@@ -13,6 +13,7 @@
  *                    (0-based, end exclusive) used INSTEAD of linePattern
  */
 const { lines, emptyMessage, parseTs } = require('./common');
+const { textValue } = require('./sample-id-path');
 
 const DEFAULTS = Object.freeze({
   linePattern: '^\\s*(?<code>[A-Za-z][A-Za-z0-9#%\\-_/]*)\\s+(?<value>[<>]?-?\\d+(?:\\.\\d+)?)\\s*(?<unit>(?![HL*]{1,2}\\s*$)\\S+)?\\s*(?<flag>[HL*]{0,2})\\s*$',
@@ -77,7 +78,15 @@ function parseText(text, cfg = {}) {
     }
     if (r) ensure().results.push({ ...r, rawRecord: line });
   }
-  return out.filter((m) => m.results.length || m.sampleId);
+  const kept = out.filter((m) => m.results.length || m.sampleId);
+  // Custom sample-number location (sampleIdPath: "line:start-end" or a regex):
+  // read from the received text, only when it is ONE ticket (a range cannot
+  // say which ticket of several it means) — else the standard pattern stands.
+  if (cfg.sampleIdPath && kept.length === 1) {
+    const id = textValue(text, cfg.sampleIdPath);
+    if (id) kept[0].sampleId = id;
+  }
+  return kept;
 }
 
 function safeDate(s) { const d = new Date(s); return Number.isNaN(d.getTime()) ? null : d.toISOString(); }

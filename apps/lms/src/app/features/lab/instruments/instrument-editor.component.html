@@ -252,6 +252,16 @@
                   }
                   <p class="pf-field__hint pf-ie-span">If the analyzer shows E59 "No server feedback", switch the reply on.</p>
                 }
+                <div class="pf-field pf-ie-span"><span class="pf-field__lbl">Where is the sample number?</span>
+                  <pf-select [options]="sampleIdModeOptions" [value]="sampleIdMode()" (valueChange)="setSampleIdMode($event)"></pf-select>
+                  <span class="pf-field__hint">Standard reads the setting above. Custom: tap the sample number once in a real message from this analyzer — every result after that is read from the same spot. If that spot is ever empty, the standard setting is used.</span></div>
+                @if (sampleIdMode() === 'custom') {
+                  <div class="pf-ie-span">
+                    <pf-sample-id-picker [raw]="pickerRaw()" [format]="pickerFormat()" [path]="pickerPath()" [loading]="pickerLoading()" [source]="pickerSource()"
+                      (pathChange)="onSampleIdPick($event)" (reload)="loadPickerMessage()"></pf-sample-id-picker>
+                  </div>
+                  @if (connectedVia()) { <p class="pf-field__hint pf-ie-span">Through a Prefrontal Bridge the custom spot is used once the Bridge is updated; until then the standard setting is read.</p> }
+                }
                 <p class="pf-field__hint pf-ie-span">The sample ID the analyzer sends must be the tube barcode Prefrontal printed.</p>
               </div>
             </div>

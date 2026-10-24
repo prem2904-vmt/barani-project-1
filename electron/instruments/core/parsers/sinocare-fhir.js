@@ -14,9 +14,10 @@
  * unit from valueQuantity.unit | unit; component[] and Bundle entry[] are
  * walked too.
  *
- * cfg (parser.sinocare): { sampleIdField: 'medicalRecordNo' (default) | 'position' }
+ * cfg (parser.sinocare): { sampleIdField: 'medicalRecordNo' (default) | 'position', sampleIdPath? }
  */
 const { emptyMessage } = require('./common');
+const { sinocareValue } = require('./sample-id-path');
 
 function str(v) { return v == null ? '' : String(v).trim(); }
 
@@ -102,6 +103,12 @@ function parseSinocare(text, cfg = {}) {
   let sampleId = null;
   if (field === 'position') sampleId = ownPos || idFromPatient(patient, 'position') || ownId || null;
   else sampleId = ownId || idFromPatient(patient, 'medicalRecordNo') || ownPos || null;
+
+  // Custom location (sampleIdPath "Patient.medicalRecordNo", "Observation.x" …) wins when it reads something.
+  if (cfg.sampleIdPath) {
+    const id = sinocareValue({ res, patient, device: ctx.device || null }, cfg.sampleIdPath);
+    if (id) sampleId = id;
+  }
 
   const msg = emptyMessage('text', text);
   msg.sampleId = sampleId;

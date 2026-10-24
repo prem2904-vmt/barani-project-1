@@ -16,6 +16,7 @@
  * — editable in the instrument editor without a new desktop build.
  */
 const { emptyMessage } = require('./common');
+const { textValue } = require('./sample-id-path');
 
 const NUM_RE = /^[<>]?-?\d+(?:\.\d+)?$/;
 
@@ -61,6 +62,8 @@ function parseHbpro(text, cfg = {}) {
   const idEnd = int(cfg.sampleIdEnd, 9);
   msg.recordType = rec.slice(0, 3);
   msg.sampleId = rec.slice(idStart, idEnd).replace(/^[-\s]+/, '').trim() || null;
+  // Custom location (sampleIdPath "start-end" / regex) wins when it reads something.
+  if (cfg.sampleIdPath) { const id = textValue(rec, cfg.sampleIdPath); if (id) msg.sampleId = id; }
   msg.patient = patientBits(rec.slice(idEnd));
   for (const f of normalizeFields(cfg.fields)) {
     const v = rec.slice(f.start, f.end).trim();

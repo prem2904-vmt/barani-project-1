@@ -12,6 +12,7 @@ import type {
   ParserType, SinocareReplyMode, SinocareSampleIdField, TransportConfig, TransportType,
 } from './instrument.models';
 import { TwoWayForm, buildBidirectional, emptyTwoWayForm, twoWayFromConfig, validateTwoWay } from './instrument-two-way';
+import { SampleIdFormat, formatFor } from './sample-id-path';
 
 // ── Defaults (from the contract) ─────────────────────────────────────────
 // Text-template defaults — MUST equal the connector core's TEXT_DEFAULTS
@@ -54,6 +55,18 @@ export interface InstrumentForm {
   sinocare: { replyMode: SinocareReplyMode; ackJson: string; sampleIdField: SinocareSampleIdField };
   /** Two-way with the analyzer (ConfigJson `bidirectional`, instrument-two-way.ts). */
   twoWay: TwoWayForm;
+  /** Custom sample-number location picked from a real message (absent = the
+   *  standard field above, exactly as before). Saved as parser.<format>.sampleIdPath. */
+  sampleIdPath?: { format: SampleIdFormat; path: string } | null;
+}
+
+/** The custom path to save, or null when unset / it no longer fits the protocol. */
+export function customSampleIdPath(f: InstrumentForm): { format: SampleIdFormat; path: string } | null {
+  const c = f.sampleIdPath;
+  const path = c?.path?.trim();
+  if (!c || !path) return null;
+  const ok = f.protocol === 'auto' ? ['hl7', 'astm', 'text'].includes(c.format) : formatFor(f.protocol) === c.format;
+  return ok ? { format: c.format, path } : null;
 }
 
 export function emptyInstrumentForm(): InstrumentForm {
@@ -201,19 +214,24 @@ function hbproFieldsText(fields: unknown): string {
 }
 
 export function buildParser(f: InstrumentForm): ParserConfig {
+  // Custom sample-number path: added ONLY to its own block, and only when set
+  // — without it every block is byte-identical to before.
+  const c = customSampleIdPath(f);
+  const sp = (fmt: SampleIdFormat) => (c && c.format === fmt ? { sampleIdPath: c.path } : {});
   return {
     type: f.protocol,
-    astm: { sampleIdField: num(f.astm.sampleIdField, 3), sampleIdComponent: num(f.astm.sampleIdComponent, 1) },
-    hl7: { sampleIdField: f.hl7.sampleIdField },
+    astm: { sampleIdField: num(f.astm.sampleIdField, 3), sampleIdComponent: num(f.astm.sampleIdComponent, 1), ...sp('astm') },
+    hl7: { sampleIdField: f.hl7.sampleIdField, ...sp('hl7') },
     text: {
       linePattern: f.text.linePattern || DEFAULT_TEXT_LINE_PATTERN,
       sampleIdPattern: f.text.sampleIdPattern || DEFAULT_TEXT_SAMPLE_ID_PATTERN,
       qcPattern: f.text.qcPattern || DEFAULT_TEXT_QC_PATTERN,
       fixedColumns: null,
+      ...sp('text'),
     },
     // Preset blocks only for their own protocol — an old instrument saves byte-identically.
-    ...(f.protocol === 'lifedx-hbpro' ? { hbpro: { fields: parseHbproFields(f.hbpro?.fields) } } : {}),
-    ...(f.protocol === 'sinocare-fhir' ? { sinocare: { sampleIdField: f.sinocare?.sampleIdField === 'position' ? 'position' as const : 'medicalRecordNo' as const } } : {}),
+    ...(f.protocol === 'lifedx-hbpro' ? { hbpro: { fields: parseHbproFields(f.hbpro?.fields), ...sp('hbpro') } } : {}),
+    ...(f.protocol === 'sinocare-fhir' ? { sinocare: { sampleIdField: f.sinocare?.sampleIdField === 'position' ? 'position' as const : 'medicalRecordNo' as const, ...sp('sinocare') } } : {}),
   };
 }
 
@@ -285,6 +303,13 @@ function applyParser(f: InstrumentForm, p: Partial<ParserConfig> | null | undefi
   if (p.sinocare) f.sinocare = { ...(f.sinocare ?? emptyInstrumentForm().sinocare), sampleIdField: p.sinocare.sampleIdField === 'position' ? 'position' : 'medicalRecordNo' };
   if (p.astm) f.astm = { sampleIdField: num(p.astm.sampleIdField, 3), sampleIdComponent: num(p.astm.sampleIdComponent, 1) };
   if (p.hl7?.sampleIdField) f.hl7 = { sampleIdField: p.hl7.sampleIdField as Hl7SampleIdField };
+  // Custom sample-number path: the protocol's own block (auto: HL7, ASTM, text).
+  const fmts: SampleIdFormat[] = f.protocol === 'auto' ? ['hl7', 'astm', 'text'] : [formatFor(f.protocol)];
+  for (const fmt of fmts) {
+    const blk = p[fmt] as { sampleIdPath?: unknown } | undefined;
+    const path = typeof blk?.sampleIdPath === 'string' ? blk.sampleIdPath.trim() : '';
+    if (path) { f.sampleIdPath = { format: fmt, path }; break; }
+  }
   if (p.text) {
     f.text = {
       linePattern: p.text.linePattern || DEFAULT_TEXT_LINE_PATTERN,
