@@ -715,13 +715,42 @@ serves every scan point. Redesign it, never fork it per screen.
   glass icon buttons at the top-right (44px on phones), with aria-labels.
 - Status line in the app font, sentence case: violet pulsing dot + what to
   do. A handheld (HID) read appears as a neutral chip — no placeholder dash.
+- **Camera · Scanner · Type** (owner 2026-10-24): a kit `.pf-seg`
+  radiogroup at the top of the body picks how this DEVICE reads codes —
+  `camera` (QR / barcode, the viewfinder), `scanner` (a USB / Bluetooth
+  hardware scanner: no camera, a neutral "Ready — scan now" panel with the
+  last read as a chip) or `type`. Remembered per device in localStorage
+  (`ScanInputPrefService`, key `pf.scanInput`); nothing chosen → the lab
+  default from the tenant's Scan / Manual setting (manual → Type, else
+  Camera). The tenant setting is never changed by it.
 - States: match = violet check pops over the reticle, then hand-off;
   mismatch = red inline message + red reticle flash, scanning continues;
-  camera unavailable = neutral panel + secondary "Enter manually"; manual
-  tenants skip the camera entirely.
-- Footer: secondary "Enter manually" + tertiary "Cancel". The only primary
-  is the manual view's Confirm. Red only for the wrong-vial warning; no
-  green, no pink, no spaced monospace caps.
+  camera unavailable = neutral panel + secondary "Type the number".
+- Footer: tertiary "Cancel" only (the switch replaced "Enter manually").
+  The only primary is the Type view's Confirm. Red only for the wrong-vial
+  warning; no green, no pink, no spaced monospace caps.
+- A tube QR carries `MRN|SampleID`: every scan path reduces it with
+  `normalizeTubeScan()` (part after the last `|`) before comparing / looking
+  up; URLs, JSON and plain barcodes pass through untouched. The Type view's
+  5-digit PF box also takes a whole scanned PF-… code.
+
+### Hardware scanner everywhere (`HardwareScanService` / `onHardwareScan`)
+
+A hardware scanner is a keyboard (web, desktop, iPad, Android tablet). ONE
+window capture-phase keydown listener (`@prefrontal/shared`
+`HardwareScanService`) treats ≥ 4 keys each < 35 ms apart, ended by Enter /
+Tab, as a scan — whatever has focus (or nothing: iPad hides the soft
+keyboard with a Bluetooth scanner) and whichever mode the switch is on.
+Characters are never blocked or delayed; only a completed burst's Enter /
+Tab is stopped (a highlighted dropdown row or a form submit never reacts to
+it), the field it was typed into gets its text back, and the newest
+registered handler gets the code. Screens register with
+`onHardwareScan(handler, { when })` — Collection, Receive (PKG- codes →
+package), My Work (Lab Intake box → receive, else the band), Billing
+counter, Stores; an open scanner window registers on top of its screen
+(result-entry re-scan gate, analyzer attach, shell "Scan order"). Never add
+a private HID buffer to a screen. The sample-ID preset clears itself on a
+burst so an all-digit scan isn't glued to it.
 
 ## 12. Result entry
 

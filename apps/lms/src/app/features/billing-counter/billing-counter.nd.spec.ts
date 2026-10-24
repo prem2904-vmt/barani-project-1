@@ -13,6 +13,7 @@ import { NavBackService } from '../../core/services/nav-back.service';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { ProcessWorkflowConfig } from '../../shared/models/process-workflow.model';
 import { WorkEventsService } from '../../core/services/work-events.service';
+import { timedKeyboard } from '../../shared/scan/hardware-scan.spec-helpers';
 
 /**
  * Billing counter (PF-PATTERN §17): the band + ONE pill search, a LEFT queue
@@ -793,5 +794,37 @@ describe('Billing counter — narrow / phone', () => {
     f.detectChanges();
     expect(c.pane()).toBe('bill');
     expect(el.querySelector('.pf-bc-main')).toBeTruthy();
+  });
+});
+
+describe('Billing counter — hardware barcode scanner', () => {
+  afterEach(() => { vi.useRealTimers(); TestBed.resetTestingModule(); });
+
+  it('a scanner burst into the search resolves the CODE — never the highlighted dropdown row', async () => {
+    vi.useFakeTimers();
+    const { f, el, api } = render();
+    const c = f.componentInstance as any;
+    c.onQuery('LAB-2609');
+    vi.advanceTimersByTime(250);
+    f.detectChanges();
+    const ev = new KeyboardEvent('keydown');
+    c.onArrow(ev, 1);
+    expect(c.highlight()).toBe(0);                      // a patient row is highlighted
+    const pick = vi.spyOn(c, 'pick');
+    api.get.mockClear();
+    const input = el.querySelector('pf-hero-band .pf-bc-us__input') as HTMLInputElement;
+    const end = timedKeyboard().scan('INV-000123', input);
+    expect(end!.defaultPrevented).toBe(true);
+    expect(pick).not.toHaveBeenCalled();
+    expect(api.get).toHaveBeenCalledWith('/api/billing/lookup?code=INV-000123');
+    expect(c.selectedOrderId()).toBe('o1');
+  });
+
+  it('a scan with nothing focused opens the order (a QR payload reduced to its last part)', () => {
+    const { f, api } = render();
+    const c = f.componentInstance as any;
+    timedKeyboard().scan('MRN1|LAB-2609-000085');
+    expect(api.get).toHaveBeenCalledWith('/api/billing/lookup?code=LAB-2609-000085');
+    expect(c.selectedOrderId()).toBe('o1');
   });
 });

@@ -44,6 +44,7 @@ import { TenantEntitlementsService } from "../../core/services/tenant-entitlemen
 import { WebrtcService } from "../../core/services/webrtc.service";
 import { AuthService } from "../../core/auth/auth.service";
 import { ScanService } from "../../core/services/scan.service";
+import { normalizeTubeScan } from "@prefrontal/shared";
 import { KeyboardService } from "../../core/services/keyboard.service";
 import { ApiService } from "../../core/services/api.service";
 import { CapacitorService } from "../../core/services/capacitor.service";
@@ -737,8 +738,10 @@ export class ShellComponent {
    *  LOCALLY; everything else goes to the order resolver (which also strips
    *  ids out of /track/{token} URLs). The old version sent every scan to the
    *  ORDER resolver, so patient ID cards did nothing, silently (OPS-50). */
-  onScanOrder(code: string) {
+  onScanOrder(scanned: string) {
     this.scan.close();
+    // A tube QR (`MRN|SampleID`) → the Sample ID; URLs pass through untouched.
+    const code = normalizeTubeScan(scanned);
     const app = /\/(p|o)\/([0-9a-f]{8}-[0-9a-f-]{27,})/i.exec(code);
     if (app) {
       this.router.navigate([`/${app[1].toLowerCase()}`, app[2]]);

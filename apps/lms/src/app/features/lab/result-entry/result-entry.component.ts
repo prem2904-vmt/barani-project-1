@@ -9,6 +9,7 @@ import { finalize } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { ScanService } from '../../../core/services/scan.service';
+import { normalizeTubeScan } from '@prefrontal/shared';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
@@ -3411,7 +3412,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     // Double-check the code matches before dropping the gate. Modal enforces
     // this already, but belt-and-braces keeps the signal honest.
     const expected = this.expectedScanBarcode();
-    if (expected && expected.toLowerCase() !== code.trim().toLowerCase()) return;
+    if (expected && expected.toLowerCase() !== normalizeTubeScan(code).toLowerCase()) return;
     this._verified.set(true);
   }
   onResumeScanCancelled() {

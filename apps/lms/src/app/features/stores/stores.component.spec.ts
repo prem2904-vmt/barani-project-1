@@ -6,6 +6,7 @@ import { AuthService } from '../../core/auth/auth.service';
 import { ScanService } from '../../core/services/scan.service';
 import { DialogService } from '../../core/services/dialog.service';
 import { StoresComponent } from './stores.component';
+import { timedKeyboard } from '../../shared/scan/hardware-scan.spec-helpers';
 
 const items = [
   { id: 'i1', sku: 'EDTA-3', name: 'EDTA tube 3ml', category: 'consumable', uom: 'piece', reorderLevel: 100, onHand: 500, lowStock: false },
@@ -160,7 +161,7 @@ describe('Stores desk — ND band + cards', () => {
     expect(Array.from(p.el.querySelectorAll('aside button')).some(b => text(b).includes('Link barcode'))).toBe(false);
   });
 
-  it('Scan mode: camera in the field + "Scanner ready"; Manual mode (lab setting): no camera, no scanner mark, no gun capture', async () => {
+  it('Scan mode: camera in the field + "Scanner ready"; Manual mode (lab setting): no camera, no scanner mark; people typing never resolves', async () => {
     let p = await render();
     p.cmp.enterAction('issue'); p.f.detectChanges();
     expect(p.el.querySelector('pf-hero-band button[aria-label="Scan with camera"]')).not.toBeNull();
@@ -173,8 +174,23 @@ describe('Stores desk — ND band + cards', () => {
     expect(text(p.body())).not.toContain('Scanner ready');
     expect(p.bandInput()!.placeholder).toContain('Type an item name');
     const spy = vi.spyOn(p.cmp, 'resolve');
-    for (const k of ['A', 'B', 'C', 'Enter']) p.cmp.onDocKey(new KeyboardEvent('keydown', { key: k }));
+    timedKeyboard().human('ABCD');
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('hardware scanner (one shared capture): a burst on Receive/Issue/Count resolves from anywhere, in either lab mode; Overview ignores it', async () => {
+    for (const manual of [false, true]) {
+      TestBed_reset();
+      const p = await render({ manual });
+      const spy = vi.spyOn(p.cmp, 'resolve').mockResolvedValue(undefined as never);
+      const kb = timedKeyboard();
+      kb.scan('ITM0000000002');                       // Overview: not a scan surface
+      expect(spy).not.toHaveBeenCalled();
+      p.cmp.enterAction('issue'); p.f.detectChanges();
+      kb.wait(500);
+      kb.scan('ITM0000000002');                       // focus on the body
+      expect(spy).toHaveBeenCalledWith('ITM0000000002');
+    }
   });
 
   it('Issue and Count keep their API calls', async () => {

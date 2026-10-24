@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { SamplePresetDirective } from './sample-preset.directive';
 import { SampleSearchPresetService } from '../../core/services/sample-search-preset.service';
+import { HardwareScanService } from '@prefrontal/shared';
 
 @Component({
   standalone: true,
@@ -106,5 +107,53 @@ describe('pfSamplePreset — pre-typed sample-ID head', () => {
     const r = render(true);
     r.input.dispatchEvent(new Event('focus'));
     expect(r.input.value).toBe('');
+  });
+
+  describe('hardware scanner — the preset never corrupts a scanned all-digit ID', () => {
+    /** Types like a keyboard: keydown, then (unless prevented) the char lands. */
+    function typeAt(input: HTMLInputElement, text: string, gap: number, clock: { t: number }, end = true) {
+      for (const ch of text) {
+        clock.t += gap;
+        const ev = key(input, ch);
+        if (!ev.defaultPrevented) { input.value += ch; input.dispatchEvent(new Event('input', { bubbles: true })); }
+      }
+      if (end) { clock.t += gap; key(input, 'Enter'); }
+    }
+    let clock: { t: number };
+    beforeEach(() => {
+      clock = { t: 5000 };
+      vi.spyOn(performance, 'now').mockImplementation(() => clock.t);
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    it('a scanner burst routed as a scan: the field ends empty, the screen gets the bare code', () => {
+      const { host, input } = render();
+      const svc = TestBed.inject(HardwareScanService);
+      svc.clock = () => clock.t;
+      const got = vi.fn();
+      svc.register(got);
+      input.dispatchEvent(new Event('focus'));
+      expect(input.value).toBe('2609');
+      typeAt(input, '260900123', 4, clock);
+      expect(got).toHaveBeenCalledWith('260900123', expect.anything());
+      expect(input.value).toBe('');
+      expect(host.value).toBe('');
+      expect(host.entered).toBe(0);
+    });
+
+    it('scanner-fast keys with no scan handler: the preset is stripped, the field holds only the scan', () => {
+      const { host, input } = render();
+      input.dispatchEvent(new Event('focus'));
+      typeAt(input, '260900123', 4, clock, false);
+      expect(input.value).toBe('260900123');
+      expect(host.value).toBe('260900123');
+    });
+
+    it('a person typing the tail keeps the preset (unchanged behaviour)', () => {
+      const { input } = render();
+      input.dispatchEvent(new Event('focus'));
+      typeAt(input, '0012', 150, clock, false);
+      expect(input.value).toBe('26090012');
+    });
   });
 });

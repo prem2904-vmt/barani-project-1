@@ -1,4 +1,4 @@
-import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnInit, computed, inject, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -14,6 +14,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { DialogService } from '../../core/services/dialog.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { ScanService } from '../../core/services/scan.service';
+import { onHardwareScan } from '@prefrontal/shared';
 import { AuthService } from '../../core/auth/auth.service';
 import { BarcodeDisplayComponent } from '../../shared/components/barcode-display/barcode-display.component';
 import { BarcodeScannerModalComponent } from '../../shared/components/barcode-scanner/barcode-scanner-modal.component';
@@ -64,13 +65,14 @@ const ICON = {
  *    the action's form and its ONE primary button.
  *
  * The lab's Scan / Manual setting (`ScanService.manualEntry`) is honoured:
- * manual mode drops the camera, the "scanner ready" mark and the
- * document-level gun capture, and the field reads "type".
+ * manual mode drops the camera and the "scanner ready" mark, and the field
+ * reads "type".
  *
- * Scan robustness: besides the focused field, a document-level keydown
- * listener captures HID-gun bursts even when focus has drifted to a button
- * or the body. It only fires for rapid key sequences outside editable
- * fields, so it never fights manual typing.
+ * Scan robustness: the app-wide hardware-scanner capture
+ * (`HardwareScanService`, scanner-fast bursts ending in Enter / Tab) routes a
+ * scan here wherever focus has drifted — a button, the body or another field
+ * — on the Receive / Issue / Count tabs, in either lab mode (a connected
+ * scanner is used whenever it is there). Normal typing is never touched.
  */
 @Component({
   selector: 'pf-stores',
@@ -507,11 +509,6 @@ export class StoresComponent implements OnInit, AfterViewInit {
   readonly countDraft = signal<Record<string, number>>({});
   readonly labelMode = signal<'both' | 'barcode' | 'qr'>('both');
 
-  // Document-level HID-gun capture buffer (used only when focus is NOT in an
-  // editable field — the focused band field handles its own Enter).
-  private hidBuffer = '';
-  private hidLastKey = 0;
-
   readonly branchName = () => this.auth.user()?.branchName ?? '';
   private can(p: string) { return this.auth.hasPermission(p) || this.auth.hasPermission('manage_inventory'); }
   /** Item config (create items, link barcodes) is Admin → Inventory's permission. */
@@ -637,30 +634,11 @@ export class StoresComponent implements OnInit, AfterViewInit {
   }
   ngAfterViewInit() { this.focusScan(); }
 
-  /** Global keystroke capture for HID scanner guns. Fires only when focus is
-   *  outside an editable element and the keys arrive in a rapid burst — so a
-   *  scan isn't lost just because the operator clicked a button first.
-   *  Off in the lab's Manual mode (no scanning there). */
-  @HostListener('document:keydown', ['$event'])
-  onDocKey(ev: KeyboardEvent) {
-    if (this.mode() === 'home' || this.scanning() || this.manual()) return;
-    if (ev.altKey || ev.ctrlKey || ev.metaKey) return;
-    const t = ev.target as HTMLElement | null;
-    const tag = t?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return;
-
-    const now = Date.now();
-    if (now - this.hidLastKey > 400) this.hidBuffer = '';
-    this.hidLastKey = now;
-
-    if (ev.key === 'Enter') {
-      const code = this.hidBuffer;
-      this.hidBuffer = '';
-      if (code.length >= 2) { ev.preventDefault(); this.resolve(code); }
-      return;
-    }
-    if (ev.key.length === 1) this.hidBuffer += ev.key;
-  }
+  /** Hardware scanner (one shared capture, HardwareScanService): a scan on
+   *  the Receive / Issue / Count tabs resolves like Enter in the field, even
+   *  when focus is on a button or the body. The camera window, when open,
+   *  takes the scan itself. */
+  private readonly _hwScan = onHardwareScan(code => this.resolve(code), { when: () => this.mode() !== 'home' && !this.scanning() });
 
   /** Focus the band field for the next scan — on web only: on touch it
    *  would raise the keyboard over the sheet after every action. */

@@ -9,6 +9,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { ScanService } from '../../../core/services/scan.service';
+import { HardwareScanContext, normalizeTubeScan, onHardwareScan } from '@prefrontal/shared';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
@@ -77,10 +78,12 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             <!-- The camera FEEDS this field, so it sits inside it, before the
                  divider (owner) — scanning is just another way to type. -->
             <ng-container band-inline>
+              @if (!scan.manualEntry()) {
               <button type="button" class="pf-hb-tool press" (click)="openBarcodeScanner()"
                       title="Scan with camera" aria-label="Scan with camera">
                 <pf-scan-icon [size]="18" />
               </button>
+              }
             </ng-container>
           </pf-hero-band>
           }
@@ -1424,8 +1427,20 @@ export class ReceiveSamplesComponent implements OnInit {
     else this._selectedIds.set(new Set(this._inTransit().map(s => s.id)));
   }
 
+  /** Hardware scanner anywhere on the standalone screen (focus or not): a
+   *  dispatch package (PKG-…, or a scan into the package box) previews the
+   *  package; anything else receives the tube. Embedded in My Work, the host
+   *  routes scans itself. */
+  private readonly _hwScan = onHardwareScan((code, ctx) => this.routeHardwareScan(code, ctx), { when: () => !this.embedded });
+  routeHardwareScan(code: string, ctx: HardwareScanContext) {
+    const inPkgBox = ctx.target instanceof Element && !!ctx.target.closest('.pf-rs-scanrow--pkg');
+    if (inPkgBox || /^PKG-/i.test(code)) { this.onPackageScanned(code); return; }
+    this.onBarcodeScanned(code);
+  }
+
   receiveByBarcode() {
-    const code = this.scanValue().trim();
+    // A tube QR (`MRN|SampleID`) typed by a scanner into the field → Sample ID.
+    const code = normalizeTubeScan(this.scanValue());
     if (!code) return;
     this.busyKey.set('barcode');
     this.busy.set(true);

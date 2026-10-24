@@ -1,16 +1,26 @@
 import {
   AfterViewInit, ChangeDetectionStrategy, Component, ElementRef,
   EventEmitter, HostListener, Input, OnDestroy, Output,
-  ViewChild, computed, signal
+  ViewChild, computed, inject, signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BarcodeDetector } from 'barcode-detector/ponyfill';
 import { NumPadComponent } from '../../primitives/num-pad.component.js';
+import { normalizeTubeScan } from '../../scan/tube-scan.js';
+import { ScanInputMode, ScanInputPrefService } from '../../scan/scan-input-pref.service.js';
+import { HardwareScanService } from '../../scan/hardware-scan.service.js';
 
-// Reusable barcode scanner modal. Two input channels:
-//  1. Camera via @zxing/browser → live viewfinder + continuous decode
-//  2. HID barcode gun → captured via a global keydown listener while open;
-//     gun input ends with Enter, which finalises the buffered code
+// Reusable barcode scanner modal. Three ways in, picked with the switch at
+// the top and remembered per device (ScanInputPrefService; nothing chosen →
+// the lab default: manualOnly → Type, else Camera):
+//  1. Camera — live viewfinder + continuous decode (QR / barcode)
+//  2. Scanner — a hardware (USB / Bluetooth) barcode scanner: no camera,
+//     a "Ready — scan now" panel. Bursts come through HardwareScanService
+//     (this window registers on top of its screen while open); a slower
+//     scanner still lands through the document keydown buffer below.
+//  3. Type — type the number
+// A tube QR (`MRN|SampleID`) is reduced to the Sample ID before anything
+// compares it (normalizeTubeScan).
 //
 // Emits (matched) with the decoded string only when it equals the
 // caller's expectedBarcode (if one is provided). If no expected code is
@@ -43,7 +53,7 @@ import { NumPadComponent } from '../../primitives/num-pad.component.js';
                 <path d="M7 8v8M10.5 8v8M14 8v8M17 8v8"/>
               </svg>
             </span>
-            <span class="pf-card__label pf-sc__label">{{ manualOnly ? 'Enter ' + noun : 'Scan ' + noun }}</span>
+            <span class="pf-card__label pf-sc__label">{{ manualMode() ? 'Enter ' + noun : 'Scan ' + noun }}</span>
             <button type="button" class="pf-sc__close press" (click)="cancel()" aria-label="Close" title="Close">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -57,13 +67,43 @@ import { NumPadComponent } from '../../primitives/num-pad.component.js';
               <span class="pf-sc__expect-label">Expected</span>
               <span class="pf-sc__expect-id">{{ expectedBarcode }}</span>
             </div>
-          } @else if (manualOnly) {
+          } @else if (manualMode()) {
             <p class="pf-sc__sub">Type the {{ noun }} ID{{ noun === 'sample' ? ' from the container' : '' }}.</p>
           }
         </header>
 
         <div class="pf-sc__body">
-          <div class="pf-sc__viewport" [hidden]="manualMode()">
+          <div class="pf-seg pf-sc__modes" role="radiogroup" aria-label="How to read the code">
+            <button type="button" class="pf-seg__item pf-sc__mode" role="radio" data-mode="camera"
+                    [attr.aria-checked]="mode() === 'camera'" (click)="setMode('camera')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+                <circle cx="12" cy="13" r="3"/>
+              </svg>
+              Camera
+            </button>
+            <button type="button" class="pf-seg__item pf-sc__mode" role="radio" data-mode="scanner"
+                    [attr.aria-checked]="mode() === 'scanner'" (click)="setMode('scanner')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/>
+                <path d="M8 9v6M11 9v6M14 9v6M17 9v6"/>
+              </svg>
+              Scanner
+            </button>
+            <button type="button" class="pf-seg__item pf-sc__mode" role="radio" data-mode="type"
+                    [attr.aria-checked]="mode() === 'type'" (click)="setMode('type')">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>
+              </svg>
+              Type
+            </button>
+          </div>
+
+          <div class="pf-sc__viewport" [hidden]="mode() !== 'camera'">
             <video #video autoplay muted playsinline class="pf-sc__video" (click)="refocus()" title="Tap to focus"></video>
             @if (cameraReady()) {
               <div class="pf-sc__reticle" [class.pf-sc__reticle--bad]="!!lastMismatch()"
@@ -114,9 +154,7 @@ import { NumPadComponent } from '../../primitives/num-pad.component.js';
                   </span>
                   <p class="pf-sc__fallback-title">{{ cameraError() }}</p>
                   <p class="pf-sc__fallback-hint">A handheld scanner still works — scan the vial and it lands here.</p>
-                  @if (!manualOnly) {
-                    <button type="button" class="pf-btn pf-btn--secondary press" (click)="toggleManual()">Enter manually</button>
-                  }
+                  <button type="button" class="pf-btn pf-btn--secondary press" (click)="setMode('type')">Type the number</button>
                 } @else {
                   <p class="pf-sc__fallback-hint">Starting camera…</p>
                 }
@@ -124,7 +162,30 @@ import { NumPadComponent } from '../../primitives/num-pad.component.js';
             }
           </div>
 
-          @if (!manualMode()) {
+          @if (mode() === 'scanner') {
+            <div class="pf-sc__ready" role="status" aria-live="polite">
+              <span class="pf-sc__ready-ico" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 7V5h3M17 5h3v2M20 17v2h-3M7 19H4v-2"/>
+                  <path d="M8 9v6M11 9v6M14 9v6M17 9v6"/>
+                </svg>
+              </span>
+              <p class="pf-sc__ready-title">
+                <span class="pf-sc__pulse pf-sc__pulse--live" aria-hidden="true"></span>
+                Ready — scan now
+              </p>
+              <p class="pf-sc__ready-hint">Scan the {{ noun }} barcode with the handheld scanner. No need to tap anything first.</p>
+              @if (hidShown(); as hid) {
+                <div class="pf-sc__hid">
+                  <span class="pf-sc__hid-label">Last read</span>
+                  <span class="pf-sc__chip">{{ hid }}</span>
+                </div>
+              }
+            </div>
+          }
+
+          @if (mode() === 'camera') {
             <p class="pf-sc__status" aria-live="polite">
               <span class="pf-sc__pulse" [class.pf-sc__pulse--live]="cameraReady()" aria-hidden="true"></span>
               {{ cameraReady() ? 'Point the camera at the ' + noun + ' barcode, or scan with a handheld scanner.'
@@ -153,11 +214,9 @@ import { NumPadComponent } from '../../primitives/num-pad.component.js';
                          class="pf-sc__seg-part pf-sc__seg-input"
                          [attr.inputmode]="isTouch() ? 'none' : 'numeric'"
                          [readonly]="isTouch()"
-                         pattern="[0-9]*"
-                         maxlength="5"
                          placeholder="00000"
                          aria-label="Sequence number"
-                         [ngModel]="manualSeq()"
+                         [ngModel]="manualFull() || manualSeq()"
                          (ngModelChange)="onManualSeqChange($event)"
                          (keydown.enter)="submitManual()" />
                   <span class="pf-sc__seg-sep">·</span>
@@ -176,7 +235,7 @@ import { NumPadComponent } from '../../primitives/num-pad.component.js';
                 <button #confirmBtn
                         type="button"
                         class="pf-btn pf-btn--primary pf-sc__confirm press"
-                        [disabled]="manualSeq().length !== 5"
+                        [disabled]="manualSeq().length !== 5 && !manualFull()"
                         (click)="submitManual()">
                   Confirm
                 </button>
@@ -214,11 +273,6 @@ import { NumPadComponent } from '../../primitives/num-pad.component.js';
         </div>
 
         <footer class="pf-sc__foot">
-          @if (!manualOnly) {
-            <button type="button" class="pf-btn pf-btn--secondary pf-sc__manual-toggle press" (click)="toggleManual()">
-              {{ manualMode() ? 'Use camera' : 'Enter manually' }}
-            </button>
-          }
           <button type="button" class="pf-btn pf-btn--tertiary pf-sc__cancel press" (click)="cancel()">Cancel</button>
         </footer>
       </div>
@@ -292,6 +346,36 @@ import { NumPadComponent } from '../../primitives/num-pad.component.js';
       flex: 1 1 auto; min-height: 0; overflow-y: auto;
       padding: 0 16px 14px; display: flex; flex-direction: column; gap: 10px;
     }
+
+    /* ── Camera · Scanner · Type switch (kit .pf-seg, neutral selected) ── */
+    .pf-sc__modes { display: flex; width: 100%; flex: none; }
+    .pf-sc__mode {
+      flex: 1 1 0; min-width: 0; height: 36px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      white-space: nowrap;
+    }
+    @media (pointer: coarse) { .pf-sc__mode { height: 44px; } }
+
+    /* ── Hardware scanner: ready panel (no camera) ── */
+    .pf-sc__ready {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 28px 20px; text-align: center;
+      border-radius: var(--pf-radius, 12px);
+      background: var(--pf-chip-bg); border: 1px solid var(--pf-line);
+    }
+    .pf-sc__ready-ico {
+      width: 52px; height: 52px; border-radius: 14px; margin-bottom: 4px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--pf-card-bg); color: var(--text-secondary);
+      border: 1px solid var(--pf-line);
+    }
+    .pf-sc__ready-title {
+      display: inline-flex; align-items: center; gap: 8px; margin: 0;
+      font-size: 16px; font-weight: 600; color: var(--text-primary);
+    }
+    .pf-sc__ready-title .pf-sc__pulse { margin-top: 0; }
+    .pf-sc__ready-hint { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-tertiary); text-wrap: pretty; max-width: 320px; }
+    .pf-sc__ready .pf-sc__hid { justify-content: center; margin-top: 6px; }
 
     /* ── Camera viewport ── */
     .pf-sc__viewport {
@@ -466,6 +550,7 @@ import { NumPadComponent } from '../../primitives/num-pad.component.js';
         border: 0; border-radius: 0; box-shadow: none;
       }
       .pf-sc__viewport { aspect-ratio: auto; flex: 1 1 260px; min-height: 240px; }
+      .pf-sc__ready { flex: 1 1 auto; justify-content: center; }
       .pf-sc__foot { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
       .pf-sc__foot .pf-btn { flex: 1 1 0; }
       .pf-sc__glass { width: 44px; height: 44px; }
@@ -483,8 +568,10 @@ import { NumPadComponent } from '../../primitives/num-pad.component.js';
 export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   @Input() title = 'Scan vial barcode';
   @Input() expectedBarcode?: string;
-  /** Manual-mode tenants: the modal is typing-only — no camera ever starts,
-   *  no "Use camera" toggle. The title/hints read as "enter", not "scan". */
+  /** The lab's default for this window: the tenant runs in Manual mode, so
+   *  the window opens on Type (no camera starts) unless THIS device chose
+   *  another way with the Camera · Scanner · Type switch (remembered per
+   *  device). The title/hints read as "enter" while Type is on. */
   @Input() manualOnly = false;
   /** What is being scanned, for the header / hints ("sample" by default;
    *  the billing counter passes "invoice or order"). Additive. */
@@ -493,8 +580,12 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
 
   /** Caller titles say "Scan vial to claim" etc. — reword for typing-only. */
   protected get displayTitle(): string {
-    return this.manualOnly ? this.title.replace(/^Scan\b/i, 'Enter') : this.title;
+    return this.manualMode() ? this.title.replace(/^Scan\b/i, 'Enter') : this.title;
   }
+
+  private readonly prefs = inject(ScanInputPrefService);
+  private readonly hardware = inject(HardwareScanService);
+  private hardwareOff: (() => void) | null = null;
 
   @Output() matched = new EventEmitter<string>();
   @Output() cancelled = new EventEmitter<void>();
@@ -549,12 +640,18 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   /** How long the match check stays up before the caller takes over. */
   static MATCH_HOLD_MS = 320;
 
-  // Manual entry: only available when expectedBarcode is set so we can
-  // lock vendor/year/dept and just collect the 5-digit sequence. The
+  /** Camera · Scanner · Type — set in ngAfterViewInit from the device's
+   *  remembered choice (else the lab default), changed by the switch. */
+  protected readonly mode = signal<ScanInputMode>('camera');
+  // Manual entry: with a segmentable expectedBarcode we lock
+  // vendor/year/dept and just collect the 5-digit sequence. The
   // submit path runs through handleScan, so the existing match-or-flash
   // logic still protects against wrong vials.
-  protected readonly manualMode = signal(false);
+  protected readonly manualMode = computed(() => this.mode() === 'type');
   protected readonly manualSeq = signal('');
+  /** A whole code typed / scanned into the 5-digit box (a scanner that types
+   *  the full PF-… ID, or a tube QR) — submitted as is. */
+  protected readonly manualFull = signal('');
   /** Free-text sample ID for short codes that don't segment (LAB26001…). */
   protected readonly manualFree = signal('');
   protected readonly isTouch = signal<boolean>(
@@ -576,24 +673,56 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     // positioning can't cover the root-level nav — hide it instead). Removed
     // again in ngOnDestroy. The component only exists while open (@if).
     try { document.body.classList.add('pf-scanner-open'); } catch { /* SSR */ }
-    if (this.manualOnly) {
-      // Typing-only: never touch the camera; land straight on the manual panel.
-      this.manualMode.set(true);
-      setTimeout(() => this.manualInputEl?.nativeElement.focus(), 50);
-      return;
-    }
-    this.detector = new BarcodeDetector({
-      // Every symbology a tube/label or requisition could carry, incl. the new
-      // Data Matrix option and the existing QR + Code128.
-      formats: ['qr_code', 'data_matrix', 'code_128', 'code_39', 'ean_13', 'ean_8',
-        'itf', 'codabar', 'upc_a', 'upc_e', 'pdf417', 'aztec'],
-    });
-    await this.startCamera();
+    // While open, hardware-scanner bursts come to THIS window (on top of the
+    // screen's own handler) whichever way is picked.
+    this.hardwareOff = this.hardware.register(code => this.onHardwareScan(code));
+    await this.applyMode(this.prefs.modeFor(this.manualOnly));
   }
 
   ngOnDestroy() {
+    this.hardwareOff?.();
+    this.hardwareOff = null;
     this.stopCamera();
     try { document.body.classList.remove('pf-scanner-open'); } catch { /* SSR */ }
+  }
+
+  /** The switch: pick a way in and remember it on this device. */
+  async setMode(m: ScanInputMode) {
+    if (m === this.mode() && (m !== 'camera' || this.stream)) return;
+    this.prefs.set(m);
+    await this.applyMode(m);
+  }
+
+  /** Show the chosen way: only Camera holds the camera; Type focuses the box. */
+  private async applyMode(m: ScanInputMode) {
+    this.mode.set(m);
+    if (m !== 'camera') {
+      this.stopCamera();
+      this.cameraError.set(null);
+      if (m === 'type') setTimeout(() => this.manualInputEl?.nativeElement.focus(), 50);
+      return;
+    }
+    if (this.stream || this.cameraStarting) return;
+    if (!this.detector) {
+      this.detector = new BarcodeDetector({
+        // Every symbology a tube/label or requisition could carry, incl. the new
+        // Data Matrix option and the existing QR + Code128.
+        formats: ['qr_code', 'data_matrix', 'code_128', 'code_39', 'ean_13', 'ean_8',
+          'itf', 'codabar', 'upc_a', 'upc_e', 'pdf417', 'aztec'],
+      });
+    }
+    this.cameraStarting = true;
+    try { await this.startCamera(); } finally { this.cameraStarting = false; }
+  }
+  /** getUserMedia in flight — a second tap on Camera must not open a second stream. */
+  private cameraStarting = false;
+
+  /** A hardware-scanner burst (HardwareScanService) — already normalised. */
+  private onHardwareScan(code: string) {
+    this._hidBuffer = '';
+    this.hidBuffer.set('');
+    this.lastHid.set(code);
+    this.handleScan(code);
   }
 
   /** Open a high-res back-camera stream, enable continuous autofocus + detect
@@ -608,6 +737,8 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
         },
         audio: false,
       });
+      // The switch moved off Camera while the permission prompt was up.
+      if (this.mode() !== 'camera') { stream.getTracks().forEach(t => t.stop()); return; }
       this.stream = stream;
       this.track = stream.getVideoTracks()[0] ?? null;
       const video = this.videoEl.nativeElement;
@@ -737,7 +868,7 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   @HostListener('document:keydown', ['$event'])
   onKey(ev: KeyboardEvent) {
     if (this.manualMode() && ev.key === 'Enter') {
-      if (this.manualSeq().length === 5) {
+      if (this.manualSeq().length === 5 || this.manualFull()) {
         ev.preventDefault();
         this.submitManual();
         return;
@@ -773,7 +904,8 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
   }
 
   private handleScan(code: string) {
-    const trimmed = (code || '').trim();
+    // A tube QR carries `MRN|SampleID` — compare / emit the Sample ID.
+    const trimmed = normalizeTubeScan(code);
     if (!trimmed) return;
 
     if (this.expectedBarcode && trimmed.toLowerCase() !== this.expectedBarcode.toLowerCase()) {
@@ -805,25 +937,27 @@ export class BarcodeScannerModalComponent implements AfterViewInit, OnDestroy {
     this.cancelled.emit();
   }
 
+  /** Type ↔ Camera (kept for callers / the camera-error panel). */
   toggleManual() {
-    const next = !this.manualMode();
-    this.manualMode.set(next);
-    // Release the camera while the manual panel is in front; reopen on close.
-    if (next) {
-      this.stopCamera();
-      setTimeout(() => {
-        this.manualInputEl?.nativeElement.focus();
-      }, 50);
-    } else {
-      void this.startCamera();
-    }
+    void this.setMode(this.manualMode() ? 'camera' : 'type');
   }
 
   onManualSeqChange(v: string) {
-    this.manualSeq.set((v ?? '').replace(/\D/g, '').slice(0, 5));
+    const raw = (v ?? '').trim();
+    // More than the 5-digit tail, or letters / dashes / a "|": a whole code
+    // (a scanner typing the full PF-… ID, a tube QR) — keep it whole.
+    if (raw.length > 5 || /[^0-9]/.test(raw)) {
+      this.manualFull.set(raw);
+      this.manualSeq.set('');
+      return;
+    }
+    this.manualFull.set('');
+    this.manualSeq.set(raw);
   }
 
   submitManual() {
+    const full = this.manualFull();
+    if (full) { this.handleScan(full); return; }
     const p = this.parsedExpected();
     if (!p) return;
     if (this.manualSeq().length !== 5) return;
