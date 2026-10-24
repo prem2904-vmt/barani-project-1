@@ -113,6 +113,7 @@ export const HL7_SAMPLE_ID_FIELDS: { value: Hl7SampleIdField; label: string }[] 
   { value: 'OBR-2', label: 'OBR-2 · Placer order number' },
   { value: 'SPM-2', label: 'SPM-2 · Specimen ID' },
   { value: 'PID-3', label: 'PID-3 · Patient ID' },
+  { value: 'PID-5', label: 'PID-5 · Patient name (tube number typed as the name)' },
 ];
 
 /** The link layer that goes with each parser choice. */

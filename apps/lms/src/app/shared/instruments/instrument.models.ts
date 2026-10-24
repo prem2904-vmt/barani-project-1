@@ -38,7 +38,7 @@ export interface LinkConfig {
 export type ParserType = 'auto' | 'astm' | 'hl7' | 'text' | 'lifedx-hbpro' | 'sinocare-fhir';
 export type SinocareReplyMode = 'none' | 'echo';
 export type SinocareSampleIdField = 'medicalRecordNo' | 'position';
-export type Hl7SampleIdField = 'OBR-3' | 'OBR-2' | 'SPM-2' | 'PID-3';
+export type Hl7SampleIdField = 'OBR-3' | 'OBR-2' | 'SPM-2' | 'PID-3' | 'PID-5';
 export interface ParserConfig {
   type: ParserType;
   astm?: { sampleIdField: number; sampleIdComponent: number };

@@ -48,6 +48,7 @@ function parseHl7(text, cfg = {}) {
   let serial = null;
   let msgTs = null;
   let pid3 = null;
+  let pid5 = null; // PID-5 patient name: the given-name part, else the family part (labs that type the tube number into the analyzer's Name box)
   const out = [];
   let cur = null;
 
@@ -61,7 +62,12 @@ function parseHl7(text, cfg = {}) {
       msgTs = parseTs(fld('MSH', parts, 7));
       continue;
     }
-    if (name === 'PID') { pid3 = comp(fld('PID', parts, 3)) || null; continue; }
+    if (name === 'PID') {
+      pid3 = comp(fld('PID', parts, 3)) || null;
+      const pid5f = fld('PID', parts, 5);
+      pid5 = comp(pid5f, 2) || comp(pid5f, 1) || null;
+      continue;
+    }
     if (name === 'OBR') {
       cur = emptyMessage('hl7', text);
       cur.instrumentSerial = serial;
@@ -69,6 +75,7 @@ function parseHl7(text, cfg = {}) {
       const obr2 = comp(fld('OBR', parts, 2));
       cur.sampleId = (which === 'OBR-2' ? obr2 || obr3
         : which === 'PID-3' ? pid3 || obr3 || obr2
+          : which === 'PID-5' ? pid5 || pid3 || obr3 || obr2
           : obr3 || obr2) || null;
       cur.runAt = parseTs(fld('OBR', parts, 7)) || msgTs;
       cur.qc = qcRe && cur.sampleId ? qcRe.test(cur.sampleId) : false;
