@@ -208,7 +208,7 @@
             <div class="pf-card__body">
               <div class="pf-ie-grid">
                 <div class="pf-field pf-ie-span"><span class="pf-field__lbl">Protocol</span>
-                  <pf-select [options]="protocolOptions" [value]="form().protocol" (valueChange)="patch({ protocol: $event })"></pf-select></div>
+                  <pf-select [options]="protocolOptions()" [value]="form().protocol" (valueChange)="patch({ protocol: $event })"></pf-select></div>
                 @if (form().protocol === 'astm' || form().protocol === 'auto') {
                   <label class="pf-field"><span class="pf-field__lbl">ASTM sample ID field (O record)</span>
                     <input class="pf-input pf-num" inputmode="numeric" [value]="form().astm.sampleIdField" (input)="patchAstm({ sampleIdField: $any($event.target).value })" /></label>
@@ -232,6 +232,25 @@
                   @for (f of ['text.linePattern', 'text.sampleIdPattern', 'text.qcPattern']; track f) {
                     @if (issueFor(f)) { <p class="pf-field__hint pf-ie-err pf-ie-span">{{ issueFor(f) }}</p> }
                   }
+                }
+                @if (form().protocol === 'lifedx-hbpro') {
+                  <label class="pf-field pf-ie-span"><span class="pf-field__lbl">Result positions</span>
+                    <textarea class="pf-input pf-ie-code" rows="4" [value]="form().hbpro.fields" (input)="patchHbpro($any($event.target).value)" placeholder="HbA1c 63 69 %" spellcheck="false"></textarea>
+                    <span class="pf-field__hint">One result per line: code, start, end, unit — character positions in the record, counted from 0 (end not included). The sample ID is read from characters 3–8. Until a line is added, records are shown here and in the log but nothing is sent.</span></label>
+                  @if (issueFor('hbpro.fields')) { <p class="pf-field__hint pf-ie-err pf-ie-span">{{ issueFor('hbpro.fields') }}</p> }
+                }
+                @if (form().protocol === 'sinocare-fhir') {
+                  <div class="pf-field"><span class="pf-field__lbl">Sample ID from</span>
+                    <pf-select [options]="sinocareSampleIdOptions" [value]="form().sinocare.sampleIdField" (valueChange)="patchSinocare({ sampleIdField: $event })"></pf-select></div>
+                  <div class="pf-field"><span class="pf-field__lbl">Reply to the analyzer</span>
+                    <pf-select [options]="sinocareReplyOptions" [value]="form().sinocare.replyMode" (valueChange)="patchSinocare({ replyMode: $event })"></pf-select></div>
+                  @if (form().sinocare.replyMode === 'echo') {
+                    <label class="pf-field pf-ie-span"><span class="pf-field__lbl">Reply JSON</span>
+                      <input class="pf-input pf-ie-code" [value]="form().sinocare.ackJson" (input)="patchSinocare({ ackJson: $any($event.target).value })" [placeholder]="defaultSinocareAck" autocomplete="off" spellcheck="false" />
+                      <span class="pf-field__hint">Sent back in a frame of the same type after every frame. {{ idToken }} becomes the frame's id.</span></label>
+                    @if (issueFor('sinocare.ackJson')) { <p class="pf-field__hint pf-ie-err pf-ie-span">{{ issueFor('sinocare.ackJson') }}</p> }
+                  }
+                  <p class="pf-field__hint pf-ie-span">If the analyzer shows E59 "No server feedback", switch the reply on.</p>
                 }
                 <p class="pf-field__hint pf-ie-span">The sample ID the analyzer sends must be the tube barcode Prefrontal printed.</p>
               </div>

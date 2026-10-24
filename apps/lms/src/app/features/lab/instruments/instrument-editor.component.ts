@@ -20,7 +20,7 @@ import { plural } from '../../../shared/utils/plural';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { InstrumentBridgeService } from '../../../shared/instruments/instrument-bridge.service';
 import {
-  BAUD_RATES, CodeMapRow, ConfigBase, DATA_BITS, FLOW_CONTROLS, FlowControl, HL7_SAMPLE_ID_FIELDS, InstrumentForm, LoincSkip, PARITIES,
+  BAUD_RATES, CodeMapRow, ConfigBase, DATA_BITS, DEFAULT_SINOCARE_ACK_JSON, DESKTOP_ONLY_PROTOCOLS, FLOW_CONTROLS, SINOCARE_REPLY_MODES, SINOCARE_SAMPLE_ID_FIELDS, FlowControl, HL7_SAMPLE_ID_FIELDS, InstrumentForm, LoincSkip, PARITIES,
   PROTOCOL_OPTIONS, RawSegment, STOP_BITS, TRANSPORT_OPTIONS, WizardStep, applyDetectProposal, applyLoincSuggestions, buildInstrumentConfig,
   buildUpsert, codesFromMessages, connectionSummary, connectorStateWord, emptyCodeMapRow, emptyInstrumentForm, fmtIst, formFromInstrument,
   mergeUnmappedCodes, previewLine, previewRows, renderControlChars, rowFromDto, statusWord, toCodeMapUpserts, validateCodeMaps,
@@ -93,7 +93,14 @@ export class InstrumentEditorComponent {
   readonly parityOptions = PARITIES;
   readonly stopBitOptions: PfSelectOption<number>[] = STOP_BITS.map((b) => ({ value: b, label: String(b) }));
   readonly flowOptions = FLOW_CONTROLS;
-  readonly protocolOptions: PfSelectOption<ParserType>[] = PROTOCOL_OPTIONS;
+  /** Through a Prefrontal Bridge the desktop-only presets are hidden (unless already chosen). */
+  readonly protocolOptions = computed<PfSelectOption<ParserType>[]>(() => this.connectedVia()
+    ? PROTOCOL_OPTIONS.filter((o) => !DESKTOP_ONLY_PROTOCOLS.includes(o.value) || o.value === this.form().protocol)
+    : PROTOCOL_OPTIONS);
+  readonly sinocareReplyOptions = SINOCARE_REPLY_MODES;
+  readonly sinocareSampleIdOptions = SINOCARE_SAMPLE_ID_FIELDS;
+  readonly defaultSinocareAck = DEFAULT_SINOCARE_ACK_JSON;
+  readonly idToken = '{{id}}';
   readonly hl7FieldOptions: PfSelectOption<Hl7SampleIdField>[] = HL7_SAMPLE_ID_FIELDS;
 
   // ── Record ───────────────────────────────────────────────────────────
@@ -382,6 +389,8 @@ export class InstrumentEditorComponent {
   }
   patchHl7(v: Hl7SampleIdField) { this.form.update((f) => ({ ...f, hl7: { sampleIdField: v } })); this.dirty.set(true); }
   patchText(p: Partial<InstrumentForm['text']>) { this.form.update((f) => ({ ...f, text: { ...f.text, ...p } })); this.dirty.set(true); }
+  patchHbpro(fields: string) { this.form.update((f) => ({ ...f, hbpro: { fields } })); this.dirty.set(true); }
+  patchSinocare(p: Partial<InstrumentForm['sinocare']>) { this.form.update((f) => ({ ...f, sinocare: { ...f.sinocare, ...p } })); this.dirty.set(true); }
   setFlow(v: FlowControl) { this.patchSerial({ flow: v }); }
   patchTwoWay(v: TwoWayForm) { this.patch({ twoWay: v }); }
   /** Side card: the two-way mode in plain words. */
