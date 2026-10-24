@@ -2246,7 +2246,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       case 'upper':  return 'Judged by the upper value only — "4-6" is read as 6.';
       case 'lower':  return 'Judged by the lower value only — "4-6" is read as 4.';
       case 'middle': return 'Judged by the middle — "4-6" is read as 5.';
-      default:       return 'High when the upper value is above the normal range, Low when the lower value is below it.';
+      default:       return 'High when the upper value is above the normal range, Low when the lower value is below it; when both ends are out, High wins, and a critical end always wins.';
     }
   }
   /** The switch: on keeps (or starts) the rule; off removes both keys, so

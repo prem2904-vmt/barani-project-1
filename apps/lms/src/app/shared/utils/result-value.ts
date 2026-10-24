@@ -97,14 +97,38 @@ type Fallback = Parameters<typeof flagBand>[2];
 const isHighish = (h: FlagHit | null) => h?.code === 'H' || h?.code === 'CH';
 const isLowish = (h: FlagHit | null) => h?.code === 'L' || h?.code === 'CL';
 
+/** The next double above (dir 1) or below (dir -1) a finite x — the TS twin
+ *  of .NET `Math.BitIncrement` / `Math.BitDecrement`. */
+export function nextDouble(x: number, dir: 1 | -1): number {
+  if (!Number.isFinite(x)) return x;
+  if (x === 0) return dir * Number.MIN_VALUE;
+  const buf = new Float64Array([x]);
+  const bits = new BigInt64Array(buf.buffer);
+  // Moving away from zero grows the magnitude bits; toward zero shrinks them.
+  bits[0] += (x > 0) === (dir > 0) ? 1n : -1n;
+  return buf[0];
+}
+
+/** The value the rule judges: "<n" is the next double below n, ">n" the next
+ *  above (strictly below / above — owner review 2026-10-24); ranges and
+ *  "<=n" / ">=n" are judged as written. Mirrors mw `ResultValue.Effective`. */
+export function effectiveRangeValue(v: RangeValue): RangeValue {
+  if (v.kind === 'lt') return { ...v, low: nextDouble(v.low, -1), high: nextDouble(v.high, -1) };
+  if (v.kind === 'gt') return { ...v, low: nextDouble(v.low, 1), high: nextDouble(v.high, 1) };
+  return v;
+}
+
 /**
  * Flag a range value against ONE band by the rule — mirrors mw
- * `ResultValue.Level`. "<n" / ">n" are judged as n.
+ * `ResultValue.Level`. "<n" / ">n" are judged strictly below / above n;
+ * "<=n" / ">=n" at n.
  *  - ends:   High (or CH) if the upper value is above the range, Low (or CL)
- *            if the lower value is below; a critical end wins; else Normal.
+ *            if the lower value is below; a critical end always wins, and
+ *            when both ends are out High wins; else Normal.
  *  - upper / lower: that end alone.  - middle: (low + high) / 2.
  */
-export function flagRangeAgainstBand(band: Band, value: RangeValue, rule: RangeFlagRule, fallback?: Fallback): FlagHit | null {
+export function flagRangeAgainstBand(band: Band, raw: RangeValue, rule: RangeFlagRule, fallback?: Fallback): FlagHit | null {
+  const value = effectiveRangeValue(raw);
   if (rule === 'upper') return flagBand(band, value.high, fallback);
   if (rule === 'lower') return flagBand(band, value.low, fallback);
   if (rule === 'middle') return flagBand(band, (value.low + value.high) / 2, fallback);

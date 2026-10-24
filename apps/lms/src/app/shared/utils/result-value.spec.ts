@@ -1,5 +1,5 @@
 import {
-  flagRangeAgainstBand, isInvalidNumericValue, liveRangeFlag, parseRangeValue, rangeAllowed,
+  flagRangeAgainstBand, isInvalidNumericValue, nextDouble, liveRangeFlag, parseRangeValue, rangeAllowed,
   rangeFlagRule, rangeKeyAllowed, rangePasteText, rangeValueFor,
 } from './result-value';
 
@@ -71,6 +71,27 @@ describe('flagging by the rule (mirrors mw ResultValue.Level)', () => {
     ['lower', '4-6', 'N'], ['lower', '1.5-4', 'L'],
     ['middle', '4-6', 'N'], ['middle', '4-8', 'H'], ['middle', '0-2', 'L'],
   ] as const)('%s %s → %s', (rule, raw, code) => expect(flag(rule, raw)).toBe(code));
+
+  it.each([
+    ['>100', { min: 0, max: 100 }, {}, 'H'],
+    ['>50', { min: 0, max: 10 }, { criticalHigh: 50 }, 'CH'],
+    ['<2', { min: 2, max: 10 }, {}, 'L'],
+    ['<5', { min: 0, max: 5 }, {}, 'N'],
+    ['<=5', { min: 0, max: 5 }, {}, 'N'],
+    ['>=100', { min: 0, max: 100 }, {}, 'N'],
+    ['<1', { min: 0, max: 10 }, { criticalLow: 1 }, 'CL'],
+    ['>=50', { min: 0, max: 100 }, { criticalHigh: 50 }, 'N'],
+  ] as const)('strict comparators: %s against %o %o → %s (mw table twin)', (raw, b, c, code) => {
+    expect(flagRangeAgainstBand(b, parseRangeValue(raw)!, 'ends', c)?.code).toBe(code);
+  });
+
+  it('nextDouble steps one representable double', () => {
+    expect(nextDouble(100, 1)).toBeGreaterThan(100);
+    expect(nextDouble(100, -1)).toBeLessThan(100);
+    expect(nextDouble(100, 1) - 100).toBeLessThan(1e-12);
+    expect(nextDouble(-2, 1)).toBeGreaterThan(-2);
+    expect(nextDouble(0, -1)).toBeLessThan(0);
+  });
 
   it('no band and no criticals → nothing to judge', () => {
     expect(flagRangeAgainstBand(null, parseRangeValue('0-4')!, 'ends', null)).toBeNull();

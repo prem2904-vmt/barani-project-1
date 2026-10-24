@@ -1454,7 +1454,7 @@
         <pf-select size="sm" data-testid="range-flag" [options]="rangeFlagOptions"
                    [value]="p.rangeFlag || 'ends'"
                    (valueChange)="patchField(i, { rangeFlag: $any($event) })"></pf-select>
-        <span class="pf-hint">{{ rangeFlagHint(p.rangeFlag) }} "&lt;5" and "&gt;100" are judged as 5 and 100.</span>
+        <span class="pf-hint">{{ rangeFlagHint(p.rangeFlag) }} "&lt;5" means below 5 and "&gt;100" above 100.</span>
       </label>
     }
   </div>
