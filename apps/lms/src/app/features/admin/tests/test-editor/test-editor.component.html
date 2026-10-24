@@ -684,6 +684,7 @@
               @if (numericFields()[0]; as nf) {
                 <pf-range-table [param]="$any(nf)" [unit]="nf.unit || d.unit || ''"
                                 (bandsChange)="setBands(fields().indexOf(nf), $event)"></pf-range-table>
+                <ng-container *ngTemplateOutlet="rangeEntry; context: { $implicit: nf, i: fields().indexOf(nf) }"></ng-container>
               }
             }
           </div>
@@ -756,6 +757,7 @@
                                           (valueChange)="patchField(i, { validHigh: $event ?? undefined })"></pf-number-input>
                       </label>
                     </div>
+                    <ng-container *ngTemplateOutlet="rangeEntry; context: { $implicit: p, i: i }"></ng-container>
                   }
 
                   @if (typeHasOptions(p.type)) {
@@ -1433,3 +1435,27 @@
   </div>
   </div>
 </section>
+
+<!-- Range entry: the tech may type "0-4", "<5" or ">100" for THIS numeric
+     value (single-value and multi-value layouts share it). Off (the
+     default) = a plain number, as always. -->
+<ng-template #rangeEntry let-p let-i="i">
+  <div class="pf-vbatch__range-entry">
+    <button type="button" class="pf-toggle pf-te2-toggle" role="switch" data-testid="allow-range"
+            [attr.aria-checked]="p.allowRange === true"
+            title="The tech can enter a range like 0-4, or less than / more than like <5 or >100"
+            (click)="toggleAllowRange(i)">
+      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+      <span>Allow a range or &lt; / &gt;</span>
+    </button>
+    @if (p.allowRange === true) {
+      <label class="flex flex-col gap-0.5 min-w-0 pf-vbatch__range-rule">
+        <span class="pf-mini-lbl">Flag a range by</span>
+        <pf-select size="sm" data-testid="range-flag" [options]="rangeFlagOptions"
+                   [value]="p.rangeFlag || 'ends'"
+                   (valueChange)="patchField(i, { rangeFlag: $any($event) })"></pf-select>
+        <span class="pf-hint">{{ rangeFlagHint(p.rangeFlag) }} "&lt;5" and "&gt;100" are judged as 5 and 100.</span>
+      </label>
+    }
+  </div>
+</ng-template>

@@ -2,6 +2,7 @@ import type { OrderTest } from '../../../shared/models/order.model';
 import type { TestParameter, TestParametersBlob } from '../../../shared/models/test.model';
 import { readParameters } from '../../../shared/utils/test-parameters';
 import { resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
+import { isInvalidNumericValue } from '../../../shared/utils/result-value';
 import { isFamilyFilled, isFamilyValue } from '../../../shared/utils/option-family';
 
 /**
@@ -146,7 +147,8 @@ export function invalidNumbers(tab: TabSnapshot): string[] {
       if (resolveParamEntryKind(p) !== 'number') continue;
       const raw = tab.values[t.id]?.[p.name];
       if (raw === undefined || raw === null || raw === '') continue;
-      if (Number.isNaN(Number(String(raw).trim()))) out.push(p.title || p.name);
+      // Without the range switch: exactly Number.isNaN(Number(raw.trim())).
+      if (isInvalidNumericValue(p, raw)) out.push(p.title || p.name);
     }
   }
   return out;

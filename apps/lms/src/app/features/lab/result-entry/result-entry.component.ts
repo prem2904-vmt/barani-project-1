@@ -25,10 +25,11 @@ import { EditResultDialogComponent } from '../../../shared/components/edit-resul
 import { AuthService } from '../../../core/auth/auth.service';
 import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange } from '../../../shared/utils/reference-range';
 import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from '../../../shared/utils/result-flag';
+import { isInvalidNumericValue, liveRangeFlag, parseRangeValue, rangeAllowed, rangeKeyAllowed, rangePasteText, rangeValueFor } from '../../../shared/utils/result-value';
 import { effectiveMethodology } from '../../../shared/utils/methodology';
 import { qualitativeOptionsFor } from '../../../shared/utils/qualitative';
 import { choiceOptionsFor, resolveParamEntryKind } from '../../../shared/utils/param-entry-kind';
-import { paramToField, readParameters } from '../../../shared/utils/test-parameters';
+import { paramToField, parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
 import { CalcContext, evaluateCalc, parseCalc } from '../../../shared/utils/calculation';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { FormField, evaluateShowWhen, validateFieldValue } from '../../../shared/forms';
@@ -353,24 +354,48 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                             <td class="pf-rg__c-result">
                               @switch (kind) {
                                 @case ('numeric') {
-                                  <input type="number" inputmode="decimal" step="any"
-                                         class="pf-rg__input pf-rg__input--num"
-                                         pfNumpad
-                                         [pfNumpadLabel]="p.title || p.name"
-                                         [pfNumpadUnit]="p.unit ?? null"
-                                         [pfNumpadFlag]="flagFor(p)"
-                                         [attr.data-numpad-skip]="calcChipFor(p) ? '' : null"
-                                         [class.pf-rg__input--outr]="isOutOfRange(p)"
-                                         [class.pf-rg__input--crit]="isParamCritical(p)"
-                                         [class.pf-rg__input--invalid]="isInvalidNumeric(p)"
-                                         [value]="valueOf(p.name) ?? ''"
-                                         [attr.data-param]="p.name"
-                                         (focus)="setActive(p.name)"
-                                         (input)="setValue(p.name, asInput($event))"
-                                         (keydown)="allowOnlyNumbers($event)"
-                                         (keydown.enter)="advanceFrom(p.name)"
-                                         (paste)="onNumericPaste($event, p.name)"
-                                         placeholder="—"/>
+                                  <!-- Range entry ("0-4", "<5") is a Test Master switch per value;
+                                       only then is the field text. Without it: unchanged. -->
+                                  @if (rangeAllowed(p)) {
+                                    <input type="text" inputmode="decimal"
+                                           class="pf-rg__input pf-rg__input--num"
+                                           data-range-entry
+                                           pfNumpad
+                                           [pfNumpadLabel]="p.title || p.name"
+                                           [pfNumpadUnit]="p.unit ?? null"
+                                           [pfNumpadFlag]="flagFor(p)"
+                                           [attr.data-numpad-skip]="calcChipFor(p) ? '' : null"
+                                           [class.pf-rg__input--outr]="isOutOfRange(p)"
+                                           [class.pf-rg__input--crit]="isParamCritical(p)"
+                                           [class.pf-rg__input--invalid]="isInvalidNumeric(p)"
+                                           [value]="valueOf(p.name) ?? ''"
+                                           [attr.data-param]="p.name"
+                                           (focus)="setActive(p.name)"
+                                           (input)="setValue(p.name, asInput($event))"
+                                           (keydown)="allowOnlyNumbers($event, p)"
+                                           (keydown.enter)="advanceFrom(p.name)"
+                                           (paste)="onNumericPaste($event, p.name)"
+                                           placeholder="—"/>
+                                  } @else {
+                                    <input type="number" inputmode="decimal" step="any"
+                                           class="pf-rg__input pf-rg__input--num"
+                                           pfNumpad
+                                           [pfNumpadLabel]="p.title || p.name"
+                                           [pfNumpadUnit]="p.unit ?? null"
+                                           [pfNumpadFlag]="flagFor(p)"
+                                           [attr.data-numpad-skip]="calcChipFor(p) ? '' : null"
+                                           [class.pf-rg__input--outr]="isOutOfRange(p)"
+                                           [class.pf-rg__input--crit]="isParamCritical(p)"
+                                           [class.pf-rg__input--invalid]="isInvalidNumeric(p)"
+                                           [value]="valueOf(p.name) ?? ''"
+                                           [attr.data-param]="p.name"
+                                           (focus)="setActive(p.name)"
+                                           (input)="setValue(p.name, asInput($event))"
+                                           (keydown)="allowOnlyNumbers($event)"
+                                           (keydown.enter)="advanceFrom(p.name)"
+                                           (paste)="onNumericPaste($event, p.name)"
+                                           placeholder="—"/>
+                                  }
                                 }
                                 @case ('family') {
                                   <div class="pf-rg__select pf-rg__family" [attr.data-param]="p.name" (focusin)="setActive(p.name)" (click)="setActive(p.name)" (keydown.enter)="advanceFrom(p.name)">
@@ -862,7 +887,7 @@ const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'] as const;
                                    [value]="valueOf(p.name) ?? ''"
                                    (focus)="setActive(p.name)"
                                    (input)="setValue(p.name, asInput($event))"
-                                   (keydown)="allowOnlyNumbers($event)"
+                                   (keydown)="allowOnlyNumbers($event, p)"
                                    (keydown.enter)="advanceFrom(p.name)"
                                    (paste)="onNumericPaste($event, p.name)"
                                    [attr.data-param]="p.name"
@@ -3014,7 +3039,7 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   }
 
   /** Restricts keydown events for numeric parameters to valid numbers (digits 0-9, decimal point, minus) and navigation keys, preventing letter input. */
-  allowOnlyNumbers(event: KeyboardEvent) {
+  allowOnlyNumbers(event: KeyboardEvent, p?: TestParameter | null) {
     const key = event.key;
     if (
       [
@@ -3039,6 +3064,13 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     const target = event.target as HTMLInputElement | null;
     const val = target?.value || '';
 
+    // A value the Test Master opened to ranges ("0-4", "<5", ">100") — the
+    // ONLY branch that differs; every other numeric field runs the old rule.
+    if (rangeAllowed(p)) {
+      if (!rangeKeyAllowed(this.textOutsideSelection(target, val), key)) event.preventDefault();
+      return;
+    }
+
     if (key === '.' && !val.includes('.')) {
       return;
     }
@@ -3056,6 +3088,15 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
   onNumericPaste(event: ClipboardEvent, name: string) {
     const input = event.target as HTMLInputElement | null;
     const raw = event.clipboardData?.getData('text') ?? '';
+    const range = rangeAllowed(this.parameters().find(x => x.name === name)) ? rangePasteText(raw) : null;
+    if (range != null) {
+      // A pasted "0 - 4" / "<5" on a range-enabled value lands as typed.
+      event.preventDefault();
+      if (!input) return;
+      input.value = range;
+      this.setValue(name, range);
+      return;
+    }
     let cleaned = raw.replace(/[^0-9.\-]/g, '');
     const neg = cleaned.startsWith('-');
     cleaned = cleaned.replace(/-/g, '');
@@ -3075,6 +3116,17 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     input.value = next;
     this.setValue(name, next);
   }
+
+  /** The field text a typed key would NOT replace (outside the selection). */
+  private textOutsideSelection(input: HTMLInputElement | null, val: string): string {
+    try {
+      const a = input?.selectionStart, b = input?.selectionEnd;
+      if (a != null && b != null && b > a) return val.slice(0, a) + val.slice(b);
+    } catch { /* no selection API */ }
+    return val;
+  }
+
+  readonly rangeAllowed = rangeAllowed;
 
   private readonly _paramsBlob = computed<TestParametersBlob | null>(() => {
     const raw = this._ot()?.test?.parameters;
@@ -3558,8 +3610,10 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (this.inputKindFor(p) !== 'numeric') return null;
     const raw = this._values()[p.name];
     if (raw === undefined || raw === null || raw === '') return null;
-    const v = parseFloat(String(raw));
-    if (Number.isNaN(v)) return null;
+    // A range value ("0-4") of a range-enabled value; null for every other.
+    const rv = rangeValueFor(p, raw);
+    const v = rv ? NaN : parseFloat(String(raw));
+    if (!rv && Number.isNaN(v)) return null;
 
     const ot = this._ot();
     const saved = savedFlagOf(parseResultSnapshot(ot?.currentResult), p.name);
@@ -3575,8 +3629,10 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
       return null;
     }
 
-    const lf = liveFlag(p, v, normalizeSex(ot?.subOrder?.order?.patient?.sex),
-      bandAgeYears(ot?.subOrder?.order?.patient), ot?.profileCode);
+    const sex = normalizeSex(ot?.subOrder?.order?.patient?.sex);
+    const age = bandAgeYears(ot?.subOrder?.order?.patient);
+    const lf = rv ? liveRangeFlag(p, rv, sex, age, ot?.profileCode)
+      : liveFlag(p, v, sex, age, ot?.profileCode);
     if (!lf) return null;
     if (lf.code === 'CL' || lf.code === 'CH') return { tone: 'critical', label: `${lf.code} · ${lf.code === 'CL' ? 'below' : 'above'} ${lf.limit}` };
     if (lf.code === 'L') return { tone: 'low',  label: 'Low' };
@@ -3603,7 +3659,8 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
     if (this.inputKindFor(p) !== 'numeric') return false;
     const raw = this._values()[p.name];
     if (raw === undefined || raw === null || raw === '') return false;
-    return Number.isNaN(Number(String(raw).trim()));
+    // Without the range switch: exactly Number.isNaN(Number(raw.trim())).
+    return isInvalidNumericValue(p, raw);
   }
 
   private hasInvalidNumeric(): boolean {
@@ -3985,11 +4042,28 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
         if (k.trim().toLowerCase() === want) return read(v);
       return null;
     }
-    for (const v of Object.values(values)) {
+    // A range value ("0-4") of a range-enabled value reads as NO number —
+    // never fall through to the next parameter's value instead.
+    const ranged = this.rangeParamNames(t);
+    for (const [k, v] of Object.entries(values)) {
+      if (ranged.size && ranged.has(k.trim().toLowerCase())
+          && parseRangeValue(v != null && typeof v === 'object' ? (v as { value?: unknown }).value : v)) return null;
       const n = read(v);
       if (n != null) return n;
     }
     return null;
+  }
+
+  /** Lower-cased names of a test's range-enabled values (usually none). */
+  private rangeParamNames(t: OrderTest): Set<string> {
+    const out = new Set<string>();
+    try {
+      const raw = t.test?.parameters;
+      if (!raw || !raw.includes('allowRange')) return out;
+      for (const p of readParameters(parseParametersBlob(raw)))
+        if (rangeAllowed(p)) out.add(String(p.name ?? '').trim().toLowerCase());
+    } catch { /* unreadable blob → none */ }
+    return out;
   }
 
   private calcContext(): CalcContext {

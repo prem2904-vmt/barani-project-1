@@ -259,6 +259,10 @@ export interface FormField {
   // A value outside it is rejected at submit as a likely transcription error.
   validLow?: number | null;
   validHigh?: number | null;
+  /** Numeric only: accept "0-4" / "<5" / ">100" at result entry. */
+  allowRange?: boolean;
+  /** Range flag rule when allowRange is on (default 'ends'). */
+  rangeFlag?: import('../models/test.model').RangeFlagRule;
   normalValue?: string | null;
   /** The test's own embedded option table rows ({code, value, normal,
    *  active}); `options`/`normalValue` derive from it on save. */

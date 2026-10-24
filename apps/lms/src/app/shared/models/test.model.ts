@@ -129,6 +129,9 @@ export interface TestOptionRow {
   active?: boolean;
 }
 
+/** How a range result ("0-4") is flagged — see shared/utils/result-value.ts. */
+export type RangeFlagRule = 'ends' | 'upper' | 'lower' | 'middle';
+
 export interface TestParameter {
   id: string;
   name: string;
@@ -174,6 +177,13 @@ export interface TestParameter {
   // and rejected at submit. Optional; unset = no plausibility check.
   validLow?: number;
   validHigh?: number;
+  /** Numeric values only (Test Master switch "Allow a range or < / >"): the
+   *  tech may also enter "0-4", "<5" or ">100" (shared/utils/result-value.ts).
+   *  Absent / false = a plain number, exactly as before. */
+  allowRange?: boolean;
+  /** How a range value is flagged when {@link allowRange} is on: 'ends'
+   *  (default), 'upper', 'lower' or 'middle'. */
+  rangeFlag?: RangeFlagRule;
   /** Photos & video at result entry for THIS value (per-row toggle); the
    *  Parameters-root `attachments: true` marker means every value. */
   attachments?: boolean;

@@ -12,7 +12,7 @@ import { PageLayoutBox, ReportColumn } from '../../../../shared/models/report-la
 import { ColumnsEditorState, ReportColumnsEditorComponent } from '../../report-template/report-columns-editor.component';
 import { PreviewProfileMember, ReportPdfPreviewComponent } from '../../report-template/report-pdf-preview.component';
 import { Department } from '../../../../shared/models/tenant.model';
-import { Test, TestOptionRow } from '../../../../shared/models/test.model';
+import { RangeFlagRule, Test, TestOptionRow } from '../../../../shared/models/test.model';
 import { ReferralLab } from '../../../../shared/models/referral-lab.model';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import {
@@ -2231,6 +2231,31 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     };
     this._fields.update(list => [...list, field]);
     this.persistFieldsToDraft();
+  }
+
+  // ── Range entry ("0-4", "<5", ">100") — per numeric value ───────────
+  readonly rangeFlagOptions: PfSelectOption<RangeFlagRule>[] = [
+    { value: 'ends',   label: 'Either end (recommended)' },
+    { value: 'upper',  label: 'The upper value' },
+    { value: 'lower',  label: 'The lower value' },
+    { value: 'middle', label: 'The middle value' },
+  ];
+  /** Plain words under "Flag a range by". */
+  rangeFlagHint(rule: RangeFlagRule | null | undefined): string {
+    switch (rule) {
+      case 'upper':  return 'Judged by the upper value only — "4-6" is read as 6.';
+      case 'lower':  return 'Judged by the lower value only — "4-6" is read as 4.';
+      case 'middle': return 'Judged by the middle — "4-6" is read as 5.';
+      default:       return 'High when the upper value is above the normal range, Low when the lower value is below it.';
+    }
+  }
+  /** The switch: on keeps (or starts) the rule; off removes both keys, so
+   *  the value saves exactly as a plain number again. */
+  toggleAllowRange(i: number) {
+    const f = this.fields()[i];
+    if (!f) return;
+    if (f.allowRange === true) this.patchField(i, { allowRange: undefined, rangeFlag: undefined });
+    else this.patchField(i, { allowRange: true, rangeFlag: f.rangeFlag || 'ends' });
   }
 
   patchField(i: number, updates: Partial<FormField>) {
