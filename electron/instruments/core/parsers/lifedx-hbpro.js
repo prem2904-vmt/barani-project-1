@@ -9,8 +9,9 @@
  *
  * Known for sure: record type (first 3 chars), sample id (next 6, '-' padding
  * stripped). Patient name / age / sex are read only when they parse cleanly.
- * The result positions are NOT known yet, so `results` stays empty until the
- * lab configures them (parser.hbpro.fields, 0-based, end exclusive):
+ * Results come from the built-in HBPRO_LAYOUT below (verified against the
+ * analyzer screen). A lab can still override with its own absolute positions
+ * (parser.hbpro.fields, 0-based, end exclusive):
  *   { fields: [{ code: 'HbA1c', start: 60, end: 64, unit: '%', decimals?: 1 }],
  *     sampleIdStart?: 3, sampleIdEnd?: 9 }
  * — editable in the instrument editor without a new desktop build.
@@ -53,6 +54,34 @@ function patientBits(rest) {
   return { name: m.groups.name.trim() || null, age: m.groups.age ? Number(m.groups.age) : null, sex: m.groups.sex || null };
 }
 
+/**
+ * The HBPro's own layout, read from a real record against the analyzer's result
+ * screen (24 Oct 2026, Arun Lab): after the ID text (variable length — the name
+ * the tech typed) comes a block of digits that starts with column temp (4),
+ * position (2), number (4), 1 digit, date YYMMDD, time hhmmss. The results sit at
+ * fixed offsets from the START of that block, so positions are counted from it.
+ */
+const HBPRO_LAYOUT = [
+  { code: 'HbA1a', start: 107, end: 111, unit: '%' },
+  { code: 'HbA1b', start: 111, end: 115, unit: '%' },
+  { code: 'HbF', start: 115, end: 119, unit: '%' },
+  { code: 'LA1c+', start: 119, end: 123, unit: '%' },
+  { code: 'HbA1c', start: 123, end: 127, unit: '%' },
+  { code: 'HbA0', start: 127, end: 131, unit: '%' },
+  { code: 'HbA1c-IFCC', start: 131, end: 136, unit: 'mmol/mol' },
+  { code: 'eAG-mmol', start: 136, end: 140, unit: 'mmol/L' },
+  { code: 'eAG', start: 140, end: 145, unit: 'mg/dL' },
+];
+
+/** Start of the digit block after the ID text, or -1. The block is 35 digits
+ *  (temp, position, number, flag, date, time, 2 + 10 more) followed by the first
+ *  decimal value "0.dddd" — anchoring on that decimal keeps an all-digit ID (a
+ *  typed tube number, which runs straight into the block) out of the block. */
+function blockStart(rec, from) {
+  const m = /(?<=\d{35})0\.\d/.exec(rec.slice(from));
+  return m ? from + m.index - 35 : -1;
+}
+
 function parseHbpro(text, cfg = {}) {
   // The link hands us the frame body; tolerate a pasted frame with STX/ETX/CR/LF.
   const rec = String(text || '').replace(/[\x02\x03]/g, '').replace(/^[\r\n]+|[\r\n]+$/g, '');
@@ -65,7 +94,17 @@ function parseHbpro(text, cfg = {}) {
   // Custom location (sampleIdPath "start-end" / regex) wins when it reads something.
   if (cfg.sampleIdPath) { const id = textValue(rec, cfg.sampleIdPath); if (id) msg.sampleId = id; }
   msg.patient = patientBits(rec.slice(idEnd));
-  for (const f of normalizeFields(cfg.fields)) {
+  const block = blockStart(rec, idEnd);
+  // A tech who types the Prefrontal tube number into the HBPro's ID box: an ID
+  // that is only digits (6+) is the sample number. Names never are.
+  if (block >= idEnd && !cfg.sampleIdPath) {
+    const idText = rec.slice(idEnd, block).trim();
+    if (/^\d{6,}$/.test(idText)) msg.sampleId = idText;
+  }
+  const own = normalizeFields(cfg.fields);
+  // Lab-entered positions are absolute; the built-in layout counts from the block.
+  const fields = own.length ? own : (block >= 0 && cfg.layout !== 'none' ? HBPRO_LAYOUT.map((f) => ({ ...f, start: block + f.start, end: block + f.end, decimals: 1 })) : []);
+  for (const f of fields) {
     const v = rec.slice(f.start, f.end).trim();
     if (!NUM_RE.test(v)) continue;
     let value = v;
@@ -75,4 +114,4 @@ function parseHbpro(text, cfg = {}) {
   return [msg];
 }
 
-module.exports = { parseHbpro, parseFieldLines, normalizeFields, patientBits };
+module.exports = { parseHbpro, parseFieldLines, normalizeFields, patientBits, HBPRO_LAYOUT, blockStart };

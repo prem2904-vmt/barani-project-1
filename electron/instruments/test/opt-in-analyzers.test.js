@@ -137,8 +137,8 @@ test('stx-etx: ACK after every frame, identical retransmits read once per window
   assert.equal(msgs[2], 'S04-----7REC');
 });
 
-test('lifedx-hbpro: record type, sample id, patient bits; results only once positions are configured', () => {
-  const [m] = parseHbpro(HBPRO);
+test('lifedx-hbpro: record type, sample id, patient bits; layout none → no results; own positions win', () => {
+  const [m] = parseHbpro(HBPRO, { layout: 'none' });
   assert.equal(m.recordType, 'S04');
   assert.equal(m.sampleId, '19');
   assert.deepEqual(m.patient, { name: 'MS TEST PATNT', age: 29, sex: 'F' });
@@ -153,12 +153,12 @@ test('lifedx-hbpro: record type, sample id, patient bits; results only once posi
   assert.equal(s.results[0].value, '0.0012');
 });
 
-test('connector: stx-etx/hbpro ACKs, uploads nothing without positions, queues once with positions despite retransmits', () => {
+test('connector: stx-etx/hbpro ACKs, uploads nothing with layout none, queues once with positions despite retransmits', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-optin-'));
   const c = new Connector({ instrumentId: '11111111-2222-3333-4444-555555555555', dataDir: dir, uploader: { getConfig: async () => null, heartbeat: async () => ({}), postMessage: async () => ({ state: 'matched' }) } });
   const sent = [];
   c.transport = { write: (b) => sent.push(Buffer.from(b)), describe: () => 'test' };
-  const l0 = c._makeLink({ type: 'stx-etx' }, { type: 'lifedx-hbpro' }, 's1');
+  const l0 = c._makeLink({ type: 'stx-etx' }, { type: 'lifedx-hbpro', hbpro: { layout: 'none' } }, 's1');
   l0.feed(hbFrame()); l0.feed(hbFrame());
   assert.equal(sent.length, 2);
   assert.equal(c.queue.length, 0, 'no result positions → nothing queued');
