@@ -712,6 +712,20 @@
           </div>
           }
           }
+          @if (isOutsourcedLine(t.id)) {
+          <!-- OUTSOURCED line only (Test Master): keep the partner, pick
+               another active partner, or keep it in-house. Locked once the
+               sample is collected — the line then just says where it goes. -->
+          @if (orderLocked() || isCollected(t.id)) {
+          <p class="pf-cart-meta" data-testid="outsourcing-meta">{{ outsourcingLabel(t.id) }}</p>
+          } @else {
+          <div class="pf-cart-spec pf-cart-out" [attr.data-out-id]="t.id" (click)="$event.stopPropagation()">
+            <pf-select size="sm" [options]="outsourcingOptsFor(t.id)" [value]="outsourcingOf(t.id)"
+              [attr.aria-label]="'Where ' + testDisplayName(t) + ' runs'"
+              (valueChange)="setOutsourcing(t.id, $event)"></pf-select>
+          </div>
+          }
+          }
         </li>
         }
         }

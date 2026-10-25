@@ -655,6 +655,15 @@
                        textual hint and no draw-volume pill — the card carries
                        only the container name and the sample id. -->
                   <p class="pf-tube__code">Sample ID&nbsp;<span class="pf-num">{{ s.barcode ?? '—' }}</span></p>
+                  <!-- Tubes poured into this one (manual merge): their Sample IDs
+                       are retired but still scan. -->
+                  @if (mergeChips(s); as chips) {
+                    @if (chips.length) {
+                      <span class="pf-sc-merges" aria-label="Poured into this tube">
+                        @for (c of chips; track c) { <span class="pf-chip pf-chip--static pf-sc-merge">{{ c }}</span> }
+                      </span>
+                    }
+                  }
 
                   @if (drawn(s)) {
                     <span class="pf-tube__stamp pf-num">
@@ -714,6 +723,19 @@
                   </svg>
                   <!-- Label shows on tablet/desktop; phones keep icon-only. -->
                   <span class="pf-tube__extflag-txt">External (brought in)</span>
+                </button>
+              }
+              @if (canPour(s, g)) {
+                <!-- Pour this tube into another of the same order (a small
+                     draw — e.g. a baby's red tube into the grey one). A real
+                     button, never hover-only, so it works by touch too. -->
+                <button type="button" class="pf-sc-ext pf-sc-pour" data-testid="pour-tube"
+                        (click)="openPour(s, $event)"
+                        [attr.aria-label]="'Pour ' + tubeName(s) + ' into another tube'">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4 4h9l-1.5 9.5a2 2 0 0 1-2 1.5H7.5a2 2 0 0 1-2-1.5Z"/><path d="M13 7l4 3"/><path d="M19 14v6"/><path d="M16.5 17.5 19 20l2.5-2.5"/>
+                  </svg>
+                  <span class="pf-tube__extflag-txt">Pour into another tube…</span>
                 </button>
               }
                     </div><!-- /pf-tube-wrap -->
@@ -972,7 +994,7 @@
                printLabels(). One barcode+QR label per tube, reusing the
                shared front-desk label card so labels match everywhere. -->
           <div class="pf-sc-labels pf-print-label" aria-hidden="true">
-            @for (s of g.samples; track s.id; let i = $index) {
+            @for (s of labelSamples(g); track s.id; let i = $index) {
               <pf-label-card [sample]="s" [patient]="s.order?.patient" [index]="i" [printing]="true"></pf-label-card>
             }
           </div>
@@ -1010,6 +1032,50 @@
             <ul>
               @for (n of peekTests(); track n) { <li>{{ n }}</li> }
             </ul>
+          </div>
+        }
+
+        <!-- "Pour into another tube…" sheet (manual merge). Same dialog shell
+             as Can't collect; pf-select pickers, plain-words verdict from the
+             server's merge-candidates. -->
+        @if (pour(); as p) {
+          <div class="pf-rej pf-pour" role="dialog" aria-modal="true" aria-labelledby="pf-pour-title" (click)="cancelPour()">
+            <div class="pf-rej__panel" (click)="$event.stopPropagation()">
+              <header class="pf-rej__head">
+                <h2 class="pf-rej__title" id="pf-pour-title">Pour {{ tubeName(pourSource()) }} into another tube</h2>
+                <p class="pf-rej__sub">The tube you pour into keeps its Sample ID. {{ pourSource()?.barcode ?? 'The poured tube' }}{{ pourSource()?.barcode ? '’s ID' : '' }} is retired but still scans, and its tests move across.</p>
+              </header>
+              <div class="pf-rej__body">
+                <label class="pf-rej__label" for="pf-pour-target">Pour into</label>
+                <pf-select id="pf-pour-target" data-testid="pour-target" [options]="pourTargetOpts()" [value]="p.targetId"
+                           placeholder="Choose the tube to keep…" (valueChange)="setPourTarget($event)"></pf-select>
+                @if (p.targetId && !p.candidates) {
+                  <p class="pf-pour__note" aria-live="polite">Checking the tubes…</p>
+                } @else if (pourRefusal(); as why) {
+                  <p class="pf-pour__note pf-pour__note--stop" role="alert" data-testid="pour-refusal">{{ why }}</p>
+                } @else if (p.targetId) {
+                  @if (pourAlsoOpts().length) {
+                    <label class="pf-rej__label" for="pf-pour-also">Also pour (optional)</label>
+                    <pf-select id="pf-pour-also" data-testid="pour-also" [multiple]="true" [options]="pourAlsoOpts()" [values]="p.alsoIds"
+                               placeholder="Other tubes into the same one…" (valuesChange)="setPourAlso($event)"></pf-select>
+                  }
+                  @for (w of pourWarnings(); track w) {
+                    <p class="pf-pour__note pf-pour__note--warn" data-testid="pour-warning">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                      {{ w }}
+                    </p>
+                  }
+                }
+              </div>
+              <footer class="pf-rej__foot">
+                <button type="button" class="pf-btn pf-btn-ghost pf-btn pf-btn--secondary" (click)="cancelPour()" [disabled]="pourBusy()">Cancel</button>
+                <button type="button" class="pf-btn pf-btn--primary pf-pour__go" data-testid="pour-confirm"
+                        [disabled]="!canConfirmPour()" [pfBusy]="pourBusy()" pfBusyLabel="Pouring…"
+                        (click)="confirmPour()">
+                  {{ pourBusy() ? 'Pouring…' : (p.targetId ? 'Pour into ' + tubeName(pourTarget()) : 'Pour') }}
+                </button>
+              </footer>
+            </div>
           </div>
         }
       </div>

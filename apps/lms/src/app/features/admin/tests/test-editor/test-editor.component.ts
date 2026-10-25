@@ -66,6 +66,13 @@ import {
   ORIGIN_ICON_PATHS, TestOrigin, canRevertToMaster, isCloneMode, originHint, originLabel, originOf, revertToMasterPath,
 } from '../../../../shared/utils/test-origin';
 import {
+  type MembersState,
+  type ProfileMemberInfo,
+  aliasByCatalogKey,
+  memberDisplayName,
+  memberInfoIndex,
+} from '../../../../shared/utils/profile-member-names';
+import {
   CODE_RANGE_EXHAUSTED_ERROR, CODE_READONLY_ERROR, CODE_READONLY_HINT, DEPARTMENT_REQUIRED_ERROR, codeDisplay,
   compareTestsByCode,
 } from '../../../../shared/utils/test-code';
@@ -1215,9 +1222,43 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
+  /** A member's name: the list row (by id, or by catalog key in reference
+   *  mode), a family line, or the server's resolved row — and when nothing
+   *  resolves, the reason in plain words ("Inactive: CRP", "Removed from
+   *  Test Master"), never "(unknown test)". */
   memberName(testId: string): string {
-    return this._memberById().get(testId)?.name ?? this.familyLineOf(testId)?.name ?? '(unknown test)';
+    return memberDisplayName({
+      local: this._memberById().get(testId),
+      familyName: this.familyLineOf(testId)?.name,
+      info: this._memberInfos().get(testId),
+      state: this.membersState(),
+    });
   }
+
+  // ── Member names from the server (GET /api/tests/{id}/members) ──
+  /** testId → the server's resolved row (catalog-key aware). */
+  private readonly _memberInfos = signal<Map<string, ProfileMemberInfo>>(new Map());
+  readonly membersState = signal<MembersState>('none');
+  private membersLoadedFor = '';
+  private readonly _membersLoader = effect(() => {
+    const d = this._draft();
+    const id = d.type === 'profile' || d.type === 'package' ? d.id ?? '' : '';
+    if (!id || id === this.membersLoadedFor) return;
+    this.membersLoadedFor = id;
+    this.membersState.set('loading');
+    untracked(() => this.api.get<ProfileMemberInfo[]>(`/api/tests/${id}/members`).subscribe({
+      next: rows => {
+        if (this.membersLoadedFor !== id) return;
+        this._memberInfos.set(memberInfoIndex(Array.isArray(rows) ? rows : []));
+        this.membersState.set('loaded');
+      },
+      error: () => {
+        if (this.membersLoadedFor !== id) return;
+        this._memberInfos.set(new Map());
+        this.membersState.set('none');
+      },
+    }));
+  });
 
   memberCalc(t: { calculation?: string | null } | undefined): CalcDef | null {
     return t ? parseCalc(t.calculation) : null;
@@ -1235,9 +1276,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private static readonly CALC_VARS = new Set(['AGE', 'ISI', 'MNPT', 'NORMAL_HCT']);
 
   readonly calcTargetOptions = computed(() => {
-    const byId = this._memberById();
     return this.packageItems()
-      .map(id => ({ id, name: byId.get(id)?.name ?? '(unknown test)' }));
+      .map(id => ({ id, name: this.memberName(id) }));
   });
 
   /** pf-select options for the calculated-test target (no native select). */
@@ -1641,7 +1681,12 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     const m = new Map<string, Test>();
     for (const t of this._allIndividualTests()) m.set(t.id, t);
     for (const t of this._allProfiles()) m.set(t.id, t);
-    return m;
+    // Reference mode: a stored member id the lists don't hold resolves to the
+    // list row with the same catalog key (what the server orders).
+    const infos = this._memberInfos();
+    if (infos.size === 0) return m;
+    const ids = [...new Set([...this._packageItems(), ...this._memberRows().map(r => r.testId)])];
+    return aliasByCatalogKey(m, ids, infos);
   });
 
   /** A member's effective price (₹1 when nobody priced it). */
@@ -1729,13 +1774,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
    *  saved family-line trees (the server stamps `inFamily` from the same). */
   readonly absorbed = computed<Map<string, string>>(() => {
     const byId = this._memberById();
-    const members = this.packageItems().map(id => ({ id, catalogKey: byId.get(id)?.catalogKey ?? null }));
+    const members = this.packageItems().map(id => ({ id, catalogKey: byId.get(id)?.catalogKey ?? this._memberInfos().get(id)?.catalogKey ?? null }));
     return absorbedMembers(this.familyLines(), members);
   });
   private memberRow(id: string) {
     const t = this._memberById().get(id);
     const line = t ? undefined : this.familyLineOf(id);
-    return { id, name: t?.name ?? line?.name ?? '(unknown test)', code: t?.testCode ?? line?.testCode ?? '' };
+    return { id, name: this.memberName(id), code: t?.testCode ?? line?.testCode ?? this._memberInfos().get(id)?.code ?? '' };
   }
   familyLineOf(testId: string): ProfileFamilyLine | undefined { return this.familyLines().find(l => l.testId === testId); }
   isFamilyLine(testId: string): boolean { return !!this.familyLineOf(testId); }

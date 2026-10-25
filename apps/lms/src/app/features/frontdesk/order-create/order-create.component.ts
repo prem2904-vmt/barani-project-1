@@ -2,7 +2,7 @@ import { Location, NgTemplateOutlet } from '@angular/common';
 import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
 import { PF_KEYS_EVENT, PF_KEYS_HEIGHT_VAR, PfKeysEnterTone } from '../../../shared/components/numpad/numpad.service';
 import { PfKeysKind, PfKeysPrefix, deptPrefixes } from '../../../shared/components/numpad/pf-keys-layouts';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, OnDestroy, AfterViewInit, HostListener, computed, effect, inject, signal, viewChild, ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, OnDestroy, AfterViewInit, HostListener, computed, effect, inject, signal, untracked, viewChild, ElementRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TrendTest } from '../../../shared/utils/trend-chart';
 import { firstValueFrom } from 'rxjs';
@@ -27,6 +27,14 @@ import { cartOverlaps, overlapMessage, overlapOnAdd } from './cart-duplicates';
 import { suggestBundles, type PackageSuggestion as BundleSuggestion } from './package-suggest';
 import { PackageSuggestCardComponent } from './package-suggest-card.component';
 import { collectedItemIds, orderedItemIds, type OrderLike } from './order-edit-items';
+import {
+  type PartnerRow,
+  effectiveDestinationLabel,
+  lineDefaultPartners,
+  outsourcingFromOrder,
+  outsourcingOptions,
+  outsourcingPayload,
+} from '../../../shared/utils/order-outsourcing';
 import { cartKey, discountNeedsSync, planConfirmOrder, type PendingOrder } from './pending-order';
 import { buildOrderDraft, parseOrderDraft, orderDraftKey, orderDraftKeysFor, orderDraftInScope, parseOrderDraftKey, DraftScope } from './order-draft';
 import { discountPctOf, fmtPct, percentDiscountAmount } from '../../../shared/utils/discount';
@@ -297,6 +305,75 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       if (sel.has(id) && sp) out[id] = sp;
     return Object.keys(out).length ? out : null;
   }
+  // ── Outsourcing choice at the desk (owner 2026-10-25) ──
+  // ONLY on lines the Test Master marks as outsourced (the test's partner,
+  // or a bundle's outsourced members): keep the Test Master partner, pick
+  // another active partner, or keep it in-house. Locked once collected.
+  // shared/utils/order-outsourcing; the server re-checks every pick.
+  /** cart line id → '' (Test Master default) | 'inhouse' | partner id. */
+  private readonly _outsourcing = signal<Record<string, string>>({});
+  /** Order being viewed / edited: the server's effective partner per
+   *  ordered item (null = in-house) — what a locked line shows. */
+  private readonly _effectivePartner = signal<Record<string, string | null>>({});
+  /** Referral labs (GET /api/referral-labs, incl. inactive so a retired
+   *  default still has a name; only active ones are offered). */
+  readonly partners = signal<PartnerRow[]>([]);
+  private _partnersAsked = false;
+  private readonly _outsourcedDefaults = computed<Record<string, string[]>>(() => {
+    const byId = this._testById();
+    const out: Record<string, string[]> = {};
+    for (const id of this._selected()) {
+      const d = lineDefaultPartners(byId.get(id), mid => byId.get(mid));
+      if (d.length) out[id] = d;
+    }
+    return out;
+  });
+  /** Does this cart line get the outsourcing choice? */
+  isOutsourcedLine(id: string): boolean { return !!this._outsourcedDefaults()[id]; }
+  outsourcingOf(id: string): string { return this._outsourcing()[id] ?? ''; }
+  outsourcingOptsFor(id: string): PfSelectOption[] {
+    return outsourcingOptions(this._outsourcedDefaults()[id] ?? [], this.partners());
+  }
+  setOutsourcing(id: string, v: string) {
+    this._outsourcing.update(m => ({ ...m, [id]: v ?? '' }));
+  }
+  /** Where the line goes, in plain words ("Outsourced · Thyrocare" /
+   *  "In-house"): the server's answer for a line already on the order, else
+   *  the cart's pick over the Test Master default. */
+  outsourcingLabel(id: string): string {
+    const eff = this._effectivePartner();
+    const untouched = (this._outsourcing()[id] ?? '') === (this._onOrderPick[id] ?? '');
+    if (id in eff && untouched) {
+      const pid = eff[id];
+      return pid ? effectiveDestinationLabel(pid, [], this.partners()) : 'In-house';
+    }
+    return effectiveDestinationLabel(this.outsourcingOf(id), this._outsourcedDefaults()[id] ?? [], this.partners());
+  }
+  /** The picks as loaded from the order (to tell an untouched line). */
+  private _onOrderPick: Record<string, string> = {};
+  private outsourcingPayload(): Record<string, string> | null {
+    return outsourcingPayload(this._outsourcing(), this._selected(), id => this.isOutsourcedLine(id));
+  }
+  /** `outsourcing` rides the request only when there is a pick to send. */
+  private outsourcingField(): { outsourcing?: Record<string, string> } {
+    const o = this.outsourcingPayload();
+    return o ? { outsourcing: o } : {};
+  }
+  private hydrateOutsourcingFrom(o: Order | null | undefined) {
+    const { picks, effective } = outsourcingFromOrder(o as unknown as Parameters<typeof outsourcingFromOrder>[0]);
+    this._onOrderPick = { ...picks };
+    this._effectivePartner.set(effective);
+    this._outsourcing.update(m => ({ ...picks, ...m }));
+  }
+  private readonly _partnersLoader = effect(() => {
+    if (this._partnersAsked) return;
+    if (Object.keys(this._outsourcedDefaults()).length === 0) return;
+    this._partnersAsked = true;
+    untracked(() => this.api.get<PartnerRow[]>('/api/referral-labs?includeInactive=true').subscribe({
+      next: rows => this.partners.set((rows ?? []).map(r => ({ id: r.id, name: r.name, isActive: r.isActive ?? true }))),
+      error: () => { /* names fall back to "Partner lab"; In-house still works */ },
+    }));
+  });
   private loadSpecimens() {
     this.api.get<{ code: string; name: string; container?: string | null }[]>('/api/microbiology/specimens').subscribe({
       next: rows => this.specimenMaster.set((rows ?? []).map(r => ({ code: r.code, name: r.name, isDefault: false, container: r.container ?? null }))),
@@ -1247,6 +1324,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           }
           this._selected.set(testIds);
           this.hydrateSpecimensFrom(o);
+          this.hydrateOutsourcingFrom(o);
         },
         error: () => { this._opening.set(false); this.toasts.error('Could not load order details'); }
       });
@@ -1281,6 +1359,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           if (o) this.extractCollectedTestIds(o);
           this.preselectFromOrder(o as unknown as HistoryRow, true);
           this.hydrateSpecimensFrom(o);
+          this.hydrateOutsourcingFrom(o);
         },
         error: () => { this._opening.set(false); this.toasts.error('Could not load order'); }
       });
@@ -1357,6 +1436,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     this._patient.set(null);
     this._selected.set([]);
     this._specimens.set({});
+    this._outsourcing.set({});
+    this._effectivePartner.set({});
+    this._onOrderPick = {};
     this._specimenErr.set({});
     this._defaultApplied.clear();
     this._onOrderIds.set(new Set());
@@ -2095,7 +2177,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       // bills THAT order (tests re-synced if the cart changed) — never a
       // duplicate. A fresh order carries the discount so the server rejects an
       // over-cap discount BEFORE the order exists.
-      const key = cartKey(this._selected(), this.specimenPayload());
+      const key = cartKey(this._selected(), this.specimenPayload(), this.outsourcingPayload());
       const plan = planConfirmOrder(this.pendingOrder, p.id, key);
       let order: { id: string };
       if (plan.action === 'create') {
@@ -2108,6 +2190,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
           collectionType: 'walkin',
           testIds: this._selected(),
           specimens: this.specimenPayload(),
+          ...this.outsourcingField(),
           // Same metadata as submit(): the appointment link AND the Trendogram
           // choice from the billing card (it was dropped on this path before).
           metadataJson: this.buildOrderMetadata(appointmentId),
@@ -2118,7 +2201,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       } else {
         if (plan.action === 'patch') {
           await this.patchTestsWithStockGate(plan.orderId, {
-            testIds: this._selected(), specimens: this.specimenPayload(), reason: 'reception edit'
+            testIds: this._selected(), specimens: this.specimenPayload(), ...this.outsourcingField(), reason: 'reception edit'
           });
           this.pendingOrder = { id: plan.orderId, patientId: p.id, key };
         }
@@ -2510,7 +2593,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         try {
           await this.patchTestsWithStockGate<{ order: Order; bill: unknown }>(editId, {
             testIds: this._selected(),
-            specimens: this.specimenPayload(), reason: 'reception edit'
+            specimens: this.specimenPayload(), ...this.outsourcingField(), reason: 'reception edit'
           });
           this._saving.set(false);
           this.toasts.success('Order updated — reconcile payment');
@@ -2539,6 +2622,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       testIds: this._selected(),
       // The desk's specimen choices (dropped on this path before).
       specimens: this.specimenPayload(),
+      ...this.outsourcingField(),
       metadataJson: this.buildOrderMetadata(appointmentId),
       // Validated against the cap BEFORE the order exists (no orphan order).
       ...(this.discountAmount() > 0 ? { discount: this.discountAmount() } : {})

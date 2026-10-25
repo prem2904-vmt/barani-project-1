@@ -14,9 +14,16 @@ export type ConfirmOrderPlan =
   | { action: 'patch'; orderId: string };
 
 /** Stable identity of the cart's tests + specimen choices (test order ignored). */
-export function cartKey(testIds: readonly string[], specimens: Record<string, string> | null | undefined): string {
+export function cartKey(
+  testIds: readonly string[],
+  specimens: Record<string, string> | null | undefined,
+  outsourcing?: Record<string, string> | null,
+): string {
   const sp = specimens ? Object.keys(specimens).sort().map(k => [k, specimens[k]]) : [];
-  return JSON.stringify([[...testIds].sort(), sp]);
+  // The outsourcing picks join the key only when there are any, so a cart
+  // without one keys exactly as before (a changed pick re-syncs the order).
+  const out = outsourcing ? Object.keys(outsourcing).sort().map(k => [k, outsourcing[k]]) : [];
+  return JSON.stringify(out.length ? [[...testIds].sort(), sp, out] : [[...testIds].sort(), sp]);
 }
 
 /** create a new order, reuse the pending one, or re-sync its tests first. A

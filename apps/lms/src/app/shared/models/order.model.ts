@@ -140,6 +140,11 @@ export interface OrderTest {
    *  directly: standalone test, or a package's direct member). */
   profileTestId?: string | null;
   profileName?: string | null;
+  /** The desk's outsourcing pick for this line (a partner id, 'inhouse', or
+   *  null = the Test Master default) — shared/utils/order-outsourcing. */
+  outsourcingOverride?: string | null;
+  /** Where the line really goes (partner id; null = in-house). */
+  effectivePartnerId?: string | null;
   /** Test CODE of the nearest profile (annotated by the samples endpoint) —
    *  picks profile-scoped reference bands at entry. */
   profileCode?: string | null;

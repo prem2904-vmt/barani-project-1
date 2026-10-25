@@ -76,6 +76,21 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { busyWhile, spinDelay } from '../../../shared/utils/busy';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 import { matchesDailyNo } from '../../../shared/utils/daily-no';
+import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
+import {
+  ManualMergeEntry,
+  MergeCandidate,
+  MergeResult,
+  MergeWarning,
+  canOfferPour,
+  isMergedTube,
+  manualMergesOf,
+  mergeChipLabel,
+  mergeRefusalText,
+  pourTargets,
+  shortTubeName,
+  warningLines,
+} from '../../../shared/utils/tube-merge';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -394,6 +409,7 @@ interface OrderGroup {
     KpiStripComponent,
     LabelCardComponent,
     ScanIconComponent,
+    SelectComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./sample-collection.component.html",
@@ -708,6 +724,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   readonly groups = computed<OrderGroup[]>(() => {
     const byOrder = new Map<string, OrderGroup>();
     for (const s of this._pending()) {
+      // A drawn tube poured into another stays on the server as 'merged'
+      // (audit only) — it is never a tube to collect, count or print.
+      if (isMergedTube(s)) continue;
       let g = byOrder.get(s.orderId);
       if (!g) {
         const p = s.order?.patient;
@@ -1829,6 +1848,269 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
     }
+  }
+
+  // ─── Pour one tube into another (manual merge, owner 2026-10-25) ──────
+  // A baby's red tube poured into the grey one: the KEPT tube keeps its
+  // Sample ID, the poured tube's ID is retired (it still scans) and its tests
+  // move onto the kept tube. The server decides every rule
+  // (GET merge-candidates / POST merge, shared/utils/tube-merge); this screen
+  // asks, shows the reason in plain words, and confirms a warning.
+
+  /** The open "Pour into another tube…" sheet (null = closed). */
+  protected readonly pour = signal<{
+    sourceId: string;
+    targetId: string;
+    /** Extra tubes poured into the same target (several into one). */
+    alsoIds: string[];
+    /** Candidates of the chosen target (null while loading / none chosen). */
+    candidates: MergeCandidate[] | null;
+    loadError: string | null;
+  } | null>(null);
+  protected readonly pourBusy = signal(false);
+
+  /** "+ Red (26104)" chips on the kept tube. */
+  mergeChips(s: OrderSample): string[] {
+    return manualMergesOf(s).map((e: ManualMergeEntry) => mergeChipLabel(e));
+  }
+
+  /** The tile offers "Pour into…" only while the tube is still at the
+   *  counter and the order has another live tube to pour into. */
+  canPour(s: OrderSample, g: OrderGroup): boolean {
+    if (this.dispatchSelect() !== null) return false;
+    if (!this.auth.hasPermission('collect_sample')) return false;
+    if (this.container(s).kind !== 'vacutainer') return false;
+    if (!canOfferPour(s)) return false;
+    return pourTargets(s, g.samples).some(t => !this.notCollected(t));
+  }
+
+  /** "Red · 26104" — how a tube is named in the sheet. */
+  tubeName(s: OrderSample | undefined | null): string {
+    if (!s) return 'Tube';
+    const name = s.tubeColor ? shortTubeName(s.tubeColor) : this.tube(s).label;
+    return s.barcode ? `${name} · ${s.barcode}` : name;
+  }
+
+  private sampleById(id: string | null | undefined): OrderSample | undefined {
+    return id ? this._pending().find(x => x.id === id) : undefined;
+  }
+
+  pourSource(): OrderSample | undefined { return this.sampleById(this.pour()?.sourceId); }
+  pourTarget(): OrderSample | undefined { return this.sampleById(this.pour()?.targetId); }
+
+  /** The tubes the source may be poured into (pf-select options). */
+  pourTargetOpts(): PfSelectOption[] {
+    const src = this.pourSource();
+    const g = this.activeGroup();
+    if (!src || !g) return [];
+    return pourTargets(src, g.samples)
+      .filter(t => !this.notCollected(t))
+      .map(t => ({
+        value: t.id,
+        label: this.tubeName(t),
+        hint: this.tubeTests(t).map(x => x.name).join(', ') || undefined,
+      }));
+  }
+
+  /** The source's row in the target's candidates (eligibility + warnings). */
+  pourVerdict(): MergeCandidate | null {
+    const p = this.pour();
+    if (!p?.candidates) return null;
+    return p.candidates.find(c => c.id === p.sourceId) ?? null;
+  }
+
+  /** Other tubes that may ALSO go into the same target (several into one). */
+  pourAlsoOpts(): PfSelectOption[] {
+    const p = this.pour();
+    if (!p?.candidates) return [];
+    return p.candidates
+      .filter(c => c.id !== p.sourceId && c.id !== p.targetId && c.eligible)
+      .map(c => {
+        const local = this.sampleById(c.id);
+        return {
+          value: c.id,
+          label: local ? this.tubeName(local) : `${shortTubeName(c.tubeColor)}${c.barcode ? ' · ' + c.barcode : ''}`,
+          hint: (c.tests ?? []).join(', ') || undefined,
+        };
+      });
+  }
+
+  /** Warnings the server named for the chosen tubes (shown before confirm). */
+  pourWarnings(): string[] {
+    const p = this.pour();
+    if (!p?.candidates) return [];
+    const ids = new Set([p.sourceId, ...p.alsoIds]);
+    return warningLines(p.candidates.filter(c => ids.has(c.id)).flatMap(c => c.warnings ?? []));
+  }
+
+  /** Plain reason the chosen pour is refused (null = allowed / not decided). */
+  pourRefusal(): string | null {
+    const p = this.pour();
+    if (!p || !p.targetId) return null;
+    if (p.loadError) return p.loadError;
+    const v = this.pourVerdict();
+    if (!p.candidates) return null;
+    if (!v) return mergeRefusalText(null);
+    return v.eligible ? null : mergeRefusalText(v.reason ?? null);
+  }
+
+  canConfirmPour(): boolean {
+    const p = this.pour();
+    return !!p && !!p.targetId && !!p.candidates && !this.pourRefusal() && !this.pourBusy();
+  }
+
+  openPour(s: OrderSample, ev?: Event): void {
+    ev?.stopPropagation();
+    ev?.preventDefault();
+    this.clearPress();
+    this.pour.set({ sourceId: s.id, targetId: '', alsoIds: [], candidates: null, loadError: null });
+    // One other tube: pick it straight away (the common baby case).
+    const opts = this.pourTargetOpts();
+    if (opts.length === 1) void this.setPourTarget(opts[0].value);
+  }
+
+  cancelPour(): void {
+    if (this.pourBusy()) return;
+    this.pour.set(null);
+  }
+
+  async setPourTarget(targetId: string): Promise<void> {
+    const p = this.pour();
+    if (!p) return;
+    this.pour.set({ ...p, targetId, alsoIds: [], candidates: null, loadError: null });
+    if (!targetId) return;
+    try {
+      const list = await firstValueFrom(
+        this.api.get<MergeCandidate[]>(`/api/samples/${targetId}/merge-candidates`),
+      );
+      const cur = this.pour();
+      if (!cur || cur.targetId !== targetId) return; // changed meanwhile
+      this.pour.set({ ...cur, candidates: list ?? [] });
+    } catch (e) {
+      const cur = this.pour();
+      if (!cur || cur.targetId !== targetId) return;
+      this.pour.set({ ...cur, candidates: [], loadError: ApiError.from(e).message });
+    }
+  }
+
+  setPourAlso(ids: string[]): void {
+    this.pour.update(p => (p ? { ...p, alsoIds: ids ?? [] } : p));
+  }
+
+  /** POST the merge; a 409 merge_needs_confirm asks the user (DialogService)
+   *  and resends with confirmWarnings. Success: the kept tube takes the
+   *  server's state, the poured tubes leave the screen, and the kept label
+   *  can be printed again. */
+  async confirmPour(): Promise<void> {
+    const p = this.pour();
+    if (!p || !this.canConfirmPour()) return;
+    const sampleIds = [p.sourceId, ...p.alsoIds.filter(id => id !== p.sourceId)];
+    this.pourBusy.set(true);
+    try {
+      let res: MergeResult<OrderSample> | null = null;
+      try {
+        res = await this.postMerge(p.targetId, sampleIds, false);
+      } catch (e) {
+        const err = ApiError.from(e);
+        if (err.code !== 'merge_needs_confirm') throw err;
+        const ws = warningLines(this.warningsFrom(err.data) ?? []);
+        const lines = ws.length ? ws : this.pourWarnings();
+        const ok = await this.dialog.confirm({
+          title: 'Pour anyway?',
+          message: `${this.tubeName(this.pourTarget())} uses a different additive.`,
+          items: lines.length ? lines : undefined,
+          question: 'Pour the tube anyway?',
+          confirmLabel: 'Pour anyway',
+          tone: 'danger',
+        });
+        if (!ok) return;
+        res = await this.postMerge(p.targetId, sampleIds, true);
+      }
+      this.applyMerge(p.targetId, sampleIds, res);
+      this.pour.set(null);
+      const kept = this.sampleById(p.targetId);
+      const retired = res?.retired?.length ? res.retired : sampleIds.map(id => this.barcodeOfRemoved(id)).filter(Boolean);
+      this.toasts.success(
+        `Poured into ${this.tubeName(kept)}${retired.length ? ` — ${retired.join(', ')} still scan${retired.length === 1 ? 's' : ''}` : ''}`,
+      );
+      this.sampleCollected.emit();
+      if (kept) void this.offerKeptLabel(kept);
+    } catch (e) {
+      const err = ApiError.from(e);
+      this.toasts.error(mergeRefusalText(err.code ?? null, err.message));
+    } finally {
+      this.pourBusy.set(false);
+    }
+  }
+
+  private _removedBarcodes = new Map<string, string>();
+  private barcodeOfRemoved(id: string): string { return this._removedBarcodes.get(id) ?? ''; }
+
+  private postMerge(keepId: string, sampleIds: string[], confirmWarnings: boolean) {
+    return firstValueFrom(
+      this.api.post<MergeResult<OrderSample>>(`/api/samples/${keepId}/merge`, { sampleIds, confirmWarnings }),
+    );
+  }
+
+  private warningsFrom(data: unknown): MergeWarning[] | null {
+    if (Array.isArray(data)) return data as MergeWarning[];
+    const w = (data as { warnings?: unknown } | null)?.warnings;
+    return Array.isArray(w) ? (w as MergeWarning[]) : null;
+  }
+
+  /** Reflect the merge locally (no refetch — the drawer must not lose the
+   *  order mid-flow): the kept tube takes the server's DTO (tests, status,
+   *  metadata.manualMerge), the poured tubes leave the list. */
+  private applyMerge(keepId: string, goneIds: string[], res: MergeResult<OrderSample> | null): void {
+    const gone = new Set(goneIds);
+    for (const id of goneIds) {
+      const b = this.sampleById(id)?.barcode;
+      if (b) this._removedBarcodes.set(id, b);
+    }
+    this._pending.update(list => list
+      .filter(x => !gone.has(x.id))
+      .map(x => {
+        if (x.id !== keepId || !res?.sample) return x;
+        const upd = res.sample;
+        return { ...x, ...upd, order: x.order ?? upd.order, tests: upd.tests ?? x.tests };
+      }));
+  }
+
+  /** After a pour: offer to print the kept tube's label again (it now
+   *  carries the poured tests). Manual mode has no printer — nothing to offer. */
+  private async offerKeptLabel(kept: OrderSample): Promise<void> {
+    if (this.scan.manualEntry()) return;
+    const ok = await this.dialog.confirm({
+      title: 'Print the kept tube’s label again?',
+      message: `${this.tubeName(kept)} now carries the poured tests. A fresh label lists them all.`,
+      confirmLabel: 'Print label',
+      cancelLabel: 'Not now',
+      tone: 'primary',
+      icon: 'printer',
+    });
+    if (!ok) return;
+    this.reprintLabel(kept);
+  }
+
+  /** Print ONE tube's label (the kept tube after a pour). */
+  reprintLabel(s: OrderSample): void {
+    if (this.printing()) return;
+    this.printing.set(true);
+    this.labelOnlyId.set(s.id);
+    void this.labelPrint.printTubeLabels({
+      samples: [s],
+      fallbackName: this.activeGroup()?.patientName,
+      systemPrint: () => printTubeLabels(),
+    }).finally(() => {
+      this.printing.set(false);
+      this.labelOnlyId.set(null);
+    });
+  }
+  /** While set, the hidden system-print label block holds only this tube. */
+  protected readonly labelOnlyId = signal<string | null>(null);
+  labelSamples(g: OrderGroup): OrderSample[] {
+    const only = this.labelOnlyId();
+    return only ? g.samples.filter(x => x.id === only) : g.samples;
   }
 
   // Original free-text dialog kept as fallback for any other call sites.

@@ -2410,3 +2410,36 @@
       transform: translateX(2px);
     }
 
+
+    /* ─── Pour into another tube (manual merge) ───────────────────────── */
+    /* The tile's second action row (under External). ND: the shared
+       .pf-sc-grid .pf-sc-ext row look; classic: a plain full-width row. */
+    .pf-sc-pour {
+      width: 100%; min-height: 44px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      margin-top: 6px;
+      border: 1px solid var(--pf-line, var(--glass-border)); border-radius: 10px;
+      background: transparent; color: var(--text-secondary);
+      font: inherit; font-size: 12px; font-weight: 600;
+      cursor: pointer;
+    }
+    .pf-drawer--nd .pf-sc-grid .pf-sc-pour { margin-top: 0; }
+    .pf-sc-pour:focus-visible { outline: 2px solid var(--input-border-focus, #8b5cf6); outline-offset: -2px; }
+    /* "+ Red (26104)" chips on the kept tube. */
+    .pf-sc-merges { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 6px; }
+    .pf-sc-merge { font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pf-pour .pf-rej__body { gap: 6px; }
+    .pf-pour .pf-rej__label { margin-top: 8px; }
+    .pf-pour__note {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin: 10px 0 0; padding: 10px 12px; border-radius: 10px;
+      font-size: 13px; line-height: 1.4;
+      background: var(--pf-chip-bg, rgba(148, 163, 184, 0.12)); color: var(--text-secondary);
+    }
+    .pf-pour__note svg { flex: 0 0 auto; margin-top: 2px; }
+    .pf-pour__note--warn { background: rgba(245, 158, 11, 0.14); color: var(--amber-text, #b45309); }
+    .pf-pour__note--stop { background: color-mix(in srgb, var(--red-text, #dc2626) 10%, transparent); color: var(--red-text, #dc2626); }
+    @media (max-width: 640px) {
+      /* Phone: the sheet's buttons share the row (44px targets). */
+      .pf-pour .pf-rej__foot .pf-btn { flex: 1 1 0; min-height: 44px; height: auto; }
+    }
