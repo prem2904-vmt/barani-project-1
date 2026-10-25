@@ -213,26 +213,48 @@ function hbproFieldsText(fields: unknown): string {
     .join('\n');
 }
 
-export function buildParser(f: InstrumentForm): ParserConfig {
+/** HBPro positions: the saved array when the box still says the same thing
+ *  (keeps per-field `decimals` etc. the box can't show); else the parsed box,
+ *  carrying `decimals` over for any position that is unchanged. */
+function hbproFieldsFor(text: string, base: unknown): unknown[] {
+  const baseArr = Array.isArray(base) ? base as Record<string, unknown>[] : [];
+  if (hbproFieldsText(baseArr) === text.trim() || (typeof base === 'string' && base === text)) return baseArr.length ? baseArr : parseHbproFields(text);
+  return parseHbproFields(text).map((n) => {
+    const old = baseArr.find((b) => b && b['code'] === n.code && b['start'] === n.start && b['end'] === n.end);
+    return old ? { ...old, ...n } : n;
+  });
+}
+
+/** `base` = the saved parser: every block / key the form cannot show
+ *  (hbpro sampleIdStart/End/layout, text.fixedColumns, sinocare extras, unknown
+ *  blocks) is kept; whatever the form edits wins. */
+export function buildParser(f: InstrumentForm, base?: Partial<ParserConfig> | null): ParserConfig {
   // Custom sample-number path: added ONLY to its own block, and only when set
   // — without it every block is byte-identical to before.
   const c = customSampleIdPath(f);
   const sp = (fmt: SampleIdFormat) => (c && c.format === fmt ? { sampleIdPath: c.path } : {});
-  return {
+  const b = (base ?? {}) as Record<string, any>;
+  const blk = (k: string): Record<string, unknown> => (b[k] && typeof b[k] === 'object' ? b[k] : {});
+  // An unset custom path clears a stale one in the saved block (form is the truth).
+  const noPath = (o: Record<string, unknown>) => { const { sampleIdPath: _drop, ...rest } = o; return rest; };
+  const out = {
+    ...b,
     type: f.protocol,
-    astm: { sampleIdField: num(f.astm.sampleIdField, 3), sampleIdComponent: num(f.astm.sampleIdComponent, 1), ...sp('astm') },
-    hl7: { sampleIdField: f.hl7.sampleIdField, ...sp('hl7') },
+    astm: { ...noPath(blk('astm')), sampleIdField: num(f.astm.sampleIdField, 3), sampleIdComponent: num(f.astm.sampleIdComponent, 1), ...sp('astm') },
+    hl7: { ...noPath(blk('hl7')), sampleIdField: f.hl7.sampleIdField, ...sp('hl7') },
     text: {
+      ...noPath(blk('text')),
       linePattern: f.text.linePattern || DEFAULT_TEXT_LINE_PATTERN,
       sampleIdPattern: f.text.sampleIdPattern || DEFAULT_TEXT_SAMPLE_ID_PATTERN,
       qcPattern: f.text.qcPattern || DEFAULT_TEXT_QC_PATTERN,
-      fixedColumns: null,
+      fixedColumns: blk('text')['fixedColumns'] ?? null,
       ...sp('text'),
     },
     // Preset blocks only for their own protocol — an old instrument saves byte-identically.
-    ...(f.protocol === 'lifedx-hbpro' ? { hbpro: { fields: parseHbproFields(f.hbpro?.fields), ...sp('hbpro') } } : {}),
-    ...(f.protocol === 'sinocare-fhir' ? { sinocare: { sampleIdField: f.sinocare?.sampleIdField === 'position' ? 'position' as const : 'medicalRecordNo' as const, ...sp('sinocare') } } : {}),
+    ...(f.protocol === 'lifedx-hbpro' ? { hbpro: { ...noPath(blk('hbpro')), fields: hbproFieldsFor(f.hbpro?.fields ?? '', blk('hbpro')['fields']), ...sp('hbpro') } } : {}),
+    ...(f.protocol === 'sinocare-fhir' ? { sinocare: { ...noPath(blk('sinocare')), sampleIdField: f.sinocare?.sampleIdField === 'position' ? 'position' as const : 'medicalRecordNo' as const, ...sp('sinocare') } } : {}),
   };
+  return out as ParserConfig;
 }
 
 /** The `config` object the contract stores (transport + link + parser).
@@ -240,13 +262,34 @@ export function buildParser(f: InstrumentForm): ParserConfig {
 /** A saved config (or a detect proposal's link) the build keeps extras from. */
 export type ConfigBase = Partial<Omit<InstrumentConfig, 'link'>> & { link?: Partial<LinkConfig> | null };
 
-export function buildInstrumentConfig(f: InstrumentForm, base?: ConfigBase | null): InstrumentConfig {
+/** A stored config as an object — tolerates the server handing it back as a JSON string. */
+export function coerceConfig<T>(c: T | string | null | undefined): T | null {
+  if (typeof c === 'string') { try { const o = JSON.parse(c); return o && typeof o === 'object' ? o as T : null; } catch { return null; } }
+  return c && typeof c === 'object' ? c : null;
+}
+
+export function buildInstrumentConfig(f: InstrumentForm, rawBase?: ConfigBase | null): InstrumentConfig {
+  const base = coerceConfig<ConfigBase>(rawBase);
   const extra: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(base ?? {})) if (!['transport', 'link', 'parser'].includes(k)) extra[k] = v;
   // Two-way: no block on an old instrument whose section is untouched (byte-identical save).
   const bidi = buildBidirectional(f.twoWay ?? emptyTwoWayForm(), base?.['bidirectional']);
   if (bidi) extra['bidirectional'] = bidi; else delete extra['bidirectional'];
-  return { ...extra, transport: buildTransport(f), link: buildLink(f, base?.link ?? null), parser: buildParser(f) };
+  const baseParser = (base as { parser?: Partial<ParserConfig> } | null)?.parser ?? null;
+  // A stored protocol this screen doesn't know (a preset added after this
+  // build — the HBPro protocol was wiped to {type:'auto'} exactly this way by
+  // an older page saving the Code mapping step) reads as 'auto' in the form;
+  // while the form still says 'auto', the stored link + parser go back as they were.
+  if (f.protocol === 'auto' && isUnknownProtocol(baseParser?.type)) {
+    return { ...extra, transport: buildTransport(f), link: { ...(base?.link ?? {}) } as LinkConfig, parser: { ...baseParser } as ParserConfig };
+  }
+  return { ...extra, transport: buildTransport(f), link: buildLink(f, base?.link ?? null), parser: buildParser(f, baseParser) };
+}
+
+/** Parser types this editor can show in its Protocol select. */
+export const KNOWN_PROTOCOLS: readonly string[] = ['auto', 'astm', 'hl7', 'text', 'lifedx-hbpro', 'sinocare-fhir'];
+function isUnknownProtocol(t: unknown): boolean {
+  return typeof t === 'string' && t.trim() !== '' && !KNOWN_PROTOCOLS.includes(t);
 }
 
 export function buildUpsert(f: InstrumentForm, base?: ConfigBase | null, profileKey?: string | null): InstrumentUpsert {
@@ -258,7 +301,8 @@ export function buildUpsert(f: InstrumentForm, base?: ConfigBase | null, profile
 }
 
 // ── Config JSON → form (edit) ────────────────────────────────────────────
-export function formFromInstrument(dto: Pick<InstrumentDto, 'name' | 'make' | 'model' | 'serialNumber' | 'isActive' | 'config' | 'transport'>): InstrumentForm {
+export function formFromInstrument(rawDto: Pick<InstrumentDto, 'name' | 'make' | 'model' | 'serialNumber' | 'isActive' | 'config' | 'transport'>): InstrumentForm {
+  const dto = { ...rawDto, config: coerceConfig<InstrumentConfig>(rawDto.config) as InstrumentConfig };
   const f = emptyInstrumentForm();
   f.name = dto.name ?? '';
   f.make = dto.make ?? '';
@@ -283,8 +327,12 @@ export function formFromInstrument(dto: Pick<InstrumentDto, 'name' | 'make' | 'm
     const d = t as { path?: string; pattern?: string; moveTo?: string | null };
     f.folder = { path: d.path ?? '', pattern: d.pattern ?? '*.txt', moveTo: d.moveTo ?? '' };
   }
-  applyParser(f, dto.config?.parser);
   const link = dto.config?.link as Partial<LinkConfig> | undefined;
+  // A saved config whose parser.type went missing still reads as its preset (link / block say which).
+  const parser = dto.config?.parser as Partial<ParserConfig> | undefined;
+  applyParser(f, parser && !parser.type
+    ? { ...parser, type: link?.type === 'stx-etx' || parser.hbpro ? 'lifedx-hbpro' : link?.type === 'sinocare-sn' || parser.sinocare ? 'sinocare-fhir' : parser.type }
+    : parser);
   if (link?.type === 'sinocare-sn') {
     f.sinocare = {
       ...f.sinocare,
@@ -298,7 +346,7 @@ export function formFromInstrument(dto: Pick<InstrumentDto, 'name' | 'make' | 'm
 
 function applyParser(f: InstrumentForm, p: Partial<ParserConfig> | null | undefined): void {
   if (!p) return;
-  if (p.type && ['auto', 'astm', 'hl7', 'text', 'lifedx-hbpro', 'sinocare-fhir'].includes(p.type)) f.protocol = p.type;
+  if (p.type && KNOWN_PROTOCOLS.includes(p.type)) f.protocol = p.type;
   if (p.hbpro) f.hbpro = { fields: hbproFieldsText(p.hbpro.fields) };
   if (p.sinocare) f.sinocare = { ...(f.sinocare ?? emptyInstrumentForm().sinocare), sampleIdField: p.sinocare.sampleIdField === 'position' ? 'position' : 'medicalRecordNo' };
   if (p.astm) f.astm = { sampleIdField: num(p.astm.sampleIdField, 3), sampleIdComponent: num(p.astm.sampleIdComponent, 1) };

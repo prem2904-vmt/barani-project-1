@@ -13,11 +13,12 @@
  * analyzer screen). A lab can still override with its own absolute positions
  * (parser.hbpro.fields, 0-based, end exclusive):
  *   { fields: [{ code: 'HbA1c', start: 60, end: 64, unit: '%', decimals?: 1 }],
- *     sampleIdStart?: 3, sampleIdEnd?: 9 }
+ *     sampleIdStart?: 3, sampleIdEnd?: 9, graph?: false }
  * — editable in the instrument editor without a new desktop build.
  */
 const { emptyMessage } = require('./common');
 const { textValue } = require('./sample-id-path');
+const { chromatogramImage } = require('./hbpro-graph');
 
 const NUM_RE = /^[<>]?-?\d+(?:\.\d+)?$/;
 
@@ -110,6 +111,16 @@ function parseHbpro(text, cfg = {}) {
     let value = v;
     if (f.decimals != null && /^-?\d+(\.\d+)?$/.test(v)) value = Number(v).toFixed(f.decimals);
     msg.results.push({ code: f.code, value, unit: f.unit, flags: [], rawRecord: `${f.code}@${f.start}-${f.end}=${v}` });
+  }
+  // The chromatogram the record carries after the results → a PNG on
+  // message.images (code 'HbA1c-graph'), the same path as the Medonic M51
+  // histograms. Only alongside results; `graph: false` turns it off; a curve
+  // that doesn't parse (or any drawing failure) just means no image.
+  if (msg.results.length && cfg.graph !== false && block >= 0) {
+    try {
+      const img = chromatogramImage(rec, block, msg.sampleId);
+      if (img) msg.images.push(img);
+    } catch { /* no graph — the results still go */ }
   }
   return [msg];
 }

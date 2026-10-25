@@ -175,7 +175,10 @@ Code is needed only for a genuinely new link/framing (e.g. a binary protocol): a
 - Analyzer timestamps carry no zone and are read in the host's local zone.
 - Histograms / scattergrams (HL7 OBX type `ED`, e.g. the Medonic M51) are extracted into `message.images[]` (`code`,
   `label`, `format`, `base64`) and uploaded alongside the results — never inlined into `raw` (see `parsers/hl7.js`
-  `redactEdImages`). There is no UI to view them yet; the server stores/serves them once it has the image-storage feature.
+  `redactEdImages`). The LifeDx HBPro sends its HbA1c chromatogram as numbers (200 × `d.dddd` OD after the results, one
+  point every 0.65 s); `parsers/hbpro-graph.js` draws it as a PNG (pure JS, `core/raster.js`) and adds it as image code
+  `HbA1c-graph` — it lands on the HbA1c line, shows under Analyzer graphs in result entry and prints with the report
+  (`parser.hbpro.graph: false` turns it off).
 - QC is stored and listed, not yet charted (no Levey-Jennings / Westgard).
 - Raspberry Pi host: CLI only — no systemd unit, OS keyring or auto-update yet; keys use the 0600 plain codec there.
 - Folder watch reads a whole file as one message set; no archive retention policy.

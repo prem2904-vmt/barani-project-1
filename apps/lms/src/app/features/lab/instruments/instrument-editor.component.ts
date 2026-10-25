@@ -22,7 +22,7 @@ import { InstrumentBridgeService } from '../../../shared/instruments/instrument-
 import {
   BAUD_RATES, CodeMapRow, ConfigBase, DATA_BITS, DEFAULT_SINOCARE_ACK_JSON, DESKTOP_ONLY_PROTOCOLS, FLOW_CONTROLS, SINOCARE_REPLY_MODES, SINOCARE_SAMPLE_ID_FIELDS, FlowControl, HL7_SAMPLE_ID_FIELDS, InstrumentForm, LoincSkip, PARITIES,
   PROTOCOL_OPTIONS, RawSegment, STOP_BITS, TRANSPORT_OPTIONS, WizardStep, applyDetectProposal, applyLoincSuggestions, buildInstrumentConfig,
-  buildUpsert, codesFromMessages, connectionSummary, connectorStateWord, emptyCodeMapRow, emptyInstrumentForm, fmtIst, formFromInstrument,
+  buildUpsert, coerceConfig, codesFromMessages, connectionSummary, connectorStateWord, emptyCodeMapRow, emptyInstrumentForm, fmtIst, formFromInstrument,
   mergeUnmappedCodes, previewLine, previewRows, renderControlChars, rowFromDto, sharedCodeHint, statusWord, toCodeMapUpserts, validateCodeMaps,
   validateInstrumentForm, withCbcDefaults, withM51Defaults,
 } from '../../../shared/instruments/instrument-config';
@@ -290,7 +290,7 @@ export class InstrumentEditorComponent {
 
   private applyDto(dto: InstrumentDto) {
     this.dto.set(dto);
-    this.configBase = dto.config ?? null;
+    this.configBase = coerceConfig<ConfigBase>(dto.config);
     this.form.set(formFromInstrument(dto));
     this.sampleIdMode.set(this.form().sampleIdPath?.path ? 'custom' : 'standard');
     if (this.sampleIdMode() === 'custom' && this.tab() === 'protocol') void this.loadPickerMessage();
