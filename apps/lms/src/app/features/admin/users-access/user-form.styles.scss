@@ -5,13 +5,43 @@
   @media (min-width: 1024px) { .pf-uf-grid2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
   .pf-uf-card { overflow: visible; }
   .pf-uf-card .pf-card__body { overflow: visible; padding: 16px 18px 18px; gap: 16px; }
-  .pf-uf-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 16px; }
+  .pf-uf-fields { display: flex; flex-direction: column; gap: 14px; }
+  .pf-uf-name-row { display: grid; grid-template-columns: 100px minmax(0, 1fr) minmax(0, 1fr); gap: 14px 16px; }
+  .pf-uf-account-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 16px; align-items: start; }
   .pf-uf-span { grid-column: 1 / -1; }
+  @media (max-width: 640px) {
+    .pf-uf-name-row { grid-template-columns: minmax(0, 1fr); }
+    .pf-uf-account-row { grid-template-columns: minmax(0, 1fr); }
+  }
   .pf-uf-req { color: var(--red-text, #b91c1c); font-weight: 600; margin-left: 2px; }
   .pf-uf-err { margin: 0; font-size: 12px; color: var(--red-text, #b91c1c); }
-  .pf-uf-phone { display: flex; gap: 8px; align-items: flex-start; }
-  .pf-uf-phone__cc { flex: 0 0 116px; min-width: 0; }
-  .pf-uf-phone__num { flex: 1 1 auto; }
+  .pf-uf-phone-field { grid-column: span 2; }
+  @media (max-width: 640px) { .pf-uf-phone-field { grid-column: auto; } }
+  .pf-uf-phone {
+    display: flex; align-items: center; width: 100%; height: 40px; box-sizing: border-box;
+    border-radius: var(--pf-radius-sm, 10px);
+    border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
+    background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg));
+    transition: border-color var(--pf-dur-fast, 0.15s) ease, box-shadow var(--pf-dur-fast, 0.15s) ease;
+  }
+  .pf-uf-phone:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
+  .pf-uf-phone:focus-within {
+    border-color: var(--color-violet-600, #7c3aed);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+  }
+  .pf-uf-phone--error { border-color: var(--red-border, #ef4444) !important; }
+  .pf-uf-phone__cc { flex: 0 0 92px; min-width: 0; }
+  :host .pf-uf-phone__cc ::ng-deep .pf-dd__trigger {
+    height: 38px !important; border: 0 !important; background: transparent !important;
+    box-shadow: none !important; padding: 0 6px 0 12px;
+  }
+  .pf-uf-phone__sep { flex: none; width: 1px; height: 22px; background: var(--pf-line, #e2e8f0); margin: 0 2px; }
+  .pf-uf-phone__num {
+    flex: 1 1 auto; min-width: 0; height: 38px; padding: 0 12px;
+    border: 0 !important; outline: 0 !important; background: transparent !important; box-shadow: none !important;
+    color: var(--text-primary); font: inherit; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;
+  }
+  .pf-uf-phone__num::placeholder { color: var(--text-muted, #9ca3af); font-weight: 400; }
 
   /* Roles / permissions: one slate switch per row, the whole row is the tap target. */
   .pf-uf-roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }

@@ -428,7 +428,7 @@
                   <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px) -->
                   @if (showAppt() || showHome()) {
                   <div class="pf-hdr-filter">
-                    <button type="button" class="pf-hdr-filter__btn"
+                    <button #apptFilterBtn type="button" class="pf-hdr-filter__btn"
                       [class.pf-hdr-filter__btn--on]="apptFilterOpen() || apptDateRange() !== 'today'"
                       (click)="toggleApptFilter()" aria-haspopup="true" [attr.aria-expanded]="apptFilterOpen()"
                       [attr.aria-label]="'Filter by date: ' + apptRangeLabel()"
@@ -446,7 +446,7 @@
                       <button #apptCustomBtnDropdown type="button" class="pf-hdr-date-pill"
                         [class.pf-hdr-date-pill--on]="apptDateRange() === 'custom'"
                         [class.pf-hdr-date-pill--has-value]="!!apptCustomStart()"
-                        (click)="openApptDatePicker(apptCustomBtnDropdown, $event)">
+                        (click)="openApptDatePicker(apptFilterBtn, $event)">
                         {{ apptCustomRangeLabel() }}
                       </button>
                       @if (apptDateRange() === 'custom' && apptCustomStart()) {
@@ -743,7 +743,7 @@
 
                   <!-- Dropdown filter for Work (visible on mobile/tablet only < 1024px) -->
                   <div class="pf-hdr-filter">
-                    <button type="button" class="pf-hdr-filter__btn"
+                    <button #workFilterBtn type="button" class="pf-hdr-filter__btn"
                       [class.pf-hdr-filter__btn--on]="workFilterOpen() || workDateRange() !== 'today'"
                       (click)="toggleWorkFilter()" aria-haspopup="true" [attr.aria-expanded]="workFilterOpen()"
                       [attr.aria-label]="'Filter by date: ' + workRangeLabel()"
@@ -761,7 +761,7 @@
                       <button #workCustomBtnDropdown type="button" class="pf-hdr-date-pill"
                         [class.pf-hdr-date-pill--on]="workDateRange() === 'custom'"
                         [class.pf-hdr-date-pill--has-value]="!!workCustomStart()"
-                        (click)="openWorkDatePicker(workCustomBtnDropdown, $event)">
+                        (click)="openWorkDatePicker(workFilterBtn, $event)">
                         {{ workCustomRangeLabel() }}
                       </button>
                       @if (workDateRange() === 'custom' && workCustomStart()) {
@@ -2320,4 +2320,25 @@
   </div>
 </aside>
 }
+}
+
+<!-- Prefrontal Shared Custom Date Range Picker Popover -->
+@if (customDatePopOpen(); as popType) {
+  <div class="pf-custom-date-bd" (click)="closeCustomDatePicker()"></div>
+  <div class="pf-custom-date-pop"
+       [class.pf-custom-date-pop--above]="customDatePopCoords().above"
+       [style.top.px]="customDatePopCoords().top"
+       [style.left.px]="customDatePopCoords().left"
+       role="dialog"
+       aria-label="Filter by custom date range"
+       (click)="$event.stopPropagation()">
+    <pf-calendar
+      mode="range"
+      [compact]="true"
+      [max]="popType === 'work' ? todayIso : null"
+      [rangeStart]="popType === 'work' ? workCustomStart() : apptCustomStart()"
+      [rangeEnd]="popType === 'work' ? workCustomEnd() : apptCustomEnd()"
+      (rangeChange)="onCustomDateRangePicked($event)">
+    </pf-calendar>
+  </div>
 }

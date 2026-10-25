@@ -61,6 +61,37 @@
     .pf-reg-form ::ng-deep [data-field="title"] .pf-di-seg:not(.pf-di-seg--fill) { display: grid; grid-template-columns: repeat(4, 1fr); width: 100%; height: auto !important; border-radius: var(--pf-radius-sm); }
   }
 
+  
+  /* Responsive Band Actions on Tablet & Mobile (<= 1024px):
+     - When the '<' back chevron is present, 'Cancel' is 100% redundant with '<'
+       and causes the buttons to push against and overlap the back chevron.
+     - Secondary actions ('Save & Book test', 'Save & Book appointment', 'Save & Book consult')
+       compact gracefully into icon buttons on narrower tablets (<= 960px) with full tooltips,
+       leaving ample room for tenant branding and preventing any overlap. */
+  @media (max-width: 1024px) {
+    .pf-reg-cancel { display: none !important; }
+    .pf-reg-order, .pf-reg-appt, .pf-reg-consult {
+      padding: 0 10px !important;
+      font-size: 13px !important;
+      gap: 5px !important;
+    }
+  }
+
+  @media (max-width: 960px) {
+    .pf-reg-order, .pf-reg-appt, .pf-reg-consult {
+      width: 36px !important;
+      min-width: 36px !important;
+      height: 34px !important;
+      padding: 0 !important;
+      justify-content: center !important;
+      .pf-reg-btn__t { display: none !important; }
+    }
+    .pf-reg-primary {
+      padding: 0 12px !important;
+      font-size: 13px !important;
+    }
+  }
+
   /* Phones: one column that scrolls naturally under the pinned band;
      Cancel goes (the back chevron is the same move); the save state keeps
      only its mark; the band's actions are 44px icons (pf-hero-band). */

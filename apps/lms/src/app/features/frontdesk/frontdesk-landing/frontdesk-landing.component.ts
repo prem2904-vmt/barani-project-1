@@ -61,7 +61,7 @@ interface DispatchPackage {
   orderCount: number;
   orders: Array<{ id: string; patientName: string; sampleCount: number; status: string }>;
 }
-import flatpickr from 'flatpickr';
+import { PfCalendarComponent } from '@prefrontal/shared';
 import { Patient, patientDisplayName, formatPatientInfo } from '../../../shared/models/patient.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { AdvancedPatientSearchComponent } from '../advanced-patient-search/advanced-patient-search.component';
@@ -170,7 +170,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -298,6 +298,25 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _apptCustomStart = signal<string | null>(null);
   private readonly _apptCustomEnd = signal<string | null>(null);
   readonly apptCustomStart = this._apptCustomStart.asReadonly();
+  readonly customDatePopOpen = signal<'appt' | 'work' | null>(null);
+  readonly customDatePopCoords = signal<{ top: number; left: number; above: boolean }>({ top: 0, left: 0, above: false });
+  readonly todayIso = this.toIsoDay(new Date());
+
+  @HostListener('window:resize')
+  @HostListener('window:scroll')
+  onWindowScrollResize() {
+    if (this.customDatePopOpen()) {
+      this.closeCustomDatePicker();
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscCloseCustomDate() {
+    if (this.customDatePopOpen()) {
+      this.closeCustomDatePicker();
+    }
+  }
+
   readonly apptCustomEnd = this._apptCustomEnd.asReadonly();
 
   private readonly _workDateRange = signal<DateRange>('today');
@@ -2874,69 +2893,88 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     return `${sLabel} – ${eLabel}`;
   }
 
-  openApptDatePicker(element: HTMLButtonElement, event: Event) {
+  openApptDatePicker(element: HTMLElement, event: Event) {
     event.stopPropagation();
-    if ((element as any)._flatpickr) {
-      (element as any)._flatpickr.open();
-      return;
-    }
-    const fp = flatpickr(element, {
-      mode: 'range',
-      dateFormat: 'Y-m-d',
-      onClose: (selectedDates) => {
-        if (selectedDates.length === 2) {
-          const start = this.toIsoDay(selectedDates[0]);
-          const end = this.toIsoDay(selectedDates[1]);
-          this._apptCustomStart.set(start);
-          this._apptCustomEnd.set(end);
-          this._apptDateRange.set('custom');
-          this.refresh();
-          this.closeDateFilters();
-        } else if (selectedDates.length === 1) {
-          const start = this.toIsoDay(selectedDates[0]);
-          this._apptCustomStart.set(start);
-          this._apptCustomEnd.set(start);
-          this._apptDateRange.set('custom');
-          this.refresh();
-          this.closeDateFilters();
-        }
-      }
-    });
-    (element as any)._flatpickr = fp;
-    fp.open();
+    this.closeDateFilters();
+    this.updateCustomPopCoords(element);
+    this.customDatePopOpen.set('appt');
+    window.addEventListener('scroll', this.onCustomDateScrollCapture, { capture: true, passive: true });
   }
 
-  openWorkDatePicker(element: HTMLButtonElement, event: Event) {
+  openWorkDatePicker(element: HTMLElement, event: Event) {
     event.stopPropagation();
-    if ((element as any)._flatpickr) {
-      (element as any)._flatpickr.open();
+    this.closeDateFilters();
+    this.updateCustomPopCoords(element);
+    this.customDatePopOpen.set('work');
+    window.addEventListener('scroll', this.onCustomDateScrollCapture, { capture: true, passive: true });
+  }
+
+    private readonly onCustomDateScrollCapture = () => {
+    if (this.customDatePopOpen()) {
+      this.closeCustomDatePicker();
+    }
+  };
+
+  closeCustomDatePicker() {
+    this.customDatePopOpen.set(null);
+    window.removeEventListener('scroll', this.onCustomDateScrollCapture, { capture: true } as EventListenerOptions);
+  }
+
+  updateCustomPopCoords(target: HTMLElement) {
+    const rect = target.getBoundingClientRect();
+    const popHeight = 360;
+    const popWidth = 285;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    // Right-align directly below the filter button / trigger element
+    let left = rect.right - popWidth;
+    if (left + popWidth > window.innerWidth - 12) {
+      left = window.innerWidth - popWidth - 12;
+    }
+    if (left < 12) {
+      left = 12;
+    }
+
+    let top: number;
+    let above = false;
+    if (spaceBelow >= popHeight || spaceBelow >= spaceAbove) {
+      top = rect.bottom + 6;
+      above = false;
+    } else if (spaceAbove >= popHeight) {
+      top = rect.top - 6;
+      above = true;
+    } else {
+      top = Math.max(12, Math.min(window.innerHeight - popHeight - 12, rect.bottom + 6));
+      above = false;
+    }
+
+    this.customDatePopCoords.set({ top, left, above });
+  }
+
+  onCustomDateRangePicked(range: { start: string; end: string }) {
+    const mode = this.customDatePopOpen();
+    if (!range.start) {
+      if (mode === 'appt') {
+        this.clearApptCustom();
+      } else if (mode === 'work') {
+        this.clearWorkCustom();
+      }
+      this.closeCustomDatePicker();
       return;
     }
-    const fp = flatpickr(element, {
-      mode: 'range',
-      dateFormat: 'Y-m-d',
-      maxDate: 'today',
-      onClose: (selectedDates) => {
-        if (selectedDates.length === 2) {
-          const start = this.toIsoDay(selectedDates[0]);
-          const end = this.toIsoDay(selectedDates[1]);
-          this._workCustomStart.set(start);
-          this._workCustomEnd.set(end);
-          this._workDateRange.set('custom');
-          this.refresh();
-          this.closeDateFilters();
-        } else if (selectedDates.length === 1) {
-          const start = this.toIsoDay(selectedDates[0]);
-          this._workCustomStart.set(start);
-          this._workCustomEnd.set(start);
-          this._workDateRange.set('custom');
-          this.refresh();
-          this.closeDateFilters();
-        }
-      }
-    });
-    (element as any)._flatpickr = fp;
-    fp.open();
+    if (mode === 'appt') {
+      this._apptCustomStart.set(range.start);
+      this._apptCustomEnd.set(range.end || range.start);
+      this._apptDateRange.set('custom');
+      this.refresh();
+    } else if (mode === 'work') {
+      this._workCustomStart.set(range.start);
+      this._workCustomEnd.set(range.end || range.start);
+      this._workDateRange.set('custom');
+      this.refresh();
+    }
+    this.closeCustomDatePicker();
   }
   toggleStragglers() { this._stragglersOpen.update(v => !v); }
   dismissStragglers() { this._stragglersDismissed.set(true); }

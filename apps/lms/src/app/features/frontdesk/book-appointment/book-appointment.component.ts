@@ -17,7 +17,6 @@ import {
 } from "@angular/core";
 import { LabFeaturesService } from "../../../core/services/lab-features.service";
 import { FormsModule } from "@angular/forms";
-import flatpickr from "flatpickr";
 import { ActivatedRoute, Router } from "@angular/router";
 import { AuthService } from "../../../core/auth/auth.service";
 import { ApiService } from "../../../core/services/api.service";
@@ -43,10 +42,11 @@ import { PatientSearchComponent } from "../../../shared/components/patient-searc
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
+import { PfDateComponent, PfCalendarComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { plural } from '../../../shared/utils/plural';
 import { formatPatientMeta } from '../../../shared/models/patient.model';
+import { KeyboardService } from '../../../core/services/keyboard.service';
 import { MONTH_DOWS, SlotPeriod, calendarMove, monthGrid, nextFocus, rovingIndex } from './book-appointment.nd';
 import {
   addDays,
@@ -90,7 +90,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
     PatientSearchComponent,
     CurrencyInrPipe,
     HeroBandComponent,
-    PfDateComponent,
+    PfDateComponent, PfCalendarComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -419,7 +419,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
         </div>
       </div>
 
-      @if (phone()) {
+      @if (phone() && !kbd.visible()) {
         <div class="pf-bottombar pf-bka-bar">
           <span class="pf-bottombar__info pf-num">{{ dateLabel() }}@if (selectedTime()) { · {{ selectedTime() }} }</span>
           <button type="button" class="pf-btn pf-btn--primary pf-bka-book press" [disabled]="saving()"
@@ -517,7 +517,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
             <div
               class="bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-xl p-1 flex justify-center min-h-0 w-full"
             >
-              <div #flatpickrEl class="w-full"></div>
+              <pf-calendar [value]="selectedDate()" [min]="todayIso" (valueChange)="selectDate($event)"></pf-calendar>
             </div>
           </section>
         </div>
@@ -1159,10 +1159,8 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
   styleUrl: './book-appointment.component.scss',
 })
 export class BookAppointmentComponent implements OnInit, OnDestroy {
-  readonly flatpickrEl = viewChild<ElementRef<HTMLDivElement>>("flatpickrEl");
   readonly testSearchInput =
     viewChild<ElementRef<HTMLInputElement>>("testSearchInput");
-  private fpInstance: any = null;
 
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
@@ -1184,6 +1182,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   protected readonly web = webPointerSignal();
   /** ≤640px: the primary moves to a full-width bottom bar above the navbar. */
   readonly phone = signal(false);
+  protected readonly kbd = inject(KeyboardService);
   protected readonly plural = plural;
   protected readonly todayIso = format(new Date(), "yyyy-MM-dd");
   readonly patientSearch = viewChild(PatientSearchComponent);
@@ -1518,26 +1517,9 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
       setTimeout(() => el.focus());
     });
 
-    effect(() => {
-      const el = this.flatpickrEl()?.nativeElement;
-      if (el) {
-        this.initFlatpickr(el);
-      }
-    });
 
-    effect(() => {
-      const date = this.selectedDate();
-      if (this.fpInstance && date) {
-        try {
-          const fpDate = format(this.fpInstance.selectedDates[0], "yyyy-MM-dd");
-          if (fpDate !== date) {
-            this.fpInstance.setDate(date, false);
-          }
-        } catch {
-          // ignore parsing error if date array is empty or partial
-        }
-      }
-    });
+
+
 
     effect(() => {
       const date = this.selectedDate();
@@ -1547,28 +1529,10 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
     });
   }
 
-  private initFlatpickr(el: HTMLElement) {
-    if (this.fpInstance) {
-      this.fpInstance.destroy();
-    }
-    this.fpInstance = flatpickr(el, {
-      inline: true,
-      defaultDate: this.selectedDate(),
-      minDate: "today",
-      dateFormat: "Y-m-d",
-      onChange: (selectedDates) => {
-        if (selectedDates.length > 0) {
-          const iso = format(selectedDates[0], "yyyy-MM-dd");
-          this.selectDate(iso);
-        }
-      },
-    });
-  }
+
 
   ngOnDestroy() {
-    if (this.fpInstance) {
-      this.fpInstance.destroy();
-    }
+
   }
 
   ngOnInit() {

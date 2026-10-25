@@ -4,7 +4,7 @@
      iPad rail: a full-height vertical sidebar on the left edge. -->
 <nav class="pf-bottom-nav xl:hidden fixed z-[2000]"
      [class.pf-bottom-nav--rail]="railMode()"
-     [class.pf-bottom-nav--kbd]="kbd.visible() && !railMode()"
+     [class.pf-bottom-nav--kbd]="kbd.visible() && !railMode() && !moreOpen()"
      [class.pf-bottom-nav--min]="minimized() && !railMode()"
      [class.pf-bottom-nav--hidden]="lock.locked()">
 
@@ -222,7 +222,7 @@
   @if (moreOpen()) {
     <div class="pf-more-bd" (click)="closeMore()"></div>
     <div class="pf-more-pop" role="menu" aria-label="More actions"
-         (click)="$event.stopPropagation()">
+         (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()">
       <!-- All nav items are in the scrollable pill — account options only here. -->
 
       <!-- Presence status — current status row; tap to expand the 7
@@ -487,12 +487,14 @@
         <div class="pf-acct-pinform">
           <p class="pf-acct-pinlbl">{{ hasPin() ? 'Change PIN' : 'Set a 4-digit PIN' }}</p>
           @if (hasPin()) {
-            <input class="pf-acct-pin" type="password" inputmode="numeric" autocomplete="off"
+            <input class="pf-acct-pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off"
+                   (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"
                    maxlength="4" placeholder="Current PIN"
                    [ngModel]="pinCurrent" (ngModelChange)="pinCurrent = sanitizePin($event)" [disabled]="pinBusy()" />
           }
           <div class="pf-acct-pinrow">
-            <input class="pf-acct-pin" type="password" inputmode="numeric" autocomplete="off"
+            <input class="pf-acct-pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off"
+                   (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"
                    maxlength="4" placeholder="New PIN"
                    [ngModel]="pinNew" (ngModelChange)="pinNew = sanitizePin($event)"
                    (keydown.enter)="savePin()" [disabled]="pinBusy()" />

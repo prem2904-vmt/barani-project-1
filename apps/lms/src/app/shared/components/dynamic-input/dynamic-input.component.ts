@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, computed, signal } from '@angular/core';
+import { ApplicationRef, ChangeDetectionStrategy, Component, ElementRef, EmbeddedViewRef, EventEmitter, HostListener, Input, OnDestroy, Output, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TestParameter } from '../../models/test.model';
 import { FieldOption, ReferenceRange, WorkflowContext, WorkflowField } from '../../models/workflow.model';
@@ -10,7 +10,7 @@ import { ageParts } from '../../utils/patient-age';
 import { normalizeSex, selectReferenceRange } from '../../utils/reference-range';
 import { liveFlag } from '../../utils/result-flag';
 import { labToday } from '../../utils/lab-clock';
-import { PfDateComponent } from '../pf-date/pf-date.component';
+import { PfDateComponent, PfCalendarComponent } from '../pf-date/pf-date.component';
 import { PfTimeComponent } from '../pf-time/pf-time.component';
 import { PfDateTimeComponent } from '../pf-date/pf-datetime.component';
 
@@ -50,7 +50,7 @@ export { isContactNumberField };
 @Component({
   selector: 'pf-dynamic-input',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, SelectComponent, PfDateComponent, PfTimeComponent, PfDateTimeComponent],
+  imports: [FormsModule, NgTemplateOutlet, SelectComponent, PfDateComponent, PfCalendarComponent, PfTimeComponent, PfDateTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ndOn()) {
@@ -132,33 +132,55 @@ export { isContactNumberField };
                 <!-- A typed dd/mm/yyyy (auto slashes) — EMPTY by default in every
                      browser (a native date input shows today greyed in Safari).
                      The calendar button still opens the native picker. -->
-                <span class="pf-di-date pf-di-dob__date">
+                <span class="pf-di-date pf-di-dob__date" #dobContainer>
                   <input #dobIn [id]="inputId" data-pf-stop type="text" inputmode="numeric" autocomplete="off"
                          maxlength="10" placeholder="dd/mm/yyyy" class="pf-input pf-num pf-di-date__in"
                          [class.pf-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                          [attr.aria-required]="field.required || null"
                          [value]="dobText()" (input)="onDobInput(dobIn)" (blur)="onDobBlur()" />
                   <button type="button" class="pf-di-date__pick" tabindex="-1" aria-label="Pick a date" title="Pick a date"
-                          (click)="openDobPicker(dobPick)">
+                          (click)="toggleDobPicker($event)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                   </button>
                   <input #dobPick type="date" class="pf-di-date__native" tabindex="-1" aria-hidden="true"
                          [attr.max]="todayIso" [value]="value || ''" (change)="onDobPicked(dobPick.value)" />
+                  <ng-template #dobPanelTpl>
+                    <div class="pf-date__portal-root">
+                      <div class="pf-date__backdrop" (click)="closeDobPicker()"></div>
+                      <div class="pf-date__popover"
+                           [class.pf-date__popover--above]="dobPopoverStyle().above"
+                           [style.top.px]="dobPopoverStyle().top"
+                           [style.left.px]="dobPopoverStyle().left"
+                           role="dialog"
+                           aria-label="Date of birth calendar"
+                           (click)="$event.stopPropagation()">
+                        <pf-calendar #dobCalendar
+                                     [value]="asDateStr(value)"
+                                     [max]="todayIso"
+                                     [compact]="true"
+                                     (valueChange)="onDobCalendarPicked($event)">
+                        </pf-calendar>
+                      </div>
+                    </div>
+                  </ng-template>
                 </span>
                 <span class="pf-di-dob__or">or</span>
-                <input #ageIn type="text" inputmode="numeric" pattern="[0-9]*" [attr.maxlength]="ageMaxLength()" autocomplete="off"
-                       class="pf-input pf-num pf-di-dob__age" [class.pf-input--error]="!!err" placeholder="Age"
-                       [attr.aria-label]="'Age in ' + ageUnit()" [attr.aria-invalid]="err ? true : null"
-                       [attr.aria-describedby]="err ? inputId + '-e' : null"
-                       [value]="ageText() ?? hybridAgeDisplay() ?? ''" (input)="onAgeText(ageIn)" (blur)="onAgeBlur()" />
-                <div class="pf-seg pf-di-seg pf-di-seg--unit" role="radiogroup" aria-label="Age unit"
-                     (keydown)="onUnitKey($event)">
-                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'years'"
-                          [attr.tabindex]="ageUnit() === 'years' ? 0 : -1" (click)="setAgeUnit('years')" title="Years (0–150)">Yrs</button>
-                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'months'"
-                          [attr.tabindex]="ageUnit() === 'months' ? 0 : -1" (click)="setAgeUnit('months')" title="Months (0–1199)">Mo</button>
-                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'days'"
-                          [attr.tabindex]="ageUnit() === 'days' ? 0 : -1" (click)="setAgeUnit('days')" title="Days (0–365)">Days</button>
+                <div class="pf-di-dob__age-group" [class.pf-di-dob__age-group--error]="!!err">
+                  <input #ageIn type="text" inputmode="numeric" pattern="[0-9]*" [attr.maxlength]="ageMaxLength()" autocomplete="off"
+                         class="pf-num pf-di-dob__age" [class.pf-input--error]="!!err" placeholder="Age"
+                         [attr.aria-label]="'Age in ' + ageUnit()" [attr.aria-invalid]="err ? true : null"
+                         [attr.aria-describedby]="err ? inputId + '-e' : null"
+                         [value]="ageText() ?? hybridAgeDisplay() ?? ''" (input)="onAgeText(ageIn)" (blur)="onAgeBlur()" />
+                  <span class="pf-di-dob__age-sep" aria-hidden="true"></span>
+                  <div class="pf-seg pf-di-seg pf-di-seg--unit" role="radiogroup" aria-label="Age unit"
+                       (keydown)="onUnitKey($event)">
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'years'"
+                            [attr.tabindex]="ageUnit() === 'years' ? 0 : -1" (click)="setAgeUnit('years')" title="Years (0–150)">Yrs</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'months'"
+                            [attr.tabindex]="ageUnit() === 'months' ? 0 : -1" (click)="setAgeUnit('months')" title="Months (0–1199)">Mo</button>
+                    <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="ageUnit() === 'days'"
+                            [attr.tabindex]="ageUnit() === 'days' ? 0 : -1" (click)="setAgeUnit('days')" title="Days (0–365)">Days</button>
+                  </div>
                 </div>
               </div>
               @if (!err) { <p class="pf-field__hint">Type either — an entered age stays current automatically.</p> }
@@ -995,11 +1017,52 @@ export { isContactNumberField };
       font: inherit; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;
     }
     .pf-di-phone__num::placeholder { color: var(--text-muted, #9ca3af); font-weight: 400; }
-    /* DOB ⇄ age on one row. */
-    .pf-di-dob { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .pf-di-dob__date { flex: 1 1 110px; min-width: 100px; width: auto; }
-    .pf-di-dob__age { flex: 0 0 52px; width: 52px; }
-    .pf-di-dob__age .pf-input { padding: 0 6px; text-align: center; }
+    /* DOB ⇄ age on one row: balanced, cohesive, modern inputs. Wraps cleanly if card is narrow */
+    .pf-di-dob { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; width: 100%; }
+    .pf-di-dob__date { flex: 1 1 145px; min-width: 140px; width: auto; }
+    .pf-di-dob__or {
+      flex: none; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
+      color: var(--text-tertiary, #94a3b8); background: var(--pf-chip-bg, #f1f5f9);
+      border: 1px solid var(--pf-line, rgba(148, 163, 184, 0.25)); border-radius: 9999px;
+      padding: 2px 7px; line-height: 1.2;
+    }
+    .pf-di-dob__age-group {
+      flex: 1 1 160px; min-width: 155px; display: inline-flex; align-items: center; height: 40px;
+      box-sizing: border-box; background: var(--pf-card-bg, #ffffff);
+      border: 1px solid var(--pf-input-border, var(--pf-line, #cbd5e1)); border-radius: 10px;
+      padding: 3px 4px 3px 2px; transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .pf-di-dob__age-group:focus-within {
+      border-color: var(--color-violet-600, #7c3aed);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-violet-600, #7c3aed) 15%, transparent);
+    }
+    .pf-di-dob__age-group--error { border-color: var(--red-border, #ef4444) !important; }
+    .pf-di-dob__age {
+      flex: 1 1 40px; min-width: 36px; width: auto; height: 32px;
+      border: 0 !important; outline: 0 !important; background: transparent !important;
+      box-shadow: none !important; padding: 0 6px; text-align: center;
+      font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;
+      color: var(--text-primary, #0f172a);
+    }
+    .pf-di-dob__age::placeholder { color: var(--text-muted, #94a3b8); font-weight: 400; }
+    .pf-di-dob__age-sep { flex: none; width: 1px; height: 22px; background: var(--pf-line, #e2e8f0); margin: 0 3px; }
+    .pf-di-seg--unit {
+      flex: none; display: inline-flex; align-items: center; gap: 1px; padding: 2px;
+      background: var(--pf-chip-bg, #f1f5f9); border-radius: 7px !important; border: 0 !important;
+      height: 30px; box-sizing: border-box;
+    }
+    .pf-di-seg--unit .pf-seg__item {
+      min-width: 32px !important; height: 26px !important; min-height: 26px !important;
+      max-height: 26px !important; padding: 0 8px !important; font-size: 12px !important;
+      font-weight: 500; border-radius: 5px !important; border: 0 !important;
+      color: var(--text-secondary, #64748b);
+      transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .pf-di-seg--unit .pf-seg__item[aria-checked='true'] {
+      background: var(--pf-card-bg, #ffffff) !important; color: var(--color-violet-600, #7c3aed) !important;
+      font-weight: 600; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08) !important;
+    }
     /* Typed date + a calendar button over a hidden native picker. */
     .pf-di-date { position: relative; display: block; min-width: 0; }
     .pf-di-date__in { padding-right: 40px; }
@@ -1010,40 +1073,106 @@ export { isContactNumberField };
     }
     .pf-di-date__pick:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
     .pf-di-date__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
-    .pf-di-dob__or { flex: none; font-size: 12px; color: var(--text-tertiary); }
-    /* Segmented choices: a 40px neutral control; wraps rather than clips. */
-    .pf-di-seg { box-sizing: border-box; min-height: 40px; height: auto; max-width: 100%; flex-wrap: wrap; align-items: stretch; }
-    .pf-di-seg .pf-seg__item { height: auto; min-height: 34px; min-width: 56px; padding: 0 14px; font-size: 13px; }
-    /* Pills (5+ options, e.g. Title) keep their natural width on web. */
-    .pf-di-seg:not(.pf-di-seg--fill) { align-self: flex-start; }
+    .pf-date__portal-root {
+      position: fixed; inset: 0; z-index: 99999; pointer-events: none;
+    }
+    .pf-date__backdrop { position: absolute; inset: 0; z-index: 1; background: transparent; pointer-events: auto; }
+    .pf-date__popover {
+      position: fixed; z-index: 2; width: 285px; box-sizing: border-box; padding: 12px; border-radius: 14px;
+      background: var(--pf-card-bg, #ffffff);
+      border: 1px solid var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+      animation: pf-pop 160ms cubic-bezier(0.32, 0.72, 0, 1) both;
+      pointer-events: auto;
+    }
+    .pf-date__popover--above {
+      transform: translateY(-100%);
+      animation-name: pf-pop-above;
+    }
+    @media (max-width: 640px) {
+      .pf-date__backdrop { background: rgba(15, 23, 42, 0.25); }
+      .pf-date__popover {
+        left: 50% !important;
+        top: auto !important;
+        bottom: calc(var(--pf-nav-h, 0px) + 12px) !important;
+        transform: translateX(-50%) !important;
+        width: calc(100vw - 24px) !important;
+        max-width: 325px !important;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4) !important;
+        animation: pf-pop-mobile-sheet 0.2s cubic-bezier(0.32, 0.72, 0, 1) both !important;
+      }
+      @keyframes pf-pop-mobile-sheet {
+        from { opacity: 0; transform: translate(-50%, 16px) scale(0.96); }
+        to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+      }
+    }
+    :root.dark .pf-date__popover {
+      background: var(--pf-card-bg, #0f172a); border-color: rgba(148, 163, 184, 0.25);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+    }
+    @keyframes pf-pop {
+      from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes pf-pop-above {
+      from { opacity: 0; transform: translateY(calc(-100% + 4px)) scale(0.97); }
+      to { opacity: 1; transform: translateY(-100%) scale(1); }
+    }
+    /* Segmented choices (Sex, etc.): modern 40px form segmented control matching inputs */
+    .pf-di-seg:not(.pf-di-seg--unit) {
+      box-sizing: border-box; min-height: 40px; height: 40px; max-width: 100%;
+      border-radius: 10px !important; background: var(--pf-chip-bg, #f1f5f9);
+      border: 1px solid var(--pf-line, rgba(148, 163, 184, 0.25)); padding: 3px; gap: 3px; align-items: stretch;
+    }
+    .pf-di-seg:not(.pf-di-seg--unit) .pf-seg__item {
+      height: 32px; min-height: 32px !important; max-height: 32px !important; padding: 0 16px;
+      font-size: 13.5px; font-weight: 500; border-radius: 7px !important;
+      color: var(--text-secondary, #64748b);
+      transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .pf-di-seg:not(.pf-di-seg--unit) .pf-seg__item:hover:not(:disabled):not([aria-checked='true']) {
+      color: var(--text-primary, #0f172a);
+    }
+    .pf-di-seg:not(.pf-di-seg--unit) .pf-seg__item[aria-checked='true'] {
+      background: var(--pf-card-bg, #ffffff) !important; color: var(--color-violet-600, #7c3aed) !important;
+      font-weight: 600; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+    }
+    .pf-di-seg:not(.pf-di-seg--fill):not(.pf-di-seg--unit) { align-self: flex-start; }
     .pf-di-seg--fill { display: flex; width: 100%; }
     .pf-di-seg--fill .pf-seg__item { flex: 1 1 0; }
-    .pf-di-seg--unit { flex: none; }
-    .pf-di-seg--unit .pf-seg__item { min-width: 34px; padding: 0 7px; font-size: 12.5px; }
-    /* Field-level errors (new design): the control is outlined in error red. */
-    .pf-di-seg--error { border-color: var(--red-border, #ef4444); }
+    .pf-di-seg--error { border-color: var(--red-border, #ef4444) !important; }
     :host .pf-di-nd ::ng-deep pf-select.pf-di-select--error .pf-dd__trigger { border-color: var(--red-border, #ef4444) !important; }
     .pf-di-seg .pf-seg__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
     .pf-di-chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .pf-di-chip { height: 34px; font-size: 13px; }
     .pf-di-switch { min-height: 40px; font-size: 13.5px; white-space: normal; text-align: left; }
     .pf-di-switch__t { display: inline-flex; align-items: center; gap: 6px; }
+    :root.dark .pf-di-seg:not(.pf-di-seg--unit) { background: rgba(30, 41, 59, 0.6); border-color: rgba(148, 163, 184, 0.2); }
+    :root.dark .pf-di-seg:not(.pf-di-seg--unit) .pf-seg__item[aria-checked='true'] { background: #1e293b !important; color: #c4b5fd !important; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important; }
+    :root.dark .pf-di-dob__or { background: rgba(30, 41, 59, 0.6); border-color: rgba(148, 163, 184, 0.2); color: var(--text-tertiary); }
+    :root.dark .pf-di-dob__age-group { background: var(--pf-card-bg, #0f172a); border-color: rgba(148, 163, 184, 0.2); }
+    :root.dark .pf-di-dob__age-sep { background: rgba(148, 163, 184, 0.2); }
+    :root.dark .pf-di-seg--unit { background: rgba(30, 41, 59, 0.7); }
+    :root.dark .pf-di-seg--unit .pf-seg__item[aria-checked='true'] { background: #1e293b !important; color: #c4b5fd !important; }
     @media (max-width: 640px) {
       .pf-di-phone { min-height: 44px; }
       .pf-di-phone__num { height: 42px; font-size: 16px; }
       :host .pf-di-phone__cc ::ng-deep .pf-dd__trigger { height: 42px !important; }
       :host .pf-di-nd ::ng-deep pf-select .pf-dd:not(.pf-dd--sm) .pf-dd__trigger { height: 44px; }
-      .pf-di-seg { min-height: 44px; }
-      .pf-di-seg .pf-seg__item { min-height: 38px; }
+      .pf-di-seg:not(.pf-di-seg--unit) { min-height: 44px; height: 44px; }
+      .pf-di-seg:not(.pf-di-seg--unit) .pf-seg__item { min-height: 36px; }
       /* 5+ one-tap options (Title): balanced rows of three, full width. */
       .pf-di-seg:not(.pf-di-seg--fill):not(.pf-di-seg--unit) { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+      .pf-di-dob { flex-wrap: wrap; gap: 8px; }
       .pf-di-dob__date { flex-basis: 100%; }
-      .pf-di-dob__age { flex: 1 1 auto; width: auto; }
+      .pf-di-dob__or { display: none; }
+      .pf-di-dob__age-group { flex-basis: 100%; min-height: 44px; height: 44px; }
+      .pf-di-dob__age { height: 38px; font-size: 16px; }
       .pf-di-switch { min-height: 44px; }
     }
   `]
 })
-export class DynamicInputComponent {
+export class DynamicInputComponent implements OnDestroy {
   private static _seq = 0;
   /** Stable id so the kit label's for= points at the control (getByLabel works). */
   readonly inputId = `pf-di-${++DynamicInputComponent._seq}`;
@@ -1155,9 +1284,148 @@ export class DynamicInputComponent {
     this.setLocalError(null);
     this.emitDob(v || null, false);
   }
-  openDobPicker(el: HTMLInputElement): void {
-    try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { el.click(); }
+  private readonly appRef = inject(ApplicationRef);
+  readonly dobPanelTpl = viewChild<TemplateRef<void>>('dobPanelTpl');
+  private dobPanelRef?: EmbeddedViewRef<void>;
+
+  readonly isDobPickerOpen = signal(false);
+  readonly dobPopoverStyle = signal<{ top: number; left: number; above: boolean }>({ top: 0, left: 0, above: false });
+  readonly dobContainer = viewChild<ElementRef<HTMLElement>>('dobContainer');
+  readonly dobCalendar = viewChild<PfCalendarComponent>('dobCalendar');
+
+  private readonly onDobScrollCapture = () => {
+    if (this.isDobPickerOpen()) {
+      this.updateDobCoords();
+      this.dobPanelRef?.detectChanges();
+      const root = this.dobContainer()?.nativeElement;
+      if (root) {
+        const rect = root.getBoundingClientRect();
+        if (rect.bottom < 50 || rect.top > window.innerHeight - 20) {
+          this.closeDobPicker();
+        }
+      }
+    }
+  };
+
+  updateDobCoords(): void {
+    const root = this.dobContainer()?.nativeElement;
+    if (!root) return;
+    const rect = root.getBoundingClientRect();
+    const popHeight = 310;
+    const popWidth = 285;
+    const bottomLimit = window.innerHeight - 12;
+
+    let left = Math.max(12, rect.left);
+    if (left + popWidth > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - popWidth - 12);
+    }
+
+    let top: number;
+    let above = false;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    if (spaceBelow >= popHeight + 6) {
+      top = rect.bottom + 6;
+      above = false;
+    } else if (spaceAbove >= popHeight + 6) {
+      top = rect.top - 6;
+      above = true;
+    } else if (spaceBelow >= spaceAbove) {
+      top = Math.max(12, Math.min(rect.bottom + 6, bottomLimit - popHeight));
+      above = false;
+    } else {
+      top = Math.max(popHeight + 12, rect.top - 6);
+      above = true;
+    }
+
+    this.dobPopoverStyle.set({ top, left, above });
   }
+
+  openDobPicker(el?: HTMLInputElement): void {
+    if (this.isDobPickerOpen()) return;
+    this.updateDobCoords();
+    this.isDobPickerOpen.set(true);
+    window.addEventListener('scroll', this.onDobScrollCapture, { capture: true, passive: true });
+
+    const tpl = this.dobPanelTpl();
+    if (tpl) {
+      this.dobPanelRef = tpl.createEmbeddedView(null as unknown as void);
+      this.appRef.attachView(this.dobPanelRef);
+      this.dobPanelRef.detectChanges();
+      for (const node of this.dobPanelRef.rootNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          document.body.appendChild(node);
+        }
+      }
+    }
+
+    const current = this.asDateStr(this.value);
+    if (current) {
+      setTimeout(() => this.dobCalendar()?.jumpToMonthOf(current));
+    }
+  }
+
+  closeDobPicker(): void {
+    if (!this.isDobPickerOpen()) return;
+    if (this.dobPanelRef) {
+      for (const node of this.dobPanelRef.rootNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE && node.parentElement === document.body) {
+          document.body.removeChild(node);
+        }
+      }
+      this.appRef.detachView(this.dobPanelRef);
+      this.dobPanelRef.destroy();
+      this.dobPanelRef = undefined;
+    }
+    this.isDobPickerOpen.set(false);
+    window.removeEventListener('scroll', this.onDobScrollCapture, { capture: true } as EventListenerOptions);
+  }
+
+  toggleDobPicker(event: MouseEvent): void {
+    event.stopPropagation();
+    if (this.isDobPickerOpen()) {
+      this.closeDobPicker();
+    } else {
+      this.openDobPicker();
+    }
+  }
+
+  onDobCalendarPicked(iso: string): void {
+    this.closeDobPicker();
+    this.onDobPicked(iso || '');
+  }
+
+  ngOnDestroy(): void {
+    this.closeDobPicker();
+  }
+
+  @HostListener('document:pointerdown', ['$event'])
+  onDocPointerDown(event: PointerEvent): void {
+    if (!this.isDobPickerOpen()) return;
+    const target = event.target as Node;
+    const container = this.dobContainer()?.nativeElement;
+    const popoverEl = (this.dobPanelRef?.rootNodes[0] as HTMLElement | undefined)?.querySelector?.('.pf-date__popover') as HTMLElement | null;
+    if ((!container || !container.contains(target)) && (!popoverEl || !popoverEl.contains(target))) {
+      this.closeDobPicker();
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.isDobPickerOpen()) {
+      this.closeDobPicker();
+    }
+  }
+
+  @HostListener('window:scroll')
+  @HostListener('window:resize')
+  onDobWindowResize(): void {
+    if (this.isDobPickerOpen()) {
+      this.updateDobCoords();
+    }
+  }
+
   /** Age as a numeric TEXT box (no spinner): digits only, capped at the
    *  unit's width; an out-of-range age shows an error (never silently kept). */
   onAgeText(el: HTMLInputElement): void {

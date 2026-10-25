@@ -289,6 +289,26 @@
   }
 }
 
+
+/* ── Tablet (641px–1023px): show like mobile view — all in 1 segment tabs,
+      controlling 1 card section at a time instead of the stacked 2-card accordion. */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .pf-mtabs { display: flex !important; }
+  .pf-appt-split__hdr,
+  .pf-appt-split__handle { display: none !important; }
+
+  /* Fully hide the pane that isn't selected so only 1 card section shows */
+  .pf-appt-split__pane:not(.pf-appt-split__pane--expanded) {
+    display: none !important;
+  }
+
+  .pf-appt-split > .pf-appt-split__pane.pf-appt-split__pane--expanded {
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
 /* Tighter still at very narrow viewports (≤360px — iPhone SE width). */
 @media (max-width: 360px) {
   .pf-head__title { font-size: 18px; }
