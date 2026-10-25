@@ -26,7 +26,9 @@ export function bridgeStatusWord(s: BridgeStatus | string | null | undefined): B
 export function linkStateWord(s: AnalyzerLinkState | string | null | undefined): BridgeWord {
   switch (s) {
     case 'connected': return { label: 'Connected', tone: 'green' };
-    case 'listening': return { label: 'Listening', tone: 'green' };
+    // A Bridge port with nobody on it yet — amber, never green (next-phase §4,
+    // same rule as the desktop connector's "Waiting for analyzer").
+    case 'listening': return { label: 'Waiting for analyzer', tone: 'amber' };
     case 'connecting': return { label: 'Connecting', tone: 'amber' };
     case 'reconnecting': return { label: 'Reconnecting', tone: 'amber' };
     case 'error': return { label: 'Error', tone: 'red' };

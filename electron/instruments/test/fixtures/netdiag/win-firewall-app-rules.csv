@@ -1,0 +1,4 @@
+"DisplayName","Direction","Action","Enabled","Profile"
+"Prefrontal","Inbound","Block","True","Public"
+"Prefrontal","Inbound","Block","True","Public"
+"Prefrontal","Inbound","Allow","True","Private"

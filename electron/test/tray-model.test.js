@@ -37,17 +37,17 @@ test('one connected instrument: a line with the dot + status, "results today" sh
   assert.ok(labels(t).includes('Results received today: 5'));
 });
 
-test('instrument states map to the right dot + word: connected/listening = ●, else = ○', () => {
+test('instrument states map to the right dot + word: ● only when really connected (a listening port is waiting, ○)', () => {
   assert.equal(model.dotFor('connected'), '●');
-  assert.equal(model.dotFor('listening'), '●');
+  assert.equal(model.dotFor('listening'), '○');
   assert.equal(model.dotFor('starting'), '○');
   assert.equal(model.dotFor('disconnected'), '○');
   assert.equal(model.dotFor('error'), '○');
   assert.equal(model.statusWord('connected'), 'Connected');
-  assert.equal(model.statusWord('listening'), 'Connected');
-  assert.equal(model.statusWord('starting'), 'Waiting');
-  assert.equal(model.statusWord('error'), 'Disconnected');
-  assert.equal(model.statusWord('disconnected'), 'Disconnected');
+  assert.equal(model.statusWord('listening'), 'Waiting for analyzer');
+  assert.equal(model.statusWord('starting'), 'Starting');
+  assert.equal(model.statusWord('error'), 'Error');
+  assert.equal(model.statusWord('disconnected'), 'Not connected');
 });
 
 test('last-result time appends only when known, in coarse relative units', () => {
@@ -98,11 +98,38 @@ test('formatClock: 12-hour wall clock, noon/midnight edge cases', () => {
   assert.equal(model.formatClock(new Date(2026, 0, 1, 8, 4)), '8:04 AM');
 });
 
-test('tooltip: counts only connected/listening instruments, singular/plural', () => {
+test('tooltip: counts only really-connected instruments (a listening port alone does not count), singular/plural', () => {
   assert.equal(model.tooltip([]), 'Prefrontal — 0 instruments connected');
   assert.equal(model.tooltip([inst()]), 'Prefrontal — 1 instrument connected');
   assert.equal(model.tooltip([inst(), inst({ instrumentId: 'i2', state: 'disconnected' })]), 'Prefrontal — 1 instrument connected');
-  assert.equal(model.tooltip([inst(), inst({ instrumentId: 'i2', state: 'listening' })]), 'Prefrontal — 2 instruments connected');
+  assert.equal(model.tooltip([inst(), inst({ instrumentId: 'i2', state: 'listening' })]), 'Prefrontal — 1 instrument connected');
+  assert.equal(model.tooltip([inst(), inst({ instrumentId: 'i2', state: 'connected', link: 'connected' })]), 'Prefrontal — 2 instruments connected');
+});
+
+test('true link: a TCP server with a session is Connected; listening with nobody on it is "Waiting for analyzer" and needs no attention', () => {
+  const waiting = inst({ state: 'listening', link: 'waiting' });
+  const on = inst({ instrumentId: 'i2', name: 'Medonic M51', state: 'connected', link: 'connected', sessions: [{ remote: '192.168.1.21:49731', since: '2026-10-24T10:00:00Z' }] });
+  assert.equal(model.dotFor(waiting.state, waiting.link), '○');
+  assert.equal(model.statusWord(waiting.state, waiting.link), 'Waiting for analyzer');
+  assert.equal(model.statusWord(on.state, on.link), 'Connected');
+  assert.equal(model.hasAttention([waiting]), false);
+  assert.equal(model.hasAttention([on]), false);
+  // A TCP client that can't reach its analyzer, or a port that would not open, does.
+  assert.equal(model.hasAttention([inst({ state: 'disconnected', link: 'not_connected' })]), true);
+  assert.equal(model.hasAttention([inst({ state: 'error', link: 'error' })]), true);
+  // A connector being stopped / started is not an attention case.
+  assert.equal(model.hasAttention([inst({ state: 'stopped' })]), false);
+});
+
+test('an instrument whose port would not open shows the plain-words problem under it', () => {
+  const t = model.buildMenuModel({ now: 0, instruments: [inst({ state: 'error', link: 'error', errorDetail: 'Port 5600 is used by CBCLisM51 (PID 7412). Close that program, or pick another port for this analyzer.' })] });
+  const labels = t.map((x) => x.label);
+  assert.ok(labels.some((l) => /— Error/.test(l || '')));
+  const p = labels.find((l) => /Port 5600 is used by CBCLisM51 \(PID 7412\)/.test(l || ''));
+  assert.ok(p, 'problem line present');
+  assert.ok(p.length <= 94, 'kept short for the menu');
+  // No problem line for a healthy one.
+  assert.equal(model.problemLine(inst()), null);
 });
 
 test('hasAttention: any disconnected/error, queued, unmatched, or server-offline instrument', () => {

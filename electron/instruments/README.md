@@ -30,9 +30,12 @@ Any analyzer is a **settings profile, not code**: four configurable layers.
 | `core/queue.js` | Store-and-forward: append-only JSONL journal (add / try / done / dead / seen), survives crash + restart, torn-line tolerant, exponential backoff with jitter, dead-letter file for permanent 4xx, idempotency keys remembered. |
 | `core/uploader.js` | Device-key HTTP client (`GET config`, `POST heartbeat`, `POST messages`); classifies ok / auth / transient / permanent. |
 | `core/rawlog.js` | Rotating raw traffic log (visible `<STX>`, `<ETX>`, `<CR>`…) + in-memory ring for the live viewer. |
-| `core/connector.js` | One analyzer end to end; one link state machine per session; ACK to the analyzer happens once the message is **on disk**; heartbeat; status. |
+| `core/connector.js` | One analyzer end to end; one link state machine per session; ACK to the analyzer happens once the message is **on disk**; heartbeat; status — incl. the TRUE `link` (`connected`/`waiting`/`not_connected`/`error`), `sessions`, `lastRxAt`, `listenPort`, `errorDetail`. |
+| `core/errors.js` | Plain-words transport problems ("Port 5600 is used by CBCLisM51 (PID 7412)…", access denied, refused). |
+| `core/analyzer-guess.js` | JS mirror of mw `AnalyzerGuess` (HL7 MSH-3/4, ASTM H-5/H-13, MAC OUI → make/model). |
 | `core/listen.js` | Listen session (captures, ACKs like a LIS so the analyzer keeps talking, never uploads) + `preview(raw)`. |
-| `core/manager.js` | Host API: pair (key verified against the server first) / unpair / list / status / raw log / serial ports / listen. |
+| `core/manager.js` | Host API: pair (key verified against the server first) / unpair / list / status / raw log / serial ports / listen (refuses a port a paired analyzer uses) / multi-port "find the analyzer" scan. |
+| `netdiag.js` | "Connect an analyzer" checks (Windows-first, plain Node, `execFile` fixed args): network cards, two-cards-one-network, port owner (named, never killed), firewall + network profile, the ONE UAC-elevated fix, ARP, opt-in connect-only LAN probe. |
 | `host-electron.js` | Electron main-process host: IPC handlers (accepted only from the main window), keys encrypted with `safeStorage`, starts with the app, keeps running in the tray, stops on quit. |
 | `host-node.js` | Headless host (Raspberry Pi later): `pair`, `run`, `list`, `unpair`. |
 | `sim/` | `cbc-sim.js` CLI, `dialects.js` (generic dialects), `cbc-data.js` (realistic 5-part / 3-part CBC), `pty-pair.py` (virtual null-modem when socat is absent). |
@@ -40,7 +43,8 @@ Any analyzer is a **settings profile, not code**: four configurable layers.
 | `test/` | `node:test` suites. |
 
 Renderer bridge (preload): `window.electronAPI.instruments` — `list, pair, unpair, status, onStatus, rawLog, listSerialPorts,
-listenStart, listenStop, onListen, preview`. The renderer never sees Node objects or the stored key.
+listenStart, listenStop, onListen, preview, diag.{snapshot, ports, nextPort, fixFirewall, arp, probe, scanStart, scanStop, onScan}`.
+The renderer never sees Node objects or the stored key; every diag argument is re-validated in main.
 
 Per-host state: `<userData>/instruments/` (Electron) or `$PF_INSTRUMENTS_DIR` (headless):
 `paired.json` (keys encrypted), `<instrumentId>/queue.jsonl`, `queue.dead.jsonl`, `raw.log(.1…)`, `config.json` (last config

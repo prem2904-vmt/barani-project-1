@@ -15,14 +15,23 @@
  *   timer and AWAITS the actual 'close' before resolving, so a caller that
  *   starts a replacement transport right after stop() never ends up with two
  *   live sockets to the same analyzer), write(bytes, sessionId?)
- *   events: 'data' (buf, sessionId), 'session-start' (id), 'session-end' (id),
- *           'status' ('listening'|'connected'|'disconnected'|'error'), 'error' (err)
+ *   events: 'data' (buf, sessionId), 'session-start' (id, { remote, local, since }),
+ *           'session-end' (id), 'status' ('listening'|'connected'|'disconnected'|'error'),
+ *           'error' (err)
+ *   sessions() → [{ id, remote, local, since, lastRxAt }] — who is connected
+ *   right now (the peer the analyzer connected from, the address of THIS PC
+ *   it reached, when, and when its last byte — keep-alives included — came
+ *   in). `lastRxAt` (ISO) is the newest byte on any session. True status
+ *   ("Online only when the analyzer is really connected") reads these.
  */
 const net = require('net');
 const { EventEmitter } = require('events');
 
 let seq = 0;
 const nextId = (p) => `${p}-${++seq}`;
+const iso = (ms) => new Date(ms).toISOString();
+/** "::ffff:192.168.1.21" → "192.168.1.21" (dual-stack sockets on Windows). */
+const plainIp = (a) => String(a || '').replace(/^::ffff:/i, '');
 
 // How soon after 'connect' a 'close' counts as "the peer rejected us again"
 // (back off) rather than an ordinary drop of an established connection
@@ -39,9 +48,13 @@ class TcpServerTransport extends EventEmitter {
     this.port = Number(port);
     this.host = host || '0.0.0.0';
     this.sockets = new Map();
+    this.info = new Map();       // id → { remote, local, since, lastRxAt }
+    this.lastRxAt = null;
     this.server = null;
     this.kind = 'tcp-server';
   }
+
+  sessions() { return [...this.info.entries()].map(([id, i]) => ({ id, ...i })); }
 
   describe() { return `TCP server ${this.host}:${this.port}`; }
 
@@ -52,12 +65,20 @@ class TcpServerTransport extends EventEmitter {
         this.sockets.set(id, sock);
         sock.setNoDelay(true);
         sock.setKeepAlive(true, 30000);
-        this.emit('session-start', id, { remote: `${sock.remoteAddress}:${sock.remotePort}` });
+        const info = {
+          remote: `${plainIp(sock.remoteAddress)}:${sock.remotePort}`,
+          local: `${plainIp(sock.localAddress)}:${sock.localPort}`,
+          since: iso(Date.now()),
+          lastRxAt: null,
+        };
+        this.info.set(id, info);
+        this.emit('session-start', id, { ...info });
         this.emit('status', 'connected');
-        sock.on('data', (buf) => this.emit('data', buf, id));
+        sock.on('data', (buf) => { info.lastRxAt = this.lastRxAt = iso(Date.now()); this.emit('data', buf, id); });
         sock.on('error', (e) => this.emit('error', e));
         sock.on('close', () => {
           this.sockets.delete(id);
+          this.info.delete(id);
           this.emit('session-end', id);
           this.emit('status', this.sockets.size ? 'connected' : 'listening');
         });
@@ -82,6 +103,7 @@ class TcpServerTransport extends EventEmitter {
     return new Promise((resolve) => {
       for (const s of this.sockets.values()) s.destroy();
       this.sockets.clear();
+      this.info.clear();
       if (!this.server) { resolve(); return; }
       this.server.close(() => { this.emit('status', 'disconnected'); resolve(); });
       this.server = null;
@@ -105,9 +127,13 @@ class TcpClientTransport extends EventEmitter {
     this.connectedAt = null;   // set on 'connect', cleared on 'close' — tells an immediate close from a real drop
     this.failStreak = 0;       // consecutive immediate-closes — drives the backoff
     this.hintedBusy = false;   // the "accepted and closed" hint is logged once per problem episode
+    this.current = null;       // { remote, local, since, lastRxAt } while connected
+    this.lastRxAt = null;
   }
 
   describe() { return `TCP client → ${this.host}:${this.port}`; }
+
+  sessions() { return this.current && this.sessionId ? [{ id: this.sessionId, ...this.current }] : []; }
 
   start() {
     this.stopped = false;
@@ -132,10 +158,16 @@ class TcpClientTransport extends EventEmitter {
       sock.setKeepAlive(true, 30000);
       this.connectedAt = Date.now();
       this.sessionId = nextId('tcpc');
-      this.emit('session-start', this.sessionId, { remote: `${this.host}:${this.port}` });
+      this.current = { remote: `${this.host}:${this.port}`, local: `${plainIp(sock.localAddress)}:${sock.localPort}`, since: iso(this.connectedAt), lastRxAt: null };
+      this.emit('session-start', this.sessionId, { ...this.current });
       this.emit('status', 'connected');
     });
-    sock.on('data', (buf) => { if (this.sock === sock) this.emit('data', buf, this.sessionId); });
+    sock.on('data', (buf) => {
+      if (this.sock !== sock) return;
+      this.lastRxAt = iso(Date.now());
+      if (this.current) this.current.lastRxAt = this.lastRxAt;
+      this.emit('data', buf, this.sessionId);
+    });
     sock.on('error', (e) => { if (this.sock === sock) this.emit('error', e); });
     sock.on('close', () => {
       if (this.sock !== sock) return; // superseded — this socket's own close is a no-op
@@ -144,6 +176,7 @@ class TcpClientTransport extends EventEmitter {
       this.connectedAt = null;
       if (this.sessionId) this.emit('session-end', this.sessionId);
       this.sessionId = null;
+      this.current = null;
       this.sock = null;
       this.emit('status', 'disconnected');
       if (this.stopped) return;
@@ -180,6 +213,7 @@ class TcpClientTransport extends EventEmitter {
     const sock = this.sock;
     this.sock = null;
     this.sessionId = null;
+    this.current = null;
     this.connectedAt = null;
     if (!sock || sock.destroyed) return Promise.resolve();
     // Await the ACTUAL close (not just calling destroy()) so a caller that
@@ -204,4 +238,4 @@ class TcpClientTransport extends EventEmitter {
   }
 }
 
-module.exports = { TcpServerTransport, TcpClientTransport };
+module.exports = { TcpServerTransport, TcpClientTransport, plainIp };

@@ -40,7 +40,7 @@ describe('bridge-status — one home for every word', () => {
     expect(bridgeStatusWord('offline').tone).toBe('amber');
     expect(bridgeStatusWord('pending').label).toBe('Waiting for the Bridge');
     expect(bridgeStatusWord(undefined).label).toBe('Never connected');
-    expect(linkStateWord('listening').label).toBe('Listening');
+    expect(linkStateWord('listening')).toEqual({ label: 'Waiting for analyzer', tone: 'amber' });
     expect(linkStateWord('reconnecting').tone).toBe('amber');
     expect(networkModeWord('hotspot')).toBe('Setup hotspot on');
     expect(commandStateWord('delivered').label).toBe('In progress');

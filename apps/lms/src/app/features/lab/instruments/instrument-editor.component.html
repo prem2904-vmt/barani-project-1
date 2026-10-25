@@ -558,26 +558,29 @@
             <p class="pf-field__hint">Not created yet. {{ connection() }}</p>
           } @else if (bridge.available && live(); as s) {
             <span class="pf-ie-status" [attr.data-tone]="liveWord().tone"><span class="pf-ie-status__dot" aria-hidden="true"></span>{{ liveWord().label }} on this PC</span>
+            @if (liveFrom()) { <p class="pf-field__hint pf-num pf-ie-from">{{ liveFrom() }}</p> }
             <dl class="pf-ie-kv">
+              @if (s.listenPort) { <div><dt>Port</dt><dd class="pf-num">{{ s.listenPort }}</dd></div> }
               <div><dt>Last message</dt><dd class="pf-num">{{ fmtIst(s.lastMessageAt) || '—' }}</dd></div>
               <div><dt>Last upload</dt><dd class="pf-num">{{ fmtIst(s.lastUploadAt) || '—' }}</dd></div>
               <div><dt>Queue</dt><dd class="pf-num">{{ s.queueLength ?? 0 }}</dd></div>
               <div><dt>Today</dt><dd class="pf-num">{{ plural(s.messagesToday ?? 0, 'message') }}</dd></div>
             </dl>
-            @if (s.lastError) { <p class="pf-field__hint pf-ie-err">{{ s.lastError }}</p> }
+            @if (liveProblem(); as err) { <p class="pf-field__hint pf-ie-err">{{ err }}</p> }
           } @else {
             <span class="pf-ie-status" [attr.data-tone]="serverStatus().tone"><span class="pf-ie-status__dot" aria-hidden="true"></span>{{ serverStatus().label }}</span>
+            @if (serverSub() && dto()?.status !== 'error') { <p class="pf-field__hint pf-num pf-ie-from">{{ serverSub() }}</p> }
             <dl class="pf-ie-kv">
               <div><dt>Last seen</dt><dd class="pf-num">{{ fmtIst(dto()?.lastSeenAt) || '—' }}</dd></div>
               <div><dt>Last result</dt><dd class="pf-num">{{ fmtIst(dto()?.lastMessageAt) || '—' }}</dd></div>
               @if (dto()?.lastStatus; as hb) {
-                @if (hb.status) { <div><dt>Connector</dt><dd>{{ hb.status }}{{ hb.host ? ' · ' + hb.host : '' }}</dd></div> }
+                @if (hb.status) { <div><dt>Connector</dt><dd>{{ hbWord() }}{{ hb.host ? ' · ' + hb.host : '' }}</dd></div> }
                 @if (hb.queueLength != null) { <div><dt>Queue</dt><dd class="pf-num">{{ hb.queueLength }}</dd></div> }
                 @if (hb.connectorVersion) { <div><dt>Version</dt><dd class="pf-num">{{ hb.connectorVersion }}</dd></div> }
               }
               <div><dt>Unmatched</dt><dd class="pf-num">{{ dto()?.unmatchedCount ?? 0 }}</dd></div>
             </dl>
-            @if (dto()?.lastStatus?.lastError; as err) { <p class="pf-field__hint pf-ie-err">{{ err }}</p> }
+            @if (dto()?.errorDetail || dto()?.lastStatus?.errorDetail || dto()?.lastStatus?.lastError; as err) { <p class="pf-field__hint pf-ie-err">{{ err }}</p> }
           }
           <p class="pf-field__hint">{{ connection() }}</p>
           <dl class="pf-ie-kv"><div><dt>Two-way</dt><dd>{{ twoWayLabel() }}</dd></div></dl>

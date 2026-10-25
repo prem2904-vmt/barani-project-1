@@ -77,6 +77,48 @@ describe('Instruments list', () => {
     expect(p.cmp.unmatchedTotal()).toBe(2);
   });
 
+  it('true status: counts per status (Online always, others only when present) and the "connected from" line', async () => {
+    const rows = [
+      instrument({ id: 'a', name: 'Medonic M51', status: 'online', sessions: [{ remote: '192.168.1.21:49731', since: '2026-10-24T09:00:00Z' }], lastRxAt: new Date(Date.now() - 2 * 60_000).toISOString() }),
+      instrument({ id: 'b', name: 'Snibe Maglumi', status: 'waiting', listenPort: 5604 }),
+      instrument({ id: 'c', name: 'Old LIS clash', status: 'error', errorDetail: 'Port 5600 is used by CBCLisM51 (PID 7412). Close that program, or pick another port for this analyzer.' }),
+      instrument({ id: 'd', name: 'Old desktop', status: 'running' }),
+    ];
+    const p = renderBandPage(InstrumentsListComponent, { getFor: (u) => (u === '/api/instruments' ? rows : []) });
+    await flush(); p.f.detectChanges();
+    expect(p.cmp.statusCounts().map((s: { label: string; n: number; tone: string }) => [s.label, s.n, s.tone])).toEqual([
+      ['Online', 1, 'green'], ['Waiting for analyzer', 1, 'amber'], ['Error', 1, 'red'], ['Connector running', 1, 'neutral'],
+    ]);
+    const cells = Array.from(p.el.querySelectorAll('.pf-inl__main .pf-inl-status'))
+      .map((c) => Array.from(c.closest('.pf-inl-cell')!.children).map((x) => x.textContent!.trim()).join(' '));
+    expect(cells).toContain('Online connected from 192.168.1.21 · last data 2 min ago');
+    expect(cells).toContain('Waiting for analyzer listening on port 5604');
+    expect(cells.find((c) => c.startsWith('Error'))).toContain('Port 5600 is used by CBCLisM51 (PID 7412)');
+    // No green dot for anything that isn't really connected.
+    expect(p.el.querySelectorAll('.pf-inl__main .pf-inl-status[data-tone="green"]').length).toBe(1);
+  });
+
+  it('"Connect an analyzer" shows on the desktop app with the setup helper (a secondary — Add stays the ONE primary)', async () => {
+    const b = fakeBridge();
+    const withDiag = { ...b.api, diag: { snapshot: vi.fn(async () => ({})) } };
+    const p = renderBandPage(InstrumentsListComponent, {
+      getFor: (u) => (u === '/api/instruments' ? [instrument()] : []),
+      providers: [{ provide: INSTRUMENT_BRIDGE_SOURCE, useValue: () => withDiag as unknown as ElectronInstrumentsApi }],
+    });
+    await flush(); p.f.detectChanges();
+    const c = Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-inl__side button')).find((x) => x.textContent!.includes('Connect an analyzer'))!;
+    expect(c.classList.contains('pf-btn--secondary')).toBe(true);
+    expect(primaries(p.el)).toBe(1);
+    const nav = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    c.click();
+    expect(nav).toHaveBeenCalledWith(['/admin/instruments', 'connect']);
+    TestBed.resetTestingModule();
+    // Web / an older desktop (no diag): not offered.
+    const web = renderBandPage(InstrumentsListComponent, { getFor: (u) => (u === '/api/instruments' ? [instrument()] : []) });
+    await flush(); web.f.detectChanges();
+    expect(web.el.textContent).not.toContain('Connect an analyzer');
+  });
+
   it('search matches name, make, model and the connection summary', () => {
     const rows = [instrument(), instrument({ id: 'i2', name: 'Mindray', make: 'Mindray', model: 'BC-5150' })];
     expect(searchInstruments(rows, 'xn-550').map((r) => r.id)).toEqual(['i1']);
@@ -116,6 +158,47 @@ describe('Instrument editor — web vs Electron', () => {
     const tabs = Array.from(p.el.querySelectorAll('pf-hero-band .pf-tabs__item')).map((b) => b.textContent!.trim());
     expect(tabs).toEqual(['Basics', 'Connection', 'Protocol', 'Listen', 'Code mapping', 'Two-way', 'Device']);
     expect(p.el.querySelector('pf-hero-band .pf-ctx__primary')!.textContent).toContain('New instrument');
+  });
+
+  it('side card on this PC: the TRUE link word, who is connected, the port; a port problem in plain words', async () => {
+    const b = fakeBridge();
+    b.api.status = vi.fn(async () => [{ instrumentId: 'i1', state: 'connected', link: 'connected', listenPort: 5601,
+      sessions: [{ remote: '192.168.1.21:49731', since: '2026-10-24T09:00:00Z' }], lastRxAt: new Date(Date.now() - 2 * 60_000).toISOString() }]) as never;
+    const p = render({ id: 'i1', bridge: b.api });
+    await flush(); p.f.detectChanges();
+    const side = p.el.querySelector('.pf-ie__side')!.textContent!.replace(/\s+/g, ' ');
+    expect(side).toContain('Analyzer connected on this PC');
+    expect(side).toContain('connected from 192.168.1.21 · last data 2 min ago');
+    expect(side).toMatch(/Port\s*5601/);
+    expect(p.el.querySelector('.pf-ie__side .pf-ie-status')!.getAttribute('data-tone')).toBe('green');
+    TestBed.resetTestingModule();
+
+    const b2 = fakeBridge();
+    b2.api.status = vi.fn(async () => [{ instrumentId: 'i1', state: 'listening', link: 'waiting', listenPort: 5604, sessions: [] }]) as never;
+    const w = render({ id: 'i1', bridge: b2.api });
+    await flush(); w.f.detectChanges();
+    expect(w.el.querySelector('.pf-ie__side .pf-ie-status')!.textContent).toContain('Waiting for analyzer on this PC');
+    expect(w.el.querySelector('.pf-ie__side .pf-ie-status')!.getAttribute('data-tone')).toBe('amber');
+    TestBed.resetTestingModule();
+
+    const b3 = fakeBridge();
+    b3.api.status = vi.fn(async () => [{ instrumentId: 'i1', state: 'error', link: 'error', sessions: [], lastError: 'TCP server 0.0.0.0:5600: …',
+      errorDetail: 'Port 5600 is used by CBCLisM51 (PID 7412). Close that program, or pick another port for this analyzer.' }]) as never;
+    const e = render({ id: 'i1', bridge: b3.api });
+    await flush(); e.f.detectChanges();
+    expect(e.el.querySelector('.pf-ie__side .pf-ie-err')!.textContent).toContain('Port 5600 is used by CBCLisM51 (PID 7412)');
+  });
+
+  it('web: the server view says "Waiting for analyzer" (amber) with the port — never green while only listening', async () => {
+    const p = render({ id: 'i1', dto: instrument({ status: 'waiting', listenPort: 5604, lastStatus: { status: 'listening', link: 'waiting', host: 'LAB-RECEPTION' } }) });
+    await flush(); p.f.detectChanges();
+    const st = p.el.querySelector('.pf-ie__side .pf-ie-status')!;
+    expect(st.textContent).toContain('Waiting for analyzer');
+    expect(st.getAttribute('data-tone')).toBe('amber');
+    const side = p.el.querySelector('.pf-ie__side')!.textContent!.replace(/\s+/g, ' ');
+    expect(side).toContain('listening on port 5604');
+    expect(side).toContain('Waiting for analyzer · LAB-RECEPTION');
+    expect(side).not.toContain('listening ·');
   });
 
   it('web: Listen explains it runs on the paired desktop app; no Start button', async () => {

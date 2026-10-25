@@ -8,7 +8,7 @@ import { formatDate } from '@angular/common';
 import { LAB_TIME_ZONE } from '../utils/lab-clock';
 import type {
   CodeMapDto, CodeMapUpsert, DetectResult, Hl7SampleIdField, InstrumentConfig, InstrumentDto, InstrumentMessage,
-  InstrumentStatus, InstrumentUpsert, LinkConfig, LinkType, LoincCandidateDto, LoincSuggestionDto, ParserConfig,
+  InstrumentSession, InstrumentStatus, InstrumentUpsert, LinkConfig, LinkType, LoincCandidateDto, LoincSuggestionDto, ParserConfig,
   ParserType, SinocareReplyMode, SinocareSampleIdField, TransportConfig, TransportType,
 } from './instrument.models';
 import { TwoWayForm, buildBidirectional, emptyTwoWayForm, twoWayFromConfig, validateTwoWay } from './instrument-two-way';
@@ -774,27 +774,124 @@ export function protocolLabel(cfg: Partial<InstrumentConfig> | null | undefined)
   return PROTOCOL_OPTIONS.find((o) => o.value === p)?.label ?? String(p);
 }
 
-/** The ONE status word per instrument: dot + tone (list rows). */
-export function statusWord(s: InstrumentStatus | string | null | undefined): { label: string; tone: 'green' | 'amber' | 'red' | 'neutral' } {
+export type StatusTone = 'green' | 'amber' | 'red' | 'neutral';
+
+/**
+ * The ONE status word per instrument: dot + tone (list rows, editor card).
+ * GREEN ONLY when the analyzer is really connected (next-phase §4 — a port
+ * merely listening used to show "Online"): Waiting for analyzer / Not
+ * connected are amber, Offline (no heartbeat) is grey, Error is red, and an
+ * older connector that can't tell says only "Connector running".
+ */
+export function statusWord(s: InstrumentStatus | string | null | undefined): { label: string; tone: StatusTone } {
   switch (s) {
     case 'online': return { label: 'Online', tone: 'green' };
-    case 'offline': return { label: 'Offline', tone: 'amber' };
+    case 'waiting': return { label: 'Waiting for analyzer', tone: 'amber' };
+    case 'not_connected': return { label: 'Not connected', tone: 'amber' };
+    case 'running': return { label: 'Connector running', tone: 'neutral' };
+    case 'offline': return { label: 'Offline', tone: 'neutral' };
     case 'error': return { label: 'Error', tone: 'red' };
     default: return { label: 'Never connected', tone: 'neutral' };
   }
 }
 
-/** The live connector state word (Electron onStatus). */
-export function connectorStateWord(s: string | null | undefined): { label: string; tone: 'green' | 'amber' | 'red' | 'neutral' } {
+/** Side-card / list order of the status counts (Online first, never last). */
+export const STATUS_ORDER: readonly InstrumentStatus[] = ['online', 'waiting', 'not_connected', 'error', 'offline', 'running', 'never'];
+
+/**
+ * The live connector word on THIS PC (Electron onStatus). With the true
+ * `link` (desktop ≥ 1.1.1) it says what the analyzer is doing; an older
+ * desktop only reports `state` — and 'listening' there is a port with nobody
+ * on it yet, so it is amber, never green.
+ */
+export function connectorStateWord(s: string | null | undefined, link?: string | null): { label: string; tone: StatusTone } {
+  switch (link) {
+    case 'connected': return { label: 'Analyzer connected', tone: 'green' };
+    case 'waiting': return { label: 'Waiting for analyzer', tone: 'amber' };
+    case 'not_connected': if (s !== 'starting' && s !== 'stopped') return { label: 'Not connected', tone: 'amber' }; break;
+    case 'error': return { label: 'Error', tone: 'red' };
+  }
   switch (s) {
     case 'connected': return { label: 'Connected', tone: 'green' };
-    case 'listening': return { label: 'Listening', tone: 'green' };
+    case 'listening': return { label: 'Listening — waiting for analyzer', tone: 'amber' };
     case 'starting': return { label: 'Starting', tone: 'neutral' };
-    case 'disconnected': return { label: 'Disconnected', tone: 'amber' };
+    case 'disconnected': return { label: 'Not connected', tone: 'amber' };
     case 'stopped': return { label: 'Stopped', tone: 'neutral' };
     case 'error': return { label: 'Error', tone: 'red' };
     default: return { label: 'Unknown', tone: 'neutral' };
   }
+}
+
+/** "192.168.1.21:58561" → "192.168.1.21" ("::ffff:" stripped). */
+export function remoteHost(remote: string | null | undefined): string {
+  const r = String(remote ?? '').replace(/^::ffff:/i, '');
+  const m = /^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/.exec(r);
+  return m ? m[1] : r;
+}
+
+/** "just now" / "2 min ago" / "3 h ago" / "yesterday" / "4 days ago" — mid-sentence words. */
+export function agoWords(iso: string | null | undefined, now: number = Date.now()): string {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '';
+  const sec = Math.max(0, Math.round((now - t) / 1000));
+  if (sec < 45) return 'just now';
+  const m = Math.round(sec / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.round(h / 24);
+  return d === 1 ? 'yesterday' : `${d} days ago`;
+}
+
+/**
+ * The line under a status: "connected from 192.168.1.21 · last data 2 min ago".
+ * Several sessions → "connected from 192.168.1.21 + 1 more". No session but
+ * bytes heard → "last data 12 min ago". Nothing known → ''.
+ */
+export function connectedFromLine(
+  x: { sessions?: readonly InstrumentSession[] | null; lastRxAt?: string | null; lastMessageAt?: string | null } | null | undefined,
+  now: number = Date.now(),
+): string {
+  if (!x) return '';
+  const sessions = (x.sessions ?? []).filter((s) => s && s.remote);
+  const parts: string[] = [];
+  if (sessions.length) {
+    parts.push(`connected from ${remoteHost(sessions[0].remote)}${sessions.length > 1 ? ` + ${sessions.length - 1} more` : ''}`);
+  }
+  const last = x.lastRxAt || x.lastMessageAt;
+  const ago = agoWords(last, now);
+  if (ago) parts.push(`last data ${ago}`);
+  return parts.join(' · ');
+}
+
+/** The true-status fields of an instrument: the DTO's own, else its last heartbeat's. */
+export function liveOf(d: Pick<InstrumentDto, 'sessions' | 'lastRxAt' | 'lastMessageAt' | 'listenPort' | 'errorDetail' | 'lastStatus'> | null | undefined): {
+  sessions: InstrumentSession[]; lastRxAt: string | null; lastMessageAt: string | null; listenPort: number | null; errorDetail: string | null;
+} {
+  const hb = d?.lastStatus ?? null;
+  return {
+    sessions: (d?.sessions ?? hb?.sessions ?? []) as InstrumentSession[],
+    lastRxAt: d?.lastRxAt ?? hb?.lastRxAt ?? null,
+    lastMessageAt: d?.lastMessageAt ?? hb?.lastMessageAt ?? null,
+    listenPort: d?.listenPort ?? hb?.listenPort ?? null,
+    errorDetail: d?.errorDetail ?? hb?.errorDetail ?? null,
+  };
+}
+
+/**
+ * The line under a status word: what the analyzer is doing right now —
+ * "connected from 192.168.1.21 · last data 2 min ago", "listening on port
+ * 5604", the plain-words problem for an error, else "Last seen …".
+ */
+export function statusSubline(d: InstrumentDto | null | undefined, now: number = Date.now()): string {
+  if (!d) return '';
+  const live = liveOf(d);
+  if (d.status === 'error' && live.errorDetail) return live.errorDetail;
+  const from = connectedFromLine(live, now);
+  if (d.status === 'waiting' && live.listenPort) return [`listening on port ${live.listenPort}`, from].filter(Boolean).join(' · ');
+  if (from && d.status !== 'offline' && d.status !== 'never') return from;
+  return d.lastSeenAt ? `Last seen ${fmtIst(d.lastSeenAt)}` : '';
 }
 
 /** ISO instant → "30 Sep, 10:42 AM" (or just the time) in the lab's IST day. */

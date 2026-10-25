@@ -1,6 +1,6 @@
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import {
-  ConnectorStatus, ElectronInstrumentsApi, ListenEvent, ListenResult, PairedInstrument, RawLogEntry, SerialPortInfo,
+  ConnectorStatus, ElectronInstrumentsApi, ElectronInstrumentsDiagApi, ListenEvent, ListenResult, PairedInstrument, RawLogEntry, SerialPortInfo,
 } from './instrument.models';
 
 /** Where the bridge comes from. Default: the Electron preload's
@@ -34,6 +34,12 @@ export class InstrumentBridgeService {
 
   /** True only inside the Electron desktop app with the connector preload. */
   get available(): boolean { return !!this.api; }
+
+  /** The "Connect an analyzer" helpers (desktop ≥ 1.1.1). */
+  get diagAvailable(): boolean { const d = this.api?.diag; return !!d && typeof d.snapshot === 'function'; }
+
+  /** The netdiag bridge, or undefined (web, older desktop). */
+  get diag(): ElectronInstrumentsDiagApi | undefined { return this.diagAvailable ? this.api!.diag : undefined; }
 
   async list(): Promise<PairedInstrument[]> {
     const a = this.api; if (!a) return [];

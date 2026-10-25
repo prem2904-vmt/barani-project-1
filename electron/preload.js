@@ -119,7 +119,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('instruments:listen', h);
       return () => ipcRenderer.removeListener('instruments:listen', h);
     },
-    preview: (raw, config) => ipcRenderer.invoke('instruments:preview', raw, config)
+    preview: (raw, config) => ipcRenderer.invoke('instruments:preview', raw, config),
+    // "Connect an analyzer" (netdiag.js): this PC's network, who holds a
+    // port, the firewall (fixFirewall = one Windows permission prompt, only
+    // after the user confirmed), the ARP table, an opt-in connect-only probe
+    // and a multi-port "find the analyzer" listen. Validated again in main.
+    diag: {
+      snapshot: () => ipcRenderer.invoke('instruments:diagSnapshot'),
+      ports: (ports) => ipcRenderer.invoke('instruments:diagPorts', ports),
+      nextPort: () => ipcRenderer.invoke('instruments:diagNextPort'),
+      fixFirewall: (p) => ipcRenderer.invoke('instruments:diagFixFirewall', p),
+      arp: () => ipcRenderer.invoke('instruments:diagArp'),
+      probe: (p) => ipcRenderer.invoke('instruments:diagProbe', p),
+      scanStart: (p) => ipcRenderer.invoke('instruments:diagScanStart', p),
+      scanStop: (scanId) => ipcRenderer.invoke('instruments:diagScanStop', scanId),
+      onScan: (cb) => {
+        const h = (_e, ev) => cb(ev);
+        ipcRenderer.on('instruments:diag', h);
+        return () => ipcRenderer.removeListener('instruments:diag', h);
+      }
+    }
   },
   // Prefrontal Bridges on this network (bridge-api v1, B.3/B.5): mDNS
   // discovery + HTTPS to a Bridge's local API with its pinned certificate.

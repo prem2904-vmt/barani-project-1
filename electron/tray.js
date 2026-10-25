@@ -183,7 +183,7 @@ function onInstrumentStatus(status) {
   if (!status || !status.instrumentId) return;
   const idx = instruments.findIndex((i) => i.instrumentId === status.instrumentId);
   if (idx >= 0) instruments[idx] = status; else instruments.push(status);
-  if (connectivityWatcher) connectivityWatcher.report(status.instrumentId, status.name, status.state);
+  if (connectivityWatcher) connectivityWatcher.report(status.instrumentId, status.name, status.state, status.link);
   scheduleRebuild();
 }
 
@@ -209,7 +209,7 @@ function create(windowGetter) {
   // Seed today's already-paired instruments as "first sightings" — app
   // launch finding an instrument already connected must never read as a
   // "reconnect" notification.
-  for (const s of instruments) connectivityWatcher.report(s.instrumentId, s.name, s.state);
+  for (const s of instruments) connectivityWatcher.report(s.instrumentId, s.name, s.state, s.link);
   if (inst) inst.onStatus(onInstrumentStatus);
 
   const updater = safeUpdater();

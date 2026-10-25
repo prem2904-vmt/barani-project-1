@@ -34,12 +34,16 @@ function formatDiagnostics({
     for (const i of instruments) {
       const bits = [
         `state=${i.state}`,
+        ...(i.link ? [`link=${i.link}`] : []),
         `queue=${Number(i.queueLength) || 0}`,
         `unmatchedToday=${Number(i.unmatchedToday) || 0}`,
         `messagesToday=${Number(i.messagesToday) || 0}`,
       ];
       if (i.lastMessageAt) bits.push(`lastMessage=${i.lastMessageAt}`);
       if (i.serverOnline === false) bits.push(`serverOfflineSince=${i.serverOfflineSince || '?'}`);
+      if (Array.isArray(i.sessions) && i.sessions.length) bits.push(`from=${i.sessions.map((x) => x.remote).join(' ')}`);
+      if (i.listenPort) bits.push(`port=${i.listenPort}`);
+      if (i.errorDetail) bits.push(`problem=${JSON.stringify(String(i.errorDetail).slice(0, 200))}`);
       lines.push(`  - ${i.name || i.instrumentId} (${i.instrumentId}): ${bits.join(', ')}`);
       const errs = Array.isArray(i.recentErrors) ? i.recentErrors.slice(-10) : [];
       if (errs.length) {

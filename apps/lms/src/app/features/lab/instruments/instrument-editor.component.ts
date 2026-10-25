@@ -22,7 +22,7 @@ import { InstrumentBridgeService } from '../../../shared/instruments/instrument-
 import {
   BAUD_RATES, CodeMapRow, ConfigBase, DATA_BITS, DEFAULT_SINOCARE_ACK_JSON, DESKTOP_ONLY_PROTOCOLS, FLOW_CONTROLS, SINOCARE_REPLY_MODES, SINOCARE_SAMPLE_ID_FIELDS, FlowControl, HL7_SAMPLE_ID_FIELDS, InstrumentForm, LoincSkip, PARITIES,
   PROTOCOL_OPTIONS, RawSegment, STOP_BITS, TRANSPORT_OPTIONS, WizardStep, applyDetectProposal, applyLoincSuggestions, buildInstrumentConfig,
-  buildUpsert, coerceConfig, codesFromMessages, connectionSummary, connectorStateWord, emptyCodeMapRow, emptyInstrumentForm, fmtIst, formFromInstrument,
+  buildUpsert, coerceConfig, codesFromMessages, connectedFromLine, connectionSummary, connectorStateWord, statusSubline, emptyCodeMapRow, emptyInstrumentForm, fmtIst, formFromInstrument,
   mergeUnmappedCodes, previewLine, previewRows, renderControlChars, rowFromDto, sharedCodeHint, statusWord, toCodeMapUpserts, validateCodeMaps,
   validateInstrumentForm, withCbcDefaults, withM51Defaults,
 } from '../../../shared/instruments/instrument-config';
@@ -243,7 +243,15 @@ export class InstrumentEditorComponent {
   readonly rawLog = signal<RawLogEntry[]>([]);
   readonly recent = signal<MessageSummaryDto[]>([]);
   readonly serverStatus = computed(() => statusWord(this.dto()?.status));
-  readonly liveWord = computed(() => connectorStateWord(this.live()?.state));
+  readonly liveWord = computed(() => connectorStateWord(this.live()?.state, this.live()?.link));
+  /** "connected from 192.168.1.21 · last data 2 min ago" (this PC, live). */
+  readonly liveFrom = computed(() => connectedFromLine(this.live()));
+  /** The connector's last heartbeat state in words (never the raw "listening"). */
+  readonly hbWord = computed(() => { const hb = this.dto()?.lastStatus; return hb ? connectorStateWord(hb.status, hb.link).label : ''; });
+  /** The same line from the server's view (web / another PC). */
+  readonly serverSub = computed(() => statusSubline(this.dto()));
+  /** A plain-words problem (port busy / access denied / refused) beats the raw last error. */
+  readonly liveProblem = computed(() => this.live()?.errorDetail || this.live()?.lastError || null);
   readonly connection = computed(() => connectionSummary(buildInstrumentConfig(this.form(), this.configBase)));
   private offStatus: (() => void) | null = null;
 

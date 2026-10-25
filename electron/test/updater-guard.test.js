@@ -75,3 +75,17 @@ test('an error-state connector (disconnected) is not treated as busy on its own'
   const statuses = [idle({ state: 'error' })];
   assert.equal(canRestartNow(statuses, NOW).safe, true);
 });
+
+
+test('a paired TCP-server connector WAITING for its analyzer (state listening + link) is idle, not busy', () => {
+  const waiting = idle({ state: 'listening', link: 'waiting' });
+  assert.equal(isConnectorBusy(waiting, NOW), false);
+  assert.deepEqual(canRestartNow([waiting], NOW), { safe: true, reasons: [] });
+  // …while a capture pseudo entry (host guardSnapshot: no link) still holds the restart.
+  assert.equal(canRestartNow([waiting, { name: 'Analyzer capture', state: 'listening' }], NOW).safe, false);
+});
+
+test('keep-alive bytes (lastRxAt) alone never make a connector busy — only real messages do', () => {
+  const pinging = idle({ state: 'connected', link: 'connected', lastRxAt: new Date(NOW - 1000).toISOString() });
+  assert.equal(isConnectorBusy(pinging, NOW), false);
+});

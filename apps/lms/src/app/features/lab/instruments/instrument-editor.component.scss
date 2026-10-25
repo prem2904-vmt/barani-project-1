@@ -23,6 +23,7 @@
 .pf-ie-span { grid-column: 1 / -1; }
 @media (max-width: 640px) { .pf-ie-grid { grid-template-columns: minmax(0, 1fr); } }
 .pf-ie-err { color: var(--red-text, #b91c1c); }
+.pf-ie-from { margin: -4px 0 0; color: var(--text-secondary); }
 .pf-ie-sub { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 .pf-ie-r { text-align: right; }
 .pf-ie-self-start { align-self: flex-start; }

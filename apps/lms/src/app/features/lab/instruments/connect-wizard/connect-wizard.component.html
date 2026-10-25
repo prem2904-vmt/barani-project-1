@@ -1,0 +1,305 @@
+<section class="pf-cw pf-band-page px-4 md:px-8 pt-6 pb-10">
+  @if (theme.isNewDesign()) {
+    <pf-hero-band [back]="true" backTo="/admin/instruments" [customSearch]="true" [contextBar]="true">
+      <div band-search class="pf-ctx pf-cw-ctx">
+        <span class="pf-ctx__primary">Connect an analyzer</span>
+        @if (available) {
+          <span class="pf-cw-ctx__div" aria-hidden="true"></span>
+          <ng-container *ngTemplateOutlet="tabsTpl"></ng-container>
+        }
+      </div>
+    </pf-hero-band>
+  }
+  <pf-screen-header class="pf-classic-only" eyebrow="Lab settings · Instruments" title="Connect an analyzer" parentRoute="/admin/instruments"></pf-screen-header>
+
+  <ng-template #tabsTpl>
+    <div class="pf-tabs pf-cw-tabs" role="tablist" aria-label="Steps">
+      @for (s of steps; track s.id; let i = $index) {
+        <button type="button" class="pf-tabs__item" role="tab" [attr.aria-selected]="step() === s.id"
+                [disabled]="i > stepIndex() && !reachable(s.id)" (click)="go(s.id)">
+          <span class="pf-num pf-cw-tabs__n">{{ i + 1 }}</span><span>{{ s.label }}</span>
+        </button>
+      }
+    </div>
+  </ng-template>
+
+  <div class="pf-band-body pf-cw__body">
+    @if (!available) {
+      <section class="pf-card">
+        <div class="pf-card__body">
+          <div class="pf-empty">
+            <span class="pf-empty__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            </span>
+            <p class="pf-empty__title">Open this on the lab PC</p>
+            <p class="pf-empty__body">The setup helper runs in the Prefrontal desktop app on the computer the analyzer is cabled to. It checks that PC's network and firewall and listens for the analyzer.</p>
+            <button type="button" class="pf-btn pf-btn--secondary press" (click)="manual()">Add an instrument by hand</button>
+          </div>
+        </div>
+      </section>
+    } @else {
+    <div class="pf-cw__split">
+      <section class="pf-card pf-cw__main" [attr.aria-label]="steps[stepIndex()].label">
+        @switch (step()) {
+          <!-- ── 1. THIS PC ─────────────────────────────────────────── -->
+          @case ('pc') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+              <h2 class="pf-card__label">This PC</h2>
+              <span class="pf-card__note">{{ snap()?.hostname || '' }}</span>
+              <span class="pf-card__spacer"></span>
+              <button type="button" class="pf-btn pf-btn--quiet press" [disabled]="snapBusy()" [pfBusy]="snapBusy()" pfBusyLabel="Checking…" (click)="refresh()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+                Check again
+              </button>
+            </header>
+            <div class="pf-card__body pf-cw-stack">
+              @if (!snap()) {
+                <p class="pf-cw-live" role="status"><span class="pf-cw-live__dot" aria-hidden="true"></span>Reading this PC's network…</p>
+              } @else {
+                <div>
+                  <h3 class="pf-cw-sub">Network cards</h3>
+                  <ul class="pf-cw-cards" aria-label="Network cards">
+                    @for (a of snap()!.adapters; track a.name) {
+                      <li class="pf-cw-cardrow">
+                        <span class="pf-cw-cardrow__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7V3M15 7V3M7 7h10v5a5 5 0 0 1-10 0V7ZM12 17v4"/></svg></span>
+                        <span class="pf-cw-cardrow__main">
+                          <span class="pf-cw-cardrow__name">{{ a.name }}</span>
+                          <span class="pf-cw-cardrow__meta">{{ a.description || '' }}</span>
+                        </span>
+                        <span class="pf-cw-cardrow__ip pf-num">
+                          @for (x of a.ipv4; track x.address) { <span>{{ x.address }}</span> }
+                          <span class="pf-cw-cardrow__meta">{{ a.gateway ? 'Gateway ' + a.gateway : 'No gateway' }}</span>
+                        </span>
+                        @if (profileOf(a.name); as cat) {
+                          <span class="pf-cw-tag" [attr.data-tone]="cat === 'Public' ? 'amber' : 'neutral'">{{ cat === 'DomainAuthenticated' ? 'Domain' : cat }}</span>
+                        }
+                      </li>
+                    } @empty {
+                      <li class="pf-cw-cardrow"><span class="pf-cw-cardrow__main">No network card has an address.</span></li>
+                    }
+                  </ul>
+                </div>
+
+                <label class="pf-field">
+                  <span class="pf-field__lbl">The analyzer's cable goes into</span>
+                  <pf-select [options]="cardOpts()" [value]="card()" (valueChange)="card.set($event)" placeholder="Pick a network card"></pf-select>
+                </label>
+
+                <div>
+                  <h3 class="pf-cw-sub">What could stop the analyzer</h3>
+                  @if (problems().length === 0) {
+                    <p class="pf-cw-ok"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Nothing in the way.</p>
+                  } @else {
+                    <ul class="pf-cw-problems">
+                      @for (p of problems(); track p.code + (p.card || '')) {
+                        <li class="pf-cw-problem" [attr.data-sev]="p.severity">
+                          <span class="pf-cw-problem__icon" aria-hidden="true">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+                          </span>
+                          <span>{{ p.message }}</span>
+                        </li>
+                      }
+                    </ul>
+                    @if (fixable().length) {
+                      <div class="pf-cw-fix">
+                        <p class="pf-field__hint">{{ fixable().length === 1 ? 'This one can be fixed' : 'These can be fixed' }} here — Windows asks for permission once.</p>
+                        <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="fixBusy()" [pfBusy]="fixBusy()" pfBusyLabel="Waiting for Windows…" (click)="fixFirewall()">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
+                          Fix with Windows permission
+                        </button>
+                      </div>
+                    }
+                  }
+                  @if (snap()!.firewall && !snap()!.firewall.supported && snap()!.firewall.message) {
+                    <p class="pf-field__hint">{{ snap()!.firewall.message }}</p>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          <!-- ── 2. FIND THE ANALYZER ───────────────────────────────── -->
+          @case ('find') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></span>
+              <h2 class="pf-card__label">Find the analyzer</h2>
+              <span class="pf-card__spacer"></span>
+              <pf-segmented size="sm" [options]="modeOptions" [value]="mode()" (valueChange)="setMode($event)" aria-label="Who connects"></pf-segmented>
+            </header>
+            <div class="pf-card__body pf-cw-stack">
+              @if (mode() === 'listen') {
+                <div class="pf-cw-instr">
+                  <p class="pf-cw-instr__lead">On the analyzer, open its <strong>LIS / Host</strong> settings and set:</p>
+                  <div class="pf-cw-instr__vals">
+                    <div class="pf-cw-instr__val"><span class="pf-cw-instr__k">Host IP</span><span class="pf-cw-instr__v pf-num">{{ card() || '—' }}</span></div>
+                    <div class="pf-cw-instr__val"><span class="pf-cw-instr__k">Port</span><span class="pf-cw-instr__v pf-num">{{ port() ?? '—' }}</span></div>
+                  </div>
+                  <p class="pf-field__hint">Save it on the analyzer (some need a restart of their LIS / communication screen).
+                    @if (otherPorts() && !hit()) { Already set to another port? This PC is also listening on {{ otherPorts() }}. }
+                  </p>
+                </div>
+
+                @if (!hit()) {
+                  <p class="pf-cw-live" role="status"><span class="pf-cw-live__dot" aria-hidden="true"></span>{{ scanning() ? 'Waiting for the analyzer to connect…' : 'Not listening' }}</p>
+                  @if (!scanning()) {
+                    <button type="button" class="pf-btn pf-btn--secondary press pf-cw-self" (click)="startScan()">Start listening</button>
+                  }
+                  <button type="button" class="pf-btn pf-btn--quiet press pf-cw-self" (click)="skip()">Skip — I'll check the protocol later</button>
+                } @else {
+                  <div class="pf-cw-hit" role="status">
+                    <span class="pf-cw-hit__dot" aria-hidden="true"></span>
+                    <span class="pf-cw-hit__t">Connected from <strong class="pf-num">{{ remoteHost(hit()!.remote) }}</strong> on port <strong class="pf-num">{{ hit()!.port }}</strong></span>
+                  </div>
+                  <p class="pf-cw-headline">{{ headline() }}</p>
+                  @if (!detect()) {
+                    <p class="pf-field__hint">Run a sample — or resend the last result from the analyzer — so we can see its protocol.</p>
+                  } @else if (detect()!.reasons.length) {
+                    <ul class="pf-cw-why">@for (r of detect()!.reasons; track $index) { <li>{{ r }}</li> }</ul>
+                  }
+                  @if (otherCard(); as o) {
+                    <p class="pf-cw-warn">It reached this PC on {{ o.card }} ({{ o.address }}), not the card you picked. Use {{ o.address }} as the analyzer's host IP.</p>
+                  }
+                }
+                @if (!hit()) {
+                  @for (s of scanSkipped(); track s.port) {
+                    <p class="pf-field__hint pf-cw-warn">{{ s.error }}</p>
+                  }
+                }
+              } @else {
+                <p class="pf-cw-instr__lead">Some analyzers wait for the LIS to call them. Find its IP address on its screen (Settings → Network / LIS), or look for it below.</p>
+                <div class="pf-cw-grid">
+                  <label class="pf-field"><span class="pf-field__lbl">Analyzer IP address</span>
+                    <input class="pf-input pf-num" [value]="dialHost()" (input)="dialHost.set($any($event.target).value)" placeholder="e.g. 192.168.1.30" autocomplete="off" inputmode="decimal" /></label>
+                  <label class="pf-field"><span class="pf-field__lbl">Its LIS port</span>
+                    <input class="pf-input pf-num" [value]="dialPort() ?? ''" (input)="setDialPortText($any($event.target).value)" placeholder="e.g. 5100" autocomplete="off" inputmode="numeric" /></label>
+                </div>
+                <div class="pf-cw-row">
+                  <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="!dialHost().trim() || !dialPort()" (click)="tryDial()">Connect to it</button>
+                  <button type="button" class="pf-btn pf-btn--quiet press" [disabled]="probeBusy()" [pfBusy]="probeBusy()" pfBusyLabel="Looking…" (click)="probe()">Look for analyzers on this network</button>
+                </div>
+                @if (dialSession()) {
+                  @if (hit()) {
+                    <div class="pf-cw-hit" role="status"><span class="pf-cw-hit__dot" aria-hidden="true"></span><span class="pf-cw-hit__t">Connected to <strong class="pf-num">{{ dialHost() }}:{{ dialPort() }}</strong></span></div>
+                    <p class="pf-cw-headline">{{ headline() }}</p>
+                  } @else {
+                    <p class="pf-cw-live" role="status"><span class="pf-cw-live__dot" aria-hidden="true"></span>Connecting to {{ dialHost() }}:{{ dialPort() }}…</p>
+                  }
+                }
+                @if (probeOpen(); as open) {
+                  <h3 class="pf-cw-sub">Answering on a LIS port</h3>
+                  @if (open.length === 0) { <p class="pf-field__hint">Nothing answered. Check the analyzer's IP and that its LIS is switched on.</p> }
+                  <ul class="pf-cw-list">
+                    @for (o of open; track o.host + ':' + o.port) {
+                      <li><button type="button" class="pf-row pf-cw-pick" [class.pf-row--in]="dialHost() === o.host && dialPort() === o.port" (click)="pickDial(o.host, o.port)"><span class="pf-num">{{ o.host }}</span><span class="pf-cw-cardrow__meta pf-num">port {{ o.port }}</span></button></li>
+                    }
+                  </ul>
+                }
+                @if (arp().length) {
+                  <h3 class="pf-cw-sub">Devices this PC has seen</h3>
+                  <ul class="pf-cw-list">
+                    @for (e of arp(); track e.ip) {
+                      <li><button type="button" class="pf-row pf-cw-pick" [class.pf-row--in]="dialHost() === e.ip" (click)="pickDial(e.ip)"><span class="pf-num">{{ e.ip }}</span><span class="pf-cw-cardrow__meta pf-num">{{ e.mac }}</span></button></li>
+                    }
+                  </ul>
+                }
+              }
+            </div>
+          }
+
+          <!-- ── 3. CREATE & PAIR ───────────────────────────────────── -->
+          @case ('create') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></span>
+              <h2 class="pf-card__label">Create &amp; pair</h2>
+              <span class="pf-card__note">Saved for the lab, and this PC starts receiving its results.</span>
+            </header>
+            <div class="pf-card__body pf-cw-stack">
+              <div class="pf-cw-grid">
+                <label class="pf-field pf-cw-span"><span class="pf-field__lbl">Name</span>
+                  <input class="pf-input" [value]="name()" (input)="name.set($any($event.target).value)" [placeholder]="guess()?.label || 'e.g. Haematology counter'" autocomplete="off" [disabled]="!!created()" /></label>
+                <label class="pf-field"><span class="pf-field__lbl">Make</span>
+                  <input class="pf-input" [value]="make()" (input)="make.set($any($event.target).value)" autocomplete="off" [disabled]="!!created()" /></label>
+                <label class="pf-field"><span class="pf-field__lbl">Model</span>
+                  <input class="pf-input" [value]="model()" (input)="model.set($any($event.target).value)" autocomplete="off" [disabled]="!!created()" /></label>
+              </div>
+              <dl class="pf-cw-kv">
+                <div><dt>Connection</dt><dd class="pf-num">{{ mode() === 'listen' ? 'This PC listens on port ' + (port() ?? '—') : 'This PC connects to ' + dialHost() + ':' + (dialPort() ?? '—') }}</dd></div>
+                <div><dt>Protocol</dt><dd>{{ protocolText() }}</dd></div>
+              </dl>
+              @if (created()) {
+                <p class="pf-cw-ok"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>{{ created()!.name }} is created{{ paired() ? ' and this PC is paired' : '' }}.</p>
+              } @else {
+                <p class="pf-field__hint">After this, map the analyzer's codes to your tests in the instrument (Code mapping).</p>
+              }
+            </div>
+          }
+
+          <!-- ── 4. CHECKLIST ───────────────────────────────────────── -->
+          @case ('check') {
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+              <h2 class="pf-card__label">Checklist</h2>
+              <span class="pf-card__spacer"></span>
+              <span class="pf-cw-count pf-num">{{ checksDone() }} of {{ checks().length }} passed</span>
+            </header>
+            <div class="pf-card__body">
+              <ng-container *ngTemplateOutlet="checksTpl; context: { $implicit: checks(), full: true }"></ng-container>
+            </div>
+          }
+        }
+      </section>
+
+      <aside class="pf-card pf-cw__side" aria-label="Progress">
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 20h.01"/></svg></span>
+          <h2 class="pf-card__label">{{ step() === 'check' ? 'Next' : 'Checks' }}</h2>
+        </header>
+        <div class="pf-card__body pf-cw-sidebody">
+          @if (step() === 'check') {
+            @if (live(); as s) {
+              <span class="pf-cw-status" [attr.data-tone]="liveWord().tone"><span class="pf-cw-status__dot" aria-hidden="true"></span>{{ liveWord().label }} on this PC</span>
+            }
+            @if (fixable().length) {
+              <p class="pf-field__hint">The firewall still blocks analyzers here.</p>
+              <button type="button" class="pf-btn pf-btn--secondary press pf-cw-self" [disabled]="fixBusy()" [pfBusy]="fixBusy()" pfBusyLabel="Waiting for Windows…" (click)="fixFirewall()">Fix with Windows permission</button>
+            }
+            <p class="pf-field__hint">Map the analyzer's codes to your tests, then run a sample — values arrive as a prefill in result entry.</p>
+          } @else {
+            <ng-container *ngTemplateOutlet="checksTpl; context: { $implicit: checks(), full: false }"></ng-container>
+          }
+        </div>
+        <div class="pf-card__foot">
+          <button type="button" class="pf-btn pf-btn--tertiary press" (click)="back()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            Back
+          </button>
+          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="primaryDisabled()"
+                  [pfBusy]="createBusy()" pfBusyLabel="Creating…" (click)="primary()">
+            {{ primaryLabel() }}
+          </button>
+        </div>
+      </aside>
+    </div>
+    }
+  </div>
+</section>
+
+<ng-template #checksTpl let-items let-full="full">
+  <ul class="pf-cw-checks" [class.pf-cw-checks--full]="full" aria-label="Checks">
+    @for (c of items; track c.id) {
+      <li class="pf-cw-check" [attr.data-ok]="c.ok === true ? 'yes' : c.ok === false ? 'no' : 'unknown'">
+        <span class="pf-cw-check__mark" aria-hidden="true">
+          @if (c.ok === true) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> }
+          @else if (c.ok === false) { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg> }
+          @else { <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/></svg> }
+        </span>
+        <span class="pf-cw-check__t">
+          <span>{{ c.label }}</span>
+          <span class="pf-cw-check__state">{{ c.ok === true ? 'Passed' : c.ok === false ? 'Failed' : 'Not checked yet' }}</span>
+          @if (full && c.detail) { <span class="pf-cw-check__d">{{ c.detail }}</span> }
+        </span>
+      </li>
+    }
+  </ul>
+</ng-template>

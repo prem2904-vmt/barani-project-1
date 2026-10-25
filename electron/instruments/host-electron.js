@@ -16,8 +16,10 @@
 const path = require('path');
 const { app, ipcMain, safeStorage } = require('electron');
 const { ConnectorManager } = require('./core/manager');
+const { NetDiag, portList, aliasList } = require('./netdiag');
 
 let manager = null;
+let diag = null;
 let getWindow = () => null;
 
 const secrets = {
@@ -46,6 +48,9 @@ function trusted(e) {
 
 const str = (v, max = 4096) => (typeof v === 'string' && v.length <= max ? v : null);
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
+const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const bad = (what) => ({ error: `bad_request: ${what}` });
 
 function handle(channel, fn) {
   ipcMain.handle(channel, async (e, ...args) => {
@@ -61,9 +66,17 @@ function handle(channel, fn) {
  */
 function register(windowGetter) {
   getWindow = windowGetter;
-  manager = new ConnectorManager({ baseDir: path.join(app.getPath('userData'), 'instruments'), secrets });
+  // Netdiag names a program holding an analyzer port (never kills it) — the
+  // connector core asks through `portOwner` and stays shell-free itself.
+  diag = new NetDiag({ usedEndpoints: () => (manager ? manager.usedEndpoints() : []) });
+  manager = new ConnectorManager({
+    baseDir: path.join(app.getPath('userData'), 'instruments'),
+    secrets,
+    connectorOpts: { portOwner: (port) => diag.portOwner(port) },
+  });
   manager.on('status', (s) => send('instruments:status', s));
   manager.on('listen', (ev) => send('instruments:listen', ev));
+  manager.on('diag', (ev) => send('instruments:diag', ev));
   manager.on('error', (err) => console.warn('[instruments]', err && err.message));
 
   handle('instruments:list', () => manager.list());
@@ -83,6 +96,40 @@ function register(windowGetter) {
   });
   handle('instruments:listenStop', (id) => manager.listenStop(str(id, 64)));
   handle('instruments:preview', (raw, config) => manager.preview(str(raw, 512 * 1024) || '', obj(config) || {}));
+
+  // ── "Connect an analyzer" wizard (netdiag.js). Read-only except
+  // diagFixFirewall, which runs ONE fixed, UAC-elevated script after the
+  // user confirmed in the UI. Every argument is re-validated here.
+  handle('instruments:diagSnapshot', () => diag.snapshot());
+  handle('instruments:diagPorts', (ports) => {
+    const list = portList(ports);
+    return list ? diag.portReport(list) : bad('ports');
+  });
+  handle('instruments:diagNextPort', () => diag.nextFreePort());
+  handle('instruments:diagFixFirewall', async (p) => {
+    const o = obj(p) || {};
+    const asked = o.ports == null ? [] : portList(o.ports, 24, 1024);
+    const aliases = aliasList(o.aliases);
+    if (!asked || !aliases) return bad('fix');
+    // The rule covers the analyzer ports this PC uses + the ones asked for.
+    const mine = manager.usedEndpoints().map((u) => u.port).filter((x) => Number.isInteger(x) && x >= 1024);
+    const ports = [...new Set([...mine, ...asked])].slice(0, 24);
+    if (!ports.length) return bad('ports');
+    return diag.fixFirewall({ ports, aliases });
+  });
+  handle('instruments:diagArp', () => diag.arp());
+  handle('instruments:diagProbe', (p) => {
+    const o = obj(p) || {};
+    const address = str(o.address, 15);
+    const ports = o.ports == null ? undefined : portList(o.ports, 8);
+    if (!address || ports === null) return bad('probe');
+    return diag.probe({ address, ports, wide: o.wide === true });
+  });
+  handle('instruments:diagScanStart', (p) => {
+    const ports = portList((obj(p) || {}).ports, 12, 1024);
+    return ports ? manager.scanStart({ ports }) : bad('ports');
+  });
+  handle('instruments:diagScanStop', (id) => (GUID_RE.test(String(id || '')) ? manager.scanStop(String(id)) : { ports: [] }));
 }
 
 /** Start every paired connector (app ready). Never throws into main. */
@@ -104,6 +151,17 @@ function statusSnapshot() {
   try { return manager ? manager.status() : []; } catch { return []; }
 }
 
+/** statusSnapshot() plus one pseudo entry per open listen / "find the
+ *  analyzer" capture (in-flight work too) — what the updater's restart
+ *  guard reads. The tray uses statusSnapshot() (real instruments only). */
+function guardSnapshot() {
+  try {
+    if (!manager) return [];
+    const captures = Array.from({ length: manager.activeCaptures() }, () => ({ name: 'Analyzer capture', state: 'listening' }));
+    return [...manager.status(), ...captures];
+  } catch { return []; }
+}
+
 /** Live status ticks for electron/tray.js (menu rebuild, attention icon,
  *  the debounced disconnect/reconnect notification). Call AFTER register()
  *  (main.js does: instruments.register → updater.register → tray.create) —
@@ -114,4 +172,4 @@ function onStatus(cb) {
   if (manager) manager.on('status', cb);
 }
 
-module.exports = { register, start, stop, secrets, statusSnapshot, onStatus };
+module.exports = { register, start, stop, secrets, statusSnapshot, guardSnapshot, onStatus };

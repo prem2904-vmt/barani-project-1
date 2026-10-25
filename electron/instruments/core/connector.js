@@ -27,6 +27,7 @@ const { RawLog } = require('./rawlog');
 const { Uploader } = require('./uploader');
 const { toBuffer, C, NAMES } = require('./bytes');
 const { BidiHost } = require('./bidi');
+const { friendlyTransportError } = require('./errors');
 
 /** Links that are opt-in only (never auto-picked): their frame notes and
  *  "no results" handling never touch the ASTM / MLLP / raw paths. */
@@ -40,7 +41,56 @@ function describeEmpty(text, link) {
   return 'record received but nothing parsed (check the protocol settings)';
 }
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
+
+/** Bytes (any — keep-alives included) within this long count as "the
+ *  analyzer is there" for a link with no session concept (serial), and the
+ *  server's own Online rule uses the same 5 minutes (next-phase contract §4). */
+const RECENT_RX_MS = 5 * 60 * 1000;
+
+/**
+ * The TRUE link state, from what the transport actually sees — never from
+ * "the connector is running":
+ *   'connected'     an analyzer session is open (TCP peer connected), or a
+ *                   serial line has had bytes in the last 5 minutes, or a
+ *                   watched folder is readable;
+ *   'waiting'       listening (TCP server) / port open (serial), nobody has
+ *                   connected / spoken yet — "Waiting for analyzer";
+ *   'not_connected' we dial the analyzer (TCP client) and are not connected,
+ *                   or the connector is not running;
+ *   'error'         the transport could not start (port busy, access denied…).
+ * Pure (unit-tested): connector.status() and the heartbeat both use it.
+ */
+function deriveLink({ state, kind, sessions = 0, lastRxAt = null, now = Date.now() } = {}) {
+  if (state === 'error') return 'error';
+  const rxRecent = !!lastRxAt && now - new Date(lastRxAt).getTime() < RECENT_RX_MS;
+  if (kind === 'folder') return state === 'listening' || state === 'connected' ? 'connected' : 'not_connected';
+  if (kind === 'serial') {
+    if (!sessions) return 'not_connected';
+    return rxRecent ? 'connected' : 'waiting';
+  }
+  if (sessions > 0) return 'connected';
+  if (kind === 'tcp-server' && (state === 'listening' || state === 'connected')) return 'waiting';
+  return 'not_connected';
+}
+
+/** Order-insensitive JSON (object keys sorted, recursively) — a transport
+ *  whose saved JSON merely comes back in another key order is the SAME
+ *  transport, and must never be restarted (that drops the analyzer). */
+function stableJson(v) {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`;
+  if (v && typeof v === 'object') return `{${Object.keys(v).sort().filter((k) => v[k] !== undefined).map((k) => `${JSON.stringify(k)}:${stableJson(v[k])}`).join(',')}}`;
+  return JSON.stringify(v);
+}
+
+/** Await a promise for at most `ms`; null on timeout or failure. */
+function within(p, ms) {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => resolve(null), ms);
+    if (t.unref) t.unref();
+    Promise.resolve(p).then((v) => { clearTimeout(t); resolve(v); }, () => { clearTimeout(t); resolve(null); });
+  });
+}
 
 function idempotencyKey(instrumentId, protocol, text, index) {
   return crypto.createHash('sha256').update(`${instrumentId}\n${protocol}\n${index}\n`).update(Buffer.from(text, 'latin1')).digest('hex');
@@ -128,6 +178,13 @@ class Connector extends EventEmitter {
     this._chain = Promise.resolve(); // serialises start()/stop()/reload() against each other — at most one touches this.transport at a time
     this.generation = 0;             // bumped on every transport (re)start/stop; a transport's own event handlers check this and no-op once stale
     this._keepAlive = null;          // { byte, count, windowStart } — throttles raw.log for a repeating lone control-byte keep-alive
+    // True status (next-phase §4): who is connected right now, when the last
+    // byte came in, which port we listen on, and the current problem in
+    // plain words (null when there is none).
+    this.sessions = new Map();       // sessionId → { remote, local, since }
+    this.lastRxAt = null;
+    this.listenPort = null;
+    this.problem = null;
   }
 
   // ── lifecycle ─────────────────────────────────────────────────────────
@@ -158,7 +215,11 @@ class Connector extends EventEmitter {
       if (this.cfgTimer.unref) this.cfgTimer.unref();
       return;
     }
-    await this._startTransport(cfg);
+    // A transport that can't start (port busy, access denied, COM port
+    // missing) must still heartbeat — so the lab sees WHY in plain words —
+    // and keep retrying: the heartbeat's reload restarts a transport that
+    // never came up (see _scheduleHeartbeat). Queued results still upload.
+    try { await this._startTransport(cfg); } catch { /* recorded by _startTransport; retried on the heartbeat */ }
     this.bidi.start();
     this._scheduleHeartbeat(0);
     this._kick(0);
@@ -189,6 +250,8 @@ class Connector extends EventEmitter {
     const t = this.transport;
     this.transport = null;
     this.transportKey = null;
+    this.sessions.clear();
+    this.listenPort = null;
     if (t) { try { await t.stop(); } catch { /* ignore */ } }
   }
 
@@ -217,26 +280,41 @@ class Connector extends EventEmitter {
     this.bidi.refresh();   // two-way settings may have changed (timer on/off, cache purge)
     const tKey = this._transportKey(cfg);
     if (!this.transport || tKey !== this.transportKey) {
+      const retry = !this.transportKey && this._attemptKey === tKey;
       await this._stopTransport();
       this._closeLinks();
-      this.rawlog.write('note', 'configuration changed — restarting the connection');
+      this.rawlog.write('note', retry ? 'trying the connection again' : 'configuration changed — restarting the connection');
       try { await this._startTransport(cfg); } catch { /* _startTransport recorded the failure; the next reload retries */ }
       this._emitStatus();
       return { changed: true, restarted: true };
     }
-    if (JSON.stringify(before) === JSON.stringify(cfg)) return none;
+    if (stableJson(before) === stableJson(cfg)) return none;
     this.active = cfg;
-    const framing = JSON.stringify([before && before.link, before && before.parser]) !== JSON.stringify([cfg.link, cfg.parser]);
+    const framing = stableJson([before && before.link, before && before.parser]) !== stableJson([cfg.link, cfg.parser]);
     if (framing) {
+      // Re-create the link of every OPEN session right away with the new
+      // framing + parser — an analyzer that keeps one connection open for
+      // days (HBPro, Medonic) must get the new protocol on its NEXT bytes,
+      // not after it happens to reconnect (Arun Lab, 24 Oct).
       this._closeLinks();
-      this.rawlog.write('note', 'configuration changed — protocol settings applied');
+      const open = [...this.sessions.keys()];
+      for (const id of open) this.links.set(id, this._makeLink(cfg.link || { type: 'auto' }, cfg.parser || {}, id));
+      this.rawlog.write('note', `configuration changed — protocol settings applied${open.length ? ` to the open connection${open.length > 1 ? 's' : ''}` : ''}`);
     }
     this._emitStatus();
     return { changed: true, restarted: false };
   }
 
   _transportKey(cfg) {
-    return JSON.stringify({ ...((cfg && cfg.transport) || {}), ...(this.o.transportOverride || {}) });
+    const t = this._transportCfg(cfg);
+    // A TCP server with no host already listens on every card (0.0.0.0) —
+    // an editor save that writes the default out must not restart it.
+    if (t.type === 'tcp-server' && !t.host) t.host = '0.0.0.0';
+    return stableJson(t);
+  }
+
+  _transportCfg(cfg) {
+    return { ...((cfg && cfg.transport) || {}), ...(this.o.transportOverride || {}) };
   }
 
   _closeLinks() {
@@ -267,7 +345,8 @@ class Connector extends EventEmitter {
   }
 
   async _startTransport(cfg) {
-    const t = createTransport({ ...(cfg.transport || {}), ...(this.o.transportOverride || {}) }, this.deps);
+    const tcfg = this._transportCfg(cfg);
+    const t = createTransport(tcfg, this.deps);
     const gen = ++this.generation;
     this.transport = t;
     this.active = cfg;
@@ -277,15 +356,26 @@ class Connector extends EventEmitter {
     // an awaited t.start()) coming up bumps `generation` and/or replaces
     // `this.transport`, and every handler below checks this before touching
     // connector state, so a superseded transport's late events are no-ops.
+    this._attemptKey = this._transportKey(cfg);
     const isCurrent = () => this.generation === gen && this.transport === t;
     // Links read the CURRENT config when a session opens, so a live reload of
     // the link/parser applies without restarting the transport.
     const linkCfg = () => (this.active && this.active.link) || { type: 'auto' };
     const parserCfg = () => (this.active && this.active.parser) || {};
     t.on('status', (s) => { if (isCurrent()) this._setState(s); });
-    t.on('error', (e) => { if (!isCurrent()) return; this._recordError(e.message); this.rawlog.write('note', `transport error: ${e.message}`); this._emitStatus(); });
+    t.on('error', (e) => {
+      if (!isCurrent()) return;
+      this._recordError(e.message);
+      // A dial-out (TCP client) problem is the current problem until the
+      // next connect; a socket hiccup on a listening port is not.
+      if (t.kind === 'tcp-client' && !this.sessions.size) this.problem = friendlyTransportError(e, tcfg);
+      this.rawlog.write('note', `transport error: ${e.message}`);
+      this._emitStatus();
+    });
     t.on('session-start', (id, info) => {
       if (!isCurrent()) return;
+      this.sessions.set(id, { remote: (info && info.remote) || null, local: (info && info.local) || null, since: (info && info.since) || new Date(this.now()).toISOString() });
+      this.problem = null;
       this.bidi.onSessionStart();
       this.rawlog.write('note', `session ${id} opened ${info && info.remote ? `(${info.remote})` : ''}`);
       this.links.set(id, this._makeLink(linkCfg(), parserCfg(), id));
@@ -295,10 +385,13 @@ class Connector extends EventEmitter {
       const l = this.links.get(id);
       if (l) { l.flush(); l.close(); }
       this.links.delete(id);
+      this.sessions.delete(id);
       this.rawlog.write('note', `session ${id} closed`);
+      this._emitStatus();
     });
     t.on('data', (buf, id) => {
       if (!isCurrent()) return;
+      this.lastRxAt = new Date(this.now()).toISOString();
       this._logIncoming(buf);
       this.emit('raw', { dir: 'in', bytes: buf });
       let l = this.links.get(id);
@@ -323,9 +416,24 @@ class Connector extends EventEmitter {
         return;
       }
       this.transportKey = this._transportKey(cfg);
+      this.listenPort = t.kind === 'tcp-server' ? t.port : null;
+      this.problem = null;
       this.rawlog.write('note', `started ${t.describe()}`);
+      this._emitStatus();
     } catch (e) {
-      if (isCurrent()) this._fail(`${t.describe()}: ${e.message}`);
+      if (isCurrent()) {
+        // Who holds the port? Asked of the host (Windows: netstat + tasklist)
+        // — never killed, only named. Bounded so a slow lookup can't stall
+        // the lifecycle chain.
+        let owner = null;
+        if (e && e.code === 'EADDRINUSE' && tcfg.type === 'tcp-server' && typeof this.o.portOwner === 'function') {
+          owner = await within(this.o.portOwner(Number(tcfg.port)), 5000);
+        }
+        if (isCurrent()) {
+          this.problem = friendlyTransportError(e, tcfg, owner);
+          this._fail(`${t.describe()}: ${this.problem}`);
+        }
+      }
       throw e;
     }
   }
@@ -504,6 +612,7 @@ class Connector extends EventEmitter {
       let hb = null;
       let reached = false;
       try {
+        const live = this._liveStatus();
         hb = await this.uploader.heartbeat({
           status: this._wireState(),
           queueLength: this.queue.length,
@@ -511,6 +620,13 @@ class Connector extends EventEmitter {
           lastError: this.lastError,
           connectorVersion: VERSION,
           host: os.hostname(),
+          // True status (next-phase contract §4) — additive; an older server ignores them.
+          link: live.link,
+          // Server caps (agent A): ≤ 20 sessions, errorDetail ≤ 300 chars.
+          sessions: live.sessions.slice(0, 20).map((x) => ({ remote: x.remote, since: x.since })),
+          lastRxAt: live.lastRxAt,
+          listenPort: live.listenPort,
+          errorDetail: live.errorDetail ? String(live.errorDetail).slice(0, 300) : null,
         });
         reached = true;
       } catch (e) {
@@ -525,7 +641,9 @@ class Connector extends EventEmitter {
       // triggers a pull when it differs; without one, pull every beat (one
       // small GET) — either way a saved edit reaches the connector.
       const ver = hb && (hb.configVersion ?? hb.configUpdatedAt);
-      if (!this.stopped && (ver == null || ver !== this.configVersion)) {
+      // A transport that never came up (port busy at boot) is retried here
+      // every beat, even when the config is unchanged.
+      if (!this.stopped && (ver == null || ver !== this.configVersion || !this.transportKey)) {
         try { await this.reload(); if (ver != null) this.configVersion = ver; } catch { /* next beat retries */ }
       }
       const secs = (this.remote && this.remote.heartbeatSeconds) || 30;
@@ -571,11 +689,26 @@ class Connector extends EventEmitter {
     }
   }
 
+  /** link / sessions / lastRxAt / listenPort / errorDetail — the true-status
+   *  block shared by status() and the heartbeat. */
+  _liveStatus() {
+    const kind = this.transport ? this.transport.kind : ((this.active && this.active.transport && this.active.transport.type) || null);
+    const sessions = [...this.sessions.values()].map((x) => ({ ...x }));
+    return {
+      link: deriveLink({ state: this.state, kind, sessions: sessions.length, lastRxAt: this.lastRxAt, now: this.now() }),
+      sessions,
+      lastRxAt: this.lastRxAt,
+      listenPort: this.listenPort,
+      errorDetail: this.state === 'error' || this.problem ? (this.problem || this.lastError || null) : null,
+    };
+  }
+
   status() {
     return {
       instrumentId: this.instrumentId,
       name: this.name,
       state: this.state,
+      ...this._liveStatus(),
       transport: this.transport ? this.transport.describe() : null,
       lastMessageAt: this.lastMessageAt,
       lastUploadAt: this.lastUploadAt,
@@ -595,4 +728,4 @@ class Connector extends EventEmitter {
   _emitStatus() { this.emit('status', this.status()); }
 }
 
-module.exports = { Connector, idempotencyKey, isLoneKeepAliveByte, VERSION };
+module.exports = { Connector, idempotencyKey, isLoneKeepAliveByte, deriveLink, stableJson, RECENT_RX_MS, VERSION };

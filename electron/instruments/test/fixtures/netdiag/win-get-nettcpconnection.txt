@@ -1,0 +1,8 @@
+
+LocalAddress                        LocalPort RemoteAddress                       RemotePort State       AppliedSetting OwningProcess
+------------                        --------- -------------                       ---------- -----       -------------- -------------
+::                                  5600      ::                                  0          Listen                     7412
+192.168.1.10                        5600      192.168.1.21                        49731      Established Internet       7412
+0.0.0.0                             5600      0.0.0.0                             0          Listen                     7412
+
+

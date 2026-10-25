@@ -129,6 +129,12 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/lab/instruments/instruments-list.component').then(m => m.InstrumentsListComponent)
       },
       {
+        // "Connect an analyzer" setup helper (desktop app; the web explains).
+        path: 'admin/instruments/connect',
+        canActivate: [...routeGuards('/admin/instruments')],
+        loadComponent: () => import('./features/lab/instruments/connect-wizard/connect-wizard.component').then(m => m.ConnectWizardComponent)
+      },
+      {
         path: 'admin/instruments/:id',
         data: { recreateOn: ['id'] },
         canActivate: [...routeGuards('/admin/instruments')],

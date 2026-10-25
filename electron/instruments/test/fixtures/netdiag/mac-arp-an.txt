@@ -1,0 +1,5 @@
+? (192.168.1.1) at a4:2b:b0:6e:10:1 on en0 ifscope [ethernet]
+? (192.168.1.21) at 0:50:c2:a:b:c on en7 ifscope [ethernet]
+? (192.168.1.255) at ff:ff:ff:ff:ff:ff on en0 ifscope [ethernet]
+? (192.168.1.40) at (incomplete) on en0 ifscope [ethernet]
+? (224.0.0.251) at 1:0:5e:0:0:fb on en0 ifscope permanent [ethernet]

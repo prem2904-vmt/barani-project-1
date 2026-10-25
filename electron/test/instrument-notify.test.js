@@ -134,3 +134,33 @@ test('forget() drops an unpaired instrument and cancels its pending timer', () =
   clock.advance(60_000);
   assert.deepEqual(fired, []);
 });
+
+
+test('true link: connected = up, error / not_connected = down, waiting (listening, nobody on it) is neutral', () => {
+  assert.equal(classify('connected', 'connected'), 'up');
+  assert.equal(classify('listening', 'waiting'), null);
+  assert.equal(classify('error', 'error'), 'down');
+  assert.equal(classify('disconnected', 'not_connected'), 'down');
+  assert.equal(classify('stopped', 'not_connected'), null);
+  assert.equal(classify('starting', 'not_connected'), null);
+});
+
+test('an analyzer that connects per run and hangs up never announces "disconnected"', () => {
+  const fired = [];
+  const timers = [];
+  const w = new InstrumentConnectivityWatcher({
+    onFire: (x) => fired.push(x), debounceMs: 10,
+    setTimer: (fn) => { timers.push(fn); return timers.length; }, clearTimer: () => {},
+  });
+  w.report('i1', 'Medonic', 'listening', 'waiting');     // first sighting: waiting is neutral, nothing recorded
+  w.report('i1', 'Medonic', 'connected', 'connected');   // first real class: recorded silently
+  w.report('i1', 'Medonic', 'listening', 'waiting');     // run done, analyzer hung up
+  w.report('i1', 'Medonic', 'connected', 'connected');
+  timers.forEach((fn) => fn());
+  assert.deepEqual(fired, []);
+  // A port that stops working does announce.
+  w.report('i1', 'Medonic', 'error', 'error');
+  timers.forEach((fn) => fn());
+  assert.equal(fired.length, 1);
+  assert.equal(fired[0].cls, 'down');
+});

@@ -11,7 +11,8 @@
  *     now,                // injectable clock (ms) — tests only
  *     version,             // app.getVersion()
  *     instruments: [{
- *       instrumentId, name, state,       // connector.status() shape
+ *       instrumentId, name, state, link, // connector.status() shape (link = true status)
+ *       sessions, errorDetail,
  *       lastMessageAt, queueLength, messagesToday, unmatchedToday,
  *       serverOnline, serverOfflineSince,
  *     }],
@@ -20,14 +21,32 @@
  *   }
  */
 
-const UP_STATES = new Set(['connected', 'listening']);
+/**
+ * The true link of an instrument: the connector's own `link` when present
+ * (connector.js deriveLink), else derived from the bare state — 'listening'
+ * is a port with NOBODY on it yet, so it is never "Connected".
+ */
+function linkOf(state, link) {
+  if (link) return link;
+  if (state === 'connected') return 'connected';
+  if (state === 'listening') return 'waiting';
+  if (state === 'error') return 'error';
+  if (state === 'starting') return 'starting';
+  if (state === 'stopped') return 'stopped';
+  return 'not_connected';
+}
 
-function dotFor(state) { return UP_STATES.has(state) ? '●' : '○'; }
+/** ● only when the analyzer is really connected. */
+function dotFor(state, link) { return linkOf(state, link) === 'connected' ? '●' : '○'; }
 
-function statusWord(state) {
-  if (UP_STATES.has(state)) return 'Connected';
-  if (state === 'starting') return 'Waiting';
-  return 'Disconnected';
+function statusWord(state, link) {
+  switch (linkOf(state, link)) {
+    case 'connected': return 'Connected';
+    case 'waiting': return 'Waiting for analyzer';
+    case 'starting': return 'Starting';
+    case 'error': return 'Error';
+    default: return 'Not connected';
+  }
 }
 
 /** "3m ago" / "2h ago" / "just now" — no external i18n, matches the rest of
@@ -61,7 +80,14 @@ function formatClock(date) {
 function instrumentLine(inst, now) {
   const rel = relativeTime(inst.lastMessageAt, now);
   const suffix = rel ? ` · last result ${rel}` : '';
-  return `${dotFor(inst.state)} ${inst.name} — ${statusWord(inst.state)}${suffix}`;
+  return `${dotFor(inst.state, inst.link)} ${inst.name} — ${statusWord(inst.state, inst.link)}${suffix}`;
+}
+
+/** "Port 5600 is used by CBC LIS M51 (PID 7412)…" under an instrument in error. */
+function problemLine(inst) {
+  if (linkOf(inst.state, inst.link) !== 'error' || !inst.errorDetail) return null;
+  const t = String(inst.errorDetail);
+  return `    ${t.length > 90 ? `${t.slice(0, 89)}…` : t}`;
 }
 
 function sum(list, pick) {
@@ -84,7 +110,7 @@ function serverStatusLine(instruments, now) {
 }
 
 function connectedCount(instruments) {
-  return instruments.filter((i) => UP_STATES.has(i.state)).length;
+  return instruments.filter((i) => linkOf(i.state, i.link) === 'connected').length;
 }
 
 /** Tray tooltip — only instrument-driven; electron/tray.js swaps in the
@@ -97,8 +123,10 @@ function tooltip(instruments) {
 /** Does the tray icon need the attention dot? Any instrument down, anything
  *  queued or unmatched, or the server looking unreachable. */
 function hasAttention(instruments) {
+  // A listening port with nobody on it ('waiting') is the normal idle state
+  // of analyzers that connect per run — not an attention case.
   return instruments.some((i) => (
-    (i.state === 'disconnected' || i.state === 'error')
+    (i.state !== 'stopped' && i.state !== 'starting' && ['error', 'not_connected'].includes(linkOf(i.state, i.link)))
     || Number(i.queueLength) > 0
     || Number(i.unmatchedToday) > 0
     || i.serverOnline === false
@@ -127,7 +155,11 @@ function buildMenuModel(state = {}) {
   if (!instruments.length) {
     t.push({ label: 'No instruments connected', enabled: false });
   } else {
-    for (const inst of instruments) t.push({ label: instrumentLine(inst, now), enabled: false });
+    for (const inst of instruments) {
+      t.push({ label: instrumentLine(inst, now), enabled: false });
+      const p = problemLine(inst);
+      if (p) t.push({ label: p, enabled: false });
+    }
   }
 
   if (instruments.length) {
@@ -171,5 +203,5 @@ function buildMenuModel(state = {}) {
 module.exports = {
   buildMenuModel, tooltip, hasAttention, connectedCount,
   instrumentLine, serverStatusLine, relativeTime, formatClock,
-  dotFor, statusWord, updaterLabel,
+  dotFor, statusWord, updaterLabel, linkOf, problemLine,
 };

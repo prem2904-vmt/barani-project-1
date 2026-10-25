@@ -197,7 +197,7 @@ bridges.register(() => mainWindow);
 // Desktop self-update: IPC for the renderer's update banner. The restart
 // guard reads the SAME instrument manager this registers against, so it
 // never restarts mid-run.
-updater.register(() => mainWindow, instruments.statusSnapshot);
+updater.register(() => mainWindow, instruments.guardSnapshot);
 // Full screen: query / set from the main window only; changes pushed back.
 fullscreen.register(() => mainWindow);
 

@@ -16,8 +16,20 @@ const UP = new Set(['connected', 'listening']);
 const DOWN = new Set(['disconnected', 'error']);
 
 /** 'starting' / 'stopped' / anything unrecognised is a transient, not a
- *  notify-worthy connectivity class — it never flips `notified`. */
-function classify(state) {
+ *  notify-worthy connectivity class — it never flips `notified`.
+ *
+ *  With the connector's true `link` (connector.js deriveLink): up = the
+ *  analyzer is really connected; down = error / we can't reach it (a TCP
+ *  client not connected); 'waiting' (a listening port nobody is on yet) is
+ *  NEUTRAL — many analyzers connect only to send a run and hang up, so
+ *  "waiting" between runs must never announce "disconnected". Without
+ *  `link` (an older status shape) the state rules apply as before. */
+function classify(state, link) {
+  if (link) {
+    if (link === 'connected') return 'up';
+    if (link === 'error' || link === 'not_connected') return state === 'stopped' || state === 'starting' ? null : 'down';
+    return null;
+  }
   if (UP.has(state)) return 'up';
   if (DOWN.has(state)) return 'down';
   return null;
@@ -41,8 +53,8 @@ class InstrumentConnectivityWatcher {
   }
 
   /** Feed one connector status tick. No-op for a neutral state. */
-  report(instrumentId, name, state) {
-    const cls = classify(state);
+  report(instrumentId, name, state, link) {
+    const cls = classify(state, link);
     if (!cls || !instrumentId) return;
     let e = this.known.get(instrumentId);
     if (!e) { e = { notified: null, pending: null, timer: null }; this.known.set(instrumentId, e); }

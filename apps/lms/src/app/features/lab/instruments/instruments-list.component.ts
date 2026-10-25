@@ -15,7 +15,8 @@ import { plural } from '../../../shared/utils/plural';
 import { spinDelay } from '../../../shared/utils/busy';
 import { InstrumentsApiService } from '../../../shared/instruments/instruments-api.service';
 import { InstrumentDto } from '../../../shared/instruments/instrument.models';
-import { connectionSummary, fmtIst, protocolLabel, statusWord } from '../../../shared/instruments/instrument-config';
+import { InstrumentBridgeService } from '../../../shared/instruments/instrument-bridge.service';
+import { STATUS_ORDER, connectionSummary, protocolLabel, statusSubline, statusWord } from '../../../shared/instruments/instrument-config';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -109,6 +110,12 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
               <p class="pf-field__hint">Setup: basics → connection → protocol → listen to a real run → map the analyzer's codes → pair the lab PC.</p>
             </div>
             <div class="pf-card__foot">
+              @if (canConnect) {
+                <button type="button" class="pf-btn pf-btn--secondary pf-span press" (click)="connect()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 7V3M15 7V3M7 7h10v5a5 5 0 0 1-10 0V7ZM12 17v4"/></svg>
+                  Connect an analyzer
+                </button>
+              }
               <button type="button" class="pf-btn pf-btn--primary pf-span press" (click)="add()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 Add instrument
@@ -131,6 +138,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
     .pf-inl__main ::ng-deep .ag-root-wrapper { border: 0; border-radius: 0; }
     .pf-inl__main ::ng-deep .pf-inl-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; padding: 6px 0; }
     .pf-inl__main ::ng-deep .pf-inl-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
+    .pf-inl__main ::ng-deep .pf-inl-cell__sub--err { color: var(--red-text, #b91c1c); }
     .pf-inl__main ::ng-deep .pf-inl-cell__name { font-weight: 600; color: var(--text-primary); }
     .pf-inl-status, .pf-inl__main ::ng-deep .pf-inl-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap;
       --pf-inl-tone: var(--text-secondary); color: color-mix(in srgb, var(--pf-inl-tone) 70%, var(--text-primary)); }
@@ -154,7 +162,10 @@ export class InstrumentsListComponent {
   private readonly api = inject(InstrumentsApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly bridge = inject(InstrumentBridgeService);
   protected readonly theme = inject(ThemeService);
+  /** The setup helper needs this PC (desktop app ≥ 1.1.1 with netdiag). */
+  readonly canConnect = this.bridge.diagAvailable;
   protected readonly plural = plural;
 
   readonly isPhone = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
@@ -169,7 +180,10 @@ export class InstrumentsListComponent {
   readonly unmatchedTotal = computed(() => this.rows().reduce((n, r) => n + (r.unmatchedCount ?? 0), 0));
   readonly statusCounts = computed(() => {
     const live = this.rows().filter((r) => r.isActive !== false);
-    return (['online', 'offline', 'error', 'never'] as const).map((s) => ({ ...statusWord(s), n: live.filter((r) => (r.status ?? 'never') === s).length }));
+    // Online always shows (even 0); every other status only when it occurs.
+    return STATUS_ORDER
+      .map((s) => ({ status: s, ...statusWord(s), n: live.filter((r) => (r.status ?? 'never') === s).length }))
+      .filter((x) => x.status === 'online' || x.n > 0);
   });
 
   readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
@@ -181,8 +195,9 @@ export class InstrumentsListComponent {
       `<div class="pf-inl-cell"><span class="${cls}">${esc(main)}</span>${sub ? `<span class="pf-inl-cell__sub">${esc(sub)}</span>` : ''}</div>`;
     const status = (d?: InstrumentDto) => {
       const st = statusWord(d?.status);
-      const seen = d?.lastSeenAt ? `Last seen ${fmtIst(d.lastSeenAt)}` : '';
-      return `<div class="pf-inl-cell"><span class="pf-inl-status" data-tone="${st.tone}"><span class="pf-inl-status__dot" aria-hidden="true"></span>${esc(st.label)}</span>${seen ? `<span class="pf-inl-cell__sub">${esc(seen)}</span>` : ''}</div>`;
+      const sub = statusSubline(d);
+      const err = d?.status === 'error';
+      return `<div class="pf-inl-cell"><span class="pf-inl-status" data-tone="${st.tone}"><span class="pf-inl-status__dot" aria-hidden="true"></span>${esc(st.label)}</span>${sub ? `<span class="pf-inl-cell__sub${err ? ' pf-inl-cell__sub--err' : ''}">${esc(sub)}</span>` : ''}</div>`;
     };
     const cols: ColDef<InstrumentDto>[] = [
       { colId: 'name', headerName: 'Instrument', flex: 1.3, minWidth: 180, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
@@ -190,7 +205,7 @@ export class InstrumentsListComponent {
       { colId: 'connection', headerName: 'Connection', flex: 1.4, minWidth: 190, valueGetter: (p) => connectionSummary(p.data?.config, p.data?.transport),
         cellRenderer: (p: { data?: InstrumentDto }) => cell(connectionSummary(p.data?.config, p.data?.transport),
           [p.data?.bridgeId ? `via ${p.data.bridgeName || 'Prefrontal Bridge'}` : '', protocolLabel(p.data?.config)].filter(Boolean).join(' · ')) },
-      { colId: 'status', headerName: 'Status', flex: 1, minWidth: 160, valueGetter: (p) => p.data?.status ?? 'never',
+      { colId: 'status', headerName: 'Status', flex: 1.3, minWidth: 200, valueGetter: (p) => p.data?.status ?? 'never',
         cellRenderer: (p: { data?: InstrumentDto }) => status(p.data) },
       { colId: 'unmatched', headerName: 'Unmatched', width: 120, minWidth: 110, flex: 0, type: 'rightAligned',
         valueGetter: (p) => p.data?.unmatchedCount ?? 0,
@@ -216,6 +231,8 @@ export class InstrumentsListComponent {
   }
 
   add() { void this.router.navigate(['/admin/instruments', 'new']); }
+
+  connect() { void this.router.navigate(['/admin/instruments', 'connect']); }
 
   onCellClicked(ev: CellClickedEvent<InstrumentDto>) {
     if (ev.data?.id) void this.router.navigate(['/admin/instruments', ev.data.id]);

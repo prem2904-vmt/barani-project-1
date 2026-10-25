@@ -1,0 +1,18 @@
+
+
+Name             : Network 3
+InterfaceAlias   : Ethernet
+InterfaceIndex   : 11
+NetworkCategory  : Private
+IPv4Connectivity : Internet
+IPv6Connectivity : NoTraffic
+
+Name             : Unidentified network
+InterfaceAlias   : Ethernet 2
+InterfaceIndex   : 17
+NetworkCategory  : Public
+IPv4Connectivity : LocalNetwork
+IPv6Connectivity : NoTraffic
+
+
+

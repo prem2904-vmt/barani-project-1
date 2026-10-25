@@ -9,7 +9,8 @@
  * preview. Nothing leaves the host.
  *
  * Events: 'raw' ({dir, text}), 'message' (InstrumentMessage), 'detect'
- * (DetectResult), 'status' (state), 'error' (Error).
+ * (DetectResult), 'status' (state), 'error' (Error), 'session'
+ * ({ id, remote, local, since } — a TCP peer connected).
  */
 const { EventEmitter } = require('events');
 const { createTransport } = require('./transports');
@@ -38,6 +39,8 @@ class ListenSession extends EventEmitter {
     this.t = createTransport(this.transportCfg, this.deps);
     this.t.on('status', (s) => this.emit('status', s));
     this.t.on('error', (e) => this.emit('error', e));
+    // Who connected (wizard: "connected from 192.168.1.30 on port 5604").
+    this.t.on('session-start', (id, info) => this.emit('session', { id, ...(info || {}) }));
     this.t.on('session-end', (id) => { const l = this.links.get(id); if (l) { l.flush(); l.close(); } this.links.delete(id); });
     this.t.on('data', (buf, id) => {
       this._capture(buf);
@@ -79,6 +82,9 @@ class ListenSession extends EventEmitter {
   }
 
   raw() { return Buffer.concat(this.chunks); }
+
+  /** The bound port (a TCP server started on port 0 learns its real one). */
+  port() { return this.t && this.t.port != null ? this.t.port : null; }
 
   result() {
     const raw = this.raw();

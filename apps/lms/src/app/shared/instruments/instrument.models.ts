@@ -68,7 +68,20 @@ export interface InstrumentConfig {
 }
 
 // ── Admin DTOs ───────────────────────────────────────────────────────────
-export type InstrumentStatus = 'never' | 'online' | 'offline' | 'error';
+/**
+ * Effective status (server InstrumentService.EffectiveStatus, next-phase
+ * contract §4): online = the analyzer is really connected (a session, or
+ * bytes in the last 5 min) on a fresh heartbeat; waiting = listening, nobody
+ * connected; not_connected = we dial it and aren't connected; running = an
+ * older connector without the true link (only "the connector is up").
+ */
+export type InstrumentStatus = 'never' | 'online' | 'waiting' | 'not_connected' | 'running' | 'offline' | 'error';
+
+/** The connector's true link (electron/instruments/core/connector.js deriveLink). */
+export type InstrumentLink = 'connected' | 'waiting' | 'not_connected' | 'error';
+
+/** One open analyzer connection: "192.168.1.21:58561" since <iso>. */
+export interface InstrumentSession { remote: string | null; since: string | null; local?: string | null }
 
 /** Heartbeat body the connector last sent (server stores it verbatim). */
 export interface InstrumentHeartbeat {
@@ -78,6 +91,11 @@ export interface InstrumentHeartbeat {
   lastError?: string | null;
   connectorVersion?: string | null;
   host?: string | null;
+  link?: InstrumentLink | string | null;
+  sessions?: InstrumentSession[] | null;
+  lastRxAt?: string | null;
+  listenPort?: number | null;
+  errorDetail?: string | null;
 }
 
 export interface InstrumentDto {
@@ -95,6 +113,12 @@ export interface InstrumentDto {
   lastSeenAt?: string | null;
   lastMessageAt?: string | null;
   lastStatus?: InstrumentHeartbeat | null;
+  /** True status (contract §4, additive — absent on an older server). */
+  link?: InstrumentLink | string | null;
+  sessions?: InstrumentSession[] | null;
+  lastRxAt?: string | null;
+  listenPort?: number | null;
+  errorDetail?: string | null;
   hasDeviceKey: boolean;
   deviceKeyPrefix?: string | null;
   deviceKeyRotatedAt?: string | null;
@@ -277,6 +301,12 @@ export interface ConnectorStatus {
   queueLength?: number;
   lastError?: string | null;
   messagesToday?: number;
+  /** True status (desktop ≥ 1.1.1; absent on an older desktop build). */
+  link?: InstrumentLink;
+  sessions?: InstrumentSession[];
+  lastRxAt?: string | null;
+  listenPort?: number | null;
+  errorDetail?: string | null;
 }
 
 export interface PairedInstrument {
@@ -310,6 +340,77 @@ export interface ListenEvent {
 
 export interface ListenResult { raw: string; detect: DetectResult; messages: InstrumentMessage[] }
 
+// ── "Connect an analyzer" (electron/instruments/netdiag.js) ─────────────
+export interface DiagAdapter {
+  name: string;
+  description?: string | null;
+  mac?: string | null;
+  dhcp?: boolean | null;
+  gateway?: string | null;
+  up?: boolean;
+  ipv4: { address: string; netmask?: string | null; subnet?: string | null }[];
+}
+export interface DiagProfile { name: string | null; alias: string; index?: number | null; category: string | null; ipv4?: string | null }
+export interface DiagProblem {
+  code: 'no_network' | 'apipa' | 'two_nics_same_subnet' | 'public_network' | 'firewall_block_rule' | 'firewall_no_rule' | string;
+  severity: 'error' | 'warning';
+  message: string;
+  card?: string;
+  cards?: string[];
+  subnet?: string;
+  /** 'firewall' = the one-permission Windows fix resolves it. */
+  fix?: 'firewall';
+}
+export interface DiagFirewall {
+  supported: boolean;
+  message?: string;
+  enabled?: { domain: boolean | null; private: boolean | null; public: boolean | null };
+  profiles?: DiagProfile[];
+  blockRules?: number;
+  ourRule?: boolean;
+}
+export interface DiagSnapshot {
+  platform: string;
+  hostname: string;
+  adapters: DiagAdapter[];
+  profiles: DiagProfile[];
+  firewall: DiagFirewall;
+  problems: DiagProblem[];
+  suggestedPort: number | null;
+}
+export interface DiagFixResult { ok: boolean; cancelled?: boolean; partial?: boolean; unsupported?: boolean; error?: string; firewall?: DiagFirewall }
+export interface AnalyzerGuess { make: string | null; model: string | null; profileKey: string | null; label: string | null }
+export interface DiagScanEvent {
+  scanId: string;
+  kind: 'listening' | 'connected' | 'detect' | 'error';
+  port: number;
+  remote?: string | null;
+  local?: string | null;
+  detect?: DetectResult;
+  guess?: AnalyzerGuess;
+  messages?: number;
+  error?: string;
+}
+export interface DiagScanStart { scanId: string | null; ports: { port: number; ok: boolean; error?: string }[] }
+export interface DiagScanPort {
+  port: number; remote: string | null; local: string | null; connectedAt: string | null; messages: number;
+  detect: DetectResult | null; guess: AnalyzerGuess | null; raw: string;
+}
+export interface DiagArpEntry { ip: string; mac: string; type: string; iface: string | null }
+export interface DiagProbeResult { subnet?: string; tried?: number; hosts?: number; open?: { host: string; port: number }[]; error?: string; retryInMs?: number }
+
+export interface ElectronInstrumentsDiagApi {
+  snapshot(): Promise<DiagSnapshot>;
+  ports(ports: number[]): Promise<{ port: number; state: 'free' | 'ours' | 'busy' | 'reserved'; name?: string | null; pid?: number | null; message?: string }[]>;
+  nextPort(): Promise<number | null>;
+  fixFirewall(p: { ports?: number[]; aliases?: string[] }): Promise<DiagFixResult>;
+  arp(): Promise<DiagArpEntry[]>;
+  probe(p: { address: string; ports?: number[]; wide?: boolean }): Promise<DiagProbeResult>;
+  scanStart(p: { ports: number[] }): Promise<DiagScanStart | { error: string }>;
+  scanStop(scanId: string): Promise<{ ports: DiagScanPort[] }>;
+  onScan(cb: (e: DiagScanEvent) => void): () => void;
+}
+
 export interface ElectronInstrumentsApi {
   list(): Promise<PairedInstrument[]>;
   pair(p: { instrumentId: string; deviceKey: string; apiUrl: string; name?: string }): Promise<{ ok: boolean; error?: string }>;
@@ -325,4 +426,6 @@ export interface ElectronInstrumentsApi {
   listenStop(sessionId: string): Promise<ListenResult>;
   onListen(cb: (e: ListenEvent) => void): () => void;
   preview(raw: string, config?: { link?: object; parser?: object }): Promise<ListenResult>;
+  /** "Connect an analyzer" helpers — desktop ≥ 1.1.1 only (absent before). */
+  diag?: ElectronInstrumentsDiagApi;
 }
