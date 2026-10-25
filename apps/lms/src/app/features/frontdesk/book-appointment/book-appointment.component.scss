@@ -37,7 +37,7 @@
   .pf-bka-card { min-width: 0; }
   .pf-bka-card .pf-card__body { gap: 12px; }
   /* Let the shared patient search results float over the neighboring cards. */
-  .pf-bka-patient:focus-within { position: relative; z-index: 20; overflow: visible; }
+  .pf-bka-patient:focus-within { position: relative; z-index: 100 !important; overflow: visible; }
   .pf-bka-patient:focus-within .pf-card__body { overflow: visible; }
   .pf-bka-patient .pf-card__head { border-top-left-radius: calc(var(--pf-radius-card, 16px) - 1px); border-top-right-radius: calc(var(--pf-radius-card, 16px) - 1px); }
   .pf-bka-req, .pf-bka-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-tertiary); }
@@ -211,8 +211,27 @@
     .pf-bka-bar .pf-bka-book { width: 100%; height: 48px; min-height: 48px; font-size: 15px; }
     .pf-bka-chips { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .pf-bka-chip { min-height: 48px; }
-    .pf-bka-periods .pf-seg__item, .pf-bka-coll .pf-seg__item { height: 44px; }
-    .pf-bka-periods { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pf-bka-coll .pf-seg__item { height: 44px; }
+    .pf-bka-periods {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      height: auto !important;
+      min-height: 0 !important;
+      padding: 4px !important;
+      gap: 4px !important;
+      border-radius: 12px !important;
+    }
+    .pf-bka-periods .pf-seg__item {
+      height: 38px !important;
+      max-height: 38px !important;
+      min-height: 38px !important;
+      border-radius: 8px !important;
+      padding: 0 8px !important;
+    }
+    :host-context(.shell-main--kbd) .pf-bka-bar,
+    :host-context(.pf-chrome--kbd) .pf-bka-bar {
+      display: none !important;
+    }
     .pf-bka-home { grid-template-columns: minmax(0, 1fr); }
     /* Phones: a compact square-cell month, 44px targets. */
     .pf-bka-cal__weeks { flex: none; grid-template-rows: none; grid-auto-rows: 44px; gap: 2px; }

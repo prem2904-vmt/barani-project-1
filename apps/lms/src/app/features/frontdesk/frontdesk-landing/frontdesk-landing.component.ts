@@ -2898,6 +2898,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.closeDateFilters();
     this.updateCustomPopCoords(element);
     this.customDatePopOpen.set('appt');
+    window.addEventListener('scroll', this.onCustomDateScrollCapture, { capture: true, passive: true });
   }
 
   openWorkDatePicker(element: HTMLElement, event: Event) {
@@ -2905,10 +2906,18 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.closeDateFilters();
     this.updateCustomPopCoords(element);
     this.customDatePopOpen.set('work');
+    window.addEventListener('scroll', this.onCustomDateScrollCapture, { capture: true, passive: true });
   }
+
+    private readonly onCustomDateScrollCapture = () => {
+    if (this.customDatePopOpen()) {
+      this.closeCustomDatePicker();
+    }
+  };
 
   closeCustomDatePicker() {
     this.customDatePopOpen.set(null);
+    window.removeEventListener('scroll', this.onCustomDateScrollCapture, { capture: true } as EventListenerOptions);
   }
 
   updateCustomPopCoords(target: HTMLElement) {
@@ -2920,9 +2929,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
     // Right-align directly below the filter button / trigger element
     let left = rect.right - popWidth;
-    if (rect.left < popWidth && rect.left + popWidth <= window.innerWidth - 12) {
-      left = rect.left;
-    }
     if (left + popWidth > window.innerWidth - 12) {
       left = window.innerWidth - popWidth - 12;
     }

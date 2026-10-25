@@ -145,19 +145,22 @@ export { isContactNumberField };
                   <input #dobPick type="date" class="pf-di-date__native" tabindex="-1" aria-hidden="true"
                          [attr.max]="todayIso" [value]="value || ''" (change)="onDobPicked(dobPick.value)" />
                   <ng-template #dobPanelTpl>
-                    <div class="pf-date__popover"
-                         [class.pf-date__popover--above]="dobPopoverStyle().above"
-                         [style.top.px]="dobPopoverStyle().top"
-                         [style.left.px]="dobPopoverStyle().left"
-                         role="dialog"
-                         aria-label="Date of birth calendar"
-                         (click)="$event.stopPropagation()">
-                      <pf-calendar #dobCalendar
-                                   [value]="asDateStr(value)"
-                                   [max]="todayIso"
-                                   [compact]="true"
-                                   (valueChange)="onDobCalendarPicked($event)">
-                      </pf-calendar>
+                    <div class="pf-date__portal-root">
+                      <div class="pf-date__backdrop" (click)="closeDobPicker()"></div>
+                      <div class="pf-date__popover"
+                           [class.pf-date__popover--above]="dobPopoverStyle().above"
+                           [style.top.px]="dobPopoverStyle().top"
+                           [style.left.px]="dobPopoverStyle().left"
+                           role="dialog"
+                           aria-label="Date of birth calendar"
+                           (click)="$event.stopPropagation()">
+                        <pf-calendar #dobCalendar
+                                     [value]="asDateStr(value)"
+                                     [max]="todayIso"
+                                     [compact]="true"
+                                     (valueChange)="onDobCalendarPicked($event)">
+                        </pf-calendar>
+                      </div>
                     </div>
                   </ng-template>
                 </span>
@@ -1014,9 +1017,9 @@ export { isContactNumberField };
       font: inherit; font-size: 13.5px; font-weight: 500; font-variant-numeric: tabular-nums;
     }
     .pf-di-phone__num::placeholder { color: var(--text-muted, #9ca3af); font-weight: 400; }
-    /* DOB ⇄ age on one row: balanced, cohesive, modern inputs. */
-    .pf-di-dob { display: flex; align-items: center; gap: 10px; width: 100%; }
-    .pf-di-dob__date { flex: 1 1 0; min-width: 130px; width: auto; }
+    /* DOB ⇄ age on one row: balanced, cohesive, modern inputs. Wraps cleanly if card is narrow */
+    .pf-di-dob { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; width: 100%; }
+    .pf-di-dob__date { flex: 1 1 145px; min-width: 140px; width: auto; }
     .pf-di-dob__or {
       flex: none; display: inline-flex; align-items: center; justify-content: center;
       font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase;
@@ -1025,7 +1028,7 @@ export { isContactNumberField };
       padding: 2px 7px; line-height: 1.2;
     }
     .pf-di-dob__age-group {
-      flex: 1 1 0; min-width: 155px; display: inline-flex; align-items: center; height: 40px;
+      flex: 1 1 160px; min-width: 155px; display: inline-flex; align-items: center; height: 40px;
       box-sizing: border-box; background: var(--pf-card-bg, #ffffff);
       border: 1px solid var(--pf-input-border, var(--pf-line, #cbd5e1)); border-radius: 10px;
       padding: 3px 4px 3px 2px; transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -1070,16 +1073,38 @@ export { isContactNumberField };
     }
     .pf-di-date__pick:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
     .pf-di-date__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+    .pf-date__portal-root {
+      position: fixed; inset: 0; z-index: 99999; pointer-events: none;
+    }
+    .pf-date__backdrop { position: absolute; inset: 0; z-index: 1; background: transparent; pointer-events: auto; }
     .pf-date__popover {
-      position: fixed; z-index: 99999; width: 285px; box-sizing: border-box; padding: 12px; border-radius: 14px;
+      position: fixed; z-index: 2; width: 285px; box-sizing: border-box; padding: 12px; border-radius: 14px;
       background: var(--pf-card-bg, #ffffff);
       border: 1px solid var(--glass-border-hover, rgba(124, 58, 237, 0.3));
       box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
       animation: pf-pop 160ms cubic-bezier(0.32, 0.72, 0, 1) both;
+      pointer-events: auto;
     }
     .pf-date__popover--above {
       transform: translateY(-100%);
       animation-name: pf-pop-above;
+    }
+    @media (max-width: 640px) {
+      .pf-date__backdrop { background: rgba(15, 23, 42, 0.25); }
+      .pf-date__popover {
+        left: 50% !important;
+        top: auto !important;
+        bottom: calc(var(--pf-nav-h, 0px) + 12px) !important;
+        transform: translateX(-50%) !important;
+        width: calc(100vw - 24px) !important;
+        max-width: 325px !important;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4) !important;
+        animation: pf-pop-mobile-sheet 0.2s cubic-bezier(0.32, 0.72, 0, 1) both !important;
+      }
+      @keyframes pf-pop-mobile-sheet {
+        from { opacity: 0; transform: translate(-50%, 16px) scale(0.96); }
+        to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+      }
     }
     :root.dark .pf-date__popover {
       background: var(--pf-card-bg, #0f172a); border-color: rgba(148, 163, 184, 0.25);
@@ -1268,14 +1293,27 @@ export class DynamicInputComponent implements OnDestroy {
   readonly dobContainer = viewChild<ElementRef<HTMLElement>>('dobContainer');
   readonly dobCalendar = viewChild<PfCalendarComponent>('dobCalendar');
 
+  private readonly onDobScrollCapture = () => {
+    if (this.isDobPickerOpen()) {
+      this.updateDobCoords();
+      this.dobPanelRef?.detectChanges();
+      const root = this.dobContainer()?.nativeElement;
+      if (root) {
+        const rect = root.getBoundingClientRect();
+        if (rect.bottom < 50 || rect.top > window.innerHeight - 20) {
+          this.closeDobPicker();
+        }
+      }
+    }
+  };
+
   updateDobCoords(): void {
     const root = this.dobContainer()?.nativeElement;
     if (!root) return;
     const rect = root.getBoundingClientRect();
-    const popHeight = 360;
+    const popHeight = 310;
     const popWidth = 285;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
+    const bottomLimit = window.innerHeight - 12;
 
     let left = Math.max(12, rect.left);
     if (left + popWidth > window.innerWidth - 12) {
@@ -1284,15 +1322,21 @@ export class DynamicInputComponent implements OnDestroy {
 
     let top: number;
     let above = false;
-    if (spaceBelow >= popHeight || spaceBelow >= spaceAbove) {
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    if (spaceBelow >= popHeight + 6) {
       top = rect.bottom + 6;
       above = false;
-    } else if (spaceAbove >= popHeight) {
+    } else if (spaceAbove >= popHeight + 6) {
       top = rect.top - 6;
       above = true;
-    } else {
-      top = Math.max(12, Math.min(window.innerHeight - popHeight - 12, rect.bottom + 6));
+    } else if (spaceBelow >= spaceAbove) {
+      top = Math.max(12, Math.min(rect.bottom + 6, bottomLimit - popHeight));
       above = false;
+    } else {
+      top = Math.max(popHeight + 12, rect.top - 6);
+      above = true;
     }
 
     this.dobPopoverStyle.set({ top, left, above });
@@ -1302,17 +1346,17 @@ export class DynamicInputComponent implements OnDestroy {
     if (this.isDobPickerOpen()) return;
     this.updateDobCoords();
     this.isDobPickerOpen.set(true);
+    window.addEventListener('scroll', this.onDobScrollCapture, { capture: true, passive: true });
 
     const tpl = this.dobPanelTpl();
     if (tpl) {
       this.dobPanelRef = tpl.createEmbeddedView(null as unknown as void);
       this.appRef.attachView(this.dobPanelRef);
       this.dobPanelRef.detectChanges();
-      const panelEl = this.dobPanelRef.rootNodes.find(
-        (n: Node) => n.nodeType === Node.ELEMENT_NODE
-      ) as HTMLElement | undefined;
-      if (panelEl) {
-        document.body.appendChild(panelEl);
+      for (const node of this.dobPanelRef.rootNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          document.body.appendChild(node);
+        }
       }
     }
 
@@ -1325,17 +1369,17 @@ export class DynamicInputComponent implements OnDestroy {
   closeDobPicker(): void {
     if (!this.isDobPickerOpen()) return;
     if (this.dobPanelRef) {
-      const panelEl = this.dobPanelRef.rootNodes.find(
-        (n: Node) => n.nodeType === Node.ELEMENT_NODE
-      ) as HTMLElement | undefined;
-      if (panelEl && panelEl.parentElement === document.body) {
-        document.body.removeChild(panelEl);
+      for (const node of this.dobPanelRef.rootNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE && node.parentElement === document.body) {
+          document.body.removeChild(node);
+        }
       }
       this.appRef.detachView(this.dobPanelRef);
       this.dobPanelRef.destroy();
       this.dobPanelRef = undefined;
     }
     this.isDobPickerOpen.set(false);
+    window.removeEventListener('scroll', this.onDobScrollCapture, { capture: true } as EventListenerOptions);
   }
 
   toggleDobPicker(event: MouseEvent): void {
@@ -1361,10 +1405,8 @@ export class DynamicInputComponent implements OnDestroy {
     if (!this.isDobPickerOpen()) return;
     const target = event.target as Node;
     const container = this.dobContainer()?.nativeElement;
-    const panelEl = this.dobPanelRef?.rootNodes.find(
-      (n: Node) => n.nodeType === Node.ELEMENT_NODE
-    ) as HTMLElement | undefined;
-    if ((!container || !container.contains(target)) && (!panelEl || !panelEl.contains(target))) {
+    const popoverEl = (this.dobPanelRef?.rootNodes[0] as HTMLElement | undefined)?.querySelector?.('.pf-date__popover') as HTMLElement | null;
+    if ((!container || !container.contains(target)) && (!popoverEl || !popoverEl.contains(target))) {
       this.closeDobPicker();
     }
   }

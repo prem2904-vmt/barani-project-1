@@ -60,20 +60,23 @@ import { PfCalendarComponent } from './pf-calendar.component.js';
 
       <!-- Prefrontal UI custom calendar popover (portal to document.body) -->
       <ng-template #datePanelTpl>
-        <div class="pf-date__popover"
-             [class.pf-date__popover--above]="popoverStyle().above"
-             [style.top.px]="popoverStyle().top"
-             [style.left.px]="popoverStyle().left"
-             role="dialog"
-             [attr.aria-label]="label() + ' calendar'"
-             (click)="$event.stopPropagation()">
-          <pf-calendar #calendar
-                       [value]="value()"
-                       [min]="min()"
-                       [max]="max()"
-                       [compact]="true"
-                       (valueChange)="onCalendarPicked($event)">
-          </pf-calendar>
+        <div class="pf-date__portal-root">
+          <div class="pf-date__backdrop" (click)="closePicker()"></div>
+          <div class="pf-date__popover"
+               [class.pf-date__popover--above]="popoverStyle().above"
+               [style.top.px]="popoverStyle().top"
+               [style.left.px]="popoverStyle().left"
+               role="dialog"
+               [attr.aria-label]="label() + ' calendar'"
+               (click)="$event.stopPropagation()">
+            <pf-calendar #calendar
+                         [value]="value()"
+                         [min]="min()"
+                         [max]="max()"
+                         [compact]="true"
+                         (valueChange)="onCalendarPicked($event)">
+            </pf-calendar>
+          </div>
         </div>
       </ng-template>
     </span>
@@ -84,9 +87,22 @@ import { PfCalendarComponent } from './pf-calendar.component.js';
   styles: [`
     .pf-date__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
     @media (hover: none) and (pointer: coarse) { .pf-date__pick { width: 40px; height: 40px; right: 2px; } }
+    .pf-date__portal-root {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      pointer-events: none;
+    }
+    .pf-date__backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background: transparent;
+      pointer-events: auto;
+    }
     .pf-date__popover {
       position: fixed;
-      z-index: 99999;
+      z-index: 2;
       width: 285px;
       box-sizing: border-box;
       padding: 12px;
@@ -95,10 +111,30 @@ import { PfCalendarComponent } from './pf-calendar.component.js';
       border: 1px solid var(--glass-border-hover, rgba(124, 58, 237, 0.3));
       box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
       animation: pf-pop 160ms cubic-bezier(0.32, 0.72, 0, 1) both;
+      pointer-events: auto;
     }
     .pf-date__popover--above {
       transform: translateY(-100%);
       animation-name: pf-pop-above;
+    }
+    @media (max-width: 640px) {
+      .pf-date__backdrop {
+        background: rgba(15, 23, 42, 0.25);
+      }
+      .pf-date__popover {
+        left: 50% !important;
+        top: auto !important;
+        bottom: calc(var(--pf-nav-h, 0px) + 12px) !important;
+        transform: translateX(-50%) !important;
+        width: calc(100vw - 24px) !important;
+        max-width: 325px !important;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4) !important;
+        animation: pf-pop-mobile-sheet 0.2s cubic-bezier(0.32, 0.72, 0, 1) both !important;
+      }
+      @keyframes pf-pop-mobile-sheet {
+        from { opacity: 0; transform: translate(-50%, 16px) scale(0.96); }
+        to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+      }
     }
     :root.dark .pf-date__popover {
       background: var(--pf-card-bg, #0f172a);
@@ -141,14 +177,25 @@ export class PfDateComponent implements OnDestroy {
 
   readonly popoverStyle = signal<{ top: number; left: number; above: boolean }>({ top: 0, left: 0, above: false });
 
+  private readonly onScrollCapture = () => {
+    if (this.isOpen()) {
+      this.updateCoords();
+      this.datePanelRef?.detectChanges();
+      const root = this.elRef.nativeElement;
+      const rect = root.getBoundingClientRect();
+      if (rect.bottom < 50 || rect.top > window.innerHeight - 20) {
+        this.closePicker();
+      }
+    }
+  };
+
   updateCoords(): void {
     const root = (this.elRef.nativeElement.querySelector('span') || this.elRef.nativeElement) as HTMLElement;
     if (!root) return;
     const rect = root.getBoundingClientRect();
-    const popHeight = 360;
+    const popHeight = 310;
     const popWidth = 285;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
+    const bottomLimit = window.innerHeight - 12;
 
     let left = Math.max(12, rect.left);
     if (left + popWidth > window.innerWidth - 12) {
@@ -157,15 +204,21 @@ export class PfDateComponent implements OnDestroy {
 
     let top: number;
     let above = false;
-    if (spaceBelow >= popHeight || spaceBelow >= spaceAbove) {
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    if (spaceBelow >= popHeight + 6) {
       top = rect.bottom + 6;
       above = false;
-    } else if (spaceAbove >= popHeight) {
+    } else if (spaceAbove >= popHeight + 6) {
       top = rect.top - 6;
       above = true;
-    } else {
-      top = Math.max(12, Math.min(window.innerHeight - popHeight - 12, rect.bottom + 6));
+    } else if (spaceBelow >= spaceAbove) {
+      top = Math.max(12, Math.min(rect.bottom + 6, bottomLimit - popHeight));
       above = false;
+    } else {
+      top = Math.max(popHeight + 12, rect.top - 6);
+      above = true;
     }
 
     this.popoverStyle.set({ top, left, above });
@@ -175,17 +228,17 @@ export class PfDateComponent implements OnDestroy {
     if (this.isOpen() || this.disabled()) return;
     this.updateCoords();
     this.isOpen.set(true);
+    window.addEventListener('scroll', this.onScrollCapture, { capture: true, passive: true });
 
     const tpl = this.datePanelTpl();
     if (tpl) {
       this.datePanelRef = tpl.createEmbeddedView(null as unknown as void);
       this.appRef.attachView(this.datePanelRef);
       this.datePanelRef.detectChanges();
-      const panelEl = this.datePanelRef.rootNodes.find(
-        (n: Node) => n.nodeType === Node.ELEMENT_NODE
-      ) as HTMLElement | undefined;
-      if (panelEl) {
-        document.body.appendChild(panelEl);
+      for (const node of this.datePanelRef.rootNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          document.body.appendChild(node);
+        }
       }
     }
 
@@ -198,17 +251,17 @@ export class PfDateComponent implements OnDestroy {
   closePicker(): void {
     if (!this.isOpen()) return;
     if (this.datePanelRef) {
-      const panelEl = this.datePanelRef.rootNodes.find(
-        (n: Node) => n.nodeType === Node.ELEMENT_NODE
-      ) as HTMLElement | undefined;
-      if (panelEl && panelEl.parentElement === document.body) {
-        document.body.removeChild(panelEl);
+      for (const node of this.datePanelRef.rootNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE && node.parentElement === document.body) {
+          document.body.removeChild(node);
+        }
       }
       this.appRef.detachView(this.datePanelRef);
       this.datePanelRef.destroy();
       this.datePanelRef = undefined;
     }
     this.isOpen.set(false);
+    window.removeEventListener('scroll', this.onScrollCapture, { capture: true } as EventListenerOptions);
   }
 
   togglePicker(event: MouseEvent): void {
@@ -255,10 +308,8 @@ export class PfDateComponent implements OnDestroy {
   onDocumentPointerDown(event: PointerEvent): void {
     if (!this.isOpen()) return;
     const target = event.target as Node;
-    const panelEl = this.datePanelRef?.rootNodes.find(
-      (n: Node) => n.nodeType === Node.ELEMENT_NODE
-    ) as HTMLElement | undefined;
-    if (!this.elRef.nativeElement.contains(target) && (!panelEl || !panelEl.contains(target))) {
+    const popoverEl = (this.datePanelRef?.rootNodes[0] as HTMLElement | undefined)?.querySelector?.('.pf-date__popover') as HTMLElement | null;
+    if (!this.elRef.nativeElement.contains(target) && (!popoverEl || !popoverEl.contains(target))) {
       this.closePicker();
     }
   }

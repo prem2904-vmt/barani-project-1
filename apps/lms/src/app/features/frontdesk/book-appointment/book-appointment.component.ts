@@ -46,6 +46,7 @@ import { PfDateComponent, PfCalendarComponent } from '../../../shared/components
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { plural } from '../../../shared/utils/plural';
 import { formatPatientMeta } from '../../../shared/models/patient.model';
+import { KeyboardService } from '../../../core/services/keyboard.service';
 import { MONTH_DOWS, SlotPeriod, calendarMove, monthGrid, nextFocus, rovingIndex } from './book-appointment.nd';
 import {
   addDays,
@@ -418,7 +419,7 @@ const DOW_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
         </div>
       </div>
 
-      @if (phone()) {
+      @if (phone() && !kbd.visible()) {
         <div class="pf-bottombar pf-bka-bar">
           <span class="pf-bottombar__info pf-num">{{ dateLabel() }}@if (selectedTime()) { · {{ selectedTime() }} }</span>
           <button type="button" class="pf-btn pf-btn--primary pf-bka-book press" [disabled]="saving()"
@@ -1181,6 +1182,7 @@ export class BookAppointmentComponent implements OnInit, OnDestroy {
   protected readonly web = webPointerSignal();
   /** ≤640px: the primary moves to a full-width bottom bar above the navbar. */
   readonly phone = signal(false);
+  protected readonly kbd = inject(KeyboardService);
   protected readonly plural = plural;
   protected readonly todayIso = format(new Date(), "yyyy-MM-dd");
   readonly patientSearch = viewChild(PatientSearchComponent);

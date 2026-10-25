@@ -491,3 +491,21 @@
   from { opacity: 0; transform: translateY(calc(-100% + 4px)) scale(0.97); }
   to { opacity: 1; transform: translateY(-100%) scale(1); }
 }
+
+@media (max-width: 640px) {
+  .pf-custom-date-bd { background: rgba(15, 23, 42, 0.25); }
+  .pf-custom-date-pop {
+    left: 50% !important;
+    top: auto !important;
+    bottom: calc(var(--pf-nav-h, 0px) + 12px) !important;
+    transform: translateX(-50%) !important;
+    width: calc(100vw - 24px) !important;
+    max-width: 325px !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4) !important;
+    animation: pf-pop-mobile-sheet 0.2s cubic-bezier(0.32, 0.72, 0, 1) both !important;
+  }
+  @keyframes pf-pop-mobile-sheet {
+    from { opacity: 0; transform: translate(-50%, 16px) scale(0.96); }
+    to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  }
+}
