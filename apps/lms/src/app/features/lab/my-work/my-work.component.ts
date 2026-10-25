@@ -17,6 +17,7 @@ import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { LiveQueueService } from '../../../core/services/live-queue.service';
 import { ScanService } from '../../../core/services/scan.service';
+import { HardwareScanContext, normalizeTubeScan, onHardwareScan } from '@prefrontal/shared';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
@@ -2968,7 +2969,8 @@ export class MyWorkComponent implements OnInit {
 
   openIntakeScanner() { this.intakeRef()?.openBarcodeScanner(); }
   intakeReceive() {
-    const code = this.intakeScanInput().trim();
+    // A tube QR (`MRN|SampleID`) typed by a scanner → Sample ID.
+    const code = normalizeTubeScan(this.intakeScanInput());
     if (!code) return;
     this.intakeRef()?.receiveByCode(code);
     this.intakeScanInput.set('');
@@ -3631,8 +3633,25 @@ export class MyWorkComponent implements OnInit {
   }
 
   /** Try to resolve a scanned barcode/OrderTest id → jump to result entry. */
+  /** Hardware scanner anywhere on My Work (focus or not): a scan into the Lab
+   *  Intake box receives the tube; every other scan goes through the band
+   *  (open / claim-by-scan), exactly like typing it there and pressing Enter.
+   *  An embedded Collection pane takes the scans typed inside it. */
+  private readonly _hwScan = onHardwareScan((code, ctx) => this.routeHardwareScan(code, ctx));
+  routeHardwareScan(code: string, ctx: HardwareScanContext) {
+    const intake = this.intakeSearchField()?.nativeElement;
+    if (intake && ctx.target === intake) {
+      this.intakeScanInput.set(code);
+      this.intakeReceive();
+      return;
+    }
+    this._scan.set(code);
+    this.scanSubmit();
+  }
+
   scanSubmit() {
-    const q = this._scan().trim();
+    // A tube QR (`MRN|SampleID`) typed by a scanner → Sample ID.
+    const q = normalizeTubeScan(this._scan());
     if (!q) return;
     // Scanned order QR (a /o/<id> URL) → open the order, don't tube-match.
     if (this.routeIfOrderUrl(q)) return;

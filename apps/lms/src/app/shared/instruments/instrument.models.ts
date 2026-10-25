@@ -25,7 +25,7 @@ export interface TcpClientTransport { type: 'tcp-client'; host: string; port: nu
 export interface FolderTransport { type: 'folder'; path: string; pattern: string; pollMs: number; moveTo?: string | null }
 export type TransportConfig = SerialTransport | TcpServerTransport | TcpClientTransport | FolderTransport;
 
-export type LinkType = 'auto' | 'astm-e1381' | 'mllp' | 'raw';
+export type LinkType = 'auto' | 'astm-e1381' | 'mllp' | 'raw' | 'stx-etx' | 'sinocare-sn';
 export interface LinkConfig {
   type: LinkType;
   ackTimeoutMs?: number;
@@ -35,18 +35,28 @@ export interface LinkConfig {
   [k: string]: unknown;
 }
 
-export type ParserType = 'auto' | 'astm' | 'hl7' | 'text';
-export type Hl7SampleIdField = 'OBR-3' | 'OBR-2' | 'SPM-2' | 'PID-3';
+export type ParserType = 'auto' | 'astm' | 'hl7' | 'text' | 'lifedx-hbpro' | 'sinocare-fhir';
+export type SinocareReplyMode = 'none' | 'echo';
+export type SinocareSampleIdField = 'medicalRecordNo' | 'position';
+export type Hl7SampleIdField = 'OBR-3' | 'OBR-2' | 'SPM-2' | 'PID-3' | 'PID-5';
 export interface ParserConfig {
   type: ParserType;
-  astm?: { sampleIdField: number; sampleIdComponent: number };
-  hl7?: { sampleIdField: Hl7SampleIdField | string };
+  // `sampleIdPath` (optional, every block): a custom sample-number location
+  // picked from a real message — overrides the standard field, which stays
+  // the fallback (core/parsers/sample-id-path.js, TS mirror sample-id-path.ts).
+  astm?: { sampleIdField: number; sampleIdComponent: number; sampleIdPath?: string };
+  hl7?: { sampleIdField: Hl7SampleIdField | string; sampleIdPath?: string };
   text?: {
     linePattern: string;
     sampleIdPattern: string;
     qcPattern: string;
     fixedColumns?: unknown;
+    sampleIdPath?: string;
   };
+  /** LifeDx HBPro: fixed-width result positions (0-based, end exclusive) — core/parsers/lifedx-hbpro.js. */
+  hbpro?: { fields: { code: string; start: number; end: number; unit: string | null }[]; sampleIdPath?: string };
+  /** Sinocare iCARE: which Patient field is the sample ID — core/parsers/sinocare-fhir.js. */
+  sinocare?: { sampleIdField: SinocareSampleIdField; sampleIdPath?: string };
   [k: string]: unknown;
 }
 
@@ -281,8 +291,8 @@ export interface RawLogEntry { at: string; dir: 'in' | 'out'; text: string; byte
 export interface SerialPortInfo { path: string; manufacturer?: string; serialNumber?: string }
 
 export interface DetectResult {
-  protocol: 'astm' | 'hl7' | 'text' | 'unknown';
-  link: 'astm-e1381' | 'mllp' | 'raw';
+  protocol: 'astm' | 'hl7' | 'text' | 'lifedx-hbpro' | 'sinocare-fhir' | 'unknown';
+  link: 'astm-e1381' | 'mllp' | 'raw' | 'stx-etx' | 'sinocare-sn';
   confidence: number;
   reasons: string[];
   proposed: { link: Partial<LinkConfig>; parser: Partial<ParserConfig> };

@@ -9,6 +9,77 @@ const { C, toBuffer } = require('./bytes');
 const { decodeFrame } = require('./link/astm-e1381');
 const { parseMessage, sniffProtocol, TEXT_DEFAULTS } = require('./parsers');
 const { parseAstm } = require('./parsers/astm');
+const { StxEtxReceiver } = require('./link/stx-etx');
+const { SinocareReceiver, scanSnFrames } = require('./link/sinocare-sn');
+
+/** HBPro-style record: type letter + 2 digits, then a 6-char sample field. */
+const HBPRO_RECORD = /^[A-Z]\d{2}[-A-Za-z0-9 ]{6}\S/;
+
+/**
+ * Message texts the opt-in links would deliver from a capture, in order
+ * ('stx-etx' → record bodies, deduped like the link; 'sinocare-sn' → JSON
+ * envelopes with their patient context). Pure — nothing is written back.
+ */
+function optInFrames(raw, link) {
+  const buf = toBuffer(raw);
+  const out = [];
+  const rx = link === 'sinocare-sn' ? new SinocareReceiver({}) : link === 'stx-etx' ? new StxEtxReceiver({ ack: false }) : null;
+  if (!rx) return out;
+  rx.on('message', (t) => out.push(t));
+  rx.feed(buf);
+  return out;
+}
+
+/** Bodies of bare <STX>…<ETX> frames with no CR/LF inside (no E1381 FN/checksum trailer). */
+function bareStxEtxBodies(buf) {
+  const out = [];
+  let i = 0;
+  while (i < buf.length) {
+    const s = buf.indexOf(C.STX, i);
+    if (s < 0) break;
+    const e = buf.indexOf(C.ETX, s + 1);
+    if (e < 0) break;
+    const body = buf.subarray(s + 1, e).toString('latin1');
+    const after = buf.subarray(e + 1, e + 5).toString('latin1');
+    if (!/[\r\n\x02]/.test(body) && !/^[0-9A-Fa-f]{2}\r\n/.test(after) && body.trim().length >= 8) out.push(body);
+    i = e + 1;
+  }
+  return out;
+}
+
+/**
+ * The opt-in analyzers (only when the classic detection found nothing):
+ * Sinocare SN frames with a valid CRC, or LifeDx HBPro STX/ETX records.
+ * Returns null when neither fits — the classic result then stands untouched.
+ */
+function detectOptIn(buf) {
+  if (buf.includes('SN', 0, 'latin1')) {
+    const sc = scanSnFrames(buf);
+    if (sc.frames.length) {
+      const reasons = [`${sc.frames.length} Sinocare SN frame(s) with a valid CRC-16${sc.bad ? `, ${sc.bad} with a bad CRC` : ''}`];
+      const texts = optInFrames(buf, 'sinocare-sn');
+      const kinds = texts.map((t) => { try { return JSON.parse(t).resource; } catch { return null; } }).filter(Boolean);
+      if (kinds.length) reasons.push(`resources: ${[...new Set(kinds)].join(', ')}`);
+      const parser = { type: 'sinocare-fhir', sinocare: { sampleIdField: 'medicalRecordNo' } };
+      const messages = texts.flatMap((t) => parseMessage(t, parser, { link: 'sinocare-sn' }));
+      if (!messages.length) reasons.push('no result (Observation) frame yet — the device waits for a server reply; try reply mode "echo"');
+      return { protocol: 'sinocare-fhir', link: 'sinocare-sn', confidence: messages.length ? 0.95 : 0.85, reasons, proposed: { link: { type: 'sinocare-sn', replyMode: 'none' }, parser }, messages, text: texts.join('\n') };
+    }
+  }
+  if (buf.includes(C.STX) && buf.includes(C.ETX)) {
+    const bodies = bareStxEtxBodies(buf);
+    const hb = bodies.filter((b) => HBPRO_RECORD.test(b));
+    if (hb.length) {
+      const uniq = new Set(hb).size;
+      const reasons = [`${hb.length} <STX>…<ETX> record(s) without frame number / checksum${uniq < hb.length ? ` (${hb.length - uniq} retransmit(s) — the analyzer is waiting for an <ACK>)` : ''}`, 'fixed-width record like the LifeDx HBPro — result positions still need to be set'];
+      const parser = { type: 'lifedx-hbpro', hbpro: { fields: [] } };
+      const texts = optInFrames(buf, 'stx-etx');
+      const messages = texts.flatMap((t) => parseMessage(t, parser, { link: 'stx-etx' }));
+      return { protocol: 'lifedx-hbpro', link: 'stx-etx', confidence: 0.7, reasons, proposed: { link: { type: 'stx-etx' }, parser }, messages, text: texts.join('\n') };
+    }
+  }
+  return null;
+}
 
 /** Pull E1381 frames out of a raw capture → { text, frames, badChecksums }. */
 function unframeAstm(buf) {
@@ -115,8 +186,10 @@ function detect(raw) {
     if (!msgs.some((m) => m.sampleId)) reasons.push('no sample-ID line recognised — adjust the sample-ID pattern');
   }
 
-  const messages = protoScore > 0 ? parseMessage(text, parser, { link }) : [];
   const unknown = protoScore === 0;
+  // Nothing classic fits → maybe one of the opt-in analyzers (suggest only).
+  if (unknown && link === 'raw') { const o = detectOptIn(buf); if (o) return o; }
+  const messages = protoScore > 0 ? parseMessage(text, parser, { link }) : [];
   const confidence = unknown ? 0 : Math.min(0.99, +(linkScore + protoScore + (messages.some((m) => m.results.length) ? 0.1 : 0)).toFixed(2));
   const linkCfg = { type: link };
   if (link === 'raw') { linkCfg.idleMs = 1500; }
@@ -132,4 +205,4 @@ function detect(raw) {
   };
 }
 
-module.exports = { detect, unframeAstm, unframeMllp };
+module.exports = { detect, unframeAstm, unframeMllp, optInFrames };

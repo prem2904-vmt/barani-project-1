@@ -939,6 +939,9 @@ select.pf-input--compact {
 .pf-profpanel__item:hover { border-color: var(--pf-sel-border); }
 .pf-profpanel__code { margin-left: auto; font-variant-numeric: tabular-nums; }
 .pf-vbatch__switches { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+/* Range entry ("0-4", "<5") switch + its flag rule, under the plausible band. */
+.pf-vbatch__range-entry { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 12px; }
+.pf-vbatch__range-rule { width: min(100%, 22rem); }
 
 
 /* ═══════════════════════════════════════════════════════════════════════

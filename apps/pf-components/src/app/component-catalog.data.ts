@@ -706,7 +706,7 @@ export const CATALOG_COMPONENTS: ComponentDoc[] = [
     inputs: [
       { name: 'title', type: 'string', required: false, default: "'Scan barcode'", description: 'Modal header title.' },
       { name: 'noun', type: 'string', required: false, default: "'specimen ID'", description: 'Entity noun shown in hints.' },
-      { name: 'manualOnly', type: 'boolean', required: false, default: 'false', description: 'Hides camera and shows numpad directly.' },
+      { name: 'manualOnly', type: 'boolean', required: false, default: 'false', description: 'Lab default is Type (the tenant runs in Manual mode): opens on the typing view unless this device chose Camera or Scanner with the switch.' },
     ],
     outputs: [
       { name: 'matched', type: 'EventEmitter<string>', description: 'Emits captured barcode string.' },

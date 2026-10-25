@@ -3,7 +3,7 @@ import type { DetectResult, InstrumentDto, LoincSuggestionDto } from './instrume
 import {
   CBC_DEFAULT_MAPS, DEFAULT_TEXT_LINE_PATTERN, applyDetectProposal, applyLoincSuggestions, buildInstrumentConfig, buildUpsert,
   codesFromMessages, connectionSummary, controlCharsText, emptyCodeMapRow, emptyInstrumentForm, formFromInstrument,
-  mergeUnmappedCodes, previewLine, previewRows, renderControlChars, statusWord, toCodeMapUpserts, validateCodeMaps,
+  mergeUnmappedCodes, previewLine, previewRows, renderControlChars, sharedCodeHint, statusWord, toCodeMapUpserts, validateCodeMaps,
   validateInstrumentForm, withCbcDefaults, withM51Defaults, M51_HL7_MAPS,
 } from './instrument-config';
 import { codeMapSuggestionsUrl, messagesUrl } from './instruments-api.service';
@@ -158,6 +158,30 @@ describe('instrument config — code maps', () => {
       { analyzerCode: 'WBC', testCatalogKey: 'HEM019', parameterName: null, factor: 1000, offset: 0, decimals: 0, unit: null },
       { analyzerCode: 'wbc', testCatalogKey: 'HEM019', parameterName: null, factor: 1, offset: 0, decimals: null, unit: null },
     ]);
+  });
+});
+
+describe('instrument config — one analyzer code on several rows (Erba GLU)', () => {
+  const glu = (key: string) => ({ ...emptyCodeMapRow('GLU'), testCatalogKey: key });
+
+  it('the same code with DIFFERENT tests is allowed and all rows are saved, in order', () => {
+    const rows = [glu('BIO010'), glu('BIO011'), { ...glu('BIO496'), analyzerCode: 'glu' }];
+    expect(validateCodeMaps(rows)).toEqual([]);
+    expect(toCodeMapUpserts(rows).map((u) => u.testCatalogKey)).toEqual(['BIO010', 'BIO011', 'BIO496']);
+  });
+
+  it('the same code AND test twice is still an error (case-insensitive)', () => {
+    const issues = validateCodeMaps([glu('BIO010'), { ...glu('bio010'), analyzerCode: ' glu ' }]);
+    expect(issues).toEqual([{ index: 1, message: 'glu is mapped to this test twice' }]);
+  });
+
+  it('a plain hint on the shared code’s first row only', () => {
+    const rows = [glu('BIO010'), { ...emptyCodeMapRow('WBC'), testCatalogKey: 'HEM019' }, glu('BIO011')];
+    expect(sharedCodeHint(rows, 0)).toBe('Same code on several rows: the one ordered on the tube is used');
+    expect(sharedCodeHint(rows, 1)).toBeNull();
+    expect(sharedCodeHint(rows, 2)).toBeNull();
+    expect(sharedCodeHint([glu('BIO010')], 0)).toBeNull();
+    expect(sharedCodeHint([emptyCodeMapRow(''), emptyCodeMapRow('')], 0)).toBeNull();
   });
 });
 

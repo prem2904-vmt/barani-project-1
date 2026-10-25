@@ -12,6 +12,11 @@
  *    the new run does not carry.
  *  - Target = the order line (orderTestId) + parameterName; null
  *    parameterName = the line's first / only parameter.
+ *  - By default every field takes the NEWEST value any run of the tube
+ *    carries for it ({@link valuesForRuns}, "Latest values"): analyzers
+ *    like the Snibe Maglumi send each test as its own message, so one run
+ *    rarely holds the whole tube. Picking one run in the picker shows only
+ *    that run's values, as before.
  */
 import { isFamilyFilled, isFamilyValue } from '../utils/option-family';
 import type { MappedValue, RunDto } from './instrument.models';
@@ -96,6 +101,30 @@ export function valuesForRun(run: RunDto | null | undefined, lines: readonly Pre
   return out;
 }
 
+/** Picker value for the merged default: each field's newest value across runs. */
+export const LATEST_VALUES = '__latest__';
+
+const runTime = (r: RunDto): number => {
+  const t = Date.parse(r.runAt ?? r.receivedAt ?? '');
+  return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
+};
+
+/**
+ * Every field the tube's runs fill, each from the NEWEST run that carries it
+ * (runAt ?? receivedAt; equal times keep the server's newest-first order —
+ * mirrors the server's per-line rule in InstrumentMapping.Decide). A late
+ * upload of an older value never beats a newer one; a run that carried only
+ * other tests never blanks this field.
+ */
+export function valuesForRuns(runs: readonly RunDto[] | null | undefined, lines: readonly PrefillLine[]): AppliedMap {
+  const out: AppliedMap = {};
+  const ordered = (runs ?? []).filter((r) => !!r).slice().sort((a, b) => runTime(b) - runTime(a));
+  for (const r of ordered) {
+    for (const [key, v] of Object.entries(valuesForRun(r, lines))) if (!out[key]) out[key] = v;
+  }
+  return out;
+}
+
 export interface PrefillPlan {
   /** Field writes to apply ('' = clear a field the previous run filled). */
   writes: PrefillWrite[];
@@ -106,18 +135,20 @@ export interface PrefillPlan {
 }
 
 /**
- * The prefill plan for `run` given what is on screen now.
+ * The prefill plan for `run` (one run) — or, with `runs`, the merged newest
+ * value per field ({@link valuesForRuns}) — given what is on screen now.
  * @param current   the field's current value (orderTestId, paramName) → value
  * @param previous  what the previously applied run put in (for run switching)
  */
 export function planPrefill(args: {
-  run: RunDto | null | undefined;
+  run?: RunDto | null | undefined;
+  runs?: readonly RunDto[] | null;
   lines: readonly PrefillLine[];
   current: (orderTestId: string, paramName: string) => unknown;
   previous?: AppliedMap | null;
 }): PrefillPlan {
   const prev = args.previous ?? {};
-  const next = valuesForRun(args.run, args.lines);
+  const next = args.runs ? valuesForRuns(args.runs, args.lines) : valuesForRun(args.run, args.lines);
   const writes: PrefillWrite[] = [];
   const kept: string[] = [];
   const untouched = (key: string, cur: unknown) => !isFilledValue(cur) || (!!prev[key] && same(cur, prev[key].value));
@@ -183,11 +214,13 @@ export function analyzerBadge(
   };
 }
 
-/** Options for the "Run" picker: newest = "Run: latest". */
+/** Options for the "Run" picker: first "Latest values" (the default — each
+ *  field's newest value across all runs), then each run, newest first. */
 export function runOptions(runs: readonly RunDto[], fmtTime: (iso: string | null) => string): { value: string; label: string }[] {
-  return runs.map((r, i) => {
+  const each = runs.map((r) => {
     const when = fmtTime(r.runAt ?? r.receivedAt ?? null);
     const tail = [r.instrumentName, when].filter(Boolean).join(' · ');
-    return { value: r.messageId, label: i === 0 ? `Run: latest${tail ? ' · ' + tail : ''}` : `Run: ${tail || r.messageId}` };
+    return { value: r.messageId, label: `Run: ${tail || r.messageId}` };
   });
+  return runs.length ? [{ value: LATEST_VALUES, label: 'Latest values (all runs)' }, ...each] : each;
 }

@@ -18,6 +18,7 @@
  * One InstrumentMessage per O record (a session may carry several samples).
  */
 const { normalizeFlags, parseTs, lines, emptyMessage } = require('./common');
+const { parseAstmPath, astmValue, pickRecord } = require('./sample-id-path');
 
 function delimitersFrom(hLine) {
   // "H|\^&..." → field = char 1, then repeat/component/escape = chars 2..4
@@ -63,10 +64,17 @@ function parseAstm(text, cfg = {}) {
   let cur = null;
   let lastResult = null;
 
+  // Custom sample-number location (sampleIdPath) — null when unset: the
+  // standard behaviour below runs byte-for-byte as before.
+  const custom = cfg.sampleIdPath ? parseAstmPath(cfg.sampleIdPath) : null;
+  const all = custom ? recs.map((r) => ({ name: (r[0] || '').toUpperCase(), parts: r.split(d.field) })) : null;
+  let recIdx = -1;
+
   const field = (parts, n) => (parts[n - 1] ?? '');
   const comps = (v) => String(v).split(d.component).map((x) => unescape(x, d));
 
   for (const rec of recs) {
+    recIdx++;
     const type = rec[0];
     const parts = rec.split(d.field);
     if (type === 'H') {
@@ -88,6 +96,11 @@ function parseAstm(text, cfg = {}) {
         // Fallback: the other specimen-ID field (O.3 ↔ O.4).
         const alt = comps(field(parts, sampleField === 3 ? 4 : 3));
         sampleId = (alt[sampleComp - 1] || alt.find((x) => x.trim()) || '').trim();
+      }
+      if (custom) {
+        const r = pickRecord(all, custom.type, custom.occ, recIdx, 'O');
+        const id = r ? astmValue(r.parts, custom, d, unescape) : '';
+        if (id) sampleId = id;
       }
       const action = field(parts, 12).trim().toUpperCase();   // O.12 action code, Q = QC
       cur = emptyMessage('astm', text);

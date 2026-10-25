@@ -23,6 +23,7 @@ import { finalize, firstValueFrom } from 'rxjs';
 import { formatPatientInfo } from '../../../shared/models/patient.model';
 import { fillUnit, formatRange, normalizeReportText, normalizeSex, selectReferenceRange, type RangeLike } from '../../../shared/utils/reference-range';
 import { criticalBadge, flagTone, rangeWithUnit, savedFlagOf, type CriticalCode, type SavedFlag } from '../../../shared/utils/result-flag';
+import { rangeValueFor } from '../../../shared/utils/result-value';
 import { parseParametersBlob, readParameters } from '../../../shared/utils/test-parameters';
 import { ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
@@ -64,6 +65,7 @@ interface ParamDef {
   criticalLow?: number;
   criticalHigh?: number;
   referenceRanges?: Array<RangeLike & { criticalLow?: number | null; criticalHigh?: number | null }>;
+  allowRange?: boolean;
 }
 
 interface ValueRow {
@@ -1306,7 +1308,9 @@ export class ValidateResultComponent implements OnInit {
         max: r?.max ?? undefined,
         critLow,
         critHigh,
-        isNumeric: isNum || (p.type === 'numeric' || p.type === 'numeric_with_range'),
+        // A range value ("0-4") of a range-enabled value has no single point
+        // to place on the range bar — the saved flag (mw's rule) is shown.
+        isNumeric: rangeValueFor(p, v) ? false : isNum || (p.type === 'numeric' || p.type === 'numeric_with_range'),
         flag: flagTone(saved?.flag),
         crit: criticalBadge(saved?.flag),
         printBold: Array.isArray(snap.bold) && snap.bold.includes(p.name),

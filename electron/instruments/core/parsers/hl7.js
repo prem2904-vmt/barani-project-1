@@ -12,6 +12,7 @@
  * One InstrumentMessage per OBR (results follow their OBR).
  */
 const { normalizeFlags, parseTs, emptyMessage } = require('./common');
+const { parseHl7Path, hl7Value, pickRecord } = require('./sample-id-path');
 
 function segmentsOf(text) {
   return String(text).split(/\r\n|\r|\n/).map((s) => s.replace(/^\x0b/, '')).filter((s) => s.length >= 3);
@@ -43,15 +44,27 @@ function parseHl7(text, cfg = {}) {
   const e = mshLine ? encodingOf(mshLine) : { field: '|', component: '^', repeat: '~', escape: '\\', sub: '&' };
   const which = String(cfg.sampleIdField || 'OBR-3').toUpperCase();
   const qcRe = cfg.qcPattern ? safeRe(cfg.qcPattern) : null;
+  // Custom sample-number location (sampleIdPath) — null when unset: the
+  // standard behaviour below runs byte-for-byte as before.
+  const custom = cfg.sampleIdPath ? parseHl7Path(cfg.sampleIdPath) : null;
+  const all = custom ? segs.map((s) => ({ name: s.slice(0, 3).toUpperCase(), parts: s.split(e.field) })) : null;
+  const customAt = (idx) => {
+    const r = pickRecord(all, custom.seg, custom.occ, idx, 'OBR');
+    return r ? hl7Value(r.parts, custom, e, unescapeHl7) : '';
+  };
+  const customHit = new WeakSet(); // messages whose ID came from the custom path (SPM-2 must not overwrite it)
+  let segIdx = -1;
   const comp = (v, i = 1) => unescapeHl7(String(v).split(e.repeat)[0].split(e.component)[i - 1] ?? '', e).trim();
 
   let serial = null;
   let msgTs = null;
   let pid3 = null;
+  let pid5 = null; // PID-5 patient name: the given-name part, else the family part (labs that type the tube number into the analyzer's Name box)
   const out = [];
   let cur = null;
 
   for (const s of segs) {
+    segIdx++;
     const name = s.slice(0, 3);
     const parts = s.split(e.field);
     if (name === 'MSH') {
@@ -61,7 +74,12 @@ function parseHl7(text, cfg = {}) {
       msgTs = parseTs(fld('MSH', parts, 7));
       continue;
     }
-    if (name === 'PID') { pid3 = comp(fld('PID', parts, 3)) || null; continue; }
+    if (name === 'PID') {
+      pid3 = comp(fld('PID', parts, 3)) || null;
+      const pid5f = fld('PID', parts, 5);
+      pid5 = comp(pid5f, 2) || comp(pid5f, 1) || null;
+      continue;
+    }
     if (name === 'OBR') {
       cur = emptyMessage('hl7', text);
       cur.instrumentSerial = serial;
@@ -69,7 +87,9 @@ function parseHl7(text, cfg = {}) {
       const obr2 = comp(fld('OBR', parts, 2));
       cur.sampleId = (which === 'OBR-2' ? obr2 || obr3
         : which === 'PID-3' ? pid3 || obr3 || obr2
+          : which === 'PID-5' ? pid5 || pid3 || obr3 || obr2
           : obr3 || obr2) || null;
+      if (custom) { const id = customAt(segIdx); if (id) { cur.sampleId = id; customHit.add(cur); } }
       cur.runAt = parseTs(fld('OBR', parts, 7)) || msgTs;
       cur.qc = qcRe && cur.sampleId ? qcRe.test(cur.sampleId) : false;
       out.push(cur);
@@ -79,14 +99,14 @@ function parseHl7(text, cfg = {}) {
       if (!cur) continue;
       const spm2 = String(fld('SPM', parts, 2));
       const spmId = spm2.split(e.component).map((c) => c.split(e.sub)[0].trim()).find((x) => x);
-      if (which === 'SPM-2' && spmId) cur.sampleId = unescapeHl7(spmId, e);
+      if (which === 'SPM-2' && spmId && !customHit.has(cur)) cur.sampleId = unescapeHl7(spmId, e);
       const role = comp(fld('SPM', parts, 11)).toUpperCase();
       if (role === 'Q' || role === 'C') cur.qc = true;
       if (qcRe && cur.sampleId && qcRe.test(cur.sampleId)) cur.qc = true;
       continue;
     }
     if (name === 'OBX') {
-      if (!cur) { cur = emptyMessage('hl7', text); cur.instrumentSerial = serial; cur.runAt = msgTs; cur.sampleId = pid3; out.push(cur); }
+      if (!cur) { cur = emptyMessage('hl7', text); cur.instrumentSerial = serial; cur.runAt = msgTs; cur.sampleId = (custom && customAt(segIdx)) || pid3; out.push(cur); }
       const obxType = (fld('OBX', parts, 2) || '').trim().toUpperCase();
       const codeField = fld('OBX', parts, 3);
       const code = comp(codeField, 1) || comp(codeField, 2);

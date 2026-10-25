@@ -1,0 +1,74 @@
+<div class="pf-sip">
+  @if (loading()) {
+    <p class="pf-sip__note">Looking for the last message from this analyzer…</p>
+  } @else if (!raw() || !hasContent()) {
+    <div class="pf-sip__empty">
+      <span class="pf-sip__empty-icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></span>
+      <span class="pf-sip__empty-t" data-testid="sip-empty">Send one result from the analyzer first, then pick the sample number here.</span>
+      <button type="button" class="pf-btn pf-btn--quiet press" (click)="reload.emit()">Check again</button>
+    </div>
+  } @else {
+    <div class="pf-sip__result" [class.pf-sip__result--warn]="path() && !preview()" aria-live="polite" data-testid="sip-result">
+      @if (!path()) {
+        <span>Tap the sample number in the message below.</span>
+      } @else if (preview()) {
+        <span>Sample number will be read from <strong>{{ label() }}</strong> → <strong class="pf-num pf-sip__val">{{ preview() }}</strong></span>
+      } @else {
+        <span>Nothing at <strong>{{ label() }}</strong> in this message — the standard setting is used instead.</span>
+      }
+      @if (path()) { <button type="button" class="pf-btn pf-btn--quiet press pf-sip__clear" (click)="clear()">Clear</button> }
+    </div>
+    @if (source()) { <p class="pf-sip__note">Message received {{ source() }}</p> }
+
+    @if (isRows()) {
+      <div class="pf-sip__msg" role="list" aria-label="Received message">
+        @for (r of model().rows; track $index) {
+          @if (r.cells.length) {
+            <div class="pf-sip__row" role="listitem">
+              <span class="pf-sip__seg">{{ r.name }}</span>
+              <div class="pf-sip__cells">
+                @for (c of r.cells; track c.path) {
+                  <button type="button" class="pf-sip__cell press" [class.is-on]="c.path === path()" [attr.aria-pressed]="c.path === path()" [attr.aria-label]="c.path + ' ' + c.value" (click)="pickCell(c)">
+                    <span class="pf-sip__pos pf-num">{{ c.label }}</span>
+                    <span class="pf-sip__v">{{ c.value }}</span>
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        }
+      </div>
+    } @else if (isText()) {
+      <p class="pf-sip__note">{{ anchor() ? 'Now tap the last character of the sample number.' : 'Tap the first character of the sample number, then the last.' }}</p>
+      <div class="pf-sip__msg pf-sip__msg--text" aria-label="Received message">
+        @for (l of model().lines; track l.line) {
+          <div class="pf-sip__line">
+            <span class="pf-sip__ln pf-num" aria-hidden="true">{{ l.line }}</span>
+            <span class="pf-sip__chars">
+              @for (ch of l.chars; track $index) {
+                <button type="button" class="pf-sip__ch" [class.is-on]="charState(l.line, $index) === 'on'" [class.is-anchor]="charState(l.line, $index) === 'anchor'"
+                  [attr.aria-label]="'Line ' + l.line + ', character ' + $index + ': ' + ch" (click)="tapChar(l.line, $index)">{{ ch }}</button>
+              }
+            </span>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="pf-sip__msg" role="list" aria-label="Received message">
+        @for (g of leafGroups(); track g.name) {
+          <div class="pf-sip__row" role="listitem">
+            <span class="pf-sip__seg">{{ g.name }}</span>
+            <div class="pf-sip__cells">
+              @for (l of g.leaves; track l.path) {
+                <button type="button" class="pf-sip__cell press" [class.is-on]="l.path === path()" [attr.aria-pressed]="l.path === path()" (click)="pickCell(l)">
+                  <span class="pf-sip__pos">{{ l.key }}</span>
+                  <span class="pf-sip__v">{{ l.value }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

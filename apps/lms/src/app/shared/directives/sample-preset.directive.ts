@@ -1,4 +1,5 @@
 import { DestroyRef, Directive, ElementRef, inject, input } from '@angular/core';
+import { SCAN_BURST, SCAN_BURST_EVENT } from '@prefrontal/shared';
 import { SampleSearchPresetService } from '../../core/services/sample-search-preset.service';
 
 /**
@@ -18,6 +19,10 @@ import { SampleSearchPresetService } from '../../core/services/sample-search-pre
  * - Leaving the field with only the preset in it clears it again, so the
  *   list filter / placeholder return.
  * - Enter with only the preset does not submit a lookup.
+ * - A hardware scanner never gets the preset glued in front of its code
+ *   (an all-digit Sample ID would read "2610" + "261000123"): a scanner
+ *   burst (HardwareScanService's `pf-scan-burst`) clears it, and so does a
+ *   second key arriving scanner-fast (< SCAN_BURST.maxGapMs) right after it.
  * Off when the lab turned the preset off, the config isn't loaded, or the
  * format has no head. The value is written like PF Keys writes it (value +
  * a real `input` event), so ngModel / (input) handlers see normal typing.
@@ -38,6 +43,11 @@ export class SamplePresetDirective {
   private readonly presets = inject(SampleSearchPresetService);
   /** The preset this directive typed (null once cleared). */
   private applied: string | null = null;
+  /** First key typed after the untouched preset: when, and the field it left. */
+  private afterPreset: { at: number; value: string } | null = null;
+  /** The preset stripped for a scanner-fast burst (the scan capture may put
+   *  the field back to it — then it must go too). */
+  private stripped: string | null = null;
 
   constructor() {
     // Lazy: one small GET the first time any sample field exists.
@@ -46,8 +56,13 @@ export class SamplePresetDirective {
     // screen's own (keydown.enter) / PF Keys handlers, so a swallowed Enter
     // or Backspace never reaches them.
     const onKey = (e: KeyboardEvent) => this.onKeydown(e);
+    const onBurst = () => this.onScanBurst();
     this.el.addEventListener('keydown', onKey, true);
-    inject(DestroyRef).onDestroy(() => this.el.removeEventListener('keydown', onKey, true));
+    this.el.addEventListener(SCAN_BURST_EVENT, onBurst);
+    inject(DestroyRef).onDestroy(() => {
+      this.el.removeEventListener('keydown', onKey, true);
+      this.el.removeEventListener(SCAN_BURST_EVENT, onBurst);
+    });
   }
 
   private get on(): boolean {
@@ -71,9 +86,34 @@ export class SamplePresetDirective {
   onBlur(): void {
     if (this.onlyPreset) this.clear();
     this.applied = null;
+    this.afterPreset = null;
+    this.stripped = null;
+  }
+
+  /** A hardware scan was typed into this field and routed as a scan: the
+   *  field is back to the preset — drop it so nothing is left glued on. */
+  onScanBurst(): void {
+    this.afterPreset = null;
+    const wasPreset = this.onlyPreset || (!!this.stripped && this.el.value === this.stripped);
+    this.stripped = null;
+    if (wasPreset) this.clear();
   }
 
   onKeydown(e: KeyboardEvent): void {
+    const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    // Scanner-fast second key right after the preset: it's a scanner typing a
+    // whole Sample ID — strip the preset in front of the first character.
+    const ap = this.afterPreset;
+    this.afterPreset = null;
+    if (ap && printable && this.applied && now - ap.at < SCAN_BURST.maxGapMs
+        && this.el.value === ap.value && this.el.value.startsWith(this.applied)) {
+      const tail = this.el.value.slice(this.applied.length);
+      this.stripped = this.applied;
+      this.applied = null;
+      this.write(tail);
+      return;
+    }
     if (!this.onlyPreset) return;
     if (e.key === 'Backspace') {
       // Whole preset in one press (PF Keys replays its ⌫ here too; a
@@ -93,6 +133,12 @@ export class SamplePresetDirective {
     if (e.key.length === 1 && /[a-z]/i.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
       this.applied = null;
       this.el.value = '';
+      return;
+    }
+    // A digit continues the preset; remember it in case a scanner is typing.
+    if (printable) {
+      const value = this.el.value + e.key;
+      this.afterPreset = { at: now, value };
     }
   }
 

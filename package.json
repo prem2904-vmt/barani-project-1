@@ -1,7 +1,7 @@
 {
   "name": "prefrontal",
   "productName": "Prefrontal",
-  "version": "1.0.3",
+  "version": "1.0.9",
   "description": "Prefrontal — clinical lab workflow.",
   "author": {
     "name": "Prefrontal Inc",
@@ -89,7 +89,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Prefrontal LMS",
-      "uninstallerIcon": "electron/icon.ico"
+      "uninstallerIcon": "electron/icon.ico",
+      "include": "electron/installer.nsh"
     }
   },
   "engines": {

@@ -9,6 +9,8 @@
  *   'astm-e1381' → AstmReceiver (ENQ/ACK/frames/EOT)
  *   'mllp'       → MllpReceiver (VT … FS CR), replies with the HL7 ACK
  *   'raw'        → RawReceiver (terminator / idle timeout)
+ *   'stx-etx'    → StxEtxReceiver (<STX> text <ETX>, we answer <ACK>; LifeDx HBPro)
+ *   'sinocare-sn'→ SinocareReceiver ("SN" + len + type + JSON + CRC16; iCARE-2100)
  *   'auto'       → decides on the first significant byte of a session:
  *                  ENQ → ASTM, VT → MLLP, anything else → raw.
  */
@@ -17,6 +19,18 @@ const { C, toBuffer } = require('../bytes');
 const { AstmReceiver } = require('./astm-e1381');
 const { MllpReceiver } = require('./mllp');
 const { RawReceiver } = require('./raw');
+const { StxEtxReceiver } = require('./stx-etx');
+const { SinocareReceiver, newContext } = require('./sinocare-sn');
+
+/** Sinocare patient context per link config object: the connector reuses one
+ *  config object for every TCP connection of an instrument (until a config
+ *  change), and the iCARE reconnects between its Patient and result frames. */
+const SINOCARE_CONTEXTS = new WeakMap();
+function sinocareContext(cfg) {
+  let c = SINOCARE_CONTEXTS.get(cfg);
+  if (!c) { c = newContext(); SINOCARE_CONTEXTS.set(cfg, c); }
+  return c;
+}
 
 function buildConcrete(type, cfg, io) {
   switch (type) {
@@ -26,6 +40,11 @@ function buildConcrete(type, cfg, io) {
     case 'mllp':
     case 'hl7':
       return new MllpReceiver({ write: io.write, reply: io.reply });
+    // Opt-in only (explicit link.type) — the auto link never picks these.
+    case 'stx-etx':
+      return new StxEtxReceiver({ write: io.write, dedupeMs: cfg.dedupeMs ?? undefined, ack: cfg.ack !== false });
+    case 'sinocare-sn':
+      return new SinocareReceiver({ write: io.write, replyMode: cfg.replyMode, ackJson: cfg.ackJson, context: sinocareContext(cfg) });
     case 'raw':
     default:
       return new RawReceiver({ terminator: cfg.terminator ?? null, idleMs: cfg.idleMs ?? 1500 });
@@ -113,6 +132,19 @@ class Link extends EventEmitter {
   close() { if (this.inner) this.inner.close?.(); }
 }
 
+/** One log line for a stx-etx / sinocare-sn 'frame' event (null for any other link). */
+function describeFrame(f) {
+  if (f.kind === 'stx-etx') {
+    return f.duplicate ? `<< same record again (analyzer retransmit) — ${f.acked ? 'ACKed, ' : ''}not read twice` : `<< STX/ETX record, ${f.length} chars${f.acked ? ' — ACK sent' : ''}`;
+  }
+  if (f.kind === 'sinocare-sn') {
+    const t = f.type != null ? `0x${Number(f.type).toString(16).padStart(4, '0')}` : '?';
+    if (!f.ok) return `SN frame ignored: ${f.reason}`;
+    return `<< SN frame type ${t}${f.resource ? ` (${f.resource})` : ''}, CRC ok${f.replied ? ' — reply sent' : ''}`;
+  }
+  return null;
+}
+
 function createLink(cfg, io) { return new Link(cfg, io); }
 
-module.exports = { createLink, Link, normalizeType, isAutoNoiseByte };
+module.exports = { createLink, Link, normalizeType, isAutoNoiseByte, describeFrame };

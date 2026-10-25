@@ -4,6 +4,7 @@ import { AgGridAngular } from 'ag-grid-angular';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ScanService } from '../../../core/services/scan.service';
+import { normalizeTubeScan } from '@prefrontal/shared';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
@@ -216,7 +217,8 @@ export class AnalyzerResultsComponent {
 
   async onBarcode(m: MessageSummaryDto, barcode: string) {
     this.attachFor.set(null);
-    const code = (barcode ?? '').trim();
+    // A tube QR (`MRN|SampleID`) → the Sample ID.
+    const code = normalizeTubeScan(barcode);
     if (!code || this.attaching.has(m.id)) return;
     const ok = await this.dialog.confirm({
       title: `Attach this run to sample ${code}?`, tone: 'primary', confirmLabel: 'Attach',

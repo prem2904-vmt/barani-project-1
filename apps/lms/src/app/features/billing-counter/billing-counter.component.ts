@@ -12,6 +12,7 @@ import { ProcessWorkflowService } from '../../core/services/process-workflow.ser
 import { BranchLabConfigService } from '../../core/services/branch-lab-config.service';
 import { BillingEventsService } from '../../core/services/billing-events.service';
 import { ScanService } from '../../core/services/scan.service';
+import { normalizeTubeScan, onHardwareScan } from '@prefrontal/shared';
 import { ToastService } from '../../core/services/toast.service';
 import { WorkEventsService } from '../../core/services/work-events.service';
 import { ZoomTransitionService } from '../../core/navigation/zoom-transition';
@@ -715,9 +716,14 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     this.resolveLookup(code);
   }
 
+  /** Hardware scanner anywhere on the counter (focus or not): the code is
+   *  looked up — never the dropdown row that happens to be highlighted (the
+   *  scanner's Enter is stopped before onEnter sees it). */
+  private readonly _hwScan = onHardwareScan(code => { this.closeDrop(); this.resolveLookup(code); });
+
   /** Resolve a typed / scanned code → order → open its cart. */
   resolveLookup(code: string) {
-    const raw = (code ?? '').trim();
+    const raw = normalizeTubeScan(code);
     if (!raw || this.resolving()) return;
     this.resolving.set(true);
     this.api.get<{ orderId: string }>(`/api/billing/lookup?code=${encodeURIComponent(raw)}`).subscribe({

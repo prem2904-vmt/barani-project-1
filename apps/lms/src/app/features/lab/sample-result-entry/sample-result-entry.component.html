@@ -683,9 +683,9 @@
                      [class.pf-sre__input--invalid]="isInvalidNumber(t, p)"
                      [ngModel]="getValue(t.id, p.name)"
                      (ngModelChange)="setValue(t.id, p.name, $event)"
-                     (keydown)="allowOnlyNumbers($event)"
+                     (keydown)="allowOnlyNumbers($event, p)"
                      (keydown.enter)="onEnterKey($event)"
-                     (paste)="onNumericPaste($event, t.id, p.name)" />
+                     (paste)="onNumericPaste($event, t.id, p.name, p)" />
             }
             @case ("select") {
               <div class="pf-sre__gselect" [class.pf-sre__input--flagged]="hasOpenComment(t.id, p.name)"

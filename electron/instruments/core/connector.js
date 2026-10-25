@@ -18,7 +18,7 @@ const crypto = require('crypto');
 const os = require('os');
 const { EventEmitter } = require('events');
 const { createTransport } = require('./transports');
-const { createLink } = require('./link');
+const { createLink, describeFrame } = require('./link');
 const { parseMessage, buildAck, redactForUpload } = require('./parsers');
 const { unframeAstm, unframeMllp } = require('./detect');
 const { applyMaps } = require('./mapper');
@@ -27,6 +27,18 @@ const { RawLog } = require('./rawlog');
 const { Uploader } = require('./uploader');
 const { toBuffer, C, NAMES } = require('./bytes');
 const { BidiHost } = require('./bidi');
+
+/** Links that are opt-in only (never auto-picked): their frame notes and
+ *  "no results" handling never touch the ASTM / MLLP / raw paths. */
+const OPT_IN_LINKS = new Set(['stx-etx', 'sinocare-sn']);
+
+function describeEmpty(text, link) {
+  if (link === 'sinocare-sn') {
+    try { const e = JSON.parse(text); if (e && e.resource) return `${e.resource} details received (kept for the result that follows)`; } catch { /* fall through */ }
+    return 'SN frame received — no results in it';
+  }
+  return 'record received but nothing parsed (check the protocol settings)';
+}
 
 const VERSION = '0.1.0';
 
@@ -353,7 +365,10 @@ class Connector extends EventEmitter {
       if (this.bidi.intercept(text, meta, sessionId)) return;
       this._onText(text, parserCfg, meta);
     });
-    link.on('frame', (f) => { if (!f.ok) this.rawlog.write('note', `frame rejected (NAK): ${f.reason}`); });
+    link.on('frame', (f) => {
+      if (f && f.kind) { const n = describeFrame(f); if (n) this.rawlog.write('note', n); return; }   // stx-etx / sinocare-sn only
+      if (!f.ok) this.rawlog.write('note', `frame rejected (NAK): ${f.reason}`);
+    });
     link.on('timeout', () => this.rawlog.write('note', 'link timeout — partial message discarded'));
     return link;
   }
@@ -379,6 +394,19 @@ class Connector extends EventEmitter {
     } catch (e) {
       this._recordError(`parse: ${e.message}`);
       this.rawlog.write('note', `parse failed: ${e.message}`);
+    }
+    // stx-etx / sinocare-sn: a frame with no results (Device / Patient
+    // context, an HBPro record before its result positions are set) is shown
+    // in the log but never queued for upload.
+    if (OPT_IN_LINKS.has(meta.link)) {
+      const empty = msgs.filter((m) => !m.results.length);
+      for (const m of empty) this.rawlog.write('note', `record for sample ${m.sampleId || '?'} has no results to send${meta.link === 'stx-etx' ? ' (set the result positions in the instrument editor)' : ''}`);
+      msgs = msgs.filter((m) => m.results.length);
+      if (!msgs.length) {
+        if (!empty.length) this.rawlog.write('note', describeEmpty(text, meta.link));
+        this._emitStatus();
+        return;
+      }
     }
     if (!msgs.length) {
       this.rawlog.write('note', 'message received but nothing parsed (check the protocol/template)');

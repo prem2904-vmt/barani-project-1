@@ -20,10 +20,10 @@ import { plural } from '../../../shared/utils/plural';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { InstrumentBridgeService } from '../../../shared/instruments/instrument-bridge.service';
 import {
-  BAUD_RATES, CodeMapRow, ConfigBase, DATA_BITS, FLOW_CONTROLS, FlowControl, HL7_SAMPLE_ID_FIELDS, InstrumentForm, LoincSkip, PARITIES,
+  BAUD_RATES, CodeMapRow, ConfigBase, DATA_BITS, DEFAULT_SINOCARE_ACK_JSON, DESKTOP_ONLY_PROTOCOLS, FLOW_CONTROLS, SINOCARE_REPLY_MODES, SINOCARE_SAMPLE_ID_FIELDS, FlowControl, HL7_SAMPLE_ID_FIELDS, InstrumentForm, LoincSkip, PARITIES,
   PROTOCOL_OPTIONS, RawSegment, STOP_BITS, TRANSPORT_OPTIONS, WizardStep, applyDetectProposal, applyLoincSuggestions, buildInstrumentConfig,
   buildUpsert, codesFromMessages, connectionSummary, connectorStateWord, emptyCodeMapRow, emptyInstrumentForm, fmtIst, formFromInstrument,
-  mergeUnmappedCodes, previewLine, previewRows, renderControlChars, rowFromDto, statusWord, toCodeMapUpserts, validateCodeMaps,
+  mergeUnmappedCodes, previewLine, previewRows, renderControlChars, rowFromDto, sharedCodeHint, statusWord, toCodeMapUpserts, validateCodeMaps,
   validateInstrumentForm, withCbcDefaults, withM51Defaults,
 } from '../../../shared/instruments/instrument-config';
 import {
@@ -33,6 +33,8 @@ import {
 import { InstrumentsApiService } from '../../../shared/instruments/instruments-api.service';
 import { TwoWayForm, modeLabel } from '../../../shared/instruments/instrument-two-way';
 import { InstrumentTwoWayComponent } from './instrument-two-way.component';
+import { SampleIdPickerComponent } from './sample-id-picker.component';
+import { SampleIdFormat, formatFor } from '../../../shared/instruments/sample-id-path';
 import { BridgesApiService } from '../../../shared/bridges/bridges-api.service';
 import type { BridgeDto } from '../../../shared/bridges/bridge.models';
 import { connectedViaOptions, transportOptionsFor } from '../../../shared/bridges/bridge-assign';
@@ -57,7 +59,7 @@ interface TabDef { id: Tab; label: string }
 @Component({
   selector: 'pf-instrument-editor',
   standalone: true,
-  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, BusyDirective, SkeletonFormComponent, InstrumentTwoWayComponent],
+  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, BusyDirective, SkeletonFormComponent, InstrumentTwoWayComponent, SampleIdPickerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './instrument-editor.component.html',
   styleUrl: './instrument-editor.component.scss',
@@ -93,7 +95,14 @@ export class InstrumentEditorComponent {
   readonly parityOptions = PARITIES;
   readonly stopBitOptions: PfSelectOption<number>[] = STOP_BITS.map((b) => ({ value: b, label: String(b) }));
   readonly flowOptions = FLOW_CONTROLS;
-  readonly protocolOptions: PfSelectOption<ParserType>[] = PROTOCOL_OPTIONS;
+  /** Through a Prefrontal Bridge the desktop-only presets are hidden (unless already chosen). */
+  readonly protocolOptions = computed<PfSelectOption<ParserType>[]>(() => this.connectedVia()
+    ? PROTOCOL_OPTIONS.filter((o) => !DESKTOP_ONLY_PROTOCOLS.includes(o.value) || o.value === this.form().protocol)
+    : PROTOCOL_OPTIONS);
+  readonly sinocareReplyOptions = SINOCARE_REPLY_MODES;
+  readonly sinocareSampleIdOptions = SINOCARE_SAMPLE_ID_FIELDS;
+  readonly defaultSinocareAck = DEFAULT_SINOCARE_ACK_JSON;
+  readonly idToken = '{{id}}';
   readonly hl7FieldOptions: PfSelectOption<Hl7SampleIdField>[] = HL7_SAMPLE_ID_FIELDS;
 
   // ── Record ───────────────────────────────────────────────────────────
@@ -283,6 +292,8 @@ export class InstrumentEditorComponent {
     this.dto.set(dto);
     this.configBase = dto.config ?? null;
     this.form.set(formFromInstrument(dto));
+    this.sampleIdMode.set(this.form().sampleIdPath?.path ? 'custom' : 'standard');
+    if (this.sampleIdMode() === 'custom' && this.tab() === 'protocol') void this.loadPickerMessage();
     this.connectedVia.set(dto.bridgeId ?? '');
     this.dirty.set(false);
   }
@@ -382,13 +393,73 @@ export class InstrumentEditorComponent {
   }
   patchHl7(v: Hl7SampleIdField) { this.form.update((f) => ({ ...f, hl7: { sampleIdField: v } })); this.dirty.set(true); }
   patchText(p: Partial<InstrumentForm['text']>) { this.form.update((f) => ({ ...f, text: { ...f.text, ...p } })); this.dirty.set(true); }
+  patchHbpro(fields: string) { this.form.update((f) => ({ ...f, hbpro: { fields } })); this.dirty.set(true); }
+  patchSinocare(p: Partial<InstrumentForm['sinocare']>) { this.form.update((f) => ({ ...f, sinocare: { ...f.sinocare, ...p } })); this.dirty.set(true); }
   setFlow(v: FlowControl) { this.patchSerial({ flow: v }); }
   patchTwoWay(v: TwoWayForm) { this.patch({ twoWay: v }); }
   /** Side card: the two-way mode in plain words. */
   readonly twoWayLabel = computed(() => modeLabel(this.form().twoWay.mode));
 
+  // ── Sample number: standard field | custom (picked from a real message) ──
+  readonly sampleIdModeOptions: PfSelectOption<'standard' | 'custom'>[] = [
+    { value: 'standard', label: 'Standard (the setting above)' },
+    { value: 'custom', label: 'Custom — pick from a received message', hint: 'Tap the sample number in the last message the analyzer sent' },
+  ];
+  readonly sampleIdMode = signal<'standard' | 'custom'>('standard');
+  /** The message the picker shows (raw text) and where it came from. */
+  readonly pickerRaw = signal<string | null>(null);
+  readonly pickerSource = signal('');
+  readonly pickerLoading = signal(false);
+  /** Newest message this Listen session captured (raw text), if any. */
+  private readonly listenRaw = computed(() => {
+    const ms = this.messages();
+    for (let i = ms.length - 1; i >= 0; i--) if (ms[i].raw) return ms[i];
+    return null;
+  });
+  readonly pickerFormat = computed<SampleIdFormat>(() => formatFor(this.form().protocol, this.pickerRaw()));
+  /** The path shown in the picker: only one that fits the message's format. */
+  readonly pickerPath = computed(() => {
+    const c = this.form().sampleIdPath;
+    return c && c.format === this.pickerFormat() ? c.path : '';
+  });
+
+  setSampleIdMode(v: 'standard' | 'custom') {
+    this.sampleIdMode.set(v);
+    if (v === 'standard') { if (this.form().sampleIdPath) this.patch({ sampleIdPath: null }); return; }
+    void this.loadPickerMessage();
+  }
+
+  /** Listen capture first; else the newest message the server stored for this instrument. */
+  async loadPickerMessage() {
+    const live = this.listenRaw();
+    if (live?.raw) {
+      this.pickerRaw.set(live.raw);
+      this.pickerSource.set(`just now (Listen)${live.sampleId ? ` · sample ${live.sampleId}` : ''}`);
+      return;
+    }
+    const id = this.id();
+    if (!id) { this.pickerRaw.set(null); return; }
+    this.pickerLoading.set(true);
+    try {
+      const page = await firstValueFrom(this.api.messages({ state: 'all', instrumentId: id, pageSize: 1 }));
+      const last = page?.items?.[0];
+      if (!last) { this.pickerRaw.set(null); return; }
+      const detail = await firstValueFrom(this.api.message(last.id));
+      this.pickerRaw.set(detail?.raw || null);
+      this.pickerSource.set(`${fmtIst(last.receivedAt)}${last.sampleId ? ` · sample ${last.sampleId}` : ''}`);
+    } catch {
+      this.pickerRaw.set(null);
+    } finally {
+      this.pickerLoading.set(false);
+    }
+  }
+
+  onSampleIdPick(path: string) {
+    this.patch({ sampleIdPath: path ? { format: this.pickerFormat(), path } : null });
+  }
+
   // ── Steps ────────────────────────────────────────────────────────────
-  go(t: Tab) { this.tab.set(t); if (t === 'status') { this.loadRecent(); void this.refreshRawLog(); } }
+  go(t: Tab) { this.tab.set(t); if (t === 'protocol' && this.sampleIdMode() === 'custom') void this.loadPickerMessage(); if (t === 'status') { this.loadRecent(); void this.refreshRawLog(); } }
   private stepIndex() { return this.tabs().findIndex((t) => t.id === this.tab()); }
   readonly prevTab = computed(() => { const i = this.stepIndex(); return i > 0 ? this.tabs()[i - 1] : null; });
   readonly nextTab = computed(() => { const i = this.stepIndex(); const all = this.tabs(); return i >= 0 && i < all.length - 1 ? all[i + 1] : null; });
@@ -528,6 +599,7 @@ export class InstrumentEditorComponent {
     this.toasts.success(added ? `${plural(added, 'code')} added — pick the test for each` : 'No new codes to add');
   }
   mapIssueAt(i: number): string | null { return this.mapIssues().find((x) => x.index === i)?.message ?? null; }
+  sharedCodeAt(i: number): string | null { return sharedCodeHint(this.maps(), i); }
   skippedCodesText(): string { return this.loincSkipped().map((s) => `${s.code} (${s.reason})`).join(', '); }
 
   /** Analyzer-code box: edits the row as usual, and debounces a LOINC

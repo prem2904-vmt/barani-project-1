@@ -30,6 +30,7 @@ import {
   summarizeRanges,
 } from "../../../shared/utils/reference-range";
 import { criticalBadge, flagChipTitle, flagCodeOf, liveFlag, parseResultSnapshot, savedFlagOf } from "../../../shared/utils/result-flag";
+import { isInvalidNumericValue, liveRangeFlag, rangeAllowed, rangeKeyAllowed, rangePasteText, rangeValueFor } from "../../../shared/utils/result-value";
 import { effectiveMethodology } from "../../../shared/utils/methodology";
 import { choiceOptionsFor, isMultiChoice, resolveParamEntryKind } from "../../../shared/utils/param-entry-kind";
 import { readParameters } from "../../../shared/utils/test-parameters";
@@ -114,6 +115,7 @@ import {
   PrefillLine,
   analyzerBadge,
   defaultRun,
+  LATEST_VALUES,
   planPrefill,
   runOptions,
 } from "../../../shared/instruments/instrument-prefill";
@@ -432,7 +434,7 @@ export class SampleResultEntryComponent {
   });
 
   /** Restricts keydown events for numeric parameters to valid numbers (digits 0-9, decimal point, minus) and navigation keys, preventing letter input. */
-  allowOnlyNumbers(event: KeyboardEvent) {
+  allowOnlyNumbers(event: KeyboardEvent, p?: TestParameter | null) {
     const key = event.key;
     // Allow control & navigation keys
     if (
@@ -458,6 +460,18 @@ export class SampleResultEntryComponent {
     const target = event.target as HTMLInputElement | null;
     const val = target?.value || "";
 
+    // A value the Test Master opened to ranges ("0-4", "<5", ">100") — the
+    // ONLY branch that differs; every other numeric field runs the old rule.
+    if (rangeAllowed(p)) {
+      let rest = val;
+      try {
+        const a = target?.selectionStart, b = target?.selectionEnd;
+        if (a != null && b != null && b > a) rest = val.slice(0, a) + val.slice(b);
+      } catch { /* no selection API */ }
+      if (!rangeKeyAllowed(rest, key)) event.preventDefault();
+      return;
+    }
+
     // Allow decimal point if not already in value
     if (key === "." && !val.includes(".")) {
       return;
@@ -475,9 +489,18 @@ export class SampleResultEntryComponent {
   /** Paste into a numeric field: strip everything that isn't a digit, dot or
    *  leading minus so "one hundred" or "12 mg/dL" can never land as the raw
    *  value. A clean numeric paste falls through to the browser default. */
-  onNumericPaste(event: ClipboardEvent, testId: string, paramName: string) {
+  onNumericPaste(event: ClipboardEvent, testId: string, paramName: string, p?: TestParameter | null) {
     const input = event.target as HTMLInputElement | null;
     const raw = event.clipboardData?.getData("text") ?? "";
+    const range = rangeAllowed(p) ? rangePasteText(raw) : null;
+    if (range != null) {
+      // A pasted "0 - 4" / "<5" on a range-enabled value lands as typed.
+      event.preventDefault();
+      if (!input) return;
+      input.value = range;
+      this.setValue(testId, paramName, range);
+      return;
+    }
     let cleaned = raw.replace(/[^0-9.\-]/g, "");
     const neg = cleaned.startsWith("-");
     cleaned = cleaned.replace(/-/g, "");
@@ -543,10 +566,12 @@ export class SampleResultEntryComponent {
       return null;
     }
     if (kind === "select") return this.qualitativeFlagFor(t, p);
-    const v = Number(String(raw).trim());
-    if (Number.isNaN(v)) return null;
+    // A range value ("0-4") of a range-enabled value; null for every other.
+    const rv = rangeValueFor(p, raw);
+    const v = rv ? NaN : Number(String(raw).trim());
+    if (!rv && Number.isNaN(v)) return null;
     const { sex, age } = this.patientSexAge();
-    const lf = liveFlag(p, v, sex, age, t.profileCode);
+    const lf = rv ? liveRangeFlag(p, rv, sex, age, t.profileCode) : liveFlag(p, v, sex, age, t.profileCode);
     if (lf?.code === "CL" || lf?.code === "CH")
       return { tone: "critical", label: `${lf.code} · ${lf.code === "CL" ? "below" : "above"} ${lf.limit}` };
     if (lf?.code === "L") return { tone: "low", label: "Low" };
@@ -600,7 +625,8 @@ export class SampleResultEntryComponent {
     if (this.inputKindFor(p) !== "number") return false;
     const raw = this.getValue(t.id, p.name);
     if (raw === undefined || raw === null || raw === "") return false;
-    return Number.isNaN(Number(String(raw).trim()));
+    // Without the range switch: exactly Number.isNaN(Number(raw.trim())).
+    return isInvalidNumericValue(p, raw);
   }
 
   /** A choice list where the tech may pick several answers (stored as string[]). */
@@ -1699,8 +1725,10 @@ export class SampleResultEntryComponent {
   private readonly prestore = inject(ReportPrestoreService);
 
   // ── Analyzer prefill (instrument connector) ─────────────────────────
-  // GET /api/instruments/results/by-sample/{id} → runs (newest first). The
-  // selected run PREFILLS empty fields only (pure rules: shared/instruments/
+  // GET /api/instruments/results/by-sample/{id} → runs (newest first). By
+  // default each field takes its NEWEST value across all runs ("Latest
+  // values" — per-test analyzers send one message per test); picking one run
+  // shows only that run's values. The prefill fills empty fields only (pure rules: shared/instruments/
   // instrument-prefill.ts): never overwrites typed values, never submits,
   // never validates, never saves a draft by itself. Errors / 404 → silent.
   readonly analyzerRuns = signal<RunDto[]>([]);
@@ -1830,20 +1858,22 @@ export class SampleResultEntryComponent {
       if (seq !== this.loadSeq || this.validateMode() || this.viewOnly()) return;
       const runs = Array.isArray(dto?.runs) ? dto.runs.filter((r) => !!r?.messageId) : [];
       this.analyzerRuns.set(runs);
-      const first = defaultRun(runs);
-      if (first) this.applyAnalyzerRun(first.messageId);
+      if (defaultRun(runs)) this.applyAnalyzerRun(LATEST_VALUES);
     } catch {
       /* no analyzer / endpoint not there yet — result entry works as before */
     }
   }
 
-  /** Apply one run (the picker): fills empty fields and fields still equal to
-   *  the previous run's prefill; typed values are never touched. */
+  /** Apply one run, or LATEST_VALUES (each field's newest value across all
+   *  runs — the default): fills empty fields and fields still equal to the
+   *  previous prefill; typed values are never touched. */
   applyAnalyzerRun(messageId: string | null) {
-    const run = this.analyzerRuns().find((r) => r.messageId === messageId) ?? null;
-    if (!run) return;
+    const merged = messageId === LATEST_VALUES;
+    const run = merged ? null : this.analyzerRuns().find((r) => r.messageId === messageId) ?? null;
+    if (!merged && !run) return;
+    if (merged && !this.analyzerRuns().length) return;
     const plan = planPrefill({
-      run,
+      ...(merged ? { runs: this.analyzerRuns() } : { run }),
       lines: this.analyzerLines(),
       current: (ot, p) => this._values()[ot]?.[p],
       previous: this._analyzerApplied(),
@@ -1857,7 +1887,7 @@ export class SampleResultEntryComponent {
       this.recomputeCalcFields();
     }
     this._analyzerApplied.set(plan.applied);
-    this.analyzerRunId.set(run.messageId);
+    this.analyzerRunId.set(merged ? LATEST_VALUES : run!.messageId);
   }
 
   /** The small "From Sysmex · 10:42 am" badge (+ analyzer H/L chips). */

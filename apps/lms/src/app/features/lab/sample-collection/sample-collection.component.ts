@@ -23,6 +23,7 @@ import { firstValueFrom } from "rxjs";
 import { ApiService } from "../../../core/services/api.service";
 import { LiveQueueService } from "../../../core/services/live-queue.service";
 import { ScanService } from "../../../core/services/scan.service";
+import { normalizeTubeScan, onHardwareScan } from "@prefrontal/shared";
 import { AuthService } from "../../../core/auth/auth.service";
 import { DialogService } from "../../../core/services/dialog.service";
 import { ToastService } from "../../../core/services/toast.service";
@@ -414,6 +415,15 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly dialog = inject(DialogService);
   private readonly process = inject(ProcessWorkflowService);
   protected readonly scan = inject(ScanService);
+  // Optional: specs build the class directly in an injection context.
+  private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
+  /** Hardware scanner, from anywhere on the screen (focus or not) → the same
+   *  path as a camera read. Embedded in a host pane: only scans typed while
+   *  focus is inside this pane (the host routes the rest). */
+  private readonly _hwScan = onHardwareScan(
+    code => this.onScanMatched(code),
+    { when: ctx => !this.embedded || (!!ctx.target && !!this.hostEl?.nativeElement.contains(ctx.target)) },
+  );
 
   /** Rendered embedded inside a host pane: the host supplies its own header, so
    *  we suppress our KPI strip + screen header + outer page padding while
@@ -1542,8 +1552,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   runSearch() {
-    const raw = this.scanValue().trim();
+    // A tube QR (`MRN|SampleID`) read by a scanner into the field → Sample ID.
+    const raw = normalizeTubeScan(this.scanValue());
     if (!raw) return;
+    if (raw !== this.scanValue().trim()) this.scanValue.set(raw);
 
     // Filter the visible queue — works for name, phone, order-id prefix.
     const matches = this.matchGroups(raw);

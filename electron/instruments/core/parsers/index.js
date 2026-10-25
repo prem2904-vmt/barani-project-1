@@ -7,6 +7,8 @@
 const { parseAstm } = require('./astm');
 const { parseHl7, buildAck, redactEdImages } = require('./hl7');
 const { parseText, TEXT_DEFAULTS } = require('./text');
+const { parseHbpro } = require('./lifedx-hbpro');
+const { parseSinocare } = require('./sinocare-fhir');
 
 /** Guess the message protocol from reassembled text (no link framing). */
 function sniffProtocol(text) {
@@ -18,7 +20,7 @@ function sniffProtocol(text) {
 
 /**
  * @param {string} text        reassembled message text
- * @param {object} parserCfg   { type: 'auto'|'astm'|'hl7'|'text', astm?, hl7?, text? }
+ * @param {object} parserCfg   { type: 'auto'|'astm'|'hl7'|'text'|'lifedx-hbpro'|'sinocare-fhir', astm?, hl7?, text?, hbpro?, sinocare? }
  * @param {{link?:string}} [hint]  link that delivered it (astm-e1381 ⇒ astm, mllp ⇒ hl7)
  */
 function parseMessage(text, parserCfg = {}, hint = {}) {
@@ -26,12 +28,16 @@ function parseMessage(text, parserCfg = {}, hint = {}) {
   if (type === 'auto') {
     if (hint.link === 'astm-e1381') type = 'astm';
     else if (hint.link === 'mllp') type = 'hl7';
+    else if (hint.link === 'sinocare-sn') type = 'sinocare-fhir';
     else type = sniffProtocol(text);
   }
   const shared = parserCfg && parserCfg.qcPattern ? { qcPattern: parserCfg.qcPattern } : {};
   switch (type) {
     case 'astm': return parseAstm(text, { ...shared, ...(parserCfg.astm || {}) });
     case 'hl7': return parseHl7(text, { ...shared, ...(parserCfg.hl7 || {}) });
+    // Opt-in presets (explicit parser.type only — sniffing never returns these).
+    case 'lifedx-hbpro': return parseHbpro(text, { ...(parserCfg.hbpro || {}) });
+    case 'sinocare-fhir': return parseSinocare(text, { ...(parserCfg.sinocare || {}) });
     default: return parseText(text, { ...(parserCfg.text || {}) });
   }
 }

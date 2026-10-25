@@ -192,6 +192,22 @@ export function intersectBox(a: { x: number; y: number; w: number; h: number }, 
   return { x, y, w: Math.max(0, r - x), h: Math.max(0, btm - y) };
 }
 
+/** How far (pt) the footer chrome — the date strip ("Generated on", page
+ *  number), "Powered by Prefrontal" and the disclaimer / footer text — moves
+ *  UP so it sits above a footer background image instead of on it (owner
+ *  2026-10-24). The lift is the visible image's height from the page bottom
+ *  (its top edge becomes the strip's "page bottom"); 0 when no footer image
+ *  prints, so a report without one is unchanged. One value for every page:
+ *  the body floor (footerFloor) cannot vary per page. */
+export function footerImageLift(bgs: readonly Pick<ResolvedBackground, 'area' | 'hidden' | 'loaded' | 'box'>[] | null | undefined): number {
+  let top: number = PAGE.h;
+  for (const b of bgs ?? []) {
+    if (b.area !== 'footer' || b.hidden || !b.loaded || b.box.h <= 0) continue;
+    top = Math.min(top, b.box.y);
+  }
+  return top >= PAGE.h ? 0 : Math.max(0, Math.ceil(PAGE.h - top));
+}
+
 /** Does this background print on this page of this job? */
 export function backgroundPrints(bg: Pick<ResolvedBackground, 'hidden' | 'pages' | 'onLetterhead' | 'loaded'>, page: number, letterheadPaper: boolean): boolean {
   if (bg.hidden || !bg.loaded) return false;
@@ -311,6 +327,9 @@ export interface ReportLayoutResult {
   letterpad?: { top: number; bottom: number } | null;
   /** Background images, bottom-most first. Drawn before anything else on a page. */
   backgrounds: ResolvedBackground[];
+  /** pt the footer chrome sits above the page bottom to clear a footer image
+   *  (footerImageLift) — 0 / absent = the classic position. */
+  footerLift?: number;
 }
 
 export interface LayoutIssue {

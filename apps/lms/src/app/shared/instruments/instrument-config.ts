@@ -9,9 +9,10 @@ import { LAB_TIME_ZONE } from '../utils/lab-clock';
 import type {
   CodeMapDto, CodeMapUpsert, DetectResult, Hl7SampleIdField, InstrumentConfig, InstrumentDto, InstrumentMessage,
   InstrumentStatus, InstrumentUpsert, LinkConfig, LinkType, LoincCandidateDto, LoincSuggestionDto, ParserConfig,
-  ParserType, TransportConfig, TransportType,
+  ParserType, SinocareReplyMode, SinocareSampleIdField, TransportConfig, TransportType,
 } from './instrument.models';
 import { TwoWayForm, buildBidirectional, emptyTwoWayForm, twoWayFromConfig, validateTwoWay } from './instrument-two-way';
+import { SampleIdFormat, formatFor } from './sample-id-path';
 
 // ── Defaults (from the contract) ─────────────────────────────────────────
 // Text-template defaults — MUST equal the connector core's TEXT_DEFAULTS
@@ -27,6 +28,8 @@ export const DEFAULT_FRAME_TIMEOUT_MS = 30000;
 export const DEFAULT_IDLE_MS = 1500;
 export const DEFAULT_RECONNECT_MS = 5000;
 export const DEFAULT_POLL_MS = 2000;
+/** MUST equal DEFAULT_ACK_JSON in electron/instruments/core/link/sinocare-sn.js. */
+export const DEFAULT_SINOCARE_ACK_JSON = '{"code":0,"msg":"success","id":"{{id}}"}';
 
 export type FlowControl = 'none' | 'rtscts' | 'xonxoff';
 
@@ -46,8 +49,24 @@ export interface InstrumentForm {
   astm: { sampleIdField: number; sampleIdComponent: number };
   hl7: { sampleIdField: Hl7SampleIdField };
   text: { linePattern: string; sampleIdPattern: string; qcPattern: string };
+  /** LifeDx HBPro result positions, one "CODE START END [UNIT]" per line. */
+  hbpro: { fields: string };
+  /** Sinocare iCARE reply + sample-ID choice. */
+  sinocare: { replyMode: SinocareReplyMode; ackJson: string; sampleIdField: SinocareSampleIdField };
   /** Two-way with the analyzer (ConfigJson `bidirectional`, instrument-two-way.ts). */
   twoWay: TwoWayForm;
+  /** Custom sample-number location picked from a real message (absent = the
+   *  standard field above, exactly as before). Saved as parser.<format>.sampleIdPath. */
+  sampleIdPath?: { format: SampleIdFormat; path: string } | null;
+}
+
+/** The custom path to save, or null when unset / it no longer fits the protocol. */
+export function customSampleIdPath(f: InstrumentForm): { format: SampleIdFormat; path: string } | null {
+  const c = f.sampleIdPath;
+  const path = c?.path?.trim();
+  if (!c || !path) return null;
+  const ok = f.protocol === 'auto' ? ['hl7', 'astm', 'text'].includes(c.format) : formatFor(f.protocol) === c.format;
+  return ok ? { format: c.format, path } : null;
 }
 
 export function emptyInstrumentForm(): InstrumentForm {
@@ -62,6 +81,8 @@ export function emptyInstrumentForm(): InstrumentForm {
     astm: { sampleIdField: 3, sampleIdComponent: 1 },
     hl7: { sampleIdField: 'OBR-3' },
     text: { linePattern: DEFAULT_TEXT_LINE_PATTERN, sampleIdPattern: DEFAULT_TEXT_SAMPLE_ID_PATTERN, qcPattern: DEFAULT_TEXT_QC_PATTERN },
+    hbpro: { fields: '' },
+    sinocare: { replyMode: 'none', ackJson: DEFAULT_SINOCARE_ACK_JSON, sampleIdField: 'medicalRecordNo' },
     twoWay: emptyTwoWayForm(),
   };
 }
@@ -87,12 +108,25 @@ export const PROTOCOL_OPTIONS: { value: ParserType; label: string; hint: string 
   { value: 'astm', label: 'ASTM (E1381 + E1394)', hint: 'Most haematology / chemistry analyzers' },
   { value: 'hl7', label: 'HL7 v2 (MLLP)', hint: 'Newer analyzers and middleware' },
   { value: 'text', label: 'Text template', hint: 'Plain printouts — one result per line' },
+  { value: 'lifedx-hbpro', label: 'LifeDx HBPro (STX/ETX text)', hint: 'HbA1c HPLC — one fixed-width record, we answer ACK' },
+  { value: 'sinocare-fhir', label: 'Sinocare iCARE (SN frames)', hint: 'iCARE-2100 POCT — binary SN frames with JSON' },
+];
+/** Presets only the desktop connector runs (not a Prefrontal Bridge). */
+export const DESKTOP_ONLY_PROTOCOLS: readonly ParserType[] = ['lifedx-hbpro', 'sinocare-fhir'];
+export const SINOCARE_REPLY_MODES: { value: SinocareReplyMode; label: string }[] = [
+  { value: 'none', label: 'No reply' },
+  { value: 'echo', label: 'Reply to every frame (same type + ack JSON)' },
+];
+export const SINOCARE_SAMPLE_ID_FIELDS: { value: SinocareSampleIdField; label: string }[] = [
+  { value: 'medicalRecordNo', label: 'Medical record no. (typed on the device)' },
+  { value: 'position', label: 'Position (slot number)' },
 ];
 export const HL7_SAMPLE_ID_FIELDS: { value: Hl7SampleIdField; label: string }[] = [
   { value: 'OBR-3', label: 'OBR-3 · Filler order number' },
   { value: 'OBR-2', label: 'OBR-2 · Placer order number' },
   { value: 'SPM-2', label: 'SPM-2 · Specimen ID' },
   { value: 'PID-3', label: 'PID-3 · Patient ID' },
+  { value: 'PID-5', label: 'PID-5 · Patient name (tube number typed as the name)' },
 ];
 
 /** The link layer that goes with each parser choice. */
@@ -101,6 +135,8 @@ export function linkForProtocol(p: ParserType): LinkType {
     case 'astm': return 'astm-e1381';
     case 'hl7': return 'mllp';
     case 'text': return 'raw';
+    case 'lifedx-hbpro': return 'stx-etx';
+    case 'sinocare-fhir': return 'sinocare-sn';
     default: return 'auto';
   }
 }
@@ -135,26 +171,67 @@ export function buildLink(f: InstrumentForm, base?: Partial<LinkConfig> | null):
   const type = linkForProtocol(f.protocol);
   // Keep tuned timings from the saved config / an applied detect proposal.
   const keep = base && base.type === type ? base : {};
-  return {
+  const out: LinkConfig = {
     ...keep,
     type,
     ackTimeoutMs: num(keep.ackTimeoutMs, DEFAULT_ACK_TIMEOUT_MS),
     frameTimeoutMs: num(keep.frameTimeoutMs, DEFAULT_FRAME_TIMEOUT_MS),
     idleMs: num(keep.idleMs, DEFAULT_IDLE_MS),
   };
+  if (type === 'sinocare-sn') {
+    const sc = f.sinocare ?? emptyInstrumentForm().sinocare;
+    out['replyMode'] = sc.replyMode === 'echo' ? 'echo' : 'none';
+    out['ackJson'] = sc.ackJson?.trim() ? sc.ackJson.trim() : DEFAULT_SINOCARE_ACK_JSON;
+  }
+  return out;
+}
+
+/** "HbA1c 63 69 %" lines → HBPro fields (0-based, end exclusive). Bad lines are dropped. */
+export function parseHbproFields(text: string | null | undefined): { code: string; start: number; end: number; unit: string | null }[] {
+  const out: { code: string; start: number; end: number; unit: string | null }[] = [];
+  for (const raw of String(text ?? '').split(/\r?\n/)) {
+    const line = raw.replace(/#.*$/, '').trim();
+    if (!line) continue;
+    const m = /^(\S+)\s+(\d+)\s+(\d+)(?:\s+(\S+))?\s*$/.exec(line);
+    if (m && +m[3] > +m[2]) out.push({ code: m[1], start: +m[2], end: +m[3], unit: m[4] ?? null });
+  }
+  return out;
+}
+
+/** Lines of the HBPro positions box that don't read as "CODE START END [UNIT]". */
+export function badHbproLines(text: string | null | undefined): string[] {
+  return String(text ?? '').split(/\r?\n/).map((l) => l.replace(/#.*$/, '').trim())
+    .filter((l) => l && !(/^(\S+)\s+(\d+)\s+(\d+)(?:\s+(\S+))?\s*$/.test(l) && +l.split(/\s+/)[2] > +l.split(/\s+/)[1]));
+}
+
+function hbproFieldsText(fields: unknown): string {
+  if (typeof fields === 'string') return fields;
+  if (!Array.isArray(fields)) return '';
+  return fields
+    .filter((x): x is { code: string; start: number; end: number; unit?: string | null } => !!x && typeof x === 'object' && 'code' in x)
+    .map((x) => [x.code, x.start, x.end, x.unit].filter((v) => v !== null && v !== undefined && v !== '').join(' '))
+    .join('\n');
 }
 
 export function buildParser(f: InstrumentForm): ParserConfig {
+  // Custom sample-number path: added ONLY to its own block, and only when set
+  // — without it every block is byte-identical to before.
+  const c = customSampleIdPath(f);
+  const sp = (fmt: SampleIdFormat) => (c && c.format === fmt ? { sampleIdPath: c.path } : {});
   return {
     type: f.protocol,
-    astm: { sampleIdField: num(f.astm.sampleIdField, 3), sampleIdComponent: num(f.astm.sampleIdComponent, 1) },
-    hl7: { sampleIdField: f.hl7.sampleIdField },
+    astm: { sampleIdField: num(f.astm.sampleIdField, 3), sampleIdComponent: num(f.astm.sampleIdComponent, 1), ...sp('astm') },
+    hl7: { sampleIdField: f.hl7.sampleIdField, ...sp('hl7') },
     text: {
       linePattern: f.text.linePattern || DEFAULT_TEXT_LINE_PATTERN,
       sampleIdPattern: f.text.sampleIdPattern || DEFAULT_TEXT_SAMPLE_ID_PATTERN,
       qcPattern: f.text.qcPattern || DEFAULT_TEXT_QC_PATTERN,
       fixedColumns: null,
+      ...sp('text'),
     },
+    // Preset blocks only for their own protocol — an old instrument saves byte-identically.
+    ...(f.protocol === 'lifedx-hbpro' ? { hbpro: { fields: parseHbproFields(f.hbpro?.fields), ...sp('hbpro') } } : {}),
+    ...(f.protocol === 'sinocare-fhir' ? { sinocare: { sampleIdField: f.sinocare?.sampleIdField === 'position' ? 'position' as const : 'medicalRecordNo' as const, ...sp('sinocare') } } : {}),
   };
 }
 
@@ -207,15 +284,32 @@ export function formFromInstrument(dto: Pick<InstrumentDto, 'name' | 'make' | 'm
     f.folder = { path: d.path ?? '', pattern: d.pattern ?? '*.txt', moveTo: d.moveTo ?? '' };
   }
   applyParser(f, dto.config?.parser);
+  const link = dto.config?.link as Partial<LinkConfig> | undefined;
+  if (link?.type === 'sinocare-sn') {
+    f.sinocare = {
+      ...f.sinocare,
+      replyMode: link['replyMode'] === 'echo' ? 'echo' : 'none',
+      ackJson: typeof link['ackJson'] === 'string' && link['ackJson'].trim() ? link['ackJson'] : DEFAULT_SINOCARE_ACK_JSON,
+    };
+  }
   f.twoWay = twoWayFromConfig(dto.config?.['bidirectional']);
   return f;
 }
 
 function applyParser(f: InstrumentForm, p: Partial<ParserConfig> | null | undefined): void {
   if (!p) return;
-  if (p.type && ['auto', 'astm', 'hl7', 'text'].includes(p.type)) f.protocol = p.type;
+  if (p.type && ['auto', 'astm', 'hl7', 'text', 'lifedx-hbpro', 'sinocare-fhir'].includes(p.type)) f.protocol = p.type;
+  if (p.hbpro) f.hbpro = { fields: hbproFieldsText(p.hbpro.fields) };
+  if (p.sinocare) f.sinocare = { ...(f.sinocare ?? emptyInstrumentForm().sinocare), sampleIdField: p.sinocare.sampleIdField === 'position' ? 'position' : 'medicalRecordNo' };
   if (p.astm) f.astm = { sampleIdField: num(p.astm.sampleIdField, 3), sampleIdComponent: num(p.astm.sampleIdComponent, 1) };
   if (p.hl7?.sampleIdField) f.hl7 = { sampleIdField: p.hl7.sampleIdField as Hl7SampleIdField };
+  // Custom sample-number path: the protocol's own block (auto: HL7, ASTM, text).
+  const fmts: SampleIdFormat[] = f.protocol === 'auto' ? ['hl7', 'astm', 'text'] : [formatFor(f.protocol)];
+  for (const fmt of fmts) {
+    const blk = p[fmt] as { sampleIdPath?: unknown } | undefined;
+    const path = typeof blk?.sampleIdPath === 'string' ? blk.sampleIdPath.trim() : '';
+    if (path) { f.sampleIdPath = { format: fmt, path }; break; }
+  }
   if (p.text) {
     f.text = {
       linePattern: p.text.linePattern || DEFAULT_TEXT_LINE_PATTERN,
@@ -277,7 +371,15 @@ export function validateInstrumentForm(f: InstrumentForm): FormIssue[] {
       if (!validRegex(f.text[k])) out.push({ step: 'protocol', field: `text.${k}`, message: `${label} is not a valid regular expression` });
     }
   }
-  if (f.protocol === 'astm' && !(f.astm.sampleIdField >= 1)) {
+  if (f.protocol === 'lifedx-hbpro') {
+    const bad = badHbproLines(f.hbpro?.fields);
+    if (bad.length) out.push({ step: 'protocol', field: 'hbpro.fields', message: `Not read as "CODE START END [UNIT]": ${bad.join(' · ')}` });
+  }
+  if (f.protocol === 'sinocare-fhir' && f.sinocare?.replyMode === 'echo') {
+    try { JSON.parse((f.sinocare.ackJson || DEFAULT_SINOCARE_ACK_JSON).split('{{id}}').join('')); }
+    catch { out.push({ step: 'protocol', field: 'sinocare.ackJson', message: 'Reply JSON is not valid JSON' }); }
+  }
+    if (f.protocol === 'astm' && !(f.astm.sampleIdField >= 1)) {
     out.push({ step: 'protocol', field: 'astm.sampleIdField', message: 'Field must be 1 or more' });
   }
   for (const i of validateTwoWay(f.twoWay ?? emptyTwoWayForm())) {
@@ -491,16 +593,20 @@ export function codesFromMessages(msgs: readonly InstrumentMessage[]): string[] 
 
 export interface CodeMapIssue { index: number; message: string }
 
-/** Rows the server would reject. Fully blank rows are ignored (dropped on save). */
+/** Rows the server would reject. Fully blank rows are ignored (dropped on save).
+ *  One analyzer code MAY sit on several rows with different tests (Erba "GLU"
+ *  → Fasting / Postprandial / Random blood sugar — the one ordered on the tube
+ *  is used, see {@link sharedCodeHint}); only the same code + test twice is an error. */
 export function validateCodeMaps(rows: readonly CodeMapRow[]): CodeMapIssue[] {
   const out: CodeMapIssue[] = [];
   const seen = new Map<string, number>();
   rows.forEach((r, i) => {
     const code = codeKey(r.analyzerCode);
     if (!code && !r.testCatalogKey) return;
+    const pair = `${code}\u001f${(r.testCatalogKey ?? '').trim().toUpperCase()}`;
     if (!code) out.push({ index: i, message: 'Analyzer code is missing' });
-    else if (seen.has(code)) out.push({ index: i, message: `${r.analyzerCode.trim()} is mapped twice` });
-    else seen.set(code, i);
+    else if (r.testCatalogKey && seen.has(pair)) out.push({ index: i, message: `${r.analyzerCode.trim()} is mapped to this test twice` });
+    else if (r.testCatalogKey) seen.set(pair, i);
     if (!r.testCatalogKey) out.push({ index: i, message: `Pick the test for ${r.analyzerCode.trim() || 'this row'}` });
     if (!Number.isFinite(Number(r.factor)) || Number(r.factor) === 0) out.push({ index: i, message: 'Factor must be a non-zero number' });
     if (r.decimals != null && !(Number.isInteger(Number(r.decimals)) && Number(r.decimals) >= 0 && Number(r.decimals) <= 6)) {
@@ -508,6 +614,15 @@ export function validateCodeMaps(rows: readonly CodeMapRow[]): CodeMapIssue[] {
     }
   });
   return out;
+}
+
+/** The plain hint under a row whose analyzer code is also on another row
+ *  (shown once, on the code's first row); null otherwise. */
+export function sharedCodeHint(rows: readonly CodeMapRow[], index: number): string | null {
+  const code = codeKey(rows[index]?.analyzerCode ?? '');
+  if (!code) return null;
+  const same = rows.map((r, i) => (codeKey(r.analyzerCode) === code ? i : -1)).filter((i) => i >= 0);
+  return same.length > 1 && same[0] === index ? 'Same code on several rows: the one ordered on the tube is used' : null;
 }
 
 /** PUT body (replace-all): blank rows dropped, text trimmed. */

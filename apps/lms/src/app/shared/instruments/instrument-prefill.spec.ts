@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { MappedValue, RunDto } from './instrument.models';
 import {
-  AppliedMap, PrefillLine, analyzerBadge, defaultRun, planPrefill, prefillKey, runOptions, targetParam, valuesForRun,
+  AppliedMap, LATEST_VALUES, PrefillLine, analyzerBadge, defaultRun, planPrefill, prefillKey, runOptions, targetParam, valuesForRun,
+  valuesForRuns,
 } from './instrument-prefill';
 
 function mv(orderTestId: string | null, value: string, extra: Partial<MappedValue> = {}): MappedValue {
@@ -94,12 +95,87 @@ describe('instrument prefill — run switching', () => {
     const switched = planPrefill({ run: r2, lines: LINES, current: screen({ wbc: { result: '7800' }, hgb: { result: '14' } }), previous: first.applied });
     expect(switched.writes.find((w) => w.orderTestId === 'hgb')).toBeUndefined();
   });
-  it('defaultRun = newest (first); runOptions label the newest "Run: latest"', () => {
+  it('defaultRun = newest (first); runOptions: "Latest values" first, then each run', () => {
     expect(defaultRun([r1, r2])?.messageId).toBe('m1');
     expect(defaultRun([])).toBeNull();
     const opts = runOptions([r1, r2], fmt);
-    expect(opts[0]).toEqual({ value: 'm1', label: 'Run: latest · Sysmex XN · 10:42 am' });
-    expect(opts[1].label).toBe('Run: Sysmex XN · 10:42 am');
+    expect(opts[0]).toEqual({ value: LATEST_VALUES, label: 'Latest values (all runs)' });
+    expect(opts[1]).toEqual({ value: 'm1', label: 'Run: Sysmex XN · 10:42 am' });
+    expect(opts[2]).toEqual({ value: 'm2', label: 'Run: Sysmex XN · 10:42 am' });
+    expect(runOptions([], fmt)).toEqual([]);
+  });
+});
+
+describe('instrument prefill — merged "Latest values" (one message per test)', () => {
+  // Snibe Maglumi X3, tube 261000012: TT3 (6:17), TT4 (6:17), TSH (6:32) — three messages.
+  const T_LINES: PrefillLine[] = [
+    { orderTestId: 'tt3', params: [{ name: 'result' }] },
+    { orderTestId: 'tt4', params: [{ name: 'result' }] },
+    { orderTestId: 'tsh', params: [{ name: 'result' }] },
+  ];
+  const tsh = run('m3', [mv('tsh', '2.40')], { instrumentName: 'Maglumi X3', runAt: '2026-10-24T01:02:00Z' });
+  const tt4 = run('m2', [mv('tt4', '8.10')], { instrumentName: 'Maglumi X3', runAt: '2026-10-24T00:47:00Z' });
+  const tt3 = run('m1', [mv('tt3', '1.21')], { instrumentName: 'Maglumi X3', runAt: '2026-10-24T00:47:00Z' });
+
+  it('fills every test from its own run (not just the newest message)', () => {
+    const plan = planPrefill({ runs: [tsh, tt4, tt3], lines: T_LINES, current: screen({}) });
+    expect(plan.writes).toEqual(expect.arrayContaining([
+      { orderTestId: 'tt3', paramName: 'result', value: '1.21' },
+      { orderTestId: 'tt4', paramName: 'result', value: '8.10' },
+      { orderTestId: 'tsh', paramName: 'result', value: '2.40' },
+    ]));
+    expect(plan.writes).toHaveLength(3);
+    // each badge names its own run
+    expect(plan.applied[prefillKey('tt3', 'result')].messageId).toBe('m1');
+    expect(plan.applied[prefillKey('tsh', 'result')].messageId).toBe('m3');
+  });
+
+  it('a re-run of one test: the newer value wins, the others stay', () => {
+    const tsh2 = run('m4', [mv('tsh', '2.95')], { instrumentName: 'Maglumi X3', runAt: '2026-10-24T01:30:00Z' });
+    const m = valuesForRuns([tsh2, tsh, tt4, tt3], T_LINES);
+    expect(m[prefillKey('tsh', 'result')].value).toBe('2.95');
+    expect(m[prefillKey('tt3', 'result')].value).toBe('1.21');
+    expect(m[prefillKey('tt4', 'result')].value).toBe('8.10');
+  });
+
+  it('newest by run time even if the list is not ordered; a late older value never wins', () => {
+    const late = run('m0', [mv('tt3', '0.90')], { runAt: '2026-10-24T00:10:00Z', state: 'superseded' });
+    const m = valuesForRuns([late, tt3, tsh], T_LINES);
+    expect(m[prefillKey('tt3', 'result')].value).toBe('1.21');
+  });
+
+  it('equal times keep the server order (newest first)', () => {
+    const a = run('a', [mv('tt3', '1.30')], { runAt: '2026-10-24T00:47:00Z' });
+    const b = run('b', [mv('tt3', '1.21')], { runAt: '2026-10-24T00:47:00Z' });
+    expect(valuesForRuns([a, b], T_LINES)[prefillKey('tt3', 'result')].messageId).toBe('a');
+  });
+
+  it('whole-panel analyzers (CBC): identical to the newest run when it carries every field', () => {
+    const newer = run('n', [mv('wbc', '8100'), mv('hgb', '13.4')], { runAt: '2026-10-24T05:00:00Z' });
+    const older = run('o', [mv('wbc', '7800'), mv('hgb', '13.2')], { runAt: '2026-10-24T04:00:00Z', state: 'superseded' });
+    expect(valuesForRuns([newer, older], LINES)).toEqual(valuesForRun(newer, LINES));
+  });
+
+  it('switching from "Latest values" to one run shows only that run (old fill cleared when untouched)', () => {
+    const merged = planPrefill({ runs: [tsh, tt4, tt3], lines: T_LINES, current: screen({}) });
+    const onScreen = { tt3: { result: '1.21' }, tt4: { result: '8.10' }, tsh: { result: '2.40' } };
+    const one = planPrefill({ run: tsh, lines: T_LINES, current: screen(onScreen), previous: merged.applied });
+    expect(one.writes).toEqual(expect.arrayContaining([
+      { orderTestId: 'tt3', paramName: 'result', value: '' },
+      { orderTestId: 'tt4', paramName: 'result', value: '' },
+    ]));
+    expect(Object.keys(one.applied)).toEqual([prefillKey('tsh', 'result')]);
+  });
+
+  it('never overwrites a typed value', () => {
+    const plan = planPrefill({ runs: [tsh, tt4, tt3], lines: T_LINES, current: screen({ tt4: { result: '7.9' } }) });
+    expect(plan.writes.find((w) => w.orderTestId === 'tt4')).toBeUndefined();
+    expect(plan.kept).toEqual([prefillKey('tt4', 'result')]);
+  });
+
+  it('no runs → nothing', () => {
+    expect(planPrefill({ runs: [], lines: T_LINES, current: screen({}) })).toEqual({ writes: [], applied: {}, kept: [] });
+    expect(valuesForRuns(null, T_LINES)).toEqual({});
   });
 });
 

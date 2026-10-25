@@ -13,9 +13,9 @@
  */
 const { EventEmitter } = require('events');
 const { createTransport } = require('./transports');
-const { createLink } = require('./link');
+const { createLink, describeFrame } = require('./link');
 const { parseMessage, buildAck } = require('./parsers');
-const { detect } = require('./detect');
+const { detect, optInFrames } = require('./detect');
 const { visible } = require('./bytes');
 
 const MAX_CAPTURE = 512 * 1024;
@@ -60,6 +60,8 @@ class ListenSession extends EventEmitter {
       reply: (text) => buildAck(text),
     });
     l.on('message', (text, meta) => this._onMessage(text, meta));
+    // stx-etx / sinocare-sn: a readable line per frame under the raw bytes.
+    l.on('frame', (f) => { const n = f && f.kind ? describeFrame(f) : null; if (n) this.emit('raw', { dir: 'note', text: `\n— ${n.replace(/^<< /, '')} —\n` }); });
     return l;
   }
 
@@ -99,7 +101,8 @@ function preview(raw, config = {}) {
   const { messages, text, ...detectOnly } = d;
   let msgs = messages;
   if (config && config.parser && config.parser.type && config.parser.type !== 'auto') {
-    msgs = parseMessage(text, config.parser, { link: d.link });
+    if (d.link === 'stx-etx' || d.link === 'sinocare-sn') msgs = optInFrames(raw, d.link).flatMap((t) => parseMessage(t, config.parser, { link: d.link }));
+    else msgs = parseMessage(text, config.parser, { link: d.link });
   }
   return { raw: visible(raw), detect: detectOnly, messages: msgs };
 }

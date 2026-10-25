@@ -78,7 +78,7 @@ export function foldLegacyField(p: TestParameter | undefined, f: FormField): Tes
   if (f.type && !fieldIsStaleForChoice(f.type, p)) out['type'] = storedTypeFor(f.type);
   // Lab data the field has but the parameter lacks (never overrides).
   for (const k of ['unit', 'referenceRanges', 'criticalLow', 'criticalHigh', 'validLow', 'validHigh',
-                   'normalValue', 'optionRows', 'optionGroupName', 'attachments', 'printOnReport'] as const) {
+                   'allowRange', 'rangeFlag', 'normalValue', 'optionRows', 'optionGroupName', 'attachments', 'printOnReport'] as const) {
     const fv = (f as unknown as Record<string, unknown>)[k];
     if ((out[k] === undefined || out[k] === null) && fv !== undefined && fv !== null) out[k] = fv;
   }
@@ -147,6 +147,8 @@ export function paramToField(p: TestParameter, order: number): FormField {
     criticalHigh: p.criticalHigh ?? null,
     validLow: p.validLow ?? null,
     validHigh: p.validHigh ?? null,
+    allowRange: p.allowRange === true || undefined,
+    rangeFlag: p.allowRange === true ? (p.rangeFlag || undefined) : undefined,
     normalValue: p.normalValue ?? null,
     optionRows: p.optionRows ?? null,
     optionGroupName: p.optionGroupName ?? null,
@@ -183,6 +185,12 @@ export function fieldToParam(f: FormField): TestParameter {
   put('criticalHigh', f.criticalHigh);
   put('validLow', f.validLow);
   put('validHigh', f.validHigh);
+  // Range entry ("0-4", "<5") — numeric values only, written ONLY when the
+  // switch is on, so a value without it saves byte-for-byte as before.
+  if (f.allowRange === true && resolveParamEntryKind({ type: storedTypeFor(f.type) }) === 'number') {
+    p['allowRange'] = true;
+    p['rangeFlag'] = f.rangeFlag || 'ends';
+  }
   copyEditorProps(p, f as unknown as Record<string, unknown>);
   return p as unknown as TestParameter;
 }
@@ -197,7 +205,7 @@ export function loadEditorFields(json: string | null | undefined): FormField[] {
 const MANAGED_KEYS = new Set<string>([
   'id', 'name', 'title', 'type', 'unit', 'options', 'optionRows', 'optionGroupName', 'familyCode',
   'attachments', 'printOnReport', 'referenceRanges', 'normalValue', 'criticalLow',
-  'criticalHigh', 'validLow', 'validHigh', ...EDITOR_PROPS,
+  'criticalHigh', 'validLow', 'validHigh', 'allowRange', 'rangeFlag', ...EDITOR_PROPS,
 ]);
 
 /** True when the blob still carries the legacy `fields` twin. */
