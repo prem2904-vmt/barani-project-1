@@ -45,6 +45,60 @@
   .pf-apc-nav__btn:hover, .pf-apc-nav__today:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
   .pf-apc-nav__btn:focus-visible, .pf-apc-nav__today:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
   .pf-apc-jump__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+  .pf-apc-jump-bd {
+    position: fixed;
+    inset: 0;
+    z-index: 99998;
+    background: transparent;
+  }
+  .pf-apc-jump-pop {
+    position: fixed;
+    z-index: 99999;
+    width: 285px;
+    box-sizing: border-box;
+    padding: 12px;
+    border-radius: var(--pf-radius, 14px);
+    background: var(--pf-card-bg, #ffffff);
+    border: 1px solid var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+    animation: pf-pop 160ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+  .pf-apc-jump-pop--above {
+    transform: translateY(-100%);
+    animation-name: pf-pop-above;
+  }
+  @media (max-width: 640px) {
+    .pf-apc-jump-bd {
+      background: rgba(15, 23, 42, 0.25);
+    }
+    .pf-apc-jump-pop {
+      left: 50% !important;
+      top: auto !important;
+      bottom: calc(var(--pf-nav-h, 0px) + 12px) !important;
+      transform: translateX(-50%) !important;
+      width: calc(100vw - 24px) !important;
+      max-width: 325px !important;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4) !important;
+      animation: pf-pop-mobile-sheet 0.2s cubic-bezier(0.32, 0.72, 0, 1) both !important;
+    }
+    @keyframes pf-pop-mobile-sheet {
+      from { opacity: 0; transform: translate(-50%, 16px) scale(0.96); }
+      to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    }
+  }
+  :root.dark .pf-apc-jump-pop {
+    background: var(--pf-card-bg, #0f172a);
+    border-color: rgba(148, 163, 184, 0.25);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  }
+  @keyframes pf-pop {
+    from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes pf-pop-above {
+    from { opacity: 0; transform: translateY(calc(-100% + 4px)) scale(0.97); }
+    to { opacity: 1; transform: translateY(-100%) scale(1); }
+  }
 
   /* ── Body: CALENDAR (main) + DAY (the right companion, 400px) ── */
   .pf-apc-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 12px; }

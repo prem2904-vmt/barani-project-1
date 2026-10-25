@@ -21,7 +21,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { ZoomSourceDirective, ZoomTargetDirective } from '../../../core/navigation/zoom.directive';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
+import { PfDateComponent, PfCalendarComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { formatPatientMeta, patientDisplayName } from '../../../shared/models/patient.model';
 import { plural } from '../../../shared/utils/plural';
@@ -59,7 +59,7 @@ const STATUS_CLASS: Record<string, string> = {
   selector: 'pf-appointments-calendar',
   standalone: true,
   imports: [BusyComponent, BusyDirective,
-    CommonModule, FormsModule, HeroBandComponent, PfDateComponent, SelectComponent,
+    CommonModule, FormsModule, HeroBandComponent, PfDateComponent, PfCalendarComponent, SelectComponent,
     ZoomSourceDirective, ZoomTargetDirective
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -121,12 +121,10 @@ const STATUS_CLASS: Record<string, string> = {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
             </button>
-            <button type="button" class="pf-apc-nav__btn pf-apc-jump" (click)="openJump(jump)" aria-label="Jump to a date" title="Jump to a date">
+            <button type="button" class="pf-apc-nav__btn pf-apc-jump" (click)="toggleJumpPicker($any($event.currentTarget), $event)" aria-label="Jump to a date" title="Jump to a date">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
             </button>
-            <input #jump type="date" class="pf-apc-jump__native" tabindex="-1" aria-hidden="true"
-                   [value]="cursorIso()" (change)="jumpToDate($any($event.target).value)" />
           </div>
         </div>
       </pf-hero-band>
@@ -472,7 +470,7 @@ const STATUS_CLASS: Record<string, string> = {
           <button type="button" class="pf-cal-nav__btn" (click)="navigate(-1)" aria-label="Previous">‹</button>
           <button type="button" class="pf-cal-nav__btn pf-cal-nav__today" (click)="goToday()">Today</button>
           <button type="button" class="pf-cal-nav__btn" (click)="navigate(1)" aria-label="Next">›</button>
-          <button type="button" class="pf-cal-nav__jump" title="Jump to date" (click)="openJump(jumpClassic)">
+          <button type="button" class="pf-cal-nav__jump" title="Jump to date" (click)="toggleJumpPicker($any($event.currentTarget), $event)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2"/>
@@ -480,9 +478,6 @@ const STATUS_CLASS: Record<string, string> = {
             </svg>
             <span>Jump</span>
           </button>
-          <input #jumpClassic type="date" class="pf-cal-nav__jump-input" tabindex="-1" aria-hidden="true"
-                 [value]="cursorIso()"
-                 (change)="jumpToDate($any($event.target).value)" />
           <span class="pf-cal-nav__title">{{ rangeLabel() }}</span>
         </div>
       </div>
@@ -690,6 +685,21 @@ const STATUS_CLASS: Record<string, string> = {
         </div>
       </div>
     }
+      @if (jumpPickerOpen()) {
+        <div class="pf-apc-jump-bd" (click)="closeJumpPicker()"></div>
+        <div class="pf-apc-jump-pop"
+             [class.pf-apc-jump-pop--above]="jumpCoords().above"
+             [style.top.px]="jumpCoords().top"
+             [style.left.px]="jumpCoords().left"
+             role="dialog"
+             aria-label="Jump to date calendar"
+             (click)="$event.stopPropagation()">
+          <pf-calendar [value]="cursorIso()"
+                       [compact]="true"
+                       (valueChange)="onJumpDatePicked($event)">
+          </pf-calendar>
+        </div>
+      }
     }
   `,
   styleUrl: './appointments-calendar.component.scss'
@@ -713,6 +723,86 @@ export class AppointmentsCalendarComponent {
   readonly phone = signal(mq('(max-width: 640px)', inject(DestroyRef), m => this.phone?.set(m)));
   /** The pill's search: patient name, phone or MRN — filters what is shown. */
   readonly query = signal('');
+  // ── Jump datepicker popover ─────────────────────────────────
+  readonly jumpPickerOpen = signal(false);
+  readonly jumpCoords = signal<{ top: number; left: number; above: boolean }>({ top: 0, left: 0, above: false });
+  private jumpTargetEl: HTMLElement | null = null;
+
+  private readonly onJumpScrollCapture = () => {
+    if (this.jumpPickerOpen()) {
+      if (this.jumpTargetEl) {
+        this.updateJumpCoords(this.jumpTargetEl);
+        const rect = this.jumpTargetEl.getBoundingClientRect();
+        if (rect.bottom < 50 || rect.top > window.innerHeight - 20) {
+          this.closeJumpPicker();
+        }
+      } else {
+        this.closeJumpPicker();
+      }
+    }
+  };
+
+  toggleJumpPicker(target: HTMLElement, event: MouseEvent): void {
+    event.stopPropagation();
+    if (this.jumpPickerOpen()) {
+      this.closeJumpPicker();
+    } else {
+      this.jumpTargetEl = target;
+      this.updateJumpCoords(target);
+      this.jumpPickerOpen.set(true);
+      window.addEventListener('scroll', this.onJumpScrollCapture, { capture: true, passive: true });
+    }
+  }
+
+  closeJumpPicker(): void {
+    this.jumpPickerOpen.set(false);
+    this.jumpTargetEl = null;
+    window.removeEventListener('scroll', this.onJumpScrollCapture, { capture: true } as EventListenerOptions);
+  }
+
+  updateJumpCoords(target: HTMLElement): void {
+    const rect = target.getBoundingClientRect();
+    const popHeight = 310;
+    const popWidth = 285;
+    const bottomLimit = window.innerHeight - 12;
+
+    let left = rect.right - popWidth;
+    if (left + popWidth > window.innerWidth - 12) {
+      left = window.innerWidth - popWidth - 12;
+    }
+    if (left < 12) {
+      left = 12;
+    }
+
+    let top: number;
+    let above = false;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    if (spaceBelow >= popHeight + 6) {
+      top = rect.bottom + 6;
+      above = false;
+    } else if (spaceAbove >= popHeight + 6) {
+      top = rect.top - 6;
+      above = true;
+    } else if (spaceBelow >= spaceAbove) {
+      top = Math.max(12, Math.min(rect.bottom + 6, bottomLimit - popHeight));
+      above = false;
+    } else {
+      top = Math.max(popHeight + 12, rect.top - 6);
+      above = true;
+    }
+
+    this.jumpCoords.set({ top, left, above });
+  }
+
+  onJumpDatePicked(iso: string): void {
+    this.closeJumpPicker();
+    if (iso) {
+      this.jumpToDate(iso);
+    }
+  }
+
   /** The DAY companion collapsed to a strip on the right edge (per user). */
   readonly sideCollapsed = signal(readFlag(this.collapseKey()));
   /** The detail's step came back from Reschedule (slide from the left). */
@@ -972,7 +1062,7 @@ export class AppointmentsCalendarComponent {
     // Tick the "now" line every 60 seconds. The interval is cleared
     // when the component is destroyed via DestroyRef.
     const tick = setInterval(() => this._now.set(new Date()), 60_000);
-    this.destroyRef.onDestroy(() => clearInterval(tick));
+    this.destroyRef.onDestroy(() => { clearInterval(tick); this.closeJumpPicker(); });
   }
 
   // ── View nav ────────────────────────────────────────────────
@@ -1083,6 +1173,11 @@ export class AppointmentsCalendarComponent {
   }
   protected closeReschedule() { this.stepBack.set(true); this.rescheduleOpen.set(false); }
   protected onEscape(e?: Event) {
+    if (this.jumpPickerOpen()) {
+      e?.preventDefault();
+      this.closeJumpPicker();
+      return;
+    }
     if (!this.theme.isNewDesign() || e?.defaultPrevented) return;
     // An open dropdown (pf-select panel) owns its own Esc.
     const t = e?.target as HTMLElement | null;
@@ -1105,10 +1200,6 @@ export class AppointmentsCalendarComponent {
     let uid = '';
     try { uid = this.auth?.user()?.id ?? ''; } catch { /* no session */ }
     return 'pf:appt:side-collapsed:' + (uid || 'anon');
-  }
-  /** The pill's jump button opens the (hidden) native picker. */
-  protected openJump(el: HTMLInputElement) {
-    try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { el.click(); }
   }
   /** Day / Week / Month radio group: ←/→ move, Home / End jump. */
   protected onViewKey(e: KeyboardEvent) {
