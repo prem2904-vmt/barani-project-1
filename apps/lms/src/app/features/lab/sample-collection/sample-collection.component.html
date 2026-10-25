@@ -307,9 +307,18 @@
                 <span class="pf-card__label">Vials</span>
                 <span class="pf-card__note">Tap a vial when drawn. Mark a brought-in specimen External to skip its draw.</span>
               </header>
+              @if (!pourHintSeen() && hasDraggable(g)) {
+                <!-- Shown until the first drag: tubes can be dragged onto
+                     each other to pour (the "Pour into…" button stays). -->
+                <p class="pf-sc-draghint" data-testid="pour-drag-hint">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>
+                  Hold and drag a tube onto another to pour it in
+                </p>
+              }
               <div class="pf-card__body">
                 <div class="pf-sc-grid" [attr.data-size]="tileSize(g)" [class]="'pf-sc-grid pf-sc-grid--' + tileSize(g)">
                   @for (s of visibleSamples(g); track s.id) {
+                    @let ds = dropState(s);
                     <div class="pf-tube-wrap">
               <!-- Tap collects the vial; press-and-hold (~2s) peeks its test
                    list (a floating popover). A div, not <button>, so the hold /
@@ -322,6 +331,13 @@
                    [class.pf-tube--missed]="tubeState(s).kind === 'missed' || notCollected(s)"
                    [class.pf-tube--inert]="dispatchSelect() !== null && s.status !== 'collected'"
                    [class.pf-tube--selected]="!!dispatchSelect()?.has(s.id)"
+                   [attr.data-pour-id]="s.id"
+                   [class.pf-tube--draggable]="pourDraggable(s, g)"
+                   [class.pf-tube--pour-lift]="dragSrc() === s.id && !dragMoving()"
+                   [class.pf-tube--pour-src]="dragSrc() === s.id && dragMoving()"
+                   [class.pf-tube--pour-ok]="ds?.kind === 'ok' || ds?.kind === 'checking'"
+                   [class.pf-tube--pour-no]="ds?.kind === 'no'"
+                   [class.pf-tube--pour-over]="!!ds && dragOver() === s.id"
                    (pointerdown)="onVialDown(s, $event)" (pointerup)="onVialUp()"
                    (pointerleave)="onVialUp()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
                    (click)="onVialClick(s, $event)" (keydown.enter)="onVialClick(s, $event)">
@@ -352,6 +368,23 @@
                      only this small neutral mark at the top differs. -->
                 @if (s.outsourcedVendorId) {
                   <span class="pf-chip pf-chip--static pf-tube__out">Outsourced</span>
+                }
+                <!-- Drag-to-pour: a grip on tubes that can be poured; while
+                     another tube is dragged, the drop verdict in plain words. -->
+                @if (!dragSrc() && pourDraggable(s, g)) {
+                  <span class="pf-tube__grip" aria-hidden="true">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>
+                  </span>
+                }
+                @if (ds; as d) {
+                  @if (d.kind === 'no') {
+                    <span class="pf-tube__drop pf-tube__drop--no" data-testid="pour-drop-reason">{{ d.reason }}</span>
+                  } @else if (dragOver() === s.id) {
+                    <span class="pf-tube__drop pf-tube__drop--ok" data-testid="pour-drop-ok">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+                      {{ d.kind === 'checking' ? 'Drop to check' : 'Drop to pour in' }}
+                    </span>
+                  }
                 }
                 <span class="pf-sc-illo">
                 @if (drawn(s)) {
@@ -1034,6 +1067,30 @@
             </ul>
           </div>
         }
+
+        <!-- Drag-to-pour ghost: the dragged tube follows the finger / cursor
+             (pointer-events: none, so hit-testing sees the card beneath). -->
+        @if (dragMoving() && dragPos(); as pos) {
+          @let gsrc = dragSource();
+          <div class="pf-pour-ghost" aria-hidden="true" data-testid="pour-ghost"
+               [class.pf-pour-ghost--back]="dragExit() === 'back'"
+               [class.pf-pour-ghost--in]="dragExit() === 'in'"
+               [class.pf-pour-ghost--no]="dragCaption().startsWith('Can’t')"
+               [style.left.px]="ghostX(pos.x)" [style.top.px]="pos.y">
+            <span class="pf-pour-ghost__tube" [style.--tube-color]="gsrc ? container(gsrc).color : null">
+              <svg viewBox="0 0 24 64" width="18" height="48" aria-hidden="true">
+                <rect x="4" y="2" width="16" height="10" rx="2.5" fill="var(--tube-color, #94a3b8)"/>
+                <path d="M6 12h12v40a6 6 0 0 1-12 0Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M7 34h10v18a5 5 0 0 1-10 0Z" fill="#b91c1c" opacity="0.85"/>
+              </svg>
+            </span>
+            <span class="pf-pour-ghost__txt">
+              <span class="pf-pour-ghost__name">{{ tubeName(gsrc) }}</span>
+              <span class="pf-pour-ghost__to">{{ dragCaption() }}</span>
+            </span>
+          </div>
+        }
+        <p class="pf-sr-only" aria-live="polite">{{ dragMoving() ? dragCaption() : '' }}</p>
 
         <!-- "Pour into another tube…" sheet (manual merge). Same dialog shell
              as Can't collect; pf-select pickers, plain-words verdict from the

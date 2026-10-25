@@ -109,6 +109,23 @@ export function mergeRefusalText(code: string | null | undefined, serverMessage?
   return (code && REFUSALS[code]) || 'This tube can’t be poured into that one.';
 }
 
+/** A few plain words for a refusal, small enough for a tube card while a
+ *  tube is dragged over it ("Already received"). Same codes as above. */
+const SHORT_REFUSALS: Record<string, string> = {
+  merge_different_order: 'Different order',
+  merge_outsourced: 'Outsourced tube',
+  merge_micro_container: 'Culture or sterile pot',
+  merge_timed_series: 'Timed series draw',
+  merge_has_results: 'Already has results',
+  merge_already_received: 'Already received',
+  merge_dead_tube: 'Cancelled or missed',
+  merge_self: 'Same tube',
+};
+
+export function mergeShortReason(code: string | null | undefined): string {
+  return (code && SHORT_REFUSALS[code]) || 'Can’t pour into this tube';
+}
+
 /** The tubes of one order a tube may be poured INTO: the other live tubes
  *  (not merged away, not the same tube). The server still has the last word
  *  through the candidates call. */

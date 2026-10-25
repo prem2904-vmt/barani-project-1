@@ -15,6 +15,7 @@ import { DestroyRef,
   inject,
   output,
   signal,
+  untracked,
 } from "@angular/core";
 import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { FormsModule } from "@angular/forms";
@@ -91,6 +92,16 @@ import {
   shortTubeName,
   warningLines,
 } from '../../../shared/utils/tube-merge';
+import {
+  PourDropState,
+  PourPointer,
+  TubePourDrag,
+  edgeScrollSpeed,
+  pourDropOpensSheet,
+  pourDropState,
+} from './tube-pour-drag';
+import { CapacitorService } from '../../../core/services/capacitor.service';
+import { ImpactStyle } from '@capacitor/haptics';
 
 /**
  * What the phlebotomist actually holds. "Kind" drives which illustration we
@@ -659,9 +670,23 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         this._clock = null;
       }
     });
+
+    this.attachPourListeners();
+    // Any change to the tubes (collect, pour, live refresh) makes the cached
+    // drop verdicts stale — the next drag asks the server again.
+    effect(() => {
+      this._pending();
+      this._pourCands.clear();
+      this._pourCandsVer.update(v => v + 1);
+      const src = untracked(() => this.dragSrc());
+      if (src) untracked(() => this.prefetchPourCands(src));
+    });
   }
 
   ngOnDestroy() {
+    this.pourDrag.cancel();
+    this.stopEdgeScroll();
+    this._detachPourListeners?.();
     if (this._clock != null) {
       clearInterval(this._clock);
       this._clock = null;
@@ -1310,9 +1335,15 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       .map((t) => t.test?.name ?? t.name)
       .filter((n): n is string => !!n);
     this.clearPress();
+    const g = this.activeGroup();
+    if (g && this.canPour(s, g)) {
+      this._pourEl = ev.currentTarget as HTMLElement;
+      this.pourDrag.down(s.id, ev);
+    }
     this.holdingId.set(s.id); // start the hold-progress fill
     this._pressTimer = setTimeout(() => {
       this._longPressFired = true;
+      this.pourDrag.cancel(); // a still 2s hold peeks — it never pours
       this.holdingId.set(null);
       this.peekPos.set({ x, y });
       this.peekTests.set(tests);
@@ -1346,6 +1377,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
    *  otherwise ('normal' | 'anchor' | 'due') the FIRST tap collects exactly
    *  as it always has. */
   onVialClick(s: OrderSample, ev: Event): void {
+    // The click that trails a drag-and-drop never also collects.
+    if (this.pourDrag.consumeClick()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
     if (this._longPressFired) {
       this._longPressFired = false;
       ev.preventDefault();
@@ -1974,10 +2011,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.pour.set(null);
   }
 
-  async setPourTarget(targetId: string): Promise<void> {
+  async setPourTarget(targetId: string, seed?: MergeCandidate[] | null): Promise<void> {
     const p = this.pour();
     if (!p) return;
-    this.pour.set({ ...p, targetId, alsoIds: [], candidates: null, loadError: null });
+    // A drop already knows the verdict (cached at drag start): show it at
+    // once, then refresh it from the server.
+    this.pour.set({ ...p, targetId, alsoIds: [], candidates: seed ?? null, loadError: null });
     if (!targetId) return;
     try {
       const list = await firstValueFrom(
@@ -2041,6 +2080,256 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     } finally {
       this.pourBusy.set(false);
     }
+  }
+
+  // ─── Drag a tube onto another to pour it in (owner 2026-10-25) ────────
+  // Touch: hold ~300 ms, then drag; mouse: drag past a few px. The DRAGGED
+  // tube is the one poured (gone); the tube it's DROPPED ON is kept. A drop
+  // only OPENS the same pour sheet with that target picked — the explicit
+  // "Pour into …" button still does the pour. Gesture rules: tube-pour-drag.ts.
+
+  private readonly capacitor = inject(CapacitorService, { optional: true });
+  /** Drop verdicts: the TARGET's merge-candidates (null = the call failed). */
+  private readonly _pourCands = new Map<string, MergeCandidate[] | null>();
+  private readonly _pourCandsVer = signal(0);
+  private readonly _pourAsked = new Set<string>();
+  /** The dragged tube (its card shows as a placeholder). */
+  protected readonly dragSrc = signal<string | null>(null);
+  /** True once the tube has left its card (the ghost follows the pointer). */
+  protected readonly dragMoving = signal(false);
+  protected readonly dragPos = signal<{ x: number; y: number } | null>(null);
+  protected readonly dragOver = signal<string | null>(null);
+  /** The ghost's exit: 'back' snaps to its card, 'in' sinks into the target. */
+  protected readonly dragExit = signal<'back' | 'in' | null>(null);
+  private _pourEl: HTMLElement | null = null;
+  private _scrollEl: HTMLElement | null = null;
+  private _scrollSpeed = 0;
+  private _scrollRaf: number | null = null;
+  private _exitTimer: ReturnType<typeof setTimeout> | null = null;
+  private _detachPourListeners: (() => void) | null = null;
+
+  /** "Hold and drag a tube onto another to pour it in" — until the first drag. */
+  protected readonly pourHintSeen = signal(this.readPourHint());
+
+  readonly pourDrag = new TubePourDrag({
+    hitTest: (x, y) => this.pourHit(x, y),
+    onLift: (id) => this.onPourLift(id),
+    onDrag: (_id, x, y, over) => this.onPourDrag(x, y, over),
+    onDrop: (id, target) => this.onPourDrop(id, target),
+    onEnd: () => this.endPourDrag(false),
+  });
+
+  /** Pourable tubes are draggable (the same rule as the "Pour into…" action). */
+  pourDraggable(s: OrderSample, g: OrderGroup): boolean {
+    return this.canPour(s, g);
+  }
+
+  /** How a tube reads while another is dragged (null = no drag / the source). */
+  dropState(t: OrderSample): PourDropState | null {
+    const src = this.dragSrc();
+    if (!src || t.id === src) return null;
+    this._pourCandsVer();
+    const local = this.notCollected(t)
+      ? 'Not collected'
+      : isMergedTube(t) ? 'Already poured' : null;
+    if (local) return pourDropState(src, [], local);
+    if (!this._pourCands.has(t.id)) return { kind: 'checking' };
+    return pourDropState(src, this._pourCands.get(t.id));
+  }
+
+  /** The ghost's caption: where the tube would go. */
+  dragCaption(): string {
+    const over = this.dragOver();
+    const t = over ? this.sampleById(over) : undefined;
+    if (!t) return 'Drop it on another tube';
+    const st = this.dropState(t);
+    if (st?.kind === 'no') return `Can’t pour: ${st.reason}`;
+    return `Pour into ${this.tubeName(t)}`;
+  }
+
+  dragSource(): OrderSample | undefined { return this.sampleById(this.dragSrc()); }
+
+  /** Keep the ghost on screen near the side edges (phones). */
+  ghostX(x: number): number {
+    const w = typeof window !== 'undefined' ? window.innerWidth : 0;
+    return w > 260 ? Math.min(Math.max(x, 120), w - 120) : x;
+  }
+
+  hasDraggable(g: OrderGroup): boolean {
+    return this.dispatchSelect() === null && g.samples.some(s => this.canPour(s, g));
+  }
+
+  private onPourLift(id: string): void {
+    if (this._exitTimer) { clearTimeout(this._exitTimer); this._exitTimer = null; }
+    this.dragExit.set(null);
+    this.dragSrc.set(id);
+    this.dragOver.set(null);
+    this._scrollEl = this.scrollParentOf(this._pourEl);
+    this.haptic(ImpactStyle.Light);
+    this.prefetchPourCands(id);
+  }
+
+  private onPourDrag(x: number, y: number, over: string | null): void {
+    // Dragging away cancels the 2 s hold-to-peek.
+    if (this._pressTimer || this.holdingId()) this.clearPress();
+    if (!this.dragMoving()) {
+      this.dragMoving.set(true);
+      if (!this.pourHintSeen()) this.markPourHintSeen();
+      this.setDragCursor(true);
+    }
+    this.dragPos.set({ x, y });
+    if (this.dragOver() !== over) this.dragOver.set(over);
+    this.updateEdgeScroll(y);
+  }
+
+  private onPourDrop(sourceId: string, targetId: string | null): void {
+    const src = this.sampleById(sourceId);
+    const t = targetId ? this.sampleById(targetId) : undefined;
+    const st = t ? this.dropState(t) : null;
+    if (!src || !t || !pourDropOpensSheet(st)) {
+      this.endPourDrag(true); // snap back — nothing changed
+      return;
+    }
+    this.haptic(ImpactStyle.Medium);
+    const seed = this._pourCands.get(t.id);
+    this.endPourDrag(false, 'in', t.id);
+    this.clearPress();
+    this.pour.set({ sourceId: src.id, targetId: '', alsoIds: [], candidates: null, loadError: null });
+    void this.setPourTarget(t.id, seed ?? null);
+  }
+
+  /** Clear the drag; `snapBack` animates the ghost home first. */
+  private endPourDrag(snapBack: boolean, exit?: 'in', targetId?: string): void {
+    this.stopEdgeScroll();
+    this.setDragCursor(false);
+    const moving = this.dragMoving();
+    const finish = () => {
+      this._exitTimer = null;
+      this.dragExit.set(null);
+      this.dragSrc.set(null);
+      this.dragMoving.set(false);
+      this.dragPos.set(null);
+      this.dragOver.set(null);
+    };
+    if (!moving || this.reducedMotion()) { finish(); return; }
+    // Glide the ghost to its card (snap back) or into the kept tube.
+    const el = exit === 'in' ? this.tileEl(targetId) : this._pourEl;
+    const r = el?.getBoundingClientRect?.();
+    if (r && r.width) this.dragPos.set({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+    this.dragOver.set(exit === 'in' ? targetId ?? null : null);
+    this.dragExit.set(snapBack ? 'back' : 'in');
+    this._exitTimer = setTimeout(finish, 200);
+  }
+
+  /** Ask each possible target's merge-candidates once per drag (cached). */
+  private prefetchPourCands(sourceId: string): void {
+    const src = this.sampleById(sourceId);
+    const g = this.activeGroup();
+    if (!src || !g) return;
+    for (const t of pourTargets(src, g.samples)) {
+      if (this.notCollected(t) || this._pourCands.has(t.id) || this._pourAsked.has(t.id)) continue;
+      this._pourAsked.add(t.id);
+      this.api.get<MergeCandidate[]>(`/api/samples/${t.id}/merge-candidates`).subscribe({
+        next: list => { this._pourAsked.delete(t.id); this._pourCands.set(t.id, list ?? []); this._pourCandsVer.update(v => v + 1); },
+        error: () => { this._pourAsked.delete(t.id); this._pourCands.set(t.id, null); this._pourCandsVer.update(v => v + 1); },
+      });
+    }
+  }
+
+  // Window-level pointer listeners (touch keeps sending moves to the pressed
+  // tile, mouse leaves it); a NON-passive document touchmove registered up
+  // front — iOS only lets a listener that existed before the touch began
+  // stop the scroll — blocks scrolling only while a tube is lifted.
+  private attachPourListeners(): void {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+    const move = (e: PointerEvent) => this.pourDrag.move(e as PourPointer);
+    const up = (e: PointerEvent) => this.pourDrag.up(e as PourPointer);
+    const cancel = () => this.pourDrag.cancel();
+    const touch = (e: TouchEvent) => { if (this.pourDrag.blocksTouchScroll() && e.cancelable) e.preventDefault(); };
+    const menu = (e: Event) => { if (this.pourDrag.blocksTouchScroll()) e.preventDefault(); };
+    window.addEventListener('pointermove', move, { passive: true });
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', cancel);
+    document.addEventListener('touchmove', touch, { passive: false, capture: true });
+    document.addEventListener('contextmenu', menu, { capture: true });
+    this._detachPourListeners = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', cancel);
+      document.removeEventListener('touchmove', touch, { capture: true });
+      document.removeEventListener('contextmenu', menu, { capture: true });
+    };
+  }
+
+  private pourHit(x: number, y: number): string | null {
+    if (typeof document === 'undefined' || typeof document.elementFromPoint !== 'function') return null;
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    return el?.closest?.('[data-pour-id]')?.getAttribute('data-pour-id') ?? null;
+  }
+
+  private tileEl(id: string | null | undefined): HTMLElement | null {
+    if (!id || typeof document === 'undefined') return null;
+    return document.querySelector<HTMLElement>(`[data-pour-id="${id}"]`);
+  }
+
+  private scrollParentOf(el: HTMLElement | null): HTMLElement | null {
+    for (let n = el?.parentElement ?? null; n; n = n.parentElement) {
+      const oy = getComputedStyle(n).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight) return n;
+    }
+    return (document.scrollingElement as HTMLElement | null) ?? null;
+  }
+
+  /** Near the scroll area's top / bottom edge the list scrolls under the
+   *  tube (phones stack the cards), re-checking what's under the finger. */
+  private updateEdgeScroll(y: number): void {
+    const sc = this._scrollEl;
+    if (!sc) return;
+    const isDoc = sc === document.scrollingElement;
+    const r = isDoc ? { top: 0, bottom: window.innerHeight } : sc.getBoundingClientRect();
+    this._scrollSpeed = edgeScrollSpeed(y, r.top, r.bottom);
+    if (this._scrollSpeed && this._scrollRaf == null && typeof requestAnimationFrame === 'function') {
+      const step = () => {
+        if (!this._scrollSpeed || !this.dragMoving() || !this._scrollEl) { this._scrollRaf = null; return; }
+        this._scrollEl.scrollTop += this._scrollSpeed;
+        const p = this.dragPos();
+        if (p) {
+          const hit = this.pourHit(p.x, p.y);
+          const over = hit && hit !== this.dragSrc() ? hit : null;
+          if (this.dragOver() !== over) this.dragOver.set(over);
+        }
+        this._scrollRaf = requestAnimationFrame(step);
+      };
+      this._scrollRaf = requestAnimationFrame(step);
+    }
+  }
+
+  private stopEdgeScroll(): void {
+    this._scrollSpeed = 0;
+    if (this._scrollRaf != null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this._scrollRaf);
+    this._scrollRaf = null;
+  }
+
+  private setDragCursor(on: boolean): void {
+    if (typeof document === 'undefined' || !document.body) return;
+    document.body.style.cursor = on ? 'grabbing' : '';
+  }
+
+  private reducedMotion(): boolean {
+    try { return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+  }
+
+  private haptic(style: ImpactStyle): void {
+    try { void this.capacitor?.impact?.(style)?.catch?.(() => {}); } catch { /* no haptics */ }
+  }
+
+  private static readonly POUR_HINT_KEY = 'pf.collect.pourDragHint';
+  private readPourHint(): boolean {
+    try { return localStorage.getItem(SampleCollectionComponent.POUR_HINT_KEY) === '1'; } catch { return false; }
+  }
+  private markPourHintSeen(): void {
+    this.pourHintSeen.set(true);
+    try { localStorage.setItem(SampleCollectionComponent.POUR_HINT_KEY, '1'); } catch { /* private window */ }
   }
 
   private _removedBarcodes = new Map<string, string>();
