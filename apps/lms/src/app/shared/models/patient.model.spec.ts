@@ -69,7 +69,7 @@ describe('formatPatientInfo', () => {
     expect(formatPatientInfo(undefined)).toBe('—');
   });
 
-  it('truncates name to 15 characters + ".." if longer', () => {
+  it('keeps full name even if longer than 15 characters (never cuts in code per PF-PATTERN)', () => {
     expect(formatPatientInfo({
       displayName: 'VeryLongNameHere',
       firstName: 'VeryLong',
@@ -77,7 +77,7 @@ describe('formatPatientInfo', () => {
       age: 30,
       sex: 'Male',
       mrn: 'AA0040',
-    })).toBe('VeryLongNameHer.. | 30/M | AA0040'); // current behavior truncates to 15 chars
+    })).toBe('VeryLongNameHere | 30/M | AA0040');
   });
 
   it('keeps name as-is if 15 characters or less', () => {

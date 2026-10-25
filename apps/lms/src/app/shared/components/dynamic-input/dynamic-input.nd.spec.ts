@@ -21,7 +21,7 @@ describe('DynamicInputComponent — new-design markup', () => {
     const { el } = create({ name: 'first_name', title: 'First name', type: 'text', required: true }, false);
     expect(el.querySelector('input.pf-input')).not.toBeNull();
     expect(el.querySelector('label.pf-label')).not.toBeNull();
-    expect(el.querySelector('.pf-input, .pf-field')).toBeNull();
+    expect(el.querySelector('.pf-field')).toBeNull();
   });
 
   it('text: a kit field; the label points at the input; required = the amber dot (not a red *)', () => {
@@ -47,7 +47,7 @@ describe('DynamicInputComponent — new-design markup', () => {
   });
 
   it('segment keyboard: arrows move + select, a letter picks (and cycles) the matching option', () => {
-    const { el, f, c } = create({ name: 'title', title: 'Title', type: 'button_select',
+    const { el, f, c } = create({ name: 'salutation', title: 'Salutation', type: 'button_select',
       options: ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby'] });
     const g = el.querySelector<HTMLElement>('[role="radiogroup"]')!;
     const key = (k: string) => { g.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); f.detectChanges(); };

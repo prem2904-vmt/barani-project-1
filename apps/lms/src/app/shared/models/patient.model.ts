@@ -82,14 +82,13 @@ export function patientMrnLabel(p: Pick<Patient, 'mrn'> | null | undefined): str
   return p?.mrn?.trim() || '—';
 }
 
-/** Formats patient details consistently: <Name(First 15 characters followed by ellipsis)> | <age> /<sex> | <P-ID> */
+/** Formats patient details consistently: <Name> | <age> /<sex> | <P-ID> */
 export function formatPatientInfo(
   p: Pick<Patient, 'firstName' | 'fathersName' | 'displayName' | 'age' | 'sex' | 'mrn'> & { dateOfBirth?: string | null } | null | undefined
 ): string {
   if (!p) return '—';
   const name = patientDisplayName(p);
-  const truncatedName = name.length > 15 ? name.substring(0, 15) + '..' : name;
-  const age = formatAge(p, 'num', '—');
+    const age = formatAge(p, 'num', '—');
   let sexCode = '—';
   if (p.sex) {
     const s = p.sex.trim().toLowerCase();
@@ -99,7 +98,7 @@ export function formatPatientInfo(
     else sexCode = p.sex.charAt(0).toUpperCase();
   }
   const pid = p.mrn?.trim() || '—';
-  return `${truncatedName} | ${age}/${sexCode} | ${pid}`;
+  return `${name} | ${age}/${sexCode} | ${pid}`;
 }
 
 /** Age/sex + MRN WITHOUT the name — "23/M · AA0040". For layouts that give the

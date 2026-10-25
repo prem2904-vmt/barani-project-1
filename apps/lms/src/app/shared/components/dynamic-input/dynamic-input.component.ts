@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output, computed, signal } from '@angular/core';
+import { ApplicationRef, ChangeDetectionStrategy, Component, ElementRef, EmbeddedViewRef, EventEmitter, HostListener, Input, OnDestroy, Output, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TestParameter } from '../../models/test.model';
 import { FieldOption, ReferenceRange, WorkflowContext, WorkflowField } from '../../models/workflow.model';
@@ -10,7 +10,7 @@ import { ageParts } from '../../utils/patient-age';
 import { normalizeSex, selectReferenceRange } from '../../utils/reference-range';
 import { liveFlag } from '../../utils/result-flag';
 import { labToday } from '../../utils/lab-clock';
-import { PfDateComponent } from '../pf-date/pf-date.component';
+import { PfDateComponent, PfCalendarComponent } from '../pf-date/pf-date.component';
 import { PfTimeComponent } from '../pf-time/pf-time.component';
 import { PfDateTimeComponent } from '../pf-date/pf-datetime.component';
 
@@ -50,7 +50,7 @@ export { isContactNumberField };
 @Component({
   selector: 'pf-dynamic-input',
   standalone: true,
-  imports: [FormsModule, NgTemplateOutlet, SelectComponent, PfDateComponent, PfTimeComponent, PfDateTimeComponent],
+  imports: [FormsModule, NgTemplateOutlet, SelectComponent, PfDateComponent, PfCalendarComponent, PfTimeComponent, PfDateTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ndOn()) {
@@ -132,18 +132,34 @@ export { isContactNumberField };
                 <!-- A typed dd/mm/yyyy (auto slashes) — EMPTY by default in every
                      browser (a native date input shows today greyed in Safari).
                      The calendar button still opens the native picker. -->
-                <span class="pf-di-date pf-di-dob__date">
+                <span class="pf-di-date pf-di-dob__date" #dobContainer>
                   <input #dobIn [id]="inputId" data-pf-stop type="text" inputmode="numeric" autocomplete="off"
                          maxlength="10" placeholder="dd/mm/yyyy" class="pf-input pf-num pf-di-date__in"
                          [class.pf-input--error]="!!err" [attr.aria-invalid]="err ? true : null" [attr.aria-describedby]="err ? inputId + '-e' : null"
                          [attr.aria-required]="field.required || null"
                          [value]="dobText()" (input)="onDobInput(dobIn)" (blur)="onDobBlur()" />
                   <button type="button" class="pf-di-date__pick" tabindex="-1" aria-label="Pick a date" title="Pick a date"
-                          (click)="openDobPicker(dobPick)">
+                          (click)="toggleDobPicker($event)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
                   </button>
                   <input #dobPick type="date" class="pf-di-date__native" tabindex="-1" aria-hidden="true"
                          [attr.max]="todayIso" [value]="value || ''" (change)="onDobPicked(dobPick.value)" />
+                  <ng-template #dobPanelTpl>
+                    <div class="pf-date__popover"
+                         [class.pf-date__popover--above]="dobPopoverStyle().above"
+                         [style.top.px]="dobPopoverStyle().top"
+                         [style.left.px]="dobPopoverStyle().left"
+                         role="dialog"
+                         aria-label="Date of birth calendar"
+                         (click)="$event.stopPropagation()">
+                      <pf-calendar #dobCalendar
+                                   [value]="asDateStr(value)"
+                                   [max]="todayIso"
+                                   [compact]="true"
+                                   (valueChange)="onDobCalendarPicked($event)">
+                      </pf-calendar>
+                    </div>
+                  </ng-template>
                 </span>
                 <span class="pf-di-dob__or">or</span>
                 <div class="pf-di-dob__age-group" [class.pf-di-dob__age-group--error]="!!err">
@@ -1054,6 +1070,29 @@ export { isContactNumberField };
     }
     .pf-di-date__pick:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
     .pf-di-date__native { position: absolute; right: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+    .pf-date__popover {
+      position: fixed; z-index: 99999; width: 285px; box-sizing: border-box; padding: 12px; border-radius: 14px;
+      background: var(--pf-card-bg, #ffffff);
+      border: 1px solid var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+      animation: pf-pop 160ms cubic-bezier(0.32, 0.72, 0, 1) both;
+    }
+    .pf-date__popover--above {
+      transform: translateY(-100%);
+      animation-name: pf-pop-above;
+    }
+    :root.dark .pf-date__popover {
+      background: var(--pf-card-bg, #0f172a); border-color: rgba(148, 163, 184, 0.25);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+    }
+    @keyframes pf-pop {
+      from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes pf-pop-above {
+      from { opacity: 0; transform: translateY(calc(-100% + 4px)) scale(0.97); }
+      to { opacity: 1; transform: translateY(-100%) scale(1); }
+    }
     /* Segmented choices (Sex, etc.): modern 40px form segmented control matching inputs */
     .pf-di-seg:not(.pf-di-seg--unit) {
       box-sizing: border-box; min-height: 40px; height: 40px; max-width: 100%;
@@ -1108,7 +1147,7 @@ export { isContactNumberField };
     }
   `]
 })
-export class DynamicInputComponent {
+export class DynamicInputComponent implements OnDestroy {
   private static _seq = 0;
   /** Stable id so the kit label's for= points at the control (getByLabel works). */
   readonly inputId = `pf-di-${++DynamicInputComponent._seq}`;
@@ -1220,9 +1259,131 @@ export class DynamicInputComponent {
     this.setLocalError(null);
     this.emitDob(v || null, false);
   }
-  openDobPicker(el: HTMLInputElement): void {
-    try { (el as HTMLInputElement & { showPicker?: () => void }).showPicker?.(); } catch { el.click(); }
+  private readonly appRef = inject(ApplicationRef);
+  readonly dobPanelTpl = viewChild<TemplateRef<void>>('dobPanelTpl');
+  private dobPanelRef?: EmbeddedViewRef<void>;
+
+  readonly isDobPickerOpen = signal(false);
+  readonly dobPopoverStyle = signal<{ top: number; left: number; above: boolean }>({ top: 0, left: 0, above: false });
+  readonly dobContainer = viewChild<ElementRef<HTMLElement>>('dobContainer');
+  readonly dobCalendar = viewChild<PfCalendarComponent>('dobCalendar');
+
+  updateDobCoords(): void {
+    const root = this.dobContainer()?.nativeElement;
+    if (!root) return;
+    const rect = root.getBoundingClientRect();
+    const popHeight = 360;
+    const popWidth = 285;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    let left = Math.max(12, rect.left);
+    if (left + popWidth > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - popWidth - 12);
+    }
+
+    let top: number;
+    let above = false;
+    if (spaceBelow >= popHeight || spaceBelow >= spaceAbove) {
+      top = rect.bottom + 6;
+      above = false;
+    } else if (spaceAbove >= popHeight) {
+      top = rect.top - 6;
+      above = true;
+    } else {
+      top = Math.max(12, Math.min(window.innerHeight - popHeight - 12, rect.bottom + 6));
+      above = false;
+    }
+
+    this.dobPopoverStyle.set({ top, left, above });
   }
+
+  openDobPicker(el?: HTMLInputElement): void {
+    if (this.isDobPickerOpen()) return;
+    this.updateDobCoords();
+    this.isDobPickerOpen.set(true);
+
+    const tpl = this.dobPanelTpl();
+    if (tpl) {
+      this.dobPanelRef = tpl.createEmbeddedView(null as unknown as void);
+      this.appRef.attachView(this.dobPanelRef);
+      this.dobPanelRef.detectChanges();
+      const panelEl = this.dobPanelRef.rootNodes.find(
+        (n: Node) => n.nodeType === Node.ELEMENT_NODE
+      ) as HTMLElement | undefined;
+      if (panelEl) {
+        document.body.appendChild(panelEl);
+      }
+    }
+
+    const current = this.asDateStr(this.value);
+    if (current) {
+      setTimeout(() => this.dobCalendar()?.jumpToMonthOf(current));
+    }
+  }
+
+  closeDobPicker(): void {
+    if (!this.isDobPickerOpen()) return;
+    if (this.dobPanelRef) {
+      const panelEl = this.dobPanelRef.rootNodes.find(
+        (n: Node) => n.nodeType === Node.ELEMENT_NODE
+      ) as HTMLElement | undefined;
+      if (panelEl && panelEl.parentElement === document.body) {
+        document.body.removeChild(panelEl);
+      }
+      this.appRef.detachView(this.dobPanelRef);
+      this.dobPanelRef.destroy();
+      this.dobPanelRef = undefined;
+    }
+    this.isDobPickerOpen.set(false);
+  }
+
+  toggleDobPicker(event: MouseEvent): void {
+    event.stopPropagation();
+    if (this.isDobPickerOpen()) {
+      this.closeDobPicker();
+    } else {
+      this.openDobPicker();
+    }
+  }
+
+  onDobCalendarPicked(iso: string): void {
+    this.closeDobPicker();
+    this.onDobPicked(iso || '');
+  }
+
+  ngOnDestroy(): void {
+    this.closeDobPicker();
+  }
+
+  @HostListener('document:pointerdown', ['$event'])
+  onDocPointerDown(event: PointerEvent): void {
+    if (!this.isDobPickerOpen()) return;
+    const target = event.target as Node;
+    const container = this.dobContainer()?.nativeElement;
+    const panelEl = this.dobPanelRef?.rootNodes.find(
+      (n: Node) => n.nodeType === Node.ELEMENT_NODE
+    ) as HTMLElement | undefined;
+    if ((!container || !container.contains(target)) && (!panelEl || !panelEl.contains(target))) {
+      this.closeDobPicker();
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.isDobPickerOpen()) {
+      this.closeDobPicker();
+    }
+  }
+
+  @HostListener('window:scroll')
+  @HostListener('window:resize')
+  onDobWindowResize(): void {
+    if (this.isDobPickerOpen()) {
+      this.updateDobCoords();
+    }
+  }
+
   /** Age as a numeric TEXT box (no spinner): digits only, capped at the
    *  unit's width; an out-of-range age shows an error (never silently kept). */
   onAgeText(el: HTMLInputElement): void {

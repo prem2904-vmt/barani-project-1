@@ -67,12 +67,14 @@
 }
 
 .pf-card--selected {
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.14), rgba(236, 72, 153, 0.06)) !important;
-  border-color: rgba(168, 85, 247, 0.5) !important;
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, var(--pf-card-bg, #ffffff)) !important;
+  border-color: var(--color-primary, #7c3aed) !important;
+  box-shadow: 0 1px 3px rgba(124, 58, 237, 0.08) !important;
 }
 .pf-card--selected:hover {
-  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12), var(--pf-card-hover-shadow, 0 12px 28px rgba(99, 102, 241, 0.14));
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, var(--pf-card-bg, #ffffff)) !important;
+  border-color: var(--color-primary, #7c3aed) !important;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.12) !important;
 }
 
 .pf-card[data-priority='STAT']::before,
@@ -120,8 +122,8 @@
 .pf-card__sel svg { width: 12px; height: 12px; }
 
 .pf-card--selected .pf-card__sel {
-  background: var(--gradient-primary);
-  border-color: transparent;
+  background: var(--color-primary, #7c3aed);
+  border-color: var(--color-primary, #7c3aed);
 }
 
 .pf-card__slot {

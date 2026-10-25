@@ -1,13 +1,17 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AppointmentQueueService } from '../../core/services/appointment-queue.service';
 import { ToastService } from '../../core/services/toast.service';
+import { ThemeService } from '../../core/services/theme.service';
 import { Appointment } from '../../shared/models/appointment.model';
+import { Patient, formatPatientMeta } from '../../shared/models/patient.model';
 import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.component';
-import { TileComponent } from '../../shared/primitives/tile.component';
 import { TouchButtonComponent } from '../../shared/primitives/touch-button.component';
 import { ChipComponent } from '../../shared/primitives/chip.component';
+import { AvatarComponent } from '../../shared/primitives/avatar.component';
+import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
+import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
 import { ApiError } from '../../shared/models/api-response.model';
 import { SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
 import { busyIdWhile } from '../frontdesk/busy-id';
@@ -15,81 +19,197 @@ import { busyIdWhile } from '../frontdesk/busy-id';
 @Component({
   selector: 'pf-my-home-collections',
   standalone: true,
-  imports: [SkeletonRowsComponent, DatePipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, ChipComponent],
+  imports: [
+    SkeletonRowsComponent,
+    DatePipe,
+    ScreenHeaderComponent,
+    TouchButtonComponent,
+    ChipComponent,
+    AvatarComponent,
+    HeroBandComponent,
+    SegmentedComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
-    /* WORK page: non-scroll app layout on ALL sizes. The page fills the shell's
-       main area; scrolling happens INSIDE the content panel, not the page. */
     :host {
       display: block;
       height: 100%;
     }
 
-    /* Page root: flex column, full height, no outer page scroll. */
-    :host .pf-hc-root {
+    .pf-hc-page {
       display: flex;
       flex-direction: column;
       height: 100%;
-      overflow: hidden;
-    }
-    /* The inner max-width wrapper inherits the flex column so header stays
-       fixed and the content area becomes the single scroll region. */
-    :host .pf-hc-root .pf-hc-shell {
-      display: flex;
-      flex-direction: column;
-      flex: 1 1 auto;
       min-height: 0;
     }
-    /* Screen header / toolbar: fixed (does not scroll). */
-    :host .pf-hc-root .pf-hc-head {
-      flex: 0 0 auto;
-    }
-    /* Content area: the only scroll container on the page. */
-    :host .pf-hc-root .pf-hc-content {
+
+    .pf-hc-content {
       flex: 1 1 auto;
       min-height: 0;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      padding-top: 16px;
+      padding-bottom: 32px;
     }
 
-    /* Scoped to this page only via .pf-hc-root. ADDITIVE overrides — desktop (>=1280) untouched. */
+    .pf-cards-skel {
+      padding: 24px;
+      border-radius: var(--pf-radius-card, 16px);
+      border: 1px solid var(--pf-line, #e2e8f0);
+      background: var(--pf-card-bg, #ffffff);
+    }
 
-    /* Phone (<=640): keep the footer action row from cramping when both
-       "Directions" and the action button are present. Allow wrap and give the
-       button room; desktop/iPad keep the single-row layout. */
+    .pf-hc-card {
+      transition: transform var(--pf-dur-fast, 0.15s) var(--pf-spring, ease),
+                  box-shadow var(--pf-dur-fast, 0.15s) ease,
+                  border-color var(--pf-dur-fast, 0.15s) ease;
+      background: var(--pf-card-bg, #ffffff);
+      border: 1px solid var(--pf-line, #e2e8f0);
+      border-radius: var(--pf-radius-card, 16px);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .pf-hc-card:hover {
+      border-color: rgba(124, 58, 237, 0.35);
+      box-shadow: 0 8px 24px rgba(124, 58, 237, 0.08);
+    }
+
+    .pf-hc-card .pf-card__head {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg, #ffffff));
+      border-bottom: 1px solid var(--pf-line, #e2e8f0);
+    }
+
+    .pf-hc-card .pf-card__body {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 11px;
+      flex: 1 1 auto;
+    }
+
+    .pf-hc-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .pf-hc-icon {
+      width: 16px;
+      height: 16px;
+      color: var(--color-primary, #7c3aed);
+      opacity: 0.9;
+    }
+
+    .pf-hc-card .pf-card__foot {
+      padding: 12px 16px;
+      background: var(--pf-card-bg, #ffffff);
+      border-top: 1px solid var(--pf-line, #e2e8f0);
+      margin-top: auto;
+    }
+
+    .pf-hc-wa-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #10b981;
+      background: color-mix(in srgb, #10b981 12%, transparent);
+      border: 1px solid color-mix(in srgb, #10b981 25%, transparent);
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .pf-hc-wa-btn:hover {
+      background: color-mix(in srgb, #10b981 22%, transparent);
+      border-color: color-mix(in srgb, #10b981 40%, transparent);
+    }
+
+    .pf-hc-directions {
+      color: var(--color-primary, #7c3aed);
+      transition: opacity 0.15s ease;
+    }
+    .pf-hc-directions:hover {
+      opacity: 0.85;
+      text-decoration: underline;
+    }
+
+    .pf-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 64px 20px;
+      text-align: center;
+      border: 1px dashed var(--pf-line, #e2e8f0);
+      border-radius: var(--pf-radius-card, 16px);
+      background: var(--pf-card-bg, #ffffff);
+    }
+    .pf-empty__icon {
+      color: var(--text-tertiary);
+      margin-bottom: 14px;
+    }
+    .pf-empty__title {
+      margin: 0 0 6px;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .pf-empty__body {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-tertiary);
+      max-width: 380px;
+    }
+
     @media (max-width: 640px) {
-      :host .pf-hc-root .pf-hc-footer {
-        flex-wrap: wrap;
-        row-gap: 0.75rem;
+      .pf-hc-foot-inner {
+        flex-direction: column;
+        align-items: stretch !important;
       }
-      :host .pf-hc-root .pf-hc-footer > * {
+      .pf-hc-foot-actions {
+        width: 100%;
+        justify-content: flex-end;
+      }
+      .pf-hc-foot-actions > button {
         flex: 1 1 auto;
-      }
-    }
-
-    /* Touch / coarse-pointer: enlarge the inline link tap targets (Directions,
-       phone number) so they meet ~44px without altering their visual size on
-       desktop. Only applies on coarse pointers. */
-    @media (pointer: coarse) {
-      :host .pf-hc-root .pf-hc-link {
-        min-height: 44px;
-        display: inline-flex;
-        align-items: center;
-      }
-    }
-
-    /* Hover affordances only where a real hover pointer exists; prevents
-       sticky hover states on touch devices. Visual values mirror the existing
-       Tailwind hover classes, so desktop is unchanged. */
-    @media (hover: none) {
-      :host .pf-hc-root .pf-hc-link:hover {
-        text-decoration: none;
       }
     }
   `],
   template: `
-    <section class="pf-hc-root bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <div class="pf-hc-shell max-w-[1600px] mx-auto w-full">
+    <section class="pf-band-page pf-hc-page">
+      @if (theme.isNewDesign()) {
+        <pf-hero-band
+          [back]="true"
+          placeholder="Search visits — patient, address, phone, pincode…"
+          [value]="query()"
+          (valueChange)="query.set($event)">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hc-seg" size="sm" [options]="filterOptions()" [value]="statusFilter()"
+                          (valueChange)="statusFilter.set($any($event))" aria-label="Filter visits" />
+          </ng-container>
+          <ng-container band-actions>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="load()"
+                    [disabled]="loading()" aria-label="Refresh visits" title="Refresh visits">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                   [class.animate-spin]="loading()">
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/>
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/>
+              </svg>
+              <span>Refresh</span>
+            </button>
+          </ng-container>
+        </pf-hero-band>
+      } @else {
         <div class="pf-hc-head px-4 pt-4 md:px-6 md:pt-6 lg:px-8 lg:pt-8">
           <pf-screen-header
             eyebrow="Home collection"
@@ -98,124 +218,138 @@ import { busyIdWhile } from '../frontdesk/busy-id';
             <pf-touch-btn actions size="sm" variant="ghost" [busy]="loading()" busyLabel="Refreshing…" (pressed)="load()">Refresh</pf-touch-btn>
           </pf-screen-header>
         </div>
+      }
 
-        <div class="pf-hc-content px-4 pb-4 pt-6 md:px-6 md:pb-6 lg:px-8 lg:pb-8">
-      @if (loading() && items().length === 0) {
-        <pf-tile tone="solid" padding="lg" class="block border border-[var(--glass-border)] shadow-lg shadow-black/5">
-          <div class="flex justify-center py-6">
-            <pf-skeleton-rows [rows]="4" label="Loading visits…"></pf-skeleton-rows>
+      <div class="pf-band-body pf-hc-content">
+        @if (loading() && items().length === 0) {
+          <div class="pf-cards-skel">
+            <pf-skeleton-rows [rows]="3" label="Loading visits…"></pf-skeleton-rows>
           </div>
-        </pf-tile>
-      } @else if (items().length === 0) {
-        <pf-tile tone="solid" padding="xl" class="block border border-[var(--glass-border)] shadow-lg shadow-black/5">
-          <p class="text-center text-[13px]" style="color: var(--text-tertiary);">No home-collection visits assigned to you.</p>
-        </pf-tile>
-      } @else {
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
-          @for (a of items(); track a.id) {
-            <pf-tile tone="solid" padding="lg" class="block h-full border border-[var(--glass-border)] shadow-lg shadow-black/5">
-              <div class="flex flex-col justify-between h-full gap-5">
-                <div class="min-w-0">
-                  <!-- Patient & Status Header -->
-                  <div class="flex items-start justify-between gap-4">
-                    <div class="min-w-0 flex-1">
-                      <h4 class="font-bold text-[16px] leading-tight truncate" style="color: var(--text-primary);" [title]="a.patient?.displayName || 'Patient'">
-                        {{ a.patient?.displayName || 'Patient' }}
-                      </h4>
-                      <p class="text-[11px] mt-1 font-medium tracking-wide uppercase" style="color: var(--text-tertiary);">
-                        Scheduled Visit
-                      </p>
-                    </div>
-                    <pf-chip [tone]="a.status === 'checked_in' ? 'amber' : a.status === 'in_progress' ? 'violet' : 'default'" size="sm">
-                      {{ statusLabel(a.status) }}
-                    </pf-chip>
-                  </div>
-
-                  <!-- Divider line -->
-                  <div class="my-3 border-t border-slate-700/20"></div>
-
-                  <!-- Details section -->
-                  <div class="space-y-2.5">
-                    <!-- Date & Time Slot -->
-                    <div class="flex items-start gap-2.5 text-[13px]">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mt-0.5 flex-shrink-0 text-violet-400">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0 2.25h.008v.008H7.5v-.008zm6.75-4.5h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V15zm0 2.25h.008v.008h-.008v-.008zm2.25-4.5h.008v.008H16.5v-.008zm0 2.25h.008v.008H16.5V15z" />
-                      </svg>
-                      <div class="min-w-0">
-                        <p class="font-medium" style="color: var(--text-secondary);">
-                          {{ a.appointmentDate | date:'dd MMM yyyy' }}
-                          @if (a.slotTime) {
-                            <span class="text-violet-300 font-semibold ml-1">· {{ a.slotTime }}</span>
-                          }
-                        </p>
-                      </div>
-                    </div>
-
-                    <!-- Address -->
-                    <div class="flex items-start gap-2.5 text-[13px]">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mt-0.5 flex-shrink-0 text-violet-400">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                      </svg>
-                      <div class="min-w-0 flex-1">
-                        <p class="leading-relaxed" style="color: var(--text-secondary);">
-                          {{ a.address || 'No address' }}
-                          @if (a.pincode) {
-                            <span class="font-semibold text-violet-300 ml-1">({{ a.pincode }})</span>
-                          }
-                        </p>
-                      </div>
-                    </div>
-
-                    <!-- Phone -->
-                    @if (a.patient; as patient) {
-                      @if (patient.phone) {
-                        <div class="flex items-start gap-2.5 text-[13px]">
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 mt-0.5 flex-shrink-0 text-violet-400">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-2.824-1.502-5.184-3.862-6.686-6.686l1.293-.97c.362-.272.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
-                          </svg>
-                          <a href="tel:{{ patient.phone }}" class="pf-hc-link hover:underline transition-colors font-semibold text-violet-400">
-                            {{ patient.phone }}
-                          </a>
-                        </div>
+        } @else if (filteredItems().length === 0) {
+          <div class="pf-empty">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="pf-empty__icon" aria-hidden="true">
+              <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            <p class="pf-empty__title">{{ query() || statusFilter() !== 'all' ? 'No matching visits' : 'No home visits assigned' }}</p>
+            <p class="pf-empty__body">{{ query() || statusFilter() !== 'all' ? 'Try adjusting your search or status filter.' : 'Home-collection requests assigned to you will appear here.' }}</p>
+          </div>
+        } @else {
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            @for (a of filteredItems(); track a.id) {
+              <div class="pf-card pf-hc-card">
+                <!-- Header -->
+                <div class="pf-card__head">
+                  <pf-avatar [name]="a.patient?.displayName || 'Patient'" [size]="34"></pf-avatar>
+                  <div class="min-w-0 flex-1">
+                    <h3 class="font-bold text-[15px] leading-tight text-[var(--text-primary)] truncate"
+                        [title]="a.patient?.displayName || 'Patient'">
+                      {{ a.patient?.displayName || 'Patient' }}
+                    </h3>
+                    <p class="text-[12px] text-[var(--text-tertiary)] mt-0.5 truncate font-medium">
+                      @if (patientMeta(a.patient); as meta) {
+                        <span>{{ meta }}</span>
+                      } @else {
+                        <span>Scheduled visit</span>
                       }
-                    }
+                    </p>
                   </div>
+                  <pf-chip [tone]="statusTone(a.status)" size="sm">
+                    {{ statusLabel(a.status) }}
+                  </pf-chip>
                 </div>
 
-                <!-- Footer Actions: Map Link and Button -->
-                <div class="pf-hc-footer flex items-center justify-between gap-4 pt-1 border-t border-slate-700/15 mt-auto">
-                  <div class="flex-shrink-0">
-                    @if (mapUrl(a); as url) {
-                      <a [href]="url" target="_blank" rel="noopener" class="pf-hc-link text-[12px] font-semibold text-violet-400 hover:text-violet-300 transition-colors inline-flex items-center gap-1">
-                        <span>Directions</span>
-                        <span class="text-[10px]">↗</span>
-                      </a>
-                    }
-                  </div>
-                  <div class="flex-shrink-0 flex flex-wrap items-center gap-2">
-                    @if (a.status === 'booked') {
-                      <pf-touch-btn size="sm" variant="primary" class="w-full sm:w-auto" [busy]="busyId() === a.id" busyLabel="Checking in…" (pressed)="checkInAndCollect(a)">
-                        Check in &amp; collect
-                      </pf-touch-btn>
-                    } @else {
-                      <pf-touch-btn size="sm" variant="secondary" class="w-full sm:w-auto" (pressed)="goCollect()">
-                        Collect samples
-                      </pf-touch-btn>
-                      @if (a.status === 'checked_in' || a.status === 'in_progress') {
-                        <pf-touch-btn size="sm" variant="primary" class="w-full sm:w-auto" [busy]="busyId() === a.id" busyLabel="Completing…" (pressed)="completeVisit(a)">
-                          Complete visit
-                        </pf-touch-btn>
+                <!-- Body -->
+                <div class="pf-card__body">
+                  <!-- Date & Slot -->
+                  <div class="pf-hc-row">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pf-hc-icon flex-shrink-0" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                      <line x1="16" y1="2" x2="16" y2="6"/>
+                      <line x1="8" y1="2" x2="8" y2="6"/>
+                      <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    <span class="text-[13px] font-medium text-[var(--text-secondary)]">
+                      {{ a.appointmentDate | date:'dd MMM yyyy' }}
+                      @if (a.slotTime) {
+                        <span class="font-bold text-[var(--color-primary,#7c3aed)] ml-1 tabular-nums">· {{ a.slotTime }}</span>
                       }
+                    </span>
+                  </div>
+
+                  <!-- Address -->
+                  <div class="pf-hc-row items-start">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pf-hc-icon flex-shrink-0 mt-0.5" aria-hidden="true">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                      <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                    <div class="min-w-0 flex-1 text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                      <span>{{ a.address || 'No address specified' }}</span>
+                      @if (a.pincode) {
+                        <span class="font-semibold text-[var(--text-primary)] ml-1 tabular-nums">({{ a.pincode }})</span>
+                      }
+                    </div>
+                  </div>
+
+                  <!-- Phone & Quick Contact -->
+                  @if (a.patient?.phone; as phone) {
+                    <div class="pf-hc-row">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="pf-hc-icon flex-shrink-0" aria-hidden="true">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                      </svg>
+                      <a [href]="'tel:' + phone" class="pf-hc-phone text-[13px] font-semibold text-[var(--color-primary,#7c3aed)] hover:underline tabular-nums">
+                        {{ phone }}
+                      </a>
+                      <a [href]="'https://wa.me/' + cleanPhone(phone)" target="_blank" rel="noopener" class="pf-hc-wa-btn press ml-auto" title="WhatsApp" aria-label="WhatsApp">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M20 12a8 8 0 1 1-15.3-3.2L3 20l6.2-1.6A8 8 0 0 0 20 12Z"/>
+                        </svg>
+                      </a>
+                    </div>
+                  }
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="pf-card__foot">
+                  <div class="pf-hc-foot-inner flex items-center justify-between w-full gap-2">
+                    @if (mapUrl(a); as url) {
+                      <a [href]="url" target="_blank" rel="noopener"
+                         class="pf-btn pf-btn--quiet pf-hc-directions text-[12px] font-semibold inline-flex items-center gap-1.5"
+                         aria-label="Directions to patient location">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+                        </svg>
+                        <span>Directions</span>
+                      </a>
+                    } @else {
+                      <span></span>
                     }
+
+                    <div class="pf-hc-foot-actions flex items-center gap-2">
+                      @if (a.status === 'booked') {
+                        <button type="button" class="pf-btn pf-btn--primary press"
+                                [disabled]="busyId() === a.id" (click)="checkInAndCollect(a)">
+                          {{ busyId() === a.id ? 'Checking in…' : 'Check in & collect' }}
+                        </button>
+                      } @else {
+                        <button type="button" class="pf-btn pf-btn--secondary press"
+                                (click)="goCollect()">
+                          Collect samples
+                        </button>
+                        @if (a.status === 'checked_in' || a.status === 'in_progress') {
+                          <button type="button" class="pf-btn pf-btn--primary press"
+                                  [disabled]="busyId() === a.id" (click)="completeVisit(a)">
+                            {{ busyId() === a.id ? 'Completing…' : 'Complete visit' }}
+                          </button>
+                        }
+                      }
+                    </div>
                   </div>
                 </div>
               </div>
-            </pf-tile>
-          }
-        </div>
-      }
-        </div>
+            }
+          </div>
+        }
       </div>
     </section>
   `
@@ -224,11 +358,43 @@ export class MyHomeCollectionsComponent implements OnInit {
   private readonly svc = inject(AppointmentQueueService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  protected readonly theme = inject(ThemeService);
 
   private readonly _items = signal<Appointment[]>([]);
   private readonly _loading = signal(false);
   readonly items = this._items.asReadonly();
   readonly loading = this._loading.asReadonly();
+
+  readonly query = signal('');
+  readonly statusFilter = signal<'all' | 'scheduled' | 'active'>('all');
+
+  readonly scheduledCount = computed(() => this._items().filter(a => a.status === 'booked').length);
+  readonly activeCount = computed(() => this._items().filter(a => a.status === 'checked_in' || a.status === 'in_progress').length);
+
+  readonly filterOptions = computed<SegmentedOption[]>(() => [
+    { value: 'all', label: `All (${this._items().length})` },
+    { value: 'scheduled', label: `Scheduled (${this.scheduledCount()})` },
+    { value: 'active', label: `In progress (${this.activeCount()})` },
+  ]);
+
+  readonly filteredItems = computed(() => {
+    let list = this._items();
+    const f = this.statusFilter();
+    if (f === 'scheduled') list = list.filter(a => a.status === 'booked');
+    else if (f === 'active') list = list.filter(a => a.status === 'checked_in' || a.status === 'in_progress');
+    const q = this.query().trim().toLowerCase();
+    if (q) {
+      list = list.filter(a => {
+        const name = (a.patient?.displayName || a.patient?.firstName || '').toLowerCase();
+        const phone = (a.patient?.phone || '').toLowerCase();
+        const addr = (a.address || '').toLowerCase();
+        const pin = (a.pincode || '').toLowerCase();
+        const mrn = (a.patient?.mrn || '').toLowerCase();
+        return name.includes(q) || phone.includes(q) || addr.includes(q) || pin.includes(q) || mrn.includes(q);
+      });
+    }
+    return list;
+  });
 
   ngOnInit() { this.load(); }
 
@@ -245,8 +411,6 @@ export class MyHomeCollectionsComponent implements OnInit {
 
   checkInAndCollect(a: Appointment) {
     if (this.busyId() === a.id) return;
-    // Check-in spawns the lab order from the pre-booked tests; the agent then
-    // collects the samples on the standard collection screen.
     this.svc.checkIn(a.id).pipe(busyIdWhile(this.busyId, a.id)).subscribe({
       next: () => { this.toast.success('Checked in — collect the samples.'); this.goCollect(); },
       error: e => { this.toast.error(ApiError.from(e).message); this.load(); }
@@ -254,8 +418,6 @@ export class MyHomeCollectionsComponent implements OnInit {
   }
 
   completeVisit(a: Appointment) {
-    // Closes the visit once the samples are collected — the appointment moves
-    // to `completed` and drops out of the agent's queue on the next load.
     if (this.busyId() === a.id) return;
     this.svc.complete(a.id).pipe(busyIdWhile(this.busyId, a.id)).subscribe({
       next: () => { this.toast.success('Visit completed.'); this.load(); },
@@ -273,7 +435,26 @@ export class MyHomeCollectionsComponent implements OnInit {
     return null;
   }
 
+  patientMeta(p?: Patient | null): string {
+    return p ? formatPatientMeta(p) : '';
+  }
+
+  cleanPhone(phone: string): string {
+    return phone.replace(/\D/g, '');
+  }
+
+  statusTone(s: string): 'default' | 'amber' | 'violet' | 'emerald' {
+    if (s === 'checked_in') return 'amber';
+    if (s === 'in_progress') return 'violet';
+    if (s === 'completed') return 'emerald';
+    return 'default';
+  }
+
   statusLabel(s: string): string {
-    return s === 'in_progress' ? 'Collecting' : s === 'checked_in' ? 'Checked in' : s.charAt(0).toUpperCase() + s.slice(1);
+    if (s === 'booked') return 'Scheduled';
+    if (s === 'checked_in') return 'Checked in';
+    if (s === 'in_progress') return 'Collecting';
+    if (s === 'completed') return 'Completed';
+    return s.charAt(0).toUpperCase() + s.slice(1);
   }
 }

@@ -101,38 +101,43 @@ interface CreateForm {
               </div>
               <div class="pf-card__body">
                 <div class="pf-uf-fields">
-                  <div class="pf-field">
-                    <span class="pf-field__lbl">Title</span>
-                    <pf-select [options]="titleOptions" [value]="form().title" placeholder="—"
-                               (valueChange)="patch({ title: $any($event) ?? '' })"></pf-select>
+                  <div class="pf-uf-name-row">
+                    <div class="pf-field">
+                      <span class="pf-field__lbl">Title</span>
+                      <pf-select [options]="titleOptions" [value]="form().title" placeholder="—"
+                                 (valueChange)="patch({ title: $any($event) ?? '' })"></pf-select>
+                    </div>
+                    <label class="pf-field">
+                      <span class="pf-field__lbl">First name</span>
+                      <input type="text" pfAlpha #nameInput class="pf-input" placeholder="e.g. Prem"
+                             [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
+                    </label>
+                    <label class="pf-field">
+                      <span class="pf-field__lbl">Last name</span>
+                      <input type="text" pfAlpha class="pf-input" placeholder="e.g. Kumar"
+                             [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
+                    </label>
                   </div>
-                  <label class="pf-field">
-                    <span class="pf-field__lbl">First name</span>
-                    <input type="text" pfAlpha #nameInput class="pf-input" placeholder="e.g. Prem"
-                           [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
-                  </label>
-                  <label class="pf-field">
-                    <span class="pf-field__lbl">Last name</span>
-                    <input type="text" pfAlpha class="pf-input" placeholder="e.g. Kumar"
-                           [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
-                  </label>
-                  <label class="pf-field">
-                    <span class="pf-field__lbl">Username <span class="pf-uf-req">*</span></span>
-                    <input type="text" pfAlpha [allowNumbers]="true" class="pf-input" autocomplete="off" autocapitalize="none" spellcheck="false"
-                           [class.pf-input--error]="!!usernameError()" placeholder="e.g. drpriya"
-                           [ngModel]="form().username" (ngModelChange)="onUsernameChange($event)" (blur)="onUsernameBlur()" />
-                    @if (usernameError()) { <p class="pf-uf-err">{{ usernameError() }}</p> }
-                    <p class="pf-field__hint">3–32 letters and digits. This is what they type to sign in.</p>
-                  </label>
-                  <div class="pf-field">
-                    <span class="pf-field__lbl">Phone</span>
-                    <div class="pf-uf-phone">
-                      <pf-select class="pf-uf-phone__cc" [options]="countryOptions" [value]="countryCode()"
-                                 [searchable]="true" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
-                      <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()"
-                             class="pf-input pf-num pf-uf-phone__num" aria-label="Mobile number"
-                             [placeholder]="phoneMaxDigits() + '-digit mobile number'"
-                             [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
+                  <div class="pf-uf-account-row">
+                    <label class="pf-field">
+                      <span class="pf-field__lbl">Username <span class="pf-uf-req">*</span></span>
+                      <input type="text" pfAlpha [allowNumbers]="true" class="pf-input" autocomplete="off" autocapitalize="none" spellcheck="false"
+                             [class.pf-input--error]="!!usernameError()" placeholder="e.g. drpriya"
+                             [ngModel]="form().username" (ngModelChange)="onUsernameChange($event)" (blur)="onUsernameBlur()" />
+                      @if (usernameError()) { <p class="pf-uf-err">{{ usernameError() }}</p> }
+                      <p class="pf-field__hint">3–32 letters and digits. This is what they type to sign in.</p>
+                    </label>
+                    <div class="pf-field">
+                      <span class="pf-field__lbl">Phone</span>
+                      <div class="pf-uf-phone">
+                        <pf-select class="pf-uf-phone__cc" [options]="countryOptions" [value]="countryCode()"
+                                   [searchable]="true" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
+                        <span class="pf-uf-phone__sep" aria-hidden="true"></span>
+                        <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()"
+                               class="pf-num pf-uf-phone__num" aria-label="Mobile number"
+                               [placeholder]="phoneMaxDigits() + '-digit mobile number'"
+                               [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
+                      </div>
                     </div>
                   </div>
                 </div>

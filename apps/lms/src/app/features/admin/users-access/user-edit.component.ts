@@ -141,44 +141,49 @@ interface EditForm {
               </div>
               <div class="pf-card__body">
                 <div class="pf-uf-fields">
-                  <div class="pf-field">
-                    <span class="pf-field__lbl">Title</span>
-                    <pf-select [options]="titleOptions" [value]="form().title" placeholder="—"
-                               (valueChange)="patch({ title: $any($event) ?? '' })"></pf-select>
-                  </div>
-                  <label class="pf-field">
-                    <span class="pf-field__lbl">First name</span>
-                    <input type="text" pfAlpha #nameInput class="pf-input" [class.pf-input--error]="!!fieldError()['firstName']"
-                           placeholder="e.g. Prem" [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
-                    @if (fieldError()['firstName']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
-                  </label>
-                  <label class="pf-field">
-                    <span class="pf-field__lbl">Last name</span>
-                    <input type="text" pfAlpha class="pf-input" [class.pf-input--error]="!!fieldError()['fathersName']"
-                           placeholder="e.g. Kumar" [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
-                    @if (fieldError()['fathersName']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
-                  </label>
-                  @if (username()) {
-                    <label class="pf-field">
-                      <span class="pf-field__lbl">Username</span>
-                      <input type="text" class="pf-input pf-num" [value]="username()" readonly aria-readonly="true" />
-                      <p class="pf-field__hint">The login handle can't be changed. Use “Reset password” in Users to issue a new password.</p>
-                    </label>
-                  }
-                  <div class="pf-field" [class.pf-uf-span]="!username()">
-                    <span class="pf-field__lbl">Phone</span>
-                    <div class="pf-uf-phone">
-                      <pf-select class="pf-uf-phone__cc" [options]="countryOptions" [value]="countryCode()"
-                                 [searchable]="true" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
-                      <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()"
-                             class="pf-input pf-num pf-uf-phone__num" aria-label="Mobile number"
-                             [class.pf-input--error]="!!fieldError()['phone']"
-                             [placeholder]="phoneMaxDigits() + '-digit mobile number'"
-                             [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
+                  <div class="pf-uf-name-row">
+                    <div class="pf-field">
+                      <span class="pf-field__lbl">Title</span>
+                      <pf-select [options]="titleOptions" [value]="form().title" placeholder="—"
+                                 (valueChange)="patch({ title: $any($event) ?? '' })"></pf-select>
                     </div>
-                    @if (fieldError()['phone']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
+                    <label class="pf-field">
+                      <span class="pf-field__lbl">First name</span>
+                      <input type="text" pfAlpha #nameInput class="pf-input" [class.pf-input--error]="!!fieldError()['firstName']"
+                             placeholder="e.g. Prem" [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
+                      @if (fieldError()['firstName']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
+                    </label>
+                    <label class="pf-field">
+                      <span class="pf-field__lbl">Last name</span>
+                      <input type="text" pfAlpha class="pf-input" [class.pf-input--error]="!!fieldError()['fathersName']"
+                             placeholder="e.g. Kumar" [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
+                      @if (fieldError()['fathersName']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
+                    </label>
                   </div>
-                  <label class="pf-field" [class.pf-uf-span]="!username()">
+                  <div class="pf-uf-account-row">
+                    @if (username()) {
+                      <label class="pf-field">
+                        <span class="pf-field__lbl">Username</span>
+                        <input type="text" class="pf-input pf-num" [value]="username()" readonly aria-readonly="true" />
+                        <p class="pf-field__hint">The login handle can't be changed. Use “Reset password” in Users to issue a new password.</p>
+                      </label>
+                    }
+                    <div class="pf-field" [class.pf-uf-span]="!username()">
+                      <span class="pf-field__lbl">Phone</span>
+                      <div class="pf-uf-phone" [class.pf-uf-phone--error]="!!fieldError()['phone']">
+                        <pf-select class="pf-uf-phone__cc" [options]="countryOptions" [value]="countryCode()"
+                                   [searchable]="true" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
+                        <span class="pf-uf-phone__sep" aria-hidden="true"></span>
+                        <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()"
+                               class="pf-num pf-uf-phone__num" aria-label="Mobile number"
+                               [class.pf-input--error]="!!fieldError()['phone']"
+                               [placeholder]="phoneMaxDigits() + '-digit mobile number'"
+                               [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
+                      </div>
+                      @if (fieldError()['phone']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
+                    </div>
+                  </div>
+                  <label class="pf-field">
                     <span class="pf-field__lbl">Registration number</span>
                     <input type="text" class="pf-input pf-num pf-ue-regno" maxlength="64" autocomplete="off"
                            [class.pf-input--error]="!!fieldError()['registrationId']"
