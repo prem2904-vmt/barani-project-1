@@ -455,6 +455,26 @@
 }
 
 
+
+/* Tablet: match mobile list search below the segmented control */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .pf-mtabs {
+    margin-bottom: 10px;
+  }
+  .pf-work-find--phone {
+    display: flex;
+    flex: none;
+    width: 100%;
+    max-width: none;
+    margin: 0 0 10px;
+  }
+  .pf-work-find--phone .pf-work-find__input {
+    min-height: 44px;
+    height: 44px;
+    font-size: 15px;
+  }
+}
+
 /* Prefrontal Shared Custom Date Picker Popover */
 .pf-custom-date-bd {
   position: fixed;
