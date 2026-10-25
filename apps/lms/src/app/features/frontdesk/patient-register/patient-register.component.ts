@@ -68,21 +68,21 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-reg-cancel press" [disabled]="saving()"
                   (click)="back()" aria-label="Cancel" title="Cancel">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-            Cancel
+            <span class="pf-reg-btn__t">Cancel</span>
           </button>
           @if (!patientId()) {
             <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-reg-order press" [disabled]="saving() || !config()"
                     [pfBusy]="saving() && savingAs() === 'order'" pfBusyLabel="Saving patient…"
                     (click)="submit('create_order')" aria-label="Save & book test" title="Register, then book a test">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.4A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.4-2.6L14 9.5V3"/><path d="M7.5 15h9"/></svg>
-              Save &amp; Book test
+              <span class="pf-reg-btn__t">Save &amp; Book test</span>
             </button>
 @if (features.appointmentsEnabled()) {
                         <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-reg-appt press" [disabled]="saving() || !config()"
                     [pfBusy]="saving() && savingAs() === 'appointment'" pfBusyLabel="Saving patient…"
                     (click)="submit('create_appointment')" aria-label="Save & book appointment" title="Register, then book an appointment">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-              Save &amp; Book appointment
+              <span class="pf-reg-btn__t">Save &amp; Book appointment</span>
             </button>
             }
             @if (opdGate.visible()) {
@@ -90,7 +90,7 @@ import { LabFeaturesService } from '../../../core/services/lab-features.service'
                     [pfBusy]="saving() && savingAs() === 'consult'" pfBusyLabel="Saving patient…"
                     (click)="submit('create_consult')" aria-label="Save & book consultation" title="Register, then book a consultation">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v6a6 6 0 0 0 12 0V3"/><path d="M10 3H6M18 3h-4"/><path d="M12 15v3a4 4 0 0 0 8 0v-2"/><circle cx="20" cy="14" r="2"/></svg>
-              Save &amp; Book consult
+              <span class="pf-reg-btn__t">Save &amp; Book consult</span>
             </button>
             }
           }

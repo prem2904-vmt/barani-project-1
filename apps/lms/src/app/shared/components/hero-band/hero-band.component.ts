@@ -136,7 +136,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
       box-shadow: var(--pf-band-glow, none);
     }
 
-    .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; flex-shrink: 0; }
     .pf-hb__logo {
       /* The tenant uploads a PNG with transparency — no backing plate
          (owner); it sits directly on the band gradient. */

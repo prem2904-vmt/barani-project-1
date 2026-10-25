@@ -685,6 +685,7 @@ const STATUS_CLASS: Record<string, string> = {
         </div>
       </div>
     }
+    }
       @if (jumpPickerOpen()) {
         <div class="pf-apc-jump-bd" (click)="closeJumpPicker()"></div>
         <div class="pf-apc-jump-pop"
@@ -700,7 +701,6 @@ const STATUS_CLASS: Record<string, string> = {
           </pf-calendar>
         </div>
       }
-    }
   `,
   styleUrl: './appointments-calendar.component.scss'
 })
