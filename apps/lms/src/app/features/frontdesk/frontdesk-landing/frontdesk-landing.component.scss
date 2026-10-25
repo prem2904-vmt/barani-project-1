@@ -8,7 +8,6 @@
 @use './styles/widgets';
 @use './styles/drawers-modals';
 @use './styles/mobile';
-@use './styles/flatpickr';
 
 /* ── Designer hero band: full-bleed (Figma 446-113) ─────────────────
    The band escapes the header's page padding so its gradient runs
@@ -453,4 +452,42 @@
     height: 44px;
     font-size: 16px;
   }
+}
+
+
+/* Prefrontal Shared Custom Date Picker Popover */
+.pf-custom-date-bd {
+  position: fixed;
+  inset: 0;
+  z-index: 99998;
+  background: transparent;
+}
+.pf-custom-date-pop {
+  position: fixed;
+  z-index: 99999;
+  width: 285px;
+  box-sizing: border-box;
+  padding: 12px;
+  border-radius: var(--pf-radius, 14px);
+  background: var(--pf-card-bg, #ffffff);
+  border: 1px solid var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18), 0 2px 8px rgba(15, 23, 42, 0.08);
+  animation: pf-pop 160ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.pf-custom-date-pop--above {
+  transform: translateY(-100%);
+  animation-name: pf-pop-above;
+}
+:root.dark .pf-custom-date-pop {
+  background: var(--pf-card-bg, #0f172a);
+  border-color: rgba(148, 163, 184, 0.25);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+}
+@keyframes pf-pop {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes pf-pop-above {
+  from { opacity: 0; transform: translateY(calc(-100% + 4px)) scale(0.97); }
+  to { opacity: 1; transform: translateY(-100%) scale(1); }
 }

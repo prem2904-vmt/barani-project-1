@@ -3,6 +3,7 @@ import {
   Component,
   ElementRef,
   computed,
+  effect,
   input,
   output,
   signal,
@@ -93,7 +94,7 @@ const MONTH_NAMES = [
       </div>
 
       @if (viewMode() === 'days') {
-        <div class="pf-cal__grid" role="grid" [attr.aria-label]="monthYearTitle()" (keydown)="onKey($event)">
+        <div class="pf-cal__grid" role="grid" [attr.aria-label]="monthYearTitle()" (keydown)="onKey($event)" (mouseleave)="onGridLeave()">
           <div class="pf-cal__dows" role="row">
             @for (dow of dows; track $index) {
               <span class="pf-cal__dow" role="columnheader" [attr.aria-label]="dow.full">{{ dow.short }}</span>
@@ -111,11 +112,15 @@ const MONTH_NAMES = [
                           [attr.data-iso]="day.iso"
                           [class.pf-cal__day--out]="day.outside"
                           [class.pf-cal__day--today]="day.today"
-                          [attr.aria-selected]="day.iso === value() ? true : null"
+                          [class.pf-cal__day--range-start]="isRangeStart(day.iso)"
+                          [class.pf-cal__day--range-end]="isRangeEnd(day.iso)"
+                          [class.pf-cal__day--in-range]="isInRange(day.iso)"
+                          [attr.aria-selected]="isSelected(day.iso) ? true : null"
                           [attr.aria-disabled]="day.disabled ? true : null"
                           [attr.aria-current]="day.today ? 'date' : null"
                           [attr.aria-label]="day.label"
                           [attr.tabindex]="day.iso === rovingIso() ? 0 : -1"
+                          (mouseenter)="!day.disabled && onDayHover(day.iso)"
                           (click)="!day.disabled && pickDay(day.iso)">
                     <span class="pf-cal__n pf-num">{{ day.dayNumber }}</span>
                   </button>
@@ -153,9 +158,16 @@ const MONTH_NAMES = [
         <button type="button" class="pf-cal__action pf-cal__action--clear" (click)="clearDate()" title="Clear date">
           Clear
         </button>
-        <button type="button" class="pf-cal__action pf-cal__action--today" (click)="pickToday()" title="Select today">
-          Today
-        </button>
+        <div class="pf-cal__foot-right">
+          <button type="button" class="pf-cal__action pf-cal__action--today" (click)="pickToday()" title="Select today">
+            Today
+          </button>
+          @if (mode() === 'range' && selectedStart()) {
+            <button type="button" class="pf-cal__action pf-cal__action--apply" (click)="applyRange()" title="Apply selected date range">
+              Apply
+            </button>
+          }
+        </div>
       </div>
     </div>
   `,
@@ -400,6 +412,70 @@ const MONTH_NAMES = [
       padding-top: 8px;
       margin-top: 4px;
     }
+    .pf-cal__foot-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .pf-cal__action--apply {
+      background: var(--color-primary, #7c3aed);
+      color: #ffffff !important;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 6px;
+    }
+    .pf-cal__action--apply:hover {
+      background: var(--color-violet-700, #6d28d9) !important;
+      color: #ffffff !important;
+    }
+    .pf-cal__day--range-start {
+      background: var(--color-primary, #7c3aed) !important;
+      color: #ffffff !important;
+      border-top-left-radius: var(--pf-radius-chip, 8px) !important;
+      border-bottom-left-radius: var(--pf-radius-chip, 8px) !important;
+      border-top-right-radius: 0 !important;
+      border-bottom-right-radius: 0 !important;
+      box-shadow: 0 1px 3px rgba(124, 58, 237, 0.3);
+    }
+    .pf-cal__day--range-start .pf-cal__n {
+      color: #ffffff !important;
+      background: transparent !important;
+      font-weight: 700;
+    }
+    .pf-cal__day--range-end {
+      background: var(--color-primary, #7c3aed) !important;
+      color: #ffffff !important;
+      border-top-right-radius: var(--pf-radius-chip, 8px) !important;
+      border-bottom-right-radius: var(--pf-radius-chip, 8px) !important;
+      border-top-left-radius: 0 !important;
+      border-bottom-left-radius: 0 !important;
+      box-shadow: 0 1px 3px rgba(124, 58, 237, 0.3);
+    }
+    .pf-cal__day--range-end .pf-cal__n {
+      color: #ffffff !important;
+      background: transparent !important;
+      font-weight: 700;
+    }
+    .pf-cal__day--range-start.pf-cal__day--range-end {
+      border-radius: var(--pf-radius-chip, 8px) !important;
+    }
+    .pf-cal__day--in-range {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, var(--pf-card-bg, #ffffff)) !important;
+      color: var(--color-primary, #7c3aed) !important;
+      border-radius: 0 !important;
+    }
+    .pf-cal__day--in-range .pf-cal__n {
+      font-weight: 600;
+      background: transparent !important;
+      color: var(--color-primary, #7c3aed) !important;
+    }
+    :root.dark .pf-cal__day--in-range {
+      background: color-mix(in srgb, var(--color-primary, #7c3aed) 22%, #0f172a) !important;
+      color: #c4b5fd !important;
+    }
+    :root.dark .pf-cal__day--in-range .pf-cal__n {
+      color: #c4b5fd !important;
+    }
     .pf-cal__action {
       background: transparent;
       border: 0;
@@ -429,12 +505,20 @@ const MONTH_NAMES = [
   `]
 })
 export class PfCalendarComponent {
+  readonly mode = input<'single' | 'range'>('single');
   readonly value = input<string | null>(null);
+  readonly rangeStart = input<string | null>(null);
+  readonly rangeEnd = input<string | null>(null);
   readonly min = input<string | null>(null);
   readonly max = input<string | null>(null);
   readonly compact = input(false);
 
   readonly valueChange = output<string>();
+  readonly rangeChange = output<{ start: string; end: string }>();
+
+  readonly selectedStart = signal<string | null>(null);
+  readonly selectedEnd = signal<string | null>(null);
+  readonly hoveredIso = signal<string | null>(null);
 
   readonly dows = DOW_HEADERS;
 
@@ -459,6 +543,23 @@ export class PfCalendarComponent {
   constructor() {
     const today = new Date();
     this.rovingIso.set(this.formatIso(today.getFullYear(), today.getMonth() + 1, today.getDate()));
+
+    effect(() => {
+      if (this.mode() === 'range') {
+        const s = this.rangeStart();
+        const e = this.rangeEnd();
+        this.selectedStart.set(s || null);
+        this.selectedEnd.set(e || null);
+        if (s) {
+          this.jumpToMonthOf(s);
+        }
+      } else {
+        const v = this.value();
+        if (v) {
+          this.jumpToMonthOf(v);
+        }
+      }
+    }, { allowSignalWrites: true });
   }
 
   readonly monthYearTitle = computed(() => {
@@ -600,11 +701,83 @@ export class PfCalendarComponent {
     this.viewYear.set(y);
     this.viewMonth.set(m);
     this.viewMode.set('days');
-    this.pickDay(iso);
+    if (this.mode() === 'range') {
+      this.selectedStart.set(iso);
+      this.selectedEnd.set(iso);
+      this.hoveredIso.set(null);
+      this.rangeChange.emit({ start: iso, end: iso });
+    } else {
+      this.pickDay(iso);
+    }
   }
 
   clearDate(): void {
-    this.valueChange.emit('');
+    if (this.mode() === 'range') {
+      this.selectedStart.set(null);
+      this.selectedEnd.set(null);
+      this.hoveredIso.set(null);
+      this.rangeChange.emit({ start: '', end: '' });
+    } else {
+      this.valueChange.emit('');
+    }
+  }
+
+  applyRange(): void {
+    const s = this.selectedStart();
+    if (!s) return;
+    const e = this.selectedEnd() || s;
+    const start = s <= e ? s : e;
+    const end = s <= e ? e : s;
+    this.selectedStart.set(start);
+    this.selectedEnd.set(end);
+    this.rangeChange.emit({ start, end });
+  }
+
+  onDayHover(iso: string): void {
+    if (this.mode() === 'range' && this.selectedStart() && !this.selectedEnd()) {
+      this.hoveredIso.set(iso);
+    }
+  }
+
+  onGridLeave(): void {
+    if (this.mode() === 'range') {
+      this.hoveredIso.set(null);
+    }
+  }
+
+  isRangeStart(iso: string): boolean {
+    if (this.mode() !== 'range') return false;
+    const s = this.selectedStart();
+    const e = this.selectedEnd() || this.hoveredIso();
+    if (!s) return false;
+    if (!e) return iso === s;
+    return iso === (s <= e ? s : e);
+  }
+
+  isRangeEnd(iso: string): boolean {
+    if (this.mode() !== 'range') return false;
+    const s = this.selectedStart();
+    const e = this.selectedEnd() || this.hoveredIso();
+    if (!s) return false;
+    if (!e) return iso === s;
+    return iso === (s <= e ? e : s);
+  }
+
+  isInRange(iso: string): boolean {
+    if (this.mode() !== 'range') return false;
+    const s = this.selectedStart();
+    const e = this.selectedEnd() || this.hoveredIso();
+    if (!s || !e) return false;
+    const start = s <= e ? s : e;
+    const end = s <= e ? e : s;
+    return iso > start && iso < end;
+  }
+
+  isSelected(iso: string): boolean {
+    if (this.mode() === 'range') {
+      return this.isRangeStart(iso) || this.isRangeEnd(iso) || this.isInRange(iso);
+    }
+    return iso === this.value();
   }
 
   jumpToMonthOf(iso: string): void {
@@ -620,7 +793,28 @@ export class PfCalendarComponent {
 
   pickDay(iso: string): void {
     this.rovingIso.set(iso);
-    this.valueChange.emit(iso);
+    if (this.mode() === 'range') {
+      const s = this.selectedStart();
+      const e = this.selectedEnd();
+      if (!s || (s && e)) {
+        this.selectedStart.set(iso);
+        this.selectedEnd.set(null);
+        this.hoveredIso.set(null);
+      } else {
+        let start = s;
+        let end = iso;
+        if (end < start) {
+          start = iso;
+          end = s;
+        }
+        this.selectedStart.set(start);
+        this.selectedEnd.set(end);
+        this.hoveredIso.set(null);
+        this.rangeChange.emit({ start, end });
+      }
+    } else {
+      this.valueChange.emit(iso);
+    }
   }
 
   onKey(event: KeyboardEvent): void {
