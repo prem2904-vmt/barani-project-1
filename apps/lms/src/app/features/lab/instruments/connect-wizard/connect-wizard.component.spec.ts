@@ -113,7 +113,7 @@ describe('Connect an analyzer — wizard', () => {
     expect(p.el.querySelectorAll('select, datalist').length).toBe(0);
   });
 
-  it('Fix: confirms in plain words FIRST, then one call with the Public card + the analyzer ports; No = nothing runs', async () => {
+  it('Fix: confirms in plain words FIRST, then one call with the picked analyzer card + the analyzer ports; No = nothing runs', async () => {
     const b = fakeDiag();
     const no = render(b.api, false);
     await flush(); no.f.detectChanges();
@@ -131,8 +131,11 @@ describe('Connect an analyzer — wizard', () => {
     const req = p.dialog.confirm.mock.calls[0][0] as unknown as { items: string[]; title: string };
     expect(req.title).toBe('Let analyzers reach Prefrontal?');
     expect(req.items).toContain('Set Ethernet 2 to a Private network.');
-    expect(req.items[0]).toBe('Remove the Windows Firewall rules that block Prefrontal.');
-    expect(b2.diag.fixFirewall).toHaveBeenCalledWith({ ports: [5603, 5599, 5600, 5601, 5602, 5604, 5605, 5606, 5607, 5608, 5609, 5610], aliases: ['Ethernet 2'] });
+    expect(req.items[0]).toBe('Remove the Windows Firewall rule that blocks Prefrontal.');
+    expect(req.items[1]).toBe('Let analyzers on 192.168.1.x (Ethernet 2) reach Prefrontal on ports 5599, 5600, 5601, 5602, 5603, 5604, 5605, 5606, 5607, 5608, 5609, 5610 — only Prefrontal, nothing else.');
+    expect(req.items.join(' ')).not.toContain('Set Ethernet to');
+    // The renderer names the card; main re-reads Windows and decides what flips.
+    expect(b2.diag.fixFirewall).toHaveBeenCalledWith({ ports: [5599, 5600, 5601, 5602, 5603, 5604, 5605, 5606, 5607, 5608, 5609, 5610], adapter: 'Ethernet 2' });
     expect(b2.diag.snapshot).toHaveBeenCalledTimes(2);
     expect(p.toasts.success).toHaveBeenCalled();
   });
@@ -148,6 +151,7 @@ describe('Connect an analyzer — wizard', () => {
     const vals = Array.from(p.el.querySelectorAll('.pf-cw-instr__v')).map((v) => v.textContent!.trim());
     expect(vals).toEqual(['192.168.1.10', '5603']);
     expect(p.el.textContent).toContain('Waiting for the analyzer to connect');
+    expect(p.el.querySelector('.pf-cw-note')!.textContent).toBe('Results sent while finding the analyzer are not saved — run a sample after pairing.');
     expect(p.el.textContent).toContain('Port 5600 is used by CBCLisM51 (PID 7412)');
     expect(btn(p.el, 'Next: create')!.disabled).toBe(true);
 

@@ -24,12 +24,15 @@
  * 192.168.1.x, an old LIS program on port 5600, a Public analyzer network).
  */
 const { execFile } = require('child_process');
+const nodePath = require('path');
 const nodeOs = require('os');
 const nodeNet = require('net');
 const { isPrivateIpv4 } = require('../bridges/local-request');
 
 /** The Windows Firewall rule this module owns (one, replaced on every fix). */
 const RULE_NAME = 'Prefrontal analyzers (inbound)';
+/** The replacement is created under this name first, then renamed (L7). */
+const RULE_TEMP_NAME = 'Prefrontal analyzers (inbound, new)';
 /** Ports the wizard hands out to analyzers (analyzer = TCP client → us). */
 const PORT_RANGE = { start: 5599, end: 5650 };
 /** LIS ports analyzers commonly LISTEN on (we dial them) — the opt-in probe. */
@@ -38,10 +41,36 @@ const PROBE_COOLDOWN_MS = 60 * 1000;
 const PROBE_TIMEOUT_MS = 400;
 const PROBE_CONCURRENCY = 16;
 const EXEC_TIMEOUT_MS = 15 * 1000;
+/** canBindPort gives up (= "not free") after this. */
+const BIND_TIMEOUT_MS = 2000;
 /** Windows ERROR_CANCELLED — the user said No to the UAC prompt. */
 const UAC_CANCELLED = 1223;
 
 const lines = (t) => String(t || '').split(/\r\n|\r|\n/);
+
+/** %SystemRoot% as an absolute drive path (no quotes / metachars), else C:\Windows. */
+const SYSROOT_RE = /^[A-Za-z]:\\[A-Za-z0-9 _.()\\-]{1,200}$/;
+function systemRoot(env = process.env) {
+  const v = String((env && (env.SystemRoot || env.SYSTEMROOT || env.windir)) || '').replace(/\\+$/, '');
+  return SYSROOT_RE.test(v) ? v : 'C:\\Windows';
+}
+
+/**
+ * Absolute paths of the Windows tools netdiag runs — never a bare name a
+ * planted powershell.exe / netstat.exe in the working directory or PATH
+ * could answer to.
+ */
+function windowsBins(env = process.env) {
+  const sys32 = nodePath.win32.join(systemRoot(env), 'System32');
+  return {
+    powershell: nodePath.win32.join(sys32, 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+    netstat: nodePath.win32.join(sys32, 'NETSTAT.EXE'),
+    tasklist: nodePath.win32.join(sys32, 'tasklist.exe'),
+    ipconfig: nodePath.win32.join(sys32, 'ipconfig.exe'),
+    netsh: nodePath.win32.join(sys32, 'netsh.exe'),
+    arp: nodePath.win32.join(sys32, 'ARP.EXE'),
+  };
+}
 const validPort = (p) => Number.isInteger(p) && p >= 1 && p <= 65535;
 
 // ── parsers (pure) ─────────────────────────────────────────────────────────
@@ -321,9 +350,15 @@ function findProblems({ adapters = [], profiles = [], firewall = null } = {}) {
     });
   }
   for (const p of profiles.filter((q) => /^public$/i.test(q.category || ''))) {
+    // Only an analyzer-only card (no Internet, no gateway) is offered the
+    // Public → Private fix; the office / Wi-Fi network stays as it is.
+    const a = adapters.find((x) => x.name === p.alias);
+    const analyzerOnly = !internetProfile(p) && !!a && !a.gateway;
     out.push({
-      code: 'public_network', severity: 'warning', card: p.alias, fix: 'firewall',
-      message: `${p.alias} is set as a Public network, so Windows blocks analyzers on it. Fix sets it to Private.`,
+      code: 'public_network', severity: 'warning', card: p.alias, ...(analyzerOnly ? { fix: 'firewall' } : {}),
+      message: analyzerOnly
+        ? `${p.alias} is set as a Public network, so Windows blocks analyzers on it. Fix sets it to Private.`
+        : `${p.alias} is set as a Public network. It reaches the internet, so Prefrontal leaves it as it is — the firewall rule still lets the analyzer in.`,
     });
   }
   if (firewall && firewall.blockRules > 0) {
@@ -342,42 +377,114 @@ const excluded = (port, ranges) => (ranges || []).some((r) => port >= r.start &&
 
 // ── the one elevated write (Windows) ───────────────────────────────────────
 
-const PROGRAM_RE = /^[A-Za-z]:\\[^'"`$\r\n\t;|&<>%*?]+\.exe$/i;
+// An apostrophe is allowed in the exe path ("C:\Users\O'Brien\…"): psq()
+// doubles it inside the single-quoted literal.
+const PROGRAM_RE = /^[A-Za-z]:\\[^"`$\r\n\t;|&<>%*?]+\.exe$/i;
 const ALIAS_RE = /^[A-Za-z0-9 _.()#-]{1,80}$/;
+const SUBNET_RE = /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/;
 const psq = (s) => `'${String(s).replace(/'/g, "''")}'`;
+const internetProfile = (p) => /^internet$/i.test(String((p && p.ipv4) || '').trim());
+const inRange = (p) => p >= PORT_RANGE.start && p <= PORT_RANGE.end;
+
+/** A remote scope for the rule: a valid IPv4 network /8–/32. */
+function validSubnet(s) {
+  if (!SUBNET_RE.test(String(s || ''))) return false;
+  const [ip, bits] = String(s).split('/');
+  return ipToInt(ip) != null && Number(bits) >= 8 && Number(bits) <= 32;
+}
+
+/** The analyzer card's own network, at most a /24 ("192.168.10.0/24"). */
+function analyzerSubnets(adapter) {
+  const out = [];
+  for (const x of (adapter && adapter.ipv4) || []) {
+    if (!isPrivateIpv4(x.address) || x.address.startsWith('169.254.')) continue;
+    const bits = Math.max(24, maskBits(x.netmask || '255.255.255.0') || 24);
+    const sn = subnetOf(x.address, intToIp(bits === 32 ? 0xffffffff : ((0xffffffff << (32 - bits)) >>> 0)));
+    if (sn && validSubnet(sn) && !out.includes(sn)) out.push(sn);
+  }
+  return out;
+}
+
+/**
+ * What ONE firewall fix will change — computed in main from what Windows
+ * reports (the renderer only names the card + asks for ports; it mirrors
+ * this in connect-wizard.logic.ts firewallFixPlan so both say the same):
+ *   ports    asked ∩ the analyzer range (5599–5650), plus the ports of the
+ *            analyzers already paired on this PC;
+ *   subnets  the picked card's own /24 (the rule's only remote scope);
+ *   flip     the picked card, if Windows calls it Public AND it has no
+ *            Internet AND no gateway (the analyzer cable, never the office
+ *            LAN / Wi-Fi);
+ *   skipped  a card that should flip but whose name fails the safety check
+ *            (reported as a partial fix, never silently dropped).
+ */
+function firewallPlan({ adapters = [], profiles = [], firewall = null, adapter, ports = [], paired = [] } = {}) {
+  const card = adapters.find((a) => a.name === adapter) || null;
+  if (!card) return { error: 'card' };
+  const asked = (ports || []).map(Number).filter((p) => Number.isInteger(p) && inRange(p));
+  const mine = (paired || []).map(Number).filter((p) => Number.isInteger(p) && p >= 1024 && p <= 65535);
+  const list = [...new Set([...mine, ...asked])].sort((a, b) => a - b).slice(0, 24);
+  if (!list.length) return { error: 'ports' };
+  const subnets = analyzerSubnets(card);
+  if (!subnets.length) return { error: 'subnet' };
+  const prof = profiles.find((p) => p.alias === card.name);
+  const wantsFlip = !!prof && /^public$/i.test(prof.category || '') && !internetProfile(prof) && !card.gateway;
+  const flip = wantsFlip && ALIAS_RE.test(card.name) ? [card.name] : [];
+  const skipped = wantsFlip && !flip.length ? [card.name] : [];
+  const blockRules = (firewall && firewall.blockRules) || 0;
+  const nets = subnets.map((s) => s.replace(/\.0\/24$/, '.x')).join(' and ');
+  const lines = [];
+  if (blockRules > 0) lines.push(`Remove the Windows Firewall ${blockRules === 1 ? 'rule that blocks' : 'rules that block'} Prefrontal.`);
+  lines.push(`Let analyzers on ${nets} (${card.name}) reach Prefrontal on port${list.length === 1 ? '' : 's'} ${list.join(', ')} — only Prefrontal, nothing else.`);
+  if (flip.length) lines.push(`Set ${flip[0]} to a Private network.`);
+  if (skipped.length) lines.push(`${skipped[0]} stays Public (its name has characters Prefrontal will not pass to Windows) — set it to Private in Windows Settings.`);
+  lines.push('Windows will ask for permission once. Nothing else on this PC changes.');
+  return { card: card.name, ports: list, subnets, flip, skipped, lines };
+}
 
 /**
  * The fixed firewall script. Inputs are validated here (throws bad_request):
  *   ports    1–24 integers 1024–65535
- *   program  this exe's own absolute path (drive:\…\X.exe, no quotes/metachars)
- *   aliases  0–8 network card names Windows reported as Public
+ *   program  this exe's own absolute path (drive:\…\X.exe, no "`$ / metachars)
+ *   subnets  1–4 IPv4 networks (a.b.c.d/nn) — the analyzer card's own /24
+ *   aliases  0–8 network card names to set Private (analyzer cards only)
  * What it does, nothing else:
  *   1. removes inbound BLOCK rules whose program is exactly this exe;
  *   2. replaces our one rule: inbound TCP allow, program = this exe,
- *      local ports = the analyzer ports, remote = LocalSubnet only. It is
- *      on every profile because a direct analyzer cable is an
- *      "Unidentified network" that Windows may flip back to Public after a
- *      reboot — the program + port + local-subnet scope is what keeps it
- *      narrow, not the profile;
+ *      local ports = the analyzer ports, remote = the analyzer card's own
+ *      network only. The NEW rule is created first (temporary name), then
+ *      the old one removed, then the new one renamed — a failed create
+ *      leaves the lab's working rule in place. It is on every profile
+ *      because a direct analyzer cable is an "Unidentified network" that
+ *      Windows may flip back to Public after a reboot — the program + port
+ *      + explicit-subnet scope is what keeps it narrow, not the profile;
  *   3. sets each named card's network profile to Private (skips a
  *      domain-managed one).
+ * Exit: 0 ok · 2 a card stayed Public · 3 a block rule stayed · 4 the new
+ * rule kept its temporary name · anything else (a thrown error) = failed.
  */
-function buildFirewallScript({ ports, program, aliases = [] } = {}) {
+function buildFirewallScript({ ports, program, subnets, aliases = [] } = {}) {
   const list = [...new Set((ports || []).map(Number))];
   if (!list.length || list.length > 24 || !list.every((p) => Number.isInteger(p) && p >= 1024 && p <= 65535)) throw new Error('bad_request: ports');
   if (!PROGRAM_RE.test(String(program || ''))) throw new Error('bad_request: program');
+  const nets = [...new Set(subnets || [])];
+  if (!nets.length || nets.length > 4 || !nets.every(validSubnet)) throw new Error('bad_request: subnets');
   const cards = [...new Set(aliases || [])];
   if (cards.length > 8 || !cards.every((a) => ALIAS_RE.test(String(a)))) throw new Error('bad_request: aliases');
   return [
     "$ErrorActionPreference = 'Stop'",
     `$name = ${psq(RULE_NAME)}`,
+    `$temp = ${psq(RULE_TEMP_NAME)}`,
     `$program = ${psq(program)}`,
     `$ports = @(${list.join(',')})`,
+    `$remote = @(${nets.map(psq).join(',')})`,
     `$aliases = @(${cards.map(psq).join(',')})`,
     '$code = 0',
     "try { Get-NetFirewallApplicationFilter -Program $program -ErrorAction SilentlyContinue | Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object { $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' } | Remove-NetFirewallRule } catch { $code = 3 }",
+    'Get-NetFirewallRule -DisplayName $temp -ErrorAction SilentlyContinue | Remove-NetFirewallRule',
+    "New-NetFirewallRule -DisplayName $temp -Direction Inbound -Action Allow -Protocol TCP -LocalPort $ports -Program $program -RemoteAddress $remote -Profile Domain,Private,Public | Out-Null",
     'Get-NetFirewallRule -DisplayName $name -ErrorAction SilentlyContinue | Remove-NetFirewallRule',
-    "New-NetFirewallRule -DisplayName $name -Direction Inbound -Action Allow -Protocol TCP -LocalPort $ports -Program $program -RemoteAddress LocalSubnet -Profile Domain,Private,Public | Out-Null",
+    'try { Get-NetFirewallRule -DisplayName $temp | Set-NetFirewallRule -NewDisplayName $name } catch { $code = 4 }',
     "foreach ($a in $aliases) { try { $p = Get-NetConnectionProfile -InterfaceAlias $a -ErrorAction Stop; if ($p.NetworkCategory -eq 'Public') { Set-NetConnectionProfile -InterfaceAlias $a -NetworkCategory Private } } catch { $code = 2 } }",
     'exit $code',
   ].join('\r\n');
@@ -387,9 +494,10 @@ function buildFirewallScript({ ports, program, aliases = [] } = {}) {
 function encodePowerShell(script) { return Buffer.from(String(script), 'utf16le').toString('base64'); }
 
 /** The non-elevated launcher: one UAC prompt, waits, passes the exit code back. */
-function elevationCommand(encoded) {
+function elevationCommand(encoded, powershellPath = windowsBins().powershell) {
   if (!/^[A-Za-z0-9+/=]+$/.test(encoded)) throw new Error('bad_request: encoded');
-  return `try { $p = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'; exit $p.ExitCode } catch { exit ${UAC_CANCELLED} }`;
+  if (!/^[A-Za-z]:\\[A-Za-z0-9 _.()\\-]+\\powershell\.exe$/i.test(String(powershellPath))) throw new Error('bad_request: powershell');
+  return `try { $p = Start-Process -FilePath ${psq(powershellPath)} -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}'; exit $p.ExitCode } catch { exit ${UAC_CANCELLED} }`;
 }
 
 // ── IPC argument checks (host-electron.js; pure, tested) ───────────────────
@@ -409,6 +517,11 @@ function aliasList(v) {
   return v.every((a) => typeof a === 'string' && a.length > 0 && a.length <= 80) ? v : null;
 }
 
+/** The ONE card the wizard picked (its name as this PC reported it), else null. */
+function adapterName(v) {
+  return typeof v === 'string' && v.length > 0 && v.length <= 256 && !/[\0\r\n]/.test(v) ? v : null;
+}
+
 // ── the host-facing class ──────────────────────────────────────────────────
 
 function defaultExec(file, args, opts = {}) {
@@ -420,6 +533,11 @@ function defaultExec(file, args, opts = {}) {
 }
 
 const PS = ['-NoProfile', '-NonInteractive', '-Command'];
+const PLAN_ERRORS = {
+  card: 'Pick the network card the analyzer cable goes into, then try again. Nothing was changed.',
+  ports: 'No analyzer port to open (analyzer ports are 5599–5650). Nothing was changed.',
+  subnet: 'The card you picked has no lab network address yet. Nothing was changed.',
+};
 
 class NetDiag {
   /**
@@ -433,6 +551,7 @@ class NetDiag {
    * @param {string} [o.programPath]       this app's exe (firewall rule scope)
    * @param {number} [o.selfPid]
    * @param {Function} [o.usedEndpoints]   () → [{ port?, path?, name }] (ConnectorManager.usedEndpoints)
+   * @param {object} [o.env]               process.env (where %SystemRoot% is read)
    */
   constructor(o = {}) {
     this.platform = o.platform || process.platform;
@@ -444,6 +563,9 @@ class NetDiag {
     this.programPath = o.programPath || process.execPath;
     this.selfPid = o.selfPid || process.pid;
     this.usedEndpoints = o.usedEndpoints || (() => []);
+    this.bin = this.platform === 'win32'
+      ? windowsBins(o.env || process.env)
+      : { powershell: 'powershell', netstat: 'netstat', tasklist: 'tasklist', ipconfig: 'ipconfig', netsh: 'netsh', arp: 'arp' };
     this.lastProbeAt = 0;
     this.fixing = false;
   }
@@ -456,7 +578,7 @@ class NetDiag {
 
   async adapters() {
     let ipc = [];
-    if (this.windows) { const r = await this._run('ipconfig', ['/all']); if (r.ok) ipc = parseIpconfig(r.stdout); }
+    if (this.windows) { const r = await this._run(this.bin.ipconfig, ['/all']); if (r.ok) ipc = parseIpconfig(r.stdout); }
     let ifs = {};
     try { ifs = this.os.networkInterfaces(); } catch { ifs = {}; }
     return mergeAdapters(ifs, ipc);
@@ -464,13 +586,13 @@ class NetDiag {
 
   async profiles() {
     if (!this.windows) return [];
-    const r = await this._run('powershell.exe', [...PS, 'Get-NetConnectionProfile | Format-List Name,InterfaceAlias,InterfaceIndex,NetworkCategory,IPv4Connectivity']);
+    const r = await this._run(this.bin.powershell, [...PS, 'Get-NetConnectionProfile | Format-List Name,InterfaceAlias,InterfaceIndex,NetworkCategory,IPv4Connectivity']);
     return r.ok ? parseNetConnectionProfile(r.stdout) : [];
   }
 
   async excludedPorts() {
     if (!this.windows) return [];
-    const r = await this._run('netsh', ['int', 'ipv4', 'show', 'excludedportrange', 'protocol=tcp']);
+    const r = await this._run(this.bin.netsh, ['int', 'ipv4', 'show', 'excludedportrange', 'protocol=tcp']);
     return r.ok ? parseExcludedPorts(r.stdout) : [];
   }
 
@@ -479,11 +601,11 @@ class NetDiag {
     if (!validPort(Number(port))) return null;
     const p = Number(port);
     if (this.windows) {
-      const ns = await this._run('netstat', ['-ano', '-p', 'TCP']);
+      const ns = await this._run(this.bin.netstat, ['-ano', '-p', 'TCP']);
       const row = ns.ok ? parseNetstat(ns.stdout).find((x) => x.localPort === p && x.state === 'LISTENING') : null;
       if (!row || !row.pid) return null;
       const ours = row.pid === this.selfPid;
-      const tl = await this._run('tasklist', ['/FO', 'CSV', '/NH', '/FI', `PID eq ${row.pid}`]);
+      const tl = await this._run(this.bin.tasklist, ['/FO', 'CSV', '/NH', '/FI', `PID eq ${row.pid}`]);
       const t = tl.ok ? parseTasklist(tl.stdout)[0] : null;
       return { pid: row.pid, name: t ? t.name.replace(/\.exe$/i, '') : null, ours };
     }
@@ -497,10 +619,10 @@ class NetDiag {
       return { supported: false, message: this.platform === 'darwin' ? 'macOS asks by itself the first time an analyzer connects — choose Allow.' : 'Check this computer\'s firewall allows the analyzer ports.' };
     }
     const [st, profiles, rules] = await Promise.all([
-      this._run('netsh', ['advfirewall', 'show', 'allprofiles', 'state']),
+      this._run(this.bin.netsh, ['advfirewall', 'show', 'allprofiles', 'state']),
       this.profiles(),
       // The exe path travels in an environment variable, never in the command text.
-      this.exec('powershell.exe', [...PS, 'Get-NetFirewallApplicationFilter -Program $env:PF_PROGRAM -ErrorAction SilentlyContinue | Get-NetFirewallRule -ErrorAction SilentlyContinue | Select-Object DisplayName,Direction,Action,Enabled,Profile | ConvertTo-Csv -NoTypeInformation'],
+      this.exec(this.bin.powershell, [...PS, 'Get-NetFirewallApplicationFilter -Program $env:PF_PROGRAM -ErrorAction SilentlyContinue | Get-NetFirewallRule -ErrorAction SilentlyContinue | Select-Object DisplayName,Direction,Action,Enabled,Profile | ConvertTo-Csv -NoTypeInformation'],
         { env: { ...process.env, PF_PROGRAM: this.programPath } }).catch(() => ({ ok: false, stdout: '' })),
     ]);
     const list = rules.ok ? parseFirewallRulesCsv(rules.stdout) : [];
@@ -511,29 +633,50 @@ class NetDiag {
       profiles,
       rules: list,
       blockRules: inbound.filter((r) => /^block$/i.test(r.action)).length,
-      ourRule: inbound.some((r) => r.name === RULE_NAME && /^allow$/i.test(r.action)),
+      ourRule: inbound.some((r) => (r.name === RULE_NAME || r.name === RULE_TEMP_NAME) && /^allow$/i.test(r.action)),
     };
   }
 
   /**
-   * The one fix (Windows): ONE UAC prompt. `aliases` must be cards Windows
-   * reports as Public right now (re-read here, never trusted from the UI).
-   * @returns {Promise<{ ok: boolean, cancelled?: boolean, partial?: boolean, error?: string, firewall?: object }>}
+   * What the fix would change for the picked card, read fresh from Windows
+   * (never trusted from the UI). See firewallPlan(). Read-only.
+   * @returns {Promise<object>} the plan, or { error } in plain words
    */
-  async fixFirewall({ ports, aliases = [] } = {}) {
+  async fixPlan({ ports, adapter } = {}) {
+    const [adapters, firewall] = await Promise.all([this.adapters(), this.firewall()]);
+    const paired = this.usedEndpoints().filter((u) => u.kind === 'connector').map((u) => u.port);
+    const plan = firewallPlan({ adapters, profiles: firewall.profiles || [], firewall, adapter, ports, paired });
+    return plan.error ? { error: PLAN_ERRORS[plan.error] || 'Nothing was changed.' } : plan;
+  }
+
+  /**
+   * The one fix (Windows): ONE UAC prompt, for the card the wizard picked
+   * (`adapter`, re-checked against this PC's own cards). `confirm(plan)` —
+   * main's own dialog — must resolve true before Windows is asked; false
+   * means nothing is changed.
+   * @returns {Promise<{ ok: boolean, cancelled?: boolean, partial?: boolean, error?: string, firewall?: object, plan?: object }>}
+   */
+  async fixFirewall({ ports, adapter, confirm } = {}) {
     if (!this.windows) return { ok: false, unsupported: true, error: 'The firewall fix is for Windows.' };
     if (this.fixing) return { ok: false, error: 'A firewall fix is already running.' };
     this.fixing = true;
     try {
-      const publicNow = new Set((await this.profiles()).filter((p) => /^public$/i.test(p.category || '')).map((p) => p.alias));
-      const cards = (Array.isArray(aliases) ? aliases : []).filter((a) => typeof a === 'string' && publicNow.has(a) && ALIAS_RE.test(a));
-      const script = buildFirewallScript({ ports, program: this.programPath, aliases: cards });
-      const r = await this._run('powershell.exe', [...PS, elevationCommand(encodePowerShell(script))]);
+      const plan = await this.fixPlan({ ports, adapter });
+      if (plan.error) return { ok: false, error: plan.error };
+      if (typeof confirm === 'function' && !(await confirm(plan))) return { ok: false, cancelled: true, error: 'Nothing was changed.' };
+      const script = buildFirewallScript({ ports: plan.ports, program: this.programPath, subnets: plan.subnets, aliases: plan.flip });
+      const r = await this._run(this.bin.powershell, [...PS, elevationCommand(encodePowerShell(script), this.bin.powershell)]);
       const firewall = await this.firewall();
-      if (r.code === UAC_CANCELLED) return { ok: false, cancelled: true, error: 'Windows did not get permission (the question was cancelled). Nothing was changed.', firewall };
-      if (r.code === 0) return { ok: true, firewall };
-      if (r.code === 2 || r.code === 3) return { ok: true, partial: true, error: r.code === 2 ? 'The rule was added, but Windows would not change one network to Private (it may be managed by your IT).' : 'The rule was added, but an old blocking rule could not be removed.', firewall };
-      return { ok: false, error: 'Windows could not apply the firewall fix.', firewall };
+      if (r.code === UAC_CANCELLED) return { ok: false, cancelled: true, error: 'Windows did not get permission (the question was cancelled). Nothing was changed.', firewall, plan };
+      const skippedMsg = plan.skipped.length ? `${plan.skipped.join(', ')} stays Public: its name has characters Prefrontal will not pass to Windows. Set it to Private in Windows Settings.` : null;
+      if (r.code === 0) return skippedMsg ? { ok: true, partial: true, error: `The rule was added. ${skippedMsg}`, firewall, plan } : { ok: true, firewall, plan };
+      if (r.code === 2 || r.code === 3 || r.code === 4) {
+        const why = r.code === 2 ? 'The rule was added, but Windows would not change the analyzer network to Private (it may be managed by your IT).'
+          : r.code === 3 ? 'The rule was added, but an old blocking rule could not be removed.'
+            : 'The rule was added under a temporary name (Windows would not rename it). It works; run the fix again to tidy it.';
+        return { ok: true, partial: true, error: skippedMsg ? `${why} ${skippedMsg}` : why, firewall, plan };
+      }
+      return { ok: false, error: 'Windows could not apply the firewall fix. The lab\'s existing firewall rule was left as it was.', firewall, plan };
     } catch (e) {
       return { ok: false, error: /^bad_request/.test(String(e && e.message)) ? 'This PC\'s details did not pass the safety check, so nothing was changed.' : String(e && e.message) };
     } finally {
@@ -542,7 +685,7 @@ class NetDiag {
   }
 
   async arp() {
-    const r = await this._run('arp', this.windows ? ['-a'] : ['-an']);
+    const r = await this._run(this.bin.arp, this.windows ? ['-a'] : ['-an']);
     return r.ok ? parseArp(r.stdout).filter((e) => isPrivateIpv4(e.ip) && e.mac !== 'ff:ff:ff:ff:ff:ff' && !e.ip.endsWith('.255')) : [];
   }
 
@@ -635,19 +778,27 @@ function tcpConnectOnly(host, port, timeoutMs) {
   });
 }
 
-/** Can this PC listen on `port` right now (all cards)? */
-function canBindPort(port) {
+/**
+ * Can this PC listen on `port` right now (all cards)? Anything that connects
+ * during the check is dropped at once; no answer within 2 s = not free.
+ */
+function canBindPort(port, timeoutMs = BIND_TIMEOUT_MS) {
   return new Promise((resolve) => {
     const srv = nodeNet.createServer();
-    srv.once('error', () => resolve(false));
-    srv.listen({ port, host: '0.0.0.0', exclusive: true }, () => srv.close(() => resolve(true)));
+    let done = false;
+    const end = (ok) => { if (done) return; done = true; clearTimeout(t); resolve(ok); };
+    const t = setTimeout(() => { try { srv.close(); } catch { /* not listening */ } end(false); }, timeoutMs);
+    if (t.unref) t.unref();
+    srv.on('connection', (s) => s.destroy());
+    srv.once('error', () => end(false));
+    srv.listen({ port, host: '0.0.0.0', exclusive: true }, () => srv.close(() => end(true)));
   });
 }
 
 module.exports = {
-  NetDiag, RULE_NAME, PORT_RANGE, COMMON_LIS_PORTS, PROBE_COOLDOWN_MS, UAC_CANCELLED,
+  NetDiag, RULE_NAME, RULE_TEMP_NAME, PORT_RANGE, COMMON_LIS_PORTS, PROBE_COOLDOWN_MS, UAC_CANCELLED,
   parseIpconfig, parseNetstat, parseGetNetTcpConnection, parseTasklist, parseNetConnectionProfile, parseArp,
   parseFirewallState, parseExcludedPorts, parseFirewallRulesCsv, parseLsof,
-  subnetOf, mergeAdapters, findProblems, buildFirewallScript, encodePowerShell, elevationCommand,
-  portList, aliasList,
+  subnetOf, mergeAdapters, findProblems, firewallPlan, analyzerSubnets, buildFirewallScript, encodePowerShell, elevationCommand,
+  portList, aliasList, adapterName, windowsBins, systemRoot, canBindPort,
 };

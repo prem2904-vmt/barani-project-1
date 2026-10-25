@@ -403,9 +403,12 @@ export interface ElectronInstrumentsDiagApi {
   snapshot(): Promise<DiagSnapshot>;
   ports(ports: number[]): Promise<{ port: number; state: 'free' | 'ours' | 'busy' | 'reserved'; name?: string | null; pid?: number | null; message?: string }[]>;
   nextPort(): Promise<number | null>;
-  fixFirewall(p: { ports?: number[]; aliases?: string[] }): Promise<DiagFixResult>;
+  /** `adapter` = the card the analyzer cable goes into (its name as this PC
+   *  reported it). Main re-reads Windows, asks in its own dialog, then
+   *  Windows asks once. */
+  fixFirewall(p: { ports?: number[]; adapter: string }): Promise<DiagFixResult>;
   arp(): Promise<DiagArpEntry[]>;
-  probe(p: { address: string; ports?: number[]; wide?: boolean }): Promise<DiagProbeResult>;
+  probe(p: { address: string; ports?: number[] }): Promise<DiagProbeResult>;
   scanStart(p: { ports: number[] }): Promise<DiagScanStart | { error: string }>;
   scanStop(scanId: string): Promise<{ ports: DiagScanPort[] }>;
   onScan(cb: (e: DiagScanEvent) => void): () => void;

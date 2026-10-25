@@ -70,19 +70,78 @@ export function fixableProblems(problems: readonly DiagProblem[] | null | undefi
   return (problems ?? []).filter((p) => p.fix === 'firewall');
 }
 
+/** Ports the desktop app may open for analyzers (netdiag.js PORT_RANGE). */
+export const ANALYZER_PORT_RANGE = { start: 5599, end: 5650 } as const;
+/** Card names the desktop app will pass to Windows (netdiag.js ALIAS_RE). */
+const ALIAS_RE = /^[A-Za-z0-9 _.()#-]{1,80}$/;
+
+const ipInt = (ip: string): number | null => {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if (!m) return null;
+  const p = m.slice(1).map(Number);
+  return p.some((x) => x > 255) ? null : ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3];
+};
+const maskLen = (mask: string | null | undefined): number => {
+  const n = ipInt(mask || '255.255.255.0');
+  if (n == null) return 24;
+  let b = 0;
+  for (let i = 31; i >= 0; i--) { if (n & (1 << i)) b++; else break; }
+  return b;
+};
+
+/** The analyzer card's own network(s), at most a /24 — mirrors netdiag analyzerSubnets(). */
+export function analyzerSubnets(adapter: DiagAdapter | null | undefined): string[] {
+  const out: string[] = [];
+  for (const x of adapter?.ipv4 ?? []) {
+    if (!isPrivate(x.address)) continue;
+    const a = ipInt(x.address);
+    if (a == null) continue;
+    const bits = Math.max(24, maskLen(x.netmask));
+    const m = bits === 32 ? 0xffffffff : (0xffffffff << (32 - bits)) >>> 0;
+    const n = (a & m) >>> 0;
+    const sn = `${n >>> 24}.${(n >>> 16) & 255}.${(n >>> 8) & 255}.${n & 255}/${bits}`;
+    if (!out.includes(sn)) out.push(sn);
+  }
+  return out;
+}
+
+export interface FirewallFixPlan {
+  /** The card the fix is for (the one the analyzer cable goes into). */
+  adapter: string | null;
+  /** Cards set Public → Private: the picked card only, and only if it has no Internet and no gateway. */
+  aliases: string[];
+  /** A card that should go Private but whose name the desktop app will not pass to Windows. */
+  skipped: string[];
+  subnets: string[];
+  ports: number[];
+  lines: string[];
+}
+
 /**
  * What the fix will do, in plain words, for the confirmation BEFORE Windows
- * asks: aliases = the Public cards; ports = the analyzer ports.
+ * asks. Mirrors netdiag.js firewallPlan() (main re-computes it, adds the
+ * ports of analyzers already paired on that PC, and asks again itself):
+ * only the picked card, only the analyzer port range, only its own /24.
  */
-export function firewallFixPlan(snap: DiagSnapshot | null, ports: readonly number[]): { aliases: string[]; ports: number[]; lines: string[] } {
-  const aliases = (snap?.profiles ?? []).filter((p) => /^public$/i.test(p.category ?? '')).map((p) => p.alias);
-  const list = [...new Set(ports.filter((p) => Number.isInteger(p) && p >= 1024))];
+export function firewallFixPlan(snap: DiagSnapshot | null, adapterName: string | null, ports: readonly number[]): FirewallFixPlan {
+  const card = (snap?.adapters ?? []).find((a) => a.name === adapterName) ?? null;
+  const list = [...new Set(ports.filter((p) => Number.isInteger(p) && p >= ANALYZER_PORT_RANGE.start && p <= ANALYZER_PORT_RANGE.end))].sort((a, b) => a - b);
+  const subnets = analyzerSubnets(card);
+  const prof = card ? (snap?.profiles ?? []).find((p) => p.alias === card.name) : undefined;
+  const wantsFlip = !!card && !!prof && /^public$/i.test(prof.category ?? '') && !/^internet$/i.test((prof.ipv4 ?? '').trim()) && !card.gateway;
+  const aliases = wantsFlip && ALIAS_RE.test(card!.name) ? [card!.name] : [];
+  const skipped = wantsFlip && !aliases.length ? [card!.name] : [];
   const lines: string[] = [];
-  if ((snap?.firewall?.blockRules ?? 0) > 0) lines.push('Remove the Windows Firewall rules that block Prefrontal.');
-  lines.push(`Let analyzers on this local network reach Prefrontal on port${list.length === 1 ? '' : 's'} ${list.join(', ')} — only Prefrontal, nothing else.`);
-  if (aliases.length) lines.push(`Set ${aliases.join(' and ')} to a Private network.`);
+  const block = snap?.firewall?.blockRules ?? 0;
+  if (block > 0) lines.push(`Remove the Windows Firewall ${block === 1 ? 'rule that blocks' : 'rules that block'} Prefrontal.`);
+  if (card && subnets.length && list.length) {
+    const nets = subnets.map((s) => s.replace(/\.0\/24$/, '.x')).join(' and ');
+    lines.push(`Let analyzers on ${nets} (${card.name}) reach Prefrontal on port${list.length === 1 ? '' : 's'} ${list.join(', ')} — only Prefrontal, nothing else.`);
+  }
+  if (aliases.length) lines.push(`Set ${aliases[0]} to a Private network.`);
+  if (skipped.length) lines.push(`${skipped[0]} stays Public (its name has characters Prefrontal will not pass to Windows) — set it to Private in Windows Settings.`);
   lines.push('Windows will ask for permission once. Nothing else on this PC changes.');
-  return { aliases, ports: list, lines };
+  return { adapter: card?.name ?? null, aliases, skipped, subnets, ports: list, lines };
 }
 
 /** Detected protocol in words ("HL7 v2", "ASTM", "LifeDx HBPro"). */

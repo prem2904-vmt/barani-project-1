@@ -14,9 +14,10 @@
  * by the future Raspberry Pi host (./host-node.js).
  */
 const path = require('path');
-const { app, ipcMain, safeStorage } = require('electron');
+const { app, ipcMain, safeStorage, dialog } = require('electron');
 const { ConnectorManager } = require('./core/manager');
-const { NetDiag, portList, aliasList } = require('./netdiag');
+const { NetDiag, portList } = require('./netdiag');
+const { makeDiagHandlers } = require('./diag-ipc');
 
 let manager = null;
 let diag = null;
@@ -98,33 +99,19 @@ function register(windowGetter) {
   handle('instruments:preview', (raw, config) => manager.preview(str(raw, 512 * 1024) || '', obj(config) || {}));
 
   // ── "Connect an analyzer" wizard (netdiag.js). Read-only except
-  // diagFixFirewall, which runs ONE fixed, UAC-elevated script after the
-  // user confirmed in the UI. Every argument is re-validated here.
+  // diagFixFirewall, which runs ONE fixed, UAC-elevated script — only after
+  // MAIN's own dialog (diag-ipc.js) said yes; the renderer's confirm is a
+  // courtesy, not the gate. Every argument is re-validated here.
+  const diagIpc = makeDiagHandlers({ diag, showMessageBox: (...a) => dialog.showMessageBox(...a), getWindow: () => getWindow() });
   handle('instruments:diagSnapshot', () => diag.snapshot());
   handle('instruments:diagPorts', (ports) => {
     const list = portList(ports);
     return list ? diag.portReport(list) : bad('ports');
   });
   handle('instruments:diagNextPort', () => diag.nextFreePort());
-  handle('instruments:diagFixFirewall', async (p) => {
-    const o = obj(p) || {};
-    const asked = o.ports == null ? [] : portList(o.ports, 24, 1024);
-    const aliases = aliasList(o.aliases);
-    if (!asked || !aliases) return bad('fix');
-    // The rule covers the analyzer ports this PC uses + the ones asked for.
-    const mine = manager.usedEndpoints().map((u) => u.port).filter((x) => Number.isInteger(x) && x >= 1024);
-    const ports = [...new Set([...mine, ...asked])].slice(0, 24);
-    if (!ports.length) return bad('ports');
-    return diag.fixFirewall({ ports, aliases });
-  });
+  handle('instruments:diagFixFirewall', (p) => diagIpc.fixFirewall(p));
   handle('instruments:diagArp', () => diag.arp());
-  handle('instruments:diagProbe', (p) => {
-    const o = obj(p) || {};
-    const address = str(o.address, 15);
-    const ports = o.ports == null ? undefined : portList(o.ports, 8);
-    if (!address || ports === null) return bad('probe');
-    return diag.probe({ address, ports, wide: o.wide === true });
-  });
+  handle('instruments:diagProbe', (p) => diagIpc.probe(p));
   handle('instruments:diagScanStart', (p) => {
     const ports = portList((obj(p) || {}).ports, 12, 1024);
     return ports ? manager.scanStart({ ports }) : bad('ports');

@@ -35,17 +35,44 @@ describe('connect wizard — this PC', () => {
     expect(pickAnalyzerCard([])).toBeNull();
   });
 
-  it('the fix plan says exactly what changes before Windows asks', () => {
+  it('the fix plan says exactly what changes before Windows asks — the picked card, its /24, the analyzer port range', () => {
     expect(fixableProblems(SNAP.problems).map((p) => p.code)).toEqual(['public_network', 'firewall_block_rule']);
-    const plan = firewallFixPlan(SNAP, [5603, 5599, 80]);
+    const plan = firewallFixPlan(SNAP, 'Ethernet 2', [5603, 5599, 80, 6000]);
+    expect(plan.adapter).toBe('Ethernet 2');
     expect(plan.aliases).toEqual(['Ethernet 2']);
-    expect(plan.ports).toEqual([5603, 5599]);
+    expect(plan.subnets).toEqual(['192.168.1.0/24']);
+    expect(plan.ports).toEqual([5599, 5603]);
     expect(plan.lines).toEqual([
       'Remove the Windows Firewall rules that block Prefrontal.',
-      'Let analyzers on this local network reach Prefrontal on ports 5603, 5599 — only Prefrontal, nothing else.',
+      'Let analyzers on 192.168.1.x (Ethernet 2) reach Prefrontal on ports 5599, 5603 — only Prefrontal, nothing else.',
       'Set Ethernet 2 to a Private network.',
       'Windows will ask for permission once. Nothing else on this PC changes.',
     ]);
+  });
+
+  it('never flips a card that reaches the internet or has a gateway, nor a card that was not picked', () => {
+    const wifi: DiagSnapshot = {
+      ...SNAP,
+      adapters: [...SNAP.adapters, { name: 'Wi-Fi', gateway: null, ipv4: [{ address: '192.168.43.20', netmask: '255.255.255.0' }] }],
+      profiles: [...SNAP.profiles, { name: 'Cafe', alias: 'Wi-Fi', category: 'Public', ipv4: 'Internet' }],
+    };
+    expect(firewallFixPlan(wifi, 'Wi-Fi', [5603]).aliases).toEqual([]);
+    expect(firewallFixPlan(wifi, 'Wi-Fi', [5603]).lines[1]).toBe('Let analyzers on 192.168.43.x (Wi-Fi) reach Prefrontal on port 5603 — only Prefrontal, nothing else.');
+    const pubRouter: DiagSnapshot = { ...SNAP, profiles: [{ name: 'Office', alias: 'Ethernet', category: 'Public', ipv4: 'LocalNetwork' }, SNAP.profiles[1]] };
+    expect(firewallFixPlan(pubRouter, 'Ethernet', [5603]).aliases).toEqual([]); // the gateway card stays as it is
+    expect(firewallFixPlan(pubRouter, 'Ethernet 2', [5603]).aliases).toEqual(['Ethernet 2']);
+  });
+
+  it('a card name the desktop app will not pass to Windows is said up front, not silently dropped', () => {
+    const odd: DiagSnapshot = {
+      ...SNAP,
+      adapters: [{ name: 'Ethernet “Analyzer”', gateway: null, ipv4: [{ address: '192.168.10.5', netmask: '255.255.255.0' }] }],
+      profiles: [{ name: 'Unidentified network', alias: 'Ethernet “Analyzer”', category: 'Public', ipv4: 'LocalNetwork' }],
+    };
+    const plan = firewallFixPlan(odd, 'Ethernet “Analyzer”', [5603]);
+    expect(plan.aliases).toEqual([]);
+    expect(plan.skipped).toEqual(['Ethernet “Analyzer”']);
+    expect(plan.lines.some((l) => l.includes('stays Public'))).toBe(true);
   });
 });
 

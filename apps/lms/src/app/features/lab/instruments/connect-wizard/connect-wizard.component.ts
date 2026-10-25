@@ -194,16 +194,18 @@ export class ConnectWizardComponent {
   async fixFirewall() {
     const d = this.bridge.diag;
     if (!d || this.fixBusy()) return;
-    const plan = firewallFixPlan(this.snap(), scanPorts(this.port()));
+    const adapter = this.cardName();
+    if (!adapter) { this.toasts.info('Pick the network card the analyzer cable goes into first'); return; }
+    const plan = firewallFixPlan(this.snap(), adapter, scanPorts(this.port()));
     const ok = await this.dialog.confirm({
       title: 'Let analyzers reach Prefrontal?', tone: 'primary', confirmLabel: 'Fix with Windows permission',
       message: 'Prefrontal will make these changes:', items: plan.lines,
-      question: 'Windows asks "Do you want to allow this app to make changes?" — choose Yes.',
+      question: 'Prefrontal asks once more, then Windows asks "Do you want to allow this app to make changes?" — choose Yes both times.',
     });
     if (!ok) return;
     this.fixBusy.set(true);
     try {
-      const r = await d.fixFirewall({ ports: plan.ports, aliases: plan.aliases });
+      const r = await d.fixFirewall({ ports: plan.ports, adapter });
       if (r.ok && !r.partial) this.toasts.success('Fixed — analyzers on this network can reach Prefrontal');
       else if (r.ok) this.toasts.info(r.error || 'Partly fixed');
       else if (r.cancelled) this.toasts.info(r.error || 'Nothing was changed');

@@ -139,6 +139,7 @@
                     @if (otherPorts() && !hit()) { Already set to another port? This PC is also listening on {{ otherPorts() }}. }
                   </p>
                 </div>
+                <p class="pf-cw-note" role="note">Results sent while finding the analyzer are not saved — run a sample after pairing.</p>
 
                 @if (!hit()) {
                   <p class="pf-cw-live" role="status"><span class="pf-cw-live__dot" aria-hidden="true"></span>{{ scanning() ? 'Waiting for the analyzer to connect…' : 'Not listening' }}</p>
@@ -168,6 +169,7 @@
                 }
               } @else {
                 <p class="pf-cw-instr__lead">Some analyzers wait for the LIS to call them. Find its IP address on its screen (Settings → Network / LIS), or look for it below.</p>
+                <p class="pf-cw-note" role="note">Results sent while finding the analyzer are not saved — run a sample after pairing.</p>
                 <div class="pf-cw-grid">
                   <label class="pf-field"><span class="pf-field__lbl">Analyzer IP address</span>
                     <input class="pf-input pf-num" [value]="dialHost()" (input)="dialHost.set($any($event.target).value)" placeholder="e.g. 192.168.1.30" autocomplete="off" inputmode="decimal" /></label>
