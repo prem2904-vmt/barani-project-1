@@ -305,7 +305,7 @@ describe('Instrument editor — web vs Electron', () => {
     expect(p.api.post).not.toHaveBeenCalled();
   });
 
-  it('Code mapping → Analyzer images: each graph with its thumbnail (received, else a sample) and a multi-profile picker; Save stores the mapped ones', async () => {
+  it('Code mapping → Analyzer images: each graph with its thumbnail (received only — never a sample) and a multi-profile picker; Save stores the mapped ones', async () => {
     const imageMaps = [
       { code: '12003', label: null, seen: 3, lastUrl: '/uploads/t/w.png', lastAt: '2026-10-02T05:00:00Z', profileKeys: ['HEM001'] },
       { code: '12053', label: null, seen: 0, lastUrl: null, lastAt: null, profileKeys: [] },
@@ -322,7 +322,9 @@ describe('Instrument editor — web vs Electron', () => {
     expect(items.length).toBe(2);
     expect(items[0].textContent).toContain('WBC histogram');
     expect(items[1].textContent).toContain('not received yet');
-    expect(items[1].querySelector('img')!.getAttribute('src')).toBe('assets/analyzer-samples/m51-12053.png');
+    expect(items[1].querySelector('img')).toBeNull();                      // no built-in sample graph
+    expect(items[1].querySelector('.pf-ie-img__thumb--none')).not.toBeNull();
+    expect(items[1].textContent).not.toContain('sample');
     expect(p.cmp.profileOptions().map((o: { value: unknown }) => o.value)).toEqual(['HEM001', 'HEM002']);   // profiles only
     expect(p.el.querySelector('select, datalist')).toBeNull();
     p.cmp.setImageProfiles(1, ['HEM001', 'HEM002']);
@@ -333,5 +335,14 @@ describe('Instrument editor — web vs Electron', () => {
       { code: '12003', label: null, profileKeys: ['HEM001'] },
       { code: '12053', label: null, profileKeys: ['HEM001', 'HEM002'] },
     ]);
+  });
+
+  it('Analyzer images: nothing received → empty note, no sample graphs', async () => {
+    const p = render({ id: 'i1', imageMaps: [], tests: [] });
+    await flush();
+    p.cmp.go('mapping'); p.f.detectChanges();
+    expect(p.el.querySelectorAll('.pf-ie-img').length).toBe(0);
+    expect(p.el.querySelector('.pf-ie-imgs__empty')!.textContent).toContain('No graphs received');
+    expect(p.el.querySelector('img[src*="analyzer-samples"]')).toBeNull();
   });
 });

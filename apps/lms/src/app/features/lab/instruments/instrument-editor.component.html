@@ -452,18 +452,27 @@
                    whose report shows them (Custom layout palette + routing). -->
               <section class="pf-ie-images" aria-label="Analyzer images">
                 <h3 class="pf-ie-images__h">Analyzer images</h3>
-                <p class="pf-field__hint">Graphs this analyzer sends with a run. Map each to the profiles whose report shows it — the profile's Custom layout offers it, and a received graph lands on that profile's tests.</p>
+                <p class="pf-field__hint">Graphs this analyzer has sent with its runs. Map each to the profiles whose report shows it — the profile's Custom layout offers it, and a received graph lands on that profile's tests.</p>
                 @if (isNew()) {
                   <p class="pf-field__hint">Create the instrument first — then map its graphs here.</p>
                 } @else {
+                  @if (!imageMaps().length) {
+                    <p class="pf-ie-imgs__empty">No graphs received from this analyzer yet. They appear here after its first run that sends one.</p>
+                  }
                   <ul class="pf-ie-imgs">
                     @for (r of imageMaps(); track r.code; let i = $index) {
                       <li class="pf-ie-img">
-                        <span class="pf-ie-img__thumb"><img [src]="imageSrc(r)" [alt]="imageLabel(r)" loading="lazy" /></span>
+                        @if (imageSrc(r); as src) {
+                          <span class="pf-ie-img__thumb"><img [src]="src" [alt]="imageLabel(r)" loading="lazy" /></span>
+                        } @else {
+                          <span class="pf-ie-img__thumb pf-ie-img__thumb--none" aria-hidden="true">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 15 4-6 4 4 4-7"/></svg>
+                          </span>
+                        }
                         <div class="pf-ie-img__body">
                           <div class="pf-ie-img__meta">
                             <span class="pf-ie-img__name">{{ imageLabel(r) }}</span>
-                            <span class="pf-ie-img__sub pf-num">Code {{ r.code }} · {{ r.seen ? 'received ' + r.seen + '× · last ' + fmtIst(r.lastAt) : 'not received yet — sample shown' }}</span>
+                            <span class="pf-ie-img__sub pf-num">Code {{ r.code }} · {{ r.seen ? 'received ' + r.seen + '× · last ' + fmtIst(r.lastAt) : 'not received yet' }}</span>
                           </div>
                           <pf-select class="pf-ie-img__profiles" [options]="profileOptions()" [multiple]="true" [searchable]="true" [compactMulti]="true"
                                      [triggerLabel]="r.profileKeys.length ? 'Change profiles' : 'Map to profiles…'"

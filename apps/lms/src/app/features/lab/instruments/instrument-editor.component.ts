@@ -8,7 +8,7 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { UploadsService } from '../../../core/services/uploads.service';
-import { analyzerLabel, analyzerSampleAsset } from '../../../shared/utils/report-profile-layout';
+import { analyzerLabel } from '../../../shared/utils/report-profile-layout';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -175,7 +175,8 @@ export class InstrumentEditorComponent {
   profileName(key: string): string { return this.profileOptions().find(o => o.value === key)?.label ?? key; }
   imageLabel(r: ImageCodeDto): string { return r.label || analyzerLabel(r.code); }
   /** The newest received graph (session fetch), else a sample look-alike. */
-  imageSrc(r: ImageCodeDto): string { return (r.lastUrl ? this.uploads.src(r.lastUrl) : '') || analyzerSampleAsset(r.code); }
+  /** Only a graph this analyzer actually sent — never a built-in sample (owner rule). '' = placeholder. */
+  imageSrc(r: ImageCodeDto): string { return r.lastUrl ? this.uploads.src(r.lastUrl) || '' : ''; }
   setImageProfiles(i: number, keys: string[]) {
     this.imageMaps.update(list => list.map((r, j) => (j === i ? { ...r, profileKeys: keys } : r)));
     this.imageMapsDirty.set(true);
