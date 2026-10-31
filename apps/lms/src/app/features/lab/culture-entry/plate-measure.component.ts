@@ -19,6 +19,7 @@ import {
   readingOrder, reconcileScale, scaleWarning, tiltCheck,
 } from './plate-vision';
 import { DiskCandidate, drugForCode, normCode, panelCandidates } from './disk-codes';
+import { PfSenseService } from '../../../core/services/pf-sense.service';
 import { AiUsage, CodeSlot, DiskReadApi, aiFallbackMessage, buildMosaic, formatTokens, mapAiRead } from './disk-read';
 import { NumpadDirective, NumpadScopeDirective } from '../../../shared/components/numpad/numpad.directive';
 
@@ -641,6 +642,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   private readonly toasts = inject(ToastService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly diskApi = inject(DiskReadApi);
+  private readonly sense = inject(PfSenseService);
 
   /** The organism's panel (antibiotic names) — codes map back to these rows.
    *  Signal-backed so the candidate codes follow a list that arrives late. */
@@ -750,7 +752,9 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     try { document.body.appendChild(this.host.nativeElement); } catch { /* */ }
     const saved = Number(safeGet('pf-plate-mm'));
     this.dishMm.set(this.existingSession?.dishMm || this.defaultDishMm || ((PLATE_SIZES as readonly number[]).includes(saved) ? saved : 90));
-    this.diskApi.usage().subscribe({ next: u => this.usage.set(u), error: () => { /* no usage line */ } });
+    void this.sense.ensureLoaded().then(() => {
+      if (this.sense.featureOn('ast_disk_read')) this.diskApi.usage().subscribe({ next: u => this.usage.set(u), error: () => { /* no usage line */ } });
+    });
     if (this.existingImageUrl) {
       this.uploadedUrl = this.existingImageUrl;
       // A private upload has no direct URL: show the session's cached blob
@@ -1030,6 +1034,10 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     const rows = this.rows().filter(r => !r.notDisk);
     const img = this.imgEl()?.nativeElement;
     if (!rows.length) { this.ai.set('idle'); return; }
+    // PF Sense off for this lab: never call the backend — straight to manual picking.
+    if (!this.sense.featureOn('ast_disk_read')) { this.ai.set('failed'); this.aiMsg.set('Codes: pick manually'); return; }
+    // Cap already used up: say so quietly, don't spend a call that will be refused.
+    if (this.sense.limitReached()) { this.ai.set('failed'); this.aiMsg.set(aiFallbackMessage(new ApiError('', 'ai_cap_reached'))); return; }
     // The case's own panel, minus codes the technician already placed.
     const placed = new Set(this.rows().filter(r => r.codeSrc === 'tech' && r.code).map(r => r.code));
     const cands = this.candidates().filter(c => !placed.has(c.code));
@@ -1054,7 +1062,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
         this.ai.set('done');
         this.diskApi.usage().subscribe({ next: u => this.usage.set(u), error: () => { /* */ } });
       },
-      error: e => { this.ai.set('failed'); this.aiMsg.set(aiFallbackMessage(e)); },
+      error: e => { this.ai.set('failed'); this.aiMsg.set(aiFallbackMessage(e)); this.sense.noteRefusal(ApiError.from(e).code); },
     });
   }
   /** The AI read is in flight — drives the rainbow glow (pf-ai-glow). */
@@ -1076,8 +1084,9 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   /** Manual fallback: a short neutral hint at the top of the list. */
   manualHint(): string | null {
     if (this.ai() !== 'failed') return null;
+    if (!this.sense.featureOn('ast_disk_read')) return null;
     return this.aiMsg().startsWith('PF Sense limit')
-      ? 'PF Sense limit reached this month — pick each disk’s code'
+      ? 'PF Sense limit reached for this month — pick each disk’s code'
       : 'PF Sense isn’t available — pick each disk’s code';
   }
   readonly usageLine = computed(() => {

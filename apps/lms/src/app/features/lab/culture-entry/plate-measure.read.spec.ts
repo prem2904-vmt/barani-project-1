@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { HttpClient } from '@angular/common/http';
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { PlateMeasureComponent } from './plate-measure.component';
+import { fakePfSense } from '../../../core/services/pf-sense.testing';
 import { PlatformService } from '../../../core/services/platform.service';
 import { CapacitorService } from '../../../core/services/capacitor.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -14,7 +15,7 @@ import { DiskReadApi, DiskReadResult } from './disk-read';
 
 const PANEL = ['Amoxicillin-Clavulanate', 'Cefixime', 'Ceftazidime', 'Imipenem'];
 
-function setup(read: () => Observable<DiskReadResult>) {
+function setup(read: () => Observable<DiskReadResult>, sense: ReturnType<typeof fakePfSense> = fakePfSense()) {
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: () => new Promise(() => { /* */ }) } });
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     fillRect() { /* */ }, drawImage() { /* */ }, fillText() { /* */ },
@@ -29,6 +30,7 @@ function setup(read: () => Observable<DiskReadResult>) {
       { provide: CapacitorService, useValue: { impact: () => Promise.resolve() } },
       { provide: ToastService, useValue: { success() {}, error() {}, info() {}, warning() {} } },
       { provide: DiskReadApi, useValue: api },
+      sense,
     ],
   });
   const f = TestBed.createComponent(PlateMeasureComponent);
@@ -118,9 +120,10 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(el.querySelectorAll('.pm-codesel--pending').length).toBe(0);
   });
 
-  it('AI result → codes fill in as suggestions (AI tag), S/I/R from the breakpoints', () => {
+  it('AI result → codes fill in as suggestions (AI tag), S/I/R from the breakpoints', async () => {
     const { f, c, el } = setup(() => of(RESULT));
     c.startAiRead();
+    await new Promise(r => setTimeout(r, 0));
     f.detectChanges();
     const codes = c.rows().map((r: any) => r.code);
     expect(codes).toEqual(['AMC 30', null, 'CAZ 30', 'IPM 10']);
@@ -211,7 +214,7 @@ describe('Measure & read — the ONE background AI call', () => {
     const { f, c, el } = setup(() => throwError(() => ({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } })));
     c.startAiRead();
     f.detectChanges();
-    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('PF Sense limit reached this month');
+    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('PF Sense limit reached for this month');
   });
 
   it('disks without a code are left out of Apply (and the review says so)', async () => {
@@ -283,5 +286,52 @@ describe('Measure & read — the ONE background AI call', () => {
     c.startAiRead(); f.detectChanges(); noAi();
     pending.next(RESULT); pending.complete(); f.detectChanges(); noAi();
     c.goReview(); f.detectChanges(); noAi();
+  });
+
+  describe('PF Sense admin switch', () => {
+    it('ast_disk_read off → the backend is never called (no read, no usage); manual picking, quiet line', async () => {
+      const { f, c, el, api } = setup(() => of(RESULT), fakePfSense({ off: ['ast_disk_read'] }));
+      c.startAiRead();
+      await new Promise(r => setTimeout(r, 0));
+      f.detectChanges();
+      expect(api.read).not.toHaveBeenCalled();
+      expect(api.usage).not.toHaveBeenCalled();
+      expect(c.ai()).toBe('failed');
+      expect(c.aiLine()).toBe('Codes: pick manually');
+      expect(c.manualHint()).toBeNull();
+      expect(el.querySelector('.pm-usage')).toBeNull();
+    });
+
+    it('master switch off behaves the same', () => {
+      const { c, api } = setup(() => of(RESULT), fakePfSense({ master: false }));
+      c.startAiRead();
+      expect(api.read).not.toHaveBeenCalled();
+    });
+
+    it('limit already reached → no call, "PF Sense limit reached for this month — codes: pick manually"', () => {
+      const { f, c, api } = setup(() => of(RESULT), fakePfSense({ limit: true }));
+      c.startAiRead();
+      f.detectChanges();
+      expect(api.read).not.toHaveBeenCalled();
+      expect(c.aiLine()).toBe('PF Sense limit reached for this month — codes: pick manually');
+      expect(c.manualHint()).toBe('PF Sense limit reached for this month — pick each disk’s code');
+    });
+
+    it('a server refusal mid-read (ai_cap_reached) shows the limit line and re-reads the status', () => {
+      const sense = fakePfSense();
+      const refresh = vi.spyOn(sense.impl, 'noteRefusal');
+      const { f, c } = setup(() => throwError(() => ({ status: 200, error: { error: 'ai_cap_reached', message: 'cap' } })), sense);
+      c.startAiRead();
+      f.detectChanges();
+      expect(c.aiLine()).toBe('PF Sense limit reached for this month — codes: pick manually');
+      expect(refresh).toHaveBeenCalledWith('ai_cap_reached');
+    });
+
+    it('pf_sense_off mid-read → quiet manual line', () => {
+      const { f, c } = setup(() => throwError(() => ({ status: 200, error: { error: 'pf_sense_off', message: 'off' } })));
+      c.startAiRead();
+      f.detectChanges();
+      expect(c.aiLine()).toBe('Codes: pick manually');
+    });
   });
 });

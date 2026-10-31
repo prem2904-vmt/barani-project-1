@@ -8,6 +8,7 @@ import { ColDef } from 'ag-grid-community';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { PfSenseService } from '../../../core/services/pf-sense.service';
 import { AssistantPanelComponent } from '../../../shared/assistant/assistant-panel.component';
 import type {
   AssistantPageContext, AssistantProviderId, AssistantReply, AssistantTurn, ProposalStatus,
@@ -92,6 +93,9 @@ export class InsightsDashboardComponent {
   private readonly toasts = inject(ToastService);
   private readonly theme = inject(ThemeService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly sense = inject(PfSenseService);
+  /** Admin switch for "Ask PF Sense" here (additional to the beta gate the page itself sits behind). */
+  readonly askShown = computed(() => this.sense.shown('insights_assistant'));
 
   /** null = a new dashboard (opens in edit mode). */
   readonly dashboardId = input<string | null>(null);
@@ -230,6 +234,7 @@ export class InsightsDashboardComponent {
   }));
 
   constructor() {
+    void this.sense.ensureLoaded();
     this.api.metrics().pipe(takeUntilDestroyed()).subscribe({ next: (m) => this.metrics.set(m), error: () => this.metrics.set([]) });
     this.api.options().pipe(takeUntilDestroyed()).subscribe({ next: (o) => this.options.set(o), error: () => undefined });
 
@@ -300,7 +305,7 @@ export class InsightsDashboardComponent {
       this.visibility.set('private');
       this.roleIds.set([]);
       this.editing.set(true);
-      this.assistantOpen.set(this.dock());
+      this.assistantOpen.set(this.dock() && this.askShown());
       this.loadState.set('ready');
       return;
     }
@@ -343,7 +348,7 @@ export class InsightsDashboardComponent {
     this.visibility.set(d.visibility);
     this.roleIds.set([...d.roleIds]);
     this.editing.set(true);
-    this.assistantOpen.set(this.dock());
+    this.assistantOpen.set(this.dock() && this.askShown());
   }
 
   async cancelEdit(): Promise<void> {

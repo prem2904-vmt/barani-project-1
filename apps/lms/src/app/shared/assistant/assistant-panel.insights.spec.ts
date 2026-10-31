@@ -1,3 +1,4 @@
+import { SENSE_ON } from '../../core/services/pf-sense.testing';
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -32,6 +33,7 @@ function setup(proposals: Record<string, ProposalStatus> = { p1: 'pending' }, re
       { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn() } },
       { provide: BetaFeaturesService, useValue: { enabled: (k: string) => k === 'assistant', ensureLoaded: async () => undefined } },
       // A desktop bridge IS available: the insights panel must still not take a network check.
+      SENSE_ON,
       { provide: INSTRUMENT_BRIDGE_SOURCE, useValue: () => ({ list: async () => [], diag: { snapshot } }) },
     ],
   });

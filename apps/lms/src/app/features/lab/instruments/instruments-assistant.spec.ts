@@ -4,6 +4,7 @@ import { of } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderBandPage } from '../../admin/admin-band.spec-helpers';
 import { BetaFeaturesService } from '../../../core/services/beta-features.service';
+import { SENSE_ON } from '../../../core/services/pf-sense.testing';
 import { PlatformService } from '../../../core/services/platform.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { INSTRUMENT_BRIDGE_SOURCE } from '../../../shared/instruments/instrument-bridge.service';
@@ -37,18 +38,19 @@ const GLU: MappingPrefill = { instrumentId: 'i1', analyzerCode: 'GLU', unit: 'mg
 
 const beta = (on: boolean) => ({ provide: BetaFeaturesService, useValue: { enabled: (k: string) => on && k === 'assistant', ensureLoaded: async () => undefined } });
 const assistantApi = { provide: AssistantApiService, useValue: { providers: () => of([{ id: 'gemini', label: 'Gemini', available: true }]), chat: vi.fn() } };
+const senseOn = SENSE_ON;
 const sparkle = (el: HTMLElement) => el.querySelector('pf-hero-band .pf-hb__actions pf-assistant-button button');
 
 describe('Instruments assistant — band button (beta gate)', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   it('instruments list: no sparkle with the beta off; on → it opens the panel', async () => {
-    let p = renderBandPage(InstrumentsListComponent, { getFor: (u) => (u === '/api/instruments' ? [instrument()] : []), providers: [beta(false), assistantApi] });
+    let p = renderBandPage(InstrumentsListComponent, { getFor: (u) => (u === '/api/instruments' ? [instrument()] : []), providers: [senseOn, beta(false), assistantApi] });
     await flush(); p.f.detectChanges();
     expect(sparkle(p.el)).toBeNull();
     TestBed.resetTestingModule();
 
-    p = renderBandPage(InstrumentsListComponent, { getFor: (u) => (u === '/api/instruments' ? [instrument()] : []), providers: [beta(true), assistantApi] });
+    p = renderBandPage(InstrumentsListComponent, { getFor: (u) => (u === '/api/instruments' ? [instrument()] : []), providers: [senseOn, beta(true), assistantApi] });
     await flush(); p.f.detectChanges();
     const b = sparkle(p.el) as HTMLButtonElement;
     expect(b).not.toBeNull();
@@ -60,7 +62,7 @@ describe('Instruments assistant — band button (beta gate)', () => {
   });
 
   it('instruments list: "Add to mapping" opens that instrument with the row in navigation state (not the URL)', async () => {
-    const p = renderBandPage(InstrumentsListComponent, { getFor: () => [], providers: [beta(true), assistantApi] });
+    const p = renderBandPage(InstrumentsListComponent, { getFor: () => [], providers: [senseOn, beta(true), assistantApi] });
     const nav = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     p.cmp.onAssistantMapping(GLU);
     expect(nav).toHaveBeenCalledWith(['/admin/instruments', 'i1'], { state: { [MAP_PREFILL_STATE_KEY]: GLU } });
@@ -71,7 +73,7 @@ describe('Instruments assistant — band button (beta gate)', () => {
 
   it('connect wizard: sparkle with the beta on; mapping waits for Create, then asks before leaving', async () => {
     const dialog = { confirm: vi.fn(async () => true), prompt: vi.fn() };
-    const p = renderBandPage(ConnectWizardComponent, { providers: [beta(true), assistantApi, { provide: DialogService, useValue: dialog },
+    const p = renderBandPage(ConnectWizardComponent, { providers: [senseOn, beta(true), assistantApi, { provide: DialogService, useValue: dialog },
       { provide: PlatformService, useValue: { getApiUrl: () => 'https://api.example', isElectron: () => false } },
       { provide: INSTRUMENT_BRIDGE_SOURCE, useValue: () => undefined }] });
     await flush(); p.f.detectChanges();

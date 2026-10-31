@@ -5,6 +5,7 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { CapacitorService } from '../../../core/services/capacitor.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { of, throwError, Subject } from 'rxjs';
+import { SENSE_ON } from '../../../core/services/pf-sense.testing';
 import { DiskReadApi } from './disk-read';
 
 /** Measure-zones modal on the kit (owner): pf-card / phone sheet, BILLING
@@ -24,6 +25,7 @@ function render(withCam = false, api: Partial<Record<keyof DiskReadApi, unknown>
       { provide: PlatformService, useValue: { isCapacitor: () => false } },
       { provide: CapacitorService, useValue: {} },
       { provide: ToastService, useValue: { success() {}, error() {}, info() {} } },
+      SENSE_ON,
       { provide: DiskReadApi, useValue: { usage: () => throwError(() => ({ status: 404 })), read: () => new Subject(), confirm: () => of({}), ...api } },
     ],
   });

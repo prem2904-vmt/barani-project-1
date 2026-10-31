@@ -135,7 +135,11 @@ export interface AssistantErrorView {
 }
 
 /** The server's failure codes (InstrumentAssistantService / AstDiskReadService). */
-export const ASSISTANT_ERROR_CODES = ['bad_request', 'not_found', 'ai_unavailable', 'ai_cap_reached', 'ai_failed'] as const;
+export const ASSISTANT_ERROR_CODES = ['bad_request', 'not_found', 'ai_unavailable', 'ai_cap_reached', 'pf_sense_off', 'ai_failed'] as const;
+
+/** The two admin-controlled refusals, worded once (server messages match). */
+export const PF_SENSE_OFF_MESSAGE = 'PF Sense is turned off for this lab — ask your admin.';
+export const PF_SENSE_LIMIT_MESSAGE = 'PF Sense limit reached for this month — ask your admin.';
 
 /**
  * The assistant endpoints answer HTTP 200 with the ApiResponse envelope; a
@@ -161,9 +165,12 @@ export function assistantError(e: unknown, providerLabel = 'This engine'): Assis
   const code = String((rec(body) ? body['error'] ?? body['code'] : (e as { code?: unknown })?.code) ?? '').toLowerCase();
   const name = String((e as { name?: unknown })?.name ?? '');
 
+  if (code === 'pf_sense_off') {
+    return { kind: 'off', retry: false, message: PF_SENSE_OFF_MESSAGE };
+  }
   if (code === 'ai_cap_reached' || status === 429 || /limit|quota|cap_reached/.test(code)) {
     return { kind: 'limit', retry: false,
-      message: 'This lab has used its PF Sense allowance for this month. It starts again next month — an admin can raise the limit.' };
+      message: PF_SENSE_LIMIT_MESSAGE };
   }
   if (code === 'ai_unavailable' || code === 'provider_unavailable' || status === 503) {
     return { kind: 'provider', retry: true, message: `${providerLabel} isn’t available right now. Pick the other engine above, or try again in a minute.` };

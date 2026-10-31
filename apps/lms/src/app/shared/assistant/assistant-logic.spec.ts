@@ -80,7 +80,13 @@ describe('assistant logic — suggestions (untrusted)', () => {
 describe('assistant logic — errors in plain words', () => {
   it('limit reached (ai_cap_reached / 429)', () => {
     expect(assistantError({ status: 429, error: { error: 'ai_cap_reached' } })).toMatchObject({ kind: 'limit', retry: false });
-    expect(assistantError({ status: 400, error: { error: 'ai_cap_reached' } }).message).toMatch(/allowance/);
+    expect(assistantError({ status: 400, error: { error: 'ai_cap_reached' } }).message).toBe('PF Sense limit reached for this month — ask your admin.');
+  });
+
+  it('PF Sense switched off (pf_sense_off) → kind off, plain words, no retry', () => {
+    expect(assistantError({ status: 200, error: { error: 'pf_sense_off', message: 'x' } })).toEqual({
+      kind: 'off', retry: false, message: 'PF Sense is turned off for this lab — ask your admin.' });
+    expect(ASSISTANT_ERROR_CODES).toContain('pf_sense_off');
   });
   it('model not available (ai_unavailable / 503) names the model and offers the other', () => {
     const e = assistantError({ status: 503, error: { error: 'ai_unavailable' } }, 'Claude');

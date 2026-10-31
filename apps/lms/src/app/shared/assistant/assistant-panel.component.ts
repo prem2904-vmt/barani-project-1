@@ -4,12 +4,13 @@ import {
 import { NgTemplateOutlet } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
+import { PfSenseService } from '../../core/services/pf-sense.service';
 import { ToastService } from '../../core/services/toast.service';
 import { SelectComponent, PfSelectOption } from '../primitives/select.component';
 import { InstrumentBridgeService } from '../instruments/instrument-bridge.service';
 import { AssistantApiService } from './assistant-api.service';
 import {
-  AssistantErrorView, CONFIDENCE_WORDS, MAX_PROMPT_CHARS, assistantError, historyFor, mappingCodeLabel, mappingTestLabel,
+  AssistantErrorView, CONFIDENCE_WORDS, MAX_PROMPT_CHARS, PF_SENSE_LIMIT_MESSAGE, assistantError, historyFor, mappingCodeLabel, mappingTestLabel,
   pickProvider, providerOptions,
 } from './assistant-logic';
 import { MdBlock, parseAssistantMarkdown } from './assistant-markdown';
@@ -58,6 +59,7 @@ const DIAG_TIMEOUT_MS = 10_000;
 })
 export class AssistantPanelComponent {
   private readonly beta = inject(BetaFeaturesService);
+  private readonly sense = inject(PfSenseService);
   private readonly api = inject(AssistantApiService);
   private readonly toasts = inject(ToastService);
   private readonly bridge = inject(InstrumentBridgeService);
@@ -108,7 +110,10 @@ export class AssistantPanelComponent {
   readonly draft = signal('');
   readonly pending = signal(false);
   readonly added = signal<ReadonlySet<string>>(new Set());
-  readonly canSend = computed(() => !!this.draft().trim() && !this.pending() && !!this.provider() && this.providersState() === 'ready');
+  /** The month's PF Sense cap is used up: a calm notice instead of the starters, composer off. */
+  readonly limitReached = this.sense.limitReached;
+  protected readonly limitMessage = PF_SENSE_LIMIT_MESSAGE;
+  readonly canSend = computed(() => !this.limitReached() && !!this.draft().trim() && !this.pending() && !!this.provider() && this.providersState() === 'ready');
   private seq = 0;
   private inFlight: Subscription | null = null;
 
@@ -122,6 +127,7 @@ export class AssistantPanelComponent {
 
   constructor() {
     void this.beta.ensureLoaded();
+    void this.sense.ensureLoaded();
     // First open: ask which models exist + take this PC's network check.
     effect(() => {
       if (!this.visible()) return;
@@ -251,7 +257,10 @@ export class AssistantPanelComponent {
         this.scrollToEnd();
       },
       error: (e) => {
-        this.items.update((list) => [...list, { id: ++this.seq, kind: 'error', error: assistantError(e, label) }]);
+        const view = assistantError(e, label);
+        this.items.update((list) => [...list, { id: ++this.seq, kind: 'error', error: view }]);
+        // An admin refusal changed the lab's PF Sense state: re-read so the page converges.
+        if (view.kind === 'limit' || view.kind === 'off') void this.sense.refresh();
         this.pending.set(false);
         this.scrollToEnd();
       },

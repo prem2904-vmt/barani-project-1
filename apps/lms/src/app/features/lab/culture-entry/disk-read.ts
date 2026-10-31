@@ -61,7 +61,8 @@ export class DiskReadApi {
 export function aiFallbackMessage(e: unknown): string {
   const status = (e as { status?: number })?.status;
   const code = ApiError.from(e).code;
-  if (code === 'ai_cap_reached') return 'PF Sense limit reached this month — codes: pick manually';
+  if (code === 'ai_cap_reached') return 'PF Sense limit reached for this month — codes: pick manually';
+  if (code === 'pf_sense_off') return 'Codes: pick manually';
   if (code === 'ai_unavailable' || status === 404) return 'Codes: pick manually';
   return 'Couldn’t read the codes — pick manually';
 }

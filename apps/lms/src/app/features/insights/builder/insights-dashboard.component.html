@@ -20,7 +20,7 @@
             History
           </button>
         }
-        @if (editing()) {
+        @if (editing() && askShown()) {
           <button type="button" class="pf-btn pf-btn--secondary press pf-insd-asktoggle" (click)="toggleAssistant()" [attr.aria-expanded]="assistantOpen()" aria-label="Ask PF Sense" title="Ask PF Sense">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6Z"/><path d="M18.5 15.5 19.3 17.7 21.5 18.5 19.3 19.3 18.5 21.5 17.7 19.3 15.5 18.5 17.7 17.7Z"/></svg>
             <span class="pf-insd-hbt">Ask PF Sense</span>
@@ -96,8 +96,8 @@
           <div class="pf-empty pf-insd-empty">
             <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></span>
             <p class="pf-empty__title">{{ editing() ? 'Nothing on this dashboard yet' : 'This dashboard is empty' }}</p>
-            <p class="pf-empty__body">{{ editing() ? 'Ask PF Sense for what you want to see, or add a chart above.' : 'Edit it to add charts.' }}</p>
-            @if (editing() && !assistantOpen()) {
+            <p class="pf-empty__body">{{ editing() ? (askShown() ? 'Ask PF Sense for what you want to see, or add a chart above.' : 'Add a chart above.') : 'Edit it to add charts.' }}</p>
+            @if (editing() && askShown() && !assistantOpen()) {
               <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="toggleAssistant()">Ask PF Sense</button>
             }
           </div>
@@ -225,7 +225,7 @@
     }
   </section>
 
-  @if (editing()) {
+  @if (editing() && (askShown() || assistantOpen())) {
     <pf-assistant-panel class="pf-insd-asst" [open]="assistantOpen()" [docked]="dock()" [context]="asstContext()"
                         (closed)="assistantOpen.set(false)" (keepProposal)="keepProposal($event)" (undoProposal)="undoProposal($event)"></pf-assistant-panel>
   }

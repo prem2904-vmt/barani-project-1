@@ -2,6 +2,7 @@ import { Component, input, output } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Observable, firstValueFrom, of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fakePfSense } from '../../../core/services/pf-sense.testing';
 import { BetaFeaturesService } from '../../../core/services/beta-features.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -88,7 +89,7 @@ function dataFor(r: InsightsRecipe): InsightsPreview {
   };
 }
 
-interface Opts { id?: string | null; dash?: InsightsDashboard; chat?: InsightsChatReply; confirm?: boolean; canShare?: boolean; updateError?: unknown; }
+interface Opts { id?: string | null; dash?: InsightsDashboard; chat?: InsightsChatReply; confirm?: boolean; canShare?: boolean; updateError?: unknown; sense?: ReturnType<typeof fakePfSense>; }
 
 function setup(o: Opts = {}) {
   (window as unknown as { matchMedia: unknown }).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
@@ -125,6 +126,7 @@ function setup(o: Opts = {}) {
   TestBed.configureTestingModule({
     imports: [InsightsDashboardComponent],
     providers: [
+      o.sense ?? fakePfSense(),
       { provide: InsightsBuilderApiService, useValue: api },
       { provide: DialogService, useValue: dialog },
       { provide: ToastService, useValue: toasts },
@@ -560,5 +562,38 @@ describe('My dashboards — history sheet vs the confirm dialog', () => {
     expect(openWhileAsking).toBe(false);
     expect(p.cmp.historyOpen()).toBe(true);
     expect(p.api.restore).not.toHaveBeenCalled();
+  });
+});
+
+describe('My dashboards — PF Sense admin switch', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('feature on: the Ask PF Sense toggle and panel are there in edit mode', async () => {
+    const p = setup();
+    await p.settle();
+    p.cmp.startEdit();
+    await p.settle();
+    expect(p.el.querySelector('.pf-insd-asktoggle')).not.toBeNull();
+    expect(p.el.querySelector('pf-assistant-panel')).not.toBeNull();
+  });
+
+  it('insights_assistant off: no toggle, no panel, no empty-state button, not auto-opened', async () => {
+    const p = setup({ sense: fakePfSense({ off: ['insights_assistant'] }) });
+    await p.settle();
+    p.cmp.startEdit();
+    await p.settle();
+    expect(p.el.querySelector('.pf-insd-asktoggle')).toBeNull();
+    expect(p.el.querySelector('pf-assistant-panel')).toBeNull();
+    expect(p.cmp.assistantOpen()).toBe(false);
+  });
+
+  it('master switch off hides it too; another feature off does not', async () => {
+    let p = setup({ sense: fakePfSense({ master: false }) });
+    await p.settle(); p.cmp.startEdit(); await p.settle();
+    expect(p.el.querySelector('.pf-insd-asktoggle')).toBeNull();
+    TestBed.resetTestingModule();
+    p = setup({ sense: fakePfSense({ off: ['instruments_assistant', 'ast_disk_read'] }) });
+    await p.settle(); p.cmp.startEdit(); await p.settle();
+    expect(p.el.querySelector('.pf-insd-asktoggle')).not.toBeNull();
   });
 });

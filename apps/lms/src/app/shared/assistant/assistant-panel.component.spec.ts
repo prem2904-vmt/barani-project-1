@@ -4,6 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Observable, Subject, of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
+import { SENSE_ON, fakePfSense } from '../../core/services/pf-sense.testing';
 import { PlatformService } from '../../core/services/platform.service';
 import { ToastService } from '../../core/services/toast.service';
 import { INSTRUMENT_BRIDGE_SOURCE } from '../instruments/instrument-bridge.service';
@@ -36,6 +37,7 @@ interface SetupOpts {
   chat?: (req: AssistantChatRequest) => Observable<AssistantReply>;
   context?: Partial<AssistantPageContext>;
   diag?: () => Promise<unknown>;
+  sense?: ReturnType<typeof fakePfSense>;
 }
 
 function setup(o: SetupOpts = {}) {
@@ -53,6 +55,7 @@ function setup(o: SetupOpts = {}) {
       { provide: ToastService, useValue: toasts },
       { provide: BetaFeaturesService, useValue: { enabled: (k: string) => k === 'assistant' && o.beta !== false, ensureLoaded: async () => undefined } },
       { provide: INSTRUMENT_BRIDGE_SOURCE, useValue: () => bridge },
+      o.sense ?? SENSE_ON,
     ],
   });
   const f = TestBed.createComponent(AssistantPanelComponent);
@@ -99,7 +102,7 @@ describe('Assistant panel — beta gate', () => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
         imports: [AssistantButtonComponent],
-        providers: [{ provide: BetaFeaturesService, useValue: { enabled: () => on, ensureLoaded: async () => undefined } }],
+        providers: [{ provide: BetaFeaturesService, useValue: { enabled: () => on, ensureLoaded: async () => undefined } }, SENSE_ON],
       });
       const f = TestBed.createComponent(AssistantButtonComponent);
       f.detectChanges();
@@ -308,7 +311,7 @@ describe('Assistant panel — error states in plain words', () => {
   it('limit reached → says so, no Try again', async () => {
     const p = await failWith(new HttpErrorResponse({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } }));
     const e = p.el.querySelector('[data-error="limit"]')!;
-    expect(e.textContent).toContain('used its PF Sense allowance');
+    expect(e.textContent).toContain('PF Sense limit reached for this month — ask your admin.');
     expect(e.querySelector('button')).toBeNull();
   });
 
@@ -408,5 +411,76 @@ describe('AssistantApiService — the contract', () => {
     http.expectOne('https://api.test/api/assistant/instruments/chat').flush({ success: false, error: 'ai_cap_reached', message: 'cap' });
     expect(err).toMatchObject({ error: { error: 'ai_cap_reached' } });
     http.verify();
+  });
+});
+
+describe('PF Sense admin switch — button + panel', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  function button(beta: boolean, sense: ReturnType<typeof fakePfSense>, feature?: 'instruments_assistant' | 'insights_assistant') {
+    TestBed.configureTestingModule({
+      imports: [AssistantButtonComponent],
+      providers: [{ provide: BetaFeaturesService, useValue: { enabled: () => beta, ensureLoaded: async () => undefined } }, sense],
+    });
+    const f = TestBed.createComponent(AssistantButtonComponent);
+    if (feature) f.componentRef.setInput('feature', feature);
+    f.detectChanges();
+    return (f.nativeElement as HTMLElement).querySelector('button');
+  }
+
+  it('shows only with the beta AND the feature on (both gates, neither replaces the other)', () => {
+    expect(button(true, fakePfSense())).not.toBeNull();
+    TestBed.resetTestingModule();
+    expect(button(false, fakePfSense())).toBeNull();                                   // beta off
+    TestBed.resetTestingModule();
+    expect(button(true, fakePfSense({ off: ['instruments_assistant'] }))).toBeNull();  // admin off
+    TestBed.resetTestingModule();
+    expect(button(true, fakePfSense({ master: false }))).toBeNull();                    // PF Sense off for the lab
+    TestBed.resetTestingModule();
+    expect(button(true, fakePfSense({ off: ['insights_assistant'] }))).not.toBeNull();  // a different feature
+    TestBed.resetTestingModule();
+    expect(button(true, fakePfSense({ off: ['insights_assistant'] }), 'insights_assistant')).toBeNull();
+  });
+
+  it('waits for the status (no flash of a button about to vanish)', () => {
+    expect(button(true, fakePfSense({ loaded: false }))).toBeNull();
+  });
+
+  it('button copy is PF Sense, never "AI"', () => {
+    const b = button(true, fakePfSense())!;
+    expect(b.getAttribute('aria-label')).toBe('Ask PF Sense (beta)');
+    expect(b.textContent).not.toMatch(/\bAI\b/);
+  });
+
+  it('limit reached: a calm notice instead of the starters, composer and send disabled', async () => {
+    const p = setup({ sense: fakePfSense({ limit: true }) });
+    await p.settle();
+    const n = p.el.querySelector('[data-state="limit"]')!;
+    expect(n.textContent).toContain('PF Sense limit reached for this month — ask your admin.');
+    expect(p.el.querySelector('.pf-asst-starter')).toBeNull();
+    expect(p.el.querySelector<HTMLTextAreaElement>('.pf-asst__input')!.disabled).toBe(true);
+    expect(p.sendBtn().disabled).toBe(true);
+    expect(p.el.querySelector('[role="alert"]')).toBeNull();                            // not an error
+  });
+
+  it('under the limit the composer works as before', async () => {
+    const p = setup();
+    await p.settle();
+    expect(p.el.querySelector('[data-state="limit"]')).toBeNull();
+    expect(p.el.querySelector<HTMLTextAreaElement>('.pf-asst__input')!.disabled).toBe(false);
+  });
+
+  it('a pf_sense_off / ai_cap_reached refusal re-reads the status; other failures do not', async () => {
+    const sense = fakePfSense();
+    const refresh = vi.spyOn(sense.impl, 'refresh');
+    let p = setup({ sense, chat: () => throwError(() => ({ status: 200, error: { error: 'pf_sense_off', message: 'x' } })) });
+    await p.settle(); p.type('hi'); p.sendBtn().click(); await p.settle();
+    expect(p.el.querySelector('[data-error="off"]')!.textContent).toContain('PF Sense is turned off for this lab — ask your admin.');
+    expect(refresh).toHaveBeenCalledTimes(1);
+    TestBed.resetTestingModule();
+    const s2 = fakePfSense(); const r2 = vi.spyOn(s2.impl, 'refresh');
+    p = setup({ sense: s2, chat: () => throwError(() => ({ status: 500, error: { error: 'ai_failed' } })) });
+    await p.settle(); p.type('hi'); p.sendBtn().click(); await p.settle();
+    expect(r2).not.toHaveBeenCalled();
   });
 });
