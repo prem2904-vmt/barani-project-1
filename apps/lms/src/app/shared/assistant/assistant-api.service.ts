@@ -2,15 +2,17 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, timeout } from 'rxjs';
 import { PlatformService } from '../../core/services/platform.service';
-import { normaliseProviders, normaliseReply } from './assistant-logic';
+import { assistantFailure, normaliseProviders, normaliseReply } from './assistant-logic';
 import type { AssistantChatRequest, AssistantPage, AssistantProvider, AssistantReply } from './assistant.models';
 
 /**
  * The assistant endpoints (BETA). HttpClient directly (like the AST disk
  * read) — a model answer can take longer than ApiService's 20 s ceiling, and
  * the panel needs the HTTP status to tell "not on" (404) from "limit" (429).
- * The beta interceptor adds X-PF-BETA; errors pass through untouched for
- * `assistantError()` to word.
+ * The beta interceptor adds X-PF-BETA (an empty 404 without it). Coded
+ * failures arrive as HTTP 200 `{ success:false, error }` (bad_request /
+ * not_found / ai_unavailable / ai_cap_reached / ai_failed) and are rethrown
+ * as errors; HTTP errors pass through untouched — `assistantError()` words both.
  */
 @Injectable({ providedIn: 'root' })
 export class AssistantApiService {
@@ -24,7 +26,11 @@ export class AssistantApiService {
   providers(): Observable<AssistantProvider[]> {
     return this.http.get<unknown>(this.url('/providers')).pipe(
       timeout(AssistantApiService.PROVIDERS_TIMEOUT_MS),
-      map((r) => normaliseProviders(r)),
+      map((r) => {
+        const fail = assistantFailure(r);
+        if (fail) throw fail;
+        return normaliseProviders(r);
+      }),
     );
   }
 
@@ -32,11 +38,8 @@ export class AssistantApiService {
     return this.http.post<unknown>(this.url(`/${encodeURIComponent(page)}/chat`), req).pipe(
       timeout(AssistantApiService.CHAT_TIMEOUT_MS),
       map((r) => {
-        // ApiResponse envelope with success:false → a coded failure.
-        if (r && typeof r === 'object' && (r as { success?: unknown }).success === false) {
-          const b = r as { error?: string; message?: string };
-          throw { status: 200, error: { error: b.error ?? 'ai_failed', message: b.message ?? '' } };
-        }
+        const fail = assistantFailure(r);
+        if (fail) throw fail;
         return normaliseReply(r);
       }),
     );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MAX_HISTORY_TURNS, assistantError, historyFor, mappingCodeLabel, mappingTestLabel, normaliseProviders, normaliseReply,
+  ASSISTANT_ERROR_CODES, MAX_HISTORY_TURNS, assistantError, assistantFailure, historyFor, mappingCodeLabel, mappingTestLabel, normaliseProviders, normaliseReply,
   normaliseSuggestions, pickProvider, providerOptions,
 } from './assistant-logic';
 
@@ -95,5 +95,37 @@ describe('assistant logic — errors in plain words', () => {
     expect(assistantError({ status: 0 })).toMatchObject({ kind: 'network', retry: true });
     expect(assistantError({ name: 'TimeoutError' })).toMatchObject({ kind: 'network' });
     expect(assistantError({ status: 500, error: { error: 'ai_failed' } })).toMatchObject({ kind: 'failed', retry: true });
+  });
+});
+
+describe('assistant logic — the backend contract (HTTP 200 + success:false)', () => {
+  it('a failure envelope becomes an error in HttpErrorResponse shape; data is not a failure', () => {
+    expect(assistantFailure({ success: false, error: 'AI_CAP_REACHED', message: 'used up' }))
+      .toEqual({ status: 200, error: { error: 'ai_cap_reached', message: 'used up' } });
+    expect(assistantFailure({ success: false })).toEqual({ status: 200, error: { error: 'ai_failed', message: '' } });
+    expect(assistantFailure({ success: true, data: [] })).toBeNull();
+    expect(assistantFailure([{ id: 'gemini' }])).toBeNull();
+    expect(assistantFailure(null)).toBeNull();
+  });
+
+  it('every server code reads as a plain sentence of the right kind', () => {
+    const kinds = Object.fromEntries(ASSISTANT_ERROR_CODES.map((c) => [c, assistantError(assistantFailure({ success: false, error: c }))]));
+    expect(kinds['bad_request']).toMatchObject({ kind: 'invalid', retry: false });
+    expect(kinds['not_found']).toMatchObject({ kind: 'missing', retry: false });
+    expect(kinds['not_found'].message).toMatch(/analyzer/);
+    expect(kinds['ai_unavailable']).toMatchObject({ kind: 'provider', retry: true });
+    expect(kinds['ai_cap_reached']).toMatchObject({ kind: 'limit', retry: false });
+    expect(kinds['ai_failed']).toMatchObject({ kind: 'failed', retry: true });
+  });
+
+  it('HTTP 200 not_found is a gone analyzer, an empty HTTP 404 is the beta switch being off', () => {
+    expect(assistantError({ status: 200, error: { error: 'not_found' } }).kind).toBe('missing');
+    expect(assistantError({ status: 404, error: null }).kind).toBe('off');
+  });
+
+  it('history never exceeds the server cap of 20 messages', () => {
+    const many = Array.from({ length: 45 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: `t${i}` }));
+    expect(historyFor(many).length).toBeLessThanOrEqual(20);
+    expect(MAX_HISTORY_TURNS).toBeLessThanOrEqual(20);
   });
 });

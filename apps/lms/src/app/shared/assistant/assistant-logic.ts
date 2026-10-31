@@ -14,7 +14,9 @@ const DEFAULT_LABELS: Record<AssistantProviderId, string> = { gemini: 'Gemini', 
 
 /** The longest message a person can send. */
 export const MAX_PROMPT_CHARS = 2000;
-/** How many earlier turns go with each question (oldest dropped first). */
+/** How many earlier turns go with each question (oldest dropped first).
+ *  Must not exceed the server's Ai:Assistant:MaxMessages (20) — more is a
+ *  `bad_request`. */
 export const MAX_HISTORY_TURNS = 20;
 
 const rec = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -123,13 +125,29 @@ export function historyFor(turns: readonly AssistantTurn[]): AssistantTurn[] {
 
 // ── Errors in plain words ─────────────────────────────────────────────────
 
-export type AssistantErrorKind = 'off' | 'limit' | 'provider' | 'network' | 'failed';
+export type AssistantErrorKind = 'off' | 'limit' | 'provider' | 'network' | 'invalid' | 'missing' | 'failed';
 
 export interface AssistantErrorView {
   kind: AssistantErrorKind;
   message: string;
   /** Show "Try again" (the same question). */
   retry: boolean;
+}
+
+/** The server's failure codes (InstrumentAssistantService / AstDiskReadService). */
+export const ASSISTANT_ERROR_CODES = ['bad_request', 'not_found', 'ai_unavailable', 'ai_cap_reached', 'ai_failed'] as const;
+
+/**
+ * The assistant endpoints answer HTTP 200 with the ApiResponse envelope; a
+ * `{ success: false, error, message }` body is a coded FAILURE, not data.
+ * Returns it in the same shape as an HttpErrorResponse (status 200, body
+ * `{ error, message }`) so `assistantError()` words both alike, or null when
+ * the body is not a failure envelope.
+ */
+export function assistantFailure(raw: unknown): { status: number; error: { error: string; message: string } } | null {
+  if (!rec(raw) || raw['success'] !== false) return null;
+  const code = str(raw['error'], 60).toLowerCase() || 'ai_failed';
+  return { status: 200, error: { error: code, message: str(raw['message'], 300) } };
 }
 
 /**
@@ -149,6 +167,14 @@ export function assistantError(e: unknown, providerLabel = 'This model'): Assist
   }
   if (code === 'ai_unavailable' || code === 'provider_unavailable' || status === 503) {
     return { kind: 'provider', retry: true, message: `${providerLabel} isn’t available right now. Pick the other model above, or try again in a minute.` };
+  }
+  if (code === 'bad_request') {
+    // The same question would be refused again: start over instead.
+    return { kind: 'invalid', retry: false, message: 'That couldn’t be sent. Start a new chat and ask again in fewer words.' };
+  }
+  if (code === 'not_found') {
+    // HTTP 200 + not_found = the analyzer asked about is gone (not "beta off").
+    return { kind: 'missing', retry: false, message: 'That analyzer isn’t there any more. Reload the page and pick it again.' };
   }
   if (status === 404 || code === 'beta_disabled' || code === 'not_enabled') {
     return { kind: 'off', retry: false, message: 'The assistant isn’t available for this lab right now.' };
