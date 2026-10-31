@@ -39,6 +39,12 @@ export function safeReturnUrl(url: string | null): string | null {
   return SessionService.isReturnable(url) ? url : null;
 }
 
+/** /set-password, keeping a safe return URL for after the new password. */
+export function setPasswordUrl(returnUrl: string | null): string {
+  const safe = safeReturnUrl(returnUrl);
+  return safe ? `/set-password?returnUrl=${encodeURIComponent(safe)}` : '/set-password';
+}
+
 @Component({
   selector: 'pf-login',
   standalone: true,
@@ -221,7 +227,9 @@ export class LoginComponent implements AfterViewInit {
     let ok = false;
     try {
       if (this.auth.mustChangePassword()) {
-        ok = await this.router.navigateByUrl('/set-password', { replaceUrl: true });
+        // Carry the return URL through the temporary-password step (an AI
+        // connector consent link must land back on its exact URL).
+        ok = await this.router.navigateByUrl(setPasswordUrl(this.returnUrl), { replaceUrl: true });
         return;
       }
       const returnUrl = this.returnUrl;

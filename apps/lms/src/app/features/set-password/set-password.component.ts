@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ApiError } from '../../shared/models/api-response.model';
@@ -30,6 +30,12 @@ export class SetPasswordComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly session = inject(SessionService);
+  /** Where to go once the password is set (login / the consent guard pass
+   *  it through) — in-app paths only; otherwise the landing. */
+  private readonly returnUrl = (() => {
+    const u = inject(ActivatedRoute).snapshot.queryParamMap.get('returnUrl');
+    return u && SessionService.isReturnable(u) ? u : null;
+  })();
 
   protected readonly pw = signal('');
   protected readonly confirm = signal('');
@@ -63,9 +69,9 @@ export class SetPasswordComponent {
     this.busy.set(true);
     try {
       await this.auth.changePassword(this.pw());
-      // Gate cleared — land on the app root and let the landing guard route
-      // by permission.
-      await this.router.navigateByUrl('/');
+      // Gate cleared — back to where the sign-in was headed (e.g. an AI
+      // connector consent link), else the app root and the landing guard.
+      await this.router.navigateByUrl(this.returnUrl ?? '/');
     } catch (e: unknown) {
       // auth.changePassword throws a plain Error; ApiError.from normalises it
       // (and any HttpErrorResponse) so the REAL backend reason surfaces. This

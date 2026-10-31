@@ -2,6 +2,8 @@ import { inject } from '@angular/core';
 import { cultureResultRedirectGuard, cultureSampleRedirectGuard, cultureValidateRedirectGuard } from './core/navigation/culture-redirect.guard';
 import { CanActivateFn, Route, Router } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
+import { consentGuard } from './features/ai-connector/consent-redirect';
+import { betaGuard } from './core/services/beta-features.service';
 import { AuthService } from './core/auth/auth.service';
 import { landingGuard } from './core/auth/landing.guard';
 import { moduleGuard } from './core/auth/module.guard';
@@ -43,6 +45,16 @@ export const appRoutes: Route[] = [
     path: 'set-password',
     canActivate: [setPasswordGuard],
     loadComponent: () => import('./features/set-password/set-password.component').then(m => m.SetPasswordComponent)
+  },
+  {
+    // AI connector (MCP) OAuth consent — Supabase's OAuth 2.1 server sends
+    // the browser here with ?authorization_id=…. Outside the shell like
+    // /login; consentGuard keeps this exact URL through login and the
+    // temporary-password step.
+    path: 'oauth/consent',
+    // BETA: pf.mcp() in this browser + server flag + dev; off ⇒ the normal unknown-URL handling.
+    canActivate: [betaGuard('mcp'), consentGuard],
+    loadComponent: () => import('./features/ai-connector/oauth-consent.page').then(m => m.OAuthConsentPage)
   },
   {
     // Public, no-login result tracking reached from the invoice QR.
@@ -120,6 +132,13 @@ export const appRoutes: Route[] = [
         path: 'lab/settings',
         canActivate: [...routeGuards('/lab/settings')],
         loadComponent: () => import('./features/lab/lab-settings-hub/lab-settings-hub.component').then(m => m.LabSettingsHubComponent)
+      },
+      {
+        // Lab settings → AI connectors (MCP): the lab switch (admin) +
+        // connector address; everyone else in the hub sees the status.
+        path: 'admin/ai-connectors',
+        canActivate: [betaGuard('mcp'), ...routeGuards('/admin/ai-connectors')],
+        loadComponent: () => import('./features/ai-connector/ai-connectors-settings.page').then(m => m.AiConnectorsSettingsPage)
       },
       {
         // Lab analyzers (instrument connector): list + setup wizard / status.

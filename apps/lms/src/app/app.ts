@@ -14,6 +14,7 @@ import { isPublicPatientPath } from './core/navigation/public-paths';
 import { SessionService } from './core/auth/session.service';
 import { BusyComponent } from './shared/primitives/skeleton-kit.component';
 import { OpdGateService } from './features/opd/shared/opd-gate.service';
+import { BetaFeaturesService } from './core/services/beta-features.service';
 import { DesktopWindowService } from './core/services/desktop-window.service';
 import { ElectronMenuActionService } from './core/services/electron-menu-action.service';
 
@@ -188,6 +189,8 @@ export class App implements OnInit {
   private readonly _injector = inject(Injector);
   /** OPD dark build: installs `window.pf.opd()` silently (no banner, no UI hint). */
   private readonly _opdGate = inject(OpdGateService);
+  /** Beta features: installs `window.pf.mcp() / passkeys() / assistant() / beta()` silently. */
+  private readonly _beta = inject(BetaFeaturesService);
   /** Desktop kiosk full screen: Esc (when the app didn't use it) leaves it,
    *  on every screen incl. /login. No-op off Electron. */
   private readonly _desktopWindow = inject(DesktopWindowService);
@@ -200,6 +203,7 @@ export class App implements OnInit {
 
   async ngOnInit() {
     this._opdGate.install();
+    this._beta.install();
     // Patient-facing public pages (report link, order tracking) are opened in
     // a phone browser by someone who is not a user of the app: no idle lock,
     // no push / calling hand-offs — keep the page light and self-contained.

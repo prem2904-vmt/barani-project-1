@@ -166,9 +166,9 @@ describe('Lab settings hub — tiles filtered by what the user can open', () => 
     expect(hrefs).toEqual(['/admin/tests', '/admin/reports', '/admin/referral-labs', '/admin/lab-settings', '/admin/microbiology', '/admin/instruments']);
   });
 
-  it('super-admin sees every tile', () => {
+  it('super-admin sees every tile (a BETA tile only with its switch — off here)', () => {
     const hub = hubFor(['*']);
-    expect(hub.visibleTiles().length).toBe(hub.tiles.length);
+    expect(hub.visibleTiles().length).toBe(hub.tiles.filter(t => !t.beta).length);
   });
 });
 

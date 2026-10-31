@@ -7,6 +7,7 @@ import { bandFilter } from '../../../shared/utils/band-search';
 import { AuthService } from '../../../core/auth/auth.service';
 import { canOpenRoute } from '../../../core/auth/route-access';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
+import { BetaFeatureKey, BetaFeaturesService } from '../../../core/services/beta-features.service';
 
 interface LabTile {
   title: string;
@@ -15,6 +16,8 @@ interface LabTile {
   iconPath: string;
   /** Shown only while this lab feature is on (core/modules/lab-features). */
   feature?: 'homeCollection';
+  /** BETA surface: listed only while BetaFeaturesService says so (pf.<key>() + server flag + dev). */
+  beta?: BetaFeatureKey;
 }
 
 /**
@@ -108,13 +111,15 @@ export class LabSettingsHubComponent {
   /** Home collection off (entitlement OR workflow — the ONE lab-feature rule)
    *  ⇒ its agents tile is gone too, like its route. */
   private readonly features = inject(LabFeaturesService);
+  private readonly beta = inject(BetaFeaturesService);
   /** Only tiles whose destination the user can open (the same ROUTE_ACCESS
    *  table the guards use): a Lab Admin (Technical) sees Tests, Report
    *  Template, Referral Labs, Lab settings and Microbiology — never a tile that
    *  lands on /403 (Referring Network, Notifications, KPI cards…) — and never a
    *  tile for a lab feature that is switched off. */
   readonly openableTiles = computed(() => {
-    const featureOn = (t: LabTile) => t.feature !== 'homeCollection' || this.features.homeCollectionEnabled();
+    const featureOn = (t: LabTile) => (t.feature !== 'homeCollection' || this.features.homeCollectionEnabled())
+      && (!t.beta || this.beta.enabled(t.beta));
     // hasAnyPermission reads the session signal, so this re-evaluates on change.
     if (typeof this.auth?.hasAnyPermission !== 'function') return this.tiles.filter(featureOn);
     const ctx = { hasAny: (p: string[]) => this.auth.hasAnyPermission(p) };
@@ -144,6 +149,9 @@ export class LabSettingsHubComponent {
     { title: 'Bridges', href: '/admin/bridges',
       subtitle: 'Prefrontal Bridges: add, Wi-Fi, analyzers they connect',
       iconPath: 'M5 13h14a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2ZM7 16.5h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0' },
+    { title: 'AI connectors', href: '/admin/ai-connectors', beta: 'mcp',
+      subtitle: 'Let AI apps like Claude read your lab’s numbers',
+      iconPath: 'M9 7H6a4 4 0 0 0 0 8h3M15 7h3a4 4 0 0 1 0 8h-3M8 11h8' },
     { title: 'Referring Network', href: '/admin/referring-network',
       subtitle: 'Hospitals + doctors that send patients to your lab',
       iconPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01' },

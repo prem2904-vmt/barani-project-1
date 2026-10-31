@@ -75,6 +75,7 @@ const RULES: readonly Rule[] = [
   [/^\/admin\/(opd|ipd|pharmacy|payroll|insurance|radiology|emergency|blood-bank)$/, 'tiles', 'Module settings'],
   [/^\/admin\/(branches|vendors|referral-labs|inventory|partners|audit|home-collection|referring-network|opd\/doctors)$/, 'grid', 'Settings'],
   [/^\/admin\/lab-settings$/, 'form', 'Lab settings'],
+  [/^\/admin\/ai-connectors$/, 'form', 'AI connectors'],
   [/^\/admin\/bridges$/, 'grid', 'Bridges'],
   [/^\/admin\/bridges\/add$/, 'form', 'Add a Bridge'],
   [/^\/admin\/bridges\/[^/]+$/, 'detail', 'Bridge'],
@@ -97,7 +98,7 @@ export function pageSkeletonFor(url: string | null | undefined): PageSkeleton | 
   const p = pagePath(url);
   if (NO_FRAME.some(r => r.test(p))) return null;
   // Public, sign-in-free pages live outside the shell.
-  if (/^\/(track|reports\/public)\//.test(p) || p === '/set-password') return null;
+  if (/^\/(track|reports\/public)\//.test(p) || p === '/set-password' || p === '/oauth/consent') return null;
   for (const [re, kind, name] of RULES) {
     if (re.test(p)) return { kind, label: `Opening ${name}…` };
   }

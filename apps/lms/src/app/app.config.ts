@@ -7,6 +7,7 @@ import {
   provideZonelessChangeDetection
 } from '@angular/core';
 import { UploadsService } from './core/services/uploads.service';
+import { BetaFeaturesService, betaHeaderInterceptor } from './core/services/beta-features.service';
 import { RouteReuseStrategy, provideRouter, withComponentInputBinding, withNavigationErrorHandler, withRouterConfig, withViewTransitions } from '@angular/router';
 import { IdentityRouteReuseStrategy } from './core/navigation/identity-reuse.strategy';
 import { slideTransition } from './core/navigation/slide-transition';
@@ -101,10 +102,12 @@ export const appConfig: ApplicationConfig = {
     // opdPreviewInterceptor: X-PF-OPD: 1 on API calls only after pf.opd() (OPD dark build).
     // storageErrorInterceptor: a real storage_error (or a masked HTML 502/503/504
     // gateway page on an upload) becomes one clear ApiError message everywhere.
-    provideHttpClient(withFetch(), withInterceptors([httpActivityInterceptor, opdPreviewInterceptor, authInterceptor, storageErrorInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([httpActivityInterceptor, opdPreviewInterceptor, betaHeaderInterceptor, authInterceptor, storageErrorInterceptor])),
     // Private uploads: register the session-authenticated fetcher the PDF
     // renderers use for "/uploads/…" assets (see shared/utils/upload-fetch.ts).
     provideAppInitializer(() => { inject(UploadsService); }),
+    // Beta UI flags (console switch + server + dev): fetched once in the background — never blocks boot.
+    provideAppInitializer(() => { void inject(BetaFeaturesService).ensureLoaded(); }),
     { provide: APP_BASE_HREF, useValue: '/' },
     {
       provide: LocationStrategy,

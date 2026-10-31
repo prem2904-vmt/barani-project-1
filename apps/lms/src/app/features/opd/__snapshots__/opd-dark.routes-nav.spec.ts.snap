@@ -43,6 +43,7 @@ exports[`non-OPD routes are exactly today's lab set > matches the snapshot 1`] =
 [
   "login",
   "set-password",
+  "oauth/consent",
   "track/:token",
   "reports/public/:token",
   "b",
@@ -55,7 +56,9 @@ exports[`non-OPD routes are exactly today's lab set > matches the snapshot 1`] =
   "admin/manage",
   "admin/modules",
   "lab/settings",
+  "admin/ai-connectors",
   "admin/instruments",
+  "admin/instruments/connect",
   "admin/instruments/:id",
   "admin/bridges",
   "admin/bridges/add",

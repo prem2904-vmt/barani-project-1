@@ -140,6 +140,9 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/setup':                   { perms: ADMIN_PERMS },
   '/lab/settings':            { perms: LAB_SETTINGS_HUB_PERMS, module: 'lab' },
   '/admin/microbiology':      { perms: ['manage_lab_settings'], module: 'lab' },
+  // AI connectors (MCP): anyone who opens the Lab settings hub sees the status;
+  // the switch inside is admin-only (the server enforces the PUT).
+  '/admin/ai-connectors':     { perms: LAB_SETTINGS_HUB_PERMS },
   // Prefrontal Bridges — list, add, one Bridge (the server enforces each action).
   '/admin/bridges':           { perms: BRIDGE_PERMS, module: 'lab' },
   // Lab analyzers (instrument connector) — the same lab-admin perm as Lab settings / Microbiology.

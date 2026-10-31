@@ -2,7 +2,7 @@ import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { vi } from 'vitest';
-import { LoginComponent, safeReturnUrl, sessionNotice } from './login.component';
+import { LoginComponent, safeReturnUrl, sessionNotice, setPasswordUrl } from './login.component';
 import { AuthService } from '../../core/auth/auth.service';
 import { AccountsService } from '../../core/auth/accounts.service';
 
@@ -15,13 +15,13 @@ import { AccountsService } from '../../core/auth/accounts.service';
 @Component({ template: '' })
 class BlankComponent {}
 
-function makeAuth() {
+function makeAuth(mustChange = false) {
   const user = signal<{ id: string } | null>(null);
   return {
     user,
     isAuthenticated: () => !!user(),
     rememberedOrgs: signal<string[]>(['Micro World']),
-    mustChangePassword: () => false,
+    mustChangePassword: () => mustChange,
     hasAnyPermission: () => true,
     hasAnyEffectivePermission: () => true,
     permissions: () => ['*'],
@@ -29,8 +29,8 @@ function makeAuth() {
   };
 }
 
-async function render(url = '/login') {
-  const auth = makeAuth();
+async function render(url = '/login', opts: { mustChange?: boolean } = {}) {
+  const auth = makeAuth(!!opts.mustChange);
   TestBed.configureTestingModule({
     imports: [LoginComponent],
     providers: [
@@ -38,6 +38,7 @@ async function render(url = '/login') {
         { path: 'login', component: LoginComponent },
         { path: 'frontdesk', component: BlankComponent },
         { path: 'set-password', component: BlankComponent },
+        { path: 'oauth/consent', component: BlankComponent },
         { path: '', component: BlankComponent },
       ]),
       { provide: AuthService, useValue: auth },
@@ -180,6 +181,43 @@ describe('LoginComponent', () => {
     expect(router.url).toBe('/frontdesk');
   });
 
+  // AI connector (MCP) consent: Supabase sends the browser to
+  // /oauth/consent?authorization_id=…; the consent guard bounces a signed-out
+  // user here with that EXACT URL, and signing in must land back on it.
+  const CONSENT = '/oauth/consent?authorization_id=auth-123';
+
+  async function signInFrom(url: string, opts: { mustChange?: boolean } = {}) {
+    const r = await render(url, opts);
+    r.$<HTMLInputElement>('#lg-username').value = 'u'; r.$<HTMLInputElement>('#lg-username').dispatchEvent(new Event('input'));
+    r.$<HTMLInputElement>('#lg-password').value = 'p'; r.$<HTMLInputElement>('#lg-password').dispatchEvent(new Event('input'));
+    r.fixture.detectChanges();
+    const nav = vi.spyOn(r.router, 'navigateByUrl');
+    r.$<HTMLButtonElement>('.lg__submit').click();
+    await r.fixture.whenStable();
+    await new Promise(res => setTimeout(res, 0));
+    return { ...r, nav };
+  }
+
+  it('returns to the exact AI-connector consent URL (authorization_id kept) after signing in', async () => {
+    const { nav, router } = await signInFrom('/login?returnUrl=' + encodeURIComponent(CONSENT));
+    expect(nav).toHaveBeenCalledWith(CONSENT, { replaceUrl: true });
+    expect(router.url).toBe(CONSENT);
+  });
+
+  it('temporary password: goes to /set-password CARRYING the consent URL', async () => {
+    const { nav } = await signInFrom('/login?returnUrl=' + encodeURIComponent(CONSENT), { mustChange: true });
+    expect(nav).toHaveBeenCalledWith('/set-password?returnUrl=' + encodeURIComponent(CONSENT), { replaceUrl: true });
+  });
+
+  it('normal login is unchanged: no return URL → the landing; temp password → plain /set-password', async () => {
+    let r = await signInFrom('/login');
+    expect(r.nav).toHaveBeenCalledWith('/', { replaceUrl: true });
+    TestBed.resetTestingModule();
+    document.body.innerHTML = '';
+    r = await signInFrom('/login', { mustChange: true });
+    expect(r.nav).toHaveBeenCalledWith('/set-password', { replaceUrl: true });
+  });
+
   it('inputs are 16px (iOS never zooms) — font-size is set on the field class', () => {
     // jsdom has no layout; the rule is pinned in the stylesheet itself.
     const scss = (LoginComponent as unknown as { ɵcmp?: { styles?: string[] } }).ɵcmp?.styles?.join('') ?? '';
@@ -194,6 +232,12 @@ describe('login helpers', () => {
     expect(sessionNotice('elsewhere')).toMatch(/another window/i);
     expect(sessionNotice(null)).toBeNull();
     expect(sessionNotice('whatever')).toBeNull();
+  });
+
+  it('setPasswordUrl carries only a safe return URL', () => {
+    expect(setPasswordUrl('/oauth/consent?authorization_id=a1')).toBe('/set-password?returnUrl=%2Foauth%2Fconsent%3Fauthorization_id%3Da1');
+    expect(setPasswordUrl('https://evil.example')).toBe('/set-password');
+    expect(setPasswordUrl(null)).toBe('/set-password');
   });
 
   it('safeReturnUrl only follows in-app paths', () => {
