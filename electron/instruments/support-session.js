@@ -97,7 +97,7 @@ const V = {
  * this PC picks it up like any edit made on the Instruments screen.
  */
 const SETTING_FIELDS = {
-  port: { word: 'port', check: (v) => { const t = valueText(v); return t && /^\d{1,5}$/.test(t) && Number(t) >= 1 && Number(t) <= 65535 ? String(Number(t)) : undefined; } },
+  port: { word: 'port', check: (v) => { const t = valueText(v); return t && /^\d{1,5}$/.test(t) && Number(t) >= 1024 && Number(t) <= 65535 ? String(Number(t)) : undefined; } },
   link: { word: 'link protocol', check: oneOf(['auto', 'astm-e1381', 'mllp', 'raw']) },
   parser: { word: 'message parser', check: oneOf(['auto', 'astm', 'hl7', 'text']) },
   sampleIdPath: { word: 'sample ID position', check: (v) => { const t = valueText(v); return t && SAMPLE_PATH_RE.test(t) ? t : undefined; } },
@@ -510,7 +510,8 @@ class SupportSession extends EventEmitter {
     let json = null;
     if (res.status !== 204) { try { json = await res.json(); } catch { json = null; } }
     const data = json && typeof json === 'object' && Object.prototype.hasOwnProperty.call(json, 'data') ? json.data : json;
-    const message = json && typeof json === 'object' ? (json.error && (json.error.message || json.error)) || json.message : null;
+    // The server's error body is {error: <code>, message: <plain words>}: show the words, keep the code as the fallback.
+    const message = json && typeof json === 'object' ? json.message || (json.error && (json.error.message || json.error)) : null;
     return { status: res.status, data, message: typeof message === 'string' ? message : null };
   }
 

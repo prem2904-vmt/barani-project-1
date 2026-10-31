@@ -31,7 +31,7 @@ async function until(fn, n = 400) { for (let i = 0; i < n; i++) { if (fn()) retu
  * The lab's HTTP side (SupportSessionsController): Start, Get, Stop. Every
  * request is recorded.
  */
-function http({ startStatus = 200, expiresInMs = 2 * 3600e3, now = () => Date.now(), code = 'WDJBMJHT' } = {}) {
+function http({ startBody = null, startStatus = 200, expiresInMs = 2 * 3600e3, now = () => Date.now(), code = 'WDJBMJHT' } = {}) {
   const st = { calls: [], getStatus: null, status: null };
   const json = (status, body) => ({ status, json: async () => body });
   st.fetch = async (url, init) => {
@@ -39,7 +39,7 @@ function http({ startStatus = 200, expiresInMs = 2 * 3600e3, now = () => Date.no
     const path = u.pathname.replace('/api/support-sessions', '');
     st.calls.push({ method: init.method, path, headers: init.headers, body: init.body ? JSON.parse(init.body) : undefined });
     if (init.method === 'POST' && path === '') {
-      if (startStatus !== 200) return json(startStatus, { success: false, error: { message: 'nope' } });
+      if (startStatus !== 200) return json(startStatus, startBody || { success: false, error: { message: 'nope' } });
       return json(200, { success: true, data: { sessionId: SID, code: code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code, expiresAt: new Date(now() + expiresInMs).toISOString(), hub: '/hubs/support' } });
     }
     if (init.method === 'GET' && path === `/${SID}`) {
@@ -637,6 +637,15 @@ test('start refused by the server: plain words, no hub connection', async () => 
   assert.equal(bad.hb.conns.length, 0);
 });
 
+test('start refused: the server’s plain-words message is shown, the error code is only the fallback', async () => {
+  const { s } = rig({ http: { startStatus: 400, startBody: { success: false, error: 'invalid_pc', message: 'pcId is required (the PC’s host name).' } } });
+  const r = await start(s);
+  assert.equal(r.ok, false);
+  assert.equal(r.error, 'pcId is required (the PC’s host name).');
+  const codeOnly = rig({ http: { startStatus: 400, startBody: { success: false, error: 'invalid_pc' } } });
+  assert.equal((await start(codeOnly.s)).error, 'invalid_pc');
+});
+
 test('start arguments: minutes 5–240 (default 120), JWT-shaped token, https API (http only on this machine), branch GUID', () => {
   assert.equal(parseStart({ token: TOKEN, apiUrl: API }).minutes, 120);
   assert.equal(parseStart({ token: TOKEN, apiUrl: API }).branchId, null);
@@ -695,6 +704,10 @@ test('serverRow: the relay\'s outcome words → tones', () => {
 
 test('connector settings: exactly the server fields and values (SupportSettings.cs)', () => {
   const v = (field, value) => { const c = parseCommand({ commandId: 'c', action: 'set_connector_setting', args: { instrumentId: IID, field, value } }); return c.error || c.args.value; };
+  assert.equal(v('port', '5603'), '5603');
+  assert.equal(v('port', '1024'), '1024');
+  assert.equal(v('port', '80'), 'bad_request: value', 'the server refuses below 1024 too');
+  assert.equal(v('port', '65536'), 'bad_request: value');
   assert.equal(v('checksumMode', 'lenient'), 'lenient');
   assert.equal(v('checksumMode', 'optional'), 'bad_request: value');
   assert.equal(v('echoMode', 'on'), 'on');
