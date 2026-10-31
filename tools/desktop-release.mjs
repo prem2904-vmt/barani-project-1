@@ -213,7 +213,9 @@ function electronBuilderBuild(a, osName, { base, channel, version }) {
   // A publish config is REQUIRED for electron-builder to even write the
   // update-info yml/blockmaps — `--publish never` stops it from also trying
   // to upload anywhere itself (we do that ourselves, after notarizing).
-  args.push('-c.publish.provider=generic', `-c.publish.url=${base}/${channel}/${osName}`, '--publish', 'never');
+  // channel=latest: a prerelease version (1.1.2-dev.3) would otherwise make
+  // electron-builder name the file dev.yml, but installed apps read latest.yml.
+  args.push('-c.publish.provider=generic', `-c.publish.url=${base}/${channel}/${osName}`, '-c.publish.channel=latest', '--publish', 'never');
   run('npx', ['electron-builder', ...args]);
 }
 
