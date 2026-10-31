@@ -32,11 +32,20 @@ function sinocareContext(cfg) {
   return c;
 }
 
+/** `link.echo` (written by the server's echoMode setting, e.g. via remote
+ *  support) → the Sinocare replyMode. An explicit `replyMode` always wins;
+ *  unset = undefined = the receiver's default ('none'), byte-identical. */
+function echoReplyMode(v) {
+  if (v === true || v === 'on' || v === 'echo') return 'echo';
+  if (v === false || v === 'off' || v === 'none') return 'none';
+  return undefined;
+}
+
 function buildConcrete(type, cfg, io) {
   switch (type) {
     case 'astm-e1381':
     case 'astm':
-      return new AstmReceiver({ write: io.write, frameTimeoutMs: cfg.frameTimeoutMs || 30000 });
+      return new AstmReceiver({ write: io.write, frameTimeoutMs: cfg.frameTimeoutMs || 30000, checksum: cfg.checksum });
     case 'mllp':
     case 'hl7':
       return new MllpReceiver({ write: io.write, reply: io.reply });
@@ -44,7 +53,7 @@ function buildConcrete(type, cfg, io) {
     case 'stx-etx':
       return new StxEtxReceiver({ write: io.write, dedupeMs: cfg.dedupeMs ?? undefined, ack: cfg.ack !== false });
     case 'sinocare-sn':
-      return new SinocareReceiver({ write: io.write, replyMode: cfg.replyMode, ackJson: cfg.ackJson, context: sinocareContext(cfg) });
+      return new SinocareReceiver({ write: io.write, replyMode: cfg.replyMode ?? echoReplyMode(cfg.echo), ackJson: cfg.ackJson, context: sinocareContext(cfg) });
     case 'raw':
     default:
       return new RawReceiver({ terminator: cfg.terminator ?? null, idleMs: cfg.idleMs ?? 1500 });
@@ -147,4 +156,4 @@ function describeFrame(f) {
 
 function createLink(cfg, io) { return new Link(cfg, io); }
 
-module.exports = { createLink, Link, normalizeType, isAutoNoiseByte, describeFrame };
+module.exports = { createLink, Link, normalizeType, isAutoNoiseByte, describeFrame, echoReplyMode };

@@ -14,13 +14,16 @@
  * by the future Raspberry Pi host (./host-node.js).
  */
 const path = require('path');
+const os = require('os');
 const { app, ipcMain, safeStorage, dialog } = require('electron');
 const { ConnectorManager } = require('./core/manager');
 const { NetDiag, portList } = require('./netdiag');
 const { makeDiagHandlers } = require('./diag-ipc');
+const { SupportSession, askApproval } = require('./support-session');
 
 let manager = null;
 let diag = null;
+let support = null;
 let getWindow = () => null;
 
 const secrets = {
@@ -117,6 +120,22 @@ function register(windowGetter) {
     return ports ? manager.scanStart({ ports }) : bad('ports');
   });
   handle('instruments:diagScanStop', (id) => (GUID_RE.test(String(id || '')) ? manager.scanStop(String(id)) : { ports: [] }));
+
+  // ── "Allow Prefrontal support" (beta `support`, support-session.js). The
+  // lab starts it; the app only reaches OUT (long-poll) while it is active;
+  // every CHANGE asks MAIN's own dialog (Deny = default). Arguments are
+  // re-validated in the module; the token never goes back to the page.
+  support = new SupportSession({
+    diag,
+    manager,
+    pcId: os.hostname(),
+    approve: (q) => askApproval(q, { showMessageBox: (...a) => dialog.showMessageBox(...a), getWindow: () => getWindow() }),
+  });
+  support.on('change', (st) => send('instruments:support', st));
+  handle('instruments:supportStart', (p) => support.startFromIpc(p));
+  handle('instruments:supportStop', () => support.stop('lab'));
+  handle('instruments:supportStatus', () => support.state());
+  handle('instruments:supportToken', (t) => support.setToken(t));
 }
 
 /** Start every paired connector (app ready). Never throws into main. */
@@ -127,6 +146,7 @@ async function start() {
 
 /** Stop connectors and listen sessions (before quit). */
 async function stop() {
+  if (support) { try { await support.stop('quit'); } catch { /* quitting anyway */ } }
   if (!manager) return;
   try { await manager.stopAll(); } catch { /* quitting anyway */ }
 }

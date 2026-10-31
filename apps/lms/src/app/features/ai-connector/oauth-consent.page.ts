@@ -8,6 +8,7 @@ import { BusyDirective } from '../../shared/directives/busy.directive';
 import { SkeletonFormComponent } from '../../shared/primitives/skeleton-kit.component';
 import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_NEVER, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState } from './ai-connector.api';
 import { ConsentRedirector } from './consent-redirect';
+import { SUPPORT_CAN_DO, SupportWhoami } from './support-whoami';
 import {
   ConsentError, ConsentErrorKind, OAuthAuthorizationDetails, OAuthConsentClient, consentErrorText,
   isConsentNeeded, redirectHost, safeRedirectUrl,
@@ -40,7 +41,7 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
       <pf-hero-band [customSearch]="true" [contextBar]="true">
         <div band-search class="pf-ctx" aria-label="Request">
           <span class="pf-ctx__primary pf-oc__app">{{ appName() || 'Connect an app' }}</span>
-          <span class="pf-ctx__chip"><span class="pf-ctx__k">Access</span>Read only</span>
+          <span class="pf-ctx__chip"><span class="pf-ctx__k">Access</span>{{ isSupport() ? 'Support sessions' : 'Read only' }}</span>
           @if (userName()) {
             <span class="pf-ctx__chip pf-oc__hide-phone"><span class="pf-ctx__k">Signed in</span>{{ userName() }}</span>
           }
@@ -54,7 +55,7 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
               <span class="pf-card__icon" aria-hidden="true">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7H6a4 4 0 0 0 0 8h3M15 7h3a4 4 0 0 1 0 8h-3M8 11h8"/></svg>
               </span>
-              <h1 class="pf-card__label" id="pf-oc-title">Connect an app</h1>
+              <h1 class="pf-card__label" id="pf-oc-title">{{ isSupport() ? 'Prefrontal Support access' : 'Connect an app' }}</h1>
             </header>
             <div class="pf-card__body pf-oc__mainbody" aria-live="polite">
               @switch (phase()) {
@@ -86,6 +87,22 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
                   </div>
                 }
                 @default {
+                  @if (isSupport()) {
+                    <p class="pf-oc__lead" data-testid="support-consent"><strong class="pf-oc__name">{{ appName() }}</strong> wants to work for you as <strong>Prefrontal Support</strong>.</p>
+                    <h2 class="pf-oc__sec">It could</h2>
+                    <ul class="pf-oc__list">
+                      @for (line of supportCanDo; track line) {
+                        <li class="pf-oc__item">
+                          <svg class="pf-oc__tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                          <span>{{ line }}</span>
+                        </li>
+                      }
+                    </ul>
+                    <p class="pf-oc__readonly">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6l-7-3Z"/></svg>
+                      <span>Nothing reaches a lab’s PC until that lab starts a support session and reads you its code. Every change still needs the lab’s OK on the PC, and the lab sees every action live.</span>
+                    </p>
+                  } @else {
                   @if (labOff()) {
                     <div class="pf-oc__note" role="status">
                       <span class="pf-oc__note-icon" aria-hidden="true">
@@ -128,6 +145,7 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6l-7-3Z"/></svg>
                     <span>Read only — it can’t add, change or delete anything. It sees only what your own account may see.</span>
                   </p>
+                  }
                 }
               }
             </div>
@@ -151,16 +169,19 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
                   }
                 </dl>
                 <p class="pf-field__hint">Only allow an app you started connecting yourself. You can turn the connection off later in that app.</p>
+                @if (isSupport()) {
+                  <p class="pf-field__hint">Signed in as a member of Prefrontal Support.</p>
+                }
                 @if (decideError()) {
                   <p class="pf-oc__err" role="alert">{{ decideError() }}</p>
                 }
               </div>
               <div class="pf-card__foot pf-oc__foot">
-                @if (connectorError() && phase() === 'ready') {
+                @if (connectorError() && phase() === 'ready' && !isSupport()) {
                   <button type="button" class="pf-btn pf-btn--secondary press" (click)="load()" [disabled]="!!busy()">Try again</button>
                 }
                 <button type="button" class="pf-btn pf-btn--secondary press pf-oc__deny"
-                        [class.pf-span]="!canAllow() && !connectorError()"
+                        [class.pf-span]="!canAllow() && (!connectorError() || isSupport())"
                         [disabled]="phase() !== 'ready' || !!busy()"
                         [pfBusy]="busy() === 'deny'" pfBusyLabel="Denying…" (click)="deny()">
                   {{ busy() === 'deny' ? 'Denying…' : 'Deny' }}
@@ -245,9 +266,14 @@ export class OAuthConsentPage implements OnInit {
   private readonly client = inject(OAuthConsentClient);
   private readonly connectorApi = inject(AiConnectorApi);
   private readonly redirector = inject(ConsentRedirector);
+  private readonly whoami = inject(SupportWhoami);
 
   readonly canSee = AI_CONNECTOR_CAN_SEE;
   readonly never = AI_CONNECTOR_NEVER;
+  readonly supportCanDo = SUPPORT_CAN_DO;
+  /** The signed-in person is in the Prefrontal Support tenant (wording only; the
+   *  support connector's own checks live on the server). */
+  readonly isSupport = signal(false);
   readonly phase = signal<ConsentPhase>('loading');
   readonly details = signal<OAuthAuthorizationDetails | null>(null);
   readonly connector = signal<AiConnectorState | null>(null);
@@ -266,8 +292,11 @@ export class OAuthConsentPage implements OnInit {
   readonly backTo = computed(() => redirectHost(this.details()?.redirect_uri));
   /** The lab switch is OFF (only once the server said so). */
   readonly labOff = computed(() => this.connector()?.enabled === false);
-  /** Allow only with a live request AND the lab's switch confirmed ON. */
-  readonly canAllow = computed(() => this.phase() === 'ready' && this.connector()?.enabled === true);
+  /** Allow only with a live request AND the lab's switch confirmed ON — or,
+   *  for Prefrontal Support, the server's own "you are support" answer (the
+   *  support connector does not read the lab's numbers; the lab switch is
+   *  about that). */
+  readonly canAllow = computed(() => this.phase() === 'ready' && (this.isSupport() || this.connector()?.enabled === true));
   readonly errorText = computed(() => consentErrorText(this.errorKind() ?? 'unknown'));
   readonly errorTitle = computed(() => {
     switch (this.errorKind()) {
@@ -304,6 +333,7 @@ export class OAuthConsentPage implements OnInit {
     const connectorP = firstValueFrom(this.connectorApi.get())
       .then(c => { this.connector.set(c); })
       .catch(() => { this.connector.set(null); this.connectorError.set(true); });
+    const supportP = this.whoami.isSupport().then(v => this.isSupport.set(v), () => this.isSupport.set(false));
     try {
       const d = await this.client.getDetails(id);
       if (!isConsentNeeded(d)) { this.leave(d.redirect_url); return; }
@@ -312,7 +342,7 @@ export class OAuthConsentPage implements OnInit {
       this.fail(e instanceof ConsentError ? e.kind : 'unknown');
       return;
     }
-    await connectorP;
+    await Promise.all([connectorP, supportP]);
     this.phase.set('ready');
   }
 

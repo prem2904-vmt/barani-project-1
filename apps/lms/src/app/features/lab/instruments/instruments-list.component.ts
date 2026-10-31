@@ -20,6 +20,7 @@ import { STATUS_ORDER, connectionSummary, protocolLabel, statusSubline, statusWo
 import { AssistantButtonComponent } from '../../../shared/assistant/assistant-button.component';
 import { AssistantPanelComponent } from '../../../shared/assistant/assistant-panel.component';
 import { AssistantPageContext, MAP_PREFILL_STATE_KEY, MappingPrefill } from '../../../shared/assistant/assistant.models';
+import { SupportSessionCardComponent } from './support-session-card.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -39,7 +40,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
 @Component({
   selector: 'pf-instruments-list',
   standalone: true,
-  imports: [AgGridAngular, RouterLink, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent],
+  imports: [AgGridAngular, RouterLink, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-inl pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -88,6 +89,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
             </div>
           </section>
 
+          <div class="pf-inl__sidecol">
           <aside class="pf-card pf-inl__side" aria-label="Instrument actions">
             <header class="pf-card__head">
               <span class="pf-card__icon" aria-hidden="true">
@@ -126,6 +128,9 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
               </button>
             </div>
           </aside>
+          <!-- Beta 'support': renders nothing unless pf.support() + server + dev. -->
+          <pf-support-session-card></pf-support-session-card>
+          </div>
         </div>
       </div>
       <pf-assistant-panel [open]="assistantOpen()" [context]="assistantContext()"
@@ -138,6 +143,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
     .pf-inl__panels { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; flex: 1 1 auto; min-height: 0; }
     @media (max-width: 1023px) { .pf-inl__panels { grid-template-columns: minmax(0, 1fr); } }
     .pf-inl__main { min-width: 0; min-height: 0; }
+    .pf-inl__sidecol { display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; }
     .pf-inl__count { margin-left: auto; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
     .pf-inl__grid-wrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
     .pf-inl__grid { display: block; width: 100%; flex: 1 1 auto; min-height: 320px; height: calc(100dvh - 300px); }

@@ -40,6 +40,12 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./features/login/login.component').then(m => m.LoginComponent)
   },
   {
+    // "Continue with Google" lands here with ?code=… (PKCE exchange, then the
+    // normal session + /me path; google-oauth.ts). Outside the shell like /login.
+    path: 'auth/callback',
+    loadComponent: () => import('./features/login/auth-callback.page').then(m => m.AuthCallbackPage)
+  },
+  {
     // Forced-password-change gate — top-level (outside the shell) so the rest
     // of the app stays blocked until the temporary password is replaced.
     path: 'set-password',
@@ -52,8 +58,10 @@ export const appRoutes: Route[] = [
     // /login; consentGuard keeps this exact URL through login and the
     // temporary-password step.
     path: 'oauth/consent',
-    // BETA: pf.mcp() in this browser + server flag + dev; off ⇒ the normal unknown-URL handling.
-    canActivate: [betaGuard('mcp'), consentGuard],
+    // BETA: pf.mcp() (the lab's AI connector) or pf.support() (Prefrontal
+    // Support's connector) in this browser + server flag + dev; off ⇒ the
+    // normal unknown-URL handling.
+    canActivate: [betaGuard('mcp', 'support'), consentGuard],
     loadComponent: () => import('./features/ai-connector/oauth-consent.page').then(m => m.OAuthConsentPage)
   },
   {

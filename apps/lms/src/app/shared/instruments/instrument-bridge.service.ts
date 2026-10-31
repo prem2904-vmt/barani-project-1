@@ -1,6 +1,6 @@
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import {
-  ConnectorStatus, ElectronInstrumentsApi, ElectronInstrumentsDiagApi, ListenEvent, ListenResult, PairedInstrument, RawLogEntry, SerialPortInfo,
+  ConnectorStatus, ElectronInstrumentsApi, ElectronInstrumentsDiagApi, ElectronSupportApi, ListenEvent, ListenResult, PairedInstrument, RawLogEntry, SerialPortInfo,
 } from './instrument.models';
 
 /** Where the bridge comes from. Default: the Electron preload's
@@ -40,6 +40,12 @@ export class InstrumentBridgeService {
 
   /** The netdiag bridge, or undefined (web, older desktop). */
   get diag(): ElectronInstrumentsDiagApi | undefined { return this.diagAvailable ? this.api!.diag : undefined; }
+
+  /** "Allow Prefrontal support" bridge (desktop ≥ 1.1.2), or undefined (web, older desktop). */
+  get support(): ElectronSupportApi | undefined {
+    const s = this.api?.support;
+    return s && typeof s.start === 'function' && typeof s.onChange === 'function' ? s : undefined;
+  }
 
   async list(): Promise<PairedInstrument[]> {
     const a = this.api; if (!a) return [];

@@ -17,7 +17,7 @@ export interface PasskeyOfferInput {
   isElectron: boolean;
   isCapacitor: boolean;
   /** How THIS session started. */
-  signedInWith: 'password' | 'passkey' | null;
+  signedInWith: 'password' | 'passkey' | 'google' | null;
   /** Login screen was in "Add account" mode (a shared lab machine). */
   addMode: boolean;
   /** Profiles saved on this device (AccountsService). */

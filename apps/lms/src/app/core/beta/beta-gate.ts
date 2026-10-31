@@ -4,7 +4,7 @@
  *
  * A beta surface is visible only when ALL three hold:
  *   1. the person switched it on in THIS browser's console — `pf.mcp()`,
- *      `pf.passkeys()`, `pf.assistant()` (localStorage `pf.beta.<name>` = '1';
+ *      `pf.passkeys()`, `pf.assistant()`, `pf.support()` (localStorage `pf.beta.<name>` = '1';
  *      `pf.<name>(false)` turns it off; `pf.beta()` prints which are on);
  *   2. the server allows it — GET /api/beta-features, which sees the
  *      `X-PF-BETA: <comma list>` header the interceptor adds while any switch
@@ -14,10 +14,10 @@
  * confirmation (the server flag), never by default.
  */
 
-export type BetaFeatureKey = 'mcp' | 'passkeys' | 'assistant';
-export const BETA_FEATURE_KEYS: readonly BetaFeatureKey[] = ['mcp', 'passkeys', 'assistant'];
+export type BetaFeatureKey = 'mcp' | 'passkeys' | 'assistant' | 'support';
+export const BETA_FEATURE_KEYS: readonly BetaFeatureKey[] = ['mcp', 'passkeys', 'assistant', 'support'];
 export type BetaFeatureFlags = Record<BetaFeatureKey, boolean>;
-export const ALL_BETA_OFF: Readonly<BetaFeatureFlags> = Object.freeze({ mcp: false, passkeys: false, assistant: false });
+export const ALL_BETA_OFF: Readonly<BetaFeatureFlags> = Object.freeze({ mcp: false, passkeys: false, assistant: false, support: false });
 
 /** Request header sent on API calls while any console switch is on. */
 export const BETA_HEADER = 'X-PF-BETA';
@@ -83,6 +83,7 @@ export function parseBetaFlags(body: unknown): BetaFeatureFlags {
   out.mcp = src['mcp'] === true || src['aiConnector'] === true;
   out.passkeys = src['passkeys'] === true;
   out.assistant = src['assistant'] === true;
+  out.support = src['support'] === true;
   return out;
 }
 
@@ -92,7 +93,7 @@ export function betaVisible(i: { switchOn: boolean; serverAllowed: boolean; isDe
 }
 
 /**
- * Install `window.pf.mcp() / .passkeys() / .assistant() / .beta()` SILENTLY:
+ * Install `window.pf.mcp() / .passkeys() / .assistant() / .support() / .beta()` SILENTLY:
  * merges into any existing `window.pf` (never replaces it — `pf.opd` lives
  * there too). A switch change reloads so every surface re-evaluates.
  * Idempotent.

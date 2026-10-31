@@ -138,6 +138,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.on('instruments:diag', h);
         return () => ipcRenderer.removeListener('instruments:diag', h);
       }
+    },
+    // "Allow Prefrontal support" (beta, support-session.js): the lab starts a
+    // session (code + expiry), main long-polls our server only while it is
+    // active and asks its OWN dialog before every change. Validated in main.
+    support: {
+      start: (p) => ipcRenderer.invoke('instruments:supportStart', p),
+      stop: () => ipcRenderer.invoke('instruments:supportStop'),
+      status: () => ipcRenderer.invoke('instruments:supportStatus'),
+      setToken: (token) => ipcRenderer.invoke('instruments:supportToken', token),
+      onChange: (cb) => {
+        const h = (_e, st) => cb(st);
+        ipcRenderer.on('instruments:support', h);
+        return () => ipcRenderer.removeListener('instruments:support', h);
+      }
     }
   },
   // Prefrontal Bridges on this network (bridge-api v1, B.3/B.5): mDNS

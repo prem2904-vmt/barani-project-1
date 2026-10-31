@@ -46,7 +46,7 @@ describe('beta gate rules', () => {
     expect(log).toHaveBeenCalledWith('Beta on in this browser: mcp, passkeys');
     (win.pf!['mcp'] as (on: boolean) => void)(false);
     expect(st.data[betaFlagKey('mcp')]).toBeUndefined();
-    expect(readBetaSwitches(st)).toEqual({ mcp: false, passkeys: true, assistant: false });
+    expect(readBetaSwitches(st)).toEqual({ mcp: false, passkeys: true, assistant: false, support: false });
     expect(reload).toHaveBeenCalledTimes(3);
   });
 
@@ -65,10 +65,12 @@ describe('beta gate rules', () => {
   });
 
   it('server answer: only literal true; envelope or bare; aiConnector aliases mcp; junk ⇒ all off', () => {
-    expect(parseBetaFlags({ success: true, data: { mcp: true, passkeys: 'true' } })).toEqual({ mcp: true, passkeys: false, assistant: false });
-    expect(parseBetaFlags({ aiConnector: true, assistant: true })).toEqual({ mcp: true, passkeys: false, assistant: true });
-    expect(parseBetaFlags(null)).toEqual({ mcp: false, passkeys: false, assistant: false });
-    expect(parseBetaFlags([true])).toEqual({ mcp: false, passkeys: false, assistant: false });
+    expect(parseBetaFlags({ success: true, data: { mcp: true, passkeys: 'true' } })).toEqual({ mcp: true, passkeys: false, assistant: false, support: false });
+    expect(parseBetaFlags({ aiConnector: true, assistant: true })).toEqual({ mcp: true, passkeys: false, assistant: true, support: false });
+    expect(parseBetaFlags(null)).toEqual({ mcp: false, passkeys: false, assistant: false, support: false });
+    expect(parseBetaFlags([true])).toEqual({ mcp: false, passkeys: false, assistant: false, support: false });
+    expect(parseBetaFlags({ data: { support: true } }).support).toBe(true);
+    expect(parseBetaFlags({ support: 'true' }).support).toBe(false);
   });
 
   it('visible only when ALL three hold', () => {
@@ -184,6 +186,14 @@ describe('BetaFeaturesService', () => {
     out = await TestBed.runInInjectionContext(() => betaGuard('mcp')({} as never, {} as never)) as unknown;
     expect(out).toBe(true);
     expect(r.beta.enabled('mcp')).toBe(true);
+  });
+
+  it('betaGuard with several keys: ANY one on lets it through (consent page: mcp | support)', async () => {
+    service({ switches: { 'pf.beta.support': '1' }, fetch: async () => new Response(JSON.stringify({ support: true }), { status: 200 }) });
+    let out = await TestBed.runInInjectionContext(() => betaGuard('mcp', 'support')({} as never, {} as never)) as unknown;
+    expect(out).toBe(true);
+    out = await TestBed.runInInjectionContext(() => betaGuard('mcp')({} as never, {} as never)) as unknown;
+    expect(out).toBeInstanceOf(UrlTree);
   });
 });
 

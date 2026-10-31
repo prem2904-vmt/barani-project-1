@@ -17,6 +17,7 @@ import { OpdGateService } from './features/opd/shared/opd-gate.service';
 import { BetaFeaturesService } from './core/services/beta-features.service';
 import { DesktopWindowService } from './core/services/desktop-window.service';
 import { ElectronMenuActionService } from './core/services/electron-menu-action.service';
+import { SupportSessionService } from './shared/instruments/support-session.service';
 
 @Component({
   selector: 'app-root',
@@ -197,6 +198,10 @@ export class App implements OnInit {
   /** Tray "Open Instruments" / "Unmatched results today" → navigates the
    *  window (electron/tray.js sends 'menu-action'; no-op off Electron). */
   private readonly _menuActions = inject(ElectronMenuActionService);
+  /** "Allow Prefrontal support" (beta, desktop ≥ 1.1.2): created at start so
+   *  a sign-out on ANY screen ends a running support session. Inert on the
+   *  web / older desktops (no bridge ⇒ nothing is wired). */
+  private readonly _support = inject(SupportSessionService);
   /** The URL the app was opened with, captured before the router's first
    *  navigation can rewrite it — carries a web push's ?pfCall=action:id. */
   private readonly _bootHref = typeof window !== 'undefined' ? window.location.href : '';

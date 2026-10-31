@@ -42,6 +42,7 @@ exports[`nav with the gate closed > shows no OPD entry and equals the gate-open 
 exports[`non-OPD routes are exactly today's lab set > matches the snapshot 1`] = `
 [
   "login",
+  "auth/callback",
   "set-password",
   "oauth/consent",
   "track/:token",

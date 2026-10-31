@@ -18,6 +18,8 @@ import { PasskeyService } from '../../core/auth/passkey.service';
 import { PasskeyIconComponent } from '../../shared/primitives/passkey-icon.component';
 import { PasskeyOfferService, offerSeen, shouldOfferPasskey } from '../../core/auth/passkey-offer';
 import { PasskeyError, passkeyErrorText } from '../../core/auth/passkey-webauthn';
+import { GoogleSignInService, showGoogleSignIn } from '../../core/auth/google-oauth';
+import { BetaFeaturesService } from '../../core/services/beta-features.service';
 
 // Post-login routing is owned by the landing guard ('/' → pickLanding), which
 // reads the same ROUTE_ACCESS table as the route guards and the nav — so a role
@@ -68,6 +70,8 @@ export class LoginComponent implements AfterViewInit {
   protected readonly kb = inject(KeyboardService);
   private readonly passkeys = inject(PasskeyService);
   private readonly passkeyOffer = inject(PasskeyOfferService);
+  private readonly google = inject(GoogleSignInService);
+  private readonly beta = inject(BetaFeaturesService);
 
   protected readonly org = signal(this.auth.rememberedOrgs()[0] ?? '');
   protected readonly username = signal('');
@@ -131,6 +135,31 @@ export class LoginComponent implements AfterViewInit {
   private navigating = false;
   /** Where to go after signing in (captured on arrival; in-app paths only). */
   private readonly returnUrl = safeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl'));
+
+  // ── "Continue with Google" (beta `support`, or on the way to the OAuth
+  // consent page). Web browsers only — Google refuses embedded web views.
+  protected readonly showGoogle = computed(() => showGoogleSignIn({
+    betaSupport: this.beta.enabled('support'),
+    returnUrl: this.returnUrl,
+    native: this.platform.isElectron() || this.platform.isCapacitor(),
+    addMode: this.addMode(),
+  }));
+  protected readonly googleBusy = signal(false);
+
+  /** Leave for Google (PKCE). Back at /auth/callback, the normal session starts. */
+  async continueWithGoogle(): Promise<void> {
+    if (this.working() || this.googleBusy() || !this.showGoogle()) return;
+    this.clearError();
+    this.notice.set(null);
+    this.stopPasskeyAutofill();
+    this.googleBusy.set(true);
+    try {
+      await this.google.begin(this.returnUrl);
+    } catch (e) {
+      this.googleBusy.set(false);
+      this.error.set(this.humaniseError(e));
+    }
+  }
   /** Split layout (brand panel + card): iPad landscape and desktop. */
   protected readonly wide = signal(false);
 

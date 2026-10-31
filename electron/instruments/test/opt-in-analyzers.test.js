@@ -216,3 +216,45 @@ test('the editor default reply JSON equals the connector default (one source)', 
   assert.ok(m, 'DEFAULT_SINOCARE_ACK_JSON not found');
   assert.equal(m[1], DEFAULT_ACK_JSON);
 });
+
+test('link.echo (server echoMode) maps to the Sinocare replyMode; explicit replyMode wins; unset = default none', () => {
+  const { createLink, echoReplyMode } = require('../core/link');
+  assert.equal(echoReplyMode(true), 'echo');
+  assert.equal(echoReplyMode('on'), 'echo');
+  assert.equal(echoReplyMode(false), 'none');
+  assert.equal(echoReplyMode(undefined), undefined);
+  const io = { write: () => {} };
+  const inner = (cfg) => { const l = createLink(cfg, io); return l.inner; };
+  assert.equal(inner({ type: 'sinocare-sn', echo: true }).replyMode, 'echo');
+  assert.equal(inner({ type: 'sinocare-sn', echo: true, replyMode: 'none' }).replyMode, 'none');
+  assert.equal(inner({ type: 'sinocare-sn' }).replyMode, 'none');
+});
+
+test('link.checksum (server checksumMode): strict NAKs a bad checksum (default, unchanged); lenient/off accept it', () => {
+  const { encodeFrames } = require('../core/link/astm-e1381');
+  const bad = () => {
+    const f = Buffer.from(encodeFrames('H|\\^&\rL|1|N\r', { maxText: 240 })[0]);
+    const i = f.length - 4;   // first checksum char
+    f[i] = f[i] === 0x30 ? 0x31 : 0x30;
+    return f;
+  };
+  const run = (cfg) => {
+    const out = [];
+    const frames = [];
+    const l = createLink({ type: 'astm-e1381', ...cfg }, { write: (b) => out.push(b[0]) });
+    l.on('frame', (f) => frames.push(f));
+    l.feed(Buffer.from([C.ENQ]));
+    l.feed(bad());
+    l.inner.close();
+    return { reply: out[1], frame: frames[0] };
+  };
+  assert.equal(run({}).reply, C.NAK);
+  assert.equal(run({ checksum: 'strict' }).reply, C.NAK);
+  assert.equal(run({ checksum: 'nonsense' }).reply, C.NAK);
+  const len = run({ checksum: 'lenient' });
+  assert.equal(len.reply, C.ACK);
+  assert.equal(len.frame.checksumIgnored, true);
+  const off = run({ checksum: 'off' });
+  assert.equal(off.reply, C.ACK);
+  assert.equal(off.frame.checksumIgnored, undefined);
+});

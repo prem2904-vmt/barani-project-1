@@ -442,4 +442,47 @@ export interface ElectronInstrumentsApi {
   preview(raw: string, config?: { link?: object; parser?: object }): Promise<ListenResult>;
   /** "Connect an analyzer" helpers — desktop ≥ 1.1.1 only (absent before). */
   diag?: ElectronInstrumentsDiagApi;
+  /** "Allow Prefrontal support" (beta) — desktop ≥ 1.1.2 only (absent before). */
+  support?: ElectronSupportApi;
+}
+
+/** One line of the support session's live log (newest first). */
+export interface SupportLogEntry {
+  at: string;
+  /** Who did it: Prefrontal support, the lab, or this PC. */
+  actor: 'support' | 'lab' | 'pc' | string;
+  text: string;
+  /** ok | approved | denied | refused | failed */
+  outcome: string;
+}
+
+/** The desktop's support session, as main reports it (never the token). */
+export interface SupportSessionState {
+  active: boolean;
+  /** idle → starting → waiting (for support to join) → connected → ended */
+  status: 'idle' | 'starting' | 'waiting' | 'connected' | 'ended';
+  sessionId?: string;
+  /** 6 digits, read out to Prefrontal support. */
+  code?: string;
+  startedAt?: string;
+  expiresAt?: string;
+  minutes?: number;
+  supportJoined?: boolean;
+  /** Who joined (the support person's email, from the server). */
+  joinedBy?: string | null;
+  /** A change is waiting for the lab's answer in the PC's own dialog. */
+  approval?: { message: string } | null;
+  /** The server refused the sign-in token (signed out elsewhere?). */
+  signedOut?: boolean;
+  endedReason?: 'lab' | 'expired' | 'quit' | 'signed_out' | 'ended' | null;
+  log: SupportLogEntry[];
+}
+
+/** electron/preload.js → instruments.support (validated again in main). */
+export interface ElectronSupportApi {
+  start(p: { minutes: number; token: string; apiUrl: string }): Promise<{ ok: boolean; error?: string; state?: SupportSessionState }>;
+  stop(): Promise<{ ok: boolean; state?: SupportSessionState }>;
+  status(): Promise<SupportSessionState>;
+  setToken(token: string): Promise<{ ok: boolean; error?: string }>;
+  onChange(cb: (s: SupportSessionState) => void): () => void;
 }

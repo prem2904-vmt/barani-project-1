@@ -90,10 +90,14 @@ function decodeFrame(frame) {
  */
 class AstmReceiver extends EventEmitter {
   /**
-   * @param {{write:(b:Buffer)=>void, frameTimeoutMs?:number, busy?:()=>boolean}} opts
+   * @param {{write:(b:Buffer)=>void, frameTimeoutMs?:number, busy?:()=>boolean, checksum?:string}} opts
+   *   checksum: 'strict' (default — a bad checksum is NAKed) | 'lenient' (a
+   *   frame whose ONLY fault is its checksum is accepted, and flagged) | 'off'
+   *   (same, unflagged). Written by the server as link.checksum (checksumMode).
    */
-  constructor({ write, frameTimeoutMs = 30000, busy } = {}) {
+  constructor({ write, frameTimeoutMs = 30000, busy, checksum: checksumMode } = {}) {
     super();
+    this.checksumMode = checksumMode === 'lenient' || checksumMode === 'off' ? checksumMode : 'strict';
     this.write = write;
     this.frameTimeoutMs = frameTimeoutMs;
     this.busy = busy || (() => false);
@@ -186,8 +190,13 @@ class AstmReceiver extends EventEmitter {
   }
 
   _frame(frame) {
-    const d = decodeFrame(frame);
+    let d = decodeFrame(frame);
     this._arm();
+    let checksumIgnored = false;
+    if (!d.ok && this.checksumMode !== 'strict' && /^checksum /.test(String(d.reason || ''))) {
+      d = { ok: true, fn: d.fn, text: d.text, final: d.final };
+      checksumIgnored = this.checksumMode === 'lenient';
+    }
     if (!d.ok) {
       this.emit('frame', { ok: false, fn: d.fn, reason: d.reason });
       this.write(Buffer.from([C.NAK]));
@@ -197,7 +206,7 @@ class AstmReceiver extends EventEmitter {
       this.text += d.text;
       this.lastAcceptedFn = d.fn;
       this.expectedFn = (d.fn + 1) % 8;
-      this.emit('frame', { ok: true, fn: d.fn, final: d.final });
+      this.emit('frame', checksumIgnored ? { ok: true, fn: d.fn, final: d.final, checksumIgnored } : { ok: true, fn: d.fn, final: d.final });
       this.write(Buffer.from([C.ACK]));
       return;
     }
