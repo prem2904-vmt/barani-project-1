@@ -1,6 +1,6 @@
 import { Component, input, output } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { Observable, firstValueFrom, of } from 'rxjs';
+import { Observable, firstValueFrom, of, throwError } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BetaFeaturesService } from '../../../core/services/beta-features.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -34,12 +34,17 @@ class StubChartComponent {
 const wait = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 const settle = async (f: { detectChanges(): void }) => { for (let i = 0; i < 3; i++) { await wait(170); f.detectChanges(); } };
 
+const M = (m: Pick<InsightsMetric, 'id' | 'label' | 'description' | 'money' | 'unit' | 'groupBy' | 'charts'> & Partial<InsightsMetric>): InsightsMetric => ({
+  filters: ['branchId'], supportsCompare: false, usesPeriod: true, multiSeries: false, groupByKinds: {}, ...m,
+});
 const METRICS: InsightsMetric[] = [
-  { id: 'patients', label: 'Patients', description: 'People registered', money: false, unit: 'count', groupBy: ['day'], charts: ['kpi', 'line', 'bar'] },
-  { id: 'tests_by_department', label: 'Tests by department', description: '', money: false, unit: 'count', groupBy: ['department'], charts: ['hbar', 'donut', 'table'] },
-  { id: 'revenue', label: 'Revenue', description: '', money: true, unit: 'money', groupBy: ['day'], charts: ['line', 'bar', 'kpi'] },
-  { id: 'tat', label: 'Turnaround', description: '', money: false, unit: 'minutes', groupBy: ['department'], charts: ['grouped_hbar', 'table'] },
-  { id: 'patient_flow', label: 'Patient flow', description: '', money: false, unit: 'count', groupBy: ['hour', 'stage'], charts: ['stacked_bar', 'bar'] },
+  M({ id: 'patients', label: 'Patients', description: 'People registered', money: false, unit: 'count', groupBy: ['day'], charts: ['kpi', 'line', 'bar'],
+    supportsCompare: true, filters: ['branchId', 'refDoctorId'] }),
+  M({ id: 'tests_by_department', label: 'Tests by department', description: '', money: false, unit: 'count', groupBy: ['department'], charts: ['hbar', 'donut', 'table'],
+    filters: ['branchId', 'departmentId', 'testId', 'refDoctorId'] }),
+  M({ id: 'revenue', label: 'Revenue', description: '', money: true, unit: 'money', groupBy: ['day'], charts: ['line', 'bar', 'kpi'], supportsCompare: true }),
+  M({ id: 'tat', label: 'Turnaround', description: '', money: false, unit: 'minutes', groupBy: ['department'], charts: ['grouped_hbar', 'table'], multiSeries: true }),
+  M({ id: 'patient_flow', label: 'Patient flow', description: '', money: false, unit: 'count', groupBy: ['hour', 'stage'], charts: ['stacked_bar', 'bar'], multiSeries: true }),
 ];
 
 const RECIPE: InsightsRecipe = {
@@ -58,7 +63,7 @@ const RECIPE: InsightsRecipe = {
 
 const DASH: InsightsDashboard = {
   id: 'd1', title: 'Morning view', status: 'published', visibility: 'private', version: 3, updatedAt: '2026-10-30T04:00:00Z',
-  canEdit: true, recipe: RECIPE, roleIds: [],
+  canEdit: true, recipe: RECIPE, roleIds: [], mine: true, canShare: true, widgetCount: RECIPE.widgets.length, notes: [], ownerName: 'Latha Ramesh',
 };
 
 function dataFor(r: InsightsRecipe): InsightsPreview {
@@ -74,26 +79,32 @@ function dataFor(r: InsightsRecipe): InsightsPreview {
         id: w.id, state: 'ok', unit: w.metric === 'tat' ? 'minutes' : 'count', bucketUnit: byDay ? 'day' : null,
         categories: byDay ? days : cats,
         series: w.chart === 'stacked_bar' || w.chart === 'grouped_hbar'
-          ? [{ name: 'Collected', values: [3, 4, 5, 6].slice(0, n) }, { name: 'Reported', values: [1, 2, 3, 4].slice(0, n) }]
-          : [{ name: 'Value', values: [12, 30, 7, 9].slice(0, n) }],
+          ? [{ name: 'Collected', values: [3, 4, 5, 6].slice(0, n), unit: w.metric === 'tat' ? 'minutes' : 'count' },
+            { name: 'Reported', values: [1, 2, 3, 4].slice(0, n), unit: w.metric === 'tat' ? 'minutes' : 'count' }]
+          : [{ name: 'Value', values: [12, 30, 7, 9].slice(0, n), unit: 'count' }],
         total: w.chart === 'kpi' ? 42 : null, deltaPct: w.chart === 'kpi' ? 12.5 : null,
       };
     }),
   };
 }
 
-interface Opts { id?: string | null; dash?: InsightsDashboard; chat?: InsightsChatReply; confirm?: boolean; }
+interface Opts { id?: string | null; dash?: InsightsDashboard; chat?: InsightsChatReply; confirm?: boolean; canShare?: boolean; updateError?: unknown; }
 
 function setup(o: Opts = {}) {
   (window as unknown as { matchMedia: unknown }).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const dash = o.dash ?? DASH;
   const api = {
     metrics: vi.fn(() => of(METRICS)),
-    preview: vi.fn((r: InsightsRecipe) => of(dataFor(r))),
+    options: vi.fn(() => of({ charts: [], periodPresets: [], sizes: [], maxWidgets: 12, maxCustomDays: 731, canSeeMoney: false, canShare: o.canShare ?? true })),
+    dimensions: vi.fn((kind: string) => of(kind === 'department' ? [{ id: 'dep1', name: 'Biochemistry' }, { id: 'dep2', name: 'Haematology' }]
+      : kind === 'referrer' ? [{ id: 'ref1', name: 'Dr. Meera Krishnan' }] : [])),
+    preview: vi.fn((r: InsightsRecipe, _band?: unknown) => of(dataFor(r))),
     get: vi.fn(() => of(dash)),
     create: vi.fn((b: { recipe: InsightsRecipe; title: string; visibility: string }) =>
       of({ ...dash, id: 'new1', status: 'draft' as const, version: 1, title: b.title, recipe: b.recipe, visibility: b.visibility as 'private' })),
-    update: vi.fn((_id: string, b: { recipe: InsightsRecipe; title: string }) => of({ ...dash, version: dash.version + 1, title: b.title, recipe: b.recipe })),
+    update: vi.fn((_id: string, b: { recipe: InsightsRecipe; title: string }) => (o.updateError
+      ? throwError(() => o.updateError) : of({ ...dash, version: dash.version + 1, title: b.title, recipe: b.recipe }))),
+    unpublish: vi.fn(() => of({ ...dash, status: 'draft' as const, visibility: 'private' as const, roleIds: [] })),
     publish: vi.fn((_id: string, b: { visibility: 'private' | 'roles' | 'lab'; roleIds: string[] }) =>
       of({ ...dash, status: 'published' as const, visibility: b.visibility, roleIds: b.roleIds })),
     remove: vi.fn(() => of({})),
@@ -105,7 +116,7 @@ function setup(o: Opts = {}) {
     roles: vi.fn(() => of([{ id: 'r1', name: 'Pathologist' }, { id: 'r2', name: 'Front desk' }])),
     chat: vi.fn((): Observable<InsightsChatReply> => of(o.chat ?? {
       reply: 'Added patient flow and made revenue a line.', model: 'gemini-x', provider: 'gemini',
-      changes: ['Added “Pending by stage”', 'Removed “Department table”'],
+      changes: ['Added “Pending by stage”', 'Removed “Department table”'], notes: [],
       recipe: { ...RECIPE, widgets: [...RECIPE.widgets.filter((w) => w.id !== 't'), { id: 'p', title: 'Pending by stage', metric: 'patient_flow', chart: 'bar', groupBy: 'stage', period: { preset: 'today' }, size: 'm' }] },
     })),
   };
@@ -177,13 +188,16 @@ describe('My dashboards — view', () => {
     expect(m.textContent).not.toMatch(/₹|NaN|undefined/);
   });
 
-  it('the band period / branch go to /preview for every widget', async () => {
+  it('the band period / branch go to /preview as `band` (the server applies them to every widget)', async () => {
     const p = setup();
     await p.settle();
+    expect(p.api.preview.mock.calls.at(-1)![1]).toBeNull();
     p.f.componentRef.setInput('band', { period: '7d', branchId: 'b2' });
     await p.settle();
-    const sent = p.api.preview.mock.calls.at(-1)![0] as InsightsRecipe;
-    expect(sent.widgets.every((w) => 'preset' in w.period && w.period.preset === '7d' && w.filters?.branchId === 'b2')).toBe(true);
+    const [sent, band] = p.api.preview.mock.calls.at(-1)! as [InsightsRecipe, unknown];
+    expect(band).toEqual({ branchId: 'b2', period: { preset: '7d' } });
+    // The recipe goes as saved — never rewritten on the client.
+    expect(sent).toEqual(RECIPE);
     // The saved recipe is untouched; the card says which period applies.
     expect(p.cmp.dashboard()!.recipe.widgets[0].period).toEqual({ preset: 'today' });
     expect(p.card('k').querySelector('.pf-insd-w__meta')!.textContent).toContain('7 days');
@@ -308,7 +322,7 @@ describe('My dashboards — PF Sense proposal: live preview, Keep / Undo', () =>
   });
 
   it('a plain answer (no recipe) proposes nothing', async () => {
-    const p = setup({ chat: { reply: 'Revenue is billed minus discounts.', recipe: null, changes: [], provider: 'gemini', model: 'x' } });
+    const p = setup({ chat: { reply: 'Revenue is billed minus discounts.', recipe: null, changes: [], notes: [], provider: 'gemini', model: 'x' } });
     await p.settle();
     p.cmp.startEdit();
     const reply = await firstValueFrom(p.cmp.asstContext().chat!({ provider: 'gemini', messages: [{ role: 'user', text: 'what is revenue?' }] }));
@@ -381,5 +395,128 @@ describe('My dashboards — publish + visibility, history + restore', () => {
     expect(p.el.querySelector('.pf-insd-history-sheet')).toBeNull();
     expect(p.cmp.shown().widgets).toHaveLength(2);
     expect(p.events.saved).toHaveLength(1);
+  });
+});
+
+describe('My dashboards — aligned with the server (options, notes, unpublish, conflict, sharing, compare, filters)', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('server notes about dropped parts are said under the PF Sense answer', async () => {
+    const p = setup({ chat: { reply: 'Added patient flow.', recipe: null, changes: [], notes: ['Dropped "Weather": not something Prefrontal can show.'], provider: 'gemini', model: 'x' } });
+    await p.settle();
+    p.cmp.startEdit();
+    const reply = await firstValueFrom(p.cmp.asstContext().chat!({ provider: 'gemini', messages: [{ role: 'user', text: 'add weather' }] }));
+    expect(reply.reply).toBe('Added patient flow.\n\n- Dropped "Weather": not something Prefrontal can show.');
+  });
+
+  it('Unpublish: owners see it on a published dashboard, it confirms, then it is a private draft', async () => {
+    const p = setup();
+    await p.settle();
+    const btn = p.el.querySelector('.pf-insd-unpublish') as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+    await p.settle();
+    expect(p.dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Unpublish “Morning view”?', confirmLabel: 'Unpublish' }));
+    expect(p.api.unpublish).toHaveBeenCalledWith('d1');
+    expect(p.el.querySelector('.pf-insd-status')!.textContent).toContain('Draft · Just me');
+    expect(p.el.querySelector('.pf-insd-unpublish')).toBeNull();
+    expect(p.events.saved).toHaveLength(1);
+  });
+
+  it('no Unpublish for someone who cannot edit, or on a draft; declining changes nothing', async () => {
+    const viewer = setup({ dash: { ...DASH, canEdit: false, mine: false } });
+    await viewer.settle();
+    expect(viewer.el.querySelector('.pf-insd-unpublish')).toBeNull();
+    TestBed.resetTestingModule();
+    const draft = setup({ dash: { ...DASH, status: 'draft' } });
+    await draft.settle();
+    expect(draft.el.querySelector('.pf-insd-unpublish')).toBeNull();
+    TestBed.resetTestingModule();
+    const no = setup({ confirm: false });
+    await no.settle();
+    await no.cmp.unpublish();
+    expect(no.api.unpublish).not.toHaveBeenCalled();
+  });
+
+  it('a 409 version_conflict says so in plain words and offers Reload (which drops the local edit)', async () => {
+    const p = setup({ updateError: Object.assign(new Error('Someone saved a newer version of this dashboard. Reload it first.'), { code: 'version_conflict' }) });
+    await p.settle();
+    p.cmp.startEdit();
+    p.cmp.remove('k');
+    await p.cmp.saveDraft();
+    await p.settle();
+    expect(p.toasts.error).toHaveBeenCalledWith('Someone else changed this dashboard — reload it to see their version.');
+    const alert = p.el.querySelector('.pf-insd-conflict')!;
+    expect(alert.textContent).toContain('Someone else changed this dashboard');
+    (alert.querySelector('.pf-insd-reload') as HTMLButtonElement).click();
+    await p.settle();
+    expect(p.api.get).toHaveBeenCalledTimes(2);
+    expect(p.cmp.editing()).toBe(false);
+    expect(p.cmp.shown().widgets).toHaveLength(RECIPE.widgets.length);
+    expect(p.el.querySelector('.pf-insd-conflict')).toBeNull();
+  });
+
+  it('without sharing rights only "Just me" is offered (canShare from the dashboard / options)', async () => {
+    const p = setup({ id: null, canShare: false });
+    await p.settle();
+    expect(p.cmp.visibilityOptions().map((o) => o.value)).toEqual(['private']);
+    p.cmp.setVisibility('lab');
+    expect(p.cmp.visibility()).toBe('private');
+    TestBed.resetTestingModule();
+    const admin = setup({ id: null, canShare: true });
+    await admin.settle();
+    expect(admin.cmp.visibilityOptions().map((o) => o.value)).toEqual(['private', 'roles', 'lab']);
+  });
+
+  it('compare + narrow-to pickers edit the widget; the meta line names the filter', async () => {
+    const p = setup();
+    await p.settle();
+    p.cmp.startEdit();
+    await p.settle();
+    // Compare only where the metric supports it on this chart.
+    expect(p.card('k').querySelector('.pf-insd-w__cmp')).toBeTruthy();
+    expect(p.card('h').querySelector('.pf-insd-w__cmp')).toBeNull();
+    (p.card('k').querySelector('.pf-insd-w__cmp') as HTMLButtonElement).click();
+    p.f.detectChanges();
+    expect(p.cmp.working().widgets.find((w) => w.id === 'k')!.compare).toBe(true);
+    // Filters: department picker from /dimensions.
+    expect(p.api.dimensions).toHaveBeenCalledWith('department');
+    (p.card('h').querySelector('.pf-insd-filters') as HTMLButtonElement).click();
+    await p.settle();
+    const vm = p.cmp.widgets().find((v) => v.w.id === 'h')!;
+    expect(vm.pickers.map((x) => x.key)).toEqual(['departmentId', 'refDoctorId']);
+    expect(vm.pickers[0].options.map((o) => o.label)).toEqual(['All departments', 'Biochemistry', 'Haematology']);
+    p.cmp.setFilter('h', 'departmentId', 'dep1');
+    await p.settle();
+    expect(p.cmp.working().widgets.find((w) => w.id === 'h')!.filters).toEqual({ departmentId: 'dep1' });
+    expect(p.card('h').querySelector('.pf-insd-w__meta')!.textContent).toContain('Biochemistry');
+    p.cmp.setFilter('h', 'departmentId', '');
+    expect(p.cmp.working().widgets.find((w) => w.id === 'h')!.filters).toBeUndefined();
+  });
+
+  it('the widget cap comes from /options', async () => {
+    const p = setup({ id: null });
+    await p.settle();
+    for (let i = 0; i < 14; i++) p.cmp.add('patients');
+    await p.settle();
+    expect(p.cmp.working().widgets).toHaveLength(12);
+    expect(p.el.textContent).toContain('A dashboard holds up to 12 charts');
+  });
+});
+
+describe('My dashboards — history sheet vs the confirm dialog', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('Restore closes the sheet while it asks, and brings it back on "Cancel"', async () => {
+    const p = setup({ confirm: false });
+    await p.settle();
+    p.cmp.openHistory();
+    await p.settle();
+    let openWhileAsking: boolean | null = null;
+    p.dialog.confirm.mockImplementation(async () => { openWhileAsking = p.cmp.historyOpen(); return false; });
+    await p.cmp.restore(p.cmp.versions()[1]);
+    expect(openWhileAsking).toBe(false);
+    expect(p.cmp.historyOpen()).toBe(true);
+    expect(p.api.restore).not.toHaveBeenCalled();
   });
 });

@@ -10,18 +10,20 @@
  */
 import type { PfSelectOption } from '../../../shared/primitives/select.component';
 import {
-  buildBusinessLineOption, buildDonutOption, buildGroupedHBarOption, buildHorizontalBarOption, buildSparklineOption,
+  CHART_OTHER, buildBusinessLineOption, buildDonutOption, buildGroupedHBarOption, buildHorizontalBarOption, buildSparklineOption,
   buildStackedBarOption, rupeeAxisFormatter, rupeeFormatter,
 } from '../../../shared/utils/business-chart';
 import { bucketAxisLabel, formatCount, formatMinutes, formatRupee } from '../../../shared/utils/insights-view';
 import type { AnalyticsPeriodPreset } from '../../../shared/utils/analytics-period';
 import {
-  CHART_KINDS, ChartKind, DashboardStatus, DashboardVisibility, GROUP_BYS, GroupBy, InsightsChatReply, InsightsDashboard,
-  InsightsDashboardSummary, InsightsDashboardVersion, InsightsMetric, InsightsPreview, InsightsRecipe, MetricUnit, PERIOD_PRESETS,
-  RecipePeriod, RecipePeriodPreset, RecipeWidget, WIDGET_SIZES, WidgetData, WidgetFilters, WidgetSize, WidgetState,
+  CHART_KINDS, ChartKind, DashboardStatus, DashboardVisibility, DimensionValue, FilterKey, GROUP_BYS, GroupBy, GroupByKind,
+  InsightsChatReply, InsightsDashboard, InsightsDashboardSummary, InsightsDashboardVersion, InsightsDashboardVersionDetail, InsightsMetric,
+  InsightsOptions, InsightsPreview, InsightsRecipe, MetricUnit, PERIOD_PRESETS, PreviewBand, RecipePeriod, RecipePeriodPreset, RecipeWidget,
+  WIDGET_SIZES, WidgetData, WidgetFilters, WidgetSeries, WidgetSize, WidgetState,
 } from './insights-builder.models';
 
-export const MAX_WIDGETS = 24;
+/** The server's cap (MetricRegistry.MaxWidgets); GET /options can say otherwise. */
+export const MAX_WIDGETS = 12;
 export const MAX_CHANGES = 20;
 const MAX_CATEGORIES = 400;
 const MAX_SERIES = 8;
@@ -49,7 +51,7 @@ export const SIZE_LABELS: Record<WidgetSize, string> = { s: 'Small', m: 'Medium'
 
 export const GROUP_LABELS: Record<GroupBy, string> = {
   day: 'Day', week: 'Week', month: 'Month', department: 'Department', test: 'Test', referrer: 'Referrer', branch: 'Branch',
-  stage: 'Stage', hour: 'Hour', weekday: 'Weekday', payment_mode: 'Payment mode',
+  stage: 'Stage', hour: 'Hour', weekday: 'Weekday', payment_mode: 'Payment mode', reason: 'Reason', staff: 'Person', status: 'Status',
 };
 
 export const VISIBILITY_OPTIONS: PfSelectOption<DashboardVisibility>[] = [
@@ -163,7 +165,9 @@ function canonical(v: unknown): string {
 
 // ── Metrics ──────────────────────────────────────────────────────────────
 
-const UNITS: readonly MetricUnit[] = ['count', 'money', 'minutes', 'percent', 'ratio'];
+const UNITS: readonly MetricUnit[] = ['count', 'money', 'minutes', 'percent'];
+const FILTER_KEYS: readonly FilterKey[] = ['branchId', 'departmentId', 'testId', 'refDoctorId'];
+const GROUP_KINDS: readonly GroupByKind[] = ['time', 'ordered', 'category'];
 
 export function normaliseMetrics(raw: unknown): InsightsMetric[] {
   const list = unwrap(raw);
@@ -183,7 +187,17 @@ export function normaliseMetrics(raw: unknown): InsightsMetric[] {
       id, label: str(m['label'], 80) || id, description: str(m['description'], 300), money,
       unit: UNITS.includes(unit) ? unit : money ? 'money' : 'count',
       groupBy, charts: charts.length ? charts : ['bar', 'table'],
+      filters: (Array.isArray(m['filters']) ? m['filters'] : []).map((f) => str(f, 20)).filter((f): f is FilterKey => (FILTER_KEYS as readonly string[]).includes(f)),
+      supportsCompare: m['supportsCompare'] === true,
+      usesPeriod: m['usesPeriod'] !== false,
+      multiSeries: m['multiSeries'] === true,
+      groupByKinds: {},
     };
+    const kinds = rec(m['groupByKinds']) ? m['groupByKinds'] : {};
+    for (const g of groupBy) {
+      const k = str(kinds[g], 10) as GroupByKind;
+      if (GROUP_KINDS.includes(k)) metric.groupByKinds[g] = k;
+    }
     const dc = str(m['defaultChart'], 20) as ChartKind;
     if (metric.charts.includes(dc)) metric.defaultChart = dc;
     const dg = str(m['defaultGroupBy'], 20) as GroupBy;
@@ -201,6 +215,65 @@ export function chartOptions(metric: InsightsMetric | undefined, current: ChartK
   return allowed.map((c) => ({ value: c, label: CHART_LABELS[c] }));
 }
 
+/** Compare (previous equal period) is offered for this metric on this chart. */
+export function compareAllowed(metric: InsightsMetric | undefined, chart: ChartKind): boolean {
+  return !!metric?.supportsCompare && (chart === 'kpi' || chart === 'line' || chart === 'bar');
+}
+
+// ── Options + dimensions ────────────────────────────────────────────────
+
+export const DEFAULT_OPTIONS: InsightsOptions = {
+  charts: [...CHART_KINDS], periodPresets: [...PERIOD_PRESETS], sizes: [...WIDGET_SIZES],
+  maxWidgets: MAX_WIDGETS, maxCustomDays: 731, canSeeMoney: false, canShare: false,
+};
+
+export function normaliseOptions(raw: unknown): InsightsOptions {
+  const r = unwrap(raw);
+  if (!rec(r)) return { ...DEFAULT_OPTIONS };
+  const pick = <T extends string>(v: unknown, known: readonly T[]): T[] => {
+    const l = (Array.isArray(v) ? v : []).map((x) => str(x, 20)).filter((x): x is T => (known as readonly string[]).includes(x));
+    return l.length ? l : [...known];
+  };
+  const maxW = Math.floor(num(r['maxWidgets']));
+  const maxD = Math.floor(num(r['maxCustomDays']));
+  return {
+    charts: pick(r['charts'], CHART_KINDS),
+    periodPresets: pick(r['periodPresets'], PERIOD_PRESETS),
+    sizes: pick(r['sizes'], WIDGET_SIZES),
+    maxWidgets: maxW > 0 ? Math.min(maxW, 50) : MAX_WIDGETS,
+    maxCustomDays: maxD > 0 ? maxD : DEFAULT_OPTIONS.maxCustomDays,
+    canSeeMoney: r['canSeeMoney'] === true,
+    canShare: r['canShare'] === true,
+  };
+}
+
+export function normaliseDimensions(raw: unknown): DimensionValue[] {
+  const list = unwrap(raw);
+  if (!Array.isArray(list)) return [];
+  return list.filter(rec).map((d) => ({ id: str(d['id'], 64), name: str(d['name'], 160) })).filter((d) => d.id && d.name);
+}
+
+/** The visibility picks this person may use (sharing wider needs lab-admin access). */
+export function visibilityOptionsFor(canShare: boolean, current: DashboardVisibility): PfSelectOption<DashboardVisibility>[] {
+  if (canShare) return VISIBILITY_OPTIONS;
+  // Keep what it already is (an admin may have shared it) so the control never shows a blank.
+  return VISIBILITY_OPTIONS.filter((o) => o.value === 'private' || o.value === current);
+}
+
+/** A failed save in plain words; 409 version_conflict = someone else saved in between. */
+export function saveErrorMessage(e: unknown, fallback: string): string {
+  const code = String((e as { code?: unknown })?.code ?? (e as { error?: { error?: unknown } })?.error?.error ?? '').toLowerCase();
+  const status = Number((e as { status?: unknown })?.status ?? 0);
+  if (code === 'version_conflict' || status === 409) return 'Someone else changed this dashboard — reload it to see their version.';
+  const m = (e as { message?: unknown })?.message;
+  return typeof m === 'string' && m.trim() && !/^Http failure/i.test(m) ? m.slice(0, 200) : fallback;
+}
+
+export function isVersionConflict(e: unknown): boolean {
+  const code = String((e as { code?: unknown })?.code ?? (e as { error?: { error?: unknown } })?.error?.error ?? '').toLowerCase();
+  return code === 'version_conflict' || Number((e as { status?: unknown })?.status ?? 0) === 409;
+}
+
 // ── Preview ──────────────────────────────────────────────────────────────
 
 const STATES: readonly WidgetState[] = ['ok', 'hidden', 'empty', 'error'];
@@ -212,15 +285,22 @@ export function normaliseWidgetData(raw: unknown): WidgetData | null {
   const state = str(raw['state'], 10) as WidgetState;
   const unit = str(raw['unit'], 12) as MetricUnit;
   const categories = (Array.isArray(raw['categories']) ? raw['categories'] : []).slice(0, MAX_CATEGORIES).map((c) => str(c, 120));
-  const series = (Array.isArray(raw['series']) ? raw['series'] : []).filter(rec).slice(0, MAX_SERIES).map((s) => ({
-    name: str(s['name'], 60) || 'Value',
-    values: categories.map((_, i) => num((Array.isArray(s['values']) ? s['values'] : [])[i])),
-  }));
+  const headUnit: MetricUnit = UNITS.includes(unit) ? unit : 'count';
+  const series = (Array.isArray(raw['series']) ? raw['series'] : []).filter(rec).slice(0, MAX_SERIES).map((s): WidgetSeries => {
+    const su = str(s['unit'], 12) as MetricUnit;
+    const out: WidgetSeries = {
+      name: str(s['name'], 80) || 'Value',
+      values: categories.map((_, i) => num((Array.isArray(s['values']) ? s['values'] : [])[i])),
+      unit: UNITS.includes(su) ? su : headUnit,
+    };
+    if (s['previous'] === true) out.previous = true;
+    return out;
+  });
   const d: WidgetData = {
     id,
     state: STATES.includes(state) ? state : 'ok',
     message: str(raw['message'], 300) || null,
-    unit: UNITS.includes(unit) ? unit : 'count',
+    unit: headUnit,
     bucketUnit: str(raw['bucketUnit'], 12) || null,
     categories,
     series,
@@ -237,11 +317,15 @@ export function normalisePreview(raw: unknown): InsightsPreview {
   const src = rec(r) ? r : {};
   const widgets = (Array.isArray(src['widgets']) ? src['widgets'] : []).map(normaliseWidgetData).filter((w): w is WidgetData => !!w);
   const notes = (Array.isArray(src['notes']) ? src['notes'] : []).map((n) => str(n, 300)).filter(Boolean).slice(0, 10);
-  return { widgets, notes };
+  const out: InsightsPreview = { widgets, notes };
+  if (src['recipe'] != null) out.recipe = normaliseRecipe(src['recipe']);
+  return out;
 }
 
-/** No numbers to draw (all zero / nothing back) → the empty state. */
-export function widgetIsEmpty(d: WidgetData): boolean {
+/** No numbers to draw (all zero / nothing back) → the empty state. A KPI with
+ *  a number (even 0 — "0 patients today" is an answer) is not empty. */
+export function widgetIsEmpty(d: WidgetData, chart?: ChartKind): boolean {
+  if (chart === 'kpi' && (d.state === 'ok' || d.state === 'empty') && d.total != null) return false;
   if (d.state === 'empty') return true;
   if (d.state !== 'ok') return false;
   if (d.total != null && d.total !== 0) return false;
@@ -265,6 +349,9 @@ export function normaliseSummary(raw: unknown): InsightsDashboardSummary | null 
     version: Math.max(1, Math.floor(num(raw['version'])) || 1),
     updatedAt: str(raw['updatedAt'], 40) || null,
     canEdit: raw['canEdit'] !== false,
+    mine: raw['mine'] !== false,
+    ownerName: str(raw['ownerName'], 120) || null,
+    widgetCount: Math.max(0, Math.floor(num(raw['widgetCount']))),
   };
 }
 
@@ -281,9 +368,11 @@ export function normaliseDashboard(raw: unknown): InsightsDashboard | null {
   return {
     ...s,
     recipe,
+    widgetCount: recipe.widgets.length,
     roleIds: (Array.isArray(r['roleIds']) ? r['roleIds'] : []).map((x) => str(x, 64)).filter(Boolean),
-    ownerName: str(r['ownerName'], 120) || null,
     updatedByName: str(r['updatedByName'], 120) || null,
+    canShare: r['canShare'] === true,
+    notes: (Array.isArray(r['notes']) ? r['notes'] : []).map((n) => str(n, 300)).filter(Boolean).slice(0, 10),
   };
 }
 
@@ -296,7 +385,17 @@ export function normaliseVersions(raw: unknown): InsightsDashboardVersion[] {
     savedByName: str(v['savedByName'], 120) || null,
     title: str(v['title'], 120),
     widgetCount: Math.max(0, Math.floor(num(v['widgetCount']))),
+    current: v['current'] === true,
   })).filter((v) => v.version > 0).sort((a, b) => b.version - a.version);
+}
+
+export function normaliseVersionDetail(raw: unknown): InsightsDashboardVersionDetail | null {
+  const r = unwrap(raw);
+  if (!rec(r)) return null;
+  const version = Math.floor(num(r['version']));
+  const recipe = normaliseRecipe(r['recipe']);
+  if (version <= 0 || !recipe) return null;
+  return { version, title: str(r['title'], 120) || recipe.title, savedAt: str(r['savedAt'], 40) || null, recipe };
 }
 
 // ── Chat reply (untrusted) ───────────────────────────────────────────────
@@ -308,6 +407,7 @@ export function normaliseChatReply(raw: unknown): InsightsChatReply {
     reply: typeof src['reply'] === 'string' ? src['reply'].slice(0, 8000) : '',
     recipe: src['recipe'] == null ? null : normaliseRecipe(src['recipe']),
     changes: (Array.isArray(src['changes']) ? src['changes'] : []).map((c) => str(c, 240)).filter(Boolean).slice(0, MAX_CHANGES),
+    notes: (Array.isArray(src['notes']) ? src['notes'] : []).map((c) => str(c, 300)).filter(Boolean).slice(0, MAX_CHANGES),
     provider: str(src['provider'], 20),
     model: str(src['model'], 80),
   };
@@ -333,8 +433,8 @@ export function moveWidget(r: InsightsRecipe, id: string, dir: -1 | 1): Insights
   return { ...r, widgets };
 }
 
-export function addWidget(r: InsightsRecipe, m: InsightsMetric): InsightsRecipe {
-  if (r.widgets.length >= MAX_WIDGETS) return r;
+export function addWidget(r: InsightsRecipe, m: InsightsMetric, max = MAX_WIDGETS): InsightsRecipe {
+  if (r.widgets.length >= max) return r;
   const chart = m.defaultChart ?? m.charts[0] ?? 'bar';
   const w: RecipeWidget = {
     id: newWidgetId(), title: m.label, metric: m.id, chart, period: { preset: 'month' }, size: chart === 'kpi' ? 's' : 'm',
@@ -355,22 +455,17 @@ export function widgetPeriodLabel(p: RecipePeriod): string {
 
 /**
  * The band applies to EVERY widget: a band period other than "Each widget's
- * own" replaces each widget's period, a band branch replaces each widget's
- * branch. The saved recipe is never changed — this is only what /preview gets.
+ * own" replaces each widget's period (live metrics keep theirs), a band
+ * branch replaces each widget's branch. It goes to /preview as `band` — the
+ * server applies it and checks the branch; the recipe itself is never
+ * changed. Null = nothing to apply.
  */
-export function applyBand(r: InsightsRecipe, band: BandFilters): InsightsRecipe {
+export function previewBand(band: BandFilters): PreviewBand | null {
   let period: RecipePeriod | null = null;
-  if (band.period === 'custom') period = isYmd(band.from) && isYmd(band.to) ? { from: band.from, to: band.to } : null;
+  if (band.period === 'custom') period = isYmd(band.from) && isYmd(band.to) ? (band.from <= band.to ? { from: band.from, to: band.to } : { from: band.to, to: band.from }) : null;
   else if (band.period !== 'own') period = { preset: band.period };
-  if (!period && !band.branchId) return r;
-  return {
-    ...r,
-    widgets: r.widgets.map((w) => ({
-      ...w,
-      ...(period ? { period } : {}),
-      ...(band.branchId ? { filters: { ...(w.filters ?? {}), branchId: band.branchId } } : {}),
-    })),
-  };
+  if (!period && !band.branchId) return null;
+  return { ...(band.branchId ? { branchId: band.branchId } : {}), ...(period ? { period } : {}) };
 }
 
 // ── Drawing (shared builders only) ───────────────────────────────────────
@@ -381,7 +476,6 @@ export function formatValue(unit: MetricUnit, v: number | null | undefined, comp
     case 'money': return formatRupee(v, compact);
     case 'minutes': return formatMinutes(v);
     case 'percent': return `${(Math.round(v * 10) / 10).toLocaleString('en-IN')}%`;
-    case 'ratio': return (+v).toFixed(2);
     default: return formatCount(v);
   }
 }
@@ -396,27 +490,47 @@ export function widgetChartOption(chart: ChartKind, d: WidgetData, theme: 'dark'
   if (d.state !== 'ok' || !d.series.length) return null;
   const money = d.unit === 'money';
   const valueFormatter = (v: number) => formatValue(d.unit, v);
-  const series = d.series.map((s) => ({ name: s.name, data: s.values }));
+  // One axis = one unit: draw the headline unit's series (a metric like patient
+  // flow or turnaround also carries minutes / % series — the table shows those).
+  const drawn = d.series.filter((s) => s.unit === d.unit);
+  const plot = drawn.length ? drawn : d.series.slice(0, 1);
+  const current = plot.filter((s) => !s.previous);
+  const prev = plot.filter((s) => s.previous);
+  const muted = CHART_OTHER[theme];
+  const series = [...current, ...prev].map((s) => ({ name: s.name, data: s.values, ...(s.previous ? { color: muted } : {}) }));
   const labels = labelsFor(d);
   switch (chart) {
-    case 'line':
-      return buildBusinessLineOption(null, {
+    case 'line': {
+      const opt = buildBusinessLineOption(null, {
         categories: d.categories, labels, series, theme, valueFormatter: money ? rupeeFormatter : valueFormatter,
         ...(money ? { axisFormatter: rupeeAxisFormatter } : {}),
       });
+      // The previous period is a quiet dashed line under the current one.
+      if (prev.length && Array.isArray(opt?.series)) {
+        opt.series = opt.series.map((s: { name: string; type: string; lineStyle?: object }) => (prev.some((p) => p.name === s.name) && s.type === 'line'
+          ? { ...s, areaStyle: undefined, lineStyle: { ...(s.lineStyle ?? {}), type: 'dashed', width: 1.5 }, z: 1 } : s));
+      }
+      return opt;
+    }
     case 'bar':
-    case 'stacked_bar':
-      return buildStackedBarOption(null, {
+    case 'stacked_bar': {
+      const one = chart === 'bar';
+      const opt = buildStackedBarOption(null, {
         categories: d.categories, labels, theme, valueFormatter,
-        series: chart === 'bar' ? series.slice(0, 1) : series,
+        series: one ? [...series.slice(0, 1), ...series.filter((_, i) => i >= current.length).slice(0, 1)] : series,
       });
+      // Bars + compare: side by side, never stacked on each other.
+      if (one && prev.length && Array.isArray(opt?.series)) opt.series = opt.series.map((s: object) => ({ ...s, stack: undefined }));
+      if (one && !prev.length && opt) opt.legend = undefined;
+      return opt;
+    }
     case 'hbar':
-      return buildHorizontalBarOption(null, { categories: labels, values: d.series[0].values, theme, valueFormatter });
+      return buildHorizontalBarOption(null, { categories: labels, values: current[0]?.values ?? d.series[0].values, theme, valueFormatter });
     case 'grouped_hbar':
       return buildGroupedHBarOption({ categories: labels, series, theme, valueFormatter });
     case 'donut':
       return buildDonutOption({
-        items: labels.map((name, i) => ({ name, value: d.series[0].values[i] ?? 0 })), theme, valueFormatter,
+        items: labels.map((name, i) => ({ name, value: (current[0] ?? d.series[0]).values[i] ?? 0 })), theme, valueFormatter,
       });
     default:
       return null;
@@ -439,7 +553,7 @@ export interface KpiView {
 }
 
 export function kpiView(d: WidgetData, theme: 'dark' | 'light'): KpiView {
-  const first = d.series[0]?.values ?? [];
+  const first = (d.series.find((s) => !s.previous) ?? d.series[0])?.values ?? [];
   const total = d.total ?? first.reduce((a, b) => a + b, 0);
   const spark = first.length > 1 && first.some((v) => v !== 0)
     ? buildSparklineOption({ data: first, labels: labelsFor(d), theme, valueFormatter: (v: number) => formatValue(d.unit, v) })
@@ -459,7 +573,7 @@ export function tableView(w: RecipeWidget, d: WidgetData): TableView {
   const columns = [{ field: 'k', headerName: head, num: false }, ...d.series.map((s, i) => ({ field: `s${i}`, headerName: s.name, num: true }))];
   const rows = labels.map((label, r) => {
     const row: Record<string, string | number> = { k: label };
-    d.series.forEach((s, i) => { row[`s${i}`] = formatValue(d.unit, s.values[r]); });
+    d.series.forEach((s, i) => { row[`s${i}`] = formatValue(s.unit ?? d.unit, s.values[r]); });
     return row;
   });
   return { columns, rows };

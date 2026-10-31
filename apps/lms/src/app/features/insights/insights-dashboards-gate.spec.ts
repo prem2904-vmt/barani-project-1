@@ -19,6 +19,8 @@ function render(betaOn: boolean) {
       { id: 'd2', title: 'Dues', status: 'draft', visibility: 'private', version: 1, updatedAt: null, canEdit: true },
     ])),
     metrics: vi.fn(() => of([])),
+    options: vi.fn(() => of({ charts: [], periodPresets: [], sizes: [], maxWidgets: 12, maxCustomDays: 731, canSeeMoney: false, canShare: true })),
+    dimensions: vi.fn(() => of([])),
     preview: vi.fn(() => of({ widgets: [], notes: [] })),
     get: vi.fn(() => of({ id: 'd1', title: 'Morning view', status: 'published', visibility: 'lab', version: 2, updatedAt: null, canEdit: true, roleIds: [], recipe: { version: 1, title: 'Morning view', widgets: [] } })),
     roles: vi.fn(() => of([])),

@@ -18,14 +18,22 @@ import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-them
 import { InsightsChartComponent } from '../insights-chart.component';
 import { InsightsBuilderApiService } from './insights-builder-api.service';
 import {
-  BandFilters, CHART_LABELS, KpiView, PERIOD_LABELS, SIZE_LABELS, TableView, VISIBILITY_OPTIONS, WIDGET_PERIOD_OPTIONS, addWidget,
-  applyBand, chartOptions, emptyRecipe, kpiView, moveWidget, recipesEqual, removeWidget, statusLine, tableView, updateWidget,
-  widgetChartHeight, widgetChartOption, widgetIsEmpty, widgetPeriodLabel, widgetPeriodValue,
+  BandFilters, CHART_LABELS, DEFAULT_OPTIONS, KpiView, PERIOD_LABELS, SIZE_LABELS, TableView, WIDGET_PERIOD_OPTIONS, addWidget,
+  chartOptions, compareAllowed, emptyRecipe, isVersionConflict, kpiView, moveWidget, previewBand, recipesEqual, removeWidget,
+  saveErrorMessage, statusLine, tableView, updateWidget, visibilityOptionsFor, widgetChartHeight, widgetChartOption, widgetIsEmpty,
+  widgetPeriodLabel, widgetPeriodValue,
 } from './insights-builder-logic';
 import {
-  ChartKind, DashboardVisibility, InsightsDashboard, InsightsDashboardSummary, InsightsDashboardVersion, InsightsMetric, InsightsRecipe,
-  RecipePeriodPreset, RecipeWidget, WIDGET_SIZES, WidgetData, WidgetSize,
+  ChartKind, DashboardVisibility, DimensionKind, DimensionValue, InsightsDashboard, InsightsDashboardSummary, InsightsDashboardVersion,
+  InsightsMetric, InsightsOptions, InsightsRecipe, RecipePeriodPreset, RecipeWidget, WIDGET_SIZES, WidgetData, WidgetFilters, WidgetSize,
 } from './insights-builder.models';
+
+/** The widget filters a person can pick by hand (branch rides the band). */
+type PickFilter = 'departmentId' | 'refDoctorId';
+const PICK_FILTERS: { key: PickFilter; kind: DimensionKind; all: string; label: string }[] = [
+  { key: 'departmentId', kind: 'department', all: 'All departments', label: 'Department' },
+  { key: 'refDoctorId', kind: 'referrer', all: 'All referrers', label: 'Referrer' },
+];
 
 interface Proposal { ref: string; recipe: InsightsRecipe; }
 
@@ -46,6 +54,12 @@ interface WidgetVm {
   chartOpts: PfSelectOption<ChartKind>[];
   periodOpts: PfSelectOption<RecipePeriodPreset | 'custom'>[];
   periodValue: RecipePeriodPreset | 'custom';
+  /** Compare with the previous period is offered here. */
+  canCompare: boolean;
+  /** Filter pickers this metric takes (edit mode). */
+  pickers: { key: PickFilter; label: string; options: PfSelectOption<string>[]; value: string }[];
+  /** "Biochemistry · Dr. Rao" — what the widget is narrowed to, in names. */
+  narrowed: string | null;
 }
 
 /**
@@ -53,8 +67,9 @@ interface WidgetVm {
  *
  * View: the widget cards, drawn with the shared business-chart builders (KPI
  * tile, AG-Grid table). The band's period / branch apply to every widget
- * (`applyBand`, preview only — the saved recipe is untouched). A money widget
- * the viewer may not see comes back `hidden` from the server and says so.
+ * (sent to /preview as `band`; the server applies it — the saved recipe is
+ * untouched). A money widget the viewer may not see comes back `hidden` from
+ * the server and says so.
  *
  * Edit: plain per-widget controls (chart type limited to the metric's
  * allowed kinds, period, size, move, remove), an "Add a chart" pick, and the
@@ -87,7 +102,14 @@ export class InsightsDashboardComponent {
 
   protected readonly sizes = WIDGET_SIZES;
   protected readonly sizeLabels = SIZE_LABELS;
-  protected readonly visibilityOptions = VISIBILITY_OPTIONS;
+
+  /** Pickers + limits from the server (GET /options); safe defaults until then. */
+  readonly options = signal<InsightsOptions>(DEFAULT_OPTIONS);
+  readonly maxWidgets = computed(() => this.options().maxWidgets);
+  readonly atCap = computed(() => this.working().widgets.length >= this.maxWidgets());
+  /** May share wider than "just me": the dashboard says so, or (a new one) /options does. */
+  readonly canShare = computed(() => this.dashboard()?.canShare || this.options().canShare);
+  readonly visibilityOptions = computed(() => visibilityOptionsFor(this.canShare(), this.dashboard()?.visibility ?? 'private'));
 
   // ── Layout ───────────────────────────────────────────────────────────
   /** Room for the assistant as a docked column beside the dashboard. */
@@ -98,6 +120,17 @@ export class InsightsDashboardComponent {
   private readonly metricById = computed(() => new Map(this.metrics().map((m) => [m.id, m])));
   readonly metricOptions = computed<PfSelectOption<string>[]>(() =>
     this.metrics().map((m) => ({ value: m.id, label: m.label, hint: m.description || undefined })));
+
+  // ── Filter names (department / referrer) — /dimensions, loaded once ──
+  readonly dims = signal<Partial<Record<DimensionKind, DimensionValue[]>>>({});
+  private dimsAsked = new Set<DimensionKind>();
+  private readonly dimName = computed(() => {
+    const m = new Map<string, string>();
+    for (const list of Object.values(this.dims())) for (const d of list ?? []) m.set(d.id, d.name);
+    return m;
+  });
+  /** Widgets whose filter row is open (edit mode). */
+  readonly filtersOpen = signal<ReadonlySet<string>>(new Set());
 
   readonly dashboard = signal<InsightsDashboard | null>(null);
   readonly loadState = signal<'loading' | 'ready' | 'error'>('loading');
@@ -134,9 +167,11 @@ export class InsightsDashboardComponent {
   // ── Preview ──────────────────────────────────────────────────────────
   readonly data = signal<Map<string, WidgetData>>(new Map());
   readonly notes = signal<string[]>([]);
+  /** A save was refused: someone else saved in between (409 version_conflict). */
+  readonly conflict = signal(false);
   readonly previewing = signal(false);
   readonly previewError = signal<string | null>(null);
-  private readonly preview$ = new Subject<InsightsRecipe>();
+  private readonly preview$ = new Subject<{ recipe: InsightsRecipe; band: ReturnType<typeof previewBand> }>();
 
   // ── Save / publish / history ─────────────────────────────────────────
   readonly saving = signal(false);
@@ -157,13 +192,13 @@ export class InsightsDashboardComponent {
       const d = data.get(w.id);
       const metric = byId.get(w.metric);
       const state: WidgetVm['state'] = !d ? (this.previewError() ? 'error' : 'loading')
-        : d.state === 'hidden' ? 'hidden' : d.state === 'error' ? 'error' : widgetIsEmpty(d) ? 'empty' : 'ok';
+        : d.state === 'hidden' ? 'hidden' : d.state === 'error' ? 'error' : widgetIsEmpty(d, w.chart) ? 'empty' : 'ok';
       const ok = state === 'ok' && d;
       const periodValue = widgetPeriodValue(w);
       return {
         w, index, metric, data: d, state,
         metricLabel: metric?.label ?? humanise(w.metric),
-        periodLabel: bandLabel ?? widgetPeriodLabel(w.period),
+        periodLabel: metric && !metric.usesPeriod ? 'Right now' : bandLabel ?? widgetPeriodLabel(w.period),
         option: ok && w.chart !== 'kpi' && w.chart !== 'table' ? widgetChartOption(w.chart, d, theme) : null,
         height: widgetChartHeight(w.chart, d),
         kpi: ok && w.chart === 'kpi' ? { ...kpiView(d, theme), delta: deltaView(d.total ?? null, d.deltaPct ?? null) } : null,
@@ -173,6 +208,9 @@ export class InsightsDashboardComponent {
           ? [...WIDGET_PERIOD_OPTIONS, { value: 'custom' as const, label: widgetPeriodLabel(w.period), disabled: true }]
           : WIDGET_PERIOD_OPTIONS,
         periodValue,
+        canCompare: compareAllowed(metric, w.chart) && !('preset' in w.period && w.period.preset === 'all'),
+        pickers: this.pickersFor(w, metric),
+        narrowed: this.narrowedLabel(w.filters),
       };
     });
   });
@@ -190,13 +228,14 @@ export class InsightsDashboardComponent {
 
   constructor() {
     this.api.metrics().pipe(takeUntilDestroyed()).subscribe({ next: (m) => this.metrics.set(m), error: () => this.metrics.set([]) });
+    this.api.options().pipe(takeUntilDestroyed()).subscribe({ next: (o) => this.options.set(o), error: () => undefined });
 
     this.preview$.pipe(
       debounceTime(150),
-      switchMap((recipe) => {
+      switchMap(({ recipe, band }) => {
         if (!recipe.widgets.length) return of({ widgets: [], notes: [] as string[], error: null as string | null });
         this.previewing.set(true);
-        return this.api.preview(recipe).pipe(
+        return this.api.preview(recipe, band).pipe(
           map((p) => ({ ...p, error: null as string | null })),
           catchError((e) => of({ widgets: [], notes: [] as string[], error: messageOf(e, 'The charts couldn’t load. Try again.') })),
         );
@@ -216,8 +255,22 @@ export class InsightsDashboardComponent {
     });
     // Any change to what's shown or to the band → one preview (debounced).
     effect(() => {
-      const r = applyBand(this.shown(), this.band());
-      untracked(() => this.preview$.next(r));
+      const next = { recipe: this.shown(), band: previewBand(this.band()) };
+      untracked(() => this.preview$.next(next));
+    });
+    // Names for the filter pickers / "narrowed to" line: once something needs them.
+    effect(() => {
+      const editing = this.editing();
+      const kinds = new Set<DimensionKind>();
+      for (const w of this.shown().widgets) {
+        if (w.filters?.departmentId) kinds.add('department');
+        if (w.filters?.refDoctorId) kinds.add('referrer');
+        if (editing) {
+          const m = this.metricById().get(w.metric);
+          for (const f of PICK_FILTERS) if (m?.filters.includes(f.key)) kinds.add(f.kind);
+        }
+      }
+      untracked(() => kinds.forEach((k) => this.loadDims(k)));
     });
   }
 
@@ -229,6 +282,7 @@ export class InsightsDashboardComponent {
     this.proposal.set(null);
     this.proposals.set({});
     this.historyOpen.set(false);
+    this.conflict.set(false);
     this.data.set(new Map());
     if (!id) {
       this.dashboard.set(null);
@@ -249,6 +303,18 @@ export class InsightsDashboardComponent {
   }
 
   retryLoad(): void { this.open(this.dashboardId()); }
+
+  /** After a 409: drop the local edit and load what is saved now. */
+  reloadAfterConflict(): void {
+    const d = this.dashboard();
+    if (!d) return;
+    this.conflict.set(false);
+    this.proposal.set(null);
+    this.api.get(d.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (fresh) => { this.setDashboard(fresh); this.editing.set(false); this.assistantOpen.set(false); this.saved.emit(fresh); },
+      error: (e) => this.toasts.error(saveErrorMessage(e, 'Couldn’t reload the dashboard. Try again.')),
+    });
+  }
 
   private setDashboard(d: InsightsDashboard): void {
     this.dashboard.set(d);
@@ -312,9 +378,21 @@ export class InsightsDashboardComponent {
   remove(id: string): void { this.edit((r) => removeWidget(r, id)); }
   /** Bumped after each pick so the "Add a chart" control resets to its placeholder. */
   readonly addKey = signal(0);
+  setCompare(id: string, on: boolean): void { this.edit((r) => updateWidget(r, id, { compare: on || undefined })); }
+  setFilter(id: string, key: PickFilter, value: string | null): void {
+    this.edit((r) => {
+      const w = r.widgets.find((x) => x.id === id);
+      const next: WidgetFilters = { ...(w?.filters ?? {}) };
+      if (value) next[key] = value; else delete next[key];
+      return updateWidget(r, id, { filters: Object.keys(next).length ? next : undefined });
+    });
+  }
+  toggleFilters(id: string): void {
+    this.filtersOpen.update((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
   add(metricId: string | null): void {
     const m = metricId ? this.metricById().get(metricId) : undefined;
-    if (m) this.edit((r) => addWidget(r, m));
+    if (m) this.edit((r) => addWidget(r, m, this.maxWidgets()));
     setTimeout(() => this.addKey.update((k) => k + 1), 0);
   }
 
@@ -327,7 +405,9 @@ export class InsightsDashboardComponent {
   private chat(req: { provider: AssistantProviderId; messages: AssistantTurn[] }): Observable<AssistantReply> {
     return this.api.chat({ provider: req.provider, recipe: this.shown(), messages: req.messages }).pipe(
       map((r) => {
-        const out: AssistantReply = { reply: r.reply, suggestions: [], provider: r.provider, model: r.model };
+        // Parts of the proposal the server dropped or adjusted: said in plain words under the answer.
+        const notes = r.notes.length ? `\n\n${r.notes.map((n) => `- ${n}`).join('\n')}` : '';
+        const out: AssistantReply = { reply: (r.reply + notes).trim(), suggestions: [], provider: r.provider, model: r.model };
         if (r.recipe && !recipesEqual(r.recipe, this.shown())) {
           const ref = `p${++this.propSeq}`;
           const prev = this.proposal();
@@ -358,6 +438,8 @@ export class InsightsDashboardComponent {
   // ═══ Save / publish ═════════════════════════════════════════════════
 
   setVisibility(v: DashboardVisibility): void {
+    // Sharing wider than "just me" needs lab-admin access (the server refuses it too).
+    if (!this.visibilityOptions().some((o) => o.value === v)) return;
     this.visibility.set(v);
     if (v === 'roles') this.loadRoles();
   }
@@ -388,8 +470,12 @@ export class InsightsDashboardComponent {
     const req$ = d ? this.api.update(d.id, this.body()) : this.api.create(this.body());
     return new Promise((resolve) => {
       req$.subscribe({
-        next: (saved) => resolve(saved),
-        error: (e) => { this.toasts.error(messageOf(e, 'Couldn’t save the dashboard. Try again.')); resolve(null); },
+        next: (saved) => { this.conflict.set(false); resolve(saved); },
+        error: (e) => {
+          if (isVersionConflict(e)) this.conflict.set(true);
+          this.toasts.error(saveErrorMessage(e, 'Couldn’t save the dashboard. Try again.'));
+          resolve(null);
+        },
       });
     });
   }
@@ -444,6 +530,23 @@ export class InsightsDashboardComponent {
     });
   }
 
+  /** Owner / lab admin: back to a private draft (nobody else sees it any more). */
+  async unpublish(): Promise<void> {
+    const d = this.dashboard();
+    if (!d || d.status !== 'published' || !d.canEdit) return;
+    const ok = await this.dialog.confirm({
+      title: `Unpublish “${d.title}”?`,
+      message: d.visibility === 'private' ? 'It goes back to a draft.' : 'It goes back to a draft only you can see. People it was shared with lose it from My dashboards.',
+      confirmLabel: 'Unpublish', cancelLabel: 'Keep it published', tone: 'danger',
+    });
+    if (!ok) return;
+    this.saving.set(true);
+    this.api.unpublish(d.id).subscribe({
+      next: (u) => { this.saving.set(false); this.setDashboard(u); this.toasts.success('Unpublished — now a draft'); this.saved.emit(u); },
+      error: (e) => { this.saving.set(false); this.toasts.error(saveErrorMessage(e, 'Couldn’t unpublish. Try again.')); },
+    });
+  }
+
   async deleteDashboard(): Promise<void> {
     const d = this.dashboard();
     if (!d) return;
@@ -474,12 +577,15 @@ export class InsightsDashboardComponent {
   async restore(v: InsightsDashboardVersion): Promise<void> {
     const d = this.dashboard();
     if (!d || this.restoring() != null) return;
+    // The history sheet (and its backdrop) sits above the page; the confirm must not open UNDER it —
+    // close the sheet while asking, bring it back if the person says no.
+    this.historyOpen.set(false);
     const ok = await this.dialog.confirm({
       title: `Restore version ${v.version}?`,
       message: `The dashboard goes back to “${v.title || d.title}” as saved then. What it shows now stays in the history.`,
       confirmLabel: 'Restore', cancelLabel: 'Cancel', tone: 'primary',
     });
-    if (!ok) return;
+    if (!ok) { this.historyOpen.set(true); return; }
     this.restoring.set(v.version);
     this.api.restore(d.id, v.version).subscribe({
       next: (r) => {
@@ -505,6 +611,38 @@ export class InsightsDashboardComponent {
   chartLabel(c: ChartKind): string { return CHART_LABELS[c]; }
 
   // ═══ helpers ════════════════════════════════════════════════════════
+
+  private loadDims(kind: DimensionKind): void {
+    if (this.dimsAsked.has(kind)) return;
+    this.dimsAsked.add(kind);
+    this.api.dimensions(kind).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (l) => this.dims.update((m) => ({ ...m, [kind]: l })),
+      error: () => this.dimsAsked.delete(kind),
+    });
+  }
+
+  private pickersFor(w: RecipeWidget, metric: InsightsMetric | undefined): WidgetVm['pickers'] {
+    if (!this.editing() || !metric) return [];
+    const dims = this.dims();
+    return PICK_FILTERS.filter((f) => metric.filters.includes(f.key)).map((f) => {
+      const value = w.filters?.[f.key] ?? '';
+      const list = dims[f.kind] ?? [];
+      const options: PfSelectOption<string>[] = [{ value: '', label: f.all }, ...list.map((d) => ({ value: d.id, label: d.name }))];
+      if (value && !list.some((d) => d.id === value)) options.push({ value, label: this.dimName().get(value) ?? 'Picked earlier' });
+      return { key: f.key, label: f.label, options, value };
+    });
+  }
+
+  private narrowedLabel(f: WidgetFilters | undefined): string | null {
+    if (!f) return null;
+    const names = this.dimName();
+    const parts = [
+      f.departmentId ? names.get(f.departmentId) ?? 'One department' : null,
+      f.testId ? 'One test' : null,
+      f.refDoctorId ? names.get(f.refDoctorId) ?? 'One referrer' : null,
+    ].filter((x): x is string => !!x);
+    return parts.length ? parts.join(' · ') : null;
+  }
 
   private tableVm(w: RecipeWidget, d: WidgetData): TableView & { colDefs: ColDef[] } {
     const t = tableView(w, d);

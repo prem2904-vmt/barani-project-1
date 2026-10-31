@@ -5,11 +5,13 @@ import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { assistantFailure } from '../../../shared/assistant/assistant-logic';
 import {
-  normaliseChatReply, normaliseDashboard, normaliseMetrics, normalisePreview, normaliseSummaries, normaliseVersions,
+  normaliseChatReply, normaliseDashboard, normaliseDimensions, normaliseMetrics, normaliseOptions, normalisePreview, normaliseSummaries,
+  normaliseVersionDetail, normaliseVersions,
 } from './insights-builder-logic';
 import type {
-  InsightsChatReply, InsightsChatRequest, InsightsDashboard, InsightsDashboardSummary, InsightsDashboardVersion, InsightsMetric,
-  InsightsPreview, InsightsRecipe, PublishDashboardRequest, SaveDashboardRequest,
+  DimensionKind, DimensionValue, InsightsChatReply, InsightsChatRequest, InsightsDashboard, InsightsDashboardSummary, InsightsDashboardVersion,
+  InsightsDashboardVersionDetail, InsightsMetric, InsightsOptions, InsightsPreview, InsightsRecipe, PreviewBand, PublishDashboardRequest,
+  SaveDashboardRequest,
 } from './insights-builder.models';
 
 /**
@@ -35,8 +37,20 @@ export class InsightsBuilderApiService {
     return this.api.get<unknown>('/api/insights/metrics').pipe(map(normaliseMetrics));
   }
 
-  preview(recipe: InsightsRecipe): Observable<InsightsPreview> {
-    return this.api.post<unknown>('/api/insights/preview', { recipe }).pipe(map(normalisePreview));
+  /** Pickers + limits (chart kinds, period presets, sizes, widget cap, canSeeMoney, canShare). */
+  options(): Observable<InsightsOptions> {
+    return this.api.get<unknown>('/api/insights/options').pipe(map(normaliseOptions));
+  }
+
+  /** Names + ids a widget can be narrowed to (tenant-scoped, at most 25; `q` searches). */
+  dimensions(kind: DimensionKind, q = ''): Observable<DimensionValue[]> {
+    const qs = q.trim() ? `?q=${encodeURIComponent(q.trim())}` : '';
+    return this.api.get<unknown>(`/api/insights/dimensions/${kind}${qs}`).pipe(map(normaliseDimensions));
+  }
+
+  /** The band (branch / period over every widget) is applied by the server; the recipe is sent as is. */
+  preview(recipe: InsightsRecipe, band?: PreviewBand | null): Observable<InsightsPreview> {
+    return this.api.post<unknown>('/api/insights/preview', band ? { recipe, band } : { recipe }).pipe(map(normalisePreview));
   }
 
   list(): Observable<InsightsDashboardSummary[]> {
@@ -63,8 +77,21 @@ export class InsightsBuilderApiService {
     return this.api.post<unknown>(`/api/insights/dashboards/${encodeURIComponent(id)}/publish`, body).pipe(map(required));
   }
 
+  /** Back to a private draft (owner or lab admin). */
+  unpublish(id: string): Observable<InsightsDashboard> {
+    return this.api.post<unknown>(`/api/insights/dashboards/${encodeURIComponent(id)}/unpublish`, {}).pipe(map(required));
+  }
+
   versions(id: string): Observable<InsightsDashboardVersion[]> {
     return this.api.get<unknown>(`/api/insights/dashboards/${encodeURIComponent(id)}/versions`).pipe(map(normaliseVersions));
+  }
+
+  version(id: string, version: number): Observable<InsightsDashboardVersionDetail> {
+    return this.api.get<unknown>(`/api/insights/dashboards/${encodeURIComponent(id)}/versions/${Math.floor(version)}`).pipe(map((raw) => {
+      const v = normaliseVersionDetail(raw);
+      if (!v) throw new Error('That version came back incomplete.');
+      return v;
+    }));
   }
 
   restore(id: string, version: number): Observable<InsightsDashboard> {

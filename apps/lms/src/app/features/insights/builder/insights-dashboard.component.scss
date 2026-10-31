@@ -75,6 +75,17 @@
 .pf-insd-w__size .pf-seg__item { min-width: 30px; padding-inline: 8px; font-size: 12px; }
 .pf-insd-w__spacer { flex: 1 1 auto; }
 .pf-insd-w__btn { width: 32px !important; height: 32px; min-height: 32px; }
+.pf-insd-w__btn[data-on='true'] { color: var(--pf-primary, var(--text-primary)); }
+.pf-insd-w__note { margin: 6px 0 0; font-size: 11.5px; line-height: 1.4; color: var(--text-tertiary); }
+.pf-insd-w__cmp { min-height: 32px; font-size: 12px; }
+.pf-insd-w__filters { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 6px; border-bottom: 1px dashed var(--pf-line); }
+.pf-insd-w__fsel { width: 180px; max-width: 100%; }
+.pf-insd-caphint { align-self: center; }
+.pf-insd-conflict {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; padding: 8px 12px; border-radius: 10px;
+  background: var(--pf-chip-bg); font-size: 13px; color: var(--text-primary);
+  span { flex: 1 1 240px; }
+}
 
 .pf-insd-w__body { min-width: 0; }
 .pf-insd-w__skel { border-radius: 10px; background: var(--pf-chip-bg); }
