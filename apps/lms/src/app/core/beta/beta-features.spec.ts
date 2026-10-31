@@ -147,6 +147,34 @@ describe('BetaFeaturesService', () => {
     expect(beta.enabled('mcp')).toBe(false);
   });
 
+  it('passkeys: ON only with switch + dev + a literal server true (sends X-PF-BETA: passkeys)', async () => {
+    const { beta, fetchMock } = service({ switches: { 'pf.beta.passkeys': '1' },
+      fetch: async () => new Response(JSON.stringify({ mcp: false, passkeys: true, assistant: false }), { status: 200 }) });
+    await beta.ensureLoaded();
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect((init.headers as Record<string, string>)[BETA_HEADER]).toBe('passkeys');
+    expect(beta.enabled('passkeys')).toBe(true);
+    expect(beta.enabled('mcp')).toBe(false);
+  });
+
+  // Owner rule: ANY error / server unreachable / non-true value = OFF. (The
+  // pre-merge passkey gate let an unreachable server count as "didn't say no".)
+  it.each([
+    ['unreachable (fetch throws)', async () => { throw new TypeError('Failed to fetch'); }],
+    ['timeout / abort', async () => { throw new DOMException('aborted', 'AbortError'); }],
+    ['HTTP 500', async () => new Response('oops', { status: 500 })],
+    ['HTTP 404 (old server, no endpoint)', async () => new Response('', { status: 404 })],
+    ['not JSON', async () => new Response('<html>', { status: 200 })],
+    ['passkeys missing', async () => new Response(JSON.stringify({ mcp: true }), { status: 200 })],
+    ['passkeys "true" (string)', async () => new Response(JSON.stringify({ passkeys: 'true' }), { status: 200 })],
+    ['passkeys 1', async () => new Response(JSON.stringify({ passkeys: 1 }), { status: 200 })],
+    ['passkeys null', async () => new Response(JSON.stringify({ passkeys: null }), { status: 200 })],
+  ] as [string, () => Promise<Response>][])('passkeys OFF when the server answer is %s', async (_label, f) => {
+    const { beta } = service({ switches: { 'pf.beta.passkeys': '1' }, fetch: f });
+    await beta.ensureLoaded();
+    expect(beta.enabled('passkeys')).toBe(false);
+  });
+
   it('betaGuard: off ⇒ the normal unknown-URL landing (/); on ⇒ through', async () => {
     let r = service();
     let out = await TestBed.runInInjectionContext(() => betaGuard('mcp')({} as never, {} as never)) as unknown;

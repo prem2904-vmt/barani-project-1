@@ -14,6 +14,10 @@ import { AmbientBgComponent } from '../../shared/components/ambient-bg/ambient-b
 import { PlatformService } from '../../core/services/platform.service';
 import { KeyboardService } from '../../core/services/keyboard.service';
 import { environment } from '../../../environments/environment';
+import { PasskeyService } from '../../core/auth/passkey.service';
+import { PasskeyIconComponent } from '../../shared/primitives/passkey-icon.component';
+import { PasskeyOfferService, offerSeen, shouldOfferPasskey } from '../../core/auth/passkey-offer';
+import { PasskeyError, passkeyErrorText } from '../../core/auth/passkey-webauthn';
 
 // Post-login routing is owned by the landing guard ('/' → pickLanding), which
 // reads the same ROUTE_ACCESS table as the route guards and the nav — so a role
@@ -48,7 +52,7 @@ export function setPasswordUrl(returnUrl: string | null): string {
 @Component({
   selector: 'pf-login',
   standalone: true,
-  imports: [FormsModule, LogoMarkComponent, LoadingLogoComponent, AmbientBgComponent],
+  imports: [FormsModule, LogoMarkComponent, LoadingLogoComponent, AmbientBgComponent, PasskeyIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
@@ -62,6 +66,8 @@ export class LoginComponent implements AfterViewInit {
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly kb = inject(KeyboardService);
+  private readonly passkeys = inject(PasskeyService);
+  private readonly passkeyOffer = inject(PasskeyOfferService);
 
   protected readonly org = signal(this.auth.rememberedOrgs()[0] ?? '');
   protected readonly username = signal('');
@@ -72,12 +78,25 @@ export class LoginComponent implements AfterViewInit {
    *  "Sign in" button to press again in between (PF-PATTERN "Loading feedback"). */
   protected readonly entering = signal(false);
   /** The submit button's busy look: signing in OR entering the app. */
-  protected readonly working = computed(() => this.busy() || this.entering());
+  protected readonly working = computed(() => this.busy() || this.entering() || this.passkeyBusy());
   protected readonly error = signal<string | null>(null);
   /** Which field the error is about (inline + aria-invalid); null = the form. */
   protected readonly errorField = signal<LoginField | null>(null);
   protected readonly showPassword = signal(false);
   protected readonly notice = signal<string | null>(null);
+
+  // ── Passkeys (WebAuthn, discoverable — no username needed) ──────────
+  /** Beta flag on (dev only) + browser + host may use passkeys (hidden in the
+   *  desktop / phone apps). Reactive: the beta answer can land after first paint. */
+  private readonly passkeyOk = computed(() => this.passkeys.available());
+  /** "Sign in with a passkey" shows (never while adding a profile on a shared machine). */
+  protected readonly showPasskey = computed(() => this.passkeyOk() && !this.addMode());
+  protected readonly passkeyBusy = signal(false);
+  /** A calm, non-error note (the person cancelled the passkey prompt). */
+  protected readonly passkeyNote = signal<string | null>(null);
+  /** Autofill (conditional UI) is listening on the username field. */
+  protected readonly passkeyAutofill = signal(false);
+  private autofillAbort: AbortController | null = null;
 
   private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
   private readonly orgInput = viewChild<ElementRef<HTMLInputElement>>('orgInput');
@@ -147,9 +166,14 @@ export class LoginComponent implements AfterViewInit {
     effect(() => {
       const authed = this.auth.isAuthenticated();
       untracked(() => {
-        if (!authed || this.addMode() || this.busy() || this.navigating) return;
+        if (!authed || this.addMode() || this.busy() || this.passkeyBusy() || this.navigating) return;
         void this.enterApp();
       });
+    });
+
+    // Passkey autofill starts once the beta flag (dev only) says passkeys are on.
+    effect(() => {
+      if (this.showPasskey()) untracked(() => void this.startPasskeyAutofill());
     });
 
     this.wireKeyboardDodge();
@@ -208,6 +232,7 @@ export class LoginComponent implements AfterViewInit {
   protected clearError(): void {
     this.error.set(null);
     this.errorField.set(null);
+    this.passkeyNote.set(null);
   }
 
   private canVisit(url: string): boolean {
@@ -287,6 +312,7 @@ export class LoginComponent implements AfterViewInit {
         ))
       ]);
       this.busy.set(false);
+      this.notePasswordSignIn();
       await this.enterApp();
     } catch (e: unknown) {
       const msg = this.humaniseError(e);
@@ -301,6 +327,98 @@ export class LoginComponent implements AfterViewInit {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  /** "Sign in with a passkey": the browser's own passkey dialog (this
+   *  device, a security key, or "use a phone" cross-device). */
+  async signInWithPasskey(): Promise<void> {
+    if (this.working() || !this.showPasskey()) return;
+    this.stopPasskeyAutofill();
+    this.clearError();
+    this.notice.set(null);
+    await this.runPasskeySignIn({});
+    // Cancelled / failed: listen in the username field again.
+    if (!this.navigating) void this.startPasskeyAutofill();
+  }
+
+  /** One passkey sign-in, modal or autofill. Same downstream as the password
+   *  path: AuthService's session tail, then enterApp (gate → returnUrl → landing). */
+  private async runPasskeySignIn(o: { mediation?: 'conditional'; signal?: AbortSignal }): Promise<'ok' | 'aborted' | PasskeyError['kind'] | 'error'> {
+    const autofill = o.mediation === 'conditional';
+    if (!autofill) this.passkeyBusy.set(true);
+    try {
+      const tokens = await this.passkeys.authenticate({ ...o, onPicked: () => this.passkeyBusy.set(true) });
+      this.passkeyBusy.set(true);
+      await this.auth.signInWithPasskeySession(tokens);
+      this.passkeyOffer.clear();
+      this.passkeyBusy.set(false);
+      await this.enterApp();
+      return 'ok';
+    } catch (e: unknown) {
+      if (o.signal?.aborted) return 'aborted';   // we stopped it (modal button / leaving)
+      this.errorField.set(null);
+      // Autofill runs in the background: before the person picked a passkey
+      // its failures stay silent (the password form is right there). Once they
+      // picked one (we got as far as the session), the error is shown.
+      const picked = this.passkeyBusy();
+      if (e instanceof PasskeyError) {
+        if (e.kind === 'cancelled') {
+          if (!autofill) this.passkeyNote.set(passkeyErrorText('cancelled'));
+        } else if (!autofill || (picked && e.kind !== 'expired')) {
+          this.error.set(e.message);
+        }
+        return e.kind;
+      }
+      if (!autofill || picked) this.error.set(this.humaniseError(e));
+      return 'error';
+    } finally {
+      this.passkeyBusy.set(false);
+    }
+  }
+
+  /** WebAuthn conditional UI: passkeys appear in the username field's
+   *  autofill. Restarts after an expired challenge (5 min server window). */
+  private autofillRestarts = 0;
+  private async startPasskeyAutofill(): Promise<void> {
+    if (!this.showPasskey() || this.autofillAbort || this.navigating) return;
+    if (!(await this.passkeys.conditionalAvailable())) return;
+    if (this.autofillAbort || this.navigating) return;
+    const ctrl = new AbortController();
+    this.autofillAbort = ctrl;
+    this.passkeyAutofill.set(true);
+    this.destroyRef.onDestroy(() => ctrl.abort());
+    let outcome: Awaited<ReturnType<LoginComponent['runPasskeySignIn']>>;
+    try {
+      outcome = await this.runPasskeySignIn({ mediation: 'conditional', signal: ctrl.signal });
+    } finally {
+      if (this.autofillAbort === ctrl) this.autofillAbort = null;
+    }
+    // Only an expired challenge re-arms the autofill on its own (a few times) —
+    // never a loop on a browser that rejects at once.
+    if (outcome === 'expired' && !this.navigating && this.autofillRestarts++ < 3) void this.startPasskeyAutofill();
+  }
+
+  private stopPasskeyAutofill(): void {
+    this.autofillAbort?.abort();
+    this.autofillAbort = null;
+  }
+
+  /** After a PASSWORD sign-in: maybe suggest a passkey once (shared-PC rule,
+   *  passkey-offer.ts). Never in Electron / phone apps / Add-account. */
+  private notePasswordSignIn(): void {
+    this.stopPasskeyAutofill();
+    const userId = this.auth.user()?.id;
+    if (!userId) return;
+    const ok = shouldOfferPasskey({
+      available: this.passkeyOk(),
+      isElectron: this.platform.isElectron(),
+      isCapacitor: this.platform.isCapacitor(),
+      signedInWith: 'password',
+      addMode: this.addMode(),
+      accountsOnDevice: this.accounts.accounts?.().length ?? 0,
+      seen: offerSeen(userId),
+    });
+    if (ok) this.passkeyOffer.offer(userId);
   }
 
   /** Map raw errors to readable messages — especially CORS/network failures

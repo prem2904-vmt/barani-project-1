@@ -9,18 +9,21 @@
  *
  * Shape served by the host:
  *   { "apiUrl": string, "reportPublicBaseUrl": string,
- *     "auth": { "supabaseUrl": string, "supabaseAnonKey": string } }
+ *     "auth": { "supabaseUrl": string, "supabaseAnonKey": string,
+ *               "passkeyRpId"?: string } }   (passkeyRpId: a bare domain)
  *
  * Only the web production environment sets `runtimeConfig: true`; phone and
  * desktop builds keep their baked-in settings.
  */
+import { isBareDomain } from '../app/core/auth/passkey-webauthn';
+
 export interface RuntimeConfigTarget {
   runtimeConfig?: boolean;
   /** Hosts where the baked-in values are valid (dev + local). Elsewhere a failed load blocks bootstrap. */
   fallbackHosts?: readonly string[];
   apiUrl: string;
   reportPublicBaseUrl?: string;
-  auth: { supabaseUrl: string; supabaseAnonKey: string };
+  auth: { supabaseUrl: string; supabaseAnonKey: string; passkeyRpId?: string };
 }
 
 export interface RuntimeConfigOptions {
@@ -62,6 +65,8 @@ export function mergeRuntimeConfig(target: RuntimeConfigTarget, raw: unknown): n
   if (isRecord(auth)) {
     if (isSafeUrl(auth['supabaseUrl'])) { target.auth.supabaseUrl = auth['supabaseUrl']; applied++; }
     if (isNonEmptyString(auth['supabaseAnonKey'])) { target.auth.supabaseAnonKey = auth['supabaseAnonKey']; applied++; }
+    // Passkeys: the Supabase project's WebAuthn RP ID (a bare domain only).
+    if (isBareDomain(auth['passkeyRpId'])) { target.auth.passkeyRpId = auth['passkeyRpId'].trim().toLowerCase(); applied++; }
   }
   return applied;
 }

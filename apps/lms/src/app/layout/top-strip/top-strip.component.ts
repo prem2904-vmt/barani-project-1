@@ -41,6 +41,7 @@ import {
   ActionsMenuTriggerDirective,
 } from "../../shared/components/actions-menu/actions-menu.component";
 import { draftCap, draftMenuActions, draftSplit, draftTitle } from "./draft-tray";
+import { BetaFeaturesService } from "../../core/services/beta-features.service";
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from "@angular/router";
 import { filter } from "rxjs/operators";
 import { FormsModule } from "@angular/forms";
@@ -689,6 +690,13 @@ export class TopStripComponent implements OnInit, OnDestroy {
   goSignature() {
     this.closeProfile();
     this.router.navigate(["/signature"]);
+  }
+  /** Passkeys (beta `passkeys`: console switch + dev only). */
+  private readonly beta = inject(BetaFeaturesService);
+  protected passkeysOn(): boolean { return this.beta.enabled('passkeys'); }
+  goPasskeys() {
+    this.closeProfile();
+    this.router.navigate(["/security"]);
   }
 
   // ── Presence status picker (Teams-style presets) ───────────────────

@@ -6,6 +6,7 @@ import { BranchRef, CurrentUser } from './mock-user';
 import { SessionScopeService } from './session-scope.service';
 import { purgeSupabaseIndexedDb, purgeSupabaseLocalStorage } from './supabase-storage';
 import { opdPreviewHeaders } from '../../features/opd/shared/opd-gate';
+import { betaHeaders } from '../beta/beta-gate';
 
 interface MeResponse {
   id: string;
@@ -34,6 +35,9 @@ interface MeResponse {
   opdAccess?: boolean;
   /** The tenant EXPLICITLY has OPD on — visible without the console flag. */
   opdEntitled?: boolean;
+  /** Temp-password gate (newer servers). Read ONLY by the passkey sign-in,
+   *  which has no /login response to carry it. */
+  mustChangePassword?: boolean;
 }
 
 /**
@@ -641,15 +645,67 @@ export class AuthService {
       access_token: data.accessToken,
       refresh_token: data.refreshToken,
     } as Session;
+    await this.beginSession(session, { mustChangePassword: !!data.mustChangePassword, org: data.tenant?.name ?? org });
+    this._signedInWith.set('password');
+  }
 
+  /**
+   * Passkey sign-in: Supabase already verified the passkey and minted the
+   * SAME kind of session the password grant returns. From here everything is
+   * the password path's tail (beginSession): persist, idle-lock reset, /me,
+   * registry, cache. The temp-password gate is raised when /me says so
+   * (`mustChangePassword`, additive on the server), and a session /me refuses
+   * is revoked at once so no orphan sign-in stays behind.
+   */
+  async signInWithPasskeySession(tokens: { access_token: string; refresh_token: string }): Promise<void> {
+    const session = { access_token: tokens.access_token, refresh_token: tokens.refresh_token } as Session;
+    this._meMustChangePassword = false;
+    try {
+      await this.beginSession(session, { mustChangePassword: false, org: null });
+    } catch (e) {
+      void this.revokeToken(tokens.access_token);
+      throw e;
+    }
+    if (this._meMustChangePassword) this._mustChangePassword.set(true);
+    const org = this._user()?.tenantName;
+    if (org) this.rememberOrg(org);
+    this._signedInWith.set('passkey');
+    // The sign-in never went through /api/auth/login (which audits itself):
+    // record it once. Fire-and-forget — an audit hiccup never blocks sign-in.
+    void this.recordSessionStart(tokens.access_token, 'passkey');
+  }
+
+  /** POST /api/auth/session-started — the server writes the "login" audit row
+   *  once per session (idempotent on the token's session id). Beta-gated on the
+   *  server (`passkeys`), so it carries X-PF-BETA like every beta call. Never throws. */
+  private async recordSessionStart(token: string, method: 'passkey'): Promise<void> {
+    try {
+      await fetch(`${environment.apiUrl}/api/auth/session-started`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...betaHeaders() },
+        body: JSON.stringify({ method }),
+        cache: 'no-store',
+      });
+    } catch { /* offline — the audit row is best-effort */ }
+  }
+
+  /** How THIS tab's session started (null = restored / switched profile).
+   *  Drives the one-time passkey suggestion (only after a password sign-in). */
+  private readonly _signedInWith = signal<'password' | 'passkey' | null>(null);
+  readonly signedInWith = this._signedInWith.asReadonly();
+  /** /me's `mustChangePassword` (newer servers) from the last profile load. */
+  private _meMustChangePassword = false;
+
+  /** The shared tail of every credential sign-in (password or passkey). */
+  private async beginSession(session: Session, opts: { mustChangePassword: boolean; org: string | null }): Promise<void> {
     // Add account keeps the previous profile's session until the new one
     // is fully loaded — restored if /me can't be reached.
     const prev = this._session();
     this._session.set(session);
     this.persistSession(session);   // survive cold start
     this.startSessionTimer();
-    this._mustChangePassword.set(!!data.mustChangePassword);
-    this.rememberOrg(data.tenant?.name ?? org);
+    this._mustChangePassword.set(opts.mustChangePassword);
+    if (opts.org) this.rememberOrg(opts.org);
     // A fresh credential sign-in supersedes any leftover idle-lock from a prior
     // session on this device — otherwise the user is greeted by a PIN gate the
     // instant they log in (and a PIN-less user could be stranded). Clear the
@@ -665,6 +721,17 @@ export class AuthService {
         ? `Signed in, but couldn't load your profile. Check your connection and try again.`
         : 'This account can’t be used here. Ask your admin to check it.');
     }
+  }
+
+  /** Best-effort revoke of ONE access token's session (scope=local). */
+  private async revokeToken(token: string): Promise<void> {
+    try {
+      await fetch(`${environment.auth.supabaseUrl}/auth/v1/logout?scope=local`, {
+        method: 'POST',
+        headers: { apikey: environment.auth.supabaseAnonKey, Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+      });
+    } catch { /* offline — the token dies with its expiry */ }
   }
 
   /** Set a new password (forced-change gate + self-service). Clears the gate. */
@@ -733,6 +800,7 @@ export class AuthService {
     this._session.set(null);
     this._user.set(null);
     this._mustChangePassword.set(false);
+    this._signedInWith.set(null);
     this._lastProfileLoadedAt = 0;
     this._activeBranchId.set(null);
     try { localStorage.removeItem(AuthService.ACTIVE_BRANCH_KEY); } catch { /* */ }
@@ -836,6 +904,7 @@ export class AuthService {
     this.startSessionTimer();
     this.accounts.setActive(acc.userId);
     this._mustChangePassword.set(false);
+    this._signedInWith.set(null);
     await this.loadProfile();
   }
 
@@ -1054,6 +1123,7 @@ export class AuthService {
       opdAccess: data.opdAccess ?? false,
       opdEntitled: data.opdEntitled ?? false
     };
+    this._meMustChangePassword = data.mustChangePassword === true;
     this.applyProfile(user, { fromCache: false });
     this.cacheProfile(user);
     this._lastProfileLoadedAt = Date.now();

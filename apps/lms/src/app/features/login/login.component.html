@@ -87,7 +87,7 @@
               </svg>
               <input id="lg-username" #userInput class="lg-field__input"
                      type="text" name="username"
-                     autocomplete="username"
+                     [attr.autocomplete]="passkeyAutofill() ? 'username webauthn' : 'username'"
                      autocapitalize="off" autocorrect="off" spellcheck="false"
                      enterkeyhint="next"
                      required
@@ -169,6 +169,29 @@
 
           @if (addMode()) {
             <button type="button" class="pf-btn pf-btn--tertiary lg__cancel" (click)="cancelAdd()">Cancel</button>
+          }
+
+          <!-- Passkey (WebAuthn): the browser's own dialog — this device's
+               fingerprint / face / screen lock, a security key, or "use a
+               phone". Web only; the password form above always works. -->
+          @if (showPasskey()) {
+            <div class="lg__or" aria-hidden="true"><span>or</span></div>
+            <button type="button" class="pf-btn pf-btn--secondary lg__passkey"
+                    data-testid="passkey-signin"
+                    (click)="signInWithPasskey()"
+                    [disabled]="working()"
+                    [attr.aria-busy]="passkeyBusy()">
+              @if (passkeyBusy()) {
+                <pf-loading-logo size="xs" [inline]="true"></pf-loading-logo>
+                <span>Waiting for your passkey…</span>
+              } @else {
+                <pf-passkey-icon [size]="18"></pf-passkey-icon>
+                <span>Sign in with a passkey</span>
+              }
+            </button>
+            @if (passkeyNote()) {
+              <p class="lg__pknote" role="status">{{ passkeyNote() }}</p>
+            }
           }
         </form>
 

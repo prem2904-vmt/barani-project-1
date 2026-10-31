@@ -36,6 +36,7 @@ import { ChatService } from "../../core/services/chat.service";
 import { ChatNotifyService } from "../../core/services/chat-notify.service";
 import { UpdateBannerComponent } from "../../shared/components/update-banner/update-banner.component";
 import { BridgeNearbyBannerComponent } from "../../shared/components/bridge-nearby-banner/bridge-nearby-banner.component";
+import { PasskeyOfferComponent } from "../../shared/components/passkey-offer/passkey-offer.component";
 import { PlatformService } from "../../core/services/platform.service";
 import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
 // Touching WebrtcService here ensures its signaling subscriptions wire up
@@ -72,6 +73,7 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
     CallOverlayComponent,
     UpdateBannerComponent,
     BridgeNearbyBannerComponent,
+    PasskeyOfferComponent,
     PeopleDrawerComponent,
     ChatWindowsComponent,
     ChatPopupsComponent,
@@ -201,6 +203,11 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
            nearby path, works on the web) + the new-analyzer toast + native
            Bridge-QR deep links. Renders nothing for everyone else. -->
       <pf-bridge-nearby-banner></pf-bridge-nearby-banner>
+
+      <!-- "Sign in faster next time with fingerprint or face?" — once per user
+           per device, only after a password sign-in in a web browser (beta
+           passkeys; never in the desktop lab app). Renders nothing otherwise. -->
+      <pf-passkey-offer></pf-passkey-offer>
 
       <!-- Toasts — anchored top-right so they don't fight the floating
            bottom-nav pill or sit on top of action buttons (Next, Submit)

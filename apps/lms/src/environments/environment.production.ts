@@ -17,6 +17,10 @@ export const environment = {
   auth: {
     bypass: false,
     supabaseUrl: 'https://cottlnsbjnstsgknsgzu.supabase.co',
-    supabaseAnonKey: 'sb_publishable_P8V0_uNNHKth6NOF57Ph6A_vjwZRDJY'
+    supabaseAnonKey: 'sb_publishable_P8V0_uNNHKth6NOF57Ph6A_vjwZRDJY',
+    // Passkeys (WebAuthn) RP ID of the DEV Supabase project. Passkey UI shows
+    // only on this host or its subdomains (passkey-webauthn.ts); other servers
+    // set their own via /config.json `auth.passkeyRpId` (none = no passkeys).
+    passkeyRpId: 'med-dev.prefrontal.health'
   }
 };

@@ -9,6 +9,7 @@ import { FormsModule } from '@angular/forms';
 import { filter } from 'rxjs/operators';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
+import { BetaFeaturesService } from '../../core/services/beta-features.service';
 import { OpdGateService } from '../../features/opd/shared/opd-gate.service';
 import { StoredAccount } from '../../core/auth/accounts.service';
 import { BranchRef } from '../../core/auth/mock-user';
@@ -43,6 +44,7 @@ const DRAG_THRESHOLD_PX = 4;
 })
 export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
+  private readonly beta = inject(BetaFeaturesService);
   /** OPD dark build: the ONE OPD visibility rule. */
   private readonly opdGate = inject(OpdGateService);
   private readonly labCfg = inject(BranchLabConfigService);
@@ -219,6 +221,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
   protected goPrinting(): void { this.closeMore(); this.router.navigate(['/printing']); }
   protected goSignature(): void { this.closeMore(); this.router.navigate(['/signature']); }
+  /** Passkeys (beta `passkeys`: console switch + dev only). */
+  protected passkeysOn(): boolean { return this.beta.enabled('passkeys'); }
+  protected goPasskeys(): void { this.closeMore(); this.router.navigate(['/security']); }
   protected goSetup(): void { this.closeMore(); this.router.navigate(['/setup']); }
 
   protected onMoreNotifications(): void {

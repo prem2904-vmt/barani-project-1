@@ -299,6 +299,14 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/user-signature/my-signature.component').then(m => m.MySignatureComponent)
       },
       {
+        // Passkeys (beta, dev only) — any signed-in user manages their own.
+        // Beta off ⇒ the same betaGuard as every beta route (redirect to '/');
+        // the page still renders "not available" if reached otherwise.
+        path: 'security',
+        canActivate: [betaGuard('passkeys')],
+        loadComponent: () => import('./features/account-security/passkeys.component').then(m => m.PasskeysComponent)
+      },
+      {
         path: 'admin/organization',
         canActivate: [...routeGuards('/admin/organization')],
         loadComponent: () => import('./features/admin/organization/organization-settings.component').then(m => m.OrganizationSettingsComponent)
