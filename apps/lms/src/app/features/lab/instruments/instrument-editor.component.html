@@ -34,6 +34,9 @@
       @for (t of tabs(); track t.id) {
         <button type="button" class="pf-tabs__item" role="tab" [attr.aria-selected]="tab() === t.id" (click)="go(t.id)">
           <span>{{ t.label }}</span>
+          @if (t.id === 'status' && testingHere()) {
+            <span class="pf-chip pf-chip--static pf-ie-testing" role="status">Testing…</span>
+          }
           @if (t.id !== 'status') {
             <span class="pf-tabs__dot" [class.pf-tabs__dot--ok]="tabDone(t.id)"
                   [attr.aria-label]="tabDone(t.id) ? 'complete' : 'something to finish'"></span>

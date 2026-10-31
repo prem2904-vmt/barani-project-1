@@ -13,7 +13,7 @@ import { INSTRUMENT_BRIDGE_SOURCE } from '../../../shared/instruments/instrument
 import type { InstrumentDto, MessageSummaryDto } from '../../../shared/instruments/instrument.models';
 import { FX_INSTRUMENTS } from '../../../shared/bridges/testing/bridge-fixtures';
 import {
-  TEST_MAPPING_PING_MS, canTestWithId, endedNote, fmtMinSec, isSessionGone, isViaTestMapping, latestUnmatchedAnalyzerId, sameAnalyzerId,
+  TEST_MAPPING_PING_MS, canTestWithId, endedNote, fmtMinSec, isSessionGone, isSessionReplaced, isViaTestMapping, latestUnmatchedAnalyzerId, sameAnalyzerId,
   TEST_MAPPING_PERMS, testMappingErrorText, testMappingLine, testSessionUrl,
 } from '../../../shared/instruments/test-mapping';
 import { analyzerBadge, valuesForRun } from '../../../shared/instruments/instrument-prefill';
@@ -105,6 +105,13 @@ describe('test mapping — pure helpers', () => {
     const fmt = () => '7:28 PM';
     expect(analyzerBadge(valuesForRun(run(true), lines), 'ot1', 'WBC', '7.2', fmt)!.label).toBe('From Horiba · 7:28 PM · via test mapping');
     expect(analyzerBadge(valuesForRun(run(false), lines), 'ot1', 'WBC', '7.2', fmt)!.label).toBe('From Horiba · 7:28 PM');
+  });
+
+  it('session_replaced is its own state, with plain words', () => {
+    expect(isSessionReplaced(new ApiError('x', 'session_replaced'))).toBe(true);
+    expect(isSessionReplaced(new ApiError('x', 'session_gone'))).toBe(false);
+    expect(endedNote({ analyzerId: '8507', sampleLabel: '26117', routedCount: 2 }, 'replaced')).toBe('Ended — started again elsewhere.');
+    expect(testMappingErrorText(new ApiError('x', 'sample_not_testable'))).toBe('Pick a tube that has no results yet.');
   });
 
   it('session gone = session_gone / not_found code or a bare 404', () => {
@@ -207,6 +214,14 @@ describe('TestMappingService — lifecycle', () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(svc.active()).toBeNull();
     expect(svc.note()).toContain('timed out');
+  });
+
+  it('ping/poll 404 session_replaced → ends with the "started again elsewhere" note', async () => {
+    const { svc } = svcSetup([new ApiError('Ended — started again elsewhere.', 'session_replaced')]);
+    await svc.start(INST, '8507', '26117');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(svc.active()).toBeNull();
+    expect(svc.note()).toBe('Ended — started again elsewhere.');
   });
 
   it('Close → DELETE …/test-session/{sid}; nothing keeps running', async () => {
@@ -384,6 +399,45 @@ describe('Instrument editor — "Test with an analyzer ID" card', () => {
     expect(p.api.post).toHaveBeenCalledWith(`/api/instruments/${dto.id}/test-session/sid-1/reingest`, { messageId: 'u1' });
     expect(p.api.post).not.toHaveBeenCalledWith(`/api/instruments/${dto.id}/test-session`, expect.anything());
     expect(p.toasts.success).toHaveBeenCalled();
+  });
+
+  it('switching tabs keeps the test running (no DELETE), shows "Testing…" on the Status tab, and the card resumes', async () => {
+    const p = renderEditor(dto, recent);
+    await flush(); p.f.detectChanges();
+    const svc = TestBed.inject(TestMappingService);
+    await svc.start(dto.id, '8507', '26117');
+    p.f.detectChanges();
+    const marker = () => p.el.querySelector('.pf-ie-testing');
+    expect(marker()?.textContent).toContain('Testing…');
+
+    p.cmp.go('basics');
+    await flush(); p.f.detectChanges();
+    expect(p.el.querySelector('pf-test-mapping-card')).toBeNull(); // the Status card is gone from the DOM...
+    expect(p.api.delete).not.toHaveBeenCalled();                    // ...but the test is NOT ended
+    expect(svc.active()).not.toBeNull();
+    expect(marker()?.textContent).toContain('Testing…');            // marker visible from any tab
+
+    p.cmp.go('status');
+    await flush(); p.f.detectChanges();
+    expect(p.el.querySelector('pf-test-mapping-card')!.textContent).toContain('Waiting for 8507 → sample 26117…');
+    expect(p.api.delete).not.toHaveBeenCalled();
+
+    p.f.destroy(); // leaving the PAGE ends it
+    await flush();
+    expect(p.api.delete).toHaveBeenCalledTimes(1);
+    expect(p.api.delete).toHaveBeenCalledWith(`/api/instruments/${dto.id}/test-session/sid-1`);
+  });
+
+  it('a test started again elsewhere ends this panel with "Ended — started again elsewhere."', async () => {
+    const p = renderEditor(dto, recent);
+    await flush(); p.f.detectChanges();
+    const svc = TestBed.inject(TestMappingService);
+    await svc.start(dto.id, '8507', '26117');
+    p.api.post.mockImplementation((() => throwError(() => new ApiError('Ended — started again elsewhere.', 'session_replaced'))) as never);
+    await vi.waitFor(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    await svc.reingest('u1');
+    expect(svc.active()).toBeNull();
+    expect(svc.note()).toBe('Ended — started again elsewhere.');
   });
 
   it('leaving the page (route leave) ends the running test', async () => {

@@ -3,7 +3,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiError } from '../models/api-response.model';
 import { TestMappingApiService } from './test-mapping-api.service';
 import {
-  ActiveTestMapping, TEST_MAPPING_PING_MS, TEST_MAPPING_POLL_MS, endedNote, isSessionGone, sameAnalyzerId, testMappingErrorText,
+  ActiveTestMapping, TEST_MAPPING_PING_MS, TEST_MAPPING_POLL_MS, endedNote, isSessionGone, isSessionReplaced, sameAnalyzerId, testMappingErrorText,
 } from './test-mapping';
 
 export type TestMappingEndReason = 'closed' | 'left' | 'logout';
@@ -97,7 +97,7 @@ export class TestMappingService {
       return { ok: true };
     } catch (e) {
       const err = ApiError.from(e);
-      if (isSessionGone(err) && this._active()?.sessionId === a.sessionId) this.finish(this._active()!, 'expired');
+      if (this.sessionEnded(err, a.sessionId)) return { ok: false, error: testMappingErrorText(err, { analyzerId: a.analyzerId }) };
       return { ok: false, error: testMappingErrorText(err, { analyzerId: a.analyzerId }) };
     }
   }
@@ -134,7 +134,7 @@ export class TestMappingService {
     try { await firstValueFrom(this.api.ping(a.instrumentId, a.sessionId)); }
     catch (e) {
       // The server no longer knows it (expired / restarted / ended elsewhere).
-      if (isSessionGone(ApiError.from(e)) && this._active()?.sessionId === a.sessionId) this.finish(a, 'expired');
+      this.sessionEnded(ApiError.from(e), a.sessionId, a);
     }
   }
 
@@ -155,10 +155,20 @@ export class TestMappingService {
       if (s.status === 'ended') { this.finish(next, s.endedReason ?? null); return; }
       this._active.set(next);
     } catch (e) {
-      if (isSessionGone(ApiError.from(e)) && this._active()?.sessionId === a.sessionId) this.finish(a, 'expired');
+      this.sessionEnded(ApiError.from(e), a.sessionId, a);
     } finally {
       this.polling = false;
     }
+  }
+
+  /** The server says this session is no longer the live one: gone (expired / restarted) or replaced
+   *  (the same user started again elsewhere). True = it was ended here. */
+  private sessionEnded(err: ApiError, sessionId: string, a: ActiveTestMapping | null = this._active()): boolean {
+    if (!a || this._active()?.sessionId !== sessionId) return false;
+    const replaced = isSessionReplaced(err);
+    if (!replaced && !isSessionGone(err)) return false;
+    this.finish(this._active() ?? a, replaced ? 'replaced' : 'expired');
+    return true;
   }
 
   private finish(a: ActiveTestMapping, reason: string | null) {

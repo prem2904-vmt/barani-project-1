@@ -280,6 +280,9 @@ export class InstrumentEditorComponent {
       for (const t of this.loincLookupTimers.values()) clearTimeout(t);
       const sid = this.sessionId();
       if (sid) void this.bridge.listenStop(sid);
+      // Leaving the PAGE (not a tab switch — the session lives in the root service) ends a running test.
+      const t = this.testMapping.active();
+      if (t && t.instrumentId === this.id()) void this.testMapping.end('left');
     });
   }
 
@@ -387,6 +390,8 @@ export class InstrumentEditorComponent {
   /** The card's prefill: the newest unmatched result's analyzer ID. */
   readonly suggestedTestId = computed(() => latestUnmatchedAnalyzerId(this.recent()));
   private readonly testCard = viewChild(TestMappingCardComponent);
+  /** A test is running for THIS instrument (the Status tab label shows "Testing…" on any tab). */
+  readonly testingHere = computed(() => { const t = this.testMapping.active(); return !!t && t.instrumentId === this.id(); });
 
   /** "Test with this ID" on an unmatched result: if a test already waits for
    *  that ID, re-run this result through it; else prefill the card. */

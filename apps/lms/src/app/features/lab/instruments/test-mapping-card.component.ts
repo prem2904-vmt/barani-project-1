@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, input, output, signal, untracked, viewChild } from '@angular/core';
 import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
 import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
@@ -16,7 +16,8 @@ import { TEST_MAPPING_QUIET_S, testMappingLine } from '../../../shared/instrumen
  *   ✓ Done — 5 results attached to 26117.          (above the empty form)
  *
  * The session itself lives in the root TestMappingService (keep-alive,
- * window close, logout); leaving this card (route leave) ends it here.
+ * window close, logout); the card only renders it, so switching tabs never ends
+ * it — the instrument screen (InstrumentEditorComponent) ends it on route leave.
  */
 @Component({
   selector: 'pf-test-mapping-card',
@@ -61,8 +62,6 @@ export class TestMappingCardComponent {
       const t = this.svc.routedTick();
       if (t !== tick) { tick = t; untracked(() => this.routed.emit()); }
     });
-    // Route leave (the instrument screen is destroyed) ends the test.
-    inject(DestroyRef).onDestroy(() => { if (this.running()) void this.svc.end('left'); });
   }
 
   setAnalyzerId(v: string) { this.idTouched = true; this.analyzerId.set(v); this.error.set(null); }

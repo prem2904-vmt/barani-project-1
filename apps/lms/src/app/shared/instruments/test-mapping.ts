@@ -119,6 +119,7 @@ const resultsWord = (n: number) => `${n} ${n === 1 ? 'result' : 'results'}`;
 
 /** The note left on the empty card once a test ended. */
 export function endedNote(t: Pick<ActiveTestMapping, 'analyzerId' | 'sampleLabel' | 'routedCount'>, reason?: string | null): string {
+  if (reason === 'replaced') return 'Ended — started again elsewhere.';
   if (t.routedCount > 0) return `Done — ${resultsWord(t.routedCount)} attached to ${t.sampleLabel}.`;
   if (reason === 'expired') return `The test for ${t.analyzerId} timed out — nothing arrived.`;
   return `The test for ${t.analyzerId} ended — nothing arrived.`;
@@ -127,6 +128,11 @@ export function endedNote(t: Pick<ActiveTestMapping, 'analyzerId' | 'sampleLabel
 /** "The server no longer knows this session" (expired / restarted / ended
  *  elsewhere): a `not_found`-style code, or a bare 404 (ApiService keeps
  *  only the message, which names the status). */
+/** The same user started the test again (another tab / window): the server answers `session_replaced`. */
+export function isSessionReplaced(e: { code?: string } | null | undefined): boolean {
+  return (e?.code ?? '').toLowerCase() === 'session_replaced';
+}
+
 export function isSessionGone(e: { code?: string; message?: string } | null | undefined): boolean {
   const code = (e?.code ?? '').toLowerCase();
   if (code === 'session_gone' || code === 'not_found' || code.endsWith('session_not_found') || code === 'session_ended') return true;
@@ -153,6 +159,8 @@ export function testMappingErrorText(e: { code?: string; message?: string }, ctx
     case 'no_alias': return ctx.analyzerId ? `The running test isn’t for ${ctx.analyzerId}.` : 'The running test isn’t for that ID.';
     case 'too_old': return 'That result is older than 10 minutes — run the sample on the analyzer again.';
     case 'session_gone': return 'The test has ended.';
+    case 'session_replaced': return 'Ended — started again elsewhere.';
+    case 'sample_not_testable': return 'Pick a tube that has no results yet.';
     default: return msg || 'Something went wrong — try again.';
   }
 }
