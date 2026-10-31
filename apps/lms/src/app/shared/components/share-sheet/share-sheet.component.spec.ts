@@ -120,6 +120,17 @@ describe('Send to colleague — the sheet', () => {
     expect(share.closeSheet).toHaveBeenCalled();
   });
 
+  it('only the people receiving the share can be @mentioned; a directory user who is not stays plain text', async () => {
+    const { el, f, open, row, share } = setup();
+    await open(REQ);
+    row('u:a1').click(); f.detectChanges();
+    (f.componentInstance as any).caption.set('cc @Karthik Iyer and @Priya Nair');
+    (el.querySelector('.pf-ss__send') as HTMLButtonElement).click();
+    await f.whenStable(); await new Promise(r => setTimeout(r, 0));
+    expect(share.shareTo).toHaveBeenCalledWith({ toUserIds: ['a1'] },
+      expect.objectContaining({ caption: 'cc @Karthik Iyer and @a1', mentions: ['a1'] }));
+  });
+
   it('suggested people (the technician who entered it) are preselected and marked', async () => {
     const { el, open, row } = setup();
     await open({ ...REQ, heading: 'Ask the technician', suggest: [{ userId: null, name: 'karthik iyer' }] });

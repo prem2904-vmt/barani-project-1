@@ -464,11 +464,8 @@ export class ShareSheetComponent {
     const dests = this.picked();
     if (!r || !dests.length || this.sending()) return;
     this.sending.set(true);
-    const everyone = [
-      ...this.mentionable(),
-      ...this.users().map(u => ({ id: u.id, name: u.displayName })),
-    ];
-    const { body, mentions } = encodeMentions(this.caption().trim(), everyone);
+    // Only the people who will actually receive this share can be @mentioned.
+    const { body, mentions } = encodeMentions(this.caption().trim(), this.mentionable());
     const req = { ...r.target, caption: body || null, mentions: mentions.length ? mentions : null };
     const failed: string[] = [];
     let lastError = '';

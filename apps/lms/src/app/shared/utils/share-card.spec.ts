@@ -14,6 +14,13 @@ describe('share-card — the card a message carries', () => {
     }
   });
 
+  it('a built-in Insights section card (null id on the wire) still draws, keyed by its section', () => {
+    expect(cardOf({ sharedRecordType: 'insights', sharedRecordId: null, sharedRecordTitle: 'Revenue', sharedRecordSubtitle: 'This month', sharedRecordMeta: '{"section":"revenue","period":"month"}' }))
+      .toEqual({ type: 'insights', id: 'revenue', title: 'Revenue', subtitle: 'This month', meta: { section: 'revenue', period: 'month' } });
+    expect(cardOf({ sharedRecordType: 'insights', sharedRecordTitle: 'Overview' })?.id).toBe('overview');
+    expect(cardOf({ sharedRecordType: 'patient', sharedRecordId: null })).toBeNull();
+  });
+
   it('legacy SharedReport* rows (before the generic refactor) still render as a report card', () => {
     expect(cardOf({ sharedReportId: 'r1', sharedReportPatientName: 'Priya Nair', sharedReportTestSummary: 'CBC' }))
       .toEqual({ type: 'report', id: 'r1', title: 'Priya Nair', subtitle: 'CBC', meta: null });

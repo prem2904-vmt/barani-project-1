@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.spec.json",
+  "compilerOptions": {
+    "paths": { "@prefrontal/shared": ["../../libs/shared/src/index.ts"] }
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "../../libs/shared/src/**/*.ts"]
+}

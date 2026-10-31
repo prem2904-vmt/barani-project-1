@@ -110,11 +110,15 @@ export function parseCardMeta(raw: unknown): ShareCardMeta | null {
  *  future type is dropped rather than drawn wrong. */
 export function cardOf(m: CardMessage | null | undefined): ShareCard | null {
   if (!m) return null;
-  if (m.sharedRecordType && m.sharedRecordId) {
+  // A built-in Insights section card has no record id on the wire (only a saved dashboard does):
+  // its identity is the section, so it still draws.
+  const insightsId = m.sharedRecordType === 'insights' && !m.sharedRecordId
+    ? (parseCardMeta(m.sharedRecordMeta)?.['section'] ?? 'overview') : null;
+  if (m.sharedRecordType && (m.sharedRecordId || insightsId)) {
     if (!isShareCardType(m.sharedRecordType)) return null;
     return {
       type: m.sharedRecordType,
-      id: m.sharedRecordId,
+      id: (m.sharedRecordId || insightsId)!,
       title: m.sharedRecordTitle || cardEyebrow(m.sharedRecordType),
       subtitle: m.sharedRecordSubtitle ?? '',
       meta: parseCardMeta(m.sharedRecordMeta),
