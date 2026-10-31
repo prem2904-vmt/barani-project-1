@@ -22,6 +22,9 @@ import {
   CheckItem, ConnectMode, WIZARD_STEPS, WizardStepId, cardChoices, cardOptions, checklist, detectHeadline, firewallFixPlan,
   fixableProblems, pickAnalyzerCard, scanPorts, wizardUpsert,
 } from './connect-wizard.logic';
+import { AssistantButtonComponent } from '../../../../shared/assistant/assistant-button.component';
+import { AssistantPanelComponent } from '../../../../shared/assistant/assistant-panel.component';
+import { AssistantPageContext, MAP_PREFILL_STATE_KEY, MappingPrefill } from '../../../../shared/assistant/assistant.models';
 
 interface Hit { port: number; remote: string | null; local: string | null }
 
@@ -46,7 +49,7 @@ interface Hit { port: number; remote: string | null; local: string | null }
 @Component({
   selector: 'pf-connect-wizard',
   standalone: true,
-  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, SegmentedComponent, BusyDirective],
+  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, SegmentedComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './connect-wizard.component.html',
   styleUrl: './connect-wizard.component.scss',
@@ -422,6 +425,29 @@ export class ConnectWizardComponent {
 
   /** Continue without seeing the analyzer (protocol stays auto-detect). */
   skip() { this.skipped.set(true); this.go('create'); }
+
+  // ── Assistant (beta) ─────────────────────────────────────────────────
+  readonly assistantOpen = signal(false);
+  /** The network check this helper already took goes along (no second run). */
+  readonly assistantContext = computed<AssistantPageContext>(() => ({
+    page: 'instruments', subject: this.created()?.name || 'Connect an analyzer',
+    instrumentId: this.created()?.id ?? null, canAddMapping: !!this.created(),
+    addMappingHint: 'Create the instrument first (step 3) — then add its mappings.',
+    diag: this.snap() ?? undefined,
+  }));
+
+  /** "Add to mapping": the instrument's Code mapping, row prefilled — asks
+   *  first because it leaves this helper. The person saves there. */
+  async onAssistantMapping(p: MappingPrefill) {
+    const id = this.created()?.id;
+    if (!id) return;
+    const ok = await this.dialog.confirm({
+      title: 'Open Code mapping?', tone: 'primary', confirmLabel: 'Open Code mapping',
+      message: `Leaves the setup helper and opens ${this.created()?.name || 'the instrument'} with ${p.analyzerCode} filled in. Check it, then press Save.`,
+    });
+    if (!ok) return;
+    void this.router.navigate(['/admin/instruments', id], { state: { [MAP_PREFILL_STATE_KEY]: { ...p, instrumentId: id } } });
+  }
 }
 
 function errText(e: unknown, fallback: string): string {

@@ -2,6 +2,7 @@
   @if (theme.isNewDesign()) {
     <pf-hero-band [back]="true" backTo="/admin/instruments" [customSearch]="true" [contextBar]="true">
       <ng-container band-actions>
+        <pf-assistant-button [expanded]="assistantOpen()" (pressed)="assistantOpen.set(!assistantOpen())"></pf-assistant-button>
         @if (dirty() || mapsDirty() || imageMapsDirty()) {
           <span class="pf-savestate"><span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-ie-vh-phone">Unsaved changes</span></span>
         }
@@ -390,7 +391,7 @@
                     </thead>
                     <tbody>
                       @for (r of maps(); track $index; let i = $index) {
-                        <tr [class.pf-ie-row--err]="!!mapIssueAt(i)">
+                        <tr [class.pf-ie-row--err]="!!mapIssueAt(i)" [class.pf-ie-row--prefill]="prefillRow() === i">
                           <td data-l="Analyzer code"><input class="pf-input pf-num" [value]="r.analyzerCode" (input)="onAnalyzerCodeInput(i, $any($event.target).value)" aria-label="Analyzer code" autocomplete="off" /></td>
                           <td data-l="Test" class="pf-ie-maps__test">
                             @if (r.loincCandidates?.length && !r.testCatalogKey) {
@@ -590,4 +591,6 @@
     </div>
     }
   </div>
+  <pf-assistant-panel [open]="assistantOpen()" [context]="assistantContext()"
+                      (closed)="assistantOpen.set(false)" (addMapping)="onAssistantMapping($event)"></pf-assistant-panel>
 </section>

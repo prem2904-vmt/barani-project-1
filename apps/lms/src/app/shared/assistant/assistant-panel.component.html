@@ -1,0 +1,242 @@
+@if (visible()) {
+  <div class="pf-asst-backdrop" (click)="close()" aria-hidden="true"></div>
+  <!-- Non-modal side panel (the page stays usable): complementary, not dialog. -->
+  <aside class="pf-asst pf-card" role="complementary" [attr.aria-label]="title()">
+    <header class="pf-card__head pf-asst__head">
+      <span class="pf-card__icon" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6Z"/><path d="M18.5 15.5 19.3 17.7 21.5 18.5 19.3 19.3 18.5 21.5 17.7 19.3 15.5 18.5 17.7 17.7Z"/></svg>
+      </span>
+      <div class="pf-asst__titles">
+        <p class="pf-card__label" role="heading" aria-level="2">{{ title() }} <span class="pf-asst__beta">Beta</span></p>
+        @if (context().subject) { <p class="pf-asst__subject">{{ context().subject }}</p> }
+      </div>
+      <span class="pf-card__spacer"></span>
+      @if (items().length) {
+        <button type="button" class="pf-btn pf-btn--icon press" (click)="newChat()" aria-label="New chat" title="New chat">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </button>
+      }
+      <button type="button" class="pf-btn pf-btn--icon press" (click)="close()" aria-label="Close the assistant" title="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+
+    @if (providersState() === 'error') {
+      <div class="pf-asst__body pf-asst__body--center">
+        <div class="pf-empty pf-empty--compact pf-asst-state" data-state="off">
+          <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></span>
+          <p class="pf-empty__title">Not available</p>
+          <p class="pf-empty__body">{{ providersError()?.message }}</p>
+          @if (providersError()?.retry) {
+            <button type="button" class="pf-btn pf-btn--secondary press" (click)="loadProviders()">Try again</button>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="pf-asst__controls">
+        <label class="pf-asst__field">
+          <span class="pf-asst__flabel">Model</span>
+          @if (providersState() === 'ready') {
+            <pf-select class="pf-asst__model" [options]="providerOpts()" [value]="provider()!" placeholder="No model available" size="sm"
+                       [disabled]="pending() || noneAvailable()" (valueChange)="setProvider($event)"></pf-select>
+          } @else {
+            <span class="pf-asst__skel" role="status" aria-label="Loading models"></span>
+          }
+        </label>
+        @if (showInstrumentPick()) {
+          <label class="pf-asst__field">
+            <span class="pf-asst__flabel">About</span>
+            <pf-select class="pf-asst__inst" [options]="instrumentOpts()" [value]="instrumentPick()" [searchable]="instrumentOpts().length > 8" size="sm"
+                       (valueChange)="instrumentPick.set($event)"></pf-select>
+          </label>
+        }
+      </div>
+
+      @if (diagPossible()) {
+        <div class="pf-asst__diag">
+          @switch (diagState()) {
+            @case ('loading') {
+              <span class="pf-chip pf-chip--static pf-asst-chip" role="status">Checking this PC’s network…</span>
+            }
+            @case ('attached') {
+              <span class="pf-chip pf-chip--static pf-chip--violet pf-asst-chip pf-asst-chip--diag">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                Includes this PC’s network check
+                <button type="button" class="pf-asst-chip__x press" (click)="removeDiag()" aria-label="Don’t include this PC’s network check" title="Remove">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+              </span>
+            }
+            @case ('removed') {
+              <button type="button" class="pf-btn pf-btn--quiet press pf-asst__diagadd" (click)="attachDiag()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Include this PC’s network check
+              </button>
+            }
+            @case ('failed') {
+              <span class="pf-asst__muted">Couldn’t check this PC’s network.</span>
+              <button type="button" class="pf-btn pf-btn--quiet press pf-asst__diagadd" (click)="attachDiag()">Try again</button>
+            }
+          }
+        </div>
+      }
+
+      <div #thread class="pf-asst__body pf-asst__thread pf-ai-glow pf-ai-glow--inset" [attr.data-ai-working]="pending() ? 'true' : null" aria-live="polite">
+        @if (noneAvailable()) {
+          <div class="pf-empty pf-empty--compact pf-asst-state" data-state="none">
+            <p class="pf-empty__title">No model is available right now</p>
+            <p class="pf-empty__body">Neither Gemini nor Claude can answer at the moment. Try again later.</p>
+          </div>
+        } @else if (!items().length) {
+          <div class="pf-asst__intro">
+            <p class="pf-asst__lead">Ask about this lab’s analyzers — why one is offline, what to set on it, or which test an analyzer code should fill.</p>
+            <ul class="pf-asst__starters" aria-label="Starter questions">
+              @for (s of starters(); track s) {
+                <li>
+                  <button type="button" class="pf-asst-starter press" [disabled]="providersState() !== 'ready' || pending()" (click)="ask(s)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span>{{ s }}</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        @for (item of items(); track item.id) {
+          @switch (item.kind) {
+            @case ('user') {
+              <div class="pf-asst-msg pf-asst-msg--user"><p class="pf-asst-msg__text">{{ $any(item).text }}</p></div>
+            }
+            @case ('assistant') {
+              <div class="pf-asst-msg pf-asst-msg--bot">
+                @if ($any(item).blocks.length) {
+                  <div class="pf-asst-md">
+                    @for (b of $any(item).blocks; track $index) {
+                      @switch (b.kind) {
+                        @case ('h') { <p class="pf-asst-md__h"><ng-container *ngTemplateOutlet="inl; context: { $implicit: b.inlines }"></ng-container></p> }
+                        @case ('p') { <p class="pf-asst-md__p"><ng-container *ngTemplateOutlet="inl; context: { $implicit: b.inlines }"></ng-container></p> }
+                        @case ('ul') {
+                          <ul class="pf-asst-md__ul">
+                            @for (it of b.items; track $index) { <li><ng-container *ngTemplateOutlet="inl; context: { $implicit: it }"></ng-container></li> }
+                          </ul>
+                        }
+                        @case ('ol') {
+                          <ol class="pf-asst-md__ol" [attr.start]="b.start">
+                            @for (it of b.items; track $index) { <li><ng-container *ngTemplateOutlet="inl; context: { $implicit: it }"></ng-container></li> }
+                          </ol>
+                        }
+                        @case ('code') { <pre class="pf-asst-md__pre"><code>{{ b.text }}</code></pre> }
+                      }
+                    }
+                  </div>
+                }
+
+                @if ($any(item).suggestions.length) {
+                  <ul class="pf-asst-cards" aria-label="Suggestions">
+                    @for (s of $any(item).suggestions; track $index) {
+                      <li class="pf-asst-card" [attr.data-kind]="s.kind">
+                        @switch (s.kind) {
+                          @case ('setting') {
+                            <div class="pf-asst-card__row">
+                              <div class="pf-asst-card__main">
+                                <span class="pf-asst-card__label">{{ s.label }}</span>
+                                <code class="pf-asst-card__value pf-num">{{ s.value }}</code>
+                              </div>
+                              <button type="button" class="pf-btn pf-btn--secondary pf-asst-card__btn press" (click)="copy(s.value)" [attr.aria-label]="'Copy ' + s.label">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                                Copy
+                              </button>
+                            </div>
+                            @if (s.note) { <p class="pf-asst-card__note">{{ s.note }}</p> }
+                          }
+                          @case ('action') {
+                            <div class="pf-asst-card__row pf-asst-card__row--action">
+                              <svg class="pf-asst-card__ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                              <p class="pf-asst-card__text">{{ s.text }}</p>
+                            </div>
+                          }
+                          @case ('mapping') {
+                            <div class="pf-asst-card__maphead">
+                              <span class="pf-asst-card__label">Mapping</span>
+                              <span class="pf-asst-conf" [attr.data-conf]="s.confidence">{{ confWord(s) }}</span>
+                            </div>
+                            @for (t of $any(s).tests; track $index) {
+                              <div class="pf-asst-card__row pf-asst-card__row--map">
+                                <p class="pf-asst-card__map">
+                                  <code class="pf-num">{{ codeLabel(s) }}</code>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="maps to" role="img"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                                  <span>{{ testLabel(t) }}</span>
+                                </p>
+                                @if (isAdded(item, s, t)) {
+                                  <span class="pf-asst-card__done" role="status">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                                    Added — check it and Save
+                                  </span>
+                                } @else {
+                                  <button type="button" class="pf-btn pf-btn--secondary pf-asst-card__btn press" [disabled]="!canAddMapping()"
+                                          (click)="addToMapping(item, s, t)" [attr.aria-label]="'Add ' + s.analyzerCode + ' to mapping'">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                                    Add to mapping
+                                  </button>
+                                }
+                              </div>
+                            }
+                            @if (s.why) { <p class="pf-asst-card__note">{{ s.why }}</p> }
+                            @if (!canAddMapping()) { <p class="pf-asst-card__note pf-asst-card__note--hint">{{ addMappingHint() }}</p> }
+                          }
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+                <p class="pf-asst-msg__by">{{ $any(item).by }}</p>
+              </div>
+            }
+            @case ('error') {
+              <div class="pf-asst-msg pf-asst-msg--error" role="alert" [attr.data-error]="$any(item).error.kind">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+                <p class="pf-asst-msg__text">{{ $any(item).error.message }}</p>
+                @if ($any(item).error.retry) {
+                  <button type="button" class="pf-btn pf-btn--quiet press pf-asst-retry" (click)="retry()">Try again</button>
+                }
+              </div>
+            }
+          }
+        }
+
+        @if (pending()) {
+          <div class="pf-asst-msg pf-asst-msg--bot pf-asst-msg--pending" role="status">
+            <span class="pf-asst-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <span>{{ providerLabel() }} is thinking…</span>
+          </div>
+        }
+      </div>
+
+      <footer class="pf-asst__foot">
+        <div class="pf-asst__composer">
+          <textarea #composer class="pf-input pf-asst__input" rows="1" [maxLength]="maxChars"
+                    [value]="draft()" (input)="draft.set($any($event.target).value)" (keydown)="onComposerKey($event)"
+                    [disabled]="providersState() !== 'ready' || noneAvailable()"
+                    placeholder="Ask about this analyzer…" aria-label="Your question"></textarea>
+          <button type="button" class="pf-btn pf-btn--primary pf-asst__send press" [disabled]="!canSend()" (click)="send()" aria-label="Send" title="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          </button>
+        </div>
+        <p class="pf-asst__fine">Suggestions only — nothing changes until you change it and save.</p>
+      </footer>
+    }
+  </aside>
+}
+
+<ng-template #inl let-inlines>
+  @for (t of inlines; track $index) {
+    @switch (t.kind) {
+      @case ('strong') { <strong>{{ t.text }}</strong> }
+      @case ('em') { <em>{{ t.text }}</em> }
+      @case ('code') { <code class="pf-asst-md__code">{{ t.text }}</code> }
+      @case ('link') { <a class="pf-asst-md__a" [href]="t.href" target="_blank" rel="noopener noreferrer nofollow">{{ t.text }}</a> }
+      @default { <ng-container>{{ t.text }}</ng-container> }
+    }
+  }
+</ng-template>

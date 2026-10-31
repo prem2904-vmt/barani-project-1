@@ -17,6 +17,9 @@ import { InstrumentsApiService } from '../../../shared/instruments/instruments-a
 import { InstrumentDto } from '../../../shared/instruments/instrument.models';
 import { InstrumentBridgeService } from '../../../shared/instruments/instrument-bridge.service';
 import { STATUS_ORDER, connectionSummary, protocolLabel, statusSubline, statusWord } from '../../../shared/instruments/instrument-config';
+import { AssistantButtonComponent } from '../../../shared/assistant/assistant-button.component';
+import { AssistantPanelComponent } from '../../../shared/assistant/assistant-panel.component';
+import { AssistantPageContext, MAP_PREFILL_STATE_KEY, MappingPrefill } from '../../../shared/assistant/assistant.models';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -36,7 +39,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
 @Component({
   selector: 'pf-instruments-list',
   standalone: true,
-  imports: [AgGridAngular, RouterLink, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective],
+  imports: [AgGridAngular, RouterLink, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-inl pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -44,6 +47,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
         <pf-hero-band [back]="true" backTo="/lab/settings" placeholder="Search instruments — name, make, model, port…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-actions>
+            <pf-assistant-button [expanded]="assistantOpen()" (pressed)="assistantOpen.set(!assistantOpen())"></pf-assistant-button>
             <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…"
                     (click)="load()" aria-label="Refresh" title="Refresh">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
@@ -124,6 +128,8 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
           </aside>
         </div>
       </div>
+      <pf-assistant-panel [open]="assistantOpen()" [context]="assistantContext()"
+                          (closed)="assistantOpen.set(false)" (addMapping)="onAssistantMapping($event)"></pf-assistant-panel>
     </section>
   `,
   styles: [`
@@ -233,6 +239,20 @@ export class InstrumentsListComponent {
   add() { void this.router.navigate(['/admin/instruments', 'new']); }
 
   connect() { void this.router.navigate(['/admin/instruments', 'connect']); }
+
+  // ── Assistant (beta) ─────────────────────────────────────────────────
+  readonly assistantOpen = signal(false);
+  readonly assistantContext = computed<AssistantPageContext>(() => ({
+    page: 'instruments', subject: 'All instruments',
+    instruments: this.rows().filter((r) => r.isActive !== false).map((r) => ({ id: r.id, name: r.name })),
+  }));
+
+  /** "Add to mapping": open that instrument's Code mapping with the row
+   *  prefilled (navigation state, never the URL) — the person saves there. */
+  onAssistantMapping(p: MappingPrefill) {
+    if (!p.instrumentId) return;
+    void this.router.navigate(['/admin/instruments', p.instrumentId], { state: { [MAP_PREFILL_STATE_KEY]: p } });
+  }
 
   onCellClicked(ev: CellClickedEvent<InstrumentDto>) {
     if (ev.data?.id) void this.router.navigate(['/admin/instruments', ev.data.id]);

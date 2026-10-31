@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -35,6 +35,10 @@ import { TwoWayForm, modeLabel } from '../../../shared/instruments/instrument-tw
 import { InstrumentTwoWayComponent } from './instrument-two-way.component';
 import { SampleIdPickerComponent } from './sample-id-picker.component';
 import { SampleIdFormat, formatFor } from '../../../shared/instruments/sample-id-path';
+import { applyMappingPrefill, isMappingPrefill } from '../../../shared/instruments/mapping-prefill';
+import { AssistantButtonComponent } from '../../../shared/assistant/assistant-button.component';
+import { AssistantPanelComponent } from '../../../shared/assistant/assistant-panel.component';
+import { AssistantPageContext, MAP_PREFILL_STATE_KEY, MappingPrefill } from '../../../shared/assistant/assistant.models';
 import { BridgesApiService } from '../../../shared/bridges/bridges-api.service';
 import type { BridgeDto } from '../../../shared/bridges/bridge.models';
 import { connectedViaOptions, transportOptionsFor } from '../../../shared/bridges/bridge-assign';
@@ -59,7 +63,7 @@ interface TabDef { id: Tab; label: string }
 @Component({
   selector: 'pf-instrument-editor',
   standalone: true,
-  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, BusyDirective, SkeletonFormComponent, InstrumentTwoWayComponent, SampleIdPickerComponent],
+  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, BusyDirective, SkeletonFormComponent, InstrumentTwoWayComponent, SampleIdPickerComponent, AssistantButtonComponent, AssistantPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './instrument-editor.component.html',
   styleUrl: './instrument-editor.component.scss',
@@ -256,6 +260,11 @@ export class InstrumentEditorComponent {
   private offStatus: (() => void) | null = null;
 
   constructor() {
+    // "Add to mapping" from another screen's assistant: the row arrives in
+    // the navigation state (never in the URL); the input serves embedding.
+    const nav = this.router.getCurrentNavigation()?.extras.state?.[MAP_PREFILL_STATE_KEY];
+    if (isMappingPrefill(nav)) this.queuePrefill(nav, true);
+    effect(() => { const p = this.mapPrefill(); if (isMappingPrefill(p)) untracked(() => this.queuePrefill(p)); });
     const raw = this.route.snapshot.paramMap.get('id');
     this.id.set(raw && raw !== 'new' ? raw : null);
     if (!this.id()) this.tab.set('basics');
@@ -275,7 +284,7 @@ export class InstrumentEditorComponent {
     this.pfBridgesApi.list().subscribe({ next: (l) => this.pfBridges.set(Array.isArray(l) ? l : []), error: () => undefined });
     if (this.bridge.available) void this.loadPorts();
     const id = this.id();
-    if (!id) { this.loading.set(false); return; }
+    if (!id) { this.loading.set(false); this.mapsReady = true; this.flushPrefill(); return; }
     try {
       const dto = await firstValueFrom(this.api.get(id));
       this.applyDto(dto);
@@ -316,16 +325,16 @@ export class InstrumentEditorComponent {
 
   private loadTests() {
     this.rawApi.get<Test[]>(testListUrl({})).subscribe({
-      next: (list) => this.tests.set(Array.isArray(list) ? list : []),
-      error: () => this.tests.set([]),
+      next: (list) => { this.tests.set(Array.isArray(list) ? list : []); this.testsReady = true; this.flushPrefill(); },
+      error: () => { this.tests.set([]); this.testsReady = true; this.flushPrefill(); },
     });
   }
 
   private loadMaps(id: string) {
     this.loadImageMaps(id);
     this.api.codeMaps(id).subscribe({
-      next: (list) => { this.maps.set((list ?? []).map(rowFromDto)); this.mapsDirty.set(false); },
-      error: () => undefined,
+      next: (list) => { this.maps.set((list ?? []).map(rowFromDto)); this.mapsDirty.set(false); this.mapsReady = true; this.flushPrefill(); },
+      error: () => { this.mapsReady = true; this.flushPrefill(); },
     });
     // Codes the server saw but could not map (any state) — "Add unmapped codes".
     this.api.messages({ state: 'all', instrumentId: id, pageSize: 100 }).subscribe({
@@ -786,6 +795,51 @@ export class InstrumentEditorComponent {
     if (!ok) return;
     await this.bridge.unpair(id);
     await this.loadPaired(id);
+  }
+
+  // ── Assistant (beta): suggestions → the Code mapping rows, prefilled ──
+  /** A mapping row to open prefilled (assistant hand-off). Never saved here:
+   *  the row is added / filled, the tab opens, the person presses Save. */
+  readonly mapPrefill = input<MappingPrefill | null>(null);
+  readonly assistantOpen = signal(false);
+  readonly assistantContext = computed<AssistantPageContext>(() => ({
+    page: 'instruments', subject: this.title(), instrumentId: this.id(), canAddMapping: true,
+  }));
+  /** The mapping row the last hand-off landed on (highlighted). */
+  readonly prefillRow = signal<number | null>(null);
+  private testsReady = false;
+  private mapsReady = false;
+  private pendingPrefill: MappingPrefill[] = [];
+
+  queuePrefill(p: MappingPrefill, fromNavigation = false) {
+    if (p.instrumentId && this.id() && p.instrumentId !== this.id()) return;
+    this.pendingPrefill.push(p);
+    if (fromNavigation) {
+      // A reload must not re-apply it.
+      try { const st = { ...(history.state ?? {}) }; delete st[MAP_PREFILL_STATE_KEY]; history.replaceState(st, ''); } catch { /* noop */ }
+    }
+    this.flushPrefill();
+  }
+
+  private flushPrefill() {
+    if (!this.testsReady || !this.mapsReady || !this.pendingPrefill.length) return;
+    const list = this.pendingPrefill.splice(0);
+    for (const p of list) {
+      const r = applyMappingPrefill(this.maps(), p, this.tests());
+      if (r.outcome !== 'exists') this.setMaps(r.rows);
+      this.prefillRow.set(r.index);
+      const code = p.analyzerCode.trim();
+      if (r.outcome === 'exists' && r.testFound) this.toasts.success(`${code} is already mapped to that test`);
+      else if (!r.testFound) this.toasts.success(`${code} is in Code mapping — pick its test, then Save`);
+      else this.toasts.success(`${code} added to Code mapping — check it, then Save`);
+    }
+    this.go('mapping');
+  }
+
+  onAssistantMapping(p: MappingPrefill) {
+    this.queuePrefill(p);
+    // Phones: the panel covers the screen — close it so the row is visible.
+    if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 640px)').matches) this.assistantOpen.set(false);
   }
 
   back() { void this.router.navigate(['/admin/instruments']); }

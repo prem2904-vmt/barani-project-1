@@ -1,6 +1,9 @@
 <section class="pf-cw pf-band-page px-4 md:px-8 pt-6 pb-10">
   @if (theme.isNewDesign()) {
     <pf-hero-band [back]="true" backTo="/admin/instruments" [customSearch]="true" [contextBar]="true">
+      <ng-container band-actions>
+        <pf-assistant-button [expanded]="assistantOpen()" (pressed)="assistantOpen.set(!assistantOpen())"></pf-assistant-button>
+      </ng-container>
       <div band-search class="pf-ctx pf-cw-ctx">
         <span class="pf-ctx__primary">Connect an analyzer</span>
         @if (available) {
@@ -285,6 +288,8 @@
     </div>
     }
   </div>
+  <pf-assistant-panel [open]="assistantOpen()" [context]="assistantContext()"
+                      (closed)="assistantOpen.set(false)" (addMapping)="onAssistantMapping($event)"></pf-assistant-panel>
 </section>
 
 <ng-template #checksTpl let-items let-full="full">

@@ -71,6 +71,8 @@
 .pf-ie-maps__test { min-width: 220px; }
 .pf-ie-maps__rm { width: 52px; }
 .pf-ie-row--err td { background: color-mix(in srgb, var(--red-text, #dc2626) 4%, transparent); }
+/* The row an assistant "Add to mapping" just opened (person checks + Saves). */
+.pf-ie-row--prefill td { background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 7%, transparent); }
 .pf-ie-row-msg td { border-bottom: 1px solid var(--pf-line); padding-top: 0; }
 @media (max-width: 900px) {
   /* Phones / narrow: each mapping is a stacked card — no truncated columns. */
