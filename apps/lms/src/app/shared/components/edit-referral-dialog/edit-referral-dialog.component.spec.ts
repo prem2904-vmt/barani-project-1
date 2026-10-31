@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { EditReferralDialogComponent } from './edit-referral-dialog.component';
 import { ReferralSaveResult } from './referral-edit';
@@ -179,5 +179,56 @@ describe('EditReferralDialogComponent', () => {
       vi.advanceTimersByTime(250);
       expect(api.get).toHaveBeenCalledWith('/api/test-picker/doctors/options?q=Kum&hospital=City+Hospital');
     } finally { vi.useRealTimers(); }
+  });
+  const escape = (target: EventTarget = document.body) => {
+    const ev = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    target.dispatchEvent(ev);
+    return ev;
+  };
+
+  it('Escape closes the dialog when nothing else wants it', () => {
+    const { host } = render();
+    escape();
+    expect(host.closed).toBe(true);
+  });
+
+  it('while saving: backdrop click, X, Cancel and Escape do not close the dialog', async () => {
+    const { f, dlg, host } = render();
+    const c = component(f);
+    const pending = new Subject<unknown>();
+    api.patch.mockReturnValueOnce(pending);
+    c.pickDoctor('Dr Late');
+    const done = c.save();
+    f.detectChanges();
+    expect(c.saving()).toBe(true);
+
+    (dlg.querySelector('.pf-erd__backdrop') as HTMLElement).click();
+    (dlg.querySelector('.pf-erd__close') as HTMLElement).click();
+    escape();
+    expect(host.closed).toBe(false);
+
+    pending.next({ changed: true, reportAmended: false, order: { id: 'o1' } });
+    pending.complete();
+    await done;
+    expect(host.saved?.changed).toBe(true);
+    // Saved: the dialog may be dismissed again.
+    (dlg.querySelector('.pf-erd__backdrop') as HTMLElement).click();
+    expect(host.closed).toBe(true);
+  });
+
+  it('Escape that closes an open pf-select panel does not also close the dialog', () => {
+    const { f, dlg, host } = render();
+    f.detectChanges();
+    (dlg.querySelector('#pf-erd-doctor button, #pf-erd-doctor .pf-dd__trigger') as HTMLElement).click();
+    f.detectChanges();
+    const input = document.body.querySelector('input.pf-dd__combox') as HTMLInputElement;
+    expect(input).not.toBeNull();
+    const ev = escape(input);
+    expect(ev.defaultPrevented).toBe(true);           // the select consumed it
+    expect(host.closed).toBe(false);
+    f.detectChanges();
+    expect(document.body.querySelector('input.pf-dd__combox')).toBeNull();   // panel closed
+    escape();                                          // a second Escape (panel gone) closes the dialog
+    expect(host.closed).toBe(true);
   });
 });

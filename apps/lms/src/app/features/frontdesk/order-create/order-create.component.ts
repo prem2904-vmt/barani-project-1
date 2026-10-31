@@ -69,6 +69,8 @@ import { MIN_LOAD_MS, createLoadHold, heldFlag } from '../../../shared/utils/min
 import { memberDepartmentNames, shownDepartmentName } from '../../../shared/utils/package-department';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { formatAge } from '../../../shared/utils/patient-age';
+import { EditReferralDialogComponent } from '../../../shared/components/edit-referral-dialog/edit-referral-dialog.component';
+import type { ReferralSaveResult } from '../../../shared/components/edit-referral-dialog/referral-edit';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 
 type Priority = 'Normal' | 'Urgent';
@@ -84,7 +86,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [DailyNoComponent, NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective, PfKeysDirective, BusyDirective, PackageSuggestCardComponent],
+  imports: [DailyNoComponent, NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective, PfKeysDirective, BusyDirective, PackageSuggestCardComponent, EditReferralDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -533,22 +535,18 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
   readonly isReadOnly = computed(() => !!this.viewOrderId());
 
   // ── Referral edit (OPS-58) — the FD can correct/add the referring doctor +
-  //    hospital on an EXISTING order, including after it is completed. The
-  //    order view is otherwise read-only; flipping `referralEditing` re-enables
-  //    just the two referral inputs and shows Save/Cancel. Backend endpoint has
-  //    no status gate, so this stays available on a finished order. ──────────
-  readonly referralEditing = signal(false);
-  readonly referralSaving = signal(false);
+  //    hospital on an EXISTING order, including after it is completed, through
+  //    the shared pf-edit-referral-dialog (no status gate on the backend). ──────────
+  readonly referralDialogOpen = signal(false);
   /** Show the "Edit referral" affordance: viewing an existing (non-cancelled)
    *  order and the user may modify orders. */
   readonly canEditReferral = computed(() =>
     !!this.viewOrderId()
     && this.auth.hasPermission('modify_order')
     && this._order()?.status !== 'cancelled');
-  /** The referral inputs are disabled when read-only UNLESS we're editing them. */
-  readonly referralDisabled = computed(() => this.isReadOnly() && !this.referralEditing());
-  /** Referral inputs are interactive when creating OR while editing the referral. */
-  readonly referralInteractive = computed(() => !this.isReadOnly() || this.referralEditing());
+  /** Referral inputs are interactive only while creating — an existing order's
+   *  referral changes through the shared "Edit referral" dialog. */
+  readonly referralInteractive = computed(() => !this.isReadOnly());
   /**
    * The order is finished — its test list must not change any more. Two states
    * reach this: opening an existing order via ?orderId= (isReadOnly), and
@@ -2290,49 +2288,21 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     if (id) this.router.navigate(['/frontdesk/order'], { queryParams: { editOrderId: id } });
   }
 
-  /** Original referral, captured when the edit begins, so Cancel restores it. */
-  private referralSnapshot: { doctor: string; hospital: string } | null = null;
-  /** Begin editing the referring doctor/hospital on an existing order (OPS-58). */
-  startReferralEdit() {
+  /** "Edit referral" opens the ONE shared dialog (the same one result entry,
+   *  validation, the report viewer and the patient's orders use) — this screen
+   *  has no inline editor of its own. */
+  openReferralDialog() {
     if (!this.canEditReferral()) return;
-    this.referralSnapshot = { doctor: this.refDoctorName(), hospital: this.refHospitalName() };
-    this.refDoctorError.set(null);
-    this.refHospitalError.set(null);
-    this.referralEditing.set(true);
+    this.referralDialogOpen.set(true);
   }
-  /** Discard referral edits and restore the loaded values. */
-  cancelReferralEdit() {
-    if (this.referralSnapshot) {
-      this.refDoctorName.set(this.referralSnapshot.doctor);
-      this.refHospitalName.set(this.referralSnapshot.hospital);
-    }
-    this.refDoctorSuggestions.set([]);
-    this.refHospitalSuggestions.set([]);
-    this.referralEditing.set(false);
-  }
-  /** Persist the referring doctor + hospital to the existing order. Works after
-   *  completion — the backend endpoint has no status gate. */
-  saveReferral() {
-    const id = this.viewOrderId();
-    if (!id || this.referralSaving()) return;
-    this.referralSaving.set(true);
-    this.api.patch<{ order: Order; reportAmended?: boolean; amendError?: string | null }>(`/api/orders/${id}/referral`, {
-      refDoctorName: this.refDoctorName().trim() || null,
-      refHospitalName: this.refHospitalName().trim() || null,
-    }).subscribe({
-      next: res => {
-        this.referralSaving.set(false);
-        this.referralEditing.set(false);
-        if (res?.order) this._order.set(res.order);
-        // A released report is re-issued AMENDED by the server (Edit referral).
-        this.toasts.success(res?.reportAmended ? 'Referral updated · amended report issued' : 'Referral updated');
-        if (res?.amendError) this.toasts.warning(res.amendError, 8000);
-      },
-      error: () => {
-        this.referralSaving.set(false);
-        this.toasts.error('Could not update the referral');
-      }
-    });
+  /** The dialog saved: the page shows the new referral (server's order). */
+  onReferralSaved(res: ReferralSaveResult) {
+    this.referralDialogOpen.set(false);
+    const o = res?.order;
+    if (!o) return;
+    this._order.set(o);
+    this.refDoctorName.set(o.refDoctorName ?? '');
+    this.refHospitalName.set(o.refHospitalName ?? '');
   }
 
   collectPaidSample() {

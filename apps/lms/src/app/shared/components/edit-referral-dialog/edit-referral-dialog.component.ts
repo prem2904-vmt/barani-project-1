@@ -241,10 +241,22 @@ export class EditReferralDialogComponent implements OnInit {
     });
   }
 
-  @HostListener('document:keydown.escape')
-  onEscape() { if (!this.saving() && !this.confirming()) this.close(); }
+  /** Escape closes the dialog — but not while a save is in flight, while the
+   *  amend confirm is up, or when the key was meant for an open pf-select
+   *  panel (the select closes its panel and calls preventDefault on Escape;
+   *  that press must not also dismiss the dialog and lose the edit). */
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscape(ev?: Event) {
+    if (ev?.defaultPrevented || this.saving() || this.confirming()) return;
+    this.close();
+  }
 
-  close() { this.closed.emit(); }
+  /** Every dismissal (backdrop, X, Cancel, Escape) is refused while saving —
+   *  the PATCH is in flight and the host must hear its answer. */
+  close() {
+    if (this.saving()) return;
+    this.closed.emit();
+  }
 
   patch(p: Partial<ReferralForm>) {
     this.form.update(f => ({ ...f, ...p }));
