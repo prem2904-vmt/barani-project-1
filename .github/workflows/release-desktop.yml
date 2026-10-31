@@ -200,10 +200,15 @@ jobs:
         run: |
           set -uo pipefail
           state="$PF_RELEASE_STATE_DIR/${CHANNEL}-mac-${VERSION}.json"
+          # No submission (notary profile missing on the runner): dev already shipped the signed build;
+          # stage/prod refused in the mac job. Warn, don't fail.
+          if ! grep -q '"submissionId": "' "$state" 2>/dev/null; then
+            echo "::warning::$CHANNEL $VERSION was not sent to Apple for notarization - is the 'prefrontal-notary' keychain profile on the Mac runner? (xcrun notarytool store-credentials prefrontal-notary ...)"
+            exit 0
+          fi
           for i in $(seq 1 18); do
             node tools/desktop-release.mjs --finish "$VERSION" --channel "$CHANNEL" --mac || { echo "::error::notarization/publish failed"; exit 1; }
             if grep -q '"finishedAt"' "$state" 2>/dev/null; then echo "finished"; exit 0; fi
-            if ! grep -q '"submissionId": "' "$state" 2>/dev/null; then echo "::warning::no notarization submission recorded - nothing to wait for"; exit 0; fi
             echo "still pending (attempt $i/18) - sleeping 5 min"; sleep 300
           done
           echo "::warning::Apple still hasn't accepted $CHANNEL $VERSION after 90 min - release-desktop-finish will publish it when it does."
