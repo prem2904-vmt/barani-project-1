@@ -72,6 +72,9 @@ import { CommentThreadComponent } from "../../../shared/components/comment-threa
 import { SelectComponent } from "../../../shared/primitives/select.component";
 import { formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
+import { ActionsMenuComponent, ActionsMenuTriggerDirective, PfAction } from "../../../shared/components/actions-menu/actions-menu.component";
+import { EditReferralDialogComponent } from "../../../shared/components/edit-referral-dialog/edit-referral-dialog.component";
+import { EDIT_REFERRAL_PERM } from "../../../shared/components/edit-referral-dialog/referral-edit";
 import { ZoomTransitionService } from "../../../core/navigation/zoom-transition";
 import { ZoomTargetDirective } from "../../../core/navigation/zoom.directive";
 import { NumpadDirective, NumpadScopeDirective } from "../../../shared/components/numpad/numpad.directive";
@@ -185,6 +188,9 @@ function calcKey(testId: string, paramName: string): string {
     ReportNotesCardComponent,
     PfDateComponent,
     FamilyInputComponent,
+    ActionsMenuComponent,
+    ActionsMenuTriggerDirective,
+    EditReferralDialogComponent,
   ],
   // Technician report notes (Lab settings switch) — one store per screen.
   providers: [ReportNotesStore],
@@ -1701,6 +1707,22 @@ export class SampleResultEntryComponent {
   /** Read-only VIEW (?view=1): inputs untouchable, no submit, no autosave —
    *  opened from the Completed tab / reports queue to inspect results. */
   readonly viewOnly = signal(false);
+
+  // ── Band ⋮ (order-level actions) ───────────────────────────────────
+  /** The order this tube belongs to (order-level actions act on it). */
+  readonly orderIdOf = computed(() => this.sample()?.orderId ?? this.sample()?.order?.id ?? null);
+  /** Edit referral (modify_order): correct the referring doctor / hospital
+   *  while the results are being entered — the report prints the new one. */
+  readonly moreActions = computed<PfAction[]>(() => {
+    const a: PfAction[] = [];
+    if (this.orderIdOf() && this.auth.hasPermission(EDIT_REFERRAL_PERM))
+      a.push({ id: "referral", label: "Edit referral", icon: "referral", group: "Order", hint: "Referring doctor, hospital or source" });
+    return a;
+  });
+  readonly referralDialogOpen = signal(false);
+  runMore(id: string): void {
+    if (id === "referral") this.referralDialogOpen.set(true);
+  }
 
   enteredTests() {
     return (this._sample()?.tests ?? []).filter(t => t.status === 'entered' && !this.isCultureTest(t));

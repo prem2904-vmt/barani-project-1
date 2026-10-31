@@ -21,6 +21,8 @@ import {
 } from './patient-profile.nd';
 import { resultValueText } from '../../../shared/utils/option-family';
 import { ShareService } from '../../../core/services/share.service';
+import { EditReferralDialogComponent } from '../../../shared/components/edit-referral-dialog/edit-referral-dialog.component';
+import { EDIT_REFERRAL_PERM, ReferralSaveResult } from '../../../shared/components/edit-referral-dialog/referral-edit';
 
 /** A stored report as `GET /api/reports/by-order/{id}` returns it. */
 type StoredReport = { id: string; orderId?: string; qrToken?: string; data?: string } & Record<string, unknown>;
@@ -40,7 +42,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
 @Component({
   selector: 'pf-lab-orders',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, PdfCanvasComponent, ZoomSourceDirective, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective],
+  imports: [DatePipe, DecimalPipe, PdfCanvasComponent, ZoomSourceDirective, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, EditReferralDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (openOrder(); as o) {
@@ -57,7 +59,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
             <p class="pf-lo-row__meta pf-num">
               @if (o.orderNumber) { <span class="pf-lo-mi">{{ o.orderNumber }}</span> }
               <span class="pf-lo-mi">{{ o.createdAt | date:'d MMM y, h:mm a' }}</span>
-              <span class="pf-lo-mi">{{ o.refDoctorName || 'Self referral' }}</span>
+              <span class="pf-lo-mi">{{ doctorLabel(o) }}</span>
               @if (o.totalAmount != null) { <span class="pf-lo-mi">₹{{ o.totalAmount | number:'1.0-0' }}</span> }
             </p>
           </div>
@@ -82,18 +84,24 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
             </button>
           }
           <!-- ⋮ — every action for this order's REPORT (share, the PDF,
-               open the full report) by permission; only once a report exists. -->
+               open the full report) by permission, once a report exists —
+               plus Edit referral (modify_order) on any live order. -->
           @if (detailActions().length) {
-            <pf-actions-menu class="pf-lo-kebab" [actions]="detailActions()" label="Report actions" [heading]="title(o)"
+            <pf-actions-menu class="pf-lo-kebab" [actions]="detailActions()" [label]="menuLabel(o)" [heading]="title(o)"
                              (opened)="onMenuOpened(o)" (action)="runDetailAction(o, $event)">
               <button pfActionsTrigger type="button" class="pf-btn pf-btn--secondary pf-lo-act pf-lo-act--more"
-                      [class.pf-lo-act--icon]="!web()" aria-label="Report actions" title="Report actions">
+                      [class.pf-lo-act--icon]="!web()" [attr.aria-label]="menuLabel(o)" [title]="menuLabel(o)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>
                 <span class="pf-lo-act__t">More</span>
               </button>
             </pf-actions-menu>
           }
         </div>
+
+        @if (referralFor() === o.id) {
+          <pf-edit-referral-dialog [orderId]="o.id" (saved)="onReferralSaved(o, $event)"
+                                   (closed)="referralFor.set(null)"></pf-edit-referral-dialog>
+        }
 
         <h3 class="pf-lo-sec">Tests</h3>
         <ul class="pf-lo-tests" role="list">
@@ -189,7 +197,7 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
                   @if (o.orderNumber) { <span class="pf-lo-mi">{{ o.orderNumber }}</span> }
                   <span class="pf-lo-mi">{{ o.createdAt | date:'d MMM y, h:mm a' }}</span>
                   <span class="pf-lo-mi">{{ countLabel(o) }}</span>
-                  <span class="pf-lo-mi">{{ o.refDoctorName || 'Self referral' }}</span>
+                  <span class="pf-lo-mi">{{ doctorLabel(o) }}</span>
                   @if (o.totalAmount != null) { <span class="pf-lo-mi">₹{{ o.totalAmount | number:'1.0-0' }}</span> }
                 </p>
               </div>
@@ -441,7 +449,10 @@ export class LabOrdersComponent implements OnDestroy {
 
   /** The order's report summary (the patient history carries it). */
   private reportOf(o: Order): { id: string; status?: string | null; type?: string | null } | null {
-    return (o as Order & { report?: { id: string; status?: string | null; type?: string | null } | null }).report ?? null;
+    const rep = (o as Order & { report?: { id: string; status?: string | null; type?: string | null } | null }).report ?? null;
+    // An "Edit referral" here re-issued the report amended: point at the new one.
+    const amended = this.referralFix()[o.id]?.reportId;
+    return rep && amended ? { ...rep, id: amended } : rep;
   }
 
   /** The history summary's report type, when it carries one (else final). */
@@ -449,10 +460,39 @@ export class LabOrdersComponent implements OnDestroy {
     return rep.type || (rep.status === 'partial' ? 'partial' : 'final');
   }
 
+  // ── Edit referral (shared/components/edit-referral-dialog) ──────────
+  /** The order whose referral dialog is open. */
+  readonly referralFor = signal<string | null>(null);
+  /** Saved referrals (the order list is the parent's input): the new doctor
+   *  shows at once, and an amended report replaces the summary's id. */
+  private readonly referralFix = signal<Record<string, { doctor: string | null; reportId: string | null }>>({});
+  doctorLabel(o: Order): string {
+    const fix = this.referralFix()[o.id];
+    return (fix ? fix.doctor : o.refDoctorName)?.trim() || 'Self referral';
+  }
+  private canEditReferral(o: Order): boolean {
+    return this.auth.hasPermission(EDIT_REFERRAL_PERM) && o.status !== 'cancelled';
+  }
+  menuLabel(o: Order): string { return this.reportOf(o) ? 'Report actions' : 'Order actions'; }
+  onReferralSaved(o: Order, res: ReferralSaveResult): void {
+    this.referralFor.set(null);
+    if (!res.changed) return;
+    const prev = this.referralFix()[o.id];
+    this.referralFix.update(m => ({ ...m, [o.id]: {
+      doctor: res.order?.refDoctorName ?? null,
+      reportId: res.reportAmended ? (res.amendedReportId ?? null) : (prev?.reportId ?? null),
+    } }));
+    if (res.reportAmended) { this.repByOrder.delete(o.id); this.showReport.update(m => ({ ...m, [o.id]: false })); }
+  }
+
   readonly detailActions = computed<PfAction[]>(() => {
     const o = this.openOrder();
-    const rep = o ? this.reportOf(o) : null;
-    if (!o || !rep || !this.has(REPORT_BY_ORDER_PERMS)) return [];
+    if (!o) return [];
+    const rep = this.reportOf(o);
+    const referral: PfAction[] = this.canEditReferral(o)
+      ? [{ id: 'referral', label: 'Edit referral', icon: 'referral', group: 'Order', hint: 'Referring doctor, hospital or source' }]
+      : [];
+    if (!rep || !this.has(REPORT_BY_ORDER_PERMS)) return referral;
     const a: PfAction[] = [];
     if (this.reportActions.canLink({ id: rep.id, orderId: o.id })) {
       a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
@@ -465,7 +505,7 @@ export class LabOrdersComponent implements OnDestroy {
     // The full viewer reads GET /api/reports/{id} (view_report | deliver_report).
     if (this.has(['view_report', 'deliver_report'])) a.push({ id: 'open-report', label: 'Open full report', icon: 'view', group: 'Go to' });
     a.push({ id: 'repeat', label: 'Repeat order', icon: 'repeat', group: 'Go to' });
-    return a;
+    return [...referral, ...a];
   });
 
   private ensureReport(o: Order): Promise<StoredReport | null> {
@@ -485,6 +525,7 @@ export class LabOrdersComponent implements OnDestroy {
 
   async runDetailAction(o: Order, id: string): Promise<void> {
     if (id === 'repeat') { this.repeat(o); return; }
+    if (id === 'referral') { this.referralFor.set(o.id); return; }
     const summary = this.reportOf(o);
     if (id === 'open-report' && summary) { void this.router.navigate(['/reports/view', summary.id]); return; }
     const rep = await this.ensureReport(o);

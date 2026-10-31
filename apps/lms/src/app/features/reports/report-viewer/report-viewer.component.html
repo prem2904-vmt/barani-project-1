@@ -124,6 +124,11 @@
     </pf-edit-result-dialog>
   }
 
+  @if (referralDialogOpen() && report()?.orderId; as orderId) {
+    <pf-edit-referral-dialog [orderId]="orderId" (saved)="onReferralSaved($event)"
+                             (closed)="referralDialogOpen.set(false)"></pf-edit-referral-dialog>
+  }
+
   <div class="pf-body pf-rv-body" [class.pf-rv-body--collapsed]="sideCollapsed() && !narrow()" [class.pf-rv-body--narrow]="narrow()">
     <!-- ─── PREVIEW: the main work card (the exact PDF) ─────────────── -->
     <!-- ONE element from skeleton to pages: it is the zoom target the

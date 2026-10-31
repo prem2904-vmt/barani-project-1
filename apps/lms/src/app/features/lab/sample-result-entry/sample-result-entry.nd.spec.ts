@@ -794,3 +794,20 @@ describe('Result entry — Share to Messages', () => {
     }));
   });
 });
+
+describe('Result entry (nd) — band ⋮ Edit referral', () => {
+  afterEach(() => document.querySelectorAll('.pf-erd, .pf-am-layer').forEach(n => n.remove()));
+
+  it('the band carries a ⋮ (never a primary) whose "Edit referral" opens the dialog for the order', async () => {
+    const { el, c, f } = await render({ single: true });
+    const kebab = el.querySelector('.pf-sre-band pf-actions-menu .pf-sre-more') as HTMLButtonElement;
+    expect(kebab).not.toBeNull();
+    expect(kebab.classList).not.toContain('pf-hb-btn--primary');
+    expect(kebab.getAttribute('aria-label')).toBe('More actions');
+    expect(c.moreActions().map((a: { id: string }) => a.id)).toEqual(['referral']);
+    expect(el.querySelectorAll('.pf-sre-band .pf-hb-btn--primary').length).toBe(1);
+    c.runMore('referral');
+    f.detectChanges();
+    expect(document.body.querySelector('.pf-erd')).not.toBeNull();
+  });
+});

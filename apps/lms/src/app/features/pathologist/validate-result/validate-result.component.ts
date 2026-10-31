@@ -15,6 +15,8 @@ import { CommentThreadComponent } from '../../../shared/components/comment-threa
 import { SkeletonDetailComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
+import { EditReferralDialogComponent } from '../../../shared/components/edit-referral-dialog/edit-referral-dialog.component';
+import { EDIT_REFERRAL_PERM } from '../../../shared/components/edit-referral-dialog/referral-edit';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ShareService } from '../../../core/services/share.service';
@@ -95,7 +97,7 @@ interface ValueRow {
 @Component({
   selector: 'pf-validate-result',
   standalone: true,
-  imports: [DailyNoComponent, FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent, ReportChartComponent, ReportNotesCardComponent],
+  imports: [DailyNoComponent, FormsModule, DatePipe, AvatarComponent, ChipComponent, CommentThreadComponent, SkeletonDetailComponent, BusyDirective, EditResultDialogComponent, EditReferralDialogComponent, SelectComponent, ZoomTargetDirective, ActionsMenuComponent, ActionsMenuTriggerDirective, CriticalAckStripComponent, ReportChartComponent, ReportNotesCardComponent],
   // Technician report notes: the reviewer sees what will print (and, while
   // a line awaits validation, may adjust it — the server decides).
   providers: [ReportNotesStore],
@@ -124,6 +126,11 @@ interface ValueRow {
           (edited)="onEdited()"
           (closed)="editDialogOpen.set(false)">
         </pf-edit-result-dialog>
+      }
+
+      @if (referralDialogOpen() && editOrderId(); as oid) {
+        <pf-edit-referral-dialog [orderId]="oid" (saved)="referralDialogOpen.set(false)"
+                                 (closed)="referralDialogOpen.set(false)"></pf-edit-referral-dialog>
       }
 
       <div class="pf-page__body px-4 md:px-8 lg:px-10 pt-2 pb-32">
@@ -839,6 +846,7 @@ export class ValidateResultComponent implements OnInit {
   // edit_result: Lab Technician, Pathologist, Lab Admin — never front desk.
   readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
   readonly editDialogOpen = signal(false);
+  readonly referralDialogOpen = signal(false);
   /** The dialog works per ORDER — take it off the loaded test's sample. */
   readonly editOrderId = computed(() =>
     this.selected()?.subOrder?.orderId ?? this.selected()?.subOrder?.order?.id ?? null);
@@ -1103,6 +1111,11 @@ export class ValidateResultComponent implements OnInit {
     if (this.canEditResult() && this.editOrderId()) {
       a.push({ id: 'send-back', label: 'Send back for correction', icon: 'sendback', group: 'Workflow', hint: 'Re-opens the results for re-entry' });
     }
+    // Edit referral before sign-off (modify_order) — the report this
+    // validation releases prints the corrected referrer.
+    if (this.auth.hasPermission(EDIT_REFERRAL_PERM) && this.editOrderId()) {
+      a.push({ id: 'referral', label: 'Edit referral', icon: 'referral', group: 'Workflow', hint: 'Referring doctor, hospital or source' });
+    }
     // Share to Messages: this item as a validation card (the server names it).
     if (this.share.available()) {
       a.push({ id: 'share', label: 'Share with colleague', icon: 'chat', group: 'Share' });
@@ -1136,6 +1149,7 @@ export class ValidateResultComponent implements OnInit {
       case 'reassign': void this.reassign(); break;
       case 'edit-self': this.startEdit(); break;
       case 'send-back': this.editDialogOpen.set(true); break;
+      case 'referral': this.referralDialogOpen.set(true); break;
       // /p/:id picks the profile route THIS user can open (pathologists hold
       // view_patient, never the front-desk set).
       case 'patient': void this.router.navigate(['/p', this.patientId()]); break;

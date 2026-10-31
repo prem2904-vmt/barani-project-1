@@ -361,7 +361,7 @@ describe('Report view (nd) — phones', () => {
     expect(menu.classList).toContain('pf-am-panel--sheet');
     const rows = Array.from(menu.querySelectorAll('[role=menuitem]')).map(b => b.querySelector('.pf-am-item__t')?.textContent?.trim());
     expect(rows).toEqual(['Share…', 'Copy patient link', 'Send on WhatsApp', 'Share with a colleague', 'Download PDF', 'Print',
-      'Edit results', 'Regenerate', 'Open patient', 'Open lab results']);
+      'Edit results', 'Edit referral', 'Regenerate', 'Open patient', 'Open lab results']);
     (menu.querySelector('[data-action=print]') as HTMLButtonElement).click();
     f.detectChanges();
     expect(print).toHaveBeenCalled();
@@ -606,5 +606,48 @@ describe('Report view (nd) — partner reports tell the truth about the PDF', ()
   it('no Attach action without the desk permission', async () => {
     const { el } = await render({ partner: true, perms: ['view_report'] });
     expect(el.querySelector('[data-testid="rv-partner-attach"]')).toBeNull();
+  });
+});
+
+describe('Report view (nd) — ⋮ Edit referral', () => {
+  const ids = (c: any) => (c.menuActions() as Array<{ id: string }>).map(a => a.id);
+  afterEach(() => document.querySelectorAll('.pf-erd').forEach(n => n.remove()));
+
+  it('modify_order holders get "Edit referral" (Report group); others never', async () => {
+    const withIt = await render({ perms: ['view_report', 'modify_order'] });
+    const row = (withIt.c.menuActions() as Array<{ id: string; group?: string; icon?: string; hint?: string }>).find(a => a.id === 'referral');
+    expect(row).toMatchObject({ group: 'Report', icon: 'referral' });
+    expect(row?.hint).toContain('amended report');
+    TestBed.resetTestingModule();
+    const without = await render({ perms: ['validate_result', 'deliver_report'] });
+    expect(ids(without.c)).not.toContain('referral');
+  });
+
+  it('a preliminary report offers it without promising an amendment', async () => {
+    const { c } = await render({ partial: true, perms: ['view_report', 'modify_order'] });
+    const row = (c.menuActions() as Array<{ id: string; hint?: string }>).find(a => a.id === 'referral');
+    expect(row?.hint).not.toContain('amended');
+  });
+
+  it('picking it opens the dialog for this order; an amended save shows the new report', async () => {
+    const { c, f } = await render({ perms: ['view_report', 'modify_order'] });
+    c.runAction('referral');
+    f.detectChanges();
+    expect(document.body.querySelector('.pf-erd')).not.toBeNull();
+    const router = TestBed.inject(Router) as unknown as { navigate: ReturnType<typeof vi.fn> };
+    c.onReferralSaved({ changed: true, reportAmended: true, amendedReportId: 'rep-2' });
+    await new Promise(r => setTimeout(r, 0));
+    f.detectChanges();
+    expect(c.referralDialogOpen()).toBe(false);
+    expect(router.navigate).toHaveBeenCalledWith(['/reports/view', 'rep-2'], { replaceUrl: true });
+  });
+
+  it('a save that changed nothing printed stays on this report', async () => {
+    const { c } = await render({ perms: ['view_report', 'modify_order'] });
+    const router = TestBed.inject(Router) as unknown as { navigate: ReturnType<typeof vi.fn> };
+    router.navigate.mockClear();
+    c.onReferralSaved({ changed: true, reportAmended: false });
+    await new Promise(r => setTimeout(r, 0));
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 });

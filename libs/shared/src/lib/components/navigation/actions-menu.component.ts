@@ -7,7 +7,7 @@ import { ModalPortalDirective } from '../../directives/modal-portal.directive.js
 /** The stroked icon set a menu row can carry (24×24, currentColor). */
 export type PfActionIcon =
   | 'share' | 'whatsapp' | 'link' | 'download' | 'print' | 'chat' | 'edit' | 'regenerate'
-  | 'patient' | 'lab' | 'reassign' | 'sendback' | 'view' | 'repeat';
+  | 'patient' | 'lab' | 'reassign' | 'sendback' | 'view' | 'repeat' | 'referral';
 
 /** One row of a `pf-actions-menu`. Screens build the list from the user's
  *  permissions and the record's state — the menu renders what it is given
@@ -47,6 +47,8 @@ const ICONS: Record<PfActionIcon, string[]> = {
   sendback: ['M3 12a9 9 0 1 0 3-6.7L3 8', 'M3 3v5h5'],
   view: ['M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
   repeat: ['M3 2v6h6', 'M21 12A9 9 0 0 0 6 5.3L3 8', 'M21 22v-6h-6', 'M3 12a9 9 0 0 0 15 6.7l3-2.7'],
+  // Stethoscope — the referring doctor (Edit referral).
+  referral: ['M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1', 'M5 2v2', 'M11 2v2', 'M8 15a6 6 0 0 0 12 0v-3', 'M18 10a2 2 0 1 0 4 0 2 2 0 0 0-4 0'],
 };
 
 /** Phones get a bottom sheet; tablets and desktop a popover by the button. */

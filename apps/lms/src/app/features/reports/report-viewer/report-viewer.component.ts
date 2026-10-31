@@ -20,6 +20,8 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { formatPatientMeta, patientDisplayName } from '../../../shared/models/patient.model';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
+import { EditReferralDialogComponent } from '../../../shared/components/edit-referral-dialog/edit-referral-dialog.component';
+import { EDIT_REFERRAL_PERM, ReferralSaveResult } from '../../../shared/components/edit-referral-dialog/referral-edit';
 import { resolveReportLayouts, LayoutSnapshotTest } from '../../../shared/utils/report-layouts';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { savedFlagOf, type SavedFlag } from '../../../shared/utils/result-flag';
@@ -142,6 +144,7 @@ export const RV_DONE_MS = 1800;
     ReportWhatsAppStatusComponent,
     HeroBandComponent,
     EditResultDialogComponent,
+    EditReferralDialogComponent,
     ZoomTargetDirective,
     ActionsMenuComponent,
     ActionsMenuTriggerDirective,
@@ -318,6 +321,12 @@ export class ReportViewerComponent implements OnInit {
     a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
     if (this.canPrint()) a.push({ id: 'print', label: 'Print', icon: 'print', group: 'Report' });
     if (this.canEditResult()) a.push({ id: 'edit', label: 'Edit results', icon: 'edit', group: 'Report', hint: 'Re-opens the results for correction' });
+    // Edit referral (modify_order): a released final is re-issued AMENDED by
+    // the server; a preliminary's referral reaches the next final.
+    if (this.canEditReferral() && r.orderId) {
+      a.push({ id: 'referral', label: 'Edit referral', icon: 'referral', group: 'Report',
+        hint: this.isPartial() ? 'Doctor, hospital or source' : 'Doctor, hospital or source · issues an amended report' });
+    }
     if (this.canGenerate() && r.orderId && !this.isPartial()) {
       a.push({ id: 'regenerate', label: 'Regenerate', icon: 'regenerate', group: 'Report', hint: 'Rebuild with the current report template' });
     }
@@ -342,6 +351,7 @@ export class ReportViewerComponent implements OnInit {
       case 'print': void this.print(); break;
       case 'edit': this.openEditDialog(); break;
       case 'regenerate': void this.regenerate(); break;
+      case 'referral': this.referralDialogOpen.set(true); break;
       case 'patient': void this.router.navigate(['/frontdesk/patients', r.patientId]); break;
       case 'lab': void this.openLabResults(); break;
     }
@@ -427,6 +437,18 @@ export class ReportViewerComponent implements OnInit {
   }
 
   readonly editDialogOpen = signal(false);
+
+  // ── Edit referral (shared/components/edit-referral-dialog) ──────────
+  readonly canEditReferral = computed(() => this.auth.hasPermission(EDIT_REFERRAL_PERM));
+  readonly referralDialogOpen = signal(false);
+  /** Saved: an amended report replaced this one ⇒ show it (the released
+   *  copy keeps the old referral for the record). */
+  onReferralSaved(res: ReferralSaveResult): void {
+    this.referralDialogOpen.set(false);
+    const next = res.reportAmended ? res.amendedReportId : null;
+    if (!next) return;
+    void this.showLive(next).then(() => this.router.navigate(['/reports/view', next], { replaceUrl: true }));
+  }
 
   openEditDialog() { this.editDialogOpen.set(true); }
 

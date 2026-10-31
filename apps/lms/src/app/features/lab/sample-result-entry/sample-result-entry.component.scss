@@ -48,6 +48,10 @@
 .pf-sre-act { position: relative; justify-content: center; }
 .pf-sre-act__i { display: none; flex: none; }
 .pf-sre-act__saved { display: none; }
+/* ⋮ More (order-level actions): an icon button on every width. */
+.pf-sre-more-menu { display: inline-flex; flex: none; }
+.pf-sre-more { min-width: 40px; padding-inline: 10px; }
+.pf-sre-more__i { display: block; flex: none; }
 
 /* Order ID: only where the pill has room. */
 @include dt.tablet-tier { .pf-sre-chip--order { display: none; } }

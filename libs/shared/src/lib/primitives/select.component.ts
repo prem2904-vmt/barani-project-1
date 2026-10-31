@@ -1,7 +1,7 @@
 import {
   ApplicationRef, ChangeDetectionStrategy, Component, ElementRef,
   EmbeddedViewRef, EventEmitter, HostListener, Input,
-  OnDestroy, Output, TemplateRef, ViewChild,
+  OnChanges, OnDestroy, Output, SimpleChanges, TemplateRef, ViewChild,
   ViewEncapsulation, inject, signal
 } from '@angular/core';
 import { TYPE_AHEAD_RESET_MS, TypeAheadBuffer, highlightParts, matchLabel, typeAheadIndex } from '../utils/index.js';
@@ -361,7 +361,7 @@ interface PanelPos { top: number; left: number; width: number; above: boolean; }
     }
   `]
 })
-export class SelectComponent<T = unknown> implements OnDestroy {
+export class SelectComponent<T = unknown> implements OnChanges, OnDestroy {
   private readonly el = inject(ElementRef<HTMLElement>);
   private readonly appRef = inject(ApplicationRef);
 
@@ -437,6 +437,11 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   @Output() valueChange = new EventEmitter<T>();
   @Output() valuesChange = new EventEmitter<T[]>();
+  /** Searchable only: the text typed in the panel's filter box, on every
+   *  keystroke ('' when the panel closes). Lets a host fetch SERVER matches
+   *  (a large directory) into `options` while the user types — the panel
+   *  re-renders the new options in place. Nothing emits it unless typed. */
+  @Output() searchChange = new EventEmitter<string>();
 
   readonly isOpen = signal(false);
   readonly panelPos = signal<PanelPos>({ top: 0, left: 0, width: 0, above: false });
@@ -527,6 +532,7 @@ export class SelectComponent<T = unknown> implements OnDestroy {
 
   onSearchInput(v: string): void {
     this.search.set(v);
+    this.searchChange.emit(v);
     if (this.typeAheadOn) this.highlightQuery.set(v.trim());
     // First row focused — with no other match that is the create row.
     this.focusedIndex.set(0);
@@ -678,9 +684,11 @@ export class SelectComponent<T = unknown> implements OnDestroy {
       this.panelRef.destroy();
       this.panelRef = undefined;
     }
+    const hadQuery = this.search() !== '';
     this.search.set('');
     this.highlightQuery.set('');
     this.isOpen.set(false);
+    if (hadQuery) this.searchChange.emit('');
   }
 
   private updatePanelPos(): void {
@@ -749,6 +757,16 @@ export class SelectComponent<T = unknown> implements OnDestroy {
   private removeScrollListeners(): void {
     window.removeEventListener('scroll', this.onCaptureScroll, true);
     window.removeEventListener('resize', this.onCaptureScroll, true);
+  }
+
+  /** Options replaced while the panel is open (a host's server search):
+   *  re-render the portalled panel, which lives outside this view. */
+  ngOnChanges(changes: SimpleChanges): void {
+    if ((changes['options'] || changes['groups']) && this.panelRef) {
+      const n = this.navOptions.length;
+      if (this.focusedIndex() >= n) this.focusedIndex.set(n ? 0 : -1);
+      this.panelRef.detectChanges();
+    }
   }
 
   ngOnDestroy(): void { this.closePanel(); }

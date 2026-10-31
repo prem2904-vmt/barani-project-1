@@ -133,6 +133,16 @@
     </span>
     <span class="pf-sre-techavatar" role="img"
           [title]="techName() + ' · Reg ' + techRegId()" [attr.aria-label]="'Technician ' + techName() + ', Reg ' + techRegId()">{{ techInitials() }}</span>
+    <!-- ⋮ order-level actions (Edit referral) — only when there is one. -->
+    @if (moreActions().length) {
+      <pf-actions-menu class="pf-sre-more-menu" [actions]="moreActions()" label="More actions"
+                       [heading]="patientName()" (action)="runMore($event)">
+        <button pfActionsTrigger type="button" class="pf-hb-btn pf-hb-btn--ghost pf-sre-act pf-sre-more"
+                aria-label="More actions" title="More actions">
+          <svg class="pf-sre-more__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5h.01"/><path d="M12 12h.01"/><path d="M12 19h.01"/></svg>
+        </button>
+      </pf-actions-menu>
+    }
     @if (validateMode()) {
       @if (openBlankTests().length > 0 && enteredTests().length === 0) {
         <!-- Nothing left to validate but blank lines hold the order (owner
@@ -210,6 +220,11 @@
       }
     }
   </ng-template>
+
+  @if (referralDialogOpen() && orderIdOf(); as oid) {
+    <pf-edit-referral-dialog [orderId]="oid" (saved)="referralDialogOpen.set(false)"
+                             (closed)="referralDialogOpen.set(false)"></pf-edit-referral-dialog>
+  }
 
   <div class="pf-body pf-sre-body">
     <!-- ─── Main column: one RESULTS card per test ─────────────────── -->

@@ -164,3 +164,31 @@ describe('Patient profile order detail — Send to colleague (Share to Messages)
     expect(el.querySelector('.pf-lo-act--chat')).toBeNull();
   });
 });
+
+describe('Patient profile order detail — ⋮ Edit referral', () => {
+  afterEach(() => document.querySelectorAll('.pf-erd').forEach(n => n.remove()));
+
+  it('modify_order: "Edit referral" leads the report rows', async () => {
+    const { c } = await render({ perms: ['view_order', 'deliver_report', 'view_report', 'modify_order'] });
+    expect(ids(c)).toEqual(['referral', 'share', 'copy-link', 'whatsapp', 'download', 'print', 'open-report', 'repeat']);
+  });
+
+  it('no report yet: the ⋮ still offers Edit referral, labelled "Order actions"', async () => {
+    const { c, el } = await render({ withReport: false, perms: ['view_order', 'modify_order'] });
+    expect(ids(c)).toEqual(['referral']);
+    const kebab = el.querySelector('.pf-lo-detail__acts pf-actions-menu .pf-lo-act--more') as HTMLButtonElement;
+    expect(kebab.getAttribute('aria-label')).toBe('Order actions');
+  });
+
+  it('saving shows the new doctor at once and points the report at the amended one', async () => {
+    const { c, f, el } = await render({ perms: ['view_order', 'deliver_report', 'view_report', 'modify_order'] });
+    await c.runDetailAction(c.openOrder(), 'referral');
+    f.detectChanges();
+    expect(document.body.querySelector('.pf-erd')).not.toBeNull();
+    c.onReferralSaved(c.openOrder(), { changed: true, reportAmended: true, amendedReportId: 'rep-2', order: { refDoctorName: 'Dr Corrected' } });
+    f.detectChanges();
+    expect(c.referralFor()).toBeNull();
+    expect(el.querySelector('.pf-lo-detail__head')?.textContent).toContain('Dr Corrected');
+    expect(c.reportOf(c.openOrder()).id).toBe('rep-2');
+  });
+});

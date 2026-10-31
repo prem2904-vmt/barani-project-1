@@ -2316,7 +2316,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
     const id = this.viewOrderId();
     if (!id || this.referralSaving()) return;
     this.referralSaving.set(true);
-    this.api.patch<{ order: Order }>(`/api/orders/${id}/referral`, {
+    this.api.patch<{ order: Order; reportAmended?: boolean; amendError?: string | null }>(`/api/orders/${id}/referral`, {
       refDoctorName: this.refDoctorName().trim() || null,
       refHospitalName: this.refHospitalName().trim() || null,
     }).subscribe({
@@ -2324,7 +2324,9 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         this.referralSaving.set(false);
         this.referralEditing.set(false);
         if (res?.order) this._order.set(res.order);
-        this.toasts.success('Referral updated');
+        // A released report is re-issued AMENDED by the server (Edit referral).
+        this.toasts.success(res?.reportAmended ? 'Referral updated · amended report issued' : 'Referral updated');
+        if (res?.amendError) this.toasts.warning(res.amendError, 8000);
       },
       error: () => {
         this.referralSaving.set(false);

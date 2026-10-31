@@ -155,3 +155,22 @@ describe('Validate — Share to Messages (⋮ Share)', () => {
     expect(ids(c)).toEqual(['reassign', 'edit-self', 'send-back', 'share', 'patient', 'lab']);
   });
 });
+
+describe('Validate — ⋮ Edit referral (before sign-off)', () => {
+  afterEach(() => document.querySelectorAll('.pf-erd').forEach(n => n.remove()));
+
+  it('modify_order adds "Edit referral" to the Workflow rows and opens the dialog for the order', async () => {
+    const { c, f } = await render({ perms: ['validate_result', 'edit_result', 'view_patient', 'modify_order'] });
+    expect(ids(c)).toEqual(['reassign', 'edit-self', 'send-back', 'referral', 'patient', 'lab']);
+    expect(c.menuActions().find((a: { id: string }) => a.id === 'referral')).toMatchObject({ group: 'Workflow', icon: 'referral' });
+    c.runAction('referral');
+    f.detectChanges();
+    expect(c.referralDialogOpen()).toBe(true);
+    expect(document.body.querySelector('.pf-erd')).not.toBeNull();
+  });
+
+  it('a pathologist without modify_order never sees it', async () => {
+    const { c } = await render();
+    expect(ids(c)).not.toContain('referral');
+  });
+});
