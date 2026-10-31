@@ -261,15 +261,15 @@ describe('Measure & read — the ONE background AI call', () => {
   it('kit: .pf-ai-glow rotates a conic rainbow, never blocks taps, and is static under reduced motion', () => {
     const kit = readFileSync('libs/shared/src/lib/styles/_pf-kit.scss', 'utf8');
     expect(kit).toMatch(/@property --pf-ai-angle/);
-    const base = /\.pf-ai-glow::before, \.pf-ai-glow::after \{([^}]*)\}/.exec(kit)?.[1] ?? '';
+    const base = /\.pf-ai-glow::before,\s*\.pf-ai-glow::after\s*\{([^}]*)\}/.exec(kit)?.[1] ?? '';
     expect(base).toMatch(/conic-gradient\(from var\(--pf-ai-angle\)/);
     expect(base).toMatch(/pointer-events: none/);
     expect(base).toMatch(/animation: pf-ai-spin 3\.5s linear infinite/);
     expect(kit).toMatch(/\.pf-ai-glow\[data-ai-working='true'\]::before/);
     // The reduced-motion block that carries the AI glow (the kit has others
     // after it, e.g. the loading-feedback "held" pulse).
-    const rm = kit.slice(kit.lastIndexOf('@media (prefers-reduced-motion: reduce)', kit.lastIndexOf('.pf-ai-glow::before, .pf-ai-glow::after, .pf-ai-glow-mark')));
-    expect(rm).toMatch(/\.pf-ai-glow::before, \.pf-ai-glow::after[^{]*\{[^}]*animation: none/);
+    const rm = kit.slice(kit.lastIndexOf('@media (prefers-reduced-motion: reduce)', kit.search(/\.pf-ai-glow::before,\s*\.pf-ai-glow::after,\s*\.pf-ai-glow-mark/)));
+    expect(rm).toMatch(/\.pf-ai-glow::before,\s*\.pf-ai-glow::after[^{]*\{[^}]*animation: none/);
   });
 
   it('no user-facing "AI" text anywhere in the modal (branded PF Sense)', () => {
