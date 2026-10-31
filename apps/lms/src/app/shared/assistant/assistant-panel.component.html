@@ -36,12 +36,12 @@
     } @else {
       <div class="pf-asst__controls">
         <label class="pf-asst__field">
-          <span class="pf-asst__flabel">Model</span>
+          <span class="pf-asst__flabel">Engine</span>
           @if (providersState() === 'ready') {
-            <pf-select class="pf-asst__model" [options]="providerOpts()" [value]="provider()!" placeholder="No model available" size="sm"
+            <pf-select class="pf-asst__model" [options]="providerOpts()" [value]="provider()!" placeholder="No engine available" size="sm"
                        [disabled]="pending() || noneAvailable()" (valueChange)="setProvider($event)"></pf-select>
           } @else {
-            <span class="pf-asst__skel" role="status" aria-label="Loading models"></span>
+            <span class="pf-asst__skel" role="status" aria-label="Loading engines"></span>
           }
         </label>
         @if (showInstrumentPick()) {
@@ -85,7 +85,7 @@
       <div #thread class="pf-asst__body pf-asst__thread" aria-live="polite">
         @if (noneAvailable()) {
           <div class="pf-empty pf-empty--compact pf-asst-state" data-state="none">
-            <p class="pf-empty__title">No model is available right now</p>
+            <p class="pf-empty__title">PF Sense isn’t available right now</p>
             <p class="pf-empty__body">Neither Gemini nor Claude can answer at the moment. Try again later.</p>
           </div>
         } @else if (!items().length) {
@@ -235,7 +235,7 @@
         @if (pending()) {
           <div class="pf-asst-msg pf-asst-msg--bot pf-asst-msg--pending" role="status">
             <span class="pf-asst-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-            <span>{{ providerLabel() }} is thinking…</span>
+            <span>PF Sense is thinking…</span>
           </div>
         }
       </div>

@@ -106,7 +106,7 @@ describe('Assistant panel — beta gate', () => {
       const b = (f.nativeElement as HTMLElement).querySelector('button');
       if (!on) { expect(b).toBeNull(); continue; }
       expect(b!.querySelector('svg path')).not.toBeNull();
-      expect(b!.textContent!.trim()).toBe('Ask AI');
+      expect(b!.textContent!.trim()).toBe('Ask PF Sense');
       expect(/\p{Extended_Pictographic}/u.test(b!.textContent!)).toBe(false);
     }
   });
@@ -143,7 +143,7 @@ describe('Assistant panel — model select', () => {
   it('no model available → says so in plain words, composer off', async () => {
     const p = setup({ providers: () => of(BOTH.map((x) => ({ ...x, available: false }))) });
     await p.settle();
-    expect(p.el.querySelector('[data-state="none"]')!.textContent).toContain('No model is available right now');
+    expect(p.el.querySelector('[data-state="none"]')!.textContent).toContain('PF Sense isn’t available right now');
     expect(p.el.querySelector<HTMLTextAreaElement>('.pf-asst__input')!.disabled).toBe(true);
   });
 
@@ -201,7 +201,7 @@ describe('Assistant panel — chat', () => {
     expect(p.el.querySelector('.pf-asst__mark')!.getAttribute('data-ai-working')).toBe('true');
     // no rainbow frame round the thread (owner: too loud)
     expect(p.el.querySelector('.pf-asst__thread')!.classList.contains('pf-ai-glow')).toBe(false);
-    expect(p.el.querySelector('.pf-asst-msg--pending')!.textContent).toContain('Gemini is thinking');
+    expect(p.el.querySelector('.pf-asst-msg--pending')!.textContent).toContain('PF Sense is thinking');
     p.type('more');
     expect(p.sendBtn().disabled).toBe(true);
     pending.next(REPLY); pending.complete();
@@ -308,7 +308,7 @@ describe('Assistant panel — error states in plain words', () => {
   it('limit reached → says so, no Try again', async () => {
     const p = await failWith(new HttpErrorResponse({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } }));
     const e = p.el.querySelector('[data-error="limit"]')!;
-    expect(e.textContent).toContain('used its AI allowance');
+    expect(e.textContent).toContain('used its PF Sense allowance');
     expect(e.querySelector('button')).toBeNull();
   });
 

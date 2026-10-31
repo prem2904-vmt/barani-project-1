@@ -88,7 +88,7 @@ export class AssistantPanelComponent {
   readonly providersError = signal<AssistantErrorView | null>(null);
   readonly provider = signal<AssistantProviderId | null>(null);
   readonly providerOpts = computed(() => providerOptions(this.providers()));
-  readonly providerLabel = computed(() => this.providers().find((p) => p.id === this.provider())?.label ?? 'This model');
+  readonly providerLabel = computed(() => this.providers().find((p) => p.id === this.provider())?.label ?? 'This engine');
   readonly noneAvailable = computed(() => this.providersState() === 'ready' && !this.providers().some((p) => p.available));
 
   // ── Subject (list page: pick an instrument) ──────────────────────────

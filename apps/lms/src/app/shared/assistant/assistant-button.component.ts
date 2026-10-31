@@ -29,7 +29,7 @@ import { BetaFeaturesService } from '../../core/services/beta-features.service';
 })
 export class AssistantButtonComponent {
   private readonly beta = inject(BetaFeaturesService);
-  readonly label = input('Ask AI');
+  readonly label = input('Ask PF Sense');
   readonly expanded = input(false);
   readonly pressed = output<void>();
   readonly visible = computed(() => this.beta.enabled('assistant'));

@@ -155,7 +155,7 @@ export function assistantFailure(raw: unknown): { status: number; error: { error
  * (AstDiskReadService: ai_unavailable / ai_cap_reached / ai_failed); the beta
  * gate answers an empty 404 when the assistant isn't switched on.
  */
-export function assistantError(e: unknown, providerLabel = 'This model'): AssistantErrorView {
+export function assistantError(e: unknown, providerLabel = 'This engine'): AssistantErrorView {
   const status = Number((e as { status?: number })?.status ?? 0);
   const body = (e as { error?: unknown })?.error;
   const code = String((rec(body) ? body['error'] ?? body['code'] : (e as { code?: unknown })?.code) ?? '').toLowerCase();
@@ -163,10 +163,10 @@ export function assistantError(e: unknown, providerLabel = 'This model'): Assist
 
   if (code === 'ai_cap_reached' || status === 429 || /limit|quota|cap_reached/.test(code)) {
     return { kind: 'limit', retry: false,
-      message: 'This lab has used its AI allowance for this month. It starts again next month — an admin can raise the limit.' };
+      message: 'This lab has used its PF Sense allowance for this month. It starts again next month — an admin can raise the limit.' };
   }
   if (code === 'ai_unavailable' || code === 'provider_unavailable' || status === 503) {
-    return { kind: 'provider', retry: true, message: `${providerLabel} isn’t available right now. Pick the other model above, or try again in a minute.` };
+    return { kind: 'provider', retry: true, message: `${providerLabel} isn’t available right now. Pick the other engine above, or try again in a minute.` };
   }
   if (code === 'bad_request') {
     // The same question would be refused again: start over instead.
