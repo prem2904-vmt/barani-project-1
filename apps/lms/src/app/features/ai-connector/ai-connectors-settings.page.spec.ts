@@ -23,10 +23,11 @@ import { AiConnectorsSettingsPage } from './ai-connectors-settings.page';
  */
 const OFF: AiConnectorState = { enabled: false, connectorUrl: 'https://med-fetch-dev.prefrontal.health/mcp', labName: 'Micro World' };
 
-function setup(opts: { perms?: string[]; state?: AiConnectorState; confirm?: boolean; put?: () => ReturnType<AiConnectorApi['setEnabled']> } = {}) {
+function setup(opts: { perms?: string[]; state?: AiConnectorState; confirm?: boolean; put?: () => ReturnType<AiConnectorApi['setEnabled']>; putLevel?: () => ReturnType<AiConnectorApi['setPrivacyLevel']> } = {}) {
   const perms = opts.perms ?? ['manage_lab_settings'];
   const api = {
     get: vi.fn(() => of(opts.state ?? OFF)),
+    setPrivacyLevel: vi.fn(opts.putLevel ?? ((privacyLevel: string) => of({ ...(opts.state ?? OFF), privacyLevel }))),
     setEnabled: vi.fn(opts.put ?? ((enabled: boolean) => of({ ...(opts.state ?? OFF), enabled }))),
   };
   const dialog = { confirm: vi.fn(async () => opts.confirm ?? true) };
@@ -147,6 +148,67 @@ describe('AiConnectorsSettingsPage', () => {
     await loaded(f);
     expect(f.nativeElement.querySelector('select, datalist, input[list]')).toBeNull();
     expect(f.nativeElement.querySelectorAll('.pf-btn--primary').length).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('AiConnectorsSettingsPage privacy level', () => {
+  const select = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('pf-select');
+
+  it('defaults to Counts only, explains all three levels in plain words, admin gets a pf-select', async () => {
+    const { f } = setup();
+    await loaded(f);
+    expect(select(f)).toBeTruthy();
+    expect(f.nativeElement.querySelectorAll('.pf-aic__levels li')).toHaveLength(3);
+    expect(f.nativeElement.querySelector('.pf-aic__levels li[data-current="true"]')!.textContent).toContain('Counts only');
+    expect(f.nativeElement.textContent).toContain('never a name, phone or ID');
+  });
+
+  it('changing the level asks first and then PUTs only the level', async () => {
+    const { f, api, dialog } = setup();
+    await loaded(f);
+    await f.componentInstance.changeLevel('results');
+    await settle(f);
+    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Change to “Results, patients as codes”?', tone: 'danger' }));
+    expect(api.setPrivacyLevel).toHaveBeenCalledWith('results');
+    expect(f.nativeElement.querySelector('.pf-aic__levels li[data-current="true"]')!.textContent).toContain('Results, patients as codes');
+  });
+
+  it('narrowing is a calm confirm; cancelling saves nothing', async () => {
+    const wide = { ...OFF, privacyLevel: 'results_groups' as const };
+    const a = setup({ state: wide });
+    await loaded(a.f);
+    await a.f.componentInstance.changeLevel('counts');
+    expect(a.dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ tone: 'primary' }));
+    expect(a.api.setPrivacyLevel).toHaveBeenCalledWith('counts');
+
+    const b = setup({ confirm: false });
+    await loaded(b.f);
+    await b.f.componentInstance.changeLevel('results');
+    expect(b.api.setPrivacyLevel).not.toHaveBeenCalled();
+  });
+
+  it('a refused save keeps the old level and says who can change it', async () => {
+    const { f, toasts } = setup({ putLevel: () => throwError(() => new ApiError('Forbidden', 'forbidden')) });
+    await loaded(f);
+    await f.componentInstance.changeLevel('results');
+    await settle(f);
+    expect(toasts.error).toHaveBeenCalledWith('Only a lab admin can change this.');
+    expect(f.componentInstance.level()).toBe('counts');
+  });
+
+  it('non-admin sees the current level as text, no select, and cannot change it', async () => {
+    const { f, api } = setup({ perms: ['manage_tests'], state: { ...OFF, privacyLevel: 'results' } });
+    await loaded(f);
+    expect(select(f)).toBeNull();
+    expect(f.nativeElement.textContent).toContain('Results, patients as codes');
+    await f.componentInstance.changeLevel('results_groups');
+    expect(api.setPrivacyLevel).not.toHaveBeenCalled();
+  });
+
+  it('an older server without the field is treated as Counts only', async () => {
+    const { f } = setup({ state: { ...OFF } });
+    await loaded(f);
+    expect(f.componentInstance.level()).toBe('counts');
   });
 });
 

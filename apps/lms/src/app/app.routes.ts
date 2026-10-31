@@ -99,6 +99,13 @@ export const appRoutes: Route[] = [
         loadComponent: () => import('./features/order-open/order-open.component').then(m => m.OrderOpenComponent)
       },
       {
+        // "Open in Prefrontal" link from an AI connector answer (`/r/P-K7Q2X`, `/r/T-3`): a plain server
+        // lookup of the expiring code, then the patient / order / staff card. Beta-gated like the connector.
+        path: 'r/:code',
+        canActivate: [betaGuard('mcp')],
+        loadComponent: () => import('./features/ai-connector/code-open.page').then(m => m.CodeOpenPage)
+      },
+      {
         // Scanned patient ID-card QR (`/p/:id`) → opens the patient's profile.
         path: 'p/:id',
         loadComponent: () => import('./features/patient-open/patient-open.component').then(m => m.PatientOpenComponent)

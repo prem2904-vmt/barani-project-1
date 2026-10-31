@@ -11,7 +11,10 @@ import { ScreenHeaderComponent } from '../../shared/primitives/screen-header.com
 import { SkeletonFormComponent } from '../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../shared/utils/min-duration';
 import { copyText } from '../../shared/utils/report-share';
-import { AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AiConnectorApi, AiConnectorState, CLAUDE_STEPS } from './ai-connector.api';
+import { SelectComponent } from '../../shared/primitives/select.component';
+import {
+  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS,
+} from './ai-connector.api';
 
 /**
  * Lab settings → AI connectors (MCP Phase 0). One lab-wide switch, DEFAULT
@@ -27,7 +30,7 @@ import { AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AiConnectorApi, AiConne
 @Component({
   selector: 'pf-ai-connectors-settings',
   standalone: true,
-  imports: [HeroBandComponent, ScreenHeaderComponent, BusyDirective, SkeletonFormComponent],
+  imports: [HeroBandComponent, ScreenHeaderComponent, BusyDirective, SkeletonFormComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page pf-aic px-4 md:px-8 lg:px-10 pt-6 pb-10">
@@ -84,6 +87,19 @@ import { AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AiConnectorApi, AiConne
                 <ul class="pf-aic__list">
                   @for (line of canSee; track line) {
                     <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>{{ line }}</span></li>
+                  }
+                </ul>
+                <h3 class="pf-aic__sec" id="pf-aic-level-label">What an app may see about patients</h3>
+                @if (isAdmin()) {
+                  <pf-select [options]="levelOptions" [value]="level()" [disabled]="saving()"
+                             aria-label="What an app may see about patients" (valueChange)="changeLevel($event)"></pf-select>
+                } @else {
+                  <p class="pf-aic__status" role="status">{{ levelInfo().label }}</p>
+                }
+                <p class="pf-field__hint pf-aic__levelhint">{{ levelInfo().summary }}</p>
+                <ul class="pf-aic__levels" aria-label="The three levels">
+                  @for (l of levels; track l.value) {
+                    <li [attr.data-current]="l.value === level()"><strong>{{ l.label }}</strong><span>{{ l.summary }}</span></li>
                   }
                 </ul>
                 <p class="pf-field__hint">Read only — an app can’t add, change or delete anything, and it sees only what the person who connected it may see. Each person signs in and presses Allow themselves.</p>
@@ -144,6 +160,11 @@ import { AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AiConnectorApi, AiConne
     .pf-aic__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
     .pf-aic__list li { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; line-height: 1.45; color: var(--text-primary); }
     .pf-aic__list svg { flex: none; margin-top: 2px; color: var(--violet-text, #7c3aed); }
+    .pf-aic__levels { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    .pf-aic__levels li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm, 10px); font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
+    .pf-aic__levels li[data-current='true'] { border-color: var(--color-violet-600, #7c3aed); }
+    .pf-aic__levels strong { font-size: 13.5px; color: var(--text-primary); }
+    .pf-aic__levelhint { margin-top: -6px; }
     .pf-aic__sidebody { gap: 10px; padding: 16px 18px 18px; }
     .pf-aic__url { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
     .pf-aic__urltext { flex: 1 1 200px; min-width: 0; padding: 11px 12px; border-radius: var(--pf-radius-sm, 10px);
@@ -174,6 +195,10 @@ export class AiConnectorsSettingsPage {
 
   readonly canSee = AI_CONNECTOR_CAN_SEE;
   readonly steps = CLAUDE_STEPS;
+  readonly levels = AI_PRIVACY_LEVELS;
+  readonly levelOptions = AI_PRIVACY_LEVELS.map(l => ({ value: l.value, label: l.label }));
+  readonly level = computed<AiPrivacyLevel>(() => this.state()?.privacyLevel ?? 'counts');
+  readonly levelInfo = computed(() => AI_PRIVACY_LEVELS.find(l => l.value === this.level()) ?? AI_PRIVACY_LEVELS[0]);
   readonly state = signal<AiConnectorState | null>(null);
   readonly loadError = signal(false);
   readonly saving = signal(false);
@@ -224,6 +249,36 @@ export class AiConnectorsSettingsPage {
       this.toasts.success(next ? 'AI connectors turned on' : 'AI connectors turned off');
     } catch (e) {
       const err = ApiError.from(e);
+      this.toasts.error(err.code === 'forbidden' || /forbid|permission|not allowed/i.test(err.message)
+        ? 'Only a lab admin can change this.'
+        : 'Couldn’t save — check your connection and try again.');
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  /** Change what outside AI may see — always asks first, and says what changes in plain words. */
+  async changeLevel(next: AiPrivacyLevel | null): Promise<void> {
+    const cur = this.state();
+    if (!cur || !next || next === this.level() || this.saving() || !this.isAdmin()) return;
+    const to = AI_PRIVACY_LEVELS.find(l => l.value === next);
+    if (!to) return;
+    const widening = AI_PRIVACY_LEVELS.findIndex(l => l.value === next) > AI_PRIVACY_LEVELS.findIndex(l => l.value === this.level());
+    const ok = await this.dialog.confirm({
+      title: `Change to “${to.label}”?`,
+      message: `${to.summary} ${widening ? 'Connected apps can see more straight away.' : 'Connected apps see less straight away.'} Patient names are never shared at any level.`,
+      confirmLabel: 'Change',
+      tone: widening ? 'danger' : 'primary',
+    });
+    if (!ok) { this.state.set({ ...cur }); return; }   // re-render the select back to the saved value
+    this.saving.set(true);
+    try {
+      const s = await firstValueFrom(this.api.setPrivacyLevel(next));
+      this.state.set(s ?? { ...cur, privacyLevel: next });
+      this.toasts.success('Saved');
+    } catch (e) {
+      const err = ApiError.from(e);
+      this.state.set({ ...cur });
       this.toasts.error(err.code === 'forbidden' || /forbid|permission|not allowed/i.test(err.message)
         ? 'Only a lab admin can change this.'
         : 'Couldn’t save — check your connection and try again.');
