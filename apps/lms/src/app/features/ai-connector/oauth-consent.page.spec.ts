@@ -104,6 +104,34 @@ describe('OAuthConsentPage', () => {
     Object.defineProperty(window, 'top', orig);
   });
 
+  it('lists what the app could see in five plain-words groups, and the never-promise', async () => {
+    const { f } = setup();
+    await settle(f);
+    const titles = Array.from((f.nativeElement as HTMLElement).querySelectorAll('.pf-oc__grptitle')).map(e => e.textContent?.trim());
+    expect(titles).toEqual([
+      'Test catalogue & lab info',
+      'Lab operations',
+      'Billing totals — only for people who see money',
+      'Patient results as codes — only when your lab’s privacy level allows',
+      'Admin overview — for lab admins',
+    ]);
+    const text = f.nativeElement.textContent ?? '';
+    expect(text).toContain('P-K7Q2X');
+    expect(text).toContain('Never names, phone numbers, addresses, exact ages or ID numbers');
+    expect(text).toContain('fewer than 5');
+  });
+
+  it('says what the lab allows about patients: Counts only by default (older server too), the real level when set', async () => {
+    const a = setup();
+    await settle(a.f);
+    expect(a.f.nativeElement.textContent).toContain('About patients, your lab allows: Counts only.');
+    expect(a.f.nativeElement.textContent).toContain('Questions about one patient (results, reports, a bill) are refused.');
+
+    const b = setup({ connector: () => of({ ...ON, privacyLevel: 'results' as const }) });
+    await settle(b.f);
+    expect(b.f.nativeElement.textContent).toContain('About patients, your lab allows: Results, patients as codes.');
+  });
+
   it('shows the app, lab and signed-in user; Allow is the ONE primary, Deny beside it; nothing is approved on load', async () => {
     const { f, client, redirector } = setup();
     await settle(f);
@@ -113,7 +141,7 @@ describe('OAuthConsentPage', () => {
     expect(text).toContain('Priya Raman');
     expect(text).toContain('claude.ai');           // where you go back to
     expect(text).toContain('Read only');
-    expect(text).toContain('Your Test Master: tests, tubes, preparation, report times and normal ranges (prices only for people who can already see them)');
+    expect(text).toContain('Your Test Master: tests, tubes, preparation, report times, normal ranges and critical limits (prices only for people who can already see them)');
     expect(text).not.toContain('micro-world.pf.local'); // never the synthetic auth email
     expect(qa(f, '.pf-btn--primary')).toHaveLength(1);
     expect(btn(f, 'Allow')?.classList).toContain('pf-btn--primary');

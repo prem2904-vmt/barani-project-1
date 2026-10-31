@@ -13,7 +13,7 @@ import { createLoadHold } from '../../shared/utils/min-duration';
 import { copyText } from '../../shared/utils/report-share';
 import { SelectComponent } from '../../shared/primitives/select.component';
 import {
-  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS,
+  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_NEVER, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS,
 } from './ai-connector.api';
 
 /**
@@ -84,11 +84,17 @@ import {
                   <p class="pf-field__hint">Only a lab admin can change this.</p>
                 }
                 <h3 class="pf-aic__sec">What a connected app can read</h3>
-                <ul class="pf-aic__list">
-                  @for (line of canSee; track line) {
-                    <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>{{ line }}</span></li>
-                  }
-                </ul>
+                @for (g of canSee; track g.title) {
+                  <div class="pf-aic__grp">
+                    <h4 class="pf-aic__grptitle">{{ g.title }}@if (g.when) {<span class="pf-aic__grpwhen"> — {{ g.when }}</span>}</h4>
+                    <ul class="pf-aic__list">
+                      @for (line of g.items; track line) {
+                        <li><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span>{{ line }}</span></li>
+                      }
+                    </ul>
+                  </div>
+                }
+                <p class="pf-field__hint">{{ never }}</p>
                 <h3 class="pf-aic__sec" id="pf-aic-level-label">What an app may see about patients</h3>
                 @if (isAdmin()) {
                   <pf-select [options]="levelOptions" [value]="level()" [disabled]="saving()"
@@ -157,6 +163,9 @@ import {
     .pf-aic__dot[data-on='true'] { background: var(--pf-switch-on, #7c3aed); }
     .pf-ctx__chip .pf-aic__dot { margin-right: 2px; }
     .pf-aic__sec { margin: 4px 0 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); }
+    .pf-aic__grp { display: grid; gap: 6px; }
+    .pf-aic__grptitle { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--text-primary); }
+    .pf-aic__grpwhen { font-weight: 400; color: var(--text-secondary); }
     .pf-aic__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
     .pf-aic__list li { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; line-height: 1.45; color: var(--text-primary); }
     .pf-aic__list svg { flex: none; margin-top: 2px; color: var(--violet-text, #7c3aed); }
@@ -194,6 +203,7 @@ export class AiConnectorsSettingsPage {
   protected readonly theme = inject(ThemeService);
 
   readonly canSee = AI_CONNECTOR_CAN_SEE;
+  readonly never = AI_CONNECTOR_NEVER;
   readonly steps = CLAUDE_STEPS;
   readonly levels = AI_PRIVACY_LEVELS;
   readonly levelOptions = AI_PRIVACY_LEVELS.map(l => ({ value: l.value, label: l.label }));

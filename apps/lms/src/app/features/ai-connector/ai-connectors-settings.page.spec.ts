@@ -154,6 +154,18 @@ describe('AiConnectorsSettingsPage', () => {
 describe('AiConnectorsSettingsPage privacy level', () => {
   const select = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('pf-select');
 
+  it('shows what an app can read in five groups, with who each one is for, and the never-promise', async () => {
+    const { f } = setup();
+    await loaded(f);
+    const groups = f.nativeElement.querySelectorAll('.pf-aic__grp');
+    expect(groups).toHaveLength(5);
+    const text = f.nativeElement.textContent ?? '';
+    expect(text).toContain('Billing totals — only for people who see money');
+    expect(text).toContain('Patient results as codes — only when your lab’s privacy level allows');
+    expect(text).toContain('Work per staff member, shown as codes like T-1');
+    expect(text).toContain('Never names, phone numbers, addresses, exact ages or ID numbers');
+  });
+
   it('defaults to Counts only, explains all three levels in plain words, admin gets a pf-select', async () => {
     const { f } = setup();
     await loaded(f);

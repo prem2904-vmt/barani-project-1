@@ -33,11 +33,11 @@ export interface PrivacyLevelInfo { value: AiPrivacyLevel; label: string; summar
 /** The three levels in plain words (settings screen only; the server is the ONE enforcer). */
 export const AI_PRIVACY_LEVELS: readonly PrivacyLevelInfo[] = [
   { value: 'counts', label: 'Counts only',
-    summary: 'Totals and timings only — how many orders, how long things take, what is waiting. No test values and no patient rows.' },
+    summary: 'Totals and timings, the Test Master and settings — how many orders, how long things take, what is waiting. Questions about one patient (results, reports, a bill) are refused. This is the default.' },
   { value: 'results', label: 'Results, patients as codes',
-    summary: 'Also test results and abnormal flags. Patients appear only as short expiring codes like P-K7Q2X — never a name, phone or ID.' },
+    summary: 'Also test results, flags, sample and report status and bills. Patients appear only as short expiring codes like P-K7Q2X that open inside Prefrontal — never a name, phone or ID.' },
   { value: 'results_groups', label: 'Results, with age group and sex',
-    summary: 'Same as above, plus a broad age group (Child, Adult, Senior) and sex next to each coded patient. Still no names or exact ages.' },
+    summary: 'Same as above, plus a broad age group (Child, Adult, Senior) next to each coded patient where it helps read a result. Still no names or exact ages.' },
 ];
 
 /** Who may flip the switch in the UI. Mirrors the server's lab-settings admin
@@ -66,16 +66,65 @@ export class AiConnectorApi {
   }
 }
 
-/** Plain-words list of what a connected AI app can read (consent + settings
- *  share it, so the two screens can never promise different things). */
-export const AI_CONNECTOR_CAN_SEE: readonly string[] = [
-  'Test and order counts for a date range',
-  'Turnaround times by department or test',
-  'Work waiting at each stage — collect, receive, result, validate, deliver',
-  'Analyzer status — online, waiting or offline',
-  'Work done per staff member (shown as codes like T-1 — names stay in Prefrontal)',
-  'Your Test Master: tests, tubes, preparation, report times and normal ranges (prices only for people who can already see them)',
+/** One group of what a connected AI app can read, in plain words. */
+export interface CanSeeGroup {
+  title: string;
+  /** Who / when, in a few words (shown next to the title). */
+  when?: string;
+  items: readonly string[];
+}
+
+/** What a connected AI app can read, grouped (consent + settings share it, so the
+ *  two screens can never promise different things). Mirrors the server's 100
+ *  read-only tools; the server's privacy gate is the ONE enforcer. */
+export const AI_CONNECTOR_CAN_SEE: readonly CanSeeGroup[] = [
+  {
+    title: 'Test catalogue & lab info',
+    items: [
+      'Your Test Master: tests, tubes, preparation, report times, normal ranges and critical limits (prices only for people who can already see them)',
+      'Profiles and packages and what is in them, and which tests go to a partner lab',
+      'Your branches, booking hours, home-collection areas and the lab’s own public phone and email',
+    ],
+  },
+  {
+    title: 'Lab operations',
+    items: [
+      'Orders, tests and samples for a date range, turnaround times and late tests',
+      'Work waiting at each step — collect, receive, result, validate, deliver — plus re-runs, rejections and recollections',
+      'Analyzers, home collections, stock and expiring lots, alerts and critical-call follow-up',
+      'Work per staff member, shown as codes like T-1 — names stay in Prefrontal',
+    ],
+  },
+  {
+    title: 'Billing totals',
+    when: 'only for people who see money',
+    items: [
+      'Revenue, collections, dues, discounts, refunds and GST totals',
+      'Prices and estimates from the same bill calculator as the counter — never cost prices',
+      'How many orders each referring doctor sent (volume only, never money per doctor)',
+    ],
+  },
+  {
+    title: 'Patient results as codes',
+    when: 'only when your lab’s privacy level allows',
+    items: [
+      'Results, trends, abnormal and critical values, with each patient shown only as a short expiring code like P-K7Q2X and a link that opens them inside Prefrontal',
+      'Where a sample, report or bill is, and when a report is expected',
+    ],
+  },
+  {
+    title: 'Admin overview',
+    when: 'for lab admins',
+    items: [
+      'Roles and what they allow, branches, analyzer setup and which modules are on',
+      'Test Master health — tests missing ranges or prices, mapping gaps and recent changes',
+    ],
+  },
 ];
+
+/** The promises that hold for every group above. */
+export const AI_CONNECTOR_NEVER =
+  'Never names, phone numbers, addresses, exact ages or ID numbers. Numbers under 5 show as “fewer than 5”. Each person only sees what their own role allows.';
 
 /** The three Claude steps on the settings screen. */
 export const CLAUDE_STEPS: readonly string[] = [
