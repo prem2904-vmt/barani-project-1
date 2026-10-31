@@ -464,3 +464,16 @@ describe('logout sequence', () => {
     expect(t.router.url).toBe('/login');
   });
 });
+
+
+describe('SessionService.isReturnable', () => {
+  it('accepts in-app paths', () => {
+    expect(SessionService.isReturnable('/frontdesk?tab=queue')).toBe(true);
+    expect(SessionService.isReturnable('/oauth/consent?authorization_id=a1')).toBe(true);
+  });
+  it('rejects open-redirect shapes: protocol-relative, backslash, absolute, login loops', () => {
+    for (const bad of ['', '/', '//evil.com', '/\\evil.com', '/\\/evil.com', '/a\\b', 'https://evil.com', 'evil', '/login', '/set-password']) {
+      expect(SessionService.isReturnable(bad), bad).toBe(false);
+    }
+  });
+});

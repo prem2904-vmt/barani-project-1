@@ -95,19 +95,28 @@ export function betaGuard(key: BetaFeatureKey): CanActivateFn {
   };
 }
 
-/** True for requests to our API (same predicate as the OPD preview interceptor). */
-function isApiRequest(url: string): boolean {
-  return url.startsWith('/api') || url.includes('/api/');
+/**
+ * True only for requests to OUR API: the configured API base (`environment.apiUrl`, which the
+ * runtime /config.json fills in) followed by `/api`, or a relative `/api…` URL when no absolute
+ * base is configured. A third-party URL that merely contains "/api/" never matches.
+ */
+export function isOurApiRequest(url: string, apiBase: string): boolean {
+  const base = (apiBase ?? '').trim().replace(/\/+$/, '');
+  if (!base) return url.startsWith('/api') && !url.startsWith('//');
+  return url.toLowerCase().startsWith(`${base.toLowerCase()}/api`);
 }
 
 /**
  * While any beta console switch is on, every request to OUR API carries
  * `X-PF-BETA: <comma list>`. No switch ⇒ requests are untouched. Never
- * touches third-party URLs (Supabase, signed storage links).
+ * touches third-party URLs (Supabase, signed storage links, anything else).
  */
-export function makeBetaHeaderInterceptor(storage: () => BetaStorage | null = safeBetaStorage): HttpInterceptorFn {
+export function makeBetaHeaderInterceptor(
+  storage: () => BetaStorage | null = safeBetaStorage,
+  apiBase: () => string = () => environment.apiUrl,
+): HttpInterceptorFn {
   return (req, next) => {
-    if (!isApiRequest(req.url) || req.headers.has(BETA_HEADER)) return next(req);
+    if (!isOurApiRequest(req.url, apiBase()) || req.headers.has(BETA_HEADER)) return next(req);
     const v = betaHeaderValue(storage());
     return v ? next(req.clone({ setHeaders: { [BETA_HEADER]: v } })) : next(req);
   };

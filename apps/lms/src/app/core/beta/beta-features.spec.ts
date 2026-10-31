@@ -4,7 +4,7 @@ import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router, UrlTree, provideRouter } from '@angular/router';
 import { vi } from 'vitest';
-import { BetaFeaturesService, betaGuard, betaHeaderInterceptor, makeBetaHeaderInterceptor } from '../services/beta-features.service';
+import { BetaFeaturesService, betaGuard, betaHeaderInterceptor, isOurApiRequest, makeBetaHeaderInterceptor } from '../services/beta-features.service';
 import {
   BETA_HEADER, BetaStorage, betaFlagKey, betaHeaderValue, betaVisible, installPfBeta, isDevEnvironment,
   parseBetaFlags, readBetaSwitches,
@@ -164,7 +164,7 @@ describe('betaHeaderInterceptor', () => {
     const st = memStorage(switches);
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(withInterceptors([makeBetaHeaderInterceptor(() => st)])), provideHttpClientTesting()],
+      providers: [provideHttpClient(withInterceptors([makeBetaHeaderInterceptor(() => st, () => 'https://api.example')])), provideHttpClientTesting()],
     });
     return { http: TestBed.inject(HttpClient), ctl: TestBed.inject(HttpTestingController) };
   }
@@ -181,6 +181,25 @@ describe('betaHeaderInterceptor', () => {
     http.get('https://x.supabase.co/auth/v1/user').subscribe();
     expect(ctl.expectOne('https://api.example/api/ai-connector').request.headers.get(BETA_HEADER)).toBe('mcp,assistant');
     expect(ctl.expectOne('https://x.supabase.co/auth/v1/user').request.headers.has(BETA_HEADER)).toBe(false);
+  });
+
+  it('a third-party URL that merely contains /api/ never gets the header', () => {
+    const { http, ctl } = client({ 'pf.beta.mcp': '1' });
+    http.get('https://evil.example/api/steal').subscribe();
+    http.get('https://api.example.evil.com/api/x').subscribe();
+    http.get('https://api.example/api/ai-connector').subscribe();
+    expect(ctl.expectOne('https://evil.example/api/steal').request.headers.has(BETA_HEADER)).toBe(false);
+    expect(ctl.expectOne('https://api.example.evil.com/api/x').request.headers.has(BETA_HEADER)).toBe(false);
+    expect(ctl.expectOne('https://api.example/api/ai-connector').request.headers.has(BETA_HEADER)).toBe(true);
+  });
+
+  it('isOurApiRequest: base prefix + /api; relative /api only when no absolute base', () => {
+    expect(isOurApiRequest('https://api.example/api/x', 'https://api.example/')).toBe(true);
+    expect(isOurApiRequest('https://api.example/other', 'https://api.example')).toBe(false);
+    expect(isOurApiRequest('/api/x', 'https://api.example')).toBe(false);
+    expect(isOurApiRequest('/api/x', '')).toBe(true);
+    expect(isOurApiRequest('//evil.com/api/x', '')).toBe(false);
+    expect(isOurApiRequest('https://evil.com/api/x', '')).toBe(false);
   });
 
   it('the app wires it next to the OPD preview interceptor', () => {

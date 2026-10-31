@@ -78,9 +78,32 @@ const qa = (f: { nativeElement: HTMLElement }, s: string) => Array.from(f.native
 const btn = (f: { nativeElement: HTMLElement }, label: string) =>
   qa(f, 'button').find(b => b.textContent?.trim() === label) as HTMLButtonElement | undefined;
 
-afterEach(() => { document.body.innerHTML = ''; });
+afterEach(() => { document.body.innerHTML = ''; vi.restoreAllMocks(); });
 
 describe('OAuthConsentPage', () => {
+  it('inside a frame it shows a plain-words error, never loads the request and never renders Allow', async () => {
+    const spy = vi.spyOn(OAuthConsentPage, 'isFramed').mockReturnValue(true);
+    const { f, client } = setup();
+    await settle(f);
+    expect(spy).toHaveBeenCalled();
+    const text = f.nativeElement.textContent ?? '';
+    expect(text).toContain('Open this page directly in your browser');
+    expect(btn(f, 'Allow')).toBeUndefined();
+    expect(btn(f, 'Deny')).toBeUndefined();
+    expect(client.getDetails).not.toHaveBeenCalled();
+    expect(client.approve).not.toHaveBeenCalled();
+  });
+
+  it('isFramed is true when window.top is not this window, and when reading it throws', () => {
+    expect(OAuthConsentPage.isFramed()).toBe(false);   // jsdom top-level
+    const orig = Object.getOwnPropertyDescriptor(window, 'top')!;
+    Object.defineProperty(window, 'top', { configurable: true, get: () => ({}) as Window });
+    expect(OAuthConsentPage.isFramed()).toBe(true);
+    Object.defineProperty(window, 'top', { configurable: true, get: () => { throw new Error('cross-origin'); } });
+    expect(OAuthConsentPage.isFramed()).toBe(true);
+    Object.defineProperty(window, 'top', orig);
+  });
+
   it('shows the app, lab and signed-in user; Allow is the ONE primary, Deny beside it; nothing is approved on load', async () => {
     const { f, client, redirector } = setup();
     await settle(f);

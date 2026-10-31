@@ -73,7 +73,7 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
                         <button type="button" class="pf-btn pf-btn--primary press" (click)="signInAgain()">Sign in again</button>
                       } @else if (errorKind() === 'network') {
                         <button type="button" class="pf-btn pf-btn--secondary press" (click)="load()">Try again</button>
-                      } @else {
+                      } @else if (errorKind() !== 'framed') {
                         <a class="pf-btn pf-btn--tertiary press" routerLink="/">Open Prefrontal</a>
                       }
                     </div>
@@ -257,6 +257,7 @@ export class OAuthConsentPage implements OnInit {
     switch (this.errorKind()) {
       case 'signed-out': return 'Sign in again';
       case 'network': return 'No connection';
+      case 'framed': return 'Open this page directly in your browser';
       default: return 'This request can’t be used';
     }
   });
@@ -266,7 +267,15 @@ export class OAuthConsentPage implements OnInit {
   }
 
   ngOnInit(): void {
+    // Clickjacking guard: this page is only ever used as a top-level page. Inside a frame we
+    // never load the request and never render Allow.
+    if (OAuthConsentPage.isFramed()) { this.fail('framed'); return; }
     void this.load();
+  }
+
+  /** True when this page sits inside another page's frame (or the check itself is blocked). */
+  static isFramed(): boolean {
+    try { return typeof window !== 'undefined' && window.top !== window.self; } catch { return true; }
   }
 
   /** Read the request + the lab switch together. Already consented ⇒ straight back. */

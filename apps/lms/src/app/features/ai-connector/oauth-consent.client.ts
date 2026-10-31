@@ -43,7 +43,7 @@ export interface OAuthAuthorizationDetails {
 /** Already consented / decided: go back to the app. */
 export interface OAuthRedirect { redirect_url: string }
 
-export type ConsentErrorKind = 'missing' | 'expired' | 'signed-out' | 'network' | 'unknown';
+export type ConsentErrorKind = 'missing' | 'expired' | 'signed-out' | 'network' | 'framed' | 'unknown';
 
 /** A consent call failed — `kind` picks the plain words on screen. */
 export class ConsentError extends Error {
@@ -64,6 +64,7 @@ export function consentErrorText(kind: ConsentErrorKind): string {
     case 'missing': return 'This link is missing its request. Go back to the app you were connecting and start again.';
     case 'expired': return 'This request has expired or was already used. Go back to the app you were connecting and start again.';
     case 'signed-out': return 'Your sign-in has ended. Sign in again to continue.';
+    case 'framed': return 'Open this page directly in your browser. For your safety it can’t be used inside another page.';
     case 'network': return 'Can’t reach the sign-in server. Check your connection and try again.';
     default: return 'Something went wrong with this request. Go back to the app you were connecting and try again.';
   }

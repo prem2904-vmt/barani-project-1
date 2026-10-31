@@ -161,7 +161,7 @@ export class SessionService {
 
   /** Worth returning to after signing in again. */
   static isReturnable(url: string): boolean {
-    return !!url && url !== '/' && url.startsWith('/') && !url.startsWith('//')
+    return !!url && url !== '/' && url.startsWith('/') && !url.startsWith('//') && !url.includes('\\')
       && !url.startsWith('/login') && !url.startsWith('/set-password');
   }
 
