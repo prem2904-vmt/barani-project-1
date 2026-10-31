@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, injec
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import {
-  DEFAULT_SUPPORT_MINUTES, SUPPORT_DURATIONS, SupportSessionService, countdownText, endedText, spacedCode,
+  DEFAULT_SUPPORT_MINUTES, SUPPORT_DURATIONS, SupportSessionService, countdownText, endedText, supportCode,
 } from '../../../shared/instruments/support-session.service';
 import { SupportLogEntry } from '../../../shared/instruments/instrument.models';
 
@@ -19,7 +19,7 @@ export function outcomeWord(o: string): string | null {
 
 /**
  * Instruments → "Prefrontal support" card (beta `support`). Desktop app only:
- * the lab starts a session, reads the 6-digit code to Prefrontal support,
+ * the lab starts a session, reads the code (WDJB-MJHT) to Prefrontal support,
  * watches every action live and can Stop at any time. Changes are asked in
  * the PC's own dialog (main), never here — this card only says so. On the
  * web it explains that support runs in the desktop app.
@@ -39,7 +39,7 @@ export function outcomeWord(o: string): string | null {
           <h2 class="pf-card__label" id="pf-sup-title">Prefrontal support</h2>
           @if (st().active) {
             <span class="pf-card__spacer"></span>
-            <span class="pf-sup__live"><span class="pf-sup__dot" aria-hidden="true"></span>{{ st().supportJoined ? 'Connected' : 'Waiting' }}</span>
+            <span class="pf-sup__live" [attr.data-line]="line()"><span class="pf-sup__dot" aria-hidden="true"></span>{{ liveWord() }}</span>
           }
         </header>
 
@@ -51,7 +51,7 @@ export function outcomeWord(o: string): string | null {
             <ul class="pf-sup__points">
               <li>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6l-7-3Z"/></svg>
-                <span>Nothing opens on this PC — the app calls Prefrontal, only while the session runs.</span>
+                <span>Nothing opens on this PC — the app connects out to Prefrontal, only while the session runs.</span>
               </li>
               <li>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -72,6 +72,7 @@ export function outcomeWord(o: string): string | null {
             </div>
             <dl class="pf-sup__facts">
               <div class="pf-sup__fact"><dt>Status</dt><dd class="pf-sup__who" data-testid="support-status">{{ statusText() }}</dd></div>
+              <div class="pf-sup__fact"><dt>This PC</dt><dd data-testid="support-line">{{ lineText() }}</dd></div>
               <div class="pf-sup__fact"><dt>Ends in</dt><dd class="pf-num" data-testid="support-countdown">{{ countdown() }}</dd></div>
             </dl>
             @if (st().approval) {
@@ -133,6 +134,7 @@ export function outcomeWord(o: string): string | null {
     .pf-sup__points li { display: flex; align-items: flex-start; gap: 8px; }
     .pf-sup__points svg { flex: none; margin-top: 1px; color: var(--violet-text, #7c3aed); }
     .pf-sup__live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--violet-text, #7c3aed); white-space: nowrap; }
+    .pf-sup__live[data-line='reconnecting'] { color: var(--amber-text, #b45309); }
     .pf-sup__dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; }
     @media (prefers-reduced-motion: no-preference) { .pf-sup__dot { animation: pf-sup-pulse 1.6s ease-in-out infinite; } }
     @keyframes pf-sup-pulse { 50% { opacity: .35; } }
@@ -177,7 +179,7 @@ export class SupportSessionCardComponent {
   private readonly now = signal(Date.now());
 
   readonly st = this.svc.state;
-  readonly code = computed(() => spacedCode(this.st().code));
+  readonly code = computed(() => supportCode(this.st().code));
   readonly countdown = computed(() => countdownText(this.st().expiresAt, this.now()));
   readonly log = computed<SupportLogEntry[]>(() => this.st().log ?? []);
   readonly statusText = computed(() => {
@@ -185,6 +187,16 @@ export class SupportSessionCardComponent {
     if (!s.supportJoined) return 'Waiting for support to join';
     return s.joinedBy ? `Support joined: ${s.joinedBy}` : 'Prefrontal support is connected';
   });
+  /** Main's hub connection: connecting | online | reconnecting (older desktops: online once a session runs). */
+  readonly line = computed(() => this.st().connection ?? 'online');
+  readonly lineText = computed(() => {
+    switch (this.line()) {
+      case 'connecting': return 'Connecting to Prefrontal…';
+      case 'reconnecting': return 'Connection lost — reconnecting…';
+      default: return 'Connected to Prefrontal';
+    }
+  });
+  readonly liveWord = computed(() => (this.line() === 'reconnecting' ? 'Offline' : this.st().supportJoined ? 'Connected' : 'Waiting'));
   readonly ended = computed(() => (this.st().status === 'ended' ? endedText(this.st().endedReason) : null));
 
   constructor() {

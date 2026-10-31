@@ -675,34 +675,10 @@ export class AuthService {
     void this.recordSessionStart(tokens.access_token, 'passkey');
   }
 
-  /**
-   * "Continue with Google" (beta `support` / the OAuth consent sign-in):
-   * Supabase's Google provider minted the session through the PKCE code
-   * exchange (google-oauth.ts — GoTrue REST, never the supabase-js session).
-   * From here it is EXACTLY the passkey tail: beginSession (persist, idle-lock
-   * reset, /me, registry); a session /me refuses (a Google account that is no
-   * Prefrontal user) is revoked at once; the login audit row is written once.
-   */
-  async signInWithGoogleSession(tokens: { access_token: string; refresh_token: string }): Promise<void> {
-    const session = { access_token: tokens.access_token, refresh_token: tokens.refresh_token } as Session;
-    this._meMustChangePassword = false;
-    try {
-      await this.beginSession(session, { mustChangePassword: false, org: null });
-    } catch (e) {
-      void this.revokeToken(tokens.access_token);
-      throw e;
-    }
-    if (this._meMustChangePassword) this._mustChangePassword.set(true);
-    const org = this._user()?.tenantName;
-    if (org) this.rememberOrg(org);
-    this._signedInWith.set('google');
-    void this.recordSessionStart(tokens.access_token, 'google');
-  }
-
   /** POST /api/auth/session-started — the server writes the "login" audit row
    *  once per session (idempotent on the token's session id). Beta-gated on the
    *  server (`passkeys`), so it carries X-PF-BETA like every beta call. Never throws. */
-  private async recordSessionStart(token: string, method: 'passkey' | 'google'): Promise<void> {
+  private async recordSessionStart(token: string, method: 'passkey'): Promise<void> {
     try {
       await fetch(`${environment.apiUrl}/api/auth/session-started`, {
         method: 'POST',
@@ -715,7 +691,7 @@ export class AuthService {
 
   /** How THIS tab's session started (null = restored / switched profile).
    *  Drives the one-time passkey suggestion (only after a password sign-in). */
-  private readonly _signedInWith = signal<'password' | 'passkey' | 'google' | null>(null);
+  private readonly _signedInWith = signal<'password' | 'passkey' | null>(null);
   readonly signedInWith = this._signedInWith.asReadonly();
   /** /me's `mustChangePassword` (newer servers) from the last profile load. */
   private _meMustChangePassword = false;

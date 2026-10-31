@@ -1,28 +1,37 @@
 'use strict';
 /**
  * "Allow Prefrontal support" — a remote support session started BY THE LAB
- * (beta `support`, dev only). Plain Node: fetch, the approval dialog, NetDiag
- * and the ConnectorManager are injected, so every rule is unit-tested without
- * launching Electron (test/support-session.test.js).
+ * (beta `support`, dev only). Plain Node: fetch, the SignalR hub connection,
+ * the approval dialog, NetDiag and the ConnectorManager are injected, so
+ * every rule is unit-tested without launching Electron
+ * (test/support-session.test.js).
  *
- * Rules (remote-support contract, owner-approved 2026-10-31):
- *   - NO inbound port, no listener. The app reaches OUT to our server with a
- *     long-poll (GET …/next?wait=25) ONLY while a session is active; idle =
- *     no request at all.
- *   - The lab starts it: start(minutes) → 6-digit code + expiry (default 2 h,
- *     max 4 h). One session per PC. Stop / expiry / app quit / sign-out end
- *     it, and nothing runs after that.
+ * Rules (remote-support + shared-state contracts, owner-approved 2026-10-31):
+ *   - NO inbound port, no listener. The app reaches OUT: one SignalR
+ *     connection from MAIN to our server (`/hubs/support`, the lab user's
+ *     token + X-PF-BETA: support) that exists ONLY while a session is active;
+ *     idle = no connection, no request at all.
+ *   - The lab starts it: POST /api/support-sessions {pcId, minutes,
+ *     instrumentIds} → code "WDJB-MJHT" + expiry (default 2 h, max 4 h). One
+ *     session per PC. Stop / expiry / app quit / sign-out / the server's
+ *     'Ended' end it, and nothing runs after that.
+ *   - The hub: Join(sessionId) after EVERY (re)connect (its answer carries the
+ *     live log backlog); the server pushes 'Command' / 'Log' / 'Ended'; the PC
+ *     answers each command with Result({commandId, ok, data, error,
+ *     approvedOnPc}). Reconnects with backoff while the session lives.
  *   - LOOK actions (network, firewall, who holds a port, connector status,
  *     ARP, connect-only probe, next free port, listen status) run during the
  *     session. CHANGE actions (connector setting, restart, listen capture,
  *     firewall fix) ask MAIN's own dialog EVERY time — Deny is the default
- *     button — and nothing changes without Allow. The firewall fix then
- *     still goes through netdiag.fixFirewall (Windows' own permission
- *     prompt, which no one can click remotely).
+ *     button — and nothing changes without Allow. A dialog open when the
+ *     connection drops is closed (= Deny): the answer could not reach support.
+ *     The firewall fix then still goes through netdiag.fixFirewall (Windows'
+ *     own permission prompt, which no one can click remotely).
  *   - Every argument is checked here with the SAME validators the renderer
  *     IPC uses (netdiag portList / adapterName, diag-ipc probe limits); an
  *     unknown action or an extra argument is refused, never guessed.
- *   - Every action is logged in plain words and shown live to the lab.
+ *   - The lab's live log is the SERVER's (Join backlog + 'Log' events, plain
+ *     words, no payloads), shown on the Instruments card.
  */
 const { EventEmitter } = require('events');
 const { portList, adapterName, PORT_RANGE } = require('./netdiag');
@@ -31,23 +40,23 @@ const { makeDiagHandlers } = require('./diag-ipc');
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 240;
 const DEFAULT_MINUTES = 120;
-const POLL_WAIT_S = 25;
-/** A long-poll that never answers is aborted after this (server wait + slack). */
-const POLL_TIMEOUT_MS = (POLL_WAIT_S + 10) * 1000;
+const HUB_PATH = '/hubs/support';
 const REQ_TIMEOUT_MS = 15 * 1000;
-/** Continuous 401s for this long = the lab user signed out → the session ends. */
+/** Refused sign-in (401/403 on GET /{id}) for this long = signed out → the session ends. */
 const SIGNED_OUT_GRACE_MS = 5 * 60 * 1000;
-const LOG_REFRESH_MS = 30 * 1000;
+/** GET /{id} (joined / pcConnected / earlier expiry / gone) this often while a session runs. */
+const STATUS_REFRESH_MS = 30 * 1000;
 const MAX_LOG = 200;
-/** The server caps a result at 128 KB; stay under it. */
+/** The server refuses a result whose data is over 128 KB (SupportSanitize.MaxBytes); stay under it. */
 const MAX_RESULT_CHARS = 120 * 1024;
 const MAX_CAPTURE_TEXT = 32 * 1024;
 const MAX_DESCRIPTION = 300;
+const MAX_INSTRUMENTS = 64;
 const BETA_HEADER = 'X-PF-BETA';
+const BRANCH_HEADER = 'X-Active-Branch';
 
 const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
-const CODE_RE = /^\d{6}$/;
 const TOKEN_RE = /^[A-Za-z0-9._~+/=-]{16,8192}$/;
 /** sampleIdPath: ASTM field[.component] ("3", "3.2") or HL7 "OBR-3" (the server's own rule). */
 const SAMPLE_PATH_RE = /^(\d{1,2}(\.\d{1,2})?|[A-Za-z]{3}-\d{1,2})$/;
@@ -68,10 +77,11 @@ const int = (v, min, max) => (Number.isInteger(v) && v >= min && v <= max ? v : 
 /** Each returns the clean value, or undefined when the argument is bad. */
 const V = {
   instrumentId: (v) => (typeof v === 'string' && GUID_RE.test(v) ? v.toLowerCase() : undefined),
-  port: (v) => int(v, 1, 65535),
+  /** A port to look at (the server's rule: 1024–65535). */
+  port: (v) => int(v, 1024, 65535),
   /** A port we may LISTEN on (never a privileged one). */
   listenPort: (v) => int(v, 1024, 65535),
-  probePorts: (v) => portList(v, 8, 1) || undefined,
+  probePorts: (v) => portList(v, 8, 1024) || undefined,
   firewallPorts: (v) => portList(v, 8, 1024) || undefined,
   host: (v) => (typeof v === 'string' && v.length <= 15 && /^\d{1,3}(\.\d{1,3}){3}$/.test(v) && v.split('.').every((o) => Number(o) <= 255) ? v : undefined),
   adapter: (v) => adapterName(v) || undefined,
@@ -154,7 +164,10 @@ function parseCommand(raw) {
   return { commandId, action: c.action, kind, args, description };
 }
 
-/** The renderer's start request → { minutes, token, apiUrl } or { error }. */
+/**
+ * The renderer's start request → { minutes, token, apiUrl, branchId } or
+ * { error }. branchId (the active branch, X-Active-Branch) is optional.
+ */
 function parseStart(p) {
   const o = obj(p) || {};
   const minutes = o.minutes == null ? DEFAULT_MINUTES : int(o.minutes, MIN_MINUTES, MAX_MINUTES);
@@ -163,7 +176,12 @@ function parseStart(p) {
   if (!token) return { error: 'bad_request: token' };
   const apiUrl = cleanApiUrl(o.apiUrl);
   if (!apiUrl) return { error: 'bad_request: apiUrl' };
-  return { minutes, token, apiUrl };
+  let branchId = null;
+  if (o.branchId != null && o.branchId !== '') {
+    if (typeof o.branchId !== 'string' || !GUID_RE.test(o.branchId)) return { error: 'bad_request: branchId' };
+    branchId = o.branchId.toLowerCase();
+  }
+  return { minutes, token, apiUrl, branchId };
 }
 
 /** https://host[:port] (or http on this machine for local runs) — no path tricks, no credentials. */
@@ -179,9 +197,6 @@ function cleanApiUrl(v) {
 }
 
 const cleanToken = (t) => (typeof t === 'string' && TOKEN_RE.test(t) ? t : null);
-
-/** Plain words for a 6-digit code: "482 913". */
-const spacedCode = (c) => `${String(c).slice(0, 3)} ${String(c).slice(3)}`;
 
 /**
  * Main's own approval, in plain words. Deny is the default and the Esc
@@ -213,17 +228,48 @@ async function askApproval({ message, detail, signal }, { showMessageBox, getWin
 }
 
 /**
- * One row of the server's log (GET …/log: {at, actor, action, outcome} —
- * `action` is already plain words, e.g. "Open port(s) 5603 in the Windows
- * firewall", `outcome` e.g. "approved on the PC") → the card's row, or null
- * for the "asked" rows (the answer row follows; the open question shows as
- * the approval banner). `outcome` becomes a tone the card can word.
+ * The server's code ("WDJB-MJHT", 8 letters) in its display form, or null
+ * when it isn't one. Upper-case, dash in the middle — read out on the phone.
+ */
+function displayCode(c) {
+  const t = String(c == null ? '' : c).replace(/[\s-]/g, '').toUpperCase();
+  return /^[A-Z0-9]{8}$/.test(t) ? `${t.slice(0, 4)}-${t.slice(4)}` : null;
+}
+
+/**
+ * The real hub connection (Electron main = Node: the token rides the
+ * Authorization header on the WebSocket upgrade, plus X-PF-BETA and the
+ * active branch). WebSockets only, no negotiate round trip — any container
+ * behind the load balancer can take the connection (no sticky sessions).
+ * Required lazily so tests never load it.
+ */
+function defaultHubFactory(url, { accessTokenFactory, headers, retryPolicy }) {
+  // eslint-disable-next-line global-require
+  const signalR = require('@microsoft/signalr');
+  return new signalR.HubConnectionBuilder()
+    .withUrl(url, {
+      accessTokenFactory,
+      headers,
+      transport: signalR.HttpTransportType.WebSockets,
+      skipNegotiation: true,
+    })
+    .withAutomaticReconnect(retryPolicy)
+    .configureLogging(signalR.LogLevel.None)
+    .build();
+}
+
+/**
+ * One row of the server's log ({at, actor, action, outcome} — `action` is
+ * already plain words, e.g. "Open port(s) 5603 in the Windows firewall",
+ * `outcome` e.g. "approved on the PC") → the card's row, or null for the
+ * "asked" rows (the answer row follows; the open question shows as the
+ * approval banner). `outcome` becomes a tone the card can word.
  */
 function serverRow(r) {
   const outcome = String(r.outcome || '').toLowerCase();
   if (outcome === 'asked' || outcome === 'asked for approval on the pc') return null;
   const tone = /denied|refused|no approval/.test(outcome) ? 'denied'
-    : /failed|timed out|stopped before/.test(outcome) ? 'failed'
+    : /failed|timed out|stopped before|not saved|no answer/.test(outcome) ? 'failed'
       : /approved/.test(outcome) ? 'approved' : 'ok';
   const text = String(r.action || '').trim();
   if (!text) return null;
@@ -232,37 +278,47 @@ function serverRow(r) {
   return { at: r.at, actor: r.actor, text: `${text}${detail}`, outcome: tone };
 }
 
+/** A server log line (Join backlog / 'Log' event), cleaned, or null. */
+function cleanLogLine(x) {
+  if (!obj(x) || typeof x.action !== 'string' || typeof x.at !== 'string') return null;
+  const clip = (v) => String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 200);
+  return { at: x.at.slice(0, 40), actor: clip(x.actor).slice(0, 16), action: clip(x.action), outcome: clip(x.outcome) };
+}
+const logKey = (l) => `${l.at}|${l.actor}|${l.action}|${l.outcome}`;
+
 class SupportSession extends EventEmitter {
   /**
    * @param {object} o
    * @param {Function} [o.fetchImpl]   fetch (global fetch in Electron main)
+   * @param {Function} [o.hubFactory]  (url, {accessTokenFactory, headers, retryPolicy}) → HubConnection
    * @param {object}   o.diag          NetDiag
    * @param {object}   o.manager       ConnectorManager
-   * @param {string}   o.pcId          this PC's id (the hostname the heartbeat reports)
-   * @param {Function} o.approve       ({ message, detail }) → Promise<boolean> (askApproval)
+   * @param {string}   o.pcId          this PC's id (os.hostname())
+   * @param {Function} o.approve       ({ message, detail, signal }) → Promise<boolean> (askApproval)
    * @param {Function} [o.now]
    * @param {Function} [o.sleep]       (ms) → Promise (tests make it instant)
-   * @param {number[]} [o.backoffMs]   retry waits after a failed poll
+   * @param {number[]} [o.backoffMs]   reconnect waits
    */
   constructor(o = {}) {
     super();
     this.fetch = o.fetchImpl || ((...a) => globalThis.fetch(...a));
+    this.hubFactory = o.hubFactory || defaultHubFactory;
     this.diag = o.diag;
     this.manager = o.manager;
     this.pcId = String(o.pcId || 'pc').slice(0, 128);
     this.approve = o.approve;
     this.now = o.now || Date.now;
     this.sleep = o.sleep || ((ms) => new Promise((r) => { const t = setTimeout(r, ms); if (t.unref) t.unref(); }));
-    this.backoffMs = o.backoffMs || [2000, 5000, 15000, 30000];
+    this.backoffMs = o.backoffMs || [0, 2000, 5000, 10000, 30000];
     this.signedOutGraceMs = o.signedOutGraceMs == null ? SIGNED_OUT_GRACE_MS : o.signedOutGraceMs;
-    this.logRefreshMs = o.logRefreshMs == null ? LOG_REFRESH_MS : o.logRefreshMs;
+    this.statusRefreshMs = o.statusRefreshMs == null ? STATUS_REFRESH_MS : o.statusRefreshMs;
     /** One capture minute (tests shorten it). */
     this.minuteMs = o.minuteMs || 60000;
     this.diagIpc = this.diag ? makeDiagHandlers({ diag: this.diag, showMessageBox: async () => ({ response: 0 }), getWindow: () => null }) : null;
     this.gen = 0;
     this.s = null;              // the active session, or null
     this.last = null;           // the last ended session's summary (for the card)
-    this.polls = 0;             // GET …/next calls made (tests: none while idle)
+    this.connections = 0;       // hub connections made (tests: none while idle)
   }
 
   /** Card state (never the token). */
@@ -281,30 +337,21 @@ class SupportSession extends EventEmitter {
       minutes: s.minutes,
       supportJoined: s.supportJoined,
       joinedBy: s.joinedBy,
+      /** This PC's live line to Prefrontal: connecting | online | reconnecting. */
+      connection: s.connection,
+      /** The server's own view (GET /{id} pcConnected), null until asked. */
+      pcConnected: s.pcConnected,
       approval: s.approval ? { message: s.approval.message } : null,
       signedOut: s.unauthSince != null,
-      log: this._mergedLog(),
+      log: this._rows(s),
     };
   }
 
   _emit() { this.emit('change', this.state()); }
 
-  /**
-   * The server's log is the record (it sees support's side too); this PC's
-   * own lines fill the gap until the next fetch, so nothing shows twice.
-   */
-  _mergedLog(s = this.s) {
-    if (!s) return [];
-    const server = s.serverLog.map(serverRow).filter(Boolean);
-    const local = s.serverLogFetchedAt ? s.log.filter((l) => Date.parse(l.at) > s.serverLogFetchedAt) : s.log;
-    return [...local, ...server].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, MAX_LOG);
-  }
-
-  _log(text, outcome, actor = 'pc') {
-    if (!this.s) return;
-    this.s.log.unshift({ at: new Date(this.now()).toISOString(), actor, text, outcome });
-    if (this.s.log.length > MAX_LOG) this.s.log.length = MAX_LOG;
-    this._emit();
+  /** The server's log → card rows, newest first. */
+  _rows(s) {
+    return s.serverLog.map(serverRow).filter(Boolean).reverse().slice(0, MAX_LOG);
   }
 
   /** The renderer pushes every fresh access token (AuthService refresh). */
@@ -322,60 +369,87 @@ class SupportSession extends EventEmitter {
     return this.start(a);
   }
 
+  /** The analyzers paired on THIS PC (support is scoped to them on the server). */
+  _pairedIds() {
+    let list = [];
+    try { list = (this.manager && this.manager.list()) || []; } catch { list = []; }
+    const ids = list.map((p) => String((p && p.instrumentId) || '').toLowerCase()).filter((id) => GUID_RE.test(id));
+    return [...new Set(ids)].slice(0, MAX_INSTRUMENTS);
+  }
+
   /**
-   * POST /api/support-sessions {pcId, minutes} → {sessionId, code, expiresAt}.
+   * POST /api/support-sessions {pcId, minutes, instrumentIds} →
+   * {sessionId, code, expiresAt, hub}; then the hub connection + Join.
    * One session per PC: a second start while one runs is refused.
    */
-  async start({ minutes, token, apiUrl }) {
+  async start({ minutes, token, apiUrl, branchId = null }) {
     if (this.s) return { ok: false, error: 'already_active', state: this.state() };
     const gen = ++this.gen;
     const s = {
-      gen, token, apiUrl, minutes, status: 'starting', sessionId: null, code: null,
+      gen, token, apiUrl, branchId, minutes, status: 'starting', sessionId: null, code: null,
       startedAt: this.now(), expiresAt: this.now() + minutes * 60000,
-      supportJoined: false, joinedBy: null, approval: null, unauthSince: null, log: [], serverLog: [], serverLogFetchedAt: 0, lastLogAt: 0,
-      ctl: null, approvalCtl: null, expiryTimer: null, scans: new Set(),
+      supportJoined: false, joinedBy: null, pcConnected: null, connection: 'connecting', approval: null, unauthSince: null,
+      serverLog: [], approvalCtl: null, expiryTimer: null, statusTimer: null, scans: new Set(),
+      conn: null, connecting: false, queue: Promise.resolve(), description: '',
     };
     this.s = s;
     this.last = null;
     this._emit();
     let r;
     try {
-      r = await this._req(s, 'POST', '', { pcId: this.pcId, minutes });
+      r = await this._req(s, 'POST', '', { pcId: this.pcId, minutes, instrumentIds: this._pairedIds() });
     } catch (e) {
       this._drop(gen);
       return { ok: false, error: `Couldn’t reach Prefrontal: ${e.message}` };
     }
-    const d = r.data || {};
+    const d = obj(r.data) || {};
     if (gen !== this.gen) {
       // Stopped while starting: end the session the server just made.
-      if (typeof d.sessionId === 'string' && ID_RE.test(d.sessionId)) {
+      if (typeof d.sessionId === 'string' && GUID_RE.test(d.sessionId)) {
         try { await this._req(s, 'POST', `/${encodeURIComponent(d.sessionId)}/stop`, {}); } catch { /* it expires anyway */ }
       }
       return { ok: false, error: 'stopped' };
     }
-    if (r.status < 200 || r.status >= 300 || typeof d.sessionId !== 'string' || !ID_RE.test(d.sessionId) || !CODE_RE.test(String(d.code || ''))) {
+    const code = displayCode(d.code);
+    if (r.status < 200 || r.status >= 300 || typeof d.sessionId !== 'string' || !GUID_RE.test(d.sessionId) || !code) {
       this._drop(gen);
       return { ok: false, error: r.status === 404 ? 'Remote support isn’t switched on for this lab.' : r.status === 403 ? 'Your account may not start a support session.' : (r.message || 'Couldn’t start the support session.') };
     }
-    s.sessionId = d.sessionId;
-    s.code = String(d.code);
+    s.sessionId = d.sessionId.toLowerCase();
+    s.code = code;
     // Never longer than asked (or the 4 h cap), whatever the server says.
     const serverExp = Date.parse(d.expiresAt);
     const cap = s.startedAt + minutes * 60000;
     s.expiresAt = Number.isFinite(serverExp) ? Math.min(serverExp, cap) : cap;
     s.status = 'waiting';
-    s.lastLogAt = this.now();
-    const left = Math.max(0, s.expiresAt - this.now());
-    s.expiryTimer = setTimeout(() => { void this.stop('expired'); }, left);
-    if (s.expiryTimer.unref) s.expiryTimer.unref();
-    this._log(`Support session started — code ${spacedCode(s.code)}`, 'ok', 'lab');
-    void this._loop(gen);
+    this._armExpiry(s);
+    this._armStatus(gen);
+    this._openHub(gen);
+    this._emit();
     return { ok: true, state: this.state() };
   }
 
+  _armExpiry(s) {
+    clearTimeout(s.expiryTimer);
+    s.expiryTimer = setTimeout(() => { void this.stop('expired'); }, Math.max(0, s.expiresAt - this.now()));
+    if (s.expiryTimer.unref) s.expiryTimer.unref();
+  }
+
+  _armStatus(gen) {
+    const s = this.s;
+    if (!s || !this.statusRefreshMs) return;
+    clearTimeout(s.statusTimer);
+    s.statusTimer = setTimeout(async () => {
+      if (!this._live(gen)) return;
+      await this._refreshStatus(gen);
+      if (this._live(gen)) this._armStatus(gen);
+    }, this.statusRefreshMs);
+    if (s.statusTimer.unref) s.statusTimer.unref();
+  }
+
   /**
-   * End the session: no more polls, nothing more runs; the server is told
-   * (best effort). reason: 'lab' | 'expired' | 'quit' | 'signed_out' | 'ended'.
+   * End the session: the hub connection closes, nothing more runs; the server
+   * is told (best effort). reason: 'lab' | 'expired' | 'quit' | 'signed_out' | 'ended'.
    */
   async stop(reason = 'lab') {
     const s = this.s;
@@ -383,15 +457,19 @@ class SupportSession extends EventEmitter {
     this.gen++;
     this.s = null;
     clearTimeout(s.expiryTimer);
-    try { if (s.ctl) s.ctl.abort(); } catch { /* already done */ }
+    clearTimeout(s.statusTimer);
     try { if (s.approvalCtl) s.approvalCtl.abort(); } catch { /* no dialog open */ }
+    const conn = s.conn;
+    s.conn = null;
+    if (conn) { try { await conn.stop(); } catch { /* already closed */ } }
     for (const scanId of s.scans) { try { await this.manager.scanStop(scanId); } catch { /* best effort */ } }
-    const words = { lab: 'You stopped the support session', expired: 'The support session expired', quit: 'The app closed — support session ended', signed_out: 'Signed out — support session ended', ended: 'Prefrontal support ended the session' };
-    const endRow = { at: new Date(this.now()).toISOString(), actor: reason === 'lab' ? 'lab' : 'pc', text: words[reason] || 'Support session ended', outcome: 'ok' };
-    this.last = { reason, log: [endRow, ...this._mergedLog(s)].slice(0, MAX_LOG) };
+    s.scans.clear();
+    const said = { lab: 'You stopped the support session', expired: 'The support session expired', quit: 'The app closed — support session ended', signed_out: 'Signed out — support session ended', ended: 'Prefrontal support ended the session' };
+    const endRow = { at: new Date(this.now()).toISOString(), actor: reason === 'lab' ? 'lab' : 'pc', text: said[reason] || 'Support session ended', outcome: 'ok' };
+    this.last = { reason, log: [endRow, ...this._rows(s)].slice(0, MAX_LOG) };
     this._emit();
     if (s.sessionId && reason !== 'ended') {
-      try { await this._req(s, 'POST', `/${encodeURIComponent(s.sessionId)}/stop`, {}, REQ_TIMEOUT_MS); } catch { /* the server expires it anyway */ }
+      try { await this._req(s, 'POST', `/${encodeURIComponent(s.sessionId)}/stop`, {}); } catch { /* the server expires it anyway */ }
     }
     return { ok: true, state: this.state() };
   }
@@ -399,6 +477,7 @@ class SupportSession extends EventEmitter {
   _drop(gen) {
     if (gen !== this.gen || !this.s) return;
     clearTimeout(this.s.expiryTimer);
+    clearTimeout(this.s.statusTimer);
     this.s = null;
     this.gen++;
     this._emit();
@@ -406,15 +485,20 @@ class SupportSession extends EventEmitter {
 
   _live(gen) { return !!this.s && this.s.gen === gen && gen === this.gen; }
 
-  async _req(s, method, path, body, timeoutMs = REQ_TIMEOUT_MS, track = false) {
+  _headers(s) {
+    const h = { [BETA_HEADER]: 'support' };
+    if (s.branchId) h[BRANCH_HEADER] = s.branchId;
+    return h;
+  }
+
+  async _req(s, method, path, body, timeoutMs = REQ_TIMEOUT_MS) {
     const ctl = new AbortController();
-    if (track) s.ctl = ctl;
     const t = setTimeout(() => ctl.abort(), timeoutMs);
     let res;
     try {
       res = await this.fetch(`${s.apiUrl}/api/support-sessions${path}`, {
         method,
-        headers: { Authorization: `Bearer ${s.token}`, 'Content-Type': 'application/json', Accept: 'application/json', [BETA_HEADER]: 'support' },
+        headers: { Authorization: `Bearer ${s.token}`, 'Content-Type': 'application/json', Accept: 'application/json', ...this._headers(s) },
         body: body === undefined ? undefined : JSON.stringify(body),
         signal: ctl.signal,
       });
@@ -422,7 +506,6 @@ class SupportSession extends EventEmitter {
       throw new Error(e && e.name === 'AbortError' ? 'timeout' : (e && e.message) || 'network');
     } finally {
       clearTimeout(t);
-      if (track && s.ctl === ctl) s.ctl = null;
     }
     let json = null;
     if (res.status !== 204) { try { json = await res.json(); } catch { json = null; } }
@@ -431,93 +514,157 @@ class SupportSession extends EventEmitter {
     return { status: res.status, data, message: typeof message === 'string' ? message : null };
   }
 
-  /** The long-poll: one command at a time, only while this session lives. */
-  async _loop(gen) {
-    let fails = 0;
-    while (this._live(gen)) {
-      const s = this.s;
-      if (this.now() >= s.expiresAt) { await this.stop('expired'); return; }
-      let r;
-      try {
-        this.polls++;
-        r = await this._req(s, 'GET', `/${encodeURIComponent(s.sessionId)}/next?wait=${POLL_WAIT_S}`, undefined, POLL_TIMEOUT_MS, true);
-      } catch {
-        if (!this._live(gen)) return;
-        await this.sleep(this.backoffMs[Math.min(fails++, this.backoffMs.length - 1)]);
-        continue;
-      }
+  // ── the hub ────────────────────────────────────────────────────────────
+
+  /** Build this session's ONE connection, wire it, connect. */
+  _openHub(gen) {
+    const s = this.s;
+    const backoff = (n) => this.backoffMs[Math.min(n, this.backoffMs.length - 1)];
+    const conn = this.hubFactory(`${s.apiUrl}${HUB_PATH}`, {
+      // Always the freshest token the renderer handed over.
+      accessTokenFactory: () => (this._live(gen) ? this.s.token : ''),
+      headers: this._headers(s),
+      // Keep reconnecting while the session lives; stop the moment it ends.
+      retryPolicy: { nextRetryDelayInMilliseconds: (ctx) => (this._live(gen) ? backoff(ctx.previousRetryCount) : null) },
+    });
+    this.connections++;
+    s.conn = conn;
+    conn.on('Command', (raw) => {
       if (!this._live(gen)) return;
-      if (r.status === 401 || r.status === 403) {
-        if (s.unauthSince == null) { s.unauthSince = this.now(); this._emit(); }
-        if (this.now() - s.unauthSince >= this.signedOutGraceMs) { await this.stop('signed_out'); return; }
-        await this.sleep(this.backoffMs[Math.min(fails++, this.backoffMs.length - 1)]);
-        continue;
+      s.queue = s.queue.then(() => this._handle(gen, raw)).catch(() => undefined);
+    });
+    conn.on('Log', (line) => { if (this._live(gen)) this._addLog(gen, line); });
+    conn.on('Ended', () => { if (this._live(gen)) void this.stop('ended'); });
+    conn.onreconnecting(() => {
+      if (!this._live(gen)) return;
+      this._lineDown(gen);
+    });
+    conn.onreconnected(() => { if (this._live(gen)) void this._join(gen); });
+    conn.onclose(() => {
+      // Automatic reconnect gave up (or the server closed for good): start over while the session lives.
+      if (!this._live(gen)) return;
+      this._lineDown(gen);
+      void this._connect(gen, 1);
+    });
+    void this._connect(gen, 0);
+  }
+
+  /** The line dropped: an open question can no longer reach support → closed (= Deny). */
+  _lineDown(gen) {
+    const s = this.s;
+    s.connection = 'reconnecting';
+    try { if (s.approvalCtl) s.approvalCtl.abort(); } catch { /* none open */ }
+    this._emit();
+    void this._refreshStatus(gen);
+  }
+
+  /** Start the connection, retrying with backoff while the session lives; then Join. */
+  async _connect(gen, fails) {
+    const s = this.s;
+    if (!s || s.connecting) return;
+    s.connecting = true;
+    try {
+      while (this._live(gen)) {
+        if (fails > 0) await this.sleep(this.backoffMs[Math.min(fails - 1, this.backoffMs.length - 1)]);
+        if (!this._live(gen)) return;
+        try {
+          await s.conn.start();
+        } catch {
+          fails++;
+          if (!this._live(gen)) return;
+          if (s.connection !== 'reconnecting') { s.connection = 'reconnecting'; this._emit(); }
+          void this._refreshStatus(gen);
+          continue;
+        }
+        if (!this._live(gen)) return;
+        await this._join(gen);
+        return;
       }
-      if (r.status === 404 || r.status === 410) { await this.stop('ended'); return; }
-      if (r.status >= 500 || r.status === 429 || r.status === 408) {
-        await this.sleep(this.backoffMs[Math.min(fails++, this.backoffMs.length - 1)]);
-        continue;
-      }
-      fails = 0;
-      if (s.unauthSince != null) { s.unauthSince = null; this._emit(); }
-      if (r.status === 200 && r.data) await this._handle(gen, r.data);
-      if (this._live(gen) && this.now() - s.lastLogAt >= this.logRefreshMs) await this._refreshLog(gen);
+    } finally {
+      s.connecting = false;
     }
   }
 
-  async _refreshLog(gen, withStatus = true) {
+  /** Join(sessionId): after EVERY (re)connect. Its log is the backlog. */
+  async _join(gen) {
     const s = this.s;
-    s.lastLogAt = this.now();
-    try {
-      const asked = this.now();
-      const r = await this._req(s, 'GET', `/${encodeURIComponent(s.sessionId)}/log`);
-      if (!this._live(gen) || r.status !== 200 || !Array.isArray(r.data)) return;
-      s.serverLog = r.data.slice(-MAX_LOG).filter((x) => obj(x) && typeof x.action === 'string' && typeof x.at === 'string')
-        .map((x) => ({ at: x.at, actor: String(x.actor || ''), action: x.action.slice(0, 200), outcome: String(x.outcome || '').slice(0, 200) }));
-      s.serverLogFetchedAt = asked;
-      this._emit();
-    } catch { /* the log is a courtesy */ }
-    if (withStatus && this._live(gen)) await this._refreshStatus(gen);
+    let r;
+    try { r = await s.conn.invoke('Join', s.sessionId); } catch { return; /* dropped again: the reconnect joins */ }
+    if (!this._live(gen)) return;
+    const o = obj(r);
+    if (!o || o.ok !== true) {
+      // not_found = the session is gone (ended, expired, replaced); invalid_request = it can never be joined.
+      if (!o || o.error === 'not_found' || o.error === 'invalid_request') await this.stop('ended');
+      return;
+    }
+    s.connection = 'online';
+    if (o.status === 'active') { s.supportJoined = true; s.status = 'connected'; }
+    const exp = Date.parse(o.expiresAt);
+    if (Number.isFinite(exp) && exp < s.expiresAt) { s.expiresAt = exp; this._armExpiry(s); }
+    // Backlog is the record; keep any line that arrived meanwhile and isn't in it.
+    const backlog = (Array.isArray(o.log) ? o.log : []).map(cleanLogLine).filter(Boolean);
+    const seen = new Set(backlog.map(logKey));
+    const lastAt = backlog.length ? backlog[backlog.length - 1].at : '';
+    const extra = s.serverLog.filter((l) => !seen.has(logKey(l)) && l.at > lastAt);
+    s.serverLog = [...backlog, ...extra].slice(-MAX_LOG);
+    this._emit();
+    void this._refreshStatus(gen);
   }
 
-  /** GET /{id} → {status, joined, joinedBy, expiresAt}: who joined (for the
-   *  card) and the server's end. The expiry may only come EARLIER, never later. */
+  _addLog(gen, line) {
+    const s = this.s;
+    const l = cleanLogLine(line);
+    if (!l) return;
+    if (s.serverLog.some((x) => logKey(x) === logKey(l))) return;   // Join's backlog may carry it already
+    s.serverLog.push(l);
+    if (s.serverLog.length > MAX_LOG) s.serverLog.splice(0, s.serverLog.length - MAX_LOG);
+    if (l.actor === 'support' && /^joined/i.test(l.action)) {
+      s.supportJoined = true;
+      s.status = 'connected';
+      if (l.outcome && l.outcome.length <= 254) s.joinedBy = l.outcome;
+    }
+    this._emit();
+  }
+
+  /** GET /{id} → {status, joined, joinedBy, expiresAt, pcConnected}. 404 = gone;
+   *  401/403 for the grace period = signed out. The expiry only moves EARLIER. */
   async _refreshStatus(gen) {
     const s = this.s;
-    try {
-      const r = await this._req(s, 'GET', `/${encodeURIComponent(s.sessionId)}`);
-      if (!this._live(gen)) return;
-      if (r.status === 404 || r.status === 410) { await this.stop('ended'); return; }
-      const d = obj(r.data);
-      if (r.status !== 200 || !d) return;
-      if (d.joined === true) { s.supportJoined = true; s.status = 'connected'; }
-      if (typeof d.joinedBy === 'string' && d.joinedBy.length <= 254) s.joinedBy = d.joinedBy.replace(/[\u0000-\u001f\u007f]/g, '');
-      const exp = Date.parse(d.expiresAt);
-      if (Number.isFinite(exp) && exp < s.expiresAt) {
-        s.expiresAt = exp;
-        clearTimeout(s.expiryTimer);
-        s.expiryTimer = setTimeout(() => { void this.stop('expired'); }, Math.max(0, exp - this.now()));
-        if (s.expiryTimer.unref) s.expiryTimer.unref();
-      }
-      if (typeof d.status === 'string' && /^(ended|expired|stopped)$/.test(d.status)) { await this.stop('ended'); return; }
-      this._emit();
-    } catch { /* a courtesy */ }
+    if (!s || !s.sessionId) return;
+    let r;
+    try { r = await this._req(s, 'GET', `/${encodeURIComponent(s.sessionId)}`); } catch { return; /* offline: the hub reconnects */ }
+    if (!this._live(gen)) return;
+    if (r.status === 404 || r.status === 410) { await this.stop('ended'); return; }
+    if (r.status === 401 || r.status === 403) {
+      if (s.unauthSince == null) { s.unauthSince = this.now(); this._emit(); }
+      if (this.now() - s.unauthSince >= this.signedOutGraceMs) await this.stop('signed_out');
+      return;
+    }
+    const d = obj(r.data);
+    if (r.status !== 200 || !d) return;
+    if (s.unauthSince != null) s.unauthSince = null;
+    if (d.joined === true || d.status === 'active') { s.supportJoined = true; s.status = 'connected'; }
+    if (typeof d.joinedBy === 'string' && d.joinedBy.length <= 254) s.joinedBy = d.joinedBy.replace(/[\u0000-\u001f\u007f]/g, '');
+    if (typeof d.pcConnected === 'boolean') s.pcConnected = d.pcConnected;
+    const exp = Date.parse(d.expiresAt);
+    if (Number.isFinite(exp) && exp < s.expiresAt) { s.expiresAt = exp; this._armExpiry(s); }
+    this._emit();
   }
 
-  /** Run one command and post its result. */
+  /** Run one command (one at a time — one dialog at a time) and answer it. */
   async _handle(gen, raw) {
+    if (!this._live(gen)) return;
     const cmd = parseCommand(raw);
     if (!cmd.commandId) return;   // nothing to answer to
     const s = this.s;
-    if (!s.supportJoined) { s.supportJoined = true; s.status = 'connected'; s.lastLogAt = 0; /* who joined: ask after this command */ }
+    if (!s.supportJoined) { s.supportJoined = true; s.status = 'connected'; this._emit(); }
     let result;
     if (cmd.error) {
       result = { ok: false, error: cmd.error };
-      this._log(`Refused a support request (${cmd.error})`, 'refused');
     } else {
       try { result = await this._run(gen, cmd); } catch (e) { result = { ok: false, error: (e && e.message) || 'failed' }; }
     }
-    // A long capture answers later; the long-poll carries on meanwhile.
+    // A long capture answers later; other commands carry on meanwhile.
     if (result && result.later) {
       void result.later.then((r) => this._post(gen, cmd, r), (e) => this._post(gen, cmd, { ok: false, approvedOnPc: true, error: (e && e.message) || 'failed' }));
       return;
@@ -525,20 +672,27 @@ class SupportSession extends EventEmitter {
     await this._post(gen, cmd, result);
   }
 
-  /** POST /{id}/result. 409 = already answered (done); 5xx / network retried. */
+  /**
+   * Result({commandId, ok, data, error, approvedOnPc}). The server answers
+   * null (recorded) or a code; result_too_large → the answer is re-sent
+   * without its data. not_connected / unknown_command / already_answered:
+   * the server already closed that command (e.g. the line dropped) — nothing
+   * to retry. A dropped connection = the server failed it already.
+   */
   async _post(gen, cmd, result) {
     if (!this._live(gen)) return;   // stopped meanwhile: report nothing more
     const s = this.s;
-    const body = { commandId: cmd.commandId, ok: !!result.ok, data: capData(result.data), error: result.error || null };
-    if (cmd.kind === 'change') body.approvedOnPc = result.approvedOnPc === true;
-    for (let i = 0; i < 3 && this._live(gen); i++) {
-      try {
-        const r = await this._req(s, 'POST', `/${encodeURIComponent(s.sessionId)}/result`, body);
-        if (r.status === 410) { await this.stop('ended'); return; }
-        if (r.status < 500) { if (this._live(gen)) await this._refreshLog(gen, false); break; }
-      } catch { /* retry */ }
-      await this.sleep(this.backoffMs[Math.min(i, this.backoffMs.length - 1)]);
-    }
+    const r = result || { ok: false, error: 'failed' };
+    const body = {
+      commandId: cmd.commandId, ok: !!r.ok, data: capData(r.data), error: r.error || null,
+      approvedOnPc: cmd.kind === 'change' ? r.approvedOnPc === true : false,
+    };
+    try {
+      const said = await s.conn.invoke('Result', body);
+      if (said === 'result_too_large' && this._live(gen)) {
+        await s.conn.invoke('Result', { ...body, ok: false, data: null, error: 'result_too_large' });
+      }
+    } catch { /* line dropped: the server answered support "offline" already */ }
   }
 
   _instrument(id) {
@@ -549,18 +703,21 @@ class SupportSession extends EventEmitter {
   /** Ask the lab on this PC. Only one dialog at a time. */
   async _ask(gen, message, detailExtra) {
     const s = this.s;
+    // The line is down: the answer could not reach support — don't ask.
+    if (s.connection !== 'online') return false;
     s.approval = { message };
     s.approvalCtl = new AbortController();
     this._emit();
     let yes = false;
     try {
       const said = s.description ? `Prefrontal support says: “${s.description}”\n\n` : '';
-      const detail = `${said}${detailExtra ? `${detailExtra}\n\n` : ''}Only allow this if you are talking to Prefrontal support right now (session code ${spacedCode(s.code)}).`;
+      const detail = `${said}${detailExtra ? `${detailExtra}\n\n` : ''}Only allow this if you are talking to Prefrontal support right now (session code ${s.code}).`;
       yes = await this.approve({ message, detail, signal: s.approvalCtl.signal });
     } catch { yes = false; }
+    const aborted = s.approvalCtl.signal.aborted;
     s.approvalCtl = null;
     if (this.s === s) { s.approval = null; this._emit(); }
-    return yes === true && this._live(gen);
+    return yes === true && !aborted && this._live(gen);
   }
 
   async _run(gen, { action, args, kind, description }) {
@@ -569,26 +726,26 @@ class SupportSession extends EventEmitter {
     this.s.description = description || '';
     // The server called a "look" a change: ask first (stricter, never looser).
     if (kind === 'change' && ACTIONS[action].kind === 'look') {
-      if (!(await this._ask(gen, `Prefrontal support wants to: ${description || action.replace(/_/g, ' ')}. Allow?`))) return this._denied(action.replace(/_/g, ' '));
+      if (!(await this._ask(gen, `Prefrontal support wants to: ${description || action.replace(/_/g, ' ')}. Allow?`))) return this._denied();
       const r = await this._run(gen, { action, args, kind: 'look', description });
       return { ...r, approvedOnPc: true };
     }
-    const look = (text, data) => { this._log(text, 'ok'); return { ok: true, data }; };
+    const look = (data) => ({ ok: true, data });
     switch (action) {
-      case 'pc_overview': return look('Looked at this PC’s network', await d.snapshot());
-      case 'firewall_status': return look('Looked at the firewall', await d.firewall());
-      case 'port_owner': return look(`Checked which program uses port ${args.port}`, { port: args.port, owner: await d.portOwner(args.port) });
+      case 'pc_overview': return look(await d.snapshot());
+      case 'firewall_status': return look(await d.firewall());
+      case 'port_owner': return look({ port: args.port, owner: await d.portOwner(args.port) });
       case 'recent_errors': {
         // Error TEXT only (never a message body): what the connector logged.
         const st = m.status().filter((x) => !args.instrumentId || String(x.instrumentId).toLowerCase() === args.instrumentId);
-        return look('Looked at recent analyzer errors', st.map((x) => ({
+        return look(st.map((x) => ({
           instrumentId: x.instrumentId, name: x.name, link: x.link || x.state || null,
           errorDetail: typeof x.errorDetail === 'string' ? x.errorDetail : null,
           lastError: typeof x.lastError === 'string' ? x.lastError : null,
           errors: (Array.isArray(x.recentErrors) ? x.recentErrors : []).map((e) => ({ at: e && e.at, error: String((e && e.message) || '').slice(0, 300) })),
         })));
       }
-      case 'arp_table': return look('Looked at devices on the lab network', await d.arp());
+      case 'arp_table': return look(await d.arp());
       case 'probe': {
         // netdiag.probe dials only ARP-known hosts on the /24 of one of THIS
         // PC's own private addresses; pick that address from the host asked
@@ -605,21 +762,17 @@ class SupportSession extends EventEmitter {
           if (!address) return { ok: false, error: 'this PC has no private network address' };
         }
         const r = await this.diagIpc.probe({ address, ports: args.ports });
-        const what = args.host ? `Checked ${args.host} on port(s) ${args.ports.join(', ')}` : `Checked the devices on the network on port(s) ${args.ports.join(', ')}`;
-        if (!r || r.error) { this._log(what, 'failed'); return { ok: false, error: (r && r.error) || 'probe failed', data: r }; }
-        return look(what, args.host ? { ...r, open: (r.open || []).filter((o) => o.host === args.host) } : r);
+        if (!r || r.error) return { ok: false, error: (r && r.error) || 'probe failed', data: r };
+        return look(args.host ? { ...r, open: (r.open || []).filter((o) => o.host === args.host) } : r);
       }
-      case 'next_free_port': return look('Looked for a free analyzer port', { port: await d.nextFreePort() });
-      case 'listen_status': return look('Looked at open listening ports', {
-        endpoints: m.usedEndpoints(), activeCaptures: m.activeCaptures(),
-      });
+      case 'next_free_port': return look({ port: await d.nextFreePort() });
+      case 'listen_status': return look({ endpoints: m.usedEndpoints(), activeCaptures: m.activeCaptures() });
       case 'set_connector_setting': {
         const p = this._instrument(args.instrumentId);
         if (!p) return { ok: false, error: 'not paired on this PC' };
         const f = SETTING_FIELDS[args.field];
         const text = `the ${f.word} of the ${p.name} to ${args.value}`;
-        if (!(await this._ask(gen, `Prefrontal support wants to change ${text}. Allow?`, 'Prefrontal saves it like a change made on the Instruments screen.'))) return this._denied(`Change ${text}`);
-        this._log(`Change ${text}`, 'approved');
+        if (!(await this._ask(gen, `Prefrontal support wants to change ${text}. Allow?`, 'Prefrontal saves it like a change made on the Instruments screen.'))) return this._denied();
         // Approval ONLY: the server applies it through the instrument config
         // (validation, audit, bridge bump) and this PC picks it up.
         return { ok: true, approvedOnPc: true, data: { approved: true } };
@@ -627,9 +780,8 @@ class SupportSession extends EventEmitter {
       case 'restart_connector': {
         const p = this._instrument(args.instrumentId);
         if (!p) return { ok: false, error: 'not paired on this PC' };
-        if (!(await this._ask(gen, `Prefrontal support wants to restart the connection to the ${p.name}. Allow?`, 'Results the analyzer sends during the restart are kept and sent after it.'))) return this._denied(`Restart the ${p.name} connection`);
+        if (!(await this._ask(gen, `Prefrontal support wants to restart the connection to the ${p.name}. Allow?`, 'Results the analyzer sends during the restart are kept and sent after it.'))) return this._denied();
         const r = await m.reload(p.instrumentId);
-        this._log(`Restarted the ${p.name} connection — approved`, r && r.ok ? 'approved' : 'failed');
         return { ok: !!(r && r.ok), approvedOnPc: true, data: r, error: r && !r.ok ? r.error : undefined };
       }
       case 'listen_capture': {
@@ -637,15 +789,13 @@ class SupportSession extends EventEmitter {
         // Never a port a paired analyzer uses (manager.scanStart refuses it too).
         const used = m.usedEndpoints().find((u) => u.port === args.port);
         if (used) return { ok: false, error: `port ${args.port} is used by ${used.name} on this PC` };
-        if (!(await this._ask(gen, `Prefrontal support wants to listen on port ${args.port} for ${minutes} min to see what the analyzer sends. Allow?`, 'Nothing is sent to the lab’s results while listening.'))) return this._denied(`Listen on port ${args.port}`);
+        if (!(await this._ask(gen, `Prefrontal support wants to listen on port ${args.port} for ${minutes} min to see what the analyzer sends. Allow?`, 'Nothing is sent to the lab’s results while listening.'))) return this._denied();
         const r = await m.scanStart({ ports: [args.port] });
         if (!r || !r.scanId) {
-          this._log(`Listen on port ${args.port} — couldn’t start`, 'failed');
           return { ok: false, approvedOnPc: true, error: (r && (r.error || (r.ports && r.ports[0] && r.ports[0].error))) || 'could not listen', data: r };
         }
         const s = this.s;
         s.scans.add(r.scanId);
-        this._log(`Listening on port ${args.port} for ${minutes} min — approved`, 'approved');
         // Answers when the capture ends: {messages:[{protocol, text}], bytes}
         // (the server scrubs the text before support sees it).
         const later = new Promise((resolve) => {
@@ -686,16 +836,14 @@ class SupportSession extends EventEmitter {
             return yes;
           },
         });
-        if (asked && !yes) return this._denied(`Open ${portWords} in the firewall`);
-        this._log(`Opened ${portWords} in the firewall${asked ? ' — approved' : ''}`, r && r.ok ? 'approved' : 'failed');
+        if (asked && !yes) return this._denied();
         return { ok: !!(r && r.ok), approvedOnPc: asked && yes, data: r, error: r && !r.ok ? r.error : undefined };
       }
       default: return { ok: false, error: 'unknown_action' };
     }
   }
 
-  _denied(what) {
-    this._log(`${what} — denied on this PC`, 'denied', 'lab');
+  _denied() {
     return { ok: false, approvedOnPc: false, error: 'denied_on_pc' };
   }
 }
@@ -713,16 +861,23 @@ function captureResult(out) {
   return { messages, bytes };
 }
 
-/** Keep a result small enough for the server (and Claude). */
+/**
+ * Keep a result under the server's cap (it counts the JSON text of `data`):
+ * a bigger one becomes a preview the server still accepts.
+ */
 function capData(data) {
   if (data === undefined) return null;
   let text;
   try { text = JSON.stringify(data); } catch { return { unserialisable: true }; }
   if (text === undefined) return null;
-  return text.length > MAX_RESULT_CHARS ? { truncated: true, preview: text.slice(0, MAX_RESULT_CHARS) } : data;
+  if (text.length <= MAX_RESULT_CHARS) return data;
+  // The preview string is JSON-escaped once more; leave room for that.
+  let preview = text.slice(0, Math.floor(MAX_RESULT_CHARS / 2));
+  while (JSON.stringify({ truncated: true, preview }).length > MAX_RESULT_CHARS) preview = preview.slice(0, Math.floor(preview.length * 0.9));
+  return { truncated: true, preview };
 }
 
 module.exports = {
-  SupportSession, ACTIONS, SETTING_FIELDS, parseCommand, captureResult, parseStart, cleanApiUrl, askApproval, capData, spacedCode,
-  MIN_MINUTES, MAX_MINUTES, DEFAULT_MINUTES, POLL_WAIT_S,
+  SupportSession, ACTIONS, SETTING_FIELDS, parseCommand, captureResult, parseStart, cleanApiUrl, askApproval, capData, displayCode,
+  serverRow, defaultHubFactory, HUB_PATH, MIN_MINUTES, MAX_MINUTES, DEFAULT_MINUTES, MAX_RESULT_CHARS,
 };

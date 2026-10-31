@@ -187,14 +187,6 @@ describe('BetaFeaturesService', () => {
     expect(out).toBe(true);
     expect(r.beta.enabled('mcp')).toBe(true);
   });
-
-  it('betaGuard with several keys: ANY one on lets it through (consent page: mcp | support)', async () => {
-    service({ switches: { 'pf.beta.support': '1' }, fetch: async () => new Response(JSON.stringify({ support: true }), { status: 200 }) });
-    let out = await TestBed.runInInjectionContext(() => betaGuard('mcp', 'support')({} as never, {} as never)) as unknown;
-    expect(out).toBe(true);
-    out = await TestBed.runInInjectionContext(() => betaGuard('mcp')({} as never, {} as never)) as unknown;
-    expect(out).toBeInstanceOf(UrlTree);
-  });
 });
 
 describe('betaHeaderInterceptor', () => {

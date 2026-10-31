@@ -140,8 +140,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
     // "Allow Prefrontal support" (beta, support-session.js): the lab starts a
-    // session (code + expiry), main long-polls our server only while it is
+    // session (code + expiry), main keeps one hub connection to our server only while it is
     // active and asks its OWN dialog before every change. Validated in main.
+    // start({minutes, token, apiUrl, branchId?}) — main holds the hub link.
     support: {
       start: (p) => ipcRenderer.invoke('instruments:supportStart', p),
       stop: () => ipcRenderer.invoke('instruments:supportStop'),

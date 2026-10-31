@@ -308,8 +308,7 @@
   color: var(--text-tertiary);
 }
 .lg__or::before, .lg__or::after { content: ''; flex: 1; height: 1px; background: var(--lg-field-line); }
-.pf-btn.lg__passkey,
-.pf-btn.lg__google {
+.pf-btn.lg__passkey {
   width: 100%;
   height: 48px;
   min-height: 48px;
@@ -320,10 +319,8 @@
   border-color: var(--lg-field-line);
   color: var(--text-primary);
 }
-.pf-btn.lg__passkey:hover:not(:disabled),
-.pf-btn.lg__google:hover:not(:disabled) { border-color: color-mix(in srgb, var(--lg-violet) 45%, var(--lg-field-line)); }
-.pf-btn.lg__passkey:focus-visible,
-.pf-btn.lg__google:focus-visible { outline: 2px solid var(--lg-violet); outline-offset: 3px; }
+.pf-btn.lg__passkey:hover:not(:disabled) { border-color: color-mix(in srgb, var(--lg-violet) 45%, var(--lg-field-line)); }
+.pf-btn.lg__passkey:focus-visible { outline: 2px solid var(--lg-violet); outline-offset: 3px; }
 .pf-btn.lg__passkey pf-passkey-icon { color: var(--lg-violet); }
 .lg__pknote { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--text-secondary); text-align: center; }
 
@@ -394,5 +391,3 @@
   .lg__card, .lg__error { animation: none; }
   .pf-btn.lg__submit, .lg-field__box, .lg-field__icon { transition: none; }
 }
-
-.pf-btn.lg__google svg { color: var(--lg-violet); }

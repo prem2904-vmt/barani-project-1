@@ -92,9 +92,6 @@ describe('no PF-logo loaders outside sign-in', () => {
   const ALLOWED = new Set([
     'features/login/login.component.ts',
     'features/login/login.component.html',
-    // The Google sign-in's return leg (/auth/callback) IS the sign-in screen's
-    // second half — same loader while the code is exchanged.
-    'features/login/auth-callback.page.ts',
     'shared/components/loading-logo/loading-logo.component.ts',
     'shared/components/loading-logo/loading-logo.component.html',
     // PENDING (2026-09-27): /pathologist is being reworked in parallel by

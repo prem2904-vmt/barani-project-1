@@ -24,6 +24,7 @@ export function normaliseSupportState(s: unknown): SupportSessionState {
     ...o,
     active: o.active === true,
     status: (['idle', 'starting', 'waiting', 'connected', 'ended'] as const).includes(o.status as never) ? o.status! : 'idle',
+    ...(o.connection !== undefined ? { connection: (['connecting', 'online', 'reconnecting'] as const).includes(o.connection as never) ? o.connection : 'connecting' } : {}),
     log: Array.isArray(o.log) ? o.log.filter((l) => l && typeof l.text === 'string') : [],
   } as SupportSessionState;
 }
@@ -40,10 +41,10 @@ export function countdownText(expiresAt: string | undefined, now: number): strin
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
 
-/** "482 913" — easier to read out on the phone. */
-export function spacedCode(code: string | undefined): string {
-  const c = String(code ?? '');
-  return /^\d{6}$/.test(c) ? `${c.slice(0, 3)} ${c.slice(3)}` : c;
+/** "WDJB-MJHT" — the server's 8-letter code, dash in the middle, read out on the phone. */
+export function supportCode(code: string | undefined): string {
+  const c = String(code ?? '').replace(/[\s-]/g, '').toUpperCase();
+  return /^[A-Z0-9]{8}$/.test(c) ? `${c.slice(0, 4)}-${c.slice(4)}` : '—';
 }
 
 /** Why the last session ended, in plain words. */
@@ -113,7 +114,9 @@ export class SupportSessionService {
     const token = await this.auth.getAccessToken();
     if (!token) return 'Sign in again, then try once more.';
     try {
-      const r = await api.start({ minutes, token, apiUrl: environment.apiUrl });
+      // The active branch rides X-Active-Branch on main's HTTP calls and hub connection.
+      const branchId = this.auth.activeBranchId() ?? undefined;
+      const r = await api.start({ minutes, token, apiUrl: environment.apiUrl, ...(branchId ? { branchId } : {}) });
       if (r?.state) this._state.set(normaliseSupportState(r.state));
       if (!r?.ok) return r?.error === 'already_active' ? null : (r?.error || 'Couldn’t start the support session.');
       this.startedBy = this.auth.user()?.id ?? null;

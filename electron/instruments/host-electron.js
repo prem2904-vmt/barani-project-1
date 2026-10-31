@@ -122,7 +122,8 @@ function register(windowGetter) {
   handle('instruments:diagScanStop', (id) => (GUID_RE.test(String(id || '')) ? manager.scanStop(String(id)) : { ports: [] }));
 
   // ── "Allow Prefrontal support" (beta `support`, support-session.js). The
-  // lab starts it; the app only reaches OUT (long-poll) while it is active;
+  // lab starts it; the app only reaches OUT (one SignalR connection from
+  // main to /hubs/support, reconnecting with backoff) while it is active;
   // every CHANGE asks MAIN's own dialog (Deny = default). Arguments are
   // re-validated in the module; the token never goes back to the page.
   support = new SupportSession({

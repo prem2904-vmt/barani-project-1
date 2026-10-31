@@ -53,7 +53,7 @@ export class BetaFeaturesService {
     return this.flags()[key];
   }
 
-  /** Install `window.pf.mcp() / passkeys() / assistant() / support() / beta()` silently. Once at app start. */
+  /** Install `window.pf.mcp() / passkeys() / assistant() / beta()` silently. Once at app start. */
   install(): void {
     if (typeof window === 'undefined' || !this.storage) return;
     installPfBeta(window as unknown as { pf?: Record<string, unknown> } & Record<string, unknown>,
@@ -85,15 +85,13 @@ export class BetaFeaturesService {
 }
 
 /** Route gate for a beta surface: off ⇒ the app's normal unknown-URL handling
- *  (the `**` route sends it to the landing, '/'). Several keys = ANY of them
- *  (the OAuth consent page serves the lab's AI connector `mcp` AND Prefrontal
- *  Support's connector `support`). */
-export function betaGuard(...keys: [BetaFeatureKey, ...BetaFeatureKey[]]): CanActivateFn {
+ *  (the `**` route sends it to the landing, '/'). */
+export function betaGuard(key: BetaFeatureKey): CanActivateFn {
   return async () => {
     const beta = inject(BetaFeaturesService);
     const router = inject(Router);
     await beta.ensureLoaded();
-    return keys.some((k) => beta.enabled(k)) ? true : router.createUrlTree(['/']);
+    return beta.enabled(key) ? true : router.createUrlTree(['/']);
   };
 }
 

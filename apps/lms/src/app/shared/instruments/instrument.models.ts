@@ -462,7 +462,7 @@ export interface SupportSessionState {
   /** idle → starting → waiting (for support to join) → connected → ended */
   status: 'idle' | 'starting' | 'waiting' | 'connected' | 'ended';
   sessionId?: string;
-  /** 6 digits, read out to Prefrontal support. */
+  /** The server's code, "WDJB-MJHT", read out to Prefrontal support. */
   code?: string;
   startedAt?: string;
   expiresAt?: string;
@@ -470,6 +470,10 @@ export interface SupportSessionState {
   supportJoined?: boolean;
   /** Who joined (the support person's email, from the server). */
   joinedBy?: string | null;
+  /** Main's live hub connection to Prefrontal (only while a session runs). */
+  connection?: 'connecting' | 'online' | 'reconnecting';
+  /** The server's own view of this PC's connection (GET /{id}), null until known. */
+  pcConnected?: boolean | null;
   /** A change is waiting for the lab's answer in the PC's own dialog. */
   approval?: { message: string } | null;
   /** The server refused the sign-in token (signed out elsewhere?). */
@@ -480,7 +484,7 @@ export interface SupportSessionState {
 
 /** electron/preload.js → instruments.support (validated again in main). */
 export interface ElectronSupportApi {
-  start(p: { minutes: number; token: string; apiUrl: string }): Promise<{ ok: boolean; error?: string; state?: SupportSessionState }>;
+  start(p: { minutes: number; token: string; apiUrl: string; branchId?: string }): Promise<{ ok: boolean; error?: string; state?: SupportSessionState }>;
   stop(): Promise<{ ok: boolean; state?: SupportSessionState }>;
   status(): Promise<SupportSessionState>;
   setToken(token: string): Promise<{ ok: boolean; error?: string }>;
