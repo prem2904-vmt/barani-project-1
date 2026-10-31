@@ -1,0 +1,44 @@
+name: release-desktop-finish
+
+# Every 30 min: finishes any Mac notarization that was still pending when its release
+# run gave up waiting (staple -> verify -> publish). Does nothing, cheaply, when there
+# is nothing pending. Runs on the Mac runner (keychain profile + stashed signed builds).
+# Note: GitHub pauses scheduled workflows after 60 days without repo activity.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-finish
+  cancel-in-progress: false
+
+jobs:
+  finish:
+    runs-on: [self-hosted, macOS, ARM64, pf-mac]
+    timeout-minutes: 60
+    steps:
+      - id: any
+        run: |
+          STATE="$HOME/.local/state/prefrontal/desktop-release"
+          echo "PF_RELEASE_STATE_DIR=$STATE" >> "$GITHUB_ENV"
+          pending=false
+          for f in "$STATE"/*-mac-*.json; do
+            [ -f "$f" ] || continue
+            if grep -q '"submissionId": "' "$f" && ! grep -qE '"(failed|finishedAt)"' "$f"; then pending=true; fi
+          done
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
+          echo "pending notarizations: $pending"
+      - if: steps.any.outputs.pending == 'true'
+        uses: actions/checkout@v4
+      - if: steps.any.outputs.pending == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: steps.any.outputs.pending == 'true'
+        run: npm ci --no-audit --no-fund
+      - if: steps.any.outputs.pending == 'true'
+        run: node tools/desktop-release.mjs --finish-pending

@@ -1,0 +1,204 @@
+name: release-desktop
+run-name: Desktop ${{ inputs.channel || 'dev' }} ${{ inputs.ref || '' }}
+
+# Builds + publishes the Electron desktop app (Windows x64+ia32 NSIS, macOS) to the
+# public update bucket for ONE channel. Runs on the owner's Mac runner (labels
+# self-hosted, macOS, ARM64, pf-mac) because the Developer ID cert, the
+# 'prefrontal-notary' keychain profile and ~/.config/prefrontal/release-spaces.env
+# live there. No secrets are stored in GitHub; nothing here prints them.
+#
+#   dev    : automatic on push to main when desktop-relevant files change.
+#            Version = package.json version + "-dev.<run_number>". Mac publishes the
+#            signed build at once, then notarization is finished + re-published later.
+#   stage  : Actions -> release-desktop -> Run workflow (channel=stage|prod). Version =
+#   prod   : package.json version at the ref. Refused if already released unless force.
+#            Windows publishes when built; Mac only after notarization.
+#
+# Windows runner is a repo VARIABLE so it can move to Oracle with one edit:
+#   Settings -> Variables -> PF_WIN_RUNNER = ["self-hosted","pf-win"]
+# (unset = the Mac runner builds Windows too).
+# A queued job waits up to 24 h for a runner; if the Mac is off longer, re-run the workflow.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/lms/**'
+      - 'libs/**'
+      - 'electron/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'nx.json'
+      - 'tsconfig.base.json'
+      - 'tools/desktop-release.mjs'
+      - '.github/workflows/release-desktop.yml'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Channel to release to
+        type: choice
+        options: [dev, stage, prod]
+        default: dev
+      ref:
+        description: Branch, tag or commit (empty = what desktop dev runs; for dev = this branch)
+        type: string
+        required: false
+        default: ''
+      force:
+        description: Release even if this version is already out on the channel
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      channel:
+        type: string
+        required: true
+      ref:
+        type: string
+        required: false
+        default: ''
+      force:
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  actions: read
+  contents: read
+
+# One desktop release per channel at a time; a newer run waits, never cancels a half-published one.
+concurrency:
+  group: desktop-release-${{ inputs.channel || 'dev' }}
+  cancel-in-progress: false
+
+env:
+  CHANNEL: ${{ inputs.channel || 'dev' }}
+
+jobs:
+  plan:
+    runs-on: [self-hosted, macOS, ARM64, pf-mac]
+    timeout-minutes: 15
+    outputs:
+      sha: ${{ steps.p.outputs.sha }}
+      version: ${{ steps.p.outputs.version }}
+      do_mac: ${{ steps.p.outputs.do_mac }}
+      do_win: ${{ steps.p.outputs.do_win }}
+    steps:
+      - id: p
+        env:
+          WANT_REF: ${{ inputs.ref }}
+          FORCE: ${{ inputs.force }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_NUMBER: ${{ github.run_number }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          STATE="$HOME/.local/state/prefrontal/desktop-release"
+          mkdir -p "$STATE"
+          # --- which commit? -------------------------------------------------
+          ref="$WANT_REF"
+          if [ -z "$ref" ]; then
+            if [ "$CHANNEL" = dev ]; then ref="$EVENT_SHA"
+            else
+              # "what dev runs" = commit of the latest successful desktop DEV run
+              ref=$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/$REPO/actions/workflows/release-desktop.yml/runs?status=success&per_page=50" \
+                | python3 -c 'import json,sys; r=[x for x in json.load(sys.stdin)["workflow_runs"] if x["display_title"].startswith("Desktop dev")]; print(r[0]["head_sha"] if r else "")')
+              [ -n "$ref" ] || { echo "::error::no successful desktop dev release found - give a ref"; exit 1; }
+            fi
+          fi
+          work=$(mktemp -d)
+          git -C "$work" init -q
+          git -C "$work" fetch -q --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$ref"
+          sha=$(git -C "$work" rev-parse FETCH_HEAD)
+          pkgver=$(git -C "$work" show FETCH_HEAD:package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).version))')
+          rm -rf "$work"
+          base="${pkgver%%-*}"
+          if [ "$CHANNEL" = dev ]; then version="${base}-dev.${RUN_NUMBER}"; else version="$pkgver"; fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"; echo "version=$version" >> "$GITHUB_OUTPUT"
+          # --- already released? (stage/prod only; dev versions are unique) ---
+          do_mac=true; do_win=true
+          if [ "$CHANNEL" != dev ] && [ "$FORCE" != true ]; then
+            pub=$(grep -E '^PF_RELEASE_PUBLIC_BASE=' "$HOME/.config/prefrontal/release-spaces.env" | cut -d= -f2- || true)
+            pub="${pub:-https://prefrontal-updates.blr1.digitaloceanspaces.com}"
+            code() { curl -s -o /dev/null -w '%{http_code}' -I "$pub/$CHANNEL/$1/$version/$2"; }
+            if [ "$(code mac latest-mac.yml)" = 200 ]; then do_mac=false; fi
+            if [ "$(code windows latest.yml)" = 200 ]; then do_win=false; fi
+            f="$STATE/${CHANNEL}-mac-${version}.json"
+            if [ -f "$f" ] && grep -q '"submissionId": "' "$f" && ! grep -qE '"(failed|finishedAt)"' "$f"; then do_mac=false; fi
+            if [ "$do_mac" = false ] && [ "$do_win" = false ]; then
+              echo "::error::$CHANNEL $version is already released (or its Mac notarization is pending). Bump package.json, or re-run with force=true."
+              exit 1
+            fi
+          fi
+          echo "do_mac=$do_mac" >> "$GITHUB_OUTPUT"; echo "do_win=$do_win" >> "$GITHUB_OUTPUT"
+          echo "### Desktop $CHANNEL $version" >> "$GITHUB_STEP_SUMMARY"
+          echo "commit \`$sha\` - mac: $do_mac, windows: $do_win" >> "$GITHUB_STEP_SUMMARY"
+
+  mac:
+    needs: plan
+    if: needs.plan.outputs.do_mac == 'true'
+    runs-on: [self-hosted, macOS, ARM64, pf-mac]
+    timeout-minutes: 90
+    steps:
+      - run: echo "PF_RELEASE_STATE_DIR=$HOME/.local/state/prefrontal/desktop-release" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Build, sign, submit for notarization (dev also publishes the signed build now)
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: node tools/desktop-release.mjs --channel "$CHANNEL" --version "$VERSION" --mac
+
+  windows:
+    needs: plan
+    if: needs.plan.outputs.do_win == 'true'
+    # one-line switch to the Oracle box: set repo variable PF_WIN_RUNNER (see header)
+    runs-on: ${{ fromJSON(vars.PF_WIN_RUNNER || '["self-hosted","macOS","ARM64","pf-mac"]') }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Build (x64 + ia32 NSIS) and publish
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: node tools/desktop-release.mjs --channel "$CHANNEL" --version "$VERSION" --win
+
+  # Polls Apple every 5 min for up to 90 min, then staples + publishes. If Apple is
+  # still busy it leaves the submission for release-desktop-finish (every 30 min).
+  mac-finish:
+    needs: [plan, mac, windows]
+    if: ${{ !cancelled() && needs.mac.result == 'success' }}
+    runs-on: [self-hosted, macOS, ARM64, pf-mac]
+    timeout-minutes: 110
+    steps:
+      - run: echo "PF_RELEASE_STATE_DIR=$HOME/.local/state/prefrontal/desktop-release" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Wait for notarization, staple, publish
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          set -uo pipefail
+          state="$PF_RELEASE_STATE_DIR/${CHANNEL}-mac-${VERSION}.json"
+          for i in $(seq 1 18); do
+            node tools/desktop-release.mjs --finish "$VERSION" --channel "$CHANNEL" --mac || { echo "::error::notarization/publish failed"; exit 1; }
+            if grep -q '"finishedAt"' "$state" 2>/dev/null; then echo "finished"; exit 0; fi
+            if ! grep -q '"submissionId": "' "$state" 2>/dev/null; then echo "::warning::no notarization submission recorded - nothing to wait for"; exit 0; fi
+            echo "still pending (attempt $i/18) - sleeping 5 min"; sleep 300
+          done
+          echo "::warning::Apple still hasn't accepted $CHANNEL $VERSION after 90 min - release-desktop-finish will publish it when it does."

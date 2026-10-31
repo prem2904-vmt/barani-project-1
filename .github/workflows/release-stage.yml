@@ -12,6 +12,10 @@ on:
         description: Build number or full commit SHA (empty = what dev is running now)
         required: false
         default: ''
+      desktop:
+        description: Also release the desktop app (Windows + Mac) to this channel - the version in package.json at what desktop dev runs
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -43,3 +47,8 @@ jobs:
     with:
       environment: stage
       build: ${{ needs.pick.outputs.build }}
+  desktop:
+    if: ${{ inputs.desktop }}
+    uses: ./.github/workflows/release-desktop.yml
+    with:
+      channel: stage

@@ -152,6 +152,65 @@ published) and republishes it as the active channel manifest. Old version
 folders are never deleted, so any previously-published version can be rolled
 back to at any time.
 
+## Automatic releases (GitHub Actions on the Mac runner)
+
+Workflows: `.github/workflows/release-desktop.yml` (build + publish),
+`release-desktop-finish.yml` (scheduled notarization finisher). Both run on the
+owner's Mac runner (`[self-hosted, macOS, ARM64, pf-mac]`) because the Developer
+ID cert, the `prefrontal-notary` keychain profile and
+`~/.config/prefrontal/release-spaces.env` live there. **No secret is stored in
+GitHub**; the script reads the Spaces keys from that file and its leak guard is
+unchanged.
+
+| Trigger | What happens |
+| --- | --- |
+| push to `main` touching `apps/lms/**`, `libs/**`, `electron/**`, `package.json`, `package-lock.json`, `nx.json`, `tsconfig.base.json`, `tools/desktop-release.mjs` | channel **dev**, Windows + Mac |
+| Actions -> release-desktop -> Run workflow (`channel`, optional `ref`, `force`) | any channel; empty `ref` = the commit the latest successful desktop **dev** run built (dev: the branch you ran from) |
+| tick **desktop** on release-stage / release-prod | same as above for that channel (web/API release unchanged) |
+| cron every 30 min (`release-desktop-finish`) | finishes any Mac notarization still pending |
+
+**Versions.** dev = `package.json` version (prerelease tag stripped) +
+`-dev.<run_number>`, e.g. `1.2.0-dev.57`. stage/prod = `package.json` version at
+the ref, and the run is **refused** if that version is already on the channel
+(public `<channel>/<os>/<version>/latest*.yml` exists, or a Mac notarization for
+it is pending) unless `force` is ticked. If only one OS is out, only the other
+is built. electron-updater (generic provider) offers an update whenever
+`semver.gt(latest, current)`; `allowPrerelease` is a GitHub-provider-only switch,
+so dev installs update `-dev.N` -> `-dev.N+1` with no change to `updater.js`
+(pinned by `electron/test/desktop-pipeline.test.js`). A stable release outranks its dev builds.
+
+**Promote dev -> stage -> prod.** Bump `package.json` version on main (that also
+makes a new dev build), then run release-desktop with channel=stage (empty ref =
+what dev runs), later channel=prod. Stage/prod are rebuilt from the same commit
+with their own Angular config and identity; nothing is copied between channels.
+
+**Mac notarization.** `--mac` builds, signs, submits to Apple and stashes the
+signed zip/dmg in `~/.local/state/prefrontal/desktop-release/artifacts/` (state
+JSON beside it, `PF_RELEASE_STATE_DIR` — outside the checkout, so workspace
+cleans don't lose it). dev publishes the signed build immediately; stage/prod
+publish nothing until accepted. The `mac-finish` job then runs `--finish` every 5
+min for up to 90 min (staple, spctl + stapler verify, publish). If Apple is
+still busy the run ends with a warning and `release-desktop-finish` retries every
+30 min (`--finish-pending`; gives up on a submission after 7 days, and a
+rejected one is marked `failed` and never retried — rebuild). Windows has no
+notarization and publishes when built.
+
+**Concurrency.** One desktop release per channel (`cancel-in-progress: false`; a
+newer run waits). The single runner serializes everything, so the 90 min poll
+holds the queue — it is last in the run on purpose.
+
+**If the Mac is off.** Jobs queue (GitHub keeps a queued job up to 24 h, then
+cancels it). Turn the Mac on and the queue drains; if it was off longer, open the
+cancelled run and *Re-run all jobs* (or run release-desktop again) — that is the
+"Re-queue desktop build" step. Only the newest pending dev run is kept when
+several pushes pile up.
+
+**Move Windows to the Oracle Linux runner.** Register it with label `pf-win`
+(needs wine for NSIS cross-build, or use the Mac), then set the repo variable
+`PF_WIN_RUNNER` to `["self-hosted","pf-win"]` (Settings -> Secrets and variables
+-> Actions -> Variables). That is the only change; unset it to fall back to the Mac.
+The Oracle box also needs `~/.config/prefrontal/release-spaces.env`.
+
 ## Testing
 
 - **Unit** (`npm run test:electron`, `node --test electron/test/*.test.js`):

@@ -7,6 +7,8 @@
  * Usage:
  *   node tools/desktop-release.mjs --channel dev --version 1.0.1 --mac [--win]
  *   node tools/desktop-release.mjs --finish 1.0.1 --channel dev --mac
+ *   node tools/desktop-release.mjs --finish-pending          (all channels; scheduled finisher)
+ *   node tools/desktop-release.mjs --is-published 1.2.0 --channel stage --mac --win   (exit 3 = already out)
  *   node tools/desktop-release.mjs --rollback 1.0.0 --channel dev --mac [--win]
  *
  * Bucket layout (owner's design): `<base>/<channel>/<os>/latest(-mac).yml`
@@ -42,7 +44,14 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(ROOT, 'dist', 'electron');
-const STATE_DIR = path.join(ROOT, 'tools', '.release-state');
+// Pending-notarization state AND the stashed zip/dmg that --finish staples live
+// here. CI points PF_RELEASE_STATE_DIR at a folder OUTSIDE the checkout (the
+// self-hosted runner cleans/re-checks-out the workspace between runs); a hand
+// run on a laptop keeps the old gitignored tools/.release-state.
+const STATE_DIR = process.env.PF_RELEASE_STATE_DIR
+  ? path.resolve(process.env.PF_RELEASE_STATE_DIR)
+  : path.join(ROOT, 'tools', '.release-state');
+const STASH_ROOT = path.join(STATE_DIR, 'artifacts');
 const NOTARY_PROFILE = 'prefrontal-notary';
 const CHANNELS = ['dev', 'stage', 'prod'];
 
@@ -82,11 +91,14 @@ function parseArgs(argv) {
     else if (t === '--win-icon') a.winIcon = argv[++i];
     else if (t === '--skip-notarize') a.skipNotarize = true;
     else if (t === '--base') a.base = argv[++i];
+    else if (t === '--finish-pending') a.finishPending = true;
+    else if (t === '--is-published') a.isPublished = argv[++i];
     else fail(`unknown argument "${t}"`);
   }
+  if (a.finishPending) return a; // sweeps every channel's pending state
   if (!a.channel) fail('--channel <dev|stage|prod> is required');
   if (!CHANNELS.includes(a.channel)) fail(`--channel must be one of ${CHANNELS.join(', ')} — channels never cross`);
-  if (!a.mac && !a.win) fail('pass --mac and/or --win');
+  if (!a.mac && !a.win && !a.finishPending) fail('pass --mac and/or --win');
   return a;
 }
 
@@ -319,6 +331,9 @@ function stateFile(channel, osName, version) {
 function saveState(channel, osName, version, data) {
   fs.writeFileSync(stateFile(channel, osName, version), JSON.stringify(data, null, 2));
 }
+function stashFor(channel, version) {
+  return path.join(STASH_ROOT, `${channel}-mac-${version}`);
+}
 function loadState(channel, osName, version) {
   const f = stateFile(channel, osName, version);
   if (!fs.existsSync(f)) return null;
@@ -344,12 +359,12 @@ function rewriteManifestForVersion(localYmlPath, version) {
   return { rewritten: yamlDump(doc), originalNames: [...originalNames] };
 }
 
-async function publishVersion(s3, creds, { channel, osName, version, localYmlPath, skipBlockmaps = false }) {
+async function publishVersion(s3, creds, { channel, osName, version, localYmlPath, skipBlockmaps = false, srcDir = OUT_DIR }) {
   const { rewritten, originalNames } = rewriteManifestForVersion(localYmlPath, version);
   const name = manifestName(osName);
   // 1) binaries (+ blockmaps) into the version subfolder FIRST.
   for (const fileName of originalNames) {
-    const local = path.join(OUT_DIR, fileName);
+    const local = path.join(srcDir, fileName);
     if (!fs.existsSync(local)) throw new Error(`expected build artifact missing: ${local}`);
     await putObject(s3, creds, `${channel}/${osName}/${version}/${fileName}`, fs.readFileSync(local));
     const bm = `${local}.blockmap`;
@@ -394,11 +409,11 @@ function hashFile(p) {
   return { sha512: crypto.createHash('sha512').update(buf).digest('base64'), size: buf.length };
 }
 
-function buildFinishManifest(version, zipName, dmgName) {
-  const zipPath = path.join(OUT_DIR, zipName);
+function buildFinishManifest(version, zipName, dmgName, srcDir = OUT_DIR) {
+  const zipPath = path.join(srcDir, zipName);
   const entries = [{ url: zipName, ...hashFile(zipPath) }];
   if (dmgName) {
-    const dmgPath = path.join(OUT_DIR, dmgName);
+    const dmgPath = path.join(srcDir, dmgName);
     if (fs.existsSync(dmgPath)) entries.push({ url: dmgName, ...hashFile(dmgPath) });
   }
   // The old blockmap was computed from the pre-staple zip bytes — it no
@@ -436,7 +451,16 @@ async function actionRelease(a) {
         submissionId = notarySubmit(path.join(OUT_DIR, zipName));
       }
     }
-    saveState(a.channel, 'mac', version, { submissionId, zipName, dmgName, submittedAt: new Date().toISOString(), published: false });
+    if (a.channel !== 'dev' && !submissionId && !a.skipNotarize) {
+      fail(`${a.channel} mac build was NOT submitted for notarization (profile missing or submit failed) — stage/prod never ship unnotarized. Fix the runner's keychain profile and re-run.`);
+    }
+    // Stash the signed zip/dmg outside dist/electron (which the next build
+    // overwrites, and CI may clean) so --finish can staple THIS version later.
+    const stashDir = stashFor(a.channel, version);
+    fs.rmSync(stashDir, { recursive: true, force: true });
+    fs.mkdirSync(stashDir, { recursive: true });
+    for (const n of [zipName, dmgName]) fs.copyFileSync(path.join(OUT_DIR, n), path.join(stashDir, n));
+    saveState(a.channel, 'mac', version, { submissionId, zipName, dmgName, stashDir, submittedAt: new Date().toISOString(), published: false });
     if (a.channel === 'dev') {
       await publishVersion(s3, creds, { channel: a.channel, osName: 'mac', version, localYmlPath: path.join(OUT_DIR, 'latest-mac.yml') });
       const st = loadState(a.channel, 'mac', version); st.published = true; st.publishedUnstapled = true; saveState(a.channel, 'mac', version, st);
@@ -467,14 +491,18 @@ async function actionFinish(a) {
   if (info.status === 'In Progress') { log('still pending — try again later.'); return; }
   if (info.status !== 'Accepted') {
     const detail = runCapture('xcrun', ['notarytool', 'log', state.submissionId, '--keychain-profile', NOTARY_PROFILE]);
+    saveState(a.channel, 'mac', version, { ...state, failed: info.status, failedAt: new Date().toISOString() });
     fail(`notarization ${info.status} — NOT publishing.\n${detail.stdout || detail.stderr || ''}`);
   }
 
-  const zipPath = path.join(OUT_DIR, state.zipName);
-  const dmgPath = path.join(OUT_DIR, state.dmgName);
-  if (!fs.existsSync(zipPath)) fail(`${zipPath} is gone (dist/electron was cleaned since the release?) — rebuild ${version} with --mac first, then --finish again.`);
+  // Prefer the stash taken at release time; fall back to dist/electron for
+  // state files written before the stash existed.
+  const stash = state.stashDir && fs.existsSync(path.join(state.stashDir, state.zipName)) ? state.stashDir : OUT_DIR;
+  const zipPath = path.join(stash, state.zipName);
+  const dmgPath = path.join(stash, state.dmgName);
+  if (!fs.existsSync(zipPath)) fail(`${zipPath} is gone (the stash / dist/electron was cleaned since the release?) — rebuild ${version} with --mac first, then --finish again.`);
   const { appPath, cleanup } = stapleAndRezipMac(zipPath, dmgPath);
-  const manifestYml = buildFinishManifest(version, state.zipName, state.dmgName);
+  const manifestYml = buildFinishManifest(version, state.zipName, state.dmgName, stash);
   const tmpYml = path.join(os.tmpdir(), `pf-finish-${a.channel}-mac-${version}.yml`);
   fs.writeFileSync(tmpYml, manifestYml);
   assertNoLeakedSecrets('mac', creds);
@@ -485,10 +513,57 @@ async function actionFinish(a) {
   log(`stapler validate: ${check.stapler.ok ? 'ok' : 'FAILED'} — ${check.stapler.output.split('\n')[0] || ''}`);
   if (!check.spctl.ok || !check.stapler.ok) { fs.rmSync(tmpYml, { force: true }); fail('post-staple verification failed — not publishing.'); }
 
-  await publishVersion(s3, creds, { channel: a.channel, osName: 'mac', version, localYmlPath: tmpYml, skipBlockmaps: true });
+  await publishVersion(s3, creds, { channel: a.channel, osName: 'mac', version, localYmlPath: tmpYml, skipBlockmaps: true, srcDir: stash });
   fs.rmSync(tmpYml, { force: true });
   saveState(a.channel, 'mac', version, { ...state, published: true, publishedUnstapled: false, finishedAt: new Date().toISOString() });
+  // The stash has done its job; free the disk (a few hundred MB per version).
+  fs.rmSync(stash === OUT_DIR ? path.join(STASH_ROOT, '__none__') : stash, { recursive: true, force: true });
   log(`${a.channel} mac ${version}: stapled, verified, published.`);
+}
+
+/** Every mac state file still waiting on notarization (not finished, not
+ *  failed, not older than 7 days) → run `--finish` for each in a child
+ *  process (fail() exits, so one bad item can't stop the rest). Used by the
+ *  scheduled finisher workflow. Exit 0 always unless a finish hard-failed. */
+function actionFinishPending() {
+  if (!fs.existsSync(STATE_DIR)) { log('no state dir — nothing pending.'); return; }
+  const WEEK = 7 * 24 * 3600 * 1000;
+  let hardFail = false;
+  for (const f of fs.readdirSync(STATE_DIR).filter((n) => /^(dev|stage|prod)-mac-.+\.json$/.test(n))) {
+    const [, channel, version] = /^(dev|stage|prod)-mac-(.+)\.json$/.exec(f);
+    const st = JSON.parse(fs.readFileSync(path.join(STATE_DIR, f), 'utf8'));
+    const waiting = st.submissionId && !st.failed && !st.finishedAt && (!st.published || st.publishedUnstapled);
+    if (!waiting) continue;
+    if (Date.now() - Date.parse(st.submittedAt) > WEEK) { log(`${channel} ${version}: pending > 7 days — skipping (rebuild if still wanted).`); continue; }
+    log(`finishing pending ${channel} ${version}…`);
+    const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--finish', version, '--channel', channel, '--mac'], { stdio: 'inherit', cwd: ROOT, env: process.env });
+    if (r.status !== 0) hardFail = true;
+  }
+  if (hardFail) process.exit(1);
+}
+
+/** `--is-published <version> --channel c [--mac] [--win]` — exit 0 when the
+ *  version is NOT yet released on that channel (safe to build), exit 3 when
+ *  it is (or a mac notarization for it is still pending). Reads the PUBLIC
+ *  bucket (the immutable <version>/ manifest copy) — no credentials needed. */
+async function actionIsPublished(a) {
+  const version = requireVersion(a.isPublished, '--is-published');
+  let base = a.base || process.env.PF_RELEASE_PUBLIC_BASE;
+  if (!base) { try { base = loadCreds().PF_RELEASE_PUBLIC_BASE; } catch { /* handled below */ } }
+  if (!base) fail('--is-published needs --base or PF_RELEASE_PUBLIC_BASE');
+  const hits = [];
+  for (const [flag, osName] of [[a.mac, 'mac'], [a.win, 'windows']]) {
+    if (!flag) continue;
+    const res = await fetch(`${base}/${a.channel}/${osName}/${version}/${manifestName(osName)}`, { method: 'HEAD' });
+    if (res.ok) hits.push(`${osName}: published`);
+    else if (res.status !== 404 && res.status !== 403) fail(`could not check ${osName}: HTTP ${res.status}`);
+    if (osName === 'mac') {
+      const st = loadState(a.channel, 'mac', version);
+      if (st && st.submissionId && !st.failed && !st.finishedAt) hits.push('mac: notarization pending');
+    }
+  }
+  if (hits.length) { log(`${a.channel} ${version} already released — ${hits.join('; ')}`); process.exit(3); }
+  log(`${a.channel} ${version} is not released yet.`);
 }
 
 async function actionRollback(a) {
@@ -501,6 +576,8 @@ async function actionRollback(a) {
 
 async function main() {
   const a = parseArgs(process.argv.slice(2));
+  if (a.finishPending) return actionFinishPending();
+  if (a.isPublished) return actionIsPublished(a);
   if (a.rollback) return actionRollback(a);
   if (a.finish) return actionFinish(a);
   return actionRelease(a);
