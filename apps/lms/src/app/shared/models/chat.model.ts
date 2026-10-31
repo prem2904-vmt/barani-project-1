@@ -21,10 +21,14 @@ export interface ChatMessage {
   /** Generic shared-record card: patient | order | report (or any
    *  future record type). Title is the primary line; subtitle the
    *  secondary line; type drives the icon/color + deep-link route. */
-  sharedRecordType?: 'patient' | 'order' | 'report' | null;
+  sharedRecordType?: 'patient' | 'order' | 'sample' | 'report' | 'result' | 'validation' | 'analyzer' | 'insights' | null;
   sharedRecordId?: string | null;
   sharedRecordTitle?: string | null;
   sharedRecordSubtitle?: string | null;
+  /** Small typed card meta (a result's parameter / value / flag, an Insights
+   *  view …) — jsonb on the server; an object (or its JSON string). Read only
+   *  through shared/utils/share-card.ts `cardOf`. */
+  sharedRecordMeta?: Record<string, unknown> | string | null;
   /** Pinned-in-conversation flag. Pinned messages appear in the
    *  pinned-strip above the thread for quick recall. */
   isPinned?: boolean;
@@ -64,6 +68,9 @@ export interface ConversationLastMessage {
   fromUserId: string;
   body: string;
   sentAt: string;
+  /** A shared-record card (its body may be empty — no caption). */
+  sharedRecordType?: string | null;
+  sharedRecordTitle?: string | null;
 }
 
 export interface Conversation {

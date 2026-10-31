@@ -110,6 +110,16 @@ export const appRoutes: Route[] = [
         path: 'p/:id',
         loadComponent: () => import('./features/patient-open/patient-open.component').then(m => m.PatientOpenComponent)
       },
+      {
+        // READ-ONLY patient profile outside the front desk (Share to Messages,
+        // 2026-10-31): lab techs / pathologists hold view_patient but not the
+        // front-desk set, so /frontdesk/patients/:id was a dead end for a shared
+        // patient. Same screen; the API's own permissions stay the real gate
+        // (its actions are permission-gated inside the screen).
+        path: 'patients/:id',
+        canActivate: [permissionGuard(['view_patient', 'register_patient'])],
+        loadComponent: () => import('./features/frontdesk/patient-profile/patient-profile.component').then(m => m.PatientProfileComponent)
+      },
 
       // Admin — gated: hidden from nav + blocked at route level if the user
       // doesn't hold any admin-config permission (manage_tests/users/workflows).

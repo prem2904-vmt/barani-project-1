@@ -37,6 +37,8 @@ import {
 } from "../../models/conversation-name";
 import { PresenceDotComponent } from "../presence-avatar/presence-avatar.component";
 import { BusyDirective } from '../../directives/busy.directive';
+import { ShareCardComponent } from '../share-card/share-card.component';
+import { ShareCard, cardCaption, cardOf } from '../../utils/share-card';
 
 /**
  * Floating chat windows — the Messenger model the owner asked for:
@@ -53,7 +55,7 @@ import { BusyDirective } from '../../directives/busy.directive';
 @Component({
   selector: "pf-chat-windows",
   standalone: true,
-  imports: [BusyDirective, DatePipe, PresenceDotComponent],
+  imports: [BusyDirective, DatePipe, PresenceDotComponent, ShareCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (theme.isNewDesign() && messagesOn()) {
@@ -179,50 +181,11 @@ import { BusyDirective } from '../../directives/busy.directive';
                     [class.pf-cw__bubble--mine]="m.fromUserId === meId()"
                     [class.pf-cw__bubble--pending]="m.pending"
                   >
-                    @if (!m.deleted && sharedPatient(m); as patient) {
-                      <button
-                        type="button"
-                        class="pf-cw__shared-patient"
-                        (click)="openSharedPatient(patient.id, $event)"
-                        [attr.aria-label]="
-                          'Open patient profile for ' + patient.title
-                        "
-                      >
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="1.8"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                          <circle cx="12" cy="7" r="4" />
-                        </svg>
-                        <span
-                          >Shared patient: {{ patient.title }}
-                          @if (patient.subtitle) {
-                            · {{ patient.subtitle }}
-                          }
-                        </span>
-                        <svg
-                          class="pf-cw__shared-go"
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          stroke-width="2"
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          aria-hidden="true"
-                        >
-                          <path d="M7 17 17 7M7 7h10v10" />
-                        </svg>
-                      </button>
+                    @if (!m.deleted && sharedCard(m); as card) {
+                      <!-- The ONE card (any record type); tap resolves for ME. -->
+                      <pf-share-card class="pf-cw__card" variant="compact" [card]="card"
+                                     [from]="m.fromUserId === meId() ? null : senderName(c, m.fromUserId)"></pf-share-card>
+                      @if (cardCaption(m); as cap) { <span class="pf-cw__cap">{{ cap }}</span> }
                     } @else {
                       {{ m.body }}
                     }
@@ -849,6 +812,8 @@ import { BusyDirective } from '../../directives/busy.directive';
       .pf-cw__bubble--pending {
         opacity: 0.6;
       }
+      .pf-cw__card { display: block; margin: 2px 0 4px; min-width: 200px; }
+      .pf-cw__cap { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
       .pf-cw__shared-patient {
         display: flex;
         align-items: center;
@@ -1288,16 +1253,14 @@ export class ChatWindowsComponent {
     () => this.auth.user()?.authId ?? this.auth.user()?.id ?? "",
   );
 
-  protected sharedPatient(
-    message: ChatMessage,
-  ): { id: string; title: string; subtitle: string } | null {
-    if (message.sharedRecordType !== "patient" || !message.sharedRecordId)
-      return null;
-    return {
-      id: message.sharedRecordId,
-      title: message.sharedRecordTitle || "Patient",
-      subtitle: message.sharedRecordSubtitle || "",
-    };
+  /** Any shared record (patient, order, sample, report, result, …) — the
+   *  same card model the Messages page draws (shared/utils/share-card.ts). */
+  protected sharedCard(message: ChatMessage): ShareCard | null {
+    return cardOf(message);
+  }
+  protected readonly cardCaption = cardCaption;
+  protected senderName(c: Conversation, userId: string): string | null {
+    return c.participants.find((p) => p.userId === userId)?.displayName ?? null;
   }
 
   /** Open windows resolved against the live conversation list. */
@@ -1436,14 +1399,6 @@ export class ChatWindowsComponent {
       this.patientFor.set(null);
     if (this.emojiFor() && !target.closest(".pf-cw__emoji, .pf-cw__plus-pop"))
       this.emojiFor.set(null);
-  }
-
-  protected openSharedPatient(patientId: string, event: Event): void {
-    event.stopPropagation();
-    this.menuFor.set(null);
-    this.patientFor.set(null);
-    this.emojiFor.set(null);
-    void this.router?.navigate(["/frontdesk/patients", patientId]);
   }
 
   protected toggleMenu(id: string): void {

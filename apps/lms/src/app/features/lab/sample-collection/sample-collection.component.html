@@ -771,6 +771,13 @@
                   <span class="pf-tube__extflag-txt">Pour into another tube…</span>
                 </button>
               }
+              @if (share.available() && s.barcode && dispatchSelect() === null) {
+                <!-- Share to Messages: ask a colleague about THIS tube (a card). -->
+                <button type="button" class="pf-sc-share" (click)="shareTube(s, g, $event)"
+                        [attr.aria-label]="'Ask a colleague about sample ' + s.barcode" title="Ask a colleague about this tube">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </button>
+              }
                     </div><!-- /pf-tube-wrap -->
                   }
                   @if (visibleSamples(g).length === 0) {

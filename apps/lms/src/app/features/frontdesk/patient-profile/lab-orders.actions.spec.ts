@@ -1,3 +1,5 @@
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { ShareService } from '../../../core/services/share.service';
 import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -33,7 +35,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(o: { perms?: string[]; withReport?: boolean; waCloud?: boolean; rep?: unknown } = {}) {
+async function render(o: { perms?: string[]; withReport?: boolean; waCloud?: boolean; rep?: unknown; messages?: boolean } = {}) {
   const perms = o.perms ?? ['view_order', 'deliver_report', 'view_report'];
   const api = {
     get: vi.fn((url: string) => url === '/api/reports/by-order/o1' ? of(o.rep ?? REP)
@@ -56,6 +58,7 @@ async function render(o: { perms?: string[]; withReport?: boolean; waCloud?: boo
       } },
       { provide: ZoomTransitionService, useValue: { holding: signal(false), runLocal: (_d: string, fn: () => void) => fn(), attachTarget() {}, detachTarget() {}, attachSource() {}, detachSource() {} } },
       { provide: Router, useValue: router },
+      { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => o.messages !== false } },
     ],
   });
   const f = TestBed.createComponent(LabOrdersComponent);
@@ -142,5 +145,22 @@ describe('Patient profile order detail — ⋮ report actions', () => {
     const send = vi.spyOn(svc, 'sendWhatsApp').mockImplementation(() => {});
     await c.runDetailAction(c.openOrder(), 'whatsapp');
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), { name: 'Priya Menon', phone: '9000000001' });
+  });
+});
+
+describe('Patient profile order detail — Send to colleague (Share to Messages)', () => {
+  it('a secondary in the detail band opens the share sheet with THIS order as the card', async () => {
+    const { el } = await render();
+    const btn = el.querySelector('.pf-lo-act--chat') as HTMLButtonElement;
+    expect(btn.className).toContain('pf-btn--secondary');
+    btn.click();
+    const sheet = TestBed.inject(ShareService).sheet()!;
+    expect(sheet.target).toEqual({ type: 'order', id: 'o1' });
+    expect(sheet.title).toBe('LAB-1');
+    expect(el.querySelectorAll('.pf-btn--primary').length).toBe(0);
+  });
+  it('without the Messages module there is no Send to colleague', async () => {
+    const { el } = await render({ messages: false });
+    expect(el.querySelector('.pf-lo-act--chat')).toBeNull();
   });
 });

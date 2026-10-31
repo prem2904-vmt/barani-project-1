@@ -19,6 +19,7 @@ import { applyReaction } from './chat-local-store';
 import { DesktopNotifyService, desktopInFront, pageShown } from './desktop-notify.service';
 import { chatBadgeCount, decideBusinessAlert, decideChatAlert } from './desktop-notify.policy';
 import { PresenceService } from './presence.service';
+import { cardCaption, cardOf, cardPreview } from '../../shared/utils/share-card';
 
 /** Kinds of surface that can be "showing" a conversation. `reader` = the
  *  messages page / people drawer (drives read state + unread); `window` =
@@ -330,7 +331,10 @@ export class ChatService implements OnDestroy {
       if (!sum?.last) return c;
       const l = sum.last;
       const lastMessage = !c.lastMessage || (l.sentAt ?? '') >= (c.lastMessage.sentAt ?? '')
-        ? { id: l.id, fromUserId: l.fromUserId, body: l.deleted ? '' : (l.body ?? ''), sentAt: l.sentAt }
+        ? { id: l.id, fromUserId: l.fromUserId, body: l.deleted ? '' : (l.body ?? ''), sentAt: l.sentAt,
+            // A shared record names itself in the preview (its body may be empty).
+            sharedRecordType: l.deleted ? null : (l.sharedRecordType ?? (l.sharedReportId ? 'report' : null)),
+            sharedRecordTitle: l.deleted ? null : (l.sharedRecordTitle ?? l.sharedReportPatientName ?? null) }
         : c.lastMessage;
       const unreadCount = this.isViewing(c.id, ['reader']) ? 0 : Math.max(c.unreadCount, sum.unread);
       return { ...c, lastMessage, unreadCount };
@@ -1081,7 +1085,7 @@ export class ChatService implements OnDestroy {
         const current = list[idx];
         const updated: Conversation = {
           ...current,
-          lastMessage: { id: m.id, fromUserId: m.fromUserId, body: m.body, sentAt: m.sentAt },
+          lastMessage: { id: m.id, fromUserId: m.fromUserId, body: m.body, sentAt: m.sentAt, sharedRecordType: m.sharedRecordType ?? null, sharedRecordTitle: m.sharedRecordTitle ?? null },
           lastMessageAt: m.sentAt,
           unreadCount: current.unreadCount + incUnread
         };
@@ -1334,7 +1338,14 @@ export class ChatService implements OnDestroy {
 }
 
 /** One-line preview for alerts — never emoji (icons are SVG in the UI). */
-export function messagePreview(m: Pick<ChatMessage, 'body' | 'attachmentMime' | 'attachmentUrl' | 'sharedRecordTitle'>): string {
+export function messagePreview(m: Pick<ChatMessage, 'body' | 'attachmentMime' | 'attachmentUrl' | 'sharedRecordTitle'> & Partial<ChatMessage>): string {
+  // A shared record: "Order: LAB-2610-000200 — <the sender's note>" (card-aware alerts).
+  const card = cardOf(m);
+  if (card) {
+    const note = cardCaption(m).replace(/\s+/g, ' ');
+    const line = note ? `${cardPreview(card)} — ${note}` : cardPreview(card);
+    return line.length > 140 ? line.slice(0, 140) + '…' : line;
+  }
   const body = (m.body ?? '').replace(/\s+/g, ' ').trim();
   if (body) return body.length > 140 ? body.slice(0, 140) + '…' : body;
   if (m.attachmentUrl) {

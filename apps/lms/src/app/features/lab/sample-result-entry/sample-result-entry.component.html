@@ -413,7 +413,7 @@
                           </tr>
                         }
                         @for (p of parametersFor(t); track p.name; let idx = $index) {
-                          <tr class="pf-sre__grow" [class.pf-sre__grow--flagged]="hasOpenComment(t.id, p.name)">
+                          <tr class="pf-sre__grow" [class.pf-sre__grow--flagged]="hasOpenComment(t.id, p.name)" [class.pf-sre__grow--focus]="focusParam() === p.name" [attr.data-param-row]="p.name">
                             <td class="pf-sre__gc-param">
                               @if (printPickerEnabled(t)) {
                                 <input type="checkbox" class="pf-sre__printpick"
@@ -459,6 +459,7 @@
                               @if (parametersFor(t).length > 1) {
                                 <ng-container *ngTemplateOutlet="noteBtn; context: { has: commentsFor(t.id, p.name).length > 0, label: 'Note on ' + (p.title || p.name), tid: t.id, pname: p.name }"></ng-container>
                               }
+                              <ng-container *ngTemplateOutlet="askBtn; context: { t, p }"></ng-container>
                               @if (idx === 0) {
                                 @if (t.status === "re_entry") {
                                   <span class="pf-sre__gdot pf-sre__gdot--rejected" title="Re-entry needed"></span>
@@ -597,6 +598,16 @@
                 (mousedown)="$event.preventDefault()" (click)="pname ? toggleParamNote(tid, pname) : toggleOverall(tid)" [attr.aria-label]="label" [title]="label">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
         </button>
+      </ng-template>
+
+      <!-- Share to Messages: "Ask about this value" — a result card (saved values only). -->
+      <ng-template #askBtn let-t="t" let-p="p">
+        @if (canAskAbout(t, p)) {
+          <button type="button" class="pf-sre__gnote pf-sre__ask" tabindex="-1" (mousedown)="$event.preventDefault()"
+                  (click)="askAboutValue(t, p)" [attr.aria-label]="'Ask about ' + (p.title || p.name)" [title]="'Ask a colleague about ' + (p.title || p.name)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </button>
+        }
       </ng-template>
 
       <ng-template #attachBtn let-t="t" let-param="param" let-count="count">
@@ -876,7 +887,7 @@
                     </thead>
                     <tbody>
                       @for (p of parametersFor(t); track p.name) {
-                        <tr class="pf-sre__grow" [class.pf-sre__grow--flagged]="hasOpenComment(t.id, p.name)">
+                        <tr class="pf-sre__grow" [class.pf-sre__grow--flagged]="hasOpenComment(t.id, p.name)" [class.pf-sre__grow--focus]="focusParam() === p.name" [attr.data-param-row]="p.name">
                           <td class="pf-sre__gc-param">
                             @if (printPickerEnabled(t)) {
                               <input type="checkbox" class="pf-sre__printpick"
@@ -915,6 +926,7 @@
                               @if (parametersFor(t).length > 1) {
                                 <ng-container *ngTemplateOutlet="noteBtn; context: { has: commentsFor(t.id, p.name).length > 0, label: 'Note on ' + (p.title || p.name), tid: t.id, pname: p.name }"></ng-container>
                               }
+                              <ng-container *ngTemplateOutlet="askBtn; context: { t, p }"></ng-container>
                             </span>
                           </td>
                         </tr>

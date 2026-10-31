@@ -56,6 +56,13 @@
           <span class="pf-ins-hbt">Clear</span>
         </button>
       }
+      @if (share.available() && canSeeAnalytics() && nav() !== 'dash:new') {
+        <!-- Share to Messages: this view (section / dashboard + period) as a card. -->
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-ins-sharebtn" (click)="shareView()" aria-label="Send this view to a colleague" title="Send this view to a colleague">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.chat)"></svg>
+          <span class="pf-ins-hbt">Share</span>
+        </button>
+      }
       @if (!ctxSide() && canSeeAnalytics() && !isDash()) {
         <!-- Below 1280px the DETAILS card is a sheet (right panel on tablets, bottom sheet on phones). -->
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-ins-ctxbtn" (click)="ctxSheet.set(true)"

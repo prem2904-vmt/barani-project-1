@@ -282,6 +282,14 @@
 .pf-mnd-rec__t, .pf-mnd-file__n { font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
 .pf-mnd-rec__s, .pf-mnd-file__s { font-size: 12px; color: var(--text-secondary); }
 .pf-mnd-rec__go { flex: none; color: var(--text-tertiary); }
+// Shared-record card host (<pf-share-card>): the caption sits under it.
+.pf-mnd-rec-host { display: block; min-width: 0; }
+.pf-mnd-rec-host + .pf-mnd-bubble__body { margin-top: 6px; }
+// A pasted Prefrontal link → the card it will send (removable).
+.pf-mnd-pending--card { align-items: center; }
+.pf-mnd-pending__card { flex: 1 1 auto; min-width: 0; }
+// Links in a message body (linkified, new tab).
+.pf-mnd-bubble__body ::ng-deep .pf-msgs__link { color: inherit; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 // An attachment the server removed (relay retention) that this device never kept.
 .pf-mnd-file--gone { color: var(--text-secondary); border-style: dashed; cursor: default; }
 .pf-mnd-file--gone:hover { border-color: var(--pf-line); }

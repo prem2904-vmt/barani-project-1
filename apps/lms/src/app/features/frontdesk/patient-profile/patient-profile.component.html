@@ -449,43 +449,7 @@
     <pf-abha-wizard [patientId]="p.id" [presetAbha]="p.abhaId || ''" (close)="abhaWizardOpen.set(false)" (done)="onAbhaDone($event)"></pf-abha-wizard>
   }
 
-  <!-- Send to a colleague. -->
-  @if (chatPickerOpen()) {
-    <div class="pf-pp-scrim" (click)="closeChatPicker()" aria-hidden="true"></div>
-    <div class="pf-card pf-pp-sheet pf-pp-sheet--modal pf-pp-sheet--pick" role="dialog" aria-modal="true" aria-labelledby="pf-pp-chat-t">
-      <span class="pf-pp-sheet__handle" aria-hidden="true"></span>
-      <header class="pf-card__head">
-        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
-        <span class="pf-card__label" id="pf-pp-chat-t">Send to a colleague</span>
-        <span class="pf-card__spacer"></span>
-        <button type="button" class="pf-btn pf-btn--icon pf-pp-close" (click)="closeChatPicker()" aria-label="Close">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-        </button>
-      </header>
-      <p class="pf-pp-pick__lead">{{ displayName() }} will appear in their chat as a tap-to-open card.</p>
-      <div class="pf-pp-pick__search">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        <input type="text" class="pf-input" placeholder="Search by name or email" aria-label="Search colleagues"
-               [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
-      </div>
-      <ul class="pf-pp-pick__list">
-        @for (u of chatPickerFiltered(); track u.id) {
-          <li>
-            <button type="button" class="pf-pp-pick__row" [disabled]="chatPickerSending()"
-                    [pfBusy]="chatPickerSending() && sendingToId() === u.id" pfBusyLabel="Sending…" (click)="sendPatientToColleague(u)">
-              <span class="pf-pp-pick__avatar" aria-hidden="true">{{ (u.displayName.charAt(0) + (u.displayName.split(' ')[1]?.charAt(0) ?? '')).toUpperCase() }}</span>
-              <span class="pf-pp-pick__meta">
-                <span class="pf-pp-pick__name">{{ u.displayName }}</span>
-                <span class="pf-pp-pick__sub">{{ u.email }}</span>
-              </span>
-            </button>
-          </li>
-        } @empty {
-          <li class="pf-empty pf-empty--compact"><p class="pf-empty__title">No colleagues match</p></li>
-        }
-      </ul>
-    </div>
-  }
+  <!-- Send to a colleague: the ONE share sheet (ShareService, rendered in the shell). -->
 
   <!-- Merge a duplicate into this record. -->
   @if (mergeOpen()) {

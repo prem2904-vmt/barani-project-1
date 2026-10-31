@@ -312,7 +312,7 @@ export class ChatLocalStore {
         Object.assign(next, {
           deleted: true, body: '', replyPreview: null, replyFromName: null,
           attachmentUrl: null, attachmentName: null, attachmentMime: null, attachmentSize: null,
-          sharedRecordTitle: null, sharedRecordSubtitle: null, sharedReportPatientName: null, sharedReportTestSummary: null,
+          sharedRecordTitle: null, sharedRecordSubtitle: null, sharedRecordMeta: null, sharedReportPatientName: null, sharedReportTestSummary: null,
         });
         if (cur.attachmentUrl) await this.dropBlob(cur.attachmentUrl);
         break;

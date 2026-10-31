@@ -26,6 +26,9 @@ import { ApiError } from '../../shared/models/api-response.model';
 import { ModalPortalDirective } from '../../shared/directives/modal-portal.directive';
 import { SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../shared/directives/busy.directive';
+import { ShareService } from '../../core/services/share.service';
+import { ShareCardComponent } from '../../shared/components/share-card/share-card.component';
+import { ShareCard, ShareTarget, captionWithoutLink, cardCaption, cardEyebrow, cardOf, cardPreview, draftCard, findPrefrontalLink } from '../../shared/utils/share-card';
 
 interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 interface PatientLite {
@@ -53,13 +56,15 @@ type CallFilter = 'all' | 'missed';
 @Component({
   selector: 'app-messages-page',
   standalone: true,
-  imports: [BusyDirective, SkeletonRowsComponent, CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective],
+  imports: [BusyDirective, SkeletonRowsComponent, CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective, ShareCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './messages-page.component.html',
   styleUrls: ['./messages-page.component.scss']
 })
 export class MessagesPageComponent implements OnInit, OnDestroy {
   protected readonly chat = inject(ChatService);
+  /** Share to Messages: cards, forward-with-card, pasted links → cards. */
+  protected readonly share = inject(ShareService);
   protected readonly signaling = inject(SignalingService);
   protected readonly webrtc = inject(WebrtcService);
   protected readonly auth = inject(AuthService);
@@ -327,7 +332,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   /** Subline beneath name — last message preview or "No messages yet". */
   protected lastMessagePreview(c: Conversation): string {
     if (!c.lastMessage) return 'No messages yet';
-    const body = c.lastMessage.body;
+    const lm = c.lastMessage;
+    // A card with no caption has an EMPTY body: name the card ("Order: LAB-…").
+    const body = lm.body || (lm.sharedRecordType && lm.sharedRecordTitle ? cardPreview({ type: lm.sharedRecordType, title: lm.sharedRecordTitle }) : '');
     const mine = c.lastMessage.fromUserId === this.me();
     return (mine ? 'You: ' : '') + (body.length > 60 ? body.slice(0, 60) + '…' : body);
   }
@@ -752,6 +759,7 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   protected async sendDraft(): Promise<void> {
     if (this.voiceDraft()) { await this.sendVoiceDraft(); return; }
+    if (this.pendingCard() && !this.editingMessageId() && !this.pendingAttachment()) { await this.sendPendingCard(); return; }
     const body = this.draft().trim();
     const convId = this.chat.activeConversationId();
     const att = this.pendingAttachment();
@@ -775,6 +783,25 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       if (editId) this.editingMessageId.set(editId);
       if (reply) this.replyingTo.set(reply);
       if (att) this.pendingAttachment.set(att);
+      this.toasts.error(ApiError.from(err).message);
+    }
+  }
+
+  /** Send the pasted link as a card; the rest of the text is its caption. */
+  private async sendPendingCard(): Promise<void> {
+    const pc = this.pendingCard();
+    const convId = this.chat.activeConversationId();
+    if (!pc || !convId) return;
+    const draft = this.draft();
+    const caption = captionWithoutLink(draft, pc.url);
+    this.draft.set('');
+    this.pendingCard.set(null);
+    try {
+      await this.share.shareToConversation(convId, { type: pc.card.type, id: pc.card.id, meta: pc.card.meta, caption });
+      void this.chat.setTyping(convId, false);
+    } catch (err) {
+      this.draft.set(draft);
+      this.pendingCard.set(pc);
       this.toasts.error(ApiError.from(err).message);
     }
   }
@@ -839,6 +866,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  clipboard and routes it into the file pipeline. Falls through to
    *  default behaviour (text paste) when there's no image. */
   protected onComposerPaste(ev: ClipboardEvent): void {
+    // A pasted Prefrontal link becomes a card (the text pastes as usual).
+    const text = ev.clipboardData?.getData?.('text/plain') || ev.clipboardData?.getData?.('text') || '';
+    if (text) void this.cardFromPastedText(text);
     const items = ev.clipboardData?.items;
     if (!items) return;
     const files: File[] = [];
@@ -996,53 +1026,68 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
   protected contextLink(c: { contextType?: string | null; contextId?: string | null }): any[] | null {
     if (!c.contextType || !c.contextId) return null;
     switch (c.contextType) {
-      case 'patient': return ['/frontdesk', 'patients', c.contextId];
-      case 'order':   return ['/lab', 'my-work'];   // no per-order route yet; closest landing
+      // /p/:id picks the profile route the user can open (front desk or read-only).
+      case 'patient': return ['/p', c.contextId];
+      case 'order':   return ['/o', c.contextId];
       case 'report':  return ['/reports', 'view', c.contextId];
       default: return null;
     }
+  }
+  /** An order context opens the order itself (never the scan-to-collect landing). */
+  protected contextQuery(c: { contextType?: string | null }): Record<string, string> | null {
+    return c.contextType === 'order' ? { view: 'detail' } : null;
   }
 
   // ── Shared-record cards (patient / order / report in a bubble) ──────
 
   /** Has *any* shared record? New generic field OR legacy report field. */
   protected hasSharedRecord(m: ChatMessage): boolean {
-    return !!(m.sharedRecordType && m.sharedRecordId) || !!m.sharedReportId;
+    return !!cardOf(m);
   }
 
-  /** Normalised view of the shared record. Prefers the generic columns
-   *  but falls back to legacy SharedReport* so old rows still render. */
-  protected sharedRecord(m: ChatMessage): { type: 'patient' | 'order' | 'report'; id: string; title: string; subtitle: string } | null {
-    if (m.sharedRecordType && m.sharedRecordId) {
-      return {
-        type: m.sharedRecordType,
-        id: m.sharedRecordId,
-        title: m.sharedRecordTitle ?? '(record)',
-        subtitle: m.sharedRecordSubtitle ?? ''
-      };
-    }
-    if (m.sharedReportId) {
-      return {
-        type: 'report',
-        id: m.sharedReportId,
-        title: m.sharedReportPatientName ?? 'Lab report',
-        subtitle: m.sharedReportTestSummary ?? ''
-      };
-    }
-    return null;
-  }
-
-  /** Router link target for a shared-record card. Matches contextLink. */
-  protected sharedRecordLink(rec: { type: string; id: string }): any[] | null {
-    switch (rec.type) {
-      case 'patient': return ['/frontdesk', 'patients', rec.id];
-      case 'order':   return ['/lab', 'my-work'];
-      case 'report':  return ['/reports', 'view', rec.id];
-      default: return null;
-    }
+  /** The ONE card model (shared/utils/share-card.ts): generic columns first,
+   *  legacy SharedReport* rows still render. Drawn by <pf-share-card>; a tap
+   *  resolves for ME (ShareService.openCard) — never a raw 403 / 404. */
+  protected sharedRecord(m: ChatMessage): ShareCard | null {
+    return cardOf(m);
   }
   protected sharedRecordEyebrow(type: string): string {
-    return type === 'patient' ? 'Patient' : type === 'order' ? 'Order' : 'Lab report';
+    return cardEyebrow(type);
+  }
+  /** Show the message text: always, except a legacy share's auto text under its card. */
+  protected cardCaptionOr(m: ChatMessage): boolean {
+    return !!m.body && (!cardOf(m) || !!cardCaption(m));
+  }
+  /** The sender's name for the card's "Ask … " notice. */
+  protected cardFrom(m: ChatMessage): string | null {
+    if (m.fromUserId === this.me()) return null;
+    const conv = this.chat.activeConversation();
+    return conv?.participants.find(p => p.userId === m.fromUserId)?.displayName ?? null;
+  }
+
+  // ── Pasted Prefrontal link → a card (removable preview above the field) ──
+  protected readonly pendingCard = signal<{ url: string; card: ShareCard } | null>(null);
+  protected readonly pendingCardLoading = signal(false);
+  private pendingCardSeq = 0;
+  protected clearPendingCard(): void { this.pendingCardSeq++; this.pendingCard.set(null); this.pendingCardLoading.set(false); }
+
+  /** The server turns the link into a card (sender permission checked);
+   *  a link it can't read simply stays text. */
+  protected async cardFromPastedText(text: string): Promise<void> {
+    if (this.pendingCard() || this.editingMessageId()) return;
+    const url = findPrefrontalLink(text, typeof location !== 'undefined' ? location.host : null);
+    if (!url) return;
+    const seq = ++this.pendingCardSeq;
+    this.pendingCardLoading.set(true);
+    let t: (ShareTarget & { title?: string; subtitle?: string }) | null = null;
+    try { t = await this.share.cardFromUrl(url); } catch { t = null; }
+    if (seq !== this.pendingCardSeq) return;
+    this.pendingCardLoading.set(false);
+    if (t) this.pendingCard.set({ url, card: draftCard({ ...t, title: t.title || this.linkTitle(t), subtitle: t.subtitle || 'Sends as a card' }) });
+  }
+  private linkTitle(t: ShareTarget): string {
+    const m = t.meta ?? {};
+    return m['parameter'] ? `${m['parameter']}` : m['section'] && t.type === 'insights' ? 'Insights view' : `${cardEyebrow(t.type)} link`;
   }
 
   // ── Share-record popover (patient picker) ──────────────────────────
@@ -1267,6 +1312,13 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
 
   // ── Forward ─────────────────────────────────────────────────────────
 
+  /** What the forward modal says it is forwarding. */
+  protected forwardLabel(m: ChatMessage): string {
+    const card = cardOf(m);
+    if (card) return `${cardEyebrow(card.type)}: ${card.title}${m.body ? ' — ' + m.body : ''}`;
+    return m.body || (m.attachmentName ?? '(attachment)');
+  }
+
   protected startForward(m: ChatMessage): void {
     this.forwardingMessage.set(m);
     this.forwardSearch.set('');
@@ -1283,7 +1335,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
     const m = this.forwardingMessage();
     if (!m) return;
     try {
-      await this.chat.forwardMessage(c.id, m);
+      // A shared record forwards AS the card (the server re-checks I may see it).
+      if (cardOf(m) && !m.attachmentUrl) await this.share.forwardCard(c.id, m);
+      else await this.chat.forwardMessage(c.id, m);
       this.toasts.info(`Forwarded to ${this.displayName(c)}`);
       this.cancelForward();
     } catch (err) {
@@ -1381,9 +1435,9 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
    *  Keep this fast — runs per bubble per render. */
   protected renderBodyHtml(m: ChatMessage): string {
     const conv = this.chat.activeConversation();
-    if (!conv) return this.escapeHtml(m.body);
+    if (!conv) return linkifyEscaped(this.escapeHtml(m.body));
     const me = this.me();
-    return this.escapeHtml(m.body).replace(
+    return linkifyEscaped(this.escapeHtml(m.body)).replace(
       /@([0-9a-fA-F-]{36})/g,
       (_full, id) => {
         const part = conv.participants.find(p => p.userId === id);
@@ -1511,4 +1565,18 @@ export class MessagesPageComponent implements OnInit, OnDestroy {
       this.toasts.error(ApiError.from(err).message);
     }
   }
+}
+
+/** Escaped message text → http(s) links clickable (new tab, noopener). Runs on
+ *  ALREADY-ESCAPED text, so nothing the sender typed can open a tag; a link
+ *  with credentials is left as text. */
+export function linkifyEscaped(escaped: string): string {
+  return escaped.replace(/https?:\/\/[^\s<]+/gi, raw => {
+    const trail = raw.match(/[).,;:!?]+$/)?.[0] ?? '';
+    const url = trail ? raw.slice(0, -trail.length) : raw;
+    let ok = false;
+    try { const u = new URL(url.replace(/&amp;/g, '&')); ok = (u.protocol === 'https:' || u.protocol === 'http:') && !u.username && !u.password; } catch { ok = false; }
+    if (!ok) return raw;
+    return `<a class="pf-msgs__link" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${trail}`;
+  });
 }

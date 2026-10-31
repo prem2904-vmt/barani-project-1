@@ -15,6 +15,8 @@ import { CallLog, ChatMessage, Conversation } from '../../shared/models/chat.mod
 import { ApiError } from '../../shared/models/api-response.model';
 import { SkeletonRowsComponent } from '../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../shared/directives/busy.directive';
+import { ShareCardComponent } from '../../shared/components/share-card/share-card.component';
+import { cardPreview } from '../../shared/utils/share-card';
 
 /** The band pill's filter segment. `calls` swaps the list for the call log. */
 export type MsgFilter = 'all' | 'unread' | 'groups' | 'calls';
@@ -57,7 +59,7 @@ function readFlag(key: string): boolean {
 @Component({
   selector: 'pf-messages-nd',
   standalone: true,
-  imports: [BusyDirective, SkeletonRowsComponent, CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective, HeroBandComponent, ZoomSourceDirective, PresenceDotComponent],
+  imports: [BusyDirective, SkeletonRowsComponent, CommonModule, FormsModule, DatePipe, RouterLink, ModalPortalDirective, HeroBandComponent, ZoomSourceDirective, PresenceDotComponent, ShareCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './messages-nd.component.html',
   styleUrls: ['./messages-nd.component.scss']
@@ -223,10 +225,12 @@ export class MessagesNdComponent extends MessagesPageComponent {
   }
 
   /** What the last message was — drives the SVG kind icon (never emoji). */
-  protected previewKind(c: Conversation): 'none' | 'text' | 'attachment' | 'deleted' {
+  protected previewKind(c: Conversation): 'none' | 'text' | 'attachment' | 'deleted' | 'card' {
     const m = c.lastMessage;
     if (!m) return 'none';
     if (m.body === '(message deleted)') return 'deleted';
+    // A shared record with no caption has an EMPTY body — name the card, never "Attachment".
+    if (!m.body.trim() && m.sharedRecordType && m.sharedRecordTitle) return 'card';
     if (!m.body.trim()) return 'attachment';
     return 'text';
   }
@@ -236,6 +240,7 @@ export class MessagesNdComponent extends MessagesPageComponent {
     if (!m) return 'No messages yet';
     const kind = this.previewKind(c);
     const body = kind === 'attachment' ? 'Attachment' : kind === 'deleted' ? 'Message deleted'
+      : kind === 'card' ? cardPreview({ type: m.sharedRecordType!, title: m.sharedRecordTitle! })
       : this.plainBody(m.body, c);
     return body;
   }
@@ -343,7 +348,7 @@ export class MessagesNdComponent extends MessagesPageComponent {
 
   protected canSend(): boolean {
     return !this.recording() && !this.attachmentUploading()
-      && (!!this.draft().trim() || !!this.pendingAttachment() || !!this.voiceDraft());
+      && (!!this.draft().trim() || !!this.pendingAttachment() || !!this.voiceDraft() || !!this.pendingCard());
   }
 
   /** Enter on the field while a voice preview is up sends it. */

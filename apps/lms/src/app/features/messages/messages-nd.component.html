@@ -188,6 +188,9 @@
                               @case ('deleted') {
                                 <svg class="pf-mnd-row__kind" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>
                               }
+                              @case ('card') {
+                                <svg class="pf-mnd-row__kind" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h6M7 14h10"/></svg>
+                              }
                               @case ('text') {
                                 @if (previewMine(c)) {
                                   <svg class="pf-mnd-row__kind" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
@@ -318,7 +321,7 @@
                     {{ presenceText(p) }}
                   }
                   @if (conv.contextType && conv.contextType !== 'self' && conv.contextLabel) {
-                    <a class="pf-chip pf-mnd-ctx" [routerLink]="contextLink(conv)" title="Open record">
+                    <a class="pf-chip pf-mnd-ctx" [routerLink]="contextLink(conv)" [queryParams]="contextQuery(conv)" title="Open record">
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                       <span class="pf-mnd-ctx__k">{{ sharedRecordEyebrow(conv.contextType) }}</span>
                       <span class="pf-mnd-ctx__v">{{ conv.contextLabel }}</span>
@@ -449,28 +452,8 @@
                             </div>
                           }
                           @if (sharedRecord(m); as rec) {
-                            <a class="pf-mnd-rec" [routerLink]="sharedRecordLink(rec)" [title]="'Open ' + sharedRecordEyebrow(rec.type)"
-                               [pfZoomSource]="rec.type === 'report' ? [rec.id] : null">
-                              <span class="pf-card__icon" aria-hidden="true">
-                                @switch (rec.type) {
-                                  @case ('patient') {
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                                  }
-                                  @case ('order') {
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                                  }
-                                  @default {
-                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/></svg>
-                                  }
-                                }
-                              </span>
-                              <span class="pf-mnd-rec__meta">
-                                <span class="pf-mnd-rec__k">{{ sharedRecordEyebrow(rec.type) }}</span>
-                                <span class="pf-mnd-rec__t">{{ rec.title }}</span>
-                                @if (rec.subtitle) { <span class="pf-mnd-rec__s">{{ rec.subtitle }}</span> }
-                              </span>
-                              <svg class="pf-mnd-rec__go" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                            </a>
+                            <pf-share-card class="pf-mnd-rec-host" [card]="rec" [from]="cardFrom(m)"
+                                           [pfZoomSource]="rec.type === 'report' ? [rec.id] : null"></pf-share-card>
                           }
                           @if (m.attachmentUrl && attachmentGone(m.attachmentUrl)) {
                             <span class="pf-mnd-file pf-mnd-file--gone" role="note">
@@ -516,7 +499,7 @@
                               </a>
                             }
                           }
-                          @if (m.body && !hasSharedRecord(m)) {
+                          @if (cardCaptionOr(m)) {
                             <div class="pf-mnd-bubble__body" [class.pf-mnd-bubble__body--big]="isEmojiOnly(m)" [innerHTML]="renderBodyHtml(m)"></div>
                           }
                           @if (!isGroupedWithNext(i) || m.editedAt || m.pending) {
@@ -616,6 +599,19 @@
                   <button type="button" class="pf-mnd-qbtn pf-mnd-qbtn--sm" (click)="cancelEdit()" aria-label="Cancel edit">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                   </button>
+                </div>
+              }
+              @if (pendingCard(); as pc) {
+                <div class="pf-mnd-pending pf-mnd-pending--card" aria-label="Link will send as a card">
+                  <pf-share-card class="pf-mnd-pending__card" [card]="pc.card" [preview]="true"></pf-share-card>
+                  <button type="button" class="pf-mnd-qbtn pf-mnd-qbtn--sm" (click)="clearPendingCard()" aria-label="Send as plain text instead">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                  </button>
+                </div>
+              } @else if (pendingCardLoading()) {
+                <div class="pf-mnd-pending pf-mnd-pending--card" role="status">
+                  <span class="pf-mnd-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                  <span class="pf-mnd-pending__s">Reading the link…</span>
                 </div>
               }
               @if (pendingAttachment(); as att) {

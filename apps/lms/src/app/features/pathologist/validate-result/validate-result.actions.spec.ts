@@ -1,3 +1,5 @@
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { ShareService } from '../../../core/services/share.service';
 import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -34,12 +36,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function render(o: { perms?: string[]; queue?: unknown[] } = {}) {
+async function render(o: { perms?: string[]; queue?: unknown[]; messages?: boolean } = {}) {
   const perms = o.perms ?? ['validate_result', 'edit_result', 'view_patient'];
   const api = {
     get: vi.fn((url: string) => url.startsWith('/api/validation/queue') ? of(o.queue ?? [ot('t1')]) : of([])),
     post: vi.fn(() => of({})), patch: vi.fn(() => of({})), put: vi.fn(() => of({})),
   };
+  const share = { available: () => !!o.messages, openSheet: vi.fn() };
   const router = { url: '/pathologist/validate/t1', navigate: vi.fn(() => Promise.resolve(true)), events: of() };
   TestBed.configureTestingModule({
     providers: [
@@ -57,13 +60,15 @@ async function render(o: { perms?: string[]; queue?: unknown[] } = {}) {
       { provide: ZoomTransitionService, useValue: { holding: signal(false), attachTarget() {}, detachTarget() {}, attachSource() {}, detachSource() {} } },
       { provide: ActivatedRoute, useValue: { snapshot: { paramMap: new Map([['id', 't1']]), queryParamMap: new Map() } } },
       { provide: Router, useValue: router },
+      { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => !!o.messages } },
+      { provide: ShareService, useValue: share },
     ],
   });
   const f = TestBed.createComponent(ValidateResultComponent);
   f.detectChanges();
   await f.whenStable();
   f.detectChanges();
-  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, router, api };
+  return { f, el: f.nativeElement as HTMLElement, c: f.componentInstance as any, router, api, share };
 }
 const ids = (c: any) => c.menuActions().map((a: { id: string }) => a.id);
 
@@ -105,7 +110,8 @@ describe('Validate — ⋮ More actions', () => {
     c.runAction('reassign'); expect(reassign).toHaveBeenCalled();
     c.runAction('edit-self'); expect(startEdit).toHaveBeenCalled();
     c.runAction('send-back'); expect(c.editDialogOpen()).toBe(true);
-    c.runAction('patient'); expect(router.navigate).toHaveBeenCalledWith(['/frontdesk/patients', 'p1']);
+    // /p/:id picks the profile route a pathologist can open (view_patient only).
+    c.runAction('patient'); expect(router.navigate).toHaveBeenCalledWith(['/p', 'p1']);
     c.runAction('lab'); expect(router.navigate).toHaveBeenCalledWith(['/lab/sample', 's1'], { queryParams: { view: 1 } });
   });
 });
@@ -126,5 +132,26 @@ describe('Validate — reads only the focused test\'s tube (DB optimisation phas
   it('the tubeOf answer gives the same sample group', async () => {
     const { c } = await render({ queue: [ot('t1', 's1'), ot('t2', 's1')] });
     expect(c.sampleTests().map((t: { id: string }) => t.id)).toEqual(['t1', 't2']);
+  });
+});
+
+describe('Validate — Share to Messages (⋮ Share)', () => {
+  it('with Messages: "Share with colleague" + "Ask the technician" (who entered it is suggested) open the share sheet', async () => {
+    const { c, share } = await render({ messages: true, queue: [ot('t1', 's1', { resultedBy: 'auth-tech', resultedByName: 'Karthik Iyer',
+      subOrder: { id: 's1', orderId: 'o1', barcode: '26105', order: { id: 'o1', patientId: 'p1', patient: { id: 'p1', displayName: 'Priya Nair' } } } })] });
+    expect(ids(c)).toEqual(['reassign', 'edit-self', 'send-back', 'share', 'ask-tech', 'patient', 'lab']);
+    expect(c.menuActions().find((a: { id: string }) => a.id === 'ask-tech').hint).toBe('Entered by Karthik Iyer');
+    c.runAction('share');
+    expect(share.openSheet).toHaveBeenLastCalledWith(expect.objectContaining({
+      target: { type: 'validation', id: 't1' }, title: 'Haemoglobin', subtitle: 'Sample 26105 · Priya Nair', heading: 'Share with colleague', suggest: [],
+    }));
+    c.runAction('ask-tech');
+    expect(share.openSheet).toHaveBeenLastCalledWith(expect.objectContaining({
+      heading: 'Ask the technician', suggest: [{ userId: 'auth-tech', name: 'Karthik Iyer' }],
+    }));
+  });
+  it('no technician on record → no "Ask the technician"', async () => {
+    const { c } = await render({ messages: true });
+    expect(ids(c)).toEqual(['reassign', 'edit-self', 'send-back', 'share', 'patient', 'lab']);
   });
 });

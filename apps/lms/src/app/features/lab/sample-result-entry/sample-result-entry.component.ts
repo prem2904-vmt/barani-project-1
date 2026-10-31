@@ -54,6 +54,7 @@ import { PlatformService } from "../../../core/services/platform.service";
 import { UploadsService } from "../../../core/services/uploads.service";
 import { isPrivateUploadPath } from "../../../shared/utils/upload-fetch";
 import { AuthService } from "../../../core/auth/auth.service";
+import { ShareService } from "../../../core/services/share.service";
 import { DialogService } from "../../../core/services/dialog.service";
 import {
   OrderSample,
@@ -81,7 +82,7 @@ import { DraftShelfService } from "../../../core/services/draft-shelf.service";
 import { NOT_REPORTED, savedResultHasValue } from "../../../shared/utils/line-status";
 import { FamilyInputComponent } from "../../../shared/components/family-input/family-input.component";
 import { OptionFamilyService } from "../../../core/services/option-family.service";
-import { familyIsAbnormal, type FamilyValue, type OptionFamily } from "../../../shared/utils/option-family";
+import { familyIsAbnormal, resultValueText, type FamilyValue, type OptionFamily } from "../../../shared/utils/option-family";
 import {
   MissingEntry,
   TabSnapshot,
@@ -2015,7 +2016,52 @@ export class SampleResultEntryComponent {
   /** Bumps per switch; a slower earlier load never paints over a later one. */
   private loadSeq = 0;
 
+  // ── Share to Messages ─────────────────────────────────────────────────
+  protected readonly share = inject(ShareService);
+  /** ?param=<name> (a shared result card): the row to scroll to + mark. */
+  readonly focusParam = signal<string | null>(null);
+  private focusTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly _focusRow = effect(() => {
+    const name = this.focusParam();
+    if (!name || this._loading() || !this._sample()) return;
+    untracked(() => setTimeout(() => {
+      const root = this.host.nativeElement as HTMLElement;
+      const rows = Array.from(root.querySelectorAll<HTMLElement>('tr[data-param-row]'));
+      const row = rows.find(r => r.getAttribute('data-param-row') === name);
+      row?.scrollIntoView?.({ block: 'center', behavior: prefersReducedMotionNow() ? 'auto' : 'smooth' });
+      if (this.focusTimer) clearTimeout(this.focusTimer);
+      this.focusTimer = setTimeout(() => this.focusParam.set(null), 4000);
+    }, 60));
+  });
+
+  /** A value SAVED on this line can be shared (the server reads the saved value, never the typed one). */
+  canAskAbout(t: OrderTest, p: TestParameter): boolean {
+    if (!this.share.available()) return false;
+    const v = parseResultSnapshot(t.currentResult)?.values?.[p.name];
+    return v !== undefined && v !== null && String(v).trim() !== '';
+  }
+  /** "Ask about this value" — a result card; the assigned validator is suggested. */
+  askAboutValue(t: OrderTest, p: TestParameter): void {
+    const s = this._sample();
+    const saved = parseResultSnapshot(t.currentResult)?.values?.[p.name];
+    const value = resultValueText(saved) || String(saved ?? '');
+    const flag = this.flagFor(t, p);
+    const name = p.title || p.name;
+    this.share.openSheet({
+      target: { type: 'result', id: t.id, meta: { parameter: p.name, sampleId: s?.id, sampleBarcode: s?.barcode ?? undefined, flag: flag?.tone === 'normal' ? undefined : flag?.label } },
+      title: [name, value, p.unit].filter(Boolean).join(' '),
+      subtitle: [t.test?.name, s?.barcode ? `sample ${s.barcode}` : null].filter(Boolean).join(' · '),
+      heading: 'Ask about this value',
+      suggest: t.validatorAssignedTo ? [{ userId: t.validatorAssignedTo }] : [],
+    });
+  }
+
   ngOnInit() {
+    // ?param=<name> — a shared result card's row (never reloads the tube).
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(q => {
+      const p = q.get("param");
+      if (p) this.focusParam.set(p);
+    });
     // The router REUSES this component for /lab/sample/A → /lab/sample/B
     // (draft shelf, tube tabs, notifications, scan): the tube is driven by
     // the LIVE param + query streams, never a one-off snapshot read — that
@@ -3082,4 +3128,8 @@ interface ResultAttachment {
   name?: string | null;
   /** The value (parameter name) this file belongs to; absent = whole test. */
   param?: string | null;
+}
+
+function prefersReducedMotionNow(): boolean {
+  try { return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
 }

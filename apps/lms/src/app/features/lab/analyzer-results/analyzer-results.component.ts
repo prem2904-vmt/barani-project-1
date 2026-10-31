@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
-import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, ModuleRegistry } from 'ag-grid-community';
+import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, GridApi, GridReadyEvent, ModuleRegistry, RowClassRules } from 'ag-grid-community';
+import { ActivatedRoute } from '@angular/router';
+import { ShareService } from '../../../core/services/share.service';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -96,8 +98,8 @@ export function searchMessages(rows: readonly MessageSummaryDto[], q: string): M
               </div>
             } @else {
               <ag-grid-angular class="pf-ar__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
-                               [defaultColDef]="defaultColDef" [getRowId]="getRowId" [animateRows]="true"
-                               [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></ag-grid-angular>
+                               [defaultColDef]="defaultColDef" [getRowId]="getRowId" [animateRows]="true" [rowClassRules]="rowClassRules"
+                               [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)" (gridReady)="onGridReady($event)"></ag-grid-angular>
             }
             @if (total() > rows().length) {
               <p class="pf-ar__more pf-num">Showing the latest {{ rows().length }} of {{ total() }}.</p>
@@ -127,6 +129,9 @@ export function searchMessages(rows: readonly MessageSummaryDto[], q: string): M
     .pf-ar__main ::ng-deep .pf-ar-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
     .pf-ar__main ::ng-deep .pf-ar-cell__id { font-size: 15px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
     .pf-ar__main ::ng-deep .ag-cell.pf-ar-actcell { padding-left: 6px; padding-right: 6px; }
+    .pf-ar__main ::ng-deep .pf-ar-acts { display: flex; align-items: center; gap: 6px; height: 100%; }
+    /* ?message=<id> (a shared analyzer card): the run is marked — neutral tint + violet edge. */
+    .pf-ar__main ::ng-deep .ag-row.pf-ar-row--focus { background: var(--pf-sel-bg, rgba(124, 58, 237, 0.08)); box-shadow: inset 3px 0 0 var(--color-violet-600, #7c3aed); }
     .pf-ar__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--pf-line); }
     @media (max-width: 640px) {
       .pf-ar__count { margin-left: 0; }
@@ -163,6 +168,7 @@ export class AnalyzerResultsComponent {
     const web = !this.isCoarse && !this.isPhone;
     const qc = this.tab() === 'qc';
     const canAttach = !qc && this.auth.hasAnyPermission(['enter_result', 'edit_result']);
+    const canShare = this.share.available();
     const cell = (main: string, sub?: string, cls = '') =>
       `<div class="pf-ar-cell"><span class="${cls}">${esc(main)}</span>${sub ? `<span class="pf-ar-cell__sub">${esc(sub)}</span>` : ''}</div>`;
     const cols: ColDef<MessageSummaryDto>[] = [
@@ -180,20 +186,70 @@ export class AnalyzerResultsComponent {
         valueGetter: (p) => (p.data ? previewSummary(p.data) : ''),
         cellRenderer: (p: { data?: MessageSummaryDto }) => `<div class="pf-ar-cell"><span class="pf-num">${esc(p.data ? previewSummary(p.data) : '')}</span></div>` },
     ];
-    if (canAttach) cols.push({
+    const attachW = canAttach ? (web ? 150 : 52) : 0;
+    const shareW = canShare ? 52 : 0;
+    if (canAttach || canShare) cols.push({
       colId: 'actions', headerName: '', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
-      width: web ? 150 : 64, minWidth: web ? 150 : 64, flex: 0, cellClass: 'pf-ar-actcell',
-      cellRenderer: (p: { data?: MessageSummaryDto }) =>
-        `<button type="button" class="pf-rowact${web ? '' : ' pf-rowact--icon'}" data-act="attach" aria-label="Attach to sample — ${esc(p.data?.sampleId || 'run')}" title="Attach to sample">` +
-        `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>` +
-        `<span class="pf-rowact__t">Attach to sample</span></button>`,
+      width: attachW + shareW + 12, minWidth: attachW + shareW + 12, flex: 0, cellClass: 'pf-ar-actcell',
+      cellRenderer: (p: { data?: MessageSummaryDto }) => '<div class="pf-ar-acts">' +
+        (canAttach
+          ? `<button type="button" class="pf-rowact${web ? '' : ' pf-rowact--icon'}" data-act="attach" aria-label="Attach to sample — ${esc(p.data?.sampleId || 'run')}" title="Attach to sample">` +
+            `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>` +
+            `<span class="pf-rowact__t">Attach to sample</span></button>`
+          : '') +
+        (canShare
+          ? `<button type="button" class="pf-rowact pf-rowact--icon" data-act="share" aria-label="Send to colleague — ${esc(p.data?.sampleId || 'run')}" title="Send to colleague">` +
+            `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>`
+          : '') + '</div>',
     });
     if (this.isPhone) return cols.filter((c) => c.colId !== 'results' && c.colId !== 'receivedAt');
     return cols;
   });
 
+  // ── Share to Messages ────────────────────────────────────────────────
+  protected readonly share = inject(ShareService);
+  private readonly route = inject(ActivatedRoute, { optional: true });
+  private gridApi: GridApi<MessageSummaryDto> | null = null;
+  /** ?message=<id> (a shared analyzer card): the run to bring into view + mark. */
+  readonly focusId = signal<string | null>(null);
+  readonly rowClassRules: RowClassRules<MessageSummaryDto> = {
+    'pf-ar-row--focus': (p) => !!p.data && p.data.id === this.focusId(),
+  };
+
   constructor() {
+    const qp = this.route?.snapshot?.queryParamMap;
+    const tab = qp?.get('tab');
+    if (tab === 'qc' || tab === 'unmatched') this.tab.set(tab);
+    this.focusId.set(qp?.get('message') ?? null);
     effect(() => { this.tab(); this.load(); });
+  }
+
+  onGridReady(ev: GridReadyEvent<MessageSummaryDto>) { this.gridApi = ev.api; this.revealFocus(); }
+
+  /** Scroll the shared run into view (once rows + grid are both here). */
+  private revealFocus() {
+    const id = this.focusId();
+    if (!id || this.loading() || !this.gridApi) return;
+    const node = this.gridApi.getRowNode(id);
+    if (!node) {
+      // Not in this tab's latest page: try the other tab once, then say so.
+      if (!this.triedOtherTab) { this.triedOtherTab = true; this.tab.set(this.tab() === 'qc' ? 'unmatched' : 'qc'); return; }
+      this.toasts.info('That analyzer run is no longer in this list.');
+      this.focusId.set(null);
+      return;
+    }
+    this.gridApi.ensureNodeVisible(node, 'middle');
+    this.gridApi.redrawRows({ rowNodes: [node] });
+  }
+  private triedOtherTab = false;
+
+  /** A run as a card (the server names it: instrument · sample ID · count). */
+  shareRun(m: MessageSummaryDto) {
+    this.share.openSheet({
+      target: { type: 'analyzer', id: m.id, meta: { tab: this.tab() } },
+      title: `${m.instrumentName || 'Analyzer'} · ${m.sampleId || (this.tab() === 'qc' ? 'QC' : 'no sample ID')}`,
+      subtitle: [plural(m.resultCount ?? 0, 'result'), previewSummary(m, 3)].filter(Boolean).join(' · '),
+    });
   }
 
   setTab(t: AnalyzerTab) { if (t !== this.tab()) { this.q.set(''); this.tab.set(t); } }
@@ -205,6 +261,7 @@ export class AnalyzerResultsComponent {
         this.rows.set(page?.items ?? []);
         this.total.set(page?.total ?? (page?.items?.length ?? 0));
         this.loading.set(false);
+        if (this.focusId()) setTimeout(() => this.revealFocus(), 0);
       },
       error: (err) => { this.loading.set(false); this.toasts.error(ApiError.from(err).message); },
     });
@@ -213,6 +270,7 @@ export class AnalyzerResultsComponent {
   onCellClicked(ev: CellClickedEvent<MessageSummaryDto>) {
     const target = (ev.event?.target as HTMLElement | null)?.closest?.('[data-act]') as HTMLElement | null;
     if (target?.dataset['act'] === 'attach' && ev.data && this.tab() === 'unmatched') this.attachFor.set(ev.data);
+    if (target?.dataset['act'] === 'share' && ev.data) this.shareRun(ev.data);
   }
 
   async onBarcode(m: MessageSummaryDto, barcode: string) {

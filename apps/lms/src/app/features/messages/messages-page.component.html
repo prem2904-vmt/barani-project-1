@@ -218,7 +218,7 @@
                [class.pf-msgs__context-chip--patient]="conv.contextType === 'patient'"
                [class.pf-msgs__context-chip--order]="conv.contextType === 'order'"
                [class.pf-msgs__context-chip--report]="conv.contextType === 'report'"
-               [routerLink]="contextLink(conv)" title="Open record">
+               [routerLink]="contextLink(conv)" [queryParams]="contextQuery(conv)" title="Open record">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
               <span class="pf-msgs__context-chip-type">{{ conv.contextType }}</span>
               <span class="pf-msgs__context-chip-label">{{ conv.contextLabel }}</span>
@@ -346,34 +346,7 @@
                     </div>
                   }
                   @if (sharedRecord(m); as rec) {
-                    <a class="pf-msgs__rec-card"
-                       [class.pf-msgs__rec-card--mine]="m.fromUserId === me()"
-                       [class.pf-msgs__rec-card--patient]="rec.type === 'patient'"
-                       [class.pf-msgs__rec-card--order]="rec.type === 'order'"
-                       [class.pf-msgs__rec-card--report]="rec.type === 'report'"
-                       [routerLink]="sharedRecordLink(rec)" [title]="'Open ' + rec.type">
-                      <div class="pf-msgs__rec-card-icon">
-                        @switch (rec.type) {
-                          @case ('patient') {
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                          }
-                          @case ('order') {
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-                          }
-                          @default {
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
-                          }
-                        }
-                      </div>
-                      <div class="pf-msgs__rec-card-meta">
-                        <span class="pf-msgs__rec-card-eyebrow">{{ sharedRecordEyebrow(rec.type) }}</span>
-                        <span class="pf-msgs__rec-card-title">{{ rec.title }}</span>
-                        @if (rec.subtitle) {
-                          <span class="pf-msgs__rec-card-sub">{{ rec.subtitle }}</span>
-                        }
-                      </div>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" class="pf-msgs__rec-card-go"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    </a>
+                    <pf-share-card class="pf-msgs__rec-host" variant="classic" [card]="rec" [from]="cardFrom(m)"></pf-share-card>
                   }
                   @if (m.attachmentUrl && attachmentGone(m.attachmentUrl)) {
                     <div class="pf-msgs__attach-card pf-msgs__attach-card--gone" role="note">
@@ -408,7 +381,7 @@
                       </a>
                     }
                   }
-                  @if (m.body && !hasSharedRecord(m)) {
+                  @if (cardCaptionOr(m)) {
                     <div class="pf-msgs__bubble-body" [innerHTML]="renderBodyHtml(m)"></div>
                   }
                   @if (!isGroupedWithNext(i) || m.editedAt || m.pending) {
@@ -509,6 +482,14 @@
             </button>
           </div>
         }
+        @if (pendingCard(); as pc) {
+          <div class="pf-msgs__pending-card" aria-label="Link will send as a card">
+            <pf-share-card variant="classic" [card]="pc.card" [preview]="true"></pf-share-card>
+            <button type="button" class="pf-msgs__icon-btn" (click)="clearPendingCard()" aria-label="Send as plain text instead" title="Send as plain text">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="14" height="14" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        }
         @if (pendingAttachment(); as att) {
           <div class="pf-msgs__pending-attach">
             @if (isImage(att.contentType)) {
@@ -600,7 +581,7 @@
                       [value]="draft()" (input)="draft.set($any($event.target).value); onComposerInput(); detectMention()"
                       (keydown)="onComposerKeyDown($event)"
                       (paste)="onComposerPaste($event)"></textarea>
-            @if (draft().trim() || pendingAttachment()) {
+            @if (draft().trim() || pendingAttachment() || pendingCard()) {
               <!-- (mousedown) preventDefault keeps focus on the textarea so the
                    on-screen keyboard stays up after a tap-send (iOS won't
                    reopen it via programmatic focus once blurred) — keyboard
@@ -871,7 +852,7 @@
       </header>
       <div class="pf-msgs__forward-preview">
         <span class="pf-msgs__forward-label">FORWARDING</span>
-        <span class="pf-msgs__forward-body">{{ fwd.body || (fwd.attachmentName ?? '(attachment)') }}</span>
+        <span class="pf-msgs__forward-body">{{ forwardLabel(fwd) }}</span>
       </div>
       <div class="pf-msgs__modal-search">
         <input type="text" placeholder="Search a conversation"

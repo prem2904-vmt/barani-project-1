@@ -1,3 +1,4 @@
+import { ShareService } from '../../../core/services/share.service';
 import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -179,11 +180,14 @@ describe('Report view (nd) — actions', () => {
     (el.querySelector('.pf-rv-act--print') as HTMLButtonElement).click();
     expect(print).toHaveBeenCalled();
 
+    // Share with… → the ONE share sheet (Share to Messages) with this report as the card.
     (el.querySelector('.pf-rv-act--share') as HTMLButtonElement).click();
     await f.whenStable(); f.detectChanges();
-    expect(el.querySelector('.pf-rv-sheet--share')).not.toBeNull();
-    expect(el.querySelector('.pf-rv-share__row')?.textContent).toContain('Priya Nair');
+    const sheet = TestBed.inject(ShareService).sheet();
+    expect(sheet?.target).toEqual({ type: 'report', id: 'rep-1' });
+    expect(sheet?.title).toBeTruthy();
     c.closeSharePicker(); f.detectChanges();
+    expect(TestBed.inject(ShareService).sheet()).toBeNull();
 
     (el.querySelector('.pf-rv-act--send') as HTMLButtonElement).click();
     expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');

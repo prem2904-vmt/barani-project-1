@@ -22,6 +22,7 @@ import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router } from "@angular/router";
 import { firstValueFrom } from "rxjs";
 import { ApiService } from "../../../core/services/api.service";
+import { ShareService } from "../../../core/services/share.service";
 import { LiveQueueService } from "../../../core/services/live-queue.service";
 import { ScanService } from "../../../core/services/scan.service";
 import { normalizeTubeScan, onHardwareScan } from "@prefrontal/shared";
@@ -1919,6 +1920,18 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (this.container(s).kind !== 'vacutainer') return false;
     if (!canOfferPour(s)) return false;
     return pourTargets(s, g.samples).some(t => !this.notCollected(t));
+  }
+
+  /** Share to Messages: ask a colleague about this tube (a sample card). */
+  protected readonly share = inject(ShareService);
+  shareTube(s: OrderSample, g: OrderGroup, ev?: Event): void {
+    ev?.stopPropagation();
+    this.share.openSheet({
+      target: { type: 'sample', id: s.id },
+      title: s.barcode || 'Sample',
+      subtitle: [this.tube(s).label, g.orderNo, g.patientName].filter(Boolean).join(' · '),
+      heading: 'Ask about this tube',
+    });
   }
 
   /** "Red · 26104" — how a tube is named in the sheet. */

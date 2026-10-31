@@ -20,6 +20,7 @@ import {
   filterOrders, orderStatusLabel, orderTests, orderTitle, orderTone, testStatusLabel, testTone,
 } from './patient-profile.nd';
 import { resultValueText } from '../../../shared/utils/option-family';
+import { ShareService } from '../../../core/services/share.service';
 
 /** A stored report as `GET /api/reports/by-order/{id}` returns it. */
 type StoredReport = { id: string; orderId?: string; qrToken?: string; data?: string } & Record<string, unknown>;
@@ -73,6 +74,13 @@ interface ResultRow { title: string; value: string; unit?: string; range?: strin
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
             {{ showReport()[o.id] ? 'Hide report' : 'View report' }}
           </button>
+          @if (share.available()) {
+            <button type="button" class="pf-btn pf-btn--secondary pf-lo-act pf-lo-act--chat" (click)="sendToColleague(o)"
+                    [class.pf-lo-act--icon]="!web()" aria-label="Send to colleague" title="Send to colleague">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span class="pf-lo-act__t">Send to colleague</span>
+            </button>
+          }
           <!-- ⋮ — every action for this order's REPORT (share, the PDF,
                open the full report) by permission; only once a report exists. -->
           @if (detailActions().length) {
@@ -385,6 +393,16 @@ export class LabOrdersComponent implements OnDestroy {
     return Object.entries(snap.values).map(([k, v]) => ({
       title: k, value: show(v), flag: 'normal' as const,
     }));
+  }
+
+  /** Share to Messages: this order as a card (the server names it). */
+  protected readonly share = inject(ShareService);
+  sendToColleague(o: Order): void {
+    this.share.openSheet({
+      target: { type: 'order', id: o.id },
+      title: o.orderNumber || 'Order',
+      subtitle: this.title(o),
+    });
   }
 
   repeat(o: Order) {

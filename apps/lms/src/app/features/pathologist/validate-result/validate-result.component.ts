@@ -17,6 +17,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { EditResultDialogComponent } from '../../../shared/components/edit-result-dialog/edit-result-dialog.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { AuthService } from '../../../core/auth/auth.service';
+import { ShareService } from '../../../core/services/share.service';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent } from '../../../shared/primitives/chip.component';
 import { finalize, firstValueFrom } from 'rxjs';
@@ -1102,10 +1103,30 @@ export class ValidateResultComponent implements OnInit {
     if (this.canEditResult() && this.editOrderId()) {
       a.push({ id: 'send-back', label: 'Send back for correction', icon: 'sendback', group: 'Workflow', hint: 'Re-opens the results for re-entry' });
     }
+    // Share to Messages: this item as a validation card (the server names it).
+    if (this.share.available()) {
+      a.push({ id: 'share', label: 'Share with colleague', icon: 'chat', group: 'Share' });
+      if (t.resultedBy || t.resultedByName) a.push({ id: 'ask-tech', label: 'Ask the technician', icon: 'chat', group: 'Share', hint: t.resultedByName ? `Entered by ${t.resultedByName}` : undefined });
+    }
     if (this.patientId() && this.has(PATIENT_PROFILE_PERMS)) a.push({ id: 'patient', label: 'Open patient', icon: 'patient', group: 'Go to' });
     if (t.subOrder?.id && this.has(LAB_RESULTS_PERMS)) a.push({ id: 'lab', label: 'Open lab results', icon: 'lab', group: 'Go to' });
     return a;
   });
+  protected readonly share = inject(ShareService);
+  /** Share with colleague / Ask the technician (who entered it is suggested). */
+  shareItem(askTech: boolean): void {
+    const t = this._selected();
+    if (!t) return;
+    const barcode = t.subOrder?.barcode;
+    const who = t.subOrder?.order?.patient?.displayName;
+    this.share.openSheet({
+      target: { type: 'validation', id: t.id },
+      title: t.test?.name ?? 'Test',
+      subtitle: [barcode ? `Sample ${barcode}` : null, who].filter(Boolean).join(' · '),
+      heading: askTech ? 'Ask the technician' : 'Share with colleague',
+      suggest: askTech ? [{ userId: t.resultedBy ?? null, name: t.resultedByName ?? null }] : [],
+    });
+  }
   readonly patientId = computed(() => {
     const o = this._selected()?.subOrder?.order as { patientId?: string; patient?: { id?: string } } | undefined;
     return o?.patient?.id ?? o?.patientId ?? null;
@@ -1115,7 +1136,11 @@ export class ValidateResultComponent implements OnInit {
       case 'reassign': void this.reassign(); break;
       case 'edit-self': this.startEdit(); break;
       case 'send-back': this.editDialogOpen.set(true); break;
-      case 'patient': void this.router.navigate(['/frontdesk/patients', this.patientId()]); break;
+      // /p/:id picks the profile route THIS user can open (pathologists hold
+      // view_patient, never the front-desk set).
+      case 'patient': void this.router.navigate(['/p', this.patientId()]); break;
+      case 'share': this.shareItem(false); break;
+      case 'ask-tech': this.shareItem(true); break;
       case 'lab': {
         const sid = this._selected()?.subOrder?.id;
         if (sid) void this.router.navigate(['/lab/sample', sid], { queryParams: { view: 1 } });
@@ -1434,6 +1459,8 @@ export class ValidateResultComponent implements OnInit {
         const match = (rows ?? []).find(r => r.id === id) ?? null;
         this._selected.set(match);
         if (match) void this.loadComments();
+        // A shared validation card names ONE item: on a multi-test tube, bring it into view.
+        if (match && (rows ?? []).length > 1) setTimeout(() => document.getElementById('vt-' + match.id)?.scrollIntoView?.({ block: 'start' }), 120);
         this.loadCritical([id, ...(rows ?? []).map(r => r.id)]);
       },
       error: () => this._loading.set(false)

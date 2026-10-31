@@ -6,7 +6,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
-import { ChatService } from '../../../core/services/chat.service';
+import { ShareService } from '../../../core/services/share.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
 import { OpdGateService } from '../../opd/shared/opd-gate.service';
@@ -51,8 +51,6 @@ function mq(query: string, ref: DestroyRef, on: (m: boolean) => void): boolean {
   try { m.addEventListener?.('change', fn); ref.onDestroy(() => m.removeEventListener?.('change', fn)); } catch { /* old engines */ }
   return !!m.matches;
 }
-
-interface DirectoryUser { id: string; displayName: string; email: string; isActive: boolean; }
 
 interface ProfilePayload {
   patient: Patient;
@@ -102,7 +100,6 @@ export class PatientProfileComponent implements OnInit {
   private readonly orderEntry = inject(OrderEntryService);
   protected readonly opdGate = inject(OpdGateService);
   private readonly locationSvc = inject(Location);
-  private readonly chat = inject(ChatService);
   private readonly dialog = inject(DialogService);
   protected readonly toasts = inject(ToastService);
   private readonly labelPrint = inject(LabelPrintService);
@@ -262,7 +259,9 @@ export class PatientProfileComponent implements OnInit {
     const path = prev.split(/[?#]/)[0];
     const isForm = /^\/frontdesk\/(patients\/new|order)(\/|$)/.test(path);
     if (prev && !isForm && path !== this.router.url.split(/[?#]/)[0]) { this.locationSvc.back(); return; }
-    this.navBack.backTo('/frontdesk');
+    // The read-only route (/patients/:id — lab techs, pathologists) has no
+    // front desk to go up to.
+    this.navBack.backTo(this.router.url.startsWith('/frontdesk') ? '/frontdesk' : '/');
   };
 
   /** Esc closes the top-most layer. */
@@ -274,7 +273,6 @@ export class PatientProfileComponent implements OnInit {
     if (this.abhaCardOpen()) { used(); this.abhaCardOpen.set(false); return; }
     if (this.qrOpen()) { used(); this.qrOpen.set(false); return; }
     if (this.showIdCard()) { used(); this.showIdCard.set(false); return; }
-    if (this.chatPickerOpen()) { used(); this.closeChatPicker(); return; }
     if (this.mergeOpen()) { used(); this.closeMerge(); return; }
     if (this.detail()) { used(); this.closeDetail(); }
   }
@@ -385,26 +383,22 @@ export class PatientProfileComponent implements OnInit {
     return times.length ? new Date(Math.max(...times)).toISOString() : null;
   });
 
-  // Send-to-chat colleague picker state.
-  protected readonly chatPickerOpen = signal(false);
-  protected readonly chatPickerSearch = signal('');
-  protected readonly chatPickerUsers = signal<DirectoryUser[]>([]);
-  protected readonly chatPickerSending = signal(false);
-  /** The colleague row the patient is being sent to (its row shows busy). */
-  protected readonly sendingToId = signal<string | null>(null);
-  protected readonly chatPickerFiltered = computed(() => {
-    const term = this.chatPickerSearch().toLowerCase().trim();
-    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
-    const all = this.chatPickerUsers().filter(u => u.id !== me && u.isActive);
-    return term ? all.filter(u => u.displayName.toLowerCase().includes(term) || u.email.toLowerCase().includes(term)) : all;
-  });
-
   ngOnInit() {
     this.route.paramMap.subscribe(map => {
       const id = map.get('id');
       if (id) this.load(id);
     });
+    // Deep link to ONE order (/o/:id?view=detail, a shared order card):
+    // ?order=<id> opens that order's detail once the history has it.
+    this.route.queryParamMap?.subscribe(q => this.pendingOrder.set(q.get('order')));
   }
+  /** ?order=<id> waiting for the history to load. */
+  private readonly pendingOrder = signal<string | null>(null);
+  private readonly _openPendingOrder = effect(() => {
+    const id = this.pendingOrder();
+    if (!id || !this._history().some(o => o.id === id)) return;
+    untracked(() => { this.pendingOrder.set(null); this.detail.set({ kind: 'order', id, report: false }); });
+  });
 
   orderTests(o: Order): OrderTest[] {
     const tests: OrderTest[] = [];
@@ -478,39 +472,16 @@ export class PatientProfileComponent implements OnInit {
     });
   }
 
-  // ── Send-to-chat ──────────────────────────────────────────────────
-  async openChatPicker(): Promise<void> {
-    this.chatPickerOpen.set(true);
-    this.chatPickerSearch.set('');
-    if (this.chatPickerUsers().length === 0) {
-      try {
-        const users = await firstValueFrom(this.api.get<DirectoryUser[]>('/api/directory/users'));
-        this.chatPickerUsers.set(users ?? []);
-      } catch {
-        this.toasts.error('Could not load directory.');
-      }
-    }
-  }
-  closeChatPicker(): void {
-    this.chatPickerOpen.set(false);
-    this.chatPickerSending.set(false);
-  }
-  async sendPatientToColleague(u: DirectoryUser): Promise<void> {
+  // ── Send to a colleague (the ONE share sheet) ─────────────────────
+  private readonly share = inject(ShareService);
+  openChatPicker(): void {
     const p = this.patient();
     if (!p) return;
-    this.sendingToId.set(u.id);
-    this.chatPickerSending.set(true);
-    try {
-      const label = `${this.displayName()}${p.mrn ? ' · ' + p.mrn : ''}`;
-      await this.chat.sharePatientWithUser(u.id, p.id, label);
-      this.toasts.info(`Sent ${this.displayName()} to ${u.displayName}`);
-      this.closeChatPicker();
-      this.router.navigate(['/messages']);
-    } catch (err) {
-      this.toasts.error(ApiError.from(err).message);
-    } finally {
-      this.chatPickerSending.set(false);
-    }
+    this.share.openSheet({
+      target: { type: 'patient', id: p.id },
+      title: this.displayName(),
+      subtitle: [this.ageSex(), p.mrn].filter(Boolean).join(' · '),
+    });
   }
 
   // ── Merge duplicate into this patient ─────────────────────────────

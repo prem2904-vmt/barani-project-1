@@ -763,3 +763,34 @@ describe('Result entry — Submit all (2+ tube tabs of one order)', () => {
     expect(report).toEqual(['26123 · Submitted', '26124 · Not submitted — Sample has not been collected yet.']);
   });
 });
+
+describe('Result entry — Share to Messages', () => {
+  it('deep link ?param=<name> (a shared result card) marks that row, without reloading the tube', async () => {
+    const { f, el, c, query$, api } = await render();
+    const loads = api.get.mock.calls.length;
+    query$.next(convertToParamMap({ param: 'adequacy' }));
+    f.detectChanges(); await f.whenStable(); f.detectChanges();
+    expect(c.focusParam()).toBe('adequacy');
+    const row = el.querySelector('tr[data-param-row="adequacy"]') as HTMLElement;
+    expect(row.classList.contains('pf-sre__grow--focus')).toBe(true);
+    expect(el.querySelectorAll('.pf-sre__grow--focus').length).toBe(1);
+    expect(api.get.mock.calls.length).toBe(loads);
+  });
+
+  it('"Ask about this value" only for a SAVED value; it opens the sheet with a result card (parameter) and the validator suggested', async () => {
+    const { c } = await render({ rich: true });
+    vi.spyOn(c.share, 'available').mockReturnValue(true);
+    const openSheet = vi.spyOn(c.share, 'openSheet').mockImplementation(() => undefined);
+    const t = { ...c.sample().tests[0], validatorAssignedTo: 'auth-val' };
+    const p = { name: 'target', title: 'Target Detection' };
+    expect(c.canAskAbout(t, p)).toBe(false);
+    t.currentResult = JSON.stringify({ values: { target: 'Detected' } });
+    expect(c.canAskAbout(t, p)).toBe(true);
+    c.askAboutValue(t, p);
+    expect(openSheet).toHaveBeenCalledWith(expect.objectContaining({
+      target: expect.objectContaining({ type: 'result', id: 'ot1', meta: expect.objectContaining({ parameter: 'target' }) }),
+      title: 'Target Detection Detected', subtitle: 'Bacterial PCR Detection · sample 26123',
+      heading: 'Ask about this value', suggest: [{ userId: 'auth-val' }],
+    }));
+  });
+});

@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { of } from 'rxjs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderBandPage } from '../../admin/admin-band.spec-helpers';
@@ -41,7 +42,39 @@ describe('Analyzer results (unmatched + QC)', () => {
     expect(p.cmp.colDefs().some((c: { colId: string }) => c.colId === 'actions')).toBe(true);
     p.cmp.setTab('qc'); p.f.detectChanges(); await flush();
     expect(p.api.get).toHaveBeenCalledWith('/api/instruments/messages?state=qc&page=1&pageSize=100');
-    expect(p.cmp.colDefs().some((c: { colId: string }) => c.colId === 'actions')).toBe(false);
+    // QC runs are read-only: no Attach — only Share (Messages on).
+    const act = p.cmp.colDefs().find((c: { colId: string }) => c.colId === 'actions');
+    const html = act ? act.cellRenderer({ data: msg({ id: 'q1', isQc: true }) }) : '';
+    expect(html).not.toContain('data-act="attach"');
+    if (p.cmp.share.available()) expect(html).toContain('data-act="share"'); else expect(act).toBeUndefined();
+  });
+
+  it('deep link ?message=<id>&tab=qc (a shared analyzer card): opens that tab and marks + reveals the run', async () => {
+    const p = renderBandPage(AnalyzerResultsComponent, {
+      getFor: (u) => (u.includes('state=qc') ? { items: [msg({ id: 'q1', isQc: true, state: 'qc' })], total: 1 } : { items: [msg()], total: 1 }),
+      providers: [{ provide: ScanService, useValue: { manualEntry: () => true } },
+        { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap({ message: 'q1', tab: 'qc' }) } } }],
+    });
+    await flush(); p.f.detectChanges();
+    expect(p.api.get).toHaveBeenCalledWith('/api/instruments/messages?state=qc&page=1&pageSize=100');
+    expect(p.cmp.focusId()).toBe('q1');
+    const rule = p.cmp.rowClassRules['pf-ar-row--focus'];
+    expect(rule({ data: { id: 'q1' } })).toBe(true);
+    expect(rule({ data: { id: 'm1' } })).toBe(false);
+    const api = { getRowNode: vi.fn(() => ({ id: 'q1' })), ensureNodeVisible: vi.fn(), redrawRows: vi.fn() };
+    p.cmp.onGridReady({ api });
+    expect(api.ensureNodeVisible).toHaveBeenCalledWith({ id: 'q1' }, 'middle');
+  });
+
+  it('Share to Messages: a row\'s Share opens the sheet with the run as an analyzer card', async () => {
+    const p = render();
+    await flush(); p.f.detectChanges();
+    const openSheet = vi.spyOn(p.cmp.share, 'openSheet').mockImplementation(() => undefined);
+    const target = document.createElement('button'); target.dataset['act'] = 'share';
+    p.cmp.onCellClicked({ event: { target }, data: msg() });
+    expect(openSheet).toHaveBeenCalledWith(expect.objectContaining({
+      target: { type: 'analyzer', id: 'm1', meta: { tab: 'unmatched' } }, title: 'Sysmex XN · 26999',
+    }));
   });
 
   it('attach: confirm → POST {barcode} → the run leaves the list', async () => {

@@ -57,6 +57,7 @@ import { PatientTimelineService } from "../../features/frontdesk/patient-profile
 import { SwipeBackDirective } from "../../core/directives/swipe-back.directive";
 import { BranchSwitchService } from "../../core/services/branch-switch.service";
 import { BranchVeilComponent } from "../../shared/components/branch-veil/branch-veil.component";
+import { ShareSheetComponent } from "../../shared/components/share-sheet/share-sheet.component";
 import { PageFrameComponent } from "../../shared/components/page-frame/page-frame.component";
 import { PageOpenService } from "../../core/navigation/page-open.service";
 
@@ -77,6 +78,7 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
     PeopleDrawerComponent,
     ChatWindowsComponent,
     ChatPopupsComponent,
+    ShareSheetComponent,
     BarcodeScannerModalComponent,
     PatientTimelineComponent,
     SwipeBackDirective,
@@ -160,6 +162,8 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
         <pf-chat-windows></pf-chat-windows>
         <!-- "New message" pop-ups (bottom-right web, top on phones). -->
         <pf-chat-popups></pf-chat-popups>
+        <!-- "Send to colleague" — the ONE share sheet (ShareService.openSheet). -->
+        <pf-share-sheet></pf-share-sheet>
       }
 
       <!-- Patient profile modal — globally available; opens via

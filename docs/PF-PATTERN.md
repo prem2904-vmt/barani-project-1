@@ -1510,6 +1510,33 @@ the same code); classic keeps its page.
   immersive class, the collapse strip, and at 375 the push + composer
   above the navbar. `BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`.
 
+### Shared records (Share to Messages, 2026-10-31)
+
+- **Send to colleague** — ONE sheet (`shared/components/share-sheet`, opened with
+  `ShareService.openSheet`, rendered once in the shell; only with the Messages
+  module): the card being sent (static preview) · To chips · search · Recent /
+  People / Groups rows (whole-row toggle, neutral selected state, violet check;
+  up to 10) · a Note with @mentions (`@Name` typed, `@<authId>` on the wire) ·
+  **Send** (the sheet's one primary; "Send to N"). One share per destination;
+  a partial failure keeps only the failed ones picked. Centred pf-card modal on
+  web, bottom sheet above the navbar on phones (44px targets, 16px inputs).
+- **Entry points**: patient profile ⋮ "Send to a colleague", order detail band
+  "Send to colleague", the collect tube card's corner icon ("Ask about this
+  tube"), result entry's per-value icon ("Ask about this value" — SAVED values
+  only; the assigned validator suggested), Validate ⋮ "Share with colleague" /
+  "Ask the technician" (who entered it preselected), Report view "Share with…",
+  Analyzer results row icon, Insights band "Share" (this view + period).
+- **The card** (`<pf-share-card>`): violet icon chip · eyebrow · title (wraps)
+  · subtitle · a status chip in WORDS (Critical low = muted red; others neutral)
+  · arrow. The sender's caption shows UNDER it in the bubble. Tap → resolve for
+  the receiver → open, or a friendly notice / branch-switch confirm.
+- **Pasted link** → a removable card preview above the composer (✕ = send as
+  text); Send shares the card with the rest of the text as the caption.
+- **Deep links**: `/o/:id?view=detail`, `/p/:id` (read-only `/patients/:id`
+  for lab roles), `/lab/sample/:id?param=` + `/lab/result/:id?param=` (row
+  scrolled + marked), `/lab/analyzer-results?message=&tab=` (run revealed +
+  marked), `/pathologist/validate/:id` (item scrolled into view on a multi-test tube).
+
 ## 19. Report view
 
 `/reports/view/:id` (`features/reports/report-viewer/`) — one report, the

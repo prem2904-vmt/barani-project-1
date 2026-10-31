@@ -242,52 +242,7 @@
     </aside>
   }
 
-  <!-- Share with a colleague: pf-card modal on web, a sheet on phones. -->
-  @if (chatPickerOpen()) {
-    <div class="pf-rv-scrim" (click)="closeSharePicker()" aria-hidden="true"></div>
-    <div class="pf-card pf-rv-sheet pf-rv-sheet--share" role="dialog" aria-modal="true" aria-labelledby="pf-rv-share-t"
-         (keydown.escape)="closeSharePicker()">
-      <span class="pf-rv-sheet__handle" aria-hidden="true"></span>
-      <header class="pf-card__head">
-        <span class="pf-card__icon" aria-hidden="true">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        </span>
-        <span class="pf-card__label" id="pf-rv-share-t">Share this report</span>
-        <span class="pf-card__spacer"></span>
-        <button type="button" class="pf-btn pf-btn--icon pf-rv-close" (click)="closeSharePicker()" aria-label="Close">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-        </button>
-      </header>
-      <p class="pf-rv-share__lead">The colleague will receive a tap-to-open report card in their chat.</p>
-      <div class="pf-rv-share__search">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-        <input type="text" class="pf-input" placeholder="Search by name or email" aria-label="Search colleagues"
-               [value]="chatPickerSearch()" (input)="chatPickerSearch.set($any($event.target).value)" autofocus>
-      </div>
-      <ul class="pf-rv-share__list">
-        @if (chatPickerLoading()) {
-          <li><pf-skeleton-rows [rows]="4" [trailing]="false" [dense]="true" label="Loading colleagues…"></pf-skeleton-rows></li>
-        } @else {
-        @for (u of chatPickerFiltered(); track u.id) {
-          <li>
-            <button type="button" class="pf-rv-share__row" [disabled]="chatPickerSending()"
-                    [pfBusy]="chatPickerSendingTo() === u.id" pfBusyLabel="Sending…" (click)="shareWith(u)">
-              <span class="pf-rv-share__avatar" aria-hidden="true">{{ initials(u.displayName) }}</span>
-              <span class="pf-rv-share__meta">
-                <span class="pf-rv-share__name">{{ u.displayName }}</span>
-                <span class="pf-rv-share__email">{{ u.email }}</span>
-              </span>
-            </button>
-          </li>
-        } @empty {
-          <li class="pf-empty pf-empty--compact">
-            <p class="pf-empty__title">No colleagues match</p>
-          </li>
-        }
-        }
-      </ul>
-    </div>
-  }
+  <!-- Share with a colleague: the ONE share sheet (ShareService, rendered in the shell). -->
 
   <ng-template #reportIcon>
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg>

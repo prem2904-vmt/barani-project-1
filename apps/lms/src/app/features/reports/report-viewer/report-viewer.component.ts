@@ -8,7 +8,7 @@ import { finalize, firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { AuthService } from '../../../core/auth/auth.service';
-import { ChatService } from '../../../core/services/chat.service';
+import { ShareService } from '../../../core/services/share.service';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { Report, ReportTemplate } from '../../../shared/models/report.model';
@@ -35,7 +35,6 @@ import { WhatsAppSendService, waSendLabel } from '../../../core/services/whatsap
 import { currentRecipient } from '../../../shared/utils/report-recipient';
 import { formatAge } from '../../../shared/utils/patient-age';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
-import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { asFamilyValue, familyValueText, resultValueText } from '../../../shared/utils/option-family';
 
 interface ReportData {
@@ -147,7 +146,6 @@ export const RV_DONE_MS = 1800;
     ActionsMenuComponent,
     ActionsMenuTriggerDirective,
     BusyDirective,
-    SkeletonRowsComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './report-viewer.component.html',
@@ -160,7 +158,6 @@ export class ReportViewerComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly navBack = inject(NavBackService);
-  private readonly chat = inject(ChatService);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
 
@@ -464,54 +461,19 @@ export class ReportViewerComponent implements OnInit {
     untracked(() => this.renderPdfView());
   });
 
-  // Share-with-colleague picker state.
-  protected readonly chatPickerOpen = signal(false);
-  protected readonly chatPickerSearch = signal('');
-  protected readonly chatPickerUsers = signal<{ id: string; displayName: string; email: string; isActive: boolean }[]>([]);
-  protected readonly chatPickerSending = signal(false);
-  /** The colleague row whose share is running (its busy dots). */
-  protected readonly chatPickerSendingTo = signal<string | null>(null);
-  /** The directory is on its way (first open): skeleton rows, not "No colleagues match". */
-  protected readonly chatPickerLoading = signal(false);
-  protected readonly chatPickerFiltered = computed(() => {
-    const term = this.chatPickerSearch().toLowerCase().trim();
-    const me = this.auth.user()?.authId ?? this.auth.user()?.id ?? '';
-    return this.chatPickerUsers()
-      .filter(u => u.id !== me && u.isActive)
-      .filter(u => !term || u.displayName.toLowerCase().includes(term) || u.email.toLowerCase().includes(term));
-  });
-
-  async openSharePicker(): Promise<void> {
-    this.chatPickerOpen.set(true);
-    this.chatPickerSearch.set('');
-    if (this.chatPickerUsers().length === 0) {
-      this.chatPickerLoading.set(true);
-      try {
-        const users = await firstValueFrom(this.api.get<{ id: string; displayName: string; email: string; isActive: boolean }[]>('/api/directory/users'));
-        this.chatPickerUsers.set(users ?? []);
-      } catch {
-        this.toasts.error('Could not load directory.');
-      } finally { this.chatPickerLoading.set(false); }
-    }
-  }
-  closeSharePicker(): void { this.chatPickerOpen.set(false); this.chatPickerSending.set(false); }
-
-  async shareWith(u: { id: string; displayName: string }): Promise<void> {
+  // Share with a colleague → the ONE share sheet (a report card; the server
+  // names it and checks I may see it). "Send to doctor" = the same sheet.
+  private readonly share = inject(ShareService);
+  openSharePicker(): void {
     const r = this.report();
     if (!r) return;
-    this.chatPickerSending.set(true);
-    this.chatPickerSendingTo.set(u.id);
-    try {
-      const label = this.subtitle() || `Report #${r.id.slice(0, 8)}`;
-      const convId = await this.chat.openConversationWithContext(u.id, 'report', r.id, label);
-      await this.chat.shareReport(convId, r.id);
-      this.toasts.info(`Sent to ${u.displayName}`);
-      this.closeSharePicker();
-      this.router.navigate(['/messages']);
-    } catch (err) {
-      this.toasts.error(ApiError.from(err).message);
-    } finally { this.chatPickerSending.set(false); this.chatPickerSendingTo.set(null); }
+    this.share.openSheet({
+      target: { type: 'report', id: r.id },
+      title: this.patientName() || 'Lab report',
+      subtitle: this.orderLabel() || '',
+    });
   }
+  closeSharePicker(): void { this.share.closeSheet(); }
 
   readonly data = computed<ReportData | null>(() => {
     const raw = this._report()?.data;

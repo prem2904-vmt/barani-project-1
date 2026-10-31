@@ -22,6 +22,8 @@ import { NavBackService } from '../../core/services/nav-back.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { UploadsService } from '../../core/services/uploads.service';
 import { ChatMessage, Conversation } from '../../shared/models/chat.model';
+import { ShareService } from '../../core/services/share.service';
+import { linkifyEscaped } from './messages-page.component';
 
 /**
  * MESSAGES — new design (PF-PATTERN §17). The page's own template renders
@@ -415,6 +417,121 @@ describe('Messages — new design (PF-PATTERN §17)', () => {
     expect(thread).toBeTruthy();
     expect(thread.classList.contains('pf-mnd-push--forward')).toBe(false);
     expect(q(thread, '.pf-mnd-thread__name')!.textContent!.trim()).toBe('Haematology bench');
+  });
+});
+
+describe('Messages — Share to Messages (shared-record cards)', () => {
+  const G = '0b8a1c2d-1111-4222-8333-944455556666';
+  const card = (over: Partial<ChatMessage> = {}): ChatMessage => ({
+    id: 'k1', conversationId: 'c1', fromUserId: 'u2', body: 'Can you recheck this?', sentAt: new Date().toISOString(), kind: 'user',
+    sharedRecordType: 'result', sharedRecordId: 't1', sharedRecordTitle: 'Hb 4.2 g/dL', sharedRecordSubtitle: 'CBC · sample 26105',
+    sharedRecordMeta: { parameter: 'hb', flag: 'critical_low' }, ...over,
+  });
+  async function thread(msgs: ChatMessage[]) {
+    const s = setup();
+    await settle(s.f);
+    rows(s.el)[0].click(); await settle(s.f);
+    s.chat.activeMessages.set(msgs);
+    await settle(s.f);
+    return { ...s, share: TestBed.inject(ShareService) };
+  }
+
+  it('a card bubble shows the ONE card AND the sender\'s caption under it', async () => {
+    const { el, c } = await thread([card()]);
+    const bubble = q(el, '.pf-mnd-bubble')!;
+    expect(bubble.querySelector('pf-share-card')).toBeTruthy();
+    expect(c.sharedRecord(card())).toEqual(expect.objectContaining({ type: 'result', id: 't1', meta: { parameter: 'hb', flag: 'critical_low' } }));
+    expect(q(bubble, '.pf-mnd-bubble__body')!.textContent).toContain('Can you recheck this?');
+    expect(c.cardFrom(card())).toBe('Dr. Meenakshi Sundaravadivelu Ramanathan');
+  });
+
+  it('a new-path card with NO caption has an empty body: the card alone; the list preview names the card', async () => {
+    const { el, c } = await thread([card({ body: '' })]);
+    const bubble = q(el, '.pf-mnd-bubble')!;
+    expect(bubble.querySelector('pf-share-card')).toBeTruthy();
+    expect(q(bubble, '.pf-mnd-bubble__body')).toBeNull();
+    const conv = { ...CONVS[0], lastMessage: { id: 'k1', fromUserId: 'u2', body: '', sentAt: iso(1), sharedRecordType: 'order', sharedRecordTitle: 'LAB-2610-000200' } };
+    expect(c.lastMessagePreview(conv)).toBe('Order: LAB-2610-000200');
+    expect(c.previewKind(conv)).toBe('card');
+    expect(c.previewText(conv)).toBe('Order: LAB-2610-000200');
+  });
+
+  it('a legacy share\'s auto text ("📄 Shared report: …") never shows as a caption', async () => {
+    const legacy = card({ sharedRecordType: null, sharedRecordId: null, sharedReportId: 'r1', sharedReportPatientName: 'Priya', body: '📄 Shared report: Priya · CBC' });
+    const { el } = await thread([legacy]);
+    const bubble = q(el, '.pf-mnd-bubble')!;
+    expect(bubble.querySelector('pf-share-card')).toBeTruthy();
+    expect(q(bubble, '.pf-mnd-bubble__body')).toBeNull();
+  });
+
+  it('a pasted Prefrontal link becomes a removable card preview; Send shares it with the rest as the caption', async () => {
+    const { f, el, c, chat, share } = await thread([]);
+    const fromUrl = vi.spyOn(share, 'cardFromUrl').mockResolvedValue({ type: 'order', id: G, meta: null });
+    const send = vi.spyOn(share, 'shareToConversation').mockResolvedValue(null);
+    const url = `https://med-dev.prefrontal.health/o/${G}`;
+    c.draft.set(`Please collect ${url} today`);
+    c.onComposerPaste({ clipboardData: { getData: () => url, items: [] } } as unknown as ClipboardEvent);
+    await settle(f);
+    expect(fromUrl).toHaveBeenCalledWith(url);
+    const pending = q(el, '.pf-mnd-pending--card')!;
+    expect(pending.querySelector('pf-share-card')).toBeTruthy();
+    expect(q<HTMLButtonElement>(el, 'button.pf-mnd-send')!.disabled).toBe(false);
+    await c.sendDraft();
+    expect(send).toHaveBeenCalledWith('c1', { type: 'order', id: G, meta: null, caption: 'Please collect today' });
+    expect(chat.sendMessage).not.toHaveBeenCalled();
+    expect(c.pendingCard()).toBeNull();
+  });
+
+  it('removing the preview sends the link as plain text', async () => {
+    const { f, el, c, chat, share } = await thread([]);
+    vi.spyOn(share, 'cardFromUrl').mockResolvedValue({ type: 'patient', id: G, meta: null });
+    const url = `https://med-dev.prefrontal.health/p/${G}`;
+    c.draft.set(url);
+    c.onComposerPaste({ clipboardData: { getData: () => url, items: [] } } as unknown as ClipboardEvent);
+    await settle(f);
+    q<HTMLButtonElement>(el, '.pf-mnd-pending--card button[aria-label="Send as plain text instead"]')!.click();
+    await settle(f);
+    expect(q(el, '.pf-mnd-pending--card')).toBeNull();
+    await c.sendDraft();
+    expect(chat.sendMessage).toHaveBeenCalledWith('c1', url, null, null);
+  });
+
+  it('a link the server can\'t make a card of stays text (no preview)', async () => {
+    const { f, el, c, share } = await thread([]);
+    const fromUrl = vi.spyOn(share, 'cardFromUrl').mockResolvedValue(null);
+    c.onComposerPaste({ clipboardData: { getData: () => 'https://google.com/o/1', items: [] } } as unknown as ClipboardEvent);
+    await settle(f);
+    expect(fromUrl).not.toHaveBeenCalled();
+    expect(q(el, '.pf-mnd-pending--card')).toBeNull();
+  });
+
+  it('forward keeps the card (re-shared, the server re-checks); a plain message forwards as before', async () => {
+    const { c, chat, share } = await thread([]);
+    const fwd = vi.spyOn(share, 'forwardCard').mockResolvedValue(true);
+    (chat as any).forwardMessage = vi.fn(async () => {});
+    const m = card();
+    c.startForward(m);
+    expect(c.forwardLabel(m)).toBe('Result: Hb 4.2 g/dL — Can you recheck this?');
+    await c.confirmForward(CONVS[1]);
+    expect(fwd).toHaveBeenCalledWith('c2', m);
+    const plain = { ...m, sharedRecordType: null, sharedRecordId: null };
+    c.startForward(plain);
+    await c.confirmForward(CONVS[1]);
+    expect((chat as any).forwardMessage).toHaveBeenCalledWith('c2', plain);
+  });
+
+  it('the order context chip opens the order itself; a patient chip goes through /p/ (works for lab roles)', async () => {
+    const { c } = await thread([]);
+    expect(c.contextLink({ contextType: 'order', contextId: 'o1' })).toEqual(['/o', 'o1']);
+    expect(c.contextQuery({ contextType: 'order' })).toEqual({ view: 'detail' });
+    expect(c.contextLink({ contextType: 'patient', contextId: 'p1' })).toEqual(['/p', 'p1']);
+    expect(c.contextQuery({ contextType: 'patient' })).toBeNull();
+  });
+
+  it('links in a message are clickable (new tab, noopener) — on ESCAPED text only', () => {
+    expect(linkifyEscaped('see https://x.test/a?b=1&amp;c=2.')).toBe('see <a class="pf-msgs__link" href="https://x.test/a?b=1&amp;c=2" target="_blank" rel="noopener noreferrer">https://x.test/a?b=1&amp;c=2</a>.');
+    expect(linkifyEscaped('&lt;script&gt; no link')).toBe('&lt;script&gt; no link');
+    expect(linkifyEscaped('https://u:p@x.test/')).toBe('https://u:p@x.test/');
   });
 });
 

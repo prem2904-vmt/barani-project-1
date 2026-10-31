@@ -1,3 +1,4 @@
+import { ShareService } from '../../../core/services/share.service';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { signal } from '@angular/core';
@@ -72,7 +73,7 @@ const APPTS = [{ id: 'a1', type: 'home_collection', collectionType: 'home', appo
 type Opts = {
   holding?: boolean; narrow?: boolean; phone?: boolean; touch?: boolean; perms?: string[]; messages?: boolean;
   fail?: boolean; hang?: boolean; orders?: unknown[]; patient?: Record<string, unknown>; results?: unknown[]; appointments?: unknown[];
-  resultsFail?: boolean;
+  resultsFail?: boolean; query?: Record<string, string>;
 };
 
 const realMatchMedia = (window as any).matchMedia;
@@ -143,7 +144,7 @@ async function render(opts: Opts = {}) {
       { provide: ThemeService, useValue: { isDark: () => false, isNewDesign: () => true } },
       { provide: ZoomTransitionService, useValue: zoom },
       { provide: PatientTimelineService, useValue: timeline },
-      { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: 'p1' })), snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } },
+      { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: 'p1' })), queryParamMap: of(convertToParamMap(opts.query ?? {})), snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } },
       { provide: Router, useValue: router },
     ],
   });
@@ -211,8 +212,9 @@ describe('Patient profile (clinical) — ONE primary + every action reachable', 
     click('.pf-pp-act--more'); click('[data-act="merge"]');
     expect(c.mergeOpen()).toBe(true);
     c.closeMerge();
+    // Send to a colleague → the ONE share sheet with this patient as the card.
     click('.pf-pp-act--more'); click('[data-act="chat"]');
-    expect(c.chatPickerOpen()).toBe(true);
+    expect(TestBed.inject(ShareService).sheet()?.target).toEqual({ type: 'patient', id: 'p1' });
   });
 
   it('phones: the primary moves to a full-width bottom bar — still exactly one', async () => {
@@ -523,5 +525,29 @@ describe('patient-profile.nd helpers', () => {
     expect(opt.series[0].markArea.itemStyle.color).not.toMatch(/16,185,129/);
     expect(opt.series[0].itemStyle.color({ dataIndex: 0 })).toBe('#7c3aed');
     expect(opt.series[0].itemStyle.color({ dataIndex: 1 })).toBe('#dc2626');
+  });
+});
+
+describe('Patient profile — Share to Messages', () => {
+  it('?order=<id> (a shared order card via /o/:id) opens THAT order\'s detail once the history loads', async () => {
+    const { c, el } = await render({ query: { order: 'o1' } });
+    expect(c.detail()).toEqual({ kind: 'order', id: 'o1', report: false });
+    expect(el.querySelector('pf-lab-orders')).not.toBeNull();
+  });
+  it('an unknown ?order never opens anything', async () => {
+    const { c } = await render({ query: { order: 'nope' } });
+    expect(c.detail()).toBeNull();
+  });
+  it('Send to a colleague: a patient card titled with the FULL name; hidden without Messages', async () => {
+    const { el, click } = await render();
+    click('.pf-pp-act--more'); click('[data-act="chat"]');
+    const sheet = TestBed.inject(ShareService).sheet()!;
+    expect(sheet.title).toBe(FULL_NAME);
+    expect(sheet.subtitle).toContain('AA');
+    TestBed.inject(ShareService).closeSheet();
+    const off = await render({ messages: false });
+    off.click('.pf-pp-act--more');
+    expect(off.el.querySelector('[data-act="chat"]')).toBeNull();
+    void el;
   });
 });

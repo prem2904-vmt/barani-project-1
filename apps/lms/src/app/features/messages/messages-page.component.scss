@@ -2249,3 +2249,11 @@
   transition: filter 0.15s ease;
 }
 .pf-msgs-locked__btn:hover { filter: brightness(1.08); }
+
+/* Share to Messages: the shared-record card (<pf-share-card>) + caption, and a
+   pasted link's card preview above the composer. */
+.pf-msgs__rec-host { display: block; min-width: 0; max-width: 340px; }
+.pf-msgs__rec-host + .pf-msgs__bubble-body { margin-top: 6px; }
+.pf-msgs__pending-card { display: flex; align-items: center; gap: 8px; padding: 8px 12px 0; }
+.pf-msgs__pending-card pf-share-card { flex: 1 1 auto; min-width: 0; }
+.pf-msgs__bubble-body ::ng-deep .pf-msgs__link { color: inherit; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }

@@ -3439,6 +3439,16 @@ export class ResultEntryComponent implements OnInit, AfterViewInit {
         // Seed the right-rail target with the first numeric param so the pad has something to drive.
         const firstNumeric = this.parameters().find(p => this.inputKindFor(p) === 'numeric');
         if (firstNumeric) this._active.set(firstNumeric.name);
+        // ?param=<name> (a shared result card): that value is the target, scrolled into view.
+        const want = this.route.snapshot.queryParamMap?.get('param');
+        const hit = want ? this.parameters().find(p => p.name === want || p.title === want) : null;
+        if (hit) {
+          this._active.set(hit.name);
+          setTimeout(() => {
+            const el = Array.from(document.querySelectorAll<HTMLElement>('[data-param]')).find(e => e.getAttribute('data-param') === hit.name);
+            el?.scrollIntoView?.({ block: 'center' });
+          }, 80);
+        }
         // Calculated test → fetch tube siblings and prefill from the formula.
         this.initCalc();
       },

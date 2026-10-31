@@ -2556,3 +2556,18 @@
       .pf-pour-ghost--back, .pf-pour-ghost--in { transition: none; }
       .pf-tube__drop--no { transition: none; }
     }
+
+    /* Share to Messages — "Ask a colleague about this tube": a quiet round
+       icon in the card's top-right corner (44px hit area), never a full row. */
+    .pf-sc-share {
+      position: absolute; top: 8px; right: 8px; z-index: 3;
+      width: 30px; height: 30px; border-radius: 999px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--pf-line, var(--glass-border)); background: var(--pf-card-bg, var(--bg-secondary));
+      color: var(--text-tertiary); cursor: pointer;
+      transition: color var(--pf-dur-fast, 200ms) ease, border-color var(--pf-dur-fast, 200ms) ease;
+    }
+    .pf-sc-share::after { content: ""; position: absolute; inset: -7px; border-radius: 50%; }
+    .pf-sc-share:focus-visible { outline: 2px solid var(--input-border-focus, #8b5cf6); outline-offset: 2px; }
+    @media (hover: hover) { .pf-sc-share:hover { color: var(--text-primary); border-color: var(--pf-hover-border, #8b5cf6); } }
+    @media (prefers-reduced-motion: reduce) { .pf-sc-share { transition: none; } }

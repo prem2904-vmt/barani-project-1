@@ -1,3 +1,4 @@
+import { ShareService } from '../../core/services/share.service';
 import { NgTemplateOutlet, formatDate } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -1151,6 +1152,22 @@ export class InsightsComponent {
       default: return null;
     }
   });
+
+  // ═══ Share to Messages ══════════════════════════════════════════════
+  protected readonly share = inject(ShareService);
+  /** This view (section / list / saved dashboard + period, range, branch) as a
+   *  card; the server re-checks the section's permission for sender and receiver. */
+  shareView(): void {
+    const section = this.nav();
+    const meta: Record<string, string> = { section, period: this.period() };
+    if (this.period() === 'custom') { meta['from'] = this.customFrom(); meta['to'] = this.customTo(); }
+    if (this.branchId()) meta['branch'] = this.branchId();
+    this.share.openSheet({
+      target: { type: 'insights', id: this.dashId() ?? section, meta },
+      title: this.navLabel() || 'Insights',
+      subtitle: this.periodLabel(),
+    });
+  }
 
   // ═══ URL ════════════════════════════════════════════════════════════
 
