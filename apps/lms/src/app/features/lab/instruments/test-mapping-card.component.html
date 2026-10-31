@@ -1,0 +1,46 @@
+<section class="pf-tm" aria-labelledby="pf-tm-title" [attr.data-state]="running() ? running()!.status : 'idle'">
+  <header class="pf-tm__head">
+    <span class="pf-tm__icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/><path d="M7.5 15h9"/></svg></span>
+    <h3 class="pf-tm__title" id="pf-tm-title">Test with an analyzer ID</h3>
+  </header>
+
+  @if (running(); as a) {
+    <div class="pf-tm__live" role="status" aria-live="polite">
+      <span class="pf-tm__dot" aria-hidden="true"></span>
+      <span class="pf-tm__line pf-num">{{ line() }}</span>
+      <button type="button" class="pf-btn pf-btn--secondary press pf-tm__close" (click)="close()">{{ a.status === 'waiting' ? 'Close' : 'Finish now' }}</button>
+    </div>
+    <p class="pf-tm__hint">
+      @if (a.status === 'waiting') { Run the sample on the analyzer now. }
+      Closing this, leaving the page or signing out stops the test.
+    </p>
+  } @else {
+    @if (svc.note(); as n) {
+      <div class="pf-tm__note" role="status">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        <span class="pf-num">{{ n }}</span>
+        <button type="button" class="pf-btn pf-btn--icon press" (click)="dismissNote()" aria-label="Dismiss" title="Dismiss">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+    }
+    <p class="pf-tm__hint">For setup: results the analyzer sends with this ID go to the sample you pick, until it goes quiet for {{ quietS }} s. Closing the page stops it.</p>
+    <form class="pf-tm__form" (submit)="$event.preventDefault(); start()">
+      <label class="pf-field pf-tm__f">
+        <span class="pf-field__lbl">Analyzer ID</span>
+        <input class="pf-input pf-num" name="analyzerId" [value]="analyzerId()" (input)="setAnalyzerId($any($event.target).value)"
+               placeholder="e.g. 8507" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      </label>
+      <svg class="pf-tm__arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      <label class="pf-field pf-tm__f">
+        <span class="pf-field__lbl">Prefrontal sample</span>
+        <input #sampleInput class="pf-input pf-num" name="sampleCode" pfKeys="sample" pfSamplePreset pfKeysEnter="Start"
+               [value]="sampleCode()" (input)="setSampleCode($any($event.target).value)"
+               placeholder="Sample / tube number" autocomplete="off" autocapitalize="off" spellcheck="false" />
+      </label>
+      <button type="submit" class="pf-btn pf-btn--secondary press pf-tm__start" [disabled]="!canStart()"
+              [pfBusy]="svc.busy()" pfBusyLabel="Starting…">Start</button>
+    </form>
+    @if (error(); as e) { <p class="pf-tm__err" role="alert">{{ e }}</p> }
+  }
+</section>

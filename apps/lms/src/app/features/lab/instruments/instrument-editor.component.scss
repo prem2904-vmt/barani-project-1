@@ -91,6 +91,9 @@
 .pf-ie-msg__id { font-size: 15px; font-weight: 600; color: var(--text-primary); }
 .pf-ie-msg__meta, .pf-ie-msg__prev { font-size: 12px; color: var(--text-tertiary); }
 .pf-ie-msg__state { text-transform: capitalize; flex: none; }
+.pf-ie-msg__side { flex: none; display: inline-flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+.pf-ie-msg__via { flex: none; font-size: 11.5px; }
+.pf-ie-msg__via::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); vertical-align: middle; }
 .pf-ie-sidebody { gap: 12px; }
 .pf-ie-status { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500;
   --pf-ie-tone: var(--text-secondary); color: color-mix(in srgb, var(--pf-ie-tone) 70%, var(--text-primary)); }

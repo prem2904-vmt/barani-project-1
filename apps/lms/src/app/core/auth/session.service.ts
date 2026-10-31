@@ -10,6 +10,7 @@ import { AppointmentBookingService } from '../services/appointment-booking.servi
 import { TenantStateService } from '../services/tenant-state.service';
 import { BranchLabConfigService } from '../services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../services/tenant-entitlements.service';
+import { TestMappingService } from '../../shared/instruments/test-mapping.service';
 
 /** Named steps of the sign-out sequence, in the order they run. */
 export type SignOutStep =
@@ -118,6 +119,9 @@ export class SessionService {
       //    Another tab signing out already dropped this browser's web push.
       this.step('push');
       if (reason !== 'elsewhere') await settle(this.get(PushService)?.unregister());
+      // An analyzer test mapping ("Test with an analyzer ID") never outlives
+      // the session: end it while the token still authenticates.
+      await settle(this.get(TestMappingService)?.end('logout'));
 
       // 3. Sockets.
       this.step('sockets');

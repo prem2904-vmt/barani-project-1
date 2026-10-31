@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -43,6 +43,11 @@ import { BridgesApiService } from '../../../shared/bridges/bridges-api.service';
 import type { BridgeDto } from '../../../shared/bridges/bridge.models';
 import { connectedViaOptions, transportOptionsFor } from '../../../shared/bridges/bridge-assign';
 import { bridgeErrorText } from '../../../shared/bridges/bridge-status';
+import { AuthService } from '../../../core/auth/auth.service';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { TestMappingService } from '../../../shared/instruments/test-mapping.service';
+import { TEST_MAPPING_PERMS, canTestWithId, isViaTestMapping, latestUnmatchedAnalyzerId } from '../../../shared/instruments/test-mapping';
+import { TestMappingCardComponent } from './test-mapping-card.component';
 
 type Tab = 'status' | WizardStep;
 const RAW_CAP = 64_000;
@@ -63,7 +68,7 @@ interface TabDef { id: Tab; label: string }
 @Component({
   selector: 'pf-instrument-editor',
   standalone: true,
-  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, BusyDirective, SkeletonFormComponent, InstrumentTwoWayComponent, SampleIdPickerComponent, AssistantButtonComponent, AssistantPanelComponent],
+  imports: [NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SelectComponent, BusyDirective, SkeletonFormComponent, InstrumentTwoWayComponent, SampleIdPickerComponent, AssistantButtonComponent, AssistantPanelComponent, TestMappingCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './instrument-editor.component.html',
   styleUrl: './instrument-editor.component.scss',
@@ -370,6 +375,32 @@ export class InstrumentEditorComponent {
   /** "N codes auto-matched by LOINC — confirm in Code mapping" banner
    *  (Status tab): summed across the recent-results list. */
   readonly recentAutoMatchedCount = computed(() => this.recent().reduce((n, m) => n + (m.autoMatchedCodes?.length ?? 0), 0));
+
+  // ── Test with an analyzer ID (one-time temporary mapping, 2026-10-31) ──
+  private readonly auth = inject(AuthService);
+  protected readonly testMapping = inject(TestMappingService);
+  protected readonly web = webPointerSignal();
+  protected readonly isViaTestMapping = isViaTestMapping;
+  protected readonly canTestWithId = canTestWithId;
+  /** The server's set for test sessions (it enforces it too). */
+  readonly canTestMapping = computed(() => this.auth.hasAnyPermission(TEST_MAPPING_PERMS));
+  /** The card's prefill: the newest unmatched result's analyzer ID. */
+  readonly suggestedTestId = computed(() => latestUnmatchedAnalyzerId(this.recent()));
+  private readonly testCard = viewChild(TestMappingCardComponent);
+
+  /** "Test with this ID" on an unmatched result: if a test already waits for
+   *  that ID, re-run this result through it; else prefill the card. */
+  async testWithId(m: MessageSummaryDto) {
+    const id = this.id();
+    if (!id || !m.sampleId) return;
+    if (this.testMapping.isRunningFor(id, m.sampleId)) {
+      const r = await this.testMapping.reingest(m.id);
+      if (r.ok) { this.toasts.success(`Sent ${m.sampleId} again through the test`); this.loadRecent(); }
+      else this.toasts.error(r.error);
+      return;
+    }
+    this.testCard()?.useId(m.sampleId);
+  }
 
   private async loadPorts() {
     const list = await this.bridge.listSerialPorts();

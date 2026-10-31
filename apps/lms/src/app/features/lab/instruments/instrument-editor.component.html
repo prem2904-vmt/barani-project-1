@@ -63,6 +63,9 @@
               </button>
             </header>
             <div class="pf-card__body">
+              @if (canTestMapping() && id(); as iid) {
+                <pf-test-mapping-card [instrumentId]="iid" [suggestedId]="suggestedTestId()" (routed)="loadRecent()"></pf-test-mapping-card>
+              }
               @if (recentAutoMatchedCount() > 0) {
                 <div class="pf-ie-notice" role="status">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h7M4 17h7M15 7h5M15 17h5M11 7l4 10M11 17l4-10"/></svg>
@@ -87,7 +90,19 @@
                           <span class="pf-ie-msg__prev pf-num">{{ previewText(m) }}</span>
                         }
                       </span>
-                      <span class="pf-chip pf-chip--static pf-ie-msg__state">{{ m.state }}</span>
+                      <span class="pf-ie-msg__side">
+                        @if (isViaTestMapping(m)) {
+                          <span class="pf-chip pf-chip--static pf-ie-msg__via" title="Routed by a test with an analyzer ID">via test mapping</span>
+                        }
+                        <span class="pf-chip pf-chip--static pf-ie-msg__state">{{ m.state }}</span>
+                        @if (canTestMapping() && canTestWithId(m)) {
+                          <button type="button" class="pf-rowact press" [class.pf-rowact--icon]="!web()" (click)="testWithId(m)"
+                                  [attr.aria-label]="'Test with this ID — ' + m.sampleId" title="Test with this ID">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/></svg>
+                            <span class="pf-rowact__t">Test with this ID</span>
+                          </button>
+                        }
+                      </span>
                     </li>
                   }
                 </ul>

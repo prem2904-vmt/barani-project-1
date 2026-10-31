@@ -193,6 +193,13 @@ export interface MessageSummaryDto {
    *  set for a code a real code map already resolved. */
   autoMatchedCodes?: string[];
   preview?: ResultPreview[];
+  /** Routed by a "Test with an analyzer ID" session (message metadata
+   *  viaTestAlias) — shown with the "via test mapping" badge. Omitted when false. */
+  viaTestAlias?: boolean;
+  /** The analyzer ID the test mapped (only when viaTestAlias). */
+  testAlias?: string | null;
+  /** Who ran the test (only when viaTestAlias). */
+  testAliasUser?: string | null;
 }
 
 export interface MessagePage { items: MessageSummaryDto[]; total: number; page: number; pageSize: number }
@@ -237,6 +244,10 @@ export interface RunDto {
   state: MessageState | string;
   /** Only values that landed on an order line (orderTestId set). */
   values?: MappedValue[];
+  /** Routed by a "Test with an analyzer ID" session (badge "via test mapping"). */
+  viaTestAlias?: boolean;
+  testAlias?: string | null;
+  testAliasUser?: string | null;
 }
 
 /** GET /api/instruments/results/by-sample/{orderSampleId}. Runs are newest

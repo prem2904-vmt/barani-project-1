@@ -44,6 +44,8 @@ export interface AppliedValue {
   /** Instruments:LoincAutoMatch ingest fallback (no code-map row) rather
    *  than a real code map — the field-side hint stays subtle but says so. */
   autoMatched: boolean;
+  /** The run reached this tube through a "Test with an analyzer ID" session. */
+  viaTestAlias?: boolean;
 }
 export type AppliedMap = Record<string, AppliedValue>;
 
@@ -96,6 +98,7 @@ export function valuesForRun(run: RunDto | null | undefined, lines: readonly Pre
       analyzerCode: v.analyzerCode ?? '', instrumentName: run.instrumentName ?? 'Analyzer',
       at: run.runAt ?? run.receivedAt ?? null, messageId: run.messageId,
       autoMatched: !!v.autoMatched,
+      ...(run.viaTestAlias ? { viaTestAlias: true } : {}),
     };
   }
   return out;
@@ -199,16 +202,18 @@ export function analyzerBadge(
   const when = fmtTime(a.at);
   const src = when ? `${a.instrumentName} · ${when}` : a.instrumentName;
   const raw = a.rawValue && a.rawValue !== a.value ? ` (sent ${a.rawValue}${a.rawUnit ? ' ' + a.rawUnit : ''})` : '';
-  const autoNote = a.autoMatched ? ' — auto-matched by LOINC, confirm in Code mapping' : '';
+  const autoNote = (a.autoMatched ? ' — auto-matched by LOINC, confirm in Code mapping' : '')
+    + (a.viaTestAlias ? ' — via test mapping (a temporary analyzer-ID test)' : '');
+  const via = a.viaTestAlias ? ' · via test mapping' : '';
   if (same(currentValue, a.value)) {
     return {
-      kind: 'from', label: `From ${src}`, title: `${a.analyzerCode} from ${src}${raw} — check it before you submit${autoNote}`,
+      kind: 'from', label: `From ${src}${via}`, title: `${a.analyzerCode} from ${src}${raw} — check it before you submit${autoNote}`,
       flags: a.flags, autoMatched: a.autoMatched,
     };
   }
   if (!isFilledValue(currentValue)) return null;
   return {
-    kind: 'edited', label: `Analyzer ${a.value}`,
+    kind: 'edited', label: `Analyzer ${a.value}${via}`,
     title: `${src} sent ${a.value}${a.unit ? ' ' + a.unit : ''}${raw} — the value here was typed${autoNote}`,
     flags: a.flags, autoMatched: a.autoMatched,
   };
