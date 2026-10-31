@@ -84,4 +84,54 @@ describe('Insights — money-hidden rendering', () => {
     expect(p.el.querySelector('.pf-ins-kpi')).toBeNull();
     p.f.destroy();
   });
+
+  describe('Referrals section', () => {
+    // Server (view_analytics only): revenue omitted from each row, ranked by orders.
+    const DOCTORS_NO_MONEY = [
+      { doctorName: 'Dr. Rao', patients: 3, orders: 5, doctorId: 'd1' },
+      { doctorName: 'Dr. Iyer', patients: 2, orders: 2 },
+    ];
+    const DOCTORS_WITH_MONEY = [
+      { doctorName: 'Dr. Rao', patients: 3, orders: 5, revenue: 7500, doctorId: 'd1' },
+      { doctorName: 'Dr. Iyer', patients: 2, orders: 2, revenue: 900 },
+    ];
+
+    function renderReferrals(perms: string[], doctors: unknown) {
+      const p = render(perms, OVERVIEW_NO_MONEY);
+      p.api.get.mockImplementation((url: string) => {
+        if (url.startsWith('/api/analytics/top-referring-doctors')) return of(doctors);
+        if (url.startsWith('/api/analytics/trends/referrals')) return of({ bucketUnit: 'day', points: [] });
+        if (url.startsWith('/api/analytics/revenue-by-source-type')) return of([{ sourceType: 'Doctor', revenue: 8400 }]);
+        if (url.startsWith('/api/tenants/branches')) return of([]);
+        return of(null);
+      });
+      (p.f.componentInstance as InsightsComponent).nav.set('referrals');
+      p.f.detectChanges();
+      return p;
+    }
+
+    it('view_analytics only: loads the volume doctors, no money endpoint, no rupee figures', () => {
+      const p = renderReferrals(['view_analytics'], DOCTORS_NO_MONEY);
+      const urls = p.api.get.mock.calls.map((c: unknown[]) => String(c[0]));
+      expect(urls.some((u: string) => u.startsWith('/api/analytics/top-referring-doctors'))).toBe(true);
+      expect(urls.some((u: string) => u.startsWith('/api/analytics/revenue-by-source-type'))).toBe(false);
+      const cmp = p.f.componentInstance as InsightsComponent;
+      expect(cmp.topDoctors().length).toBe(2);
+      // chart plots order counts, not revenue
+      const series = (cmp.doctorsChart() as any).series?.[0]?.data ?? [];
+      expect(series.map((d: any) => (typeof d === 'object' ? d.value : d)).sort()).toEqual([2, 5]);
+      const text = p.el.textContent ?? '';
+      expect(text).not.toContain('₹');
+      expect(text).not.toContain('undefined');
+      expect(text).not.toContain('NaN');
+      p.f.destroy();
+    });
+
+    it('view_financial_analytics: doctor revenue still flows into the chart', () => {
+      const p = renderReferrals(['view_analytics', 'view_financial_analytics'], DOCTORS_WITH_MONEY);
+      const series = ((p.f.componentInstance as InsightsComponent).doctorsChart() as any).series?.[0]?.data ?? [];
+      expect(series.map((d: any) => (typeof d === 'object' ? d.value : d)).sort((a: number, b: number) => a - b)).toEqual([900, 7500]);
+      p.f.destroy();
+    });
+  });
 });
