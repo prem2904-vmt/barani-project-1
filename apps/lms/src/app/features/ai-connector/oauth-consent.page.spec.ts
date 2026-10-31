@@ -117,7 +117,7 @@ describe('OAuthConsentPage', () => {
     ]);
     const text = f.nativeElement.textContent ?? '';
     expect(text).toContain('P-K7Q2X');
-    expect(text).toContain('Never names, phone numbers, addresses, exact ages or ID numbers');
+    expect(text).toContain('Never patient or staff names, phone numbers, exact ages or ID numbers, and never a patient’s or staff member’s address');
     expect(text).toContain('fewer than 5');
   });
 

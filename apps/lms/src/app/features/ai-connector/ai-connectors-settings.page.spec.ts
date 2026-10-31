@@ -13,7 +13,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
 import { LabSettingsHubComponent } from '../lab/lab-settings-hub/lab-settings-hub.component';
-import { AiConnectorApi, AiConnectorState } from './ai-connector.api';
+import { AI_CONNECTOR_NEVER, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState } from './ai-connector.api';
 import { AiConnectorsSettingsPage } from './ai-connectors-settings.page';
 
 /**
@@ -163,7 +163,7 @@ describe('AiConnectorsSettingsPage privacy level', () => {
     expect(text).toContain('Billing totals — only for people who see money');
     expect(text).toContain('Patient results as codes — only when your lab’s privacy level allows');
     expect(text).toContain('Work per staff member, shown as codes like T-1');
-    expect(text).toContain('Never names, phone numbers, addresses, exact ages or ID numbers');
+    expect(text).toContain('Never patient or staff names, phone numbers, exact ages or ID numbers, and never a patient’s or staff member’s address');
   });
 
   it('defaults to Counts only, explains all three levels in plain words, admin gets a pf-select', async () => {
@@ -252,5 +252,12 @@ describe('Lab settings hub → AI connectors tile', () => {
     expect(tile?.title).toBe('AI connectors');
     expect(canOpenRoute('/admin/ai-connectors', { hasAny: p => p.includes('manage_tests') })).toBe(true);
     expect(canOpenRoute('/admin/ai-connectors', { hasAny: p => p.includes('register_patient') })).toBe(false);
+  });
+
+  it('words the privacy levels and the never-line exactly as the server behaves (age groups only, no sex; addresses of people never)', () => {
+    expect(AI_PRIVACY_LEVELS.map(l => l.label)).toEqual(['Counts only', 'Results, patients as codes', 'Results, with age groups']);
+    expect(JSON.stringify(AI_PRIVACY_LEVELS)).not.toMatch(/\bsex\b/i);
+    expect(AI_CONNECTOR_NEVER).toContain('never a patient’s or staff member’s address');
+    expect(AI_CONNECTOR_NEVER).not.toContain('addresses,');
   });
 });

@@ -36,7 +36,7 @@ export const AI_PRIVACY_LEVELS: readonly PrivacyLevelInfo[] = [
     summary: 'Totals and timings, the Test Master and settings — how many orders, how long things take, what is waiting. Questions about one patient (results, reports, a bill) are refused. This is the default.' },
   { value: 'results', label: 'Results, patients as codes',
     summary: 'Also test results, flags, sample and report status and bills. Patients appear only as short expiring codes like P-K7Q2X that open inside Prefrontal — never a name, phone or ID.' },
-  { value: 'results_groups', label: 'Results, with age group and sex',
+  { value: 'results_groups', label: 'Results, with age groups',
     summary: 'Same as above, plus a broad age group (Child, Adult, Senior) next to each coded patient where it helps read a result. Still no names or exact ages.' },
 ];
 
@@ -124,7 +124,7 @@ export const AI_CONNECTOR_CAN_SEE: readonly CanSeeGroup[] = [
 
 /** The promises that hold for every group above. */
 export const AI_CONNECTOR_NEVER =
-  'Never names, phone numbers, addresses, exact ages or ID numbers. Numbers under 5 show as “fewer than 5”. Each person only sees what their own role allows.';
+  'Never patient or staff names, phone numbers, exact ages or ID numbers, and never a patient’s or staff member’s address. Numbers under 5 show as “fewer than 5”. Each person only sees what their own role allows.';
 
 /** The three Claude steps on the settings screen. */
 export const CLAUDE_STEPS: readonly string[] = [
