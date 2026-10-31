@@ -114,7 +114,12 @@ jobs:
           pkgver=$(git -C "$work" show FETCH_HEAD:package.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).version))')
           rm -rf "$work"
           base="${pkgver%%-*}"
-          if [ "$CHANNEL" = dev ]; then version="${base}-dev.${RUN_NUMBER}"; else version="$pkgver"; fi
+          if [ "$CHANNEL" = dev ]; then
+            # dev counts up from the NEXT patch: 1.1.1 -> 1.1.2-dev.N, which sorts above the
+            # installed 1.1.1 (so dev installs update) and below the eventual 1.1.2 release.
+            IFS=. read -r ma mi pa <<< "$base"
+            version="${ma}.${mi}.$((pa + 1))-dev.${RUN_NUMBER}"
+          else version="$pkgver"; fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"; echo "version=$version" >> "$GITHUB_OUTPUT"
           # --- already released? (stage/prod only; dev versions are unique) ---
           do_mac=true; do_win=true

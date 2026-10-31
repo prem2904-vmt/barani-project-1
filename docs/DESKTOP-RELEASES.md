@@ -169,8 +169,9 @@ unchanged.
 | tick **desktop** on release-stage / release-prod | same as above for that channel (web/API release unchanged) |
 | cron every 30 min (`release-desktop-finish`) | finishes any Mac notarization still pending |
 
-**Versions.** dev = `package.json` version (prerelease tag stripped) +
-`-dev.<run_number>`, e.g. `1.2.0-dev.57`. stage/prod = `package.json` version at
+**Versions.** dev = the NEXT patch of the `package.json` version + `-dev.<run_number>`
+(package 1.1.1 → `1.1.2-dev.57`), so dev builds sort above the installed release and below the
+next real one. stage/prod = `package.json` version at
 the ref, and the run is **refused** if that version is already on the channel
 (public `<channel>/<os>/<version>/latest*.yml` exists, or a Mac notarization for
 it is pending) unless `force` is ticked. If only one OS is out, only the other
