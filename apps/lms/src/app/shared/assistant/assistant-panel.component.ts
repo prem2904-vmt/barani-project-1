@@ -14,8 +14,8 @@ import {
 } from './assistant-logic';
 import { MdBlock, parseAssistantMarkdown } from './assistant-markdown';
 import {
-  ASSISTANT_STARTERS, ASSISTANT_TITLES, AssistantPageContext, AssistantProvider, AssistantProviderId, AssistantSuggestion,
-  AssistantTestRef, AssistantTurn, MappingPrefill, MappingSuggestion,
+  ASSISTANT_COPY, ASSISTANT_STARTERS, ASSISTANT_TITLES, AssistantPageContext, AssistantProvider, AssistantProviderId, AssistantSuggestion,
+  AssistantTestRef, AssistantTurn, ChangesSuggestion, MappingPrefill, MappingSuggestion, ProposalStatus,
 } from './assistant.models';
 
 /** One row of the conversation. */
@@ -32,9 +32,15 @@ const DIAG_TIMEOUT_MS = 10_000;
 /**
  * The assistant side panel (BETA). Reusable: the host page passes a
  * {@link AssistantPageContext} (which assistant, the subject, an optional
- * instrument picker / network check) and listens for `addMapping`; the panel
- * never changes anything itself — every suggestion is applied by a person in
- * the page's own editor.
+ * instrument picker / network check, or its own `chat` transport) and listens
+ * for `addMapping` / `keepProposal` / `undoProposal`; the panel never changes
+ * anything itself — every suggestion is applied by a person in the page's own
+ * editor. Instrument-only parts (picker, network check, mapping cards) only
+ * appear on the instruments page.
+ *
+ * `docked`: on wide screens a host may dock the panel into its own layout
+ * column (Insights edit mode) instead of floating it; phones always get the
+ * full-screen sheet.
  *
  * ND sheet: a right-side card on desktop (the page stays usable beside it),
  * a full-screen sheet on phones. Model pf-select (unavailable greyed),
@@ -61,6 +67,10 @@ export class AssistantPanelComponent {
   readonly context = input.required<AssistantPageContext>();
   readonly closed = output<void>();
   readonly addMapping = output<MappingPrefill>();
+  readonly keepProposal = output<string>();
+  readonly undoProposal = output<string>();
+  /** Sit in the host's layout instead of floating over the page (≥ 641px). */
+  readonly docked = input(false);
 
   protected readonly codeLabel = mappingCodeLabel;
   protected readonly testLabel = mappingTestLabel;
@@ -69,6 +79,8 @@ export class AssistantPanelComponent {
   readonly visible = computed(() => this.open() && this.beta.enabled('assistant'));
   readonly title = computed(() => ASSISTANT_TITLES[this.context().page] ?? 'Assistant');
   readonly starters = computed(() => ASSISTANT_STARTERS[this.context().page] ?? []);
+  readonly copyText = computed(() => ASSISTANT_COPY[this.context().page] ?? ASSISTANT_COPY.instruments);
+  readonly isInstruments = computed(() => this.context().page === 'instruments');
 
   // ── Models ───────────────────────────────────────────────────────────
   readonly providers = signal<AssistantProvider[]>([]);
@@ -85,7 +97,7 @@ export class AssistantPanelComponent {
     const list = this.context().instruments ?? [];
     return [{ value: '', label: 'All instruments' }, ...list.map((i) => ({ value: i.id, label: i.name }))];
   });
-  readonly showInstrumentPick = computed(() => !this.context().instrumentId && (this.context().instruments?.length ?? 0) > 0);
+  readonly showInstrumentPick = computed(() => this.isInstruments() && !this.context().instrumentId && (this.context().instruments?.length ?? 0) > 0);
   readonly instrumentId = computed(() => this.context().instrumentId || this.instrumentPick() || null);
   readonly canAddMapping = computed(() => this.context().canAddMapping ?? !!this.instrumentId());
   readonly addMappingHint = computed(() => this.context().addMappingHint
@@ -103,7 +115,7 @@ export class AssistantPanelComponent {
   // ── This PC's network check (desktop) ────────────────────────────────
   readonly diagState = signal<DiagState>('none');
   private diagSnap: unknown = null;
-  readonly diagPossible = computed(() => this.context().diag != null || this.bridge.diagAvailable);
+  readonly diagPossible = computed(() => this.isInstruments() && (this.context().diag != null || this.bridge.diagAvailable));
 
   private readonly thread = viewChild<ElementRef<HTMLElement>>('thread');
   private readonly composer = viewChild<ElementRef<HTMLTextAreaElement>>('composer');
@@ -115,7 +127,7 @@ export class AssistantPanelComponent {
       if (!this.visible()) return;
       untracked(() => {
         if (this.providersState() === 'idle') this.loadProviders();
-        if (this.diagState() === 'none') void this.attachDiag();
+        if (this.diagState() === 'none' && this.isInstruments()) void this.attachDiag();
         setTimeout(() => this.composer()?.nativeElement.focus({ preventScroll: true }), 0);
       });
     });
@@ -222,9 +234,13 @@ export class AssistantPanelComponent {
     this.scrollToEnd();
     const diag = this.diagState() === 'attached' && this.diagSnap != null ? this.diagSnap : undefined;
     this.inFlight?.unsubscribe();
-    this.inFlight = this.api.chat(this.context().page, {
-      provider, instrumentId: this.instrumentId(), messages: this.turns(), ...(diag !== undefined ? { diag } : {}),
-    }).subscribe({
+    const ctx = this.context();
+    const call$ = ctx.chat
+      ? ctx.chat({ provider, messages: this.turns() })
+      : this.api.chat(ctx.page, {
+        provider, instrumentId: this.instrumentId(), messages: this.turns(), ...(diag !== undefined ? { diag } : {}),
+      });
+    this.inFlight = call$.subscribe({
       next: (r) => {
         const text = r.reply.trim() || (r.suggestions.length ? '' : 'No answer came back. Try asking another way.');
         const by = this.providers().find((p) => p.id === r.provider)?.label ?? label;
@@ -282,6 +298,14 @@ export class AssistantPanelComponent {
     });
     this.added.update((set) => new Set([...set, this.addedKey(item, s, t)]));
   }
+
+  // ── Host proposals (Insights: Keep / Undo a previewed recipe) ────────
+  proposalStatus(s: ChangesSuggestion): ProposalStatus {
+    return this.context().proposals?.[s.ref] ?? 'replaced';
+  }
+
+  keep(s: ChangesSuggestion) { if (this.proposalStatus(s) === 'pending') this.keepProposal.emit(s.ref); }
+  undo(s: ChangesSuggestion) { if (this.proposalStatus(s) === 'pending') this.undoProposal.emit(s.ref); }
 
   confWord(s: AssistantSuggestion): string { return s.kind === 'mapping' ? CONFIDENCE_WORDS[s.confidence] ?? '' : ''; }
 }

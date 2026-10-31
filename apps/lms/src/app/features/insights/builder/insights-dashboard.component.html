@@ -1,0 +1,238 @@
+<div class="pf-insd" [class.pf-insd--docked]="editing() && assistantOpen() && dock()">
+  <section class="pf-card pf-insd-main" [attr.aria-label]="shown().title">
+    <header class="pf-card__head pf-insd-head">
+      <span class="pf-card__icon" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      </span>
+      @if (editing()) {
+        <input class="pf-input pf-insd-titlein" type="text" maxlength="120" [value]="working().title" [disabled]="locked()"
+               (input)="setTitle($any($event.target).value)" aria-label="Dashboard name" placeholder="Dashboard name" />
+      } @else {
+        <h2 class="pf-card__label pf-insd-title">{{ shown().title }}</h2>
+      }
+      <span class="pf-chip pf-chip--static pf-insd-status">{{ statusText() }}</span>
+      @if (dirty()) { <span class="pf-insd-unsaved">Unsaved changes</span> }
+      <span class="pf-card__spacer"></span>
+      <div class="pf-insd-headbtns">
+        @if (dashboard()) {
+          <button type="button" class="pf-btn pf-btn--tertiary press pf-insd-history" (click)="openHistory()" aria-haspopup="dialog" [attr.aria-expanded]="historyOpen()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+            History
+          </button>
+        }
+        @if (editing()) {
+          <button type="button" class="pf-btn pf-btn--secondary press pf-insd-asktoggle" (click)="toggleAssistant()" [attr.aria-expanded]="assistantOpen()" aria-label="Ask PF Sense" title="Ask PF Sense">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6Z"/><path d="M18.5 15.5 19.3 17.7 21.5 18.5 19.3 19.3 18.5 21.5 17.7 19.3 15.5 18.5 17.7 17.7Z"/></svg>
+            <span class="pf-insd-hbt">Ask PF Sense</span>
+          </button>
+          @if (dashboard()) {
+            <button type="button" class="pf-btn pf-btn--tertiary press pf-insd-cancel" (click)="cancelEdit()">Cancel</button>
+          }
+        } @else if (dashboard() && canEdit()) {
+          <button type="button" class="pf-btn pf-btn--secondary press pf-insd-edit" (click)="startEdit()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            Edit
+          </button>
+        }
+      </div>
+    </header>
+
+    @if (proposal()) {
+      <div class="pf-insd-preview" role="status">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span class="pf-insd-preview__t">Preview of PF Sense’s change — keep it or undo it.</span>
+        <span class="pf-insd-preview__btns">
+          <button type="button" class="pf-btn pf-btn--secondary press pf-insd-undo" (click)="undoProposal(proposal()!.ref)">Undo</button>
+          <button type="button" class="pf-btn pf-btn--secondary press pf-insd-keep" (click)="keepProposal(proposal()!.ref)">Keep</button>
+        </span>
+      </div>
+    }
+
+    <div class="pf-card__body pf-insd-body">
+      @if (loadState() === 'loading') {
+        <div class="pf-insd-grid" aria-busy="true">
+          @for (i of [1, 2, 3, 4]; track i) { <div class="pf-insd-skel" data-size="m"></div> }
+        </div>
+      } @else if (loadState() === 'error') {
+        <div class="pf-empty pf-insd-loaderr">
+          <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></span>
+          <p class="pf-empty__title">This dashboard didn’t load</p>
+          <p class="pf-empty__body">It may have been deleted, or the connection dropped.</p>
+          <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="retryLoad()">Try again</button>
+        </div>
+      } @else {
+        @if (notes().length) {
+          <ul class="pf-insd-notes" aria-label="Notes about this dashboard">
+            @for (n of notes(); track $index) { <li>{{ n }}</li> }
+          </ul>
+        }
+        @if (previewError() && shown().widgets.length) {
+          <p class="pf-insd-err" role="alert">{{ previewError() }}</p>
+        }
+
+        @if (editing() && !locked()) {
+          <div class="pf-insd-add">
+            @for (k of [addKey()]; track k) {
+              <pf-select class="pf-insd-addsel" [options]="metricOptions()" [value]="''" placeholder="Add a chart…" [searchable]="metricOptions().length > 8"
+                         [disabled]="locked() || !metricOptions().length" (valueChange)="add($event)" aria-label="Add a chart"></pf-select>
+            }
+          </div>
+        }
+
+        @if (!shown().widgets.length) {
+          <div class="pf-empty pf-insd-empty">
+            <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg></span>
+            <p class="pf-empty__title">{{ editing() ? 'Nothing on this dashboard yet' : 'This dashboard is empty' }}</p>
+            <p class="pf-empty__body">{{ editing() ? 'Ask PF Sense for what you want to see, or add a chart above.' : 'Edit it to add charts.' }}</p>
+            @if (editing() && !assistantOpen()) {
+              <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="toggleAssistant()">Ask PF Sense</button>
+            }
+          </div>
+        } @else {
+          <div class="pf-insd-grid pf-ai-glow pf-ai-glow--inset" [attr.data-ai-working]="previewing() && proposal() ? 'true' : null">
+            @for (vm of widgets(); track vm.w.id) {
+              <article class="pf-insd-w" [attr.data-size]="vm.w.size" [attr.data-chart]="vm.w.chart" [attr.data-state]="vm.state" [attr.aria-label]="vm.w.title">
+                <header class="pf-insd-w__head">
+                  <h3 class="pf-insd-w__title" role="heading" aria-level="3">{{ vm.w.title }}</h3>
+                  <p class="pf-insd-w__meta">{{ vm.metricLabel }} · {{ vm.periodLabel }}</p>
+                </header>
+
+                @if (editing()) {
+                  <div class="pf-insd-w__ctrls" role="group" [attr.aria-label]="'Change ' + vm.w.title">
+                    <pf-select class="pf-insd-w__sel pf-insd-w__chart" size="sm" [options]="vm.chartOpts" [value]="vm.w.chart" [disabled]="locked()"
+                               (valueChange)="setChart(vm.w.id, $event)" aria-label="Chart type"></pf-select>
+                    <pf-select class="pf-insd-w__sel pf-insd-w__period" size="sm" [options]="vm.periodOpts" [value]="vm.periodValue" [disabled]="locked()"
+                               (valueChange)="setPeriod(vm.w.id, $event)" aria-label="Period"></pf-select>
+                    <div class="pf-seg pf-insd-w__size" role="radiogroup" aria-label="Size">
+                      @for (sz of sizes; track sz) {
+                        <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="vm.w.size === sz" [disabled]="locked()"
+                                (click)="setSize(vm.w.id, sz)" [attr.aria-label]="sizeLabels[sz]" [title]="sizeLabels[sz]">{{ sz.toUpperCase() }}</button>
+                      }
+                    </div>
+                    <span class="pf-insd-w__spacer"></span>
+                    <button type="button" class="pf-btn pf-btn--icon pf-insd-w__btn pf-insd-up" [disabled]="locked() || vm.index === 0" (click)="move(vm.w.id, -1)" [attr.aria-label]="'Move ' + vm.w.title + ' up'" title="Move up">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                    </button>
+                    <button type="button" class="pf-btn pf-btn--icon pf-insd-w__btn pf-insd-down" [disabled]="locked() || vm.index === shown().widgets.length - 1" (click)="move(vm.w.id, 1)" [attr.aria-label]="'Move ' + vm.w.title + ' down'" title="Move down">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+                    </button>
+                    <button type="button" class="pf-btn pf-btn--icon pf-insd-w__btn pf-insd-remove" [disabled]="locked()" (click)="remove(vm.w.id)" [attr.aria-label]="'Remove ' + vm.w.title" title="Remove">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+                    </button>
+                  </div>
+                }
+
+                <div class="pf-insd-w__body">
+                  @switch (vm.state) {
+                    @case ('loading') { <div class="pf-insd-w__skel" [style.height]="vm.w.chart === 'kpi' ? '72px' : '200px'" aria-label="Loading" role="status"></div> }
+                    @case ('hidden') {
+                      <div class="pf-insd-w__state pf-insd-w__state--hidden">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                        <p><strong>Hidden</strong> — this chart shows money. It needs “View financial analytics”.</p>
+                      </div>
+                    }
+                    @case ('error') {
+                      <div class="pf-insd-w__state">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+                        <p>{{ vm.data?.message || 'This chart couldn’t load.' }}</p>
+                      </div>
+                    }
+                    @case ('empty') {
+                      <div class="pf-insd-w__state">
+                        <p>Nothing for {{ vm.periodLabel.toLowerCase() }} yet.</p>
+                      </div>
+                    }
+                    @default {
+                      @if (vm.kpi; as k) {
+                        <div class="pf-insd-kpi">
+                          <span class="pf-insd-kpi__value pf-num">{{ k.value }}</span>
+                          <span class="pf-insd-kpi__delta pf-num" [attr.data-tone]="k.delta.tone" [title]="k.delta.sentence">{{ k.delta.text }}</span>
+                          @if (k.spark) { <pf-ins-chart class="pf-insd-kpi__spark" [option]="k.spark" [spark]="true" height="44px" [label]="vm.w.title + ' trend'"></pf-ins-chart> }
+                        </div>
+                      } @else if (vm.table; as t) {
+                        <ag-grid-angular class="pf-insd-table" [theme]="gridTheme()" [rowData]="t.rows" [columnDefs]="t.colDefs" [defaultColDef]="defaultColDef"
+                                         [suppressCellFocus]="true" [enableCellTextSelection]="true"></ag-grid-angular>
+                      } @else if (vm.option) {
+                        <pf-ins-chart [option]="vm.option" [height]="vm.height" [label]="vm.w.title"></pf-ins-chart>
+                      }
+                    }
+                  }
+                </div>
+              </article>
+            }
+          </div>
+        }
+      }
+    </div>
+
+    @if (editing()) {
+      <footer class="pf-card__foot pf-insd-foot">
+        <div class="pf-insd-vis pf-span">
+          <label class="pf-insd-vis__field">
+            <span class="pf-insd-vis__lbl">Who sees it</span>
+            <pf-select class="pf-insd-vis__sel" [options]="visibilityOptions" [value]="visibility()" (valueChange)="setVisibility($event)" aria-label="Who sees it"></pf-select>
+          </label>
+          @if (visibility() === 'roles') {
+            <label class="pf-insd-vis__field pf-insd-vis__field--roles">
+              <span class="pf-insd-vis__lbl">Roles</span>
+              <pf-select class="pf-insd-vis__sel" [options]="roleOptions()" [multiple]="true" [values]="roleIds()" [searchable]="roleOptions().length > 8"
+                         placeholder="Pick roles" (valuesChange)="roleIds.set($event)" aria-label="Roles"></pf-select>
+            </label>
+          }
+          @if (dashboard()) {
+            <button type="button" class="pf-btn pf-btn--danger press pf-insd-delete" (click)="deleteDashboard()">Delete</button>
+          }
+        </div>
+        @if (visibilityBlocked()) { <p class="pf-insd-hint pf-span">Pick at least one role to publish to.</p> }
+        <button type="button" class="pf-btn pf-btn--secondary press pf-insd-save" [disabled]="!canSave()" (click)="saveDraft()">Save draft</button>
+        <button type="button" class="pf-btn pf-btn--primary press pf-insd-publish" [disabled]="!canSave() || visibilityBlocked()" (click)="publish()">
+          {{ saving() ? 'Saving…' : 'Publish' }}
+        </button>
+      </footer>
+    }
+  </section>
+
+  @if (editing()) {
+    <pf-assistant-panel class="pf-insd-asst" [open]="assistantOpen()" [docked]="dock()" [context]="asstContext()"
+                        (closed)="assistantOpen.set(false)" (keepProposal)="keepProposal($event)" (undoProposal)="undoProposal($event)"></pf-assistant-panel>
+  }
+
+  @if (historyOpen()) {
+    <div class="pf-sheet-backdrop pf-insd-backdrop" (click)="historyOpen.set(false)"></div>
+    <aside class="pf-card pf-insd-history-sheet" role="dialog" aria-modal="true" aria-label="Version history">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></span>
+        <p class="pf-card__label" role="heading" aria-level="2">Version history</p>
+        <span class="pf-card__spacer"></span>
+        <button type="button" class="pf-btn pf-btn--icon" (click)="historyOpen.set(false)" aria-label="Close version history">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </header>
+      <div class="pf-card__body pf-insd-versions">
+        @switch (versionsState()) {
+          @case ('loading') { <p class="pf-insd-muted" role="status">Loading versions…</p> }
+          @case ('error') { <p class="pf-insd-muted" role="alert">The history didn’t load. Close and try again.</p> }
+          @default {
+            @if (!versions().length) { <p class="pf-insd-muted">No earlier versions yet.</p> }
+            <ul class="pf-insd-vlist">
+              @for (v of versions(); track v.version) {
+                <li class="pf-insd-v">
+                  <div class="pf-insd-v__main">
+                    <span class="pf-insd-v__title">Version {{ v.version }}@if (v.version === dashboard()?.version) { <span class="pf-insd-v__cur"> · current</span> }</span>
+                    <span class="pf-insd-v__meta">{{ v.title }} · {{ v.widgetCount }} {{ v.widgetCount === 1 ? 'chart' : 'charts' }}</span>
+                    <span class="pf-insd-v__meta pf-num">{{ versionWhen(v) }}{{ v.savedByName ? ' · ' + v.savedByName : '' }}</span>
+                  </div>
+                  @if (v.version !== dashboard()?.version && canEdit()) {
+                    <button type="button" class="pf-btn pf-btn--secondary press pf-rowact pf-insd-restore" [disabled]="restoring() != null" (click)="restore(v)">
+                      {{ restoring() === v.version ? 'Restoring…' : 'Restore' }}
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        }
+      </div>
+    </aside>
+  }
+</div>

@@ -6,8 +6,9 @@
 
 export type AnalyticsSection = 'overview' | 'volume' | 'revenue' | 'tests-depts' | 'referrals' | 'lab-ops' | 'outsourcing' | 'profitability';
 export type OpsListKey = 'patients' | 'orders' | 'test-volume' | 'outsourced-tests' | 'referrals' | 'monthly-financial' | 'outstanding' | 'discounts' | 'refunds';
-/** The left navigation's one id space: an analytics section or `list:<key>`. */
-export type InsightsNavId = AnalyticsSection | `list:${OpsListKey}`;
+/** The left navigation's one id space: an analytics section, `list:<key>`,
+ *  or (beta `assistant`) a saved dashboard `dash:<id>` / `dash:new`. */
+export type InsightsNavId = AnalyticsSection | `list:${OpsListKey}` | `dash:${string}`;
 
 export interface SectionDef {
   id: AnalyticsSection;
@@ -41,6 +42,8 @@ export const ICONS = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   percent: '<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
   undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
 } as const;
 
 export const SECTIONS: SectionDef[] = [

@@ -79,6 +79,16 @@
 .pf-ins-nav__dot { flex: none; width: 16px; display: inline-flex; justify-content: center; }
 .pf-ins-nav__dot::before { content: ''; width: 5px; height: 5px; border-radius: 99px; background: var(--pf-sel-border); }
 .pf-ins-nav__item--list[aria-current='page'] .pf-ins-nav__dot::before { background: var(--violet-text, #7c3aed); }
+/* My dashboards (beta) */
+.pf-ins-nav__beta {
+  margin-left: 4px; padding: 0 5px; border-radius: 999px; border: 1px solid var(--pf-line);
+  font-size: 9.5px; letter-spacing: 0.06em; color: var(--text-tertiary); vertical-align: 1px;
+}
+.pf-ins-nav__dtitle { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.pf-ins-nav__tag { flex: none; font-size: 11px; font-weight: 500; color: var(--text-tertiary); }
+.pf-ins-nav__new > svg { flex: none; width: 16px; color: var(--text-tertiary); }
+.pf-ins-dash { min-width: 0; min-height: 0; }
+.pf-ins-dashperiod { min-width: 156px; }
 
 .pf-ins-strip {
   min-height: 0; align-items: center; gap: 6px; padding: 10px 0;

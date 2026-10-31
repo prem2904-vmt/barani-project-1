@@ -149,6 +149,23 @@
 
 .pf-asst-state { text-align: center; }
 
+/* Host proposals (Insights): plain change list + Keep / Undo. */
+.pf-asst-prop { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.pf-asst-prop[data-status='pending'] { color: var(--asst-accent); }
+.pf-asst-prop[data-status='replaced'], .pf-asst-prop[data-status='undone'] { color: var(--text-tertiary); }
+.pf-asst-changes { margin: 0; padding-left: 20px; list-style: disc; display: grid; gap: 3px; font-size: 13.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.pf-asst-changes li::marker { color: var(--text-tertiary); }
+.pf-asst-card__row--props { justify-content: flex-end; }
+
+/* Docked into the host's layout column (≥ 641px; phones keep the sheet). */
+@media (min-width: 641px) {
+  .pf-asst-backdrop--docked { display: none !important; }
+  .pf-asst.pf-asst--docked {
+    position: relative; top: auto; right: auto; bottom: auto; z-index: auto;
+    width: 100%; height: 100%; box-shadow: none; animation: none;
+  }
+}
+
 /* Composer */
 .pf-asst__foot { flex: none; padding: 10px 16px 14px; border-top: 1px solid var(--pf-line); display: flex; flex-direction: column; gap: 6px; }
 .pf-asst__composer { display: flex; align-items: flex-end; gap: 8px; }

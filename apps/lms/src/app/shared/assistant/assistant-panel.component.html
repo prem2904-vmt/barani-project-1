@@ -1,7 +1,7 @@
 @if (visible()) {
-  <div class="pf-asst-backdrop" (click)="close()" aria-hidden="true"></div>
+  <div class="pf-asst-backdrop" [class.pf-asst-backdrop--docked]="docked()" (click)="close()" aria-hidden="true"></div>
   <!-- Non-modal side panel (the page stays usable): complementary, not dialog. -->
-  <aside class="pf-asst pf-card" role="complementary" [attr.aria-label]="title()">
+  <aside class="pf-asst pf-card" [class.pf-asst--docked]="docked()" role="complementary" [attr.aria-label]="title()">
     <header class="pf-card__head pf-asst__head">
       <span class="pf-card__icon" aria-hidden="true">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6Z"/><path d="M18.5 15.5 19.3 17.7 21.5 18.5 19.3 19.3 18.5 21.5 17.7 19.3 15.5 18.5 17.7 17.7Z"/></svg>
@@ -89,7 +89,7 @@
           </div>
         } @else if (!items().length) {
           <div class="pf-asst__intro">
-            <p class="pf-asst__lead">Ask about this lab’s analyzers — why one is offline, what to set on it, or which test an analyzer code should fill.</p>
+            <p class="pf-asst__lead">{{ copyText().lead }}</p>
             <ul class="pf-asst__starters" aria-label="Starter questions">
               @for (s of starters(); track s) {
                 <li>
@@ -156,6 +156,32 @@
                               <p class="pf-asst-card__text">{{ s.text }}</p>
                             </div>
                           }
+                          @case ('changes') {
+                            <div class="pf-asst-card__maphead">
+                              <span class="pf-asst-card__label">Changes</span>
+                              @switch (proposalStatus($any(s))) {
+                                @case ('pending') { <span class="pf-asst-prop" data-status="pending">Showing as a preview</span> }
+                                @case ('kept') { <span class="pf-asst-prop" data-status="kept">Kept</span> }
+                                @case ('undone') { <span class="pf-asst-prop" data-status="undone">Undone</span> }
+                                @default { <span class="pf-asst-prop" data-status="replaced">Replaced by a newer suggestion</span> }
+                              }
+                            </div>
+                            <ul class="pf-asst-changes">
+                              @for (c of $any(s).changes; track $index) { <li>{{ c }}</li> }
+                            </ul>
+                            @if (proposalStatus($any(s)) === 'pending') {
+                              <div class="pf-asst-card__row pf-asst-card__row--props">
+                                <button type="button" class="pf-btn pf-btn--secondary pf-asst-card__btn press pf-asst-undo" (click)="undo($any(s))">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
+                                  Undo
+                                </button>
+                                <button type="button" class="pf-btn pf-btn--secondary pf-asst-card__btn press pf-asst-keep" (click)="keep($any(s))">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                                  Keep
+                                </button>
+                              </div>
+                            }
+                          }
                           @case ('mapping') {
                             <div class="pf-asst-card__maphead">
                               <span class="pf-asst-card__label">Mapping</span>
@@ -218,12 +244,12 @@
           <textarea #composer class="pf-input pf-asst__input" rows="1" [maxLength]="maxChars"
                     [value]="draft()" (input)="draft.set($any($event.target).value)" (keydown)="onComposerKey($event)"
                     [disabled]="providersState() !== 'ready' || noneAvailable()"
-                    placeholder="Ask about this analyzer…" aria-label="Your question"></textarea>
+                    [placeholder]="copyText().placeholder" aria-label="Your question"></textarea>
           <button type="button" class="pf-btn pf-btn--primary pf-asst__send press" [disabled]="!canSend()" (click)="send()" aria-label="Send" title="Send">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
           </button>
         </div>
-        <p class="pf-asst__fine">Suggestions only — nothing changes until you change it and save.</p>
+        <p class="pf-asst__fine">{{ copyText().fine }}</p>
       </footer>
     }
   </aside>

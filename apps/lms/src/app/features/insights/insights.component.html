@@ -4,25 +4,31 @@
   <pf-hero-band [back]="true" [placeholder]="listKey() ? 'Search these rows…' : 'Search tests, departments, doctors…'"
                 [value]="q()" (valueChange)="q.set($event)">
     <ng-container band-tools>
-      @if (narrow() && !phone()) {
+      @if (narrow() && (!phone() || isDash())) {
         <button type="button" class="pf-chip pf-ins-navchip press" (click)="navSheet.set(true)"
                 aria-haspopup="dialog" [attr.aria-expanded]="navSheet()" [attr.aria-label]="'Sections · ' + navLabel()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.sections)"></svg>
           <span>{{ navLabel() }}</span>
         </button>
       }
-      <pf-select class="pf-ins-bandsel pf-ins-bandsel--period" size="sm" [options]="periodOptions" [value]="period()"
-                 (valueChange)="setPeriod($event)" aria-label="Period"></pf-select>
+      @if (isDash()) {
+        <!-- A dashboard: the band period applies to every chart, or leaves each chart its own. -->
+        <pf-select class="pf-ins-bandsel pf-ins-bandsel--period pf-ins-dashperiod" size="sm" [options]="dashPeriodOptions" [value]="dashPeriod()"
+                   (valueChange)="dashPeriod.set($event)" aria-label="Period for every chart"></pf-select>
+      } @else {
+        <pf-select class="pf-ins-bandsel pf-ins-bandsel--period" size="sm" [options]="periodOptions" [value]="period()"
+                   (valueChange)="setPeriod($event)" aria-label="Period"></pf-select>
+      }
       @if (phone()) {
         <!-- Phones: no sideways-scrolling filter row — period + one Filters button (bottom sheet). -->
         <button type="button" class="pf-chip pf-ins-filtersbtn press" (click)="openFilters()" aria-haspopup="dialog"
                 [attr.aria-expanded]="filtersSheet()" [attr.aria-pressed]="dimCount() > 0"
                 [attr.aria-label]="dimCount() ? 'Filters, ' + dimCount() + ' on' : 'Filters'">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></svg>
-          <span>Filters{{ dimCount() || period() === 'custom' ? ' (' + (dimCount() + (period() === 'custom' ? 1 : 0)) + ')' : '' }}</span>
+          <span>Filters{{ dimCount() || customOn() ? ' (' + (dimCount() + (customOn() ? 1 : 0)) + ')' : '' }}</span>
         </button>
       } @else {
-        @if (period() === 'custom') {
+        @if (customOn()) {
           <span class="pf-ins-dates">
             <pf-date label="From" inputId="pf-ins-from" [value]="customFrom()" [max]="customTo()" (valueChange)="$event && customFrom.set($event)"></pf-date>
             <span class="pf-ins-dates__sep" aria-hidden="true">–</span>
@@ -33,12 +39,14 @@
           <pf-select class="pf-ins-bandsel" size="sm" [options]="branchOptions()" [value]="branchId()"
                      (valueChange)="setFilter('branch', $event)" aria-label="Branch"></pf-select>
         }
-        <pf-select class="pf-ins-bandsel" size="sm" [options]="departmentOptions()" [value]="departmentId()" [searchable]="true"
-                   (valueChange)="setFilter('department', $event)" aria-label="Department"></pf-select>
-        <pf-select class="pf-ins-bandsel" size="sm" [options]="testOptions()" [value]="testId()" [searchable]="true"
-                   (valueChange)="setFilter('test', $event)" aria-label="Test"></pf-select>
-        <pf-select class="pf-ins-bandsel" size="sm" [options]="referrerOptions()" [value]="refDoctorId()" [searchable]="true"
-                   (valueChange)="setFilter('referrer', $event)" aria-label="Referrer"></pf-select>
+        @if (!isDash()) {
+          <pf-select class="pf-ins-bandsel" size="sm" [options]="departmentOptions()" [value]="departmentId()" [searchable]="true"
+                     (valueChange)="setFilter('department', $event)" aria-label="Department"></pf-select>
+          <pf-select class="pf-ins-bandsel" size="sm" [options]="testOptions()" [value]="testId()" [searchable]="true"
+                     (valueChange)="setFilter('test', $event)" aria-label="Test"></pf-select>
+          <pf-select class="pf-ins-bandsel" size="sm" [options]="referrerOptions()" [value]="refDoctorId()" [searchable]="true"
+                     (valueChange)="setFilter('referrer', $event)" aria-label="Referrer"></pf-select>
+        }
       }
     </ng-container>
     <ng-container band-actions>
@@ -48,7 +56,7 @@
           <span class="pf-ins-hbt">Clear</span>
         </button>
       }
-      @if (!ctxSide() && canSeeAnalytics()) {
+      @if (!ctxSide() && canSeeAnalytics() && !isDash()) {
         <!-- Below 1280px the DETAILS card is a sheet (right panel on tablets, bottom sheet on phones). -->
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-ins-ctxbtn" (click)="ctxSheet.set(true)"
                 aria-haspopup="dialog" [attr.aria-expanded]="ctxSheet()" [attr.aria-label]="listKey() ? 'This list — summary and export' : 'Details'">
@@ -70,7 +78,7 @@
       </div>
     } @else {
     <div class="pf-ins__panels" [class.pf-ins__panels--narrow]="narrow()" [class.pf-ins__panels--collapsed]="navCollapsed() && !narrow()"
-         [class.pf-ins__panels--ctx]="ctxSide()">
+         [class.pf-ins__panels--ctx]="ctxSide() && !isDash()">
 
       <!-- ── LEFT: SECTIONS (navigation companion) ─────────────────── -->
       @if (narrow()) {
@@ -101,6 +109,17 @@
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(l.icon)"></svg>
               </button>
             }
+            @if (builderOn()) {
+              <span class="pf-ins-strip__sep" aria-hidden="true"></span>
+              @for (d of dashboards(); track d.id) {
+                <button type="button" class="pf-ins-strip__item" [attr.aria-current]="dashId() === d.id ? 'page' : null" (click)="goDash(d.id)" [attr.aria-label]="d.title + ' dashboard'" [title]="d.title">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.dashboard)"></svg>
+                </button>
+              }
+              <button type="button" class="pf-ins-strip__item" [attr.aria-current]="dashNav() === 'new' ? 'page' : null" (click)="go('dash:new')" aria-label="New dashboard" title="New dashboard">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.plus)"></svg>
+              </button>
+            }
           </nav>
         </aside>
       } @else {
@@ -111,6 +130,11 @@
       }
 
       <!-- ── MAIN: the section's figures and charts, or the list ─────── -->
+      @if (isDash() && builderOn()) {
+        <!-- My dashboards (beta): the dashboard card + (edit) the assistant beside it. -->
+        <pf-ins-dashboard class="pf-ins-dash" [dashboardId]="dashId()" [band]="dashBand()"
+                          (saved)="onDashSaved($event)" (created)="onDashCreated($event)" (deleted)="onDashDeleted($event)"></pf-ins-dashboard>
+      } @else {
       <section class="pf-card pf-ins-main" [attr.aria-label]="navLabel()">
         <header class="pf-card__head pf-ins-main__head">
           <span class="pf-card__icon" aria-hidden="true">
@@ -219,6 +243,7 @@
           </div>
         }
       </section>
+      }
 
       @if (phone() && filtersSheet()) {
         <div class="pf-sheet-backdrop pf-ins-sheet-backdrop" (click)="filtersSheet.set(false)"></div>
@@ -233,7 +258,7 @@
             </button>
           </header>
           <div class="pf-card__body pf-ins-filters__body">
-            @if (period() === 'custom') {
+            @if (customOn()) {
               <div class="pf-field">
                 <span class="pf-field__lbl">Dates (IST)</span>
                 <div class="pf-ins-filters__dates">
@@ -246,12 +271,14 @@
               <div class="pf-field"><label class="pf-field__lbl" for="pf-ins-f-branch">Branch</label>
                 <pf-select id="pf-ins-f-branch" [options]="branchOptions()" [value]="draft().branch" (valueChange)="setDraft('branch', $event)"></pf-select></div>
             }
+            @if (!isDash()) {
             <div class="pf-field"><label class="pf-field__lbl" for="pf-ins-f-dept">Department</label>
               <pf-select id="pf-ins-f-dept" [options]="departmentOptions()" [value]="draft().department" [searchable]="true" (valueChange)="setDraft('department', $event)"></pf-select></div>
             <div class="pf-field"><label class="pf-field__lbl" for="pf-ins-f-test">Test</label>
               <pf-select id="pf-ins-f-test" [options]="testOptions()" [value]="draft().test" [searchable]="true" (valueChange)="setDraft('test', $event)"></pf-select></div>
             <div class="pf-field"><label class="pf-field__lbl" for="pf-ins-f-ref">Referrer</label>
               <pf-select id="pf-ins-f-ref" [options]="referrerOptions()" [value]="draft().referrer" [searchable]="true" (valueChange)="setDraft('referrer', $event)"></pf-select></div>
+            }
           </div>
           <footer class="pf-card__foot">
             <button type="button" class="pf-btn pf-btn--secondary" (click)="clearDraft()">Clear</button>
@@ -261,7 +288,9 @@
       }
 
       <!-- ── RIGHT: DETAILS (what the main card doesn't show + the primary) ── -->
-      @if (ctxSide()) {
+      @if (isDash()) {
+        <!-- a dashboard brings its own companion (the assistant, in edit mode) -->
+      } @else if (ctxSide()) {
         <aside class="pf-card pf-ins-ctx" [attr.aria-label]="listKey() ? 'This list' : 'Details'">
           <ng-container *ngTemplateOutlet="ctxCard; context: { sheet: false }"></ng-container>
         </aside>
@@ -322,6 +351,26 @@
         </li>
       }
     </ul>
+    @if (builderOn()) {
+      <p class="pf-ins-nav__group pf-ins-nav__group--dash">My dashboards <span class="pf-ins-nav__beta">Beta</span></p>
+      <ul class="pf-ins-nav__list pf-ins-nav__list--dash">
+        @for (d of dashboards(); track d.id) {
+          <li>
+            <button type="button" class="pf-ins-nav__item pf-ins-nav__item--list" [attr.aria-current]="dashId() === d.id ? 'page' : null" (click)="goDash(d.id)">
+              <span class="pf-ins-nav__dot" aria-hidden="true"></span>
+              <span class="pf-ins-nav__dtitle">{{ d.title }}</span>
+              @if (d.status === 'draft') { <span class="pf-ins-nav__tag">Draft</span> }
+            </button>
+          </li>
+        }
+        <li>
+          <button type="button" class="pf-ins-nav__item pf-ins-nav__item--list pf-ins-nav__new" [attr.aria-current]="dashNav() === 'new' ? 'page' : null" (click)="go('dash:new')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [innerHTML]="svg(icons.plus)"></svg>
+            <span>New dashboard</span>
+          </button>
+        </li>
+      </ul>
+    }
   </nav>
 </ng-template>
 

@@ -26,6 +26,11 @@ import {
 import { DeltaView, allZero, bucketAxisLabel, bucketRange, deltaView, formatCount, formatMinutes, formatRupee, rangeLabel, shortDay } from '../../shared/utils/insights-view';
 import { gridThemeDark, gridThemeLight } from '../admin/tests/tests/grid-theme';
 import { ChartPick, InsightsChartComponent } from './insights-chart.component';
+import { BetaFeaturesService } from '../../core/services/beta-features.service';
+import { InsightsBuilderApiService } from './builder/insights-builder-api.service';
+import { InsightsDashboardComponent } from './builder/insights-dashboard.component';
+import type { BandFilters, BandPeriod } from './builder/insights-builder-logic';
+import type { InsightsDashboardSummary } from './builder/insights-builder.models';
 import {
   AnalyticsSection, CriticalValuesSummary, DeptRevenueRow, ICONS, InsightsNavId, ListDrill, OPS_LISTS, OpsListConfig, OpsListKey,
   OutsourcedVolumeTrendPoint, OutsourcingCostResult, OutsourcingCostTrendPoint, OverviewDto, PendingByStageRow, ProfitabilityRow,
@@ -78,7 +83,7 @@ function writeStore(key: string, value: unknown): void {
 @Component({
   selector: 'pf-insights',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, PfDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, InsightsChartComponent],
+  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, PfDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, InsightsChartComponent, InsightsDashboardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './insights.component.html',
   styleUrl: './insights.component.scss',
@@ -91,6 +96,8 @@ export class InsightsComponent {
   private readonly router = inject(Router, { optional: true });
   private readonly location = inject(Location, { optional: true });
   protected readonly theme = inject(ThemeService);
+  private readonly beta = inject(BetaFeaturesService);
+  private readonly builderApi = inject(InsightsBuilderApiService);
 
   readonly icons = ICONS;
   readonly fmtCount = formatCount;
@@ -207,11 +214,49 @@ export class InsightsComponent {
     const n = this.nav();
     return n.startsWith('list:') ? (n.slice(5) as OpsListKey) : null;
   });
-  readonly section = computed<AnalyticsSection | null>(() => (this.listKey() ? null : (this.nav() as AnalyticsSection)));
+  /** "My dashboards" (beta): `dash:<id>`, or `dash:new` for an unsaved one. */
+  readonly dashNav = computed<string | null>(() => {
+    const n = this.nav();
+    return n.startsWith('dash:') ? n.slice(5) : null;
+  });
+  readonly isDash = computed(() => this.dashNav() != null);
+  readonly dashId = computed(() => (this.dashNav() && this.dashNav() !== 'new' ? this.dashNav() : null));
+  readonly section = computed<AnalyticsSection | null>(() => (this.listKey() || this.isDash() ? null : (this.nav() as AnalyticsSection)));
   readonly sectionDef = computed(() => SECTIONS.find(s => s.id === this.section()) ?? null);
   readonly listCfg = computed(() => OPS_LISTS.find(l => l.key === this.listKey()) ?? null);
-  readonly navLabel = computed(() => this.sectionDef()?.label ?? this.listCfg()?.label ?? '');
-  readonly navIcon = computed(() => this.sectionDef()?.icon ?? ICONS.list);
+  readonly navLabel = computed(() => this.sectionDef()?.label ?? this.listCfg()?.label
+    ?? (this.isDash() ? (this.dashboards().find(d => d.id === this.dashId())?.title ?? 'New dashboard') : ''));
+  readonly navIcon = computed(() => this.sectionDef()?.icon ?? (this.isDash() ? ICONS.dashboard : ICONS.list));
+
+  // ── My dashboards (BETA `assistant` — the ONE gate, structural) ───────
+  readonly builderOn = computed(() => this.beta.enabled('assistant') && this.canSeeAnalytics());
+  readonly dashboards = signal<InsightsDashboardSummary[]>([]);
+  /** On a dashboard the band's period is "each chart's own" until one is picked for all. */
+  readonly dashPeriod = signal<BandPeriod>('own');
+  readonly dashPeriodOptions: PfSelectOption<BandPeriod>[] = [
+    { value: 'own', label: 'Each chart’s own' },
+    ...(ANALYTICS_PERIOD_OPTIONS as unknown as PfSelectOption<BandPeriod>[]),
+  ];
+  readonly dashBand = computed<BandFilters>(() => ({
+    period: this.dashPeriod(), from: this.customFrom(), to: this.customTo(), branchId: this.branchId() || undefined,
+  }));
+  /** The custom date pickers show for the sections' period or the dashboard's. */
+  readonly customOn = computed(() => (this.isDash() ? this.dashPeriod() === 'custom' : this.period() === 'custom'));
+
+  loadDashboards(): void {
+    this.builderApi.list().subscribe({ next: l => this.dashboards.set(l), error: () => this.dashboards.set([]) });
+  }
+  onDashSaved(d: InsightsDashboardSummary): void {
+    this.dashboards.update(list => (list.some(x => x.id === d.id) ? list.map(x => (x.id === d.id ? { ...x, ...d } : x)) : [...list, d]));
+    this.loadDashboards();
+  }
+  goDash(id: string): void { this.go(`dash:${id}`); }
+  onDashCreated(id: string): void { this.nav.set(`dash:${id}`); }
+  onDashDeleted(id: string): void {
+    this.dashboards.update(list => list.filter(x => x.id !== id));
+    this.go('overview');
+    this.loadDashboards();
+  }
   readonly drill = signal<ListDrill | null>(null);
 
   // ── Data ─────────────────────────────────────────────────────────────
@@ -259,6 +304,14 @@ export class InsightsComponent {
 
   constructor() {
     this.restoreFromUrl();
+    void this.beta.ensureLoaded();
+    // My dashboards: listed only with the beta on; a dashboard URL without it falls back to Overview.
+    effect(() => {
+      if (this.builderOn()) untracked(() => this.loadDashboards());
+    });
+    effect(() => {
+      if (this.beta.loaded() && !this.builderOn() && this.isDash()) untracked(() => this.go('overview'));
+    });
     this.api.get<Branch[]>('/api/tenants/branches').subscribe({ next: b => this.branches.set(b ?? []), error: () => undefined });
     this.api.get<{ id: string; name: string }[]>('/api/tenants/departments').subscribe({ next: d => this.departments.set(d ?? []), error: () => undefined });
     this.api.get<{ id: string; name: string }[]>('/api/tests?view=summary&activeOnly=true')
@@ -1106,6 +1159,8 @@ export class InsightsComponent {
     if (!qp) return;
     const sec = qp.get('section');
     if (sec && (SECTIONS.some(s => s.id === sec) || OPS_LISTS.some(l => `list:${l.key}` === sec))) this.nav.set(sec as InsightsNavId);
+    // A saved dashboard (never `dash:new` — an unsaved one has nothing to come back to).
+    if (sec && /^dash:[A-Za-z0-9_-]{1,64}$/.test(sec) && sec !== 'dash:new') this.nav.set(sec as InsightsNavId);
     const p = qp.get('period') as AnalyticsPeriodPreset | null;
     if (p && ANALYTICS_PERIOD_OPTIONS.some(o => o.value === p)) this.period.set(p);
     const from = qp.get('from'), to = qp.get('to');

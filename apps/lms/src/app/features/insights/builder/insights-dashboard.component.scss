@@ -1,0 +1,148 @@
+/* My dashboards (beta) — ND: the dashboard is the main work card; in edit mode
+   the assistant docks as the right-hand companion (≥1100px), floats as a side
+   card below that and is a full-screen sheet on phones. Only card bodies scroll.
+   Tokens only (light + dark come from them). */
+
+:host { display: block; min-width: 0; min-height: 0; height: 100%; }
+
+.pf-insd {
+  height: 100%; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px;
+  transition: grid-template-columns var(--pf-dur, 320ms) var(--pf-spring, ease);
+}
+.pf-insd--docked { grid-template-columns: minmax(0, 1fr) 400px; }
+@media (prefers-reduced-motion: reduce) { .pf-insd { transition: none; } }
+
+.pf-insd-main { min-width: 0; min-height: 0; }
+
+/* ── Header ───────────────────────────────────────────────────────── */
+.pf-insd-head { row-gap: 8px; flex-wrap: wrap; }
+.pf-insd-title { margin: 0; text-transform: none; letter-spacing: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.pf-insd-titlein { flex: 1 1 220px; max-width: 420px; min-height: 36px; height: 36px; font-size: 14px; font-weight: 600; }
+.pf-insd-status { flex: none; height: 26px; font-size: 12px; }
+.pf-insd-unsaved { flex: none; font-size: 12px; color: var(--text-tertiary); }
+.pf-insd-headbtns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pf-insd-headbtns .pf-btn { min-height: 36px; }
+
+/* PF Sense preview strip: neutral, violet mark — the change is only shown. */
+.pf-insd-preview {
+  flex: none; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 14px; padding: 8px 12px; border-radius: 10px;
+  background: var(--pf-sel-bg, rgba(124, 58, 237, 0.06)); border: 1px solid var(--pf-sel-border, rgba(124, 58, 237, 0.25));
+  font-size: 13px; color: var(--text-primary);
+}
+.pf-insd-preview > svg { flex: none; color: var(--violet-text, #7c3aed); }
+.pf-insd-preview__t { flex: 1 1 200px; }
+.pf-insd-preview__btns { display: inline-flex; gap: 8px; margin-left: auto; }
+.pf-insd-preview__btns .pf-btn { min-height: 34px; }
+
+/* ── Body ─────────────────────────────────────────────────────────── */
+.pf-insd-body { container-type: inline-size; gap: 12px; padding: 14px; }
+.pf-insd-notes { margin: 0; padding: 8px 12px 8px 28px; border-radius: 10px; background: var(--pf-chip-bg); font-size: 12.5px; color: var(--text-secondary); display: grid; gap: 2px; }
+.pf-insd-err { margin: 0; font-size: 13px; color: var(--amber-text, #b45309); }
+.pf-insd-add { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-insd-addsel { display: block; width: min(320px, 100%); }
+.pf-insd-hint { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
+.pf-insd-muted { margin: 0; font-size: 13px; color: var(--text-tertiary); }
+.pf-insd-empty, .pf-insd-loaderr { flex: 1 1 auto; }
+
+/* Widgets: 6-column grid; S = 2, M = 3, L = 6. Stacks on narrow cards. */
+.pf-insd-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; border-radius: 14px; }
+.pf-insd-w, .pf-insd-skel { grid-column: span 3; }
+.pf-insd-w[data-size='s'], .pf-insd-skel[data-size='s'] { grid-column: span 2; }
+.pf-insd-w[data-size='l'] { grid-column: span 6; }
+@container (max-width: 760px) {
+  .pf-insd-w, .pf-insd-skel, .pf-insd-w[data-size='l'] { grid-column: span 6; }
+  .pf-insd-w[data-size='s'] { grid-column: span 3; }
+}
+@container (max-width: 480px) {
+  .pf-insd-w[data-size='s'] { grid-column: span 6; }
+}
+.pf-insd-skel { height: 260px; border-radius: 12px; background: var(--pf-chip-bg); }
+
+.pf-insd-w {
+  min-width: 0; display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px; border-radius: 12px; border: 1px solid var(--pf-line); background: var(--pf-card-bg);
+  animation: pf-insd-in var(--pf-dur, 320ms) var(--pf-spring, ease) both;
+}
+@keyframes pf-insd-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .pf-insd-w { animation: none; } }
+.pf-insd-w__head { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pf-insd-w__title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.pf-insd-w__meta { margin: 0; font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+
+.pf-insd-w__ctrls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-bottom: 6px; border-bottom: 1px dashed var(--pf-line); }
+.pf-insd-w__sel { display: block; width: 128px; }
+.pf-insd-w__size .pf-seg__item { min-width: 30px; padding-inline: 8px; font-size: 12px; }
+.pf-insd-w__spacer { flex: 1 1 auto; }
+.pf-insd-w__btn { width: 32px !important; height: 32px; min-height: 32px; }
+
+.pf-insd-w__body { min-width: 0; }
+.pf-insd-w__skel { border-radius: 10px; background: var(--pf-chip-bg); }
+.pf-insd-w__state {
+  min-height: 96px; display: flex; align-items: center; justify-content: center; gap: 10px; text-align: left;
+  padding: 12px; border-radius: 10px; background: var(--pf-chip-bg); color: var(--text-secondary); font-size: 13px;
+}
+.pf-insd-w__state p { margin: 0; }
+.pf-insd-w__state > svg { flex: none; color: var(--text-tertiary); }
+.pf-insd-w__state--hidden strong { color: var(--text-primary); font-weight: 600; }
+
+.pf-insd-kpi { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 10px; row-gap: 6px; }
+.pf-insd-kpi__value { font-size: 26px; font-weight: 600; letter-spacing: -0.01em; color: var(--text-primary); }
+.pf-insd-kpi__delta {
+  justify-self: start; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 500;
+  background: var(--pf-chip-bg); color: var(--text-secondary);
+}
+.pf-insd-kpi__delta[data-tone='good'] { color: var(--ins-good, #15803d); background: var(--ins-good-bg, rgba(22, 163, 74, 0.1)); }
+.pf-insd-kpi__delta[data-tone='bad'] { color: var(--ins-bad, #b91c1c); background: var(--ins-bad-bg, rgba(220, 38, 38, 0.09)); }
+.pf-insd-kpi__spark { grid-column: 1 / -1; }
+
+.pf-insd-table { display: block; width: 100%; height: 240px; }
+
+/* ── Footer: who sees it + Save draft / Publish ───────────────────── */
+.pf-insd-foot { align-items: end; }
+.pf-insd-vis { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.pf-insd-vis__field { display: flex; flex-direction: column; gap: 4px; margin: 0; min-width: 0; }
+.pf-insd-vis__field--roles { flex: 1 1 220px; }
+.pf-insd-vis__lbl { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
+.pf-insd-vis__sel { display: block; min-width: 160px; }
+.pf-insd-delete { margin-left: auto; }
+
+/* ── Version history sheet ────────────────────────────────────────── */
+.pf-insd-backdrop {
+  display: block; position: fixed; inset: 0 0 var(--pf-nav-h, 0px) 0; z-index: 1001; background: rgba(0, 0, 0, 0.45);
+}
+.pf-insd-history-sheet {
+  position: fixed; z-index: 1002; top: 72px; right: 16px; bottom: calc(var(--pf-nav-h, 0px) + 16px);
+  width: min(420px, calc(100vw - 32px)); min-height: 0;
+  animation: pf-insd-side var(--pf-dur-sheet, 320ms) var(--pf-spring, ease) both;
+}
+@keyframes pf-insd-side { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+.pf-insd-versions { padding: 8px; }
+.pf-insd-vlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pf-insd-v { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-bottom: 1px solid var(--pf-line); }
+.pf-insd-v:last-child { border-bottom: 0; }
+.pf-insd-v__main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-insd-v__title { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
+.pf-insd-v__cur { color: var(--text-tertiary); font-weight: 400; }
+.pf-insd-v__meta { font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+
+/* ── Phone ────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .pf-insd--docked { grid-template-columns: minmax(0, 1fr); }
+  .pf-insd-hbt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pf-insd-headbtns .pf-btn { min-height: 44px; }
+  .pf-insd-asktoggle { width: 44px; padding: 0; justify-content: center; }
+  .pf-insd-titlein { max-width: none; font-size: 16px; height: 44px; }
+  .pf-insd-w__sel { width: calc(50% - 3px); }
+  .pf-insd-w__btn { width: 44px !important; height: 44px; min-height: 44px; }
+  .pf-insd-w__size .pf-seg__item { min-height: 40px; min-width: 40px; }
+  /* Phones: one compact row (who sees it + Delete) so the charts keep the room. */
+  .pf-insd-vis { flex-wrap: wrap; }
+  .pf-insd-vis__field { flex: 1 1 0; }
+  .pf-insd-vis__field--roles { order: 3; flex-basis: 100%; }
+  .pf-insd-vis__lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pf-insd-vis__sel { min-width: 0; }
+  .pf-insd-delete { flex: none; min-height: 44px; }
+  .pf-insd-history-sheet { top: auto; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); width: 100%; max-height: 80dvh; border-radius: 20px 20px 0 0; }
+  .pf-insd-addsel { width: 100%; }
+}
