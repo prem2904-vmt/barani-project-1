@@ -38,7 +38,7 @@
     "sim:cbc": "node electron/instruments/sim/cbc-sim.js",
     "cap:sync:prod": "npx nx build lms --configuration=capacitor-prod && PF_TARGET=prod npx cap sync",
     "electron:build:mac:prod": "npx nx build lms --configuration=electron-prod && electron-builder --mac -c.extraMetadata.pfDataProfile=prod",
-    "electron:build:win:prod": "npx nx build lms --configuration=electron-prod && electron-builder --win --x64 -c.npmRebuild=false -c.extraMetadata.pfDataProfile=prod"
+    "electron:build:win:prod": "npx nx build lms --configuration=electron-prod && electron-builder --win nsis --x64 --ia32 -c.npmRebuild=false -c.extraMetadata.pfDataProfile=prod"
   },
   "build": {
     "appId": "in.prefrontal.app",
@@ -60,8 +60,19 @@
     ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "electron/icon.ico"
     },

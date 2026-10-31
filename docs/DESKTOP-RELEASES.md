@@ -212,13 +212,38 @@ back to at any time.
   notarization was asked for); an unsigned/signing-less `.exe` will show the
   SmartScreen "unknown publisher" prompt on first run.
 - Building `--win` from a Mac defaults to the HOST's arch (arm64 on Apple
-  Silicon) unless told otherwise — the legacy `electron:build:win` npm script
-  has this gap. `tools/desktop-release.mjs` always passes `--x64` for Windows
-  builds so the real distribution target (most Windows PCs) is what actually
-  ships. Verified for real (2026-10-02, before that fix): an arm64 build
-  produced a correctly-formed NSIS installer + portable exe + manifest with a
-  correct sha512 (recomputed locally and matched byte-for-byte) — the
-  mechanism works, only the arch flag was missing.
+  Silicon) unless told otherwise, so `tools/desktop-release.mjs` and
+  `electron:build:win:prod` always pass `--win nsis --x64 --ia32` explicitly.
+
+## Windows architectures (64-bit + 32-bit) — desktop 1.1.2+
+
+- **One** NSIS installer contains both x64 and ia32 (`package.json`
+  `build.win.target` nsis `arch: [x64, ia32]`; release script passes
+  `--x64 --ia32`). At install time the installer's `RunningX64` check extracts
+  the matching package, so a 32-bit Windows PC gets the ia32 app and a 64-bit
+  PC the x64 app. Nothing changes in the channel layout or `updater-feed.js`:
+  `latest.yml` still lists a single `Prefrontal Setup <v>.exe`
+  (`files[0].url` == `path`), so existing 64-bit installs auto-update as
+  before and the public site's download button (reads `latest.yml`) needs no
+  change — it points at the one `.exe`, which works for both.
+- Native modules: `usb` and `@serialport/bindings-cpp` ship every
+  `prebuilds/<platform>-<arch>` and `node-gyp-build` picks the right one at
+  runtime from `process.platform/arch`, so `-c.npmRebuild=false` is correct for
+  both arches (verified: both `win-unpacked` and `win-ia32-unpacked` contain
+  the `win32-x64` and `win32-ia32` `.node` files in `app.asar.unpacked`;
+  `Prefrontal.exe` is PE32+ x86-64 in one and PE32 i386 in the other). No other
+  native module is loaded by `electron/`.
+- Cost: the combined installer is ~308 MB vs ~161 MB for x64 only (the 320 MB
+  `app.asar` is carried once per arch). Updates are full downloads anyway (DO
+  Spaces has no multi-range support). The `portable` target stays x64 only and
+  is never published.
+- Minimum OS: **Windows 10 (32- or 64-bit)**. Electron 41 does not run on
+  Windows 7/8/8.1.
+- The leak guard scans BOTH `win-unpacked/…/app.asar` and
+  `win-ia32-unpacked/…/app.asar`.
+- If the size becomes a problem, the fallback is separate per-arch installers
+  with a second feed (`<channel>/windows-ia32/`, selected in `updater-feed.js`
+  by `process.arch`) and an arch-aware site button — more moving parts, not done.
 
 ## Key rotation
 

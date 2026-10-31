@@ -188,10 +188,14 @@ function electronBuilderBuild(a, osName, { base, channel, version }) {
   if (APP_ID_BY_CHANNEL[channel]) args.push(`-c.appId=${APP_ID_BY_CHANNEL[channel]}`);
   args.push('-c.npmRebuild=false');
   if (osName !== 'mac') {
-    // Most real Windows PCs are x64; electron-builder's default (no arch
-    // flag) is the HOST's arch, which on this Mac is arm64 — wrong target
-    // for real users. Always build the real distribution arch explicitly.
-    args.push('--x64');
+    // electron-builder's default (no arch flag) is the HOST's arch, which on
+    // this Mac is arm64 — wrong for real users. Build BOTH real Windows
+    // arches into ONE NSIS installer (the installer picks x64 / ia32 at
+    // install time), so latest.yml keeps a single .exe and existing 64-bit
+    // installs auto-update unchanged. `nsis` only: the portable exe is never
+    // published and would double in size with two arches.
+    args.splice(1, 0, 'nsis');
+    args.push('--x64', '--ia32');
     if (a.winIcon) args.push(`-c.win.icon=${a.winIcon}`, `-c.nsis.installerIcon=${a.winIcon}`, `-c.nsis.installerHeaderIcon=${a.winIcon}`);
   }
   // A publish config is REQUIRED for electron-builder to even write the
@@ -214,23 +218,29 @@ function findAsar(osName) {
       }
     }
   } else {
-    const p = path.join(OUT_DIR, 'win-unpacked', 'resources', 'app.asar');
-    if (fs.existsSync(p)) return p;
+    // Both arches are packaged: win-unpacked (x64) and win-ia32-unpacked.
+    const found = ['win-unpacked', 'win-ia32-unpacked']
+      .map((d) => path.join(OUT_DIR, d, 'resources', 'app.asar'))
+      .filter((p) => fs.existsSync(p));
+    return found.length ? found : null;
   }
   return null;
 }
 
 function assertNoLeakedSecrets(osName, creds) {
-  const asarPath = findAsar(osName);
-  if (!asarPath) { log(`(no app.asar found to scan for ${osName} — skipping leak guard)`); return; }
-  const buf = fs.readFileSync(asarPath);
+  const found = findAsar(osName);
+  const asarPaths = found ? [].concat(found) : [];
+  if (!asarPaths.length) { log(`(no app.asar found to scan for ${osName} — skipping leak guard)`); return; }
   const needles = [creds.PF_RELEASE_KEY_ID, creds.PF_RELEASE_SECRET];
-  for (const needle of needles) {
-    if (needle && buf.includes(Buffer.from(needle))) {
-      fail(`SECURITY: the packaged app.asar (${asarPath}) contains a release credential — refusing to publish. Find and remove the leak before re-running.`);
+  for (const asarPath of asarPaths) {
+    const buf = fs.readFileSync(asarPath);
+    for (const needle of needles) {
+      if (needle && buf.includes(Buffer.from(needle))) {
+        fail(`SECURITY: the packaged app.asar (${asarPath}) contains a release credential — refusing to publish. Find and remove the leak before re-running.`);
+      }
     }
   }
-  log(`leak guard: app.asar (${osName}) clean`);
+  log(`leak guard: ${asarPaths.length} app.asar (${osName}) clean`);
 }
 
 // ── notarization (async — never blocks on Apple) ─────────────────────────
