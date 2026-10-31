@@ -204,6 +204,48 @@ describe('My dashboards — view', () => {
   });
 });
 
+describe('My dashboards — when the preview is called', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('title, size and move do not call /preview again; a metric / period / chart change does', async () => {
+    const p = setup();
+    await p.settle();
+    p.cmp.startEdit();
+    await p.settle();
+    const base = p.api.preview.mock.calls.length;
+    p.cmp.setTitle('A new name');
+    p.cmp.setSize('h', 'l');
+    p.cmp.move('k', 1);
+    await p.settle();
+    expect(p.api.preview.mock.calls.length).toBe(base);
+    p.cmp.setPeriod('h', 'quarter');
+    await p.settle();
+    expect(p.api.preview.mock.calls.length).toBe(base + 1);
+    p.cmp.setChart('h', 'donut');
+    await p.settle();
+    expect(p.api.preview.mock.calls.length).toBe(base + 2);
+  });
+
+  it('a chart that is too detailed says so in plain words', async () => {
+    const p = setup();
+    p.api.preview.mockImplementation((r: InsightsRecipe) => of({
+      widgets: r.widgets.map((w) => ({ id: w.id, state: 'error' as const, code: 'too_detailed', message: 'Too detailed — pick a shorter period.', unit: 'count' as const, categories: [], series: [] })),
+      notes: [],
+    }));
+    await p.settle();
+    expect(p.el.textContent).toContain('Too detailed — pick a shorter period.');
+  });
+
+  it('a timed-out preview says what to do, in plain words', async () => {
+    const q = setup();
+    q.api.preview.mockImplementation(() => throwError(() => ({ status: 504, message: 'Http failure response' })));
+    q.cmp.startEdit();
+    q.cmp.setPeriod('h', 'quarter');
+    await q.settle();
+    expect(q.cmp.previewError()).toMatch(/took too long to calculate/);
+  });
+});
+
 describe('My dashboards — edit controls', () => {
   afterEach(() => TestBed.resetTestingModule());
 

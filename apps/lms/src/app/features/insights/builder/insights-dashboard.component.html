@@ -166,7 +166,7 @@
                     @case ('error') {
                       <div class="pf-insd-w__state">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
-                        <p>{{ vm.data?.message || 'This chart couldn’t load.' }}</p>
+                        <p>{{ errorText(vm.data) }}</p>
                       </div>
                     }
                     @case ('empty') {

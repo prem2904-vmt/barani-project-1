@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_WIDGETS, addWidget, chartOptions, compareAllowed, isVersionConflict, kpiView, moveWidget, normaliseChatReply, normaliseDashboard,
   normaliseDimensions, normaliseMetrics, normaliseOptions, normalisePreview, normaliseRecipe, normaliseSummaries, normaliseVersionDetail,
-  normaliseVersions, previewBand, recipesEqual, removeWidget, saveErrorMessage, tableView, updateWidget, visibilityOptionsFor,
-  widgetChartOption, widgetIsEmpty,
+  normaliseVersions, previewBand, previewFailureText, previewKey, recipesEqual, removeWidget, saveErrorMessage, tableView, updateWidget, visibilityOptionsFor,
+  widgetChartOption, widgetErrorText, widgetIsEmpty,
 } from './insights-builder-logic';
 import type { InsightsMetric, InsightsRecipe, WidgetData } from './insights-builder.models';
 import { formatMinutes } from '../../../shared/utils/insights-view';
@@ -275,5 +275,55 @@ describe('Insights builder — server shapes', () => {
     expect(plain.recipe).toBeNull();
     expect(plain.changes).toEqual([]);
     expect(plain.notes).toEqual(['Dropped "Weather": not something Prefrontal can show.']);
+  });
+});
+
+describe('previewKey — only data-relevant changes re-preview', () => {
+  const same = (a: InsightsRecipe, b: InsightsRecipe, band = null) => previewKey(a, band) === previewKey(b, band);
+  const edit = (id: string, patch: Record<string, unknown>): InsightsRecipe =>
+    ({ ...RECIPE, widgets: RECIPE.widgets.map((w) => (w.id === id ? { ...w, ...patch } : w)) });
+
+  it('title, size, dashboard title and card order do not change it', () => {
+    expect(same(RECIPE, edit('a', { title: 'Renamed' }))).toBe(true);
+    expect(same(RECIPE, edit('a', { size: 'l' }))).toBe(true);
+    expect(same(RECIPE, { ...RECIPE, title: 'Other name' })).toBe(true);
+    expect(same(RECIPE, { ...RECIPE, widgets: [...RECIPE.widgets].reverse() })).toBe(true);
+    expect(same(RECIPE, moveWidget(RECIPE, 'a', 1))).toBe(true);
+  });
+
+  it('metric, chart, split, filters, period, compare, adding / removing a card and the band all change it', () => {
+    expect(same(RECIPE, edit('a', { metric: 'tests' }))).toBe(false);
+    expect(same(RECIPE, edit('c', { chart: 'bar' }))).toBe(false);
+    expect(same(RECIPE, edit('c', { groupBy: 'week' }))).toBe(false);
+    expect(same(RECIPE, edit('c', { filters: { branchId: 'b2' } }))).toBe(false);
+    expect(same(RECIPE, edit('a', { period: { preset: '7d' } }))).toBe(false);
+    expect(same(RECIPE, edit('a', { compare: true }))).toBe(false);
+    expect(same(RECIPE, removeWidget(RECIPE, 'b'))).toBe(false);
+    expect(previewKey(RECIPE, null)).not.toBe(previewKey(RECIPE, { branchId: 'b1' }));
+    expect(previewKey(RECIPE, { branchId: 'b1' })).toBe(previewKey(RECIPE, { branchId: 'b1' }));
+  });
+
+  it('compare off and compare missing are the same thing', () => {
+    expect(same(RECIPE, edit('a', { compare: false }))).toBe(true);
+  });
+});
+
+describe('preview failures in plain words', () => {
+  it('a timeout (504 / 408 / code) and too many refreshes (429) say what to do', () => {
+    expect(previewFailureText({ status: 504 }, 'x')).toMatch(/took too long.*shorter period/);
+    expect(previewFailureText({ status: 408 }, 'x')).toMatch(/took too long/);
+    expect(previewFailureText({ error: { error: 'timeout' } }, 'x')).toMatch(/took too long/);
+    expect(previewFailureText({ status: 429 }, 'x')).toMatch(/Wait a few seconds/);
+    expect(previewFailureText({ status: 500 }, 'fallback')).toBe('fallback');
+  });
+
+  it('a chart that is too detailed shows the server words, and the code survives normalising', () => {
+    const d = normalisePreview({ widgets: [{ id: 'w', state: 'error', code: 'too_detailed', message: 'Too detailed — pick a shorter period.', unit: 'count', categories: [], series: [] }], notes: [] }).widgets[0];
+    expect(d.state).toBe('error');
+    expect(d.code).toBe('too_detailed');
+    expect(widgetErrorText(d)).toBe('Too detailed — pick a shorter period.');
+    expect(widgetErrorText({ ...d, message: null })).toBe('Too detailed — pick a shorter period.');
+    expect(widgetErrorText({ ...d, code: 'timeout', message: null })).toMatch(/took too long/);
+    expect(widgetErrorText(undefined)).toBe('This chart couldn’t load.');
   });
 });

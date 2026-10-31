@@ -276,6 +276,32 @@ export function isVersionConflict(e: unknown): boolean {
 
 // ── Preview ──────────────────────────────────────────────────────────────
 
+/** Only what changes the NUMBERS: per widget the metric, chart, split, filters, period and compare — plus the band. Title, size and
+ *  position never do, so renaming, resizing or moving a card must not call /preview again. Order-independent (sorted by id). */
+export function previewKey(recipe: InsightsRecipe, band: PreviewBand | null): string {
+  const widgets = recipe.widgets
+    .map((w) => ({ id: w.id, metric: w.metric, chart: w.chart, groupBy: w.groupBy ?? null, filters: w.filters ?? null, period: w.period, compare: !!w.compare }))
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return canonical({ widgets, band });
+}
+
+/** Plain words for a preview request that failed as a whole (timeout / too many refreshes / anything else). */
+export function previewFailureText(e: unknown, fallback: string): string {
+  const status = Number((e as { status?: unknown })?.status ?? 0);
+  const code = String((e as { code?: unknown })?.code ?? (e as { error?: { error?: unknown } })?.error?.error ?? '').toLowerCase();
+  if (status === 504 || status === 408 || code === 'timeout')
+    return 'This took too long to calculate. Pick a shorter period or fewer charts, then try again.';
+  if (status === 429) return 'That is a lot of refreshing. Wait a few seconds and the charts will load.';
+  return fallback;
+}
+
+/** What a chart in the error state says: the server's plain message, or words for the known codes. */
+export function widgetErrorText(d: WidgetData | undefined): string {
+  if (d?.code === 'too_detailed') return d.message || 'Too detailed — pick a shorter period.';
+  if (d?.code === 'timeout') return d.message || 'This took too long — pick a shorter period.';
+  return d?.message || 'This chart couldn’t load.';
+}
+
 const STATES: readonly WidgetState[] = ['ok', 'hidden', 'empty', 'error'];
 
 export function normaliseWidgetData(raw: unknown): WidgetData | null {
@@ -300,6 +326,7 @@ export function normaliseWidgetData(raw: unknown): WidgetData | null {
     id,
     state: STATES.includes(state) ? state : 'ok',
     message: str(raw['message'], 300) || null,
+    code: str(raw['code'], 32) || null,
     unit: headUnit,
     bucketUnit: str(raw['bucketUnit'], 12) || null,
     categories,

@@ -19,8 +19,8 @@ import { InsightsChartComponent } from '../insights-chart.component';
 import { InsightsBuilderApiService } from './insights-builder-api.service';
 import {
   BandFilters, CHART_LABELS, DEFAULT_OPTIONS, KpiView, PERIOD_LABELS, SIZE_LABELS, TableView, WIDGET_PERIOD_OPTIONS, addWidget,
-  chartOptions, compareAllowed, emptyRecipe, isVersionConflict, kpiView, moveWidget, previewBand, recipesEqual, removeWidget,
-  saveErrorMessage, statusLine, tableView, updateWidget, visibilityOptionsFor, widgetChartHeight, widgetChartOption, widgetIsEmpty,
+  chartOptions, compareAllowed, emptyRecipe, isVersionConflict, kpiView, moveWidget, previewBand, previewFailureText, previewKey, recipesEqual, removeWidget,
+  saveErrorMessage, statusLine, tableView, updateWidget, visibilityOptionsFor, widgetChartHeight, widgetChartOption, widgetErrorText, widgetIsEmpty,
   widgetPeriodLabel, widgetPeriodValue,
 } from './insights-builder-logic';
 import {
@@ -171,6 +171,7 @@ export class InsightsDashboardComponent {
   readonly conflict = signal(false);
   readonly previewing = signal(false);
   readonly previewError = signal<string | null>(null);
+  private lastPreviewKey: string | null = null;
   private readonly preview$ = new Subject<{ recipe: InsightsRecipe; band: ReturnType<typeof previewBand> }>();
 
   // ── Save / publish / history ─────────────────────────────────────────
@@ -215,6 +216,8 @@ export class InsightsDashboardComponent {
     });
   });
 
+  readonly errorText = widgetErrorText;
+
   readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, flex: 1, minWidth: 90 };
 
@@ -237,13 +240,14 @@ export class InsightsDashboardComponent {
         this.previewing.set(true);
         return this.api.preview(recipe, band).pipe(
           map((p) => ({ ...p, error: null as string | null })),
-          catchError((e) => of({ widgets: [], notes: [] as string[], error: messageOf(e, 'The charts couldn’t load. Try again.') })),
+          catchError((e) => of({ widgets: [], notes: [] as string[], error: previewFailureText(e, messageOf(e, 'The charts couldn’t load. Try again.')) })),
         );
       }),
       takeUntilDestroyed(),
     ).subscribe((p) => {
       this.previewing.set(false);
       this.previewError.set(p.error);
+      if (p.error) this.lastPreviewKey = null;   // a failed run is retried by the next edit
       this.data.set(new Map(p.widgets.map((w) => [w.id, w])));
       this.notes.set(p.notes);
     });
@@ -253,10 +257,16 @@ export class InsightsDashboardComponent {
       const id = this.dashboardId();
       untracked(() => this.open(id));
     });
-    // Any change to what's shown or to the band → one preview (debounced).
+    // A change to what the NUMBERS depend on (metric / chart / split / filters / period / compare, or the band) → one preview
+    // (debounced). Title, size and position changes do not call the server again.
     effect(() => {
       const next = { recipe: this.shown(), band: previewBand(this.band()) };
-      untracked(() => this.preview$.next(next));
+      const key = previewKey(next.recipe, next.band);
+      untracked(() => {
+        if (key === this.lastPreviewKey) return;
+        this.lastPreviewKey = key;
+        this.preview$.next(next);
+      });
     });
     // Names for the filter pickers / "narrowed to" line: once something needs them.
     effect(() => {

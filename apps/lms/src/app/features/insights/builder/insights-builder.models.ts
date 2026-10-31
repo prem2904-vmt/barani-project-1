@@ -135,6 +135,8 @@ export interface WidgetData {
   id: string;
   state: WidgetState;
   message?: string | null;
+  /** Why a chart is in the error state: `too_detailed` | `timeout` | `failed` … */
+  code?: string | null;
   unit: MetricUnit;
   /** Time buckets (day/week/month/quarter) when grouped by time, else null. */
   bucketUnit?: string | null;
