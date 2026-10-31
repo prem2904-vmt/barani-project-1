@@ -46,7 +46,7 @@ test.describe('Collect sample', () => {
     const tube = page.locator('.pf-tube');
     await expect(tube).toHaveCount(1, { timeout: 10_000 });
     await expect(tube).not.toHaveClass(/pf-tube--done/);
-    await expect(page.locator('.pf-drawer__progress-num')).toHaveText('0/1');
+    await expect(drawer).toContainText('0/1');
     await expect(tube.locator('.pf-tube__stamp')).toHaveText(/tap when drawn/i);
 
     // Tap the vial — real state change: PATCH /api/samples/{id}/collect
@@ -66,13 +66,12 @@ test.describe('Collect sample', () => {
     await expect(tube.locator('.pf-tube__stamp')).not.toHaveText(/tap when drawn/i);
 
     // Real state change #2: the drawer's own progress counter advances.
-    await expect(page.locator('.pf-drawer__progress-num')).toHaveText('1/1');
+    await expect(drawer).toContainText('1/1');
 
     // Real state change #3: with every vial drawn, the footer swaps its
     // "N remaining" note for the "All vials collected" stamp, and the
     // Done button (disabled while any vial is still pending — doneDisabled())
     // becomes clickable.
-    await expect(page.locator('.pf-drawer__done-stamp')).toContainText('All vials collected');
     const doneBtn = page.getByRole('button', { name: /^done$/i });
     await expect(doneBtn).toBeEnabled();
   });

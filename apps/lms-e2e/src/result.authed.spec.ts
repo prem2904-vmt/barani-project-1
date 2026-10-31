@@ -62,7 +62,7 @@ test.describe('Enter result', () => {
       page.waitForResponse(
         r => /\/api\/orders\/[0-9a-f-]{36}\/arrive/i.test(r.url()) && r.request().method() === 'PATCH',
       ),
-      row.getByRole('button', { name: /mark arrived/i }).click(),
+      row.getByRole('button', { name: /^(receive|mark arrived)$/i }).click(),
     ]);
     expect(arriveResponse.ok()).toBe(true);
     const arriveBody = (await arriveResponse.json())?.data ?? {};
@@ -70,7 +70,7 @@ test.describe('Enter result', () => {
 
     // ── Enter the result ───────────────────────────────────────────────
     await page.goto(`/lab/sample/${sample.sampleId}`);
-    await expect(page.locator('.pf-sre__title')).toHaveText(sample.barcode || /.+/, { timeout: 15_000 });
+    await expect(page.locator('tr.pf-sre__grow').first()).toBeVisible({ timeout: 15_000 });
 
     const paramRow = page.locator('tr.pf-sre__grow', { hasText: 'Alkaline Phosphatase' });
     await expect(paramRow).toBeVisible({ timeout: 10_000 });
@@ -81,7 +81,7 @@ test.describe('Enter result', () => {
     await input.fill('85');
     await expect(input).toHaveValue('85');
 
-    const submitBtn = page.getByRole('button', { name: /submit all results/i });
+    const submitBtn = page.getByRole('button', { name: /^submit (all )?results$/i });
     await expect(submitBtn).toBeEnabled();
 
     // Real outcome: the bulk-submit POST must succeed server-side, not just
@@ -116,7 +116,7 @@ test.describe('Enter result', () => {
     // navigates away — so re-navigate explicitly and re-fetch from
     // GET /api/samples/{id}/tests rather than trusting client-side state.)
     await page.goto(`/lab/sample/${sample.sampleId}`);
-    await expect(page.locator('.pf-sre__title')).toHaveText(sample.barcode || /.+/, { timeout: 15_000 });
+    await expect(page.locator('tr.pf-sre__grow').first()).toBeVisible({ timeout: 15_000 });
 
     const reloadedRow = page.locator('tr.pf-sre__grow', { hasText: 'Alkaline Phosphatase' });
     await expect(reloadedRow.locator('input.pf-sre__ginput--num')).toHaveValue('85');
@@ -127,6 +127,8 @@ test.describe('Enter result', () => {
     // The tube is no longer writable (entered/validated), so the header
     // swaps Submit/Save-draft for the reopen-to-edit action.
     await expect(page.getByRole('button', { name: /^edit result$/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /submit all results/i })).toHaveCount(0);
+    // New design keeps the primary in place as a disabled "Submitted".
+    const submitPrimary = page.getByRole('button', { name: /^submit (all )?results$/i });
+    if (await submitPrimary.count()) await expect(submitPrimary).toBeDisabled();
   });
 });

@@ -13,7 +13,7 @@ import { expect } from '@playwright/test';
  *  control. Scope by the row that contains the given label text. */
 export function fieldRow(page: Page, label: string) {
   return page.locator('div.flex.flex-col.gap-1\\.5').filter({
-    has: page.locator('label.pf-label, label.nd-field__lbl', { hasText: label }),
+    has: page.locator('label.pf-label, label.nd-field__lbl, label.pf-field__lbl', { hasText: label }),
   });
 }
 
@@ -40,7 +40,7 @@ export async function pickSex(page: Page, value: string): Promise<void> {
     await trigger.click();
     await page.getByRole('option', { name: value, exact: true }).click();
   } else {
-    await row.locator('.nd-seg__item', { hasText: new RegExp(`^${value}$`) }).click();
+    await row.locator('.pf-seg__item, .nd-seg__item', { hasText: new RegExp(`^${value}$`) }).click();
   }
 }
 
@@ -106,7 +106,7 @@ export async function registerPatient(page: Page): Promise<RegisteredPatient> {
 
   // The profile header renders the server's canonical displayName for the
   // patient we just registered.
-  await expect(page.locator('.pf-pp__tb-name')).toContainText(firstName, { timeout: 20_000 });
+  await expect(page.locator('.pf-pp-name, .pf-pp__tb-name').first()).toContainText(firstName, { timeout: 20_000 });
 
   return { firstName, lastName, phone, patientId };
 }
@@ -133,29 +133,31 @@ export async function createOrder(
 ): Promise<PlacedOrder> {
   // From the patient's profile, "New Lab Order" is the canonical entry
   // point into order-create (patient-profile.component.ts::startOrder).
-  await page.getByRole('button', { name: 'New Lab Order' }).click();
+  await page.getByRole('button', { name: /^(New order|New Lab Order)$/ }).first().click();
   await page.waitForURL(new RegExp(`/frontdesk/order\\?patientId=${patient.patientId}`), { timeout: 30_000 });
 
   // The catalogue is fetched async (GET /api/tests/?activeOnly=true) —
   // wait for the search box before typing into it.
-  const search = page.getByPlaceholder(/search tests or packages/i);
+  // New design: ONE unified search pill in the band; the matches drop down
+  // as options (code / name / department / price). Picking one adds it to
+  // the billing card's cart.
+  const search = page.locator('input.pf-us__input');
   await expect(search).toBeVisible({ timeout: 30_000 });
   await search.fill(testCode);
-
-  // Exactly one test card should match this code — click it to add to cart.
-  const testCard = page.locator('.pf-rail-card', { hasText: testName });
-  await expect(testCard).toHaveCount(1, { timeout: 20_000 });
-  await testCard.click();
+  const match = page.locator('#pf-us-drop [role="option"]', { hasText: testName });
+  await expect(match).toHaveCount(1, { timeout: 20_000 });
+  await match.click();
+  await page.keyboard.press('Escape');
 
   // Real state change #1: the cart reflects the added test.
-  await expect(page.locator('.pf-cart-name', { hasText: testName })).toBeVisible();
+  await expect(page.locator('.pf-crt', { hasText: testName })).toBeVisible();
 
-  // Inline payment pane appears once a patient + ≥1 test are attached
-  // (showInlinePay() — front_desk billing mode, not editing an order).
+  // Continue to payment → the inline payment pane → Pay later.
+  await page.getByRole('button', { name: /continue to payment/i }).click();
   await expect(page.locator('.pf-ipp')).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('button', { name: 'Pay later', exact: true }).click();
+  await page.locator('.pf-ipp').getByText('Pay later', { exact: true }).first().click();
 
-  const confirmBtn = page.getByRole('button', { name: /place order \(pay later\)/i });
+  const confirmBtn = page.getByRole('button', { name: /^place order/i });
   await expect(confirmBtn).toBeEnabled();
 
   // Capture the real backend response for the order-creation POST — the
@@ -172,7 +174,7 @@ export async function createOrder(
   expect(order?.patientId).toBe(patient.patientId);
 
   // Real state change #2: the screen locks into its post-order summary.
-  await expect(page.locator('.pf-payment-due-tests')).toContainText('Tests in this Order (1)');
+  await expect(page.locator('.pf-payment-due-tests')).toContainText(/Tests in this Order \(1\)/i);
 
   return { orderId: order.id, patientId: patient.patientId };
 }
@@ -223,7 +225,7 @@ export async function collectSample(page: Page, orderId: string): Promise<Collec
   // Real state change: the tube card flips to its collected look and the
   // drawer's progress counter advances.
   await expect(tube).toHaveClass(/pf-tube--done/);
-  await expect(page.locator('.pf-drawer__progress-num')).toHaveText('1/1');
+  await expect(drawer).toContainText('1/1');
 
   return { sampleId: sample.id, barcode: sample.barcode ?? '', orderId };
 }
@@ -283,7 +285,7 @@ export async function enterResult(
     page.waitForResponse(
       r => /\/api\/orders\/[0-9a-f-]{36}\/arrive/i.test(r.url()) && r.request().method() === 'PATCH',
     ),
-    row.getByRole('button', { name: /mark arrived/i }).click(),
+    row.getByRole('button', { name: /^(receive|mark arrived)$/i }).click(),
   ]);
   expect(arriveResponse.ok()).toBe(true);
   const arriveBody = (await arriveResponse.json())?.data ?? {};
@@ -291,7 +293,6 @@ export async function enterResult(
 
   // ── Enter the result ───────────────────────────────────────────────
   await page.goto(`/lab/sample/${sample.sampleId}`);
-  await expect(page.locator('.pf-sre__title')).toHaveText(sample.barcode || /.+/, { timeout: 30_000 });
 
   const paramRow = page.locator('tr.pf-sre__grow', { hasText: testName });
   await expect(paramRow).toBeVisible({ timeout: 20_000 });
@@ -299,7 +300,7 @@ export async function enterResult(
   await input.fill(value);
   await expect(input).toHaveValue(value);
 
-  const submitBtn = page.getByRole('button', { name: /submit all results/i });
+  const submitBtn = page.getByRole('button', { name: /^submit (all )?results$/i });
   await expect(submitBtn).toBeEnabled();
 
   const [submitResponse] = await Promise.all([

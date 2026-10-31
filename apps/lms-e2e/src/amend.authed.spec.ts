@@ -74,7 +74,7 @@ test.describe('Amend a finalized result', () => {
     await expect(testRow).toBeVisible({ timeout: 10_000 });
     await expect(testRow.locator('.pf-lo-res__val')).toContainText('85');
 
-    const viewReportBtn = card.getByRole('button', { name: /view report/i });
+    const viewReportBtn = card.locator('.pf-lo-act--report');
     const [firstReportResponse] = await Promise.all([
       page.waitForResponse(
         r => new RegExp(`/api/reports/by-order/${order.orderId}`, 'i').test(r.url())
@@ -99,12 +99,14 @@ test.describe('Amend a finalized result', () => {
 
     // ── Open the result for correction ("Edit result") ────────────────────
     await page.goto(`/lab/sample/${sample.sampleId}`);
-    await expect(page.locator('.pf-sre__title')).toHaveText(sample.barcode || /.+/, { timeout: 15_000 });
+    await expect(page.locator('tr.pf-sre__grow').first()).toBeVisible({ timeout: 15_000 });
 
     const editResultBtn = page.getByRole('button', { name: /^edit result$/i });
     await expect(editResultBtn).toBeVisible({ timeout: 10_000 });
     // The write path (submit) must not be visible on an already-reported tube.
-    await expect(page.getByRole('button', { name: /submit all results/i })).toHaveCount(0);
+    // New design keeps the primary in place as a disabled "Submitted".
+    const submitPrimary = page.getByRole('button', { name: /^submit (all )?results$/i });
+    if (await submitPrimary.count()) await expect(submitPrimary).toBeDisabled();
     await editResultBtn.click();
 
     // The app's themed prompt dialog (DialogService/pf-dialog-host) —
@@ -154,7 +156,7 @@ test.describe('Amend a finalized result', () => {
     await input.fill('150');
     await expect(input).toHaveValue('150');
 
-    const submitBtn = page.getByRole('button', { name: /submit all results/i });
+    const submitBtn = page.getByRole('button', { name: /^submit (all )?results$/i });
     await expect(submitBtn).toBeEnabled();
 
     const [resubmitResponse] = await Promise.all([
@@ -189,7 +191,7 @@ test.describe('Amend a finalized result', () => {
         r => new RegExp(`/api/reports/by-order/${order.orderId}`, 'i').test(r.url())
           && r.request().method() === 'GET',
       ),
-      card.getByRole('button', { name: /view report/i }).click(),
+      card.locator('.pf-lo-act--report').click(),
     ]);
     expect(amendedReportResponse.ok()).toBe(true);
     const amendedReportJson = await amendedReportResponse.json();

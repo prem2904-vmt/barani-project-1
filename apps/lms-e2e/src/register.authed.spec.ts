@@ -43,6 +43,6 @@ test.describe('Patient registration', () => {
 
     // The profile header renders the server's canonical displayName for the
     // patient we just registered.
-    await expect(page.locator('.pf-pp__tb-name')).toContainText(firstName, { timeout: 10_000 });
+    await expect(page.locator('.pf-pp-name, .pf-pp__tb-name').first()).toContainText(firstName, { timeout: 10_000 });
   });
 });

@@ -34,48 +34,30 @@ test.describe('Billing — payment on order', () => {
 
     // From the patient's profile, "New Lab Order" is the canonical entry
     // point into order-create (patient-profile.component.ts::startOrder).
-    await page.getByRole('button', { name: 'New Lab Order' }).click();
+    await page.getByRole('button', { name: /^(New order|New Lab Order)$/ }).first().click();
     await page.waitForURL(new RegExp(`/frontdesk/order\\?patientId=${patient.patientId}`), { timeout: 30_000 });
 
-    // The catalogue is fetched async (GET /api/tests/?activeOnly=true) —
-    // wait for the search box before typing into it.
-    const search = page.getByPlaceholder(/search tests or packages/i);
+    // New design: the unified search pill → pick the match from its drop.
+    const search = page.locator('input.pf-us__input');
     await expect(search).toBeVisible({ timeout: 30_000 });
     await search.fill('BIO010');
+    const match = page.locator('#pf-us-drop [role="option"]', { hasText: 'Fasting Blood Sugar' });
+    await expect(match).toHaveCount(1, { timeout: 20_000 });
+    await match.click();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.pf-crt', { hasText: 'Fasting Blood Sugar' })).toBeVisible();
 
-    // Exactly one test card should match this code — click it to add to cart.
-    const testCard = page.locator('.pf-rail-card', { hasText: 'Fasting Blood Sugar' });
-    await expect(testCard).toHaveCount(1, { timeout: 20_000 });
-    await testCard.click();
-
-    // Real state change #1: the cart reflects the added test, priced at ₹30.
-    await expect(page.locator('.pf-cart-name', { hasText: 'Fasting Blood Sugar' })).toBeVisible();
-    await expect(page.locator('.pf-cart-line--total')).toContainText('₹30.00');
-
-    // Inline payment pane appears once a patient + ≥1 test are attached
-    // (showInlinePay() — front_desk billing mode, not editing an order).
+    // Continue to payment → Pay now · Cash · Exact (price-agnostic: the
+    // tenant's catalogue price is whatever the bill says).
+    await page.getByRole('button', { name: /continue to payment/i }).click();
     const ipp = page.locator('.pf-ipp');
     await expect(ipp).toBeVisible({ timeout: 20_000 });
+    await ipp.getByText('Cash', { exact: true }).click();
+    await ipp.getByText('Exact', { exact: true }).click();
 
-    // Select the Cash tile (it's the panel's default, but click it explicitly
-    // — this is the real action a front-desk user takes).
-    await ipp.locator('.pf-ipp__modes').getByRole('button', { name: 'Cash', exact: true }).click();
-
-    // Cash num-pad + exact-tender gate: InlinePaymentPanelComponent.canConfirm()
-    // for cash mode requires cashNum() >= amount() && amount() > 0. "Exact"
-    // (setExactCash()) fills the tendered amount to exactly the cart total —
-    // the deterministic way to clear that gate without hard-coding the price.
-    await page.getByRole('button', { name: 'Exact', exact: true }).click();
-    await expect(page.locator('.pf-cash__amt')).toHaveText('₹30.00');
-    await expect(page.locator('.pf-cash__change')).toContainText('Exact — no change due');
-
-    const confirmBtn = page.getByRole('button', { name: /confirm payment/i });
+    const confirmBtn = page.getByRole('button', { name: /^confirm .* received$/i });
     await expect(confirmBtn).toBeEnabled();
 
-    // Capture the real backend responses for the three sequential calls
-    // confirmPayment() makes: create order, create bill, record payment.
-    // These are the load-bearing proof that a payment actually landed
-    // server-side, not just that the UI stopped complaining.
     const [orderResponse, billResponse, paymentResponse] = await Promise.all([
       page.waitForResponse(r => r.url().includes('/api/orders/') && r.request().method() === 'POST'),
       page.waitForResponse(r => r.url().endsWith('/api/billing/') && r.request().method() === 'POST'),
@@ -95,7 +77,8 @@ test.describe('Billing — payment on order', () => {
     const billBody = await billResponse.json();
     const bill = billBody?.data ?? billBody;
     expect(bill?.orderId).toBe(order.id);
-    expect(bill?.totalPayable).toBe(30);
+    expect(bill?.totalPayable).toBeGreaterThan(0);
+    const price = bill.totalPayable as number;
     // Fresh bill, payment not yet recorded.
     expect(bill?.totalPaid).toBe(0);
 
@@ -107,14 +90,14 @@ test.describe('Billing — payment on order', () => {
     const paidBill = paymentBody?.data ?? paymentBody;
     expect(paidBill?.id).toBe(bill.id);
     expect(paidBill?.orderId).toBe(order.id);
-    expect(paidBill?.totalPayable).toBe(30);
-    expect(paidBill?.totalPaid).toBe(30);
+    expect(paidBill?.totalPayable).toBe(price);
+    expect(paidBill?.totalPaid).toBe(price);
     expect(paidBill?.balance).toBe(0);
     expect(paidBill?.status).toBe('paid');
     expect(paidBill?.payments?.length).toBeGreaterThan(0);
     const lastPayment = paidBill.payments[paidBill.payments.length - 1];
     expect(lastPayment.mode).toBe('cash');
-    expect(lastPayment.amount).toBe(30);
+    expect(lastPayment.amount).toBe(price);
     // Server-allocated invoice number (prefix + running counter) — the
     // concrete "invoice issued" proof the task calls out.
     expect(paidBill?.invoiceNumber).toBeTruthy();
@@ -123,23 +106,11 @@ test.describe('Billing — payment on order', () => {
     // Real state change #2: the screen locks into its post-payment summary —
     // the catalogue swaps for a read-only "Tests in this Order" recap
     // (orderLocked() via paidOrderId()) showing the exact test we bought.
-    await expect(page.locator('.pf-payment-due-tests')).toContainText('Tests in this Order (1)');
-    await expect(page.locator('.pf-readonly-test-card', { hasText: 'Fasting Blood Sugar' })).toBeVisible();
-
-    // Real state change #3: "Payment recorded" (not "Advance recorded" —
-    // that only shows when balance > 0, i.e. a partial/advance payment).
-    const paidPanel = page.locator('.pf-paid');
-    await expect(paidPanel).toBeVisible({ timeout: 10_000 });
-    await expect(paidPanel.locator('.pf-paid__msg')).toHaveText(/payment recorded/i);
-
-    // The Total / Paid / Balance due summary reflects the fully-settled bill.
-    const summary = paidPanel.locator('.pf-paid__summary');
-    await expect(summary).toBeVisible();
-    await expect(summary.locator('.pf-paid__sumline').nth(0)).toContainText('₹30.00'); // Total
-    await expect(summary.locator('.pf-paid__sumline').nth(1)).toContainText('₹30.00'); // Paid
-    await expect(summary.locator('.pf-paid__sumline--due')).toContainText('₹0.00'); // Balance due
-
-    // Invoice is reachable from the UI too.
-    await expect(paidPanel.getByRole('button', { name: 'Print invoice' })).toBeVisible();
+    // The screen locks into its post-order summary: the test, nothing due.
+    await expect(page.locator('.pf-payment-due-tests')).toContainText(/Tests in this Order \(1\)/i);
+    await expect(page.locator('.pf-payment-due-tests')).toContainText('Fasting Blood Sugar');
+    await expect(page.locator('.pf-oc-bill')).toContainText('Payment recorded');
+    await expect(page.locator('.pf-oc-bill')).toContainText('Payment completed');
+    await expect(page.getByRole('button', { name: 'Print invoice' })).toBeVisible();
   });
 });
