@@ -113,6 +113,7 @@ describe('OAuthConsentPage', () => {
     expect(text).toContain('Priya Raman');
     expect(text).toContain('claude.ai');           // where you go back to
     expect(text).toContain('Read only');
+    expect(text).toContain('Your Test Master: tests, tubes, preparation, report times and normal ranges (prices only for people who can already see them)');
     expect(text).not.toContain('micro-world.pf.local'); // never the synthetic auth email
     expect(qa(f, '.pf-btn--primary')).toHaveLength(1);
     expect(btn(f, 'Allow')?.classList).toContain('pf-btn--primary');

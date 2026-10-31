@@ -74,6 +74,7 @@ export const AI_CONNECTOR_CAN_SEE: readonly string[] = [
   'Work waiting at each stage — collect, receive, result, validate, deliver',
   'Analyzer status — online, waiting or offline',
   'Work done per staff member (shown as codes like T-1 — names stay in Prefrontal)',
+  'Your Test Master: tests, tubes, preparation, report times and normal ranges (prices only for people who can already see them)',
 ];
 
 /** The three Claude steps on the settings screen. */

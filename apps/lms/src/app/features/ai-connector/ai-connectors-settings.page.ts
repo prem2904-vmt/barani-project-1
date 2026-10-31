@@ -231,7 +231,7 @@ export class AiConnectorsSettingsPage {
     const ok = await this.dialog.confirm(next
       ? {
         title: 'Turn on AI connectors?',
-        message: 'People in your lab will be able to connect an AI app such as Claude and let it read the lab’s numbers — counts, turnaround, pending work and analyzer status. It can’t change anything, and each person must sign in and press Allow.',
+        message: 'People in your lab will be able to connect an AI app such as Claude and let it read the lab’s numbers — counts, turnaround, pending work and analyzer status — and your Test Master (tests, tubes, preparation, report times and normal ranges). It can’t change anything, and each person must sign in and press Allow.',
         confirmLabel: 'Turn on',
         tone: 'primary',
       }
