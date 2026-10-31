@@ -463,6 +463,13 @@ describe('PF Sense admin switch — button + panel', () => {
     expect(p.el.querySelector('[role="alert"]')).toBeNull();                            // not an error
   });
 
+  it('limit reached wins over "no engine available" (the actionable reason)', async () => {
+    const p = setup({ sense: fakePfSense({ limit: true }), providers: () => of(BOTH.map((x) => ({ ...x, available: false }))) });
+    await p.settle();
+    expect(p.el.querySelector('[data-state="limit"]')!.textContent).toContain('PF Sense is resting');
+    expect(p.el.querySelector('[data-state="none"]')).toBeNull();
+  });
+
   it('under the limit the composer works as before', async () => {
     const p = setup();
     await p.settle();

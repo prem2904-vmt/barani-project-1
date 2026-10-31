@@ -83,16 +83,18 @@
       }
 
       <div #thread class="pf-asst__body pf-asst__thread" aria-live="polite">
-        @if (noneAvailable()) {
-          <div class="pf-empty pf-empty--compact pf-asst-state" data-state="none">
-            <p class="pf-empty__title">PF Sense isn’t available right now</p>
-            <p class="pf-empty__body">Neither Gemini nor Claude can answer at the moment. Try again later.</p>
-          </div>
-        } @else if (limitReached() && !items().length) {
+        <!-- The month's limit is the real, actionable reason — it wins over
+             "no engine" (an engine coming back would still be refused). -->
+        @if (limitReached() && !items().length) {
           <div class="pf-empty pf-empty--compact pf-asst-state" data-state="limit">
             <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
             <p class="pf-empty__title">PF Sense is resting</p>
             <p class="pf-empty__body">{{ limitMessage }}</p>
+          </div>
+        } @else if (noneAvailable()) {
+          <div class="pf-empty pf-empty--compact pf-asst-state" data-state="none">
+            <p class="pf-empty__title">PF Sense isn’t available right now</p>
+            <p class="pf-empty__body">Neither Gemini nor Claude can answer at the moment. Try again later.</p>
           </div>
         } @else if (!items().length) {
           <div class="pf-asst__intro">
