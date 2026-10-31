@@ -198,13 +198,16 @@ describe('Assistant panel — chat', () => {
     const p = setup({ chat: () => pending });
     await p.settle();
     p.type('hello'); p.sendBtn().click(); p.f.detectChanges();
-    expect(p.el.querySelector('.pf-asst__thread')!.getAttribute('data-ai-working')).toBe('true');
+    expect(p.el.querySelector('.pf-asst__mark')!.getAttribute('data-ai-working')).toBe('true');
+    // no rainbow frame round the thread (owner: too loud)
+    expect(p.el.querySelector('.pf-asst__thread')!.classList.contains('pf-ai-glow')).toBe(false);
     expect(p.el.querySelector('.pf-asst-msg--pending')!.textContent).toContain('Gemini is thinking');
     p.type('more');
     expect(p.sendBtn().disabled).toBe(true);
     pending.next(REPLY); pending.complete();
     await p.settle();
     expect(p.el.querySelector('.pf-asst-msg--pending')).toBeNull();
+    expect(p.el.querySelector('.pf-asst__mark')!.getAttribute('data-ai-working')).toBeNull();
     p.el.querySelector<HTMLButtonElement>('[aria-label="New chat"]')!.click();
     p.f.detectChanges();
     expect(p.el.querySelectorAll('.pf-asst-msg')).toHaveLength(0);

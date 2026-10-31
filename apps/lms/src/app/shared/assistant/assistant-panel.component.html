@@ -3,7 +3,8 @@
   <!-- Non-modal side panel (the page stays usable): complementary, not dialog. -->
   <aside class="pf-asst pf-card" [class.pf-asst--docked]="docked()" role="complementary" [attr.aria-label]="title()">
     <header class="pf-card__head pf-asst__head">
-      <span class="pf-card__icon" aria-hidden="true">
+      <!-- AI working = the sparkle glows (pf-ai-glow-mark), not a rainbow frame round the whole thread. -->
+      <span class="pf-card__icon pf-asst__mark pf-ai-glow-mark" [attr.data-ai-working]="pending() ? 'true' : null" aria-hidden="true">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6Z"/><path d="M18.5 15.5 19.3 17.7 21.5 18.5 19.3 19.3 18.5 21.5 17.7 19.3 15.5 18.5 17.7 17.7Z"/></svg>
       </span>
       <div class="pf-asst__titles">
@@ -81,7 +82,7 @@
         </div>
       }
 
-      <div #thread class="pf-asst__body pf-asst__thread pf-ai-glow pf-ai-glow--inset" [attr.data-ai-working]="pending() ? 'true' : null" aria-live="polite">
+      <div #thread class="pf-asst__body pf-asst__thread" aria-live="polite">
         @if (noneAvailable()) {
           <div class="pf-empty pf-empty--compact pf-asst-state" data-state="none">
             <p class="pf-empty__title">No model is available right now</p>
