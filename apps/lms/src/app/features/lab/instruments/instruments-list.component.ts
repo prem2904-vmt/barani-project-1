@@ -45,7 +45,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
   template: `
     <section class="pf-inl pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <pf-hero-band [back]="true" backTo="/lab/settings" placeholder="Search instruments — name, make, model, port…"
+        <pf-hero-band [back]="true" placeholder="Search instruments — name, make, model, port…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-actions>
             <pf-assistant-button [expanded]="assistantOpen()" (pressed)="assistantOpen.set(!assistantOpen())"></pf-assistant-button>

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { CdkDragDrop, CdkDropList, CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -26,7 +27,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
 @Component({
   selector: 'pf-branches',
   standalone: true,
-  imports: [SkeletonRowsComponent, BusyDirective, 
+  imports: [SkeletonRowsComponent, BusyDirective, RouterLink, 
     FormsModule,
     CdkDropList,
     CdkDrag,
@@ -150,6 +151,10 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                   <p class="pf-br-hint">
                     Drag a department into a space. Tubes are counted per space + colour — departments in one space sharing a colour share a vial.
                   </p>
+                  <p class="pf-br-hint pf-br-hint--text" data-testid="br-sample-id-note">
+                    Each space's code (and the Lab code) is the sample-ID prefix; the date and number part is set in
+                    <a class="pf-br-link" routerLink="/admin/organization" [queryParams]="{ tab: 'sample' }">Organization › Sample ID format</a>.
+                  </p>
                   <!-- Structure notice: the board's arrangement only DRIVES orders
                        in Auto mode. Integrated = the one Lab space; Standalone =
                        one space per department. The arrangement is kept either way
@@ -157,12 +162,12 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                   @if (structureOf(b) === 'integrated') {
                     <p class="text-[11px] mb-2" style="color: var(--text-secondary);">
                       This branch runs <strong>Integrated</strong> — one lab, one space: every department shares "Lab (default)".
-                      Space arrangement below is saved but only applies after switching the branch to <strong>Auto</strong> in Lab settings.
+                      Space arrangement below is saved but only applies after switching the branch to <strong>Auto</strong> in <a class="pf-br-link" routerLink="/admin/lab-settings" [queryParams]="{ tab: 'queues' }">Lab settings › Lab structure</a>.
                     </p>
                   } @else if (structureOf(b) === 'standalone') {
                     <p class="text-[11px] mb-2" style="color: var(--text-secondary);">
                       This branch runs <strong>Standalone</strong> — every department keeps its own sample-ID prefix; tubes are still shared across departments.
-                      Space arrangement below only applies after switching the branch to <strong>Auto</strong> in Lab settings.
+                      Space arrangement below only applies after switching the branch to <strong>Auto</strong> in <a class="pf-br-link" routerLink="/admin/lab-settings" [queryParams]="{ tab: 'queues' }">Lab settings › Lab structure</a>.
                     </p>
                   }
 
@@ -252,6 +257,9 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
     .pf-br-chip { height: 24px; font-size: 11.5px; }
     .pf-br-sec { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary); }
     .pf-br-hint { margin: 0 0 8px; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); display: flex; align-items: center; gap: 6px; }
+    .pf-br-hint--text { display: block; }
+    .pf-br-link { color: var(--violet-text, #7c3aed); font-weight: 600; text-decoration: none; }
+    .pf-br-link:hover { text-decoration: underline; }
     .pf-br-note { margin: 0 0 10px; padding: 8px 12px; border-radius: var(--pf-radius-sm); font-size: 12px; line-height: 1.5;
       color: var(--text-secondary); background: var(--pf-chip-bg); border: 1px solid var(--pf-line); }
     .pf-sample-input.pf-input { min-height: 30px; }

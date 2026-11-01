@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { BranchesComponent } from './branches.component';
@@ -30,6 +31,7 @@ function render() {
   TestBed.configureTestingModule({
     imports: [BranchesComponent],
     providers: [
+      provideRouter([]),
       { provide: ApiService, useValue: api },
       { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() } },
     ],

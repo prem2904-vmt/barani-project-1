@@ -1,4 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+import { ORG_SETTINGS_TABS } from '../../../shared/utils/settings-catalog';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
@@ -19,7 +21,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
 @Component({
   selector: 'pf-organization-settings',
   standalone: true,
-  imports: [BusyDirective, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
+  imports: [BusyDirective, FormsModule, RouterLink, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -29,7 +31,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
         <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-tools>
             <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
-                          (valueChange)="tab.set($event)"></pf-segmented>
+                          (valueChange)="pickTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ls__bandsave press"
@@ -184,7 +186,9 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
           <p class="pf-ls__hint">
             Every tube's ID is <strong>SPACE-DATE-NUMBER</strong> (e.g. <span class="pf-num">MIC-2607-00001</span>).
             The <strong>space code</strong> comes from Branches → “Departments &amp; lab spaces”. The number restarts <strong>each month per space</strong>.
+            This is the one place the sample-ID format is set.
           </p>
+          <a class="pf-ls__link" routerLink="/admin/branches">Set space codes in Branches</a>
           <div class="pf-ls__grid pf-ls__grid--3">
             <div class="pf-field">
               <span class="pf-field__lbl">Date</span>
@@ -284,6 +288,8 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
     .pf-ls__preview strong { color: var(--text-primary); font-weight: 600; }
     .pf-ls__save { align-self: flex-start; }
     .pf-ls__sw { flex-shrink: 0; }
+    .pf-ls__link { align-self: flex-start; font-size: 13px; font-weight: 600; color: var(--violet-text, #7c3aed); text-decoration: none; }
+    .pf-ls__link:hover { text-decoration: underline; }
     .pf-ls__inline-toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     .pf-ls__inline-toggle-text { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
     .pf-ls__inline-toggle-text strong { color: var(--text-primary); font-weight: 600; }
@@ -312,6 +318,13 @@ export class OrganizationSettingsComponent implements OnInit {
     { value: 'order', label: 'Order ID' },
   ];
   readonly tab = signal<OrgSettingsTab>('identity');
+  private readonly router = inject(Router);
+  /** Switch tab and keep it in the URL (`?tab=`, replacing this history
+   *  entry) so a reload, a shared link and back all return to it. */
+  pickTab(t: OrgSettingsTab): void {
+    this.tab.set(t);
+    void this.router.navigate([], { queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
   showSec(key: OrgSettingsTab): boolean {
     return !this.theme.isNewDesign() || this.tab() === key;
   }
@@ -509,6 +522,10 @@ export class OrganizationSettingsComponent implements OnInit {
   protected idSection<T>(f: T): T { return f; }
 
   ngOnInit() {
+    // Deep link: …/organization?tab=<identity|patient|sample|order> (the
+    // settings search and Lab settings link straight to a card).
+    const t = this.router.parseUrl(this.router.url).queryParams['tab'];
+    if ((ORG_SETTINGS_TABS as readonly string[]).includes(t)) this.tab.set(t as OrgSettingsTab);
     // Current tenant login handle (OPS-13).
     this.api.get<any>('/api/tenants/current').subscribe({
       next: t => {

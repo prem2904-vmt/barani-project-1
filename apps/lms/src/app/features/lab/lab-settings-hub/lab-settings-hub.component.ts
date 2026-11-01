@@ -1,9 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
-import { bandFilter } from '../../../shared/utils/band-search';
+import { filterSettingsTiles } from '../../../shared/utils/settings-search';
+import { settingsKeywordsFor } from '../../../shared/utils/settings-catalog';
 import { AuthService } from '../../../core/auth/auth.service';
 import { canOpenRoute } from '../../../core/auth/route-access';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
@@ -35,9 +36,11 @@ interface LabTile {
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <!-- Band pill (owner): the hub's search filters its tiles. -->
+        <!-- Band pill (owner): the hub's search filters its tiles — the ONE
+             precise matcher over each tile's title + the settings on its page
+             (never the subtitle); Enter opens the top tile. -->
         <pf-hero-band [back]="true" placeholder="Search lab settings — tests, report, referral, KPIs…"
-                      [value]="q()" (valueChange)="q.set($event)"></pf-hero-band>
+                      [value]="q()" (valueChange)="q.set($event)" (submitted)="openTop()"></pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
         eyebrow="Lab"
@@ -67,7 +70,7 @@ interface LabTile {
         }
       </div>
       @if (!visibleTiles().length) {
-        <p class="pf-band-empty">No lab settings match "{{ q() }}".</p>
+        <p class="pf-band-empty">No settings match “{{ q() }}”.</p>
       }
       </div>
     </section>
@@ -125,7 +128,14 @@ export class LabSettingsHubComponent {
     const ctx = { hasAny: (p: string[]) => this.auth.hasAnyPermission(p) };
     return this.tiles.filter(t => featureOn(t) && canOpenRoute(t.href, ctx));
   });
-  readonly visibleTiles = computed(() => bandFilter(this.openableTiles(), this.q(), (t) => [t.title, t.subtitle]));
+  readonly visibleTiles = computed(() =>
+    filterSettingsTiles(this.openableTiles(), this.q(), (t) => t.title, (t) => settingsKeywordsFor(t.href)));
+  private readonly router = inject(Router);
+  /** Enter in the band search opens the top tile. */
+  openTop(): void {
+    const top = this.q().trim() ? this.visibleTiles()[0] : undefined;
+    if (top) void this.router.navigateByUrl(top.href);
+  }
 
   readonly tiles: LabTile[] = [
     { title: 'Tests & Packages', href: '/admin/tests',
@@ -134,9 +144,6 @@ export class LabSettingsHubComponent {
     { title: 'Report Template', href: '/admin/reports',
       subtitle: 'Branding, header, columns, signatures, colours',
       iconPath: 'M4 4h11l5 5v11H4zM15 4v5h5M8 14h8M8 18h6' },
-    { title: 'Referral Labs', href: '/admin/referral-labs',
-      subtitle: 'Outsourced / external labs',
-      iconPath: 'M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9' },
     { title: 'Lab settings', href: '/admin/lab-settings',
       subtitle: 'Sample finding, queues, payment and validation rules',
       iconPath: 'M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3ZM8 12h8' },
@@ -152,8 +159,11 @@ export class LabSettingsHubComponent {
     { title: 'AI connectors', href: '/admin/ai-connectors', beta: 'mcp',
       subtitle: 'Let AI apps like Claude read your lab’s numbers',
       iconPath: 'M9 7H6a4 4 0 0 0 0 8h3M15 7h3a4 4 0 0 1 0 8h-3M8 11h8' },
-    { title: 'Referring Network', href: '/admin/referring-network',
-      subtitle: 'Hospitals + doctors that send patients to your lab',
+    // Referral labs, partner prices, vendor wallets and the referring network
+    // have ONE home — the Referral & Vendors hub. This is a link to it, not a
+    // second copy of its tiles.
+    { title: 'Referral & Vendors', href: '/admin/partners',
+      subtitle: 'Referral labs, partner prices, vendor wallets, referring network',
       iconPath: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01' },
     { title: 'Home-collection agents', href: '/admin/home-collection', feature: 'homeCollection',
       subtitle: 'Agents · coverage areas · weightage',

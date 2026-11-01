@@ -38,7 +38,7 @@ const STAGE_LABELS: Record<string, string> = {
       @if (theme.isNewDesign()) {
         <!-- Band (owner): no search — the two cards become tabs in a
              tabs-only pill; Save rides the band actions. -->
-        <pf-hero-band [back]="true" backTo="/lab/settings" [tabsOnly]="true">
+        <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-tools>
             <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
                           (valueChange)="tab.set($event)"></pf-segmented>

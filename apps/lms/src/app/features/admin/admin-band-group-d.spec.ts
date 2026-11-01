@@ -330,8 +330,12 @@ describe('Admin band — Settings hub (/admin/manage)', () => {
   it('pill search finds settings across every category; picking a category leaves search', () => {
     const p = make();
     p.type('vendor');
-    expect(tileTitles(p.el)).toEqual(expect.arrayContaining(['Vendor Credit Wallets']));
-    expect(tileTitles(p.el)).not.toContain('Users & Access');
+    // One ranked row per hit from the ONE settings catalog (Vendor Wallets'
+    // single home is the Referral & Vendors hub), with its section.
+    const hits = () => Array.from(p.el.querySelectorAll('.pf-band-body [data-testid="settings-hit"]')).map((t) => t.textContent ?? '');
+    expect(hits()[0]).toContain('Vendor Wallets');
+    expect(hits()[0]).toContain('Referral & Vendors');
+    expect(hits().some((h) => h.includes('Users & Access'))).toBe(false);
     p.cmp.pickCategory('people');
     p.f.detectChanges();
     expect(p.cmp.q()).toBe('');

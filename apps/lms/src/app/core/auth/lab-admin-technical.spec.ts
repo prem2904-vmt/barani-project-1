@@ -76,7 +76,7 @@ const guardAllows = (path: string, perms: string[]) =>
   guardsFor(path).every(g => !g.requiredPerms || g.requiredPerms.some(c => perms.includes('*') || perms.includes(c)));
 
 describe('Lab Admin (Technical) — routes it CAN open', () => {
-  for (const route of ['/admin/tests', '/admin/tests/new', '/admin/referral-labs', '/admin/lab-settings',
+  for (const route of ['/admin/tests', '/admin/tests/new', '/admin/referral-labs', '/admin/partner-prices', '/admin/partners', '/admin/lab-settings',
                        '/lab/settings', '/admin/microbiology', '/admin/reports', '/lab/my-work', '/dashboard']) {
     it(`${route}: nav table and real guard both admit`, () => {
       expect(canOpenRoute(route, ctxFor(LAB_ADMIN_TECH))).toBe(true);
@@ -163,7 +163,9 @@ describe('Lab settings hub — tiles filtered by what the user can open', () => 
 
   it('Lab Admin (Technical) sees only openable tiles', () => {
     const hrefs = hubFor(LAB_ADMIN_TECH).visibleTiles().map(t => t.href);
-    expect(hrefs).toEqual(['/admin/tests', '/admin/reports', '/admin/referral-labs', '/admin/lab-settings', '/admin/microbiology', '/admin/instruments']);
+    // Referral Labs now lives ONLY in the Referral & Vendors hub; the Lab hub
+    // links to that hub (test-master perms open it), so the role still reaches it.
+    expect(hrefs).toEqual(['/admin/tests', '/admin/reports', '/admin/lab-settings', '/admin/microbiology', '/admin/instruments', '/admin/partners']);
   });
 
   it('super-admin sees every tile (a BETA tile only with its switch — off here)', () => {

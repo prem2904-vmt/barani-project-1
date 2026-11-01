@@ -485,7 +485,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                       <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   </div>
-                  <!-- Same switch as Lab settings → Report (one metadata option). -->
+                  <!-- The ONE home of this switch (Lab settings only links here). -->
                   <div class="pf-toggle-row">
                     <div class="flex flex-col pr-3">
                       <span class="text-[13px]" style="color: var(--text-primary);">Consolidated abnormal results sheet</span>

@@ -293,10 +293,10 @@ export const PREVIEW_LABEL: LabelData = {
             <div class="pf-lp-conn__txt">
               <span class="pf-lp-conn__k">Code on every label</span>
               <span class="pf-lp-conn__v pf-lp-code__v"><span class="pf-chip pf-chip--static pf-lp-codechip">{{ codeLabel() }}</span>
-                <span class="pf-hint">Organisation policy, set by an admin</span></span>
+                <span class="pf-hint">Branch policy, set by an admin in Lab settings</span></span>
             </div>
             @if (canEditCode) {
-              <a class="pf-btn pf-btn--quiet pf-lp-codelink" routerLink="/admin/lab-settings">Lab settings</a>
+              <a class="pf-btn pf-btn--quiet pf-lp-codelink" routerLink="/admin/lab-settings" [queryParams]="{ tab: 'collection' }">Lab settings</a>
             }
           </div>
           <label class="pf-field pf-lp-slider">

@@ -35,7 +35,7 @@ import {
   template: `
     <section class="pf-band-page pf-aic px-4 md:px-8 lg:px-10 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <pf-hero-band [back]="true" backTo="/lab/settings" [customSearch]="true" [contextBar]="true">
+        <pf-hero-band [back]="true" [customSearch]="true" [contextBar]="true">
           <div band-search class="pf-ctx">
             <span class="pf-ctx__primary">AI connectors</span>
             @if (state(); as s) {

@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Location } from '@angular/common';
 import { NavigationEnd, Router } from '@angular/router';
 import { PRIMARY_NAV } from '../../layout/nav-items';
+import { PERSONAL_SETTINGS_PAGES, SETTINGS_HUBS, SETTINGS_PARENT } from '../../shared/utils/settings-catalog';
 
 /**
  * Single source of truth for the mobile "back" affordance.
@@ -69,12 +70,40 @@ export class NavBackService {
   }
 
   constructor() {
+    if (this.url()) this.stack.push(this.url());
     this.router.events.subscribe((e) => {
       if (e instanceof NavigationEnd) {
+        const next = this.norm(e.urlAfterRedirects);
+        // A query-only change on the same page (a tab / category kept in the
+        // URL with replaceUrl) is not "coming from" somewhere — keep the
+        // page we really arrived from.
+        if (next === this.url()) return;
+        this.track(next);
         this.previousUrl = this.url();
-        this.url.set(this.norm(e.urlAfterRedirects));
+        this.url.set(next);
       }
     });
+  }
+
+  /** Best-effort mirror of this tab's history (normalised paths, oldest
+   *  first) so back can POP to an ancestor that is really behind us instead
+   *  of pushing a duplicate entry browser-back would bounce off. Reset by a
+   *  reload (then back falls back to replacing the entry). */
+  private readonly stack: string[] = [];
+
+  private track(next: string): void {
+    const nav = typeof this.router.getCurrentNavigation === 'function' ? this.router.getCurrentNavigation() : null;
+    const top = this.stack.length - 1;
+    if (nav?.trigger === 'popstate') {
+      // Browser back / forward (or our own location.back / history.go):
+      // land on the nearest matching entry behind us, else treat as forward.
+      const i = this.stack.lastIndexOf(next, top - 1);
+      if (i >= 0) { this.stack.length = i + 1; return; }
+      this.stack.push(next);
+      return;
+    }
+    if (nav?.extras?.replaceUrl && top >= 0) { this.stack[top] = next; return; }
+    this.stack.push(next);
   }
 
   /** Strip query/hash + trailing slashes so "/lab/my-work/" === "/lab/my-work". */
@@ -87,51 +116,19 @@ export class NavBackService {
     const rawUrl = currentUrl || this.router.url;
     const normUrl = this.norm(rawUrl);
 
-    // People & Access (cat=people)
+    // People & Access editors
     if (normUrl === '/admin/users/invite' || (normUrl.startsWith('/admin/users/') && normUrl !== '/admin/users')) {
       return '/admin/users?tab=users';
     }
     if (normUrl === '/admin/roles/new' || (normUrl.startsWith('/admin/roles/') && normUrl !== '/admin/roles')) {
       return '/admin/users?tab=roles';
     }
-    if (normUrl === '/admin/users' || normUrl === '/admin/roles' || normUrl === '/admin/audit') {
-      return '/admin/manage?cat=people';
-    }
 
-    // Branches & Organization (cat=org)
-    if (normUrl === '/admin/vendors' || normUrl === '/admin/referral-labs' || normUrl === '/admin/referring-network') {
-      return '/admin/partners';
-    }
-    if (
-      normUrl === '/admin/branches' ||
-      normUrl === '/admin/organization' ||
-      normUrl === '/admin/appointments' ||
-      normUrl === '/admin/partners' ||
-      normUrl === '/setup'
-    ) {
-      return '/admin/manage?cat=org';
-    }
-
-    // Finance (cat=finance)
-    if (normUrl === '/admin/billing' || normUrl === '/finance' || normUrl === '/finance/daily') {
-      return '/admin/manage?cat=finance';
-    }
-
-    // Platform & Automation (cat=automation)
+    // Nested settings editors climb to their list.
     if (normUrl.startsWith('/admin/workflows/')) {
       const seg = normUrl.split('/').filter(Boolean);
       return seg.length > 3 ? `/admin/workflows/${seg[2]}` : '/admin/workflows';
     }
-    if (normUrl === '/admin/process' || normUrl === '/admin/workflows') {
-      return '/admin/manage?cat=automation';
-    }
-
-    // Settings hub landing
-    if (normUrl === '/admin/manage') {
-      return '/admin';
-    }
-
-    // Tests & Lab settings hub (/lab/settings)
     if (normUrl.startsWith('/admin/tests/')) {
       const match = rawUrl.match(/[?&]type=([^&]+)/);
       if (match) {
@@ -139,16 +136,19 @@ export class NavBackService {
       }
       return '/admin/tests';
     }
-    if (
-      normUrl === '/admin/tests' ||
-      normUrl === '/admin/lab-settings' ||
-      normUrl.startsWith('/admin/lab-settings/') ||
-      normUrl === '/admin/reports' ||
-      normUrl === '/admin/notifications' ||
-      normUrl === '/admin/microbiology' ||
-      normUrl === '/admin/kpis'
-    ) {
-      return '/lab/settings';
+    if (normUrl.startsWith('/admin/instruments/')) return '/admin/instruments';
+    if (normUrl.startsWith('/admin/bridges/')) return '/admin/bridges';
+    if (normUrl.startsWith('/admin/lab-settings/')) return '/lab/settings';
+
+    // Personal settings (avatar menu, any signed-in user, reached from any
+    // screen): back is where you came from — never /admin (a 403 for most).
+    if (PERSONAL_SETTINGS_PAGES.includes(normUrl)) {
+      return this.previousUrl && this.previousUrl !== normUrl ? this.previousUrl : '/';
+    }
+
+    // Every settings page → the ONE hub that lists it (settings-catalog).
+    if (SETTINGS_PARENT[normUrl]) {
+      return SETTINGS_PARENT[normUrl];
     }
 
     // Frontdesk subroutes
@@ -178,11 +178,7 @@ export class NavBackService {
       return '/frontdesk';
     }
 
-    // Lab settings hub is an ADMIN surface reached from /admin, but its own
-    // children (culture settings…) parent back to the hub.
-    if (normUrl === '/lab/settings') {
-      return '/admin';
-    }
+    // The Lab settings hub's own children (culture settings…) parent back to it.
     if (normUrl.startsWith('/lab/settings/')) {
       return '/lab/settings';
     }
@@ -226,12 +222,22 @@ export class NavBackService {
    *  router.navigate. */
   backTo(target: string): void {
     const current = this.norm(this.router.url);
-    if (this.norm(target) === current) return;
-    if (this.previousUrl !== null && this.previousUrl === this.norm(target)) {
+    const want = this.norm(target);
+    if (want === current) return;
+    if (this.previousUrl !== null && this.previousUrl === want) {
       this.location.back();
-    } else {
-      void this.router.navigateByUrl(target, { replaceUrl: true });
+      return;
     }
+    // The parent is further behind us in this tab's history (e.g. hub →
+    // list → editor → list): go back to THAT entry, so no duplicate piles up.
+    const top = this.stack.length - 1;
+    const i = top > 0 && this.stack[top] === current ? this.stack.lastIndexOf(want, top - 1) : -1;
+    if (i >= 0 && i === top - 1) { this.location.back(); return; }
+    if (i >= 0 && typeof window !== 'undefined') {
+      window.history.go(i - top);
+      return;
+    }
+    void this.router.navigateByUrl(target, { replaceUrl: true });
   }
 
   /**
@@ -245,6 +251,14 @@ export class NavBackService {
     if (this.interceptor && this.interceptor()) return;
 
     const current = this.norm(this.router.url);
+    // A settings page opened from a settings hub (its tiles or its search)
+    // goes back to THAT hub — the one the person came from — by popping
+    // history, so browser back and the chevron agree.
+    if (SETTINGS_PARENT[current] && this.previousUrl !== null && this.previousUrl !== current
+        && SETTINGS_HUBS.includes(this.previousUrl)) {
+      this.location.back();
+      return;
+    }
     const parent = this.getParentRoute(this.router.url);
     if (parent && this.norm(parent) !== current) {
       this.backTo(parent);

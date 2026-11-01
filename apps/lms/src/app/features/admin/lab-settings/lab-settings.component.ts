@@ -18,8 +18,7 @@ import { SelectComponent, PfSelectOption } from '../../../shared/primitives/sele
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
-import { ReportTemplate } from '../../../shared/models/report.model';
-import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
+import { LAB_SETTINGS_TABS } from '../../../shared/utils/settings-catalog';
 import { WaSettings, WhatsAppService, waSenderLine } from '../../../core/services/whatsapp.service';
 import { WaConnectCardComponent } from './wa-connect-card.component';
 import { BusyComponent, SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
@@ -56,10 +55,10 @@ interface AutoAssignConfig {
       @if (theme.isNewDesign()) {
         <!-- Band (owner): no search here — the section cards are grouped into
              tabs in a tabs-only pill. Every change autosaves, so no actions. -->
-        <pf-hero-band [back]="true" backTo="/lab/settings" [tabsOnly]="true">
+        <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-tools>
             <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
-                          (valueChange)="tab.set($event)"></pf-segmented>
+                          (valueChange)="pickTab($event)"></pf-segmented>
           </ng-container>
           <!-- Autosave is authoritative here (no Save button): the band says
                so as the neutral save state with a violet check. -->
@@ -107,10 +106,18 @@ interface AutoAssignConfig {
         </div>
       } @else {
 
+      <!-- Where these apply: most cards are per BRANCH (the signed-in one —
+           the server scopes branch-lab-config to it); a few are for the
+           whole organisation. Each card says which. -->
+      <p class="pf-ls__scopenote" data-testid="ls-scope-note">
+        Cards marked <strong>This branch</strong> apply to <strong>{{ branchName() }}</strong> only — switch branch to set
+        another branch. <strong>All branches</strong> cards apply everywhere.
+      </p>
+
       @if (showSec('collection')) {
       <!-- Counters & collection — now driven by the Workflow (single source) -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18v4H3zM5 7v14h14V7M9 11h6"/></svg></span><h3 class="pf-card__label pf-ls__title">Counters &amp; collection</h3></div>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18v4H3zM5 7v14h14V7M9 11h6"/></svg></span><h3 class="pf-card__label pf-ls__title">Counters &amp; collection</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Whether <strong>billing</strong> and <strong>sample collection</strong> run at a separate
@@ -133,7 +140,7 @@ interface AutoAssignConfig {
       @if (showSec('collection')) {
       <!-- Sample identification mode (tenant-wide) — governs the lab screens. -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg></span><h3 class="pf-card__label pf-ls__title">Sample identification</h3></div>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg></span><h3 class="pf-card__label pf-ls__title">Sample identification</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How techs identify a sample on the lab screens. <strong>Scan</strong> shows the camera
@@ -185,7 +192,7 @@ interface AutoAssignConfig {
       @if (showSec('queues')) {
       <!-- Queue focus (per-branch) — how the lab worklists group work. -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="pf-card__label pf-ls__title">Queue focus</h3></div>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="pf-card__label pf-ls__title">Queue focus</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How the technician worklist, lab intake and result-entry queues group work.
@@ -222,7 +229,7 @@ interface AutoAssignConfig {
       @if (showSec('queues')) {
       <!-- Lab structure (per-branch): integrated / standalone / auto -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><h3 class="pf-card__label pf-ls__title">Lab structure</h3></div>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><h3 class="pf-card__label pf-ls__title">Lab structure</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How this branch's tubes group into spaces.
@@ -252,40 +259,36 @@ interface AutoAssignConfig {
           dedicated space) on the default "Lab" lane in <strong>Branches</strong> —
           leave it blank for no prefix.
         </p>
+        <button type="button" class="pf-ls__link" style="margin-top: 6px;" (click)="goBranches()">Open Branches</button>
       </div>
       </section>
       }
 
       @if (showSec('collection')) {
-      <!-- Sample ID — short sample barcode number width (tenant-wide) -->
-      <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg></span><h3 class="pf-card__label pf-ls__title">Sample ID</h3></div>
+      <!-- Sample IDs have ONE home each: the format (date, separator, digits)
+           is Organization › Sample ID; each space's prefix is on the
+           Branches board. (The old "number width" here was read by nothing
+           — removed 2026-11-01.) This is a pointer, not an editor. -->
+      <section class="pf-card pf-ls__card" data-testid="ls-sample-ids">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg></span><h3 class="pf-card__label pf-ls__title">Sample IDs</h3></div>
         <div class="pf-ls__cardbody">
-        <p class="pf-ls__hint">
-          The short sample barcode is <strong>DD</strong>(dept) + <strong>YY</strong>(year) +
-          this many digits, e.g. <span class="pf-num">012600001</span>. Set each department's
-          2-digit code in <strong>Departments</strong>.
-        </p>
-        <div class="mt-4 flex flex-wrap items-end gap-4">
-          <label class="block max-w-[160px]">
-            <span class="pf-field__lbl">Number width</span>
-            <input class="pf-input pf-num mt-1" type="number" min="1" max="9"
-                   [ngModel]="sampleNumberWidth()"
-                   (ngModelChange)="sampleNumberWidth.set(+$event)"
-                   (blur)="saveSampleNumberWidth()" />
-          </label>
-          <p class="text-[13px] pb-2" style="color: var(--text-secondary);">
-            Preview: <strong class="pf-num" style="color: var(--text-primary);">{{ sampleBarcodePreview() }}</strong>
+          <p class="pf-ls__hint">
+            Every tube's ID is <strong>prefix + date + number</strong> (e.g. <span class="pf-num">MIC-2607-00001</span>).
+            The <strong>format</strong> is set once for the organisation; the <strong>prefix</strong> is each
+            lab space's code, set per branch.
           </p>
+          <div class="pf-ls__links">
+            <button type="button" class="pf-btn pf-btn--secondary pf-ls__linkbtn" (click)="goSampleIdFormat()">Sample ID format</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-ls__linkbtn" (click)="goBranches()">Prefixes in Branches</button>
+          </div>
         </div>
-      </div>
       </section>
       }
 
       @if (showSec('rules')) {
       <!-- Calculation constants (tenant-wide) — feed calculated results. -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h8"/></svg></span><h3 class="pf-card__label pf-ls__title">Calculation constants</h3></div>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h8"/></svg></span><h3 class="pf-card__label pf-ls__title">Calculation constants</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Lab-specific numbers used by calculated results during entry.
@@ -323,7 +326,7 @@ interface AutoAssignConfig {
       @if (showSec('rules')) {
       <!-- No-scan override (tenant-wide) -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/></svg></span><h3 class="pf-card__label pf-ls__title">Allow no-scan claim (supervisor override)</h3><span class="pf-card__spacer"></span>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/></svg></span><h3 class="pf-card__label pf-ls__title">Allow no-scan claim (supervisor override)</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span><span class="pf-card__spacer"></span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="allowNoScan()" aria-label="Allow no-scan claim (supervisor override)"
                   (click)="setAllowNoScan(!allowNoScan())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
@@ -344,7 +347,7 @@ interface AutoAssignConfig {
            inventory module, so an admin can't turn on a module they don't have. -->
       @if (entitlements.moduleEnabled('inventory')) {
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></span><h3 class="pf-card__label pf-ls__title">Enable inventory</h3><span class="pf-card__spacer"></span>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></span><h3 class="pf-card__label pf-ls__title">Enable inventory</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span><span class="pf-card__spacer"></span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="inventoryEnabled()" aria-label="Enable inventory"
                   (click)="setInventoryEnabled(!inventoryEnabled())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
@@ -366,7 +369,7 @@ interface AutoAssignConfig {
            Revenue policy — billing / organisation admins only (never the
            Lab Admin (Technical) role); the server refuses it the same way. -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span><h3 class="pf-card__label pf-ls__title">Require full payment to progress</h3></div>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span><h3 class="pf-card__label pf-ls__title">Require full payment to progress</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Choose where an unpaid balance blocks the workflow. Sample <em>collection</em> is never blocked —
@@ -389,15 +392,15 @@ interface AutoAssignConfig {
       }
 
       @if (showSec('collection')) {
-      <!-- Specimen label CODE — an org-wide policy. Label SIZE + printer + darkness
+      <!-- Specimen label CODE — a per-branch policy (branch-lab-config). Label SIZE + printer + darkness
            are per-station (a user's Print settings), never stored in the cloud. -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg></span><h3 class="pf-card__label pf-ls__title">Specimen label code</h3></div>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg></span><h3 class="pf-card__label pf-ls__title">Specimen label code</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
-          The <strong>one</strong> machine-readable code printed on every tube label across the
-          organisation. A tube label can't fit more than one. Label size, printer &amp; darkness
-          are set per station under <strong>Print settings</strong> (profile menu).
+          The <strong>one</strong> machine-readable code printed on every tube label in this
+          branch. A tube label can't fit more than one. Label size, printer &amp; darkness
+          are set per station under <strong>Printing</strong> (profile menu).
         </p>
 
         <div class="pf-ls__gate mt-3" role="radiogroup">
@@ -420,7 +423,7 @@ interface AutoAssignConfig {
       @if (showSec('rules')) {
       <!-- Require validation for all results -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><h3 class="pf-card__label pf-ls__title">Require validation for all results</h3><span class="pf-card__spacer"></span>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><h3 class="pf-card__label pf-ls__title">Require validation for all results</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span><span class="pf-card__spacer"></span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="requireValidation()" aria-label="Require validation for all results"
                   (click)="setRequireValidation(!requireValidation())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
@@ -438,7 +441,7 @@ interface AutoAssignConfig {
       @if (showSec('rules') && canManagePayments()) {
       <!-- Front-desk Payments-due tab visibility (billing admins only). -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Show "Payments due" tab</h3><span class="pf-card__spacer"></span>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Show "Payments due" tab</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span><span class="pf-card__spacer"></span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="showPaymentsDue()" aria-label="Show &quot;Payments due&quot; tab"
                   (click)="setShowPaymentsDue(!showPaymentsDue())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
@@ -454,28 +457,19 @@ interface AutoAssignConfig {
       }
 
       @if (showSec('report')) {
-      <!-- Consolidated abnormal-results sheet — a report template option
-           (metadata), so every viewer's report renders it identically. -->
-      <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h3M8 17h3M15 12v6M13 14l2-2 2 2"/></svg></span><h3 class="pf-card__label pf-ls__title">Consolidated abnormal results sheet</h3><span class="pf-card__spacer"></span>
-          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="abnormalSummaryOn()"
-                  aria-label="Consolidated abnormal results sheet" [disabled]="!reportTpl() || savingReportOption()"
-                  (click)="setAbnormalSummary(!abnormalSummaryOn())">
-            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-          </button>
-        </div>
+      <!-- The consolidated abnormal-results sheet is a report-template option:
+           its ONE switch lives in Report Template › Results table (with the
+           live preview). A pointer here, never a second switch. -->
+      <section class="pf-card pf-ls__card" data-testid="ls-abnormal-link">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></span><h3 class="pf-card__label pf-ls__title">Report layout</h3></div>
         <div class="pf-ls__cardbody">
           <p class="pf-ls__hint">
-            Print a first page listing every <strong>high</strong> and <strong>low</strong> result, grouped by
-            department and test, before the department pages. Only validated values the report prints are listed;
-            a report with none prints no summary page.
+            The consolidated abnormal results sheet, columns, letterhead and the rest of the report layout
+            are set in <strong>Report Template</strong>.
           </p>
-          @if (reportTpl() === null) {
-            <p class="pf-ls__warn">Save the report design once (Admin → Report design) to turn this on.</p>
-          }
-          <button type="button" class="pf-ls__link" style="margin-top: 10px;" (click)="goReportTemplate()">
-            Preview in the report designer
-          </button>
+          <div class="pf-ls__links">
+            <button type="button" class="pf-btn pf-btn--secondary pf-ls__linkbtn" (click)="goReportTemplate()">Open Report Template</button>
+          </div>
         </div>
       </section>
       }
@@ -485,7 +479,7 @@ interface AutoAssignConfig {
            result-entry switches): the bench writes rich-text notes that print
            under a test, a profile, a department section or the whole report. -->
       <section class="pf-card pf-ls__card" data-testid="ls-tech-notes">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Technician notes on report</h3><span class="pf-card__spacer"></span>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Technician notes on report</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span><span class="pf-card__spacer"></span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="techReportNotes()"
                   aria-label="Technician notes on report" (click)="setTechReportNotes(!techReportNotes())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
@@ -507,7 +501,7 @@ interface AutoAssignConfig {
       <!-- WhatsApp auto-send (Meta Cloud API): tenant switch; the sender
            number + token are platform config on the server. -->
       <section class="pf-card pf-ls__card" data-testid="ls-whatsapp">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Send WhatsApp automatically when the report is ready</h3><span class="pf-card__spacer"></span>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Send WhatsApp automatically when the report is ready</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span><span class="pf-card__spacer"></span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.autoSendEnabled"
                   aria-label="Send WhatsApp automatically when the report is ready" [disabled]="waSaving() || !canManageWa()"
                   (click)="saveWa({ autoSendEnabled: !waSettings()!.autoSendEnabled })">
@@ -562,7 +556,7 @@ interface AutoAssignConfig {
       @if (showSec('queues')) {
       <!-- Auto-assign per department -->
       <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><h3 class="pf-card__label pf-ls__title">Auto-assign by department</h3></div>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><h3 class="pf-card__label pf-ls__title">Auto-assign by department</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           Two independent legs. <strong>Technicians</strong> — when a sample is received, each test is
@@ -684,6 +678,18 @@ interface AutoAssignConfig {
     /* ── ND audit: kit cards (BILLING header), slate switches, neutral radios ── */
     .pf-ls__card { margin-bottom: 16px; }
     .pf-ls__card .pf-ls__title.pf-card__label { font-size: 13px; }
+    /* Where a card applies: a quiet neutral chip after the title. */
+    .pf-ls__scope {
+      flex: none; margin-left: 8px; padding: 2px 8px; border-radius: 999px;
+      border: 1px solid var(--pf-line); background: var(--pf-chip-bg);
+      font-size: 11px; font-weight: 600; line-height: 1.4; color: var(--text-secondary);
+      text-transform: none; letter-spacing: 0; white-space: nowrap;
+    }
+    .pf-ls__scope--all { color: var(--text-tertiary); }
+    .pf-ls__scopenote { margin: 0 0 12px; font-size: 12.5px; line-height: 1.55; color: var(--text-tertiary); }
+    .pf-ls__scopenote strong { color: var(--text-secondary); font-weight: 600; }
+    .pf-ls__links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .pf-ls__linkbtn { min-height: 40px; }
     .pf-ls__cardbody { padding: 14px 18px 18px; }
     .pf-ls__cardbody > .pf-ls__hint:first-child { margin-top: 0; }
     .pf-ls__switch { flex: none; }
@@ -860,6 +866,15 @@ export class LabSettingsComponent implements OnInit {
       return src.pipe(finalize(() => this.pendingSaves.update(n => Math.max(0, n - 1))));
     });
   }
+  /** Switch tab and keep it in the URL (`?tab=`, replacing this history
+   *  entry) so a reload, a shared link and back all return to it. */
+  pickTab(t: LabSettingsTab): void {
+    this.tab.set(t);
+    void this.router.navigate([], { queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+  /** The branch the per-branch cards on this page apply to (the signed-in /
+   *  active branch — the server scopes branch-lab-config to it). */
+  readonly branchName = computed(() => this.auth.activeBranch?.()?.name ?? this.auth.user()?.branchName ?? 'this branch');
   showSec(key: LabSettingsTab): boolean {
     return !this.theme.isNewDesign() || this.tab() === key;
   }
@@ -914,20 +929,6 @@ export class LabSettingsComponent implements OnInit {
     { value: 'integrated', label: 'Integrated', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared tube with the Lab-code prefix. Space arrangement on the Branches board is ignored.' },
     { value: 'standalone', label: 'Standalone', desc: 'Every department keeps its own sample-ID prefix (the department code). Tubes are still shared: one tube per tube type per visit, whatever the department.' },
   ];
-  // ── Sample ID — running-number width of the short sample barcode ──
-  /** Editable number width (1–9). Seeded from the tenant once it loads. */
-  protected readonly sampleNumberWidth = signal(5);
-  /** Keep the editable signal in sync with the loaded/saved tenant. */
-  private readonly _swSync = effect(() => {
-    const w = this.tenantState.tenant()?.sampleNumberWidth;
-    if (typeof w === 'number') this.sampleNumberWidth.set(Math.min(Math.max(w, 1), 9));
-  });
-  /** Live example barcode: dept 01 + last-2-digit year + zero-padded number. */
-  protected readonly sampleBarcodePreview = computed(() => {
-    const yy = String(new Date().getFullYear() % 100).padStart(2, '0');
-    const width = Math.min(Math.max(this.sampleNumberWidth() || 1, 1), 9);
-    return '01' + yy + '1'.padStart(width, '0');
-  });
   readonly collectionMode = this.labCfg.collectionMode;
   readonly billingMode = this.labCfg.billingMode;
 
@@ -1031,30 +1032,9 @@ export class LabSettingsComponent implements OnInit {
     });
   }
 
-  // ── Consolidated abnormal-results sheet (report template metadata option) ──
-  /** The lab's report template — `undefined` while loading, `null` when the
-   *  lab has never saved one (the switch then stays off / disabled: posting a
-   *  bare template would replace the lab's defaults). */
-  protected readonly reportTpl = signal<ReportTemplate | null | undefined>(undefined);
-  protected readonly savingReportOption = signal(false);
-  readonly abnormalSummaryOn = computed(() => readReportOption(this.reportTpl(), 'abnormalSummary'));
-  setAbnormalSummary(v: boolean) {
-    const prev = this.reportTpl();
-    if (!prev || this.savingReportOption()) return;
-    // The template POST replaces the whole row: send every field back, with
-    // only the one option changed (other metadata keys kept).
-    const next: ReportTemplate = { ...prev, metadata: writeReportOption(prev, 'abnormalSummary', v) };
-    this.reportTpl.set(next);
-    this.savingReportOption.set(true);
-    this.api.post('/api/config/report-template', next).pipe(this.tracked()).subscribe({
-      next: () => {
-        this.savingReportOption.set(false);
-        this.toasts.success(v ? 'Reports now open with a summary of abnormal results' : 'Summary of abnormal results turned off');
-      },
-      error: e => { this.reportTpl.set(prev); this.savingReportOption.set(false); this.toasts.error(ApiError.from(e).message); }
-    });
-  }
   goReportTemplate() { this.router.navigate(['/admin/reports'], { queryParams: { tab: 'table' } }); }
+  goSampleIdFormat() { this.router.navigate(['/admin/organization'], { queryParams: { tab: 'sample' } }); }
+  goBranches() { this.router.navigate(['/admin/branches']); }
 
   // ── WhatsApp auto-send (Meta Cloud API) ──
   private readonly wa = inject(WhatsAppService);
@@ -1099,15 +1079,13 @@ export class LabSettingsComponent implements OnInit {
 
   ngOnInit() {
     this.destroyRef.onDestroy(() => this.loadHold.cancel());
-    // Deep link: …/lab-settings?tab=report opens the Report tab (WhatsApp lives there).
-    if (this.router.parseUrl(this.router.url).queryParams['tab'] === 'report') this.tab.set('report');
+    // Deep link: …/lab-settings?tab=<collection|queues|rules|report> opens that
+    // tab (the settings search and other pages link straight to a card).
+    const t = this.router.parseUrl(this.router.url).queryParams['tab'];
+    if ((LAB_SETTINGS_TABS as readonly string[]).includes(t)) this.tab.set(t as LabSettingsTab);
     this.wa.settings().subscribe({
       next: s => { if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s); },
       error: () => this.waSettings.set(null),   // no permission / older server → card hidden
-    });
-    this.api.get<ReportTemplate | null>('/api/config/report-template').subscribe({
-      next: t => this.reportTpl.set(t && typeof t === 'object' && !Array.isArray(t) ? t : null),
-      error: () => this.reportTpl.set(null),
     });
     this.tenantState.ensureLoaded();
     this.samplePresets.reload();
@@ -1347,14 +1325,6 @@ export class LabSettingsComponent implements OnInit {
   }
 
   /** Clamp to 1–9, then PATCH the tenant-wide sample number width. */
-  saveSampleNumberWidth() {
-    const width = Math.min(Math.max(Math.trunc(this.sampleNumberWidth() || 1), 1), 9);
-    this.sampleNumberWidth.set(width);
-    this.api.patch<Tenant>('/api/tenants/current', { sampleNumberWidth: width }).pipe(this.tracked()).subscribe({
-      next: t => { this.tenantState.update(t); this.toasts.success('Sample number width saved'); },
-      error: e => this.toasts.error(ApiError.from(e).message)
-    });
-  }
 
   // Billing/collection modes are now derived from the active Workflow.
   goWorkflow() { this.router.navigate(['/admin/process']); }

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { canOpenRoute } from '../../core/auth/route-access';
 import { ApiService } from '../../core/services/api.service';
@@ -8,6 +8,8 @@ import { NavBackService } from '../../core/services/nav-back.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../shared/primitives/segmented.component';
+import { SettingsCatalogService } from '../../core/services/settings-catalog.service';
+import { SettingsResultsComponent } from '../../shared/components/settings-results/settings-results.component';
 
 interface SeedSummary {
   tenants: number;
@@ -60,7 +62,7 @@ interface Category {
 @Component({
   selector: 'pf-admin-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe, HeroBandComponent, SegmentedComponent],
+  imports: [RouterLink, DatePipe, HeroBandComponent, SegmentedComponent, SettingsResultsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-admin-page pf-band-page">
@@ -68,7 +70,7 @@ interface Category {
         <!-- Band pill (owner): the settings search, and the category switch
              inside the pill so any category is one tap away. -->
         <pf-hero-band [back]="true" placeholder="Search settings — inventory, invoice, patient ID…"
-                      [value]="q()" (valueChange)="setQ($event)">
+                      [value]="q()" (valueChange)="setQ($event)" (submitted)="openTopHit()">
           <ng-container band-tools>
             <pf-segmented class="pf-admin-catseg" size="sm" [options]="categoryOptions" [value]="active()"
                           (valueChange)="pickCategory($event)"></pf-segmented>
@@ -89,6 +91,7 @@ interface Category {
         <div class="pf-admin-hdr__right">
           <input class="pf-admin-search" type="search" [value]="q()"
                  (input)="setQ($any($event.target).value)"
+                 (keydown.enter)="openTopHit()"
                  placeholder="Search settings — inventory, invoice, patient ID…"
                  aria-label="Search admin settings" />
         </div>
@@ -101,38 +104,11 @@ interface Category {
              shows just the selected category full-width. Back returns to it. -->
         <div class="pf-admin-pane pf-card">
           @if (q().trim()) {
-            <header class="pf-card__head pf-admin-pane__hdr">
-              <span class="pf-card__icon pf-admin-pane__chip">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-              </span>
-              <h2 class="pf-card__label pf-admin-pane__title">Search results</h2>
-              <p class="pf-card__note pf-admin-pane__blurb">for “{{ q() }}”</p>
-              <span class="pf-admin-pane__count pf-num">{{ results().length }} {{ results().length === 1 ? 'match' : 'matches' }}</span>
-            </header>
-            <div class="pf-admin-pane__grid">
-              @for (r of results(); track r.tile.title) {
-                <a [routerLink]="r.tile.href" [queryParams]="r.tile.queryParams ?? null"
-                   class="pf-admin-tile pf-row group press">
-                  <span class="pf-card__icon pf-admin-tile__icon">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
-                         stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path [attr.d]="r.tile.iconPath"/>
-                      @if (r.tile.iconExtra) { <path [attr.d]="r.tile.iconExtra"/> }
-                    </svg>
-                  </span>
-                  <div class="pf-admin-tile__body">
-                    <p class="pf-admin-tile__title">{{ r.tile.title }}</p>
-                    <p class="pf-admin-tile__sub">{{ r.cat.label }}</p>
-                  </div>
-                  <span class="pf-admin-tile__arrow">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-6 6 6-6 6"/></svg>
-                  </span>
-                </a>
-              } @empty {
-                <p class="pf-band-empty">No settings match “{{ q() }}”.</p>
-              }
+            <!-- Search: the ONE settings catalog + precise matcher — every
+                 setting and page (not just this category), one ranked row per
+                 hit with where it lives; Enter opens the top row. -->
+            <div class="pf-admin-pane__results">
+              <pf-settings-results [hits]="results()" [query]="q()"></pf-settings-results>
             </div>
           } @else if (activeCategory(); as cat) {
             <header class="pf-card__head pf-admin-pane__hdr">
@@ -274,6 +250,7 @@ interface Category {
     .pf-admin-pane__grid { margin-top: 16px; }
     .pf-admin-pane > :last-child { margin-bottom: 16px; }
     .pf-admin-pane__title { margin: 0; }
+    .pf-admin-pane__results { padding: 16px 16px 0; }
     .pf-admin-pane__count { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
     .pf-admin-pane__grid {
       display: grid;
@@ -472,7 +449,7 @@ export class AdminDashboardComponent implements OnInit {
       gradient: 'amber',
       iconPath: 'M3 5h18v14H3z',
       iconExtra: 'M3 10h18M7 15h3',
-      blurb: 'Money flow — GST registration, discount policy, invoice numbering, vendor (B2B) wallets.',
+      blurb: 'Money flow — GST registration, discount policy, invoice numbering, the daily statement and expenses.',
       tiles: [
         { title: 'Finance', href: '/finance', gradient: 'emerald',
           iconPath: 'M3 3v18h18', iconExtra: 'M7 14l4-4 3 3 5-6',
@@ -486,10 +463,6 @@ export class AdminDashboardComponent implements OnInit {
         { title: 'Expenses',  href: '/expenses', gradient: 'amber',
           iconPath: 'M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5Z', iconExtra: 'M8 8h8M8 12h8M8 16h5',
           subtitle: () => 'Staff expenses · bills · cashier day closing' },
-        { title: 'Vendor Credit Wallets',  href: '/admin/vendors', gradient: 'fuchsia',
-          iconPath: 'M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14',
-          iconExtra: 'M17 14h.01',
-          subtitle: () => 'B2B credit accounts · top-ups & usage' },
       ]
     },
     {
@@ -535,34 +508,36 @@ export class AdminDashboardComponent implements OnInit {
     label: ({ people: 'People & Access', org: 'Branches & Org', finance: 'Billing & Finance', automation: 'Platform' } as Record<string, string>)[c.id] ?? c.label,
     iconPath: [c.iconPath, ...(c.iconExtra ? [c.iconExtra] : [])],
   }));
-  /** Picking a category from the pill leaves search mode so the pick shows. */
-  pickCategory(id: string) { this._q.set(''); this._active.set(id); }
+  /** Picking a category from the pill leaves search mode so the pick shows,
+   *  and keeps it in the URL (`?cat=`, replacing this history entry) so
+   *  browser back / a child page's back returns to the same category. */
+  pickCategory(id: string) {
+    this._q.set('');
+    this._active.set(id);
+    if (this.route) {
+      void this.router.navigate([], { relativeTo: this.route, queryParams: { cat: id }, queryParamsHandling: 'merge', replaceUrl: true });
+    }
+  }
 
-  // Admin-wide tile search: flatten every category's tiles and match on title,
-  // subtitle, and category label so a setting is one keystroke away.
+  // Settings search: the ONE catalog (every setting + page, filtered to what
+  // this person can open) and the ONE precise matcher (settings-search.ts).
+  private readonly catalog = inject(SettingsCatalogService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute, { optional: true });
   private readonly _q = signal('');
   readonly q = this._q.asReadonly();
   setQ(v: string) { this._q.set(v ?? ''); }
-  readonly results = computed<{ tile: Tile; cat: Category }[]>(() => {
-    const term = this._q().trim().toLowerCase();
-    if (!term) return [];
-    const out: { tile: Tile; cat: Category }[] = [];
-    for (const cat of this.categories) {
-      for (const tile of cat.tiles) {
-        let sub = '';
-        try { sub = tile.subtitle() ?? ''; } catch { /* summary not loaded */ }
-        if (`${tile.title} ${sub} ${cat.label} ${cat.blurb}`.toLowerCase().includes(term)) {
-          out.push({ tile, cat });
-        }
-      }
-    }
-    return out;
-  });
+  readonly results = computed(() => this.catalog.search(this._q()));
+  /** Enter in the search opens the top hit. */
+  openTopHit(): void {
+    const top = this.results()[0];
+    if (top) void this.router.navigate([top.href], { queryParams: top.queryParams ?? {} });
+  }
 
   ngOnInit(): void {
     // Optional deep-link: /admin?cat=billing routes straight in.
-    const params = new URLSearchParams(window.location.search);
-    const cat = params.get('cat');
+    const cat = this.route?.snapshot.queryParamMap.get('cat')
+      ?? new URLSearchParams(window.location.search).get('cat');
     if (cat && this.categories.some(c => c.id === cat)) this._active.set(cat);
     this.api.get<SeedSummary>('/api/_seed/summary').subscribe({
       next: s => this._summary.set(s)

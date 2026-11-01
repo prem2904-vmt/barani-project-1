@@ -164,7 +164,12 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // Report design saves on manage_report_template (ConfigController / ReportLayoutController).
   '/admin/reports':           { perms: ['manage_tenant', 'manage_tests', 'manage_report_template'] },
   '/admin/referring-network': { perms: ['manage_tenant', 'manage_admin'] },
-  '/admin/partners':          { perms: ['manage_tenant', 'manage_tests', 'manage_admin'] },
+  // The Referral & Vendors hub is the ONE home of Referral Labs / Partner
+  // Prices / Vendor Wallets / Referring Network (links only — each tile keeps
+  // its own guard and the hub hides tiles a person can't open). Test-master
+  // perms open it so a Lab Admin (Technical) still reaches Referral Labs +
+  // Partner Prices, which the Lab hub used to list directly.
+  '/admin/partners':          { perms: ['manage_tenant', 'manage_admin', ...TEST_MASTER_PERMS] },
   '/admin/notifications':     { perms: ['manage_tenant', 'manage_notifications'] },
   '/admin/workflows':         { perms: ['manage_workflows'] },
   '/admin/process':           { perms: ['manage_workflows'] },

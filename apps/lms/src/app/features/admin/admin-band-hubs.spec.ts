@@ -32,8 +32,16 @@ describe('Admin band — tile hubs', () => {
       p.type(h.hit);
       expect(tiles().length).toBeGreaterThan(0);
       expect(tiles().length).toBeLessThanOrEqual(all);
-      expect(tiles().every((t) => t.toLowerCase().includes(h.hit))).toBe(true);
-      expect(tiles().some((t) => t.includes(h.expect))).toBe(true);
+      // Precise search (settings-search.ts): ranked by title first, so the
+      // tile whose TITLE matches leads; other tiles match by the settings on
+      // their page (keywords), never by a word inside the subtitle.
+      if (h.cmp === OpdAdminComponent) {
+        // OPD hub keeps the plain band filter (not a settings-catalog hub).
+        expect(tiles().every((t) => t.toLowerCase().includes(h.hit))).toBe(true);
+        expect(tiles().some((t) => t.includes(h.expect))).toBe(true);
+      } else {
+        expect(tiles()[0]).toContain(h.expect);
+      }
       p.type('zzzz-nothing');
       expect(tiles().length).toBe(0);
       expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();

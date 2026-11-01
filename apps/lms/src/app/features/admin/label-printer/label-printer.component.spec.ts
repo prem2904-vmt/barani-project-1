@@ -194,7 +194,7 @@ describe('Printing (ND) — every control writes the same station config', () =>
   it('the code is read-only here with a Lab settings link for admins only', () => {
     const p = render();
     expect(p.$('.pf-lp-codechip')!.textContent!.trim()).toBe('Barcode');
-    expect(p.$('a.pf-lp-codelink')!.getAttribute('href')).toBe('/admin/lab-settings');
+    expect(p.$('a.pf-lp-codelink')!.getAttribute('href')).toBe('/admin/lab-settings?tab=collection');
     TestBed.resetTestingModule();
     const q = render({ providers: [{ provide: AuthService, useValue: {
       user: () => ({ tenantName: 'Micro World', permissions: [] }), hasPermission: () => false, hasAnyPermission: () => false,

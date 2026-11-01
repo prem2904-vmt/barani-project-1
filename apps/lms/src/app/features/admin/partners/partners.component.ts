@@ -1,9 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ThemeService } from '../../../core/services/theme.service';
-import { bandFilter } from '../../../shared/utils/band-search';
+import { filterSettingsTiles } from '../../../shared/utils/settings-search';
+import { settingsKeywordsFor } from '../../../shared/utils/settings-catalog';
+import { AuthService } from '../../../core/auth/auth.service';
+import { canOpenRoute } from '../../../core/auth/route-access';
 
 interface PartnerTile {
   title: string;
@@ -30,7 +33,7 @@ interface PartnerTile {
       @if (theme.isNewDesign()) {
         <!-- Band pill (owner): the hub's search filters its tiles. -->
         <pf-hero-band [back]="true" placeholder="Search referral labs, vendors, referring network…"
-                      [value]="q()" (valueChange)="q.set($event)"></pf-hero-band>
+                      [value]="q()" (valueChange)="q.set($event)" (submitted)="openTop()"></pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
         eyebrow="Admin"
@@ -60,7 +63,7 @@ interface PartnerTile {
         }
       </div>
       @if (!visibleTiles().length) {
-        <p class="pf-band-empty">No partners match "{{ q() }}".</p>
+        <p class="pf-band-empty">No settings match “{{ q() }}”.</p>
       }
       </div>
     </section>
@@ -98,9 +101,26 @@ interface PartnerTile {
 })
 export class PartnersComponent {
   protected readonly theme = inject(ThemeService);
-  /** Band pill search over the tiles (title + subtitle). */
+  /** Band pill search over the tiles — the ONE precise matcher (title +
+   *  the page's keywords, never the subtitle). */
   readonly q = signal('');
-  readonly visibleTiles = computed(() => bandFilter(this.tiles, this.q(), (t) => [t.title, t.subtitle]));
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  /** Only tiles whose page this person can open (the same ROUTE_ACCESS the
+   *  guards use) — a Lab Admin (Technical) sees Referral Labs + Partner
+   *  Prices, never a tile that lands on /403. */
+  readonly openableTiles = computed(() => {
+    if (typeof this.auth?.hasAnyPermission !== 'function') return this.tiles.slice();
+    const ctx = { hasAny: (p: string[]) => this.auth.hasAnyPermission(p) };
+    return this.tiles.filter((t) => canOpenRoute(t.href, ctx));
+  });
+  readonly visibleTiles = computed(() =>
+    filterSettingsTiles(this.openableTiles(), this.q(), (t) => t.title, (t) => settingsKeywordsFor(t.href)));
+  /** Enter in the band search opens the top tile. */
+  openTop(): void {
+    const top = this.q().trim() ? this.visibleTiles()[0] : undefined;
+    if (top) void this.router.navigateByUrl(top.href);
+  }
 
   readonly tiles: PartnerTile[] = [
     { title: 'Referral Labs', href: '/admin/referral-labs',

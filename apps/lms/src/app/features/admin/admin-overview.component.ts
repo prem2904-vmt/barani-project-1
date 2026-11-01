@@ -9,7 +9,7 @@ import {
 import { DatePipe } from "@angular/common";
 import { ThemeService } from "../../core/services/theme.service";
 import { HeroBandComponent } from "../../shared/components/hero-band/hero-band.component";
-import { RouterLink } from "@angular/router";
+import { Router, RouterLink } from "@angular/router";
 import { AuthService } from "../../core/auth/auth.service";
 import { OpdGateService } from "../opd/shared/opd-gate.service";
 import { canOpenRoute } from "../../core/auth/route-access";
@@ -21,6 +21,8 @@ import { ToastService } from "../../core/services/toast.service";
 import { testListUrl } from '../../shared/utils/test-list-url';
 import { addDays, istDayRange, labToday } from "../../shared/utils/lab-clock";
 import { BusyDirective } from '../../shared/directives/busy.directive';
+import { SettingsCatalogService } from '../../core/services/settings-catalog.service';
+import { SettingsResultsComponent } from '../../shared/components/settings-results/settings-results.component';
 
 interface SeedSummary {
   tenants: number;
@@ -66,7 +68,7 @@ interface KpiCard {
 @Component({
   selector: "pf-admin-overview",
   standalone: true,
-  imports: [BusyDirective, RouterLink, DatePipe, HeroBandComponent],
+  imports: [BusyDirective, RouterLink, DatePipe, HeroBandComponent, SettingsResultsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-ov pf-band-page">
@@ -77,6 +79,7 @@ interface KpiCard {
           placeholder="Search settings & pages — users, billing, inventory, referral…"
           [value]="q()"
           (valueChange)="setQ($event)"
+          (submitted)="openTopHit()"
         >
           <ng-container band-tools>
             <!-- Date range rides in the search bar (owner) — one control
@@ -224,6 +227,7 @@ interface KpiCard {
             name="search-admin-settings"
             [value]="q()"
             (input)="setQ($any($event.target).value)"
+            (keydown.enter)="openTopHit()"
             placeholder="Search settings & pages — users, billing, inventory, referral…"
             aria-label="Search admin configuration and pages"
           />
@@ -251,42 +255,10 @@ interface KpiCard {
         </label>
 
         @if (q().trim()) {
-          <!-- Search mode: flat list of matching config screens, links straight in. -->
-          <p class="pf-ov__section">
-            {{ results().length }} match{{
-              results().length === 1 ? "" : "es"
-            }}
-            for “{{ q() }}”
-          </p>
-          <div class="pf-ov__cards">
-            @for (r of results(); track r.href) {
-              <a
-                [routerLink]="[r.href]"
-                [queryParams]="r.queryParams ?? null"
-                class="pf-ov__card pf-card press"
-              >
-                <span class="pf-card__icon pf-ov__card-ic">
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.8"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path [attr.d]="r.icon" />
-                  </svg>
-                </span>
-                <span class="pf-ov__card-t">{{ r.label }}</span>
-                <span class="pf-ov__card-s">{{ r.hint }}</span>
-              </a>
-            } @empty {
-              <p class="pf-band-empty">
-                No settings or pages match “{{ q() }}”.
-              </p>
-            }
-          </div>
+          <!-- Search mode: ONE ranked row per matching setting / page, with
+               where it lives (the one settings catalog + matcher). Enter
+               opens the top row. -->
+          <pf-settings-results [hits]="results()" [query]="q()"></pf-settings-results>
         } @else {
           <!-- Date filter -->
           <div
@@ -1264,21 +1236,14 @@ export class AdminOverviewComponent implements OnInit {
     {
       cat: "org",
       label: "Branches & Organization",
-      blurb: "Branches, departments, queue, inventory",
+      blurb: "Branches, departments, IDs, appointments, referral & vendors",
       icon: "M4 21V7l8-4 8 4v14",
     },
     {
       cat: "finance",
       label: "Billing & Finance",
-      blurb: "GST, discounts, invoices, vendor wallets",
+      blurb: "GST, discounts, invoices, daily statement",
       icon: "M3 5h18v14H3z",
-    },
-    {
-      cat: "partners",
-      label: "Referral & Vendors",
-      blurb: "Referral labs, vendor wallets & the referring network",
-      icon: "M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01",
-      href: "/admin/partners",
     },
     {
       cat: "automation",
@@ -1297,235 +1262,17 @@ export class AdminOverviewComponent implements OnInit {
     this._q.set(v ?? "");
   }
 
-  // Each page carries a rich `kw` keyword index of the settings NESTED inside it,
-  // so searching a nested term (e.g. "gst", "tube colour", "collection mode",
-  // "pin", "no-scan") surfaces the page that contains it — iPhone-Settings style.
-  readonly pages: Array<{
-    label: string;
-    href: string;
-    hint: string;
-    g: string;
-    icon: string;
-    kw: string;
-    queryParams?: Record<string, string>;
-  }> = this.openable([
-    {
-      label: "Users & Access",
-      href: "/admin/users",
-      g: "people",
-      hint: "Staff, roles & permissions",
-      icon: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 21a6.5 6.5 0 0 1 13 0M17 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
-      kw: "user staff member employee role permission access invite create user username password reset pin lock unlock deactivate reactivate role editor grant privilege login account multi account",
-    },
-    {
-      label: "Audit trail",
-      href: "/admin/audit",
-      g: "people",
-      hint: "Every change — who, when, before → after",
-      icon: "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 12h6M9 16h6",
-      kw: "audit log history change activity trail who when before after track record security",
-    },
-    {
-      label: "Branches & Departments",
-      href: "/admin/branches",
-      g: "org",
-      hint: "Branches, departments, lab spaces",
-      icon: "M4 21V7l8-4 8 4v14M9 21v-5h6v5",
-      kw: "branch region department lab space spaces integrated individual tube colour container sample code barcode prefix department catalog drag drop location building",
-    },
-    {
-      label: "Organization & Identity",
-      href: "/admin/organization",
-      g: "org",
-      hint: "Login handle · Patient/Sample/Order ID formats",
-      icon: "M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2",
-      kw: "patient id mrn number format prefix date running number identity login handle slug sample order id format",
-    },
-    {
-      label: "Appointments & queue",
-      href: "/admin/appointments",
-      g: "org",
-      hint: "Slots, timings, queue mode",
-      icon: "M8 2v4M16 2v4M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z",
-      kw: "appointment booking slot start time end time duration between appointments schedule queue mode token walk-in walk in priority no-show reminder 24x7 open hours",
-    },
-    {
-      label: "Branding",
-      href: "/setup",
-      g: "org",
-      hint: "Logo & lab name in the top bar",
-      icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
-      kw: "branding logo lab name brand top bar letterhead theme colour appearance",
-    },
-    {
-      label: "Billing Config",
-      href: "/admin/billing",
-      g: "finance",
-      hint: "GST, discounts, invoice numbering, UPI",
-      icon: "M3 5h18v14H3zM3 10h18M7 15h3",
-      kw: "billing gst tax slab hsn sac invoice number numbering series discount cap approval upi online payment razorpay payment gateway bank account place of supply interstate",
-    },
-    {
-      label: "Expenses",
-      href: "/expenses",
-      g: "finance",
-      hint: "Staff expenses, bills, cashier day closing",
-      icon: "M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5ZM8 8h8M8 12h8M8 16h5",
-      kw: "expense expenses spend spending petty cash bill receipt voucher opening closing balance day book cash book vendor payment rent salary consumables cashier day closing counted cash variance",
-    },
-    {
-      label: "Vendor Credit Wallets",
-      href: "/admin/vendors",
-      g: "finance",
-      hint: "B2B credit accounts · top-ups & usage",
-      icon: "M21 7H5a2 2 0 0 1 0-4h13v4M3 5v14a2 2 0 0 0 2 2h16V7",
-      kw: "vendor credit wallet b2b top-up topup balance referral hospital collection centre debit charge partner account",
-    },
-    {
-      label: "Referral & Vendors",
-      href: "/admin/partners",
-      g: "finance",
-      hint: "Combined partners hub — referral labs, vendors, network",
-      icon: "M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01",
-      kw: "partner referral vendor network hospital doctor outsource external lab combined hub",
-    },
-    {
-      label: "Referral Labs",
-      href: "/admin/referral-labs",
-      g: "finance",
-      hint: "Outsourced / external labs",
-      icon: "M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6",
-      kw: "referral lab outsource external subcontract send out third party commission",
-    },
-    {
-      label: "Referring Network",
-      href: "/admin/referring-network",
-      g: "org",
-      hint: "Hospitals + doctors that send patients",
-      icon: "M3 21h18M5 21V7l8-4v18M19 21V11l-6-4",
-      kw: "referring network referral hospital doctor physician send patients commission panel",
-    },
-    {
-      label: "Tests & Packages",
-      href: "/admin/tests",
-      g: "catalog",
-      hint: "Tests, parameters, reference ranges, packages",
-      icon: "M11 4h3v9c-4-1-4-7 0-9ZM6 21h14M9 17h8",
-      kw: "test package profile parameter reference range unit tat price tube colour sample type specimen methodology test code short name section critical low high result type report format outsource sku catalog fasting sample volume container",
-    },
-    {
-      label: "Report Template",
-      href: "/admin/reports",
-      g: "catalog",
-      hint: "Branding, header, columns, signatures",
-      icon: "M4 4h11l5 5v11H4zM15 4v5h5M8 14h8M8 18h6",
-      kw: "report template header footer column signature branding nabl layout logo letterhead sign-off format",
-    },
-    {
-      label: "Lab settings",
-      href: "/admin/lab-settings",
-      g: "catalog",
-      hint: "Sample finding, queues, payment and validation rules",
-      icon: "M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Z",
-      kw: "lab settings collection mode dedicated counter front desk billing mode require validation require payment before report inventory auto-assign auto assign sample number width no-scan no scan claim payments due tab",
-    },
-    {
-      label: "Printing",
-      href: "/printing",
-      g: "catalog",
-      hint: "Printer setup, label size & code, invoice printer",
-      icon: "M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M8 14h8v6H8z",
-      kw: "label printer bluetooth ble usb thermal tsc tspl sticker tube sample print weprint pair scan detonger seznik",
-    },
-    {
-      label: "Home-collection agents",
-      href: "/admin/home-collection",
-      g: "org",
-      hint: "Agents · coverage areas · weightage",
-      icon: "M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10",
-      kw: "home collection agent field pickup coverage area pincode weightage route home visit",
-    },
-    {
-      label: "Notifications",
-      href: "/admin/notifications",
-      g: "catalog",
-      hint: "In-app alerts and overdue warnings",
-      icon: "M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2ZM11 20a1 1 0 0 0 2 0",
-      kw: "notification alert in-app bell escalation critical value tat breach report ready sample rejection reminder in-app push channel",
-    },
-    {
-      label: "KPI cards",
-      href: "/admin/kpis",
-      g: "catalog",
-      hint: "Pick which KPIs show on each lab screen",
-      icon: "M3 12h4l3-9 4 18 3-9h4",
-      kw: "kpi metric card dashboard screen turnaround tat sla count analytics tile",
-    },
-    {
-      label: "Lab Settings hub",
-      href: "/lab/settings",
-      g: "catalog",
-      hint: "All lab-specific configuration",
-      icon: "M9 3h6M10 3v5.5L5.5 17A2 2 0 0 0 7.3 20h9.4a2 2 0 0 0 1.8-3L14 8.5V3",
-      kw: "lab hub settings catalog report referral notifications kpi home collection",
-    },
-    {
-      label: "Inventory",
-      href: "/admin/inventory",
-      g: "org",
-      hint: "Stock, batches, expiry alerts, usage",
-      icon: "M21 8 12 3 3 8l9 5 9-5ZM3 8v8l9 5 9-5V8M12 13v8",
-      kw: "inventory stock stores batch expiry consumable reagent kit vendor purchase order count audit reorder fefo bom per-test usage",
-    },
-    {
-      label: "Process builder",
-      href: "/admin/process",
-      g: "automation",
-      hint: "Menus, actions & role access",
-      icon: "M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M9 16h5v4H9z",
-      kw: "process workflow work area action menu nav navigation role access collect dispatch intake result validate builder drag drop",
-    },
-    {
-      label: "Form Flows",
-      href: "/admin/workflows",
-      g: "automation",
-      hint: "Register / Order / Appointment fields",
-      icon: "M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9zM9 7h6M12 14V10",
-      kw: "form flow field register patient order create appointment builder dynamic input custom field add more one page",
-    },
-    {
-      label: "Modules (Extensions)",
-      href: "/admin/modules",
-      g: "automation",
-      hint: "Enable products & their features",
-      icon: "M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z",
-      kw: "module extension enable disable feature lab ipd pharmacy radiology inventory payroll insurance entitlement product plan",
-    },
-    {
-      label: "Settings hub",
-      href: "/admin/manage",
-      g: "automation",
-      hint: "Browse every setting by category",
-      icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.6 1.6 0 0 0 .3 1.7M4.6 15a1.6 1.6 0 0 1-.3 1.7",
-      kw: "settings hub manage browse category all configuration",
-    },
-  ]);
-  readonly results = computed(() => {
-    const term = this._q().trim().toLowerCase();
-    if (!term) return [];
-    // Re-checked live: the workflow / entitlements may load after construction.
-    const pages = this.pages.filter((p) => this.canOpen(p.href));
-    // Rank: label/hint matches first, then keyword-only matches (a nested setting
-    // name surfacing its page) — so the most relevant page leads.
-    const head = pages.filter((p) =>
-      `${p.label} ${p.hint}`.toLowerCase().includes(term),
-    );
-    const headSet = new Set(head);
-    const kwOnly = pages.filter(
-      (p) => !headSet.has(p) && p.kw.toLowerCase().includes(term),
-    );
-    return [...head, ...kwOnly];
-  });
+  // The search reads the ONE settings catalog (shared/utils/settings-catalog)
+  // with the ONE precise matcher — titles + keywords, whole words / prefixes,
+  // ranked; filtered to what this person can open.
+  private readonly catalog = inject(SettingsCatalogService);
+  private readonly router = inject(Router);
+  readonly results = computed(() => this.catalog.search(this._q()));
+  /** Enter in the search opens the top hit. */
+  openTopHit(): void {
+    const top = this.results()[0];
+    if (top) void this.router.navigate([top.href], { queryParams: top.queryParams ?? {} });
+  }
 
   ngOnInit(): void {
     this.api

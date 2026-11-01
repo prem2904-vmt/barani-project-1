@@ -48,7 +48,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
   template: `
     <section class="pf-brl pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <pf-hero-band [back]="true" backTo="/lab/settings" placeholder="Search Bridges — name, serial, branch, Wi-Fi, analyzer…"
+        <pf-hero-band [back]="true" placeholder="Search Bridges — name, serial, branch, Wi-Fi, analyzer…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…"
