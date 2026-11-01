@@ -1124,6 +1124,11 @@ export class AuthService {
       opdEntitled: data.opdEntitled ?? false
     };
     this._meMustChangePassword = data.mustChangePassword === true;
+    // A restored session (reload / reopened app) never passed through the
+    // sign-in that raises the gate: raise it here from /me so the person is
+    // held on /set-password (core/auth/password-gate) instead of an app whose
+    // every call answers 403. Only ever RAISED here — changePassword clears it.
+    if (this._meMustChangePassword) this._mustChangePassword.set(true);
     this.applyProfile(user, { fromCache: false });
     this.cacheProfile(user);
     this._lastProfileLoadedAt = Date.now();

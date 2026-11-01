@@ -12,6 +12,7 @@ import { LockScreenComponent } from './shared/components/lock-screen.component';
 import { SwitchScreenComponent } from './shared/components/switch-screen.component';
 import { isPublicPatientPath } from './core/navigation/public-paths';
 import { SessionService } from './core/auth/session.service';
+import { installPasswordGate } from './core/auth/password-gate';
 import { BusyComponent } from './shared/primitives/skeleton-kit.component';
 import { OpdGateService } from './features/opd/shared/opd-gate.service';
 import { BetaFeaturesService } from './core/services/beta-features.service';
@@ -184,6 +185,8 @@ export class App implements OnInit {
   /** Owns the ordered sign-out; also registers itself with AuthService so
    *  an expiry detected there runs the same sequence. */
   protected readonly session = inject(SessionService);
+  /** Temp-password gate on a restored session (reload before the change). */
+  private readonly _passwordGate = installPasswordGate();
   /** Root owner of call ringtones — alive on every screen (incl. /login),
    *  so a ring always stops on a terminal call state or account switch. */
   private readonly _ring = inject(CallRingService);

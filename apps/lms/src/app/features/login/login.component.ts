@@ -8,6 +8,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { AccountsService } from '../../core/auth/accounts.service';
 import { SessionService } from '../../core/auth/session.service';
+import { setPasswordUrl } from '../../core/auth/password-gate';
 import { LogoMarkComponent } from '../../shared/primitives/logo-mark.component';
 import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
 import { AmbientBgComponent } from '../../shared/components/ambient-bg/ambient-bg.component';
@@ -43,11 +44,8 @@ export function safeReturnUrl(url: string | null): string | null {
   return SessionService.isReturnable(url) ? url : null;
 }
 
-/** /set-password, keeping a safe return URL for after the new password. */
-export function setPasswordUrl(returnUrl: string | null): string {
-  const safe = safeReturnUrl(returnUrl);
-  return safe ? `/set-password?returnUrl=${encodeURIComponent(safe)}` : '/set-password';
-}
+/** /set-password, keeping a safe return URL (one home: core/auth/password-gate). */
+export { setPasswordUrl };
 
 @Component({
   selector: 'pf-login',

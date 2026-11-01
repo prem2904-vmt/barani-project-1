@@ -37,7 +37,9 @@ import { AmbientBgComponent } from '../../shared/components/ambient-bg/ambient-b
   imports: [FormsModule, LogoMarkComponent, LoadingLogoComponent, AmbientBgComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './set-password.component.html',
-  styleUrl: './set-password.component.scss',
+  // The sign-in screen's stylesheet is this page's base: same shell, brand,
+  // card and fields (the Oct-31 Tailwind rewrite drifted from it).
+  styleUrls: ['../login/login.component.scss', './set-password.component.scss'],
   host: { '[class.lg-host--kb]': 'kb.visible()' },
 })
 export class SetPasswordComponent implements AfterViewInit {
@@ -65,6 +67,8 @@ export class SetPasswordComponent implements AfterViewInit {
   /** Live, non-blocking strength/validity hints shown under the field. */
   protected readonly tooShort = computed(() => this.pw().length > 0 && this.pw().length < 8);
   protected readonly mismatch = computed(() => this.confirm().length > 0 && this.confirm() !== this.pw());
+  /** The new-password box shows red: too short, or a length error on submit. */
+  protected readonly newPwInvalid = computed(() => this.tooShort() || (!!this.error() && (this.pw().length < 8 || this.pw().length > 64)));
 
   /** True when running inside Capacitor (iOS/Android), false on web. */
   protected readonly isNative = computed(() => this.platform.isCapacitor());
@@ -98,11 +102,6 @@ export class SetPasswordComponent implements AfterViewInit {
     queueMicrotask(() => this.newPassInput()?.nativeElement.focus());
   }
 
-  protected canSubmit(): boolean {
-    const p = this.pw();
-    return p.length >= 8 && p.length <= 64 && p === this.confirm();
-  }
-
   protected onEnterNewPassword(ev: Event): void {
     ev.preventDefault();
     this.confirmPassInput()?.nativeElement.focus();
@@ -110,9 +109,8 @@ export class SetPasswordComponent implements AfterViewInit {
 
   protected onEnterConfirmPassword(ev: Event): void {
     ev.preventDefault();
-    if (this.canSubmit()) {
-      void this.submit(ev);
-    }
+    // Always submit: an invalid pair gets its reason inline, never silence.
+    void this.submit(ev);
   }
 
   async submit(ev?: Event) {
