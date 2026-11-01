@@ -63,7 +63,7 @@ interface Breakpoint {
       @if (!m().noGrowth) {
         @if (plateOn()) {
           <!-- The PLATE, measured BEFORE the organism (SME flow): OpenCV
-               measures every zone, PF Sense reads the codes against the whole
+               measures every zone, Cortex reads the codes against the whole
                antibiotic master; held on the case until the organism is known. -->
           <section class="ce-plate" aria-label="Plate">
             <div class="ce-plate__head">
@@ -94,7 +94,7 @@ interface Breakpoint {
                    : 'Assign the organism — CLSI breakpoints are applied and S / I / R is worked out.' }}
               </p>
             } @else {
-              <p class="ce-plate__note">Measure the AST plate now, before the organism is known. PF Sense reads each disk against the whole antibiotic list; the table fills in once the organism is identified.</p>
+              <p class="ce-plate__note">Measure the AST plate now, before the organism is known. Cortex reads each disk against the whole antibiotic list; the table fills in once the organism is identified.</p>
             }
             @if (plateError()) { <p class="ce-plate__err" role="alert">{{ plateError() }}</p> }
           </section>
@@ -417,7 +417,7 @@ interface Breakpoint {
       }
       @if (orgMeasureOpen() && orgMeasureReady()) {
         <!-- The culture case's MAIN path (Identification header → Measure):
-             plate → PF Sense codes → pick the organism INSIDE the measure →
+             plate → Cortex codes → pick the organism INSIDE the measure →
              its CLSI panel with live S / I / R → OK fills the AST table. -->
         <pf-plate-measure
           [antibiotics]="abxNames()"

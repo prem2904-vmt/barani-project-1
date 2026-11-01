@@ -109,7 +109,7 @@ describe('Assistant panel — beta gate', () => {
       const b = (f.nativeElement as HTMLElement).querySelector('button');
       if (!on) { expect(b).toBeNull(); continue; }
       expect(b!.querySelector('svg path')).not.toBeNull();
-      expect(b!.textContent!.trim()).toBe('Ask PF Sense');
+      expect(b!.textContent!.trim()).toBe('Ask Cortex');
       expect(/\p{Extended_Pictographic}/u.test(b!.textContent!)).toBe(false);
     }
   });
@@ -146,7 +146,7 @@ describe('Assistant panel — model select', () => {
   it('no model available → says so in plain words, composer off', async () => {
     const p = setup({ providers: () => of(BOTH.map((x) => ({ ...x, available: false }))) });
     await p.settle();
-    expect(p.el.querySelector('[data-state="none"]')!.textContent).toContain('PF Sense isn’t available right now');
+    expect(p.el.querySelector('[data-state="none"]')!.textContent).toContain('Cortex isn’t available right now');
     expect(p.el.querySelector<HTMLTextAreaElement>('.pf-asst__input')!.disabled).toBe(true);
   });
 
@@ -204,7 +204,7 @@ describe('Assistant panel — chat', () => {
     expect(p.el.querySelector('.pf-asst__mark')!.getAttribute('data-ai-working')).toBe('true');
     // no rainbow frame round the thread (owner: too loud)
     expect(p.el.querySelector('.pf-asst__thread')!.classList.contains('pf-ai-glow')).toBe(false);
-    expect(p.el.querySelector('.pf-asst-msg--pending')!.textContent).toContain('PF Sense is thinking');
+    expect(p.el.querySelector('.pf-asst-msg--pending')!.textContent).toContain('Cortex is thinking');
     p.type('more');
     expect(p.sendBtn().disabled).toBe(true);
     pending.next(REPLY); pending.complete();
@@ -311,7 +311,7 @@ describe('Assistant panel — error states in plain words', () => {
   it('limit reached → says so, no Try again', async () => {
     const p = await failWith(new HttpErrorResponse({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } }));
     const e = p.el.querySelector('[data-error="limit"]')!;
-    expect(e.textContent).toContain('PF Sense limit reached for this month — ask your admin.');
+    expect(e.textContent).toContain('Cortex limit reached for this month — ask your admin.');
     expect(e.querySelector('button')).toBeNull();
   });
 
@@ -448,7 +448,7 @@ describe('PF Sense admin switch — button + panel', () => {
 
   it('button copy is PF Sense, never "AI"', () => {
     const b = button(true, fakePfSense())!;
-    expect(b.getAttribute('aria-label')).toBe('Ask PF Sense (beta)');
+    expect(b.getAttribute('aria-label')).toBe('Ask Cortex (beta)');
     expect(b.textContent).not.toMatch(/\bAI\b/);
   });
 
@@ -456,7 +456,7 @@ describe('PF Sense admin switch — button + panel', () => {
     const p = setup({ sense: fakePfSense({ limit: true }) });
     await p.settle();
     const n = p.el.querySelector('[data-state="limit"]')!;
-    expect(n.textContent).toContain('PF Sense limit reached for this month — ask your admin.');
+    expect(n.textContent).toContain('Cortex limit reached for this month — ask your admin.');
     expect(p.el.querySelector('.pf-asst-starter')).toBeNull();
     expect(p.el.querySelector<HTMLTextAreaElement>('.pf-asst__input')!.disabled).toBe(true);
     expect(p.sendBtn().disabled).toBe(true);
@@ -466,7 +466,7 @@ describe('PF Sense admin switch — button + panel', () => {
   it('limit reached wins over "no engine available" (the actionable reason)', async () => {
     const p = setup({ sense: fakePfSense({ limit: true }), providers: () => of(BOTH.map((x) => ({ ...x, available: false }))) });
     await p.settle();
-    expect(p.el.querySelector('[data-state="limit"]')!.textContent).toContain('PF Sense is resting');
+    expect(p.el.querySelector('[data-state="limit"]')!.textContent).toContain('Cortex is resting');
     expect(p.el.querySelector('[data-state="none"]')).toBeNull();
   });
 
@@ -482,7 +482,7 @@ describe('PF Sense admin switch — button + panel', () => {
     const refresh = vi.spyOn(sense.impl, 'refresh');
     let p = setup({ sense, chat: () => throwError(() => ({ status: 200, error: { error: 'pf_sense_off', message: 'x' } })) });
     await p.settle(); p.type('hi'); p.sendBtn().click(); await p.settle();
-    expect(p.el.querySelector('[data-error="off"]')!.textContent).toContain('PF Sense is turned off for this lab — ask your admin.');
+    expect(p.el.querySelector('[data-error="off"]')!.textContent).toContain('Cortex is turned off for this lab — ask your admin.');
     expect(refresh).toHaveBeenCalledTimes(1);
     TestBed.resetTestingModule();
     const s2 = fakePfSense(); const r2 = vi.spyOn(s2.impl, 'refresh');

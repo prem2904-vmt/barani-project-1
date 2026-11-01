@@ -42,7 +42,7 @@ export class DiskReadApi {
   static readonly TIMEOUT_MS = 60_000;
   read(req: DiskReadRequest): Observable<DiskReadResult> {
     return this.http.post<ApiResponse<DiskReadResult>>(this.url('/disk-read'), req).pipe(timeout(DiskReadApi.TIMEOUT_MS), map(r => {
-      if (!r?.success || !r.data) throw new ApiError(r?.message || 'PF Sense couldn’t read the codes', r?.error || 'ai_failed');
+      if (!r?.success || !r.data) throw new ApiError(r?.message || 'Cortex couldn’t read the codes', r?.error || 'ai_failed');
       return r.data;
     }));
   }
@@ -61,7 +61,7 @@ export class DiskReadApi {
 export function aiFallbackMessage(e: unknown): string {
   const status = (e as { status?: number })?.status;
   const code = ApiError.from(e).code;
-  if (code === 'ai_cap_reached') return 'PF Sense limit reached for this month — codes: pick manually';
+  if (code === 'ai_cap_reached') return 'Cortex limit reached for this month — codes: pick manually';
   if (code === 'pf_sense_off') return 'Codes: pick manually';
   if (code === 'ai_unavailable' || status === 404) return 'Codes: pick manually';
   return 'Couldn’t read the codes — pick manually';

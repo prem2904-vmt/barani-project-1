@@ -209,7 +209,7 @@ test.describe('Measure zones — OpenCV + one AI read', () => {
     console.log(`[measure] all zones: ${others.join(', ')}`);
 
     await expect(modal.locator('.pm-codesel--pending').first()).toBeVisible({ timeout: 10_000 });
-    await expect(modal.locator('.pm-sense')).toContainText('PF Sense · reading…');
+    await expect(modal.locator('.pm-sense')).toContainText('Cortex · reading…');
     await expect(modal.locator('.pm-stage.nd-ai-glow')).toHaveAttribute('data-ai-working', 'true');
     await expect(modal.locator('.pm-list.nd-ai-glow')).toHaveAttribute('data-ai-working', 'true');
     expect(lastRequest?.tiles?.length).toBe(count);
@@ -219,7 +219,7 @@ test.describe('Measure zones — OpenCV + one AI read', () => {
     // Absent backend → manual fallback.
     await held!.fulfill({ status: 404, body: '' });
     await expect(modal.locator('[data-ai-working="true"]')).toHaveCount(0);
-    await expect(modal.locator('.pm-note--manual')).toContainText('PF Sense isn’t available — pick each disk’s code');
+    await expect(modal.locator('.pm-note--manual')).toContainText('Cortex isn’t available — pick each disk’s code');
     await expect(modal.locator('.pm-codesel .pf-dd__value').first()).toHaveText('Unknown — tap to pick');
     await shots(page, 'read-manual-1440');
     // Review keeps the picker: pick PIT's code there → Apply enables.
@@ -240,8 +240,8 @@ test.describe('Measure zones — OpenCV + one AI read', () => {
     aiMode = 'real';
     await modal.getByRole('button', { name: 'Recalibrate' }).click();
     await modal.locator('.pm-controls .nd-btn--primary').click();
-    await expect(modal.locator('.pm-pf[aria-label="Read by PF Sense"]').first()).toBeVisible({ timeout: 30_000 });
-    const filled = await modal.locator('.pm-pf[aria-label="Read by PF Sense"]').count();
+    await expect(modal.locator('.pm-pf[aria-label="Read by Cortex"]').first()).toBeVisible({ timeout: 30_000 });
+    const filled = await modal.locator('.pm-pf[aria-label="Read by Cortex"]').count();
     expect(await modal.textContent()).not.toMatch(/\bAI\b/);
     console.log(`[measure] codes filled by the mocked read: ${filled}; candidates sent: ${(lastRequest?.candidates ?? []).length}`);
     await shots(page, 'read-filled-1440');

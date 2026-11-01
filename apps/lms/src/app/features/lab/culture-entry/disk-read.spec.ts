@@ -126,13 +126,13 @@ describe('API absent → manual fallback', () => {
   it('404 / ai_unavailable → "Codes: pick manually"; cap → says so', () => {
     expect(aiFallbackMessage({ status: 404, error: {} })).toBe('Codes: pick manually');
     expect(aiFallbackMessage({ status: 503, error: { error: 'ai_unavailable', message: 'off' } })).toBe('Codes: pick manually');
-    expect(aiFallbackMessage({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } })).toMatch(/PF Sense limit reached.*pick manually/);
+    expect(aiFallbackMessage({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } })).toMatch(/Cortex limit reached.*pick manually/);
     expect(aiFallbackMessage({ status: 500, error: { error: 'ai_failed', message: 'x' } })).toMatch(/pick manually/);
   });
 
   it('PF Sense off / limit reached → the two quiet lines', () => {
     expect(aiFallbackMessage({ status: 200, error: { error: 'pf_sense_off', message: 'off' } })).toBe('Codes: pick manually');
-    expect(aiFallbackMessage({ status: 200, error: { error: 'ai_cap_reached', message: 'cap' } })).toBe('PF Sense limit reached for this month — codes: pick manually');
+    expect(aiFallbackMessage({ status: 200, error: { error: 'ai_cap_reached', message: 'cap' } })).toBe('Cortex limit reached for this month — codes: pick manually');
   });
 
   it('usage reads small', () => {

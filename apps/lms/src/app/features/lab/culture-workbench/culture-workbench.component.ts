@@ -223,7 +223,7 @@ interface StageField { name: string; title: string; type: string; options: strin
                     <!-- THE path to the AST (owner): measure the plate, pick the
                          organism inside the measure, OK fills AST below. -->
                     <button type="button" class="pf-btn pf-cse-measure press" [disabled]="busy()" (click)="startMeasure()"
-                            aria-label="Measure the AST plate" title="Measure the AST plate — PF Sense reads the disks, pick the organism, S / I / R fill in below">
+                            aria-label="Measure the AST plate" title="Measure the AST plate — Cortex reads the disks, pick the organism, S / I / R fill in below">
                       <span class="pf-cse-measure__pf" aria-hidden="true"><pf-logo-mark variant="mono" size="xs" aria-hidden="true" /></span>
                       <span>Measure</span>
                     </button>

@@ -84,7 +84,7 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(req.candidates).not.toContain('VA 30');
     expect(c.ai()).toBe('pending');
     const pill = el.querySelector('.pm-sense.pf-ai-glow[data-ai-working="true"]');
-    expect(pill?.textContent).toContain('PF Sense · reading…');
+    expect(pill?.textContent).toContain('Cortex · reading…');
     expect(pill?.querySelector('pf-logo-mark')).toBeTruthy();
     expect(el.querySelectorAll('.pm-codesel--pending').length).toBe(4);
     expect(el.querySelector('.pm-codesel .pf-dd__value')?.textContent?.trim()).toBe('Reading…');
@@ -101,10 +101,10 @@ describe('Measure & read — the ONE background AI call', () => {
       c.startAiRead();
       vi.advanceTimersByTime(14_000);
       f.detectChanges();
-      expect(el.querySelector('.pm-sense')?.textContent).toContain('PF Sense · reading…');
+      expect(el.querySelector('.pm-sense')?.textContent).toContain('Cortex · reading…');
       vi.advanceTimersByTime(2_000);
       f.detectChanges();
-      expect(el.querySelector('.pm-sense')?.textContent).toContain('PF Sense · still reading…');
+      expect(el.querySelector('.pm-sense')?.textContent).toContain('Cortex · still reading…');
       expect(DiskReadApi.TIMEOUT_MS).toBe(60_000);
     } finally { vi.useRealTimers(); }
   });
@@ -114,7 +114,7 @@ describe('Measure & read — the ONE background AI call', () => {
     c.startAiRead();
     f.detectChanges();
     expect(c.ai()).toBe('failed');
-    expect(el.querySelector('.pm-note--manual')?.textContent?.trim()).toBe('PF Sense isn’t available — pick each disk’s code');
+    expect(el.querySelector('.pm-note--manual')?.textContent?.trim()).toBe('Cortex isn’t available — pick each disk’s code');
     expect(el.querySelector('.pm-status')).toBeNull();
     expect(el.querySelector('.pm-codesel .pf-dd__value')?.textContent?.trim()).toBe('Unknown — tap to pick');
     expect(el.querySelectorAll('.pm-codesel--pending').length).toBe(0);
@@ -127,13 +127,13 @@ describe('Measure & read — the ONE background AI call', () => {
     f.detectChanges();
     const codes = c.rows().map((r: any) => r.code);
     expect(codes).toEqual(['AMC 30', null, 'CAZ 30', 'IPM 10']);
-    const marks = el.querySelectorAll('.pm-pf[aria-label="Read by PF Sense"]');
+    const marks = el.querySelectorAll('.pm-pf[aria-label="Read by Cortex"]');
     expect(marks.length).toBe(3);                            // the PF mark, never the letters "AI"
     expect(marks[0].querySelector('pf-logo-mark svg')).toBeTruthy();
     expect(c.sirOf(c.rows()[3])).toBe('S');                 // IPM 10 at 22 mm
     expect(el.querySelector('.pm-drow[data-n="4"] .pm-sir')?.textContent?.trim()).toBe('S');
-    expect(el.querySelector('.pm-usage')?.textContent).toContain('PF Sense this month: 1.2M / 2M tokens');
-    expect(el.querySelector('.pm-status')?.textContent).toContain('3 of 4 codes read by PF Sense');
+    expect(el.querySelector('.pm-usage')?.textContent).toContain('Cortex this month: 1.2M / 2M tokens');
+    expect(el.querySelector('.pm-status')?.textContent).toContain('3 of 4 codes read by Cortex');
   });
 
   it('"Probably CFM 5 — confirm": a neutral one-tap chip, never applied by itself', () => {
@@ -190,7 +190,7 @@ describe('Measure & read — the ONE background AI call', () => {
     c.startAiRead();
     c.goReview();
     f.detectChanges();
-    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('PF Sense isn’t available');
+    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('Cortex isn’t available');
     const pickers = el.querySelectorAll('.pm-drow pf-select.pm-codesel');
     expect(pickers.length).toBe(4);                          // not a static "No code" chip
     expect(el.querySelector('.pm-drow[data-n="1"] .pf-dd__value')?.textContent?.trim()).toBe('Unknown — tap to pick');
@@ -214,7 +214,7 @@ describe('Measure & read — the ONE background AI call', () => {
     const { f, c, el } = setup(() => throwError(() => ({ status: 429, error: { error: 'ai_cap_reached', message: 'cap' } })));
     c.startAiRead();
     f.detectChanges();
-    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('PF Sense limit reached for this month');
+    expect(el.querySelector('.pm-note--manual')?.textContent).toContain('Cortex limit reached for this month');
   });
 
   it('disks without a code are left out of Apply (and the review says so)', async () => {
@@ -313,8 +313,8 @@ describe('Measure & read — the ONE background AI call', () => {
       c.startAiRead();
       f.detectChanges();
       expect(api.read).not.toHaveBeenCalled();
-      expect(c.aiLine()).toBe('PF Sense limit reached for this month — codes: pick manually');
-      expect(c.manualHint()).toBe('PF Sense limit reached for this month — pick each disk’s code');
+      expect(c.aiLine()).toBe('Cortex limit reached for this month — codes: pick manually');
+      expect(c.manualHint()).toBe('Cortex limit reached for this month — pick each disk’s code');
     });
 
     it('a server refusal mid-read (ai_cap_reached) shows the limit line and re-reads the status', () => {
@@ -323,7 +323,7 @@ describe('Measure & read — the ONE background AI call', () => {
       const { f, c } = setup(() => throwError(() => ({ status: 200, error: { error: 'ai_cap_reached', message: 'cap' } })), sense);
       c.startAiRead();
       f.detectChanges();
-      expect(c.aiLine()).toBe('PF Sense limit reached for this month — codes: pick manually');
+      expect(c.aiLine()).toBe('Cortex limit reached for this month — codes: pick manually');
       expect(refresh).toHaveBeenCalledWith('ai_cap_reached');
     });
 

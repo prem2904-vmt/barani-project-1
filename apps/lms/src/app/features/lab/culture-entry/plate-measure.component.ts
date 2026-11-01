@@ -274,7 +274,7 @@ const NOT_A_DISK = '__not_a_disk';
                   @if (aiWorking()) {
                     <span class="pm-sense pf-ai-glow" data-ai-working="true" role="status">
                       <span class="pm-pf" aria-hidden="true"><pf-logo-mark variant="mono" size="xs" aria-hidden="true" /></span>
-                      PF Sense · {{ aiSlow() ? 'still reading…' : 'reading…' }}
+                      Cortex · {{ aiSlow() ? 'still reading…' : 'reading…' }}
                     </span>
                   }
                   <span class="pm-list__count pf-num">{{ activeRows().length }} {{ activeRows().length === 1 ? 'disk' : 'disks' }}</span>
@@ -315,7 +315,7 @@ const NOT_A_DISK = '__not_a_disk';
                                      [attr.aria-label]="'Disk ' + d.n + ' code'"
                                      (valueChange)="pickCode(d.id, $any($event))"></pf-select>
                           @if (d.codeSrc === 'ai' && d.code) {
-                            <span class="pm-pf" role="img" aria-label="Read by PF Sense" title="Read by PF Sense — check it"><pf-logo-mark variant="mono" size="xs" aria-hidden="true" /></span>
+                            <span class="pm-pf" role="img" aria-label="Read by Cortex" title="Read by Cortex — check it"><pf-logo-mark variant="mono" size="xs" aria-hidden="true" /></span>
                           }
                         </div>
                         @if (!d.code && !d.notDisk && d.suggested) {
@@ -1076,7 +1076,7 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
     const coded = rows.filter(r => r.code).length;
     switch (this.ai()) {
       case 'pending': return 'Keep checking the zones — codes fill in as they are read.';
-      case 'done': return `${coded} of ${rows.length} codes read by PF Sense — check each one.`;
+      case 'done': return `${coded} of ${rows.length} codes read by Cortex — check each one.`;
       case 'failed': return this.aiMsg() || 'Codes: pick manually';
       default: return rows.length ? 'Codes: pick manually' : '';
     }
@@ -1085,13 +1085,13 @@ export class PlateMeasureComponent implements OnInit, OnDestroy {
   manualHint(): string | null {
     if (this.ai() !== 'failed') return null;
     if (!this.sense.featureOn('ast_disk_read')) return null;
-    return this.aiMsg().startsWith('PF Sense limit')
-      ? 'PF Sense limit reached for this month — pick each disk’s code'
-      : 'PF Sense isn’t available — pick each disk’s code';
+    return this.aiMsg().startsWith('Cortex limit')
+      ? 'Cortex limit reached for this month — pick each disk’s code'
+      : 'Cortex isn’t available — pick each disk’s code';
   }
   readonly usageLine = computed(() => {
     const u = this.usage();
-    return u && u.capTokens > 0 ? `PF Sense this month: ${formatTokens(u.monthTokens)} / ${formatTokens(u.capTokens)} tokens` : '';
+    return u && u.capTokens > 0 ? `Cortex this month: ${formatTokens(u.monthTokens)} / ${formatTokens(u.capTokens)} tokens` : '';
   });
 
   // ── Rows ─────────────────────────────────────────────────────────

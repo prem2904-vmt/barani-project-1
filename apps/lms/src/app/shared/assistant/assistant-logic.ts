@@ -138,8 +138,8 @@ export interface AssistantErrorView {
 export const ASSISTANT_ERROR_CODES = ['bad_request', 'not_found', 'ai_unavailable', 'ai_cap_reached', 'pf_sense_off', 'ai_failed'] as const;
 
 /** The two admin-controlled refusals, worded once (server messages match). */
-export const PF_SENSE_OFF_MESSAGE = 'PF Sense is turned off for this lab — ask your admin.';
-export const PF_SENSE_LIMIT_MESSAGE = 'PF Sense limit reached for this month — ask your admin.';
+export const PF_SENSE_OFF_MESSAGE = 'Cortex is turned off for this lab — ask your admin.';
+export const PF_SENSE_LIMIT_MESSAGE = 'Cortex limit reached for this month — ask your admin.';
 
 /**
  * The assistant endpoints answer HTTP 200 with the ApiResponse envelope; a

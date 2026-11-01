@@ -179,6 +179,6 @@ export const ASSISTANT_COPY: Readonly<Record<AssistantPage, { lead: string; plac
   insights: {
     lead: 'Say what you want to see — “add patient flow by hour, make revenue a line chart, last 30 days”. The dashboard updates as a preview; keep it or undo it.',
     placeholder: 'Describe a change to this dashboard…',
-    fine: 'PF Sense only sees the list of charts, never your lab’s numbers. Nothing is saved until you save.',
+    fine: 'Cortex only sees the list of charts, never your lab’s numbers. Nothing is saved until you save.',
   },
 };
