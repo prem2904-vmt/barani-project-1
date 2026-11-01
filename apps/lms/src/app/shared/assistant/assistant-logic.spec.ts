@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ASSISTANT_ERROR_CODES, MAX_HISTORY_TURNS, assistantError, assistantFailure, historyFor, mappingCodeLabel, mappingTestLabel, normaliseProviders, normaliseReply,
-  normaliseRateCardSummary, normaliseSuggestions, pickProvider, providerOptions, rateCardBreakdown, rateCardHeadline, unmatchedHeading, unmatchedMore,
+  normaliseRateCardSummary, normaliseSuggestions, availableModelCount, modelMenuActions, modelSwitchLabel, pickProvider, rateCardBreakdown, rateCardHeadline, unmatchedHeading, unmatchedMore,
 } from './assistant-logic';
 
 describe('assistant logic — providers', () => {
@@ -22,10 +22,19 @@ describe('assistant logic — providers', () => {
     expect(normaliseProviders([{ id: 'claude', available: 'yes' }])[0]).toEqual({ id: 'claude', label: 'Claude', available: false });
   });
 
-  it('pf-select options grey out an unavailable model', () => {
-    const o = providerOptions(normaliseProviders(raw));
-    expect(o[1]).toEqual({ value: 'claude', label: 'Claude', hint: 'Not available', disabled: true });
-    expect(o[0].disabled).toBe(false);
+  it('model menu rows: unavailable greyed with a reason, the one in use is current', () => {
+    const list = normaliseProviders(raw);
+    expect(modelMenuActions(list, 'gemini')).toEqual([
+      { id: 'gemini', label: 'Gemini', current: true },
+      { id: 'claude', label: 'Claude', current: false, hint: 'Not available', disabled: true },
+    ]);
+    expect(availableModelCount(list)).toBe(1);
+    expect(availableModelCount([])).toBe(0);
+  });
+
+  it('model switch aria-label says the model, and "change model" only when there is a choice', () => {
+    expect(modelSwitchLabel('Gemini', true)).toBe('Model: Gemini, change model');
+    expect(modelSwitchLabel('Gemini', false)).toBe('Model: Gemini');
   });
 
   it('starts on the remembered model when available, else the first available, else none', () => {

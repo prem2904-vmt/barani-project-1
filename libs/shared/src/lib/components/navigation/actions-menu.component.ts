@@ -114,6 +114,7 @@ export class ActionsMenuTriggerDirective {
         <div #panel class="pf-am-panel" [class.pf-am-panel--sheet]="sheet()" [class.pf-am-panel--placed]="placed()"
              [id]="menuId" role="menu" [attr.aria-label]="heading() || label()"
              [style.top.px]="sheet() ? null : pos().top" [style.left.px]="sheet() ? null : pos().left"
+             [style.width.px]="sheet() ? null : width()" [class.pf-am-panel--start]="align() === 'start'"
              (keydown)="onMenuKey($event)">
           @if (sheet()) {
             <span class="pf-am-handle" aria-hidden="true"></span>
@@ -125,9 +126,11 @@ export class ActionsMenuTriggerDirective {
               <div class="pf-am-group" role="group" [attr.aria-label]="s.group || null">
                 @if (s.group) { <p class="pf-am-group__t" aria-hidden="true">{{ s.group }}</p> }
                 @for (a of s.items; track a.id) {
-                  <button #item type="button" role="menuitem" class="pf-am-item" tabindex="-1"
+                  <button #item type="button" [attr.role]="checkCurrent() ? 'menuitemradio' : 'menuitem'" class="pf-am-item" tabindex="-1"
                           [attr.data-action]="a.id" [class.pf-am-item--danger]="a.tone === 'danger'"
-                          [class.pf-am-item--current]="a.current" [attr.aria-current]="a.current ? 'page' : null"
+                          [class.pf-am-item--current]="a.current && !checkCurrent()"
+                          [attr.aria-current]="a.current && !checkCurrent() ? 'page' : null"
+                          [attr.aria-checked]="checkCurrent() ? !!a.current : null"
                           [disabled]="a.disabled" [attr.aria-disabled]="a.disabled || null"
                           (click)="pick(a)">
                     @if (a.icon) {
@@ -140,6 +143,10 @@ export class ActionsMenuTriggerDirective {
                       <span class="pf-am-item__t">{{ a.label }}</span>
                       @if (a.hint) { <span class="pf-am-item__hint">{{ a.hint }}</span> }
                     </span>
+                    @if (checkCurrent() && a.current) {
+                      <svg class="pf-am-item__check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                    }
                   </button>
                 }
               </div>
@@ -173,6 +180,7 @@ export class ActionsMenuTriggerDirective {
       visibility: hidden; opacity: 0; transform: translateY(-4px) scale(0.98); transform-origin: top right;
       transition: opacity var(--pf-dur-fast, 200ms) ease, transform var(--pf-dur, 320ms) var(--pf-spring, ease);
     }
+    .pf-am-panel--start { transform-origin: bottom left; }
     .pf-am-panel--placed { visibility: visible; opacity: 1; transform: none; }
     .pf-am-scroll { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
 
@@ -188,6 +196,7 @@ export class ActionsMenuTriggerDirective {
       font: inherit; font-size: 14px; text-align: left; cursor: pointer;
     }
     .pf-am-item__i { flex: none; color: var(--text-secondary); }
+    .pf-am-item__check { flex: none; margin-left: auto; color: var(--text-primary); }
     .pf-am-item__txt { display: flex; flex-direction: column; min-width: 0; }
     .pf-am-item__t { line-height: 1.3; }
     .pf-am-item__hint { font-size: 12px; line-height: 1.3; color: var(--text-tertiary); }
@@ -240,6 +249,17 @@ export class ActionsMenuComponent {
   readonly labelClass = input('');
   /** Sheet title on phones ("Report · Priya Nair"). */
   readonly heading = input('');
+  /** Popover edge that lines up with the trigger: `end` (right, the ⋮
+   *  default) or `start` (left — a trigger at the left of a bar). */
+  readonly align = input<'start' | 'end'>('end');
+  /** Open above the trigger when it fits (a trigger at the bottom of a
+   *  panel, e.g. a composer); default below, flipping above only if needed. */
+  readonly prefer = input<'below' | 'above'>('below');
+  /** A pick-one list (e.g. the Cortex model): rows are `menuitemradio`,
+   *  the `current` row carries a quiet trailing check instead of the tint. */
+  readonly checkCurrent = input(false);
+  /** Popover width in px (phones always get the full-width sheet). */
+  readonly width = input(POP_W);
 
   /** The chosen row's id — emitted AFTER the menu closed. */
   readonly action = output<string>();
@@ -365,19 +385,24 @@ export class ActionsMenuComponent {
     list[Math.max(0, Math.min(i, list.length - 1))].focus();
   }
 
-  /** Right-align under the ⋮, clamp to the viewport, flip above if needed. */
+  /** Right-align under the ⋮ (or left-align for `align="start"`), clamp to
+   *  the viewport, flip above if needed. */
   private place(): void {
     const el = this.triggerEl();
     if (!el) return;
     const t = el.getBoundingClientRect();
     const p = this.panel()?.nativeElement;
-    const w = p?.offsetWidth || POP_W;
+    const w = p?.offsetWidth || this.width();
     const h = p?.offsetHeight || 0;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const left = Math.min(Math.max(EDGE, t.right - w), Math.max(EDGE, vw - w - EDGE));
+    const want = this.align() === 'start' ? t.left : t.right - w;
+    const left = Math.min(Math.max(EDGE, want), Math.max(EDGE, vw - w - EDGE));
     const below = t.bottom + GAP;
-    const top = below + h > vh - EDGE && t.top - GAP - h >= EDGE ? t.top - GAP - h : Math.max(EDGE, Math.min(below, vh - h - EDGE));
+    const above = t.top - GAP - h;
+    const fitsAbove = above >= EDGE;
+    const top = (this.prefer() === 'above' && fitsAbove) || (below + h > vh - EDGE && fitsAbove)
+      ? above : Math.max(EDGE, Math.min(below, vh - h - EDGE));
     this.pos.set({ top, left });
     this.placed.set(true);
   }

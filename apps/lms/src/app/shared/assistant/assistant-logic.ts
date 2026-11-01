@@ -1,4 +1,4 @@
-import type { PfSelectOption } from '../primitives/select.component';
+import type { PfAction } from '../components/actions-menu/actions-menu.component';
 import type {
   AssistantProvider, AssistantProviderId, AssistantReply, AssistantSuggestion, AssistantTestRef, AssistantTurn, MappingSuggestion, RateCardSummary,
 } from './assistant.models';
@@ -35,9 +35,23 @@ export function normaliseProviders(raw: unknown): AssistantProvider[] {
   return PROVIDER_IDS.filter((id) => byId.has(id)).map((id) => byId.get(id)!);
 }
 
-/** pf-select options: an unavailable model stays listed but greyed out. */
-export function providerOptions(list: readonly AssistantProvider[]): PfSelectOption<AssistantProviderId>[] {
-  return list.map((p) => ({ value: p.id, label: p.label, hint: p.available ? undefined : 'Not available', disabled: !p.available }));
+/** The composer's model menu: an unavailable model stays listed but greyed
+ *  out; the one in use is `current` (a quiet check in the menu). */
+export function modelMenuActions(list: readonly AssistantProvider[], current: AssistantProviderId | null): PfAction[] {
+  return list.map((p) => ({
+    id: p.id, label: p.label, current: p.id === current,
+    ...(p.available ? {} : { hint: 'Not available', disabled: true }),
+  }));
+}
+
+/** How many models can answer right now (1 → a plain name, no menu). */
+export function availableModelCount(list: readonly AssistantProvider[]): number {
+  return list.filter((p) => p.available).length;
+}
+
+/** Accessible name of the composer's model switch. */
+export function modelSwitchLabel(label: string, canChange: boolean): string {
+  return canChange ? `Model: ${label}, change model` : `Model: ${label}`;
 }
 
 /** Which model to start with: the remembered one if still available, else

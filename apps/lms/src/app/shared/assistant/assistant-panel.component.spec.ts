@@ -118,16 +118,86 @@ describe('Assistant panel — beta gate', () => {
 describe('Assistant panel — model select', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('lists Gemini + Claude; an unavailable one is greyed and can’t be picked', async () => {
+  it('no ENGINE field at the top: the model is a quiet sparkle + name in the composer', async () => {
     const p = setup();
     await p.settle();
-    expect(p.cmp.providerOpts()).toEqual([
-      { value: 'gemini', label: 'Gemini', hint: undefined, disabled: false },
-      { value: 'claude', label: 'Claude', hint: 'Not available', disabled: true },
-    ]);
-    expect(p.cmp.provider()).toBe('gemini');
+    const top = p.el.querySelector('.pf-asst__controls');
+    expect(top).toBeNull(); // instrument already known → nothing up top
+    expect(p.el.textContent).not.toMatch(/\bEngine\b/i);
+    const m = p.el.querySelector<HTMLElement>('.pf-asst__composer [data-asst-model]')!;
+    expect(m).not.toBeNull();
+    expect(m.textContent!.trim()).toBe('Gemini');
+    expect(m.querySelector('svg path')).not.toBeNull();
+    expect(/\p{Extended_Pictographic}/u.test(m.textContent!)).toBe(false);
+  });
+
+  it('only ONE model available → just its name: not a button, no chevron, no menu', async () => {
+    const p = setup(); // BOTH: Claude unavailable
+    await p.settle();
+    const m = p.el.querySelector<HTMLElement>('[data-asst-model]')!;
+    expect(m.tagName).toBe('SPAN');
+    expect(m.querySelector('.pf-asst-model__chev')).toBeNull();
+    expect(p.el.querySelector('pf-actions-menu')).toBeNull();
+    expect(m.getAttribute('aria-label')).toBe('Model: Gemini');
+    // an unavailable model still can’t be forced
     p.cmp.setProvider('claude');
     expect(p.cmp.provider()).toBe('gemini');
+  });
+
+  it('no model available → the switch is hidden (the empty state says so)', async () => {
+    const p = setup({ providers: () => of(BOTH.map((x) => ({ ...x, available: false }))) });
+    await p.settle();
+    expect(p.el.querySelector('[data-asst-model]')).toBeNull();
+  });
+
+  it('two models → a ghost button opens a small menu; the current one is checked; picking switches', async () => {
+    const p = setup({ providers: () => of(BOTH.map((x) => ({ ...x, available: true }))) });
+    await p.settle();
+    const btn = p.el.querySelector<HTMLButtonElement>('button[data-asst-model]')!;
+    expect(btn.getAttribute('aria-label')).toBe('Model: Gemini, change model');
+    expect(btn.getAttribute('aria-haspopup')).toBe('menu');
+    expect(btn.querySelector('.pf-asst-model__chev')).not.toBeNull();
+    expect(btn.classList.contains('pf-btn--primary')).toBe(false);
+    btn.click(); p.f.detectChanges(); await p.settle();
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+    const rows = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'));
+    expect(rows.map((r) => r.textContent!.trim())).toEqual(['Gemini', 'Claude']);
+    expect(rows.map((r) => r.getAttribute('aria-checked'))).toEqual(['true', 'false']);
+    expect(rows[0].querySelector('.pf-am-item__check')).not.toBeNull();
+    rows[1].click(); p.f.detectChanges(); await p.settle();
+    expect(p.cmp.provider()).toBe('claude');
+    expect(btn.getAttribute('aria-label')).toBe('Model: Claude, change model');
+    expect(document.querySelector('[role="menuitemradio"]')).toBeNull();
+    expect(p.closedCount()).toBe(0);
+  });
+
+  it('keyboard: ↓ opens on a row, arrows move, Escape closes the menu (not the panel)', async () => {
+    const p = setup({ providers: () => of(BOTH.map((x) => ({ ...x, available: true }))) });
+    await p.settle();
+    const btn = p.el.querySelector<HTMLButtonElement>('button[data-asst-model]')!;
+    btn.focus();
+    btn.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    p.f.detectChanges(); await p.settle();
+    const rows = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'));
+    expect(rows().length).toBe(2);
+    expect(document.activeElement).toBe(rows()[0]);
+    rows()[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(document.activeElement).toBe(rows()[1]);
+    rows()[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    p.f.detectChanges(); await p.settle();
+    expect(rows().length).toBe(0);
+    expect(document.activeElement).toBe(btn);
+    expect(p.closedCount()).toBe(0);
+    expect(p.cmp.provider()).toBe('gemini');
+  });
+
+  it('the switch is off while an answer is on its way', async () => {
+    const pending = new Subject<AssistantReply>();
+    const p = setup({ providers: () => of(BOTH.map((x) => ({ ...x, available: true }))), chat: () => pending });
+    await p.settle();
+    p.type('Hello'); p.sendBtn().click(); p.f.detectChanges();
+    expect(p.el.querySelector<HTMLButtonElement>('button[data-asst-model]')!.disabled).toBe(true);
+    pending.complete();
   });
 
   it('remembers the pick and sends it', async () => {

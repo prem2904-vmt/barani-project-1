@@ -7,11 +7,12 @@ import { BetaFeaturesService } from '../../core/services/beta-features.service';
 import { PfSenseService } from '../../core/services/pf-sense.service';
 import { ToastService } from '../../core/services/toast.service';
 import { SelectComponent, PfSelectOption } from '../primitives/select.component';
+import { ActionsMenuComponent, ActionsMenuTriggerDirective } from '../components/actions-menu/actions-menu.component';
 import { InstrumentBridgeService } from '../instruments/instrument-bridge.service';
 import { AssistantApiService } from './assistant-api.service';
 import {
   AssistantErrorView, CONFIDENCE_WORDS, MAX_PROMPT_CHARS, PF_SENSE_LIMIT_MESSAGE, assistantError, historyFor, mappingCodeLabel, mappingTestLabel,
-  pickProvider, providerOptions, rateCardBreakdown, rateCardHeadline, unmatchedHeading, unmatchedMore,
+  availableModelCount, modelMenuActions, modelSwitchLabel, pickProvider, rateCardBreakdown, rateCardHeadline, unmatchedHeading, unmatchedMore,
 } from './assistant-logic';
 import { PREPARE_WORDS, RATE_CARD_PREPARE, RateCardPrepareException } from './rate-card-pages';
 import { MdBlock, parseAssistantMarkdown } from './assistant-markdown';
@@ -49,7 +50,8 @@ const DIAG_TIMEOUT_MS = 10_000;
  * full-screen sheet.
  *
  * ND sheet: a right-side card on desktop (the page stays usable beside it),
- * a full-screen sheet on phones. Model pf-select (unavailable greyed),
+ * a full-screen sheet on phones. The model switch is a quiet sparkle + name
+ * inside the composer (a small menu; unavailable greyed),
  * starter prompts, the chat (model text rendered as TEXT tokens — never
  * HTML), suggestion cards (setting + Copy, action, mapping + Add to mapping),
  * this PC's network check as a removable chip (desktop app only).
@@ -57,7 +59,7 @@ const DIAG_TIMEOUT_MS = 10_000;
 @Component({
   selector: 'pf-assistant-panel',
   standalone: true,
-  imports: [SelectComponent, NgTemplateOutlet],
+  imports: [SelectComponent, NgTemplateOutlet, ActionsMenuComponent, ActionsMenuTriggerDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './assistant-panel.component.html',
   styleUrl: './assistant-panel.component.scss',
@@ -103,7 +105,12 @@ export class AssistantPanelComponent {
   readonly providersState = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
   readonly providersError = signal<AssistantErrorView | null>(null);
   readonly provider = signal<AssistantProviderId | null>(null);
-  readonly providerOpts = computed(() => providerOptions(this.providers()));
+  /** Composer model switch: the menu rows, and whether there is a choice at
+   *  all (one model → just its name; none → hidden, the empty state says so). */
+  readonly modelActions = computed(() => modelMenuActions(this.providers(), this.provider()));
+  readonly modelChoice = computed(() => availableModelCount(this.providers()) > 1);
+  readonly showModel = computed(() => this.providersState() === 'ready' && !this.noneAvailable() && !!this.provider());
+  readonly modelAria = computed(() => modelSwitchLabel(this.providerLabel(), this.modelChoice()));
   readonly providerLabel = computed(() => this.providers().find((p) => p.id === this.provider())?.label ?? 'This engine');
   readonly noneAvailable = computed(() => this.providersState() === 'ready' && !this.providers().some((p) => p.available));
 
@@ -180,11 +187,11 @@ export class AssistantPanelComponent {
     });
   }
 
-  setProvider(id: AssistantProviderId) {
+  setProvider(id: string) {
     const p = this.providers().find((x) => x.id === id);
     if (!p?.available) return;
-    this.provider.set(id);
-    try { localStorage.setItem(PROVIDER_KEY, id); } catch { /* storage blocked */ }
+    this.provider.set(p.id);
+    try { localStorage.setItem(PROVIDER_KEY, p.id); } catch { /* storage blocked */ }
   }
 
   private remembered(): string | null {

@@ -38,24 +38,17 @@
         </div>
       </div>
     } @else {
-      <div class="pf-asst__controls">
-        <label class="pf-asst__field">
-          <span class="pf-asst__flabel">Engine</span>
-          @if (providersState() === 'ready') {
-            <pf-select class="pf-asst__model" [options]="providerOpts()" [value]="provider()!" placeholder="No engine available" size="sm"
-                       [disabled]="pending() || noneAvailable()" (valueChange)="setProvider($event)"></pf-select>
-          } @else {
-            <span class="pf-asst__skel" role="status" aria-label="Loading engines"></span>
-          }
-        </label>
-        @if (showInstrumentPick()) {
+      <!-- The model switch lives in the composer (sparkle + name); only the
+           "About" instrument picker stays up here, and only when needed. -->
+      @if (showInstrumentPick()) {
+        <div class="pf-asst__controls">
           <label class="pf-asst__field">
             <span class="pf-asst__flabel">About</span>
             <pf-select class="pf-asst__inst" [options]="instrumentOpts()" [value]="instrumentPick()" [searchable]="instrumentOpts().length > 8" size="sm"
                        (valueChange)="instrumentPick.set($event)"></pf-select>
           </label>
-        }
-      </div>
+        </div>
+      }
 
       @if (diagPossible()) {
         <div class="pf-asst__diag">
@@ -339,29 +332,52 @@
 
       <footer class="pf-asst__foot">
         <div class="pf-asst__composer">
-          @if (attachOn()) {
-            <button type="button" class="pf-btn pf-btn--icon press pf-asst__attach" [disabled]="!canAttach()" (click)="pickFile()"
-                    aria-label="Add a rate card (photo or PDF)" title="Add a rate card">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.6-9.2 9.2a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.2a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5"/></svg>
-            </button>
-            <button type="button" class="pf-btn pf-btn--icon press pf-asst__attach pf-asst__attach--cam" [disabled]="!canAttach()" (click)="pickCamera()"
-                    aria-label="Take a photo of the rate card" title="Take a photo">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3Z"/><circle cx="12" cy="13" r="3.5"/></svg>
-            </button>
-          }
-          <textarea #composer class="pf-input pf-asst__input" rows="1" [maxLength]="maxChars"
+          <textarea #composer class="pf-asst__input" rows="1" [maxLength]="maxChars"
                     [value]="draft()" (input)="draft.set($any($event.target).value)" (keydown)="onComposerKey($event)"
                     [disabled]="providersState() !== 'ready' || noneAvailable() || limitReached()"
                     [placeholder]="limitReached() ? limitMessage : copyText().placeholder" aria-label="Your question"></textarea>
-          <button type="button" class="pf-btn pf-btn--primary pf-asst__send press" [disabled]="!canSend()" (click)="send()" aria-label="Send" title="Send">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-          </button>
+          <div class="pf-asst__bar">
+            @if (attachOn()) {
+              <button type="button" class="pf-btn pf-btn--icon press pf-asst__attach" [disabled]="!canAttach()" (click)="pickFile()"
+                      aria-label="Add a rate card (photo or PDF)" title="Add a rate card">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.6-9.2 9.2a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.2a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5"/></svg>
+              </button>
+              <button type="button" class="pf-btn pf-btn--icon press pf-asst__attach pf-asst__attach--cam" [disabled]="!canAttach()" (click)="pickCamera()"
+                      aria-label="Take a photo of the rate card" title="Take a photo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+              </button>
+            }
+            @if (showModel()) {
+              @if (modelChoice()) {
+                <pf-actions-menu class="pf-asst__modelmenu" [actions]="modelActions()" label="Model" heading="Model" align="start" prefer="above"
+                                 [checkCurrent]="true" [width]="220" (action)="setProvider($event)">
+                  <button pfActionsTrigger type="button" class="pf-asst-model press" [disabled]="pending()" [attr.aria-label]="modelAria()" data-asst-model>
+                    <ng-container *ngTemplateOutlet="modelFace"></ng-container>
+                    <svg class="pf-asst-model__chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                  </button>
+                </pf-actions-menu>
+              } @else {
+                <span class="pf-asst-model pf-asst-model--static" role="note" [attr.aria-label]="modelAria()" data-asst-model>
+                  <ng-container *ngTemplateOutlet="modelFace"></ng-container>
+                </span>
+              }
+            }
+            <span class="pf-asst__barspace"></span>
+            <button type="button" class="pf-btn pf-btn--primary pf-asst__send press" [disabled]="!canSend()" (click)="send()" aria-label="Send" title="Send">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+            </button>
+          </div>
         </div>
         <p class="pf-asst__fine">{{ copyText().fine }}</p>
       </footer>
     }
   </aside>
 }
+
+<ng-template #modelFace>
+  <svg class="pf-asst-model__mark" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6Z"/><path d="M18.5 15.5 19.3 17.7 21.5 18.5 19.3 19.3 18.5 21.5 17.7 19.3 15.5 18.5 17.7 17.7Z"/></svg>
+  <span class="pf-asst-model__name" aria-hidden="true">{{ providerLabel() }}</span>
+</ng-template>
 
 <ng-template #inl let-inlines>
   @for (t of inlines; track $index) {

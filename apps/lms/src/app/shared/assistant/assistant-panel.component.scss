@@ -47,7 +47,6 @@
 }
 .pf-asst__field { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin: 0; }
 .pf-asst__flabel { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
-.pf-asst__skel { display: block; height: 36px; border-radius: 8px; background: var(--pf-chip-bg, rgba(148, 163, 184, 0.15)); }
 
 .pf-asst__diag { flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px 0; }
 .pf-asst-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; font-size: 12.5px; }
@@ -168,12 +167,49 @@
 
 /* Composer */
 .pf-asst__foot { flex: none; padding: 10px 16px 14px; border-top: 1px solid var(--pf-line); display: flex; flex-direction: column; gap: 6px; }
-.pf-asst__composer { display: flex; align-items: flex-end; gap: 8px; }
-.pf-asst__input {
-  flex: 1 1 auto; min-height: 44px; max-height: 160px; resize: none; field-sizing: content;
-  padding: 11px 12px; font-size: 15px; line-height: 1.4;
+/* One typing box (kit field look): the text on top, a quiet bar under it —
+   attach, the model switch, then Send (the ONE primary) at the right. */
+.pf-asst__composer {
+  display: flex; flex-direction: column; gap: 2px; padding: 4px 6px 6px;
+  border-radius: var(--pf-radius-sm, 10px);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg));
+  transition: border-color var(--pf-dur-fast, 200ms) ease, box-shadow var(--pf-dur-fast, 200ms) ease;
 }
-.pf-asst__send { flex: none; width: 44px; height: 44px; padding: 0; display: inline-grid; place-items: center; }
+.pf-asst__composer:hover { border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3)); }
+.pf-asst__composer:focus-within {
+  border-color: var(--color-violet-600, #7c3aed);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+}
+.pf-asst__input {
+  display: block; box-sizing: border-box; width: 100%; min-width: 0;
+  min-height: 40px; max-height: 160px; resize: none; field-sizing: content;
+  padding: 8px 6px 4px; border: 0; outline: 0; background: transparent; color: var(--text-primary);
+  font: inherit; font-size: 15px; font-weight: 500; line-height: 1.4;
+}
+.pf-asst__input::placeholder { color: var(--text-muted, #9ca3af); font-weight: 400; }
+.pf-asst__input:disabled { cursor: not-allowed; }
+.pf-asst__bar { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.pf-asst__barspace { flex: 1 1 auto; }
+.pf-asst__send { flex: none; width: 36px; height: 36px; min-height: 36px; padding: 0; display: inline-grid; place-items: center; border-radius: 10px; }
+
+/* The model switch: a ghost text button (sparkle + name + chevron), muted —
+   like the model picker in Claude / ChatGPT. Never a field, never a fill. */
+.pf-asst__modelmenu { min-width: 0; }
+.pf-asst-model {
+  display: inline-flex; align-items: center; gap: 5px; min-width: 0; height: 32px; padding: 0 8px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--text-tertiary);
+  font: inherit; font-size: 12.5px; font-weight: 500; line-height: 1; white-space: nowrap;
+}
+button.pf-asst-model { cursor: pointer; }
+button.pf-asst-model:hover:not(:disabled), button.pf-asst-model[aria-expanded='true'] {
+  color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+button.pf-asst-model:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+button.pf-asst-model:disabled { opacity: 0.6; cursor: default; }
+.pf-asst-model--static { cursor: default; }
+.pf-asst-model__mark, .pf-asst-model__chev { flex: none; display: block; }
+.pf-asst-model__chev { opacity: 0.8; }
 .pf-asst__fine { margin: 0; font-size: 11.5px; color: var(--text-tertiary); }
 
 /* Phone: full-screen sheet above the nav (16px text keeps iOS from zooming). */
@@ -185,6 +221,7 @@
     animation-name: pf-asst-up;
   }
   .pf-asst__input { font-size: 16px; }
+  .pf-asst__send { width: 40px; height: 40px; }
   .pf-asst__titles .pf-card__label { font-size: 12px; letter-spacing: 0.08em; flex-wrap: wrap; row-gap: 2px; }
   .pf-asst__head .pf-card__spacer { display: none; }
   .pf-asst-msg--user { max-width: 92%; }
@@ -194,7 +231,7 @@
 
 /* Test Master: Attach + camera in the composer, the "Add a rate card" door in the empty state, and the rate-card card. */
 .pf-asst__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; }
-.pf-asst__attach { flex: none; width: 44px; height: 44px; padding: 0; display: inline-grid; place-items: center; color: var(--text-secondary); }
+.pf-asst__attach { flex: none; width: 36px; height: 36px; min-height: 36px; padding: 0; display: inline-grid; place-items: center; color: var(--text-secondary); }
 .pf-asst__attach--cam { display: none; }
 @media (pointer: coarse), (max-width: 640px) { .pf-asst__attach--cam { display: inline-grid; } }
 
@@ -229,3 +266,9 @@
 .pf-asst-rc__txt { color: var(--text-primary); }
 .pf-asst-rc__why { font-size: 12px; color: var(--text-tertiary); }
 p.pf-asst-rc__why { margin: 4px 0 0; }
+
+/* Touch: the composer bar keeps 40px targets (still one row with Send). */
+@media (pointer: coarse) {
+  .pf-asst__attach, .pf-asst__send { width: 40px; height: 40px; min-height: 40px; }
+  .pf-asst-model { height: 40px; }
+}
