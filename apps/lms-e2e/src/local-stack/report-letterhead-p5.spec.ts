@@ -51,6 +51,11 @@ async function stripPng(): Promise<string> {
 }
 
 async function previewPdf(page: Page, name: string): Promise<string> {
+  // The Letterhead tab draws the page itself; the PDF viewer lives on the Results table tab.
+  await page.getByRole('radio', { name: 'Results table' }).click();
+  try { return await readPdf(page, name); } finally { await page.getByRole('radio', { name: 'Letterhead' }).click(); await expect(page.locator('pf-report-letterhead-card')).toBeVisible(); }
+}
+async function readPdf(page: Page, name: string): Promise<string> {
   const note = page.locator('.pf-card__note, .pf-rt-aside__k').filter({ hasText: /Rendering/ });
   await expect(note).toHaveCount(0, { timeout: 30_000 });
   await page.waitForTimeout(1500);
@@ -100,6 +105,7 @@ test('designer: Letterhead type - digital slim, pre-printed paper with a measure
 
     // Image letterhead.
     await tile(/^Image letterhead/).click();
+    await expect(tile(/^Image letterhead/)).toHaveAttribute('aria-checked', 'true');
     await card.locator('input[type=file]').setInputFiles(strip);
     await expect(card.getByText('Replace the letterhead image')).toBeVisible({ timeout: 60_000 });
     await previewPdf(page, `image-${theme}`);

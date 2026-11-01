@@ -532,6 +532,13 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
           </div>
         } @else {
           <!-- ── Every element (also the phone view) ── -->
+          @if (region() === 'header') {
+            <section class="pf-rhe-sec pf-rhe-sec--first" aria-label="Letterhead type">
+              <pf-report-letterhead-card [tpl]="template()" [busy]="lhBusy()" [note]="lhNote()" [error]="lhError()"
+                (presetChange)="applyLetterhead($event)" (continuationChange)="setLhContinuation($event)"
+                (pick)="onLetterheadFile($event.kind, $event.file)" (measure)="measureScan()" (mm)="setLhMm($event)"></pf-report-letterhead-card>
+            </section>
+          }
           <ul class="pf-rhe-list" role="list">
             @for (e of entries(); track e.id) {
               <li class="pf-rhe-li" [class.pf-rhe-li--off]="!isOn(e)">
@@ -583,12 +590,6 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
           </section>
 
           @if (region() === 'header') {
-            <section class="pf-rhe-sec" aria-label="Letterhead type">
-              <pf-report-letterhead-card [tpl]="template()" [busy]="lhBusy()" [note]="lhNote()" [error]="lhError()"
-                (presetChange)="applyLetterhead($event)" (continuationChange)="setLhContinuation($event)"
-                (pick)="onLetterheadFile($event.kind, $event.file)" (measure)="measureScan()" (mm)="setLhMm($event)"></pf-report-letterhead-card>
-            </section>
-
             <button type="button" class="pf-btn pf-btn--secondary pf-rhe-add" (click)="addLine()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
               Add a text line (GSTIN, registration no.…)
@@ -772,6 +773,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     .pf-rhe-fix { display: flex; margin-top: 6px; }
 
     .pf-rhe-sec { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--pf-line); }
+    .pf-rhe-sec--first { border-top: 0; padding-top: 0; }
     .pf-rhe-sec__h { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-rhe-readout { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
     .pf-rhe-align { align-self: flex-start; }
