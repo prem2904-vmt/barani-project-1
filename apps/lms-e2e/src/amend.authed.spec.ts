@@ -235,7 +235,7 @@ test.describe('Amend a finalized result', () => {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       return { status: res.status, body: await res.json() };
-    }, { apiBase: 'http://localhost:5270', reportId: firstReport.id as string });
+    }, { apiBase: process.env['PF_API_URL'] ?? 'http://localhost:5270', reportId: firstReport.id as string });
 
     expect(oldReportJson.status).toBe(200);
     expect(oldReportJson.body.success).toBe(true);
