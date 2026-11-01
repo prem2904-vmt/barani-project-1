@@ -23,6 +23,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 import { readReportStyle, writeReportStyle, type ReportStylePatch } from '../../../shared/utils/report-style';
 import { SAMPLE_SIGNERS } from '../../../shared/utils/report-signature-space';
+import { sampleTrendograms } from '../../../shared/utils/report-trend-sample';
 import { squeezeMessage, type SqueezeReport } from '../../../shared/utils/report-density';
 import {
   AGE_STYLE_CHOICES, LABEL_JOINER_CHOICES, PATIENT_LABELS, RENAMEABLE_LABEL_KEYS, ageSexText, ageText, miniStripText, patientLabel, sexText, swapAgeSexColumns,
@@ -1752,6 +1753,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
         template: effTpl,
         resolvedLayouts: this.buildPreviewLayouts(),
         previewKeepEmptyColumns: onColumns,
+        // Footer tab: sample trends so the Charts card shows what it does.
+        ...(this.tab() === 'footer' ? { trendograms: await sampleTrendograms(this.reportStyle().charts.trend.style === 'vector') } : {}),
       };
       // Preload uploaded images (logo, NABL, sig scans) as data URLs.
       // The sync renderer can't fetch images itself, so this step

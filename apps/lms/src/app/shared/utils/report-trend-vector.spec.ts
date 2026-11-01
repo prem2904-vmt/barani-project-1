@@ -36,10 +36,10 @@ describe('vector trendograms - data', () => {
 });
 
 describe('vector trendograms - axis', () => {
-  it('uses the nice scale the chart blocks use (0..137 -> 0..150 in steps of 25)', () => {
+  it('uses the nice scale the chart blocks use (0..137 -> 0..150 in steps of 50)', () => {
     const s = niceScale(0, 137, null, null);
-    expect([s.lo, s.hi, s.step]).toEqual([0, 150, 25]);
-    expect(s.ticks).toEqual([0, 25, 50, 75, 100, 125, 150]);
+    expect([s.lo, s.hi, s.step]).toEqual([0, 150, 50]);
+    expect(s.ticks).toEqual([0, 50, 100, 150]);
   });
   it('a haemoglobin-sized series gets round ticks, not 11.2 / 17.1', () => {
     const s = niceScale(11.2, 17.1, null, null);

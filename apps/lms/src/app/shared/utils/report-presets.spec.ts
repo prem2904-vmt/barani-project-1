@@ -18,6 +18,7 @@ describe('style presets — Modern writes exactly the documented fields', () => 
       v: 1, preset: 'modern', fit: { enabled: true },
       patient: { ageSex: 'combined', ageStyle: 'short', frame: 'tint', continuation: 'mini' },
       pageNumbers: 'n-of-m', colors: { palette: 'teal' }, signatures: { placement: 'end' },
+      charts: { trend: { style: 'vector' }, rangeBar: true },
     });
     const teal = PALETTES.find(p => p.id === 'teal')!;
     for (const k of PALETTE_KEYS) expect(next[k]).toBe(teal.colors[k]);

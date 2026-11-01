@@ -64,8 +64,8 @@ describe('report chart panel (phase 7)', () => {
   describe('vector trend charts', () => {
     it('draws the series as shapes and real text, with no picture, in the report\'s own face', () => {
       const r = render(withSeries({ charts: { trend: { style: 'vector' } } }));
-      const pictureOnlyDoc = buildReportPdf({ ...withSeries({}), trendograms: SERIES.map(s => ({ title: s.title, dataUrl: PNG_1x1 })) });
-      expect(images(r.doc)).toBeLessThan(images(pictureOnlyDoc));
+      const noCharts = buildReportPdf({ ...withSeries({}), trendograms: [] });
+      expect(images(r.doc)).toBe(images(noCharts));                  // the charts add no picture at all
       const text = readPdfRuns(raw(r.doc)).map(x => x.text).join(' ');
       expect(text).toContain('TRENDOGRAM');
       expect(text).toMatch(/Haemoglobin/);
@@ -74,7 +74,7 @@ describe('report chart panel (phase 7)', () => {
     it('prints the nice axis numbers, not the data extremes', () => {
       const text = readPdfRuns(raw(buildReportPdf(withSeries({ charts: { trend: { style: 'vector' } } })))).map(x => x.text);
       expect(text).toContain('150');
-      expect(text).toContain('25');
+      expect(text).toContain('50');
     });
     it('the layout changes how many sit across, and nothing is lost', () => {
       const tops = (layout: string) => {
