@@ -21,7 +21,10 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
-import { readReportStyle, writeReportStyle } from '../../../shared/utils/report-style';
+import { readReportStyle, writeReportStyle, type ReportStylePatch } from '../../../shared/utils/report-style';
+import {
+  AGE_STYLE_CHOICES, LABEL_JOINER_CHOICES, PATIENT_LABELS, RENAMEABLE_LABEL_KEYS, ageSexText, ageText, miniStripText, patientLabel, sexText, swapAgeSexColumns,
+} from '../../../shared/utils/report-patient-text';
 import { reportIssues, type ReportIssues } from '../../../shared/utils/report-issues';
 import { readReportTheme, REPORT_THEME_OPTIONS, ReportThemeId, writeReportTheme } from '../../../shared/utils/report-theme';
 import { SOURCE_SANS_DIR, SOURCE_SANS_FACES } from '../../../shared/utils/report-fonts';
@@ -29,6 +32,32 @@ import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-stri
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
+
+/** More sample tests so the live preview runs to three pages. */
+const previewTest = (testId: string, name: string, rows: Array<[string, string, string, string]>) => ({
+  testId, name, department: 'Biochemistry', departmentCode: 'BIO', sampleType: 'Serum', method: 'Photometry',
+  result: { values: Object.fromEntries(rows.map(([n, value, unit, range]) => [n, { value, unit, range }])) },
+});
+const PREVIEW_EXTRA_TESTS = [
+  previewTest('x1', 'Liver Function Test', [
+    ['Total Bilirubin', '0.8', 'mg/dL', '0.3 – 1.2'], ['Direct Bilirubin', '0.2', 'mg/dL', '0.0 – 0.3'], ['SGOT (AST)', '28', 'U/L', '5 – 40'],
+    ['SGPT (ALT)', '31', 'U/L', '5 – 45'], ['Alkaline Phosphatase', '96', 'U/L', '40 – 129'], ['Total Protein', '7.1', 'g/dL', '6.0 – 8.3'],
+    ['Albumin', '4.2', 'g/dL', '3.5 – 5.2'], ['Globulin', '2.9', 'g/dL', '2.0 – 3.5'], ['GGT', '24', 'U/L', '8 – 61'],
+  ]),
+  previewTest('x2', 'Kidney Function Test', [
+    ['Urea', '28', 'mg/dL', '15 – 40'], ['Creatinine', '0.8', 'mg/dL', '0.6 – 1.1'], ['Uric Acid', '4.6', 'mg/dL', '2.4 – 5.7'],
+    ['Sodium', '139', 'mmol/L', '135 – 145'], ['Potassium', '4.2', 'mmol/L', '3.5 – 5.1'], ['Chloride', '102', 'mmol/L', '98 – 107'],
+    ['Calcium', '9.4', 'mg/dL', '8.6 – 10.2'], ['Phosphorus', '3.5', 'mg/dL', '2.5 – 4.5'],
+  ]),
+  previewTest('x3', 'Iron Studies', [
+    ['Serum Iron', '84', 'µg/dL', '60 – 170'], ['TIBC', '310', 'µg/dL', '250 – 450'], ['Transferrin Saturation', '27', '%', '20 – 50'], ['Ferritin', '62', 'ng/mL', '13 – 150'],
+  ]),
+  previewTest('x4', 'Thyroid Profile', [
+    ['T3', '1.2', 'ng/mL', '0.8 – 2.0'], ['T4', '8.4', 'µg/dL', '5.1 – 14.1'], ['TSH', '2.6', 'µIU/mL', '0.27 – 4.20'],
+  ]),
+  previewTest('x5', 'Vitamin B12', [['Vitamin B12', '412', 'pg/mL', '211 – 911']]),
+  previewTest('x6', 'HbA1c', [['HbA1c', '5.6', '%', '4.0 – 5.6'], ['Estimated Average Glucose', '114', 'mg/dL', '< 117']]),
+];
 
 type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer';
 
@@ -260,6 +289,132 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                       @for (l of issues().lines; track l) { <li>{{ l }}</li> }
                     </ul>
                   }
+                </div>
+
+                <div class="pf-rtb" id="pf-age-sex">
+                  <h4 class="pf-rtb-h">Age &amp; sex</h4>
+                  <p class="pf-rtb-s">Print age and sex as one field, like “45 Y / Male”, or on their own lines. Only the wording changes, never the patient’s details.</p>
+                  <div class="space-y-3">
+                    <div>
+                      <label class="pf-label">Show as</label>
+                      <pf-segmented [options]="ageSexModeOptions" [value]="reportStyle().patient.ageSex" size="md"
+                                    (valueChange)="setAgeSex($event)"></pf-segmented>
+                    </div>
+                    <div class="pf-ps-grid">
+                      <div>
+                        <label class="pf-label">Age</label>
+                        <pf-select [options]="$any(ageStyleOptions)" [value]="reportStyle().patient.ageStyle"
+                                   (valueChange)="setPatientStyle({ ageStyle: $any($event) })"></pf-select>
+                      </div>
+                      <div>
+                        <label class="pf-label">Sex</label>
+                        <pf-segmented [options]="sexStyleOptions" [value]="reportStyle().patient.sexStyle" size="md"
+                                      (valueChange)="setPatientStyle({ sexStyle: $any($event) })"></pf-segmented>
+                      </div>
+                      @if (reportStyle().patient.ageSex === 'combined') {
+                        <div>
+                          <label class="pf-label">Between age and sex</label>
+                          <pf-select [options]="$any(joinerOptions)" [value]="reportStyle().patient.joiner"
+                                     (valueChange)="setPatientStyle({ joiner: $any($event) })"></pf-select>
+                        </div>
+                      }
+                    </div>
+                    <div class="pf-ps-sample" role="status" aria-live="polite">
+                      <span class="pf-ps-sample__k">Prints as</span>
+                      <span class="pf-ps-sample__v">{{ ageSexSample() }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pf-rtb" id="pf-field-names">
+                  <h4 class="pf-rtb-h">Field names</h4>
+                  <p class="pf-rtb-s">Rename a field in the strip, for example Order to Lab No. or MRN to UHID. Clear the box to go back to the usual name.</p>
+                  <div class="space-y-3">
+                    <div class="pf-ps-rename">
+                      <div class="pf-ps-rename__f">
+                        <label class="pf-label">Field</label>
+                        <pf-select [options]="$any(labelFieldOptions())" [value]="labelField()"
+                                   (valueChange)="labelField.set($any($event))"></pf-select>
+                      </div>
+                      <div class="pf-ps-rename__i">
+                        <label class="pf-label" for="pf-label-input">Printed as</label>
+                        <input id="pf-label-input" class="pf-input" type="text" maxlength="40"
+                               [placeholder]="defaultLabelText(labelField())" [value]="labelValue()"
+                               (input)="setLabel(labelField(), $any($event.target).value)" />
+                      </div>
+                    </div>
+                    <div>
+                      <label class="pf-label">Between the name and the value</label>
+                      <pf-select [options]="$any(labelJoinerOptions)" [value]="reportStyle().patient.labelJoiner"
+                                 (valueChange)="setPatientStyle({ labelJoiner: $any($event) })"></pf-select>
+                    </div>
+                    @if (renamedLabels().length) {
+                      <ul class="pf-ps-chips" aria-label="Renamed fields">
+                        @for (r of renamedLabels(); track r.key) {
+                          <li class="pf-ps-chip">
+                            <span class="pf-ps-chip__t"><span>{{ r.was }}</span><span aria-hidden="true">&rarr;</span><span class="pf-sr">printed as</span><strong>{{ r.now }}</strong></span>
+                            <button type="button" class="pf-ps-chip__x press" [attr.aria-label]="'Use the usual name for ' + r.was" (click)="setLabel(r.key, '')">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                            </button>
+                          </li>
+                        }
+                      </ul>
+                    }
+                  </div>
+                </div>
+
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Frame</h4>
+                  <p class="pf-rtb-s">How the strip is set off from the results.</p>
+                  <pf-segmented [options]="frameOptions" [value]="reportStyle().patient.frame" size="md"
+                                (valueChange)="setPatientStyle({ frame: $any($event) })"></pf-segmented>
+                </div>
+
+                <div class="pf-rtb" id="pf-every-page">
+                  <h4 class="pf-rtb-h">Every page</h4>
+                  <p class="pf-rtb-s">So a loose page can always be matched to its patient and a missing page is easy to spot.</p>
+                  <div class="pf-sqr">
+                    <div class="pf-sqr__row">
+                      <span class="pf-sqr__ic" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8"/><path d="M8 12h8M8 16h5"/></svg>
+                      </span>
+                      <span class="pf-sqr__txt">
+                        <span class="pf-sqr__label">Patient line on pages 2, 3 and on</span>
+                        <span class="pf-sqr__desc">{{ continuationSample() }}</span>
+                      </span>
+                      <button type="button" class="pf-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="reportStyle().patient.continuation !== 'none'"
+                              aria-label="Patient line on every page after the first"
+                              (click)="setPatientStyle({ continuation: reportStyle().patient.continuation === 'none' ? 'mini' : 'none' })">
+                        <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                      </button>
+                    </div>
+                    <div class="pf-sqr__row">
+                      <span class="pf-sqr__ic" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+                      </span>
+                      <span class="pf-sqr__txt">
+                        <span class="pf-sqr__label">Page N of M</span>
+                        <span class="pf-sqr__desc">{{ reportStyle().pageNumbers === 'n-of-m' ? 'The footer prints “Page 2 of 3”.' : 'The footer prints just the page number.' }}</span>
+                      </span>
+                      <button type="button" class="pf-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="reportStyle().pageNumbers === 'n-of-m'"
+                              aria-label="Page N of M" (click)="setPageNumbers(reportStyle().pageNumbers !== 'n-of-m')">
+                        <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                      </button>
+                    </div>
+                    <div class="pf-sqr__row">
+                      <span class="pf-sqr__ic" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+                      </span>
+                      <span class="pf-sqr__txt">
+                        <span class="pf-sqr__label">Report status</span>
+                        <span class="pf-sqr__desc">Print “Final” or “Preliminary” in the strip.</span>
+                      </span>
+                      <button type="button" class="pf-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="reportStyle().patient.showReportStatus"
+                              aria-label="Report status" (click)="setPatientStyle({ showReportStatus: !reportStyle().patient.showReportStatus })">
+                        <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="pf-rtb">
@@ -927,6 +1082,21 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-rt-designer { min-width: 0; min-height: 0; }
     @media (min-width: 901px) and (min-height: 560px) { .pf-rt-designer { height: 100%; } }
     .pf-lt-size { flex: none; width: 120px; }
+    .pf-ps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; align-items: start; }
+    .pf-ps-sample { display: flex; align-items: baseline; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2, var(--bg-subtle)); border: 1px solid var(--border-subtle, var(--border)); }
+    .pf-ps-sample__k { font-size: 11.5px; color: var(--text-muted); }
+    .pf-ps-sample__v { font-size: 14px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; white-space: pre-wrap; }
+    .pf-ps-rename { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+    .pf-ps-rename__f { flex: 1 1 200px; min-width: 0; }
+    .pf-ps-rename__i { flex: 1 1 200px; min-width: 0; }
+    .pf-ps-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+    .pf-ps-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border-radius: 999px; font-size: 12px;
+      background: var(--surface-2, var(--bg-subtle)); border: 1px solid var(--border-subtle, var(--border)); color: var(--text); }
+    .pf-ps-chip__t { display: inline-flex; align-items: center; gap: 6px; }
+    .pf-ps-chip__x { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
+    .pf-ps-chip__x:hover { background: var(--bg-hover, rgba(127,127,127,.15)); color: var(--text); }
+    .pf-ps-chip__x:focus-visible { outline: 2px solid var(--focus-ring, var(--primary)); outline-offset: 1px; }
+    .pf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .pf-lt-issues { margin: 8px 0 0; padding: 0 0 0 18px; font-size: 12px; line-height: 1.5; color: var(--text-muted); }
     .pf-rt-issues { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--pf-radius-chip, 8px);
       font-size: 12.5px; font-weight: 600; cursor: pointer;
@@ -1185,6 +1355,76 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     const n = parseFloat(v);
     if (isFinite(n)) this.setFit({ minPt: n });
   }
+  // ── Patient block wording (report-patient-text.ts) — stored in the same style object ──
+  readonly ageSexModeOptions: SegmentedOption<string>[] = [
+    { value: 'separate', label: 'Two lines' },
+    { value: 'combined', label: 'One field' },
+  ];
+  readonly sexStyleOptions: SegmentedOption<string>[] = [
+    { value: 'word', label: 'Male' },
+    { value: 'letter', label: 'M' },
+  ];
+  readonly frameOptions: SegmentedOption<string>[] = [
+    { value: 'rules', label: 'Lines' },
+    { value: 'box', label: 'Box' },
+    { value: 'tint', label: 'Tint' },
+    { value: 'none', label: 'None' },
+  ];
+  readonly ageStyleOptions = [{ value: 'auto', label: 'As the layout prints it' }, ...AGE_STYLE_CHOICES];
+  readonly joinerOptions = [{ value: ' / ', label: '45 Y / Male' }, { value: ', ', label: '45 Y, Male' }, { value: ' ', label: '45 Y Male' }, { value: '/', label: '45 Y/Male' }];
+  readonly labelJoinerOptions = LABEL_JOINER_CHOICES;
+  /** A fixed sample (45-year-old male) so the chip shows the wording, not this lab's preview patient. */
+  private readonly SAMPLE_PATIENT = { age: 45, sex: 'Male', displayName: 'Ravi Kumar', mrn: 'CHN-2609-004217-3' };
+  readonly ageSexSample = computed(() => {
+    const ps = this.reportStyle().patient;
+    if (ps.ageSex === 'combined') return `${patientLabel(ps, 'ageSex', 'Age / Sex : ')}${ageSexText(this.SAMPLE_PATIENT, ps, 'short')}`;
+    return `${patientLabel(ps, 'age', 'Age : ')}${ageText(this.SAMPLE_PATIENT, ps, 'Years')}     ${patientLabel(ps, 'sex', 'Sex : ')}${sexText(this.SAMPLE_PATIENT.sex, ps.sexStyle)}`;
+  });
+  readonly continuationSample = computed(() => this.reportStyle().patient.continuation === 'none'
+    ? 'Off. Pages after the first have no patient name on them.'
+    : `Prints  ${miniStripText(this.SAMPLE_PATIENT, 'LAB-2609-000142', this.reportStyle().patient).replace(/\s{2,}/g, ' ')}  and “Page 2 of 3”.`);
+  setPatientStyle(p: Partial<ReturnType<typeof readReportStyle>['patient']>) {
+    this.patch({ metadata: writeReportStyle(this.tpl(), { patient: p } as ReportStylePatch) });
+  }
+  setPageNumbers(on: boolean) {
+    this.patch({ metadata: writeReportStyle(this.tpl(), { pageNumbers: on ? 'n-of-m' : 'n' }) });
+  }
+  /** One field or two lines. An arranged strip swaps its `age` + `sex` chips for the one `ageSex` chip (and back). */
+  setAgeSex(mode: string) {
+    const combined = mode === 'combined';
+    const ps = this.reportStyle().patient;
+    const patient: Record<string, unknown> = { ageSex: combined ? 'combined' : 'separate' };
+    // "45 Y / Male" is what a lab means by one field; keep a lab's own wording choice if it made one.
+    if (combined && ps.ageStyle === 'auto') patient['ageStyle'] = 'short';
+    if (!combined && ps.ageStyle === 'short') patient['ageStyle'] = 'auto';
+    const next: Partial<ReportTemplate> = { metadata: writeReportStyle(this.tpl(), { patient } as ReportStylePatch) };
+    if (this.tpl().patientColumnsJson && this.patientScope() === 'default') {
+      const cols = swapAgeSexColumns(this.patientCols(), combined);
+      this.patientCols.set(cols);
+      next.patientColumnsJson = JSON.stringify(cols);
+    }
+    this.patch(next);
+  }
+  readonly labelField = signal<string>('orderid');
+  readonly labelFieldOptions = computed(() => {
+    const combined = this.reportStyle().patient.ageSex === 'combined';
+    return RENAMEABLE_LABEL_KEYS
+      .filter(k => (combined ? k !== 'age' && k !== 'sex' : k !== 'ageSex'))
+      .map(k => ({ value: k, label: PATIENT_LABELS[k].text }));
+  });
+  readonly labelValue = computed(() => this.reportStyle().patient.labels[this.labelField()] ?? '');
+  defaultLabelText(key: string): string { return PATIENT_LABELS[key]?.text ?? ''; }
+  setLabel(key: string, value: string) {
+    const labels = { ...this.reportStyle().patient.labels };
+    const v = value.trim() === '' ? '' : value;
+    if (v === '') delete labels[key]; else labels[key] = v;
+    this.patch({ metadata: writeReportStyle(this.tpl(), { patient: { labels } } as ReportStylePatch) });
+  }
+  readonly renamedLabels = computed(() =>
+    Object.entries(this.reportStyle().patient.labels)
+      .filter(([k]) => PATIENT_LABELS[k])
+      .map(([key, now]) => ({ key, was: PATIENT_LABELS[key].text, now })));
+
   /** Would long names overlap on this template? Re-rendered with long sample names after each preview render. */
   readonly issues = signal<ReportIssues>({ count: 0, lines: [] });
   readonly issuesLabel = computed(() => {
@@ -1459,6 +1699,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
           result: { values: {
             '25-Hydroxy Vitamin D': { value: '18', unit: 'ng/mL', range: '30 – 100', flag: 'L' },
           } } },
+        // A multi-page preview, only while a choice that shows on pages 2+ is on (the patient line, "Page N of M").
+        ...(this.reportStyle().patient.continuation !== 'none' || this.reportStyle().pageNumbers === 'n-of-m' ? PREVIEW_EXTRA_TESTS : []),
       ],
     });
   }
@@ -1561,7 +1803,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   ];
   private readonly PATIENT_ITEM_LABELS: Record<string, string> = {
     name: 'Patient name', age: 'Age', sex: 'Sex', mrn: 'MRN', phone: 'Phone',
-    orderid: 'Order ID', refdoctor: 'Referring doctor', specimen: 'Specimen(s)',
+    ageSex: 'Age / Sex', orderid: 'Order ID', refdoctor: 'Referring doctor', specimen: 'Specimen(s)',
     barcode: 'Barcode', registered: 'Registered date', collected: 'Collected date',
     reported: 'Reported date',
     refhospital: 'Referring hospital', collectedby: 'Collected by',
@@ -1589,7 +1831,10 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   readonly patientPool = computed<string[]>(() => {
     const placed = new Set(this.patientCols().flat());
     const custom = this.customPatientFields().map(f => f.name);
-    const all = [...this.ALL_PATIENT_ITEMS, ...custom];
+    // One field for age and sex: its chip stands where the two stood.
+    const combined = this.reportStyle().patient.ageSex === 'combined';
+    const builtIn = combined ? this.ALL_PATIENT_ITEMS.flatMap(k => (k === 'age' ? ['ageSex'] : k === 'sex' ? [] : [k])) : this.ALL_PATIENT_ITEMS;
+    const all = [...builtIn, ...custom];
     return all.filter((k, i) => all.indexOf(k) === i && !placed.has(k));
   });
 
@@ -1703,6 +1948,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       } catch { cols = null; }
     }
     cols = cols ?? this.DEFAULT_PATIENT_COLS.map(c => [...c]);
+    if (this.reportStyle().patient.ageSex === 'combined') cols = swapAgeSexColumns(cols, true);
     this.patientCols.set(this.fitColumns(cols, n));
   }
 
@@ -1718,6 +1964,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       } catch { cols = null; }
     }
     cols = cols ?? this.DEFAULT_PATIENT_COLS.map(c => [...c]);
+    if (this.reportStyle().patient.ageSex === 'combined') cols = swapAgeSexColumns(cols, true);
     this.patientCols.set(this.fitColumns(cols, n));
   }
 
