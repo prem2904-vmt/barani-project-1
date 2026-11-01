@@ -13,7 +13,7 @@ import { createLoadHold } from '../../shared/utils/min-duration';
 import { copyText } from '../../shared/utils/report-share';
 import { SelectComponent } from '../../shared/primitives/select.component';
 import {
-  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_CONNECTOR_SUGGEST_WIPE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorGrant, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS, rememberedAppName,
+  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_CONNECTOR_SUGGEST_WIPE, AI_CONNECTOR_MASTER_WIPE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorGrant, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS, rememberedAppName,
 } from './ai-connector.api';
 
 /**
@@ -69,7 +69,7 @@ import {
                   <div class="pf-aic__switchrow">
                     <div class="pf-aic__switchtext">
                       <span class="pf-aic__switchtitle" id="pf-aic-switch-label">Allow AI apps to connect</span>
-                      <span class="pf-aic__switchsub">{{ s.enabled ? 'On — people in your lab can connect an app and read the lab’s numbers.' : 'Off — no app can connect. Nothing is shared.' }}</span>
+                      <span class="pf-aic__switchsub">{{ s.enabled ? 'On — people in your lab can connect an app and read the lab’s numbers. Turning this off removes every app’s permission to suggest. People will need to allow it again.' : 'Off — no app can connect. Nothing is shared.' }}</span>
                     </div>
                     <button type="button" class="pf-toggle pf-aic__toggle press" role="switch" [attr.aria-checked]="s.enabled"
                             aria-labelledby="pf-aic-switch-label" [disabled]="saving()" [pfBusy]="saving()" (click)="toggle()">
@@ -345,7 +345,7 @@ export class AiConnectorsSettingsPage {
       }
       : {
         title: 'Turn off AI connectors?',
-        message: 'Every connected app stops working for your lab straight away. People can connect again after you turn this back on.',
+        message: 'Every connected app stops working for your lab straight away, and it can no longer read anything. ' + AI_CONNECTOR_MASTER_WIPE + ' People can connect again after you turn this back on.',
         confirmLabel: 'Turn off',
         tone: 'danger',
       });

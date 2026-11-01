@@ -259,6 +259,16 @@ describe('AiConnectorsSettingsPage: let connected assistants suggest Test Master
     expect(toasts.success).toHaveBeenCalled();
   });
 
+  it('turning the master switch OFF says every app permission is removed', async () => {
+    const a = setup({ state: { ...OFF, enabled: true } });
+    await loaded(a.f);
+    expect(a.f.nativeElement.textContent).toContain('Turning this off removes every app’s permission to suggest. People will need to allow it again.');
+    sw(a.f)!.click();
+    await settle(a.f);
+    const arg = (a.dialog.confirm.mock.calls as unknown as Array<[{ message: string }]>)[0][0];
+    expect(arg.message).toContain('Turning this off removes every app’s permission to suggest. People will need to allow it again.');
+  });
+
   it('the OFF confirm and the switch text say plainly that every app permission is removed', async () => {
     const a = setup({ state: { ...OFF, proposals: true } });
     await loaded(a.f);
