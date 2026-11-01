@@ -40,7 +40,11 @@ import { listenForBridgeLinks } from '../../bridges/bridge-link';
   `,
   styles: [`
     .pf-bnb {
-      position: fixed; z-index: 64; right: 16px; bottom: calc(var(--nd-nav-h, 0px) + env(safe-area-inset-bottom, 0px) + 16px);
+      /* Above the app nav from its MEASURED footprint (--pf-nav-h, safe area
+         included; layout/shell/nav-insets.ts) — the old --nd-nav-h never
+         existed, so the banner covered the docked bar's bell / avatar. */
+      position: fixed; z-index: 64; right: 16px;
+      bottom: max(calc(var(--pf-nav-h, 0px) + 16px), calc(env(safe-area-inset-bottom, 0px) + 16px));
       display: flex; align-items: center; gap: 12px; max-width: min(520px, calc(100vw - 32px));
       padding: 10px 12px; border-radius: var(--nd-radius, 14px);
       background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb); box-shadow: 0 10px 32px rgba(15, 23, 42, 0.18);

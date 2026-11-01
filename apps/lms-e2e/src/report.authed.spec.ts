@@ -112,10 +112,9 @@ test.describe('Generate report', () => {
           r => new RegExp(`/api/validation/${result.orderTestId}/validate$`, 'i').test(r.url())
             && r.request().method() === 'POST',
         ),
-        // KNOWN LAYOUT ISSUE (on origin/main too, 2026-11-01): at 1440×900 the
-        // validate action bar sits under the bottom nav, so a pointer click is
-        // intercepted — dispatch the click on the button itself.
-        validateBtn.dispatchEvent('click'),
+        // A real pointer click: the verdict bar floats above the docked
+        // bottom nav (--pf-nav-h), so nothing intercepts it at 1440×900.
+        validateBtn.click(),
       ]);
       expect(validateResponse.ok()).toBe(true);
       const validateJson = await validateResponse.json();

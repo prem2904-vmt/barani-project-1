@@ -45,7 +45,9 @@ import { UpdaterService } from '../../../core/services/updater.service';
     .pf-update-banner {
       position: fixed;
       left: 50%;
-      bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+      /* Above the app nav (measured --pf-nav-h, safe area included), never
+         on top of the docked bottom bar's items. */
+      bottom: max(calc(var(--pf-nav-h, 0px) + 16px), calc(env(safe-area-inset-bottom, 0px) + 16px));
       transform: translateX(-50%);
       z-index: 65; /* above toasts' stack area, below the offline banner */
       display: flex;

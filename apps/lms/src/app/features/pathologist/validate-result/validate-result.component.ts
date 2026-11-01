@@ -558,7 +558,6 @@ interface ValueRow {
     </section>
     `,
   styles: [`
-    @use '../../../shared/styles/device-tier' as dt;
     /* ── WORK page: non-scroll app layout ─────────────────────
        The PAGE itself never scrolls. :host fills the shell's main
        area; the screen header is fixed (flex:0 0 auto); the SCROLL
@@ -741,8 +740,12 @@ interface ValueRow {
     .pf-trendsel { display: block; margin-top: 10px; }
 
     /* ── Sticky verdict bar ──────────────────────────────────── */
-    .pf-stickybar { position: fixed; left: 0; right: 0; bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px)); z-index: 30; padding: 0 16px; pointer-events: none; }
-    @include dt.desktop-only { .pf-stickybar { bottom: 1rem; } }
+    /* Floats 16px above whatever app nav is showing — the docked bottom bar,
+       the phone pill, an iPad rail (left) or none — from the shell's MEASURED
+       footprint (--pf-nav-h / --pf-nav-left, layout/shell/nav-insets.ts, safe
+       area included). A guessed offset (the old 1rem on desktop) put Validate
+       under the docked bar, out of reach of the mouse. */
+    .pf-stickybar { position: fixed; left: var(--pf-nav-left, 0px); right: 0; bottom: calc(var(--pf-nav-h, 0px) + 16px); z-index: 30; padding: 0 16px; pointer-events: none; }
     .pf-stickybar__inner { pointer-events: auto; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 16px;
       background: var(--pf-card-bg, #ffffff); border: 1px solid var(--pf-line, #e2e8f0); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
       backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); max-width: 1400px; margin: 0 auto; }
