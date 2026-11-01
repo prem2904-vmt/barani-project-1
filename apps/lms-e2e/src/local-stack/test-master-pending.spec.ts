@@ -83,10 +83,14 @@ test('screens: Pending (N) in the band, the list + review card, light and dark, 
     await shot(page, `tm-pending-failed-${theme}`);
     await pickRow(page, seed.priceLabel);
     await shot(page, `tm-pending-price-${theme}`);
-    // Only a model / similarity match reads "guessed" (matchedBy); the badge is counts.pending + stale + failed.
+    // Only a model / similarity match reads "guessed" (matchedBy); a code match shows the plain confidence.
+    await expect(page.locator('[data-tmp-confidence]')).toHaveText('Confidence 96');
     if (seed.guessed) {
-      const g = await tm<{ matchedBy?: string }>(`/${seed.guessed}`);
+      const g = await tm<{ matchedBy?: string; targetLabel: string }>(`/${seed.guessed}`);
       expect(g.matchedBy).toBe('model');
+      await pickRow(page, g.targetLabel);
+      await expect(page.locator('[data-tmp-confidence]')).toHaveText('Cortex guessed this match (confidence 72)');
+      await shot(page, `tm-pending-guessed-${theme}`);
     }
     await ctx.close();
   }
