@@ -157,7 +157,7 @@ export class LabSettingsHubComponent {
       subtitle: 'Prefrontal Bridges: add, Wi-Fi, analyzers they connect',
       iconPath: 'M5 13h14a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2ZM7 16.5h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0' },
     { title: 'AI connectors', href: '/admin/ai-connectors', beta: 'mcp',
-      subtitle: 'Let AI apps like Claude read your numbers and suggest changes',
+      subtitle: 'Let AI apps like Claude read your lab’s numbers',
       iconPath: 'M9 7H6a4 4 0 0 0 0 8h3M15 7h3a4 4 0 0 1 0 8h-3M8 11h8' },
     // Referral labs, partner prices, vendor wallets and the referring network
     // have ONE home — the Referral & Vendors hub. This is a link to it, not a
