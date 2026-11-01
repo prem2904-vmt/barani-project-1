@@ -19,6 +19,12 @@ import { firstValueFrom } from 'rxjs';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ImageUploadComponent } from './image-upload.component';
+import { ReportLetterheadCardComponent, type LetterheadFileKind } from './report-letterhead-card.component';
+import { measureStationery, readImagePixels } from '../../../shared/utils/report-background-measure';
+import {
+  LH_SCAN_ID, applyLetterheadPreset, letterheadPresetOf, setLetterheadContinuation, setLetterpadMm,
+  type LetterheadContinuation, type LetterheadPresetId,
+} from '../../../shared/utils/report-letterhead';
 import { DialogService } from '../../../core/services/dialog.service';
 
 /** Template text field each element edits (content lives on the template). */
@@ -66,7 +72,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
 @Component({
   selector: 'pf-report-header-editor',
   standalone: true,
-  imports: [FormsModule, ImageUploadComponent, SnapGuidesComponent],
+  imports: [FormsModule, ImageUploadComponent, SnapGuidesComponent, ReportLetterheadCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'pf-rhe-host' },
   template: `
@@ -577,6 +583,12 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
           </section>
 
           @if (region() === 'header') {
+            <section class="pf-rhe-sec" aria-label="Letterhead type">
+              <pf-report-letterhead-card [tpl]="template()" [busy]="lhBusy()" [note]="lhNote()" [error]="lhError()"
+                (presetChange)="applyLetterhead($event)" (continuationChange)="setLhContinuation($event)"
+                (pick)="onLetterheadFile($event.kind, $event.file)" (measure)="measureScan()" (mm)="setLhMm($event)"></pf-report-letterhead-card>
+            </section>
+
             <button type="button" class="pf-btn pf-btn--secondary pf-rhe-add" (click)="addLine()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
               Add a text line (GSTIN, registration no.…)
@@ -631,6 +643,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                   <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                 </button>
               </div>
+              @if (lhPreset() !== 'preprinted') {
               <div class="pf-rhe-row pf-rhe-row--flat">
                 <div><p class="pf-rhe-row__t">Pre-printed letterhead paper</p>
                   <p class="pf-rhe-row__s">Printing asks whether to use your letterhead paper (header and footer left blank). Shared and downloaded reports always include them.</p></div>
@@ -646,6 +659,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                   <label class="pf-field"><span class="pf-field__lbl">Blank at the bottom (mm)</span>
                     <input class="pf-input pf-num" type="number" min="0" max="120" [ngModel]="template().letterpadFooterMm ?? 30" (ngModelChange)="emitPatch({ letterpadFooterMm: +$event })" /></label>
                 </div>
+              }
               }
             </section>
 
@@ -1321,6 +1335,70 @@ export class ReportHeaderEditorComponent implements OnDestroy {
       this.bgBusy.set(false);
     }
   }
+  // ── letterhead presets (phase 5) ─────────────────────────────────────
+  readonly lhBusy = signal(false);
+  readonly lhNote = signal<string | null>(null);
+  readonly lhError = signal<string | null>(null);
+  readonly lhPreset = computed<LetterheadPresetId>(() => letterheadPresetOf(this.template()));
+
+  applyLetterhead(id: LetterheadPresetId) {
+    if (id === this.lhPreset()) return;
+    this.lhNote.set(null); this.lhError.set(null);
+    this.patch.emit(applyLetterheadPreset(this.template(), id));
+  }
+  setLhContinuation(c: LetterheadContinuation) { this.patch.emit(setLetterheadContinuation(this.template(), c)); }
+  setLhMm(mm: { headerMm?: number; footerMm?: number }) { this.lhNote.set(null); this.patch.emit(setLetterpadMm(this.template(), mm)); }
+
+  /** Pick -> check -> shrink -> upload -> (stationery: measure it) -> apply the preset with the picture. */
+  async onLetterheadFile(kind: LetterheadFileKind, file: File) {
+    this.lhError.set(null); this.lhNote.set(null);
+    const bad = validateBackgroundFile(file);
+    if (bad) { this.lhError.set(bad); return; }
+    this.lhBusy.set(true);
+    try {
+      const shrunk = await this.shrinkImage(file);
+      if (shrunk.blob.size > BG_MAX_UPLOAD_BYTES) {
+        this.lhError.set(`Even at print size it is ${(shrunk.blob.size / 1048576).toFixed(1)} MB — save it as a JPG, or simplify it (limit 5 MB).`);
+        return;
+      }
+      const px = await readImagePixels(shrunk.blob);
+      const url = await this.uploadBlob(shrunk.blob, `${kind === 'scan' ? 'stationery' : 'letterhead'}.${shrunk.ext}`);
+      if (kind === 'image') {
+        this.patch.emit(applyLetterheadPreset(this.template(), 'image', { imageUrl: url, imageAspect: px.height / px.width }));
+        return;
+      }
+      const m = measureStationery(px);
+      this.patch.emit(applyLetterheadPreset(this.template(), 'preprinted', { scanUrl: url, headerMm: m.headerMm ?? undefined, footerMm: m.footerMm ?? undefined }));
+      this.lhNote.set(this.measureText(m.headerMm, m.footerMm));
+    } catch (e) {
+      this.lhError.set(ApiError.from(e).message || 'Upload failed — try again.');
+    } finally {
+      this.lhBusy.set(false);
+    }
+  }
+  /** Measure the stationery scan that is already on the page again. */
+  async measureScan() {
+    this.lhError.set(null); this.lhNote.set(null);
+    const bg = this.layout().backgrounds.find(b => b.id === LH_SCAN_ID);
+    const src = bg ? this.imageCache()[bg.url] : null;
+    if (!src) { this.lhError.set('The scan is not loaded yet — try again in a moment.'); return; }
+    this.lhBusy.set(true);
+    try {
+      const m = measureStationery(await readImagePixels(src));
+      this.patch.emit(setLetterpadMm(this.template(), { headerMm: m.headerMm ?? undefined, footerMm: m.footerMm ?? undefined }));
+      this.lhNote.set(this.measureText(m.headerMm, m.footerMm));
+    } catch {
+      this.lhError.set('Could not read that image.');
+    } finally {
+      this.lhBusy.set(false);
+    }
+  }
+  private measureText(top: number | null, bottom: number | null): string {
+    if (top === null && bottom === null) return 'We could not see any printing at the top or bottom of that image. Type the blank space in mm.';
+    const parts = [top !== null ? `${top} mm at the top` : 'nothing printed at the top', bottom !== null ? `${bottom} mm at the bottom` : 'nothing printed at the bottom'];
+    return `Measured ${parts.join(' and ')}. Check the guides on the page and change the numbers if they are off.`;
+  }
+
   /** Shrink to A4 @ 300 dpi on the longest side; opaque images become JPEG (small),
    *  images with transparency stay PNG. */
   protected async shrinkImage(file: File): Promise<{ blob: Blob; ext: 'jpg' | 'png' }> {
