@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Observable } from 'rxjs';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -68,6 +68,12 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
           <pf-select class="pf-tmp__filter" size="sm" [options]="filterOptions" [value]="filter()"
                      (valueChange)="setFilter($event)" aria-label="Show"></pf-select>
         </header>
+        @if (batch()) {
+          <div class="pf-tmp__batch" data-tmp-batch>
+            <span class="pf-chip pf-chip--static pf-chip--violet">From the rate card you just read</span>
+            <button type="button" class="pf-btn pf-btn--quiet press" (click)="batchCleared.emit()">Show all pending</button>
+          </div>
+        }
         <div class="pf-tmp__body">
           @if (loading() && !loadedOnce()) {
             <pf-skeleton-table [rows]="6" [cols]="4" label="Loading pending changes…"></pf-skeleton-table>
@@ -227,6 +233,7 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
     .pf-tmp__hint { font-size: 12px; color: var(--text-tertiary); }
     .pf-tmp__count { font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
     .pf-tmp__filter { min-width: 190px; }
+    .pf-tmp__batch { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 16px; border-bottom: 1px solid var(--pf-line); }
     .pf-tmp__body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
     .pf-tmp__grid { flex: 1 1 auto; min-height: 280px; width: 100%; }
     .pf-tmp__more { margin: 0; padding: 8px 14px 10px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--pf-line); }
@@ -301,6 +308,10 @@ export class PendingChangesPanelComponent implements OnInit {
 
   /** Band search text (the host's band pill drives it). */
   readonly query = input<string>('');
+  /** Narrow to the suggestions of ONE rate-card read (the assistant's "Review in Pending"); null = everything. */
+  readonly batch = input<string | null>(null);
+  /** The person cleared the batch chip: show everything again. */
+  readonly batchCleared = output<void>();
   /** ≤900px: the review is a sheet over the list. */
   readonly narrow = input<boolean>(false);
   /** The loaded catalogue (names for profile members). */
@@ -430,6 +441,18 @@ export class PendingChangesPanelComponent implements OnInit {
     ];
   });
 
+  constructor() {
+    // The host picks / clears a rate-card batch after the panel exists: reload when it changes (not on first run).
+    let seen: string | null | undefined;
+    effect(() => {
+      const b = this.batch();
+      if (seen === undefined) { seen = b; return; }   // first run: ngOnInit already loads
+      if (b === seen) return;
+      seen = b;
+      untracked(() => { this.selectedId.set(null); this.detail.set(null); this.sheetOpen.set(false); this.reload(false); });
+    });
+  }
+
   ngOnInit(): void { this.reload(); }
 
   setFilter(f: TmListFilter) {
@@ -443,7 +466,7 @@ export class PendingChangesPanelComponent implements OnInit {
   reload(keepSelection = true, next?: string | null) {
     this.loading.set(true);
     this.now = Date.now();
-    this.svc.list(this.filter()).subscribe({
+    (this.batch() ? this.svc.list(this.filter(), this.batch()) : this.svc.list(this.filter())).subscribe({
       next: r => {
         this.items.set(r.items); this.total.set(r.total);
         this.loading.set(false); this.loadedOnce.set(true);

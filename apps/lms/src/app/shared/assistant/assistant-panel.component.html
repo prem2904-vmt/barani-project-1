@@ -2,6 +2,10 @@
   <div class="pf-asst-backdrop" [class.pf-asst-backdrop--docked]="docked()" (click)="close()" aria-hidden="true"></div>
   <!-- Non-modal side panel (the page stays usable): complementary, not dialog. -->
   <aside class="pf-asst pf-card" [class.pf-asst--docked]="docked()" role="complementary" [attr.aria-label]="title()">
+    @if (attachOn()) {
+      <input #filePick type="file" class="pf-asst__file" accept="image/*,application/pdf,.pdf" multiple tabindex="-1" aria-hidden="true" (change)="onFilesPicked($event)">
+      <input #camPick type="file" class="pf-asst__file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true" (change)="onFilesPicked($event)">
+    }
     <header class="pf-card__head pf-asst__head">
       <!-- AI working = the sparkle glows (pf-ai-glow-mark), not a rainbow frame round the whole thread. -->
       <span class="pf-card__icon pf-asst__mark pf-ai-glow-mark" [attr.data-ai-working]="pending() ? 'true' : null" aria-hidden="true">
@@ -109,6 +113,15 @@
                 </li>
               }
             </ul>
+            @if (attachOn()) {
+              <button type="button" class="pf-asst-attach press" [disabled]="!canAttach()" (click)="pickFile()" data-asst-attach>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.6-9.2 9.2a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.2a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5"/></svg>
+                <span class="pf-asst-attach__text">
+                  <strong>Add a rate card</strong>
+                  <span>A photo or PDF, up to 6 pages</span>
+                </span>
+              </button>
+            }
           </div>
         }
 
@@ -163,6 +176,12 @@
                             <div class="pf-asst-card__row pf-asst-card__row--action">
                               <svg class="pf-asst-card__ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
                               <p class="pf-asst-card__text">{{ s.text }}</p>
+                            </div>
+                          }
+                          @case ('proposal') {
+                            <div class="pf-asst-card__row pf-asst-card__row--action">
+                              <svg class="pf-asst-card__ico" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                              <p class="pf-asst-card__text">{{ s.label }} <span class="pf-asst-prop" data-status="pending">Waiting in Pending</span></p>
                             </div>
                           }
                           @case ('changes') {
@@ -225,7 +244,71 @@
                     }
                   </ul>
                 }
+                @if (proposalCount(item) > 0) {
+                  <div class="pf-asst-card__row pf-asst-card__row--props">
+                    <button type="button" class="pf-btn pf-btn--secondary pf-asst-card__btn press" (click)="reviewInPending(null)" data-asst-review>
+                      Review in Pending
+                    </button>
+                  </div>
+                }
                 <p class="pf-asst-msg__by">{{ $any(item).by }}</p>
+              </div>
+            }
+            @case ('card') {
+              <div class="pf-asst-msg pf-asst-msg--bot pf-asst-rc" [attr.data-phase]="$any(item).phase" data-asst-card>
+                @switch ($any(item).phase) {
+                  @case ('done') {
+                    <p class="pf-asst-rc__head" role="status">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                      {{ cardHeadline($any(item).summary) }}
+                    </p>
+                    @if ($any(item).summary.suggestions > 0) {
+                      <p class="pf-asst-rc__line">{{ cardBreakdown($any(item).summary) }}. Nothing is changed until you approve each one.</p>
+                    }
+                    @if ($any(item).summary.alreadyCurrent > 0) {
+                      <p class="pf-asst-rc__line pf-asst-rc__line--quiet">{{ $any(item).summary.alreadyCurrent }} already at the printed price.</p>
+                    }
+                    @if ($any(item).summary.noPrice > 0) {
+                      <p class="pf-asst-rc__line pf-asst-rc__line--quiet">{{ $any(item).summary.noPrice }} matched but have no price printed.</p>
+                    }
+                    @for (n of $any(item).summary.notes; track $index) { <p class="pf-asst-rc__line pf-asst-rc__line--quiet">{{ n }}</p> }
+                    @if ($any(item).summary.unmatched.length) {
+                      <details class="pf-asst-rc__more">
+                        <summary>{{ $any(item).summary.unmatched.length }} line{{ $any(item).summary.unmatched.length === 1 ? '' : 's' }} not added</summary>
+                        <ul>
+                          @for (u of $any(item).summary.unmatched; track $index) {
+                            <li><span class="pf-asst-rc__txt">{{ u.text }}</span> <span class="pf-asst-rc__why">{{ u.reason }}</span></li>
+                          }
+                        </ul>
+                      </details>
+                    }
+                    @if ($any(item).summary.suggestions > 0) {
+                      <div class="pf-asst-card__row pf-asst-card__row--props">
+                        <button type="button" class="pf-btn pf-btn--primary pf-asst-card__btn press" (click)="reviewInPending($any(item).summary.batchId)" data-asst-review>
+                          Review in Pending
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                        </button>
+                      </div>
+                    }
+                    <p class="pf-asst-msg__by">{{ providerLabel() }}</p>
+                  }
+                  @case ('error') {
+                    <p class="pf-asst-rc__head pf-asst-rc__head--bad" role="alert">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+                      {{ $any(item).error.message }}
+                    </p>
+                    @if ($any(item).canRetry) {
+                      <button type="button" class="pf-btn pf-btn--quiet press pf-asst-retry" (click)="retryCard(item.id)">Try again</button>
+                    }
+                  }
+                  @default {
+                    <p class="pf-asst-rc__head" role="status">
+                      <span class="pf-asst-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                      {{ $any(item).step }}
+                    </p>
+                    <div class="pf-asst-rc__bar" aria-hidden="true"><span [attr.data-phase]="$any(item).phase"></span></div>
+                  }
+                }
               </div>
             }
             @case ('error') {
@@ -250,6 +333,16 @@
 
       <footer class="pf-asst__foot">
         <div class="pf-asst__composer">
+          @if (attachOn()) {
+            <button type="button" class="pf-btn pf-btn--icon press pf-asst__attach" [disabled]="!canAttach()" (click)="pickFile()"
+                    aria-label="Add a rate card (photo or PDF)" title="Add a rate card">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.4 11.6-9.2 9.2a5.5 5.5 0 0 1-7.8-7.8l9.2-9.2a3.7 3.7 0 0 1 5.2 5.2l-9.2 9.2a1.8 1.8 0 0 1-2.6-2.6l8.5-8.5"/></svg>
+            </button>
+            <button type="button" class="pf-btn pf-btn--icon press pf-asst__attach pf-asst__attach--cam" [disabled]="!canAttach()" (click)="pickCamera()"
+                    aria-label="Take a photo of the rate card" title="Take a photo">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3Z"/><circle cx="12" cy="13" r="3.5"/></svg>
+            </button>
+          }
           <textarea #composer class="pf-input pf-asst__input" rows="1" [maxLength]="maxChars"
                     [value]="draft()" (input)="draft.set($any($event.target).value)" (keydown)="onComposerKey($event)"
                     [disabled]="providersState() !== 'ready' || noneAvailable() || limitReached()"

@@ -1,6 +1,6 @@
 import type { PfSelectOption } from '../primitives/select.component';
 import type {
-  AssistantProvider, AssistantProviderId, AssistantReply, AssistantSuggestion, AssistantTestRef, AssistantTurn, MappingSuggestion,
+  AssistantProvider, AssistantProviderId, AssistantReply, AssistantSuggestion, AssistantTestRef, AssistantTurn, MappingSuggestion, RateCardSummary,
 } from './assistant.models';
 
 /**
@@ -71,6 +71,13 @@ export function normaliseSuggestions(raw: unknown): AssistantSuggestion[] {
         if (text) out.push({ kind: 'action', text });
         break;
       }
+      case 'proposal': {
+        const id = str(s['id'] ?? s['value'], 64);
+        const label = str(s['label'], 200);
+        // Only a real id shape (a GUID) makes a card: the id is shown nowhere, but it is what Pending filters on.
+        if (label && /^[0-9a-f-]{32,40}$/i.test(id)) out.push({ kind: 'proposal', id, label, note: str(s['note'], 40) || null });
+        break;
+      }
       case 'mapping': {
         const analyzerCode = str(s['analyzerCode'], 40);
         const tests = normTests(s['tests']);
@@ -137,6 +144,21 @@ export interface AssistantErrorView {
 /** The server's failure codes (InstrumentAssistantService / AstDiskReadService). */
 export const ASSISTANT_ERROR_CODES = ['bad_request', 'not_found', 'ai_unavailable', 'ai_cap_reached', 'pf_sense_off', 'ai_failed'] as const;
 
+/** Rate-card endpoint refusals (mw RateCardReadService) in plain words. Checked BEFORE the generic 429 → "limit" rule:
+ *  `rate_limited` is "one a minute", not the monthly cap. */
+export const RATE_CARD_ERRORS: Readonly<Record<string, string>> = {
+  rate_limited: 'One rate card a minute. Wait a moment and try again.',
+  too_many_pages: 'A rate card can have at most 6 pages.',
+  too_large: 'That is over 15 MB. Try fewer pages or a smaller photo.',
+  unsupported_type: 'Add a photo (JPEG, PNG, WebP) or a PDF.',
+  too_many_uploads: 'Too many rate cards are waiting. Try again later.',
+  already_read: 'That rate card was already read. Add it again to read it again.',
+  in_progress: 'That rate card is being read.',
+  file_missing: 'The file is no longer available. Add it again.',
+  storage_error: 'Couldn’t save the file. Try again in a moment.',
+  storage_unavailable: 'File storage isn’t available right now.',
+};
+
 /** The two admin-controlled refusals, worded once (server messages match). */
 export const PF_SENSE_OFF_MESSAGE = 'Cortex is turned off for this lab — ask your admin.';
 export const PF_SENSE_LIMIT_MESSAGE = 'Cortex limit reached for this month — ask your admin.';
@@ -168,6 +190,9 @@ export function assistantError(e: unknown, providerLabel = 'This engine'): Assis
   if (code === 'pf_sense_off') {
     return { kind: 'off', retry: false, message: PF_SENSE_OFF_MESSAGE };
   }
+  if (RATE_CARD_ERRORS[code]) {
+    return { kind: 'invalid', retry: code === 'storage_error' || code === 'rate_limited', message: RATE_CARD_ERRORS[code] };
+  }
   if (code === 'ai_cap_reached' || status === 429 || /limit|quota|cap_reached/.test(code)) {
     return { kind: 'limit', retry: false,
       message: PF_SENSE_LIMIT_MESSAGE };
@@ -180,7 +205,7 @@ export function assistantError(e: unknown, providerLabel = 'This engine'): Assis
     return { kind: 'invalid', retry: false, message: 'That couldn’t be sent. Start a new chat and ask again in fewer words.' };
   }
   if (code === 'not_found') {
-    // HTTP 200 + not_found = the analyzer asked about is gone (not "beta off").
+    // HTTP 200 + not_found = the analyzer asked about is gone (not "beta off"); a 404 is the rate card read (below).
     return { kind: 'missing', retry: false, message: 'That analyzer isn’t there any more. Reload the page and pick it again.' };
   }
   if (status === 404 || code === 'beta_disabled' || code === 'not_enabled') {
@@ -193,4 +218,37 @@ export function assistantError(e: unknown, providerLabel = 'This engine'): Assis
     return { kind: 'network', retry: true, message: 'No answer came back. Check the connection and try again.' };
   }
   return { kind: 'failed', retry: true, message: 'The assistant couldn’t answer that. Try again, or ask it another way.' };
+}
+
+// ── Rate card summary ─────────────────────────────────────────────────────
+
+const num = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0; };
+
+/** The read endpoint's answer (envelope or bare), defensively; null when it isn't one. */
+export function normaliseRateCardSummary(raw: unknown): RateCardSummary | null {
+  const src = rec(raw) && rec(raw['data']) ? raw['data'] : raw;
+  if (!rec(src) || !/^[0-9a-f-]{32,40}$/i.test(str(src['batchId'], 64))) return null;
+  const unmatched = (Array.isArray(src['unmatched']) ? src['unmatched'] : []).filter(rec).slice(0, 60)
+    .map((u) => ({ n: num(u['n']), text: str(u['text'], 200), reason: str(u['reason'], 200) })).filter((u) => u.text);
+  const notes = (Array.isArray(src['notes']) ? src['notes'] : []).map((n) => str(n, 200)).filter(Boolean).slice(0, 8);
+  const price = num(src['priceSuggestions']); const created = num(src['newTestSuggestions']);
+  return {
+    batchId: str(src['batchId'], 64), pages: num(src['pages']), pagesRead: num(src['pagesRead']), lines: num(src['lines']),
+    priceSuggestions: price, newTestSuggestions: created, suggestions: num(src['suggestions']) || price + created,
+    alreadyCurrent: num(src['alreadyCurrent']), noPrice: num(src['noPrice']), unmatched, notes,
+    provider: str(src['provider'], 20), model: str(src['model'], 80),
+  };
+}
+
+/** "3 prices and 1 new test" — the breakdown under the headline. */
+export function rateCardBreakdown(s: Pick<RateCardSummary, 'priceSuggestions' | 'newTestSuggestions'>): string {
+  const parts: string[] = [];
+  if (s.priceSuggestions) parts.push(`${s.priceSuggestions} price${s.priceSuggestions === 1 ? '' : 's'}`);
+  if (s.newTestSuggestions) parts.push(`${s.newTestSuggestions} new test${s.newTestSuggestions === 1 ? '' : 's'}`);
+  return parts.join(' and ');
+}
+
+/** The headline: "4 suggestions added to Pending" / "Nothing to suggest". Copy says Cortex, never "AI". */
+export function rateCardHeadline(s: Pick<RateCardSummary, 'suggestions'>): string {
+  return s.suggestions > 0 ? `${s.suggestions} suggestion${s.suggestions === 1 ? '' : 's'} added to Pending` : 'Nothing to suggest from this rate card';
 }

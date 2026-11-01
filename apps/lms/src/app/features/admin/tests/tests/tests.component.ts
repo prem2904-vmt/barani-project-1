@@ -48,6 +48,9 @@ import { CatalogProposalsPanelComponent } from './catalog-proposals-panel.compon
 import { PendingChangesPanelComponent } from './pending-changes-panel.component';
 import { BetaFeaturesService } from '../../../../core/services/beta-features.service';
 import { TmProposalsService } from '../../../../core/services/tm-proposals.service';
+import { AssistantButtonComponent } from '../../../../shared/assistant/assistant-button.component';
+import { AssistantPanelComponent } from '../../../../shared/assistant/assistant-panel.component';
+import type { AssistantPageContext } from '../../../../shared/assistant/assistant.models';
 import { TM_ALL_PERMS } from '../../../../shared/utils/tm-proposals';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitives/segmented.component';
@@ -161,6 +164,8 @@ type TmStatus = 'all' | 'active' | 'inactive';
     PricingComponent,
     CatalogProposalsPanelComponent,
     PendingChangesPanelComponent,
+    AssistantButtonComponent,
+    AssistantPanelComponent,
     HeroBandComponent,
     SegmentedComponent,
   ],
@@ -968,6 +973,20 @@ export class TestsComponent implements OnInit {
     this.tmProposals.openCount().subscribe(n => this.pendingCount.set(n));
   }
 
+  /** Cortex panel (Test Master assistant + "Read a rate card"; beta `assistant`, dev only). */
+  readonly assistantOpen = signal(false);
+  readonly asstContext = computed<AssistantPageContext>(() => ({ page: 'test-master', subject: 'Tests and prices', attachments: 'rate-card' }));
+  /** Pending narrowed to one rate-card read (set by the panel's "Review in Pending"). */
+  readonly pendingBatch = signal<string | null>(null);
+
+  /** The assistant's "Review in Pending": close the panel (phones: a full-screen sheet) and show the suggestions it added. */
+  onAssistantOpenPending(batch: string | null) {
+    this.assistantOpen.set(false);
+    this.pendingBatch.set(batch);
+    this.openPendingView();
+    this.loadPendingCount();
+  }
+
   openPendingView() {
     if (!this.pendingOn()) return;
     this.panelEditing.set(false); this.panelQuery.set('');
@@ -1029,7 +1048,7 @@ export class TestsComponent implements OnInit {
   readonly gridView = computed(() => !this.ogView() && !this.microView() && !this.pricingView() && !this.pendingView());
   setView(v: TmView) {
     this.panelEditing.set(false);
-    if (v === 'pending') this.openPendingView();
+    if (v === 'pending') { this.pendingBatch.set(null); this.openPendingView(); }
     else if (v === 'og') this.openOgView();
     else if (v === 'micro') this.openMicroView();
     else if (v === 'pricing') this.openPricingView();

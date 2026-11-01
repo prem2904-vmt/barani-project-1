@@ -107,3 +107,46 @@ describe('TestsComponent — Pending (N) view (beta assistant)', () => {
     expect(c.pendingView()).toBe(true);
   });
 });
+
+describe('TestsComponent — Cortex "Read a rate card" (beta assistant)', () => {
+  it('beta off: no Read-a-rate-card button and no assistant panel', async () => {
+    const { el, c } = render({ beta: false });
+    await flush();
+    expect(el.querySelector('pf-assistant-button')).toBeNull();
+    expect(el.querySelector('pf-assistant-panel')).toBeNull();
+    expect(c.assistantOpen()).toBe(false);
+  });
+
+  it('beta on: the band button is the Test Master Cortex feature; pressing it opens the panel in Test Master mode with attach on', async () => {
+    const { f, c, el } = render({ beta: true });
+    await flush(); f.detectChanges();
+    const btn = el.querySelector('pf-assistant-button')!;
+    expect(btn.getAttribute('feature')).toBe('test_master_assistant');
+    expect(btn.getAttribute('label')).toBe('Read a rate card');
+    expect(c.asstContext()).toMatchObject({ page: 'test-master', attachments: 'rate-card' });
+    c.assistantOpen.set(true); f.detectChanges();
+    expect(el.querySelector('pf-assistant-panel')).not.toBeNull();
+  });
+
+  it('a role with no Test Master / pricing permission gets neither the button nor the panel', async () => {
+    const { el } = render({ beta: true, perms: ['view_reports'] });
+    await flush();
+    expect(el.querySelector('pf-assistant-button')).toBeNull();
+    expect(el.querySelector('pf-assistant-panel')).toBeNull();
+  });
+
+  it('"Review in Pending" closes the panel and opens Pending narrowed to that batch; the tab itself shows everything', async () => {
+    const { f, c, el } = render({ beta: true });
+    await flush();
+    c.assistantOpen.set(true);
+    c.onAssistantOpenPending('batch-1');
+    f.detectChanges();
+    expect(c.assistantOpen()).toBe(false);
+    expect(c.pendingView()).toBe(true);
+    expect(c.pendingBatch()).toBe('batch-1');
+    expect(el.querySelector('pf-tm-pending-panel')).not.toBeNull();
+    c.setView('individual'); f.detectChanges();
+    c.setView('pending'); f.detectChanges();
+    expect(c.pendingBatch()).toBeNull();
+  });
+});

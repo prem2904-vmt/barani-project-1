@@ -268,4 +268,25 @@ describe('PendingChangesPanelComponent', () => {
       expect(t.el.textContent).not.toMatch(/PF Sense/);
     }
   });
+
+  it('batch (a rate-card read): the list asks for that batch, shows the chip, and "Show all pending" tells the host', async () => {
+    const t = render({ list: [P(), MINE] });
+    t.f.componentRef.setInput('batch', 'batch-9');
+    t.f.detectChanges();
+    await flush(); t.f.detectChanges();
+    expect(t.svc.list).toHaveBeenLastCalledWith('review', 'batch-9');
+    const chip = t.el.querySelector('[data-tmp-batch]')!;
+    expect(chip.textContent).toContain('From the rate card you just read');
+    let cleared = 0;
+    t.c.batchCleared.subscribe(() => cleared++);
+    chip.querySelector<HTMLButtonElement>('button')!.click();
+    expect(cleared).toBe(1);
+  });
+
+  it('no batch: the plain one-argument list call and no chip', async () => {
+    const t = render({ list: [P()] });
+    await flush(); t.f.detectChanges();
+    expect(t.svc.list).toHaveBeenLastCalledWith('review');
+    expect(t.el.querySelector('[data-tmp-batch]')).toBeNull();
+  });
 });

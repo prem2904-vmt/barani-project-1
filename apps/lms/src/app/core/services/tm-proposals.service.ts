@@ -25,8 +25,9 @@ export class TmProposalsService {
   private readonly api = inject(ApiService);
   static readonly PAGE = 100;
 
-  private page(status: string, take = TmProposalsService.PAGE): Observable<TmProposalPage> {
-    return this.api.get<TmProposalPage>(`${TM_PROPOSALS_URL}?status=${encodeURIComponent(status)}&take=${take}`).pipe(
+  private page(status: string, take = TmProposalsService.PAGE, batchId: string | null = null): Observable<TmProposalPage> {
+    const batch = batchId ? `&batchId=${encodeURIComponent(batchId)}` : '';
+    return this.api.get<TmProposalPage>(`${TM_PROPOSALS_URL}?status=${encodeURIComponent(status)}&take=${take}${batch}`).pipe(
       map(p => ({
         items: Array.isArray(p?.items) ? p.items : [], total: Number(p?.total) || 0, pendingCount: Number(p?.pendingCount) || 0,
         counts: p?.counts ?? null,
@@ -45,10 +46,11 @@ export class TmProposalsService {
    * (the server settles staleness first, so total, rows and counts agree). The badge
    * is the server's `counts` (pending + stale + failed), never a second read.
    */
-  list(filter: TmListFilter): Observable<TmListResult> {
+  list(filter: TmListFilter, batchId: string | null = null): Observable<TmListResult> {
     const status = filter === 'review' ? 'pending,stale,failed' : filter;
-    return this.page(status).pipe(
-      map(p => ({ items: tmSort(p.items), total: p.total, openCount: filter === 'review' ? p.total : TmProposalsService.open(p) })),
+    return this.page(status, TmProposalsService.PAGE, batchId).pipe(
+      // `openCount` is the band badge: always the lab's whole open set, never just one rate-card batch.
+      map(p => ({ items: tmSort(p.items), total: p.total, openCount: filter === 'review' && !batchId ? p.total : TmProposalsService.open(p) })),
     );
   }
 

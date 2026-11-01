@@ -190,3 +190,40 @@
   .pf-asst-msg--user { max-width: 92%; }
 }
 @keyframes pf-asst-up { from { opacity: 0; transform: translateY(32px); } to { opacity: 1; transform: none; } }
+
+
+/* Test Master: Attach + camera in the composer, the "Add a rate card" door in the empty state, and the rate-card card. */
+.pf-asst__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: hidden; }
+.pf-asst__attach { flex: none; width: 44px; height: 44px; padding: 0; display: inline-grid; place-items: center; color: var(--text-secondary); }
+.pf-asst__attach--cam { display: none; }
+@media (pointer: coarse), (max-width: 640px) { .pf-asst__attach--cam { display: inline-grid; } }
+
+.pf-asst-attach {
+  display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 12px; padding: 14px 16px; text-align: left;
+  border: 1px dashed var(--pf-line-strong, var(--pf-line)); border-radius: 12px; background: transparent; color: var(--text-primary); cursor: pointer;
+  min-height: 56px;
+}
+.pf-asst-attach:hover:not(:disabled) { border-color: var(--asst-accent); background: color-mix(in srgb, var(--asst-accent) 6%, transparent); }
+.pf-asst-attach:disabled { opacity: 0.5; cursor: not-allowed; }
+.pf-asst-attach:focus-visible { outline: 2px solid var(--asst-accent); outline-offset: 2px; }
+.pf-asst-attach svg { flex: none; color: var(--asst-accent); }
+.pf-asst-attach__text { display: grid; gap: 1px; font-size: 13px; color: var(--text-secondary); }
+.pf-asst-attach__text strong { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+
+.pf-asst-rc { display: grid; gap: 8px; }
+.pf-asst-rc__head { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.pf-asst-rc__head svg { flex: none; color: var(--asst-accent); }
+.pf-asst-rc__head--bad svg { color: var(--pf-danger, #dc2626); }
+.pf-asst-rc__line { margin: 0; font-size: 13.5px; line-height: 1.45; color: var(--text-secondary); }
+.pf-asst-rc__line--quiet { font-size: 12.5px; color: var(--text-tertiary); }
+.pf-asst-rc__bar { height: 3px; border-radius: 2px; background: var(--pf-line); overflow: hidden; }
+.pf-asst-rc__bar span { display: block; height: 100%; width: 35%; background: var(--asst-accent); border-radius: 2px; animation: pf-asst-rc 1.4s ease-in-out infinite; }
+.pf-asst-rc__bar span[data-phase='uploading'] { width: 55%; }
+@keyframes pf-asst-rc { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@media (prefers-reduced-motion: reduce) { .pf-asst-rc__bar span { animation: none; width: 100%; opacity: 0.5; } }
+.pf-asst-rc__more { font-size: 13px; color: var(--text-secondary); }
+.pf-asst-rc__more summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.pf-asst-rc__more ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; max-height: 180px; overflow: auto; }
+.pf-asst-rc__more li { display: grid; gap: 1px; overflow-wrap: anywhere; }
+.pf-asst-rc__txt { color: var(--text-primary); }
+.pf-asst-rc__why { font-size: 12px; color: var(--text-tertiary); }

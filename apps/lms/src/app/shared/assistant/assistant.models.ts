@@ -26,7 +26,7 @@ export interface AssistantProvider {
  *  page adds its id here + a server endpoint `/api/assistant/<id>/chat`
  *  (Insights: the dashboard builder, which sends its own request through
  *  {@link AssistantPageContext.chat}). */
-export type AssistantPage = 'instruments' | 'insights';
+export type AssistantPage = 'instruments' | 'insights' | 'test-master';
 
 export type AssistantRole = 'user' | 'assistant';
 
@@ -76,7 +76,41 @@ export interface ChangesSuggestion {
   changes: string[];
 }
 
-export type AssistantSuggestion = SettingSuggestion | MappingSuggestion | ActionSuggestion | ChangesSuggestion;
+/** A Test Master change Cortex saved as a PENDING suggestion (never applied): the card says where to review it. */
+export interface ProposalSuggestion {
+  kind: 'proposal';
+  /** The proposal id (Pending changes). */
+  id: string;
+  /** One plain line: "CBC ₹250 → ₹300". */
+  label: string;
+  /** price | test_create | test_update | ... (shown as a small tag). */
+  note?: string | null;
+}
+
+export type AssistantSuggestion = SettingSuggestion | MappingSuggestion | ActionSuggestion | ChangesSuggestion | ProposalSuggestion;
+
+/** What one "Read a rate card" produced (`POST /api/assistant/test-master/rate-card/{id}/read`). */
+export interface RateCardSummary {
+  batchId: string;
+  pages: number;
+  pagesRead: number;
+  lines: number;
+  priceSuggestions: number;
+  newTestSuggestions: number;
+  /** Rows added to Pending (price + new test). */
+  suggestions: number;
+  /** Lines whose test already has that price. */
+  alreadyCurrent: number;
+  /** Matched lines with no price printed. */
+  noPrice: number;
+  unmatched: { n: number; text: string; reason: string }[];
+  notes: string[];
+  provider: string;
+  model: string;
+}
+
+/** An upload the panel sends to the rate-card endpoints (JPEG pages made in the browser). */
+export interface RateCardUpload { uploadId: string; pages: number; }
 
 /** Where a host's proposal stands (drives the Keep / Undo card). */
 export type ProposalStatus = 'pending' | 'kept' | 'undone' | 'replaced';
@@ -147,6 +181,8 @@ export interface AssistantPageContext {
   chat?: (req: { provider: AssistantProviderId; messages: AssistantTurn[] }) => Observable<AssistantReply>;
   /** Status per `changes` card ref (Insights proposals). */
   proposals?: Readonly<Record<string, ProposalStatus>>;
+  /** Test Master: the composer gets Attach + camera and a rate card can be read (photos / PDF → JPEG pages in the browser). */
+  attachments?: 'rate-card';
 }
 
 /** Starter prompts per page (plain words). */
@@ -161,12 +197,18 @@ export const ASSISTANT_STARTERS: Readonly<Record<AssistantPage, readonly string[
     'Patient flow by hour today',
     'Revenue and dues this month',
   ],
+  'test-master': [
+    'Which tests have no price yet?',
+    'Set the CBC price to 300',
+    'Which tests are missing a reference range?',
+  ],
 };
 
 /** Display names per page (panel title). */
 export const ASSISTANT_TITLES: Readonly<Record<AssistantPage, string>> = {
   instruments: 'Instruments assistant',
   insights: 'Dashboard assistant',
+  'test-master': 'Test Master assistant',
 };
 
 /** The line above the starters, the composer placeholder and the fine print. */
@@ -180,5 +222,10 @@ export const ASSISTANT_COPY: Readonly<Record<AssistantPage, { lead: string; plac
     lead: 'Say what you want to see — “add patient flow by hour, make revenue a line chart, last 30 days”. The dashboard updates as a preview; keep it or undo it.',
     placeholder: 'Describe a change to this dashboard…',
     fine: 'Cortex only sees the list of charts, never your lab’s numbers. Nothing is saved until you save.',
+  },
+  'test-master': {
+    lead: 'Add a photo or PDF of a rate card and Cortex will suggest price changes and new tests. Or ask about your tests — “set CBC to 300”. Everything waits in Pending for you to approve.',
+    placeholder: 'Ask about your tests or prices…',
+    fine: 'Cortex never saves a change itself. Suggestions wait in Pending until you approve them one by one.',
   },
 };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ASSISTANT_ERROR_CODES, MAX_HISTORY_TURNS, assistantError, assistantFailure, historyFor, mappingCodeLabel, mappingTestLabel, normaliseProviders, normaliseReply,
-  normaliseSuggestions, pickProvider, providerOptions,
+  normaliseRateCardSummary, normaliseSuggestions, pickProvider, providerOptions, rateCardBreakdown, rateCardHeadline,
 } from './assistant-logic';
 
 describe('assistant logic — providers', () => {
@@ -133,5 +133,54 @@ describe('assistant logic — the backend contract (HTTP 200 + success:false)', 
     const many = Array.from({ length: 45 }, (_, i) => ({ role: (i % 2 ? 'assistant' : 'user') as 'user' | 'assistant', text: `t${i}` }));
     expect(historyFor(many).length).toBeLessThanOrEqual(20);
     expect(MAX_HISTORY_TURNS).toBeLessThanOrEqual(20);
+  });
+});
+
+describe('Test Master assistant — suggestions, errors and the rate-card summary', () => {
+  const id = '3f2a9c1e-5b7d-4c8e-9a10-0123456789ab';
+
+  it('a proposal suggestion needs a real id and a label; anything else is dropped', () => {
+    const out = normaliseSuggestions([
+      { kind: 'proposal', value: id, label: 'CBC ₹250 → ₹300', note: 'price' },
+      { kind: 'proposal', value: 'not-an-id', label: 'x' },
+      { kind: 'proposal', value: id, label: '' },
+    ]);
+    expect(out).toEqual([{ kind: 'proposal', id, label: 'CBC ₹250 → ₹300', note: 'price' }]);
+  });
+
+  it('rate_limited is "one a minute", NOT the monthly limit, even on HTTP 429', () => {
+    const e = assistantError({ status: 429, error: { error: 'rate_limited' } });
+    expect(e.message).toMatch(/One rate card a minute/);
+    expect(e.retry).toBe(true);
+    expect(e.kind).not.toBe('limit');
+    expect(assistantError({ status: 429, error: { error: 'ai_cap_reached' } }).kind).toBe('limit');
+  });
+
+  it('upload refusals are worded', () => {
+    expect(assistantError({ status: 400, error: { error: 'too_many_pages' } }).message).toMatch(/at most 6 pages/);
+    expect(assistantError({ status: 413, error: { error: 'too_large' } }).message).toMatch(/15 MB/);
+    expect(assistantError({ status: 400, error: { error: 'unsupported_type' } }).message).toMatch(/photo/);
+    expect(assistantError({ status: 409, error: { error: 'already_read' } }).retry).toBe(false);
+  });
+
+  it('summary: defensive parse, counts and unmatched kept, junk dropped', () => {
+    const s = normaliseRateCardSummary({ success: true, data: {
+      batchId: id, pages: 2, pagesRead: 2, lines: 40, priceSuggestions: 3, newTestSuggestions: 1, alreadyCurrent: 5, noPrice: 1,
+      unmatched: [{ n: 4, text: 'Lipid Pro', reason: 'Not in your tests.' }, { n: 5, text: '' }, 'x'], notes: ['Only the first 200 lines were used.', ''],
+      provider: 'gemini', model: 'gemini-x',
+    } })!;
+    expect(s.suggestions).toBe(4);
+    expect(s.unmatched).toEqual([{ n: 4, text: 'Lipid Pro', reason: 'Not in your tests.' }]);
+    expect(s.notes).toHaveLength(1);
+    expect(normaliseRateCardSummary({ data: { batchId: 'nope' } })).toBeNull();
+    expect(normaliseRateCardSummary(null)).toBeNull();
+  });
+
+  it('headline + breakdown use plain words and say Cortex-friendly copy', () => {
+    expect(rateCardHeadline({ suggestions: 4 })).toBe('4 suggestions added to Pending');
+    expect(rateCardHeadline({ suggestions: 1 })).toBe('1 suggestion added to Pending');
+    expect(rateCardHeadline({ suggestions: 0 })).toBe('Nothing to suggest from this rate card');
+    expect(rateCardBreakdown({ priceSuggestions: 3, newTestSuggestions: 1 })).toBe('3 prices and 1 new test');
+    expect(rateCardBreakdown({ priceSuggestions: 1, newTestSuggestions: 0 })).toBe('1 price');
   });
 });

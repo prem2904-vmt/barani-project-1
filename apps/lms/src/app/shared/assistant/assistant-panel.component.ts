@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, computed, effect, inject, input, output, signal, untracked, viewChild,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { Subscription } from 'rxjs';
+import { Subscription, firstValueFrom } from 'rxjs';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
 import { PfSenseService } from '../../core/services/pf-sense.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -11,19 +11,24 @@ import { InstrumentBridgeService } from '../instruments/instrument-bridge.servic
 import { AssistantApiService } from './assistant-api.service';
 import {
   AssistantErrorView, CONFIDENCE_WORDS, MAX_PROMPT_CHARS, PF_SENSE_LIMIT_MESSAGE, assistantError, historyFor, mappingCodeLabel, mappingTestLabel,
-  pickProvider, providerOptions,
+  pickProvider, providerOptions, rateCardBreakdown, rateCardHeadline,
 } from './assistant-logic';
+import { PREPARE_WORDS, RATE_CARD_PREPARE, RateCardPrepareException } from './rate-card-pages';
 import { MdBlock, parseAssistantMarkdown } from './assistant-markdown';
 import {
   ASSISTANT_COPY, ASSISTANT_STARTERS, ASSISTANT_TITLES, AssistantPageContext, AssistantProvider, AssistantProviderId, AssistantSuggestion,
-  AssistantTestRef, AssistantTurn, ChangesSuggestion, MappingPrefill, MappingSuggestion, ProposalStatus,
+  AssistantTestRef, AssistantTurn, ChangesSuggestion, MappingPrefill, MappingSuggestion, ProposalStatus, RateCardSummary,
 } from './assistant.models';
 
 /** One row of the conversation. */
 export type ChatItem =
   | { id: number; kind: 'user'; text: string }
   | { id: number; kind: 'assistant'; text: string; blocks: MdBlock[]; suggestions: AssistantSuggestion[]; by: string }
-  | { id: number; kind: 'error'; error: AssistantErrorView };
+  | { id: number; kind: 'error'; error: AssistantErrorView }
+  | { id: number; kind: 'card'; phase: CardPhase; step: string; summary: RateCardSummary | null; error: AssistantErrorView | null; canRetry: boolean };
+
+/** Where a rate-card read stands (drives the progress / result card). */
+export type CardPhase = 'preparing' | 'uploading' | 'reading' | 'done' | 'error';
 
 type DiagState = 'none' | 'loading' | 'attached' | 'removed' | 'failed';
 
@@ -64,6 +69,7 @@ export class AssistantPanelComponent {
   private readonly toasts = inject(ToastService);
   private readonly bridge = inject(InstrumentBridgeService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly prepare = inject(RATE_CARD_PREPARE);
 
   readonly open = input(false);
   readonly context = input.required<AssistantPageContext>();
@@ -71,6 +77,8 @@ export class AssistantPanelComponent {
   readonly addMapping = output<MappingPrefill>();
   readonly keepProposal = output<string>();
   readonly undoProposal = output<string>();
+  /** "Review in Pending": the host opens its Pending view (filtered to a rate-card batch when it has an id). */
+  readonly openPending = output<string | null>();
   /** Sit in the host's layout instead of floating over the page (≥ 641px). */
   readonly docked = input(false);
 
@@ -83,6 +91,10 @@ export class AssistantPanelComponent {
   readonly starters = computed(() => ASSISTANT_STARTERS[this.context().page] ?? []);
   readonly copyText = computed(() => ASSISTANT_COPY[this.context().page] ?? ASSISTANT_COPY.instruments);
   readonly isInstruments = computed(() => this.context().page === 'instruments');
+  /** Test Master: the composer gets Attach + camera (a rate card is read from photos / a PDF). */
+  readonly attachOn = computed(() => this.context().attachments === 'rate-card');
+  protected readonly cardHeadline = rateCardHeadline;
+  protected readonly cardBreakdown = rateCardBreakdown;
 
   // ── Models ───────────────────────────────────────────────────────────
   readonly providers = signal<AssistantProvider[]>([]);
@@ -113,7 +125,10 @@ export class AssistantPanelComponent {
   /** The month's PF Sense cap is used up: a calm notice instead of the starters, composer off. */
   readonly limitReached = this.sense.limitReached;
   protected readonly limitMessage = PF_SENSE_LIMIT_MESSAGE;
-  readonly canSend = computed(() => !this.limitReached() && !!this.draft().trim() && !this.pending() && !!this.provider() && this.providersState() === 'ready');
+  /** A rate card is being prepared / uploaded / read: the composer waits. */
+  readonly cardBusy = computed(() => this.items().some((i) => i.kind === 'card' && i.phase !== 'done' && i.phase !== 'error'));
+  readonly canSend = computed(() => !this.limitReached() && !!this.draft().trim() && !this.pending() && !this.cardBusy() && !!this.provider() && this.providersState() === 'ready');
+  readonly canAttach = computed(() => this.attachOn() && !this.limitReached() && !this.pending() && !this.cardBusy() && !!this.provider() && this.providersState() === 'ready');
   private seq = 0;
   private inFlight: Subscription | null = null;
 
@@ -124,6 +139,8 @@ export class AssistantPanelComponent {
 
   private readonly thread = viewChild<ElementRef<HTMLElement>>('thread');
   private readonly composer = viewChild<ElementRef<HTMLTextAreaElement>>('composer');
+  private readonly filePick = viewChild<ElementRef<HTMLInputElement>>('filePick');
+  private readonly camPick = viewChild<ElementRef<HTMLInputElement>>('camPick');
 
   constructor() {
     void this.beta.ensureLoaded();
@@ -217,6 +234,7 @@ export class AssistantPanelComponent {
 
   newChat() {
     this.inFlight?.unsubscribe();
+    this.cardWork.clear();
     this.pending.set(false);
     this.items.set([]);
     this.added.set(new Set());
@@ -265,6 +283,81 @@ export class AssistantPanelComponent {
         this.scrollToEnd();
       },
     });
+  }
+
+  // ── Rate card (Test Master) ──────────────────────────────────────────
+  /** Per card: the prepared JPEG pages and, once stored, the upload id (so "Try again" never re-prepares or re-uploads). */
+  private readonly cardWork = new Map<number, { blobs: Blob[]; uploadId: string | null; files: File[] }>();
+
+  pickFile() { if (this.canAttach()) this.filePick()?.nativeElement.click(); }
+  pickCamera() { if (this.canAttach()) this.camPick()?.nativeElement.click(); }
+
+  onFilesPicked(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = '';   // the same file can be picked again
+    if (files.length) void this.readCard(files);
+  }
+
+  private setCard(id: number, patch: Partial<Extract<ChatItem, { kind: 'card' }>>) {
+    this.items.update((list) => list.map((i) => (i.id === id && i.kind === 'card' ? { ...i, ...patch } : i)));
+  }
+
+  async readCard(files: File[], resume?: number) {
+    const provider = this.provider();
+    if (!provider || !this.canAttach() && resume === undefined) return;
+    const id = resume ?? ++this.seq;
+    if (resume === undefined) {
+      this.items.update((list) => [...list.filter((i) => i.kind !== 'error'), { id, kind: 'card', phase: 'preparing', step: 'Getting the pages ready…', summary: null, error: null, canRetry: false }]);
+      this.cardWork.set(id, { blobs: [], uploadId: null, files });
+    } else {
+      this.setCard(id, { phase: 'reading', step: 'Cortex is reading the rate card…', error: null, canRetry: false });
+    }
+    this.scrollToEnd();
+    const work = this.cardWork.get(id)!;
+    try {
+      if (!work.blobs.length) {
+        work.blobs = await this.prepare(work.files, (p) => this.setCard(id, { step: p.total > 1 ? `Getting page ${Math.min(p.done + 1, p.total)} of ${p.total} ready…` : 'Getting the page ready…' }));
+      }
+      if (!work.uploadId) {
+        this.setCard(id, { phase: 'uploading', step: `Sending ${work.blobs.length} page${work.blobs.length === 1 ? '' : 's'}…` });
+        work.uploadId = (await firstValueFrom(this.api.rateCardUpload(work.blobs))).uploadId;
+      }
+      this.setCard(id, { phase: 'reading', step: `Cortex is reading ${work.blobs.length} page${work.blobs.length === 1 ? '' : 's'}…` });
+      this.scrollToEnd();
+      const summary = await firstValueFrom(this.api.rateCardRead(work.uploadId, provider));
+      this.cardWork.delete(id);
+      this.setCard(id, { phase: 'done', step: '', summary });
+      if (summary.suggestions > 0) void this.sense.refresh();
+    } catch (e) {
+      const view = e instanceof RateCardPrepareException
+        ? { kind: 'invalid', retry: false, message: PREPARE_WORDS[e.code] } as AssistantErrorView
+        : this.cardError(e);
+      // A prepare / upload failure can be retried from the stored files; a refused read (cap / off / already read) cannot.
+      this.setCard(id, { phase: 'error', step: '', error: view, canRetry: view.retry && !(e instanceof RateCardPrepareException) });
+      if (view.kind === 'limit' || view.kind === 'off') void this.sense.refresh();
+    }
+    this.scrollToEnd();
+  }
+
+  private cardError(e: unknown): AssistantErrorView {
+    const body = (e as { error?: { error?: string } })?.error;
+    if (body?.error === 'not_found' || (e as { status?: number })?.status === 404 && !body?.error) {
+      return { kind: 'missing', retry: false, message: 'That rate card isn’t there any more. Add it again.' };
+    }
+    return assistantError(e, this.providerLabel());
+  }
+
+  retryCard(id: number) {
+    const w = this.cardWork.get(id);
+    if (w && !this.cardBusy()) void this.readCard(w.files, id);
+  }
+
+  reviewInPending(batch: string | null) { this.openPending.emit(batch); }
+
+  /** Proposals Cortex saved in one chat answer (for the "Review in Pending" link under it). */
+  proposalCount(item: ChatItem): number {
+    return item.kind === 'assistant' ? item.suggestions.filter((s) => s.kind === 'proposal').length : 0;
   }
 
   onComposerKey(ev: KeyboardEvent) {

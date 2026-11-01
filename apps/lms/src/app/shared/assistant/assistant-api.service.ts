@@ -2,8 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, timeout } from 'rxjs';
 import { PlatformService } from '../../core/services/platform.service';
-import { assistantFailure, normaliseProviders, normaliseReply } from './assistant-logic';
-import type { AssistantChatRequest, AssistantPage, AssistantProvider, AssistantReply } from './assistant.models';
+import { assistantFailure, normaliseProviders, normaliseReply, normaliseRateCardSummary } from './assistant-logic';
+import type { AssistantChatRequest, AssistantPage, AssistantProvider, AssistantProviderId, AssistantReply, RateCardSummary, RateCardUpload } from './assistant.models';
 
 /**
  * The assistant endpoints (BETA). HttpClient directly (like the AST disk
@@ -18,6 +18,9 @@ import type { AssistantChatRequest, AssistantPage, AssistantProvider, AssistantR
 export class AssistantApiService {
   static readonly CHAT_TIMEOUT_MS = 90_000;
   static readonly PROVIDERS_TIMEOUT_MS = 15_000;
+  /** Uploading ≤ 6 JPEG pages (≤ 15 MB) / reading them (one model call per page + one more). */
+  static readonly UPLOAD_TIMEOUT_MS = 90_000;
+  static readonly READ_TIMEOUT_MS = 240_000;
 
   private readonly http = inject(HttpClient);
   private readonly platform = inject(PlatformService);
@@ -41,6 +44,37 @@ export class AssistantApiService {
         const fail = assistantFailure(r);
         if (fail) throw fail;
         return normaliseReply(r);
+      }),
+    );
+  }
+
+  /** Test Master → "Read a rate card", step 1: store the JPEG pages (no model call). */
+  rateCardUpload(pages: readonly Blob[]): Observable<RateCardUpload> {
+    const form = new FormData();
+    pages.forEach((b, i) => form.append('pages', b, `page-${i + 1}.jpg`));
+    return this.http.post<unknown>(this.url('/test-master/rate-card'), form).pipe(
+      timeout(AssistantApiService.UPLOAD_TIMEOUT_MS),
+      map((r) => {
+        const fail = assistantFailure(r);
+        if (fail) throw fail;
+        const d = ((r as { data?: Record<string, unknown> })?.data ?? {}) as Record<string, unknown>;
+        const uploadId = typeof d['uploadId'] === 'string' ? d['uploadId'] : '';
+        if (!uploadId) throw { status: 200, error: { error: 'ai_failed', message: '' } };
+        return { uploadId, pages: Number(d['pages']) || pages.length };
+      }),
+    );
+  }
+
+  /** Step 2: read it. Adds PENDING suggestions only; the answer is the summary. */
+  rateCardRead(uploadId: string, provider: AssistantProviderId): Observable<RateCardSummary> {
+    return this.http.post<unknown>(this.url(`/test-master/rate-card/${encodeURIComponent(uploadId)}/read`), { provider }).pipe(
+      timeout(AssistantApiService.READ_TIMEOUT_MS),
+      map((r) => {
+        const fail = assistantFailure(r);
+        if (fail) throw fail;
+        const s = normaliseRateCardSummary(r);
+        if (!s) throw { status: 200, error: { error: 'ai_failed', message: '' } };
+        return s;
       }),
     );
   }

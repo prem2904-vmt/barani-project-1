@@ -23,6 +23,10 @@
                       (valueChange)="setView($event)"></pf-segmented>
       </ng-container>
       <ng-container band-actions>
+        @if (pendingOn()) {
+          <!-- Beta `assistant` + Cortex switch (dev only): read a rate card → suggestions wait in Pending. -->
+          <pf-assistant-button feature="test_master_assistant" label="Read a rate card" [expanded]="assistantOpen()" (pressed)="assistantOpen.set(true)"></pf-assistant-button>
+        }
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="restoring()"
                 [pfBusy]="restoring()" pfBusyLabel="Restoring…" (click)="restoreDefaults()" title="Restore to default" aria-label="Restore to default">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -164,7 +168,7 @@
     <!-- Pending changes (beta assistant): suggested by Cortex / an outside
          assistant, reviewed ONE BY ONE — no bulk approve anywhere. -->
     <pf-tm-pending-panel [query]="panelQuery()" [narrow]="narrow()" [tests]="allTests()"
-                         [departments]="pendingDepartments()"
+                         [departments]="pendingDepartments()" [batch]="pendingBatch()" (batchCleared)="pendingBatch.set(null)"
                          (countChange)="pendingCount.set($event)" (applied)="onPendingApplied()"></pf-tm-pending-panel>
   } @else if (ogView()) {
     <!-- Shared option-group vocabularies, derived live from this tenant's
@@ -348,4 +352,8 @@
   </ng-template>
   }
   </div>
+  @if (pendingOn()) {
+    <pf-assistant-panel [open]="assistantOpen()" [context]="asstContext()" (closed)="assistantOpen.set(false)"
+                        (openPending)="onAssistantOpenPending($event)"></pf-assistant-panel>
+  }
 </section>
