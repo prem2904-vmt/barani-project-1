@@ -124,7 +124,7 @@
     @for (v of views; track v.value) {
       <button type="button"
               class="pf-tm-tab"
-              [class.pf-tm-tab--active]="!ogView() && !microView() && !pricingView() && type() === v.value"
+              [class.pf-tm-tab--active]="!ogView() && !microView() && !pricingView() && !pendingView() && type() === v.value"
               (click)="setType(v.value)">
         {{ v.label }}
       </button>
@@ -147,12 +147,26 @@
             (click)="openPricingView()">
       Pricing
     </button>
+    @if (pendingOn()) {
+      <button type="button"
+              class="pf-tm-tab"
+              [class.pf-tm-tab--active]="pendingView()"
+              (click)="openPendingView()">
+        Pending ({{ pendingCount() }})
+      </button>
+    }
   </div>
 
   <!-- Everything under the band: the grid view FILLS the body (the grid
        scrolls itself); the side views scroll the body. -->
-  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView() || ogView()">
-  @if (ogView()) {
+  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView() || ogView() || pendingView()">
+  @if (pendingView()) {
+    <!-- Pending changes (beta assistant): suggested by Cortex / an outside
+         assistant, reviewed ONE BY ONE — no bulk approve anywhere. -->
+    <pf-tm-pending-panel [query]="panelQuery()" [narrow]="narrow()" [tests]="allTests()"
+                         [departments]="pendingDepartments()"
+                         (countChange)="pendingCount.set($event)" (applied)="onPendingApplied()"></pf-tm-pending-panel>
+  } @else if (ogView()) {
     <!-- Shared option-group vocabularies, derived live from this tenant's
          tests — edit once, changes every linked parameter. -->
     <pf-option-groups-panel [bandQuery]="theme.isNewDesign() ? panelQuery() : null"

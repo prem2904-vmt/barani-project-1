@@ -16,6 +16,9 @@ export interface DialogAction {
   value: string;
   label: string;
   variant?: 'primary' | 'secondary';
+  /** Disabled until the dialog's checkbox is ticked (e.g. a clinical
+   *  "I checked these values against the lab's SOP" confirm). */
+  requiresCheck?: boolean;
 }
 
 /** Result of an `actions()` dialog: the button pressed (null = dismissed) and

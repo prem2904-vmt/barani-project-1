@@ -45,4 +45,21 @@ describe('DialogHost — actions() dialog', () => {
     cancel.click();
     expect(await p).toEqual({ action: null, checked: false });
   });
+
+  it('requiresCheck: the action stays disabled until the box is ticked (clinical SOP confirm)', async () => {
+    const { f, dialog, el } = render();
+    const p = dialog.actions({
+      title: 'Clinical values change',
+      actions: [{ value: 'approve', label: 'Approve', variant: 'primary', requiresCheck: true }],
+      checkbox: { label: "I checked these values against the lab's SOP" },
+    });
+    f.detectChanges();
+    expect(btn(el, 'approve').disabled).toBe(true);
+    btn(el, 'approve').click();          // a disabled click does nothing
+    el.querySelector<HTMLButtonElement>('.pf-dh-check')!.click();
+    f.detectChanges();
+    expect(btn(el, 'approve').disabled).toBe(false);
+    btn(el, 'approve').click();
+    expect(await p).toEqual({ action: 'approve', checked: true });
+  });
 });

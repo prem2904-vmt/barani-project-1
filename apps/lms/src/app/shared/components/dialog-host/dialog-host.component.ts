@@ -124,6 +124,7 @@ import { TouchButtonComponent } from '../../primitives/touch-button.component';
               @for (a of d.actions ?? []; track a.value) {
                 <pf-touch-btn size="sm" [attr.data-action]="a.value"
                               [variant]="a.variant === 'primary' ? 'primary' : 'secondary'"
+                              [disabled]="!!a.requiresCheck && !checked()"
                               (pressed)="onAction(a.value)">
                   {{ a.label }}
                 </pf-touch-btn>
@@ -512,7 +513,9 @@ export class DialogHostComponent {
 
   /** A footer action of an actions() dialog. */
   onAction(value: string) {
-    if (!this.dialog.active()) return;
+    const d = this.dialog.active();
+    if (!d) return;
+    if (d.actions?.find(a => a.value === value)?.requiresCheck && !this.checked()) return;
     this.dialog.resolve(value, this.checked());
   }
 

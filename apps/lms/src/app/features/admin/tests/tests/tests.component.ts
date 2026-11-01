@@ -45,6 +45,10 @@ import { departmentKeys, shownDepartmentName } from '../../../../shared/utils/pa
 import { pendingProposalIds } from '../../../../shared/utils/catalog-proposals';
 import { CatalogProposal } from '../../../../shared/models/test.model';
 import { CatalogProposalsPanelComponent } from './catalog-proposals-panel.component';
+import { PendingChangesPanelComponent } from './pending-changes-panel.component';
+import { BetaFeaturesService } from '../../../../core/services/beta-features.service';
+import { TmProposalsService } from '../../../../core/services/tm-proposals.service';
+import { TM_ALL_PERMS } from '../../../../shared/utils/tm-proposals';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitives/segmented.component';
 import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
@@ -137,7 +141,7 @@ export function actionsWidth(web: boolean, revert: boolean): { width: number; mi
 }
 
 /** Views the band pill's switch can select. */
-type TmView = TestType | 'og' | 'micro' | 'pricing';
+type TmView = TestType | 'og' | 'micro' | 'pricing' | 'pending';
 /** Test Master status filter (the Active/Inactive switch). */
 type TmStatus = 'all' | 'active' | 'inactive';
 
@@ -156,6 +160,7 @@ type TmStatus = 'all' | 'active' | 'inactive';
     MicroMastersPanelComponent,
     PricingComponent,
     CatalogProposalsPanelComponent,
+    PendingChangesPanelComponent,
     HeroBandComponent,
     SegmentedComponent,
   ],
@@ -185,6 +190,15 @@ export class TestsComponent implements OnInit {
   /** Pricing view — the per-tenant pricing table (bulk edit, branch picker
    *  when isolation is ON) replaces the grid. */
   readonly pricingView = signal(false);
+  /** Pending view (beta `assistant`, dev only) — changes Cortex / an outside
+   *  assistant suggested, reviewed one by one, replace the grid. */
+  readonly pendingView = signal(false);
+  private readonly beta = inject(BetaFeaturesService);
+  private readonly tmProposals = inject(TmProposalsService);
+  /** Open suggested changes (pending + changed-since + could-not-apply) — the band badge. */
+  readonly pendingCount = signal(0);
+  /** A `?view=pending` deep link waits for the beta answer. */
+  private wantPending = false;
   @ViewChild(MicroMastersPanelComponent) private microPanel?: MicroMastersPanelComponent;
   @ViewChild(OptionGroupsPanelComponent) private ogPanel?: OptionGroupsPanelComponent;
   private readonly _type = signal<TestType>('individual');
@@ -932,6 +946,34 @@ export class TestsComponent implements OnInit {
     return wrap;
   };
 
+  /** The Pending view exists only with beta `assistant` on (console pf.assistant(), server flag, dev)
+   *  and a Test Master or pricing permission (price changes are visible to pricing-only roles). */
+  readonly pendingOn = computed(() => {
+    if (!this.beta.enabled('assistant')) return false;
+    const a = this.auth;
+    return !a || typeof a.hasAnyPermission !== 'function' || a.hasAnyPermission([...TM_ALL_PERMS]);
+  });
+
+  /** Department names for the Pending view's before → after. */
+  readonly pendingDepartments = computed(() => this._depts().map(d => ({ id: d.id, name: d.name })));
+
+  /** A pending change was approved: the catalogue moved. */
+  onPendingApplied() {
+    this.loadTests();
+    this.loadProposals();
+  }
+
+  loadPendingCount() {
+    if (!this.pendingOn()) { this.pendingCount.set(0); return; }
+    this.tmProposals.openCount().subscribe(n => this.pendingCount.set(n));
+  }
+
+  openPendingView() {
+    if (!this.pendingOn()) return;
+    this.panelEditing.set(false); this.panelQuery.set('');
+    this.ogView.set(false); this.microView.set(false); this.pricingView.set(false); this.pendingView.set(true);
+  }
+
   ngOnInit() {
     this.route.queryParams.subscribe(params => {
       const t = params['type'];
@@ -942,6 +984,12 @@ export class TestsComponent implements OnInit {
       if (params['view'] === 'option-groups') this.ogView.set(true);
       if (params['view'] === 'microbiology') this.microView.set(true);
       if (params['view'] === 'pricing' && this.canEditPrices()) this.pricingView.set(true);
+      if (params['view'] === 'pending') { this.wantPending = true; if (this.pendingOn()) this.openPendingView(); }
+    });
+    void this.beta.ensureLoaded().then(() => {
+      if (!this.pendingOn()) return;
+      this.loadPendingCount();
+      if (this.wantPending && !this.pendingView()) this.openPendingView();
     });
     this.destroyRef.onDestroy(() => this.listHold.cancel());
     this.loadTests();
@@ -954,9 +1002,9 @@ export class TestsComponent implements OnInit {
     this.gridApi = e.api;
   }
 
-  openOgView() { this.panelEditing.set(false); this.panelQuery.set(''); this.microView.set(false); this.pricingView.set(false); this.ogView.set(true); }
-  openMicroView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.pricingView.set(false); this.microView.set(true); }
-  openPricingView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.microView.set(false); this.pricingView.set(true); }
+  openOgView() { this.panelEditing.set(false); this.panelQuery.set(''); this.microView.set(false); this.pricingView.set(false); this.pendingView.set(false); this.ogView.set(true); }
+  openMicroView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.pricingView.set(false); this.pendingView.set(false); this.microView.set(true); }
+  openPricingView() { this.panelEditing.set(false); this.panelQuery.set(''); this.ogView.set(false); this.microView.set(false); this.pendingView.set(false); this.pricingView.set(true); }
 
   // ── Band pill (owner, "band pill everywhere") ──────────────────────────
   /** The ONE view switch in the pill: the three catalogue types plus the
@@ -970,15 +1018,19 @@ export class TestsComponent implements OnInit {
     { value: 'pricing', label: 'Pricing' },
   ];
   /** Pricing (the view) only for someone who may change prices. */
-  readonly viewOptions = computed<SegmentedOption<TmView>[]>(() =>
-    this.canEditPrices() ? this.allViewOptions : this.allViewOptions.filter(o => o.value !== 'pricing'));
+  readonly viewOptions = computed<SegmentedOption<TmView>[]>(() => {
+    const base = this.canEditPrices() ? this.allViewOptions : this.allViewOptions.filter(o => o.value !== 'pricing');
+    // "Pending (N)": the count IS the badge (plain tabular number, PF-PATTERN).
+    return this.pendingOn() ? [...base, { value: 'pending', label: 'Pending', count: this.pendingCount() }] : base;
+  });
   readonly view = computed<TmView>(() =>
-    this.ogView() ? 'og' : this.microView() ? 'micro' : this.pricingView() ? 'pricing' : this._type());
+    this.pendingView() ? 'pending' : this.ogView() ? 'og' : this.microView() ? 'micro' : this.pricingView() ? 'pricing' : this._type());
   /** True while the tests/profiles/packages grid (not a side view) shows. */
-  readonly gridView = computed(() => !this.ogView() && !this.microView() && !this.pricingView());
+  readonly gridView = computed(() => !this.ogView() && !this.microView() && !this.pricingView() && !this.pendingView());
   setView(v: TmView) {
     this.panelEditing.set(false);
-    if (v === 'og') this.openOgView();
+    if (v === 'pending') this.openPendingView();
+    else if (v === 'og') this.openOgView();
     else if (v === 'micro') this.openMicroView();
     else if (v === 'pricing') this.openPricingView();
     else this.setType(v);
@@ -992,6 +1044,7 @@ export class TestsComponent implements OnInit {
       case 'og': return 'Search option groups — values, tests, parameters…';
       case 'micro': return 'Search microbiology masters…';
       case 'pricing': return 'Search test name…';
+      case 'pending': return 'Search pending changes — test, change, who…';
       case 'profile': return 'Search profiles…';
       case 'package': return 'Search packages…';
       default: return 'Search tests — name, code, short name…';
@@ -1014,9 +1067,10 @@ export class TestsComponent implements OnInit {
   /** The band's Create / New steps down to secondary when another primary
    *  owns the view (pending grid edits, or an open panel editor). */
   readonly bandPrimaryElsewhere = computed(() =>
-    this.dirtyCount() > 0 || ((this.ogView() || this.microView() || this.pricingView()) && this.panelEditing()));
+    this.dirtyCount() > 0 || this.pendingView() || ((this.ogView() || this.microView() || this.pricingView()) && this.panelEditing()));
 
   setType(t: TestType) {
+    this.pendingView.set(false);
     this.ogView.set(false);
     this.microView.set(false);
     this.pricingView.set(false);
