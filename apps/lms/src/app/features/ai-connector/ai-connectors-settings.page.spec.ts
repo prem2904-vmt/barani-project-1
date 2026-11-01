@@ -13,7 +13,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
 import { LabSettingsHubComponent } from '../lab/lab-settings-hub/lab-settings-hub.component';
-import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_REQUESTED, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState } from './ai-connector.api';
+import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_REQUESTED, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorGrant, AiConnectorState } from './ai-connector.api';
 import { AiConnectorsSettingsPage } from './ai-connectors-settings.page';
 
 /**
@@ -23,10 +23,12 @@ import { AiConnectorsSettingsPage } from './ai-connectors-settings.page';
  */
 const OFF: AiConnectorState = { enabled: false, connectorUrl: 'https://med-fetch-dev.prefrontal.health/mcp', labName: 'Micro World' };
 
-function setup(opts: { perms?: string[]; state?: AiConnectorState; confirm?: boolean; putProposals?: () => ReturnType<AiConnectorApi['setProposals']>; put?: () => ReturnType<AiConnectorApi['setEnabled']>; putLevel?: () => ReturnType<AiConnectorApi['setPrivacyLevel']> } = {}) {
+function setup(opts: { grants?: AiConnectorGrant[]; deleteGrant?: () => ReturnType<AiConnectorApi['deleteGrant']>; perms?: string[]; state?: AiConnectorState; confirm?: boolean; putProposals?: () => ReturnType<AiConnectorApi['setProposals']>; put?: () => ReturnType<AiConnectorApi['setEnabled']>; putLevel?: () => ReturnType<AiConnectorApi['setPrivacyLevel']> } = {}) {
   const perms = opts.perms ?? ['manage_lab_settings'];
   const api = {
     get: vi.fn(() => of(opts.state ?? OFF)),
+    listGrants: vi.fn(() => of(opts.grants ?? [])),
+    deleteGrant: vi.fn(opts.deleteGrant ?? (() => of({}))),
     setPrivacyLevel: vi.fn(opts.putLevel ?? ((privacyLevel: string) => of({ ...(opts.state ?? OFF), privacyLevel }))),
     setProposals: vi.fn(opts.putProposals ?? ((proposals: boolean) => of({ ...(opts.state ?? OFF), proposals }))),
     setEnabled: vi.fn(opts.put ?? ((enabled: boolean) => of({ ...(opts.state ?? OFF), enabled }))),
@@ -338,5 +340,67 @@ describe('Lab settings hub → AI connectors tile', () => {
     expect(JSON.stringify(AI_PRIVACY_LEVELS)).not.toMatch(/\bsex\b/i);
     expect(AI_CONNECTOR_NEVER).toContain('never a patient’s or staff member’s address');
     expect(AI_CONNECTOR_NEVER).not.toContain('addresses,');
+  });
+});
+
+describe('AiConnectorsSettingsPage: apps you have allowed to suggest changes', () => {
+  const ON: AiConnectorState = { ...OFF, enabled: true, proposals: true };
+  const G1: AiConnectorGrant = { clientId: '3f2b8c1e-5a4d-4e7f-9b21-0c6d8e1a2b3c', propose: true, createdAt: '2026-11-01T05:00:00Z', updatedAt: '2026-11-01T05:00:00Z' };
+  const G2: AiConnectorGrant = { clientId: '9a8b7c6d-1111-4222-8333-444455556666', propose: true, createdAt: '2026-10-30T05:00:00Z', updatedAt: '2026-10-30T05:00:00Z' };
+  const rows = (f: { nativeElement: HTMLElement }) => Array.from(f.nativeElement.querySelectorAll('.pf-aic__grant')) as HTMLElement[];
+  const revokeBtn = (row: HTMLElement) => row.querySelector('.pf-aic__revoke') as HTMLButtonElement;
+
+  afterEach(() => localStorage.removeItem('pf.aic.appnames'));
+
+  it('lists the person’s own apps (name when remembered, else a generic label + short id) with a Revoke button each', async () => {
+    localStorage.setItem('pf.aic.appnames', JSON.stringify({ [G1.clientId]: 'Claude' }));
+    const { f, api } = setup({ state: ON, grants: [G1, G2] });
+    await loaded(f);
+    expect(api.listGrants).toHaveBeenCalled();
+    const r = rows(f);
+    expect(r).toHaveLength(2);
+    expect(r[0].textContent).toContain('Claude');
+    expect(r[0].textContent).toContain('…1a2b3c');
+    expect(r[1].textContent).toContain('Connected app');
+    expect(r.every(x => revokeBtn(x).textContent?.trim() === 'Revoke')).toBe(true);
+    expect(f.nativeElement.textContent).toContain('Only your own apps are listed.');
+  });
+
+  it('Revoke asks first (danger), then DELETEs that one app and drops it from the list', async () => {
+    const { f, api, dialog, toasts } = setup({ state: ON, grants: [G1, G2] });
+    await loaded(f);
+    revokeBtn(rows(f)[0]).click();
+    await settle(f);
+    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', confirmLabel: 'Revoke' }));
+    expect(api.deleteGrant).toHaveBeenCalledWith(G1.clientId);
+    expect(rows(f)).toHaveLength(1);
+    expect(toasts.success).toHaveBeenCalled();
+  });
+
+  it('cancelling the confirm revokes nothing; a failed revoke keeps the row and says so', async () => {
+    const a = setup({ state: ON, grants: [G1], confirm: false });
+    await loaded(a.f);
+    revokeBtn(rows(a.f)[0]).click(); await settle(a.f);
+    expect(a.api.deleteGrant).not.toHaveBeenCalled();
+    expect(rows(a.f)).toHaveLength(1);
+    const b = setup({ state: ON, grants: [G1], deleteGrant: () => throwError(() => new Error('x')) });
+    await loaded(b.f);
+    revokeBtn(rows(b.f)[0]).click(); await settle(b.f);
+    expect(rows(b.f)).toHaveLength(1);
+    expect(b.toasts.error).toHaveBeenCalled();
+  });
+
+  it('shows an honest empty line when the lab allows suggestions and nobody allowed an app; hides the block when both are off', async () => {
+    const a = setup({ state: ON, grants: [] });
+    await loaded(a.f);
+    expect(a.f.nativeElement.textContent).toContain('No app can suggest Test Master changes with your account.');
+    expect(rows(a.f)).toHaveLength(0);
+    const b = setup({ state: { ...ON, proposals: false }, grants: [] });
+    await loaded(b.f);
+    expect(b.f.nativeElement.textContent).not.toContain('Apps you’ve allowed to suggest changes');
+    // an old grant stays visible (and revocable) even after the lab switch is turned off
+    const c = setup({ state: { ...ON, proposals: false }, grants: [G1] });
+    await loaded(c.f);
+    expect(rows(c.f)).toHaveLength(1);
   });
 });

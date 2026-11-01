@@ -36,13 +36,21 @@ function setup(opts: {
   connector?: () => ReturnType<AiConnectorApi['get']>;
   approve?: () => Promise<unknown>;
   deny?: () => Promise<unknown>;
+  putGrant?: () => ReturnType<AiConnectorApi['putGrant']>;
+  deleteGrant?: () => ReturnType<AiConnectorApi['deleteGrant']>;
 } = {}) {
   const client = {
     getDetails: vi.fn(opts.details ?? (async () => DETAILS)),
     approve: vi.fn(opts.approve ?? (async () => ({ redirect_url: 'https://claude.ai/api/mcp/auth_callback?code=abc&state=s' }))),
     deny: vi.fn(opts.deny ?? (async () => ({ redirect_url: 'https://claude.ai/api/mcp/auth_callback?error=access_denied&state=s' }))),
   };
-  const connector = { get: vi.fn(opts.connector ?? (() => of(ON))), setEnabled: vi.fn() };
+  const calls: string[] = [];
+  client.approve = vi.fn(async () => { calls.push('approve'); return (opts.approve ?? (async () => ({ redirect_url: 'https://claude.ai/api/mcp/auth_callback?code=abc&state=s' })))(); });
+  const connector = {
+    get: vi.fn(opts.connector ?? (() => of(ON))), setEnabled: vi.fn(),
+    putGrant: vi.fn((..._a: unknown[]) => { calls.push('put'); return (opts.putGrant ?? (() => of({})))(); }),
+    deleteGrant: vi.fn((..._a: unknown[]) => { calls.push('delete'); return (opts.deleteGrant ?? (() => of({})))(); }),
+  };
   const redirector = { go: vi.fn() };
   const session = { expire: vi.fn(async () => undefined) };
   const id = opts.id === undefined ? 'auth-123' : opts.id;
@@ -63,7 +71,7 @@ function setup(opts: {
   });
   const f = TestBed.createComponent(OAuthConsentPage);
   document.body.appendChild(f.nativeElement);
-  return { f, client, connector, redirector, session };
+  return { f, client, connector, redirector, session, calls };
 }
 
 async function settle(f: { detectChanges(): void; whenStable(): Promise<unknown> }) {
@@ -151,20 +159,103 @@ describe('OAuthConsentPage', () => {
     expect(redirector.go).not.toHaveBeenCalled();
   });
 
-  it('an app that asks to suggest Test Master changes gets a second block and the honest access chip; a plain read app does not', async () => {
-    const plain = setup();
-    await settle(plain.f);
-    expect(plain.f.nativeElement.textContent).not.toContain('It could suggest');
-    expect(plain.f.nativeElement.textContent).toContain('Read only');
-    const { f } = setup({ details: async () => ({ ...DETAILS, scope: 'openid prefrontal:read prefrontal:test_master.propose' }) });
+  const SUGGEST_ON: AiConnectorState = { ...ON, proposals: true };
+  const box = (f: { nativeElement: HTMLElement }) => q(f, '#pf-oc-suggest-opt') as HTMLButtonElement | null;
+
+  it('the suggest checkbox is HIDDEN when the lab switch is off (or the older server says nothing), and the access chip stays Read only', async () => {
+    for (const c of [ON, { ...ON, proposals: false }]) {
+      const { f } = setup({ connector: () => of(c) });
+      await settle(f);
+      expect(box(f)).toBeNull();
+      expect(f.nativeElement.textContent).not.toContain('Also let this app suggest Test Master changes');
+      expect(f.nativeElement.textContent).toContain('Read only');
+    }
+    // a request scope never turns it on: Supabase refuses custom scopes, the person decides here
+    const scoped = setup({ details: async () => ({ ...DETAILS, scope: 'openid prefrontal:test_master.propose' }) });
+    await settle(scoped.f);
+    expect(box(scoped.f)).toBeNull();
+  });
+
+  it('the checkbox is hidden when the request carries no app id (the grant is per app) and when the lab is off', async () => {
+    const noId = setup({ connector: () => of(SUGGEST_ON), details: async () => ({ ...DETAILS, client: { name: 'Claude' } }) });
+    await settle(noId.f);
+    expect(box(noId.f)).toBeNull();
+    const off = setup({ connector: () => of({ ...SUGGEST_ON, enabled: false }) });
+    await settle(off.f);
+    expect(box(off.f)).toBeNull();
+  });
+
+  it('when the lab allows suggestions the checkbox shows, UNTICKED by default, with the promise in words', async () => {
+    const { f } = setup({ connector: () => of(SUGGEST_ON) });
     await settle(f);
+    const b = box(f)!;
+    expect(b).toBeTruthy();
+    expect(b.getAttribute('role')).toBe('checkbox');
+    expect(b.getAttribute('aria-checked')).toBe('false');
     const text = f.nativeElement.textContent ?? '';
-    expect(text).toContain('wants to read your lab’s numbers and suggest Test Master changes.');
-    expect(text).toContain('It could suggest');
-    expect(text).toContain('This app can suggest changes to your Test Master. Nothing is applied until someone with Test Master permission approves it in Prefrontal.');
-    expect(text).toContain('Read and suggest');
-    expect(text).toContain('Your lab hasn’t turned this on yet');   // the lab's switch is off in the default fixture
-    expect(text).toContain('it can never approve');
+    expect(text).toContain('Also let this app suggest Test Master changes');
+    expect(text).toContain('Nothing is applied until someone with Test Master permission approves it in Prefrontal.');
+    expect(text).toContain('Read only');
+    b.click(); await settle(f);
+    expect(b.getAttribute('aria-checked')).toBe('true');
+    expect(f.nativeElement.textContent).toContain('Read and suggest');
+    b.click(); await settle(f);
+    expect(b.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('ticked Allow WRITES the grant first and only then approves (in that order, grant for this app)', async () => {
+    const { f, connector, client, calls, redirector } = setup({ connector: () => of(SUGGEST_ON) });
+    await settle(f);
+    box(f)!.click(); await settle(f);
+    btn(f, 'Allow')!.click(); await settle(f);
+    expect(connector.putGrant).toHaveBeenCalledWith('c1', true);
+    expect(client.approve).toHaveBeenCalledWith('auth-123');
+    expect(calls).toEqual(['put', 'approve']);
+    expect(connector.deleteGrant).not.toHaveBeenCalled();
+    expect(redirector.go).toHaveBeenCalled();
+  });
+
+  it('if approving FAILS after the grant was written, the grant is deleted again', async () => {
+    const { f, connector, calls } = setup({ connector: () => of(SUGGEST_ON), approve: async () => { throw new ConsentError('unknown'); } });
+    await settle(f);
+    box(f)!.click(); await settle(f);
+    btn(f, 'Allow')!.click(); await settle(f);
+    expect(calls).toEqual(['put', 'approve', 'delete']);
+    expect(connector.deleteGrant).toHaveBeenCalledWith('c1');
+  });
+
+  it('UNTICKED Allow on a reconnect writes propose=false (which removes an earlier grant), then approves', async () => {
+    const { f, connector, calls } = setup({ connector: () => of(SUGGEST_ON) });
+    await settle(f);
+    btn(f, 'Allow')!.click(); await settle(f);
+    expect(connector.putGrant).toHaveBeenCalledWith('c1', false);
+    expect(calls).toEqual(['put', 'approve']);
+    expect(connector.deleteGrant).not.toHaveBeenCalled();
+  });
+
+  it('if the choice cannot be saved, nothing is approved and the person is told', async () => {
+    const { f, client, redirector } = setup({ connector: () => of(SUGGEST_ON), putGrant: () => throwError(() => new Error('down')) });
+    await settle(f);
+    box(f)!.click(); await settle(f);
+    btn(f, 'Allow')!.click(); await settle(f);
+    expect(client.approve).not.toHaveBeenCalled();
+    expect(redirector.go).not.toHaveBeenCalled();
+    expect(f.nativeElement.textContent).toContain('Couldn’t save your choice about suggestions');
+    expect(btn(f, 'Allow')).toBeTruthy();   // can try again
+  });
+
+  it('Deny writes nothing, even with the box ticked; and a lab with the box hidden writes no grant on Allow', async () => {
+    const a = setup({ connector: () => of(SUGGEST_ON) });
+    await settle(a.f);
+    box(a.f)!.click(); await settle(a.f);
+    btn(a.f, 'Deny')!.click(); await settle(a.f);
+    expect(a.connector.putGrant).not.toHaveBeenCalled();
+    expect(a.connector.deleteGrant).not.toHaveBeenCalled();
+    const b = setup();   // switch off: no box
+    await settle(b.f);
+    btn(b.f, 'Allow')!.click(); await settle(b.f);
+    expect(b.connector.putGrant).not.toHaveBeenCalled();
+    expect(b.client.approve).toHaveBeenCalled();
   });
 
   it('renders the app name as TEXT — markup in it never becomes HTML', async () => {
