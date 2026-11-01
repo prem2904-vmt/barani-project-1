@@ -13,7 +13,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
 import { LabSettingsHubComponent } from '../lab/lab-settings-hub/lab-settings-hub.component';
-import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_REQUESTED, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorGrant, AiConnectorState } from './ai-connector.api';
+import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_NEVER_ITEMS, AI_CONNECTOR_SUGGEST_OFF_EFFECT, AI_CONNECTOR_SUGGEST_REQUESTED, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorGrant, AiConnectorState } from './ai-connector.api';
 import { AiConnectorsSettingsPage } from './ai-connectors-settings.page';
 
 /**
@@ -33,7 +33,7 @@ function setup(opts: { grants?: AiConnectorGrant[]; deleteGrant?: () => ReturnTy
     setProposals: vi.fn(opts.putProposals ?? ((proposals: boolean) => of({ ...(opts.state ?? OFF), proposals }))),
     setEnabled: vi.fn(opts.put ?? ((enabled: boolean) => of({ ...(opts.state ?? OFF), enabled }))),
   };
-  const dialog = { confirm: vi.fn(async () => opts.confirm ?? true) };
+  const dialog = { confirm: vi.fn(async () => opts.confirm ?? true), alert: vi.fn(async () => undefined) };
   const toasts = { success: vi.fn(), error: vi.fn() };
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
@@ -72,6 +72,12 @@ async function settle(f: { detectChanges(): void; whenStable(): Promise<unknown>
 }
 const sw = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('[role="switch"]') as HTMLButtonElement | null;
 const suggestSw = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('#pf-aic-suggest') as HTMLButtonElement | null;
+const tabBtn = (f: { nativeElement: HTMLElement }, id: 'settings' | 'can' | 'apps') => f.nativeElement.querySelector(`#pf-aic-tab-${id}`) as HTMLButtonElement | null;
+/** Open one of the main card's tabs (Settings is open by default). */
+async function openTab(f: { nativeElement: HTMLElement; detectChanges(): void; whenStable(): Promise<unknown> }, id: 'settings' | 'can' | 'apps') {
+  tabBtn(f, id)!.click();
+  await settle(f);
+}
 
 afterEach(() => { document.body.innerHTML = ''; vi.useRealTimers(); });
 
@@ -132,7 +138,7 @@ describe('AiConnectorsSettingsPage', () => {
     expect(f.nativeElement.querySelector('#pf-aic-url')).toBeNull();
     expect(f.nativeElement.querySelector('.pf-aic__steps')).toBeNull();
     expect(f.nativeElement.textContent).toContain('AI connectors are on for your lab.');
-    expect(f.nativeElement.textContent).toContain('Only a lab admin can change this.');
+    expect(f.nativeElement.textContent).toContain('Only a lab admin can change these.');
     expect(api.setEnabled).not.toHaveBeenCalled();
   });
 
@@ -158,26 +164,59 @@ describe('AiConnectorsSettingsPage', () => {
 describe('AiConnectorsSettingsPage privacy level', () => {
   const select = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('pf-select');
 
-  it('shows what an app can read and suggest in six groups, with who each one is for, and the never-promise', async () => {
+  it('“What apps see” is a compact Can / Never list: six groups (who each is for + one short line) and the never lines', async () => {
     const { f } = setup();
     await loaded(f);
+    expect(f.nativeElement.querySelectorAll('.pf-aic__grp')).toHaveLength(0);   // not on the Settings tab
+    await openTab(f, 'can');
+    expect(tabBtn(f, 'can')!.getAttribute('aria-selected')).toBe('true');
     const groups = f.nativeElement.querySelectorAll('.pf-aic__grp');
     expect(groups).toHaveLength(6);
     const text = f.nativeElement.textContent ?? '';
     expect(text).toContain('Billing totals — only for people who see money');
     expect(text).toContain('Patient results as codes — only when your lab’s privacy level allows');
-    expect(text).toContain('Work per staff member, shown as codes like T-1');
     expect(text).toContain('Suggested Test Master changes — only if your lab allows it');
-    expect(text).toContain('Never patient or staff names, phone numbers, exact ages or ID numbers, and never a patient’s or staff member’s address');
+    expect(text).toContain('Results and report status, each patient as a code');
+    const never = Array.from(f.nativeElement.querySelectorAll('.pf-aic__never li')).map(li => (li as HTMLElement).textContent!.trim());
+    expect(never).toEqual([...AI_CONNECTOR_NEVER_ITEMS]);
+    expect(text).toContain('Patient or staff names');
+    expect(text).toContain('Approve or apply a change by itself');
   });
 
-  it('defaults to Counts only, explains all three levels in plain words, admin gets a pf-select', async () => {
-    const { f } = setup();
+  it('“See the full list” opens the full wording (every item of every group + the never-promise) in a DialogService notice', async () => {
+    const { f, dialog } = setup();
+    await loaded(f);
+    await openTab(f, 'can');
+    const btn = Array.from(f.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(b => b.textContent?.trim() === 'See the full list') as HTMLButtonElement;
+    btn.click();
+    await settle(f);
+    const req = (dialog.alert.mock.calls[0] as unknown as [{ title: string; message: string; items: string[] }])[0];
+    expect(req.message).toContain('Never patient or staff names, phone numbers, exact ages or ID numbers, and never a patient’s or staff member’s address');
+    const total = [...AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST].reduce((n, g) => n + g.items.length, 0);
+    expect(req.items).toHaveLength(total);
+    expect(req.items.some(i => i.includes('Work per staff member, shown as codes like T-1'))).toBe(true);
+    expect(req.items.some(i => i.startsWith('Billing totals (only for people who see money): '))).toBe(true);
+  });
+
+  it('the never short lines keep every promise of the full never-sentence', () => {
+    const joined = AI_CONNECTOR_NEVER_ITEMS.join(' ').toLowerCase();
+    for (const w of ['names', 'phone', 'exact ages', 'id numbers', 'address', 'fewer than 5', 'approve or apply']) expect(joined).toContain(w);
+  });
+
+  it('defaults to Counts only, says what it means, admin gets a pf-select; “Compare the levels” explains all three', async () => {
+    const { f, dialog } = setup();
     await loaded(f);
     expect(select(f)).toBeTruthy();
-    expect(f.nativeElement.querySelectorAll('.pf-aic__levels li')).toHaveLength(3);
-    expect(f.nativeElement.querySelector('.pf-aic__levels li[data-current="true"]')!.textContent).toContain('Counts only');
+    expect(f.nativeElement.querySelector('.pf-aic__levelhint')!.textContent).toContain(AI_PRIVACY_LEVELS[0].summary);
     expect(f.nativeElement.textContent).toContain('never a name, phone or ID');
+    const btn = Array.from(f.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(b => b.textContent?.trim() === 'Compare the levels') as HTMLButtonElement;
+    btn.click();
+    await settle(f);
+    const req = (dialog.alert.mock.calls[0] as unknown as [{ message: string; items: string[] }])[0];
+    expect(req.items).toHaveLength(3);
+    expect(req.items[0]).toBe(`Counts only: ${AI_PRIVACY_LEVELS[0].summary}`);
+    expect(req.message).toContain('Your lab is on “Counts only”');
+    expect(dialog.confirm).not.toHaveBeenCalled();
   });
 
   it('changing the level asks first and then PUTs only the level', async () => {
@@ -187,7 +226,7 @@ describe('AiConnectorsSettingsPage privacy level', () => {
     await settle(f);
     expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Change to “Results, patients as codes”?', tone: 'danger' }));
     expect(api.setPrivacyLevel).toHaveBeenCalledWith('results');
-    expect(f.nativeElement.querySelector('.pf-aic__levels li[data-current="true"]')!.textContent).toContain('Results, patients as codes');
+    expect(f.nativeElement.querySelector('.pf-aic__levelhint')!.textContent).toContain(AI_PRIVACY_LEVELS[1].summary);
   });
 
   it('narrowing is a calm confirm; cancelling saves nothing', async () => {
@@ -254,6 +293,7 @@ describe('AiConnectorsSettingsPage: let connected assistants suggest Test Master
     expect(api.setEnabled).not.toHaveBeenCalled();
     expect(suggestSw(f)!.getAttribute('aria-checked')).toBe('true');
     expect(f.nativeElement.textContent).toContain('someone with Test Master permission approves it');
+    expect(f.nativeElement.textContent).toContain('Turning this off removes every app’s permission to suggest. People will need to allow it again.');
     expect(f.nativeElement.textContent).toContain('An app can read, and suggest Test Master changes for your approval.');
     expect(f.nativeElement.textContent).not.toContain('Read only — an app can’t add');
     expect(toasts.success).toHaveBeenCalled();
@@ -272,11 +312,11 @@ describe('AiConnectorsSettingsPage: let connected assistants suggest Test Master
   it('the OFF confirm and the switch text say plainly that every app permission is removed', async () => {
     const a = setup({ state: { ...OFF, proposals: true } });
     await loaded(a.f);
-    expect(a.f.nativeElement.textContent).toContain('Turning this off removes every app’s permission to suggest; people will need to allow it again.');
+    expect(a.f.nativeElement.textContent).toContain('Turning this off removes every app’s permission to suggest. People will need to allow it again.');
     suggestSw(a.f)!.click();
     await settle(a.f);
     const arg = (a.dialog.confirm.mock.calls as unknown as Array<[{ message: string }]>)[0][0];
-    expect(arg.message).toContain('Turning this off removes every app’s permission to suggest; people will need to allow it again.');
+    expect(arg.message).toContain('Turning this off removes every app’s permission to suggest. People will need to allow it again.');
   });
 
   it('turning it OFF is a danger confirm; cancelling changes nothing', async () => {
@@ -284,7 +324,8 @@ describe('AiConnectorsSettingsPage: let connected assistants suggest Test Master
     await loaded(a.f);
     suggestSw(a.f)!.click();
     await settle(a.f);
-    expect(a.dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Stop assistants suggesting changes?', tone: 'danger' }));
+    expect(a.dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Stop assistants suggesting changes?', tone: 'danger',
+      message: expect.stringContaining('Turning this off removes every app’s permission to suggest. People will need to allow it again.') }));
     expect(a.api.setProposals).toHaveBeenCalledWith(false);
     const b = setup({ confirm: false });
     await loaded(b.f);
@@ -377,6 +418,8 @@ describe('AiConnectorsSettingsPage: apps you have allowed to suggest changes', (
     const { f, api } = setup({ state: ON, grants: [G1, G2] });
     await loaded(f);
     expect(api.listGrants).toHaveBeenCalled();
+    expect(tabBtn(f, 'apps')!.textContent).toContain('2');
+    await openTab(f, 'apps');
     const r = rows(f);
     expect(r).toHaveLength(2);
     expect(r[0].textContent).toContain('Claude');
@@ -389,6 +432,7 @@ describe('AiConnectorsSettingsPage: apps you have allowed to suggest changes', (
   it('Revoke asks first (danger), then DELETEs that one app and drops it from the list', async () => {
     const { f, api, dialog, toasts } = setup({ state: ON, grants: [G1, G2] });
     await loaded(f);
+    await openTab(f, 'apps');
     revokeBtn(rows(f)[0]).click();
     await settle(f);
     expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', confirmLabel: 'Revoke' }));
@@ -400,27 +444,89 @@ describe('AiConnectorsSettingsPage: apps you have allowed to suggest changes', (
   it('cancelling the confirm revokes nothing; a failed revoke keeps the row and says so', async () => {
     const a = setup({ state: ON, grants: [G1], confirm: false });
     await loaded(a.f);
+    await openTab(a.f, 'apps');
     revokeBtn(rows(a.f)[0]).click(); await settle(a.f);
     expect(a.api.deleteGrant).not.toHaveBeenCalled();
     expect(rows(a.f)).toHaveLength(1);
     const b = setup({ state: ON, grants: [G1], deleteGrant: () => throwError(() => new Error('x')) });
     await loaded(b.f);
+    await openTab(b.f, 'apps');
     revokeBtn(rows(b.f)[0]).click(); await settle(b.f);
     expect(rows(b.f)).toHaveLength(1);
     expect(b.toasts.error).toHaveBeenCalled();
   });
 
+  it('turning suggestions off (or the master switch off) clears the app list at once', async () => {
+    const a = setup({ state: ON, grants: [G1] });
+    await loaded(a.f);
+    expect((a.f.componentInstance as unknown as { grants: () => unknown[] }).grants()).toHaveLength(1);
+    suggestSw(a.f)!.click();
+    await settle(a.f);
+    expect((a.f.componentInstance as unknown as { grants: () => unknown[] }).grants()).toHaveLength(0);
+    const b = setup({ state: ON, grants: [G1] });
+    await loaded(b.f);
+    sw(b.f)!.click();
+    await settle(b.f);
+    expect((b.f.componentInstance as unknown as { grants: () => unknown[] }).grants()).toHaveLength(0);
+  });
+
   it('shows an honest empty line when the lab allows suggestions and nobody allowed an app; hides the block when both are off', async () => {
     const a = setup({ state: ON, grants: [] });
     await loaded(a.f);
+    await openTab(a.f, 'apps');
     expect(a.f.nativeElement.textContent).toContain('No app can suggest Test Master changes with your account.');
     expect(rows(a.f)).toHaveLength(0);
     const b = setup({ state: { ...ON, proposals: false }, grants: [] });
     await loaded(b.f);
+    expect(tabBtn(b.f, 'apps')).toBeNull();
     expect(b.f.nativeElement.textContent).not.toContain('Apps you’ve allowed to suggest changes');
     // an old grant stays visible (and revocable) even after the lab switch is turned off
     const c = setup({ state: { ...ON, proposals: false }, grants: [G1] });
     await loaded(c.f);
+    await openTab(c.f, 'apps');
     expect(rows(c.f)).toHaveLength(1);
+  });
+});
+
+describe('AiConnectorsSettingsPage: tabs instead of one long page', () => {
+  const ON: AiConnectorState = { ...OFF, enabled: true, proposals: true };
+  const G1: AiConnectorGrant = { clientId: '3f2b8c1e-5a4d-4e7f-9b21-0c6d8e1a2b3c', propose: true, createdAt: '2026-11-01T05:00:00Z', updatedAt: '2026-11-01T05:00:00Z' };
+
+  it('Settings is open by default; tabs are a labelled tablist with one selected tab and one tabpanel', async () => {
+    const { f } = setup({ state: ON, grants: [G1] });
+    await loaded(f);
+    const list = f.nativeElement.querySelector('[role="tablist"]')!;
+    expect(list.getAttribute('aria-label')).toBe('AI connector sections');
+    const tabs = Array.from(list.querySelectorAll('[role="tab"]')) as HTMLElement[];
+    expect(tabs.map(t => t.textContent!.replace(/\s+/g, ' ').trim())).toEqual(['Settings', 'What apps see', 'Your apps1']);
+    expect(tabs.filter(t => t.getAttribute('aria-selected') === 'true')).toHaveLength(1);
+    expect(f.nativeElement.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
+    expect(f.nativeElement.querySelector('[role="tabpanel"]')!.getAttribute('aria-labelledby')).toBe('pf-aic-tab-settings');
+    expect(sw(f)).toBeTruthy();
+  });
+
+  it('“Your apps” falls back to Settings when its tab goes away (last grant revoked while suggestions are off)', async () => {
+    const { f } = setup({ state: { ...ON, proposals: false }, grants: [G1] });
+    await loaded(f);
+    await openTab(f, 'apps');
+    expect(f.componentInstance.tab()).toBe('apps');
+    (f.nativeElement.querySelector('.pf-aic__revoke') as HTMLButtonElement).click();
+    await settle(f);
+    expect(tabBtn(f, 'apps')).toBeNull();
+    expect(f.componentInstance.tab()).toBe('settings');
+    expect(sw(f)).toBeTruthy();
+  });
+
+  it('the side card (address + steps) stays visible on every tab for an admin', async () => {
+    const { f } = setup({ state: ON, grants: [G1] });
+    await loaded(f);
+    for (const t of ['can', 'apps', 'settings'] as const) {
+      await openTab(f, t);
+      expect(f.nativeElement.querySelector('#pf-aic-url')).toBeTruthy();
+    }
+  });
+
+  it('the suggest-off helper and confirm share ONE sentence (owner rule)', () => {
+    expect(AI_CONNECTOR_SUGGEST_OFF_EFFECT).toBe('Turning this off removes every app’s permission to suggest. People will need to allow it again.');
   });
 });

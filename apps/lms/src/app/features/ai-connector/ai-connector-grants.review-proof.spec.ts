@@ -49,12 +49,20 @@ function setup(grants: AiConnectorGrant[]) {
   return { f, api, dialog, toasts };
 }
 
-async function loaded(f: { detectChanges(): void; whenStable(): Promise<unknown> }) {
+async function loaded(f: { nativeElement: HTMLElement; detectChanges(): void; whenStable(): Promise<unknown> }) {
   f.detectChanges();
   await new Promise(r => setTimeout(r, 650));
   for (let i = 0; i < 4; i++) { await Promise.resolve(); await new Promise(r => setTimeout(r, 0)); }
   await f.whenStable();
   f.detectChanges();
+  // The allowed-apps list lives on the main card's "Your apps" tab.
+  const tab = f.nativeElement.querySelector('#pf-aic-tab-apps') as HTMLButtonElement | null;
+  if (tab && tab.getAttribute('aria-selected') !== 'true') {
+    tab.click();
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+  }
 }
 
 afterEach(() => { document.body.innerHTML = ''; localStorage.removeItem('pf.aic.appnames'); delete (window as unknown as { __pwned?: number }).__pwned; });

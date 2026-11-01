@@ -40,7 +40,7 @@ export function patientTarget(patientId: string, orderIds: readonly string[]): s
             </header>
             <div class="pf-card__body pf-co__body">
               <p class="pf-co__name">{{ staffName() }}</p>
-              <p class="pf-field__hint">Shown to AI only as a short code. Names stay inside Prefrontal.</p>
+              <p class="pf-field__hint">Shown to the connected app only as a short code. Names stay inside Prefrontal.</p>
               <a class="pf-btn pf-btn--secondary press" routerLink="/">Back to Prefrontal</a>
             </div>
           </section>
@@ -49,7 +49,7 @@ export function patientTarget(patientId: string, orderIds: readonly string[]): s
           <section class="pf-card pf-co__card" role="alert">
             <div class="pf-card__body pf-co__body">
               <p class="pf-co__name">This link has expired or isn’t yours.</p>
-              <p class="pf-field__hint">Links from an AI answer last one day and open only for the person who asked. Ask the question again to get a fresh link.</p>
+              <p class="pf-field__hint">Links from a connected app’s answer last one day and open only for the person who asked. Ask the question again to get a fresh link.</p>
               <a class="pf-btn pf-btn--secondary press" routerLink="/">Back to Prefrontal</a>
             </div>
           </section>

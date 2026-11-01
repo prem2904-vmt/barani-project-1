@@ -24,7 +24,7 @@ export interface AiConnectorState {
   /** The public MCP URL to paste into Claude (e.g. https://…/mcp). */
   connectorUrl: string;
   labName: string;
-  /** How much an outside AI may see. Absent (older server) = 'counts', the safest. */
+  /** How much a connected app may see. Absent (older server) = 'counts', the safest. */
   privacyLevel?: AiPrivacyLevel;
   /** Connected assistants may suggest Test Master changes (they wait for a person to approve). Absent (older server) = off. */
   proposals?: boolean;
@@ -93,21 +93,24 @@ export class AiConnectorApi {
   }
 }
 
-/** One group of what a connected AI app can read, in plain words. */
+/** One group of what a connected app can read, in plain words. */
 export interface CanSeeGroup {
   title: string;
   /** Who / when, in a few words (shown next to the title). */
   when?: string;
+  /** The group in one short line (settings screen's compact Can list; the full items open on demand). */
+  brief: string;
   items: readonly string[];
 }
 
-/** What a connected AI app can read, and suggest, grouped (consent + settings share it, so the
+/** What a connected app can read, and suggest, grouped (consent + settings share it, so the
  *  two screens can never promise different things). Mirrors the server's connector tools:
  *  reads, plus "suggest a Test Master change" tools that only ever store a pending suggestion;
  *  the server's privacy gate and the lab's suggestion switch are the ONE enforcer. */
 export const AI_CONNECTOR_CAN_SEE: readonly CanSeeGroup[] = [
   {
     title: 'Test catalogue & lab info',
+    brief: 'Test Master, profiles and packages, branches and hours',
     items: [
       'Your Test Master: tests, tubes, preparation, report times, normal ranges and critical limits (prices only for people who can already see them)',
       'Profiles and packages and what is in them, and which tests go to a partner lab',
@@ -116,6 +119,7 @@ export const AI_CONNECTOR_CAN_SEE: readonly CanSeeGroup[] = [
   },
   {
     title: 'Lab operations',
+    brief: 'Orders, turnaround, work waiting, analyzers and stock',
     items: [
       'Orders, tests and samples for a date range, turnaround times and late tests',
       'Work waiting at each step — collect, receive, result, validate, deliver — plus re-runs, rejections and recollections',
@@ -126,6 +130,7 @@ export const AI_CONNECTOR_CAN_SEE: readonly CanSeeGroup[] = [
   {
     title: 'Billing totals',
     when: 'only for people who see money',
+    brief: 'Revenue, dues, discounts and GST totals',
     items: [
       'Revenue, collections, dues, discounts, refunds and GST totals',
       'Prices and estimates from the same bill calculator as the counter — never cost prices',
@@ -135,6 +140,7 @@ export const AI_CONNECTOR_CAN_SEE: readonly CanSeeGroup[] = [
   {
     title: 'Patient results as codes',
     when: 'only when your lab’s privacy level allows',
+    brief: 'Results and report status, each patient as a code',
     items: [
       'Results, trends, abnormal and critical values, with each patient shown only as a short expiring code like P-K7Q2X and a link that opens them inside Prefrontal',
       'Where a sample, report or bill is, and when a report is expected',
@@ -143,6 +149,7 @@ export const AI_CONNECTOR_CAN_SEE: readonly CanSeeGroup[] = [
   {
     title: 'Admin overview',
     when: 'for lab admins',
+    brief: 'Roles, analyzer setup and Test Master health',
     items: [
       'Roles and what they allow, branches, analyzer setup and which modules are on',
       'Test Master health — tests missing ranges or prices, mapping gaps and recent changes',
@@ -155,7 +162,8 @@ export const AI_CONNECTOR_CAN_SEE: readonly CanSeeGroup[] = [
 export const AI_CONNECTOR_CAN_SUGGEST: CanSeeGroup = {
   title: 'Suggested Test Master changes',
   when: 'only if your lab allows it',
-  items: [
+  brief: 'Suggestions that wait for a person to approve',
+    items: [
     'It can suggest new prices, a new test, an edit to a test or a change to what is in a profile',
     'Each suggestion waits in Test Master, Pending changes. Nothing changes until someone with Test Master permission approves it there',
   ],
@@ -165,15 +173,25 @@ export const AI_CONNECTOR_CAN_SUGGEST: CanSeeGroup = {
 export const AI_CONNECTOR_NEVER =
   'Never patient or staff names, phone numbers, exact ages or ID numbers, and never a patient’s or staff member’s address. Numbers under 5 show as “fewer than 5”. Each person only sees what their own role allows. An app can never approve or apply a change itself.';
 
+/** The same promises as {@link AI_CONNECTOR_NEVER}, as short lines (settings screen's compact Never list). */
+export const AI_CONNECTOR_NEVER_ITEMS: readonly string[] = [
+  'Patient or staff names',
+  'Phone numbers, exact ages or ID numbers',
+  'A patient’s or staff member’s address',
+  'Exact numbers under 5 — they show as “fewer than 5”',
+  'More than the person’s own role allows',
+  'Approve or apply a change by itself',
+];
+
 /** What the app is promised on the "suggest" switch, in plain words (one home for settings + consent). */
 export const AI_CONNECTOR_SUGGEST_TITLE = 'Let connected assistants suggest Test Master changes';
 export const AI_CONNECTOR_SUGGEST_ON =
   'On — a connected assistant can suggest changes to the Test Master. Each one waits in Test Master, Pending changes until someone with Test Master permission approves it.';
-/** Owner rule 2026-11-01: switch off = every app's permission is removed; turning it on again restores nothing. */
-export const AI_CONNECTOR_SUGGEST_WIPE = 'Turning this off removes every app’s permission to suggest; people will need to allow it again.';
-/** Master switch: off also disconnects reading, and the same permissions are removed. */
-export const AI_CONNECTOR_MASTER_WIPE = 'Turning this off removes every app’s permission to suggest. People will need to allow it again.';
 export const AI_CONNECTOR_SUGGEST_OFF = 'Off — connected assistants can read, but can’t suggest any changes.';
+/** Owner rule (2026-11-01): turning suggestions OFF wipes every app's suggest permission on the server, so the
+ *  switch's helper text and its confirm both say so, in these exact words. */
+export const AI_CONNECTOR_SUGGEST_OFF_EFFECT =
+  'Turning this off removes every app’s permission to suggest. People will need to allow it again.';
 export const AI_CONNECTOR_SUGGEST_REQUESTED =
   'This app can suggest changes to your Test Master. Nothing is applied until someone with Test Master permission approves it in Prefrontal.';
 /** The consent-screen choice (unticked by default; shown only when the lab allows suggestions). */

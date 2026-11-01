@@ -17,13 +17,13 @@ import { join, relative, resolve } from 'node:path';
 
 const APP_ROOT = resolve(process.cwd(), 'apps/lms/src/app');
 
-/** The AI connector feature owns its own folder — "AI" is allowed there. */
-const ALLOWED_DIRS = ['features/ai-connector/'];
+/** No folder is exempt any more (owner, 2026-11-01): even the connector's own screens say "AI" only in
+ *  "AI connector" — the apps it lets in are "apps" / "connected apps", never "AI apps". */
+const ALLOWED_DIRS: string[] = [];
 
-/** Connector wording allowed anywhere (nav skeleton, the Lab-settings tile). */
+/** The ONE allowed wording, anywhere: the feature's name. */
 const ALLOWED_PHRASES: RegExp[] = [
   /\bAI[- ]connectors?\b/g,
-  /Let AI apps like Claude read your lab[’']s numbers/g,
 ];
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -56,6 +56,7 @@ describe('no user-facing "AI" — it is Cortex (owner standing rule)', () => {
     expect(aiMentions(`const AI_CAP = 1; aiGlow(); class="pf-ai-glow"; 'ai_cap_reached'`)).toEqual([]);
     expect(aiMentions(`// the AI call\n/* AI */\n<!-- AI -->`)).toEqual([]);
     expect(aiMentions(`title: 'AI connectors', 'Turn on AI connector'`)).toEqual([]);
+    expect(aiMentions(`subtitle: 'Let AI apps like Claude read your lab’s numbers'`)).toHaveLength(1);
   });
 
   it('no file in apps/lms/src/app says "AI" outside the AI connector', () => {
