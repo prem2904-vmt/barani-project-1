@@ -44,6 +44,19 @@ const label = (b: DrawnBox) => {
   return t.length > 32 ? `"${t.slice(0, 32)}…"` : `"${t}"`;
 };
 
+/** The distinct collisions in a recording, in plain words (the same collision seen twice is counted once). */
+export function distinctCollisions(boxes: ReadonlyArray<DrawnBox>): string[] {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const o of findOverlaps(boxes)) {
+    const k = `${o.a.text ?? o.a.kind}|${o.b.text ?? o.b.kind}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    lines.push(`${label(o.a)} runs into ${label(o.b)}`);
+  }
+  return lines;
+}
+
 export function reportIssues(input: ReportPdfInput, max = 5): ReportIssues {
   try {
     let rec: ReturnType<typeof recordDrawing> | null = null;
@@ -52,14 +65,7 @@ export function reportIssues(input: ReportPdfInput, max = 5): ReportIssues {
       report: { ...input.report, data: stressSnapshot(input.report.data ?? '{}') },
       drawRecorder: d => { rec = recordDrawing(d); },
     });
-    const seen = new Set<string>();
-    const lines: string[] = [];
-    for (const o of findOverlaps(rec!.boxes)) {
-      const k = `${o.a.text ?? o.a.kind}|${o.b.text ?? o.b.kind}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      lines.push(`${label(o.a)} runs into ${label(o.b)}`);
-    }
+    const lines = distinctCollisions(rec!.boxes);
     return { count: lines.length, lines: lines.slice(0, max) };
   } catch {
     return { count: 0, lines: [] };

@@ -117,6 +117,8 @@ interface W {
   id: string; kind: LayoutItem['kind']; region: LayoutItem['region']; label: string; align: Align;
   x: number; y: number; box: { x: number; y: number; w: number; h: number };
   size: number | null; text: boolean; moved: boolean;
+  /** The lab placed / resized this item by hand (an override exists). Untouched items keep the header style's own rhythm. */
+  custom: boolean;
 }
 
 const rnd2 = (n: number) => Math.round(n * 100) / 100;
@@ -127,7 +129,7 @@ function workOf(layout: ReportLayoutResult): W[] {
     .filter(i => !i.hidden && (i.kind === 'text' || i.kind === 'logo' || i.kind === 'nabl'))
     .map(i => ({
       id: i.id, kind: i.kind, region: i.region, label: i.label, align: i.align, x: i.x, y: i.y,
-      box: { ...i.box }, size: i.kind === 'text' ? (i.sizeValue ?? i.size ?? null) : null, text: i.kind === 'text', moved: false,
+      box: { ...i.box }, size: i.kind === 'text' ? (i.sizeValue ?? i.size ?? null) : null, text: i.kind === 'text', moved: false, custom: !!i.customized,
     }));
 }
 const left = (w: W) => w.box.x;
@@ -193,6 +195,7 @@ function ruleSnap(ws: W[], push: (c: TidyChange | null) => void) {
   const before = mark(ws);
   const hitW: W[] = [];
   for (const w of ws) {
+    if (!w.custom) continue;
     const s = snapBoxX(left(w), w.box.w, TOL_SNAP);
     const dx = s.left - left(w);
     if (s.guide === null || Math.abs(dx) < EPS || Math.abs(dx) > TOL_SNAP + EPS) continue;
@@ -227,7 +230,7 @@ function ruleAlign(ws: W[], push: (c: TidyChange | null) => void) {
           const target = edge(onGuide ?? run[0]);
           for (const w of run) {
             const dx = target - edge(w);
-            if (Math.abs(dx) < EPS) continue;
+            if (!w.custom || Math.abs(dx) < EPS) continue;
             if (left(w) + dx < MARGIN_X - 0.5 || right(w) + dx > PAGE.w - MARGIN_X + 0.5) continue;
             shift(w, dx, 0); hitW.add(w);
           }
@@ -248,7 +251,7 @@ function ruleAlign(ws: W[], push: (c: TidyChange | null) => void) {
       const a = texts[i], b = texts[j];
       const dy = b.y - a.y;
       if (dy > TOL_ROW) break;
-      if (dy < EPS) continue;
+      if (dy < EPS || !b.custom) continue;
       const apart = right(a) <= left(b) + 0.5 || right(b) <= left(a) + 0.5;
       if (!apart) continue;
       shift(b, 0, -dy); hitW.add(b);
@@ -317,6 +320,7 @@ function ruleSpacing(ws: W[], push: (c: TidyChange | null) => void) {
     }
     if (chain.length < 3) continue;
     chain.forEach(c => used.add(c));
+    if (!chain.slice(1, -1).every(c => c.custom)) continue;
     const gaps = chain.slice(1).map((c, i) => top(c) - bottom(chain[i]));
     if (Math.max(...gaps) - Math.min(...gaps) < 0.5 * MM) continue;
     const mean = gaps.reduce((s, g) => s + g, 0) / gaps.length;

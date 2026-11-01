@@ -4,8 +4,8 @@ import { firstValueFrom, timeout } from 'rxjs';
 import { PlatformService } from './platform.service';
 
 /** The PF Sense features an admin can switch (keys are a cross-repo contract). */
-export type PfSenseFeatureKey = 'ast_disk_read' | 'instruments_assistant' | 'insights_assistant' | 'test_master_assistant';
-export const PF_SENSE_FEATURES: readonly PfSenseFeatureKey[] = ['ast_disk_read', 'instruments_assistant', 'insights_assistant', 'test_master_assistant'];
+export type PfSenseFeatureKey = 'ast_disk_read' | 'instruments_assistant' | 'insights_assistant' | 'test_master_assistant' | 'report_tidy';
+export const PF_SENSE_FEATURES: readonly PfSenseFeatureKey[] = ['ast_disk_read', 'instruments_assistant', 'insights_assistant', 'test_master_assistant', 'report_tidy'];
 
 /** Server refusal codes that mean "the admin switch / cap changed" — re-read the status. */
 export const PF_SENSE_REFUSALS: readonly string[] = ['pf_sense_off', 'ai_cap_reached'];

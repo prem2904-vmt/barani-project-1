@@ -12,7 +12,7 @@ const base = (over: Partial<ReportTemplate> = {}): ReportTemplate => ({ metadata
 function text(id: string, x: number, y: number, w: number, h: number, extra: Partial<LayoutItem> = {}): LayoutItem {
   return {
     id, region: 'header', kind: 'text', label: id, x, y: y + h * 0.8, align: 'left', box: { x, y, w, h },
-    customized: false, sizeValue: 10, sizeUnit: 'pt', size: 10, ...extra,
+    customized: !!(extra as { customized?: boolean }).customized, sizeValue: 10, sizeUnit: 'pt', size: 10, ...extra,
   } as LayoutItem;
 }
 function layout(items: LayoutItem[], over: Partial<ReportLayoutResult> = {}): ReportLayoutResult {
@@ -53,14 +53,14 @@ describe('Tidy up - deterministic rules', () => {
 
   it('snap: a hair off the margin goes onto it', () => {
     tpl = base();
-    const r = runTidy(tpl, probeOf(layout([...CLEAN.slice(0, 2), text('contact', 30.9, 70, 240, 10), CLEAN[3]])));
+    const r = runTidy(tpl, probeOf(layout([...CLEAN.slice(0, 2), text('contact', 30.9, 70, 240, 10, { customized: true }), CLEAN[3]])));
     const c = r.changes.find(x => x.rule === 'snap')!;
     expect(c.patches).toEqual([{ kind: 'move', id: 'contact', dx: -0.32, dy: 0 }]);
   });
 
   it('align: left edges within 2 mm become one edge, side-by-side baselines become one row', () => {
     tpl = base();
-    const l = layout([text('a', 100, 100, 120, 10), text('b', 103, 114, 120, 10), text('c', 330, 100, 60, 10), text('d', 330, 102, 40, 10, { box: { x: 400, y: 102, w: 40, h: 10 } })]);
+    const l = layout([text('a', 100, 100, 120, 10), text('b', 103, 114, 120, 10, { customized: true }), text('c', 330, 100, 60, 10), text('d', 330, 102, 40, 10, { box: { x: 400, y: 102, w: 40, h: 10 }, customized: true })]);
     const r = runTidy(tpl, probeOf(l));
     const c = r.changes.find(x => x.rule === 'align')!;
     expect(c).toBeTruthy();
@@ -98,7 +98,7 @@ describe('Tidy up - deterministic rules', () => {
 
   it('spacing: a column of lines with uneven gaps gets even gaps', () => {
     tpl = base();
-    const l = layout([text('l1', 30, 40, 200, 10), text('l2', 30, 52, 200, 10), text('l3', 30, 78, 200, 10), text('l4', 30, 90, 200, 10)]);
+    const l = layout([text('l1', 30, 40, 200, 10), text('l2', 30, 52, 200, 10, { customized: true }), text('l3', 30, 78, 200, 10, { customized: true }), text('l4', 30, 90, 200, 10)]);
     const r = runTidy(tpl, probeOf(l));
     const c = r.changes.find(x => x.rule === 'spacing')!;
     expect(c).toBeTruthy();
@@ -173,6 +173,13 @@ describe('Tidy up - deterministic rules', () => {
     expect(c.patches).toEqual([{ kind: 'style', path: 'signatures.placement', to: 'end' }]);
     const dept = runTidy(base(), probeOf(layout(CLEAN)));
     expect(dept.changes.some(x => x.rule === 'signature')).toBe(false);
+  });
+
+  it('items the lab never touched keep the header style\'s own rhythm (no snap / align / spacing for them)', () => {
+    tpl = base();
+    const l = layout([text('a', 30.9, 40, 200, 10), text('b', 33, 52, 200, 10), text('c', 30, 78, 200, 10), text('d', 30, 90, 200, 10)]);
+    const r = runTidy(tpl, probeOf(l));
+    expect(r.changes).toEqual([]);
   });
 
   it('every change has a named rule and a plain-words reason, and never says AI', () => {

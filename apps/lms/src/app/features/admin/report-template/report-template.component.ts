@@ -29,6 +29,10 @@ import {
   AGE_STYLE_CHOICES, LABEL_JOINER_CHOICES, PATIENT_LABELS, RENAMEABLE_LABEL_KEYS, ageSexText, ageText, miniStripText, patientLabel, sexText, swapAgeSexColumns,
 } from '../../../shared/utils/report-patient-text';
 import { reportIssues, type ReportIssues } from '../../../shared/utils/report-issues';
+import { ReportTidyCardComponent } from './report-tidy-card.component';
+import { BetaFeaturesService } from '../../../core/services/beta-features.service';
+import { PfSenseService } from '../../../core/services/pf-sense.service';
+import type { ReportPdfInput } from '../../../shared/utils/report-pdf';
 import { ReportStyleCardsComponent } from './report-style-cards.component';
 import { ReportChartPanelCardComponent } from './report-chart-panel-card.component';
 import { applyStylePreset, detectPreset, type PresetId } from '../../../shared/utils/report-presets';
@@ -76,7 +80,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
+  imports: [ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
@@ -99,6 +103,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                           [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
+            @if (tidyShown()) {
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
+                      aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6Z"/><path d="M18.5 15.5 19.3 17.7 21.5 18.5 19.3 19.3 18.5 21.5 17.7 19.3 15.5 18.5 17.7 17.7Z"/></svg>
+                Tidy up
+              </button>
+            }
             @if (issues().count > 0) {
               <button type="button" class="pf-rt-issues press" (click)="openIssues()"
                       [attr.aria-label]="issuesLabel()" [title]="issuesTitle()">
@@ -130,6 +141,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           <h1 class="pf-rt-title">Report designer</h1>
           <p class="pf-rt-sub">How every printed report looks — edit on the left, watch the page on the right.</p>
         </div>
+        @if (tidyShown()) {
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
+                  aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6Z"/><path d="M18.5 15.5 19.3 17.7 21.5 18.5 19.3 19.3 18.5 21.5 17.7 19.3 15.5 18.5 17.7 17.7Z"/></svg>
+            Tidy up
+          </button>
+        }
         @if (issues().count > 0) {
           <button type="button" class="pf-rt-issues press" (click)="openIssues()"
                   [attr.aria-label]="issuesLabel()" [title]="issuesTitle()">
@@ -144,6 +162,10 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           {{ saving() ? 'Saving…' : 'Save' }}
         </pf-touch-btn>
       </header>
+
+      @if (tidyOpen() && tidyBase(); as tb) {
+        <pf-report-tidy-card [tpl]="tpl()" [base]="tb" (applied)="applyTidy($event)" (close)="tidyOpen.set(false)"></pf-report-tidy-card>
+      }
 
       <div class="pf-band-body pf-band-body--fill">
       @if (tplSkeleton()) {
@@ -1544,6 +1566,41 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     const i = this.issues();
     return i.count ? `With long names: ${i.lines.join('; ')}${i.count > i.lines.length ? '…' : ''}. Open Patient strip to fix.` : '';
   });
+  // ── Cortex "Tidy up" (beta `assistant`, dev only; report-tidy.ts) ──
+  private readonly beta = inject(BetaFeaturesService);
+  private readonly sense = inject(PfSenseService);
+  readonly tidyOpen = signal(false);
+  readonly tidyBusy = signal(false);
+  readonly tidyBase = signal<Omit<ReportPdfInput, 'template'> | null>(null);
+  /** The button shows only with the `assistant` beta on AND Cortex switched on for this lab (two gates, both required). */
+  readonly tidyShown = computed(() => this.beta.enabled('assistant') && this.sense.shown('report_tidy'));
+  /** Load the sample report (made-up patient) and its images, then open the review card. */
+  async openTidy() {
+    if (this.tidyBusy() || this.tidyOpen()) return;
+    this.tidyBusy.set(true);
+    try {
+      const baseInput = {
+        report: { id: 'tidy-' + Date.now(), type: 'final', createdAt: new Date().toISOString(), data: this.sampleSnapshot() },
+        template: this.tpl(),
+        resolvedLayouts: this.buildPreviewLayouts(),
+      };
+      const imageCache = await preloadReportImages(baseInput, this.platform.getApiUrl());
+      const { template: _t, ...base } = { ...baseInput, imageCache };
+      this.tidyBase.set(base as Omit<ReportPdfInput, 'template'>);
+      this.tidyOpen.set(true);
+    } catch (e) {
+      console.error('tidy could not start', e);
+      this.toasts.error('Tidy up could not start. Try again.');
+    } finally { this.tidyBusy.set(false); }
+  }
+  /** Apply the ticked changes as ONE undo step. Nothing is saved until the normal Save. */
+  applyTidy(p: Partial<ReportTemplate>) {
+    this.tidyOpen.set(false);
+    if (!Object.keys(p).length) return;
+    this.patch(p, { step: true });
+    this.toasts.success('Tidied. Press Undo (Ctrl+Z) to take it back; nothing is saved until you press Save.');
+  }
+
   openIssues() {
     this.setTab('patient');
     setTimeout(() => document.getElementById('pf-long-text')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
@@ -1672,6 +1729,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   private renderTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
+    void this.beta.ensureLoaded(); void this.sense.ensureLoaded();
     // Debounced live-preview render — every template change schedules a
     // 300ms tick that regenerates the blob URL (avoids hammering jsPDF
     // on every keystroke).

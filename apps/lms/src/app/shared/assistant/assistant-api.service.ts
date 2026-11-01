@@ -65,6 +65,36 @@ export class AssistantApiService {
     );
   }
 
+  /** Report designer: which engines are available to Cortex "Tidy up" (needs the report-template permission). */
+  reportTidyProviders(): Observable<AssistantProvider[]> {
+    return this.http.get<unknown>(this.url('/report-tidy/providers')).pipe(
+      timeout(AssistantApiService.PROVIDERS_TIMEOUT_MS),
+      map((r) => {
+        const fail = assistantFailure(r);
+        if (fail) throw fail;
+        return normaliseProviders(r);
+      }),
+    );
+  }
+
+  /** Report designer: Cortex's judgement calls on a layout. Layout settings and geometry go in; allow-listed suggestions come
+   *  back. Nothing is saved anywhere by this call. */
+  reportTidy(body: Record<string, unknown>): Observable<{ summary: string; changes: Array<Record<string, unknown>>; dropped: number }> {
+    return this.http.post<unknown>(this.url('/report-tidy'), body).pipe(
+      timeout(AssistantApiService.CHAT_TIMEOUT_MS),
+      map((r) => {
+        const fail = assistantFailure(r);
+        if (fail) throw fail;
+        const d = ((r as { data?: Record<string, unknown> })?.data ?? {}) as Record<string, unknown>;
+        return {
+          summary: typeof d['summary'] === 'string' ? d['summary'] : '',
+          changes: Array.isArray(d['changes']) ? (d['changes'] as Array<Record<string, unknown>>) : [],
+          dropped: Number(d['dropped']) || 0,
+        };
+      }),
+    );
+  }
+
   /** Step 2: read it. Adds PENDING suggestions only; the answer is the summary. */
   rateCardRead(uploadId: string, provider: AssistantProviderId): Observable<RateCardSummary> {
     return this.http.post<unknown>(this.url(`/test-master/rate-card/${encodeURIComponent(uploadId)}/read`), { provider }).pipe(
