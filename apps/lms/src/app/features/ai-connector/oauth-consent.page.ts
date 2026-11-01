@@ -6,7 +6,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { BusyDirective } from '../../shared/directives/busy.directive';
 import { SkeletonFormComponent } from '../../shared/primitives/skeleton-kit.component';
-import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_REQUESTED, AI_CONNECTOR_SUGGEST_SCOPE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState } from './ai-connector.api';
+import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_OPTION, AI_CONNECTOR_SUGGEST_REQUESTED, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState, rememberAppName } from './ai-connector.api';
 import { ConsentRedirector } from './consent-redirect';
 import {
   ConsentError, ConsentErrorKind, OAuthAuthorizationDetails, OAuthConsentClient, consentErrorText,
@@ -107,7 +107,7 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
                       </div>
                     </div>
                   }
-                  <p class="pf-oc__lead"><strong class="pf-oc__name">{{ appName() }}</strong> wants to read your lab’s numbers{{ wantsSuggest() ? ' and suggest Test Master changes' : '' }}.</p>
+                  <p class="pf-oc__lead"><strong class="pf-oc__name">{{ appName() }}</strong> wants to read your lab’s numbers.</p>
                   <h2 class="pf-oc__sec">It could see</h2>
                   @for (g of canSee; track g.title) {
                     <div class="pf-oc__grp">
@@ -124,10 +124,19 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
                   }
                   <p class="pf-oc__level"><strong>About patients, your lab allows: {{ levelInfo().label }}.</strong> {{ levelInfo().summary }}</p>
                   <p class="pf-oc__never">{{ never }}</p>
-                  @if (wantsSuggest()) {
-                    <h2 class="pf-oc__sec">It could suggest</h2>
-                    <p class="pf-oc__level" id="pf-oc-suggest"><strong>{{ suggestText }}</strong>
-                      @if (connector()?.proposals !== true) { Your lab hasn’t turned this on yet, so suggestions will be refused until a lab admin does. }</p>
+                  @if (offerSuggest()) {
+                    <h2 class="pf-oc__sec">Optional</h2>
+                    <button type="button" class="pf-oc__opt press" role="checkbox" id="pf-oc-suggest-opt"
+                            [attr.aria-checked]="suggestTick()" [attr.aria-describedby]="'pf-oc-suggest'"
+                            [disabled]="!!busy()" (click)="suggestTick.set(!suggestTick())">
+                      <span class="pf-check" aria-hidden="true" [attr.aria-checked]="suggestTick()">
+                        <span class="pf-check__box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                      </span>
+                      <span class="pf-oc__opt-text">
+                        <span class="pf-oc__opt-title">{{ suggestOption }}</span>
+                        <span class="pf-oc__opt-sub" id="pf-oc-suggest">{{ suggestText }}</span>
+                      </span>
+                    </button>
                   }
                   <p class="pf-oc__readonly">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6l-7-3Z"/></svg>
@@ -208,6 +217,15 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
     .pf-oc__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
     .pf-oc__item { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; line-height: 1.45; color: var(--text-primary); }
     .pf-oc__tick { flex: none; margin-top: 2px; color: var(--violet-text, #7c3aed); }
+    .pf-oc__opt { display: flex; align-items: flex-start; gap: 12px; width: 100%; text-align: left; cursor: pointer; padding: 12px 14px; border-radius: 12px;
+      border: 1px solid var(--pf-line); background: transparent; color: inherit; font: inherit; min-height: 44px; }
+    .pf-oc__opt:hover:not(:disabled) { background: var(--pf-chip-bg, transparent); }
+    .pf-oc__opt:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    .pf-oc__opt[aria-checked='true'] { border-color: var(--color-violet-600, #7c3aed); }
+    .pf-oc__opt:disabled { opacity: .6; cursor: default; }
+    .pf-oc__opt-text { display: grid; gap: 4px; min-width: 0; }
+    .pf-oc__opt-title { font-size: 14px; font-weight: 600; line-height: 1.4; color: var(--text-primary); }
+    .pf-oc__opt-sub { font-size: 13px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
     .pf-oc__readonly { display: flex; align-items: flex-start; gap: 10px; margin: 4px 0 0; padding: 12px 14px; border-radius: 12px;
       border: 1px solid var(--pf-line); background: var(--pf-chip-bg, transparent); font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
     .pf-oc__readonly svg { flex: none; margin-top: 1px; color: var(--violet-text, #7c3aed); }
@@ -258,8 +276,14 @@ export class OAuthConsentPage implements OnInit {
   readonly canSee = AI_CONNECTOR_CAN_SEE;
   readonly never = AI_CONNECTOR_NEVER;
   readonly suggestText = AI_CONNECTOR_SUGGEST_REQUESTED;
-  /** The app asked for the propose scope (its request carries scopes as one space-separated string). */
-  readonly wantsSuggest = computed(() => (this.details()?.scope ?? '').split(/[\s,]+/).includes(AI_CONNECTOR_SUGGEST_SCOPE));
+  readonly suggestOption = AI_CONNECTOR_SUGGEST_OPTION;
+  /** Supabase's OAuth server refuses custom scopes, so an app can never ASK to suggest: the person decides here.
+   *  The box shows only when the lab switch is on and the request carries the app's id (the grant is per app). */
+  readonly appId = computed(() => this.details()?.client?.id?.trim() || '');
+  readonly offerSuggest = computed(() => this.canAllow() && this.connector()?.proposals === true && !!this.appId());
+  /** Unticked by default, every time. */
+  readonly suggestTick = signal(false);
+  readonly wantsSuggest = computed(() => this.offerSuggest() && this.suggestTick());
   readonly phase = signal<ConsentPhase>('loading');
   readonly details = signal<OAuthAuthorizationDetails | null>(null);
   readonly connector = signal<AiConnectorState | null>(null);
@@ -343,10 +367,21 @@ export class OAuthConsentPage implements OnInit {
     if (!id) return;
     this.busy.set(action);
     this.decideError.set(null);
+    let wroteGrant = false;
     try {
+      if (action === 'allow' && this.offerSuggest()) {
+        // Record the person's choice on OUR server first (tenant + user come from the session, never from here), then approve.
+        // Unticked writes "no" so reconnecting without the box clears an earlier grant. If we can't record it, we don't approve.
+        const tick = this.suggestTick();
+        try { await firstValueFrom(this.connectorApi.putGrant(this.appId(), tick)); }
+        catch { this.decideError.set('Couldn’t save your choice about suggestions. Check your connection and press Allow again.'); return; }
+        wroteGrant = tick;
+        if (tick) rememberAppName(this.appId(), this.appName() || 'Connected app');
+      }
       const r = action === 'allow' ? await this.client.approve(id) : await this.client.deny(id);
       this.leave(r?.redirect_url);
     } catch (e) {
+      if (wroteGrant) { try { await firstValueFrom(this.connectorApi.deleteGrant(this.appId())); } catch { /* best effort; the row is inert without a connection, and Revoke removes it */ } }
       const kind = e instanceof ConsentError ? e.kind : 'unknown';
       if (kind === 'expired' || kind === 'signed-out' || kind === 'missing') this.fail(kind);
       else this.decideError.set(consentErrorText(kind));

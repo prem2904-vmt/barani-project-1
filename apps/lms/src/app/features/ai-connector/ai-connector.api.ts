@@ -12,6 +12,9 @@ import { ApiService } from '../../core/services/api.service';
  *   PUT /api/ai-connector {privacyLevel} → lab admin only; either field may be sent alone
  *   PUT /api/ai-connector {proposals} → lab admin only: "let connected assistants SUGGEST Test Master changes"
  *     (default OFF; the changes wait in Test Master → Pending changes, nothing applies by itself)
+ *   GET /api/ai-connector/grants → the CALLER's own allowed apps (never anyone else's)
+ *   PUT /api/ai-connector/grants/{clientId} {propose} → allow (true) / stop allowing (false = removes the row) ONE app to
+ *     suggest Test Master changes; normal sessions only, for yourself only. DELETE …/grants/{clientId} = revoke.
  *   GET /api/ai-connector/resolve/{code} → "open in Prefrontal" links: P-xxxxx / T-n → the real record
  *     (only for the person the code was issued to; anything else is a 404)
  */
@@ -26,6 +29,9 @@ export interface AiConnectorState {
   /** Connected assistants may suggest Test Master changes (they wait for a person to approve). Absent (older server) = off. */
   proposals?: boolean;
 }
+
+/** One app the signed-in person allowed to suggest Test Master changes (their own list only). */
+export interface AiConnectorGrant { clientId: string; propose: boolean; createdAt: string; updatedAt: string }
 
 /** What a code opens. Patients are masked as P-codes, staff as T-codes, outside Prefrontal. */
 export type ResolvedCode =
@@ -67,6 +73,19 @@ export class AiConnectorApi {
 
   setPrivacyLevel(privacyLevel: AiPrivacyLevel): Observable<AiConnectorState> {
     return this.api.put<AiConnectorState>('/api/ai-connector', { privacyLevel });
+  }
+
+  listGrants(): Observable<AiConnectorGrant[]> {
+    return this.api.get<AiConnectorGrant[]>('/api/ai-connector/grants');
+  }
+
+  /** propose=true allows the app; propose=false removes any earlier grant. */
+  putGrant(clientId: string, propose: boolean): Observable<unknown> {
+    return this.api.put<unknown>(`/api/ai-connector/grants/${encodeURIComponent(clientId)}`, { propose });
+  }
+
+  deleteGrant(clientId: string): Observable<unknown> {
+    return this.api.delete<unknown>(`/api/ai-connector/grants/${encodeURIComponent(clientId)}`);
   }
 
   resolve(code: string): Observable<ResolvedCode> {
@@ -153,8 +172,25 @@ export const AI_CONNECTOR_SUGGEST_ON =
 export const AI_CONNECTOR_SUGGEST_OFF = 'Off — connected assistants can read, but can’t suggest any changes.';
 export const AI_CONNECTOR_SUGGEST_REQUESTED =
   'This app can suggest changes to your Test Master. Nothing is applied until someone with Test Master permission approves it in Prefrontal.';
-/** The Prefrontal OAuth scope an app asks for to be allowed to suggest. */
-export const AI_CONNECTOR_SUGGEST_SCOPE = 'prefrontal:test_master.propose';
+/** The consent-screen choice (unticked by default; shown only when the lab allows suggestions). */
+export const AI_CONNECTOR_SUGGEST_OPTION = 'Also let this app suggest Test Master changes';
+
+/** Per-browser convenience: the app's name, remembered when the person allows it, so the "apps allowed" list can show a name
+ *  (the server keeps only the app's id). Never trusted for anything but display; always rendered as text. */
+const APP_NAMES_KEY = 'pf.aic.appnames';
+export function rememberAppName(clientId: string, name: string): void {
+  try {
+    const map = JSON.parse(localStorage.getItem(APP_NAMES_KEY) ?? '{}') as Record<string, string>;
+    map[clientId] = name.slice(0, 80);
+    localStorage.setItem(APP_NAMES_KEY, JSON.stringify(map));
+  } catch { /* private window / blocked storage: the list falls back to a generic label */ }
+}
+export function rememberedAppName(clientId: string): string | null {
+  try {
+    const v = (JSON.parse(localStorage.getItem(APP_NAMES_KEY) ?? '{}') as Record<string, unknown>)[clientId];
+    return typeof v === 'string' && v.trim() ? v : null;
+  } catch { return null; }
+}
 
 /** The three Claude steps on the settings screen. */
 export const CLAUDE_STEPS: readonly string[] = [

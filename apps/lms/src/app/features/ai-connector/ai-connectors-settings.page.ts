@@ -13,7 +13,7 @@ import { createLoadHold } from '../../shared/utils/min-duration';
 import { copyText } from '../../shared/utils/report-share';
 import { SelectComponent } from '../../shared/primitives/select.component';
 import {
-  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS,
+  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorGrant, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS, rememberedAppName,
 } from './ai-connector.api';
 
 /**
@@ -96,6 +96,29 @@ import {
                     {{ s.proposals ? 'Connected assistants can suggest Test Master changes.' : 'Connected assistants can’t suggest Test Master changes.' }}
                   </p>
                   <p class="pf-field__hint">Only a lab admin can change this.</p>
+                }
+                @if (s.proposals || grants().length > 0) {
+                  <h3 class="pf-aic__sec" id="pf-aic-grants-label">Apps you’ve allowed to suggest changes</h3>
+                  @if (grantsError()) {
+                    <p class="pf-field__hint" role="alert">Couldn’t load your list. <button type="button" class="pf-btn pf-btn--tertiary press" (click)="loadGrants()">Try again</button></p>
+                  } @else if (grants().length === 0) {
+                    <p class="pf-field__hint">None. No app can suggest Test Master changes with your account.</p>
+                  } @else {
+                    <ul class="pf-aic__grants" aria-labelledby="pf-aic-grants-label">
+                      @for (g of grants(); track g.clientId) {
+                        <li class="pf-aic__grant">
+                          <span class="pf-aic__granttext">
+                            <span class="pf-aic__grantname">{{ grantName(g) }}</span>
+                            <span class="pf-aic__grantsub">Allowed {{ grantDate(g) }} · app {{ shortId(g) }}</span>
+                          </span>
+                          <button type="button" class="pf-btn pf-btn--secondary press pf-aic__revoke" [disabled]="revoking() === g.clientId"
+                                  [pfBusy]="revoking() === g.clientId" pfBusyLabel="Revoking…" (click)="revoke(g)"
+                                  [attr.aria-label]="'Revoke ' + grantName(g)">Revoke</button>
+                        </li>
+                      }
+                    </ul>
+                    <p class="pf-field__hint">Only your own apps are listed. Revoking stops the app suggesting changes straight away; it can still read.</p>
+                  }
                 }
                 <h3 class="pf-aic__sec">What a connected app can read</h3>
                 @for (g of canSee; track g.title) {
@@ -193,6 +216,12 @@ import {
     .pf-aic__levels li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm, 10px); font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
     .pf-aic__levels li[data-current='true'] { border-color: var(--color-violet-600, #7c3aed); }
     .pf-aic__levels strong { font-size: 13.5px; color: var(--text-primary); }
+    .pf-aic__grants { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+    .pf-aic__grant { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm, 10px); }
+    .pf-aic__granttext { display: grid; gap: 2px; min-width: 0; }
+    .pf-aic__grantname { font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-aic__grantsub { font-size: 12.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+    .pf-aic__revoke { flex: none; min-height: 44px; }
     .pf-aic__levelhint { margin-top: -6px; }
     .pf-aic__sidebody { gap: 10px; padding: 16px 18px 18px; }
     .pf-aic__url { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
@@ -233,6 +262,10 @@ export class AiConnectorsSettingsPage {
   readonly level = computed<AiPrivacyLevel>(() => this.state()?.privacyLevel ?? 'counts');
   readonly levelInfo = computed(() => AI_PRIVACY_LEVELS.find(l => l.value === this.level()) ?? AI_PRIVACY_LEVELS[0]);
   readonly state = signal<AiConnectorState | null>(null);
+  /** The signed-in person's OWN allowed apps (the server never returns anyone else's). */
+  readonly grants = signal<AiConnectorGrant[]>([]);
+  readonly grantsError = signal(false);
+  readonly revoking = signal<string | null>(null);
   readonly loadError = signal(false);
   readonly saving = signal(false);
   readonly copied = signal(false);
@@ -253,6 +286,46 @@ export class AiConnectorsSettingsPage {
       this.loadError.set(true);
     } finally {
       this.loadHold.done();
+    }
+    if (!this.loadError()) await this.loadGrants();
+  }
+
+  async loadGrants(): Promise<void> {
+    this.grantsError.set(false);
+    try {
+      this.grants.set((await firstValueFrom(this.api.listGrants())) ?? []);
+    } catch {
+      this.grantsError.set(true);
+    }
+  }
+
+  grantName(g: AiConnectorGrant): string { return rememberedAppName(g.clientId) ?? 'Connected app'; }
+  shortId(g: AiConnectorGrant): string { return '…' + g.clientId.slice(-6); }
+  grantDate(g: AiConnectorGrant): string {
+    const d = new Date(g.updatedAt || g.createdAt);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  /** Stop one app suggesting changes — asks first; takes effect on the server at once. */
+  async revoke(g: AiConnectorGrant): Promise<void> {
+    if (this.revoking()) return;
+    const name = this.grantName(g);
+    const ok = await this.dialog.confirm({
+      title: `Revoke ${name}?`,
+      message: `${name} will no longer be able to suggest Test Master changes with your account, starting now. It can still read what your account may see. Suggestions it already made stay in Pending changes.`,
+      confirmLabel: 'Revoke',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.revoking.set(g.clientId);
+    try {
+      await firstValueFrom(this.api.deleteGrant(g.clientId));
+      this.grants.update(list => list.filter(x => x.clientId !== g.clientId));
+      this.toasts.success(`${name} can no longer suggest changes`);
+    } catch {
+      this.toasts.error('Couldn’t revoke — check your connection and try again.');
+    } finally {
+      this.revoking.set(null);
     }
   }
 
