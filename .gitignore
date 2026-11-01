@@ -82,3 +82,6 @@ graphify-out/
 apps/lms-e2e/.auth/
 apps/lms-e2e/test-output/
 apps/lms-e2e/playwright-report/
+
+# Playwright output
+apps/lms-e2e/test-results/
