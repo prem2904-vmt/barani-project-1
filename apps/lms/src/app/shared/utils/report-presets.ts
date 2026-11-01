@@ -20,7 +20,9 @@ import { readReportTheme, writeReportTheme, type ReportThemeId } from './report-
  * font size, logo, signatures and sequencing are left alone. Keys of later
  * phases (signature placement, chart look) are not in the bundle until their
  * renderers exist, so a preset never changes paper in a way the summary does
- * not say.
+ * not say. Signature placement and wording (`signatures.placement` / `.show`)
+ * joined the bundle with their renderer (Phase 6); image height, per-row limit,
+ * stationery reserve and the verified text stay the lab's own.
  */
 
 export type PresetId = 'classic' | 'modern' | 'compact';
@@ -33,6 +35,7 @@ export const PRESET_KEYS: ReadonlyArray<string> = [
   'patient.ageSex', 'patient.ageStyle', 'patient.sexStyle', 'patient.joiner', 'patient.labelJoiner',
   'patient.frame', 'patient.continuation',
   'pageNumbers', 'density', 'squeeze', 'colors.palette',
+  'signatures.placement', 'signatures.show',
 ];
 
 /** The type theme and colours each preset brings. */
@@ -106,6 +109,7 @@ export const PRESET_INFO: ReadonlyArray<PresetInfo> = [
       'Age and sex on two lines, as the layout prints them',
       'Lined patient block; no patient name on later pages',
       'Page number only',
+      'Each department signs at the end of its own results, with the signature image',
       'Normal row spacing, no squeeze',
       'Classic type; navy and blue colours',
     ] },
@@ -115,6 +119,7 @@ export const PRESET_INFO: ReadonlyArray<PresetInfo> = [
       'Age and sex in one field: 45 Y / Male',
       'Tinted patient block; name on later pages',
       '“Page 2 of 3” page numbers',
+      'One sign-off after End of Report, with signature images',
       'Source Sans 3 type, Teal colours',
     ] },
   { id: 'compact', label: 'Compact', desc: 'Fewer pages, plain black and grey.',
@@ -123,6 +128,7 @@ export const PRESET_INFO: ReadonlyArray<PresetInfo> = [
       'Age and sex in one field: 45 Yrs / M',
       'Name on later pages; “Page 2 of 3”',
       'Tight rows; squeezes a small overflow onto one page',
+      'One sign-off after End of Report as “Electronically verified by …” lines',
       'Classic type, Ink (black and grey) colours',
     ] },
 ];

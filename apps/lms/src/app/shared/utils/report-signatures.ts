@@ -104,8 +104,42 @@ export interface SignatureRowLayout {
   top: number; height: number; slots: SignatureSlot[];
   /** The row's extra lines (the tallest signatory wins each line) — all zero unless text fitting wrapped a name. */
   extra: SignatureExtra;
+  /** Offset (pt) from the row top to the image / name baseline. Absent = the image rhythm (`SIG_ROW.base`). */
+  base?: number;
+  /** Verified-line rows: how many text lines this signatory's attestation takes. */
+  lines?: number;
 }
-export interface SignatureBlockLayout { rows: SignatureRowLayout[]; height: number; slotW: number; }
+export interface SignatureBlockLayout {
+  rows: SignatureRowLayout[]; height: number; slotW: number;
+  /** Height the block takes on the page: `height`, or the stationery reserve when that is taller (0 with nobody to sign). */
+  reserved?: number;
+}
+
+/** What prints per signatory (report-signature-space.ts decides, the renderer obeys). */
+export type SigShow = 'image' | 'name-only' | 'verified-line';
+/** The Phase 6 knobs. Absent = today's geometry, byte for byte. */
+export interface SigLayoutOpts {
+  show: SigShow;
+  /** Signature image height (pt); the image is SIG_IMG_W * imageH / SIG_IMG_H wide, never wider than its slot. */
+  imageH: number;
+  /** At most this many per row. */
+  maxPerRow: number;
+  /** Stationery reserve (pt): the block never takes less. 0 = none. */
+  reserveH: number;
+  /** Verified-line rows: lines the attestation of `s` takes in the full width. */
+  linesOf?: (s: ReportSignature) => number;
+}
+
+/** One verified-line row: its line height, the air above the first row and under the last. */
+export const SIG_VERIFIED = { line: 10, lead: 8, tail: 4 };
+/** Name-only rows: the name sits this far above where the image rhythm would put it. */
+export const SIG_NAME_ONLY_UP = 8;
+
+/** Baseline offset of a row for the way it prints. */
+export function signatureRowBase(opts: Pick<SigLayoutOpts, 'show' | 'imageH'> | undefined): number {
+  if (!opts || opts.show === 'image') return SIG_ROW.base + (opts ? opts.imageH - SIG_IMG_H : 0);
+  return SIG_ROW.lead - SIG_NAME_ONLY_UP;
+}
 
 /** Full sign-off layout for a block starting at `top`. Rows stack with no
  *  extra gap — each row's own `lead` separates it from the one above. */
@@ -118,10 +152,14 @@ export function layoutSignatureBlock(
    *  needs when it wraps inside a slot `slotW` wide. Absent = one line each
    *  (today's geometry, byte-identical). */
   extraOf?: (s: ReportSignature, slotW: number) => SignatureExtra,
+  /** Signature space decider (Phase 6). Absent = today. */
+  opts?: SigLayoutOpts,
 ): SignatureBlockLayout {
   const list = presentSignatures(sigs);
-  const perRow = signaturesPerRow(usableW);
+  if (opts && opts.show === 'verified-line') return layoutVerifiedBlock(list, left, usableW, top, opts);
+  const perRow = opts ? Math.max(1, Math.min(signaturesPerRow(usableW), Math.round(opts.maxPerRow))) : signaturesPerRow(usableW);
   const slotW = usableW / perRow;
+  const base = signatureRowBase(opts);
   const rows: SignatureRowLayout[] = [];
   let y = top;
   let i = 0;
@@ -136,9 +174,35 @@ export function layoutSignatureBlock(
         extra.name = Math.max(extra.name, e.name); extra.title = Math.max(extra.title, e.title); extra.reg = Math.max(extra.reg, e.reg);
       }
     }
-    const height = signatureRowHeight(row) + extra.name + extra.title + extra.reg;
-    rows.push({ top: y, height, slots: row.map((sig, j) => ({ sig, cx: xs[j] })), extra });
+    const height = (opts ? rowHeightFor(row, base) : signatureRowHeight(row)) + extra.name + extra.title + extra.reg;
+    rows.push({ top: y, height, slots: row.map((sig, j) => ({ sig, cx: xs[j] })), extra, ...(opts ? { base } : {}) });
     y += height;
   }
-  return { rows, height: y - top, slotW };
+  const height = y - top;
+  return { rows, height, slotW, ...(opts ? { reserved: reservedHeight(height, opts) } : {}) };
+}
+
+function rowHeightFor(row: ReadonlyArray<ReportSignature>, base: number): number {
+  if (row.length === 0) return 0;
+  const hasTitle = row.some(s => !!(s.title ?? '').trim());
+  const hasReg = row.some(s => !!(s.regNo ?? '').trim());
+  return base + SIG_ROW.name + (hasTitle ? SIG_ROW.title : 0) + (hasReg ? SIG_ROW.reg : 0) + SIG_ROW.tail;
+}
+
+function reservedHeight(height: number, opts: SigLayoutOpts): number {
+  return height > 0 ? Math.max(height, opts.reserveH) : 0;
+}
+
+/** "Electronically verified by …" — one line per signatory, stacked. */
+function layoutVerifiedBlock(list: ReportSignature[], left: number, usableW: number, top: number, opts: SigLayoutOpts): SignatureBlockLayout {
+  const rows: SignatureRowLayout[] = [];
+  let y = top;
+  list.forEach((sig, i) => {
+    const lines = Math.max(1, opts.linesOf ? opts.linesOf(sig) : 1);
+    const height = SIG_VERIFIED.line * lines + (i === 0 ? SIG_VERIFIED.lead : 0) + (i === list.length - 1 ? SIG_VERIFIED.tail : 0);
+    rows.push({ top: y, height, slots: [{ sig, cx: left }], extra: { name: 0, title: 0, reg: 0 }, lines });
+    y += height;
+  });
+  const height = y - top;
+  return { rows, height, slotW: usableW, reserved: reservedHeight(height, opts) };
 }

@@ -11,7 +11,10 @@ import {
   ResolvedSection,
 } from '../models/report-layout.model';
 import { normalizeHeaderPreset, ReportSignature, ReportTemplate, type HeaderPreset } from '../models/report.model';
-import { layoutSignatureBlock, SIG_IMG_H, SIG_IMG_W, SIG_ROW, setSignatureRhythm } from './report-signatures';
+import { layoutSignatureBlock, SIG_IMG_H, SIG_IMG_W, SIG_ROW, SIG_VERIFIED, setSignatureRhythm, type SigLayoutOpts } from './report-signatures';
+import {
+  formatVerifiedStamp, mergeSignatories, sigOptsFrom, signatureImageBox, signatureStyleOf, verifiedLine,
+} from './report-signature-space';
 import { DENSITY, SQUEEZE_SCALE, densityTokens, squeezeEligible, squeezedSize, type DensityId, type DensityTokens, type SqueezeReport } from './report-density';
 import { savedFlagOf, type SavedFlag } from './result-flag';
 import { reportFlag, reportFlagWord } from './report-flag';
@@ -460,6 +463,16 @@ let SQ = 1;
 let PASS: { density?: DensityId; sq?: number } = {};
 /** Where the last render's content ended (pt on the last page) - the squeeze reads it. */
 let END_Y = 0;
+// Signature space decider (report-signature-space.ts): the per-render signature style,
+// the time printed in the verified line, and the height held back for the one block
+// that signs once after "End of Report" (placement `end`).
+let SIG_STYLE = signatureStyleOf(null);
+let SIG_STAMP = '';
+let END_BLOCK_H = 0;
+// Every-page placement: who signs, the room held at the foot of every page, and the body floor without it.
+let EVERY_PAGE_SIGS: ReportSignature[] = [];
+let EVERY_PAGE_H = 0;
+let EVERY_PAGE_BASE = 0;
 let END_SIGS_H = 0;
 /** Page number -> the lowest point a results row / sign-off reached on it (the squeeze
  *  needs the free room left at the foot of the page before the last). */
@@ -959,6 +972,9 @@ function renderReportOnce(input: ReportPdfInput): { doc: jsPDF; layout: ReportLa
   // loads it), the theme's sizes print in Helvetica rather than failing.
   EMBEDDED = installThemeFont(doc);
   FIT_DOC = doc;
+  SIG_STYLE = signatureStyleOf(STYLE);
+  SIG_STAMP = formatVerifiedStamp(latestValidatedAt(snap) ?? report.createdAt);
+  END_BLOCK_H = 0;
   // Safety net (RCA 2026-09-27): a standalone test with values whose layout
   // has no results table gets the default one — every caller (report viewer,
   // queue, public link, test-editor live preview) prints the RESULT, never a
@@ -971,6 +987,15 @@ function renderReportOnce(input: ReportPdfInput): { doc: jsPDF; layout: ReportLa
   LAYOUT = layout;
   if (!LETTERPAD) HEADER_RESERVE = layout.bodyTop - MARGIN_TOP;
   if (!LETTERPAD) MARGIN_BOTTOM = footerFloor(layout);
+  // Signature space decider, every-page placement: hold the sign-off's height at the foot of EVERY page.
+  EVERY_PAGE_SIGS = []; EVERY_PAGE_H = 0; EVERY_PAGE_BASE = MARGIN_BOTTOM;
+  if (SIG_STYLE.placement === 'every-page') {
+    const level = (theme.signatures ?? []).filter(x => !!x && (!!(x.name ?? '').trim() || !!x.signatureUrl));
+    EVERY_PAGE_SIGS = level.length ? level
+      : mergeSignatories((snap.deptSignatures ?? []).map(d => ({ department: (d.department ?? '').trim(), sigs: d.signatures ?? [] })));
+    EVERY_PAGE_H = signatureBlockHeight(EVERY_PAGE_SIGS);
+    MARGIN_BOTTOM += EVERY_PAGE_H;
+  }
   CONT = planContinuation(doc, snap);
   CONT_LH = planContinuationHeader({
     mode: STYLE.letterhead.continuation, letterpad: LETTERPAD, top: MARGIN_TOP, headerBottom: layout.headerBottom, bodyGap: BODY_GAP,
@@ -1349,6 +1374,24 @@ function renderReportOnce(input: ReportPdfInput): { doc: jsPDF; layout: ReportLa
   // inline at the end of its own block.
   const finalSigs: { sigs: ReportSignature[] | null } = { sigs: null };
 
+  // Signature placement (report-signature-space.ts). WHO signs is unchanged — the same
+  // present, per-department signatories; only where they print differs. A department
+  // with a Custom layout keeps the sign-off in the box its lab placed.
+  if (SIG_STYLE.placement !== 'department' && deptSigs.size > 0) {
+    const customDepts = new Set(onePageBundles.map(b => (b.group.department ?? '').trim()));
+    const shown = [...inScope, ...outScope].map(g => (g.department ?? '').trim());
+    const depts = [...new Set(shown.length ? shown : special.map(t => (t.department ?? '').trim()))]
+      .filter(d => d && deptSigs.has(d) && !customDepts.has(d));
+    if (SIG_STYLE.placement === 'end') {
+      const merged = mergeSignatories(depts.map(d => ({ department: d, sigs: deptSigs.get(d)! })));
+      for (const d of depts) deptSigs.delete(d);
+      if (merged.length) { finalSigs.sigs = merged; END_BLOCK_H = signatureBlockHeight(merged); }
+    } else {
+      // Every page: the page-foot block (planned above) signs for the whole report.
+      for (const d of depts) deptSigs.delete(d);
+    }
+  }
+
   // ── Consolidated sheet: "Summary of abnormal results" as page 1 ──
   // (Lab settings switch → template metadata option.) The department pages
   // then open on a fresh page with the letterhead + patient block, exactly as
@@ -1439,7 +1482,7 @@ function renderReportOnce(input: ReportPdfInput): { doc: jsPDF; layout: ReportLa
     // sign-off still prints — below the End of Report when this is the
     // report's final item, else right under the layout.
     if (signHere && !res.signed && sigs.length) {
-      if (isFinal) finalSigs.sigs = sigs;
+      if (isFinal) finalSigs.sigs = finalSigs.sigs ? mergeSignatories([{ department: '', sigs: finalSigs.sigs }, { department: '', sigs }]) : sigs;
       else cursorY = drawInlineSignatures(doc, sigs, cursorY + 8, practice);
     }
   });
@@ -1577,6 +1620,7 @@ function renderReportOnce(input: ReportPdfInput): { doc: jsPDF; layout: ReportLa
   // ── Signature footer + page numbers (every page, drawn last) ───
   // Skipped in letterpad mode — the blank MARGIN_BOTTOM reserve is where the
   // lab's own pre-printed footer/signatures sit.
+  drawEveryPageSignatures(doc, practice);
   drawContinuationStrips(doc);
   if (!LETTERPAD) drawSignatureFooter(doc, practice, snap);
   return { doc, layout };
@@ -3768,7 +3812,9 @@ function renderContinuousTable(
     // breaks EARLY and the signatures land under the last rows they belong to.
     // Only the signatories actually present count (7 configured, 2 resolved →
     // one row of 2), and a department with none reserves nothing.
-    const sigH = signatureBlockHeight(sigs);
+    let sigH = signatureBlockHeight(sigs);
+    // Placement `end`: the one block after End of Report is held back from the LAST department's table.
+    if (isLast && deferLastSigs && !sigs && END_BLOCK_H > 0) sigH = END_BLOCK_H;
     // This department's technician note prints after its last table run,
     // before its sign-off — the sign-off reserve makes room for it too.
     const deptNote = TECH_DEPT_NOTES.get(dept.toUpperCase());
@@ -4119,7 +4165,38 @@ export function footerStripBase(layout: Pick<ReportLayoutResult, 'footerLift'> |
 /** Height (pt) of the sign-off block the PRESENT signatories need — 0 when
  *  there are none, so nothing is reserved. See report-signatures.ts. */
 function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): number {
-  return layoutSignatureBlock(sigs, MARGIN_X, A4.w - 2 * MARGIN_X, 0, sigExtraFn()).height;
+  const b = layoutSignatureBlock(sigs, MARGIN_X, A4.w - 2 * MARGIN_X, 0, sigExtraFn(), sigOpts());
+  return b.reserved ?? b.height;
+}
+
+/** The latest time any test of the snapshot was validated (the verified line's "on ..."). */
+function latestValidatedAt(snap: ReportSnapshot): string | undefined {
+  let best: string | undefined, t = 0;
+  for (const x of snap.tests ?? []) {
+    const v = x.validatedAt, ms = v ? new Date(v).getTime() : NaN;
+    if (!isNaN(ms) && ms > t) { t = ms; best = v; }
+  }
+  return best;
+}
+
+/** Signature-space geometry for this render — undefined (today's code path) unless the lab chose otherwise. */
+function sigOpts(): SigLayoutOpts | undefined {
+  return sigOptsFrom(SIG_STYLE, verifiedLinesOf);
+}
+
+/** Set the verified line's face (small, italic). */
+function verifiedFace(doc: jsPDF): number {
+  const size = typeset(doc, 'signatureTitle');
+  setFace(doc, 'italic');
+  return size;
+}
+
+/** How many lines one signatory's verified line takes across the full width. */
+function verifiedLinesOf(s: ReportSignature): number {
+  const doc = FIT_DOC;
+  if (!doc) return 1;
+  verifiedFace(doc);
+  return Math.max(1, (doc.splitTextToSize(verifiedLine(s, SIG_STYLE.verifiedText, SIG_STAMP), A4.w - 2 * MARGIN_X) as string[]).length);
 }
 
 /** The document of the render in progress — text fitting measures with it
@@ -4175,19 +4252,37 @@ function drawInlineSignatures(
   /** Profile one-page layout: the same sign-off, inside the signatures box
    *  (left `x`, width `w`) — never moved to another page. */
   region: { x: number; w: number } | null = null,
+  /** Every-page placement: the block sits in the room reserved at the foot of THIS page — no page break, no cursor. */
+  fixed = false,
 ): number {
   const left = region ? region.x : MARGIN_X;
   const usable = region ? region.w : A4.w - 2 * MARGIN_X;
   // Text fitting never applies inside a Custom-layout box (its geometry is the lab's own).
   const extraOf = region ? undefined : sigExtraFn();
-  const probe = layoutSignatureBlock(sigs, left, usable, 0, extraOf);
+  // A stationery reserve belongs to the page body, not to a Custom-layout box.
+  const opts = region ? stripReserve(sigOpts()) : sigOpts();
+  const probe = layoutSignatureBlock(sigs, left, usable, 0, extraOf, opts);
   if (probe.rows.length === 0) return startY;
+  const full = probe.reserved ?? probe.height;
+  // Inside a reserve the names sit at its FOOT, under the printed signature line.
+  const lift = full - probe.height;
   let top = startY;
-  if (!region && top + probe.height > A4.h - MARGIN_BOTTOM) { top = newPage(doc, practice) + 6; }
-  const block = layoutSignatureBlock(sigs, left, usable, top, extraOf);
+  if (!region && !fixed && top + full > A4.h - MARGIN_BOTTOM) { top = newPage(doc, practice) + 6; }
+  const block = layoutSignatureBlock(sigs, left, usable, top + lift, extraOf, opts);
+  if (opts?.show === 'verified-line') {
+    for (const row of block.rows) {
+      const first = row === block.rows[0];
+      verifiedFace(doc);
+      doc.setTextColor(TEXT_DIM);
+      const lines = doc.splitTextToSize(verifiedLine(row.slots[0].sig, SIG_STYLE.verifiedText, SIG_STAMP), usable) as string[];
+      lines.forEach((l, i) => doc.text(l, left, row.top + (first ? SIG_VERIFIED.lead : 0) + SIG_VERIFIED.line * (i + 1) - 2.5));
+    }
+    if (!fixed) noteBottom(doc, top + full);
+    return top + full;
+  }
   const textW = block.slotW - 6;
   for (const row of block.rows) {
-    const baseY = row.top + SIG_ROW.base;
+    const baseY = row.top + (row.base ?? SIG_ROW.base);
     const hasTitle = row.slots.some(s => !!(s.sig.title ?? '').trim());
     const titleY = baseY + SIG_ROW.name + row.extra.name + SIG_ROW.title;
     const regY = baseY + SIG_ROW.name + row.extra.name + (hasTitle ? SIG_ROW.title + row.extra.title : 0) + SIG_ROW.reg;
@@ -4195,7 +4290,17 @@ function drawInlineSignatures(
       const sigSrc = s.signatureUrl
         ? (s.signatureUrl.startsWith('data:') ? s.signatureUrl : IMG_CACHE[s.signatureUrl])
         : null;
-      if (sigSrc) {
+      if (opts?.show === 'name-only') {
+        // Names only: nothing drawn where a signature image would sit.
+      } else if (opts) {
+        const box = signatureImageBox(opts.imageH, block.slotW);
+        if (sigSrc) {
+          try { doc.addImage(sigSrc, 'PNG', px - box.w / 2, baseY + 4 - box.h, box.w, box.h, undefined, 'FAST'); }
+          catch { drawSigScribble(doc, px, baseY + 4); }
+        } else {
+          drawSigScribble(doc, px, baseY + 4);
+        }
+      } else if (sigSrc) {
         try { doc.addImage(sigSrc, 'PNG', px - SIG_IMG_W / 2, baseY - 20, SIG_IMG_W, SIG_IMG_H, undefined, 'FAST'); }
         catch { drawSigScribble(doc, px, baseY + 4); }
       } else {
@@ -4228,8 +4333,23 @@ function drawInlineSignatures(
       }
     }
   }
-  noteBottom(doc, top + block.height);
-  return top + block.height;
+  if (!fixed) noteBottom(doc, top + full);
+  return top + full;
+}
+
+/** Placement `every-page`: the report's signatories at the foot of EVERY page, in the room
+ *  MARGIN_BOTTOM held back for them (so results never run under it). */
+function drawEveryPageSignatures(doc: jsPDF, practice: NonNullable<ReportPdfInput['practice']>): void {
+  if (SIG_STYLE.placement !== 'every-page' || EVERY_PAGE_H <= 0) return;
+  const total = doc.getNumberOfPages();
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i);
+    drawInlineSignatures(doc, EVERY_PAGE_SIGS, A4.h - EVERY_PAGE_BASE - EVERY_PAGE_H, practice, null, true);
+  }
+}
+
+function stripReserve(o: SigLayoutOpts | undefined): SigLayoutOpts | undefined {
+  return o ? { ...o, reserveH: 0 } : o;
 }
 
 /** The single pipeline every column source passes through before rendering:

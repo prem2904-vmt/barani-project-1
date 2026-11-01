@@ -17,7 +17,7 @@ describe('style presets — Modern writes exactly the documented fields', () => 
     expect(m.reportStyle).toEqual({
       v: 1, preset: 'modern', fit: { enabled: true },
       patient: { ageSex: 'combined', ageStyle: 'short', frame: 'tint', continuation: 'mini' },
-      pageNumbers: 'n-of-m', colors: { palette: 'teal' },
+      pageNumbers: 'n-of-m', colors: { palette: 'teal' }, signatures: { placement: 'end' },
     });
     const teal = PALETTES.find(p => p.id === 'teal')!;
     for (const k of PALETTE_KEYS) expect(next[k]).toBe(teal.colors[k]);
@@ -32,12 +32,16 @@ describe('style presets — Modern writes exactly the documented fields', () => 
     expect(t.primaryColor).toBe(PALETTES.find(p => p.id === 'ink')!.colors.primaryColor);
   });
 
-  it('later-phase keys (signatures, charts) are not written yet', () => {
-    for (const id of ['modern', 'compact'] as const) {
-      const s = readReportStyle(applyTo(tpl(), id));
-      expect(s.signatures).toEqual(DEFAULT_REPORT_STYLE.signatures);
-      expect(s.charts).toEqual(DEFAULT_REPORT_STYLE.charts);
-    }
+  it('signature placement and wording ride the bundle; the rest of the signature settings and the chart keys do not', () => {
+    expect(readReportStyle(applyTo(tpl(), 'modern')).signatures).toEqual({ ...DEFAULT_REPORT_STYLE.signatures, placement: 'end', show: 'image' });
+    expect(readReportStyle(applyTo(tpl(), 'compact')).signatures).toEqual({ ...DEFAULT_REPORT_STYLE.signatures, placement: 'end', show: 'verified-line' });
+    for (const id of ['modern', 'compact'] as const) expect(readReportStyle(applyTo(tpl(), id)).charts).toEqual(DEFAULT_REPORT_STYLE.charts);
+  });
+
+  it('a preset leaves the lab\'s own image height, per-row limit, reserve and wording alone, and Classic puts placement back', () => {
+    const own = tpl({ metadata: writeReportStyle(tpl(), { signatures: { imageH: 32, maxPerRow: 3, reserveMm: 40, verifiedText: 'Verified: {name}' } }) });
+    expect(readReportStyle(applyTo(applyTo(own, 'compact'), 'classic')).signatures)
+      .toEqual({ ...DEFAULT_REPORT_STYLE.signatures, imageH: 32, maxPerRow: 3, reserveMm: 40, verifiedText: 'Verified: {name}' });
   });
 });
 
@@ -93,7 +97,8 @@ describe('style presets — only the bundle is touched', () => {
 
   it('the bundle lists only the documented keys', () => {
     expect(PRESET_KEYS).toContain('density');
-    expect(PRESET_KEYS.some(k => k.startsWith('signatures') || k.startsWith('charts'))).toBe(false);
+    expect(PRESET_KEYS.filter(k => k.startsWith('signatures'))).toEqual(['signatures.placement', 'signatures.show']);
+    expect(PRESET_KEYS.some(k => k.startsWith('charts'))).toBe(false);
     expect(presetBundle('classic')).toMatchObject({ preset: 'classic', density: 'normal', squeeze: false, pageNumbers: 'n' });
   });
 });
@@ -122,6 +127,12 @@ describe('style presets — detection and the card text', () => {
     expect(detectPreset(tweaked)).toBe('custom');
     const dens = { ...applyTo(tpl(), 'modern'), metadata: writeReportStyle(applyTo(tpl(), 'modern'), { density: 'compact' }) } as ReportTemplate;
     expect(detectPreset(dens)).toBe('custom');
+    const sig = { ...applyTo(tpl(), 'modern'), metadata: writeReportStyle(applyTo(tpl(), 'modern'), { signatures: { placement: 'every-page' } }) } as ReportTemplate;
+    expect(detectPreset(sig)).toBe('custom');
+  });
+  it('the card says where the sign-off goes, for every preset', () => {
+    for (const p of PRESET_INFO) expect(p.changes.join(' ')).toMatch(/sign/i);
+    expect(PRESET_INFO.find(p => p.id === 'compact')!.changes.join(' ')).toMatch(/Electronically verified/);
   });
   it('every preset has a plain-words list of what it changes (no jargon, no AI)', () => {
     expect(PRESET_INFO.map(p => p.id)).toEqual(['classic', 'modern', 'compact']);
