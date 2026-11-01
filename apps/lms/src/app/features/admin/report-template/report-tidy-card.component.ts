@@ -159,8 +159,9 @@ type CortexState = 'idle' | 'loading' | 'done' | 'error' | 'none';
     .pf-td__changes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
     .pf-td__row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 6px; border-radius: var(--pf-radius-sm, 10px); min-height: 44px; }
     .pf-td__row:hover { background: var(--pf-chip-bg); }
+    .pf-check { position: relative; display: inline-flex; cursor: pointer; }
     .pf-td__row .pf-check { flex: none; margin-top: 1px; }
-    .pf-td__row .pf-check input { inset: -10px; width: calc(100% + 20px); height: calc(100% + 20px); }
+    .pf-check input { position: absolute; inset: -10px; width: calc(100% + 20px); height: calc(100% + 20px); margin: 0; opacity: 0; cursor: pointer; }
     .pf-td__row .pf-check input:focus-visible + .pf-check-box { outline: 2px solid var(--pf-sel-border); outline-offset: 2px; }
     .pf-check-box { width: 20px; height: 20px; border-radius: 6px; background: var(--glass-bg); border: 1px solid var(--glass-border);
       display: inline-flex; align-items: center; justify-content: center; color: transparent; transition: background .15s, border-color .15s, color .15s; }
