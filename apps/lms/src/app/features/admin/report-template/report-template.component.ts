@@ -537,7 +537,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                   <div class="pf-sqr pf-rt-after">
                     <div class="pf-sqr__row">
                       <span class="pf-sqr__ic" aria-hidden="true">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 9l4 3 4-3"/><path d="M8 15l4-3 4 3"/></svg>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v7"/><path d="M9 7l3 3 3-3"/><path d="M12 21v-7"/><path d="M9 17l3-3 3 3"/><path d="M4 12h16"/></svg>
                       </span>
                       <span class="pf-sqr__txt">
                         <span class="pf-sqr__label">Squeeze onto one page</span>
