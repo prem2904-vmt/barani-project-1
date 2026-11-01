@@ -22,6 +22,7 @@ import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 import { readReportStyle, writeReportStyle, type ReportStylePatch } from '../../../shared/utils/report-style';
+import { SAMPLE_SIGNERS } from '../../../shared/utils/report-signature-space';
 import { squeezeMessage, type SqueezeReport } from '../../../shared/utils/report-density';
 import {
   AGE_STYLE_CHOICES, LABEL_JOINER_CHOICES, PATIENT_LABELS, RENAMEABLE_LABEL_KEYS, ageSexText, ageText, miniStripText, patientLabel, sexText, swapAgeSexColumns,
@@ -180,7 +181,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           <pf-report-header-editor class="pf-rt-designer"
             [template]="tpl()" [region]="tab() === 'footer' ? 'footer' : 'header'"
             [pdfUrl]="rawPreviewUrl()" [imageCache]="imageCache()" [rendering]="rendering()"
-            [canUndo]="canUndo()" [canRedo]="canRedo()"
+            [canUndo]="canUndo()" [canRedo]="canRedo()" [sigSample]="sigSample()" (sigSampleChange)="sigSample.set($event)"
             (patch)="patch($event)" (undo)="undo()" (redo)="redo()"></pf-report-header-editor>
         } @else {
         <!-- ── Focused section panel. ── -->
@@ -1658,6 +1659,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     return u ? this.sanitizer.bypassSecurityTrustResourceUrl(u) : null;
   });
   readonly rendering = signal<boolean>(false);
+  /** Footer tab: how many sample signatories the preview prints (the Signatures card's "Try it with"). */
+  readonly sigSample = signal(2);
   private renderTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
@@ -1673,6 +1676,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       this.patientScope(); this.patientCols(); this.deptPatientLayout();
       // Sequencing tab: the preview runs on the lab's own departments/tests.
       this.seqPreviewTests(); this.onSequenceTab();
+      this.sigSample(); this.tab();
       if (this.renderTimer) clearTimeout(this.renderTimer);
       this.rendering.set(true);
       this.renderTimer = setTimeout(() => this.renderPreview(tpl), 300);
@@ -1787,6 +1791,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
                  collectedBy: 'S. Priya',
                  departments: 'Haematology, Biochemistry' },
       type: 'final',
+      // Footer tab only: sample signatories so the Signatures card can be seen working (a real report prints each department's own).
+      ...(this.tab() === 'footer' ? { deptSignatures: ['Haematology', 'Biochemistry'].map(department => ({ department, signatures: SAMPLE_SIGNERS.slice(0, this.sigSample()) })) } : {}),
       tests: [
         { testId: 'd1', name: 'Complete Blood Count (CBC)', department: 'Haematology', departmentCode: 'HAEM',
           sampleType: 'EDTA Whole Blood', method: 'Automated cell counter',
@@ -1810,7 +1816,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
             '25-Hydroxy Vitamin D': { value: '18', unit: 'ng/mL', range: '30 – 100', flag: 'L' },
           } } },
         // A multi-page preview, only while a choice that shows on pages 2+ is on (the patient line, "Page N of M").
-        ...(this.reportStyle().patient.continuation !== 'none' || this.reportStyle().pageNumbers === 'n-of-m' ? PREVIEW_EXTRA_TESTS : []),
+        ...(this.reportStyle().patient.continuation !== 'none' || this.reportStyle().pageNumbers === 'n-of-m' || (this.tab() === 'footer' && this.reportStyle().signatures.placement === 'every-page') ? PREVIEW_EXTRA_TESTS : []),
       ],
     });
   }
