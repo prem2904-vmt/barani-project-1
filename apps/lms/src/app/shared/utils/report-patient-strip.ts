@@ -107,3 +107,46 @@ export function stripTextHeight(env: StripEnv, el: TypeEl, text: string, colW: n
   const fit = fitText(env.doc, text, { maxW: colW, maxLines: env.maxLines, startPt: start, minPt: env.minPt, policy: 'clinical' });
   return { lines: fit.lines.length, lineH: fit.lineH };
 }
+
+// ── Frame (report layout plan §3.5, phase 2) ───────────────────────────────
+// `rules` is today's look and stays inline in report-pdf.ts (the very same
+// draw calls). `box`, `tint` and `none` come through here.
+
+type PageOps = { internal: { pages: unknown[]; getCurrentPageInfo(): { pageNumber: number } } };
+
+/** Where in the current page's content stream the block starts — so a fill
+ *  decided AFTER the cells were measured can still be put BEHIND them. */
+export interface PageMark { page: number; at: number }
+
+export function markPage(doc: jsPDF): PageMark {
+  const d = doc as unknown as PageOps;
+  const page = d.internal.getCurrentPageInfo().pageNumber;
+  return { page, at: (d.internal.pages[page] as string[]).length };
+}
+
+/** Run `draw` and move what it painted to `mark` (behind the text drawn since). */
+export function insertBehind(doc: jsPDF, mark: PageMark, draw: () => void): void {
+  const ops = (doc as unknown as PageOps).internal.pages[mark.page] as string[];
+  const before = ops.length;
+  draw();
+  const added = ops.splice(before);
+  ops.splice(mark.at, 0, 'q', ...added, 'Q');
+}
+
+export const STRIP_TINT = '#f4f6f9';
+
+/** The non-default frames. `seps` are x positions of the column separators. */
+export function drawStripFrame(
+  doc: jsPDF, kind: 'box' | 'tint' | 'none', mark: PageMark,
+  x: number, top: number, w: number, bottom: number, seps: number[], hair: string,
+): void {
+  if (kind === 'none') return;
+  doc.setDrawColor(hair);
+  doc.setLineWidth(0.5);
+  if (kind === 'tint') {
+    insertBehind(doc, mark, () => { doc.setFillColor(STRIP_TINT); doc.roundedRect(x, top, w, bottom - top, 4, 4, 'F'); });
+  } else {
+    doc.roundedRect(x, top, w, bottom - top, 4, 4, 'S');
+  }
+  for (const sx of seps) doc.line(sx, top + 6, sx, bottom - 6);
+}

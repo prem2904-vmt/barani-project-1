@@ -115,10 +115,18 @@ describe('report text fitting — long names never overlap', () => {
     // (Four-col prints a long specimen list CUT to its first line today, and Centered's contact lines run into the
     // strip today — with fitting on those two are fixed on purpose, so they are not "unchanged".)
     it.each(classicBodyMatrix().filter(([n]) => ['three-col', 'stacked', 'columns', 'banner', 'minimal', 'font-lg-times'].includes(n)))(
-      '%s — fitting on puts every text run exactly where it was, for short text', (_n, patch) => {
+      '%s — fitting on moves nothing but the website line (and the body, by one small constant) for short text', (_n, patch) => {
         const base = richInput(patch, short);
         const fitOn = { ...base, template: { ...base.template!, metadata: JSON.stringify({ options: { abnormalSummary: true, specimenLine: true }, reportStyle: { v: 1, fit: { enabled: true } } }) } };
-        expect(runs(buildReportPdf(fitOn))).toEqual(runs(buildReportPdf(base)));
+        // Phase 2: with fitting on the website line sits CLEAR of the accent bar, under it - so that one run
+        // moves and the body below the header moves down with it by one constant (<= 8 pt). Nothing else changes.
+        const on = runs(buildReportPdf(fitOn)).filter(r => r.text !== 'www.microworld.in');
+        const off = runs(buildReportPdf(base)).filter(r => r.text !== 'www.microworld.in');
+        expect(on.map(r => [r.page, r.text, r.x, r.size])).toEqual(off.map(r => [r.page, r.text, r.x, r.size]));
+        const dys = new Set(on.map((r, i) => Math.round((off[i].y - r.y) * 100) / 100));
+        const moved = [...dys].filter(d => d !== 0);
+        expect(moved.length).toBeLessThanOrEqual(1);
+        for (const d of moved) { expect(d).toBeGreaterThan(0); expect(d).toBeLessThanOrEqual(8); }
       });
   });
 

@@ -35,10 +35,13 @@ export interface ReportFitStyle {
 
 export interface ReportPatientStyle {
   ageSex: 'separate' | 'combined';
-  ageStyle: 'Years' | 'Y' | 'yrs' | 'long';
+  /** 'auto' = each layout's own wording (today). */
+  ageStyle: 'auto' | 'Years' | 'short' | 'Y' | 'yrs' | 'long';
   sexStyle: 'word' | 'letter';
+  /** Between age and sex when they print as one field. */
   joiner: string;
   labels: Record<string, string>;
+  /** 'auto' = each label keeps its own punctuation (today). */
   labelJoiner: string;
   frame: 'rules' | 'box' | 'tint' | 'none';
   continuation: 'none' | 'mini' | 'full';
@@ -77,7 +80,7 @@ export const DEFAULT_REPORT_STYLE: Readonly<ReportStyle> = Object.freeze({
   preset: 'classic',
   fit: { enabled: false, minPt: 7, maxLines: 2, autoColumns: false },
   patient: {
-    ageSex: 'separate', ageStyle: 'Years', sexStyle: 'word', joiner: ' / ', labels: {}, labelJoiner: ' : ',
+    ageSex: 'separate', ageStyle: 'auto', sexStyle: 'word', joiner: ' / ', labels: {}, labelJoiner: 'auto',
     frame: 'rules', continuation: 'none', showReportStatus: false,
   },
   pageNumbers: 'n',
@@ -112,7 +115,7 @@ const SCHEMA: Schema = {
   },
   patient: {
     ageSex: { k: 'enum', of: ['separate', 'combined'] },
-    ageStyle: { k: 'enum', of: ['Years', 'Y', 'yrs', 'long'] },
+    ageStyle: { k: 'enum', of: ['auto', 'Years', 'short', 'Y', 'yrs', 'long'] },
     sexStyle: { k: 'enum', of: ['word', 'letter'] },
     joiner: { k: 'str', max: 12 },
     labels: { k: 'strMap', max: 40 },
@@ -270,7 +273,7 @@ export const STYLE_PRESETS: Readonly<Record<'classic' | 'modern' | 'compact', Re
   modern: {
     preset: 'modern',
     fit: { enabled: true },
-    patient: { ageSex: 'combined', frame: 'tint', continuation: 'mini' },
+    patient: { ageSex: 'combined', ageStyle: 'short', frame: 'tint', continuation: 'mini' },
     pageNumbers: 'n-of-m',
     colors: { palette: 'teal' },
     signatures: { placement: 'end' },

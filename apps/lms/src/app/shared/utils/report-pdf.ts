@@ -26,8 +26,8 @@ import {
   Align, BackgroundImage, BgArea, HeaderField, ItemOverride, LayoutItem, LayoutRegion, MM, ReportLayoutResult,
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
   readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption, footerImageLift } from './report-header-layout';
-import { AgeStyle, formatAge } from './patient-age';
-import { stripPair, stripText, stripTextHeight, type StripEnv } from './report-patient-strip';
+import { STRIP_TINT, drawStripFrame, markPage, stripPair, stripText, stripTextHeight, type StripEnv } from './report-patient-strip';
+import { ageSexText, ageText, gridLabel, miniStripText, pageOfText, patientLabel, reportStatusText, sexText } from './report-patient-text';
 import { fitText } from './report-fit';
 import { autofitColumns } from './report-autofit-columns';
 import { DEFAULT_REPORT_STYLE, isDefaultReportStyle, readReportStyle, reportEngineStamp, type ReportStyle } from './report-style';
@@ -218,16 +218,6 @@ interface ResolvedTheme {
   disclaimer: string;
   // QR code toggle (drawn in the sample-band area)
   showQrCode: boolean;
-}
-
-/** The snapshot's age at collection in `style` — the shared patient-age
- *  helper: adults print as before ("34 Years" / "34 yrs"), an infant as
- *  months / days ("8 Months", "12 days") — never "0 Years". */
-function snapAge(snap: ReportSnapshot, style: AgeStyle): string {
-  const p = snap.patient;
-  if (!p) return '';
-  const age = typeof p.age === 'string' ? (p.age.trim() === '' ? null : Number(p.age)) : p.age;
-  return formatAge({ age: age ?? null, ageDisplay: p.ageDisplay ?? null, ageYears: p.ageYears ?? null }, style);
 }
 
 interface ReportSnapshot {
@@ -459,6 +449,21 @@ let theme: ResolvedTheme = defaultTheme();
 /** The template's report style (metadata.reportStyle) for this render.
  *  Default = today's behaviour on every path (report-style.ts). */
 let STYLE: ReportStyle = DEFAULT_REPORT_STYLE;
+
+/** The patient-block wording / frame choices of this render (a getter so every
+ *  draw reads the style frozen for THIS render). */
+const PS = (): ReportStyle['patient'] => STYLE.patient;
+
+/** The mini patient strip on continuation pages (phase 2): measured once per
+ *  render, BEFORE any page is laid out, so the reserved height is exact.
+ *  null = the template asked for none (today's paper). */
+interface ContinuationPlan { lines: string[]; pt: number; lineH: number; h: number }
+let CONT: ContinuationPlan | null = null;
+/** Pages that already carry the full patient block (the first page, a page a
+ *  custom layout / the abnormal sheet opened with its own strip) - no mini strip there. */
+let PATIENT_PAGES = new Set<number>();
+/** Vertical room the mini strip takes at the top of a continuation page. */
+const contShift = (): number => (CONT ? CONT.h : 0);
 
 // ── Typography — the report theme's token table (report-theme.ts) ──────
 // EVERY text draw below names its element and takes font / size / weight
@@ -781,6 +786,8 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
 
   applyTheme(resolveTheme(template, practice));
   STYLE = readReportStyle(template);
+  CONT = null;
+  PATIENT_PAGES = new Set<number>();
   TYPE = reportTypeTheme(template);
   EMBEDDED = false;
   // Per-report signatories (who validated / entered results) take precedence
@@ -844,6 +851,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   LAYOUT = layout;
   if (!LETTERPAD) HEADER_RESERVE = layout.bodyTop - MARGIN_TOP;
   if (!LETTERPAD) MARGIN_BOTTOM = footerFloor(layout);
+  CONT = planContinuation(doc, snap);
   // Background images go down FIRST on every page they print on, so text,
   // the logo and the results always draw over them. Page 1 now; later pages
   // (ours or autotable's) as each is added.
@@ -1443,6 +1451,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // ── Signature footer + page numbers (every page, drawn last) ───
   // Skipped in letterpad mode — the blank MARGIN_BOTTOM reserve is where the
   // lab's own pre-printed footer/signatures sit.
+  drawContinuationStrips(doc);
   if (!LETTERPAD) drawSignatureFooter(doc, practice, snap);
   return { doc, layout };
 }
@@ -1907,6 +1916,14 @@ function computeReportLayout(
   };
   const pill = (b: Resolved | null) => {
     if (!b || !practice.website) return;
+    if (STYLE.fit.enabled) {
+      // Text fitting on: the website sits CLEAR of the accent bar, under its right end
+      // (it used to straddle the bar, a white notch cut into it). The body moves down with it.
+      add({ id: 'website', kind: 'text', label: 'Website', text: practice.website, x: A4.w - MARGIN_X - 6,
+            y: b.y + b.defBox.h + 3 + tsz('website') * 0.75, align: 'right', style: tstyle('website'), size: tsz('website'),
+            color: BLUE, tone: 'plain' });
+      return;
+    }
     add({ id: 'website', kind: 'text', label: 'Website', text: practice.website, x: A4.w - MARGIN_X - 6, y: b.y + 5.5,
           align: 'right', style: tstyle('website'), size: tsz('website'), color: BLUE, tone: 'pill',
           measure: { style: 'normal', size: TYPE.tokens.website.size * fs } });
@@ -2275,6 +2292,8 @@ function drawPatientBlock(
   snap: ReportSnapshot,
   report: ReportPdfInput['report']
 ): number {
+  // This page carries the full patient block — it needs no mini strip.
+  PATIENT_PAGES.add(doc.getNumberOfPages());
   // Dispatch to the chosen patient-block layout. All three renderers
   // share the same external contract: take snapshot + report, return
   // the cursor Y after the block.
@@ -2306,10 +2325,16 @@ function drawPatientBlockThreeCol(
   const col1W = w * 0.36;
   const col2W = w * 0.36;
   const col3W = w * 0.28;
+  const mark = markPage(doc);
+  const ps = PS();
 
   // The frame + separators. Text fitting off: drawn first at the fixed 80 pt,
   // as always. On: drawn AFTER the cells, at the height they measured to.
   const frame = (blockH: number) => {
+    if (ps.frame !== 'rules') {
+      drawStripFrame(doc, ps.frame, mark, MARGIN_X, top, w, top + blockH, [MARGIN_X + col1W, MARGIN_X + col1W + col2W], HAIR);
+      return;
+    }
     doc.setDrawColor(HAIR);
     doc.setLineWidth(0.5);
     doc.line(MARGIN_X, top, A4.w - MARGIN_X, top);
@@ -2343,17 +2368,30 @@ function drawPatientBlockThreeCol(
     y += 16;
   }
   doc.setTextColor(BLACK);
-  if (snapAge(snap, 'Years')) {
-    y = pairStep(doc, 'Age : ', snapAge(snap, 'Years'), x1, y, nameMaxW, 'demoLabel', 'demoValue', 12);
-    lastBase1 = y - 12;
-  }
-  if (snap.patient?.sex) {
-    y = pairStep(doc, 'Sex : ', snap.patient.sex, x1, y, nameMaxW, 'demoLabel', 'demoValue', 12);
-    lastBase1 = y - 12;
+  if (ps.ageSex === 'combined') {
+    // Age and sex as ONE field ("45 Y / Male").
+    const as = ageSexText(snap.patient, ps, 'short');
+    if (as) {
+      y = pairStep(doc, patientLabel(ps, 'ageSex', 'Age / Sex : '), as, x1, y, nameMaxW, 'demoLabel', 'demoValue', 12);
+      lastBase1 = y - 12;
+    }
+  } else {
+    if (ageText(snap.patient, ps, 'Years')) {
+      y = pairStep(doc, patientLabel(ps, 'age', 'Age : '), ageText(snap.patient, ps, 'Years'), x1, y, nameMaxW, 'demoLabel', 'demoValue', 12);
+      lastBase1 = y - 12;
+    }
+    if (snap.patient?.sex) {
+      y = pairStep(doc, patientLabel(ps, 'sex', 'Sex : '), sexText(snap.patient.sex, ps.sexStyle), x1, y, nameMaxW, 'demoLabel', 'demoValue', 12);
+      lastBase1 = y - 12;
+    }
   }
   const mrn = (snap.patient?.mrn ?? '').trim();
   if (mrn) {
-    lastBase1 = pairStep(doc, 'MRN : ', mrn, x1, y, nameMaxW, 'mrnLabel', 'mrnValue', 0);
+    lastBase1 = pairStep(doc, patientLabel(ps, 'mrn', 'MRN : '), mrn, x1, y, nameMaxW, 'mrnLabel', 'mrnValue', ps.showReportStatus ? 12 : 0);
+    if (ps.showReportStatus) y = lastBase1;
+  }
+  if (ps.showReportStatus) {
+    lastBase1 = pairStep(doc, patientLabel(ps, 'reportStatus', 'Report status : '), reportStatusText(snap.isPartial), x1, y, nameMaxW, 'demoLabel', 'demoValue', 0);
   }
 
   // ── Col 2 — Specimens collected + Ref doctor ──
@@ -2382,19 +2420,20 @@ function drawPatientBlockThreeCol(
     lastBase2 = y + (lines.length - 1) * 11;
     y += lines.length * 11 + 6;
   } else if (snap.patient?.phone) {
-    y = pairStep(doc, 'Phone: ', snap.patient.phone, x2, y, col2W - 20, 'demoLabel', 'demoValue', 14);
+    y = pairStep(doc, patientLabel(ps, 'phone', 'Phone: '), snap.patient.phone, x2, y, col2W - 20, 'demoLabel', 'demoValue', 14);
     lastBase2 = y - 14;
   }
 
   if (snap.order?.refDoctorName) {
     if (env) {
       doc.setTextColor(BLACK);
-      lastBase2 = stripPair(env, 'Ref. By: ', snap.order.refDoctorName, x2, y, col2W - 20, 'demoLabel', 'demoValue', 0, { force: true });
+      lastBase2 = stripPair(env, patientLabel(ps, 'refdoctor', 'Ref. By: '), snap.order.refDoctorName, x2, y, col2W - 20, 'demoLabel', 'demoValue', 0, { force: true });
     } else {
       typeset(doc, 'demoLabel');
       doc.setTextColor(BLACK);
-      doc.text('Ref. By: ', x2, y);
-      const refW = doc.getTextWidth('Ref. By: ');
+      const refLabel = patientLabel(ps, 'refdoctor', 'Ref. By: ');
+      doc.text(refLabel, x2, y);
+      const refW = doc.getTextWidth(refLabel);
       typeset(doc, 'demoValue');
       doc.text(snap.order.refDoctorName, x2 + refW, y);
     }
@@ -2424,9 +2463,9 @@ function drawPatientBlockThreeCol(
     doc.text(value, x3 + labelW + 2, y);
     y += 11;
   };
-  if (theme.showRegistered) drawTimeLine('Registered on: ', formatShort(snap.order?.createdAt));
-  if (theme.showCollected)  drawTimeLine('Collected on: ',  formatShort(snap.order?.createdAt));
-  if (theme.showReported)   drawTimeLine('Reported on: ',   formatShort(report.createdAt));
+  if (theme.showRegistered) drawTimeLine(patientLabel(ps, 'registered', 'Registered on: '), formatShort(snap.order?.createdAt));
+  if (theme.showCollected)  drawTimeLine(patientLabel(ps, 'collected', 'Collected on: '),  formatShort(snap.order?.createdAt));
+  if (theme.showReported)   drawTimeLine(patientLabel(ps, 'reported', 'Reported on: '),   formatShort(report.createdAt));
 
   if (!fit) return top + 80;
   // The classic block is 80 pt; it only ever GROWS (20 pt under the last text baseline).
@@ -2446,13 +2485,20 @@ function drawPatientBlockColumns(
 ): number {
   const top = MARGIN_TOP + HEADER_RESERVE;
   const w = A4.w - 2 * MARGIN_X;
-  const cols = theme.patientColumns;
+  const ps = PS();
+  const mark = markPage(doc);
+  // "Show the report status" puts the line at the end of the first column.
+  const cols = ps.showReportStatus && !theme.patientColumns.some(c => c.includes('reportStatus'))
+    ? theme.patientColumns.map((c, i) => (i === 0 ? [...c, 'reportStatus'] : c))
+    : theme.patientColumns;
   const n = Math.max(1, cols.length);
   const colW = w / n;
 
-  doc.setDrawColor(HAIR);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN_X, top, A4.w - MARGIN_X, top);
+  if (ps.frame === 'rules') {
+    doc.setDrawColor(HAIR);
+    doc.setLineWidth(0.5);
+    doc.line(MARGIN_X, top, A4.w - MARGIN_X, top);
+  }
 
   let maxBottom = top + 22;
   cols.forEach((keys, ci) => {
@@ -2474,6 +2520,10 @@ function drawPatientBlockColumns(
   });
   const blockBottom = maxBottom + 4;
 
+  if (ps.frame !== 'rules') {
+    drawStripFrame(doc, ps.frame, mark, MARGIN_X, top, w, blockBottom, Array.from({ length: n - 1 }, (_, i) => MARGIN_X + (i + 1) * colW), HAIR);
+    return blockBottom;
+  }
   // Vertical separators between columns.
   for (let i = 1; i < n; i++) {
     doc.line(MARGIN_X + i * colW, top + 6, MARGIN_X + i * colW, blockBottom - 6);
@@ -2533,6 +2583,15 @@ function pairStep(
   return stripPair(stripEnv(doc), label, value, x, y, colW, labelEl, valueEl, step);
 }
 
+/** "Age / Sex : 45 Y / Male" - age and sex as one field. */
+function drawAgeSex(doc: jsPDF, snap: ReportSnapshot, x: number, y: number, colW: number): number {
+  const ps = PS();
+  const text = ageSexText(snap.patient, ps, 'short');
+  if (!text) return y;
+  doc.setTextColor(BLACK);
+  return pairStep(doc, patientLabel(ps, 'ageSex', 'Age / Sex : '), text, x, y, colW, 'demoLabel', 'demoValue', 12);
+}
+
 function drawPatientItem(
   doc: jsPDF, key: string, x: number, colW: number, y: number,
   snap: ReportSnapshot, report: ReportPdfInput['report']
@@ -2543,51 +2602,67 @@ function drawPatientItem(
       if (STYLE.fit.enabled) return stripText(stripEnv(doc), 'patientNameColumn', snap.patient?.displayName ?? '—', x, y, colW, 16);
       doc.text(snap.patient?.displayName ?? '—', x, y);
       return y + 16;
-    case 'age':
-      if (!snapAge(snap, 'Years')) return y;
+    case 'age': {
+      const ps = PS();
+      // Combined: the 'age' chip prints the whole "45 Y / Male" field (a lab
+      // that arranged age + sex before choosing Combined still gets one field)
+      // unless an 'ageSex' chip is placed too.
+      if (ps.ageSex === 'combined') return theme.patientColumns.some(c => c.includes('ageSex')) ? y : drawAgeSex(doc, snap, x, y, colW);
+      if (!ageText(snap.patient, ps, 'Years')) return y;
       doc.setTextColor(BLACK);
-      return pairStep(doc, 'Age : ', snapAge(snap, 'Years'), x, y, colW, 'demoLabel', 'demoValue', 12);
-    case 'sex':
+      return pairStep(doc, patientLabel(ps, 'age', 'Age : '), ageText(snap.patient, ps, 'Years'), x, y, colW, 'demoLabel', 'demoValue', 12);
+    }
+    case 'ageSex':
+      return drawAgeSex(doc, snap, x, y, colW);
+    case 'sex': {
+      const ps = PS();
       if (!snap.patient?.sex) return y;
+      // Combined: the sex already printed with the age.
+      if (ps.ageSex === 'combined' && theme.patientColumns.some(c => c.includes('age') || c.includes('ageSex'))) return y;
       doc.setTextColor(BLACK);
-      return pairStep(doc, 'Sex : ', snap.patient.sex, x, y, colW, 'demoLabel', 'demoValue', 12);
+      return pairStep(doc, patientLabel(ps, 'sex', 'Sex : '), sexText(snap.patient.sex, ps.sexStyle), x, y, colW, 'demoLabel', 'demoValue', 12);
+    }
+    case 'reportStatus':
+      doc.setTextColor(BLACK);
+      return pairStep(doc, patientLabel(PS(), 'reportStatus', 'Report status : '), reportStatusText(snap.isPartial), x, y, colW, 'demoLabel', 'demoValue', 12);
     case 'mrn': {
       const mrn = (snap.patient?.mrn ?? '').trim(); if (!mrn) return y;
       doc.setTextColor(BLACK);
-      return pairStep(doc, 'MRN : ', mrn, x, y, colW, 'mrnLabel', 'mrnValue', 12);
+      return pairStep(doc, patientLabel(PS(), 'mrn', 'MRN : '), mrn, x, y, colW, 'mrnLabel', 'mrnValue', 12);
     }
     case 'phone':
       if (!snap.patient?.phone) return y;
       doc.setTextColor(BLACK);
-      return pairStep(doc, 'Phone : ', snap.patient.phone, x, y, colW, 'demoLabel', 'demoValue', 12);
+      return pairStep(doc, patientLabel(PS(), 'phone', 'Phone : '), snap.patient.phone, x, y, colW, 'demoLabel', 'demoValue', 12);
     case 'orderid': {
       // The human order number (LAB-2608-000049) — not a slice of the GUID,
       // which is what staff were being asked to read out loud.
       const oid = snap.order?.orderNumber?.trim() || (snap.order?.id ?? '').slice(0, 8);
       if (!oid) return y;
       doc.setTextColor(BLACK);
-      return pairStep(doc, 'Order : ', oid, x, y, colW, 'mrnLabel', 'mrnValue', 12);
+      return pairStep(doc, patientLabel(PS(), 'orderid', 'Order : '), oid, x, y, colW, 'mrnLabel', 'mrnValue', 12);
     }
     case 'refdoctor': {
       if (!snap.order?.refDoctorName) return y;
+      const refLabel = patientLabel(PS(), 'refdoctor', 'Ref. By: ');
       if (STYLE.fit.enabled) {
         doc.setTextColor(BLACK);
-        return stripPair(stripEnv(doc), 'Ref. By: ', snap.order.refDoctorName, x, y, colW, 'demoLabel', 'demoValue', 12, { force: true });
+        return stripPair(stripEnv(doc), refLabel, snap.order.refDoctorName, x, y, colW, 'demoLabel', 'demoValue', 12, { force: true });
       }
       typeset(doc, 'demoLabel'); doc.setTextColor(BLACK);
-      doc.text('Ref. By: ', x, y);
-      const rw = doc.getTextWidth('Ref. By: ');
+      doc.text(refLabel, x, y);
+      const rw = doc.getTextWidth(refLabel);
       typeset(doc, 'demoValue'); doc.text(snap.order.refDoctorName, x + rw, y);
       return y + 12;
     }
     case 'refhospital':
-      return drawPatientLabelled(doc, 'Ref. Hospital: ', snap.order?.refHospitalName, x, y, colW);
+      return drawPatientLabelled(doc, patientLabel(PS(), 'refhospital', 'Ref. Hospital: '), snap.order?.refHospitalName, x, y, colW);
     case 'collectedby':
-      return drawPatientLabelled(doc, 'Collected by: ', snap.order?.collectedBy, x, y, colW);
+      return drawPatientLabelled(doc, patientLabel(PS(), 'collectedby', 'Collected by: '), snap.order?.collectedBy, x, y, colW);
     case 'department':
-      return drawPatientLabelled(doc, 'Department: ', snap.order?.departments, x, y, colW);
+      return drawPatientLabelled(doc, patientLabel(PS(), 'department', 'Department: '), snap.order?.departments, x, y, colW);
     case 'branch':
-      return drawPatientLabelled(doc, 'Centre: ', snap.order?.branchName, x, y, colW);
+      return drawPatientLabelled(doc, patientLabel(PS(), 'branch', 'Centre: '), snap.order?.branchName, x, y, colW);
     case 'specimen': {
       const specimens = Array.from(new Set((snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(isConcreteSpecimen)));
       typeset(doc, 'patientCaptionColumn'); doc.setTextColor(BLUE);
@@ -2609,14 +2684,14 @@ function drawPatientItem(
     case PROFILE_QR_KEY:
     case ORDER_QR_KEY:
       return drawPatientQrPair(doc, [key], x, colW, y, snap);
-    case 'registered': return drawPatientTimeItem(doc, 'Registered on: ', formatShort(snap.order?.createdAt), x, y);
-    case 'collected':  return drawPatientTimeItem(doc, 'Collected on: ',  formatShort(snap.order?.createdAt), x, y);
-    case 'reported':   return drawPatientTimeItem(doc, 'Reported on: ',   formatShort(report.createdAt), x, y);
+    case 'registered': return drawPatientTimeItem(doc, patientLabel(PS(), 'registered', 'Registered on: '), formatShort(snap.order?.createdAt), x, y);
+    case 'collected':  return drawPatientTimeItem(doc, patientLabel(PS(), 'collected', 'Collected on: '),  formatShort(snap.order?.createdAt), x, y);
+    case 'reported':   return drawPatientTimeItem(doc, patientLabel(PS(), 'reported', 'Reported on: '),   formatShort(report.createdAt), x, y);
     default: {
       const fld = theme.patientFields.find(f => f.name === key);
       const val = parsePatientAttributes(snap)[key];
       if (val == null || String(val).trim() === '') return y;
-      const label = `${fld?.title ?? key}: `;
+      const label = patientLabel(PS(), key, `${fld?.title ?? key}: `);
       if (STYLE.fit.enabled) {
         return stripPair(stripEnv(doc), label, String(val), x, y, colW, 'fieldLabel', 'fieldValue', 12,
           { force: true, labelColor: BLACK, valueColor: TEXT_DIM });
@@ -2687,27 +2762,27 @@ function drawPatientBlockFourCol(
   const top = MARGIN_TOP + HEADER_RESERVE;
   const w = A4.w - 2 * MARGIN_X;
   const colW = w / 4;
+  const ps = PS();
   const mrn = (snap.patient?.mrn ?? '').trim();
-  const ageSex = [
-    snapAge(snap, 'yrs'),
-    snap.patient?.sex ?? ''
-  ].filter(Boolean).join(' / ');
+  const ageSex = ageSexText(snap.patient, ps, 'yrs');
   const specimens = Array.from(new Set(
     (snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(isConcreteSpecimen)
   )).join(', ');
 
   const cells: { label: string; value: string }[][] = [
     [
-      { label: 'PATIENT', value: snap.patient?.displayName ?? '—' },
-      { label: 'MRN', value: mrn || '—' },
-      { label: 'AGE / SEX', value: ageSex || '—' },
-      { label: 'REF DOCTOR', value: snap.order?.refDoctorName ?? 'Self' },
+      { label: gridLabel(ps, 'name', 'PATIENT'), value: snap.patient?.displayName ?? '—' },
+      { label: gridLabel(ps, 'mrn', 'MRN'), value: mrn || '—' },
+      { label: gridLabel(ps, 'ageSex', 'AGE / SEX'), value: ageSex || '—' },
+      { label: gridLabel(ps, 'refdoctor', 'REF DOCTOR'), value: snap.order?.refDoctorName ?? 'Self' },
     ],
     [
-      { label: 'PHONE', value: snap.patient?.phone ?? '—' },
-      { label: 'COLLECTED', value: formatShort(snap.order?.createdAt) || '—' },
-      { label: 'REPORTED', value: formatShort(report.createdAt) || '—' },
-      { label: 'SAMPLE(S)', value: specimens || '—' },
+      { label: gridLabel(ps, 'phone', 'PHONE'), value: snap.patient?.phone ?? '—' },
+      { label: gridLabel(ps, 'collected', 'COLLECTED'), value: formatShort(snap.order?.createdAt) || '—' },
+      // "Show the report status": Final / Preliminary rides on the reported-on caption.
+      { label: ps.showReportStatus ? `${gridLabel(ps, 'reported', 'REPORTED')} (${reportStatusText(snap.isPartial)})` : gridLabel(ps, 'reported', 'REPORTED'),
+        value: formatShort(report.createdAt) || '—' },
+      { label: gridLabel(ps, 'specimen', 'SAMPLE(S)'), value: specimens || '—' },
     ],
   ];
 
@@ -2728,10 +2803,13 @@ function drawPatientBlockFourCol(
   }
   const blockH = rowH[0] + rowH[1];
 
-  doc.setFillColor('#f8fafc');
+  // rules = today's tinted, outlined card; the other frames drop one or both.
+  doc.setFillColor(ps.frame === 'tint' ? STRIP_TINT : '#f8fafc');
   doc.setDrawColor(HAIR);
   doc.setLineWidth(0.5);
-  doc.roundedRect(MARGIN_X, top, w, blockH, 4, 4, 'FD');
+  if (ps.frame === 'rules') doc.roundedRect(MARGIN_X, top, w, blockH, 4, 4, 'FD');
+  else if (ps.frame === 'tint') doc.roundedRect(MARGIN_X, top, w, blockH, 4, 4, 'F');
+  else if (ps.frame === 'box') doc.roundedRect(MARGIN_X, top, w, blockH, 4, 4, 'S');
 
   for (let r = 0; r < 2; r++) {
     for (let c = 0; c < 4; c++) {
@@ -2749,7 +2827,7 @@ function drawPatientBlockFourCol(
   }
   // Faint vertical separators between cells
   doc.setDrawColor(HAIR);
-  for (let c = 1; c < 4; c++) {
+  for (let c = 1; c < 4 && ps.frame !== 'none'; c++) {
     const x = MARGIN_X + c * colW;
     doc.line(x, top + 6, x, top + blockH - 6);
   }
@@ -2765,47 +2843,54 @@ function drawPatientBlockStacked(
   report: ReportPdfInput['report']
 ): number {
   const top = MARGIN_TOP + HEADER_RESERVE;
+  const ps = PS();
+  const mark = markPage(doc);
   const mrn = (snap.patient?.mrn ?? '').trim();
   const orderShort = (snap.order?.id ?? '').replace(/-/g, '').slice(-8).toUpperCase();
-  const ageSex = [
-    snapAge(snap, 'yrs'),
-    snap.patient?.sex ?? ''
-  ].filter(Boolean).join(' / ');
+  const ageSex = ageSexText(snap.patient, ps, 'yrs');
   const specimens = Array.from(new Set(
     (snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(isConcreteSpecimen)
   )).join(', ');
 
+  // A lab's own label wins; the joiner follows the template's choice ('auto' = " :" as always).
+  const lab = (key: string, base: string) => (ps.labels[key] ?? '').trim() || base;
   const rows: { label: string; value: string }[] = [];
-  rows.push({ label: 'Patient name', value: snap.patient?.displayName ?? '—' });
-  rows.push({ label: 'Age / Sex',    value: ageSex || '—' });
-  if (mrn) rows.push({ label: 'MRN', value: mrn });
-  if (orderShort) rows.push({ label: 'Order No.', value: `#${orderShort}` });
+  rows.push({ label: lab('name', 'Patient name'), value: snap.patient?.displayName ?? '—' });
+  rows.push({ label: lab('ageSex', 'Age / Sex'),    value: ageSex || '—' });
+  if (mrn) rows.push({ label: lab('mrn', 'MRN'), value: mrn });
+  if (orderShort) rows.push({ label: lab('orderid', 'Order No.'), value: `#${orderShort}` });
   if (theme.showAbhaId) rows.push({ label: 'ABHA ID', value: '—' });
-  if (snap.patient?.phone) rows.push({ label: 'Phone', value: snap.patient.phone });
-  if (snap.order?.refDoctorName) rows.push({ label: 'Ref Doctor', value: snap.order.refDoctorName });
-  if (specimens) rows.push({ label: 'Specimens', value: specimens });
-  if (theme.showRegistered) rows.push({ label: 'Registered on', value: formatShort(snap.order?.createdAt) });
-  if (theme.showCollected)  rows.push({ label: 'Collected on',  value: formatShort(snap.order?.createdAt) });
-  if (theme.showReported)   rows.push({ label: 'Reported on',   value: formatShort(report.createdAt) });
+  if (snap.patient?.phone) rows.push({ label: lab('phone', 'Phone'), value: snap.patient.phone });
+  if (snap.order?.refDoctorName) rows.push({ label: lab('refdoctor', 'Ref Doctor'), value: snap.order.refDoctorName });
+  if (specimens) rows.push({ label: lab('specimen', 'Specimens'), value: specimens });
+  if (theme.showRegistered) rows.push({ label: lab('registered', 'Registered on'), value: formatShort(snap.order?.createdAt) });
+  if (theme.showCollected)  rows.push({ label: lab('collected', 'Collected on'),  value: formatShort(snap.order?.createdAt) });
+  if (theme.showReported)   rows.push({ label: lab('reported', 'Reported on'),   value: formatShort(report.createdAt) });
+  if (ps.showReportStatus)  rows.push({ label: lab('reportStatus', 'Report status'), value: reportStatusText(snap.isPartial) });
+  const joiner = ps.labelJoiner === 'auto' ? ' :' : ps.labelJoiner.trimEnd();
 
-  doc.setDrawColor(HAIR);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN_X, top, A4.w - MARGIN_X, top);
+  if (ps.frame === 'rules') {
+    doc.setDrawColor(HAIR);
+    doc.setLineWidth(0.5);
+    doc.line(MARGIN_X, top, A4.w - MARGIN_X, top);
+  }
 
   let y = top + 16;
-  const labelW = 110;
+  typeset(doc, 'stackLabel');
+  const labelW = Math.max(110, ...rows.map(r => doc.getTextWidth(`${r.label}${joiner}`) + 8));
   const stackEnv = STYLE.fit.enabled ? stripEnv(doc) : null;
   rows.forEach(row => {
     typeset(doc, 'stackLabel');
     doc.setTextColor(TEXT_DIM);
-    doc.text(`${row.label} :`, MARGIN_X, y);
+    doc.text(`${row.label}${joiner}`, MARGIN_X, y);
     typeset(doc, 'stackValue');
     doc.setTextColor(TEXT);
     if (stackEnv) { y = stripText(stackEnv, 'stackValue', row.value, MARGIN_X + labelW, y, A4.w - 2 * MARGIN_X - labelW, 14); return; }
     doc.text(row.value, MARGIN_X + labelW, y);
     y += 14;
   });
-  doc.line(MARGIN_X, y + 2, A4.w - MARGIN_X, y + 2);
+  if (ps.frame === 'rules') doc.line(MARGIN_X, y + 2, A4.w - MARGIN_X, y + 2);
+  else drawStripFrame(doc, ps.frame, mark, MARGIN_X - 6, top - 4, A4.w - 2 * MARGIN_X + 12, y + 4, [], HAIR);
   return y + 6;
 }
 
@@ -5044,7 +5129,7 @@ function summaryCellHooks(doc: jsPDF) {
  *  put the repeated column header over the stationery. The "— CONTINUED"
  *  stamp sits 14pt above this top. */
 function tablePageMargins(): { left: number; right: number; top: number; bottom: number } {
-  return { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM, top: LETTERPAD ? MARGIN_TOP + 24 : 56 };
+  return { left: MARGIN_X, right: MARGIN_X, bottom: MARGIN_BOTTOM, top: (LETTERPAD ? MARGIN_TOP + 24 : 56) + contShift() };
 }
 
 /** Shared body styles for both grid + legacy tables. Honours the
@@ -5652,9 +5737,9 @@ function drawSigFooterPage(
   typeset(doc, 'generated');
   doc.setTextColor(BLACK);
   doc.text(`Generated on :  ${formatShort(new Date().toISOString())}`, MARGIN_X, base - 18);
-  // Plain page number ("1", "2", "3" …).
+  // Plain page number ("1", "2", "3" …) - or "Page 2 of 3" when the lab chose it.
   typeset(doc, 'pageNumber');
-  doc.text(String(pageNo), A4.w - MARGIN_X, base - 18, { align: 'right' });
+  doc.text(STYLE.pageNumbers === 'n-of-m' ? pageOfText(pageNo, pageTotal) : String(pageNo), A4.w - MARGIN_X, base - 18, { align: 'right' });
 
   // Blue band at the bottom (classic "Sample Collection" strip) — the LAB's
   // contact number (home-collection line), never the patient's phone.
@@ -5719,12 +5804,52 @@ function drawSigFooterPage(
   }
 }
 
+const CONT_PT = 8.5;
+
+/** Measure the mini patient strip once: the identity line (name, age / sex,
+ *  MRN, order no.) wraps at its dots, then shrinks to the lab's floor, then
+ *  grows - the name is never cut - and the answer is the exact height every
+ *  continuation page reserves under the letterhead. */
+function planContinuation(doc: jsPDF, snap: ReportSnapshot): ContinuationPlan | null {
+  if (PS().continuation === 'none') return null;
+  const text = miniStripText(snap.patient, snap.order?.orderNumber, PS());
+  typeset(doc, 'demoLabel'); doc.setFontSize(CONT_PT);
+  const pageW = doc.getTextWidth(pageOfText(99, 99));
+  typeset(doc, 'demoValue');
+  const fit = fitText(doc, text, {
+    maxW: A4.w - 2 * MARGIN_X - pageW - 14, maxLines: 2, startPt: CONT_PT,
+    minPt: STYLE.fit.enabled ? STYLE.fit.minPt : 7, policy: 'clinical',
+  });
+  return { lines: fit.lines, pt: fit.pt, lineH: fit.lineH, h: (fit.lines.length - 1) * fit.lineH + 18 };
+}
+
+/** The mini patient strip + "Page N of M" at the top of every page that has no
+ *  full patient block. Drawn last, once the page count is known. */
+function drawContinuationStrips(doc: jsPDF): void {
+  const plan = CONT;
+  if (!plan) return;
+  const total = doc.getNumberOfPages();
+  for (let i = 2; i <= total; i++) {
+    if (PATIENT_PAGES.has(i)) continue;
+    doc.setPage(i);
+    const y0 = MARGIN_TOP + 9;
+    typeset(doc, 'demoValue'); doc.setFontSize(plan.pt); doc.setTextColor(BLACK);
+    plan.lines.forEach((l, k) => doc.text(l, MARGIN_X, y0 + k * plan.lineH));
+    typeset(doc, 'demoLabel'); doc.setFontSize(CONT_PT); doc.setTextColor(TEXT_DIM);
+    doc.text(pageOfText(i, total), A4.w - MARGIN_X, y0, { align: 'right' });
+    const ry = y0 + (plan.lines.length - 1) * plan.lineH + 5;
+    doc.setDrawColor(HAIR); doc.setLineWidth(0.5);
+    doc.line(MARGIN_X, ry, A4.w - MARGIN_X, ry);
+  }
+  doc.setPage(total);
+}
+
 /** Add a new page and redraw the per-page furniture (letterhead etc.
  *  are not repeated — classic reports keep the body pages clean and
  *  rely on the bottom strip alone). */
 function newPage(doc: jsPDF, _practice: NonNullable<ReportPdfInput['practice']>): number {
   doc.addPage();
-  return MARGIN_TOP + 10;
+  return MARGIN_TOP + 10 + contShift();
 }
 
 // ──────────────────────────────────────────────────────────────
