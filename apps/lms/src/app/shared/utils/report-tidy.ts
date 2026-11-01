@@ -98,6 +98,10 @@ export interface TidyResult {
   /** Rule codes that fired. */
   applied: string[];
   issuesBefore: number;
+  /** Where the patient details start (mm) when the lab fixed it; absent = automatic (the body moves down with the letterhead). */
+  bodyTopMm?: number;
+  /** The highest a footer item may sit (mm): a little above the footer block as it stands. */
+  footerTopMm?: number;
 }
 
 export interface TidyOptions {
@@ -607,7 +611,12 @@ export function runTidy(tpl: ReportTemplate, probe: TidyProbeFn, opts: TidyOptio
   }
 
   const applied = [...new Set(changes.map(c => RULE_CODE[c.rule as TidyRuleId]).filter(Boolean))];
-  return { changes, choices, base: baseOf(p0.layout), findings, applied, issuesBefore: p0.issues };
+  const footerTops = p0.layout.items.filter(i => !i.hidden && i.region === 'footer').map(i => ptToMm(i.box.y));
+  return {
+    changes, choices, base: baseOf(p0.layout), findings, applied, issuesBefore: p0.issues,
+    ...(p0.layout.bodyTopAuto ? {} : { bodyTopMm: ptToMm(p0.layout.bodyTop) }),
+    footerTopMm: (footerTops.length ? Math.min(...footerTops) : ptToMm(PAGE.h) - 22.6) - 5,
+  };
 }
 
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);

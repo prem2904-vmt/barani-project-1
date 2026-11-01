@@ -65,8 +65,12 @@ for (const theme of ['light', 'dark'] as const) {
     expect(text).toMatch(/black and white/);
     expect(text).toMatch(/Bring letterhead items inside the margins/);
     expect(text).toMatch(/Move apart letterhead items that collide/);
-    // The model's answer joins as Cortex changes (the scripted fake picks the first offered option of each question).
+    // Cortex is NOT called on open: only when asked. The scripted fake then picks the first offered option of each question.
     await expect(card.getByText('Cortex suggests')).toBeVisible();
+    await expect(card.locator('.pf-td__chip--cortex')).toHaveCount(0);
+    await shot(page, `p8-review-card-before-ask-${theme}`);
+    await card.getByRole('button', { name: 'Ask Cortex for suggestions' }).click();
+
     await expect(card.locator('.pf-td__chip--cortex').first()).toBeVisible({ timeout: 60_000 });
     await expect(card.getByText(/Page N of M helps/)).toBeVisible();
     await expect(card.locator('iframe')).toHaveCount(2);
@@ -92,6 +96,7 @@ for (const theme of ['light', 'dark'] as const) {
     // Apply = one undo step, nothing saved.
     await button(page).click();
     await expect(card.locator('.pf-td__row').first()).toBeVisible({ timeout: 120_000 });
+    await card.getByRole('button', { name: 'Ask Cortex for suggestions' }).click();
     await expect(card.locator('.pf-td__chip--cortex').first()).toBeVisible({ timeout: 60_000 });
     await card.getByRole('button', { name: /^Apply/ }).click();
     await expect(card).toHaveCount(0);
@@ -135,6 +140,7 @@ test('Cortex off for the lab: the button is gone; cap reached: the plain fixes s
   await button(page).click();
   const card = page.locator('pf-report-tidy-card');
   await expect(card.locator('.pf-td__row').first()).toBeVisible({ timeout: 120_000 });
+  await card.getByRole('button', { name: 'Ask Cortex for suggestions' }).click();
   await expect(card.getByText(/limit/i).first()).toBeVisible({ timeout: 60_000 });
   await expect(card.getByRole('button', { name: /^Apply/ })).toBeEnabled();
   await shot(page, 'p8-cap-reached');

@@ -118,6 +118,12 @@ function checkPatch(path: string, value: unknown, tpl: ReportTemplate, result: T
         const l = boxLeft(value * MM, b.align, b.wMm * MM);
         if (l < MARGIN_X - 0.5 || l + b.wMm * MM > PAGE.w - MARGIN_X + 0.5) return { reason: 'outside the margins' };
       }
+      if (key === 'y') {
+        // Header items stay above where the patient details start; footer items stay down in the footer block.
+        const bottom = value + (b.kind === 'text' ? 0.25 * b.hMm : b.hMm);
+        if (b.region === 'header' && result.bodyTopMm !== undefined && bottom > result.bodyTopMm + 0.5) return { reason: 'below where the patient details start' };
+        if (b.region === 'footer' && result.footerTopMm !== undefined && value < result.footerTopMm) return { reason: 'above the footer area' };
+      }
       return { patch: { kind: 'item', id, key, to: Math.round(value * 100) / 100 } };
     }
     if (b.kind !== 'text') return { reason: 'text items only' };

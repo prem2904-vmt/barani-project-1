@@ -70,6 +70,22 @@ describe('Tidy wire - what comes back is re-validated', () => {
     expect(r.dropped.length).toBe(12);
   });
 
+  it('a header item may not go below the body top, nor a footer item above the footer area', () => {
+    const r2: TidyResult = {
+      ...result, bodyTopMm: 60, footerTopMm: 270,
+      base: { ...result.base,
+        foot: { id: 'foot', kind: 'text', region: 'footer', label: 'Footer', align: 'left', xMm: 10.6, yMm: 285, wMm: 80, hMm: 4, size: 8, textLen: 40, hidden: false } },
+    };
+    const ok = cortexChanges(ans([ch('cortex:a', 'item.labName.y', 40), ch('cortex:b', 'item.foot.y', 280)]), tpl, r2);
+    expect(ok.changes).toHaveLength(2);
+    const bad = cortexChanges(ans([ch('cortex:c', 'item.labName.y', 70), ch('cortex:d', 'item.logo.y', 55), ch('cortex:e', 'item.foot.y', 200)]), tpl, r2);
+    expect(bad.changes).toEqual([]);
+    expect(bad.dropped.join(' ')).toMatch(/patient details start/);
+    expect(bad.dropped.join(' ')).toMatch(/footer area/);
+    // automatic body top (none recorded): no header limit
+    expect(cortexChanges(ans([ch('cortex:f', 'item.labName.y', 70)]), tpl, result).changes).toHaveLength(1);
+  });
+
   it('a change that sets what is already set is not shown', () => {
     const r = cortexChanges(ans([ch('cortex:x', 'style.density', 'normal')]), tpl, result);
     expect(r.changes).toEqual([]);

@@ -14,6 +14,14 @@ import { applyChanges, runTidy, toggleChange, type TidyChange, type TidyResult }
 import { buildTidyRequest, cortexChanges } from '../../../shared/utils/report-tidy-wire';
 import { makeTidyProbe } from '../../../shared/utils/report-tidy-probe';
 
+/** Small stable string hash (FNV-1a) - cache key only, never sent anywhere. */
+function hashOf(s: string): number { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+
+type TidyAnswer = { summary: string; changes: Array<Record<string, unknown>>; dropped: number };
+/** The last answer and the hash of the template JSON it was asked about: reopening the card on an unchanged template re-shows it - no second model call. */
+let LAST: { key: string; answer: TidyAnswer } | null = null;
+export function resetTidyAnswerCache(): void { LAST = null; }
+
 type CortexState = 'idle' | 'loading' | 'done' | 'error' | 'none';
 
 /**
@@ -71,7 +79,12 @@ type CortexState = 'idle' | 'loading' | 'done' | 'error' | 'none';
               <h3 class="pf-td__h">Cortex suggests
                 @if (cortexState() === 'done') { <span class="pf-td__n">{{ cortexList().length }}</span> }
               </h3>
-              @if (cortexState() === 'loading') {
+              @if (cortexState() === 'idle') {
+                <div class="pf-td__ask">
+                  <span>Some choices (like which style suits your lab) are judgement calls. Cortex sees only your layout settings, never patient details.</span>
+                </div>
+                <div class="pf-td__askbtn"><pf-touch-btn size="sm" variant="secondary" (pressed)="askCortex()">Ask Cortex for suggestions</pf-touch-btn></div>
+              } @else if (cortexState() === 'loading') {
                 <div class="pf-td__ask" role="status"><span class="pf-td__dots" aria-hidden="true"></span>Cortex is looking at the judgement calls…</div>
               } @else if (cortexState() === 'error') {
                 <div class="pf-td__ask pf-td__ask--err" role="alert">
@@ -178,6 +191,7 @@ type CortexState = 'idle' | 'loading' | 'done' | 'error' | 'none';
     .pf-td__hint { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
     .pf-td__ask { display: flex; align-items: center; gap: 10px; padding: 10px; font-size: 12.5px; color: var(--text-secondary); }
     .pf-td__ask--err { color: var(--warning-text, #b45309); }
+    .pf-td__askbtn { padding: 0 10px 8px; }
     .pf-td__link { border: 0; background: none; padding: 4px 6px; font: inherit; font-weight: 600; color: var(--color-violet-600, #7c3aed); cursor: pointer; min-height: 32px; }
     .pf-td__state { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 48px 20px; font-size: 13.5px; color: var(--text-secondary); }
     .pf-td__state--clean { flex-direction: column; text-align: center; gap: 6px; padding: 28px 12px; color: var(--text-secondary); }
@@ -284,12 +298,14 @@ export class ReportTidyCardComponent implements OnDestroy {
     this.result.set(res);
     this.selected.set(new Set(res.changes.map(c => c.id)));
     this.phase.set('ready');
-    if (this.withCortex() && res.choices.length) { this.cortexState.set('loading'); void this.askCortex(); }
+    if (this.withCortex() && res.choices.length) this.cortexState.set('idle');   // never an automatic model call: the person asks
   }
 
   async askCortex() {
     const res = this.result();
     if (!res) return;
+    const key = String(hashOf(JSON.stringify(this.tpl())));
+    if (LAST?.key === key) { this.showAnswer(LAST.answer, res); return; }
     this.cortexState.set('loading');
     this.canRetry.set(false);
     try {
@@ -297,20 +313,27 @@ export class ReportTidyCardComponent implements OnDestroy {
       const provider = pickProvider(providers, null);
       if (!provider) { this.cortexState.set('error'); this.cortexMessage.set('Cortex isn’t available right now. The plain fixes above still work.'); return; }
       const answer = await firstValueFrom(this.api.reportTidy(buildTidyRequest(provider, this.tpl(), res)));
-      const { changes, dropped } = cortexChanges(answer as never, this.tpl(), res);
-      this.cortexList.set(changes);
-      this.summary.set(answer.summary);
-      const n = dropped.length + answer.dropped;
-      this.droppedNote.set(n ? `${n} ${n === 1 ? 'suggestion was' : 'suggestions were'} left out because ${n === 1 ? 'it' : 'they'} didn’t fit the report’s rules.` : '');
-      this.selected.update(s => new Set([...s, ...changes.map(c => c.id)]));
-      this.cortexState.set('done');
+      LAST = { key, answer };
+      this.showAnswer(answer, res);
     } catch (e) {
       const v = assistantError(e, 'Cortex');
+      const code = String((e as { error?: { error?: string } })?.error?.error ?? '');
+      const soon = code === 'tidy_too_soon';
       this.sense.noteRefusal(String((e as { error?: { error?: string } })?.error?.error ?? ''));
       this.cortexState.set('error');
-      this.cortexMessage.set(`${v.message} The plain fixes above still work.`);
-      this.canRetry.set(v.retry);
+      this.cortexMessage.set(soon ? 'Cortex just answered. Wait a few seconds and ask again. The plain fixes above still work.' : `${v.message} The plain fixes above still work.`);
+      this.canRetry.set(soon || v.retry);
     }
+  }
+
+  private showAnswer(answer: TidyAnswer, res: TidyResult) {
+    const { changes, dropped } = cortexChanges(answer as never, this.tpl(), res);
+    this.cortexList.set(changes);
+    this.summary.set(answer.summary);
+    const n = dropped.length + answer.dropped;
+    this.droppedNote.set(n ? `${n} ${n === 1 ? 'suggestion was' : 'suggestions were'} left out because ${n === 1 ? 'it' : 'they'} didn’t fit the report’s rules.` : '');
+    this.selected.update(s => new Set([...s, ...changes.map(c => c.id)]));
+    this.cortexState.set('done');
   }
 
   tick(id: string, on: boolean) { this.selected.set(toggleChange(this.selected(), id, on, this.all())); }

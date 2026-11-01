@@ -6,7 +6,7 @@ import type { ReportTemplate } from '../../../shared/models/report.model';
 import { silenceJsdomCanvas } from '../../../shared/utils/report-header-legacy.spec-helpers';
 import { richInput } from '../../../shared/utils/report-theme.spec-helpers';
 import { readReportStyle } from '../../../shared/utils/report-style';
-import { ReportTidyCardComponent } from './report-tidy-card.component';
+import { ReportTidyCardComponent, resetTidyAnswerCache } from './report-tidy-card.component';
 
 /**
  * Cortex "Tidy up" review card, rendered for real with a stubbed API (no model call, no network):
@@ -21,6 +21,8 @@ describe('Tidy up review card', () => {
 
   let tidyCalls: Array<Record<string, unknown>>;
   let answer: () => unknown;
+
+  beforeEach(() => resetTidyAnswerCache());
 
   beforeAll(() => {
     (URL as unknown as { createObjectURL: () => string }).createObjectURL ??= () => 'blob:tidy-spec';
@@ -54,7 +56,8 @@ describe('Tidy up review card', () => {
     await wait(); fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     return {
-      fixture, el, applied, template: template as ReportTemplate, closed: () => closed,
+      fixture, el, applied,
+      ask: async () => { [...el.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent!.includes('Ask Cortex'))!.click(); await wait(); fixture.detectChanges(); await wait(); fixture.detectChanges(); }, template: template as ReportTemplate, closed: () => closed,
       text: () => el.textContent!.replace(/\s+/g, ' '),
       boxes: () => [...el.querySelectorAll<HTMLInputElement>('input[type=checkbox]')],
       rows: () => [...el.querySelectorAll('.pf-td__row')].map(r => r.textContent!.replace(/\s+/g, ' ').trim()),
@@ -113,14 +116,43 @@ describe('Tidy up review card', () => {
     expect(m.applied).toEqual([]);
   });
 
-  it('with Cortex off only the rules run (no call); with it on exactly one call is made, carrying no names or tenant ids', async () => {
-    await make(OVERLAPPING, false);
+  it('Cortex is never called on open: the rules show at once with an "Ask Cortex" button; one click is one call, carrying no names or tenant ids', async () => {
+    const off = await make(OVERLAPPING, false);
     expect(tidyCalls).toEqual([]);
+    expect(off.text()).not.toContain('Ask Cortex');
     TestBed.resetTestingModule();
     const m = await make(OVERLAPPING, true);
+    expect(m.rows().length).toBeGreaterThan(0);
+    expect(tidyCalls).toEqual([]);
+    expect(m.text()).toContain('Ask Cortex for suggestions');
+    await m.ask();
     expect(tidyCalls).toHaveLength(1);
     expect(JSON.stringify(tidyCalls[0])).not.toMatch(/Sita|Raman|tenant|user/i);
     expect(m.text()).toContain('Cortex suggests');
+    expect(m.text()).not.toContain('Ask Cortex for suggestions');
+  });
+
+  it('reopening on an unchanged template re-shows the last answer without a second call; a changed template asks again', async () => {
+    const m1 = await make(OVERLAPPING, true);
+    await m1.ask();
+    expect(tidyCalls).toHaveLength(1);
+    TestBed.resetTestingModule();
+    const m2 = await make(OVERLAPPING, true);
+    const calls = tidyCalls.length;   // make() resets the counter; nothing was sent on open
+    expect(calls).toBe(0);
+    await m2.ask();
+    expect(tidyCalls).toHaveLength(0);          // cached: no new call
+    expect(m2.text()).toContain('Cortex suggests');
+    TestBed.resetTestingModule();
+    const m3 = await make({ ...OVERLAPPING, primaryColor: '#123456' } as Partial<ReportTemplate>, true);
+    await m3.ask();
+    expect(tidyCalls).toHaveLength(1);
+  });
+
+  it('too soon after a call: plain words and a way to try again', async () => {
+    const m = await makeWithAnswer(() => throwError(() => ({ status: 200, error: { error: 'tidy_too_soon', message: 'x' } })));
+    expect(m.text()).toMatch(/Wait a few seconds/);
+    expect(m.button('Try again')).toBeTruthy();
   });
 
   it('a Cortex suggestion is validated here, listed with a Cortex chip, and ticking it adds it to the patch', async () => {
@@ -181,6 +213,9 @@ describe('Tidy up review card', () => {
       await wait(); fixture.detectChanges();
       await wait(); fixture.detectChanges();
       const el = fixture.nativeElement as HTMLElement;
+      [...el.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent!.includes('Ask Cortex'))?.click();
+      await wait(); fixture.detectChanges();
+      await wait(); fixture.detectChanges();
       return {
         el, applied, fixture,
         text: () => el.textContent!.replace(/\s+/g, ' '),
