@@ -19,7 +19,9 @@
 // ═══════════════════════════════════════════════════════════════
 
 export type ReportColumnType = 'name' | 'text' | 'result' | 'unit' | 'range' | 'flag'
-  | 'method' | 'specimen' | 'code' | 'short_name' | 'section';
+  | 'method' | 'specimen' | 'code' | 'short_name' | 'section'
+  /** Drawn, not typed: the range-bar number line (reportStyle.charts.rangeBar). Never stored in a layout. */
+  | 'rangebar';
 
 export interface ReportColumn {
   id: string;

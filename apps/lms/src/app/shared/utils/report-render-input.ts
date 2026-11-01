@@ -3,6 +3,7 @@ import type { ReportTemplate } from '../models/report.model';
 import type { ResolvedReportLayout } from '../models/report-layout.model';
 import type { ReportPdfInput } from './report-pdf';
 import { LayoutSnapshotTest, PreviewFn, resolveReportLayouts } from './report-layouts';
+import { readReportStyle } from './report-style';
 import { ORDER_QR_KEY, patientStripPlaces } from './patient-strip-qr';
 
 /**
@@ -98,7 +99,7 @@ export async function prepareReportPdfInput(report: RenderableReport, deps: Repo
     preloadReportImages(baseInput, deps.apiUrl),
     deps.trendograms === false
       ? Promise.resolve([])
-      : import('./trendogram-report').then(m => m.prepareTrendograms(report, deps.api as never)).catch(e => {
+      : import('./trendogram-report').then(m => m.prepareTrendograms(report, deps.api as never, { vector: readReportStyle(template).charts.trend.style === 'vector' })).catch(e => {
           throw new ReportRenderError(REPORT_RENDER_ERROR_MESSAGE, 'layout', e);
         }),
   ]);

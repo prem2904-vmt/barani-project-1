@@ -39,6 +39,9 @@ import { DEFAULT_REPORT_STYLE, isDefaultReportStyle, readReportStyle, reportEngi
 import { CLASSIC_THEME, ReportTypeTheme, TypeEl, TypeWeight, reportTypeTheme, tokenSize } from './report-theme';
 import { INTER_FAMILY, SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './report-fonts';
 import { renderReportChart, setReportChartContext, reportChartLead } from './report-chart/report-chart.report';
+import { layoutReportChartAt, paintChart } from './report-chart/report-chart.pdf';
+import { trendChartData, trendPerRow, type TrendogramSeries } from './report-trend-vector';
+import { drawRangeBar, rowRangeBar, type RangeBarRow } from './report-range-bar';
 import { applyReportSequencing, readReportSequencing } from './report-sequencing';
 import { drawReportNote, drawReportNoteLine, layoutReportNote, type NoteLayout, type NoteTypeset } from './report-note-pdf';
 import { asFamilyValue, familyReportLines, familyValueText, isFamilyValue, type FamilyReportLine } from './option-family';
@@ -127,7 +130,7 @@ export interface ReportPdfInput {
    *  results. Each is a pre-rendered PNG data URL + a title, laid out 2-per-row
    *  (half-page each), up to 6 per page. Prepared by the caller via
    *  renderTrendogramPng() before the sync build. */
-  trendograms?: Array<{ title: string; dataUrl: string }>;
+  trendograms?: Array<{ title: string; dataUrl: string; series?: TrendogramSeries }>;
   /** PRINT ONLY — leave the header & footer areas blank (same margins as the
    *  template's letterpad reserves) so the body lands on the lab's pre-printed
    *  stationery. Set solely by a print entry point, after asking the user
@@ -1562,7 +1565,11 @@ function renderReportOnce(input: ReportPdfInput): { doc: jsPDF; layout: ReportLa
   // ── Trendogram charts (serial-result trends), 2-per-row, up to 6/page ──
   if (input.trendograms?.length) {
     if (cursorY > A4.h - MARGIN_BOTTOM - 200) { cursorY = newPage(doc, practice); }
-    cursorY = renderTrendogramSection(doc, input.trendograms, cursorY, practice);
+    // Vector style: the series are drawn here, with the report's own type and accent. Anything
+    // that arrives as a picture only (an older caller) still prints as the picture.
+    cursorY = STYLE.charts.trend.style === 'vector' && input.trendograms.every(t => !!t.series)
+      ? renderTrendogramVector(doc, input.trendograms.map(t => t.series!), cursorY, practice)
+      : renderTrendogramSection(doc, input.trendograms, cursorY, practice);
   }
 
   // Department notes whose section never printed as a table (a culture /
@@ -4498,6 +4505,9 @@ function columnElement(m: ReportColumn): TypeEl {
   }
 }
 
+/** The range-bar column the renderer adds when the style asks (not a stored column). */
+const RANGE_BAR_COLUMN: ReportColumn = { id: 'rc-rangebar', name: 'rangebar', label: 'Where it falls', order: 99, width: 14, type: 'rangebar', locked: false };
+
 /** Render panel groups as ONE columnar autoTable against the column config
  *  `cfg`. Consecutive LINKED columns merge into a single cell ("11.4 g/dL")
  *  and keep the first column's header label. */
@@ -4540,6 +4550,12 @@ function renderColumnarTable(
   if (groups.length === 0) return startY;
   if (!region && startY > A4.h - MARGIN_BOTTOM - 70) { startY = newPage(doc, practice); }
 
+  // Range bar (reportStyle.charts.rangeBar): a drawn number-line column right after
+  // Reference. Not in a box of a Custom layout, nor in a test's own arranged columns.
+  if (STYLE.charts.rangeBar && !region && !overriddenRun && !cfg.some(c => c.type === 'rangebar')) {
+    const ri = cfg.findIndex(c => c.type === 'range');
+    if (ri >= 0 && !cfg[ri].linkedNext) cfg = [...cfg.slice(0, ri + 1), RANGE_BAR_COLUMN, ...cfg.slice(ri + 1)];
+  }
   const LEFT = region ? region.x : MARGIN_X;
   const usable = region ? region.w : A4.w - 2 * MARGIN_X;
   type VCol = { members: ReportColumn[]; label: string; weight: number; hasResult: boolean; textOnly: boolean; nameOnly: boolean };
@@ -4565,6 +4581,7 @@ function renderColumnarTable(
       case 'unit':  return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.unit ?? '').trim() && looksNumeric(r.result)));
       case 'range': return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.range ?? '').trim()));
       case 'flag':  return groups.some(g => g.rows.some(r => r.kind === 'param' && !!(r.flag ?? '').trim()));
+      case 'rangebar':   return groups.some(g => g.rows.some(r => r.kind === 'param' && rowRangeBar(r) !== null));
       case 'method':     return groups.some(g => !!(g.method ?? '').trim() || g.rows.some(r => !!r.method));
       case 'specimen':   return groups.some(g => !!(g.specimen ?? '').trim());
       case 'code':       return groups.some(g => !!(g.code ?? '').trim());
@@ -4591,6 +4608,9 @@ function renderColumnarTable(
   // -1 when the layout has no reference column at all, which the hook treats
   // as "never matches" — no special-casing needed at the call site.
   const rangeColIdx = vcols.findIndex(c => c.members.some(m => m.type === 'range'));
+  const rangeBarColIdx = vcols.findIndex(c => c.members.some(m => m.type === 'rangebar'));
+  /** Body row index -> its number line (range-bar column). */
+  const barCells = new Map<number, RangeBarRow>();
 
   type Cell = { content: string; colSpan?: number; styles?: Record<string, unknown> };
   const head: Cell[][] = [vcols.map(c => ({ content: c.label, styles: { halign: 'left' } }))];
@@ -4771,6 +4791,7 @@ function renderColumnarTable(
           case 'unit':   return looksNumeric(r.result) ? (r.unit ?? '').trim() : '';
           case 'range':  return (r.range ?? '').trim();
           case 'flag':   return (r.flag ?? '').trim();
+          case 'rangebar': return '';      // drawn in didDrawCell
           // Test-level sources print once per test block (first row).
           // One method for the block → printed once (first row); values
           // measured by different methods → each row prints its own.
@@ -4837,6 +4858,10 @@ function renderColumnarTable(
       body.push(cells);
       const paramRowIdx = body.length - 1;
       bodyKind.push('param');
+      if (rangeBarColIdx >= 0) {
+        const rb = rowRangeBar(r);
+        if (rb) barCells.set(paramRowIdx, rb);
+      }
       // Remember the result text so the arrow can sit right AFTER it — the
       // result cell is wide, and anchoring the glyph to the cell's far edge
       // parked it visually beside the Reference column.
@@ -5066,6 +5091,13 @@ function renderColumnarTable(
       }
       drawQualifiedRangeCell(doc, qualCells, d as CellHookArg);
       drawSuperscriptCell(doc, supCells, d as CellHookArg);
+      if (d.section === 'body' && d.column.index === rangeBarColIdx && barCells.has(d.row.index)) {
+        const sc = theme.flagStyle === 'bold_color';
+        drawRangeBar(doc, d.cell, barCells.get(d.row.index)!, {
+          accent: BLUE, ink: BLACK, highColor: sc ? theme.abnormalColor : null, lowColor: sc ? theme.abnormalLowColor : null,
+          font: faceOf('bold') as [string, string],
+        });
+      }
       if (d.section !== 'body' || d.column.index !== resultColIdx) return;
       const m = bodyMeta[d.row.index];
       if (!m) return;
@@ -5998,6 +6030,50 @@ function renderTrendogramSection(
   });
 
   return y + cellH + 14;   // advance past the last row
+}
+
+/**
+ * Vector trendograms: the same section (heading, cells, rounded frames) as the
+ * picture style, but each chart is laid out for its cell with the report's real
+ * font metrics and painted as PDF shapes. Cells per row follow the chosen layout
+ * (2 / 3 across, or one full-width chart per row); a row never splits across pages.
+ */
+function renderTrendogramVector(
+  doc: jsPDF,
+  series: TrendogramSeries[],
+  startY: number,
+  practice: NonNullable<ReportPdfInput['practice']>,
+): number {
+  const cfg = STYLE.charts.trend;
+  const perRow = trendPerRow(cfg.layout);
+  const gap = 14, pad = 6;
+  const cellW = (A4.w - 2 * MARGIN_X - gap * (perRow - 1)) / perRow;
+  const th = chartTheme();
+
+  let y = startY + 12;
+  typeset(doc, 'trendHeading');
+  doc.setTextColor('#334155');
+  doc.text('TRENDOGRAM — SERIAL RESULT TRENDS', A4.w / 2, y, { align: 'center' });
+  y += 8;
+  doc.setDrawColor('#cbd5e1'); doc.setLineWidth(0.5);
+  doc.line(MARGIN_X, y, A4.w - MARGIN_X, y);
+  y += 14;
+
+  const cells = series.map(s => layoutReportChartAt(
+    doc, trendChartData(s, { band: cfg.band, values: cfg.values, size: perRow === 1 ? 'full' : 'half' }), cellW - 2 * pad, th));
+  for (let i = 0; i < cells.length; i += perRow) {
+    const row = cells.slice(i, i + perRow);
+    const rowH = Math.max(...row.map(c => c.height)) + 2 * pad;
+    if (y + rowH > A4.h - MARGIN_BOTTOM) y = newPage(doc, practice);
+    row.forEach((c, j) => {
+      const x = MARGIN_X + j * (cellW + gap);
+      doc.setDrawColor('#e2e8f0'); doc.setLineWidth(0.5);
+      doc.roundedRect(x, y, cellW, rowH, 6, 6);
+      paintChart(doc, c, x + pad, y + pad, th);
+    });
+    y += rowH + gap;
+  }
+  return y;
 }
 
 function drawEndOfReport(doc: jsPDF, snap: ReportSnapshot, startY: number): number {

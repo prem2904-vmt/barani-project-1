@@ -22,7 +22,9 @@ import { readReportTheme, writeReportTheme, type ReportThemeId } from './report-
  * renderers exist, so a preset never changes paper in a way the summary does
  * not say. Signature placement and wording (`signatures.placement` / `.show`)
  * joined the bundle with their renderer (Phase 6); image height, per-row limit,
- * stationery reserve and the verified text stay the lab's own.
+ * stationery reserve and the verified text stay the lab's own. The chart look
+ * (`charts.trend.style` / `.layout`, `charts.rangeBar`) joined with its renderer
+ * (Phase 7); whether the trend charts show the normal band and values stays the lab's own.
  */
 
 export type PresetId = 'classic' | 'modern' | 'compact';
@@ -36,6 +38,7 @@ export const PRESET_KEYS: ReadonlyArray<string> = [
   'patient.frame', 'patient.continuation',
   'pageNumbers', 'density', 'squeeze', 'colors.palette',
   'signatures.placement', 'signatures.show',
+  'charts.trend.style', 'charts.trend.layout', 'charts.rangeBar',
 ];
 
 /** The type theme and colours each preset brings. */
@@ -110,6 +113,7 @@ export const PRESET_INFO: ReadonlyArray<PresetInfo> = [
       'Lined patient block; no patient name on later pages',
       'Page number only',
       'Each department signs at the end of its own results, with the signature image',
+      'Trend charts as pictures; no range bars',
       'Normal row spacing, no squeeze',
       'Classic type; navy and blue colours',
     ] },
@@ -120,6 +124,7 @@ export const PRESET_INFO: ReadonlyArray<PresetInfo> = [
       'Tinted patient block; name on later pages',
       '“Page 2 of 3” page numbers',
       'One sign-off after End of Report, with signature images',
+      'Sharp trend charts in the report colours, two across; a range bar next to each reference range',
       'Source Sans 3 type, Teal colours',
     ] },
   { id: 'compact', label: 'Compact', desc: 'Fewer pages, plain black and grey.',
@@ -129,6 +134,7 @@ export const PRESET_INFO: ReadonlyArray<PresetInfo> = [
       'Name on later pages; “Page 2 of 3”',
       'Tight rows; squeezes a small overflow onto one page',
       'One sign-off after End of Report as “Electronically verified by …” lines',
+      'Sharp trend charts, three across; a range bar next to each reference range',
       'Classic type, Ink (black and grey) colours',
     ] },
 ];

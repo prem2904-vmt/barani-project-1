@@ -32,10 +32,25 @@ describe('style presets — Modern writes exactly the documented fields', () => 
     expect(t.primaryColor).toBe(PALETTES.find(p => p.id === 'ink')!.colors.primaryColor);
   });
 
-  it('signature placement and wording ride the bundle; the rest of the signature settings and the chart keys do not', () => {
+  it('signature placement and wording ride the bundle; the rest of the signature settings do not', () => {
     expect(readReportStyle(applyTo(tpl(), 'modern')).signatures).toEqual({ ...DEFAULT_REPORT_STYLE.signatures, placement: 'end', show: 'image' });
     expect(readReportStyle(applyTo(tpl(), 'compact')).signatures).toEqual({ ...DEFAULT_REPORT_STYLE.signatures, placement: 'end', show: 'verified-line' });
-    for (const id of ['modern', 'compact'] as const) expect(readReportStyle(applyTo(tpl(), id)).charts).toEqual(DEFAULT_REPORT_STYLE.charts);
+  });
+
+  it('Modern and Compact switch the trend charts to vector and add the range bar; Classic puts the pictures back; band and values stay the lab\'s own', () => {
+    const own = tpl({ metadata: writeReportStyle(tpl(), { charts: { trend: { band: false, values: false } } }) });
+    const modern = readReportStyle(applyTo(own, 'modern')).charts;
+    expect(modern).toEqual({ trend: { style: 'vector', layout: 'grid-2', band: false, values: false }, rangeBar: true, previous: false });
+    expect(readReportStyle(applyTo(own, 'compact')).charts.trend).toMatchObject({ style: 'vector', layout: 'grid-3' });
+    expect(readReportStyle(applyTo(applyTo(own, 'compact'), 'classic')).charts)
+      .toEqual({ ...DEFAULT_REPORT_STYLE.charts, trend: { ...DEFAULT_REPORT_STYLE.charts.trend, band: false, values: false } });
+  });
+
+  it('the "what this changes" lists say what the charts do', () => {
+    const line = (id: string) => PRESET_INFO.find(p => p.id === id)!.changes.filter(c => /chart/i.test(c)).join(' ');
+    expect(line('classic')).toMatch(/pictures/);
+    expect(line('modern')).toMatch(/two across.*range bar/);
+    expect(line('compact')).toMatch(/three across.*range bar/);
   });
 
   it('a preset leaves the lab\'s own image height, per-row limit, reserve and wording alone, and Classic puts placement back', () => {
@@ -98,7 +113,7 @@ describe('style presets — only the bundle is touched', () => {
   it('the bundle lists only the documented keys', () => {
     expect(PRESET_KEYS).toContain('density');
     expect(PRESET_KEYS.filter(k => k.startsWith('signatures'))).toEqual(['signatures.placement', 'signatures.show']);
-    expect(PRESET_KEYS.some(k => k.startsWith('charts'))).toBe(false);
+    expect(PRESET_KEYS.filter(k => k.startsWith('charts'))).toEqual(['charts.trend.style', 'charts.trend.layout', 'charts.rangeBar']);
     expect(presetBundle('classic')).toMatchObject({ preset: 'classic', density: 'normal', squeeze: false, pageNumbers: 'n' });
   });
 });

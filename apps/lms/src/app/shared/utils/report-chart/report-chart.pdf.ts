@@ -108,6 +108,11 @@ export function layoutReportChart(doc: jsPDF, data: ChartData, contentWidth: num
   return layoutChart(data, chartWidth(data.size, contentWidth), { measure: pdfMeasure(doc, th), fontScale: th.fontScale });
 }
 
+/** The same layout at an exact width (a trend chart in a grid cell). */
+export function layoutReportChartAt(doc: jsPDF, data: ChartData, width: number, th: ChartPdfTheme): ChartLayout {
+  return layoutChart(data, width, { measure: pdfMeasure(doc, th), fontScale: th.fontScale });
+}
+
 /** Paint a laid-out chart at (x0, y0). */
 export function paintChart(doc: jsPDF, layout: ChartLayout, x0: number, y0: number, th: ChartPdfTheme): void {
   const col = (c: ChartColor) => chartColor(c, th);

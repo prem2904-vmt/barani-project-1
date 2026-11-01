@@ -2,6 +2,10 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../core/services/api.service';
 import { TrendTest, filterTrendPoints, renderTrendogramPng } from './trend-chart';
 import { isAccessFailure } from './report-layouts';
+import type { TrendogramSeries } from './report-trend-vector';
+
+/** One trendogram for the PDF: a picture (PNG style) or, in the Vector style, the series to draw. */
+export interface TrendogramItem { title: string; dataUrl: string; series?: TrendogramSeries }
 
 /** The trendogram preference stored on the order metadata + echoed into the
  *  report snapshot. `charts` is the explicit list the user picked in the popup;
@@ -24,7 +28,9 @@ export interface TrendogramConfig {
 export async function prepareTrendograms(
   report: { data?: string | null },
   api: ApiService,
-): Promise<Array<{ title: string; dataUrl: string }>> {
+  /** `vector`: hand the series to the report to draw (no picture is rendered). */
+  opts: { vector?: boolean } = {},
+): Promise<TrendogramItem[]> {
   let snap: { trendogram?: TrendogramConfig; patient?: { id?: string } };
   try { snap = JSON.parse(report.data ?? '{}'); } catch { return []; }
   const cfg = snap?.trendogram;
@@ -52,7 +58,7 @@ export async function prepareTrendograms(
     : trends.map(t => ({ testId: t.testId, parameter: t.parameters[0]?.parameter ?? '' }))
             .filter(c => !!c.parameter);
 
-  const out: Array<{ title: string; dataUrl: string }> = [];
+  const out: TrendogramItem[] = [];
   for (const w of wanted) {
     const test = trends.find(t => t.testId === w.testId);
     const param = test?.parameters.find(p => p.parameter === w.parameter);
@@ -60,6 +66,10 @@ export async function prepareTrendograms(
     const points = filterTrendPoints(param.points, duration);
     if (points.length < 2) continue;   // no trend to draw
     const title = `${test.testName} — ${param.parameter}${param.unit ? ' (' + param.unit + ')' : ''}`;
+    if (opts.vector) {
+      out.push({ title, dataUrl: '', series: { title, unit: param.unit ?? null, referenceRange: param.referenceRange ?? null, points, chartType } });
+      continue;
+    }
     const dataUrl = await renderTrendogramPng({ param, points, chartType, title });
     if (dataUrl) out.push({ title, dataUrl });
   }

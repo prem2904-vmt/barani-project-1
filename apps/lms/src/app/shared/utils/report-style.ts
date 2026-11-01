@@ -288,6 +288,7 @@ export const STYLE_PRESETS: Readonly<Record<'classic' | 'modern' | 'compact', Re
     squeeze: true,
     colors: { palette: 'ink' },
     signatures: { placement: 'end', show: 'verified-line' },
+    charts: { trend: { style: 'vector', layout: 'grid-3' }, rangeBar: true },
   },
 } as Record<'classic' | 'modern' | 'compact', ReportStylePatch>);
 
