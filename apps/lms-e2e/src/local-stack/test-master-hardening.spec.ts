@@ -74,10 +74,12 @@ for (const theme of ['light', 'dark'] as const) {
   test(`pending: a test edit for another branch offers the switch (${theme}, desktop + phone)`, async ({ browser }) => {
     const seed = JSON.parse(readFileSync(`${STACK_PATH}.tm.json`, 'utf8')) as { clinical: string; clinicalLabel: string };
     const branch2 = sql(`select "Id" from branches where "TenantId"='${STACK.tenantId}' and "Name"='Salem'`)
-      || sql(`insert into branches ("Id","TenantId","Name","Code","CreatedAt") values (gen_random_uuid(),'${STACK.tenantId}','Salem','SLM',now()) returning "Id"`).split('\n')[0];
+      || sql(`insert into branches ("Id","TenantId","Name","Code","Type","HasPfBox","Timezone","IsActive","LabStructure","CreatedAt") values (gen_random_uuid(),'${STACK.tenantId}','Salem','SLM','lab',false,'Asia/Kolkata',true,'auto',now()) returning "Id"`).split('\n')[0];
     sql(`update tm_change_proposals set "BranchId"='${branch2}' where "Id"='${seed.clinical}'`);
     for (const phone of [false, true]) {
       const { ctx, page } = await openAs(browser, ADMIN, '/admin/tests?view=pending', { theme, beta: ['assistant'], viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 } });
+      await expect(page.locator('.pf-tmp__grid .ag-row').first()).toBeVisible({ timeout: 60_000 });
+      await page.getByPlaceholder(/Search pending changes/i).first().fill(seed.clinicalLabel.replace(/ \(.*$/, ''));
       const row = page.locator('.pf-tmp__grid .ag-row').filter({ hasText: seed.clinicalLabel }).first();
       await expect(row).toBeVisible({ timeout: 60_000 });
       await row.click();
