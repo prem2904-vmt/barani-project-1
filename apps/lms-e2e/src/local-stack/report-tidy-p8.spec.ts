@@ -68,6 +68,7 @@ for (const theme of ['light', 'dark'] as const) {
     // Cortex is NOT called on open: only when asked. The scripted fake then picks the first offered option of each question.
     await expect(card.getByText('Cortex suggests')).toBeVisible();
     await expect(card.locator('.pf-td__chip--cortex')).toHaveCount(0);
+    await card.getByRole('button', { name: 'Ask Cortex for suggestions' }).scrollIntoViewIfNeeded();
     await shot(page, `p8-review-card-before-ask-${theme}`);
     await card.getByRole('button', { name: 'Ask Cortex for suggestions' }).click();
 
