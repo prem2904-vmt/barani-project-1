@@ -1,5 +1,4 @@
 import { ReportSignatureCardComponent } from './report-signature-card.component';
-import { ReportChartPanelCardComponent } from './report-chart-panel-card.component';
 import {
   ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, viewChild,
 } from '@angular/core';
@@ -74,7 +73,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
 @Component({
   selector: 'pf-report-header-editor',
   standalone: true,
-  imports: [FormsModule, ImageUploadComponent, SnapGuidesComponent, ReportLetterheadCardComponent, ReportSignatureCardComponent, ReportChartPanelCardComponent],
+  imports: [FormsModule, ImageUploadComponent, SnapGuidesComponent, ReportLetterheadCardComponent, ReportSignatureCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'pf-rhe-host' },
   template: `
@@ -697,7 +696,6 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
             </section>
             <pf-report-signature-card [template]="template()" [sample]="sigSample()"
                                       (patch)="emitPatch($event)" (sampleChange)="sigSampleChange.emit($event)" />
-            <pf-report-chart-panel-card [template]="template()" (patch)="emitPatch($event)" />
           }
         }
       </div>

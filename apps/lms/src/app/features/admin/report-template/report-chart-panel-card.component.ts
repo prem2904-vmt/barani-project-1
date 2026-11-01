@@ -5,8 +5,9 @@ import { readReportStyle, writeReportStyle, type ReportStyle } from '../../../sh
 type Trend = ReportStyle['charts']['trend'];
 
 /**
- * Report designer -> Footer: the Chart panel card (report layout plan 3.11).
+ * Report designer -> Results table: the Charts card (report layout plan 3.11).
  *
+ * Lives on the Results table tab, beside the live PDF preview (which prints sample trends there).
  * Decides how the serial-result trend charts and the range-bar column print:
  * as pictures (today) or drawn sharply in the report's colours, how many sit
  * across, and whether the range bar sits next to each reference range. The
@@ -21,9 +22,6 @@ type Trend = ReportStyle['charts']['trend'];
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cpc" aria-label="Charts">
-      <h4 class="pf-cpc__h">Charts</h4>
-      <p class="pf-cpc__s">How the trend charts and the range bar print. The preview shows sample trends.</p>
-
       <span class="pf-cpc__k" id="pf-cpc-style">Trend charts</span>
       <div class="pf-seg pf-cpc__seg" role="radiogroup" aria-labelledby="pf-cpc-style">
         @for (o of styles; track o.value) {
@@ -68,9 +66,7 @@ type Trend = ReportStyle['charts']['trend'];
   `,
   styles: [`
     :host { display: block; }
-    .pf-cpc { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--pf-line); }
-    .pf-cpc__h { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
-    .pf-cpc__s { margin: 0; font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
+    .pf-cpc { display: flex; flex-direction: column; gap: 10px; }
     .pf-cpc__k { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
     .pf-cpc__seg { flex-wrap: wrap; align-self: flex-start; }
     .pf-cpc__hint { margin: 0; font-size: 12px; line-height: 1.4; color: var(--text-tertiary); }

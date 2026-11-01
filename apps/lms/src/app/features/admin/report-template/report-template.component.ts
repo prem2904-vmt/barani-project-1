@@ -30,6 +30,7 @@ import {
 } from '../../../shared/utils/report-patient-text';
 import { reportIssues, type ReportIssues } from '../../../shared/utils/report-issues';
 import { ReportStyleCardsComponent } from './report-style-cards.component';
+import { ReportChartPanelCardComponent } from './report-chart-panel-card.component';
 import { applyStylePreset, detectPreset, type PresetId } from '../../../shared/utils/report-presets';
 import { paletteById, paletteColumns, type PaletteColors, type PaletteId } from '../../../shared/utils/report-palettes';
 import { readReportTheme, REPORT_THEME_OPTIONS, ReportThemeId, writeReportTheme } from '../../../shared/utils/report-theme';
@@ -75,7 +76,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [ReportStyleCardsComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
+  imports: [ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
@@ -575,6 +576,12 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                       </button>
                     </div>
                   </div>
+                </div>
+
+                <div class="pf-rtb" id="pf-charts">
+                  <h4 class="pf-rtb-h">Charts</h4>
+                  <p class="pf-rtb-s">How the trend charts and the range bar print. The preview shows sample trends.</p>
+                  <pf-report-chart-panel-card [template]="tpl()" (patch)="patch($event)"></pf-report-chart-panel-card>
                 </div>
 
                 <div class="pf-rtb">
@@ -1753,8 +1760,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
         template: effTpl,
         resolvedLayouts: this.buildPreviewLayouts(),
         previewKeepEmptyColumns: onColumns,
-        // Footer tab: sample trends so the Charts card shows what it does.
-        ...(this.tab() === 'footer' ? { trendograms: await sampleTrendograms(this.reportStyle().charts.trend.style === 'vector') } : {}),
+        // Results table tab: sample trends so the Charts card shows what it does.
+        ...(this.tab() === 'table' ? { trendograms: await sampleTrendograms(this.reportStyle().charts.trend.style === 'vector') } : {}),
       };
       // Preload uploaded images (logo, NABL, sig scans) as data URLs.
       // The sync renderer can't fetch images itself, so this step
