@@ -91,7 +91,13 @@ export function signatureRowHeight(row: ReadonlyArray<ReportSignature>): number 
 }
 
 export interface SignatureSlot { sig: ReportSignature; cx: number; }
-export interface SignatureRowLayout { top: number; height: number; slots: SignatureSlot[]; }
+/** Extra height (pt) a signatory's wrapped lines need beyond the one-line rhythm. */
+export interface SignatureExtra { name: number; title: number; reg: number; }
+export interface SignatureRowLayout {
+  top: number; height: number; slots: SignatureSlot[];
+  /** The row's extra lines (the tallest signatory wins each line) — all zero unless text fitting wrapped a name. */
+  extra: SignatureExtra;
+}
 export interface SignatureBlockLayout { rows: SignatureRowLayout[]; height: number; slotW: number; }
 
 /** Full sign-off layout for a block starting at `top`. Rows stack with no
@@ -101,6 +107,10 @@ export function layoutSignatureBlock(
   left: number,
   usableW: number,
   top = 0,
+  /** Text fitting: the extra height each signatory's name / title / reg line
+   *  needs when it wraps inside a slot `slotW` wide. Absent = one line each
+   *  (today's geometry, byte-identical). */
+  extraOf?: (s: ReportSignature, slotW: number) => SignatureExtra,
 ): SignatureBlockLayout {
   const list = presentSignatures(sigs);
   const perRow = signaturesPerRow(usableW);
@@ -112,8 +122,15 @@ export function layoutSignatureBlock(
     const row = list.slice(i, i + k);
     i += k;
     const xs = signatureCentres(k, left, usableW, slotW);
-    const height = signatureRowHeight(row);
-    rows.push({ top: y, height, slots: row.map((sig, j) => ({ sig, cx: xs[j] })) });
+    const extra: SignatureExtra = { name: 0, title: 0, reg: 0 };
+    if (extraOf) {
+      for (const s of row) {
+        const e = extraOf(s, slotW);
+        extra.name = Math.max(extra.name, e.name); extra.title = Math.max(extra.title, e.title); extra.reg = Math.max(extra.reg, e.reg);
+      }
+    }
+    const height = signatureRowHeight(row) + extra.name + extra.title + extra.reg;
+    rows.push({ top: y, height, slots: row.map((sig, j) => ({ sig, cx: xs[j] })), extra });
     y += height;
   }
   return { rows, height: y - top, slotW };

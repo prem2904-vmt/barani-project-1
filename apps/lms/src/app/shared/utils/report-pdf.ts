@@ -27,6 +27,9 @@ import {
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
   readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption, footerImageLift } from './report-header-layout';
 import { AgeStyle, formatAge } from './patient-age';
+import { stripPair, stripText, stripTextHeight, type StripEnv } from './report-patient-strip';
+import { fitText } from './report-fit';
+import { autofitColumns } from './report-autofit-columns';
 import { DEFAULT_REPORT_STYLE, isDefaultReportStyle, readReportStyle, reportEngineStamp, type ReportStyle } from './report-style';
 import { CLASSIC_THEME, ReportTypeTheme, TypeEl, TypeWeight, reportTypeTheme, tokenSize } from './report-theme';
 import { SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './report-fonts';
@@ -682,6 +685,22 @@ function drawCustomPatientFields(doc: jsPDF, snap: ReportSnapshot, startY: numbe
     .filter(r => r.value != null && String(r.value).trim() !== '');
   if (!rows.length) return startY;
 
+  if (STYLE.fit.enabled) {
+    // Measured: a long value wraps inside its half of the row and the next row moves down with it.
+    const env = stripEnv(doc);
+    const half = (A4.w - 2 * MARGIN_X) / 2;
+    let fy = startY + 12;
+    for (let i = 0; i < rows.length; i += 2) {
+      let last = fy;
+      for (let j = 0; j < 2 && i + j < rows.length; j++) {
+        const r = rows[i + j];
+        last = Math.max(last, stripPair(env, `${r.title}: `, String(r.value), MARGIN_X + j * half, fy, half - 12,
+          'customFieldLabel', 'customFieldValue', 0, { force: true, labelColor: BLACK, valueColor: TEXT_DIM }));
+      }
+      fy = i + 2 < rows.length ? last + 13 : last;
+    }
+    return fy + 4;
+  }
   let y = startY + 12;
   const colW = (A4.w - 2 * MARGIN_X) / 2;
   rows.forEach((r, i) => {
@@ -812,6 +831,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // The Modern theme's Source Sans 3 — when not loaded (preloadReportImages
   // loads it), the theme's sizes print in Helvetica rather than failing.
   EMBEDDED = !!TYPE.embedded && installReportFonts(doc);
+  FIT_DOC = doc;
   // Safety net (RCA 2026-09-27): a standalone test with values whose layout
   // has no results table gets the default one — every caller (report viewer,
   // queue, public link, test-editor live preview) prints the RESULT, never a
@@ -1794,6 +1814,11 @@ function computeReportLayout(
   // A flowing theme (Modern): the accent bar and the patient block clear the
   // tallest letterhead text, as in an edited layout (see ReportTypeTheme).
   const flow = active || TYPE.flowHeader;
+  // Text fitting on a PINNED (non-flowing) letterhead: a lab name / address that
+  // does not fit wraps, and everything under it (the accent bar, the body) moves
+  // down by the lines it gained. Zero when nothing wrapped → identical paper.
+  let fitShift = 0;
+  const fitOn = STYLE.fit.enabled && !flow;
   const ov = (id: string): ItemOverride => cfg?.items[id] ?? {};
   const items: Resolved[] = [];
   const add = (s: Seed): Resolved => {
@@ -1817,7 +1842,7 @@ function computeReportLayout(
   const fitName = (el: 'labName' | 'labNameMinimal', text: string, maxW: number, canWrap = true):
       { size: number; wrapW?: number; extra: number } => {
     let size = tsz(el);
-    if (!TYPE.flowHeader || ov('name').size !== undefined) return { size, extra: 0 };
+    if (!(TYPE.flowHeader || STYLE.fit.enabled) || ov('name').size !== undefined) return { size, extra: 0 };
     setFace(doc, twt(el));
     doc.setFontSize(size);
     const floor = canWrap ? 16 : 11;
@@ -1837,16 +1862,29 @@ function computeReportLayout(
   const fullName = (practice.name ?? 'Prefrontal Pathology Lab').toUpperCase();
   const rightX = A4.w - MARGIN_X;
   const val = (f: HeaderField) => practice[f] ?? '';
+  const wrapIf = (w: number | undefined): { wrapDefault?: number; expectWrap?: boolean } => (w == null ? {} : { wrapDefault: w, expectWrap: true });
   const nablSeed = (): Seed | null => theme.nablAccredited ? {
     id: 'nabl', kind: 'nabl', label: 'NABL badge', x: rightX - 30, y: LH_TOP - 2, align: 'right',
     defX: w => rightX - w, w: 30, h: 30, url: theme.nablLogoUrl || null, sub: theme.nablNumber || undefined,
   } : null;
+  /** Text fitting, pinned letterhead: the width a long single line wraps to (and the
+   *  lines it gained, added to `fitShift`), or undefined when it already fits. */
+  const fitWrapW = (text: string, size: number, el: TypeEl, align: Align, x: number): number | undefined => {
+    setFace(doc, twt(el)); doc.setFontSize(size);
+    // (The NABL badge sits top-right: a long contact line stops short of it.)
+    const avail = (align === 'center' ? A4.w - 2 * MARGIN_X : align === 'right' ? x - MARGIN_X : A4.w - MARGIN_X - x)
+      - (theme.nablAccredited && align !== 'center' ? nablW : 0);
+    if (doc.getTextWidth(text) <= avail) return undefined;
+    fitShift += ((doc.splitTextToSize(text, avail) as string[]).length - 1) * size * 1.15;
+    return avail;
+  };
   const joined = (id: string, def: HeaderField[], x: number, y: number, align: Align, size = tsz('labContactLine'),
                   wrapDefault?: number): void => {
     const fields = ov(id).fields ?? def;
     const text = fields.map(val).filter(Boolean).join('  ·  ');
     if (!text) return;
     const label = fields.filter(f => val(f)).map(f => FIELD_LABEL[f]).join(' · ');
+    if (fitOn && wrapDefault == null) wrapDefault = fitWrapW(text, size, 'labContactLine', align, x);
     add({ id, kind: 'text', label, text, fields, x, y, align, style: twt('labContactLine') as Seed['style'], size, color: TEXT_DIM, tone: 'plain',
           wrapDefault, expectWrap: wrapDefault != null });
   };
@@ -1856,7 +1894,7 @@ function computeReportLayout(
     // address, Centered's contact lines) instead of striking through it.
     // Text the lab placed BELOW the bar's spot stays below it (dragging a
     // line under the bar is allowed); text above it pushes the bar down.
-    let y = LH_TOP + 54;
+    let y = LH_TOP + 54 + fitShift;
     if (flow) {
       const texts = items
         .filter(i => i.kind === 'text' && !i.hidden)
@@ -1883,6 +1921,7 @@ function computeReportLayout(
     const nm = fitName('labName', fullName, A4.w - 2 * MARGIN_X - 2 * nablW);
     // (+4: air between the logo and a taller name's cap line.)
     const g = nameGrow(nm.size, 18 * fs) + nm.extra + (TYPE.flowHeader ? 4 : 0);
+    if (fitOn) fitShift += nm.extra;
     add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: A4.w / 2, y: LH_TOP + lh + 14 + g - nm.extra, align: 'center',
           style: tstyle('labName'), size: nm.size, color: BLACK, tone: 'plain', wrapDefault: nm.wrapW, expectWrap: !!nm.wrapW });
     add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x: A4.w / 2, y: LH_TOP + lh + 28 + g, align: 'center',
@@ -1891,7 +1930,8 @@ function computeReportLayout(
     joined('contact', ['phone', 'email', 'website'], A4.w / 2, LH_TOP + lh + 40 + g, 'center');
     if (practice.address) add({ id: 'address', kind: 'text', label: 'Address', text: practice.address, x: A4.w / 2,
           y: LH_TOP + lh + 50 + g + lead('labAddress', 8 * fs), align: 'center', style: tstyle('labAddress'), size: tsz('labAddress'),
-          color: TEXT_DIM, tone: 'plain' });
+          color: TEXT_DIM, tone: 'plain',
+          ...(fitOn ? wrapIf(fitWrapW(practice.address, tsz('labAddress'), 'labAddress', 'center', A4.w / 2)) : {}) });
     pill(bar());
   } else if (preset === 'banner') {
     const n = nablSeed();
@@ -1918,6 +1958,7 @@ function computeReportLayout(
     const nm = fitName('labName', fullName,
       (lp === 'center' ? A4.w - 2 * MARGIN_X - 2 * nablW : A4.w - MARGIN_X - wmX - nablW), !bandOn);
     const g = nameGrow(nm.size, 18 * fs);
+    if (fitOn) fitShift += nm.extra;
     const nameY = bandOn ? 24 + g / 2 : lp === 'center' ? LH_TOP + logo.defBox.h + 14 + g : LH_TOP + 18 + g;
     const tagY = bandOn ? 40 + g / 2 : nameY + 14 + nm.extra;
     const contactY = bandOn ? bh + 10 + lead('labContactLine', 8 * fs)
@@ -1937,6 +1978,7 @@ function computeReportLayout(
     const x = align === 'center' ? A4.w / 2 : align === 'right' ? A4.w - MARGIN_X : MARGIN_X;
     const nm = fitName('labNameMinimal', fullName, A4.w - 2 * MARGIN_X - (align === 'center' ? 2 * nablW : nablW));
     const g = nameGrow(nm.size, 16 * fs) + nm.extra;
+    if (fitOn) fitShift += nm.extra;
     add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x, y: LH_TOP + 14 + g - nm.extra, align,
           style: tstyle('labNameMinimal'), size: nm.size, color: BLACK, tone: 'plain', wrapDefault: nm.wrapW, expectWrap: !!nm.wrapW });
     add({ id: 'tagline', kind: 'text', label: 'Tagline', text: theme.tagline, x, y: LH_TOP + 26 + g, align,
@@ -1959,6 +2001,7 @@ function computeReportLayout(
     const nm = fitName('labName', fullName, contactRight - (contactW ? contactW + 14 : 0) - wx);
     const g0 = nameGrow(nm.size, 18 * fs);
     const g = g0 + nm.extra;
+    if (fitOn) fitShift += nm.extra;
     const wy = LH_TOP + 18 + g0;
     // A wrapped name prints in one ink (the two-tone split is a one-line look).
     add({ id: 'name', kind: 'text', label: 'Lab name', text: fullName, x: wx, y: wy, align: 'left',
@@ -1976,7 +2019,8 @@ function computeReportLayout(
           align: 'right', style: tstyle('labContact'), size: tsz('labContact'), color: BLACK, tone: 'plain' });
     if (practice.address) add({ id: 'address', kind: 'text', label: 'Address', text: practice.address, x: MARGIN_X,
           y: LH_TOP + 46 + g + lead('labAddress', 8 * fs), align: 'left', style: tstyle('labAddress'), size: tsz('labAddress'),
-          color: TEXT_DIM, tone: 'plain' });
+          color: TEXT_DIM, tone: 'plain',
+          ...(fitOn ? wrapIf(fitWrapW(practice.address, tsz('labAddress'), 'labAddress', 'left', MARGIN_X)) : {}) });
     pill(bar());
   }
 
@@ -2023,7 +2067,9 @@ function computeReportLayout(
   const headerBottom = Math.max(LH_TOP, ...header.map(i => i.box.y + i.box.h));
   const legacyTop = LH_TOP + 70;
   const bodyTopAuto = !cfg || cfg.bodyTop == null;
-  const bodyTop = !flow ? legacyTop
+  // Text fitting on a pinned letterhead: the body also clears whatever the header actually drew
+  // (the Centered style's contact + address lines run past the classic 70 pt reserve).
+  const bodyTop = !flow ? (STYLE.fit.enabled ? Math.max(legacyTop + fitShift, headerBottom + 6) : legacyTop)
     : cfg?.bodyTop != null ? cfg.bodyTop * MM
     : Math.max(legacyTop, headerBottom + BODY_GAP);
   const lp = tpl?.letterpadMode
@@ -2254,20 +2300,28 @@ function drawPatientBlockThreeCol(
   report: ReportPdfInput['report']
 ): number {
   const top = MARGIN_TOP + HEADER_RESERVE;
-  const blockH = 80;
+  const fit = STYLE.fit.enabled;
+  const env = fit ? stripEnv(doc) : null;
   const w = A4.w - 2 * MARGIN_X;
   const col1W = w * 0.36;
   const col2W = w * 0.36;
   const col3W = w * 0.28;
 
-  doc.setDrawColor(HAIR);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN_X, top, A4.w - MARGIN_X, top);
-  doc.line(MARGIN_X, top + blockH, A4.w - MARGIN_X, top + blockH);
+  // The frame + separators. Text fitting off: drawn first at the fixed 80 pt,
+  // as always. On: drawn AFTER the cells, at the height they measured to.
+  const frame = (blockH: number) => {
+    doc.setDrawColor(HAIR);
+    doc.setLineWidth(0.5);
+    doc.line(MARGIN_X, top, A4.w - MARGIN_X, top);
+    doc.line(MARGIN_X, top + blockH, A4.w - MARGIN_X, top + blockH);
 
-  // Vertical separators between the three columns
-  doc.line(MARGIN_X + col1W, top + 6, MARGIN_X + col1W, top + blockH - 6);
-  doc.line(MARGIN_X + col1W + col2W, top + 6, MARGIN_X + col1W + col2W, top + blockH - 6);
+    // Vertical separators between the three columns
+    doc.line(MARGIN_X + col1W, top + 6, MARGIN_X + col1W, top + blockH - 6);
+    doc.line(MARGIN_X + col1W + col2W, top + 6, MARGIN_X + col1W + col2W, top + blockH - 6);
+  };
+  if (!fit) frame(80);
+  // Baseline of the last line each text column drew (fit mode sizes the block from them).
+  let lastBase1 = top + 18, lastBase2 = top + 18;
 
   // ── Col 1 — Patient identity ──
   const x1 = MARGIN_X + 10;
@@ -2276,23 +2330,30 @@ function drawPatientBlockThreeCol(
   // separator into the Specimen(s) column (was overlapping at 13pt).
   const patientName = snap.patient?.displayName ?? '—';
   const nameMaxW = col1W - 16;
-  let nameSize = typeset(doc, 'patientName');
-  while (nameSize > 8 && doc.getTextWidth(patientName) > nameMaxW) { nameSize -= 0.5; doc.setFontSize(nameSize); }
-  doc.setTextColor(BLACK);
-  doc.text(patientName, x1, y);
-  y += 16;
+  if (env) {
+    // Measured: wraps to the lab's line limit, then shrinks to its floor, then grows the block.
+    doc.setTextColor(BLACK);
+    y = stripText(env, 'patientName', patientName, x1, y, nameMaxW, 16);
+    lastBase1 = y - 16;
+  } else {
+    let nameSize = typeset(doc, 'patientName');
+    while (nameSize > 8 && doc.getTextWidth(patientName) > nameMaxW) { nameSize -= 0.5; doc.setFontSize(nameSize); }
+    doc.setTextColor(BLACK);
+    doc.text(patientName, x1, y);
+    y += 16;
+  }
   doc.setTextColor(BLACK);
   if (snapAge(snap, 'Years')) {
-    drawPair(doc, 'Age : ', snapAge(snap, 'Years'), x1, y, 'demoLabel', 'demoValue');
-    y += 12;
+    y = pairStep(doc, 'Age : ', snapAge(snap, 'Years'), x1, y, nameMaxW, 'demoLabel', 'demoValue', 12);
+    lastBase1 = y - 12;
   }
   if (snap.patient?.sex) {
-    drawPair(doc, 'Sex : ', snap.patient.sex, x1, y, 'demoLabel', 'demoValue');
-    y += 12;
+    y = pairStep(doc, 'Sex : ', snap.patient.sex, x1, y, nameMaxW, 'demoLabel', 'demoValue', 12);
+    lastBase1 = y - 12;
   }
   const mrn = (snap.patient?.mrn ?? '').trim();
   if (mrn) {
-    drawPair(doc, 'MRN : ', mrn, x1, y, 'mrnLabel', 'mrnValue');
+    lastBase1 = pairStep(doc, 'MRN : ', mrn, x1, y, nameMaxW, 'mrnLabel', 'mrnValue', 0);
   }
 
   // ── Col 2 — Specimens collected + Ref doctor ──
@@ -2318,19 +2379,25 @@ function drawPatientBlockThreeCol(
     const text = specimens.join(', ');
     const lines = doc.splitTextToSize(text, col2W - 20);
     doc.text(lines, x2, y);
+    lastBase2 = y + (lines.length - 1) * 11;
     y += lines.length * 11 + 6;
   } else if (snap.patient?.phone) {
-    drawPair(doc, 'Phone: ', snap.patient.phone, x2, y, 'demoLabel', 'demoValue');
-    y += 14;
+    y = pairStep(doc, 'Phone: ', snap.patient.phone, x2, y, col2W - 20, 'demoLabel', 'demoValue', 14);
+    lastBase2 = y - 14;
   }
 
   if (snap.order?.refDoctorName) {
-    typeset(doc, 'demoLabel');
-    doc.setTextColor(BLACK);
-    doc.text('Ref. By: ', x2, y);
-    const refW = doc.getTextWidth('Ref. By: ');
-    typeset(doc, 'demoValue');
-    doc.text(snap.order.refDoctorName, x2 + refW, y);
+    if (env) {
+      doc.setTextColor(BLACK);
+      lastBase2 = stripPair(env, 'Ref. By: ', snap.order.refDoctorName, x2, y, col2W - 20, 'demoLabel', 'demoValue', 0, { force: true });
+    } else {
+      typeset(doc, 'demoLabel');
+      doc.setTextColor(BLACK);
+      doc.text('Ref. By: ', x2, y);
+      const refW = doc.getTextWidth('Ref. By: ');
+      typeset(doc, 'demoValue');
+      doc.text(snap.order.refDoctorName, x2 + refW, y);
+    }
   }
 
   // ── Col 3 — Sample IDs + registration/collection/report times ──
@@ -2361,6 +2428,10 @@ function drawPatientBlockThreeCol(
   if (theme.showCollected)  drawTimeLine('Collected on: ',  formatShort(snap.order?.createdAt));
   if (theme.showReported)   drawTimeLine('Reported on: ',   formatShort(report.createdAt));
 
+  if (!fit) return top + 80;
+  // The classic block is 80 pt; it only ever GROWS (20 pt under the last text baseline).
+  const blockH = Math.max(80, lastBase1 - top + 20, lastBase2 - top + 20);
+  frame(blockH);
   return top + blockH;
 }
 
@@ -2418,10 +2489,14 @@ function drawPatientBlockColumns(
  *  how "Ref. By:" already prints. Skips the row entirely when there's no value
  *  so an unset field costs no vertical space. */
 function drawPatientLabelled(
-  doc: jsPDF, label: string, value: string | null | undefined, x: number, y: number
+  doc: jsPDF, label: string, value: string | null | undefined, x: number, y: number, colW?: number
 ): number {
   const v = (value ?? '').trim();
   if (!v) return y;
+  if (STYLE.fit.enabled && colW) {
+    doc.setTextColor(BLACK);
+    return stripPair(stripEnv(doc), label, v, x, y, colW, 'demoLabel', 'demoValue', 12, { force: true });
+  }
   typeset(doc, 'demoLabel'); doc.setTextColor(BLACK);
   doc.text(label, x, y);
   const lw = doc.getTextWidth(label);
@@ -2442,6 +2517,22 @@ function drawPair(doc: jsPDF, label: string, value: string, x: number, y: number
   doc.text(value, x + lw, y);
 }
 
+/** The strip primitives' view of this render (report-patient-strip.ts). */
+function stripEnv(doc: jsPDF): StripEnv {
+  return { doc, minPt: STYLE.fit.minPt, maxLines: STYLE.fit.maxLines, splitLabels: TYPE.splitLabels, font: el => typeset(doc, el) };
+}
+
+/** A pair + the next baseline. Text fitting off: drawPair and a fixed step,
+ *  exactly as before. On: the pair is measured and wraps / shrinks to the
+ *  column, and the step grows with it. */
+function pairStep(
+  doc: jsPDF, label: string, value: string, x: number, y: number, colW: number,
+  labelEl: TypeEl, valueEl: TypeEl, step: number,
+): number {
+  if (!STYLE.fit.enabled) { drawPair(doc, label, value, x, y, labelEl, valueEl); return y + step; }
+  return stripPair(stripEnv(doc), label, value, x, y, colW, labelEl, valueEl, step);
+}
+
 function drawPatientItem(
   doc: jsPDF, key: string, x: number, colW: number, y: number,
   snap: ReportSnapshot, report: ReportPdfInput['report']
@@ -2449,35 +2540,40 @@ function drawPatientItem(
   switch (key) {
     case 'name':
       typeset(doc, 'patientNameColumn'); doc.setTextColor(BLACK);
+      if (STYLE.fit.enabled) return stripText(stripEnv(doc), 'patientNameColumn', snap.patient?.displayName ?? '—', x, y, colW, 16);
       doc.text(snap.patient?.displayName ?? '—', x, y);
       return y + 16;
     case 'age':
       if (!snapAge(snap, 'Years')) return y;
       doc.setTextColor(BLACK);
-      drawPair(doc, 'Age : ', snapAge(snap, 'Years'), x, y, 'demoLabel', 'demoValue'); return y + 12;
+      return pairStep(doc, 'Age : ', snapAge(snap, 'Years'), x, y, colW, 'demoLabel', 'demoValue', 12);
     case 'sex':
       if (!snap.patient?.sex) return y;
       doc.setTextColor(BLACK);
-      drawPair(doc, 'Sex : ', snap.patient.sex, x, y, 'demoLabel', 'demoValue'); return y + 12;
+      return pairStep(doc, 'Sex : ', snap.patient.sex, x, y, colW, 'demoLabel', 'demoValue', 12);
     case 'mrn': {
       const mrn = (snap.patient?.mrn ?? '').trim(); if (!mrn) return y;
       doc.setTextColor(BLACK);
-      drawPair(doc, 'MRN : ', mrn, x, y, 'mrnLabel', 'mrnValue'); return y + 12;
+      return pairStep(doc, 'MRN : ', mrn, x, y, colW, 'mrnLabel', 'mrnValue', 12);
     }
     case 'phone':
       if (!snap.patient?.phone) return y;
       doc.setTextColor(BLACK);
-      drawPair(doc, 'Phone : ', snap.patient.phone, x, y, 'demoLabel', 'demoValue'); return y + 12;
+      return pairStep(doc, 'Phone : ', snap.patient.phone, x, y, colW, 'demoLabel', 'demoValue', 12);
     case 'orderid': {
       // The human order number (LAB-2608-000049) — not a slice of the GUID,
       // which is what staff were being asked to read out loud.
       const oid = snap.order?.orderNumber?.trim() || (snap.order?.id ?? '').slice(0, 8);
       if (!oid) return y;
       doc.setTextColor(BLACK);
-      drawPair(doc, 'Order : ', oid, x, y, 'mrnLabel', 'mrnValue'); return y + 12;
+      return pairStep(doc, 'Order : ', oid, x, y, colW, 'mrnLabel', 'mrnValue', 12);
     }
     case 'refdoctor': {
       if (!snap.order?.refDoctorName) return y;
+      if (STYLE.fit.enabled) {
+        doc.setTextColor(BLACK);
+        return stripPair(stripEnv(doc), 'Ref. By: ', snap.order.refDoctorName, x, y, colW, 'demoLabel', 'demoValue', 12, { force: true });
+      }
       typeset(doc, 'demoLabel'); doc.setTextColor(BLACK);
       doc.text('Ref. By: ', x, y);
       const rw = doc.getTextWidth('Ref. By: ');
@@ -2485,13 +2581,13 @@ function drawPatientItem(
       return y + 12;
     }
     case 'refhospital':
-      return drawPatientLabelled(doc, 'Ref. Hospital: ', snap.order?.refHospitalName, x, y);
+      return drawPatientLabelled(doc, 'Ref. Hospital: ', snap.order?.refHospitalName, x, y, colW);
     case 'collectedby':
-      return drawPatientLabelled(doc, 'Collected by: ', snap.order?.collectedBy, x, y);
+      return drawPatientLabelled(doc, 'Collected by: ', snap.order?.collectedBy, x, y, colW);
     case 'department':
-      return drawPatientLabelled(doc, 'Department: ', snap.order?.departments, x, y);
+      return drawPatientLabelled(doc, 'Department: ', snap.order?.departments, x, y, colW);
     case 'branch':
-      return drawPatientLabelled(doc, 'Centre: ', snap.order?.branchName, x, y);
+      return drawPatientLabelled(doc, 'Centre: ', snap.order?.branchName, x, y, colW);
     case 'specimen': {
       const specimens = Array.from(new Set((snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(isConcreteSpecimen)));
       typeset(doc, 'patientCaptionColumn'); doc.setTextColor(BLUE);
@@ -2521,6 +2617,10 @@ function drawPatientItem(
       const val = parsePatientAttributes(snap)[key];
       if (val == null || String(val).trim() === '') return y;
       const label = `${fld?.title ?? key}: `;
+      if (STYLE.fit.enabled) {
+        return stripPair(stripEnv(doc), label, String(val), x, y, colW, 'fieldLabel', 'fieldValue', 12,
+          { force: true, labelColor: BLACK, valueColor: TEXT_DIM });
+      }
       typeset(doc, 'fieldLabel'); doc.setTextColor(BLACK);
       doc.text(label, x, y);
       typeset(doc, 'fieldValue'); doc.setTextColor(TEXT_DIM);
@@ -2585,7 +2685,6 @@ function drawPatientBlockFourCol(
   report: ReportPdfInput['report']
 ): number {
   const top = MARGIN_TOP + HEADER_RESERVE;
-  const blockH = 76;
   const w = A4.w - 2 * MARGIN_X;
   const colW = w / 4;
   const mrn = (snap.patient?.mrn ?? '').trim();
@@ -2596,11 +2695,6 @@ function drawPatientBlockFourCol(
   const specimens = Array.from(new Set(
     (snap.tests ?? []).map(t => (t.sampleType ?? '').trim()).filter(isConcreteSpecimen)
   )).join(', ');
-
-  doc.setFillColor('#f8fafc');
-  doc.setDrawColor(HAIR);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(MARGIN_X, top, w, blockH, 4, 4, 'FD');
 
   const cells: { label: string; value: string }[][] = [
     [
@@ -2617,17 +2711,40 @@ function drawPatientBlockFourCol(
     ],
   ];
 
+  // Row heights. Classic: two fixed 38 pt rows. Text fitting on: a row is as tall as its
+  // tallest value (a wrapped doctor or patient name), never shorter than 38 pt.
+  const fit = STYLE.fit.enabled;
+  const env = fit ? stripEnv(doc) : null;
+  const rowH = [38, 38];
+  if (env) {
+    for (let r = 0; r < 2; r++) {
+      let extra = 0;
+      for (let c = 0; c < 4; c++) {
+        const m = stripTextHeight(env, 'gridValue', cells[r][c].value, colW - 20);
+        extra = Math.max(extra, (m.lines - 1) * m.lineH);
+      }
+      rowH[r] = 38 + extra;
+    }
+  }
+  const blockH = rowH[0] + rowH[1];
+
+  doc.setFillColor('#f8fafc');
+  doc.setDrawColor(HAIR);
+  doc.setLineWidth(0.5);
+  doc.roundedRect(MARGIN_X, top, w, blockH, 4, 4, 'FD');
+
   for (let r = 0; r < 2; r++) {
     for (let c = 0; c < 4; c++) {
       const x = MARGIN_X + c * colW + 10;
-      const y = top + r * (blockH / 2) + 13;
+      const y = top + (r === 0 ? 0 : rowH[0]) + 13;
       typeset(doc, 'gridLabel');
       doc.setTextColor(TEXT_DIM);
       doc.text(cells[r][c].label, x, y);
       typeset(doc, 'gridValue');
       doc.setTextColor(TEXT);
-      const fit = doc.splitTextToSize(cells[r][c].value, colW - 20)[0] ?? cells[r][c].value;
-      doc.text(fit, x, y + 12);
+      if (env) { stripText(env, 'gridValue', cells[r][c].value, x, y + 12, colW - 20, 0); continue; }
+      const first = doc.splitTextToSize(cells[r][c].value, colW - 20)[0] ?? cells[r][c].value;
+      doc.text(first, x, y + 12);
     }
   }
   // Faint vertical separators between cells
@@ -2677,12 +2794,14 @@ function drawPatientBlockStacked(
 
   let y = top + 16;
   const labelW = 110;
+  const stackEnv = STYLE.fit.enabled ? stripEnv(doc) : null;
   rows.forEach(row => {
     typeset(doc, 'stackLabel');
     doc.setTextColor(TEXT_DIM);
     doc.text(`${row.label} :`, MARGIN_X, y);
     typeset(doc, 'stackValue');
     doc.setTextColor(TEXT);
+    if (stackEnv) { y = stripText(stackEnv, 'stackValue', row.value, MARGIN_X + labelW, y, A4.w - 2 * MARGIN_X - labelW, 14); return; }
     doc.text(row.value, MARGIN_X + labelW, y);
     y += 14;
   });
@@ -3765,7 +3884,38 @@ export function footerStripBase(layout: Pick<ReportLayoutResult, 'footerLift'> |
 /** Height (pt) of the sign-off block the PRESENT signatories need — 0 when
  *  there are none, so nothing is reserved. See report-signatures.ts. */
 function signatureBlockHeight(sigs: ReportSignature[] | null | undefined): number {
-  return layoutSignatureBlock(sigs, MARGIN_X, A4.w - 2 * MARGIN_X).height;
+  return layoutSignatureBlock(sigs, MARGIN_X, A4.w - 2 * MARGIN_X, 0, sigExtraFn()).height;
+}
+
+/** The document of the render in progress — text fitting measures with it
+ *  (set in buildReportPdfWithLayout once fonts are installed). */
+let FIT_DOC: jsPDF | null = null;
+
+/** One signatory's lines, fitted to a slot: name, "(title)" and "Reg. …" each
+ *  wrap to the lab's line limit, then shrink to its floor, then grow. */
+function fitSignatory(doc: jsPDF, s: ReportSignature, textW: number) {
+  const one = (el: TypeEl, text: string) => {
+    const start = typeset(doc, el);
+    return fitText(doc, text, { maxW: textW, maxLines: STYLE.fit.maxLines, startPt: start, minPt: STYLE.fit.minPt, policy: 'clinical' });
+  };
+  const name = (s.name ?? '').trim(), title = (s.title ?? '').trim(), reg = (s.regNo ?? '').trim();
+  return {
+    name: name ? one('signatureName', name) : null,
+    title: title ? one('signatureTitle', `(${title})`) : null,
+    reg: reg ? one('signatureReg', `Reg. ${reg}`) : null,
+  };
+}
+
+/** The extra-height callback for layoutSignatureBlock — undefined (today's
+ *  one-line-each geometry) unless text fitting is on. */
+function sigExtraFn(): ((s: ReportSignature, slotW: number) => { name: number; title: number; reg: number }) | undefined {
+  if (!STYLE.fit.enabled || !FIT_DOC) return undefined;
+  const doc = FIT_DOC;
+  const extra = (r: { lines: string[]; lineH: number } | null) => (r ? (r.lines.length - 1) * r.lineH : 0);
+  return (s, slotW) => {
+    const f = fitSignatory(doc, s, slotW - 6);
+    return { name: extra(f.name), title: extra(f.title), reg: extra(f.reg) };
+  };
 }
 
 /** Draw `text` centred on `cx`, shrinking the font (down to 6.5pt) until it
@@ -3793,17 +3943,19 @@ function drawInlineSignatures(
 ): number {
   const left = region ? region.x : MARGIN_X;
   const usable = region ? region.w : A4.w - 2 * MARGIN_X;
-  const probe = layoutSignatureBlock(sigs, left, usable, 0);
+  // Text fitting never applies inside a Custom-layout box (its geometry is the lab's own).
+  const extraOf = region ? undefined : sigExtraFn();
+  const probe = layoutSignatureBlock(sigs, left, usable, 0, extraOf);
   if (probe.rows.length === 0) return startY;
   let top = startY;
   if (!region && top + probe.height > A4.h - MARGIN_BOTTOM) { top = newPage(doc, practice) + 6; }
-  const block = layoutSignatureBlock(sigs, left, usable, top);
+  const block = layoutSignatureBlock(sigs, left, usable, top, extraOf);
   const textW = block.slotW - 6;
   for (const row of block.rows) {
     const baseY = row.top + SIG_ROW.base;
     const hasTitle = row.slots.some(s => !!(s.sig.title ?? '').trim());
-    const titleY = baseY + SIG_ROW.name + SIG_ROW.title;
-    const regY = baseY + SIG_ROW.name + (hasTitle ? SIG_ROW.title : 0) + SIG_ROW.reg;
+    const titleY = baseY + SIG_ROW.name + row.extra.name + SIG_ROW.title;
+    const regY = baseY + SIG_ROW.name + row.extra.name + (hasTitle ? SIG_ROW.title + row.extra.title : 0) + SIG_ROW.reg;
     for (const { sig: s, cx: px } of row.slots) {
       const sigSrc = s.signatureUrl
         ? (s.signatureUrl.startsWith('data:') ? s.signatureUrl : IMG_CACHE[s.signatureUrl])
@@ -3813,6 +3965,19 @@ function drawInlineSignatures(
         catch { drawSigScribble(doc, px, baseY + 4); }
       } else {
         drawSigScribble(doc, px, baseY + 4);
+      }
+      if (extraOf) {
+        // Text fitting on: each line wraps / shrinks to the slot and is drawn exactly as measured.
+        const f = fitSignatory(doc, s, textW);
+        const centred = (r: ReturnType<typeof fitText> | null, el: TypeEl, color: string, y0: number) => {
+          if (!r) return;
+          typeset(doc, el); doc.setFontSize(r.pt); doc.setTextColor(color);
+          r.lines.forEach((l, i) => doc.text(l, px, y0 + i * r.lineH, { align: 'center' }));
+        };
+        centred(f.name, 'signatureName', BLACK, baseY + SIG_ROW.name);
+        centred(f.title, 'signatureTitle', TEXT_DIM, titleY);
+        centred(f.reg, 'signatureReg', TEXT_DIM, regY);
+        continue;
       }
       if ((s.name ?? '').trim()) {
         doc.setTextColor(BLACK);
@@ -4064,7 +4229,7 @@ function renderColumnarTable(
   const hasResultCol = vcols.some(c => c.hasResult);
   const hasMethodCol = vcols.some(c => c.members.some(m => m.type === 'method'));
   const totalWeight = vcols.reduce((s, c) => s + c.weight, 0) || 1;
-  const colWidths = vcols.map(c => (c.weight / totalWeight) * usable);
+  let colWidths = vcols.map(c => (c.weight / totalWeight) * usable);
   const COLSPAN = vcols.length;
   const resultColIdx = Math.max(0, vcols.findIndex(c => c.hasResult));
   // -1 when the layout has no reference column at all, which the hook treats
@@ -4350,6 +4515,38 @@ function renderColumnarTable(
   }
 
   const sentenceCells = new Map<number, SentenceCell>();
+
+  // Text fitting → "Auto-fit columns": a department with long parameter names gets a wider
+  // name column, and a result column never squeezes below its longest value. Each column's
+  // content range (longest word … longest line) is measured from the cells about to print.
+  if (STYLE.fit.enabled && STYLE.fit.autoColumns && !region && vcols.length > 1) {
+    const PAD = 14;
+    const specs = vcols.map((vc, i) => {
+      const el = columnElement(vc.members[0]);
+      let word = 0, line = 0;
+      const measure = (text: string, font: string, style: string, size: number) => {
+        doc.setFont(font, style); doc.setFontSize(size);
+        for (const ln of text.split('\n')) {
+          line = Math.max(line, doc.getTextWidth(ln));
+          for (const w of ln.split(/\s+/)) word = Math.max(word, doc.getTextWidth(w));
+        }
+      };
+      const base = cellType(el);
+      for (const row of body) {
+        if (row.length !== vcols.length) continue;                       // bands / sentences span every column
+        const c = row[i];
+        const st = (c.styles ?? {}) as { font?: string; fontStyle?: string; fontSize?: number };
+        measure(String(c.content ?? ''), st.font ?? base.font, st.fontStyle ?? base.fontStyle, st.fontSize ?? base.fontSize);
+      }
+      const hd = cellType('columnHead');
+      measure(vc.label, hd.font, hd.fontStyle, hd.fontSize);
+      const max = Math.min(line + PAD, usable * (vc.hasResult ? 0.34 : 0.8));
+      // The result column is held at its full content width: a value never wraps mid-number.
+      const min = vc.hasResult ? max : Math.min(word + PAD, max);
+      return { pref: (vc.weight / totalWeight) * usable, min, max };
+    });
+    colWidths = autofitColumns(specs, usable);
+  }
 
   // When the table spills onto further pages, stamp "<DEPT> — continued" above
   // the repeated column header — otherwise a reader on page 2 can't tell which

@@ -21,6 +21,8 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
+import { readReportStyle, writeReportStyle } from '../../../shared/utils/report-style';
+import { reportIssues, type ReportIssues } from '../../../shared/utils/report-issues';
 import { readReportTheme, REPORT_THEME_OPTIONS, ReportThemeId, writeReportTheme } from '../../../shared/utils/report-theme';
 import { SOURCE_SANS_DIR, SOURCE_SANS_FACES } from '../../../shared/utils/report-fonts';
 import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-strip-qr';
@@ -61,6 +63,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                           [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
+            @if (issues().count > 0) {
+              <button type="button" class="pf-rt-issues press" (click)="openIssues()"
+                      [attr.aria-label]="issuesLabel()" [title]="issuesTitle()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                <span class="pf-rt-issues__t">{{ issuesLabel() }}</span>
+              </button>
+            }
             <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite">
               @if (dirty()) {
                 <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Unsaved changes</span>
@@ -85,6 +94,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           <h1 class="pf-rt-title">Report designer</h1>
           <p class="pf-rt-sub">How every printed report looks — edit on the left, watch the page on the right.</p>
         </div>
+        @if (issues().count > 0) {
+          <button type="button" class="pf-rt-issues press" (click)="openIssues()"
+                  [attr.aria-label]="issuesLabel()" [title]="issuesTitle()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+            <span class="pf-rt-issues__t">{{ issuesLabel() }}</span>
+          </button>
+        }
         <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite">
           @if (dirty()) { <span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
         </span>
@@ -192,6 +208,58 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                   </div>
 
                 </div>
+                </div>
+
+
+                <div class="pf-rtb" id="pf-long-text">
+                  <h4 class="pf-rtb-h">Long text</h4>
+                  <p class="pf-rtb-s">A long patient, doctor or hospital name wraps onto a second line instead of running into the next field. If it is still too long it gets a little smaller, never below the size you choose. Names are never cut off. The block grows and the results move down to make room.</p>
+                  <div class="pf-sqr">
+                    <div class="pf-sqr__row">
+                      <span class="pf-sqr__ic" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+                      </span>
+                      <span class="pf-sqr__txt">
+                        <span class="pf-sqr__label">Fit long text</span>
+                        <span class="pf-sqr__desc">
+                          @if (fitOn()) { Long names wrap or shrink to fit. }
+                          @else if (issues().count > 0) { Off. With long names, {{ issues().count }} {{ issues().count === 1 ? 'place' : 'places' }} on your report can overlap. }
+                          @else { Off. Long names print as they always did. }
+                        </span>
+                      </span>
+                      <button type="button" class="pf-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="fitOn()"
+                              aria-label="Fit long text" (click)="setFit({ enabled: !fitOn() })">
+                        <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                      </button>
+                    </div>
+                    @if (fitOn()) {
+                      <div class="pf-sqr__row">
+                        <span class="pf-sqr__txt">
+                          <span class="pf-sqr__label">Smallest size</span>
+                          <span class="pf-sqr__desc">Text never goes below this.</span>
+                        </span>
+                        <div class="pf-lt-size">
+                          <pf-select [options]="$any(minPtOptions)" [value]="'' + reportStyle().fit.minPt"
+                                     (valueChange)="setMinPt($any($event))"></pf-select>
+                        </div>
+                      </div>
+                      <div class="pf-sqr__row">
+                        <span class="pf-sqr__txt">
+                          <span class="pf-sqr__label">Widen the name column</span>
+                          <span class="pf-sqr__desc">In the results table, give long test names more room and keep each result on one line.</span>
+                        </span>
+                        <button type="button" class="pf-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="reportStyle().fit.autoColumns"
+                                aria-label="Widen the name column" (click)="setFit({ autoColumns: !reportStyle().fit.autoColumns })">
+                          <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                  @if (issues().count > 0 && !fitOn()) {
+                    <ul class="pf-lt-issues" aria-label="Where long names overlap">
+                      @for (l of issues().lines; track l) { <li>{{ l }}</li> }
+                    </ul>
+                  }
                 </div>
 
                 <div class="pf-rtb">
@@ -858,6 +926,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     @media (max-width: 1180px) { .pf-rt-grid.pf-rt-grid--designer { grid-template-columns: minmax(0, 1fr); } }
     .pf-rt-designer { min-width: 0; min-height: 0; }
     @media (min-width: 901px) and (min-height: 560px) { .pf-rt-designer { height: 100%; } }
+    .pf-lt-size { flex: none; width: 120px; }
+    .pf-lt-issues { margin: 8px 0 0; padding: 0 0 0 18px; font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+    .pf-rt-issues { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--pf-radius-chip, 8px);
+      font-size: 12.5px; font-weight: 600; cursor: pointer;
+      background: var(--warning-bg); color: var(--warning-text); border: 1px solid var(--warning-border); }
+    .pf-rt-issues:focus-visible { outline: 2px solid var(--warning-text); outline-offset: 2px; }
+    @media (max-width: 640px) { .pf-rt-issues__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .pf-rt-issues { width: 34px; padding: 0; justify-content: center; } }
     .pf-rt-savestate { margin-right: 4px; }
     .pf-classic-only .pf-rt-savestate, .pf-rt-head .pf-rt-savestate { align-self: center; }
     @media (max-width: 640px) { .pf-rt-savestate__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
@@ -1099,6 +1174,32 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     });
   }
 
+  // ── Report style (report-style.ts) — text fitting, stored in the template metadata ──
+  readonly reportStyle = computed(() => readReportStyle(this.tpl()));
+  readonly fitOn = computed(() => this.reportStyle().fit.enabled);
+  readonly minPtOptions = [6, 6.5, 7, 7.5, 8].map(v => ({ value: '' + v, label: `${v} pt${v === 7 ? ' (usual)' : ''}` }));
+  setFit(p: { enabled?: boolean; minPt?: number; autoColumns?: boolean }) {
+    this.patch({ metadata: writeReportStyle(this.tpl(), { fit: p }) });
+  }
+  setMinPt(v: string) {
+    const n = parseFloat(v);
+    if (isFinite(n)) this.setFit({ minPt: n });
+  }
+  /** Would long names overlap on this template? Re-rendered with long sample names after each preview render. */
+  readonly issues = signal<ReportIssues>({ count: 0, lines: [] });
+  readonly issuesLabel = computed(() => {
+    const n = this.issues().count;
+    return `${n} ${n === 1 ? 'issue' : 'issues'}`;
+  });
+  readonly issuesTitle = computed(() => {
+    const i = this.issues();
+    return i.count ? `With long names: ${i.lines.join('; ')}${i.count > i.lines.length ? '…' : ''}. Open Patient strip to fix.` : '';
+  });
+  openIssues() {
+    this.setTab('patient');
+    setTimeout(() => document.getElementById('pf-long-text')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+  }
+
   // ── Report theme (report-theme.ts) — stored in the template metadata ──
   readonly reportThemeOptions = REPORT_THEME_OPTIONS;
   readonly reportTheme = computed<ReportThemeId>(() => readReportTheme(this.tpl()));
@@ -1306,6 +1407,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       const prev = this._previewUrl();
       if (prev) URL.revokeObjectURL(prev);
       const url = renderReportPdfBlobUrl({ ...baseInput, imageCache });
+      this.issues.set(reportIssues({ ...baseInput, imageCache }));
       this.imageCache.set(imageCache);
       this.rawPreviewUrl.set(url);
       // #view=FitH&toolbar=0 gives a clean top-fit preview in Chrome/FF.
