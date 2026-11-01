@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, Injector, OnInit, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Observable } from 'rxjs';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -6,6 +6,7 @@ import { CellKeyDownEvent, ColDef, FullWidthCellKeyDownEvent, GetRowIdParams, Gr
 import { ThemeService } from '../../../../core/services/theme.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { DialogService } from '../../../../core/services/dialog.service';
+import { BranchSwitchService } from '../../../../core/services/branch-switch.service';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { TmListFilter, TmProposalsService } from '../../../../core/services/tm-proposals.service';
 import { ApiError } from '../../../../shared/models/api-response.model';
@@ -138,6 +139,16 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
             </div>
           </div>
 
+          @if (branchTarget(); as bt) {
+            <div class="pf-tmp__banner pf-tmp__banner--warn" role="status" data-tmp-branch>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+              <div>
+                <p class="pf-tmp__banner-t">Suggested for {{ bt.name }}</p>
+                <p class="pf-tmp__banner-b">A test change is applied in the branch you are working in. Switch to {{ bt.name }} to approve it.</p>
+                <button type="button" class="pf-btn pf-btn--tertiary pf-tmp__switch press" [disabled]="busy()" (click)="switchToBranch()" data-tmp-switch>Switch to {{ bt.name }}</button>
+              </div>
+            </div>
+          }
           @if (p.status === 'stale') {
             <div class="pf-tmp__banner pf-tmp__banner--warn" role="status" data-tmp-stale>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
@@ -261,6 +272,7 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
     .pf-tmp__banner--warn > svg { color: var(--amber-text, #d97706); }
     .pf-tmp__banner--bad > svg { color: var(--red-text, #dc2626); }
     .pf-tmp__banner-t { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
+    .pf-tmp__switch { margin-top: 8px; }
     .pf-tmp__banner-b { margin: 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; }
     .pf-tmp__diffwrap { overflow-x: auto; }
     .pf-tmp__diff { width: 100%; border-collapse: collapse; font-size: 12.5px; }
@@ -305,6 +317,8 @@ export class PendingChangesPanelComponent implements OnInit {
   private readonly dialog = inject(DialogService);
   private readonly auth = inject(AuthService, { optional: true });
   private readonly destroyRef = inject(DestroyRef);
+  /** The branch switcher is looked up only when a switch is needed (it pulls in the router and the branch caches). */
+  private readonly injector = inject(Injector);
 
   /** Band search text (the host's band pill drives it). */
   readonly query = input<string>('');
@@ -340,6 +354,16 @@ export class PendingChangesPanelComponent implements OnInit {
   readonly detail = signal<TmProposal | null>(null);
   readonly detailLoading = signal(false);
   readonly sheetOpen = signal(false);
+  /** The branch a pending TEST edit was suggested for when it is not the one open now (and the person can go there).
+   *  Mirrors the server's wrong_branch rule: prices name their own branch row and are not affected. */
+  readonly branchTarget = computed<{ id: string; name: string } | null>(() => {
+    const p = this.detail();
+    if (!p || p.status !== 'pending' || !p.branchId || p.kind === 'price' || p.kind === 'offered') return null;
+    const a = this.auth;
+    if (!a || p.branchId === a.activeBranchId?.()) return null;
+    const b = a.user?.()?.branches?.find(x => x.id === p.branchId);
+    return b ? { id: b.id, name: b.name } : null;
+  });
   readonly busy = signal(false);
   readonly busyKey = signal<string | null>(null);
   private now = Date.now();
@@ -529,6 +553,7 @@ export class PendingChangesPanelComponent implements OnInit {
   async approve() {
     const p = this.detail();
     if (!p || this.busy() || p.status !== 'pending') return;
+    if (this.branchTarget()) { await this.askSwitchBranch(); return; }   // the server would refuse (wrong_branch): say it first
     let confirmClinical = false;
     if (tmNeedsClinicalConfirm(p)) {
       const reopen = this.hideSheetForDialog();
@@ -616,11 +641,40 @@ export class PendingChangesPanelComponent implements OnInit {
     });
   }
 
+  /** "Switch to <branch>": the existing in-app branch switch (veil, caches, guards), nothing else. */
+  async switchToBranch(): Promise<void> {
+    const t = this.branchTarget();
+    if (!t) return;
+    const ok = await this.injector.get(BranchSwitchService).switchTo(t.id);
+    if (!ok) this.toasts.error('Could not switch branch. Use the branch switcher at the top.');
+  }
+
+  private async askSwitchBranch(): Promise<void> {
+    const t = this.branchTarget();
+    if (!t) return;
+    const reopen = this.hideSheetForDialog();
+    const ok = await this.dialog.confirm({
+      title: `Switch to ${t.name}?`,
+      message: `This change was suggested for ${t.name}. A test change is applied in the branch you are working in, so switch there first, then approve it.`,
+      confirmLabel: `Switch to ${t.name}`,
+      cancelLabel: 'Stay here',
+      tone: 'primary',
+    });
+    reopen();
+    if (ok) await this.switchToBranch();
+  }
+
   /** A refused action: say why (server words), then re-read the change — it may be stale or failed now. */
   private failed(e: unknown, id: string) {
     this.busy.set(false); this.busyKey.set(null);
     const err = ApiError.from(e);
     if (err.code === 'changed_since_proposed') this.toasts.warning('This test changed after it was suggested. Compare the values and re-review it first.');
+    else if (err.code === 'wrong_branch') {
+      // The server refused because this lab acts in another branch: offer the switch (the row carries its branch);
+      // with no branch of the person's to go to, say the server's words.
+      if (this.branchTarget()) void this.askSwitchBranch();
+      else this.toasts.error(err.message);
+    }
     else this.toasts.error(err.message);
     this.reload(true, id);
   }

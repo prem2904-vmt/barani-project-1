@@ -235,9 +235,21 @@ export function normaliseRateCardSummary(raw: unknown): RateCardSummary | null {
   return {
     batchId: str(src['batchId'], 64), pages: num(src['pages']), pagesRead: num(src['pagesRead']), lines: num(src['lines']),
     priceSuggestions: price, newTestSuggestions: created, suggestions: num(src['suggestions']) || price + created,
-    alreadyCurrent: num(src['alreadyCurrent']), noPrice: num(src['noPrice']), unmatched, notes,
+    alreadyCurrent: num(src['alreadyCurrent']), noPrice: num(src['noPrice']), unmatched,
+    unmatchedTotal: Math.max(unmatched.length, num(src['unmatchedTotal'])), notes,
     provider: str(src['provider'], 20), model: str(src['model'], 80),
   };
+}
+
+/** "2 lines not added" - the heading over the list of lines the rate card read could not turn into a suggestion. */
+export function unmatchedHeading(s: Pick<RateCardSummary, 'unmatched' | 'unmatchedTotal'>): string {
+  const n = Math.max(s.unmatched.length, s.unmatchedTotal);
+  return `${n} line${n === 1 ? '' : 's'} not added`;
+}
+
+/** Lines the server counted but did not list (its list is capped). */
+export function unmatchedMore(s: Pick<RateCardSummary, 'unmatched' | 'unmatchedTotal'>): number {
+  return Math.max(0, s.unmatchedTotal - s.unmatched.length);
 }
 
 /** "3 prices and 1 new test" — the breakdown under the headline. */

@@ -104,6 +104,8 @@ export interface RateCardSummary {
   /** Matched lines with no price printed. */
   noPrice: number;
   unmatched: { n: number; text: string; reason: string }[];
+  /** All lines not added (the list above is capped by the server). */
+  unmatchedTotal: number;
   notes: string[];
   provider: string;
   model: string;

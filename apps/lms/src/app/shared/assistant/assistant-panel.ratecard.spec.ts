@@ -14,7 +14,7 @@ const flush = async () => { for (let i = 0; i < 6; i++) await new Promise((r) =>
 const BATCH = '3f2a9c1e-5b7d-4c8e-9a10-0123456789ab';
 const SUMMARY: RateCardSummary = {
   batchId: BATCH, pages: 2, pagesRead: 2, lines: 12, priceSuggestions: 3, newTestSuggestions: 1, suggestions: 4, alreadyCurrent: 2, noPrice: 1,
-  unmatched: [{ n: 7, text: 'Lipid Pro', reason: 'Not in your tests, and no matching department.' }], notes: [], provider: 'gemini', model: 'm',
+  unmatched: [{ n: 7, text: 'Lipid Pro', reason: 'Not in your tests, and no matching department.' }], unmatchedTotal: 1, notes: [], provider: 'gemini', model: 'm',
 };
 const PROVIDERS = [{ id: 'gemini' as const, label: 'Gemini', available: true }, { id: 'claude' as const, label: 'Claude', available: true }];
 
@@ -93,8 +93,27 @@ describe('Assistant panel — Test Master rate card', () => {
     expect(card.textContent).toContain('3 prices and 1 new test');
     expect(card.textContent).toContain('2 already at the printed price');
     expect(card.textContent).toContain('1 line not added');
+    // Each line that was not added is on screen with its line number and why - not a count behind a click.
+    const rows = Array.from(card.querySelectorAll('[data-asst-unmatched-row]'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('Line 7');
+    expect(rows[0].textContent).toContain('Lipid Pro');
+    expect(rows[0].textContent).toContain('Not in your tests, and no matching department.');
+    expect(card.querySelector('details')).toBeNull();
     p.el.querySelector<HTMLButtonElement>('[data-asst-review]')!.click();
     expect(p.opened).toEqual([BATCH]);
+  });
+
+  it('lists every unmatched line and says how many more the server did not list', async () => {
+    const many = { ...SUMMARY, suggestions: 0, priceSuggestions: 0, newTestSuggestions: 0, unmatchedTotal: 63,
+      unmatched: Array.from({ length: 60 }, (_, i) => ({ n: i + 1, text: `Line text ${i + 1}`, reason: 'No price printed.' })) };
+    const p = setup({ read: () => of(many) });
+    await p.settle();
+    await p.pick();
+    const card = p.el.querySelector('[data-asst-card]')!;
+    expect(card.querySelectorAll('[data-asst-unmatched-row]')).toHaveLength(60);
+    expect(card.textContent).toContain('63 lines not added');
+    expect(card.textContent).toContain('and 3 more not shown');
   });
 
   it('shows progress while reading and holds the composer', async () => {

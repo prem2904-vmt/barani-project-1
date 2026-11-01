@@ -273,14 +273,20 @@
                     }
                     @for (n of $any(item).summary.notes; track $index) { <p class="pf-asst-rc__line pf-asst-rc__line--quiet">{{ n }}</p> }
                     @if ($any(item).summary.unmatched.length) {
-                      <details class="pf-asst-rc__more">
-                        <summary>{{ $any(item).summary.unmatched.length }} line{{ $any(item).summary.unmatched.length === 1 ? '' : 's' }} not added</summary>
+                      <div class="pf-asst-rc__more" data-asst-unmatched>
+                        <p class="pf-asst-rc__moreh">{{ unmatchedHeading($any(item).summary) }}</p>
                         <ul>
                           @for (u of $any(item).summary.unmatched; track $index) {
-                            <li><span class="pf-asst-rc__txt">{{ u.text }}</span> <span class="pf-asst-rc__why">{{ u.reason }}</span></li>
+                            <li data-asst-unmatched-row>
+                              <span class="pf-asst-rc__txt">@if (u.n) { <span class="pf-asst-rc__ln">Line {{ u.n }}</span> }{{ u.text }}</span>
+                              <span class="pf-asst-rc__why">{{ u.reason }}</span>
+                            </li>
                           }
                         </ul>
-                      </details>
+                        @if (unmatchedMore($any(item).summary) > 0) {
+                          <p class="pf-asst-rc__why">and {{ unmatchedMore($any(item).summary) }} more not shown.</p>
+                        }
+                      </div>
                     }
                     @if ($any(item).summary.suggestions > 0) {
                       <div class="pf-asst-card__row pf-asst-card__row--props">

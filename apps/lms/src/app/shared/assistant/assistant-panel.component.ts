@@ -11,7 +11,7 @@ import { InstrumentBridgeService } from '../instruments/instrument-bridge.servic
 import { AssistantApiService } from './assistant-api.service';
 import {
   AssistantErrorView, CONFIDENCE_WORDS, MAX_PROMPT_CHARS, PF_SENSE_LIMIT_MESSAGE, assistantError, historyFor, mappingCodeLabel, mappingTestLabel,
-  pickProvider, providerOptions, rateCardBreakdown, rateCardHeadline,
+  pickProvider, providerOptions, rateCardBreakdown, rateCardHeadline, unmatchedHeading, unmatchedMore,
 } from './assistant-logic';
 import { PREPARE_WORDS, RATE_CARD_PREPARE, RateCardPrepareException } from './rate-card-pages';
 import { MdBlock, parseAssistantMarkdown } from './assistant-markdown';
@@ -95,6 +95,8 @@ export class AssistantPanelComponent {
   readonly attachOn = computed(() => this.context().attachments === 'rate-card');
   protected readonly cardHeadline = rateCardHeadline;
   protected readonly cardBreakdown = rateCardBreakdown;
+  protected readonly unmatchedHeading = unmatchedHeading;
+  protected readonly unmatchedMore = unmatchedMore;
 
   // ── Models ───────────────────────────────────────────────────────────
   readonly providers = signal<AssistantProvider[]>([]);

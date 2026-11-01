@@ -222,8 +222,10 @@
 @keyframes pf-asst-rc { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
 @media (prefers-reduced-motion: reduce) { .pf-asst-rc__bar span { animation: none; width: 100%; opacity: 0.5; } }
 .pf-asst-rc__more { font-size: 13px; color: var(--text-secondary); }
-.pf-asst-rc__more summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
-.pf-asst-rc__more ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; max-height: 180px; overflow: auto; }
+.pf-asst-rc__moreh { margin: 0; font-weight: 600; color: var(--text-primary); }
+.pf-asst-rc__more ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; max-height: 220px; overflow: auto; }
+.pf-asst-rc__ln { margin-right: 6px; font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 .pf-asst-rc__more li { display: grid; gap: 1px; overflow-wrap: anywhere; }
 .pf-asst-rc__txt { color: var(--text-primary); }
 .pf-asst-rc__why { font-size: 12px; color: var(--text-tertiary); }
+p.pf-asst-rc__why { margin: 4px 0 0; }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ASSISTANT_ERROR_CODES, MAX_HISTORY_TURNS, assistantError, assistantFailure, historyFor, mappingCodeLabel, mappingTestLabel, normaliseProviders, normaliseReply,
-  normaliseRateCardSummary, normaliseSuggestions, pickProvider, providerOptions, rateCardBreakdown, rateCardHeadline,
+  normaliseRateCardSummary, normaliseSuggestions, pickProvider, providerOptions, rateCardBreakdown, rateCardHeadline, unmatchedHeading, unmatchedMore,
 } from './assistant-logic';
 
 describe('assistant logic — providers', () => {
@@ -172,6 +172,12 @@ describe('Test Master assistant — suggestions, errors and the rate-card summar
     expect(s.suggestions).toBe(4);
     expect(s.unmatched).toEqual([{ n: 4, text: 'Lipid Pro', reason: 'Not in your tests.' }]);
     expect(s.notes).toHaveLength(1);
+    expect(s.unmatchedTotal).toBe(1);                                   // server did not send a total: the list length
+    expect(normaliseRateCardSummary({ data: { batchId: id, unmatched: [], unmatchedTotal: 9 } })!.unmatchedTotal).toBe(9);
+    expect(unmatchedHeading({ unmatched: [{ n: 1, text: 'a', reason: '' }], unmatchedTotal: 1 })).toBe('1 line not added');
+    expect(unmatchedHeading({ unmatched: [{ n: 1, text: 'a', reason: '' }], unmatchedTotal: 5 })).toBe('5 lines not added');
+    expect(unmatchedMore({ unmatched: [{ n: 1, text: 'a', reason: '' }], unmatchedTotal: 5 })).toBe(4);
+    expect(unmatchedMore({ unmatched: [], unmatchedTotal: 0 })).toBe(0);
     expect(normaliseRateCardSummary({ data: { batchId: 'nope' } })).toBeNull();
     expect(normaliseRateCardSummary(null)).toBeNull();
   });

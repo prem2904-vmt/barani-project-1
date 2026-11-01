@@ -1,4 +1,4 @@
-import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { CUSTOM_ELEMENTS_SCHEMA, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { NgTemplateOutlet } from '@angular/common';
 import { of, throwError } from 'rxjs';
@@ -10,6 +10,7 @@ import { ThemeService } from '../../../../core/services/theme.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { DialogService } from '../../../../core/services/dialog.service';
 import { AuthService } from '../../../../core/auth/auth.service';
+import { BranchSwitchService } from '../../../../core/services/branch-switch.service';
 import { ApiError } from '../../../../shared/models/api-response.model';
 import type { TmProposal } from '../../../../shared/models/tm-proposal.model';
 
@@ -35,7 +36,7 @@ const FAILED = P({ id: 'fail1', kind: 'test_update', status: 'failed', error: 'f
   clinicalFields: ['parametersJson'], payload: { parametersJson: '{"parameters":[{"name":"Cast","type":"family"}]}' }, before: { parametersJson: '{"parameters":[]}' } });
 const MINE = P({ id: 'mine1', isMine: true, targetLabel: 'LFT (BIO010)' });
 
-function render(opts: { list?: TmProposal[]; byId?: Record<string, TmProposal>; perms?: string[] | null; narrow?: boolean; } = {}) {
+function render(opts: { list?: TmProposal[]; byId?: Record<string, TmProposal>; perms?: string[] | null; narrow?: boolean; branches?: { id: string; name: string }[]; active?: string; } = {}) {
   const list = opts.list ?? [P(), CLINICAL, STALE, FAILED, MINE];
   const byId = { ...Object.fromEntries(list.map(p => [p.id, p])), ...(opts.byId ?? {}) };
   const svc = {
@@ -54,7 +55,9 @@ function render(opts: { list?: TmProposal[]; byId?: Record<string, TmProposal>; 
   };
   const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
   const perms = opts.perms === undefined ? ['*'] : opts.perms;
-  const auth = perms === null ? null : { hasPermission: (c: string) => perms.includes('*') || perms.includes(c), user: () => ({ id: 'u1' }) };
+  const activeSig = signal(opts.active ?? 'b1');
+  const auth = perms === null ? null : { hasPermission: (c: string) => perms.includes('*') || perms.includes(c), user: () => ({ id: 'u1', branches: opts.branches ?? [] }), activeBranchId: activeSig };
+  const sw = { switchTo: vi.fn(async (_id: string) => true) };
   TestBed.configureTestingModule({
     imports: [PendingChangesPanelComponent],
     providers: [
@@ -62,6 +65,7 @@ function render(opts: { list?: TmProposal[]; byId?: Record<string, TmProposal>; 
       { provide: ThemeService, useValue: { isDark: () => false, isNewDesign: () => true } },
       { provide: ToastService, useValue: toasts },
       { provide: DialogService, useValue: dialog },
+      { provide: BranchSwitchService, useValue: sw },
       ...(auth ? [{ provide: AuthService, useValue: auth }] : []),
     ],
   });
@@ -75,7 +79,7 @@ function render(opts: { list?: TmProposal[]; byId?: Record<string, TmProposal>; 
   const c = f.componentInstance;
   const pick = (id: string) => { c.open(id, true); f.detectChanges(); };
   const q = (sel: string) => el.querySelector<HTMLElement>(sel);
-  return { f, el, c, svc, dialog, toasts, pick, q };
+  return { f, el, c, svc, dialog, toasts, pick, q, sw, activeSig };
 }
 const flush = () => new Promise(r => setTimeout(r, 0));
 
@@ -288,5 +292,81 @@ describe('PendingChangesPanelComponent', () => {
     await flush(); t.f.detectChanges();
     expect(t.svc.list).toHaveBeenLastCalledWith('review');
     expect(t.el.querySelector('[data-tmp-batch]')).toBeNull();
+  });
+
+  describe('a test edit suggested for another branch', () => {
+    const SALEM = { id: 'b2', name: 'Salem' };
+    const FOR_SALEM = P({ id: 'br1', kind: 'test_update', targetLabel: 'Glucose (BIO001)', summary: 'Edit: Short name', branchId: 'b2',
+      payload: { shortName: 'GLU' }, before: { shortName: 'G' }, current: { shortName: 'G' } });
+    const BOTH = [{ id: 'b1', name: 'Chennai' }, SALEM];
+
+    it('shows a "Switch to <branch>" banner; the button uses the branch switcher', async () => {
+      const { q, pick, sw } = render({ list: [FOR_SALEM], branches: BOTH, active: 'b1' });
+      pick('br1');
+      expect(q('[data-tmp-branch]')!.textContent).toContain('Suggested for Salem');
+      const btn = q('[data-tmp-switch]') as HTMLButtonElement;
+      expect(btn.textContent).toContain('Switch to Salem');
+      btn.click();
+      await flush();
+      expect(sw.switchTo).toHaveBeenCalledWith('b2');
+    });
+
+    it('Approve there asks first (nothing is sent to the server) and switches on yes', async () => {
+      const { q, pick, svc, dialog, sw } = render({ list: [FOR_SALEM], branches: BOTH, active: 'b1' });
+      dialog.confirm.mockResolvedValueOnce(true);
+      pick('br1');
+      (q('[data-tmp-approve]') as HTMLButtonElement).click();
+      await flush();
+      expect(dialog.confirm).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(dialog.confirm.mock.calls[0][0])).toContain('Switch to Salem');
+      expect(svc.approve).not.toHaveBeenCalled();
+      expect(sw.switchTo).toHaveBeenCalledWith('b2');
+    });
+
+    it('"Stay here" leaves everything as it was', async () => {
+      const { q, pick, svc, dialog, sw } = render({ list: [FOR_SALEM], branches: BOTH, active: 'b1' });
+      pick('br1');
+      (q('[data-tmp-approve]') as HTMLButtonElement).click();
+      await flush();
+      expect(dialog.confirm).toHaveBeenCalledTimes(1);
+      expect(svc.approve).not.toHaveBeenCalled();
+      expect(sw.switchTo).not.toHaveBeenCalled();
+    });
+
+    it('a server wrong_branch (the screen did not know) offers the same switch', async () => {
+      const { q, pick, svc, dialog, sw, toasts, activeSig } = render({ list: [FOR_SALEM], branches: BOTH, active: 'b2' });
+      pick('br1');
+      expect(q('[data-tmp-branch]')).toBeNull();               // the screen thinks it is already in Salem
+      // The active branch moved underneath (another tab) after the screen drew: the server answers wrong_branch.
+      svc.approve.mockReturnValueOnce(throwError(() => {
+        activeSig.set('b1');
+        return new ApiError('Switch to the branch this change was suggested for, then approve it.', 'wrong_branch');
+      }));
+      dialog.confirm.mockResolvedValueOnce(true);
+      (q('[data-tmp-approve]') as HTMLButtonElement).click();
+      await flush();
+      expect(svc.approve).toHaveBeenCalledTimes(1);
+      expect(dialog.confirm).toHaveBeenCalledTimes(1);
+      expect(sw.switchTo).toHaveBeenCalledWith('b2');
+      expect(toasts.error).not.toHaveBeenCalled();
+    });
+
+    it('prices show no banner', () => {
+      const a = render({ list: [P({ id: 'pr', branchId: 'b2' })], branches: BOTH, active: 'b1' });
+      a.pick('pr');
+      expect(a.q('[data-tmp-branch]')).toBeNull();
+    });
+
+    it('the branch already open shows no banner', () => {
+      const b = render({ list: [FOR_SALEM], branches: BOTH, active: 'b2' });
+      b.pick('br1');
+      expect(b.q('[data-tmp-branch]')).toBeNull();
+    });
+
+    it('a branch the person cannot reach shows no banner', () => {
+      const c = render({ list: [FOR_SALEM], branches: [{ id: 'b1', name: 'Chennai' }], active: 'b1' });
+      c.pick('br1');
+      expect(c.q('[data-tmp-branch]')).toBeNull();
+    });
   });
 });
