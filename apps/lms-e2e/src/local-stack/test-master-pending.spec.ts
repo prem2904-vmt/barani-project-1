@@ -83,6 +83,11 @@ test('screens: Pending (N) in the band, the list + review card, light and dark, 
     await shot(page, `tm-pending-failed-${theme}`);
     await pickRow(page, seed.priceLabel);
     await shot(page, `tm-pending-price-${theme}`);
+    // Only a model / similarity match reads "guessed" (matchedBy); the badge is counts.pending + stale + failed.
+    if (seed.guessed) {
+      const g = await tm<{ matchedBy?: string }>(`/${seed.guessed}`);
+      expect(g.matchedBy).toBe('model');
+    }
     await ctx.close();
   }
   for (const theme of ['light', 'dark'] as const) {
@@ -106,8 +111,12 @@ test('a price change: Approve applies it', async ({ browser }) => {
   const seed = await freshBatch();
   const { ctx, page } = await openAs(browser, ADMIN, '/admin/tests?view=pending', { beta: ['assistant'] });
   await openPending(page);
+  // The list line and the diff use the server's plain words: ₹ amounts, plain labels (no field keys, no raw decimals).
+  await expect(page.locator('.pf-tmp__grid .ag-row').filter({ hasText: seed.priceLabel }).first()).toContainText(/Price .*₹\d/);
   await pickRow(page, seed.priceLabel);
   await expect(page.locator('.pf-tmp__diff thead th')).toHaveText(['Field', 'Current', 'Proposed']);
+  await expect(page.locator('.pf-tmp__diff tbody tr').first()).toContainText('₹');
+  await expect(page.locator('.pf-tmp__diff')).not.toContainText(/\d\.00\b/);
   await page.locator('[data-tmp-approve]').click();
   await expect(page.getByText(`Approved: ${seed.priceLabel}`).first()).toBeVisible({ timeout: 20_000 });
   await expect.poll(async () => (await tm<{ status: string }>(`/${seed.price}`)).status).toBe('approved');

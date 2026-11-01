@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable, concat, forkJoin, map, of, toArray, catchError, last } from 'rxjs';
+import { Observable, map, of, catchError } from 'rxjs';
 import { ApiService } from './api.service';
 import type { TmProposal, TmProposalPage } from '../../shared/models/tm-proposal.model';
 import { TM_PROPOSALS_URL, tmProposalPath, tmSort } from '../../shared/utils/tm-proposals';
@@ -27,45 +27,35 @@ export class TmProposalsService {
 
   private page(status: string, take = TmProposalsService.PAGE): Observable<TmProposalPage> {
     return this.api.get<TmProposalPage>(`${TM_PROPOSALS_URL}?status=${encodeURIComponent(status)}&take=${take}`).pipe(
-      map(p => ({ items: Array.isArray(p?.items) ? p.items : [], total: Number(p?.total) || 0, pendingCount: Number(p?.pendingCount) || 0 })),
+      map(p => ({
+        items: Array.isArray(p?.items) ? p.items : [], total: Number(p?.total) || 0, pendingCount: Number(p?.pendingCount) || 0,
+        counts: p?.counts ?? null,
+      })),
     );
   }
 
+  /** Open rows (pending + stale + failed) from the server's own counts; an older server without `counts` has only `pendingCount`. */
+  private static open(p: TmProposalPage): number {
+    const c = p.counts;
+    return c ? (Number(c.pending) || 0) + (Number(c.stale) || 0) + (Number(c.failed) || 0) : p.pendingCount;
+  }
+
   /**
-   * The list for a filter. "Needs review" = pending, then stale + failed — in that
-   * ORDER: the pending read is what flips moved rows to stale (server, at list
-   * time), so stale is read after it and never misses a row it just flipped.
+   * The list for a filter. "Needs review" = ONE request for `pending,stale,failed`
+   * (the server settles staleness first, so total, rows and counts agree). The badge
+   * is the server's `counts` (pending + stale + failed), never a second read.
    */
   list(filter: TmListFilter): Observable<TmListResult> {
-    if (filter !== 'review') {
-      return forkJoin({ page: this.page(filter), open: this.openCount() }).pipe(
-        map(({ page, open }) => ({ items: tmSort(page.items), total: page.total, openCount: open })));
-    }
-    return concat(this.page('pending'), forkJoin([this.page('stale'), this.page('failed')])).pipe(
-      toArray(),
-      map(parts => {
-        const pending = parts[0] as TmProposalPage;
-        const [stale, failed] = parts[1] as [TmProposalPage, TmProposalPage];
-        const items = tmSort([...pending.items, ...stale.items, ...failed.items]);
-        // The pending read flips moved rows to stale AFTER counting, so its total can count a row the
-        // stale page then lists too: trust the rows themselves unless a page was cut at PAGE.
-        const cut = [pending, stale, failed].some(p => p.items.length >= TmProposalsService.PAGE);
-        const total = cut ? pending.total + stale.total + failed.total : items.length;
-        return { items, total, openCount: total };
-      }),
+    const status = filter === 'review' ? 'pending,stale,failed' : filter;
+    return this.page(status).pipe(
+      map(p => ({ items: tmSort(p.items), total: p.total, openCount: filter === 'review' ? p.total : TmProposalsService.open(p) })),
     );
   }
 
   /** The band badge: open rows (pending + stale + failed). 0 on any failure (beta off / no permission / older server). */
   openCount(): Observable<number> {
-    return concat(this.page('pending', 1), forkJoin([this.page('stale', 1), this.page('failed', 1)])).pipe(
-      toArray(),
-      map(parts => {
-        const pending = parts[0] as TmProposalPage;
-        const [stale, failed] = parts[1] as [TmProposalPage, TmProposalPage];
-        return pending.total + stale.total + failed.total;
-      }),
-      last(),
+    return this.page('pending,stale,failed', 1).pipe(
+      map(p => TmProposalsService.open(p) || (p.counts ? 0 : p.total)),
       catchError(() => of(0)),
     );
   }

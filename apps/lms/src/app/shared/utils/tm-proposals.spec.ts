@@ -1,12 +1,12 @@
 import type { TmProposal } from '../models/tm-proposal.model';
 import {
   DASH, tmCanSeeKind, tmChangeLine, tmClinicalItems, tmConfidenceLine, tmDiffRows, tmExpiresLine, tmFailedWords, tmFieldLabel,
-  tmKindLabel, tmMatches, tmMemberRows, tmNeedsClinicalConfirm, tmParameterRows, tmPeopleLine, tmProposalPath, tmSourceLine,
+  tmKindLabel, tmMatches, tmMemberRows, tmNeedsClinicalConfirm, tmIsGuess, tmParameterRows, tmPeopleLine, tmProposalPath, tmSourceLine,
   tmSourceShort, tmStatusLabel, tmWhenLine,
 } from './tm-proposals';
 
 const base = (over: Partial<TmProposal> = {}): TmProposal => ({
-  id: 'p1', kind: 'price', status: 'pending', targetTestId: 't1', targetLabel: 'CBC (HEM001)', summary: 'Price 250.00 → 300',
+  id: 'p1', kind: 'price', status: 'pending', targetTestId: 't1', targetLabel: 'CBC (HEM001)', summary: 'Price ₹250 → ₹300',
   clinicalFields: [], confidence: 96, source: 'pf_sense', sourceModel: 'gemini:gemini-2.5-flash', clientId: null, proposedBy: 'Lakshmi Admin',
   isMine: true, createdAt: '2026-11-01T10:00:00Z', expiresAt: '2026-12-01T10:00:00Z', ...over,
 });
@@ -42,10 +42,15 @@ describe('tm-proposals helpers', () => {
       expect(s.replace('AI connector', '')).not.toMatch(/\bAI\b/);
   });
 
-  it('confidence: a model match below 85 is labelled as a guess; a typed change shows nothing', () => {
-    expect(tmConfidenceLine(base())).toBe('Confidence 96');
-    expect(tmConfidenceLine(base({ confidence: 72 }))).toBe('Cortex guessed this match (confidence 72)');
+  it('confidence: only a model / similarity match is called a guess (matchedBy), never a score threshold', () => {
+    expect(tmConfidenceLine(base({ matchedBy: 'code' }))).toBe('Confidence 96');
+    expect(tmConfidenceLine(base({ confidence: 60, matchedBy: 'code' }))).toBe('Confidence 60');
+    expect(tmConfidenceLine(base({ confidence: 72, matchedBy: 'model' }))).toBe('Cortex guessed this match (confidence 72)');
+    expect(tmConfidenceLine(base({ confidence: 91, matchedBy: 'similarity' }))).toBe('Cortex guessed this match (confidence 91)');
+    expect(tmConfidenceLine(base({ confidence: 72, matchedBy: null }))).toBe('Confidence 72');
     expect(tmConfidenceLine(base({ confidence: null }))).toBe('');
+    expect(tmIsGuess(base({ matchedBy: 'model' }))).toBe(true);
+    expect(tmIsGuess(base({ confidence: 10 }))).toBe(false);
   });
 
   it('words for kinds, statuses, failures, people and time', () => {
@@ -62,13 +67,28 @@ describe('tm-proposals helpers', () => {
     expect(tmExpiresLine(base({ status: 'approved' }), now)).toBe('');
   });
 
-  it('the list line: ₹ prices, labels instead of field keys', () => {
+  it('the list line is the server wording passed through', () => {
     expect(tmChangeLine(base())).toBe('Price ₹250 → ₹300');
-    expect(tmChangeLine(base({ summary: 'Price not set → 120' }))).toBe('Price not set → ₹120');
-    expect(tmChangeLine(base({ summary: 'Price (EDTA) 90 → 100' }))).toBe('Price (EDTA) ₹90 → ₹100');
-    expect(tmChangeLine(base({ kind: 'test_update', summary: 'Edit: unit, adultReferenceRange' }))).toBe('Edit: unit, reference range');
+    expect(tmChangeLine(base({ summary: 'Price not set → ₹120' }))).toBe('Price not set → ₹120');
+    expect(tmChangeLine(base({ kind: 'test_update', summary: 'Edit: Unit, Reference range' }))).toBe('Edit: Unit, Reference range');
+    expect(tmChangeLine(base({ kind: 'bundle_members', summary: 'Tests in bundle 3 → 4' }))).toBe('Tests in bundle 3 → 4');
     expect(tmChangeLine(base({ kind: 'test_create', summary: 'New test' }))).toBe('New test');
+    expect(tmChangeLine(base({ kind: 'test_create', summary: '' }))).toBe('New test');
     expect(tmFieldLabel('tatHours')).toBe('Turnaround');
+  });
+
+  it('diff rows prefer the server changes[] (plain label, ₹ text) over formatting the payload', () => {
+    const rows = tmDiffRows(base({
+      kind: 'test_update', clinicalFields: ['tatHours'], payload: { tatHours: 6, price: 1250.5 }, before: { tatHours: 4, price: 1000 },
+      changes: [
+        { field: 'tatHours', label: 'Turnaround (hours)', before: '4', after: '6', clinical: true },
+        { field: 'price', label: 'Price', before: '₹1,000', after: '₹1,250.50', clinical: false },
+      ],
+    }));
+    expect(rows.map(r => [r.label, r.current, r.proposed])).toEqual([
+      ['Turnaround (hours)', '4', '6'], ['Price', '₹1,000', '₹1,250.50'],
+    ]);
+    expect(rows[0].clinical).toBe(true);
   });
 
   it('price diff: Field | Current | Proposed with ₹, the test id is context only', () => {

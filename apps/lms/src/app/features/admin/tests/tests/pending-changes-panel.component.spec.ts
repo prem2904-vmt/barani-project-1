@@ -22,16 +22,16 @@ import type { TmProposal } from '../../../../shared/models/tm-proposal.model';
  * stay unknown elements so the panel's own template is what renders.
  */
 const P = (over: Partial<TmProposal> = {}): TmProposal => ({
-  id: 'price1', kind: 'price', status: 'pending', targetTestId: 't1', targetLabel: 'CBC (HEM001)', summary: 'Price 250.00 → 300',
+  id: 'price1', kind: 'price', status: 'pending', targetTestId: 't1', targetLabel: 'CBC (HEM001)', summary: 'Price ₹250 → ₹300',
   clinicalFields: [], confidence: 96, source: 'pf_sense', sourceModel: 'gemini:gemini-2.5-flash', clientId: null, reason: 'Rate card line 3',
   proposedBy: 'Lakshmi Admin', isMine: false, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 30 * 864e5).toISOString(),
   payload: { testId: 't1', price: 300 }, before: { price: 250, taxSlab: 0, notPriced: false }, current: { price: 250 }, changedSinceProposed: false,
   ...over,
 });
-const CLINICAL = P({ id: 'clin1', kind: 'test_update', targetLabel: 'Glucose (BIO001)', summary: 'Edit: unit', clinicalFields: ['unit'],
+const CLINICAL = P({ id: 'clin1', kind: 'test_update', targetLabel: 'Glucose (BIO001)', summary: 'Edit: Unit', clinicalFields: ['unit'],
   payload: { unit: 'mmol/L' }, before: { unit: 'mg/dL' }, current: { unit: 'mg/dL' } });
 const STALE = P({ id: 'stale1', status: 'stale', targetLabel: 'Urea (BIO004)', before: { price: 120 }, current: { price: 95 }, payload: { testId: 't4', price: 140 }, changedSinceProposed: true });
-const FAILED = P({ id: 'fail1', kind: 'test_update', status: 'failed', error: 'family_via_profile', targetLabel: 'Urine (CLI001)', summary: 'Edit: parametersJson',
+const FAILED = P({ id: 'fail1', kind: 'test_update', status: 'failed', error: 'family_via_profile', targetLabel: 'Urine (CLI001)', summary: 'Edit: Result setup',
   clinicalFields: ['parametersJson'], payload: { parametersJson: '{"parameters":[{"name":"Cast","type":"family"}]}' }, before: { parametersJson: '{"parameters":[]}' } });
 const MINE = P({ id: 'mine1', isMine: true, targetLabel: 'LFT (BIO010)' });
 
@@ -204,7 +204,7 @@ describe('PendingChangesPanelComponent', () => {
   });
 
   it('outside assistant: named with its client through the AI connector; a guess is labelled', () => {
-    const outside = P({ id: 'out1', source: 'connector', sourceModel: null, clientId: 'claude-desktop', confidence: 70 });
+    const outside = P({ id: 'out1', source: 'connector', sourceModel: null, clientId: 'claude-desktop', confidence: 70, matchedBy: 'model' });
     const t = render({ list: [outside] });
     t.pick('out1');
     expect(t.q('[data-tmp-source]')!.textContent).toBe('Outside assistant through the AI connector · claude-desktop');

@@ -46,6 +46,10 @@ export interface TmProposal {
   /** Apply failure code (status `failed`). */
   error?: string | null;
   branchId?: string | null;
+  /** How the test was found: code | name | short_name | panel | loinc | similarity | model | manual. */
+  matchedBy?: string | null;
+  /** The server's plain-words change lines (labels, ₹ formatting): prefer these over formatting payload keys. */
+  changes?: TmChange[] | null;
   // ── detail only (GET /{id}) ──
   payload?: TmJson | null;
   /** The touched fields' values when it was suggested (or last re-reviewed). */
@@ -55,9 +59,27 @@ export interface TmProposal {
   changedSinceProposed?: boolean | null;
 }
 
+/** One line of "what changes", already in words by the server (prefrontal-mw TmChange). */
+export interface TmChange {
+  /** Payload key (to key on). */
+  field: string;
+  label: string;
+  before?: string | null;
+  after?: string | null;
+  clinical: boolean;
+}
+
+/** Open items by status for the caller's scope, counted after the stale flip; not narrowed by the list filters. */
+export interface TmProposalCounts {
+  pending: number;
+  stale: number;
+  failed: number;
+}
+
 export interface TmProposalPage {
   items: TmProposal[];
   total: number;
   /** Pending rows the caller may see (the server's own count). */
   pendingCount: number;
+  counts?: TmProposalCounts | null;
 }

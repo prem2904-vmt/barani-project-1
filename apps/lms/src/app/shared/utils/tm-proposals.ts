@@ -91,19 +91,22 @@ export function tmSourceLine(p: Pick<TmProposal, 'source' | 'sourceModel' | 'cli
   return engine ? `Cortex (${engine})` : 'Cortex';
 }
 
-/** A model's match below this is a guess (deterministic code / name matches score 90+). */
-export const TM_GUESS_BELOW = 85;
+/** matchedBy values that are a guess (a model's pick or a fuzzy name match); code / name / panel / LOINC matches are exact. */
+const TM_GUESS_MATCHES = ['model', 'similarity'];
 
-/** "Confidence 96" · "Cortex guessed this match (72)" · '' when a person typed it. */
-export function tmConfidenceLine(p: Pick<TmProposal, 'confidence' | 'source'>): string {
-  const c = p.confidence;
-  if (c == null || !Number.isFinite(c)) return '';
-  if (c < TM_GUESS_BELOW) return `${p.source === 'connector' ? 'The assistant' : 'Cortex'} guessed this match (confidence ${c})`;
-  return `Confidence ${c}`;
+export function tmIsGuess(p: Pick<TmProposal, 'matchedBy'>): boolean {
+  return TM_GUESS_MATCHES.includes((p.matchedBy ?? '').trim().toLowerCase());
 }
 
-export function tmIsGuess(p: Pick<TmProposal, 'confidence'>): boolean {
-  return p.confidence != null && p.confidence < TM_GUESS_BELOW;
+/** "Confidence 96" · "Cortex guessed this match (confidence 72)" · '' when a person typed it. */
+export function tmConfidenceLine(p: Pick<TmProposal, 'confidence' | 'source' | 'matchedBy'>): string {
+  const c = p.confidence;
+  const has = c != null && Number.isFinite(c);
+  if (tmIsGuess(p)) {
+    const who = p.source === 'connector' ? 'The assistant' : 'Cortex';
+    return has ? `${who} guessed this match (confidence ${c})` : `${who} guessed this match`;
+  }
+  return has ? `Confidence ${c}` : '';
 }
 
 /** "Suggested 2 min ago" / "Expires in 30 days". */
@@ -149,35 +152,13 @@ export function tmFailedWords(code: string | null | undefined): string {
   return FAILED[c] ?? 'The change could not be applied. Check the values, then re-review or reject it.';
 }
 
-/** Number in a server summary ("250.00") → "₹250". */
-function moneyWord(tok: string): string {
-  const n = Number(tok);
-  return tok === 'not set' || !Number.isFinite(n) ? 'not set' : rupees(n);
-}
-
 /**
- * The list's one line, in words, from the server's summary ("Price 250 → 300",
- * "Edit: unit, adultReferenceRange", "Members 4 → 5"): prices get ₹, field keys
- * become labels. Unknown shapes pass through unchanged.
+ * The list's one line. The server already writes it in words ("Price ₹250 → ₹300",
+ * "Edit: Unit, Reference range", "Tests in bundle 3 → 4", "Offer for ordering"), so
+ * this passes it through; an empty summary falls back to the kind.
  */
 export function tmChangeLine(p: Pick<TmProposal, 'kind' | 'summary'>): string {
   const s = (p.summary ?? '').trim();
-  if (p.kind === 'price') {
-    const m = /^Price(?: \(([^)]*)\))? (not set|[-\d.]+) \u2192 ([-\d.]+)$/.exec(s);
-    if (m) return `Price${m[1] ? ` (${m[1].replace(/"/g, '')})` : ''} ${moneyWord(m[2])} \u2192 ${moneyWord(m[3])}`;
-    const t = /^Tax slab (\S+) \u2192 (\S+)$/.exec(s);
-    if (t) return `Tax slab ${t[1]}% \u2192 ${t[2]}%`;
-    return s;
-  }
-  if (p.kind === 'offered') return s === 'Offer for ordering' ? 'Offer for ordering' : s === 'Hide from ordering' ? 'Hide from ordering' : s;
-  if (p.kind === 'bundle_members') {
-    const m = /^Members (\d+) \u2192 (\d+)$/.exec(s);
-    return m ? `Members ${m[1]} \u2192 ${m[2]}` : s;
-  }
-  if (s.startsWith('Edit: ')) {
-    const keys = s.slice(6).split(',').map(k => k.trim()).filter(Boolean);
-    return 'Edit: ' + keys.map(k => tmFieldLabel(k).toLowerCase()).join(', ');
-  }
   return s || tmKindLabel(p.kind);
 }
 
@@ -395,17 +376,22 @@ export function tmDiffRows(p: TmProposal, look: TmLookups = {}): TmDiffRow[] {
       continue;
     }
     const isNew = p.kind === 'test_create';
-    const cur = isNew ? DASH : tmValueText(key, (stale && live ? live : before)[key], look, stale && live ? live : before);
+    // The server's plain-words line for this field (label, ₹, names) wins over formatting the raw payload here.
+    const sc = (p.changes ?? []).find(c => c.field === key);
+    const fromServer = (t: string | null | undefined, fallback: string) => (t == null || t === '' ? fallback : t);
+    const cur = isNew ? DASH
+      : stale && live ? tmValueText(key, live[key], look, live)
+      : sc ? fromServer(sc.before, DASH) : tmValueText(key, before[key], look, before);
     const r: TmDiffRow = {
-      key, label: tmFieldLabel(key), current: cur,
-      proposed: tmValueText(key, payload[key], look), clinical: clinical.has(key.toLowerCase()),
+      key, label: sc?.label || tmFieldLabel(key), current: cur,
+      proposed: sc ? fromServer(sc.after, DASH) : tmValueText(key, payload[key], look), clinical: clinical.has(key.toLowerCase()),
     };
-    if (stale) r.atProposal = isNew ? DASH : tmValueText(key, before[key], look, before);
+    if (stale) r.atProposal = isNew ? DASH : sc ? fromServer(sc.before, DASH) : tmValueText(key, before[key], look, before);
     out.push(r);
   }
   // A price for one specimen says so in the label.
   const spec = payload['specimenCode'];
-  if (p.kind === 'price' && typeof spec === 'string' && spec) for (const r of out) if (r.key === 'price') r.label = `Price (${spec})`;
+  if (p.kind === 'price' && typeof spec === 'string' && spec) for (const r of out) if (r.key === 'price' && !r.label.includes(`(${spec})`)) r.label = `Price (${spec})`;
   return out;
 }
 
