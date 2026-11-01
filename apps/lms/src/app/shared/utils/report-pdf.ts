@@ -27,6 +27,7 @@ import {
   ResolvedBackground, BODY_GAP, anchorX, backgroundArea, backgroundPrints, backgroundRect, boxLeft, intersectBox,
   readHeaderLayout, BG_MAX_EDGE, downscaleSize, readReportOption, footerImageLift } from './report-header-layout';
 import { AgeStyle, formatAge } from './patient-age';
+import { DEFAULT_REPORT_STYLE, isDefaultReportStyle, readReportStyle, reportEngineStamp, type ReportStyle } from './report-style';
 import { CLASSIC_THEME, ReportTypeTheme, TypeEl, TypeWeight, reportTypeTheme, tokenSize } from './report-theme';
 import { SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './report-fonts';
 import { renderReportChart, setReportChartContext, reportChartLead } from './report-chart/report-chart.report';
@@ -134,6 +135,12 @@ export interface ReportPdfInput {
   /** Order tracking token for the patient-strip Order QR, for reports whose
    *  snapshot predates `order.trackToken`. The snapshot's own token wins. */
   orderTrackToken?: string | null;
+  /** Tooling hook (specs, the editor's Issues chip): called once with the
+   *  fresh document, after the text sanitizer is installed and before anything
+   *  is drawn, so a recorder can watch every text / image draw
+   *  (report-overlap-detector.ts). It only observes — never set by a real
+   *  report path. */
+  drawRecorder?: (doc: jsPDF) => void;
 }
 
 /** Effective theme + chrome values fed to every drawing function.
@@ -446,6 +453,10 @@ let TECH_DEPT_NOTES = new Map<string, { name: string; note: string }>();
  *  Functions read from these closure-captured vars at draw time. */
 let theme: ResolvedTheme = defaultTheme();
 
+/** The template's report style (metadata.reportStyle) for this render.
+ *  Default = today's behaviour on every path (report-style.ts). */
+let STYLE: ReportStyle = DEFAULT_REPORT_STYLE;
+
 // ── Typography — the report theme's token table (report-theme.ts) ──────
 // EVERY text draw below names its element and takes font / size / weight
 // from TYPE; no draw site carries a literal font size. Classic's table holds
@@ -750,6 +761,7 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   } : rawPractice;
 
   applyTheme(resolveTheme(template, practice));
+  STYLE = readReportStyle(template);
   TYPE = reportTypeTheme(template);
   EMBEDDED = false;
   // Per-report signatories (who validated / entered results) take precedence
@@ -793,6 +805,10 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // doc.text covers every draw here AND inside jspdf-autotable. (An embedded
   // theme font prints them natively — the wrapper then passes text through.)
   installPdfTextSanitizer(doc);
+  input.drawRecorder?.(doc);
+  // Which engine / preset made a stored file — PDF metadata only, and only for
+  // a template that carries a style (an untouched lab's bytes do not change).
+  if (!isDefaultReportStyle(STYLE)) doc.setProperties({ creator: reportEngineStamp(STYLE) });
   // The Modern theme's Source Sans 3 — when not loaded (preloadReportImages
   // loads it), the theme's sizes print in Helvetica rather than failing.
   EMBEDDED = !!TYPE.embedded && installReportFonts(doc);
