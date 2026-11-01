@@ -130,7 +130,7 @@ describe('API absent → manual fallback', () => {
     expect(aiFallbackMessage({ status: 500, error: { error: 'ai_failed', message: 'x' } })).toMatch(/pick manually/);
   });
 
-  it('PF Sense off / limit reached → the two quiet lines', () => {
+  it('Cortex off / limit reached → the two quiet lines', () => {
     expect(aiFallbackMessage({ status: 200, error: { error: 'pf_sense_off', message: 'off' } })).toBe('Codes: pick manually');
     expect(aiFallbackMessage({ status: 200, error: { error: 'ai_cap_reached', message: 'cap' } })).toBe('Cortex limit reached for this month — codes: pick manually');
   });

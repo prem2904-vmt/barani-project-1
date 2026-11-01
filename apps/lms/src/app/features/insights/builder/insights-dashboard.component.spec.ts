@@ -317,7 +317,7 @@ describe('My dashboards — edit controls', () => {
   });
 });
 
-describe('My dashboards — PF Sense proposal: live preview, Keep / Undo', () => {
+describe('My dashboards — Cortex proposal: live preview, Keep / Undo', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   async function propose() {
@@ -445,7 +445,7 @@ describe('My dashboards — publish + visibility, history + restore', () => {
 describe('My dashboards — aligned with the server (options, notes, unpublish, conflict, sharing, compare, filters)', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('server notes about dropped parts are said under the PF Sense answer', async () => {
+  it('server notes about dropped parts are said under the Cortex answer', async () => {
     const p = setup({ chat: { reply: 'Added patient flow.', recipe: null, changes: [], notes: ['Dropped "Weather": not something Prefrontal can show.'], provider: 'gemini', model: 'x' } });
     await p.settle();
     p.cmp.startEdit();
@@ -565,10 +565,10 @@ describe('My dashboards — history sheet vs the confirm dialog', () => {
   });
 });
 
-describe('My dashboards — PF Sense admin switch', () => {
+describe('My dashboards — Cortex admin switch', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('feature on: the Ask PF Sense toggle and panel are there in edit mode', async () => {
+  it('feature on: the Ask Cortex toggle and panel are there in edit mode', async () => {
     const p = setup();
     await p.settle();
     p.cmp.startEdit();

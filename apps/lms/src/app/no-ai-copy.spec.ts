@@ -49,7 +49,7 @@ function aiMentions(rawText: string): string[] {
   return text.split('\n').filter((l) => /\bAI\b/.test(l)).map((l) => l.trim().slice(0, 140));
 }
 
-describe('no user-facing "AI" — it is PF Sense (owner standing rule)', () => {
+describe('no user-facing "AI" — it is Cortex (owner standing rule)', () => {
   it('the guard itself: flags "Ask AI", ignores identifiers, comments and the connector', () => {
     expect(aiMentions(`label = input('Ask AI');`)).toHaveLength(1);
     expect(aiMentions(`<span>AI is thinking…</span>`)).toHaveLength(1);

@@ -83,7 +83,7 @@ describe('assistant logic — errors in plain words', () => {
     expect(assistantError({ status: 400, error: { error: 'ai_cap_reached' } }).message).toBe('Cortex limit reached for this month — ask your admin.');
   });
 
-  it('PF Sense switched off (pf_sense_off) → kind off, plain words, no retry', () => {
+  it('Cortex switched off (pf_sense_off) → kind off, plain words, no retry', () => {
     expect(assistantError({ status: 200, error: { error: 'pf_sense_off', message: 'x' } })).toEqual({
       kind: 'off', retry: false, message: 'Cortex is turned off for this lab — ask your admin.' });
     expect(ASSISTANT_ERROR_CODES).toContain('pf_sense_off');

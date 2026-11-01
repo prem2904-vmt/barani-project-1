@@ -275,7 +275,7 @@ describe('Measure & read — the ONE background AI call', () => {
     expect(rm).toMatch(/\.pf-ai-glow::before,\s*\.pf-ai-glow::after[^{]*\{[^}]*animation: none/);
   });
 
-  it('no user-facing "AI" text anywhere in the modal (branded PF Sense)', () => {
+  it('no user-facing "AI" text anywhere in the modal (branded Cortex)', () => {
     const pending = new Subject<DiskReadResult>();
     const { f, c, el } = setup(() => pending);
     const noAi = () => {
@@ -288,7 +288,7 @@ describe('Measure & read — the ONE background AI call', () => {
     c.goReview(); f.detectChanges(); noAi();
   });
 
-  describe('PF Sense admin switch', () => {
+  describe('Cortex admin switch', () => {
     it('ast_disk_read off → the backend is never called (no read, no usage); manual picking, quiet line', async () => {
       const { f, c, el, api } = setup(() => of(RESULT), fakePfSense({ off: ['ast_disk_read'] }));
       c.startAiRead();
@@ -308,7 +308,7 @@ describe('Measure & read — the ONE background AI call', () => {
       expect(api.read).not.toHaveBeenCalled();
     });
 
-    it('limit already reached → no call, "PF Sense limit reached for this month — codes: pick manually"', () => {
+    it('limit already reached → no call, "Cortex limit reached for this month — codes: pick manually"', () => {
       const { f, c, api } = setup(() => of(RESULT), fakePfSense({ limit: true }));
       c.startAiRead();
       f.detectChanges();

@@ -414,7 +414,7 @@ describe('AssistantApiService — the contract', () => {
   });
 });
 
-describe('PF Sense admin switch — button + panel', () => {
+describe('Cortex admin switch — button + panel', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   function button(beta: boolean, sense: ReturnType<typeof fakePfSense>, feature?: 'instruments_assistant' | 'insights_assistant') {
@@ -446,7 +446,7 @@ describe('PF Sense admin switch — button + panel', () => {
     expect(button(true, fakePfSense({ loaded: false }))).toBeNull();
   });
 
-  it('button copy is PF Sense, never "AI"', () => {
+  it('button copy is Cortex, never "AI"', () => {
     const b = button(true, fakePfSense())!;
     expect(b.getAttribute('aria-label')).toBe('Ask Cortex (beta)');
     expect(b.textContent).not.toMatch(/\bAI\b/);

@@ -170,7 +170,7 @@ test('(b) edit referral on an order with a released report → amended report sh
   }
 });
 
-test('(c) PF Sense: platform switch hides the assistant and the server refuses; cap reached → "PF Sense is resting"', async ({ browser }) => {
+test('(c) Cortex: platform switch hides the assistant and the server refuses; cap reached → "Cortex is resting"', async ({ browser }) => {
   const beta = ['assistant'];
   // Off for the instruments assistant.
   await platform('PUT', `/tenants/${STACK.tenantId}/pf-sense`, { features: { instruments_assistant: false } });
