@@ -13,7 +13,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
 import { LabSettingsHubComponent } from '../lab/lab-settings-hub/lab-settings-hub.component';
-import { AI_CONNECTOR_NEVER, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState } from './ai-connector.api';
+import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_REQUESTED, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState } from './ai-connector.api';
 import { AiConnectorsSettingsPage } from './ai-connectors-settings.page';
 
 /**
@@ -23,11 +23,12 @@ import { AiConnectorsSettingsPage } from './ai-connectors-settings.page';
  */
 const OFF: AiConnectorState = { enabled: false, connectorUrl: 'https://med-fetch-dev.prefrontal.health/mcp', labName: 'Micro World' };
 
-function setup(opts: { perms?: string[]; state?: AiConnectorState; confirm?: boolean; put?: () => ReturnType<AiConnectorApi['setEnabled']>; putLevel?: () => ReturnType<AiConnectorApi['setPrivacyLevel']> } = {}) {
+function setup(opts: { perms?: string[]; state?: AiConnectorState; confirm?: boolean; putProposals?: () => ReturnType<AiConnectorApi['setProposals']>; put?: () => ReturnType<AiConnectorApi['setEnabled']>; putLevel?: () => ReturnType<AiConnectorApi['setPrivacyLevel']> } = {}) {
   const perms = opts.perms ?? ['manage_lab_settings'];
   const api = {
     get: vi.fn(() => of(opts.state ?? OFF)),
     setPrivacyLevel: vi.fn(opts.putLevel ?? ((privacyLevel: string) => of({ ...(opts.state ?? OFF), privacyLevel }))),
+    setProposals: vi.fn(opts.putProposals ?? ((proposals: boolean) => of({ ...(opts.state ?? OFF), proposals }))),
     setEnabled: vi.fn(opts.put ?? ((enabled: boolean) => of({ ...(opts.state ?? OFF), enabled }))),
   };
   const dialog = { confirm: vi.fn(async () => opts.confirm ?? true) };
@@ -68,6 +69,7 @@ async function settle(f: { detectChanges(): void; whenStable(): Promise<unknown>
   f.detectChanges();
 }
 const sw = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('[role="switch"]') as HTMLButtonElement | null;
+const suggestSw = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('#pf-aic-suggest') as HTMLButtonElement | null;
 
 afterEach(() => { document.body.innerHTML = ''; vi.useRealTimers(); });
 
@@ -154,15 +156,16 @@ describe('AiConnectorsSettingsPage', () => {
 describe('AiConnectorsSettingsPage privacy level', () => {
   const select = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('pf-select');
 
-  it('shows what an app can read in five groups, with who each one is for, and the never-promise', async () => {
+  it('shows what an app can read and suggest in six groups, with who each one is for, and the never-promise', async () => {
     const { f } = setup();
     await loaded(f);
     const groups = f.nativeElement.querySelectorAll('.pf-aic__grp');
-    expect(groups).toHaveLength(5);
+    expect(groups).toHaveLength(6);
     const text = f.nativeElement.textContent ?? '';
     expect(text).toContain('Billing totals — only for people who see money');
     expect(text).toContain('Patient results as codes — only when your lab’s privacy level allows');
     expect(text).toContain('Work per staff member, shown as codes like T-1');
+    expect(text).toContain('Suggested Test Master changes — only if your lab allows it');
     expect(text).toContain('Never patient or staff names, phone numbers, exact ages or ID numbers, and never a patient’s or staff member’s address');
   });
 
@@ -221,6 +224,82 @@ describe('AiConnectorsSettingsPage privacy level', () => {
     const { f } = setup({ state: { ...OFF } });
     await loaded(f);
     expect(f.componentInstance.level()).toBe('counts');
+  });
+});
+
+describe('AiConnectorsSettingsPage: let connected assistants suggest Test Master changes', () => {
+  it('admin: a second switch, OFF by default, with the plain-words label and the read-only promise', async () => {
+    const { f } = setup();
+    await loaded(f);
+    const s = suggestSw(f)!;
+    expect(s).toBeTruthy();
+    expect(s.getAttribute('role')).toBe('switch');
+    expect(s.getAttribute('aria-checked')).toBe('false');
+    const text = f.nativeElement.textContent ?? '';
+    expect(text).toContain('Let connected assistants suggest Test Master changes');
+    expect(text).toContain('Off — connected assistants can read, but can’t suggest any changes.');
+    expect(text).toContain('Read only — an app can’t add, change or delete anything');
+  });
+
+  it('turning it ON asks first, explains the inbox, and PUTs only {proposals:true}', async () => {
+    const { f, api, dialog, toasts } = setup();
+    await loaded(f);
+    suggestSw(f)!.click();
+    await settle(f);
+    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Let connected assistants suggest changes?', tone: 'primary',
+      message: expect.stringContaining('Pending changes') }));
+    expect(api.setProposals).toHaveBeenCalledWith(true);
+    expect(api.setEnabled).not.toHaveBeenCalled();
+    expect(suggestSw(f)!.getAttribute('aria-checked')).toBe('true');
+    expect(f.nativeElement.textContent).toContain('someone with Test Master permission approves it');
+    expect(f.nativeElement.textContent).toContain('An app can read, and suggest Test Master changes for your approval.');
+    expect(f.nativeElement.textContent).not.toContain('Read only — an app can’t add');
+    expect(toasts.success).toHaveBeenCalled();
+  });
+
+  it('turning it OFF is a danger confirm; cancelling changes nothing', async () => {
+    const a = setup({ state: { ...OFF, proposals: true } });
+    await loaded(a.f);
+    suggestSw(a.f)!.click();
+    await settle(a.f);
+    expect(a.dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Stop assistants suggesting changes?', tone: 'danger' }));
+    expect(a.api.setProposals).toHaveBeenCalledWith(false);
+    const b = setup({ confirm: false });
+    await loaded(b.f);
+    suggestSw(b.f)!.click();
+    await settle(b.f);
+    expect(b.api.setProposals).not.toHaveBeenCalled();
+    expect(suggestSw(b.f)!.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('a refused save says who can change it and keeps it off', async () => {
+    const { f, toasts } = setup({ putProposals: () => throwError(() => new ApiError('Forbidden', 'forbidden')) });
+    await loaded(f);
+    suggestSw(f)!.click();
+    await settle(f);
+    expect(toasts.error).toHaveBeenCalledWith('Only a lab admin can change this.');
+    expect(suggestSw(f)!.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('non-admin: sees the state as text only — no switch, cannot change it', async () => {
+    const { f, api } = setup({ perms: ['manage_tests'], state: { ...OFF, proposals: true } });
+    await loaded(f);
+    expect(suggestSw(f)).toBeNull();
+    expect(f.nativeElement.textContent).toContain('Connected assistants can suggest Test Master changes.');
+    await f.componentInstance.toggleProposals();
+    expect(api.setProposals).not.toHaveBeenCalled();
+  });
+
+  it('an older server without the field is treated as off', async () => {
+    const { f } = setup({ state: { ...OFF } });
+    await loaded(f);
+    expect(suggestSw(f)!.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('copy shared with the consent screen never says an app only reads when suggestions are allowed', () => {
+    expect(AI_CONNECTOR_SUGGEST_REQUESTED).toContain('Nothing is applied until someone with Test Master permission approves it in Prefrontal.');
+    expect(JSON.stringify([...AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST])).not.toMatch(/read-only|read only/i);
+    expect(AI_CONNECTOR_NEVER).toContain('can never approve or apply a change');
   });
 });
 

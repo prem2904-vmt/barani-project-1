@@ -151,6 +151,22 @@ describe('OAuthConsentPage', () => {
     expect(redirector.go).not.toHaveBeenCalled();
   });
 
+  it('an app that asks to suggest Test Master changes gets a second block and the honest access chip; a plain read app does not', async () => {
+    const plain = setup();
+    await settle(plain.f);
+    expect(plain.f.nativeElement.textContent).not.toContain('It could suggest');
+    expect(plain.f.nativeElement.textContent).toContain('Read only');
+    const { f } = setup({ details: async () => ({ ...DETAILS, scope: 'openid prefrontal:read prefrontal:test_master.propose' }) });
+    await settle(f);
+    const text = f.nativeElement.textContent ?? '';
+    expect(text).toContain('wants to read your lab’s numbers and suggest Test Master changes.');
+    expect(text).toContain('It could suggest');
+    expect(text).toContain('This app can suggest changes to your Test Master. Nothing is applied until someone with Test Master permission approves it in Prefrontal.');
+    expect(text).toContain('Read and suggest');
+    expect(text).toContain('Your lab hasn’t turned this on yet');   // the lab's switch is off in the default fixture
+    expect(text).toContain('it can never approve');
+  });
+
   it('renders the app name as TEXT — markup in it never becomes HTML', async () => {
     const evil = '<img src=x onerror="alert(1)"><b>Claude</b>';
     const { f } = setup({ details: async () => ({ ...DETAILS, client: { name: evil } }) });

@@ -13,7 +13,7 @@ import { createLoadHold } from '../../shared/utils/min-duration';
 import { copyText } from '../../shared/utils/report-share';
 import { SelectComponent } from '../../shared/primitives/select.component';
 import {
-  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_NEVER, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS,
+  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS,
 } from './ai-connector.api';
 
 /**
@@ -45,7 +45,7 @@ import {
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only" eyebrow="Lab settings" title="AI connectors"
-        subtitle="Let AI apps like Claude read your lab's numbers" parentRoute="/lab/settings"></pf-screen-header>
+        subtitle="Let AI apps like Claude read your lab's numbers and suggest Test Master changes" parentRoute="/lab/settings"></pf-screen-header>
 
       <div class="pf-band-body">
         <div class="pf-aic__grid" [class.pf-aic__grid--solo]="!isAdmin()">
@@ -76,10 +76,24 @@ import {
                       <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
                   </div>
+                  <div class="pf-aic__switchrow">
+                    <div class="pf-aic__switchtext">
+                      <span class="pf-aic__switchtitle" id="pf-aic-suggest-label">{{ suggestTitle }}</span>
+                      <span class="pf-aic__switchsub">{{ s.proposals ? suggestOn : suggestOff }}</span>
+                    </div>
+                    <button type="button" class="pf-toggle pf-aic__toggle press" role="switch" id="pf-aic-suggest" [attr.aria-checked]="!!s.proposals"
+                            aria-labelledby="pf-aic-suggest-label" [disabled]="saving()" (click)="toggleProposals()">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    </button>
+                  </div>
                 } @else {
                   <p class="pf-aic__status" role="status">
                     <span class="pf-aic__dot" [attr.data-on]="s.enabled" aria-hidden="true"></span>
                     {{ s.enabled ? 'AI connectors are on for your lab.' : 'AI connectors are off for your lab.' }}
+                  </p>
+                  <p class="pf-aic__status" role="status">
+                    <span class="pf-aic__dot" [attr.data-on]="!!s.proposals" aria-hidden="true"></span>
+                    {{ s.proposals ? 'Connected assistants can suggest Test Master changes.' : 'Connected assistants can’t suggest Test Master changes.' }}
                   </p>
                   <p class="pf-field__hint">Only a lab admin can change this.</p>
                 }
@@ -108,7 +122,13 @@ import {
                     <li [attr.data-current]="l.value === level()"><strong>{{ l.label }}</strong><span>{{ l.summary }}</span></li>
                   }
                 </ul>
-                <p class="pf-field__hint">Read only — an app can’t add, change or delete anything, and it sees only what the person who connected it may see. Each person signs in and presses Allow themselves.</p>
+                <p class="pf-field__hint">
+                  @if (s.proposals) {
+                    An app can read, and suggest Test Master changes for your approval. It can’t apply, approve, or delete anything itself, and it sees only what the person who connected it may see. Each person signs in and presses Allow themselves.
+                  } @else {
+                    Read only — an app can’t add, change or delete anything, and it sees only what the person who connected it may see. Each person signs in and presses Allow themselves.
+                  }
+                </p>
               }
             </div>
           </section>
@@ -202,8 +222,11 @@ export class AiConnectorsSettingsPage {
   private readonly toasts = inject(ToastService);
   protected readonly theme = inject(ThemeService);
 
-  readonly canSee = AI_CONNECTOR_CAN_SEE;
+  readonly canSee = [...AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST];
   readonly never = AI_CONNECTOR_NEVER;
+  readonly suggestTitle = AI_CONNECTOR_SUGGEST_TITLE;
+  readonly suggestOn = AI_CONNECTOR_SUGGEST_ON;
+  readonly suggestOff = AI_CONNECTOR_SUGGEST_OFF;
   readonly steps = CLAUDE_STEPS;
   readonly levels = AI_PRIVACY_LEVELS;
   readonly levelOptions = AI_PRIVACY_LEVELS.map(l => ({ value: l.value, label: l.label }));
@@ -241,7 +264,7 @@ export class AiConnectorsSettingsPage {
     const ok = await this.dialog.confirm(next
       ? {
         title: 'Turn on AI connectors?',
-        message: 'People in your lab will be able to connect an AI app such as Claude and let it read the lab’s numbers — counts, turnaround, pending work and analyzer status — and your Test Master (tests, tubes, preparation, report times and normal ranges). It can’t change anything, and each person must sign in and press Allow.',
+        message: 'People in your lab will be able to connect an AI app such as Claude and let it read the lab’s numbers — counts, turnaround, pending work and analyzer status — and your Test Master (tests, tubes, preparation, report times and normal ranges). It can’t change anything by itself, and each person must sign in and press Allow.',
         confirmLabel: 'Turn on',
         tone: 'primary',
       }
@@ -257,6 +280,40 @@ export class AiConnectorsSettingsPage {
       const s = await firstValueFrom(this.api.setEnabled(next));
       this.state.set(s ?? { ...cur, enabled: next });
       this.toasts.success(next ? 'AI connectors turned on' : 'AI connectors turned off');
+    } catch (e) {
+      const err = ApiError.from(e);
+      this.toasts.error(err.code === 'forbidden' || /forbid|permission|not allowed/i.test(err.message)
+        ? 'Only a lab admin can change this.'
+        : 'Couldn’t save — check your connection and try again.');
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
+  /** Flip "let connected assistants suggest Test Master changes" — always asks first. Off by default. */
+  async toggleProposals(): Promise<void> {
+    const cur = this.state();
+    if (!cur || this.saving() || !this.isAdmin()) return;
+    const next = !cur.proposals;
+    const ok = await this.dialog.confirm(next
+      ? {
+        title: 'Let connected assistants suggest changes?',
+        message: 'A connected assistant such as Claude will be able to suggest changes to your Test Master — prices, new tests, edits to a test, what is in a profile. Each suggestion waits in Test Master, Pending changes. Nothing changes until someone with Test Master permission approves it there, one by one. Each person who connects an app still presses Allow, and the app must ask for this access.',
+        confirmLabel: 'Turn on',
+        tone: 'primary',
+      }
+      : {
+        title: 'Stop assistants suggesting changes?',
+        message: 'Connected assistants go back to reading only. Suggestions already waiting in Pending changes stay there until someone approves or rejects them.',
+        confirmLabel: 'Turn off',
+        tone: 'danger',
+      });
+    if (!ok) return;
+    this.saving.set(true);
+    try {
+      const s = await firstValueFrom(this.api.setProposals(next));
+      this.state.set(s ?? { ...cur, proposals: next });
+      this.toasts.success(next ? 'Assistants can now suggest Test Master changes' : 'Assistants can no longer suggest changes');
     } catch (e) {
       const err = ApiError.from(e);
       this.toasts.error(err.code === 'forbidden' || /forbid|permission|not allowed/i.test(err.message)

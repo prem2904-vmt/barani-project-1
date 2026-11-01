@@ -10,6 +10,8 @@ import { ApiService } from '../../core/services/api.service';
  *   GET /api/ai-connector            → any signed-in user of the lab
  *   PUT /api/ai-connector {enabled}  → lab admin only (the server decides)
  *   PUT /api/ai-connector {privacyLevel} → lab admin only; either field may be sent alone
+ *   PUT /api/ai-connector {proposals} → lab admin only: "let connected assistants SUGGEST Test Master changes"
+ *     (default OFF; the changes wait in Test Master → Pending changes, nothing applies by itself)
  *   GET /api/ai-connector/resolve/{code} → "open in Prefrontal" links: P-xxxxx / T-n → the real record
  *     (only for the person the code was issued to; anything else is a 404)
  */
@@ -21,6 +23,8 @@ export interface AiConnectorState {
   labName: string;
   /** How much an outside AI may see. Absent (older server) = 'counts', the safest. */
   privacyLevel?: AiPrivacyLevel;
+  /** Connected assistants may suggest Test Master changes (they wait for a person to approve). Absent (older server) = off. */
+  proposals?: boolean;
 }
 
 /** What a code opens. Patients are masked as P-codes, staff as T-codes, outside Prefrontal. */
@@ -57,6 +61,10 @@ export class AiConnectorApi {
     return this.api.put<AiConnectorState>('/api/ai-connector', { enabled });
   }
 
+  setProposals(proposals: boolean): Observable<AiConnectorState> {
+    return this.api.put<AiConnectorState>('/api/ai-connector', { proposals });
+  }
+
   setPrivacyLevel(privacyLevel: AiPrivacyLevel): Observable<AiConnectorState> {
     return this.api.put<AiConnectorState>('/api/ai-connector', { privacyLevel });
   }
@@ -74,9 +82,10 @@ export interface CanSeeGroup {
   items: readonly string[];
 }
 
-/** What a connected AI app can read, grouped (consent + settings share it, so the
- *  two screens can never promise different things). Mirrors the server's 100
- *  read-only tools; the server's privacy gate is the ONE enforcer. */
+/** What a connected AI app can read, and suggest, grouped (consent + settings share it, so the
+ *  two screens can never promise different things). Mirrors the server's connector tools:
+ *  reads, plus "suggest a Test Master change" tools that only ever store a pending suggestion;
+ *  the server's privacy gate and the lab's suggestion switch are the ONE enforcer. */
 export const AI_CONNECTOR_CAN_SEE: readonly CanSeeGroup[] = [
   {
     title: 'Test catalogue & lab info',
@@ -122,9 +131,30 @@ export const AI_CONNECTOR_CAN_SEE: readonly CanSeeGroup[] = [
   },
 ];
 
+/** What an app that is ALLOWED to suggest can do (settings shows it as a sixth group; the consent screen shows it only
+ *  when the app asked for the suggest scope). Never listed as something every app can do. */
+export const AI_CONNECTOR_CAN_SUGGEST: CanSeeGroup = {
+  title: 'Suggested Test Master changes',
+  when: 'only if your lab allows it',
+  items: [
+    'It can suggest new prices, a new test, an edit to a test or a change to what is in a profile',
+    'Each suggestion waits in Test Master, Pending changes. Nothing changes until someone with Test Master permission approves it there',
+  ],
+};
+
 /** The promises that hold for every group above. */
 export const AI_CONNECTOR_NEVER =
-  'Never patient or staff names, phone numbers, exact ages or ID numbers, and never a patient’s or staff member’s address. Numbers under 5 show as “fewer than 5”. Each person only sees what their own role allows.';
+  'Never patient or staff names, phone numbers, exact ages or ID numbers, and never a patient’s or staff member’s address. Numbers under 5 show as “fewer than 5”. Each person only sees what their own role allows. An app can never approve or apply a change itself.';
+
+/** What the app is promised on the "suggest" switch, in plain words (one home for settings + consent). */
+export const AI_CONNECTOR_SUGGEST_TITLE = 'Let connected assistants suggest Test Master changes';
+export const AI_CONNECTOR_SUGGEST_ON =
+  'On — a connected assistant can suggest changes to the Test Master. Each one waits in Test Master, Pending changes until someone with Test Master permission approves it.';
+export const AI_CONNECTOR_SUGGEST_OFF = 'Off — connected assistants can read, but can’t suggest any changes.';
+export const AI_CONNECTOR_SUGGEST_REQUESTED =
+  'This app can suggest changes to your Test Master. Nothing is applied until someone with Test Master permission approves it in Prefrontal.';
+/** The Prefrontal OAuth scope an app asks for to be allowed to suggest. */
+export const AI_CONNECTOR_SUGGEST_SCOPE = 'prefrontal:test_master.propose';
 
 /** The three Claude steps on the settings screen. */
 export const CLAUDE_STEPS: readonly string[] = [

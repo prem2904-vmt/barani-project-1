@@ -6,7 +6,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { BusyDirective } from '../../shared/directives/busy.directive';
 import { SkeletonFormComponent } from '../../shared/primitives/skeleton-kit.component';
-import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_NEVER, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState } from './ai-connector.api';
+import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_REQUESTED, AI_CONNECTOR_SUGGEST_SCOPE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState } from './ai-connector.api';
 import { ConsentRedirector } from './consent-redirect';
 import {
   ConsentError, ConsentErrorKind, OAuthAuthorizationDetails, OAuthConsentClient, consentErrorText,
@@ -40,7 +40,7 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
       <pf-hero-band [customSearch]="true" [contextBar]="true">
         <div band-search class="pf-ctx" aria-label="Request">
           <span class="pf-ctx__primary pf-oc__app">{{ appName() || 'Connect an app' }}</span>
-          <span class="pf-ctx__chip"><span class="pf-ctx__k">Access</span>Read only</span>
+          <span class="pf-ctx__chip"><span class="pf-ctx__k">Access</span>{{ wantsSuggest() ? 'Read and suggest' : 'Read only' }}</span>
           @if (userName()) {
             <span class="pf-ctx__chip pf-oc__hide-phone"><span class="pf-ctx__k">Signed in</span>{{ userName() }}</span>
           }
@@ -107,7 +107,7 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
                       </div>
                     </div>
                   }
-                  <p class="pf-oc__lead"><strong class="pf-oc__name">{{ appName() }}</strong> wants to read your lab’s numbers.</p>
+                  <p class="pf-oc__lead"><strong class="pf-oc__name">{{ appName() }}</strong> wants to read your lab’s numbers{{ wantsSuggest() ? ' and suggest Test Master changes' : '' }}.</p>
                   <h2 class="pf-oc__sec">It could see</h2>
                   @for (g of canSee; track g.title) {
                     <div class="pf-oc__grp">
@@ -124,9 +124,18 @@ export type ConsentPhase = 'loading' | 'ready' | 'error' | 'leaving';
                   }
                   <p class="pf-oc__level"><strong>About patients, your lab allows: {{ levelInfo().label }}.</strong> {{ levelInfo().summary }}</p>
                   <p class="pf-oc__never">{{ never }}</p>
+                  @if (wantsSuggest()) {
+                    <h2 class="pf-oc__sec">It could suggest</h2>
+                    <p class="pf-oc__level" id="pf-oc-suggest"><strong>{{ suggestText }}</strong>
+                      @if (connector()?.proposals !== true) { Your lab hasn’t turned this on yet, so suggestions will be refused until a lab admin does. }</p>
+                  }
                   <p class="pf-oc__readonly">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6l-7-3Z"/></svg>
-                    <span>Read only — it can’t add, change or delete anything. It sees only what your own account may see.</span>
+                    @if (wantsSuggest()) {
+                      <span>It can’t add, change or delete anything itself, and it can never approve. It sees only what your own account may see.</span>
+                    } @else {
+                      <span>Read only — it can’t add, change or delete anything. It sees only what your own account may see.</span>
+                    }
                   </p>
                 }
               }
@@ -248,6 +257,9 @@ export class OAuthConsentPage implements OnInit {
 
   readonly canSee = AI_CONNECTOR_CAN_SEE;
   readonly never = AI_CONNECTOR_NEVER;
+  readonly suggestText = AI_CONNECTOR_SUGGEST_REQUESTED;
+  /** The app asked for the propose scope (its request carries scopes as one space-separated string). */
+  readonly wantsSuggest = computed(() => (this.details()?.scope ?? '').split(/[\s,]+/).includes(AI_CONNECTOR_SUGGEST_SCOPE));
   readonly phase = signal<ConsentPhase>('loading');
   readonly details = signal<OAuthAuthorizationDetails | null>(null);
   readonly connector = signal<AiConnectorState | null>(null);
