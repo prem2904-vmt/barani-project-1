@@ -169,6 +169,8 @@ export const AI_CONNECTOR_NEVER =
 export const AI_CONNECTOR_SUGGEST_TITLE = 'Let connected assistants suggest Test Master changes';
 export const AI_CONNECTOR_SUGGEST_ON =
   'On — a connected assistant can suggest changes to the Test Master. Each one waits in Test Master, Pending changes until someone with Test Master permission approves it.';
+/** Owner rule 2026-11-01: switch off = every app's permission is removed; turning it on again restores nothing. */
+export const AI_CONNECTOR_SUGGEST_WIPE = 'Turning this off removes every app’s permission to suggest; people will need to allow it again.';
 export const AI_CONNECTOR_SUGGEST_OFF = 'Off — connected assistants can read, but can’t suggest any changes.';
 export const AI_CONNECTOR_SUGGEST_REQUESTED =
   'This app can suggest changes to your Test Master. Nothing is applied until someone with Test Master permission approves it in Prefrontal.';

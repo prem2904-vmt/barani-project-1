@@ -213,6 +213,14 @@ describe('TestEditor codes — server-assigned, read-only (9-series)', () => {
     expect(c.fieldError('testCode')).toBeFalsy();
   });
 
+  it('a not_found on save says the test no longer exists, not a generic error', () => {
+    const { c, toasts } = make({ patchErr: new ApiError('Test not found', 'not_found') });
+    c.patch({ name: 'Sodium (lab)' });
+    c.saveTest();
+    expect(toasts.warning).toHaveBeenCalledWith('This test no longer exists — it may have been deleted. Reload the list.');
+    expect(toasts.error).not.toHaveBeenCalled();
+  });
+
   it('clone mode: a customised copy offers no revert (the server would refuse it)', () => {
     const { c } = make({ test: baseTest({ origin: 'customised', catalogMode: 'clone' }) });
     expect(c.canRevert()).toBe(false);

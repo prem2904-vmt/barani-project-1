@@ -13,7 +13,7 @@ import { createLoadHold } from '../../shared/utils/min-duration';
 import { copyText } from '../../shared/utils/report-share';
 import { SelectComponent } from '../../shared/primitives/select.component';
 import {
-  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorGrant, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS, rememberedAppName,
+  AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_CONNECTOR_SUGGEST_WIPE, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorGrant, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS, rememberedAppName,
 } from './ai-connector.api';
 
 /**
@@ -80,6 +80,7 @@ import {
                     <div class="pf-aic__switchtext">
                       <span class="pf-aic__switchtitle" id="pf-aic-suggest-label">{{ suggestTitle }}</span>
                       <span class="pf-aic__switchsub">{{ s.proposals ? suggestOn : suggestOff }}</span>
+                      @if (s.proposals) { <span class="pf-aic__switchsub" id="pf-aic-suggest-wipe">{{ suggestWipe }}</span> }
                     </div>
                     <button type="button" class="pf-toggle pf-aic__toggle press" role="switch" id="pf-aic-suggest" [attr.aria-checked]="!!s.proposals"
                             aria-labelledby="pf-aic-suggest-label" [disabled]="saving()" (click)="toggleProposals()">
@@ -256,6 +257,7 @@ export class AiConnectorsSettingsPage {
   readonly suggestTitle = AI_CONNECTOR_SUGGEST_TITLE;
   readonly suggestOn = AI_CONNECTOR_SUGGEST_ON;
   readonly suggestOff = AI_CONNECTOR_SUGGEST_OFF;
+  readonly suggestWipe = AI_CONNECTOR_SUGGEST_WIPE;
   readonly steps = CLAUDE_STEPS;
   readonly levels = AI_PRIVACY_LEVELS;
   readonly levelOptions = AI_PRIVACY_LEVELS.map(l => ({ value: l.value, label: l.label }));
@@ -377,7 +379,7 @@ export class AiConnectorsSettingsPage {
       }
       : {
         title: 'Stop assistants suggesting changes?',
-        message: 'Connected assistants go back to reading only. Suggestions already waiting in Pending changes stay there until someone approves or rejects them.',
+        message: 'Connected assistants go back to reading only. ' + AI_CONNECTOR_SUGGEST_WIPE + ' Suggestions already waiting in Pending changes stay there until someone approves or rejects them.',
         confirmLabel: 'Turn off',
         tone: 'danger',
       });
@@ -386,6 +388,7 @@ export class AiConnectorsSettingsPage {
     try {
       const s = await firstValueFrom(this.api.setProposals(next));
       this.state.set(s ?? { ...cur, proposals: next });
+      if (!next) this.grants.set([]);   // the server removed every app's permission; nothing to show until people allow again
       this.toasts.success(next ? 'Assistants can now suggest Test Master changes' : 'Assistants can no longer suggest changes');
     } catch (e) {
       const err = ApiError.from(e);

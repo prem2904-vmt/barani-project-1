@@ -2525,6 +2525,11 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       this.toasts.warning(err.message);
       return;
     }
+    if (err.code === 'not_found') {
+      // The test was deleted since this editor loaded (mw answers a plain not_found, not a server error).
+      this.toasts.warning('This test no longer exists — it may have been deleted. Reload the list.');
+      return;
+    }
     if (err.code === DEPARTMENT_REQUIRED_ERROR) {
       this.toasts.warning(err.message);
       return;
