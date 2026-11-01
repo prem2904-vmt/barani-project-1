@@ -30,6 +30,7 @@ import {
 import { STRIP_TINT, drawStripFrame, markPage, stripPair, stripText, stripTextHeight, type StripEnv } from './report-patient-strip';
 import { ageSexText, ageText, gridLabel, miniStripText, pageOfText, patientLabel, reportStatusText, sexText } from './report-patient-text';
 import { fitText } from './report-fit';
+import { LH_SCAN_ID, continuationClearance, planContinuationHeader, type ContinuationHeader } from './report-letterhead';
 import { autofitColumns } from './report-autofit-columns';
 import { DEFAULT_REPORT_STYLE, isDefaultReportStyle, readReportStyle, reportEngineStamp, type ReportStyle } from './report-style';
 import { CLASSIC_THEME, ReportTypeTheme, TypeEl, TypeWeight, reportTypeTheme, tokenSize } from './report-theme';
@@ -484,8 +485,11 @@ let CONT: ContinuationPlan | null = null;
 /** Pages that already carry the full patient block (the first page, a page a
  *  custom layout / the abnormal sheet opened with its own strip) - no mini strip there. */
 let PATIENT_PAGES = new Set<number>();
-/** Vertical room the mini strip takes at the top of a continuation page. */
-const contShift = (): number => (CONT ? CONT.h : 0);
+/** What pages 2+ carry above the body besides the mini strip (phase 5): artwork to
+ *  clear, a slim letterhead, or the whole letterhead. `h` = 0 on every untouched template. */
+let CONT_LH: ContinuationHeader = { kind: 'none', h: 0 };
+/** Vertical room the letterhead line and the mini strip take at the top of a continuation page. */
+const contShift = (): number => (CONT ? CONT.h : 0) + CONT_LH.h;
 
 // ── Typography — the report theme's token table (report-theme.ts) ──────
 // EVERY text draw below names its element and takes font / size / weight
@@ -834,6 +838,7 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   DENS = densityTokens(PASS.density ?? STYLE.density);
   SQ = PASS.sq ?? 1;
   CONT = null;
+  CONT_LH = { kind: 'none', h: 0 };
   PATIENT_PAGES = new Set<number>();
   TYPE = reportTypeTheme(template);
   EMBEDDED = false;
@@ -967,6 +972,10 @@ function renderReportOnce(input: ReportPdfInput): { doc: jsPDF; layout: ReportLa
   if (!LETTERPAD) HEADER_RESERVE = layout.bodyTop - MARGIN_TOP;
   if (!LETTERPAD) MARGIN_BOTTOM = footerFloor(layout);
   CONT = planContinuation(doc, snap);
+  CONT_LH = planContinuationHeader({
+    mode: STYLE.letterhead.continuation, letterpad: LETTERPAD, top: MARGIN_TOP, headerBottom: layout.headerBottom, bodyGap: BODY_GAP,
+    clearance: continuationClearance(STYLE.letterhead.preset, layout.backgrounds, template?.letterpadHeaderMm ?? 45),
+  });
   // Background images go down FIRST on every page they print on, so text,
   // the logo and the results always draw over them. Page 1 now; later pages
   // (ours or autotable's) as each is added.
@@ -2183,7 +2192,12 @@ function computeReportLayout(
   // ── Footer lines (last page), stacked up from just above the date strip.
   // A footer background image lifts the whole footer chrome above it
   // (footerImageLift); the footer area does not depend on bodyTop.
-  const footerLift = footerImageLift(resolveBackgrounds(doc, (cfg?.backgrounds ?? []).filter(b => b.area === 'footer'), 0));
+  let footerLift = footerImageLift(resolveBackgrounds(doc, (cfg?.backgrounds ?? []).filter(b => b.area === 'footer'), 0));
+  // Pre-printed paper shown on screen: its scan carries the footer artwork, so the date
+  // strip and disclaimer sit above the blank-at-the-bottom line, as on the printed sheet.
+  if (!LETTERPAD && STYLE.letterhead.preset === 'preprinted' && cfg?.backgrounds?.some(b => b.id === LH_SCAN_ID && !b.hidden)) {
+    footerLift = Math.max(footerLift, Math.ceil(Math.max(0, tpl?.letterpadFooterMm ?? 30) * MM));
+  }
   let extraY = A4.h - footerLift - 40;
   if (theme.disclaimer) {
     const dlh = TYPE.tokens.disclaimer.lineHeight ?? tsz('disclaimer') * 1.2;
@@ -6012,16 +6026,36 @@ function planContinuation(doc: jsPDF, snap: ReportSnapshot): ContinuationPlan | 
   return { lines: fit.lines, pt: fit.pt, lineH: fit.lineH, h: (fit.lines.length - 1) * fit.lineH + 18 };
 }
 
-/** The mini patient strip + "Page N of M" at the top of every page that has no
- *  full patient block. Drawn last, once the page count is known. */
+/** The slim letterhead of a continuation page: the lab name in the body's own face and a
+ *  hairline under it. The name shrinks (never wraps, never cut) to fit between the margins. */
+function drawSlimLetterhead(doc: jsPDF): void {
+  const name = LAYOUT?.items.find(i => i.id === 'name')?.text;
+  if (!name) return;
+  const y = MARGIN_TOP + 11;
+  typeset(doc, 'labName'); doc.setTextColor(BLACK);
+  let pt = 10;
+  doc.setFontSize(pt);
+  while (pt > 7 && doc.getTextWidth(name) > A4.w - 2 * MARGIN_X) { pt -= 0.5; doc.setFontSize(pt); }
+  doc.text(name, MARGIN_X, y);
+  doc.setDrawColor(HAIR); doc.setLineWidth(0.5);
+  doc.line(MARGIN_X, y + 5, A4.w - MARGIN_X, y + 5);
+}
+
+/** The letterhead line (slim / whole letterhead) and the mini patient strip + "Page N of M" at the
+ *  top of every page that has no full patient block. Drawn last, once the page count is known. */
 function drawContinuationStrips(doc: jsPDF): void {
   const plan = CONT;
-  if (!plan) return;
+  const lh = CONT_LH;
+  const lhDraws = lh.kind === 'slim' || lh.kind === 'full';
+  if (!plan && !lhDraws) return;
   const total = doc.getNumberOfPages();
   for (let i = 2; i <= total; i++) {
     if (PATIENT_PAGES.has(i)) continue;
     doc.setPage(i);
-    const y0 = MARGIN_TOP + 9;
+    if (lh.kind === 'slim') drawSlimLetterhead(doc);
+    else if (lh.kind === 'full') for (const it of LAYOUT?.items ?? []) if (it.region === 'header') drawLayoutItem(doc, it);
+    if (!plan) continue;
+    const y0 = MARGIN_TOP + 9 + lh.h;
     typeset(doc, 'demoValue'); doc.setFontSize(plan.pt); doc.setTextColor(BLACK);
     plan.lines.forEach((l, k) => doc.text(l, MARGIN_X, y0 + k * plan.lineH));
     typeset(doc, 'demoLabel'); doc.setFontSize(CONT_PT); doc.setTextColor(TEXT_DIM);
