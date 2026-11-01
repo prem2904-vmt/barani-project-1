@@ -187,6 +187,64 @@ describe('ProfileLayoutDesignerComponent — real box editing', () => {
     expect(note.y).toBeCloseTo(105, 0);
   });
 
+  it('smart guides: a box dragged near another lines up with it and the guide is drawn while dragging', () => {
+    const { f, c, el, emitted } = make({ sections: saved(two()) });
+    const boxEl = el.querySelectorAll('.pld-box')[1] as HTMLElement;
+    const k = c.mmPx();
+    c.onBoxPointerDown(ptr(boxEl, 0, 0), c.boxes()[1]);
+    fire(boxEl, 'pointermove', -19 * k, 0);              // left edge 101 mm — 1 mm off the table's right edge
+    f.detectChanges();
+    expect(c.boxes().find(b => b.id === 'note')!.x).toBe(100);
+    const g = c.guideLines().lines.find(l => l.axis === 'v' && l.pos === 100)!;
+    expect(g).toBeTruthy();
+    expect(g.from).toBe(0);                                // from the table's top…
+    expect(g.to).toBeCloseTo(120, 0);                      // …to the note's bottom, not the whole body
+    expect(el.querySelectorAll('pf-snap-guides .sg-line').length).toBeGreaterThan(0);
+    fire(boxEl, 'pointerup', -19 * k, 0);
+    f.detectChanges();
+    expect(lastBoxes(emitted).find(b => b.id === 'note')!.x).toBe(100);
+    expect(el.querySelectorAll('pf-snap-guides .sg-line').length).toBe(0);
+  });
+
+  it('the snap reach is ~6 screen px at any zoom (1.5× zoom = a shorter reach in mm)', () => {
+    const { c } = make({ sections: saved(two()) });
+    const k1 = c.mmPx();
+    c.zoom.set(1.5);
+    expect(c.mmPx()).toBeCloseTo(k1 * 1.5, 5);
+    const boxEl = document.createElement('div');
+    c.onBoxPointerDown(ptr(boxEl, 0, 0), c.boxes()[1]);
+    const k = c.mmPx();
+    fire(boxEl, 'pointermove', -(20 - 6 / k - 0.3) * k, 0); // just beyond 6 px
+    expect(c.boxes().find(b => b.id === 'note')!.x).not.toBe(100);
+    fire(boxEl, 'pointerup', 0, 0);
+  });
+
+  it('a newly added box lands lined up and the guides show for a moment', () => {
+    vi.useFakeTimers();
+    try {
+      const { c } = make({ sections: saved(two()) });
+      c.add('notes');
+      const id = c.selected()!;
+      const n = c.boxes().find(b => b.id === id)!;
+      const t = c.boxes().find(b => b.id === 'table')!;
+      expect(n.x === t.x || n.y === t.y || n.x === t.x + t.w + 4 || n.y === t.y + t.h + 4).toBe(true);
+      expect(c.guideLines().lines.length).toBeGreaterThan(0);
+      vi.advanceTimersByTime(1500);
+      expect(c.guideLines().lines).toEqual([]);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('an arrow nudge stops on another box\'s edge', () => {
+    const { c } = make({ sections: saved([
+      { id: 'table', kind: 'table', x: 0, y: 0, w: 100, h: 80 },
+      { id: 'note', kind: 'notes', text: 'Hi', x: 102, y: 100, w: 40, h: 20 },
+    ]) });
+    c.select('note');
+    c.step.set(5);
+    c.nudge(-5, 0);
+    expect(c.boxes().find(b => b.id === 'note')!.x).toBe(100);
+  });
+
   it('a press without movement only selects (no save)', () => {
     const { f, c, emitted } = make({ sections: saved(two()) });
     const boxEl = f.nativeElement.querySelectorAll('.pld-box')[1] as HTMLElement;

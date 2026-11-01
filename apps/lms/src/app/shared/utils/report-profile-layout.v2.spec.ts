@@ -1,7 +1,7 @@
 import type { PageLayoutBox } from '../models/report-layout.model';
 import { PAGE, ptToMm } from './report-header-layout';
 import {
-  addPaletteBox, analyzerSampleAsset, bodyArea, buildDefaultLayout, graphGrid, detectLayoutIssues, dragBox, findFreeSpot, isCbcFamily,
+  addPaletteBox, alignmentFor, analyzerSampleAsset, nudgeBox, bodyArea, buildDefaultLayout, graphGrid, detectLayoutIssues, dragBox, findFreeSpot, isCbcFamily,
   KNOWN_ANALYZER_IMAGES, printableBoxes, resizeFromHandle, setBoxHidden,
 } from './report-profile-layout';
 
@@ -77,13 +77,15 @@ describe('dragBox — 2-D snapping to the body and to the other boxes', () => {
     const boxes = [box('a', 0, 0, 60, 40), box('b', 100, 80, 30, 30)];
     const r = dragBox(boxes, 'b', 61.2, 80, BODY);
     expect(r.boxes.find(b => b.id === 'b')!.x).toBe(60);
-    expect(r.guides.v).toContain(60);
+    expect(r.guides.lines.filter(g => g.axis === 'v').map(g => g.pos)).toContain(60);
+    // Drawn between the two boxes only, not down the whole body.
+    expect(r.guides.lines.find(g => g.axis === 'v' && g.pos === 60)).toMatchObject({ from: 0, to: 110 });
   });
   it('tops snap too (horizontal guide)', () => {
     const boxes = [box('a', 0, 10, 60, 40), box('b', 100, 80, 30, 30)];
     const r = dragBox(boxes, 'b', 100, 11, BODY);
     expect(r.boxes.find(b => b.id === 'b')!.y).toBe(10);
-    expect(r.guides.h).toContain(10);
+    expect(r.guides.lines.filter(g => g.axis === 'h').map(g => g.pos)).toContain(10);
   });
   it('snap off (Alt) = free placement', () => {
     const boxes = [box('a', 0, 0, 60, 40), box('b', 100, 80, 30, 30)];
@@ -94,6 +96,21 @@ describe('dragBox — 2-D snapping to the body and to the other boxes', () => {
     const a = r.boxes[0];
     expect(a.x).toBe(0);
     expect(a.y + a.h).toBeLessThanOrEqual(H + 0.01);
+  });
+  it('the snap distance is what the designer passes (screen px → mm at the zoom)', () => {
+    const boxes = [box('a', 0, 0, 60, 40), box('b', 100, 80, 20, 30)];
+    expect(dragBox(boxes, 'b', 62.5, 80, BODY).boxes.find(b => b.id === 'b')!.x).toBe(62.5);       // > 1.6 mm default
+    expect(dragBox(boxes, 'b', 62.5, 80, BODY, true, 3).boxes.find(b => b.id === 'b')!.x).toBe(60); // zoomed out: 3 mm reach
+  });
+  it('Alt (snap off) draws no guides', () => {
+    const boxes = [box('a', 0, 0, 60, 40), box('b', 100, 80, 30, 30)];
+    expect(dragBox(boxes, 'b', 60, 80, BODY, false).guides).toEqual({ lines: [], measures: [] });
+  });
+  it('an image box lined up beside another shows the equal gap', () => {
+    const boxes = [box('a', 0, 0, 40, 30, 'analyzer'), box('b', 44, 0, 40, 30, 'analyzer'), box('c', 120, 0, 40, 30, 'analyzer')];
+    const r = dragBox(boxes, 'c', 89, 0, BODY);
+    expect(r.boxes.find(b => b.id === 'c')!.x).toBe(88);
+    expect(r.guides.measures.filter(m => m.kind === 'gap').map(m => m.size)).toEqual([4, 4]);
   });
   it('hidden boxes are not snap targets', () => {
     const boxes = [{ ...box('a', 0, 0, 60, 40), hidden: true }, box('b', 100, 80, 30, 30)];
@@ -119,6 +136,11 @@ describe('resizeFromHandle — 8 handles, opposite edges stay put', () => {
     const a = resizeFromHandle([start], start, 'e', -200, 0, BODY, false).boxes[0];
     expect(a.w).toBe(10);
     expect(a.x).toBe(50);
+  });
+  it('a resize can match another box\'s width', () => {
+    const other = box('b', 120, 120, 50, 30);
+    const a = resizeFromHandle([start, other], start, 'e', 9, 0, BODY).boxes.find(b => b.id === 'a')!;
+    expect(a.w).toBe(50);
   });
   it('the moving edge snaps to a neighbour', () => {
     const other = box('b', 100, 0, 20, 20);
@@ -146,6 +168,25 @@ describe('palette adds + hide', () => {
     expect(n.kind).toBe('notes');
     expect(n.text).toBe('Kindly correlate clinically.');
     expect(detectLayoutIssues(r.boxes, BODY).filter(i => i.kind === 'overlap')).toEqual([]);
+  });
+  it('a new image box lands lined up: beside the table with tops matched, or under the last image with left edges matched', () => {
+    const table = box('table', 0, 0, 110, 120, 'table');
+    const first = addPaletteBox([table], 'analyzer', BODY, { ref: '12003' });
+    const img1 = first.boxes.find(b => b.id === first.id)!;
+    expect(img1).toMatchObject({ x: 114, y: 0 });
+    const second = addPaletteBox(first.boxes, 'analyzer', BODY, { ref: '12053' });
+    const img2 = second.boxes.find(b => b.id === second.id)!;
+    expect(img2.x).toBe(img1.x);
+    expect(img2.y).toBe(img1.y + img1.h + 4);
+    expect(alignmentFor(second.boxes, second.id, BODY).lines.some(g => g.axis === 'v' && g.pos === img1.x)).toBe(true);
+  });
+  it('arrow nudge stops on another box\'s edge', () => {
+    const boxes = [box('a', 0, 0, 40, 30), box('b', 60, 50, 30, 30)];
+    const r = nudgeBox(boxes, 'b', -5, 0, BODY);          // nothing in the way: the full step
+    expect(r.boxes.find(b => b.id === 'b')!.x).toBe(55);
+    const s = nudgeBox(boxes.map(b => (b.id === 'b' ? { ...b, x: 42 } : b)), 'b', -5, 0, BODY);
+    expect(s.boxes.find(b => b.id === 'b')!.x).toBe(40);  // stops on a's right edge
+    expect(s.guides.lines.some(g => g.axis === 'v' && g.pos === 40)).toBe(true);
   });
   it('adding an analyzer graph already on the page re-shows it instead of a duplicate', () => {
     const boxes = setBoxHidden([box('analyzer-12003', 0, 0, 30, 30, 'analyzer')].map(b => ({ ...b, ref: '12003' })), 'analyzer-12003', true);

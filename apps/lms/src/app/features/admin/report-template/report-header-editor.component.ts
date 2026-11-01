@@ -6,10 +6,14 @@ import { normalizeHeaderPreset, ReportTemplate } from '../../../shared/models/re
 import { computeReportPageLayout } from '../../../shared/utils/report-pdf';
 import {
   Align, BG_MAX_UPLOAD_BYTES, BackgroundImage, BgArea, BgFit, HeaderField, HeaderLayoutConfig, ItemOverride, LayoutIssue,
-  LayoutItem, LayoutRegion, MARGIN_X, MAX_BACKGROUNDS, MM, PAGE, ResolvedBackground, addBackground, detectIssues,
-  downscaleSize, nudgeSnapX, positionReadout, ptToMm, readHeaderLayout, removeBackground, resetItem, setBackground,
-  setItem, snapBoxX, validateBackgroundFile, writeHeaderLayout,
+  LayoutItem, LayoutRegion, MARGIN_TOP, MARGIN_X, MAX_BACKGROUNDS, MM, PAGE, ResolvedBackground, addBackground, detectIssues,
+  downscaleSize, pageSnapContext, positionReadout, ptToMm, readHeaderLayout, removeBackground, resetItem, setBackground,
+  setItem, validateBackgroundFile, writeHeaderLayout,
 } from '../../../shared/utils/report-header-layout';
+import {
+  NO_GUIDES, nudgeStop, snapMove, snappingOn, tolFromPx, type SnapContext, type SnapGuides, type SnapRect,
+} from '../../../shared/utils/layout-snap';
+import { SnapGuidesComponent } from '../../../shared/components/snap-guides.component';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { PlatformService } from '../../../core/services/platform.service';
@@ -48,7 +52,10 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
  * footer element, placed from the SAME resolved layout the PDF was drawn with
  * (computeReportPageLayout) — click one to select it, drag it, or nudge it
  * with the arrow keys; guides show the printable margins, the centre line and
- * where the patient details start. The side card edits the selected element:
+ * where the patient details start. While moving, smart guides (layout-snap.ts,
+ * the engine the profile Custom layout designer shares) line the element up
+ * with the other elements and the background images / logos on both axes;
+ * Alt (Option) held places it freely. The side card edits the selected element:
  * its text, show/hide, alignment, exact position in mm, size, bold and line
  * width, with a warning when it will wrap, overflow or collide. With nothing
  * selected it lists every element (the phone view) plus the page settings.
@@ -59,7 +66,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
 @Component({
   selector: 'pf-report-header-editor',
   standalone: true,
-  imports: [FormsModule, ImageUploadComponent],
+  imports: [FormsModule, ImageUploadComponent, SnapGuidesComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'pf-rhe-host' },
   template: `
@@ -115,9 +122,8 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
               }
             }
           }
-          @if (snapGuide() !== null) {
-            <div class="pf-rhe-guide pf-rhe-guide--v pf-rhe-guide--snap" [style.left.px]="snapGuide()! * scale()" aria-hidden="true"></div>
-          }
+          <!-- Smart guides: what the moving element lines up with (always, Guides on or off). -->
+          <pf-snap-guides [guides]="smart()" [pxPerUnit]="scale()" [mmPerUnit]="MM_PER_PT" />
 
           <!-- Background images — under every element outline (and under the print). -->
           @for (bg of layout().backgrounds; track bg.id) {
@@ -426,7 +432,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
                         <button type="button" class="pf-seg__item pf-num" role="radio" [attr.aria-checked]="step() === st" (click)="step.set(st)">{{ st }} mm</button>
                       }
                     </div>
-                    <span class="pf-field__hint">Keyboard: arrows move {{ step() }} mm, Shift + arrows 5 mm.</span>
+                    <span class="pf-field__hint">Keyboard: arrows move {{ step() }} mm, Shift + arrows 5 mm. Dragged near another element or an image, it lines up with it; hold Alt (Option) while dragging to place it freely.</span>
                   </div>
                 </div>
                 <div class="pf-rhe-grid2">
@@ -704,7 +710,6 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     .pf-rhe-guide { position: absolute; pointer-events: none; z-index: 1; }
     .pf-rhe-guide--v { top: 0; bottom: 0; width: 0; border-left: 1px dashed rgba(124, 58, 237, .28); }
     .pf-rhe-guide--centre { border-left-style: dotted; border-left-color: rgba(124, 58, 237, .38); }
-    .pf-rhe-guide--snap { border-left: 1.5px solid #7c3aed; z-index: 3; }
     .pf-rhe-guide--body { left: 0; right: 0; height: 0; border-top: 1px dashed rgba(124, 58, 237, .5); }
     .pf-rhe-guide__tag { position: absolute; right: 6px; top: 2px; padding: 1px 6px; border-radius: 6px; white-space: nowrap;
       font-size: 10.5px; font-weight: 500; color: #5b21b6; background: rgba(245, 243, 255, .92); font-variant-numeric: tabular-nums; }
@@ -733,6 +738,8 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
       padding: 2px 7px; border-radius: 6px; white-space: nowrap; font-size: 11px; font-weight: 600; line-height: 1.3;
       color: #fff; background: #6d28d9; box-shadow: 0 2px 6px rgba(15,23,42,.2); pointer-events: none; }
     .pf-rhe-box--warn .pf-rhe-box__tag { background: #b45309; }
+    /* While an element moves, its name tag steps aside for the smart guides (the live readout stays). */
+    .pf-rhe-box--drag .pf-rhe-box__tag { display: none !important; }
     .pf-rhe-box:hover .pf-rhe-box__tag, .pf-rhe-box:focus-visible .pf-rhe-box__tag, .pf-rhe-box--sel .pf-rhe-box__tag { display: inline-flex; }
     .pf-rhe--footer .pf-rhe-box__tag { bottom: auto; top: calc(100% + 2px); }
     .pf-rhe-box__live { position: absolute; left: 0; top: calc(100% + 4px); padding: 2px 7px; border-radius: 6px; white-space: nowrap;
@@ -873,6 +880,7 @@ export class ReportHeaderEditorComponent implements OnDestroy {
 
   protected readonly PAGE = PAGE;
   protected readonly MARGIN_X = MARGIN_X;
+  protected readonly MM_PER_PT = 1 / MM;
   protected readonly PAGE_RATIO = PAGE.h / PAGE.w;
   protected readonly presets = PRESETS;
   protected readonly steps = STEPS;
@@ -894,7 +902,8 @@ export class ReportHeaderEditorComponent implements OnDestroy {
   readonly zoom = signal<1 | 2>(1);
   readonly guides = signal(true);
   readonly step = signal(1);
-  readonly snapGuide = signal<number | null>(null);
+  /** Smart guides on show (while dragging, or briefly after a nudge). */
+  readonly smart = signal<SnapGuides>(NO_GUIDES);
   readonly drag = signal<{ id: string; dxPx: number; dyPx: number } | null>(null);
   readonly canvasReady = signal(false);
   private readonly hostW = signal(600);
@@ -968,7 +977,7 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     });
   }
 
-  ngOnDestroy() { this.ro?.disconnect(); }
+  ngOnDestroy() { this.ro?.disconnect(); if (this.flashTimer) clearTimeout(this.flashTimer); }
 
   // ── page rendering (pdf.js, page 1) ─────────────────────────────────
   private async drawPage(url: string, cssW: number, host: HTMLDivElement) {
@@ -1159,22 +1168,39 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     if (!it || !this.movable(it)) return;
     this.moveTo(it, dxMm * MM, dyMm * MM, 'nudge');
   }
-  private moveTo(it: LayoutItem, dxPt: number, dyPt: number, mode: 'nudge' | 'drag') {
-    const p: Partial<Record<keyof ItemOverride, unknown>> = {};
-    if (dxPt && it.kind !== 'bar') {
-      const from = it.box.x, to = from + dxPt;
-      const snapped = mode === 'nudge' ? nudgeSnapX(from, to, it.box.w) : snapBoxX(to, it.box.w);
-      this.flashGuide(snapped.guide);
-      p['x'] = ptToMm(it.x + (snapped.left - from));
+  /** Everything a moving element can line up with: the other visible
+   *  elements of this region AND the background images / logos (pt). */
+  private snapContext(movingId: string, tol: number): SnapContext {
+    const others: SnapRect[] = [
+      ...this.regionItems().filter(i => i.id !== movingId && !i.hidden).map(i => i.box),
+      ...this.layout().backgrounds.filter(b => 'bg:' + b.id !== movingId && !b.hidden).map(b => b.box),
+    ];
+    const L = this.layout();
+    const ys = this.region() === 'header' ? [MARGIN_TOP, ...(L.bodyTopAuto ? [] : [L.bodyTop])] : [];
+    return pageSnapContext(others, tol, ys);
+  }
+  /** Move an element by (dx, dy) pt. A nudge that would carry an edge or
+   *  centre across a margin / centre line or another element's edge stops on
+   *  it; 'place' commits a drag's already-snapped position as it is. */
+  private moveTo(it: LayoutItem, dxPt: number, dyPt: number, mode: 'nudge' | 'place') {
+    const lockX = it.kind === 'bar';
+    if (lockX) dxPt = 0;
+    if (mode === 'nudge' && (dxPt || dyPt)) {
+      const r = nudgeStop(it.box, dxPt, dyPt, this.snapContext(it.id, 0));
+      this.flashGuides(r);
+      dxPt = r.rect.x - it.box.x; dyPt = r.rect.y - it.box.y;
     }
+    const p: Partial<Record<keyof ItemOverride, unknown>> = {};
+    if (dxPt) p['x'] = ptToMm(it.x + dxPt);
     if (dyPt) p['y'] = Math.max(0, ptToMm(it.y + dyPt));
     if (Object.keys(p).length) this.setOverride(p, it.id);
   }
   private flashTimer: ReturnType<typeof setTimeout> | null = null;
-  private flashGuide(g: number | null) {
-    this.snapGuide.set(g);
+  private flashGuides(g: SnapGuides) {
     if (this.flashTimer) clearTimeout(this.flashTimer);
-    if (g !== null) this.flashTimer = setTimeout(() => this.snapGuide.set(null), 900);
+    this.flashTimer = null;
+    this.smart.set({ lines: g.lines, measures: g.measures });
+    if (g.lines.length || g.measures.length) this.flashTimer = setTimeout(() => { this.flashTimer = null; this.smart.set(NO_GUIDES); }, 900);
   }
   /** Overflow fix: wrap at the margin (and pull it back inside if it was moved out). */
   fitInside(id: string) {
@@ -1235,15 +1261,15 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     const other = axis === 'x' ? { y: ptToMm(b.rect.y) } : { x: ptToMm(b.rect.x) };
     this.patchBg(id, { [axis]: v, ...other });
   }
-  /** Move a background by (dx, dy) pt; a nudge that crosses a guide stops on it, a drag snaps. */
-  private moveBg(b: ResolvedBackground, dxPt: number, dyPt: number, mode: 'nudge' | 'drag') {
-    let left = b.rect.x + dxPt;
-    if (dxPt) {
-      const snapped = mode === 'nudge' ? nudgeSnapX(b.rect.x, left, b.rect.w) : snapBoxX(left, b.rect.w);
-      this.flashGuide(snapped.guide);
-      left = snapped.left;
+  /** Move a background by (dx, dy) pt; a nudge stops on a guide / another
+   *  element's edge, 'place' commits a drag's already-snapped position. */
+  private moveBg(b: ResolvedBackground, dxPt: number, dyPt: number, mode: 'nudge' | 'place') {
+    if (mode === 'nudge' && (dxPt || dyPt)) {
+      const r = nudgeStop(b.box, dxPt, dyPt, this.snapContext('bg:' + b.id, 0));
+      this.flashGuides(r);
+      dxPt = r.rect.x - b.box.x; dyPt = r.rect.y - b.box.y;
     }
-    this.patchBg(b.id, { x: ptToMm(left), y: ptToMm(b.rect.y + dyPt) });
+    this.patchBg(b.id, { x: ptToMm(b.rect.x + dxPt), y: ptToMm(b.rect.y + dyPt) });
   }
   dragReadoutBg(b: ResolvedBackground): string {
     const d = this.drag(); if (!d) return '';
@@ -1255,7 +1281,7 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     const id = 'bg:' + b.id;
     if (this.selected() !== id) { this.select(id); return; }
     if (ev.button !== 0) return;
-    this.trackDrag(ev, id, b.rect, false, (dx, dy) => this.moveBg(b, dx, dy, 'drag'));
+    this.trackDrag(ev, id, b.box, false, (dx, dy) => this.moveBg(b, dx, dy, 'place'));
   }
   async removeBg(id: string) {
     const ok = await this.dialog.confirm({ title: 'Remove this background image?', message: 'It stops printing on every report. You can upload it again later.',
@@ -1344,10 +1370,11 @@ export class ReportHeaderEditorComponent implements OnDestroy {
     ev.stopPropagation();
     if (this.selected() !== it.id) { this.select(it.id); return; }   // first tap selects
     if (!this.movable(it) || ev.button !== 0) return;
-    this.trackDrag(ev, it.id, it.box, it.kind === 'bar', (dx, dy) => this.moveTo(it, dx, dy, 'drag'));
+    this.trackDrag(ev, it.id, it.box, it.kind === 'bar', (dx, dy) => this.moveTo(it, dx, dy, 'place'));
   }
-  /** Pointer drag with live snapping; `commit` gets the final (dx, dy) in pt. */
-  private trackDrag(ev: PointerEvent, id: string, box: { x: number; w: number }, lockX: boolean, commit: (dx: number, dy: number) => void) {
+  /** Pointer drag with live smart guides; `commit` gets the final, already
+   *  snapped (dx, dy) in pt. Alt (Option) held = free placement. */
+  private trackDrag(ev: PointerEvent, id: string, box: SnapRect, lockX: boolean, commit: (dx: number, dy: number) => void) {
     const el = ev.currentTarget as HTMLElement;
     const sx = ev.clientX, sy = ev.clientY;
     let moved = false;
@@ -1356,11 +1383,18 @@ export class ReportHeaderEditorComponent implements OnDestroy {
       const dx = lockX ? 0 : e.clientX - sx, dy = e.clientY - sy;
       if (!moved && Math.hypot(dx, dy) < 3) return;
       moved = true;
-      // Live snap: show where it will land.
+      if (this.flashTimer) { clearTimeout(this.flashTimer); this.flashTimer = null; }
       const s = this.scale();
-      const snap = snapBoxX(box.x + dx / s, box.w);
-      this.snapGuide.set(lockX ? null : snap.guide);
-      this.drag.set({ id, dxPx: lockX ? 0 : (snap.left - box.x) * s, dyPx: dy });
+      const proposed = { ...box, x: box.x + dx / s, y: box.y + dy / s };
+      let at = proposed;
+      if (snappingOn(e)) {
+        const r = snapMove(proposed, this.snapContext(id, tolFromPx(s)), { x: !lockX });
+        at = r.rect;
+        this.smart.set({ lines: r.lines, measures: r.measures });
+      } else {
+        this.smart.set(NO_GUIDES);
+      }
+      this.drag.set({ id, dxPx: (at.x - box.x) * s, dyPx: (at.y - box.y) * s });
     };
     const onUp = () => {
       el.removeEventListener('pointermove', onMove);
@@ -1368,6 +1402,7 @@ export class ReportHeaderEditorComponent implements OnDestroy {
       el.removeEventListener('pointercancel', onUp);
       const d = this.drag();
       this.drag.set(null);
+      this.smart.set(NO_GUIDES);
       if (moved && d) {
         const s = this.scale();
         // The snapped position is already in dxPx — commit it as a plain move.

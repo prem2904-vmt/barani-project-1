@@ -48,6 +48,103 @@ function make(t: Partial<ReportTemplate> = {}, region: 'header' | 'footer' = 'he
   return { f, c, el, boxes, boxFor, patches, cfg, item, dialog, tpl: () => tpl };
 }
 
+/** Pointer events for the drag handlers (jsdom has no PointerEvent ctor). */
+function ptr(target: HTMLElement, x: number, y: number) {
+  return { button: 0, clientX: x, clientY: y, pointerId: 1, altKey: false, currentTarget: target, target,
+    stopPropagation() {}, preventDefault() {} } as unknown as PointerEvent;
+}
+function fire(target: HTMLElement, type: string, x: number, y: number, altKey = false) {
+  const e = new Event(type) as Event & { clientX: number; clientY: number; altKey: boolean };
+  e.clientX = x; e.clientY = y; e.altKey = altKey;
+  target.dispatchEvent(e);
+}
+/** A small header image (a logo-sized background) at 120 mm, 10 mm. */
+const withImage = () => {
+  const cfg = addBackground(null, '/uploads/t/logo.png', 'img', 'header');
+  cfg.backgrounds![0] = { ...cfg.backgrounds![0], scale: 20, x: 120, y: 10 };
+  return { metadata: writeHeaderLayout(BASE, cfg) };
+};
+
+describe('Report designer — smart guides (one shared snap engine)', () => {
+  it('dragging a text element near an image lines its left edge up with the image, with a guide', () => {
+    const p = make(withImage());
+    const img = p.c.layout().backgrounds[0].box;
+    const it = p.item('address');
+    const el = p.boxFor('Address');
+    const s = p.c.scale();
+    p.c.select('address');
+    p.c.onBoxPointerDown(ptr(el, 0, 0), it);
+    const dx = (img.x + 1.2 - it.box.x) * s;                // 1.2 pt short of the image's left edge
+    fire(el, 'pointermove', dx, 0);
+    expect(p.c.smart().lines.some(l => l.axis === 'v' && Math.abs(l.pos - img.x) < 0.01)).toBe(true);
+    fire(el, 'pointerup', dx, 0);
+    expect(p.item('address').box.x).toBeCloseTo(img.x, 1);
+    expect(p.c.smart().lines).toEqual([]);                    // guides go when the drag ends
+  });
+
+  it('snaps on the y axis too: an element\'s top to the image\'s top', () => {
+    const p = make(withImage());
+    const img = p.c.layout().backgrounds[0].box;
+    const it = p.item('address');
+    const el = p.boxFor('Address');
+    const s = p.c.scale();
+    p.c.select('address');
+    p.c.onBoxPointerDown(ptr(el, 0, 0), it);
+    const dx = (img.x - 80 - it.box.x) * s, dy = (img.y + 0.2 - it.box.y) * s;
+    fire(el, 'pointermove', dx, dy);
+    expect(p.c.smart().lines.some(l => l.axis === 'h' && Math.abs(l.pos - img.y) < 0.01)).toBe(true);
+    fire(el, 'pointerup', dx, dy);
+    expect(p.item('address').box.y).toBeCloseTo(img.y, 1);
+  });
+
+  it('the image itself snaps to a text element (images are movers as well as targets)', () => {
+    const p = make(withImage());
+    const bg = p.c.layout().backgrounds[0];
+    const name = p.item('name');
+    const el = p.el.querySelector<HTMLElement>('.pf-rhe-box--bgimg')!;
+    const s = p.c.scale();
+    p.c.select('bg:img');
+    p.c.onBgPointerDown(ptr(el, 0, 0), bg);
+    const dy = (name.box.y + 0.2 - bg.box.y) * s;
+    fire(el, 'pointermove', 0, dy);
+    fire(el, 'pointerup', 0, dy);
+    expect(p.c.layout().backgrounds[0].box.y).toBeCloseTo(name.box.y, 1);
+  });
+
+  it('hold Alt (Option) while dragging: no snapping, no guides', () => {
+    const p = make(withImage());
+    const img = p.c.layout().backgrounds[0].box;
+    const it = p.item('address');
+    const el = p.boxFor('Address');
+    const s = p.c.scale();
+    p.c.select('address');
+    p.c.onBoxPointerDown(ptr(el, 0, 0), it);
+    const dx = (img.x + 1.2 - it.box.x) * s;
+    fire(el, 'pointermove', dx, 0, true);
+    expect(p.c.smart().lines).toEqual([]);
+    fire(el, 'pointerup', dx, 0, true);
+    expect(p.item('address').box.x).toBeCloseTo(img.x + 1.2, 1);
+  });
+
+  it('an arrow nudge stops on the image\'s edge', () => {
+    const p = make(withImage());
+    const img = p.c.layout().backgrounds[0].box;
+    p.c.select('address');
+    const w = p.item('address').box.w;
+    // Put the address's right edge 1 mm short of the image's left edge, then nudge 5 mm right.
+    p.c.setOverride({ x: (img.x - w - 1 * MM) / MM });
+    p.c.step.set(5);
+    p.c.nudge(5, 0);
+    expect(p.item('address').box.x + w).toBeCloseTo(img.x, 1);
+  });
+
+  it('the hint tells people about Alt', () => {
+    const p = make();
+    p.c.select('address'); p.f.detectChanges();
+    expect(p.el.textContent).toContain('hold Alt (Option) while dragging');
+  });
+});
+
 describe('Report designer — letterhead editor', () => {
   it('outlines every letterhead element from the resolved layout', () => {
     const p = make();
@@ -82,15 +179,16 @@ describe('Report designer — letterhead editor', () => {
   });
 
   it('arrow keys nudge the selected element by the step (Shift = 5 mm)', () => {
-    const p = make();
-    p.c.select('phone');
-    const y0 = p.item('phone').y;
+    // The footer disclaimer: nothing below it to stop on, so every step is whole.
+    const p = make({}, 'footer');
+    p.c.select('disclaimer');
+    const y0 = p.item('disclaimer').y;
     const page = p.el.querySelector<HTMLElement>('.pf-rhe-page')!;
     page.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-    expect(p.item('phone').y - y0).toBeCloseTo(1 * MM, 1);
+    expect(p.item('disclaimer').y - y0).toBeCloseTo(1 * MM, 1);
     page.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true, bubbles: true }));
-    expect(p.item('phone').y - y0).toBeCloseTo(6 * MM, 1);
-    expect(p.cfg()!.items['phone'].y).toBeCloseTo((y0 + 6 * MM) / MM, 1);
+    expect(p.item('disclaimer').y - y0).toBeCloseTo(6 * MM, 1);
+    expect(p.cfg()!.items['disclaimer'].y).toBeCloseTo((y0 + 6 * MM) / MM, 1);
   });
 
   it('a nudge across the left margin stops on it', () => {
@@ -102,7 +200,7 @@ describe('Report designer — letterhead editor', () => {
     p.c.nudge(3, 0);                                   // move right first
     p.c.nudge(-5, 0);                                  // back across the margin → stops on it
     expect(p.item('address').box.x).toBeCloseTo(MARGIN_X, 1);   // stored to 0.01 mm
-    expect(p.c.snapGuide()).toBe(MARGIN_X);
+    expect(p.c.smart().lines.some(l => l.axis === 'v' && Math.abs(l.pos - MARGIN_X) < 0.01)).toBe(true);
   });
 
   it('alignment re-anchors to that edge; the exact mm field moves it', () => {

@@ -54,8 +54,8 @@ describe('report-profile-layout — geometry: drag snap / arrow nudge (reuses th
   it('nudging across the centre guide stops exactly on it, not past it', () => {
     const centreMm = (PAGE.w / 2 - MARGIN_X) / MM;
     const boxes: PageLayoutBox[] = [{ id: 'b', kind: 'table', x: centreMm - 0.2, y: 0, w: 0, h: 10 }];
-    const { boxes: nudged, guide } = nudgeBox(boxes, 'b', 1, 0, BODY); // 1mm step would cross centre
-    expect(guide).toBe(PAGE.w / 2);
+    const { boxes: nudged, guides } = nudgeBox(boxes, 'b', 1, 0, BODY); // 1mm step would cross centre
+    expect(guides.lines.some(g => g.axis === 'v' && Math.abs(g.pos - centreMm) < 0.01)).toBe(true);
     expect(nudged[0].x).toBeCloseTo(centreMm, 2);
   });
 

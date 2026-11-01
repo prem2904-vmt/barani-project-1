@@ -1,7 +1,11 @@
 import type { PageLayoutAnalyzerImage, PageLayoutBox, PageLayoutBoxKind, PageLayoutPage, PageLayoutSection, PageLayoutTableMode, ReportSection } from '../models/report-layout.model';
 import {
-  MARGIN_X, MM, PAGE, intersectBox, mmToPt, nudgeSnapX, ptToMm, snapBoxX,
+  MARGIN_X, MM, PAGE, intersectBox, mmToPt, ptToMm, snapBoxX,
 } from './report-header-layout';
+import {
+  describeAlignment, nudgeStop, placeAligned, snapMove, snapResize,
+  type SnapContext, type SnapGuides as SnapGuideSet,
+} from './layout-snap';
 
 /**
  * Profile ONE-PAGE report layout — the designer that lets a lab arrange a
@@ -253,15 +257,16 @@ export function moveBox(boxes: PageLayoutBox[], id: string, xMm: number, yMm: nu
   return { boxes: boxes.map(x => (x.id === id ? next : x)), guide: snapped.guide };
 }
 
-/** Arrow-key nudge (mm step). A move that would carry an edge across the
- *  margin/centre line stops exactly on it, like the letterhead editor. */
-export function nudgeBox(boxes: PageLayoutBox[], id: string, dxMm: number, dyMm: number, body: BodyArea): { boxes: PageLayoutBox[]; guide: number | null } {
+/** Arrow-key nudge (mm step). A step that would carry an edge or centre
+ *  across a body edge / centre line OR another box's edge / centre stops
+ *  exactly on it (the next step moves on), like the letterhead editor. */
+export function nudgeBox(boxes: PageLayoutBox[], id: string, dxMm: number, dyMm: number, body: BodyArea): { boxes: PageLayoutBox[]; guides: SnapGuides } {
   const b = boxes.find(x => x.id === id);
-  if (!b) return { boxes, guide: null };
-  const fromPt = body.left + mmToPt(b.x), toPt = fromPt + mmToPt(dxMm);
-  const snapped = dxMm ? nudgeSnapX(fromPt, toPt, mmToPt(b.w)) : { left: fromPt, guide: null };
-  const next = clampBox({ ...b, x: ptToMm(snapped.left - body.left), y: b.y + dyMm }, body);
-  return { boxes: boxes.map(x => (x.id === id ? next : x)), guide: snapped.guide };
+  if (!b) return { boxes, guides: { lines: [], measures: [] } };
+  const ctx = snapContext(boxes, id, body);
+  const r = nudgeStop(b, dxMm, dyMm, ctx).rect;
+  const next = clampBox({ ...b, x: r.x, y: r.y }, body);
+  return { boxes: boxes.map(x => (x.id === id ? next : x)), guides: describeAlignment(next, ctx) };
 }
 
 /** Resize (drag a handle) — width/height only; position unchanged. */
@@ -577,10 +582,15 @@ export function addPaletteBox(
     notes: [Math.min(90, W), Math.min(18, H)],
   };
   const [w, h] = size[kind];
-  const spot = findFreeSpot(boxes, w, h, body);
+  // Line it up with what is already there (beside / below a box, edges
+  // matched); the grid scan only when no aligned spot fits.
+  const spot = placeAligned(w, h, {
+    others: boxes.filter(b => !b.hidden),
+    bounds: { x: 0, y: 0, w: ptToMm(body.w), h: ptToMm(body.h) },
+  }, PLACE_GAP_MM) ?? findFreeSpot(boxes, w, h, body);
   const prefix = kind === 'analyzer' ? `analyzer-${opts.ref ?? 'img'}` : kind === 'chart' ? `chart-${opts.ref ?? 'new'}` : kind;
   const id = newBoxId(prefix, boxes);
-  const box: PageLayoutBox = { id, kind, x: spot.x, y: spot.y, w: round1(w), h: round1(h) };
+  const box: PageLayoutBox = { id, kind, x: round1(spot.x), y: round1(spot.y), w: round1(w), h: round1(h) };
   if (opts.ref) box.ref = opts.ref;
   if (opts.label) box.label = opts.label;
   if (kind === 'notes') box.text = opts.text ?? '';
@@ -601,54 +611,50 @@ export function printableBoxes(boxes: ReadonlyArray<PageLayoutBox>): PageLayoutB
   return boxes.filter(b => !b.hidden);
 }
 
-// ── snapping: body edges / centre + every other box's edges ──────────────
+// ── snapping: body edges / centre + every other box (shared engine) ──────
+// The math lives in ONE place, layout-snap.ts — the letterhead editor uses the
+// same functions. This file only says what the targets are for a body.
 
-/** Snap lines (mm, body-relative) shown while dragging / resizing. */
-export interface SnapGuides { v: number[]; h: number[] }
+/** What the designer draws while a box moves (mm, body-relative). */
+export type SnapGuides = SnapGuideSet;
 
+/** Default snap distance when the caller has no zoom to convert from. */
 const SNAP_TOL_MM = 1.6;
+/** Space a newly added box keeps from its neighbours (the default layout's gap). */
+const PLACE_GAP_MM = 4;
 
-function snapTargets(boxes: ReadonlyArray<PageLayoutBox>, id: string, body: BodyArea): { xs: number[]; ys: number[] } {
+/** The body's snap world for box `id`: body edges + centre lines, every
+ *  other visible box. */
+function snapContext(boxes: ReadonlyArray<PageLayoutBox>, id: string, body: BodyArea, tol = SNAP_TOL_MM): SnapContext {
   const W = ptToMm(body.w), H = ptToMm(body.h);
-  const xs = [0, W / 2, W], ys = [0, H];
-  for (const b of boxes) {
-    if (b.id === id || b.hidden) continue;
-    xs.push(b.x, b.x + b.w, b.x + b.w / 2);
-    ys.push(b.y, b.y + b.h, b.y + b.h / 2);
-  }
-  return { xs, ys };
+  return {
+    others: boxes.filter(b => b.id !== id && !b.hidden),
+    lines: { xs: [0, W / 2, W], ys: [0, H / 2, H] },
+    bounds: { x: 0, y: 0, w: W, h: H },
+    tol,
+  };
 }
 
-/** Best snap of any of `edges` (positions of the moving box's edges, mm) to
- *  `targets`, within the tolerance. Returns the delta to apply and the line. */
-function bestSnap(edges: number[], targets: number[], tol = SNAP_TOL_MM): { d: number; line: number } | null {
-  let best: { d: number; line: number; abs: number } | null = null;
-  for (const e of edges) for (const t of targets) {
-    const d = t - e, abs = Math.abs(d);
-    if (abs <= tol && (!best || abs < best.abs)) best = { d, line: t, abs };
-  }
-  return best ? { d: best.d, line: best.line } : null;
+/** The guides for box `id` where it sits now (e.g. right after it was added). */
+export function alignmentFor(boxes: ReadonlyArray<PageLayoutBox>, id: string, body: BodyArea): SnapGuides {
+  const b = boxes.find(x => x.id === id);
+  return b ? describeAlignment(b, snapContext(boxes, id, body)) : { lines: [], measures: [] };
 }
 
 /** Drag a box to (x, y) mm — every edge AND centre snaps to the body edges,
- *  the body centre and the other boxes' edges/centres (both axes), then the
- *  box is clamped inside the body. The letterhead editor's feel, in 2-D. */
+ *  the body centre and the other boxes' edges/centres (both axes), or to an
+ *  equal gap; then the box is clamped inside the body. `tolMm` is the snap
+ *  distance (the designer passes ~6 screen px in mm); `snap = false` (Alt
+ *  held) places freely. */
 export function dragBox(
-  boxes: PageLayoutBox[], id: string, xMm: number, yMm: number, body: BodyArea, snap = true,
+  boxes: PageLayoutBox[], id: string, xMm: number, yMm: number, body: BodyArea, snap = true, tolMm = SNAP_TOL_MM,
 ): { boxes: PageLayoutBox[]; guides: SnapGuides } {
   const b = boxes.find(x => x.id === id);
-  if (!b) return { boxes, guides: { v: [], h: [] } };
-  let x = xMm, y = yMm;
-  const guides: SnapGuides = { v: [], h: [] };
-  if (snap) {
-    const t = snapTargets(boxes, id, body);
-    const sx = bestSnap([x, x + b.w / 2, x + b.w], t.xs);
-    if (sx) { x += sx.d; guides.v.push(sx.line); }
-    const sy = bestSnap([y, y + b.h / 2, y + b.h], t.ys);
-    if (sy) { y += sy.d; guides.h.push(sy.line); }
-  }
-  const next = clampBox({ ...b, x, y }, body);
-  return { boxes: boxes.map(o => (o.id === id ? next : o)), guides };
+  if (!b) return { boxes, guides: { lines: [], measures: [] } };
+  const ctx = snapContext(boxes, id, body, tolMm);
+  const r = snap ? snapMove({ x: xMm, y: yMm, w: b.w, h: b.h }, ctx).rect : { x: xMm, y: yMm };
+  const next = clampBox({ ...b, x: r.x, y: r.y }, body);
+  return { boxes: boxes.map(o => (o.id === id ? next : o)), guides: snap ? describeAlignment(next, ctx) : { lines: [], measures: [] } };
 }
 
 /** Which edges a resize handle moves. */
@@ -661,7 +667,7 @@ const MIN_W = 10, MIN_H = 8;
  *  a drag; the opposite edges stay put; never below the minimum size and
  *  never outside the body. */
 export function resizeFromHandle(
-  boxes: PageLayoutBox[], start: PageLayoutBox, handle: ResizeHandle, dxMm: number, dyMm: number, body: BodyArea, snap = true,
+  boxes: PageLayoutBox[], start: PageLayoutBox, handle: ResizeHandle, dxMm: number, dyMm: number, body: BodyArea, snap = true, tolMm = SNAP_TOL_MM,
 ): { boxes: PageLayoutBox[]; guides: SnapGuides } {
   const W = ptToMm(body.w), H = ptToMm(body.h);
   let l = start.x, r = start.x + start.w, t = start.y, btm = start.y + start.h;
@@ -669,19 +675,19 @@ export function resizeFromHandle(
   if (handle.includes('e')) r += dxMm;
   if (handle.includes('n')) t += dyMm;
   if (handle.includes('s')) btm += dyMm;
-  const guides: SnapGuides = { v: [], h: [] };
+  const ctx = snapContext(boxes, start.id, body, tolMm);
+  const edges = { l: handle.includes('w'), r: handle.includes('e'), t: handle.includes('n'), b: handle.includes('s') };
   if (snap) {
-    const tg = snapTargets(boxes, start.id, body);
-    if (handle.includes('w')) { const s = bestSnap([l], tg.xs); if (s) { l += s.d; guides.v.push(s.line); } }
-    if (handle.includes('e')) { const s = bestSnap([r], tg.xs); if (s) { r += s.d; guides.v.push(s.line); } }
-    if (handle.includes('n')) { const s = bestSnap([t], tg.ys); if (s) { t += s.d; guides.h.push(s.line); } }
-    if (handle.includes('s')) { const s = bestSnap([btm], tg.ys); if (s) { btm += s.d; guides.h.push(s.line); } }
+    const s = snapResize({ x: l, y: t, w: r - l, h: btm - t }, edges, ctx).rect;
+    l = s.x; t = s.y; r = s.x + s.w; btm = s.y + s.h;
   }
   l = Math.max(0, l); t = Math.max(0, t); r = Math.min(W, r); btm = Math.min(H, btm);
   if (r - l < MIN_W) { if (handle.includes('w')) l = r - MIN_W; else r = l + MIN_W; }
   if (btm - t < MIN_H) { if (handle.includes('n')) t = btm - MIN_H; else btm = t + MIN_H; }
   const next = clampBox({ ...start, x: l, y: t, w: r - l, h: btm - t }, body);
-  return { boxes: boxes.map(o => (o.id === start.id ? next : o)), guides };
+  // Re-describe the FINAL box so the guides / equal-size marks match what lands.
+  const guides = snap ? snapResize(next, edges, { ...ctx, tol: 0 }) : null;
+  return { boxes: boxes.map(o => (o.id === start.id ? next : o)), guides: guides ? { lines: guides.lines, measures: guides.measures } : { lines: [], measures: [] } };
 }
 
 /** The label a box shows in the designer / issue list. */

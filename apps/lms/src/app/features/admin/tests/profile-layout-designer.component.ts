@@ -8,13 +8,15 @@ import type {
 import type { ReportSignature, ReportTemplate } from '../../../shared/models/report.model';
 import { layoutSignatureBlock } from '../../../shared/utils/report-signatures';
 import {
-  DEFAULT_TABLE_SHARE, KNOWN_ANALYZER_IMAGES, PAGE, RESIZE_HANDLES, addPaletteBox, analyzerLabel, analyzerSampleAsset, bodyArea,
+  DEFAULT_TABLE_SHARE, KNOWN_ANALYZER_IMAGES, PAGE, RESIZE_HANDLES, addPaletteBox, alignmentFor, analyzerLabel, analyzerSampleAsset, bodyArea,
   boxLabel, buildDefaultLayout, detectLayoutIssues, dragBox, fitMeter, isCbcFamily, nudgeBox, patchBox, readPageLayout, removeBox,
   resizeBox, resizeFromHandle, setBoxHidden, setColumnVisible, writePageLayout,
   assignRowToBox, newBoxId, newPageId, rowAssignmentIssues, setTableMode, tableChain, type LiveLayout,
   type BodyArea, type PageLayoutIssue, type ResizeHandle, type SnapGuides,
 } from '../../../shared/utils/report-profile-layout';
 import { MM, ptToMm } from '../../../shared/utils/report-header-layout';
+import { snappingOn, tolFromPx } from '../../../shared/utils/layout-snap';
+import { SnapGuidesComponent } from '../../../shared/components/snap-guides.component';
 import { computeReportPageLayout, renderReportPdfBlobUrl, type ReportPdfInput } from '../../../shared/utils/report-pdf';
 import {
   applyLivePageLayout, buildSamplePreviewInput, namesFromParametersJson, withSampleImagesLoaded, type PreviewProfileMember,
@@ -53,7 +55,9 @@ interface DragState {
  * from the EXACT body rect the renderer reports back (`onOnePageBody`), so
  * what you drag is what prints:
  *   · press-and-drag moves a box (edges and centres snap to the body and to
- *     the other boxes, with guide lines); 8 handles resize it;
+ *     the other boxes, equal gaps too, with smart guides drawn between the
+ *     aligned boxes — layout-snap.ts; Alt = free); 8 handles resize it (and
+ *     match another box's width / height); a new box lands lined up;
  *   · arrow keys nudge (step 0.5 / 1 / 5 mm, Shift = 5 mm), Delete removes,
  *     Ctrl+Z / Ctrl+Shift+Z undo / redo, Esc clears the selection;
  *   · the side card adds boxes from a palette (results table, charts, the
@@ -67,7 +71,7 @@ interface DragState {
 @Component({
   selector: 'pf-profile-layout-designer',
   standalone: true,
-  imports: [FormsModule, SelectComponent],
+  imports: [FormsModule, SelectComponent, SnapGuidesComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'pld-host' },
   template: `
@@ -160,13 +164,8 @@ interface DragState {
           <div class="pld-fixed pld-fixed--top" aria-hidden="true" [style.height.px]="bodyPx().y"><span>Letterhead &amp; patient details — fixed, from the Report template</span></div>
           <div class="pld-fixed pld-fixed--bottom" aria-hidden="true" [style.top.px]="bodyPx().y + bodyPx().h"><span>Footer — fixed</span></div>
 
-          <!-- Snap guides while dragging / resizing. -->
-          @for (g of guideLines().v; track $index) {
-            <div class="pld-guide pld-guide--v" aria-hidden="true" [style.left.px]="bodyPx().x + g * mmPx()" [style.top.px]="bodyPx().y" [style.height.px]="bodyPx().h"></div>
-          }
-          @for (g of guideLines().h; track $index) {
-            <div class="pld-guide pld-guide--h" aria-hidden="true" [style.top.px]="bodyPx().y + g * mmPx()" [style.left.px]="bodyPx().x" [style.width.px]="bodyPx().w"></div>
-          }
+          <!-- Smart guides while dragging / resizing / nudging, and briefly after an add. -->
+          <pf-snap-guides [guides]="guideLines()" [pxPerUnit]="mmPx()" [originX]="bodyPx().x" [originY]="bodyPx().y" />
 
           <!-- Where a dragged box came from: blanked until the page re-renders. -->
           @if (drag(); as d) {
@@ -286,6 +285,7 @@ interface DragState {
                 </div>
               </div>
             </div>
+            <p class="pf-field__hint">Drag near another box or an image and it lines up with it — a guide line shows where. Hold Alt (Option) while dragging to place it freely.</p>
             <div class="pld-grid2">
               <label class="pf-field"><span class="pf-field__lbl">Left</span>
                 <input class="pf-input pf-num" type="number" step="0.5" [ngModel]="round(b.x)" (change)="setGeom('x', $any($event.target).value)" /></label>
@@ -572,9 +572,6 @@ interface DragState {
       color: #5b21b6; background: rgba(245, 243, 255, .95); opacity: 0; transition: opacity var(--pf-dur-fast, 200ms) ease; font-variant-numeric: tabular-nums; }
     .pld--guides .pld-body__tag, .pld-page:hover .pld-body__tag { opacity: 1; }
     .pld-body__centre { position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1px dotted rgba(124, 58, 237, .4); }
-    .pld-guide { position: absolute; z-index: 4; pointer-events: none; }
-    .pld-guide--v { width: 0; border-left: 1.5px solid #7c3aed; }
-    .pld-guide--h { height: 0; border-top: 1.5px solid #7c3aed; }
     .pld-hole { position: absolute; z-index: 2; background: #fff; pointer-events: none; }
 
     .pld-box { position: absolute; z-index: 3; box-sizing: border-box; cursor: grab; touch-action: none; outline: none;
@@ -593,6 +590,8 @@ interface DragState {
     .pld-box--warn .pld-box__tag { background: #b45309; }
     .pld-box:hover .pld-box__tag, .pld-box:focus-visible .pld-box__tag, .pld-box--sel .pld-box__tag, .pld--guides .pld-box__tag { display: inline-flex; }
     .pld--guides .pld-box:not(.pld-box--sel):not(:hover) .pld-box__tag { background: rgba(109, 40, 217, .78); }
+    /* While a box moves, its name tag steps aside for the smart guides' marks (the live readout stays). */
+    .pld-box--drag .pld-box__tag, .pld-box--drag:hover .pld-box__tag { display: none; }
     .pld-box__live { position: absolute; left: 0; top: calc(100% + 4px); padding: 2px 7px; border-radius: 6px; white-space: nowrap;
       font-size: 11px; color: #fff; background: #0f172a; pointer-events: none; z-index: 6; }
 
@@ -734,7 +733,16 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
   readonly advancedOpen = signal(false);
   readonly restoring = signal(false);
   readonly drag = signal<DragState | null>(null);
-  readonly guideLines = signal<SnapGuides>({ v: [], h: [] });
+  readonly guideLines = signal<SnapGuides>({ lines: [], measures: [] });
+  private guideTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Show guides for a moment (after a nudge or an add), then clear them. */
+  private flashGuides(g: SnapGuides, ms = 1200): void {
+    if (this.guideTimer) clearTimeout(this.guideTimer);
+    this.guideLines.set(g);
+    this.guideTimer = (g.lines.length || g.measures.length)
+      ? setTimeout(() => { this.guideTimer = null; this.guideLines.set({ lines: [], measures: [] }); }, ms)
+      : null;
+  }
   /** Original spots of just-moved boxes, blanked until the page re-renders. */
   readonly holes = signal<Array<{ id: string; x: number; y: number; w: number; h: number }>>([]);
   /** Cropped page pixels that travel with a moved box until the re-render lands. */
@@ -959,6 +967,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     if (this.renderTimer) clearTimeout(this.renderTimer);
+    if (this.guideTimer) clearTimeout(this.guideTimer);
     this.resizeObs?.disconnect();
     if (this.lastBlobUrl) URL.revokeObjectURL(this.lastBlobUrl);
   }
@@ -1230,7 +1239,9 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
 
   nudge(dx: number, dy: number): void {
     const id = this.selected(); if (!id) return;
-    this.commit(nudgeBox(this.boxes(), id, dx, dy, this.body()).boxes);
+    const r = nudgeBox(this.boxes(), id, dx, dy, this.body());
+    this.commit(r.boxes);
+    this.flashGuides(r.guides, 900);
   }
   setGeom(k: 'x' | 'y' | 'w' | 'h', raw: string): void {
     const b = this.selectedBox(); const v = parseFloat(raw);
@@ -1409,8 +1420,10 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     }
     const box: PageLayoutBox = { ...nb, id: newBoxId('table', all), label: this.tableMode() === 'auto' ? 'Results table (continued)' : 'Results table',
       ...(this.tableMode() === 'manual' ? { rows: [] } : {}) };
-    this.commit([...this.boxes(), box]);
+    const next = [...this.boxes(), box];
+    this.commit(next);
     this.selected.set(box.id);
+    this.flashGuides(alignmentFor(next, box.id, this.body()));
   }
   readonly dropTarget = signal<string | null>(null);
   onRowDragStart(ev: DragEvent, key: string): void {
@@ -1457,8 +1470,11 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     const others = this.pages().filter((_, i) => i !== this.activePage()).flatMap(p => p.boxes);
     let id = r.id;
     if (others.some(o => o.id === id)) id = newBoxId(id, [...others, ...r.boxes]);
-    this.commit(r.boxes.map(b => (b.id === r.id ? { ...b, id } : b)));
+    const next = r.boxes.map(b => (b.id === r.id ? { ...b, id } : b));
+    this.commit(next);
     this.selected.set(id);
+    // It lands lined up with what is there — show that for a moment.
+    this.flashGuides(alignmentFor(next, id, this.body()));
   }
   addAnalyzer(code: string, label: string): void { this.add('analyzer', { ref: code, label }); }
   addChart(id: string, label: string): void { this.add('chart', { ref: id, label }); }
@@ -1487,6 +1503,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
     this.sectionsChange.emit(next);
     this.emitLive();
     this.selected.set(r.id);
+    this.flashGuides(alignmentFor(r.boxes, r.id, this.body()));
     this.toasts.info('Chart added — set what it shows in its block in the print order.');
   }
 
@@ -1526,10 +1543,12 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
         this.captureGhost(start);
       }
       const k = this.mmPx();
-      const snap = !e.altKey; // Alt = free placement
+      const snap = snappingOn(e); // Alt (Option) held = free placement
+      const tol = tolFromPx(k);   // ~6 screen px, whatever the zoom
+      if (this.guideTimer) { clearTimeout(this.guideTimer); this.guideTimer = null; }
       const r = mode === 'move'
-        ? dragBox(before, start.id, start.x + dxPx / k, start.y + dyPx / k, this.body(), snap)
-        : resizeFromHandle(before, start, handle!, dxPx / k, dyPx / k, this.body(), snap);
+        ? dragBox(before, start.id, start.x + dxPx / k, start.y + dyPx / k, this.body(), snap, tol)
+        : resizeFromHandle(before, start, handle!, dxPx / k, dyPx / k, this.body(), snap, tol);
       this.guideLines.set(r.guides);
       this.setBoxes(r.boxes);
       if (mode === 'resize') this.shiftGhost(start, r.boxes.find(x => x.id === start.id)!);
@@ -1538,7 +1557,7 @@ export class ProfileLayoutDesignerComponent implements OnDestroy {
       el.removeEventListener('pointermove', onMove);
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointercancel', onUp);
-      this.guideLines.set({ v: [], h: [] });
+      this.guideLines.set({ lines: [], measures: [] });
       if (!moved) return;
       const r = this.boxRect(start);
       this.holes.update(hs => [...hs.filter(h => h.id !== start.id), { id: start.id, ...r }]);

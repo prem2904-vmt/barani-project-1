@@ -1,4 +1,5 @@
 import type { ReportTemplate } from '../models/report.model';
+import { nudgeStop, snapMove, type SnapContext, type SnapRect } from './layout-snap';
 
 /**
  * Report letterhead / footer LAYOUT MODEL (owner, 2026-09-27: "the user can
@@ -469,18 +470,21 @@ export const GUIDES_X: ReadonlyArray<{ x: number; label: string }> = [
   { x: PAGE.w - MARGIN_X, label: 'Right margin' },
 ];
 
+/** The letterhead's static snap world (pt, page coordinates): the margin /
+ *  centre guides on x, plus any y lines the caller adds. Every snap in the
+ *  editors runs through layout-snap.ts — the ONE engine. */
+export function pageSnapContext(others: ReadonlyArray<SnapRect>, tol: number, ys: ReadonlyArray<number> = []): SnapContext {
+  return { others, lines: { xs: GUIDES_X.map(g => g.x), ys }, bounds: { x: 0, y: 0, w: PAGE.w, h: PAGE.h }, tol };
+}
+const guideAt = (left: number, width: number): number | null =>
+  GUIDES_X.find(g => [left, left + width / 2, left + width].some(e => Math.abs(e - g.x) < 1e-6))?.x ?? null;
+
 /** Snap an item moved to a new box-left `left` (pt): when its left edge,
  *  centre or right edge lands within `tol` of a guide, pull it onto it.
  *  Returns the snapped left + the guide it snapped to (for a flash). */
 export function snapBoxX(left: number, width: number, tol = 1.5 * MM): { left: number; guide: number | null } {
-  let best: { d: number; left: number; guide: number } | null = null;
-  for (const g of GUIDES_X) {
-    for (const [edge, off] of [[left, 0], [left + width / 2, width / 2], [left + width, width]] as const) {
-      const d = Math.abs(edge - g.x);
-      if (d <= tol && (!best || d < best.d)) best = { d, left: g.x - off, guide: g.x };
-    }
-  }
-  return best ? { left: best.left, guide: best.guide } : { left, guide: null };
+  const r = snapMove({ x: left, y: 0, w: width, h: 0 }, pageSnapContext([], tol), { y: false }).rect;
+  return r.x === left && guideAt(left, width) === null ? { left, guide: null } : { left: r.x, guide: guideAt(r.x, width) };
 }
 
 /** A NUDGE that would carry an edge (left, centre or right) ACROSS a guide
@@ -488,18 +492,8 @@ export function snapBoxX(left: number, width: number, tol = 1.5 * MM): { left: n
  *  instead of skipping past it; the next nudge moves on. */
 export function nudgeSnapX(from: number, to: number, width: number): { left: number; guide: number | null } {
   if (Math.abs(to - from) < 1e-6) return { left: to, guide: null };
-  let best: { d: number; left: number; guide: number } | null = null;
-  for (const g of GUIDES_X) {
-    for (const off of [0, width / 2, width]) {
-      const a = from + off, b = to + off;
-      const crosses = (a < g.x - 0.01 && b > g.x + 0.01) || (a > g.x + 0.01 && b < g.x - 0.01);
-      if (crosses) {
-        const d = Math.abs(g.x - a);
-        if (!best || d < best.d) best = { d, left: g.x - off, guide: g.x };
-      }
-    }
-  }
-  return best ? { left: best.left, guide: best.guide } : { left: to, guide: null };
+  const left = nudgeStop({ x: from, y: 0, w: width, h: 0 }, to - from, 0, pageSnapContext([], 0)).rect.x;
+  return Math.abs(left - to) < 1e-9 ? { left: to, guide: null } : { left, guide: guideAt(left, width) };
 }
 
 /** Text box-left (pt) from anchor x, alignment and width. */
