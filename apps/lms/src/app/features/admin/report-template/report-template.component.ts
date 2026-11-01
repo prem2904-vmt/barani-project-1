@@ -13,7 +13,7 @@ import { SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
 import { ReportSequencingEditorComponent } from './report-sequencing-editor.component';
-import { preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
+import { lastReportSqueeze, preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -22,6 +22,7 @@ import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
 import { readReportOption, writeReportOption } from '../../../shared/utils/report-header-layout';
 import { readReportStyle, writeReportStyle, type ReportStylePatch } from '../../../shared/utils/report-style';
+import { squeezeMessage, type SqueezeReport } from '../../../shared/utils/report-density';
 import {
   AGE_STYLE_CHOICES, LABEL_JOINER_CHOICES, PATIENT_LABELS, RENAMEABLE_LABEL_KEYS, ageSexText, ageText, miniStripText, patientLabel, sexText, swapAgeSexColumns,
 } from '../../../shared/utils/report-patient-text';
@@ -271,16 +272,6 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                           <pf-select [options]="$any(minPtOptions)" [value]="'' + reportStyle().fit.minPt"
                                      (valueChange)="setMinPt($any($event))"></pf-select>
                         </div>
-                      </div>
-                      <div class="pf-sqr__row">
-                        <span class="pf-sqr__txt">
-                          <span class="pf-sqr__label">Widen the name column</span>
-                          <span class="pf-sqr__desc">In the results table, give long test names more room and keep each result on one line.</span>
-                        </span>
-                        <button type="button" class="pf-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="reportStyle().fit.autoColumns"
-                                aria-label="Widen the name column" (click)="setFit({ autoColumns: !reportStyle().fit.autoColumns })">
-                          <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-                        </button>
                       </div>
                     }
                   </div>
@@ -532,6 +523,49 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                         <span class="pf-rtheme__desc">{{ o.desc }}</span>
                       </button>
                     }
+                  </div>
+                </div>
+
+                <div class="pf-rtb" id="pf-density">
+                  <h4 class="pf-rtb-h">Page density</h4>
+                  <p class="pf-rtb-s">Compact tightens the rows, prints each Method and Specimen beside its test name, and slims the department headings, so a long report takes fewer pages. Results keep their size.</p>
+                  <div>
+                    <label class="pf-label">Density</label>
+                    <pf-segmented [options]="densityOptions" [value]="reportStyle().density === 'compact' ? 'compact' : 'normal'" size="md"
+                                  (valueChange)="setDensity($event)"></pf-segmented>
+                  </div>
+                  <div class="pf-sqr pf-rt-after">
+                    <div class="pf-sqr__row">
+                      <span class="pf-sqr__ic" aria-hidden="true">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 9l4 3 4-3"/><path d="M8 15l4-3 4 3"/></svg>
+                      </span>
+                      <span class="pf-sqr__txt">
+                        <span class="pf-sqr__label">Squeeze onto one page</span>
+                        <span class="pf-sqr__desc">
+                          @if (!reportStyle().squeeze) { Off. A report that runs a few lines onto a second page prints on two pages. }
+                          @else { When a report runs only a little over (up to 12% of a page), it prints Compact, then a touch smaller, so it fits one page less. Results never go below your smallest size. }
+                        </span>
+                        @if (reportStyle().squeeze && squeezeNote(); as note) { <span class="pf-sqr__note" role="status">{{ note }}</span> }
+                      </span>
+                      <button type="button" class="pf-toggle pf-rt-sw pf-sqr__sw" role="switch" [attr.aria-checked]="reportStyle().squeeze"
+                              aria-label="Squeeze onto one page" (click)="setSqueeze(!reportStyle().squeeze)">
+                        <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                      </button>
+                    </div>
+                    <div class="pf-sqr__row">
+                      <span class="pf-sqr__txt">
+                        <span class="pf-sqr__label">Widen the name column</span>
+                        <span class="pf-sqr__desc">
+                          @if (fitOn()) { In the results table, give long test names more room and keep each result on one line. }
+                          @else { Needs “Fit long text” on the Patient strip tab. }
+                        </span>
+                      </span>
+                      <button type="button" class="pf-toggle pf-rt-sw pf-sqr__sw" role="switch" [disabled]="!fitOn()"
+                              [attr.aria-checked]="fitOn() && reportStyle().fit.autoColumns"
+                              aria-label="Widen the name column" (click)="setFit({ autoColumns: !reportStyle().fit.autoColumns })">
+                        <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -986,6 +1020,9 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-sqr__label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .pf-sqr__desc { font-size: 12px; line-height: 1.4; color: var(--text-muted); }
     .pf-sqr__sw { flex: none; min-width: 44px; min-height: 44px; }
+    .pf-sqr__sw:disabled { opacity: .45; cursor: not-allowed; }
+    .pf-sqr__note { font-size: 12px; font-weight: 600; line-height: 1.4; color: var(--text-secondary); }
+    .pf-rt-after { margin-top: 10px; }
 
     /* Department scope row for the patient strip */
     .pf-pt-scope { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -1351,6 +1388,20 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   setFit(p: { enabled?: boolean; minPt?: number; autoColumns?: boolean }) {
     this.patch({ metadata: writeReportStyle(this.tpl(), { fit: p }) });
   }
+  // ── Page density + squeeze (report-density.ts) ──
+  readonly densityOptions: SegmentedOption<string>[] = [
+    { value: 'normal', label: 'Normal' },
+    { value: 'compact', label: 'Compact' },
+  ];
+  /** What the squeeze did to the designer's sample report (null = not asked / not run). */
+  readonly squeeze = signal<SqueezeReport | null>(null);
+  readonly squeezeNote = computed<string>(() => squeezeMessage(this.squeeze()));
+  setDensity(v: string) {
+    this.patch({ metadata: writeReportStyle(this.tpl(), { density: v === 'compact' ? 'compact' : 'normal' }) });
+  }
+  setSqueeze(on: boolean) {
+    this.patch({ metadata: writeReportStyle(this.tpl(), { squeeze: on }) });
+  }
   setMinPt(v: string) {
     const n = parseFloat(v);
     if (isFinite(n)) this.setFit({ minPt: n });
@@ -1647,6 +1698,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       const prev = this._previewUrl();
       if (prev) URL.revokeObjectURL(prev);
       const url = renderReportPdfBlobUrl({ ...baseInput, imageCache });
+      this.squeeze.set(lastReportSqueeze());
       this.issues.set(reportIssues({ ...baseInput, imageCache }));
       this.imageCache.set(imageCache);
       this.rawPreviewUrl.set(url);

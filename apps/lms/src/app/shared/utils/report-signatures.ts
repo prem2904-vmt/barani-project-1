@@ -31,20 +31,27 @@ export const SIG_MIN_W = 120;
 export const SIG_IMG_W = 70;
 export const SIG_IMG_H = 24;
 
+/** Density overlay (report-density.ts): the air above and under a signature
+ *  row. Normal = today's 10 / 7; the renderer sets it per render and resets it. */
+let rhythm = { lead: 10, tail: 7 };
+export function setSignatureRhythm(r: { lead: number; tail: number } | null): void {
+  rhythm = r ? { lead: r.lead, tail: r.tail } : { lead: 10, tail: 7 };
+}
+
 /** Vertical rhythm of one signature row (pt, from the row's top). */
 export const SIG_ROW = {
   /** Air above the image — separates the row from what precedes it. */
-  lead: 10,
+  get lead(): number { return rhythm.lead; },
   /** Image/scribble baseline (image spans baseline-20 … baseline+4). */
-  base: 30,
+  get base(): number { return rhythm.lead + 20; },
   /** Name baseline, relative to `base`. */
   name: 16,
   /** Each optional line (title, registration) adds this much. */
   title: 11,
   reg: 10,
   /** Air under the last baseline. */
-  tail: 7,
-} as const;
+  get tail(): number { return rhythm.tail; },
+};
 
 /** The signatories that will actually print: a slot needs a name or an
  *  image, and at most SIG_MAX of them. */

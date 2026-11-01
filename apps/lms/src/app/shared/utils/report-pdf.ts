@@ -11,7 +11,8 @@ import {
   ResolvedSection,
 } from '../models/report-layout.model';
 import { normalizeHeaderPreset, ReportSignature, ReportTemplate, type HeaderPreset } from '../models/report.model';
-import { layoutSignatureBlock, SIG_IMG_H, SIG_IMG_W, SIG_ROW } from './report-signatures';
+import { layoutSignatureBlock, SIG_IMG_H, SIG_IMG_W, SIG_ROW, setSignatureRhythm } from './report-signatures';
+import { DENSITY, SQUEEZE_SCALE, densityTokens, squeezeEligible, squeezedSize, type DensityId, type DensityTokens, type SqueezeReport } from './report-density';
 import { savedFlagOf, type SavedFlag } from './result-flag';
 import { reportFlag, reportFlagWord } from './report-flag';
 import { fillUnit, normalizeReportText } from './reference-range';
@@ -450,6 +451,27 @@ let theme: ResolvedTheme = defaultTheme();
  *  Default = today's behaviour on every path (report-style.ts). */
 let STYLE: ReportStyle = DEFAULT_REPORT_STYLE;
 
+/** The density overlay of this render (report-density.ts). Normal = today's numbers. */
+let DENS: DensityTokens = DENSITY.normal;
+/** The squeeze's last-resort font scale of this render (1 = off). */
+let SQ = 1;
+/** The pass the wrapper asked for (density / scale override); {} = what the template says. */
+let PASS: { density?: DensityId; sq?: number } = {};
+/** Where the last render's content ended (pt on the last page) - the squeeze reads it. */
+let END_Y = 0;
+let END_SIGS_H = 0;
+/** Page number -> the lowest point a results row / sign-off reached on it (the squeeze
+ *  needs the free room left at the foot of the page before the last). */
+let PAGE_BOTTOM = new Map<number, number>();
+function noteBottom(doc: jsPDF, y: number): void {
+  const pg = (doc as unknown as { getCurrentPageInfo(): { pageNumber: number } }).getCurrentPageInfo().pageNumber;
+  if (y > (PAGE_BOTTOM.get(pg) ?? 0)) PAGE_BOTTOM.set(pg, y);
+}
+/** What the last render's squeeze attempt did (null = squeeze not asked for). */
+let LAST_SQUEEZE: SqueezeReport | null = null;
+/** The squeeze report of the most recent build (the designer's chip reads it). */
+export function lastReportSqueeze(): SqueezeReport | null { return LAST_SQUEEZE; }
+
 /** The patient-block wording / frame choices of this render (a getter so every
  *  draw reads the style frozen for THIS render). */
 const PS = (): ReportStyle['patient'] => STYLE.patient;
@@ -487,8 +509,23 @@ function setFace(doc: jsPDF, weight: TypeWeight): void {
 }
 /** An element's size (pt) under the template's font scale. */
 function tsz(el: TypeEl): number {
-  return tokenSize(TYPE.tokens[el], theme.fontScale);
+  let v = tokenSize(TYPE.tokens[el], theme.fontScale);
+  // Density: a note face is capped (never a result face; never under the fit floor).
+  const cap = DENS.sizeCap[el];
+  if (cap !== undefined && v > cap) v = Math.max(cap, STYLE.fit.enabled ? STYLE.fit.minPt : 0);
+  // Squeeze, last resort: body faces x0.95, never under the fit floor.
+  if (SQ < 1 && SQUEEZE_FACES.has(el)) v = squeezedSize(v, SQ, STYLE.fit.minPt);
+  return v;
 }
+/** The faces a squeeze may shrink: the results body, never the letterhead, the strip or the footer. */
+const SQUEEZE_FACES: ReadonlySet<TypeEl> = new Set<TypeEl>([
+  'deptName', 'deptMeta', 'deptContinued', 'columnHead', 'tableBody', 'panelName', 'panelContinued',
+  'testName', 'result', 'resultAbnormal', 'unit', 'range', 'methodology', 'specimen', 'referral', 'cellText',
+  'methodColumn', 'specimenColumn', 'narrativeResult', 'description', 'interpretation', 'interpretationLabel', 'note',
+  'techNote', 'testHeading', 'sectionLabel', 'narrativeName', 'narrative', 'narrativeMerged',
+  'cultureLabel', 'cultureValue', 'astDrug', 'astResult', 'astLegend',
+  'signatureName', 'signatureTitle', 'signatureReg', 'signatureStatement', 'endMarker',
+]);
 /** An element's weight. */
 function twt(el: TypeEl): TypeWeight {
   return TYPE.tokens[el].weight;
@@ -786,6 +823,8 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
 
   applyTheme(resolveTheme(template, practice));
   STYLE = readReportStyle(template);
+  DENS = densityTokens(PASS.density ?? STYLE.density);
+  SQ = PASS.sq ?? 1;
   CONT = null;
   PATIENT_PAGES = new Set<number>();
   TYPE = reportTypeTheme(template);
@@ -821,10 +860,78 @@ function prepareRender(input: ReportPdfInput): { practice: NonNullable<ReportPdf
   return { practice, template, snap };
 }
 
-/** Build the PDF and hand back the letterhead/footer layout it drew with. */
-export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; layout: ReportLayoutResult } {
+/** What a build hands back: the document, the letterhead/footer layout it drew
+ *  with, and - only for a template that asked for it - what the squeeze did. */
+export interface ReportBuild { doc: jsPDF; layout: ReportLayoutResult; squeeze: SqueezeReport | null }
+
+/** Build the PDF and hand back the letterhead/footer layout it drew with.
+ *
+ *  "Squeeze onto one page" (report-density.ts, plan §3.6): with `reportStyle.squeeze`
+ *  on, the report is laid out once as the template says (a dry pass); if its last
+ *  page holds only a small overflow (<= 12 percent of a page) it is laid out again
+ *  at the Compact density and, if that is still over, with the body faces at 0.95
+ *  (never under the fit floor). The squeezed paper is kept only when it really has
+ *  fewer pages - otherwise the report prints exactly as it would have. Without the
+ *  switch this is one ordinary render, byte for byte. */
+export function buildReportPdfWithLayout(input: ReportPdfInput): ReportBuild {
+  LAST_SQUEEZE = null;
+  const run = (pass: { density?: DensityId; sq?: number }, inp: ReportPdfInput) => {
+    PASS = pass;
+    try {
+      const out = renderReportOnce(inp);
+      return { ...out, pages: out.doc.getNumberOfPages(), overflow: lastPageFill(out.doc.getNumberOfPages()) };
+    } finally { PASS = {}; setSignatureRhythm(null); }
+  };
+  if (!readReportStyle(input.template ?? null).squeeze) {
+    const one = run({}, input);
+    return { doc: one.doc, layout: one.layout, squeeze: null };
+  }
+  const hooks = !!(input.drawRecorder || input.onOnePageBody);
+  const quiet: ReportPdfInput = { ...input, drawRecorder: undefined, onOnePageBody: undefined };
+  const base = run({}, hooks ? quiet : input);
+  const styleDensity = densityTokens(readReportStyle(input.template ?? null).density).id;
+  let best = base;
+  let pass: { density?: DensityId; sq?: number } = {};
+  let report: SqueezeReport = { applied: false, pagesBefore: base.pages, pagesAfter: base.pages, overflow: base.overflow, by: '', reason: 'one-page' };
+  if (base.pages >= 2) {
+    if (!squeezeEligible(base.pages, base.overflow)) report = { ...report, reason: 'too-long' };
+    else {
+      report = { ...report, reason: 'no-gain' };
+      const tries: Array<{ pass: { density?: DensityId; sq?: number }; by: SqueezeReport['by'] }> = [];
+      if (styleDensity !== 'compact') tries.push({ pass: { density: 'compact' }, by: 'compact' });
+      tries.push({ pass: { density: 'compact', sq: SQUEEZE_SCALE }, by: styleDensity !== 'compact' ? 'compact+scale' : 'scale' });
+      for (const t of tries) {
+        const r = run(t.pass, hooks ? quiet : input);
+        if (r.pages < base.pages) {
+          best = r; pass = t.pass;
+          report = { applied: true, pagesBefore: base.pages, pagesAfter: r.pages, overflow: base.overflow, by: t.by };
+          break;
+        }
+      }
+    }
+  }
+  // A recorder / designer hook must watch the paper that is actually returned.
+  const final = hooks ? run(pass, input) : best;
+  LAST_SQUEEZE = report;
+  return { doc: final.doc, layout: final.layout, squeeze: report };
+}
+
+/** How far over the previous page the report runs, as a share of a page height (0..1.5):
+ *  what sits on the LAST page (from the top of its body to where the End of Report and
+ *  the sign-off end) minus the room still free at the foot of the page before it. A
+ *  previous page whose foot is unknown (a narrative / custom page) counts as full. */
+function lastPageFill(pages: number): number {
+  if (pages < 2) return 0;
+  const top = MARGIN_TOP + 10 + contShift();
+  const free = Math.max(0, A4.h - MARGIN_BOTTOM - (PAGE_BOTTOM.get(pages - 1) ?? A4.h - MARGIN_BOTTOM));
+  return Math.max(0, Math.min(1.5, (END_Y + END_SIGS_H - top - free) / A4.h));
+}
+
+function renderReportOnce(input: ReportPdfInput): { doc: jsPDF; layout: ReportLayoutResult } {
+  PAGE_BOTTOM = new Map();
   const report = input.report;
   const { practice, template, snap } = prepareRender(input);
+  setSignatureRhythm(DENS.sig);
   const doc = newReportDoc();
   // Built-in PDF fonts are cp1252-only: superscripts (×10⁹/L), subscripts
   // (CO₂) and Greek (β-hCG) would otherwise print as garbage. One wrapper on
@@ -900,7 +1007,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   // Reported-on time. The amendment trail lives in the data — snap.amendment,
   // AmendedBy/AmendmentReason on the report row, the result versions and the
   // order activity — where the audit needs it.
-  let cursorY = patientBottom + 14;
+  let cursorY = patientBottom + DENS.afterStrip;
 
   // ── Body — ONE continuous results table, grouped by panel/profile ──
   // Each tabular test becomes a bold full-width "panel" header row
@@ -1254,7 +1361,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
       NEXT_PAGE_IS_FIRST = true;
       try { doc.addPage(); } finally { NEXT_PAGE_IS_FIRST = false; }
       drawLetterhead(doc);
-      cursorY = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report)) + 14;
+      cursorY = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report)) + DENS.afterStrip;
     }
   }
 
@@ -1296,7 +1403,7 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
         NEXT_PAGE_IS_FIRST = false;
         doc.addPage();
         drawLetterhead(doc);
-        cursorY = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report)) + 14;
+        cursorY = drawCustomPatientFields(doc, snap, drawPatientBlock(doc, snap, report)) + DENS.afterStrip;
         pageHasContent = false;
       }
       if (sg.scopeHeading) cursorY = renderScopeHeading(doc, 'TESTS NOT UNDER NABL SCOPE', cursorY + 6, practice);
@@ -1429,6 +1536,8 @@ export function buildReportPdfWithLayout(input: ReportPdfInput): { doc: jsPDF; l
   const eorReserve = deferredSigH > 0 ? 12 + deferredSigH + SIGN_OFF_SLACK : 26;
   if (cursorY > A4.h - MARGIN_BOTTOM - eorReserve) { cursorY = newPage(doc, practice); }
   cursorY = drawEndOfReport(doc, snap, cursorY);
+  // (The squeeze reads where the content ended on the last page.)
+  END_Y = cursorY; END_SIGS_H = deferredSigH;
 
   // The final department's signatories sign BELOW the End-of-Report marker —
   // the marker closes the results; the signatures authorise the document.
@@ -1904,7 +2013,9 @@ function computeReportLayout(
     // Text the lab placed BELOW the bar's spot stays below it (dragging a
     // line under the bar is allowed); text above it pushes the bar down.
     let y = LH_TOP + 54 + fitShift;
-    if (flow) {
+    // Text fitting on: the Centered preset's bar sits BELOW its measured text block too
+    // (it used to be drawn through the tagline and the contact lines). Off: unchanged.
+    if (flow || (STYLE.fit.enabled && preset === 'centered')) {
       const texts = items
         .filter(i => i.kind === 'text' && !i.hidden)
         .map(i => (ov(i.id).x !== undefined || ov(i.id).y !== undefined ? { b: i.box, moved: true } : { b: i.defBox, moved: false }))
@@ -3533,6 +3644,22 @@ function renderScopeHeading(
   // clear department separation carries the whole multi-department report).
   // A taller department name (Modern) sits lower on the same rule rhythm.
   const grow = TYPE.flowHeader ? Math.max(0, Math.round((tsz('deptName') - 10.5) * 0.7)) : 0;
+  if (DENS.slimDept) {
+    // Compact: a slim caption with a short accent rule on its left - no full-width
+    // underline, about a third less height. The sample ID(s) still sit on the right.
+    const size = typeset(doc, 'deptName');
+    const base = y + 10 + grow;
+    doc.setFillColor(theme.primary);
+    doc.rect(MARGIN_X, base - size * 0.8, 2.5, size * 0.95, 'F');
+    doc.setTextColor(theme.primary);
+    doc.text(text, MARGIN_X + 7, base);
+    if (rightText) {
+      typeset(doc, 'deptMeta');
+      doc.setTextColor(TEXT_DIM);
+      doc.text(rightText, A4.w - MARGIN_X, base, { align: 'right' });
+    }
+    return y + 16 + grow;
+  }
   typeset(doc, 'deptName');
   doc.setTextColor(theme.primary);
   doc.text(text, MARGIN_X, y + 12 + grow);
@@ -3609,7 +3736,7 @@ function renderContinuousTable(
     if (dept && (multiDept || theme.groupByDepartment || theme.departmentPageBreak)) {
       const ids = departmentSampleIds(dg);
       const right = ids.length ? `Sample ID: ${ids.join(', ')}` : null;
-      y = renderScopeHeading(doc, dept.toUpperCase(), y + 4, practice, right);
+      y = renderScopeHeading(doc, dept.toUpperCase(), y + DENS.deptLead, practice, right);
     }
     const sigs = deptSigs?.get(dept);
     const isLast = rendered === order.length - 1;
@@ -4078,6 +4205,7 @@ function drawInlineSignatures(
       }
     }
   }
+  noteBottom(doc, top + block.height);
   return top + block.height;
 }
 
@@ -4345,6 +4473,16 @@ function renderColumnarTable(
   const groupOfRow: number[] = [];
   /** Group index → its panel band's body row (compact tests have none). */
   const bandRowOf = new Map<number, number>();
+  /** Compact density: body row → the Method / Specimen text printed on that row's own
+   *  line (a panel band, or a single test's name cell) instead of a row of its own. */
+  const inlineSub = new Map<number, { band: boolean; label: string; text: string }>();
+  const nameColIdx = vcols.findIndex(vc => vc.nameOnly);
+  /** The width of `text` in an element's face (pt). */
+  const widthIn = (el: TypeEl, text: string): number => {
+    const c = cellType(el);
+    doc.setFont(c.font, c.fontStyle); doc.setFontSize(c.fontSize);
+    return doc.getTextWidth(text);
+  };
   /** No Description column in this table → each value's description prints
    *  as a full-width row right under that value's row (P1, D1, P2, P3, D3). */
   const descAsRow = !hasDescriptionColumn(cfg);
@@ -4391,12 +4529,22 @@ function renderColumnarTable(
       // Classic: one italic cell, a line each. A theme that styles them
       // apart (Modern: method regular, specimen italic) gives each its row.
       const subRows = !sub.length ? [] : TYPE.splitSubLines ? sub : [{ text: sub.map(l => l.text).join('\n'), el: 'methodology' as TypeEl }];
-      for (const line of subRows) {
+      // Compact: the lines ride on the band, after the panel's name - only when they fit
+      // beside it whole (a long one keeps its own row; nothing is ever cut).
+      let inlined = false;
+      if (DENS.inlineMethod && sub.length && !region) {
+        const joined = sub.map(l => l.text).join('  ·  ');
+        if (widthIn('panelName', g.testName.toUpperCase()) + 14 + widthIn('methodology', joined) + 6 <= usable - 12) {
+          inlineSub.set(body.length - 1, { band: true, label: g.testName.toUpperCase(), text: joined });
+          inlined = true;
+        }
+      }
+      for (const line of inlined ? [] : subRows) {
         body.push([{
           content: line.text,
           colSpan: COLSPAN,
           styles: { ...cellType(line.el), textColor: TEXT_DIM, fillColor: '#ffffff', halign: 'left',
-                    ...(TYPE.splitSubLines ? { cellPadding: { top: 2, right: 6, bottom: 2, left: 6 } } : {}) },
+                    ...(TYPE.splitSubLines ? { cellPadding: { top: DENS.subPadV, right: 6, bottom: DENS.subPadV, left: 6 } } : {}) },
         }]);
         bodyMeta.push(null);
         bodyKind.push('other');
@@ -4437,7 +4585,7 @@ function renderColumnarTable(
           content: '',
           colSpan: COLSPAN,
           styles: { fillColor: '#ffffff', textColor: TEXT, ...cellType('techNote'), halign: 'left', valign: 'top',
-                    minCellHeight: lay.height + 8 },
+                    minCellHeight: lay.height + DENS.techPad },
         }]);
         bodyMeta.push(null);
         // Glued to the row above (the test's last result) like a description.
@@ -4538,12 +4686,13 @@ function renderColumnarTable(
         // A family's picked item: its name sits indented under the parent.
         // (regular weight — the parent row carries the emphasis).
         if (r.indent && vc.members.some(m => m.type === 'name')) {
-          styles['cellPadding'] = { top: 4, right: 6, bottom: 4, left: 6 + FAMILY_INDENT * r.indent };
+          styles['cellPadding'] = padBody(6 + FAMILY_INDENT * r.indent);
           styles['fontStyle'] = faceOf('normal')[1];
         }
         return { content: txt, styles };
       });
       body.push(cells);
+      const paramRowIdx = body.length - 1;
       bodyKind.push('param');
       // Remember the result text so the arrow can sit right AFTER it — the
       // result cell is wide, and anchoring the glyph to the cell's far edge
@@ -4576,7 +4725,18 @@ function renderColumnarTable(
       // carries it, so no second copy then.
       const compactMethod = compact && r.kind === 'param' && !g.hideMethodLine && !hasMethodCol
         ? (g.methodLine ?? g.method ?? r.method ?? '').trim() : '';
-      if (compactMethod) {
+      // Compact: "Total Bilirubin  (Diazo)" - the method after the name, when both fit its
+      // column on one line (not with auto-fit columns: their widths are decided later).
+      let inlineName = false;
+      if (compactMethod && DENS.inlineMethod && !region && !r.indent && nameColIdx >= 0
+          && !(STYLE.fit.enabled && STYLE.fit.autoColumns)) {
+        const nm = ((r.name ?? '').trim() || g.testName);
+        if (widthIn('testName', nm) + 10 + widthIn('methodology', `(${compactMethod})`) + 6 <= colWidths[nameColIdx] - 12) {
+          inlineSub.set(paramRowIdx, { band: false, label: nm, text: `(${compactMethod})` });
+          inlineName = true;
+        }
+      }
+      if (compactMethod && !inlineName) {
         body.push([{
           content: `Method: ${compactMethod}`,
           colSpan: COLSPAN,
@@ -4656,7 +4816,7 @@ function renderColumnarTable(
     content: '',
     colSpan: COLSPAN,
     styles: { fillColor: false, lineWidth: 0, ...cellType('panelContinued'), halign: 'left',
-              cellPadding: { top: 4, right: 6, bottom: 4, left: 6 } },
+              cellPadding: padBody(6) },
   }]);
   let contH = 0;
   let pageOpened = -1;
@@ -4679,7 +4839,7 @@ function renderColumnarTable(
       const bandSize = typeset(doc, 'panelContinued');
       doc.setTextColor(theme.primary);
       // autotable's own top-aligned first baseline for the band's font.
-      doc.text(`${groups[gi].testName.toUpperCase()} — CONTINUED`, LEFT + 6, top + 4 + bandSize * 0.85);
+      doc.text(`${groups[gi].testName.toUpperCase()} — CONTINUED`, LEFT + 6, top + DENS.padV + bandSize * 0.85);
       doc.setFillColor(fill);
       doc.setFont(font.fontName, font.fontStyle);
       doc.setFontSize(size);
@@ -4743,9 +4903,23 @@ function renderColumnarTable(
     },
     didDrawCell: (d: { section: string; column: { index: number }; row: { index: number }; cell: { x: number; y: number; width: number; height: number; styles?: Record<string, unknown> } }) => {
       drawSentenceCell(doc, sentenceCells, d as unknown as SentenceHookArg);
+      if (d.section === 'body') noteBottom(doc, d.cell.y + d.cell.height);
+      if (d.section === 'body' && inlineSub.has(d.row.index)) {
+        const it = inlineSub.get(d.row.index)!;
+        // A band is one cell across the table; a test's line sits in its name cell.
+        if (it.band ? d.column.index === 0 : d.column.index === nameColIdx) {
+          const c = cellType(it.band ? 'panelName' : 'testName');
+          doc.setFont(c.font, c.fontStyle); doc.setFontSize(c.fontSize);
+          const x = d.cell.x + 6 + doc.getTextWidth(it.label) + (it.band ? 14 : 10);
+          const base = d.cell.y + DENS.padV + c.fontSize * 0.85;
+          typeset(doc, 'methodology');
+          doc.setTextColor(TEXT_DIM);
+          doc.text(it.text, x, base);
+        }
+      }
       if (d.section === 'body' && techCells.has(d.row.index)) {
         const t = noteTypeset();
-        drawReportNote(doc, techCells.get(d.row.index)!, d.cell.x + 6, d.cell.y + 4 + t.size * 0.8, t, TEXT);
+        drawReportNote(doc, techCells.get(d.row.index)!, d.cell.x + 6, d.cell.y + DENS.padV + t.size * 0.8, t, TEXT);
       }
       drawQualifiedRangeCell(doc, qualCells, d as CellHookArg);
       drawSuperscriptCell(doc, supCells, d as CellHookArg);
@@ -4761,7 +4935,7 @@ function renderColumnarTable(
       // Align to the FIRST text line, not the cell middle — a multi-band
       // reference stack makes the row tall, and a centred glyph floated
       // below "500 mg/dL" instead of sitting beside it.
-      const cy = d.cell.y + 4 + fs * 0.42;
+      const cy = d.cell.y + DENS.padV + fs * 0.42;
       doc.setFillColor(m.color);
       if (m.arrow === 'up') doc.triangle(cx - s, cy + s, cx + s, cy + s, cx, cy - s, 'F');
       else doc.triangle(cx - s, cy - s, cx + s, cy - s, cx, cy + s, 'F');
@@ -5065,7 +5239,7 @@ function renderGridSection(
     // mw's own family rows: indent the pick's name, nothing else to do.
     if ((r.indent ?? 0) > 0) {
       vcols.forEach((vc, i) => { if (vc.isName) main[i] = { content: (r.title ?? '').trim(),
-        styles: { ...(main[i]?.styles ?? {}), cellPadding: { top: 4, right: 6, bottom: 4, left: 6 + FAMILY_INDENT * r.indent! } } }; });
+        styles: { ...(main[i]?.styles ?? {}), cellPadding: padBody(6 + FAMILY_INDENT * r.indent!) } }; });
       return [main];
     }
     const fam = serverFamily ? null : famOf(r);
@@ -5078,7 +5252,7 @@ function renderGridSection(
       if (vc.isName) {
         Object.assign(styles, cellType('narrativeName'));
         styles['textColor'] = BLACK;
-        styles['cellPadding'] = { top: 4, right: 6, bottom: 4, left: 6 + FAMILY_INDENT * l.depth };
+        styles['cellPadding'] = padBody(6 + FAMILY_INDENT * l.depth);
         return { content: l.label, styles };
       }
       if (vc.hasResult) { Object.assign(styles, cellType('narrativeResult')); styles['textColor'] = BLACK; return { content: l.value, styles }; }
@@ -5123,6 +5297,11 @@ function summaryCellHooks(doc: jsPDF) {
   };
 }
 
+/** Body cell padding under the active density (Normal: 4 / 6 / 4 / left). */
+function padBody(left = 6) {
+  return { top: DENS.padV, right: 6, bottom: DENS.padV, left };
+}
+
 /** Page margins for every results table: the body floor (footer band) and,
  *  on continuation pages, a top that clears the letterhead — in letterpad
  *  mode the lab's PRE-PRINTED header (45 mm by default), where a fixed 56pt
@@ -5142,7 +5321,7 @@ function tableBodyStyles() {
     fontSize: tsz('tableBody'),
     // Tighter rows than the old 6/6 padding — a 20-row department block
     // should read as one dense professional table, not a spaced-out list.
-    cellPadding: { top: 4, right: 6, bottom: 4, left: 6 },
+    cellPadding: padBody(6),
     textColor: TEXT,
     lineColor: HAIR,
     lineWidth: bordered ? 0.4 : 0,
@@ -5161,7 +5340,7 @@ function tableHeadStyles() {
     // than the body values, with a firm rule underneath (classic pattern).
     fontSize: tsz('columnHead'),
     halign: 'left' as const,
-    cellPadding: { top: 3, right: 6, bottom: 6, left: 6 },
+    cellPadding: { top: DENS.head.top, right: 6, bottom: DENS.head.bottom, left: 6 },
     lineColor: HAIR,
     lineWidth: bordered
       ? 0.4
@@ -5357,7 +5536,7 @@ function renderLegacyTest(
       ]);
       for (const l of famL.slice(1)) {
         tableRows.push([
-          { content: l.label, styles: { ...cellType('testName'), textColor: BLACK, cellPadding: { top: 4, right: 6, bottom: 4, left: 6 + FAMILY_INDENT * l.depth } } },
+          { content: l.label, styles: { ...cellType('testName'), textColor: BLACK, cellPadding: padBody(6 + FAMILY_INDENT * l.depth) } },
           { content: l.value, styles: { ...cellType('narrativeResult'), textColor: BLACK } },
           { content: '' },
           { content: '' },
@@ -5646,7 +5825,8 @@ function renderTrendogramSection(
   practice: NonNullable<ReportPdfInput['practice']>,
 ): number {
   const gap = 14;
-  const cellW = (A4.w - 2 * MARGIN_X - gap) / 2;   // half-page cell
+  const perRow = DENS.trendPerRow;
+  const cellW = (A4.w - 2 * MARGIN_X - gap * (perRow - 1)) / perRow;   // half-page cell (a third in Compact)
   const cellH = cellW * 0.66;
 
   // Section heading (centered uppercase + hairline, matching the report style).
@@ -5660,11 +5840,11 @@ function renderTrendogramSection(
   y += 14;
 
   charts.forEach((c, i) => {
-    const col = i % 2;
+    const col = i % perRow;
     if (col === 0 && i > 0) {
-      // New row. Cap at 6 charts (3 rows) per page; otherwise advance and
+      // New row. Cap at 3 rows per page; otherwise advance and
       // page-break if the next row won't fit.
-      if (i % 6 === 0) { y = newPage(doc, practice); }
+      if (i % (perRow * 3) === 0) { y = newPage(doc, practice); }
       else { y += cellH + gap; if (y > A4.h - MARGIN_BOTTOM - cellH) y = newPage(doc, practice); }
     }
     const x = MARGIN_X + col * (cellW + gap);
