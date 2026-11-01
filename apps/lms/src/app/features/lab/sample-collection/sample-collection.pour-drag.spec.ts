@@ -149,7 +149,7 @@ describe('Sample collection — drag a tube onto another to pour it', () => {
     TestBed.resetTestingModule();
   });
 
-  it('only pourable tubes are draggable (grip shown); outsourced / series tubes are not', async () => {
+  it('only pourable tubes are draggable (grip shown); outsourced tubes are not', async () => {
     const out = { ...grey, id: 'out', barcode: '26106', outsourcedVendorId: 'v1' };
     const { f, c } = render({ samples: [red, grey, out] });
     await open(f, c);

@@ -189,6 +189,29 @@ describe('Sample collection — pour one tube into another', () => {
     expect((sheet.querySelector('[data-testid="pour-confirm"]') as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('timed draws: a 60-min draw offers only the other series\' 60-min tube, and the plain refusal shows for a different time', async () => {
+    const t = (id: string, code: string, off: number | null, series: string | null, test: string) => ({
+      ...grey, id, barcode: code, repeatOffsetMin: off, repeatProfileTestId: series, status: 'collected',
+      tests: [{ id: 'l' + id, test: { name: test, departmentId: 'd-b' } }],
+    });
+    const ogtt60 = t('ogtt60', '26201', 60, 'ogtt', 'Glucose 60 min');
+    const ins60 = t('ins60', '26202', 60, 'ins', 'Insulin 60 min');
+    const ins120 = t('ins120', '26203', 120, 'ins', 'Insulin 120 min');
+    const plain = t('plain', '26204', null, null, 'Random sugar');
+    const { f, c } = render({
+      samples: [ogtt60, ins60, ins120, plain],
+      candidates: [{ id: 'ogtt60', barcode: '26201', tubeColor: 'fluoride', eligible: false, reason: 'merge_timed_series' }],
+    });
+    await open(f, c);
+    // The 60-min tube offers the pour, and its target list is exactly the eligible tube.
+    expect(tileOf(f, '26201').querySelector('[data-testid="pour-tube"]')).not.toBeNull();
+    c.openPour(ogtt60);
+    await settle(f);
+    expect(c.pourTargetOpts().map((o: any) => o.value)).toEqual(['ins60']);
+    // A different time point (if the server is asked anyway) reads in plain words.
+    expect(c.pourRefusal()).toBe('Only draws taken at the same time can be poured together.');
+  });
+
   it('409 merge_needs_confirm → DialogService names the warning → resend with confirmWarnings', async () => {
     const { f, c, api, dialog } = render({ mergeFirst: 'confirm', confirm: [true, false] });
     await open(f, c);

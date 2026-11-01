@@ -96,7 +96,7 @@ const REFUSALS: Record<string, string> = {
   merge_different_order: 'Only tubes of the same order can be poured together.',
   merge_outsourced: 'An outsourced tube can’t be poured — it goes to the partner lab.',
   merge_micro_container: 'Culture and sterile pots can’t be poured.',
-  merge_timed_series: 'Timed (series) draws can’t be poured into another tube.',
+  merge_timed_series: 'Only draws taken at the same time can be poured together.',
   merge_has_results: 'This tube already has results.',
   merge_already_received: 'The lab has already received this tube.',
   merge_dead_tube: 'This tube was cancelled, rejected or missed.',
@@ -115,7 +115,7 @@ const SHORT_REFUSALS: Record<string, string> = {
   merge_different_order: 'Different order',
   merge_outsourced: 'Outsourced tube',
   merge_micro_container: 'Culture or sterile pot',
-  merge_timed_series: 'Timed series draw',
+  merge_timed_series: 'Different time point',
   merge_has_results: 'Already has results',
   merge_already_received: 'Already received',
   merge_dead_tube: 'Cancelled or missed',
@@ -129,28 +129,57 @@ export function mergeShortReason(code: string | null | undefined): string {
 /** The tubes of one order a tube may be poured INTO: the other live tubes
  *  (not merged away, not the same tube). The server still has the last word
  *  through the candidates call. */
-export function pourTargets<T extends { id: string; orderId?: string; status?: string | null }>(
+export function pourTargets<T extends TimedTube & { id: string; orderId?: string; status?: string | null }>(
   source: T, samples: readonly T[],
 ): T[] {
   return samples.filter(s =>
     s.id !== source.id &&
     (!source.orderId || !s.orderId || s.orderId === source.orderId) &&
-    !isMergedTube(s));
+    !isMergedTube(s) &&
+    timedPourOk(source, s));
+}
+
+/** The bits of a tube the timed-draw rule reads. */
+export interface TimedTube {
+  repeatOffsetMin?: number | null;
+  repeatProfileTestId?: string | null;
+  metadata?: unknown;
+}
+
+/** Other timed series whose draw was poured into this tube (`metadata.extraSeries`). */
+export function extraSeriesOf(s: { metadata?: unknown } | null | undefined): string[] {
+  const list = sampleMeta(s)['extraSeries'];
+  return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string' && !!x) : [];
+}
+
+/** Mirror of the server's timed-draw rule (`SharedTubeRules.CanManualMerge`):
+ *  a FIRST draw (offset 0 / untimed) pours like an ordinary tube with any other
+ *  first draw; a LATER draw (offset > 0) pours only with a draw of ANOTHER series at
+ *  the SAME offset. The server still decides. */
+export function timedPourOk(a: TimedTube, b: TimedTube): boolean {
+  const oa = a.repeatOffsetMin ?? 0;
+  const ob = b.repeatOffsetMin ?? 0;
+  if (oa === 0 && ob === 0) return true;
+  if (oa !== ob) return false;
+  const sa = [a.repeatProfileTestId, ...extraSeriesOf(a)].filter((x): x is string => !!x);
+  const sb = [b.repeatProfileTestId, ...extraSeriesOf(b)].filter((x): x is string => !!x);
+  if (sa.length === 0 || sb.length === 0) return false;
+  return !sa.some(x => sb.includes(x));
 }
 
 /** May this tube offer "Pour into another tube…"? Only a tube still at the
- *  counter: pending or collected, in-house, not part of a timed series. A
+ *  counter: pending or collected, in-house (a timed draw may pour too — the
+ *  server limits it to the same time point of another series). A
  *  sterile / culture pot never pours. The server checks every rule again. */
 export function canOfferPour(s: {
   status?: string | null;
   outsourcedVendorId?: string | null;
-  repeatOffsetMin?: number | null;
+  repeatOffsetMin?: number | null; // accepted, not read: timed draws pour too
   tubeColor?: string | null;
 }): boolean {
   const st = s.status ?? '';
   if (st !== 'pending' && st !== 'collected') return false;
   if (s.outsourcedVendorId) return false;
-  if (s.repeatOffsetMin != null) return false;
   const k = (s.tubeColor ?? '').toLowerCase();
   if (k === 'sterile' || k === 'blood_culture' || k === 'urine') return false;
   return true;
