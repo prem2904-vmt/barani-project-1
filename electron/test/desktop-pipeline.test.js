@@ -33,3 +33,13 @@ test('--finish-pending skips stale/failed/finished submissions and exits 0 on an
   assert.doesNotMatch(r.stdout, /finishing pending/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('--finish scans the app it just stapled for leaked credentials, and never needs dist/electron', () => {
+  // The scheduled finisher runs in a fresh checkout with no build output; it used to
+  // crash in the leak guard (readdir of the missing dist/electron) after stapling.
+  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'tools', 'desktop-release.mjs'), 'utf8');
+  assert.match(src, /function findAsar\(osName\) \{\s*if \(!fs\.existsSync\(OUT_DIR\)\) return null;/);
+  assert.match(src, /assertNoLeakedSecrets\('mac', creds, path\.join\(appPath, 'Contents', 'Resources', 'app\.asar'\)\)/);
+  const finish = src.slice(src.indexOf('async function actionFinish'), src.indexOf('function actionFinishPending'));
+  assert.ok(finish.indexOf('assertNoLeakedSecrets') < finish.indexOf('cleanup()'), 'scan before the stapled app is deleted');
+});

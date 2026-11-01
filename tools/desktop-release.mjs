@@ -221,6 +221,7 @@ function electronBuilderBuild(a, osName, { base, channel, version }) {
 
 // ── secret-leak guard ─────────────────────────────────────────────────────
 function findAsar(osName) {
+  if (!fs.existsSync(OUT_DIR)) return null;
   if (osName === 'mac') {
     const dirs = fs.readdirSync(OUT_DIR).filter((d) => d.startsWith('mac'));
     for (const d of dirs) {
@@ -241,8 +242,9 @@ function findAsar(osName) {
   return null;
 }
 
-function assertNoLeakedSecrets(osName, creds) {
-  const found = findAsar(osName);
+function assertNoLeakedSecrets(osName, creds, explicitAsar) {
+  // --finish runs in a fresh checkout with no dist/electron: it passes the app it just stapled.
+  const found = explicitAsar && fs.existsSync(explicitAsar) ? explicitAsar : findAsar(osName);
   const asarPaths = found ? [].concat(found) : [];
   if (!asarPaths.length) { log(`(no app.asar found to scan for ${osName} — skipping leak guard)`); return; }
   const needles = [creds.PF_RELEASE_KEY_ID, creds.PF_RELEASE_SECRET];
@@ -507,7 +509,7 @@ async function actionFinish(a) {
   const manifestYml = buildFinishManifest(version, state.zipName, state.dmgName, stash);
   const tmpYml = path.join(os.tmpdir(), `pf-finish-${a.channel}-mac-${version}.yml`);
   fs.writeFileSync(tmpYml, manifestYml);
-  assertNoLeakedSecrets('mac', creds);
+  assertNoLeakedSecrets('mac', creds, path.join(appPath, 'Contents', 'Resources', 'app.asar'));
 
   const check = verifyMacNotarization(appPath);
   cleanup();
