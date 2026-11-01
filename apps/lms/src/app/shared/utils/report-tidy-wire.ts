@@ -1,7 +1,7 @@
 import type { ReportTemplate } from '../models/report.model';
 import { MARGIN_X, MM, PAGE, boxLeft } from './report-header-layout';
-import { PALETTE_KEYS, normalizeHex, paletteById, type PaletteId } from './report-palettes';
-import { readReportStyle, validateReportStyle, type ReportStyle } from './report-style';
+import { PALETTE_KEYS, checkColors, normalizeHex, paletteById, templateColors, type PaletteId } from './report-palettes';
+import { readReportStyle, validateReportStyle, type ReportStyle, type ReportStylePatch } from './report-style';
 import { TIDY_STYLE_PATHS, flattenStylePatch, type TidyChange, type TidyPatch, type TidyResult } from './report-tidy';
 
 /**
@@ -29,8 +29,21 @@ const patchPath = (p: TidyPatch): { path: string; value: unknown } | null => {
   }
 };
 
+/** The style with ONLY the allow-listed leaves (the same list the server keeps): a lab's own words - custom labels, the
+ *  joiner, the "verified by" line - never leave the browser, whatever the server would strip later. */
+export function tidyStyleOut(tpl: ReportTemplate): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [path, v] of flattenStylePatch(readReportStyle(tpl) as unknown as ReportStylePatch)) {
+    const parts = path.split('.');
+    let cur = out;
+    for (let i = 0; i < parts.length - 1; i++) cur = (cur[parts[i]] ??= {}) as Record<string, unknown>;
+    cur[parts[parts.length - 1]] = v;
+  }
+  return out;
+}
+
 export function buildTidyRequest(provider: TidyProvider, tpl: ReportTemplate, result: TidyResult): Record<string, unknown> {
-  const style = readReportStyle(tpl);
+  const style = tidyStyleOut(tpl);
   let cols: string[] = [];
   try { cols = (JSON.parse(tpl.patientColumnsJson ?? '[]') as unknown[][]).flat().filter((k): k is string => typeof k === 'string'); } catch { /* none */ }
   return {
@@ -67,7 +80,13 @@ function checkPatch(path: string, value: unknown, tpl: ReportTemplate, result: T
   if (path.startsWith('color.')) {
     const key = path.slice(6) as (typeof PALETTE_KEYS)[number];
     const hex = normalizeHex(value);
-    return PALETTE_KEYS.includes(key) && hex ? { patch: { kind: 'color', key, to: hex } } : { reason: 'not a colour' };
+    if (!PALETTE_KEYS.includes(key) || !hex) return { reason: 'not a colour' };
+    // A colour may not make text vanish: a print-safe check that passes today must still pass with the new colour.
+    const now = { ...templateColors(tpl), bodyTextColor: tpl.bodyTextColor };
+    const flags = tpl.flagStyle === 'bold_color';
+    const okNow = new Set(checkColors(now, flags).filter(c => c.ok).map(c => c.id));
+    if (checkColors({ ...now, [key]: hex }, flags).some(c => !c.ok && okNow.has(c.id))) return { reason: 'would be hard to read' };
+    return { patch: { kind: 'color', key, to: hex } };
   }
   if (path.startsWith('style.')) {
     const p = path.slice(6);
@@ -86,7 +105,8 @@ function checkPatch(path: string, value: unknown, tpl: ReportTemplate, result: T
   }
   if (path.startsWith('item.')) {
     const [, id, key] = path.split('.');
-    const b = result.base[id];
+    // Own keys only: "__proto__" / "constructor" are not letterhead items.
+    const b = Object.prototype.hasOwnProperty.call(result.base, id) ? result.base[id] : undefined;
     if (!b || b.hidden) return { reason: 'unknown item' };
     if (key === 'align') {
       return value === 'left' || value === 'center' || value === 'right' ? { patch: { kind: 'item', id, key, to: value } } : { reason: 'not an alignment' };

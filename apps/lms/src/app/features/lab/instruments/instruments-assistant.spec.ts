@@ -105,7 +105,9 @@ describe('Instrument editor — mapping prefill hand-off', () => {
         return [];
       },
       providers: [
-        beta(on), assistantApi,
+        // The band's sparkle (pf-assistant-button) also reads PfSenseService.shown(): stub it like the list / wizard tests do,
+        // or the real service's status fetch races the six flush ticks and the sparkle is sometimes not there yet (flaky).
+        senseOn, beta(on), assistantApi,
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: 'i1' }) } } },
         { provide: PlatformService, useValue: { getApiUrl: () => 'https://api.example', isElectron: () => false } },
         { provide: INSTRUMENT_BRIDGE_SOURCE, useValue: () => undefined },
