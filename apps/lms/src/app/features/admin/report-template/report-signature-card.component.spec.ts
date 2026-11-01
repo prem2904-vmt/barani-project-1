@@ -54,7 +54,7 @@ describe('Signatures card', () => {
   it('"Try it with" changes the sample count, not the template', () => {
     const m = make({}, 7);
     expect(m.text()).toMatch(/7 signatories · 2 rows/);
-    radio(m.el, '3 signatories').click();
+    m.el.querySelector<HTMLButtonElement>('[aria-label="Try with 3 signatories"]')!.click();
     expect(m.samples).toEqual([3]);
     expect(m.patches).toHaveLength(0);
   });

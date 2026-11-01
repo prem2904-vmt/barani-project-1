@@ -92,10 +92,10 @@ import { samplePlan, signatureCost, signatureReadout } from '../../../shared/uti
         @if (plan().reserveTooSmall) {
           <span class="pf-sgc__warn">The names need more than the room you reserved. The block grows to fit them.</span>
         }
-        <span class="pf-sgc__k pf-sgc__try" id="pf-sgc-try">Try it with</span>
+        <span class="pf-sgc__k pf-sgc__try" id="pf-sgc-try">Try it with this many signatories</span>
         <div class="pf-seg pf-sgc__seg" role="radiogroup" aria-labelledby="pf-sgc-try">
           @for (n of samples; track n) {
-            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="sample() === n" (click)="sampleChange.emit(n)">{{ n }} {{ n === 1 ? 'signatory' : 'signatories' }}</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="sample() === n" [attr.aria-label]="'Try with ' + n + (n === 1 ? ' signatory' : ' signatories')" (click)="sampleChange.emit(n)">{{ n }}</button>
           }
         </div>
       </div>
