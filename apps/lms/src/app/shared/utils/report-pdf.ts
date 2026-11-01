@@ -33,7 +33,7 @@ import { fitText } from './report-fit';
 import { autofitColumns } from './report-autofit-columns';
 import { DEFAULT_REPORT_STYLE, isDefaultReportStyle, readReportStyle, reportEngineStamp, type ReportStyle } from './report-style';
 import { CLASSIC_THEME, ReportTypeTheme, TypeEl, TypeWeight, reportTypeTheme, tokenSize } from './report-theme';
-import { SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './report-fonts';
+import { INTER_FAMILY, SOURCE_SANS_FAMILY, installReportFonts, loadReportFonts } from './report-fonts';
 import { renderReportChart, setReportChartContext, reportChartLead } from './report-chart/report-chart.report';
 import { applyReportSequencing, readReportSequencing } from './report-sequencing';
 import { drawReportNote, drawReportNoteLine, layoutReportNote, type NoteLayout, type NoteTypeset } from './report-note-pdf';
@@ -495,12 +495,20 @@ const contShift = (): number => (CONT ? CONT.h : 0);
 let TYPE: ReportTypeTheme = CLASSIC_THEME;
 /** The theme's embedded family is registered on the current document. */
 let EMBEDDED = false;
+/** The jsPDF family name of that embedded theme font (Source Sans 3 or Inter). */
+let EMB_FAMILY: string = SOURCE_SANS_FAMILY;
+/** Register the active theme's embedded font on `doc`; false = Helvetica fallback. */
+function installThemeFont(doc: jsPDF): boolean {
+  const fam = TYPE.embedded;
+  EMB_FAMILY = fam === 'Inter' ? INTER_FAMILY : SOURCE_SANS_FAMILY;
+  return !!fam && installReportFonts(doc, fam);
+}
 
 /** [font name, jsPDF style] for a weight in the current theme. The built-in
  *  PDF fonts have no semibold (it draws bold); Source Sans has no bold
  *  italic (it draws bold). */
 function faceOf(weight: TypeWeight): [string, string] {
-  if (EMBEDDED) return [SOURCE_SANS_FAMILY, weight === 'bolditalic' ? 'bold' : weight];
+  if (EMBEDDED) return [EMB_FAMILY, weight === 'bolditalic' ? 'bold' : weight];
   return [PDF_FONT, weight === 'semibold' ? 'bold' : weight];
 }
 function setFace(doc: jsPDF, weight: TypeWeight): void {
@@ -781,7 +789,7 @@ export function computeReportPageLayout(input: ReportPdfInput): ReportLayoutResu
   const { practice, template } = prepareRender({ ...input, blankLetterhead: false });
   const doc = newReportDoc();
   installPdfTextSanitizer(doc);   // it also widens symbol glyphs — measure like the real render
-  EMBEDDED = !!TYPE.embedded && installReportFonts(doc);
+  EMBEDDED = installThemeFont(doc);
   return computeReportLayout(doc, practice, template?.logoUrl ?? null, template);
 }
 
@@ -944,7 +952,7 @@ function renderReportOnce(input: ReportPdfInput): { doc: jsPDF; layout: ReportLa
   if (!isDefaultReportStyle(STYLE)) doc.setProperties({ creator: reportEngineStamp(STYLE) });
   // The Modern theme's Source Sans 3 — when not loaded (preloadReportImages
   // loads it), the theme's sizes print in Helvetica rather than failing.
-  EMBEDDED = !!TYPE.embedded && installReportFonts(doc);
+  EMBEDDED = installThemeFont(doc);
   FIT_DOC = doc;
   // Safety net (RCA 2026-09-27): a standalone test with values whose layout
   // has no results table gets the default one — every caller (report viewer,
@@ -1682,7 +1690,8 @@ export async function preloadReportImages(
  *  Modern theme's Source Sans 3 files, fetched once per session. Classic
  *  needs nothing and fetches nothing. Never throws. */
 export async function prepareReportTheme(tpl: ReportTemplate | null | undefined): Promise<void> {
-  if (reportTypeTheme(tpl).embedded) await loadReportFonts();
+  const fam = reportTypeTheme(tpl).embedded;
+  if (fam) await loadReportFonts(undefined, fam);
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -3137,7 +3146,7 @@ function drawSuperscriptCell(doc: jsPDF, store: Map<string, SupCell>, d: CellHoo
   const fs = typeof st.fontSize === 'number' ? st.fontSize : 9;
   // Classic redraws in its regular / bold face; an embedded theme in the
   // cell's own style (semibold, italic …).
-  if (EMBEDDED) doc.setFont(SOURCE_SANS_FAMILY, String(st.fontStyle ?? 'normal'));
+  if (EMBEDDED) doc.setFont(EMB_FAMILY, String(st.fontStyle ?? 'normal'));
   else doc.setFont(PDF_FONT, st.fontStyle === 'bold' ? 'bold' : 'normal');
   doc.setFontSize(fs);
   const tc = st.textColor;
@@ -3869,7 +3878,7 @@ function renderCustomLayout(
   const pages = pl?.pages ?? [];
   const images = profileAnalyzerImages(snap, pkg);
   const availCodes = new Set(Object.keys(images));
-  const labelFont = EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT;
+  const labelFont = EMBEDDED ? EMB_FAMILY : PDF_FONT;
   const floor = A4.h - footerFloor(LAYOUT);
   const chain = tableChain(pages);
   const lastTableId = chain[chain.length - 1]?.box.id;
@@ -5439,7 +5448,7 @@ function isReportChart(s: ResolvedSection): boolean {
  *  embedded it. `face` is the ONE weight → face resolver the tables use
  *  (faceOf), so a bold italic chart label maps to a registered face too. */
 function chartTheme() {
-  return { font: EMBEDDED ? SOURCE_SANS_FAMILY : PDF_FONT, face: (w: TypeWeight) => faceOf(w) as [string, string],
+  return { font: EMBEDDED ? EMB_FAMILY : PDF_FONT, face: (w: TypeWeight) => faceOf(w) as [string, string],
     fontScale: theme.fontScale, accent: BLUE, text: TEXT, ink: BLACK, dim: TEXT_DIM,
     hair: HAIR, abnormalColored: theme.flagStyle === 'bold_color',
     abnormalColor: theme.abnormalColor, abnormalLowColor: theme.abnormalLowColor };

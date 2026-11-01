@@ -1,5 +1,6 @@
 import type { ReportTemplate } from '../models/report.model';
 import { parseTemplateMeta } from './report-header-layout';
+import type { EmbeddedFamily } from './report-fonts';
 
 /**
  * REPORT THEMES — the typography of the printed report as ONE token table.
@@ -26,7 +27,7 @@ import { parseTemplateMeta } from './report-header-layout';
  * the tenant's theme. Absent / unknown = classic.
  */
 
-export type ReportThemeId = 'classic' | 'source-sans';
+export type ReportThemeId = 'classic' | 'source-sans' | 'inter';
 
 /** A text weight. 'semibold' exists only in embedded fonts; the built-in PDF
  *  fonts have no semibold and draw it bold. */
@@ -79,7 +80,7 @@ export type TypeEl =
 export interface ReportTypeTheme {
   id: ReportThemeId;
   /** Embedded family for every weight; null = the template's built-in font. */
-  embedded: 'SourceSans3' | null;
+  embedded: EmbeddedFamily | null;
   tokens: Readonly<Record<TypeEl, TypeToken>>;
   /** Department heading rule (pt). */
   deptRule: number;
@@ -234,9 +235,28 @@ export const SOURCE_SANS_THEME: ReportTypeTheme = {
   flowHeader: true, splitLabels: true, splitSubLines: true,
 };
 
+/** Inter runs wider than Source Sans 3 with a taller x-height: the same scale
+ *  at 0.94, to the nearest 0.5 pt (never under 6.5 pt; the watermark stays). */
+const INTER_SCALE = 0.94;
+const interTokens = (): Record<TypeEl, TypeToken> => {
+  const out = {} as Record<TypeEl, TypeToken>;
+  for (const k of Object.keys(SOURCE_SANS_TOKENS) as TypeEl[]) {
+    const tok = SOURCE_SANS_TOKENS[k];
+    if (k === 'watermark') { out[k] = { ...tok }; continue; }
+    const size = Math.max(6.5, Math.round(tok.size * INTER_SCALE * 2) / 2);
+    out[k] = { ...tok, size, ...(tok.lineHeight ? { lineHeight: Math.round(tok.lineHeight * INTER_SCALE * 2) / 2 } : {}) };
+  }
+  return out;
+};
+export const INTER_THEME: ReportTypeTheme = {
+  id: 'inter', embedded: 'Inter', tokens: interTokens(),
+  deptRule: 1.5, flowHeader: true, splitLabels: true, splitSubLines: true,
+};
+
 export const REPORT_TYPE_THEMES: Readonly<Record<ReportThemeId, ReportTypeTheme>> = {
   'classic': CLASSIC_THEME,
   'source-sans': SOURCE_SANS_THEME,
+  'inter': INTER_THEME,
 };
 
 /** The picker's cards (report designer → Results table → Report theme). */
@@ -244,6 +264,8 @@ export const REPORT_THEME_OPTIONS: ReadonlyArray<{ value: ReportThemeId; label: 
   { value: 'classic', label: 'Classic', desc: 'The report as it prints today — your chosen font family and size.' },
   { value: 'source-sans', label: 'Modern — Source Sans 3',
     desc: 'One clean typeface with a clear size scale: bold lab name and departments, semibold names and results, quiet units and ranges.' },
+  { value: 'inter', label: 'Modern — Inter',
+    desc: 'The same clear scale in Inter, a screen-first typeface with open, even letters. Loads about 0.7 MB once, only when you choose it.' },
 ];
 
 const IDS = Object.keys(REPORT_TYPE_THEMES) as ReportThemeId[];
