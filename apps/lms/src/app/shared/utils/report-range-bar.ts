@@ -117,9 +117,11 @@ export function drawRangeBar(
 ): void {
   const m = rangeBarModel(row);
   if (!m) return;
-  const padX = 7;
-  const x0 = cell.x + padX;
-  const w = Math.max(10, cell.width - 2 * padX - 8);        // room for the letter after the line
+  // 12 pt each side: room for the marker's half width + its letter, so H always sits right of the
+  // marker and L left of it - away from the band, never on top of it.
+  const pad = 12;
+  const x0 = cell.x + pad;
+  const w = Math.max(10, cell.width - 2 * pad);
   const cy = cell.y + cell.height / 2;
   // The track: a thin neutral line; the normal range: a thicker grey bar over it.
   doc.setLineCap('round' as never);
@@ -143,11 +145,14 @@ export function drawRangeBar(
   const r = 4;
   doc.setFillColor(col); doc.setDrawColor('#ffffff'); doc.setLineWidth(0.8);
   doc.lines([[r, r], [-r, r], [-r, -r], [r, -r]], mx, cy - r, [1, 1], 'FD', true);
+  const letter = m.state === 'high' ? 'H' : 'L';
+  // A paper-white pad under the letter, so the thin track never strikes through it.
+  const lx = m.state === 'high' ? mx + r + 1 : mx - r - 1 - 5.2;
+  doc.setFillColor('#ffffff');
+  doc.rect(lx, cy - 3.6, 5.2, 7.2, 'F');
   doc.setTextColor(col);
   doc.setFont(p.font[0], p.font[1]);
   doc.setFontSize(7);
-  const letter = m.state === 'high' ? 'H' : 'L';
-  // After the marker; before it when the marker sits at the right end.
-  if (m.marker > 0.82) doc.text(letter, mx - r - 2, cy + 2.4, { align: 'right' });
-  else doc.text(letter, mx + r + 2, cy + 2.4);
+  if (m.state === 'high') doc.text(letter, mx + r + 1.5, cy + 2.4);
+  else doc.text(letter, mx - r - 1.5, cy + 2.4, { align: 'right' });
 }

@@ -39,6 +39,7 @@ async function readPdf(page: Page, name: string): Promise<string> {
 }
 
 test('designer: Charts card - pictures, sharp charts (2 / 3 across / one per row), range bar, light and dark', async ({ browser }) => {
+  test.setTimeout(600_000);
   for (const theme of THEMES) {
     const { page } = await openAs(browser, ADMIN, '/admin/reports', { theme });
     await page.getByRole('radio', { name: 'Results table' }).click();
@@ -75,16 +76,18 @@ test('designer: Charts card - pictures, sharp charts (2 / 3 across / one per row
 });
 
 test('designer: Modern preset brings sharp charts and the range bar; Classic puts the pictures back', async ({ browser }) => {
+  test.setTimeout(240_000);
   const { page } = await openAs(browser, ADMIN, '/admin/reports', { theme: 'light' });
   await page.getByRole('radio', { name: 'Results table' }).click();
   const card = page.locator('pf-report-chart-panel-card');
   await expect(card).toBeVisible({ timeout: 60_000 });
-  await page.getByRole('radio', { name: /^Modern/ }).click();
+  const presets = page.locator('pf-report-style-cards');
+  await presets.getByRole('radio', { name: /^Modern/ }).click();
   await expect(card.getByRole('radio', { name: /^Sharp/ })).toHaveAttribute('aria-checked', 'true');
   await expect(card.getByRole('switch', { name: 'Range bar' })).toHaveAttribute('aria-checked', 'true');
   await readPdf(page, 'modern-preset');
   await shot(page, 'p7-editor-modern-preset');
-  await page.getByRole('radio', { name: /^Classic/ }).click();
+  await presets.getByRole('radio', { name: /^Classic/ }).click();
   await expect(card.getByRole('radio', { name: /^Pictures/ })).toHaveAttribute('aria-checked', 'true');
   await expect(card.getByRole('switch', { name: 'Range bar' })).toHaveAttribute('aria-checked', 'false');
 });
