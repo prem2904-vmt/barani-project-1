@@ -27,8 +27,11 @@ import {
   AGE_STYLE_CHOICES, LABEL_JOINER_CHOICES, PATIENT_LABELS, RENAMEABLE_LABEL_KEYS, ageSexText, ageText, miniStripText, patientLabel, sexText, swapAgeSexColumns,
 } from '../../../shared/utils/report-patient-text';
 import { reportIssues, type ReportIssues } from '../../../shared/utils/report-issues';
+import { ReportStyleCardsComponent } from './report-style-cards.component';
+import { applyStylePreset, detectPreset, type PresetId } from '../../../shared/utils/report-presets';
+import { paletteById, paletteColumns, type PaletteColors, type PaletteId } from '../../../shared/utils/report-palettes';
 import { readReportTheme, REPORT_THEME_OPTIONS, ReportThemeId, writeReportTheme } from '../../../shared/utils/report-theme';
-import { SOURCE_SANS_DIR, SOURCE_SANS_FACES } from '../../../shared/utils/report-fonts';
+import { INTER_DIR, INTER_FACES, SOURCE_SANS_DIR, SOURCE_SANS_FACES } from '../../../shared/utils/report-fonts';
 import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-strip-qr';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
@@ -70,7 +73,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
+  imports: [ReportStyleCardsComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
@@ -497,6 +500,9 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
             <!-- ══ RESULTS TABLE — style ══ -->
             @case ('table') {
               <div class="pf-rt-flat">
+                <pf-report-style-cards [tpl]="tpl()" [applied]="appliedBanner()"
+                  (preset)="applyPreset($event)" (palette)="applyPalette($event)" (custom)="applyCustomColors($event)"
+                  (printSafeChange)="setPrintSafe($event)" (undo)="undo()"></pf-report-style-cards>
                 <div class="pf-rtb">
                   <h4 class="pf-rtb-h">Report theme</h4>
                   <p class="pf-rtb-s">The typeface and size scale of the whole report — letterhead, patient strip, results, sign-off and footer. Colours stay yours.</p>
@@ -505,16 +511,16 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                       <button type="button" class="pf-rtheme__card press" role="radio"
                               [attr.aria-checked]="reportTheme() === o.value" (click)="setReportTheme(o.value)">
                         <span class="pf-rtheme__spec" aria-hidden="true"
-                              [style.fontFamily]="o.value === 'source-sans' ? sourceSansCss : fontCss(tpl().fontFamily ?? 'helvetica')">
+                              [style.fontFamily]="themeSpecimenCss(o.value)">
                           <span class="pf-rtheme__lab" [style.fontWeight]="700">LAB NAME</span>
                           <span class="pf-rtheme__dept" [style.fontWeight]="700">HAEMATOLOGY</span>
                           <span class="pf-rtheme__row">
-                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 700">Haemoglobin</span>
-                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 400">13.8</span>
+                            <span [style.fontWeight]="o.value !== 'classic' ? 600 : 700">Haemoglobin</span>
+                            <span [style.fontWeight]="o.value !== 'classic' ? 600 : 400">13.8</span>
                             <span class="pf-rtheme__dim">13.0 – 17.0</span>
                           </span>
                           <span class="pf-rtheme__row">
-                            <span [style.fontWeight]="o.value === 'source-sans' ? 600 : 700">MCV</span>
+                            <span [style.fontWeight]="o.value !== 'classic' ? 600 : 700">MCV</span>
                             <span [style.fontWeight]="700">101.7 H</span>
                             <span class="pf-rtheme__dim">83 – 101</span>
                           </span>
@@ -785,7 +791,14 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           } @else {
           <p class="pf-rt-aside__k">Live preview ({{ rendering() ? 'rendering…' : 'PDF' }})</p>
           }
-          <div class="pf-pdf-frame">
+          <div class="pf-rt-bw">
+            <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="bwPreview()"
+                    aria-label="Black and white preview" (click)="bwPreview.set(!bwPreview())">
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+            </button>
+            <span class="pf-rt-bw__t">Black &amp; white preview <span class="pf-rt-bw__d">— see how it photocopies</span></span>
+          </div>
+          <div class="pf-pdf-frame" [class.pf-bw]="bwPreview()">
             @if (previewSafe()) {
               <iframe [src]="previewSafe()" title="Report PDF preview"
                       class="w-full pf-pdf-iframe"></iframe>
@@ -1033,6 +1046,9 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-pt-btn { height: 36px; min-height: 36px; }
 
     .pf-rt-sw { flex-shrink: 0; }
+    .pf-rt-bw { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; font-size: 12.5px; color: var(--text-secondary); }
+    .pf-rt-bw__d { color: var(--text-tertiary); }
+    .pf-bw .pf-pdf-iframe { filter: grayscale(1); }
     /* New design: the focused section is an pf-card surface (kit line/shadow). */
     :host-context(.design-new) .pf-rt-work { background: var(--pf-card-bg); border-color: var(--pf-line); box-shadow: var(--pf-shadow-sm); }
     .pf-color-picker { height: 36px; width: 56px; border-radius: 8px;
@@ -1325,10 +1341,11 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     this.patch({ metadata: writeReportOption(this.tpl(), 'abnormalSummary', !this.abnormalSummaryOn()) });
   }
 
-  patch(p: Partial<ReportTemplate>) {
+  /** `step: true` = a one-click action (preset, palette): always its own undo step, never merged with a patch just before it. */
+  patch(p: Partial<ReportTemplate>, opts?: { step?: boolean }) {
     const keys = Object.keys(p).sort().join(',');
     const now = Date.now();
-    const coalesce = keys === this.lastPatch.keys && now - this.lastPatch.at < 700 && this.past().length > 0;
+    const coalesce = !opts?.step && keys === this.lastPatch.keys && now - this.lastPatch.at < 700 && this.past().length > 0;
     this.lastPatch = { at: now, keys };
     if (!coalesce) {
       const cur = this._tpl();
@@ -1387,6 +1404,38 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   readonly minPtOptions = [6, 6.5, 7, 7.5, 8].map(v => ({ value: '' + v, label: `${v} pt${v === 7 ? ' (usual)' : ''}` }));
   setFit(p: { enabled?: boolean; minPt?: number; autoColumns?: boolean }) {
     this.patch({ metadata: writeReportStyle(this.tpl(), { fit: p }) });
+  }
+  // ── Style presets, colour palettes and the print check (report-presets.ts, report-palettes.ts) ──
+  /** Editor-only: preview the sample report in greyscale, as a photocopy shows it. */
+  readonly bwPreview = signal(false);
+  private readonly lastPreset = signal<PresetId | null>(null);
+  /** The preset just applied, while the settings still equal it (else the banner goes away). */
+  readonly appliedBanner = computed<PresetId | null>(() => {
+    const id = this.lastPreset();
+    return id && detectPreset(this.tpl()) === id ? id : null;
+  });
+  applyPreset(id: PresetId) {
+    const next = applyStylePreset(this.tpl(), id);
+    if (next.patientColumnsJson) {
+      // The arranged strip is only swapped for the default strip (as the Age & sex switch does).
+      if (this.patientScope() === 'default') this.patientCols.set(JSON.parse(next.patientColumnsJson) as string[][]);
+      else delete next.patientColumnsJson;
+    }
+    this.lastPreset.set(id);
+    this.patch(next, { step: true });
+  }
+  applyPalette(id: PaletteId) {
+    const pal = paletteById(id);
+    if (!pal) return;
+    this.lastPreset.set(null);
+    this.patch({ ...paletteColumns(pal.colors), metadata: writeReportStyle(this.tpl(), { colors: { palette: id } } as ReportStylePatch) }, { step: true });
+  }
+  applyCustomColors(colors: PaletteColors) {
+    this.lastPreset.set(null);
+    this.patch({ ...paletteColumns(colors), metadata: writeReportStyle(this.tpl(), { colors: { palette: 'custom' } } as ReportStylePatch) }, { step: true });
+  }
+  setPrintSafe(on: boolean) {
+    this.patch({ metadata: writeReportStyle(this.tpl(), { colors: { printSafe: on } } as ReportStylePatch) });
   }
   // ── Page density + squeeze (report-density.ts) ──
   readonly densityOptions: SegmentedOption<string>[] = [
@@ -1502,16 +1551,25 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   /** The theme card's specimen font: the report's own Source Sans 3 files,
    *  registered once as a web font when the card is shown. */
   readonly sourceSansCss = "'PF Source Sans 3', 'Source Sans 3', system-ui, sans-serif";
-  private sourceSansFaceLoaded = false;
+  readonly interCss = "'PF Inter', Inter, system-ui, sans-serif";
+  /** The font a theme card's specimen is set in. */
+  themeSpecimenCss(id: ReportThemeId): string {
+    return id === 'source-sans' ? this.sourceSansCss : id === 'inter' ? this.interCss : this.fontCss(this.tpl().fontFamily ?? 'helvetica');
+  }
+  private themeFacesLoaded = false;
   private loadSourceSansFace() {
-    if (this.sourceSansFaceLoaded || typeof FontFace === 'undefined' || typeof document === 'undefined') return;
-    this.sourceSansFaceLoaded = true;
+    if (this.themeFacesLoaded || typeof FontFace === 'undefined' || typeof document === 'undefined') return;
+    this.themeFacesLoaded = true;
     const faces: Array<[keyof typeof SOURCE_SANS_FACES, string, string]> =
       [['normal', '400', 'normal'], ['semibold', '600', 'normal'], ['bold', '700', 'normal']];
-    for (const [f, weight, style] of faces) {
-      const url = new URL(SOURCE_SANS_DIR + SOURCE_SANS_FACES[f].file, document.baseURI).toString();
-      const face = new FontFace('PF Source Sans 3', `url(${url})`, { weight, style });
-      face.load().then(ff => document.fonts.add(ff)).catch(() => { /* card falls back to system sans */ });
+    const sets: Array<[string, string, typeof SOURCE_SANS_FACES]> =
+      [['PF Source Sans 3', SOURCE_SANS_DIR, SOURCE_SANS_FACES], ['PF Inter', INTER_DIR, INTER_FACES]];
+    for (const [family, dir, table] of sets) {
+      for (const [f, weight, style] of faces) {
+        const url = new URL(dir + table[f].file, document.baseURI).toString();
+        const face = new FontFace(family, `url(${url})`, { weight, style });
+        face.load().then(ff => document.fonts.add(ff)).catch(() => { /* card falls back to system sans */ });
+      }
     }
   }
 
