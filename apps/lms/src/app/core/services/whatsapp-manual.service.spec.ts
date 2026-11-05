@@ -4,9 +4,9 @@ import { vi } from 'vitest';
 import { DialogService } from './dialog.service';
 import { ToastService } from './toast.service';
 import { WhatsAppService } from './whatsapp.service';
-import { ElectronWhatsAppBridge, WA_CONSENT_REMINDER, WhatsAppManualService } from './whatsapp-manual.service';
+import { ElectronWhatsAppBridge, WA_CONSENT_REMINDER, WA_REMINDER_KEY, WhatsAppManualService } from './whatsapp-manual.service';
 
-/** "Send on WhatsApp" (manual): confirm → WhatsApp opens with the chat and
+/** "Send on WhatsApp" (manual): one click → WhatsApp opens with the chat and
  *  message ready; the person presses Send. Desktop app = the docked panel,
  *  browser = ONE phone-shaped window on the right, phone = wa.me. */
 const SCREEN = { availWidth: 1440, availHeight: 875, availLeft: 0, availTop: 25 } as unknown as Screen;
@@ -38,52 +38,55 @@ const REQ = { phone: '98765 43210', patientName: 'Asha Rao', labName: 'Micro Wor
 const TEXT = 'Dear Asha Rao, your report from Micro World is ready. View it here: https://med.prefrontal.health/reports/public/t1';
 const URL_ = `https://web.whatsapp.com/send?phone=919876543210&text=${encodeURIComponent(TEXT)}`;
 
-describe('WhatsAppManualService — confirm', () => {
-  it('asks first: the message, the number and the consent reminder (DialogService, never window.confirm)', async () => {
-    const { svc, dialog } = setup();
+describe('WhatsAppManualService — one click', () => {
+  beforeEach(() => localStorage.removeItem(WA_REMINDER_KEY));
+
+  it('opens straight away: no confirm, never window.confirm', async () => {
+    const { svc, dialog, open } = setup();
     const native = vi.spyOn(window, 'confirm');
-    await svc.send(REQ);
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(dialog.confirm).not.toHaveBeenCalled();
     expect(native).not.toHaveBeenCalled();
-    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Send on WhatsApp',
-      items: [TEXT],
-      question: WA_CONSENT_REMINDER,
-      confirmLabel: 'Open WhatsApp',
-      tone: 'primary',
-    }));
-    const msg = (dialog.confirm.mock.calls[0] as unknown as [{ message: string }])[0].message;
-    expect(msg).toContain('+91 98765 43210');
-    expect(msg).toContain('press Send in WhatsApp');
+    expect(open).toHaveBeenCalledTimes(1);
     native.mockRestore();
   });
 
-  it('Cancel opens nothing', async () => {
-    const { svc, open } = setup({ confirm: false });
-    expect(await svc.send(REQ)).toBe('cancelled');
-    expect(open).not.toHaveBeenCalled();
+  it('the consent reminder shows once per device, then never again', async () => {
+    const first = setup();
+    await first.svc.send(REQ);
+    expect(first.toasts.info).toHaveBeenCalledWith(WA_CONSENT_REMINDER);
+    TestBed.resetTestingModule();
+    const second = setup();
+    await second.svc.send(REQ);
+    expect(second.toasts.info).not.toHaveBeenCalled();
   });
 
-  it('a patient who opted out: a warning, still allowed', async () => {
+  it('a patient who opted out: the one warning, still allowed', async () => {
     const { svc, dialog, open } = setup({ optOut: true });
     expect(await svc.send(REQ)).toBe('opened');
     expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'This patient opted out of WhatsApp', confirmLabel: 'Send anyway', tone: 'danger',
+      title: 'This patient opted out of WhatsApp', confirmLabel: 'Send anyway', tone: 'danger', items: [TEXT],
     }));
     expect(open).toHaveBeenCalled();
   });
 
-  it('the opt-out read failing never blocks the send', async () => {
-    const { svc, dialog } = setup({ optOut: 'error' });
-    expect(await svc.send(REQ)).toBe('opened');
-    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Send on WhatsApp' }));
+  it('opted out + Cancel opens nothing', async () => {
+    const { svc, open } = setup({ optOut: true, confirm: false });
+    expect(await svc.send(REQ)).toBe('cancelled');
+    expect(open).not.toHaveBeenCalled();
   });
 
-  it('no valid mobile: a plain message, nothing opens, no confirm', async () => {
+  it('the opt-out read failing never blocks the send (and asks nothing)', async () => {
+    const { svc, dialog } = setup({ optOut: 'error' });
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(dialog.confirm).not.toHaveBeenCalled();
+  });
+
+  it('no valid mobile: a plain message, nothing opens', async () => {
     for (const phone of [null, '', '12345', '+1 555 123 4567']) {
       const { svc, dialog, open } = setup();
       expect(await svc.send({ ...REQ, phone })).toBe('no-phone');
       expect(dialog.alert).toHaveBeenCalledWith(expect.objectContaining({ title: 'No mobile number' }));
-      expect(dialog.confirm).not.toHaveBeenCalled();
       expect(open).not.toHaveBeenCalled();
       TestBed.resetTestingModule();
     }

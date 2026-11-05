@@ -118,10 +118,10 @@ describe('ReportActionsService — share / copy', () => {
 });
 
 describe('ReportActionsService — Send on WhatsApp (manual, every lab)', () => {
-  it('needs deliver_report; confirms, opens the WhatsApp window with the report link and records the delivery', async () => {
+  it('needs deliver_report; one click (no confirm), opens the WhatsApp window with the report link and records the delivery', async () => {
     const { svc, api, open, dialog } = setup();
     expect(await svc.whatsApp({ id: 'r1', orderId: 'o1', qrToken: 'q1' }, { name: 'Priya', phone: '9876543210' })).toBe(true);
-    expect(dialog.confirm).toHaveBeenCalled();
+    expect(dialog.confirm).not.toHaveBeenCalled();
     const [url, name] = open.mock.calls[0] as unknown as [string, string];
     expect(name).toBe('pf-whatsapp');
     expect(url.startsWith('https://web.whatsapp.com/send?phone=919876543210&text=')).toBe(true);
@@ -129,10 +129,12 @@ describe('ReportActionsService — Send on WhatsApp (manual, every lab)', () => 
     expect(api.post).toHaveBeenCalledWith('/api/reports/r1/deliver', { via: 'whatsapp', note: 'WhatsApp opened (manual)' });
   });
 
-  it('cancelled at the confirm: nothing opens, nothing recorded', async () => {
+  it('opted-out patient, cancelled at the opt-out dialog: nothing opens, nothing recorded', async () => {
     const { svc, api, open, dialog } = setup();
+    api.get.mockImplementation((url: string) => of(url.includes('/api/whatsapp/reports/r1') ? { patientOptOut: true } : null) as never);
     dialog.confirm.mockResolvedValueOnce(false);
     expect(await svc.whatsApp({ id: 'r1' }, { name: 'Priya', phone: '9876543210' })).toBe(false);
+    expect(dialog.confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'This patient opted out of WhatsApp' }));
     expect(open).not.toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalledWith('/api/reports/r1/deliver', expect.anything());
   });

@@ -734,13 +734,12 @@ describe('Reports list — WhatsApp (automatic) + Send on WhatsApp (manual)', ()
     (TestBed.inject(WhatsAppSendService) as any).stopWatch('r1');
   });
 
-  it('Send on WhatsApp: confirm, then the click-to-chat window on this computer; recorded once it opened', async () => {
+  it('Send on WhatsApp: one click (no confirm), the click-to-chat window on this computer; recorded once it opened', async () => {
     const { c, api } = await render({ waCloud: true });
     const manual = TestBed.inject(WhatsAppManualService);
     const open = vi.fn((..._a: unknown[]) => ({ opener: null, focus: vi.fn() }));
     manual.win = { open, screen: { availWidth: 1440, availHeight: 900 }, navigator: { userAgent: 'Macintosh' } } as never;
     manual.bridge = () => null;
-    (TestBed.inject(DialogService).confirm as ReturnType<typeof vi.fn>).mockResolvedValueOnce(true);
     const r = c.items()[0];
     c.runRowAction(r, 'whatsapp-mine');
     for (let i = 0; i < 4; i++) await new Promise(res => setTimeout(res, 0));
@@ -749,8 +748,11 @@ describe('Reports list — WhatsApp (automatic) + Send on WhatsApp (manual)', ()
     expect(api.post).toHaveBeenCalledWith(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: 'WhatsApp opened (manual)' });
   });
 
-  it('Send on WhatsApp cancelled: nothing opens, nothing recorded', async () => {
+  it('Send on WhatsApp, patient opted out and the person cancels: nothing opens, nothing recorded', async () => {
     const { c, api } = await render({ waCloud: false });
+    const base = api.get.getMockImplementation() as (url: string) => unknown;
+    api.get.mockImplementation(((url: string) =>
+      url.startsWith('/api/whatsapp/reports/') ? of({ patientOptOut: true }) : base(url)) as never);
     const manual = TestBed.inject(WhatsAppManualService);
     const open = vi.fn();
     manual.win = { open, screen: { availWidth: 1440, availHeight: 900 }, navigator: { userAgent: 'Macintosh' } } as never;
@@ -758,6 +760,7 @@ describe('Reports list — WhatsApp (automatic) + Send on WhatsApp (manual)', ()
     const r = c.items()[0];
     c.deliver(r, 'whatsapp');
     for (let i = 0; i < 4; i++) await new Promise(res => setTimeout(res, 0));
+    expect(TestBed.inject(DialogService).confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'This patient opted out of WhatsApp' }));
     expect(open).not.toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalledWith(`/api/reports/${r.id}/deliver`, expect.anything());
   });

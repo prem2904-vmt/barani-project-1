@@ -20,7 +20,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { DialogService } from '../../../core/services/dialog.service';
 import { ReportActionsService } from '../../../core/services/report-actions.service';
 import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
-import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
+import { WhatsAppManualService, WA_REMINDER_KEY } from '../../../core/services/whatsapp-manual.service';
 
 /**
  * Report view on the nd pattern (docs/PF-PATTERN.md → "Report view"):
@@ -112,12 +112,12 @@ async function render(opts: Opts = {}) {
       { provide: Router, useValue: { url: '/reports/view/rep-1', navigate: vi.fn(() => Promise.resolve(true)), events: of() } },
     ],
   });
-  // Send on WhatsApp (manual) on a desktop browser: confirm → the named popup.
+  // Send on WhatsApp (manual) on a desktop browser: one click → the named popup (no confirm).
   const manual = TestBed.inject(WhatsAppManualService);
   const waOpen = vi.fn((..._a: unknown[]) => ({ opener: null, focus: vi.fn() }));
   manual.win = { open: waOpen, screen: { availWidth: 1440, availHeight: 900 }, navigator: { userAgent: 'Macintosh' } } as never;
   manual.bridge = () => null;
-  vi.spyOn(TestBed.inject(DialogService), 'confirm').mockResolvedValue(true);
+  try { localStorage.removeItem(WA_REMINDER_KEY); } catch { /* */ }
   const f = TestBed.createComponent(ReportViewerComponent);
   f.detectChanges();
   await f.whenStable();
@@ -128,7 +128,7 @@ async function render(opts: Opts = {}) {
   return { f, el: f.nativeElement as HTMLElement, c, api, renderSpy, holding, ready, outsourcing, waOpen };
 }
 
-/** Let the confirm + opt-out read settle. */
+/** Let the opt-out read settle. */
 const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(r => setTimeout(r, 0)); };
 const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary');
 /** Component CSS with Angular's scoping attributes stripped. */

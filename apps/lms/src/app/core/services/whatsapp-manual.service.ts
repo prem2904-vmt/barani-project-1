@@ -64,8 +64,9 @@ export interface WaManualRequest {
 
 export type WaManualOutcome = 'opened' | 'cancelled' | 'no-phone' | 'blocked';
 
-/** The consent reminder (no consent field on the patient yet — owner decision). */
+/** The consent reminder (no consent field on the patient yet — owner decision); shown once per device. */
 export const WA_CONSENT_REMINDER = 'Only send if the patient agreed to get reports on WhatsApp.';
+export const WA_REMINDER_KEY = 'pf.wa.manual.reminded';
 
 /**
  * "Send on WhatsApp" — opens WhatsApp's click-to-chat with the patient's
@@ -105,24 +106,36 @@ export class WhatsAppManualService {
       return 'no-phone';
     }
     const text = waReportMessage({ patient: req.patientName, lab: req.labName, link: req.link, extra: req.extra });
-    const optedOut = await this.optedOut(req.reportId);
-    const who = (req.patientName ?? '').trim();
-    const ok = await this.dialog.confirm({
-      title: optedOut ? 'This patient opted out of WhatsApp' : 'Send on WhatsApp',
-      message: optedOut
-        ? `${who || 'This patient'} asked not to get WhatsApp messages. Send anyway? WhatsApp opens with this message to ${waDisplayPhone(e164)}; you press Send there.`
-        : `WhatsApp opens with this message to ${who ? who + ', ' : ''}${waDisplayPhone(e164)}. Check it, then press Send in WhatsApp.`,
-      items: [text],
-      question: WA_CONSENT_REMINDER,
-      confirmLabel: optedOut ? 'Send anyway' : 'Open WhatsApp',
-      cancelLabel: 'Cancel',
-      tone: optedOut ? 'danger' : 'primary',
-    });
-    if (!ok) return 'cancelled';
-    return this.open(req, text);
+    // One click: no confirm. The only stop is a patient who OPTED OUT of
+    // WhatsApp (a recorded "no"). The read is kept short so the browser
+    // still treats the window as opened by the click.
+    if (await this.optedOut(req.reportId)) {
+      const who = (req.patientName ?? '').trim() || 'This patient';
+      const ok = await this.dialog.confirm({
+        title: 'This patient opted out of WhatsApp',
+        message: `${who} asked not to get WhatsApp messages. Send anyway? WhatsApp opens with the message to ${waDisplayPhone(e164)}; you press Send there.`,
+        items: [text],
+        confirmLabel: 'Send anyway',
+        cancelLabel: 'Cancel',
+        tone: 'danger',
+      });
+      if (!ok) return 'cancelled';
+    }
+    const out = await this.open(req, text);
+    if (out === 'opened') this.remindOnce();
+    return out;
   }
 
-  /** Open the chat (no questions asked — `send` asked them). */
+  /** The consent reminder, shown ONCE per device (first send), never again. */
+  private remindOnce(): void {
+    try {
+      if (localStorage.getItem(WA_REMINDER_KEY)) return;
+      localStorage.setItem(WA_REMINDER_KEY, '1');
+    } catch { return; }
+    this.toasts.info(WA_CONSENT_REMINDER);
+  }
+
+  /** Open the chat. */
   private async open(req: WaManualRequest, text: string): Promise<WaManualOutcome> {
     const url = waClickToChatUrl(req.phone, text);
     if (!url || !isClickToChatUrl(url)) return 'no-phone';
@@ -164,11 +177,11 @@ export class WhatsAppManualService {
     } catch { /* the link in the message is enough */ }
   }
 
-  /** The patient's WhatsApp opt-out, when the server knows it (2 s max). */
+  /** The patient's WhatsApp opt-out, when the server knows it (0.8 s max — keeps the click's pop-up permission). */
   private async optedOut(reportId: string | null | undefined): Promise<boolean> {
     if (!reportId) return false;
     try {
-      const st = await firstValueFrom(this.wa.reportStatus(reportId).pipe(timeout(2000)));
+      const st = await firstValueFrom(this.wa.reportStatus(reportId).pipe(timeout(800)));
       return st?.patientOptOut === true;
     } catch {
       return false;
