@@ -1,0 +1,343 @@
+/**
+ * "Send on WhatsApp" — WhatsApp Web docked on the RIGHT of the main window.
+ *
+ * The page asks to open WhatsApp's official click-to-chat link
+ * (`https://web.whatsapp.com/send?phone=<digits>&text=<encoded>`); this
+ * module shows it in a WebContentsView beside the app, which reflows to the
+ * left. The person signs in once (QR) — the sign-in lives in its OWN
+ * persistent partition `persist:whatsapp`, isolated from the app's session
+ * and cookies — checks the message and presses Send THEMSELVES.
+ *
+ * Hard lines (legal / WhatsApp terms — pinned by test/whatsapp-dock.test.js):
+ *   - NOTHING inside WhatsApp is automated: no preload, no script injected
+ *     (no executeJavaScript / insertCSS), its page is never read, Send is
+ *     never pressed for the person, no file is attached for them, no bulk.
+ *   - Only the click-to-chat link is loaded (`parseClickToChat`); the view
+ *     never leaves *.whatsapp.com / *.whatsapp.net — anything else opens in
+ *     the system browser.
+ *   - The user agent is Electron's own (no Chrome spoofing — an owner
+ *     decision, not done). If WhatsApp refuses to load here, the page offers
+ *     the same link in the system browser or the WhatsApp app.
+ *   - The report PDF is only offered as a NATIVE DRAG the person starts
+ *     (webContents.startDrag from their drag gesture) — never attached.
+ *
+ * The decisions are plain functions (no Electron) so they are unit-tested;
+ * `createDock` takes Electron's pieces as arguments so tests pass fakes.
+ */
+
+const PARTITION = 'persist:whatsapp';
+/** Hosts the panel may show (the host itself or any subdomain). */
+const WA_HOST_SUFFIXES = ['whatsapp.com', 'whatsapp.net'];
+/** The page's header strip above the panel (CSS px; Close / Sign out / PDF). */
+const HEADER_CSS = 96;
+/** Permissions WhatsApp Web may have here: its own message notifications and
+ *  copying text. Everything else (camera, microphone, location, screen,
+ *  devices, clipboard READ, …) is denied. */
+const ALLOWED_PERMISSIONS = ['notifications', 'clipboard-sanitized-write'];
+const OPEN_EXTERNAL_SCHEMES = ['https:', 'http:', 'mailto:', 'tel:'];
+const MAX_PDF_BYTES = 25 * 1024 * 1024;
+
+function hostAllowed(hostname) {
+  const h = String(hostname || '').toLowerCase();
+  return WA_HOST_SUFFIXES.some((s) => h === s || h.endsWith('.' + s));
+}
+
+/** https on a WhatsApp host (no credentials in the URL). */
+function isWhatsAppUrl(url) {
+  let u;
+  try { u = new URL(url); } catch { return false; }
+  return u.protocol === 'https:' && !u.username && !u.password && hostAllowed(u.hostname);
+}
+
+/** Main-frame navigation inside the panel: stay on WhatsApp, else hand a
+ *  safe link to the system browser, else block. */
+function decideWaNavigation(url) {
+  if (isWhatsAppUrl(url)) return { allow: true, openExternal: false };
+  let u;
+  try { u = new URL(url); } catch { return { allow: false, openExternal: false }; }
+  return { allow: false, openExternal: OPEN_EXTERNAL_SCHEMES.includes(u.protocol) };
+}
+
+/** EXACTLY a click-to-chat link → { phone, text }; anything else → null.
+ *  Mirror of the page's `isClickToChatUrl` (shared/utils/whatsapp-manual.ts). */
+function parseClickToChat(url) {
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  if (u.protocol !== 'https:' || u.hostname !== 'web.whatsapp.com' || u.port || u.username || u.password || u.hash) return null;
+  if (u.pathname !== '/send') return null;
+  const keys = [...u.searchParams.keys()];
+  if (keys.some((k) => k !== 'phone' && k !== 'text') || new Set(keys).size !== keys.length) return null;
+  const phone = u.searchParams.get('phone') || '';
+  if (!/^\d{8,15}$/.test(phone)) return null;
+  const text = u.searchParams.get('text') || '';
+  if (text.length > 4000) return null;
+  return { phone, text };
+}
+
+/** The same chat in the WhatsApp desktop app (the fallback). */
+function appDeepLink({ phone, text }) {
+  return `whatsapp://send?phone=${phone}&text=${encodeURIComponent(text)}`;
+}
+
+/** The panel's web preferences: its own persistent partition, sandboxed,
+ *  isolated, no Node, and NO preload (nothing of ours runs in WhatsApp). */
+function viewWebPreferences() {
+  return {
+    partition: PARTITION,
+    contextIsolation: true,
+    nodeIntegration: false,
+    nodeIntegrationInSubFrames: false,
+    nodeIntegrationInWorker: false,
+    sandbox: true,
+    webSecurity: true,
+    allowRunningInsecureContent: false,
+    webviewTag: false,
+    // Messages must still arrive while the app is in front of it.
+    backgroundThrottling: false,
+  };
+}
+
+function decidePermission(permission) {
+  return ALLOWED_PERMISSIONS.includes(permission);
+}
+
+/** Panel width in DIP: about a phone (380–480), ~a quarter of wide windows,
+ *  and the app keeps at least 560 px. */
+function dockWidth(contentWidth) {
+  const w = Math.round(Math.min(480, Math.max(380, contentWidth * 0.24)));
+  return Math.max(0, Math.min(w, contentWidth - 560));
+}
+
+/** Where the panel goes in the window's content area + what the page needs
+ *  to reflow (CSS px, so a zoomed page still lines up). */
+function dockLayout(content, zoom = 1) {
+  const z = zoom > 0 ? zoom : 1;
+  const width = dockWidth(content.width);
+  const header = Math.round(HEADER_CSS * z);
+  return {
+    bounds: { x: content.width - width, y: header, width, height: Math.max(0, content.height - header) },
+    cssWidth: Math.round(width / z),
+    cssTop: HEADER_CSS,
+  };
+}
+
+/** A file name safe on every OS, always ending .pdf. */
+function safePdfName(name) {
+  const base = String(name || 'report').replace(/\.pdf$/i, '').replace(/[^A-Za-z0-9 ._-]+/g, '-').replace(/\.{2,}/g, '-').replace(/-{2,}/g, '-').replace(/^[.\s-]+/, '').slice(0, 80);
+  return `${base || 'report'}.pdf`;
+}
+
+function isPdfBytes(bytes) {
+  return !!bytes && bytes.length > 5 && bytes.length <= MAX_PDF_BYTES
+    && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d; // %PDF-
+}
+
+/**
+ * The panel. deps: { WebContentsView, session, shell, nativeImage, fs, os,
+ * path, iconPath, getWindow }.
+ */
+function createDock(deps) {
+  const { WebContentsView, session, shell, getWindow } = deps;
+  let view = null;
+  let attachedTo = null;
+  let lastChat = null;
+  let pdfPath = null;
+  let hardened = false;
+  const state = { open: false, width: 0, top: HEADER_CSS, loading: false, failed: false, pdfName: null };
+
+  const waSession = () => session.fromPartition(PARTITION);
+
+  /** Is this web contents the panel's (or anything in its partition)? The
+   *  app-wide navigation guard skips these — the panel has its own. */
+  function owns(contents) {
+    try { return !!contents && contents.session === waSession(); } catch { return false; }
+  }
+
+  function harden(ses) {
+    if (hardened) return;
+    ses.setPermissionRequestHandler((_wc, permission, callback) => callback(decidePermission(permission)));
+    ses.setPermissionCheckHandler((_wc, permission) => decidePermission(permission));
+    if (typeof ses.setDevicePermissionHandler === 'function') ses.setDevicePermissionHandler(() => false);
+    hardened = true;
+  }
+
+  function emit() {
+    const win = getWindow();
+    if (win && !win.isDestroyed()) win.webContents.send('whatsapp:state', publicState());
+  }
+
+  function publicState() { return { ...state }; }
+
+  function ensureView() {
+    if (view && !view.webContents.isDestroyed()) return view;
+    harden(waSession());
+    view = new WebContentsView({ webPreferences: viewWebPreferences() });
+    const wc = view.webContents;
+    // New windows never open in the app: web links go to the system browser.
+    wc.setWindowOpenHandler(({ url }) => {
+      const d = decideWaNavigation(url);
+      if (d.allow || d.openExternal) shell.openExternal(url);
+      return { action: 'deny' };
+    });
+    const guard = (event, url) => {
+      const d = decideWaNavigation(url);
+      if (d.allow) return;
+      event.preventDefault();
+      if (d.openExternal) shell.openExternal(url);
+    };
+    wc.on('will-navigate', guard);
+    wc.on('will-redirect', guard);
+    wc.on('did-start-loading', () => { state.loading = true; emit(); });
+    wc.on('did-stop-loading', () => { state.loading = false; emit(); });
+    wc.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
+      if (isMainFrame && code !== -3) { state.failed = true; state.loading = false; emit(); }   // -3 = aborted
+    });
+    wc.on('render-process-gone', () => { state.failed = true; state.loading = false; emit(); });
+    return view;
+  }
+
+  function layout() {
+    const win = getWindow();
+    if (!view || !state.open || !win || win.isDestroyed()) return;
+    let zoom = 1;
+    try { zoom = win.webContents.getZoomFactor() || 1; } catch { /* */ }
+    const l = dockLayout(win.getContentBounds(), zoom);
+    view.setBounds(l.bounds);
+    state.width = l.cssWidth;
+    state.top = l.cssTop;
+  }
+
+  function relayout() { if (state.open) { layout(); emit(); } }
+
+  function open(url) {
+    const chat = parseClickToChat(url);
+    if (!chat) return { ok: false, error: 'not_click_to_chat' };
+    const win = getWindow();
+    if (!win || win.isDestroyed()) return { ok: false, error: 'no_window' };
+    const v = ensureView();
+    if (attachedTo !== win) {
+      win.contentView.addChildView(v);
+      attachedTo = win;
+    }
+    lastChat = { url, ...chat };
+    clearPdf();
+    state.open = true;
+    state.failed = false;
+    state.loading = true;
+    layout();
+    Promise.resolve(v.webContents.loadURL(url)).catch(() => { state.failed = true; state.loading = false; emit(); });
+    emit();
+    return { ok: true };
+  }
+
+  function close() {
+    const v = view;
+    view = null;
+    if (v) {
+      try { if (attachedTo && !attachedTo.isDestroyed()) attachedTo.contentView.removeChildView(v); } catch { /* */ }
+      try { if (!v.webContents.isDestroyed()) v.webContents.close(); } catch { /* */ }
+    }
+    attachedTo = null;
+    clearPdf();
+    Object.assign(state, { open: false, width: 0, loading: false, failed: false, pdfName: null });
+    emit();
+    return { ok: true };
+  }
+
+  /** "Sign out of WhatsApp on this computer": close + wipe the partition. */
+  async function signOut() {
+    close();
+    const ses = waSession();
+    try { await ses.clearStorageData(); } catch { /* */ }
+    try { await ses.clearCache(); } catch { /* */ }
+    try { await ses.clearAuthCache(); } catch { /* */ }
+    return { ok: true };
+  }
+
+  /** The same chat outside the app: the system browser or the WhatsApp app. */
+  function openElsewhere(kind) {
+    if (!lastChat) return { ok: false };
+    if (kind === 'app') shell.openExternal(appDeepLink(lastChat));
+    else shell.openExternal(lastChat.url);
+    return { ok: true };
+  }
+
+  function clearPdf() {
+    if (pdfPath) { try { deps.fs.unlinkSync(pdfPath); } catch { /* */ } }
+    pdfPath = null;
+    state.pdfName = null;
+  }
+
+  /** The page hands over the report PDF for the drag helper. */
+  function setPdf(p) {
+    if (!state.open) return { ok: false };
+    const bytes = p && p.bytes ? Buffer.from(p.bytes) : null;
+    if (!isPdfBytes(bytes)) return { ok: false, error: 'not_pdf' };
+    clearPdf();
+    const dir = deps.path.join(deps.os.tmpdir(), 'prefrontal-whatsapp');
+    deps.fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const name = safePdfName(p.name);
+    pdfPath = deps.path.join(dir, name);
+    deps.fs.writeFileSync(pdfPath, bytes, { mode: 0o600 });
+    state.pdfName = name;
+    emit();
+    return { ok: true };
+  }
+
+  /** The person started dragging the PDF chip: a native file drag they drop
+   *  into the chat themselves. */
+  function startDrag(sender) {
+    if (!pdfPath || !sender) return;
+    let icon;
+    try { icon = deps.nativeImage.createFromPath(deps.iconPath).resize({ width: 32, height: 32 }); } catch { icon = undefined; }
+    sender.startDrag({ file: pdfPath, icon });
+  }
+
+  function windowGone() {
+    view = null;
+    attachedTo = null;
+    clearPdf();
+    Object.assign(state, { open: false, width: 0, loading: false, failed: false, pdfName: null });
+  }
+
+  return { open, close, signOut, openElsewhere, setPdf, startDrag, relayout, owns, windowGone, state: publicState };
+}
+
+/** IPC + window wiring (main.js). Only the main window's page may drive it. */
+function register(getWindow, electron = require('electron')) {
+  const { ipcMain, WebContentsView, session, shell, nativeImage } = electron;
+  const dock = createDock({
+    WebContentsView, session, shell, nativeImage, getWindow,
+    fs: require('fs'), os: require('os'), path: require('path'),
+    iconPath: require('path').join(__dirname, 'icon.png'),
+  });
+  const fromApp = (e) => {
+    const win = getWindow();
+    return !!win && !win.isDestroyed() && e.sender === win.webContents;
+  };
+  ipcMain.handle('whatsapp:open', (e, url) => (fromApp(e) ? dock.open(String(url || '')) : { ok: false }));
+  ipcMain.handle('whatsapp:close', (e) => (fromApp(e) ? dock.close() : { ok: false }));
+  ipcMain.handle('whatsapp:signOut', (e) => (fromApp(e) ? dock.signOut() : { ok: false }));
+  ipcMain.handle('whatsapp:state', (e) => (fromApp(e) ? dock.state() : null));
+  ipcMain.handle('whatsapp:openElsewhere', (e, kind) => (fromApp(e) ? dock.openElsewhere(kind === 'app' ? 'app' : 'browser') : { ok: false }));
+  ipcMain.handle('whatsapp:setPdf', (e, p) => (fromApp(e) ? dock.setPdf(p) : { ok: false }));
+  ipcMain.on('whatsapp:startDrag', (e) => { if (fromApp(e)) dock.startDrag(e.sender); });
+  return dock;
+}
+
+/** Follow the main window: re-lay the panel on resize / zoom / full screen. */
+function attach(win, dock) {
+  const relayout = () => dock.relayout();
+  win.on('resize', relayout);
+  win.on('enter-full-screen', relayout);
+  win.on('leave-full-screen', relayout);
+  win.webContents.on('zoom-changed', () => setTimeout(relayout, 0));
+  win.webContents.on('did-finish-load', () => dock.relayout());
+  win.on('closed', () => dock.windowGone());
+}
+
+module.exports = {
+  PARTITION, WA_HOST_SUFFIXES, HEADER_CSS, ALLOWED_PERMISSIONS,
+  isWhatsAppUrl, decideWaNavigation, parseClickToChat, appDeepLink, viewWebPreferences,
+  decidePermission, dockWidth, dockLayout, safePdfName, isPdfBytes, createDock, register, attach,
+};

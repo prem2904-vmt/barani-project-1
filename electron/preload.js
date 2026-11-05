@@ -180,6 +180,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
     print: (opts) => ipcRenderer.invoke('doc:print', opts),
     printPdf: (opts) => ipcRenderer.invoke('doc:printPdf', opts)
   },
+  // "Send on WhatsApp" (whatsapp-dock.js): WhatsApp Web docked on the right.
+  // open() takes ONLY a click-to-chat link (main re-checks it); the person
+  // presses Send in WhatsApp. setPdf + startDrag = the "drag the PDF into
+  // the chat" helper (a native drag THEY start — never an attachment).
+  whatsapp: {
+    open: (url) => ipcRenderer.invoke('whatsapp:open', String(url || '')),
+    close: () => ipcRenderer.invoke('whatsapp:close'),
+    signOut: () => ipcRenderer.invoke('whatsapp:signOut'),
+    state: () => ipcRenderer.invoke('whatsapp:state'),
+    onState: (cb) => {
+      const h = (_e, s) => cb(s);
+      ipcRenderer.on('whatsapp:state', h);
+      return () => ipcRenderer.removeListener('whatsapp:state', h);
+    },
+    openElsewhere: (kind) => ipcRenderer.invoke('whatsapp:openElsewhere', kind === 'app' ? 'app' : 'browser'),
+    setPdf: (p) => ipcRenderer.invoke('whatsapp:setPdf', { name: String((p && p.name) || 'report.pdf'), bytes: p && p.bytes }),
+    startDrag: () => ipcRenderer.send('whatsapp:startDrag')
+  },
   // Desktop self-update (electron/updater.js). The renderer owns the
   // banner; main owns checking, background download and the "is it safe
   // to restart" call. restartNow() can come back { deferred: true } if an

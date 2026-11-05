@@ -28,6 +28,9 @@ const tray = require('./tray');
 // Electron's canonical app.isPackaged instead.
 const isDev = !app.isPackaged;
 const { decideNavigation } = require('./nav-guard');
+// "Send on WhatsApp": WhatsApp Web docked on the right, in its own isolated
+// session, click-to-chat only — nothing inside WhatsApp is automated.
+const whatsappDock = require('./whatsapp-dock');
 
 // The packaged UI is served from the secure custom origin app://prefrontal
 // (file:// sends `Origin: null`, which the APIs' CORS rejects). Must be
@@ -182,6 +185,7 @@ function createWindow() {
 
   calls.attach(mainWindow);
   notify.attach(mainWindow);
+  whatsappDock.attach(mainWindow, waDock);
 }
 
 // ── Label printer (USB) IPC — the desktop counterpart to the iPad's BLE
@@ -200,6 +204,8 @@ bridges.register(() => mainWindow);
 updater.register(() => mainWindow, instruments.guardSnapshot);
 // Full screen: query / set from the main window only; changes pushed back.
 fullscreen.register(() => mainWindow);
+// Send on WhatsApp: the docked WhatsApp Web panel (open / close / sign out).
+const waDock = whatsappDock.register(() => mainWindow);
 
 ipcMain.handle('printer:status', async () => labelPrinter.status());
 ipcMain.handle('printer:print', async (_e, payload) => labelPrinter.print(payload));
@@ -320,6 +326,8 @@ app.on('window-all-closed', () => {
 // the dev server, the app:// bundle (file:// is the call window), or our API. Anything
 // else gets opened in the user's browser instead.
 app.on('web-contents-created', (_, contents) => {
+  // The WhatsApp panel has its own guard (stays on *.whatsapp.com / .net).
+  if (waDock.owns(contents)) return;
   contents.on('will-navigate', (event, url) => {
     const d = decideNavigation(url, { isDev, appOrigin: appProtocol.APP_ORIGIN });
     if (d.allow) return;
