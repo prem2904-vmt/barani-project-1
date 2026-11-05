@@ -91,11 +91,10 @@ describe('WhatsAppManualService — confirm', () => {
 });
 
 describe('WhatsAppManualService — web browser popup', () => {
-  it('ONE named phone-shaped window flush right, full height; opener cut, focused', async () => {
+  it('ONE named phone-shaped window flush right, full height; focused', async () => {
     const { svc, open, pop } = setup();
     expect(await svc.send(REQ)).toBe('opened');
     expect(open).toHaveBeenCalledWith(URL_, 'pf-whatsapp', 'popup=yes,width=420,height=875,left=1020,top=25');
-    expect(pop.opener).toBeNull();
     expect(pop.focus).toHaveBeenCalled();
   });
 

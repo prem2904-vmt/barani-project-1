@@ -216,7 +216,7 @@ export class ReportActionsService {
    *  the patient's. */
   whatsAppActions(r: ReportRef | null | undefined): PfAction[] {
     if (!r || !this.auth.hasPermission('deliver_report')) return [];
-    const manual: PfAction = { id: WA_ACTION_MINE, label: 'Send on WhatsApp', icon: 'chat', group: 'Share', hint: 'Opens WhatsApp with the message ready; you press Send' };
+    const manual: PfAction = { id: WA_ACTION_MINE, label: 'Send on WhatsApp', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the message ready; you press Send' };
     if (this.waSend.canSend(r)) {
       return [
         { id: WA_ACTION_SEND, label: 'WhatsApp (automatic)', icon: 'whatsapp', group: 'Share', hint: "The lab's WhatsApp number sends the report link" },

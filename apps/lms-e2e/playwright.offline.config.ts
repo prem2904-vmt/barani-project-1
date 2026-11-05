@@ -10,7 +10,7 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './src',
-  testMatch: /(messages-realtime|notification-bell-alerts|opd-consult-dock|pour-timed-draws)\.smoke\.spec\.ts/,
+  testMatch: /(messages-realtime|notification-bell-alerts|opd-consult-dock|pour-timed-draws|whatsapp-manual)\.smoke\.spec\.ts/,
   retries: 0,
   workers: 1,
   use: {

@@ -146,9 +146,9 @@ export class WhatsAppManualService {
       this.toasts.error('Your browser blocked the WhatsApp window. Allow pop-ups for this site, then try again.');
       return 'blocked';
     }
-    // The new window must not reach back into the app (a reused one is
-    // already WhatsApp's own page — cross-origin, so this throws harmlessly).
-    try { (pop as { opener: unknown }).opener = null; } catch { /* reused window */ }
+    // The opener is NOT cut here: disowning the window would also stop the
+    // next click from finding it by name. WhatsApp's own page sets
+    // Cross-Origin-Opener-Policy, which severs it from the app anyway.
     try { pop.focus(); } catch { /* */ }
     return 'opened';
   }
