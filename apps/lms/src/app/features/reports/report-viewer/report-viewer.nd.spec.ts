@@ -20,6 +20,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { DialogService } from '../../../core/services/dialog.service';
 import { ReportActionsService } from '../../../core/services/report-actions.service';
 import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
+import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
 
 /**
  * Report view on the nd pattern (docs/PF-PATTERN.md → "Report view"):
@@ -111,6 +112,12 @@ async function render(opts: Opts = {}) {
       { provide: Router, useValue: { url: '/reports/view/rep-1', navigate: vi.fn(() => Promise.resolve(true)), events: of() } },
     ],
   });
+  // Send on WhatsApp (manual) on a desktop browser: confirm → the named popup.
+  const manual = TestBed.inject(WhatsAppManualService);
+  const waOpen = vi.fn((..._a: unknown[]) => ({ opener: null, focus: vi.fn() }));
+  manual.win = { open: waOpen, screen: { availWidth: 1440, availHeight: 900 }, navigator: { userAgent: 'Macintosh' } } as never;
+  manual.bridge = () => null;
+  vi.spyOn(TestBed.inject(DialogService), 'confirm').mockResolvedValue(true);
   const f = TestBed.createComponent(ReportViewerComponent);
   f.detectChanges();
   await f.whenStable();
@@ -118,9 +125,11 @@ async function render(opts: Opts = {}) {
   f.detectChanges();
   const c = f.componentInstance as any;
   const ready = () => { c._pdfReady.set(true); c.pageCount.set(2); f.detectChanges(); };
-  return { f, el: f.nativeElement as HTMLElement, c, api, renderSpy, holding, ready, outsourcing };
+  return { f, el: f.nativeElement as HTMLElement, c, api, renderSpy, holding, ready, outsourcing, waOpen };
 }
 
+/** Let the confirm + opt-out read settle. */
+const settle = async () => { for (let i = 0; i < 4; i++) await new Promise(r => setTimeout(r, 0)); };
 const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary');
 /** Component CSS with Angular's scoping attributes stripped. */
 const css = () => ((ReportViewerComponent as any).ɵcmp.styles as string[]).join('\n')
@@ -153,11 +162,11 @@ describe('Report view (nd) — band + CONTEXT BAR', () => {
 });
 
 describe('Report view (nd) — actions', () => {
-  it('ONE primary (Send WhatsApp) in the band; Edit / Print / Share with are quiet secondaries', async () => {
+  it('ONE primary (Send on WhatsApp) in the band; Edit / Print / Share with are quiet secondaries', async () => {
     const { el } = await render();
     const actions = el.querySelector('pf-hero-band .pf-hb__actions') as HTMLElement;
     expect(primaries(el).length).toBe(1);
-    expect(actions.querySelector('.pf-hb-btn--primary')?.getAttribute('aria-label')).toBe('Send WhatsApp');
+    expect(actions.querySelector('.pf-hb-btn--primary')?.getAttribute('aria-label')).toBe('Send on WhatsApp');
     for (const k of ['edit', 'print', 'share', 'more']) {
       const b = actions.querySelector(`.pf-rv-act--${k}`) as HTMLElement;
       expect(b, k).not.toBeNull();
@@ -169,8 +178,8 @@ describe('Report view (nd) — actions', () => {
     expect(actions.querySelector('.pf-rv-act--print .pf-rv-act__t')?.textContent?.trim()).toBe('Print');
   });
 
-  it('every original action still works: Edit, Print, Share with…, Send WhatsApp, partner report', async () => {
-    const { el, c, f, api } = await render({ partner: true });
+  it('every original action still works: Edit, Print, Share with…, Send on WhatsApp, partner report', async () => {
+    const { el, c, f, api, waOpen } = await render({ partner: true });
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     (el.querySelector('.pf-rv-act--edit') as HTMLButtonElement).click();
     expect(c.editDialogOpen()).toBe(true);
@@ -190,14 +199,15 @@ describe('Report view (nd) — actions', () => {
     expect(TestBed.inject(ShareService).sheet()).toBeNull();
 
     (el.querySelector('.pf-rv-act--send') as HTMLButtonElement).click();
-    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+    await settle();
+    expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?phone='), 'pf-whatsapp', expect.stringContaining('width=420'));
     expect(api.post).toHaveBeenCalledWith('/api/reports/rep-1/deliver', expect.objectContaining({ via: 'whatsapp' }));
 
     f.detectChanges();
     const partner = el.querySelector('.pf-rv-partner .pf-rowact') as HTMLButtonElement;
     expect(partner.getAttribute('aria-label')).toContain('Vitamin D');
     partner.click();
-    expect(open).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(1);
   });
 
   it('Edit hides without edit_result, Share without the Messages module', async () => {
@@ -253,28 +263,28 @@ describe('Report view (nd) — actions', () => {
   });
 
   it('VIEW-ONLY: deliverWhatsApp() never records a delivery', async () => {
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    const { c, api } = await render({ perms: ['view_report'] });
+    const { c, api, waOpen } = await render({ perms: ['view_report'] });
     c.deliverWhatsApp();
-    expect(open).not.toHaveBeenCalled();
+    await settle();
+    expect(waOpen).not.toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalledWith(expect.stringContaining('/deliver'), expect.anything());
   });
 
-  it('Send shows a brief "Sent" success state (SVG check), then returns to its label', async () => {
-    vi.spyOn(window, 'open').mockReturnValue(null);
+  it('Send on WhatsApp shows a brief "Opened" state (SVG check), then returns to its label', async () => {
     const { el, f, c } = await render();
     vi.useFakeTimers();
     (el.querySelector('.pf-rv-act--send') as HTMLButtonElement).click();
+    for (let i = 0; i < 6; i++) await vi.advanceTimersByTimeAsync(1);
     f.detectChanges();
     const send = el.querySelector('.pf-rv-act--send') as HTMLElement;
     expect(send.classList).toContain('pf-rv-act--done');
-    expect(send.querySelector('.pf-rv-act__t')?.textContent?.trim()).toBe('Sent');
+    expect(send.querySelector('.pf-rv-act__t')?.textContent?.trim()).toBe('Opened');
     expect(send.querySelector('.pf-rv-act__check')).not.toBeNull();
     // The recorded delivery shows in the REPORT card.
     expect(c.deliveryLine()).toBe('Delivered via WhatsApp');
     vi.advanceTimersByTime(RV_DONE_MS + 10);
     f.detectChanges();
-    expect(el.querySelector('.pf-rv-act--send .pf-rv-act__t')?.textContent?.trim()).toBe('Send WhatsApp');
+    expect(el.querySelector('.pf-rv-act--send .pf-rv-act__t')?.textContent?.trim()).toBe('Send on WhatsApp');
   });
 });
 
@@ -368,7 +378,7 @@ describe('Report view (nd) — phones', () => {
     expect(document.body.querySelector('[role=menu]')).toBeNull();
     // Touch → the band buttons are icon buttons with their words kept for AT.
     expect(el.querySelector('.pf-rv-act--send')?.classList).toContain('pf-rv-act--icon');
-    expect(el.querySelector('.pf-rv-act--send')?.getAttribute('aria-label')).toBe('Send WhatsApp');
+    expect(el.querySelector('.pf-rv-act--send')?.getAttribute('aria-label')).toBe('Send on WhatsApp');
   });
 
   it('phone CSS: 44px icons, full-width preview, sheets above the navbar', () => {
@@ -435,7 +445,7 @@ describe('Report view (nd) — ⋮ report actions: permission + state rules', ()
 
   it('delivery desk without edit_result / lab access: share rows + WhatsApp, no Edit / Lab results', async () => {
     const { c } = await render({ perms: ['deliver_report', 'view_order', 'view_patient'], messages: false });
-    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'download', 'print', 'regenerate', 'patient']);
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp-mine', 'download', 'print', 'regenerate', 'patient']);
   });
 
   it('a PRELIMINARY report is never regenerated as final from here', async () => {
@@ -499,7 +509,7 @@ describe('Report view (nd) — ⋮ report actions: permission + state rules', ()
   });
 });
 
-describe('Report view (nd) — Send WhatsApp through the lab\'s WhatsApp Cloud API number', () => {
+describe('Report view (nd) — WhatsApp (automatic) through the lab\'s WhatsApp Cloud API number', () => {
   const sendBtn = (el: HTMLElement) => el.querySelector('.pf-rv-act--send') as HTMLButtonElement;
 
   it('lab with a sender: the primary sends from the server (no wa.me window) and shows Sent with the check', async () => {
@@ -523,42 +533,41 @@ describe('Report view (nd) — Send WhatsApp through the lab\'s WhatsApp Cloud A
     (TestBed.inject(WhatsAppSendService) as any).stopWatch('rep-1');
   });
 
-  it('a Meta failure keeps the label "Send WhatsApp" and records no delivery', async () => {
+  it('a Meta failure keeps the label "WhatsApp (automatic)" and records no delivery', async () => {
     const { el, f, api } = await render({ waCloud: true, waStatus: 'failed' });
     sendBtn(el).click();
     await new Promise(r => setTimeout(r, 0));
     f.detectChanges();
-    expect(sendBtn(el).textContent).toContain('Send WhatsApp');
+    expect(sendBtn(el).textContent).toContain('WhatsApp (automatic)');
     expect(api.post).not.toHaveBeenCalledWith('/api/reports/rep-1/deliver', expect.anything());
   });
 
-  it('the ⋮ keeps wa.me as the secondary "Share via my WhatsApp"', async () => {
-    const { c } = await render({ waCloud: true });
-    const ids = c.menuActions().map((a: { id: string }) => a.id);
-    expect(ids).toContain('whatsapp');
-    expect(ids).toContain('whatsapp-mine');
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+  it('the ⋮ offers "WhatsApp (automatic)" + "Send on WhatsApp" (manual)', async () => {
+    const { c, waOpen } = await render({ waCloud: true });
+    const rows = c.menuActions().filter((a: { id: string }) => a.id.startsWith('whatsapp')).map((a: { label: string }) => a.label);
+    expect(rows).toEqual(['WhatsApp (automatic)', 'Send on WhatsApp']);
     c.runAction('whatsapp-mine');
-    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+    await settle();
+    expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp', expect.any(String));
   });
 
-  it('wa.me goes to the patient AS ON FILE (a corrected name / mobile), not the issued snapshot', async () => {
-    const { c } = await render({ waCloud: true, current: { displayName: 'Ms. Yamini Rao', phone: '9123456789' } });
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+  it('Send on WhatsApp goes to the patient AS ON FILE (a corrected name / mobile), not the issued snapshot', async () => {
+    const { c, waOpen } = await render({ waCloud: true, current: { displayName: 'Ms. Yamini Rao', phone: '9123456789' } });
     c.runAction('whatsapp-mine');
-    const url = decodeURIComponent(String(open.mock.calls[0][0]));
-    expect(url).toContain('9123456789');
+    await settle();
+    const url = decodeURIComponent(String(waOpen.mock.calls[0][0]));
+    expect(url).toContain('phone=919123456789');
     expect(url).not.toContain('9876543210');
-    expect(url).toContain('Hi Ms. Yamini Rao,');
+    expect(url).toContain('Dear Ms. Yamini Rao, your report from');
   });
 
-  it('lab without a sender: today\'s wa.me flow, one WhatsApp row', async () => {
-    const { el, c, api } = await render({ waCloud: false });
+  it('lab without a sender: the band primary is Send on WhatsApp (manual), one WhatsApp row', async () => {
+    const { el, c, api, waOpen } = await render({ waCloud: false });
     expect(c.waCloud()).toBe(false);
-    expect(c.menuActions().map((a: { id: string }) => a.id)).not.toContain('whatsapp-mine');
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    expect(c.menuActions().filter((a: { id: string }) => a.id.startsWith('whatsapp')).map((a: { label: string }) => a.label)).toEqual(['Send on WhatsApp']);
     sendBtn(el).click();
-    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+    await settle();
+    expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp', expect.any(String));
     expect(api.post).not.toHaveBeenCalledWith('/api/whatsapp/reports/rep-1/resend', {});
   });
 

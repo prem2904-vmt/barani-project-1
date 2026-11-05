@@ -55,7 +55,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
             } @else if (st.autoSendEnabled) {
               Sends automatically, with the report PDF, once this final report is ready and the bill is fully paid.
             } @else {
-              Not sent yet. Send WhatsApp sends the report link to the patient's number.
+              Not sent yet. WhatsApp (automatic) sends the report link to the patient's number.
             }
           </p>
         }

@@ -7,6 +7,7 @@ import { of, EMPTY } from 'rxjs';
 import { vi } from 'vitest';
 import { ReportQueueComponent } from './report-queue.component';
 import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
+import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
 import { cultureStagesDone, cultureSummary, deptCountLabel, pendingStatus, reportStatus } from './report-queue.partial';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -512,13 +513,13 @@ describe('Reports list — same reports for every viewer, actions by permission'
       full.c._filter.set('all'); full.f.detectChanges();
       const fullRows = rowNames(full.el);
       expect(fullRows.length).toBeGreaterThan(0);
-      expect(full.el.querySelector('[title="Send via WhatsApp"]')).not.toBeNull();
+      expect(full.el.querySelector('[title="Send on WhatsApp"]')).not.toBeNull();
       TestBed.resetTestingModule();
 
       const viewer = await render({ nd, perms: ['view_report'] });
       viewer.c._filter.set('all'); viewer.f.detectChanges();
       expect(rowNames(viewer.el)).toEqual(fullRows);                       // identical list
-      expect(viewer.el.querySelector('[title="Send via WhatsApp"]')).toBeNull();  // no delivery
+      expect(viewer.el.querySelector('[title="Send on WhatsApp"]')).toBeNull();  // no delivery
       expect(viewer.el.querySelector('[title="View on screen"]')).not.toBeNull();
       expect(viewer.el.querySelector('[title="Download PDF"]')).not.toBeNull();
       // No Generate / Regenerate; branch managers (no edit_result, no bench
@@ -567,7 +568,7 @@ describe('Reports list — same reports for every viewer, actions by permission'
       c._filter.set('all'); f.detectChanges();
       const print = el.querySelector('.pf-rq-print') as HTMLButtonElement;
       expect(print).not.toBeNull();
-      expect(el.querySelector('[title="Send via WhatsApp"]')).toBeNull();
+      expect(el.querySelector('[title="Send on WhatsApp"]')).toBeNull();
       const spy = vi.spyOn(c, 'printReport').mockResolvedValue(undefined);
       print.click();
       expect(spy).toHaveBeenCalled();
@@ -626,7 +627,7 @@ describe('Reports list — ⋮ report actions', () => {
 
   it('full delivery desk: share rows, the PDF, workflow steps and go-to — in that order', async () => {
     const { c } = await render({ perms: ['deliver_report', 'view_report', 'view_order', 'edit_result', 'view_patient', 'enter_result'] });
-    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'view', 'download', 'print', 'edit', 'regenerate', 'patient', 'lab']);
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp-mine', 'view', 'download', 'print', 'edit', 'regenerate', 'patient', 'lab']);
   });
 
   it('pathologist in Results (view_report + validate_result): no share rows, but Regenerate', async () => {
@@ -709,11 +710,11 @@ describe('Reports list (nd) — WhatsApp auto-send status', () => {
   });
 });
 
-describe('Reports list — Send WhatsApp through the lab\'s WhatsApp Cloud API number', () => {
+describe('Reports list — WhatsApp (automatic) + Send on WhatsApp (manual)', () => {
   afterEach(() => closeMenus());
   const ids = (c: any, i = 0) => c.rowActions().get(c.items()[i].id).map((a: { id: string }) => a.id);
 
-  it('the ⋮ offers Send WhatsApp (server) + Share via my WhatsApp (wa.me) when the lab has a sender', async () => {
+  it('the ⋮ offers WhatsApp (automatic) + Send on WhatsApp when the lab has a sender', async () => {
     const { c } = await render({ waCloud: true, perms: ['deliver_report', 'view_report', 'view_order'] });
     expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'whatsapp-mine', 'view', 'download', 'print', 'regenerate']);
   });
@@ -733,12 +734,32 @@ describe('Reports list — Send WhatsApp through the lab\'s WhatsApp Cloud API n
     (TestBed.inject(WhatsAppSendService) as any).stopWatch('r1');
   });
 
-  it('Share via my WhatsApp opens wa.me on this device', async () => {
+  it('Send on WhatsApp: confirm, then the click-to-chat window on this computer; recorded once it opened', async () => {
     const { c, api } = await render({ waCloud: true });
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    c.runRowAction(c.items()[0], 'whatsapp-mine');
-    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+    const manual = TestBed.inject(WhatsAppManualService);
+    const open = vi.fn((..._a: unknown[]) => ({ opener: null, focus: vi.fn() }));
+    manual.win = { open, screen: { availWidth: 1440, availHeight: 900 }, navigator: { userAgent: 'Macintosh' } } as never;
+    manual.bridge = () => null;
+    (TestBed.inject(DialogService).confirm as ReturnType<typeof vi.fn>).mockResolvedValueOnce(true);
+    const r = c.items()[0];
+    c.runRowAction(r, 'whatsapp-mine');
+    for (let i = 0; i < 4; i++) await new Promise(res => setTimeout(res, 0));
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp', expect.stringContaining('width=420'));
     expect(api.post).not.toHaveBeenCalledWith(expect.stringMatching(/\/resend$/), {});
+    expect(api.post).toHaveBeenCalledWith(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: 'WhatsApp opened (manual)' });
+  });
+
+  it('Send on WhatsApp cancelled: nothing opens, nothing recorded', async () => {
+    const { c, api } = await render({ waCloud: false });
+    const manual = TestBed.inject(WhatsAppManualService);
+    const open = vi.fn();
+    manual.win = { open, screen: { availWidth: 1440, availHeight: 900 }, navigator: { userAgent: 'Macintosh' } } as never;
+    manual.bridge = () => null;
+    const r = c.items()[0];
+    c.deliver(r, 'whatsapp');
+    for (let i = 0; i < 4; i++) await new Promise(res => setTimeout(res, 0));
+    expect(open).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalledWith(`/api/reports/${r.id}/deliver`, expect.anything());
   });
 });
 

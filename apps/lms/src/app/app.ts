@@ -19,17 +19,22 @@ import { BetaFeaturesService } from './core/services/beta-features.service';
 import { DesktopWindowService } from './core/services/desktop-window.service';
 import { ElectronMenuActionService } from './core/services/electron-menu-action.service';
 import { SupportSessionService } from './shared/instruments/support-session.service';
+import { WhatsAppDockComponent } from './shared/components/whatsapp-dock/whatsapp-dock.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent, BusyComponent],
+  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent, BusyComponent, WhatsAppDockComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Navigation feedback is the page OPEN (core/navigation/page-open.service.ts):
          the destination's frame + skeleton in the shell, then a view
          transition — no top progress bar. -->
     <router-outlet></router-outlet>
+
+    <!-- Desktop app: the strip above the docked WhatsApp Web panel ("Send on
+         WhatsApp"); renders nothing on the web / phones. -->
+    <pf-wa-dock />
 
     <!-- 15-minute idle lock (shared lab machines) — PIN to resume. -->
     <pf-lock-screen />

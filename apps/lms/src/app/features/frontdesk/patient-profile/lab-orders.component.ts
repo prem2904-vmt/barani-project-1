@@ -498,7 +498,7 @@ export class LabOrdersComponent implements OnDestroy {
       a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
       a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
     }
-    // Send WhatsApp (the lab's Cloud API number) + Share via my WhatsApp, or wa.me.
+    // WhatsApp (automatic) when the lab sends from its number + Send on WhatsApp (manual, every lab).
     a.push(...this.reportActions.whatsAppActions({ id: rep.id, orderId: o.id, type: this.reportType(rep) }));
     a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
     a.push({ id: 'print', label: 'Print', icon: 'print', group: 'Report', hint: this.auth.hasPermission('deliver_report') ? 'Recorded as delivered' : undefined });

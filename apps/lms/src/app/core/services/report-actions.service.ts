@@ -7,10 +7,11 @@ import { DialogService } from './dialog.service';
 import { ToastService } from './toast.service';
 import { orderReportQrUrl } from '../../shared/utils/patient-strip-qr';
 import { copyText, shareLink, shareRoute, shareHint, type ShareEnv, type ShareOutcome } from '../../shared/utils/report-share';
-import { waLink } from '../../shared/utils/whatsapp';
+import { reportPublicLink } from '../../shared/utils/whatsapp-manual';
 import { printPdfBlobUrl } from '../../shared/utils/print-pdf';
 import type { PfAction } from '../../shared/components/actions-menu/actions-menu.component';
 import { WhatsAppSendService } from './whatsapp-send.service';
+import { WhatsAppManualService } from './whatsapp-manual.service';
 
 /** What a report row needs for the link / share / delivery actions. */
 export interface ReportRef {
@@ -20,6 +21,9 @@ export interface ReportRef {
   /** 'final' | 'partial' — only a final report goes through the server send. */
   type?: string | null;
 }
+
+/** The delivery note of a manual send (WhatsApp opened on this computer). */
+export const WA_MANUAL_NOTE = 'WhatsApp opened (manual)';
 
 /** ⋮ ids of the two WhatsApp rows (see `whatsAppActions`). */
 export const WA_ACTION_SEND = 'whatsapp';
@@ -49,7 +53,7 @@ export const LAB_RESULTS_PERMS = ['enter_result', 'edit_result', 'validate_resul
  * - **Share…**: the platform ladder in `shared/utils/report-share.ts`.
  * - **Download / Print / WhatsApp** for screens that only hold a stored
  *   report (patient profile): the same recipes the Results list runs
- *   (`report-blob`, letterpad choice, wa.me + `POST /deliver`).
+ *   (`report-blob`, letterpad choice, Send on WhatsApp + `POST /deliver`).
  */
 @Injectable({ providedIn: 'root' })
 export class ReportActionsService {
@@ -200,30 +204,34 @@ export class ReportActionsService {
     return true;
   }
 
-  // ── WhatsApp: the lab's Cloud API sender, else wa.me ─────────────────
+  // ── WhatsApp: the lab's Cloud API sender + the manual flow ───────────
 
   private readonly waSend = inject(WhatsAppSendService);
 
-  /** The ⋮ WhatsApp rows for the delivery desk. Lab sends from the server
-   *  (`WhatsAppSendService.cloud()`, final report): **Send WhatsApp** (the
-   *  lab's number → the patient's) + **Share via my WhatsApp** (wa.me on this
-   *  device, the secondary). Otherwise today's single wa.me row. */
+  /** The ⋮ WhatsApp rows for the delivery desk. Every lab gets **Send on
+   *  WhatsApp** (the manual flow: WhatsApp opens on this computer with the
+   *  chat + message ready, the person presses Send — WhatsAppManualService).
+   *  A lab that also sends from the server (`WhatsAppSendService.cloud()`,
+   *  final report) gets **WhatsApp (automatic)** first: the lab's number →
+   *  the patient's. */
   whatsAppActions(r: ReportRef | null | undefined): PfAction[] {
     if (!r || !this.auth.hasPermission('deliver_report')) return [];
+    const manual: PfAction = { id: WA_ACTION_MINE, label: 'Send on WhatsApp', icon: 'chat', group: 'Share', hint: 'Opens WhatsApp with the message ready; you press Send' };
     if (this.waSend.canSend(r)) {
       return [
-        { id: WA_ACTION_SEND, label: 'Send WhatsApp', icon: 'whatsapp', group: 'Share', hint: "Sends the report link to the patient's number" },
-        { id: WA_ACTION_MINE, label: 'Share via my WhatsApp', icon: 'share', group: 'Share', hint: 'Opens WhatsApp on this device with the report link' },
+        { id: WA_ACTION_SEND, label: 'WhatsApp (automatic)', icon: 'whatsapp', group: 'Share', hint: "The lab's WhatsApp number sends the report link" },
+        manual,
       ];
     }
-    return [{ id: WA_ACTION_SEND, label: 'Send on WhatsApp', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the report link' }];
+    return [manual];
   }
 
   /** Warm the "lab sends from the server" flag (screens call it on init —
    *  never from inside a computed). */
   warmWhatsApp(): void { this.waSend.ensure(); }
 
-  /** "Send WhatsApp": the server send when the lab has it, else wa.me. */
+  /** "WhatsApp (automatic)": the server send when the lab has it, else the
+   *  manual flow. */
   sendWhatsApp(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null }): void {
     if (!this.auth.hasPermission('deliver_report')) return;
     if (this.waSend.canSend(rep)) {
@@ -232,22 +240,36 @@ export class ReportActionsService {
       void this.waSend.send(rep.id);
       return;
     }
-    this.whatsApp(rep, patient);
+    void this.whatsApp(rep, patient);
   }
 
-  /** Send on WhatsApp — wa.me pre-filled with the report link (deliver_report). */
-  whatsApp(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null }): void {
-    if (!this.auth.hasPermission('deliver_report')) return;
-    // Archive the PDF first (background) so the public link serves the real
-    // file — fired before window.open so the popup is not blocked.
+  private readonly waManual = inject(WhatsAppManualService);
+
+  /** Send on WhatsApp — the manual flow (deliver_report): click-to-chat with
+   *  the patient's chat and the report link ready; the person presses Send.
+   *  Recorded as delivered once WhatsApp opened. */
+  async whatsApp(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null }): Promise<boolean> {
+    if (!this.auth.hasPermission('deliver_report')) return false;
+    // Archive the PDF first (background) so the public link serves the real file.
     if (rep.qrToken) void this.archive(rep);
-    const lab = this.auth.user()?.tenantName || 'our lab';
-    const link = rep.qrToken && this.base() ? `${this.base()}/reports/public/${rep.qrToken}` : '';
-    const lines = [patient.name ? `Hi ${patient.name},` : 'Hi,', `Your lab report from ${lab} is ready.`];
-    if (link) lines.push(`View & download your report:\n${link}`);
-    lines.push('Please contact us if you have any questions.');
-    window.open(waLink(patient.phone, lines.join('\n\n')), '_blank', 'noopener');
+    const out = await this.waManual.send({
+      phone: patient.phone,
+      patientName: patient.name,
+      labName: this.auth.user()?.tenantName,
+      link: reportPublicLink(this.base(), rep.qrToken),
+      reportId: rep.id,
+      pdf: () => this.pdfBlob(rep),
+      pdfName: this.fileName(rep),
+    });
+    if (out !== 'opened') return false;
     this.recordDelivery(rep, 'whatsapp');
+    return true;
+  }
+
+  /** The stored PDF (desktop drag helper). */
+  private async pdfBlob(rep: ReportRef & Record<string, unknown>): Promise<Blob | null> {
+    const { storedReportBlob } = await import('../../shared/utils/report-blob');
+    return storedReportBlob(rep, this.api, this.injector);
   }
 
   /** Make sure the report's PDF is STORED (the public link serves the stored
@@ -261,7 +283,7 @@ export class ReportActionsService {
   }
 
   private recordDelivery(r: ReportRef, via: string): void {
-    this.api.post(`/api/reports/${r.id}/deliver`, { via, note: via === 'whatsapp' ? 'wa.me link' : null }).subscribe({
+    this.api.post(`/api/reports/${r.id}/deliver`, { via, note: via === 'whatsapp' ? WA_MANUAL_NOTE : null }).subscribe({
       next: () => { if (via !== 'whatsapp') this.toasts.success(`Delivered via ${via}`); },
       error: () => { /* the handover already happened; the record is best-effort */ },
     });

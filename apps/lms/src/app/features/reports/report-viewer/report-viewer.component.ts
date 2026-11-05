@@ -14,7 +14,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { Report, ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ResolvedReportLayout, ResolvedRow } from '../../../shared/models/report-layout.model';
-import { waLink } from '../../../shared/utils/whatsapp';
+import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
 import { NgTemplateOutlet } from '@angular/common';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
@@ -31,7 +31,7 @@ import { PartnerReport, PdfParts, firstAttachProblem, partnerReportShareLine, pa
 import { UploadsService } from '../../../core/services/uploads.service';
 import { ReportWhatsAppStatusComponent } from './report-whatsapp-status.component';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
-import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
+import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS, ReportActionsService, WA_MANUAL_NOTE } from '../../../core/services/report-actions.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { WhatsAppSendService, waSendLabel } from '../../../core/services/whatsapp-send.service';
 import { currentRecipient } from '../../../shared/utils/report-recipient';
@@ -314,7 +314,7 @@ export class ReportViewerComponent implements OnInit {
       a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
     }
     if (this.canDeliver()) {
-      // Send WhatsApp (the lab's Cloud API number) + Share via my WhatsApp, or wa.me.
+      // WhatsApp (automatic) when the lab sends from its number + Send on WhatsApp (manual, every lab).
       a.push(...this.reportActions.whatsAppActions({ ...r, type: this.isPartial() ? 'partial' : r.type }));
       if (this.entitlements.moduleEnabled('messages')) a.push({ id: 'colleague', label: 'Share with a colleague', icon: 'chat', group: 'Share' });
     }
@@ -345,7 +345,7 @@ export class ReportViewerComponent implements OnInit {
       case 'share': void this.reportActions.share(r, this.recipient().name ?? this.patientName()); break;
       case 'copy-link': void this.reportActions.copyLink(r); break;
       case 'whatsapp': this.deliverWhatsApp(); break;
-      case 'whatsapp-mine': this.shareViaMyWhatsApp(); break;
+      case 'whatsapp-mine': void this.shareViaMyWhatsApp(); break;
       case 'colleague': void this.openSharePicker(); break;
       case 'download': void this.download(); break;
       case 'print': void this.print(); break;
@@ -1062,15 +1062,9 @@ export class ReportViewerComponent implements OnInit {
     }
   }
 
-  /** Deliver via WhatsApp using the click-to-chat deep link (wa.me). The
-   *  Meta WhatsApp API isn't wired up yet, so we open WhatsApp Web / app
-   *  with the patient's number and a pre-filled message that carries the
-   *  report's QR verify link — the recipient taps it to open & download the
-   *  PDF. (wa.me cannot auto-attach files, so the link stands in for the
-   *  attachment.) We still record the delivery best-effort so the queue
-   *  reflects it. */
-  // ── Send WhatsApp through the lab's WhatsApp Cloud API number ─────────
+  // ── WhatsApp (automatic) through the lab's WhatsApp Cloud API number ─────────
   private readonly waSend = inject(WhatsAppSendService);
+  private readonly waManual = inject(WhatsAppManualService);
   /** This final report goes out from the server (the lab has a sender). */
   readonly waCloud = computed(() => {
     const r = this._report();
@@ -1078,17 +1072,17 @@ export class ReportViewerComponent implements OnInit {
   });
   /** Live phase of the server send for the report on screen. */
   readonly waState = computed(() => this.waSend.state(this._report()?.id));
-  /** The primary's words: Send WhatsApp → Sending… → Sent → Delivered / Read. */
+  /** The primary's words: WhatsApp (automatic) → Sending… → Sent → Delivered / Read. */
   readonly waLabel = computed(() => {
     const st = this.waState();
-    return st && st.phase !== 'failed' ? waSendLabel(st.phase) : 'Send WhatsApp';
+    return st && st.phase !== 'failed' ? waSendLabel(st.phase) : 'WhatsApp (automatic)';
   });
   /** Sent / Delivered / Read: the primary shows the check. */
   readonly waDone = computed(() => ['sent', 'delivered', 'read'].includes(this.waState()?.phase ?? ''));
 
   /** THE primary. Lab has WhatsApp Cloud → the server sends the approved
    *  template with the report link to the patient's number; otherwise (or a
-   *  preliminary report) today's wa.me flow. */
+   *  preliminary report) Send on WhatsApp (manual). */
   deliverWhatsApp() {
     const r = this._report();
     if (!r || !this.canDeliver()) return;
@@ -1103,41 +1097,40 @@ export class ReportViewerComponent implements OnInit {
       });
       return;
     }
-    this.shareViaMyWhatsApp();
+    void this.shareViaMyWhatsApp();
   }
 
-  /** Share via my WhatsApp: the click-to-chat deep link (wa.me) on THIS
-   *  device — the fallback when the lab has no Cloud API sender, and the
-   *  secondary ⋮ row when it does. */
-  shareViaMyWhatsApp() {
+  /** Send on WhatsApp — the manual flow on THIS computer (every lab): the
+   *  docked panel (desktop app) / a phone-shaped window (browser) / the
+   *  WhatsApp app (phone) opens the patient's chat with the message ready;
+   *  the person presses Send. The fallback when the lab has no server
+   *  sender, and the ⋮ row beside "WhatsApp (automatic)" when it does. */
+  async shareViaMyWhatsApp() {
     const r = this._report();
     if (!r || !this.canDeliver()) return;
-    const lab = this.tpl()?.labName || 'our lab';
-    const name = this.recipient().name ?? '';
-    const link = r.qrToken ? this.verifyCode(r.qrToken) : '';
-    const lines = [
-      name ? `Hi ${name},` : 'Hi,',
-      `Your lab report from ${lab} is ready.`,
-    ];
-    if (link) lines.push(`View & download your report:\n${link}`);
-    const partnerLine = partnerReportShareLine(this.partnerReports());
-    if (partnerLine) lines.push(partnerLine);
-    lines.push('Please contact us if you have any questions.');
     // Render + archive the PDF (best-effort, background) so the public link
-    // resolves to a real file when the patient opens it. Fire before the
-    // synchronous window.open so the popup isn't blocked.
+    // resolves to a real file when the patient opens it.
     if (r.qrToken) this.archiveReportPdf(r);
-    const url = waLink(this.recipient().phone, lines.join('\n\n'));
-    window.open(url, '_blank', 'noopener');
+    const out = await this.waManual.send({
+      phone: this.recipient().phone,
+      patientName: this.recipient().name,
+      labName: this.tpl()?.labName,
+      link: r.qrToken ? this.verifyCode(r.qrToken) : '',
+      extra: [partnerReportShareLine(this.partnerReports())],
+      reportId: r.id,
+      pdf: async () => { await this.archiveReportPdf(r); return this._pdfBlob ?? null; },
+      pdfName: `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`,
+    });
+    if (out !== 'opened') return;
     this.flash('whatsapp');
-    this.api.post(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: 'wa.me link' }).subscribe({
+    this.api.post(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: WA_MANUAL_NOTE }).subscribe({
       next: () => {
-        this.toasts.success('Opened WhatsApp with the report link');
+        this.toasts.success('WhatsApp is open. Press Send there.');
         // Reflect the recorded delivery in the REPORT card without a refetch.
         const cur = this._report();
         if (cur && cur.id === r.id) this._report.set({ ...cur, deliveryStatus: 'delivered', deliveredVia: 'whatsapp' });
       },
-      error: () => this.toasts.info('Opened WhatsApp with the report link'),
+      error: () => this.toasts.info('WhatsApp is open. Press Send there.'),
     });
   }
 

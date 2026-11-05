@@ -75,7 +75,7 @@ const ids = (c: any) => c.detailActions().map((a: { id: string }) => a.id);
 describe('Patient profile order detail — ⋮ report actions', () => {
   it('delivery desk: share rows, WhatsApp, download, print, open full report, repeat', async () => {
     const { c, el } = await render();
-    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'download', 'print', 'open-report', 'repeat']);
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp-mine', 'download', 'print', 'open-report', 'repeat']);
     const kebab = el.querySelector('.pf-lo-detail__acts pf-actions-menu .pf-lo-act--more') as HTMLButtonElement;
     expect(kebab.getAttribute('aria-label')).toBe('Report actions');
     // Repeat + View report stay as buttons; the ⋮ joins them.
@@ -110,11 +110,11 @@ describe('Patient profile order detail — ⋮ report actions', () => {
   it('rows run the shared flows: WhatsApp gets the snapshot patient, download / print the stored report', async () => {
     const { c, router } = await render();
     const svc = TestBed.inject(ReportActionsService);
-    const wa = vi.spyOn(svc, 'whatsApp').mockImplementation(() => {});
+    const wa = vi.spyOn(svc, 'whatsApp').mockResolvedValue(true);
     const dl = vi.spyOn(svc, 'download').mockResolvedValue(true);
     const pr = vi.spyOn(svc, 'print').mockResolvedValue(true);
     const o = c.openOrder();
-    await c.runDetailAction(o, 'whatsapp');
+    await c.runDetailAction(o, 'whatsapp-mine');
     expect(wa).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), { name: 'Priya Nair', phone: '9876543210' });
     await c.runDetailAction(o, 'download');
     expect(dl).toHaveBeenCalled();
@@ -126,12 +126,12 @@ describe('Patient profile order detail — ⋮ report actions', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/frontdesk/order'], { queryParams: { patientId: 'p1', fromOrderId: 'o1' } });
   });
 
-  it('lab sends WhatsApp from its number: Send WhatsApp (server) + Share via my WhatsApp (wa.me)', async () => {
+  it('lab sends WhatsApp from its number: WhatsApp (automatic) + Send on WhatsApp (manual)', async () => {
     const { c } = await render({ waCloud: true });
     expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'whatsapp-mine', 'download', 'print', 'open-report', 'repeat']);
     const svc = TestBed.inject(ReportActionsService);
     const send = vi.spyOn(svc, 'sendWhatsApp').mockImplementation(() => {});
-    const mine = vi.spyOn(svc, 'whatsApp').mockImplementation(() => {});
+    const mine = vi.spyOn(svc, 'whatsApp').mockResolvedValue(true);
     const o = c.openOrder();
     await c.runDetailAction(o, 'whatsapp');
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), { name: 'Priya Nair', phone: '9876543210' });
@@ -170,7 +170,7 @@ describe('Patient profile order detail — ⋮ Edit referral', () => {
 
   it('modify_order: "Edit referral" leads the report rows', async () => {
     const { c } = await render({ perms: ['view_order', 'deliver_report', 'view_report', 'modify_order'] });
-    expect(ids(c)).toEqual(['referral', 'share', 'copy-link', 'whatsapp', 'download', 'print', 'open-report', 'repeat']);
+    expect(ids(c)).toEqual(['referral', 'share', 'copy-link', 'whatsapp-mine', 'download', 'print', 'open-report', 'repeat']);
   });
 
   it('no report yet: the ⋮ still offers Edit referral, labelled "Order actions"', async () => {

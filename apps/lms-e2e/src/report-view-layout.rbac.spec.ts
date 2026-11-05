@@ -7,7 +7,7 @@ import { loginAs } from './support/auth';
  * call is aborted, so nothing is delivered, archived or edited.
  *  - 1440: Results list → tap View → the PREVIEW card (skeleton first — the
  *    pdf.js worker is held so the mid-load state is captured) → the painted
- *    pages; ONE band primary "Send WhatsApp", the pill = patient · order ·
+ *    pages; ONE band primary "Send on WhatsApp" (or "WhatsApp (automatic)"), the pill = patient · order ·
  *    status · date, REPORT ~400px on the right, collapse → strip → back,
  *    no page scroll, no monospace, no native select.
  *  - 375: the preview full width, the primary + ⋮ as 44px icons, the
@@ -113,10 +113,10 @@ test.describe('Report view — PREVIEW + REPORT', () => {
     await expect(card.locator('.pf-rv-pages--in canvas.pf-rv-pdfpage').first()).toBeVisible({ timeout: 60_000 });
     await expect(card.locator('.pf-rv-skel')).toHaveCount(0);
 
-    // ONE primary: Send WhatsApp.
+    // ONE primary: Send on WhatsApp (a lab without a server sender) or WhatsApp (automatic).
     const primaries = page.locator('.nd-btn--primary:visible, .pf-hb-btn--primary:visible');
     await expect(primaries).toHaveCount(1);
-    await expect(primaries.first()).toHaveAttribute('aria-label', 'Send WhatsApp');
+    await expect(primaries.first()).toHaveAttribute('aria-label', /^(Send on WhatsApp|WhatsApp \(automatic\))$/);
     await expect(page.locator('.pf-rv-act--print')).toBeVisible();
     // Pill: patient · order · status · date.
     await expect(page.locator('.pf-rv-ctx .pf-rv-chip--status')).toBeVisible();

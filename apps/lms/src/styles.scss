@@ -340,6 +340,14 @@ app-root {
   display: block;
   height: 100%;
 }
+/* Desktop app, "Send on WhatsApp": WhatsApp Web is docked on the right
+   (electron/whatsapp-dock.js) and the app reflows into the rest. The
+   transform makes app-root the box every fixed overlay (dialogs, sheets,
+   toasts) is placed in, so none of them hides under the panel. */
+html.pf-wa-docked app-root {
+  width: calc(100% - var(--pf-wa-dock-w, 0px));
+  transform: translateZ(0);
+}
 app-root > router-outlet + * {
   display: block;
   height: 100%;

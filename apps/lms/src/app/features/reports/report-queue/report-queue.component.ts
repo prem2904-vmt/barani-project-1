@@ -43,7 +43,8 @@ import {
 } from "../../../shared/primitives/tile.component";
 import { TouchButtonComponent } from "../../../shared/primitives/touch-button.component";
 import { KpiStripComponent } from "../../../shared/components/kpi-strip/kpi-strip.component";
-import { waLink } from "../../../shared/utils/whatsapp";
+import { reportPublicLink } from "../../../shared/utils/whatsapp-manual";
+import { WhatsAppManualService } from "../../../core/services/whatsapp-manual.service";
 import {
   REPORT_QUEUE_PAGE_SIZE,
   reportQueuePageUrl,
@@ -58,7 +59,7 @@ import { savedValueRows } from "../../../shared/utils/result-flag";
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
-import { PATIENT_PROFILE_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
+import { PATIENT_PROFILE_PERMS, ReportActionsService, WA_MANUAL_NOTE } from '../../../core/services/report-actions.service';
 import { formatAge } from "../../../shared/utils/patient-age";
 import { BusyDirective } from "../../../shared/directives/busy.directive";
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
@@ -268,6 +269,7 @@ export class ReportQueueComponent implements OnInit {
   // (edit results, regenerate) and go-to (patient, lab results). Each row
   // follows the SAME permission + state rule as the button it mirrors.
   private readonly reportActions = inject(ReportActionsService);
+  private readonly waManual = inject(WhatsAppManualService);
   readonly rowActions = computed<Map<string, PfAction[]>>(() => {
     const m = new Map<string, PfAction[]>();
     for (const r of this.visible()) m.set(r.id, this.buildRowActions(r));
@@ -280,7 +282,7 @@ export class ReportQueueComponent implements OnInit {
       a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
       a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
     }
-    // Send WhatsApp (the lab's Cloud API number) + Share via my WhatsApp, or wa.me.
+    // WhatsApp (automatic) when the lab sends from its number + Send on WhatsApp (manual, every lab).
     a.push(...this.reportActions.whatsAppActions(r));
     a.push({ id: 'view', label: 'View report', icon: 'view', group: 'Report' });
     a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
@@ -850,43 +852,22 @@ export class ReportQueueComponent implements OnInit {
     try { await this.storedPdf(r); } catch { /* best-effort */ }
   }
 
+  /** The lab sends this report from its own number ("WhatsApp (automatic)"). */
+  waAuto(r: Report): boolean { return !!this.waSend?.canSend(r); }
+
   deliver(r: Report, via: string) {
     if (!this.canDeliver()) return;
     // The lab sends WhatsApp from its Cloud API number: "WhatsApp" is the
     // server send to the patient's number (Sending… → Sent → Delivered / Read
-    // in the row meta). "whatsapp-mine" is the wa.me share from this device.
+    // in the row meta). "whatsapp-mine" is Send on WhatsApp from this computer.
     if (via === "whatsapp" && this.waSend?.canSend(r)) {
       if (r.qrToken || r.type === "final") void this.archiveReportPdf(r);
       void this.waSend.send(r.id).then((m) => { if (m && m.status !== "failed") this.refresh(); });
       return;
     }
-    if (via === "whatsapp-mine") via = "whatsapp";
-    // WhatsApp: the Meta API isn't wired up yet, so open WhatsApp Web / app
-    // (wa.me) pre-filled with the patient's number + a message carrying the
-    // report's QR verify link. wa.me can't auto-attach the PDF, so the link
-    // stands in for it. Then record the delivery best-effort.
-    if (via === "whatsapp") {
-      // Ensure the public link resolves to a real file: render + archive the
-      // PDF now (best-effort, in the background) so /reports/public/{qrToken}
-      // can serve it by the time the patient opens the message. Fire before the
-      // synchronous window.open so the popup isn't blocked.
-      if (r.qrToken) this.archiveReportPdf(r);
-      const lab = this.auth.user()?.tenantName || "our lab";
-      const name = r.order?.patient?.displayName ?? "";
-      const link = r.qrToken
-        ? `${environment.reportPublicBaseUrl}/reports/public/${r.qrToken}`
-        : "";
-      const lines = [
-        name ? `Hi ${name},` : "Hi,",
-        `Your lab report from ${lab} is ready.`,
-      ];
-      if (link) lines.push(`View & download your report:\n${link}`);
-      lines.push("Please contact us if you have any questions.");
-      window.open(
-        waLink(r.order?.patient?.phone, lines.join("\n\n")),
-        "_blank",
-        "noopener",
-      );
+    if (via === "whatsapp-mine" || via === "whatsapp") {
+      void this.sendOnWhatsApp(r);
+      return;
     }
     if (via === "print") {
       // Print is its own flow: it may ask letterhead vs plain paper first, and
@@ -895,6 +876,25 @@ export class ReportQueueComponent implements OnInit {
       return;
     }
     this.recordDelivery(r, via);
+  }
+
+  /** Send on WhatsApp — the manual flow on this computer (every lab):
+   *  WhatsApp opens with the patient's chat and the report link ready; the
+   *  person presses Send. Recorded as delivered once WhatsApp opened. */
+  private async sendOnWhatsApp(r: Report) {
+    // The public link must resolve to a real file: archive the PDF now
+    // (best-effort, background) so it is there when the patient opens it.
+    if (r.qrToken) this.archiveReportPdf(r);
+    const out = await this.waManual.send({
+      phone: r.order?.patient?.phone,
+      patientName: r.order?.patient?.displayName,
+      labName: this.auth.user()?.tenantName,
+      link: reportPublicLink(environment.reportPublicBaseUrl, r.qrToken),
+      reportId: r.id,
+      pdf: () => this.storedPdf(r),
+      pdfName: `report-${r.id.replace(/-/g, "").slice(-8).toUpperCase()}.pdf`,
+    });
+    if (out === "opened") this.recordDelivery(r, "whatsapp");
   }
 
   /** Print a report from the queue. A delivery for deliver_report users; a
@@ -945,14 +945,14 @@ export class ReportQueueComponent implements OnInit {
     this.api
       .post(`/api/reports/${r.id}/deliver`, {
         via,
-        note: via === "whatsapp" ? "wa.me link" : null,
+        note: via === "whatsapp" ? WA_MANUAL_NOTE : null,
       })
       .subscribe({
         next: () => {
           if (via !== "whatsapp") this.toasts.success(`Delivered via ${via}`);
           this.refresh();
         },
-        // WhatsApp already opened the wa.me window (the real handover), so its
+        // WhatsApp already opened on this computer (the real handover), so its
         // delivery record is best-effort; for print/other, the POST *is* the
         // delivery — surface the backend's real reason on failure.
         error: (e) => {

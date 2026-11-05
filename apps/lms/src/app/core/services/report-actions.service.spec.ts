@@ -7,6 +7,7 @@ import { ApiService } from './api.service';
 import { DialogService } from './dialog.service';
 import { ToastService } from './toast.service';
 import { ReportActionsService } from './report-actions.service';
+import { WhatsAppManualService } from './whatsapp-manual.service';
 
 /** The ⋮ menu's shared report actions: the patient link (tracking token,
  *  falling back to the report's own public link), share / copy per platform,
@@ -39,7 +40,12 @@ function setup(o: { perms?: string[]; trackFails?: boolean; clip?: 'ok' | 'fail'
   const writeText = vi.fn(async () => { if (o.clip === 'fail') throw new Error('denied'); });
   const share = vi.fn(async () => {});
   svc.shareEnv = { capacitor: null, navigator: { share: o.webShare ? share : undefined, clipboard: { writeText } } as never, document: null };
-  return { svc, api, toasts, dialog, writeText, share };
+  // Send on WhatsApp (manual) on a desktop browser: the named popup.
+  const manual = TestBed.inject(WhatsAppManualService);
+  const open = vi.fn(() => ({ opener: null, focus: vi.fn() }));
+  manual.win = { open, screen: { availWidth: 1440, availHeight: 900 }, navigator: { userAgent: 'Macintosh' } } as never;
+  manual.bridge = () => null;
+  return { svc, api, toasts, dialog, writeText, share, open };
 }
 afterEach(() => TestBed.resetTestingModule());
 
@@ -111,23 +117,31 @@ describe('ReportActionsService — share / copy', () => {
   });
 });
 
-describe('ReportActionsService — WhatsApp', () => {
-  it('needs deliver_report; opens wa.me with the report link and records the delivery', () => {
-    const { svc, api } = setup();
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    svc.whatsApp({ id: 'r1', orderId: 'o1' }, { name: 'Priya', phone: '9876543210' });
-    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
-    expect(api.post).toHaveBeenCalledWith('/api/reports/r1/deliver', { via: 'whatsapp', note: 'wa.me link' });
-    open.mockRestore();
+describe('ReportActionsService — Send on WhatsApp (manual, every lab)', () => {
+  it('needs deliver_report; confirms, opens the WhatsApp window with the report link and records the delivery', async () => {
+    const { svc, api, open, dialog } = setup();
+    expect(await svc.whatsApp({ id: 'r1', orderId: 'o1', qrToken: 'q1' }, { name: 'Priya', phone: '9876543210' })).toBe(true);
+    expect(dialog.confirm).toHaveBeenCalled();
+    const [url, name] = open.mock.calls[0] as unknown as [string, string];
+    expect(name).toBe('pf-whatsapp');
+    expect(url.startsWith('https://web.whatsapp.com/send?phone=919876543210&text=')).toBe(true);
+    expect(new URL(url).searchParams.get('text')).toBe(`Dear Priya, your report from Micro World is ready. View it here: ${BASE}/reports/public/q1`);
+    expect(api.post).toHaveBeenCalledWith('/api/reports/r1/deliver', { via: 'whatsapp', note: 'WhatsApp opened (manual)' });
   });
 
-  it('without deliver_report it does nothing', () => {
-    const { svc, api } = setup({ perms: ['view_report'] });
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
-    svc.whatsApp({ id: 'r1' }, { name: 'Priya', phone: '9876543210' });
+  it('cancelled at the confirm: nothing opens, nothing recorded', async () => {
+    const { svc, api, open, dialog } = setup();
+    dialog.confirm.mockResolvedValueOnce(false);
+    expect(await svc.whatsApp({ id: 'r1' }, { name: 'Priya', phone: '9876543210' })).toBe(false);
+    expect(open).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalledWith('/api/reports/r1/deliver', expect.anything());
+  });
+
+  it('without deliver_report it does nothing', async () => {
+    const { svc, api, open } = setup({ perms: ['view_report'] });
+    await svc.whatsApp({ id: 'r1' }, { name: 'Priya', phone: '9876543210' });
     expect(open).not.toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalled();
-    open.mockRestore();
   });
 });
 
@@ -141,21 +155,21 @@ describe('ReportActionsService — WhatsApp Cloud API (lab sends from its number
     return ctx;
   }
 
-  it('before the lab flag is known (or without a sender) the ⋮ keeps the single wa.me row', () => {
+  it('every lab (no sender, or before the flag is known): one row, Send on WhatsApp (manual)', () => {
     const { svc } = cloud(false);
-    expect(svc.whatsAppActions({ id: 'r1', type: 'final' }).map(a => a.id)).toEqual(['whatsapp']);
+    expect(svc.whatsAppActions({ id: 'r1', type: 'final' }).map(a => a.id)).toEqual(['whatsapp-mine']);
     svc.warmWhatsApp();
     const rows = svc.whatsAppActions({ id: 'r1', type: 'final' });
     expect(rows.map(a => a.label)).toEqual(['Send on WhatsApp']);
-    expect(rows[0].hint).toBe('Opens WhatsApp with the report link');
+    expect(rows[0].hint).toBe('Opens WhatsApp with the message ready; you press Send');
   });
 
-  it('with a sender: Send WhatsApp (server) + Share via my WhatsApp (wa.me) — final reports only', () => {
+  it('with a sender: WhatsApp (automatic) + Send on WhatsApp — final reports only', () => {
     const { svc } = cloud();
     svc.warmWhatsApp();
     const rows = svc.whatsAppActions({ id: 'r1', type: 'final' });
-    expect(rows.map(a => [a.id, a.label])).toEqual([['whatsapp', 'Send WhatsApp'], ['whatsapp-mine', 'Share via my WhatsApp']]);
-    expect(svc.whatsAppActions({ id: 'r1', type: 'partial' }).map(a => a.id)).toEqual(['whatsapp']);
+    expect(rows.map(a => [a.id, a.label])).toEqual([['whatsapp', 'WhatsApp (automatic)'], ['whatsapp-mine', 'Send on WhatsApp']]);
+    expect(svc.whatsAppActions({ id: 'r1', type: 'partial' }).map(a => a.id)).toEqual(['whatsapp-mine']);
   });
 
   it('sendWhatsApp posts the server send (no wa.me window) when the lab has a sender', async () => {
@@ -170,13 +184,13 @@ describe('ReportActionsService — WhatsApp Cloud API (lab sends from its number
     open.mockRestore();
   });
 
-  it('sendWhatsApp falls back to wa.me when the lab has no sender', () => {
-    const { svc, api } = cloud(false);
+  it('sendWhatsApp falls back to Send on WhatsApp (manual) when the lab has no sender', async () => {
+    const { svc, api, open } = cloud(false);
     svc.warmWhatsApp();
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
     svc.sendWhatsApp({ id: 'r1', orderId: 'o1', type: 'final' }, { name: 'Priya', phone: '9876543210' });
-    expect(open).toHaveBeenCalledWith(expect.stringContaining('wa.me'), '_blank', 'noopener');
+    await new Promise(r => setTimeout(r, 0));
+    await new Promise(r => setTimeout(r, 0));
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?phone=919876543210'), 'pf-whatsapp', expect.stringContaining('width=420'));
     expect(api.post).not.toHaveBeenCalledWith('/api/whatsapp/reports/r1/resend', {});
-    open.mockRestore();
   });
 });
