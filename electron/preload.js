@@ -132,6 +132,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       arp: () => ipcRenderer.invoke('instruments:diagArp'),
       probe: (p) => ipcRenderer.invoke('instruments:diagProbe', p),
       scanStart: (p) => ipcRenderer.invoke('instruments:diagScanStart', p),
+      scanPort: (p) => ipcRenderer.invoke('instruments:diagScanPort', p),
       scanStop: (scanId) => ipcRenderer.invoke('instruments:diagScanStop', scanId),
       onScan: (cb) => {
         const h = (_e, ev) => cb(ev);

@@ -18,7 +18,7 @@ const os = require('os');
 const { app, ipcMain, safeStorage, dialog } = require('electron');
 const { ConnectorManager } = require('./core/manager');
 const { NetDiag, portList } = require('./netdiag');
-const { makeDiagHandlers } = require('./diag-ipc');
+const { makeDiagHandlers, listenTransportOk } = require('./diag-ipc');
 const { SupportSession, askApproval } = require('./support-session');
 
 let manager = null;
@@ -96,6 +96,7 @@ function register(windowGetter) {
   handle('instruments:listenStart', (opts) => {
     const o = obj(opts);
     if (!o || !obj(o.transport)) return { error: 'transport required' };
+    if (!listenTransportOk(o.transport)) return bad('transport');
     return manager.listenStart({ transport: o.transport, link: obj(o.link) || undefined, parser: obj(o.parser) || undefined });
   });
   handle('instruments:listenStop', (id) => manager.listenStop(str(id, 64)));
@@ -105,7 +106,7 @@ function register(windowGetter) {
   // diagFixFirewall, which runs ONE fixed, UAC-elevated script — only after
   // MAIN's own dialog (diag-ipc.js) said yes; the renderer's confirm is a
   // courtesy, not the gate. Every argument is re-validated here.
-  const diagIpc = makeDiagHandlers({ diag, showMessageBox: (...a) => dialog.showMessageBox(...a), getWindow: () => getWindow() });
+  const diagIpc = makeDiagHandlers({ diag, manager, showMessageBox: (...a) => dialog.showMessageBox(...a), getWindow: () => getWindow() });
   handle('instruments:diagSnapshot', () => diag.snapshot());
   handle('instruments:diagPorts', (ports) => {
     const list = portList(ports);
@@ -119,6 +120,7 @@ function register(windowGetter) {
     const ports = portList((obj(p) || {}).ports, 12, 1024);
     return ports ? manager.scanStart({ ports }) : bad('ports');
   });
+  handle('instruments:diagScanPort', (p) => diagIpc.scanSetPort(p));
   handle('instruments:diagScanStop', (id) => (GUID_RE.test(String(id || '')) ? manager.scanStop(String(id)) : { ports: [] }));
 
   // ── "Allow Prefrontal support" (beta `support`, support-session.js). The

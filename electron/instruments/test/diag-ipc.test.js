@@ -82,7 +82,7 @@ test('M3: Fix in main\'s dialog → one elevated script, matching what the dialo
   assert.match(st.elevated[0], /\$aliases = @\('Ethernet 2'\)/);
 });
 
-test('M3: asked ports outside 5599–5650 are dropped (a paired analyzer\'s port stays); only-outside → refused before any dialog', async () => {
+test('M3: remote-admin ports are dropped (a paired analyzer\'s port stays); only-forbidden → refused before any dialog', async () => {
   const { diag, st } = rig({ paired: [{ port: 6100, name: 'Old LIS analyzer', kind: 'connector' }] });
   const dlg = dialogDouble(1);
   const h = makeDiagHandlers({ diag, showMessageBox: dlg.showMessageBox, getWindow: dlg.getWindow });
@@ -94,7 +94,7 @@ test('M3: asked ports outside 5599–5650 are dropped (a paired analyzer\'s port
   const h2 = makeDiagHandlers({ diag: none.diag, showMessageBox: dlg2.showMessageBox, getWindow: dlg2.getWindow });
   const r = await h2.fixFirewall({ ports: [3389], adapter: 'Ethernet 2' });
   assert.equal(r.ok, false);
-  assert.match(r.error, /5599–5650/);
+  assert.match(r.error, /1024 or higher/);
   assert.equal(dlg2.calls.length, 0);
   assert.equal(none.st.elevated.length, 0);
 });
@@ -136,4 +136,31 @@ test('L2: probe ports must be ≥ 1024; `wide` from the renderer is ignored', as
   assert.deepEqual(seen, [{ address: '192.168.1.10', ports: [5100] }]);
   await h.probe({ address: '192.168.1.10' });
   assert.deepEqual(seen[1], { address: '192.168.1.10', ports: undefined });
+});
+
+test('scanSetPort IPC: strict args — GUID scan id, whole-number port 1–65535 (no strings / floats), `keep` is main\'s own', async () => {
+  const { diag } = rig();
+  const calls = [];
+  const manager = { scanSetPort: (a) => { calls.push(a); return { ok: true, port: a.port }; } };
+  const dlg = dialogDouble(0);
+  const h = makeDiagHandlers({ diag, manager, showMessageBox: dlg.showMessageBox, getWindow: dlg.getWindow });
+  const id = '11111111-2222-3333-4444-555555555555';
+  assert.equal((await h.scanSetPort({ scanId: id, port: 8080, previous: 5603 })).ok, true);
+  assert.deepEqual(calls[0].previous, 5603);
+  assert.ok(calls[0].keep.includes(5599) && calls[0].keep.includes(5610) && !calls[0].keep.includes(8080));
+  assert.equal((await h.scanSetPort({ scanId: id, port: 8080, keep: [8080] })) && calls[1].previous, null);
+  assert.deepEqual(calls[1].keep.includes(8080), false, 'the page cannot choose which ports stay open');
+  const n = calls.length;
+  for (const bad of [
+    { scanId: 'x', port: 8080 }, { scanId: id, port: '8080' }, { scanId: id, port: 0 }, { scanId: id, port: 65536 },
+    { scanId: id, port: 80.5 }, { scanId: id, port: 8080, previous: '5603' }, { scanId: id }, null, 'x', [],
+  ]) assert.match((await h.scanSetPort(bad)).error, /^bad_request/);
+  assert.equal(calls.length, n, 'nothing reached the manager');
+});
+
+test('listenStart IPC transport check: port whole 1–65535, host short string', () => {
+  const { listenTransportOk } = require('../diag-ipc');
+  assert.equal(listenTransportOk({ type: 'tcp-client', host: '192.168.1.30', port: 5100 }), true);
+  assert.equal(listenTransportOk({ type: 'serial', path: 'COM3' }), true);
+  for (const t of [{ port: '5100' }, { port: 0 }, { port: 70000 }, { port: 1.5 }, { host: 5 }, { host: 'x'.repeat(300) }, null, []]) assert.equal(listenTransportOk(t), false);
 });

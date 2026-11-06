@@ -30,6 +30,8 @@ const nodeNet = require('net');
 const { isPrivateIpv4 } = require('../bridges/local-request');
 
 /** The Windows Firewall rule this module owns (one, replaced on every fix). */
+/** Ports of remote-admin / database services: never opened by the analyzer rule, even if typed (RDP, WinRM, VNC, SQL, Redis, …). */
+const SENSITIVE_PORTS = new Set([1433, 1434, 1521, 2049, 2375, 2376, 3306, 3389, 5432, 5900, 5985, 5986, 6379, 9200, 11211, 27017]);
 const RULE_NAME = 'Prefrontal analyzers (inbound)';
 /** The replacement is created under this name first, then renamed (L7). */
 const RULE_TEMP_NAME = 'Prefrontal analyzers (inbound, new)';
@@ -243,6 +245,23 @@ function parseExcludedPorts(text) {
 }
 
 /** ConvertTo-Csv of Get-NetFirewallRule → [{ name, direction, action, enabled, profile }] */
+/** `Get-NetFirewallPortFilter` LocalPort output ("5599,5600", "5603-5610", "Any") → tokens, or null when nothing was read. */
+function parseRulePorts(text) {
+  const toks = String(text || '').split(/[\s,]+/).map((t) => t.trim()).filter((t) => /^(any|\d{1,5}(-\d{1,5})?)$/i.test(t));
+  return toks.length ? [...new Set(toks)] : null;
+}
+
+/** Does a rule's port spec (parseRulePorts) cover `port`? Unknown spec (null) → true (never nag without data). */
+function rulePortsCover(spec, port) {
+  if (!Array.isArray(spec)) return true;
+  const p = Number(port);
+  return spec.some((t) => {
+    if (/^any$/i.test(t)) return true;
+    const [lo, hi] = t.split('-').map(Number);
+    return p >= lo && p <= (hi == null || Number.isNaN(hi) ? lo : hi);
+  });
+}
+
 function parseFirewallRulesCsv(text) {
   const rows = lines(text).filter((l) => l.trim().startsWith('"'));
   if (!rows.length) return [];
@@ -384,7 +403,6 @@ const ALIAS_RE = /^[A-Za-z0-9 _.()#-]{1,80}$/;
 const SUBNET_RE = /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/;
 const psq = (s) => `'${String(s).replace(/'/g, "''")}'`;
 const internetProfile = (p) => /^internet$/i.test(String((p && p.ipv4) || '').trim());
-const inRange = (p) => p >= PORT_RANGE.start && p <= PORT_RANGE.end;
 
 /** A remote scope for the rule: a valid IPv4 network /8–/32. */
 function validSubnet(s) {
@@ -409,8 +427,8 @@ function analyzerSubnets(adapter) {
  * What ONE firewall fix will change — computed in main from what Windows
  * reports (the renderer only names the card + asks for ports; it mirrors
  * this in connect-wizard.logic.ts firewallFixPlan so both say the same):
- *   ports    asked ∩ the analyzer range (5599–5650), plus the ports of the
- *            analyzers already paired on this PC;
+ *   ports    asked (1024–65535: the analyzer range, or a fixed port the lab
+ *            typed in), plus the ports of the analyzers already paired here;
  *   subnets  the picked card's own /24 (the rule's only remote scope);
  *   flip     the picked card, if Windows calls it Public AND it has no
  *            Internet AND no gateway (the analyzer cable, never the office
@@ -421,7 +439,11 @@ function analyzerSubnets(adapter) {
 function firewallPlan({ adapters = [], profiles = [], firewall = null, adapter, ports = [], paired = [] } = {}) {
   const card = adapters.find((a) => a.name === adapter) || null;
   if (!card) return { error: 'card' };
-  const asked = (ports || []).map(Number).filter((p) => Number.isInteger(p) && inRange(p));
+  // The analyzer range, plus a port the lab typed in because its analyzer's
+  // host port is FIXED (wizard "Change"): any port >= 1024 (the rule is
+  // still only for this exe, only the picked card's /24; main's own dialog
+  // lists the exact ports). Below 1024 the rule is never written.
+  const asked = (ports || []).map(Number).filter((p) => Number.isInteger(p) && p >= 1024 && p <= 65535 && !SENSITIVE_PORTS.has(p));
   const mine = (paired || []).map(Number).filter((p) => Number.isInteger(p) && p >= 1024 && p <= 65535);
   const list = [...new Set([...mine, ...asked])].sort((a, b) => a - b).slice(0, 24);
   if (!list.length) return { error: 'ports' };
@@ -535,7 +557,7 @@ function defaultExec(file, args, opts = {}) {
 const PS = ['-NoProfile', '-NonInteractive', '-Command'];
 const PLAN_ERRORS = {
   card: 'Pick the network card the analyzer cable goes into, then try again. Nothing was changed.',
-  ports: 'No analyzer port to open (analyzer ports are 5599–5650). Nothing was changed.',
+  ports: 'No port to open (it must be 1024 or higher, and not a remote-admin or database port). Nothing was changed.',
   subnet: 'The card you picked has no lab network address yet. Nothing was changed.',
 };
 
@@ -618,12 +640,15 @@ class NetDiag {
     if (!this.windows) {
       return { supported: false, message: this.platform === 'darwin' ? 'macOS asks by itself the first time an analyzer connects — choose Allow.' : 'Check this computer\'s firewall allows the analyzer ports.' };
     }
-    const [st, profiles, rules] = await Promise.all([
+    const [st, profiles, rules, rulePorts] = await Promise.all([
       this._run(this.bin.netsh, ['advfirewall', 'show', 'allprofiles', 'state']),
       this.profiles(),
       // The exe path travels in an environment variable, never in the command text.
       this.exec(this.bin.powershell, [...PS, 'Get-NetFirewallApplicationFilter -Program $env:PF_PROGRAM -ErrorAction SilentlyContinue | Get-NetFirewallRule -ErrorAction SilentlyContinue | Select-Object DisplayName,Direction,Action,Enabled,Profile | ConvertTo-Csv -NoTypeInformation'],
         { env: { ...process.env, PF_PROGRAM: this.programPath } }).catch(() => ({ ok: false, stdout: '' })),
+      // Which local ports OUR allow rule opens (fixed text; the rule names travel in the environment).
+      this.exec(this.bin.powershell, [...PS, '(Get-NetFirewallRule -DisplayName @($env:PF_RULE,$env:PF_RULE_TEMP) -ErrorAction SilentlyContinue | Get-NetFirewallPortFilter | ForEach-Object { $_.LocalPort }) -join \',\''],
+        { env: { ...process.env, PF_RULE: RULE_NAME, PF_RULE_TEMP: RULE_TEMP_NAME } }).catch(() => ({ ok: false, stdout: '' })),
     ]);
     const list = rules.ok ? parseFirewallRulesCsv(rules.stdout) : [];
     const inbound = list.filter((r) => /^inbound$/i.test(r.direction) && r.enabled);
@@ -634,6 +659,8 @@ class NetDiag {
       rules: list,
       blockRules: inbound.filter((r) => /^block$/i.test(r.action)).length,
       ourRule: inbound.some((r) => (r.name === RULE_NAME || r.name === RULE_TEMP_NAME) && /^allow$/i.test(r.action)),
+      /** Local ports our rule opens ("5599", "5603-5610", "Any"); null = could not be read. */
+      ourRulePorts: rulePorts && rulePorts.ok ? parseRulePorts(rulePorts.stdout) : null,
     };
   }
 
@@ -796,9 +823,9 @@ function canBindPort(port, timeoutMs = BIND_TIMEOUT_MS) {
 }
 
 module.exports = {
-  NetDiag, RULE_NAME, RULE_TEMP_NAME, PORT_RANGE, COMMON_LIS_PORTS, PROBE_COOLDOWN_MS, UAC_CANCELLED,
+  NetDiag, SENSITIVE_PORTS, RULE_NAME, RULE_TEMP_NAME, PORT_RANGE, COMMON_LIS_PORTS, PROBE_COOLDOWN_MS, UAC_CANCELLED,
   parseIpconfig, parseNetstat, parseGetNetTcpConnection, parseTasklist, parseNetConnectionProfile, parseArp,
-  parseFirewallState, parseExcludedPorts, parseFirewallRulesCsv, parseLsof,
+  parseFirewallState, parseExcludedPorts, parseFirewallRulesCsv, parseRulePorts, rulePortsCover, parseLsof,
   subnetOf, mergeAdapters, findProblems, firewallPlan, analyzerSubnets, buildFirewallScript, encodePowerShell, elevationCommand,
   portList, aliasList, adapterName, windowsBins, systemRoot, canBindPort,
 };

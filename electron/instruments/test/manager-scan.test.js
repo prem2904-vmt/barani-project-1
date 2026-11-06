@@ -125,3 +125,79 @@ test('AnalyzerGuess mirror: HL7 MSH-3/4, ASTM H-5/H-13, MAC OUI, opt-in protocol
   assert.equal(normalizeMac('0:50:c2:a:b:c'), null, 'short octets are not guessed');
   assert.equal(normalizeMac('00-50-C2-0A-0B-0C'), '00:50:C2:0A:0B:0C');
 });
+
+// ── fixed analyzer port: the wizard's "Change" ──────────────────────────────
+const portListening = (port) => new Promise((res) => { const x = net.createConnection({ host: '127.0.0.1', port }); x.once('connect', () => { x.destroy(); res(true); }); x.once('error', () => res(false)); });
+
+test('scanSetPort: new port opens FIRST, only then the suggested one closes; the usual ports stay', async () => {
+  const [sugg, fixed] = [await freePort(), await freePort()];
+  const m = new ConnectorManager({ baseDir: tmp() });
+  const events = [];
+  m.on('diag', (e) => events.push(e));
+  try {
+    const r = await m.scanStart({ ports: [sugg] });
+    assert.equal(await portListening(sugg), true);
+    const c = await m.scanSetPort({ scanId: r.scanId, port: fixed, previous: sugg });
+    assert.deepEqual({ ok: c.ok, port: c.port, ports: c.ports }, { ok: true, port: fixed, ports: [fixed] });
+    assert.equal(await portListening(fixed), true);
+    assert.equal(await portListening(sugg), false, 'the old suggestion no longer listens');
+    assert.ok(events.some((e) => e.kind === 'listening' && e.port === fixed), 'live events continue on the new port');
+    // the analyzer connects on the chosen port → same live events as before
+    const s = await new Promise((res) => { const x = net.createConnection({ host: '127.0.0.1', port: fixed }, () => res(x)); });
+    s.write(M51_HL7);
+    assert.ok(await until(() => events.some((e) => e.kind === 'detect' && e.port === fixed)));
+    assert.equal(events.filter((e) => e.kind === 'detect').at(-1).guess.label, 'Medonic M51');
+    s.destroy();
+    // a "usual" previous port is kept open
+    const keep = await m.scanSetPort({ scanId: r.scanId, port: sugg, previous: fixed, keep: [fixed] });
+    assert.deepEqual(keep.ports.sort(), [sugg, fixed].sort());
+    // same port again is a no-op success
+    assert.equal((await m.scanSetPort({ scanId: r.scanId, port: sugg })).ok, true);
+    const stop = await m.scanStop(r.scanId);
+    assert.equal(stop.ports.length, 2);
+  } finally { await m.stopAll(); }
+});
+
+test('scanSetPort refusals leave the previous port listening: invalid, paired-by-another-analyzer, held by a program (named)', async () => {
+  const [sugg, pairedPort, held] = [await freePort(), await freePort(), await freePort()];
+  const { m } = await managerWithPaired(pairedPort);
+  m.connectorOpts = { portOwner: async (p) => (p === held ? { pid: 7412, name: 'CBCLisM51' } : null) };
+  const squatter = net.createServer();
+  await new Promise((r) => squatter.listen(held, '0.0.0.0', r));
+  try {
+    const { scanId } = await m.scanStart({ ports: [sugg] });
+    for (const bad of [0, 70000, 80.5, NaN, '5603', null]) {
+      const r = await m.scanSetPort({ scanId, port: bad, previous: sugg });
+      assert.equal(r.ok, false); assert.equal(r.code, 'invalid_port'); assert.match(r.error, /1 to 65535/);
+    }
+    const a = await m.scanSetPort({ scanId, port: pairedPort, previous: sugg });
+    assert.equal(a.code, 'port_in_use');
+    assert.match(a.error, /used by the analyzer "Medonic M51" on this PC/);
+    const b = await m.scanSetPort({ scanId, port: held, previous: sugg });
+    assert.equal(b.code, 'port_in_use');
+    assert.equal(b.error, `Port ${held} is used by CBCLisM51 (PID 7412). Close that program, or pick another port for this analyzer.`);
+    assert.equal(await portListening(sugg), true, 'previous port still listening after every refusal');
+    assert.equal((await m.scanSetPort({ scanId: 'gone', port: sugg })).code, 'no_scan');
+    // a port below 1024 is allowed but warned
+    const low = await m.scanSetPort({ scanId, port: 1, previous: sugg });
+    if (low.ok) assert.match(low.warning, /administrator/); else assert.ok(low.error);
+    assert.equal(await portListening(sugg), low.ok ? false : true);
+  } finally { squatter.close(); await m.stopAll(); }
+});
+
+test('listen vs paired is refused both ways: a paired analyzer\'s port can\'t be listened on, and pair() refuses a second analyzer on the same port', async () => {
+  const port = await freePort();
+  const { m } = await managerWithPaired(port);
+  try {
+    assert.match(m.conflictFor({ type: 'tcp-server', port }), /used by the analyzer "Medonic M51"/);
+    assert.equal(m.conflictFor({ type: 'tcp-server', port }, { exceptInstrumentId: ID }), null, 're-pairing the same analyzer is fine');
+    assert.equal(m.conflictFor({ type: 'tcp-client', port }), null, 'a client dial uses no listen port');
+    const OTHER = '99999999-2222-3333-4444-555555555555';
+    const fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ success: true, data: { name: 'Other', config: { transport: { type: 'tcp-server', port } }, codeMaps: [] } }), text: async () => '{}' });
+    const m2 = Object.assign(m, { fetchImpl });
+    const r = await m2.pair({ instrumentId: OTHER, deviceKey: 'k', apiUrl: 'http://localhost:1' });
+    assert.equal(r.ok, false);
+    assert.match(r.error, /^Port \d+ is used by the analyzer "Medonic M51" on this PC/);
+    assert.equal(m.paired.some((p) => p.instrumentId === OTHER), false, 'nothing stored');
+  } finally { await m.stopAll(); }
+});

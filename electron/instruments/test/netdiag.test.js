@@ -56,6 +56,10 @@ function winExec(over = {}) {
         assert.equal(opts && opts.env && opts.env.PF_PROGRAM, EXE, 'the exe path travels in the environment, not the command');
         return { ok: true, code: 0, stdout: over.rules ?? fx('win-firewall-app-rules.csv') };
       }
+      if (/Get-NetFirewallPortFilter/.test(cmd)) {
+        assert.equal(opts.env.PF_RULE, 'Prefrontal analyzers (inbound)');
+        return { ok: true, code: 0, stdout: over.rulePorts ?? '' };
+      }
       if (/Start-Process -FilePath 'C:\\Windows\\System32\\WindowsPowerShell\\v1\.0\\powershell\.exe' -Verb RunAs/.test(cmd)) return over.elevate ? over.elevate(cmd) : { ok: true, code: 0, stdout: '' };
       throw new Error(`unexpected powershell: ${cmd.slice(0, 80)}`);
     }
@@ -257,16 +261,16 @@ test('firewall script: fixed text, validated literals only, our exe, the analyze
   ]) assert.throws(() => nd.buildFirewallScript(bad), /bad_request/, JSON.stringify(bad));
 });
 
-test('firewall plan (M1/M2/M3 ports): only the picked analyzer card flips; rule scoped to its /24; ports = range ∩ asked + paired', () => {
+test('firewall plan (M1/M2/M3 ports): only the picked analyzer card flips; rule scoped to its /24; ports = asked (≥1024, not remote-admin) + paired', () => {
   const adapters = nd.mergeAdapters(WIN_IFACES, nd.parseIpconfig(fx('win-ipconfig-all.txt')));
   const profiles = nd.parseNetConnectionProfile(fx('win-get-netconnectionprofile.txt'));
   const p = nd.firewallPlan({ adapters, profiles, firewall: { blockRules: 2 }, adapter: 'Ethernet 2', ports: [5603, 6000, 3389], paired: [5599, 5601] });
-  assert.deepEqual(p.ports, [5599, 5601, 5603], '6000 / 3389 are outside 5599–5650 and not a paired analyzer → dropped');
+  assert.deepEqual(p.ports, [5599, 5601, 5603, 6000], '6000 is a typed fixed analyzer port (kept); 3389 (RDP) is never opened');
   assert.deepEqual(p.subnets, ['192.168.1.0/24']);
   assert.deepEqual(p.flip, ['Ethernet 2']);
   assert.deepEqual(p.lines, [
     'Remove the Windows Firewall rules that block Prefrontal.',
-    'Let analyzers on 192.168.1.x (Ethernet 2) reach Prefrontal on ports 5599, 5601, 5603 — only Prefrontal, nothing else.',
+    'Let analyzers on 192.168.1.x (Ethernet 2) reach Prefrontal on ports 5599, 5601, 5603, 6000 — only Prefrontal, nothing else.',
     'Set Ethernet 2 to a Private network.',
     'Windows will ask for permission once. Nothing else on this PC changes.',
   ]);
@@ -274,7 +278,7 @@ test('firewall plan (M1/M2/M3 ports): only the picked analyzer card flips; rule 
   const pubRouter = profiles.map((x) => (x.alias === 'Ethernet' ? { ...x, category: 'Public' } : x));
   assert.deepEqual(nd.firewallPlan({ adapters, profiles: pubRouter, adapter: 'Ethernet', ports: [5603] }).flip, []);
   assert.deepEqual(nd.firewallPlan({ adapters, profiles, adapter: 'Wi-Fi 9', ports: [5603] }), { error: 'card' });
-  assert.deepEqual(nd.firewallPlan({ adapters, profiles, adapter: 'Ethernet 2', ports: [80] }), { error: 'ports' });
+  assert.deepEqual(nd.firewallPlan({ adapters, profiles, adapter: 'Ethernet 2', ports: [80, 443, 3389] }), { error: 'ports' });
 });
 
 test('M1: a Public Wi-Fi profile with IPv4Connectivity Internet is NOT flipped (and not offered the fix)', async () => {
@@ -469,4 +473,20 @@ test('IPC argument checks: ports are integers in range (no strings with junk, no
   assert.equal(nd.aliasList('Ethernet 2'), null);
   assert.equal(nd.aliasList([''.padEnd(81, 'x')]), null);
   assert.equal(nd.aliasList([1]), null);
+});
+
+test('fixed analyzer port: a typed port >= 1024 joins the rule; below 1024 / remote-admin ports never do; rule ports are read + matched (ranges, Any)', async () => {
+  const adapters = nd.mergeAdapters(WIN_IFACES, nd.parseIpconfig(fx('win-ipconfig-all.txt')));
+  const profiles = nd.parseNetConnectionProfile(fx('win-get-netconnectionprofile.txt'));
+  assert.deepEqual(nd.firewallPlan({ adapters, profiles, adapter: 'Ethernet 2', ports: [8080, 80, 3389, 5985] }).ports, [8080]);
+  assert.deepEqual(nd.parseRulePorts('5599,5601,5603-5610\r\n'), ['5599', '5601', '5603-5610']);
+  assert.deepEqual(nd.parseRulePorts('Any'), ['Any']);
+  assert.equal(nd.parseRulePorts(''), null);
+  assert.equal(nd.rulePortsCover(['5599', '5603-5610'], 5605), true);
+  assert.equal(nd.rulePortsCover(['5599', '5603-5610'], 8080), false);
+  assert.equal(nd.rulePortsCover(['Any'], 8080), true);
+  assert.equal(nd.rulePortsCover(null, 8080), true, 'unknown → never nag');
+  const { d } = winDiag({ exec: { rulePorts: '5599,5601' } });
+  const fw = await d.firewall();
+  assert.deepEqual(fw.ourRulePorts, ['5599', '5601']);
 });

@@ -101,6 +101,13 @@ class ConnectorManager extends EventEmitter {
     const probe = new Uploader({ apiUrl, instrumentId, deviceKey, fetchImpl: this.fetchImpl });
     let remote;
     try { remote = await probe.getConfig(); } catch (e) { return { ok: false, error: e.kind === 'auth' ? 'The server rejected this device key' : e.message }; }
+    // Two analyzers on this PC can never share a listen port (the wizard's
+    // fixed-port "Change" made this reachable): refuse before storing the key.
+    const rt = remote && remote.config && remote.config.transport;
+    if (rt && rt.type === 'tcp-server') {
+      const clash = this.conflictFor(rt, { exceptInstrumentId: instrumentId });
+      if (clash && /is used by the analyzer/.test(clash)) return { ok: false, error: clash };
+    }
     this._read();
     const entry = {
       instrumentId,
@@ -172,9 +179,10 @@ class ConnectorManager extends EventEmitter {
 
   /** Plain-words refusal when `transport` would take a port / COM port this
    *  PC already uses (paired analyzer or another listen) — else null. */
-  conflictFor(transport) {
+  conflictFor(transport, { exceptInstrumentId } = {}) {
     const t = transport || {};
     for (const u of this.usedEndpoints()) {
+      if (exceptInstrumentId && u.instrumentId === exceptInstrumentId) continue;
       if (t.type === 'tcp-server' && u.port && Number(t.port) === u.port) {
         return u.kind === 'connector'
           ? `Port ${u.port} is used by the analyzer "${u.name}" on this PC. Pick another port, or open that analyzer instead.`
@@ -248,40 +256,71 @@ class ConnectorManager extends EventEmitter {
     const scanId = crypto.randomUUID();
     const sc = { sessions: new Map(), info: new Map(), timer: null };
     this.scans.set(scanId, sc);
-    const emit = (kind, port, extra = {}) => this.emit('diag', { scanId, kind, port, ...extra });
     const out = [];
-    for (const port of list) {
-      const transport = { type: 'tcp-server', port, host: '0.0.0.0' };
-      const conflict = this.conflictFor(transport);
-      if (conflict) { out.push({ port, ok: false, error: conflict }); continue; }
-      const s = new ListenSession({ transport }, this.deps);
-      const info = { port, remote: null, local: null, connectedAt: null, messages: 0, detect: null, guess: null };
-      s.on('session', (x) => {
-        info.remote = x.remote || null; info.local = x.local || null; info.connectedAt = x.since || new Date().toISOString();
-        emit('connected', port, { remote: info.remote, local: info.local });
-      });
-      s.on('message', () => { info.messages++; });
-      s.on('detect', () => {
-        const d = detect(s.raw());
-        info.detect = { protocol: d.protocol, link: d.link, confidence: d.confidence, reasons: d.reasons, proposed: d.proposed };
-        info.guess = guess({ ...headerOf(d.text), protocol: d.protocol });
-        emit('detect', port, { remote: info.remote, detect: info.detect, guess: info.guess, messages: info.messages });
-      });
-      s.on('error', (e) => emit('error', port, { error: e && e.message }));
-      try {
-        await s.start();
-        sc.sessions.set(port, s);
-        sc.info.set(port, info);
-        out.push({ port, ok: true });
-        emit('listening', port);
-      } catch (e) {
-        out.push({ port, ok: false, error: await this._friendly(e, transport) });
-      }
-    }
+    for (const port of list) out.push(await this._scanOpen(sc, scanId, port));
     if (!sc.sessions.size) { this.scans.delete(scanId); return { scanId: null, ports: out }; }
     sc.timer = setTimeout(() => this.scanStop(scanId).catch(() => {}), SCAN_TTL_MS);
     if (sc.timer.unref) sc.timer.unref();
     return { scanId, ports: out };
+  }
+
+  /** Open ONE port into a scan: { port, ok } or { port, ok:false, error, code? }. Never takes a port this PC already uses. */
+  async _scanOpen(sc, scanId, port) {
+    const emit = (kind, p, extra = {}) => this.emit('diag', { scanId, kind, port: p, ...extra });
+    const transport = { type: 'tcp-server', port, host: '0.0.0.0' };
+    const conflict = this.conflictFor(transport);
+    if (conflict) return { port, ok: false, error: conflict, code: 'port_in_use' };
+    const s = new ListenSession({ transport }, this.deps);
+    const info = { port, remote: null, local: null, connectedAt: null, messages: 0, detect: null, guess: null };
+    s.on('session', (x) => {
+      info.remote = x.remote || null; info.local = x.local || null; info.connectedAt = x.since || new Date().toISOString();
+      emit('connected', port, { remote: info.remote, local: info.local });
+    });
+    s.on('message', () => { info.messages++; });
+    s.on('detect', () => {
+      const d = detect(s.raw());
+      info.detect = { protocol: d.protocol, link: d.link, confidence: d.confidence, reasons: d.reasons, proposed: d.proposed };
+      info.guess = guess({ ...headerOf(d.text), protocol: d.protocol });
+      emit('detect', port, { remote: info.remote, detect: info.detect, guess: info.guess, messages: info.messages });
+    });
+    s.on('error', (e) => emit('error', port, { error: e && e.message }));
+    try {
+      await s.start();
+    } catch (e) {
+      return { port, ok: false, error: await this._friendly(e, transport), code: e && e.code === 'EADDRINUSE' ? 'port_in_use' : 'cannot_open' };
+    }
+    sc.sessions.set(port, s);
+    sc.info.set(port, info);
+    emit('listening', port);
+    return { port, ok: true };
+  }
+
+  /**
+   * The lab's analyzer has a FIXED host port: listen on `port` in this scan,
+   * and only once it really opened let go of `previous` (the port we had
+   * suggested — never one of the usual `keep` ports). A bad / busy port
+   * leaves the scan exactly as it was, so the old port keeps listening.
+   * Validation: whole number 1–65535; not a port a paired analyzer / another
+   * listen on this PC uses (conflictFor); not held by another program (the
+   * bind fails → the host's portOwner names it, never kills it).
+   * @returns {Promise<{ ok: true, port: number, ports: number[], warning?: string } | { ok: false, error: string, code: string }>}
+   */
+  async scanSetPort({ scanId, port, previous, keep = [] } = {}) {
+    const sc = this.scans.get(scanId);
+    if (!sc) return { ok: false, error: 'The listening session has ended. Press Start listening, then try again.', code: 'no_scan' };
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return { ok: false, error: 'A port is a whole number from 1 to 65535.', code: 'invalid_port' };
+    const warning = port < 1024 ? `Ports below 1024 may need Prefrontal to run as administrator, and the firewall fix cannot open them.` : undefined;
+    if (!sc.sessions.has(port)) {
+      const r = await this._scanOpen(sc, scanId, port);
+      if (!r.ok) return { ok: false, error: r.error, code: r.code };
+    }
+    const prev = Number.isInteger(previous) ? previous : null;
+    if (prev != null && prev !== port && !keep.includes(prev) && sc.sessions.has(prev)) {
+      const old = sc.sessions.get(prev);
+      sc.sessions.delete(prev); sc.info.delete(prev);
+      try { await old.stop(); } catch { /* already closed */ }
+    }
+    return { ok: true, port, ports: [...sc.sessions.keys()], ...(warning ? { warning } : {}) };
   }
 
   /** Stop a scan; per port: who connected, what was detected, the capture. */

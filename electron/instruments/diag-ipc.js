@@ -14,6 +14,21 @@
  */
 const { portList, adapterName } = require('./netdiag');
 
+/** The usual analyzer ports the wizard's scan keeps open (connect-wizard.logic.ts COMMON_PORTS). */
+const USUAL_PORTS = [5599, 5600, 5601, 5602, 5603, 5604, 5605, 5606, 5607, 5608, 5609, 5610];
+
+const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A TCP port from the page: a real integer number 1–65535 (no strings, no 80.5), else null. */
+const wholePort = (v) => (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 65535 ? v : null);
+
+/** A tcp-server / tcp-client transport for a listen session: port (when given) must be a whole 1–65535, host a short string. */
+function listenTransportOk(t) {
+  if (!t || typeof t !== 'object' || Array.isArray(t)) return false;
+  if (t.port != null && wholePort(t.port) == null) return false;
+  if (t.host != null && (typeof t.host !== 'string' || t.host.length > 255)) return false;
+  return true;
+}
+
 const bad = (what) => ({ error: `bad_request: ${what}` });
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
 const str = (v, max) => (typeof v === 'string' && v.length <= max ? v : null);
@@ -41,7 +56,7 @@ async function confirmFix(plan, { showMessageBox, getWindow }) {
  * @param {Function} deps.showMessageBox  Electron dialog.showMessageBox
  * @param {Function} deps.getWindow     () → the main BrowserWindow (dialog parent)
  */
-function makeDiagHandlers({ diag, showMessageBox, getWindow }) {
+function makeDiagHandlers({ diag, manager, showMessageBox, getWindow }) {
   return {
     /** { ports?: number[], adapter: string } — the card the wizard picked. */
     async fixFirewall(p) {
@@ -50,6 +65,20 @@ function makeDiagHandlers({ diag, showMessageBox, getWindow }) {
       const adapter = adapterName(o.adapter);
       if (!asked || !adapter) return bad('fix');
       return diag.fixFirewall({ ports: asked, adapter, confirm: (plan) => confirmFix(plan, { showMessageBox, getWindow }) });
+    },
+    /**
+     * { scanId, port, previous? } — the lab typed the analyzer's FIXED host
+     * port. Strict: GUID scan id, whole-number port 1–65535, previous (the
+     * port we had suggested) the same. `keep` (the usual ports that stay
+     * open) is decided here, never taken from the page.
+     */
+    scanSetPort(p) {
+      const o = obj(p) || {};
+      const scanId = typeof o.scanId === 'string' && GUID_RE.test(o.scanId) ? o.scanId : null;
+      const port = wholePort(o.port);
+      const previous = o.previous == null ? null : wholePort(o.previous);
+      if (!scanId || port == null || (o.previous != null && previous == null)) return bad('port');
+      return manager.scanSetPort({ scanId, port, previous, keep: USUAL_PORTS });
     },
     /** { address: string, ports?: number[] } — `wide` is not accepted from the renderer. */
     probe(p) {
@@ -62,4 +91,4 @@ function makeDiagHandlers({ diag, showMessageBox, getWindow }) {
   };
 }
 
-module.exports = { makeDiagHandlers, confirmFix };
+module.exports = { makeDiagHandlers, confirmFix, wholePort, listenTransportOk };
