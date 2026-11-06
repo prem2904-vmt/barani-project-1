@@ -1713,3 +1713,13 @@ a.pf-ts-tenant:hover {
     transform: translate(-50%, -50%);
   }
 }
+
+/* Desktop app with WhatsApp docked on the right ("Send on WhatsApp"): the
+   app is ~380px narrower than the window, so the full-width labels would be
+   cut off. Icons only (names stay for screen readers + hover title). */
+:host-context(html.pf-wa-docked) .pf-topnav-link { padding-left: 10px; padding-right: 10px; }
+:host-context(html.pf-wa-docked) .pf-topnav-link__lbl,
+:host-context(html.pf-wa-docked) .pf-brand-text {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}

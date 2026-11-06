@@ -85,6 +85,7 @@
       [routerLinkActive]="(n.id === 'opd' || n.id === 'doctor') ? [] : 'pf-topnav-link--on'"
       [routerLinkActiveOptions]="{ exact: !!n.exact }"
       [class.pf-topnav-link--on]="(n.id === 'opd' || n.id === 'doctor') && opdActive(n)"
+      [attr.title]="n.label"
       class="pf-topnav-link press">
       @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
       <span class="pf-collect-nav-icon w-3.5 h-3.5" aria-hidden="true"></span>
@@ -99,7 +100,7 @@
     </a>
     }
     @if (showAdmin()) {
-    <a routerLink="/admin" routerLinkActive="pf-topnav-link--on" class="pf-topnav-link press">
+    <a routerLink="/admin" routerLinkActive="pf-topnav-link--on" title="Settings" class="pf-topnav-link press">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="3" />
