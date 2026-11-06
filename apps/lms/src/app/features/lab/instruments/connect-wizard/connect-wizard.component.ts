@@ -20,7 +20,7 @@ import type {
 } from '../../../../shared/instruments/instrument.models';
 import {
   CheckItem, ConnectMode, WIZARD_STEPS, WizardStepId, cardChoices, cardOptions, checklist, detectHeadline, firewallFixPlan,
-  fixableProblems, pickAnalyzerCard, scanPorts, wizardUpsert,
+  checkPortText, firewallCoversPort, fixableProblems, pickAnalyzerCard, scanPorts, wizardUpsert,
 } from './connect-wizard.logic';
 import { AssistantButtonComponent } from '../../../../shared/assistant/assistant-button.component';
 import { AssistantPanelComponent } from '../../../../shared/assistant/assistant-panel.component';
@@ -93,6 +93,14 @@ export class ConnectWizardComponent {
   readonly scanning = signal(false);
   readonly scanList = signal<number[]>([]);
   readonly scanSkipped = signal<{ port: number; error?: string }[]>([]);
+  // The analyzer's host port is FIXED → the lab types it (port editor).
+  readonly portEditing = signal(false);
+  readonly portText = signal('');
+  readonly portBusy = signal(false);
+  readonly portError = signal<string | null>(null);
+  readonly portWarning = signal<string | null>(null);
+  /** Our firewall rule exists but does not open the chosen port (Windows only; re-read after each change). */
+  readonly portFirewallGap = computed(() => !firewallCoversPort(this.snap()?.firewall, this.port()));
   readonly hit = signal<Hit | null>(null);
   readonly detect = signal<DetectResult | null>(null);
   readonly guess = signal<AnalyzerGuess | null>(null);
@@ -144,7 +152,7 @@ export class ConnectWizardComponent {
     switch (this.step()) {
       case 'pc': return !!this.snap() && !!this.card();
       case 'find': return this.mode() === 'listen'
-        ? (!!this.hit() || this.skipped()) && !!this.port()
+        ? (!!this.hit() || this.skipped()) && !!this.port() && !this.portBusy()
         : !!this.dialHost().trim() && !!this.dialPort();
       case 'create': return !!this.created();
       default: return false;
@@ -245,6 +253,64 @@ export class ConnectWizardComponent {
     if (!r.scanId) { this.scanning.set(false); this.toasts.error(r.ports[0]?.error || 'Could not open any port'); return; }
     // The suggested port itself could not open — offer the first one that did.
     if (this.port() && !this.scanList().includes(this.port()!)) this.port.set(this.scanList()[0] ?? null);
+  }
+
+  // ── the analyzer's fixed port ────────────────────────────────────────
+  openPortEdit() {
+    this.portText.set(this.port() ? String(this.port()) : '');
+    this.portError.set(null);
+    this.portEditing.set(true);
+  }
+
+  cancelPortEdit() {
+    this.portEditing.set(false);
+    this.portError.set(null);
+  }
+
+  /**
+   * Listen on the typed port. The port we had keeps listening until the new
+   * one really opened (main opens first, then closes the old); any refusal
+   * (invalid, another analyzer here, another program — named) leaves
+   * everything as it was. Live waiting / detection carries on, now on the
+   * chosen port; the instrument is saved with it (wizardUpsert).
+   */
+  async applyPort() {
+    if (this.portBusy()) return;
+    const c = checkPortText(this.portText());
+    if (c.port == null) { this.portError.set(c.error ?? 'That is not a port.'); return; }
+    this.portError.set(null);
+    const chosen = c.port;
+    if (chosen === this.port()) { this.portWarning.set(c.warning ?? null); this.portEditing.set(false); return; }
+    const d = this.bridge.diag;
+    if (!d) return;
+    this.portBusy.set(true);
+    try {
+      const id = this.scanId();
+      if (id && d.scanPort) {
+        const r = await d.scanPort({ scanId: id, port: chosen, previous: this.port() }).catch((e) => ({ ok: false as const, error: errText(e, 'Could not open that port') }));
+        if (!r.ok) { this.portError.set(r.error); return; }
+        this.scanList.set(r.ports);
+        this.scanSkipped.update((l) => l.filter((x) => x.port !== chosen));
+      } else if (id) {
+        this.portError.set('This version of the desktop app cannot change the port here. Update the desktop app, then try again.');
+        return;
+      } else {
+        // Not listening yet (or it ended): start fresh with the chosen port first.
+        this.port.set(chosen);
+        await this.startScan();
+        if (!this.scanList().includes(chosen)) {
+          this.portError.set(this.scanSkipped().find((x) => x.port === chosen)?.error ?? 'Could not open that port.');
+          return;
+        }
+      }
+      this.port.set(chosen);
+      this.hit.set(null); this.detect.set(null); this.guess.set(null); this.skipped.set(false);
+      this.portWarning.set(c.warning ?? null);
+      this.portEditing.set(false);
+      void this.refresh(); // the firewall check is read again for the new port
+    } finally {
+      this.portBusy.set(false);
+    }
   }
 
   private onScan(e: DiagScanEvent) {

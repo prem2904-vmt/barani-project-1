@@ -136,8 +136,41 @@
                   <p class="pf-cw-instr__lead">On the analyzer, open its <strong>LIS / Host</strong> settings and set:</p>
                   <div class="pf-cw-instr__vals">
                     <div class="pf-cw-instr__val"><span class="pf-cw-instr__k">Host IP</span><span class="pf-cw-instr__v pf-num">{{ card() || '—' }}</span></div>
-                    <div class="pf-cw-instr__val"><span class="pf-cw-instr__k">Port</span><span class="pf-cw-instr__v pf-num">{{ port() ?? '—' }}</span></div>
+                    <div class="pf-cw-instr__val"><span class="pf-cw-instr__k">Port</span>
+                      <span class="pf-cw-instr__pv"><span class="pf-cw-instr__v pf-num">{{ port() ?? '—' }}</span>
+                        @if (!portEditing()) {
+                          <button type="button" class="pf-btn pf-btn--quiet press" (click)="openPortEdit()" aria-label="Change the port">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                            Change
+                          </button>
+                        }
+                      </span></div>
                   </div>
+                  @if (portEditing()) {
+                    <form class="pf-cw-port" (submit)="$event.preventDefault(); applyPort()">
+                      <label class="pf-field"><span class="pf-field__lbl">Your analyzer's port is fixed? Type it here.</span>
+                        <span class="pf-cw-port__row">
+                          <input class="pf-input pf-num pf-cw-port__in" [class.pf-input--error]="!!portError()" [value]="portText()" (input)="portText.set($any($event.target).value); portError.set(null)"
+                            placeholder="e.g. 5100" autocomplete="off" inputmode="numeric" maxlength="5" aria-label="Analyzer port"
+                            [attr.aria-invalid]="portError() ? true : null" aria-describedby="pf-cw-port-msg" (keydown.escape)="cancelPortEdit()" />
+                          <button type="submit" class="pf-btn pf-btn--secondary press" [disabled]="portBusy()" [pfBusy]="portBusy()" pfBusyLabel="Opening…">Use this port</button>
+                          <button type="button" class="pf-btn pf-btn--quiet press" [disabled]="portBusy()" (click)="cancelPortEdit()">Cancel</button>
+                        </span>
+                      </label>
+                      <p id="pf-cw-port-msg" class="pf-field__hint" [class.pf-cw-warn]="!!portError()" role="status">
+                        {{ portError() || 'Prefrontal keeps listening on the current port until the new one is open.' }}
+                      </p>
+                    </form>
+                  }
+                  @if (portWarning(); as w) { <p class="pf-cw-warn">{{ w }}</p> }
+                  @if (portFirewallGap()) {
+                    <div class="pf-cw-fix">
+                      <p class="pf-cw-warn">The Windows Firewall rule for Prefrontal does not open port {{ port() }} yet.{{ (port() ?? 0) < 1024 ? ' Ports below 1024 cannot be opened here — add it in Windows Firewall.' : '' }}</p>
+                      @if ((port() ?? 0) >= 1024) {
+                        <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="fixBusy()" [pfBusy]="fixBusy()" pfBusyLabel="Waiting for Windows…" (click)="fixFirewall()">Fix with Windows permission</button>
+                      }
+                    </div>
+                  }
                   <p class="pf-field__hint">Save it on the analyzer (some need a restart of their LIS / communication screen).
                     @if (otherPorts() && !hit()) { Already set to another port? This PC is also listening on {{ otherPorts() }}. }
                   </p>

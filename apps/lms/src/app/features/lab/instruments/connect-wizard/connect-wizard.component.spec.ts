@@ -43,6 +43,11 @@ function fakeDiag() {
     arp: vi.fn(async () => [{ ip: '192.168.1.30', mac: 'b8:27:eb:12:34:56', type: 'dynamic', iface: '192.168.1.8' }]),
     probe: vi.fn(async () => ({ subnet: '192.168.1.0/24', tried: 8, hosts: 1, open: [{ host: '192.168.1.30', port: 5100 }] })),
     scanStart: vi.fn(async (p: { ports: number[] }) => ({ scanId: 'scan-1', ports: p.ports.map((port) => ({ port, ok: port !== 5600, ...(port === 5600 ? { error: 'Port 5600 is used by CBCLisM51 (PID 7412). Close that program, or pick another port for this analyzer.' } : {}) })) })),
+    scanPort: vi.fn(async (p: { scanId: string; port: number; previous?: number | null }) => {
+      if (p.port === 5100) return { ok: false as const, error: 'Port 5100 is used by the analyzer "Medonic M51" on this PC. Pick another port, or open that analyzer instead.', code: 'port_in_use' };
+      if (p.port === 8080) return { ok: false as const, error: 'Port 8080 is used by Skype (PID 4410). Close that program, or pick another port for this analyzer.', code: 'port_in_use' };
+      return { ok: true as const, port: p.port, ports: [p.port, 5599, 5600], ...(p.port < 1024 ? { warning: 'low' } : {}) };
+    }),
     scanStop: vi.fn(async () => ({ ports: [] })),
     onScan: vi.fn((cb: (e: DiagScanEvent) => void) => { scan = cb; return () => { scan = null; }; }),
   };
@@ -217,5 +222,118 @@ describe('Connect an analyzer — wizard', () => {
     expect(p.cmp.dialHost()).toBe('192.168.1.30');
     expect(p.cmp.dialPort()).toBe(5100);
     expect(p.cmp.canNext()).toBe(true);
+  });
+
+  describe('fixed analyzer port (Change)', () => {
+    async function onFind(snap?: DiagSnapshot) {
+      const b = fakeDiag();
+      if (snap) (b.diag.snapshot as ReturnType<typeof vi.fn>).mockResolvedValue(snap);
+      const p = render(b.api);
+      await flush(); p.f.detectChanges();
+      p.cmp.primary(); await flush(); p.f.detectChanges();
+      return { b, p };
+    }
+    const type = async (p: ReturnType<typeof render>, v: string) => {
+      const input = p.el.querySelector<HTMLInputElement>('.pf-cw-port__in')!;
+      input.value = v; input.dispatchEvent(new Event('input'));
+      p.f.detectChanges();
+      btn(p.el, 'Use this port')!.click();
+      await flush(); p.f.detectChanges();
+    };
+
+    it('shows the suggested port with a Change button; the editor says it in plain words; no native controls', async () => {
+      const { p } = await onFind();
+      expect(btn(p.el, 'Change')).toBeTruthy();
+      expect(p.el.querySelector('.pf-cw-port')).toBeNull();
+      btn(p.el, 'Change')!.click(); p.f.detectChanges();
+      expect(p.el.querySelector('.pf-cw-port')!.textContent).toContain("Your analyzer's port is fixed? Type it here.");
+      expect(p.el.querySelector<HTMLInputElement>('.pf-cw-port__in')!.value).toBe('5603');
+      expect(p.el.querySelectorAll('select, datalist, input[type=number]').length).toBe(0);
+      expect(primaries(p.el)).toBe(1);
+    });
+
+    it('a valid port: main opens it, live wait carries on, hit resets, the instrument is saved with that port', async () => {
+      const { b, p } = await onFind();
+      b.emit({ scanId: 'scan-1', kind: 'connected', port: 5601, remote: '192.168.1.21:49731', local: '192.168.1.10:5601' });
+      p.f.detectChanges();
+      expect(p.cmp.hit()).toBeTruthy();
+      btn(p.el, 'Change')!.click(); p.f.detectChanges();
+      await type(p, '6100');
+      expect(b.diag.scanPort).toHaveBeenCalledWith({ scanId: 'scan-1', port: 6100, previous: 5601 });
+      expect(p.cmp.port()).toBe(6100);
+      expect(p.cmp.hit()).toBeNull();
+      expect(p.cmp.portEditing()).toBe(false);
+      expect(p.el.textContent).toContain('Waiting for the analyzer to connect');
+      expect(Array.from(p.el.querySelectorAll('.pf-cw-instr__v')).map((v) => v.textContent!.trim())).toEqual(['192.168.1.10', '6100']);
+      // auto mode keeps working on the chosen port: it connects, we detect, create + pair with the preset
+      b.emit({ scanId: 'scan-1', kind: 'detect', port: 6100, remote: '192.168.1.21:5', messages: 1,
+        detect: { protocol: 'hl7', link: 'mllp', confidence: 0.9, reasons: [], proposed: { link: { type: 'mllp' }, parser: { type: 'hl7' } as never } },
+        guess: { make: 'Medonic', model: 'M51', profileKey: 'medonic-m51-cbc', label: 'Medonic M51' } });
+      p.f.detectChanges();
+      expect(p.cmp.port()).toBe(6100);
+      p.cmp.primary(); await flush(); p.cmp.primary(); await flush();
+      const body = p.http.post.mock.calls.find((c) => c[0] === '/api/instruments')![1] as { config: { transport: object; parser: { type: string } } };
+      expect(body.config.transport).toEqual({ type: 'tcp-server', port: 6100, host: '0.0.0.0' });
+      expect(body.config.parser.type).toBe('hl7');
+    });
+
+    it('refusals (another analyzer here / another program, named) keep the previous port and say so in plain words', async () => {
+      const { b, p } = await onFind();
+      btn(p.el, 'Change')!.click(); p.f.detectChanges();
+      await type(p, '5100');
+      expect(p.cmp.port()).toBe(5603);
+      expect(p.cmp.portEditing()).toBe(true);
+      expect(p.el.querySelector('.pf-cw-port')!.textContent).toContain('used by the analyzer "Medonic M51" on this PC');
+      expect(p.el.querySelector('.pf-cw-port__in')!.classList.contains('pf-input--error')).toBe(true);
+      await type(p, '8080');
+      expect(p.el.querySelector('.pf-cw-port')!.textContent).toContain('used by Skype (PID 4410)');
+      expect(p.cmp.port()).toBe(5603);
+      expect(Array.from(p.el.querySelectorAll('.pf-cw-instr__v')).map((v) => v.textContent!.trim())[1]).toBe('5603');
+      expect(b.diag.scanStop).not.toHaveBeenCalled();
+    });
+
+    it('bad text never reaches main: empty, letters, decimals, 0, 65536', async () => {
+      const { b, p } = await onFind();
+      btn(p.el, 'Change')!.click(); p.f.detectChanges();
+      for (const v of ['', 'abc', '80.5', '0', '65536', '-5']) {
+        await type(p, v);
+        expect(p.el.querySelector('.pf-cw-port .pf-cw-warn')).toBeTruthy();
+      }
+      expect(b.diag.scanPort).not.toHaveBeenCalled();
+    });
+
+    it('below 1024 works but warns (admin; firewall fix cannot open it)', async () => {
+      const { p } = await onFind();
+      btn(p.el, 'Change')!.click(); p.f.detectChanges();
+      await type(p, '502');
+      expect(p.cmp.port()).toBe(502);
+      expect(p.el.textContent).toContain('may need Prefrontal to run as administrator');
+    });
+
+    it('an older desktop without scanPort says to update, changes nothing', async () => {
+      const b = fakeDiag();
+      delete (b.diag as { scanPort?: unknown }).scanPort;
+      const p = render(b.api);
+      await flush(); p.f.detectChanges();
+      p.cmp.primary(); await flush(); p.f.detectChanges();
+      btn(p.el, 'Change')!.click(); p.f.detectChanges();
+      await type(p, '6100');
+      expect(p.cmp.port()).toBe(5603);
+      expect(p.el.textContent).toContain('Update the desktop app');
+    });
+
+    it('firewall: a rule that does not open the chosen port is re-checked and Fix is offered; the fix names the new port', async () => {
+      const snap: DiagSnapshot = { ...SNAP, firewall: { supported: true, blockRules: 0, ourRule: true, ourRulePorts: ['5599-5610'] }, problems: [] };
+      const { b, p } = await onFind(snap);
+      expect(p.el.textContent).not.toContain('does not open port');
+      btn(p.el, 'Change')!.click(); p.f.detectChanges();
+      await type(p, '6100');
+      expect(b.diag.snapshot).toHaveBeenCalledTimes(2); // re-read for the new port
+      expect(p.el.textContent).toContain('rule for Prefrontal does not open port 6100');
+      btn(p.el, 'Fix with Windows permission')!.click();
+      await flush();
+      expect(b.diag.fixFirewall).toHaveBeenCalled();
+      expect((b.diag.fixFirewall as ReturnType<typeof vi.fn>).mock.calls[0][0].ports).toContain(6100);
+    });
   });
 });

@@ -103,3 +103,8 @@
 .pf-cw-status[data-tone='amber'] { --pf-cw-tone: var(--amber-text, #b45309); }
 .pf-cw-status[data-tone='red'] { --pf-cw-tone: var(--red-text, #b91c1c); }
 .pf-cw-status__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-cw-tone); }
+
+.pf-cw-instr__pv { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-cw-port { display: flex; flex-direction: column; gap: 6px; }
+.pf-cw-port__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pf-cw-port__in { width: 128px; min-height: 44px; font-size: 16px; }

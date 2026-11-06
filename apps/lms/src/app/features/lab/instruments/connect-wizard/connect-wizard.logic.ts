@@ -70,8 +70,10 @@ export function fixableProblems(problems: readonly DiagProblem[] | null | undefi
   return (problems ?? []).filter((p) => p.fix === 'firewall');
 }
 
-/** Ports the desktop app may open for analyzers (netdiag.js PORT_RANGE). */
+/** The usual analyzer range (netdiag.js PORT_RANGE). Any typed port ≥ 1024 may join the firewall rule too (a fixed analyzer port). */
 export const ANALYZER_PORT_RANGE = { start: 5599, end: 5650 } as const;
+/** Remote-admin / database ports the rule never opens (netdiag.js SENSITIVE_PORTS). */
+export const SENSITIVE_PORTS: ReadonlySet<number> = new Set([1433, 1434, 1521, 2049, 2375, 2376, 3306, 3389, 5432, 5900, 5985, 5986, 6379, 9200, 11211, 27017]);
 /** Card names the desktop app will pass to Windows (netdiag.js ALIAS_RE). */
 const ALIAS_RE = /^[A-Za-z0-9 _.()#-]{1,80}$/;
 
@@ -125,7 +127,7 @@ export interface FirewallFixPlan {
  */
 export function firewallFixPlan(snap: DiagSnapshot | null, adapterName: string | null, ports: readonly number[]): FirewallFixPlan {
   const card = (snap?.adapters ?? []).find((a) => a.name === adapterName) ?? null;
-  const list = [...new Set(ports.filter((p) => Number.isInteger(p) && p >= ANALYZER_PORT_RANGE.start && p <= ANALYZER_PORT_RANGE.end))].sort((a, b) => a - b);
+  const list = [...new Set(ports.filter((p) => Number.isInteger(p) && p >= 1024 && p <= 65535 && !SENSITIVE_PORTS.has(p)))].sort((a, b) => a - b);
   const subnets = analyzerSubnets(card);
   const prof = card ? (snap?.profiles ?? []).find((p) => p.alias === card.name) : undefined;
   const wantsFlip = !!card && !!prof && /^public$/i.test(prof.category ?? '') && !/^internet$/i.test((prof.ipv4 ?? '').trim()) && !card.gateway;
@@ -241,4 +243,25 @@ export function checklist(i: ChecklistInput): CheckItem[] {
     });
   }
   return items;
+}
+
+/** What the person typed as the analyzer's fixed port: a whole number 1–65535, said in plain words when it is not. */
+export function checkPortText(text: string): { port: number | null; error?: string; warning?: string } {
+  const t = String(text ?? '').trim();
+  if (!t) return { port: null, error: 'Type the port number.' };
+  if (!/^\d{1,5}$/.test(t)) return { port: null, error: 'A port is a whole number from 1 to 65535 — digits only.' };
+  const port = Number(t);
+  if (port < 1 || port > 65535) return { port: null, error: 'A port is a whole number from 1 to 65535.' };
+  if (port < 1024) return { port, warning: 'Ports below 1024 may need Prefrontal to run as administrator, and the firewall fix cannot open them.' };
+  return { port };
+}
+
+/** Mirror of netdiag.js rulePortsCover: does our firewall rule's port list include `port`? Unknown → true (never nag without data). */
+export function firewallCoversPort(fw: { supported?: boolean; ourRule?: boolean; ourRulePorts?: string[] | null } | null | undefined, port: number | null): boolean {
+  if (!fw || !fw.supported || !fw.ourRule || !port || !Array.isArray(fw.ourRulePorts)) return true;
+  return fw.ourRulePorts.some((t) => {
+    if (/^any$/i.test(t)) return true;
+    const [lo, hi] = t.split('-').map(Number);
+    return port >= lo && port <= (hi == null || Number.isNaN(hi) ? lo : hi);
+  });
 }

@@ -379,6 +379,8 @@ export interface DiagFirewall {
   profiles?: DiagProfile[];
   blockRules?: number;
   ourRule?: boolean;
+  /** Local ports our rule opens ("5599", "5603-5610", "Any"); null / absent = could not be read. */
+  ourRulePorts?: string[] | null;
 }
 export interface DiagSnapshot {
   platform: string;
@@ -402,6 +404,9 @@ export interface DiagScanEvent {
   messages?: number;
   error?: string;
 }
+export type DiagScanSetPortResult =
+  | { ok: true; port: number; ports: number[]; warning?: string }
+  | { ok: false; error: string; code?: string };
 export interface DiagScanStart { scanId: string | null; ports: { port: number; ok: boolean; error?: string }[] }
 export interface DiagScanPort {
   port: number; remote: string | null; local: string | null; connectedAt: string | null; messages: number;
@@ -421,6 +426,9 @@ export interface ElectronInstrumentsDiagApi {
   arp(): Promise<DiagArpEntry[]>;
   probe(p: { address: string; ports?: number[] }): Promise<DiagProbeResult>;
   scanStart(p: { ports: number[] }): Promise<DiagScanStart | { error: string }>;
+  /** The analyzer's host port is FIXED: listen on `port` (the old `previous`
+   *  one closes only after the new one really opened; a refusal leaves it). */
+  scanPort?(p: { scanId: string; port: number; previous?: number | null }): Promise<DiagScanSetPortResult>;
   scanStop(scanId: string): Promise<{ ports: DiagScanPort[] }>;
   onScan(cb: (e: DiagScanEvent) => void): () => void;
 }

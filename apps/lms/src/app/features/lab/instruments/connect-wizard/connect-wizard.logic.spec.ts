@@ -35,16 +35,16 @@ describe('connect wizard — this PC', () => {
     expect(pickAnalyzerCard([])).toBeNull();
   });
 
-  it('the fix plan says exactly what changes before Windows asks — the picked card, its /24, the analyzer port range', () => {
+  it('the fix plan says exactly what changes before Windows asks — the picked card, its /24, the analyzer ports (range or typed)', () => {
     expect(fixableProblems(SNAP.problems).map((p) => p.code)).toEqual(['public_network', 'firewall_block_rule']);
-    const plan = firewallFixPlan(SNAP, 'Ethernet 2', [5603, 5599, 80, 6000]);
+    const plan = firewallFixPlan(SNAP, 'Ethernet 2', [5603, 5599, 80, 6000, 3389]);
     expect(plan.adapter).toBe('Ethernet 2');
     expect(plan.aliases).toEqual(['Ethernet 2']);
     expect(plan.subnets).toEqual(['192.168.1.0/24']);
-    expect(plan.ports).toEqual([5599, 5603]);
+    expect(plan.ports).toEqual([5599, 5603, 6000]); // a typed fixed port joins; <1024 and RDP never do
     expect(plan.lines).toEqual([
       'Remove the Windows Firewall rules that block Prefrontal.',
-      'Let analyzers on 192.168.1.x (Ethernet 2) reach Prefrontal on ports 5599, 5603 — only Prefrontal, nothing else.',
+      'Let analyzers on 192.168.1.x (Ethernet 2) reach Prefrontal on ports 5599, 5603, 6000 — only Prefrontal, nothing else.',
       'Set Ethernet 2 to a Private network.',
       'Windows will ask for permission once. Nothing else on this PC changes.',
     ]);
@@ -129,5 +129,27 @@ describe('connect wizard — checklist', () => {
     expect(c.find((x) => x.id === 'firewall')).toEqual({ id: 'firewall', label: 'Firewall', ok: null, detail: 'macOS asks by itself…' });
     const d = checklist({ snapshot: SNAP, card: '192.168.1.10', mode: 'dial', port: 5100 });
     expect(d.map((x) => x.id)).toEqual(['card', 'cards', 'connected', 'protocol', 'created']);
+  });
+});
+
+import { checkPortText, firewallCoversPort } from './connect-wizard.logic';
+describe('analyzer fixed port', () => {
+  it('checkPortText: whole numbers 1–65535 only; <1024 warns', () => {
+    expect(checkPortText(' 5100 ')).toEqual({ port: 5100 });
+    expect(checkPortText('1023').warning).toMatch(/administrator/);
+    expect(checkPortText('65535').port).toBe(65535);
+    for (const v of ['', ' ', 'abc', '80.5', '0', '65536', '-1', '1e3', '１２３']) {
+      const r = checkPortText(v); expect(r.port).toBeNull(); expect(r.error).toBeTruthy();
+    }
+  });
+  it('firewallCoversPort mirrors netdiag: ranges, Any, unknown → never nag', () => {
+    const fw = { supported: true, ourRule: true, ourRulePorts: ['5599', '5603-5610'] };
+    expect(firewallCoversPort(fw, 5605)).toBe(true);
+    expect(firewallCoversPort(fw, 6100)).toBe(false);
+    expect(firewallCoversPort({ ...fw, ourRulePorts: ['Any'] }, 6100)).toBe(true);
+    expect(firewallCoversPort({ ...fw, ourRulePorts: null }, 6100)).toBe(true);
+    expect(firewallCoversPort({ ...fw, ourRule: false }, 6100)).toBe(true);
+    expect(firewallCoversPort({ supported: false }, 6100)).toBe(true);
+    expect(firewallCoversPort(null, 6100)).toBe(true);
   });
 });
