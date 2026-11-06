@@ -1,9 +1,10 @@
 import { aliasByCatalogKey, memberDisplayName, memberInfoIndex } from './profile-member-names';
 
 describe('profile-member-names', () => {
+  // The server answers with the authored id (memberId) AND the resolved row's id (testId).
   const infos = memberInfoIndex([
-    { testId: 'master-crp', catalogKey: 'K-CRP', name: 'CRP', status: 'active' },
-    { testId: 'nokey', catalogKey: null, status: 'missing' },
+    { memberId: 'master-crp', testId: 'ovr-crp', catalogKey: 'K-CRP', name: 'CRP', status: 'active' },
+    { memberId: 'nokey', testId: 'nokey', catalogKey: null, status: 'missing' },
   ]);
 
   it('aliases a stored master id to the list row with the same catalog key', () => {
@@ -14,6 +15,15 @@ describe('profile-member-names', () => {
     expect(out.has('nokey')).toBe(false);
     expect(out.get('local-crp')).toBe(local);
     expect(byId.size).toBe(1);   // input untouched
+  });
+
+  it('indexes by the authored id first, the resolved id second; an older server pairs by position', () => {
+    expect(infos.get('master-crp')?.name).toBe('CRP');
+    expect(infos.get('ovr-crp')?.name).toBe('CRP');
+    const old = memberInfoIndex([{ testId: 'ovr-a', name: 'A' }, { testId: 'ovr-b', name: 'B' }], ['m-a', 'm-b']);
+    expect(old.get('m-b')?.name).toBe('B');
+    // lengths differ (an item without an id): no guessing
+    expect(memberInfoIndex([{ testId: 'x' }], ['a', 'b']).has('a')).toBe(false);
   });
 
   it('names: list row, family line, server row, then a plain reason', () => {

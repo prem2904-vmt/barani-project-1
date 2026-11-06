@@ -16,7 +16,10 @@
 export type MemberStatus = 'active' | 'inactive' | 'family_line' | 'missing';
 
 export interface ProfileMemberInfo {
+  /** The RESOLVED row's id (the tenant's override row in reference mode). */
   testId: string;
+  /** The id AS AUTHORED in the profile's items[] — what the editor holds. Absent on an older server. */
+  memberId?: string | null;
   catalogKey?: string | null;
   name?: string | null;
   code?: string | null;
@@ -33,10 +36,27 @@ export interface MemberListRow {
   testCode?: string | null;
 }
 
-/** testId → the server's row for it. */
-export function memberInfoIndex(infos: readonly ProfileMemberInfo[] | null | undefined): Map<string, ProfileMemberInfo> {
+/**
+ * stored member id → the server's row for it. The server answers in authored
+ * order with BOTH ids: `memberId` (as stored in the profile) and `testId`
+ * (the resolved row — a different id whenever the lab customised the member).
+ * Indexing by `testId` alone left every customised member unmatched, so the
+ * editor called it unknown. Keyed by the authored id first; the resolved id
+ * stays as a second key (an id the picker handed out from the lists). An older
+ * server without `memberId`: pair by position with the ids the profile was
+ * loaded with (same order, same length) when `authoredIds` is given.
+ */
+export function memberInfoIndex(
+  infos: readonly ProfileMemberInfo[] | null | undefined,
+  authoredIds?: readonly string[],
+): Map<string, ProfileMemberInfo> {
   const m = new Map<string, ProfileMemberInfo>();
-  for (const i of infos ?? []) if (i?.testId) m.set(i.testId, i);
+  const rows = (infos ?? []).filter(Boolean);
+  const hasAuthored = rows.some(i => !!i.memberId);
+  if (!hasAuthored && authoredIds && authoredIds.length === rows.length)
+    rows.forEach((i, ix) => { if (authoredIds[ix]) m.set(authoredIds[ix], i); });
+  for (const i of rows) if (i.memberId) m.set(i.memberId, i);
+  for (const i of rows) if (i.testId && !m.has(i.testId)) m.set(i.testId, i);
   return m;
 }
 

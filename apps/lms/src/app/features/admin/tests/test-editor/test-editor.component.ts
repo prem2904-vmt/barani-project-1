@@ -1240,16 +1240,24 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly _memberInfos = signal<Map<string, ProfileMemberInfo>>(new Map());
   readonly membersState = signal<MembersState>('none');
   private membersLoadedFor = '';
+  /** The member ids the profile was LOADED with, in stored order — pairs with an older server's answer. */
+  private _loadedMemberIds: string[] = [];
   private readonly _membersLoader = effect(() => {
     const d = this._draft();
     const id = d.type === 'profile' || d.type === 'package' ? d.id ?? '' : '';
     if (!id || id === this.membersLoadedFor) return;
     this.membersLoadedFor = id;
     this.membersState.set('loading');
-    untracked(() => this.api.get<ProfileMemberInfo[]>(`/api/tests/${id}/members`).subscribe({
+    untracked(() => this.loadMembers(id));
+  });
+
+  /** (Re)ask the server who the saved members are. Also called after every save:
+   *  the saved items[] changed, and the answer is the one source of names. */
+  private loadMembers(id: string) {
+    this.api.get<ProfileMemberInfo[]>(`/api/tests/${id}/members`).subscribe({
       next: rows => {
         if (this.membersLoadedFor !== id) return;
-        this._memberInfos.set(memberInfoIndex(Array.isArray(rows) ? rows : []));
+        this._memberInfos.set(memberInfoIndex(Array.isArray(rows) ? rows : [], this._loadedMemberIds));
         this.membersState.set('loaded');
       },
       error: () => {
@@ -1257,8 +1265,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         this._memberInfos.set(new Map());
         this.membersState.set('none');
       },
-    }));
-  });
+    });
+  }
 
   memberCalc(t: { calculation?: string | null } | undefined): CalcDef | null {
     return t ? parseCalc(t.calculation) : null;
@@ -2111,6 +2119,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
         const ids: string[] = items
           .map((it: unknown) => typeof it === 'string' ? it : ((it as { testId?: string })?.testId ?? ''))
           .filter((id: string) => id.length > 0);
+        this._loadedMemberIds = ids;
         this._packageItems.set([...new Set(ids)]);
         this._reportOrder.set(readReportOrder(blob) ?? [...new Set(ids)]);
         this.profilePrintPicker.set(t.type === 'profile' && blob.printPicker === true);
@@ -2461,6 +2470,11 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       this.api.patch<Test>(`/api/tests/${d.id}`, changed).subscribe({
         next: t => {
           this._baseline = body;   // saved: the next save diffs against this
+          if (d.type === 'profile' || d.type === 'package') {
+            // The saved members changed: their stored ids pair with the answer, and the answer is the source of names.
+            this._loadedMemberIds = this._packageItems();
+            if (!(!!t?.id && t.id !== d.id)) this.loadMembers(d.id!);
+          }
           // Copy-on-write: the first save of a master test (or of the tenant
           // copy under branch isolation) creates the lab's OWN row with a new
           // id — prices and every later save go to that row.
