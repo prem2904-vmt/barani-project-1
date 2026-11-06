@@ -153,3 +153,14 @@ describe('analyzer fixed port', () => {
     expect(firewallCoversPort(null, 6100)).toBe(true);
   });
 });
+
+describe('port check while listening', () => {
+  const base = { snapshot: null, card: null, mode: 'listen' as const, port: 6100 };
+  const portOk = (i: object) => checklist({ ...base, ...i } as never).find((c) => c.id === 'port')!.ok;
+  it('Passed once this PC listens on it or the analyzer connected; not checked yet otherwise; a real port report wins', () => {
+    expect(portOk({})).toBeNull();
+    expect(portOk({ listening: true })).toBe(true);
+    expect(portOk({ connectedFrom: '192.168.1.21' })).toBe(true);
+    expect(portOk({ portReport: { state: 'busy' }, listening: true })).toBe(false);
+  });
+});

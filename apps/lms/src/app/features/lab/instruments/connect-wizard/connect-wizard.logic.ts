@@ -201,6 +201,8 @@ export interface ChecklistInput {
   card: string | null;
   mode: ConnectMode;
   port: number | null;
+  /** This PC is really listening on `port` (the wizard's own scan has it open). */
+  listening?: boolean;
   portReport?: { state: string; message?: string } | null;
   connectedFrom?: string | null;
   detect?: DetectResult | null;
@@ -221,7 +223,7 @@ export function checklist(i: ChecklistInput): CheckItem[] {
   items.push({ id: 'cards', label: 'Only one network card on that network', ok: snap ? !same : null, detail: same ? same.message : undefined });
   if (i.mode === 'listen') {
     const pr = i.portReport;
-    items.push({ id: 'port', label: `Port ${i.port ?? '—'} is free for the analyzer`, ok: pr ? pr.state === 'free' || pr.state === 'ours' : null, detail: pr?.message });
+    items.push({ id: 'port', label: `Port ${i.port ?? '—'} is free for the analyzer`, ok: pr ? pr.state === 'free' || pr.state === 'ours' : (i.listening || i.connectedFrom ? true : null), detail: pr?.message });
     if (fw && fw.supported) {
       items.push({ id: 'firewall', label: 'Windows Firewall lets the analyzer in', ok: !!fw.ourRule && !fw.blockRules, detail: fw.blockRules ? 'A rule is blocking Prefrontal' : !fw.ourRule ? 'No rule for the analyzer ports yet' : undefined });
       const pub = (snap?.profiles ?? []).filter((p) => /^public$/i.test(p.category ?? ''));

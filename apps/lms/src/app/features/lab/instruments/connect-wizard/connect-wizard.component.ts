@@ -140,7 +140,7 @@ export class ConnectWizardComponent {
 
   readonly checks = computed<CheckItem[]>(() => checklist({
     snapshot: this.snap(), card: this.card(), mode: this.mode(), port: this.mode() === 'listen' ? this.port() : this.dialPort(),
-    portReport: this.portState(),
+    portReport: this.portState(), listening: this.scanning() && !!this.port() && this.scanList().includes(this.port()!),
     connectedFrom: this.hit() ? remoteHost(this.hit()!.remote) : null,
     detect: this.detect(), guess: this.guess(),
     created: !!this.created(), paired: this.paired(),
