@@ -2812,3 +2812,9 @@ html.device-touch {
     animation: none !important;
   }
 }
+
+/* OPS-9: Edge draws its own reveal / clear buttons inside inputs; ours are the only ones. */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
