@@ -252,6 +252,16 @@ describe('Connect an analyzer — wizard', () => {
       expect(primaries(p.el)).toBe(1);
     });
 
+    it('checklist: "Port N is free" passes once this PC listens on the chosen port', async () => {
+      const { p } = await onFind();
+      const row = () => Array.from(p.el.querySelectorAll('.pf-cw__main .pf-cw-check, .pf-cw-check')).find((c) => c.textContent!.includes('is free for the analyzer'))!;
+      expect(row().getAttribute('data-ok')).toBe('yes');
+      btn(p.el, 'Change')!.click(); p.f.detectChanges();
+      await type(p, '6100');
+      expect(row().textContent).toContain('Port 6100 is free');
+      expect(row().getAttribute('data-ok')).toBe('yes');
+    });
+
     it('a valid port: main opens it, live wait carries on, hit resets, the instrument is saved with that port', async () => {
       const { b, p } = await onFind();
       b.emit({ scanId: 'scan-1', kind: 'connected', port: 5601, remote: '192.168.1.21:49731', local: '192.168.1.10:5601' });
