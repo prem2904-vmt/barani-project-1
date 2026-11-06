@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   AGE_LIMITS, dobFromAge, identityKind, isContactNumberField, validateAadhaar, validateAadhaarLast4,
-  validateAbhaNumber, validateAge, validateEmail, verhoeffValid,
+  validateAbhaNumber, validateAge, validateEmail, verhoeffValid, isPersonNameField, validatePersonName,
 } from './patient-fields';
 import { validateFieldValue } from './validate';
 
@@ -124,5 +124,25 @@ describe('patient-fields — age', () => {
     expect(dobFromAge(40, 'years', now)).toBe('1986-09-27');
     expect(dobFromAge(3, 'months', now)).toBe('2026-06-27');
     expect(dobFromAge(10, 'days', now)).toBe('2026-09-17');
+  });
+});
+
+describe('OPS-30 person-name fields', () => {
+  it('accepts letters of any script, spaces and . \' -', () => {
+    for (const n of ['Prem', 'Mary-Ann', "O'Neil", 'Dr. K R', 'அருண்', 'José', 'Müller'])
+      expect(validatePersonName(n), n).toBeNull();
+    expect(validatePersonName('')).toBeNull();
+  });
+  it('rejects digits and symbols', () => {
+    for (const n of ['Prem1', '123', 'a@b', 'x_y', '-Prem', '#'])
+      expect(validatePersonName(n), n).toMatch(/letters only/);
+  });
+  it('applies to the core name fields only, not custom text', () => {
+    expect(isPersonNameField({ type: 'text', name: 'first_name' })).toBe(true);
+    expect(isPersonNameField({ type: 'text', name: 'guardian_name' })).toBe(true);
+    expect(isPersonNameField({ type: 'text', name: 'barcode' })).toBe(false);
+    expect(validateFieldValue({ type: 'text', name: 'first_name' }, 'Ab3')).toMatch(/letters only/);
+    expect(validateFieldValue({ type: 'text', name: 'occupation' }, 'Teacher')).toBeNull();
+    expect(validateFieldValue({ type: 'text', name: 'custom_note' }, 'Ab3 #1')).toBeNull();
   });
 });

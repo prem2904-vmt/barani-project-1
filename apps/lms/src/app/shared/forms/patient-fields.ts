@@ -22,6 +22,24 @@ export function isContactNumberField(f: { type?: string; name?: string; title?: 
   return /phone|mobile|contact|whats\s?app|(^|[^a-z])tel([^a-z]|$)/i.test(`${f.name ?? ''} ${f.title ?? ''}`);
 }
 
+/** Registration text fields that hold a person's name or a job title (by field
+ *  name): letters only. Free-form custom fields are NOT in this list. */
+const PERSON_NAME_FIELDS = new Set([
+  'first_name', 'middle_name', 'last_name', 'fathers_name', 'father_name', 'guardian_name', 'occupation',
+]);
+export function isPersonNameField(f: { type?: string; name?: string } | null | undefined): boolean {
+  if (!f || (f.type ?? 'text') !== 'text') return false;
+  return PERSON_NAME_FIELDS.has((f.name ?? '').toLowerCase());
+}
+
+/** Letters (any script), spaces and . ' - only. Mirrored by the mw
+ *  PatientInputValidator.NameError. */
+export function validatePersonName(v: unknown): string | null {
+  const s = String(v ?? '').trim();
+  if (!s) return null;
+  return /^[\p{L}\p{M}][\p{L}\p{M} .'\u2019-]*$/u.test(s) ? null : 'Use letters only (spaces, . \' and - are fine)';
+}
+
 export type IdentityKind = 'abha' | 'aadhaar' | 'aadhaar_last4';
 
 /** Which identity number a TEXT field holds, by its name (same names the

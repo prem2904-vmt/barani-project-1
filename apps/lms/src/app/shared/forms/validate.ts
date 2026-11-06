@@ -5,7 +5,7 @@
 // and result-entry (blocks submission on failure).
 
 import { FormField, FormFieldType, ValidationConfig } from './form-field.model';
-import { identityKind, isContactNumberField, validateEmail, validateIdentity } from './patient-fields';
+import { identityKind, isContactNumberField, isPersonNameField, validateEmail, validateIdentity, validatePersonName } from './patient-fields';
 import { indianNational } from '../utils/indian-phone';
 
 export interface CountryPhoneRule {
@@ -90,6 +90,10 @@ export function validateFieldValue(field: ValidatableField, value: unknown): str
   if (field.type === 'email') {
     const emailErr = validateEmail(value);
     if (emailErr) return emailErr;
+  }
+  if (isPersonNameField(field)) {
+    const nameErr = validatePersonName(value);
+    if (nameErr) return nameErr;
   }
   const idKind = identityKind(field);
   if (idKind) {
