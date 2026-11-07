@@ -244,6 +244,11 @@
         <pf-segmented class="pf-tm-status" data-status-filter size="sm" [options]="statusOptions()"
                       [value]="statusFilter()" (valueChange)="statusFilter.set($event)"
                       aria-label="Filter by status"></pf-segmented>
+        <!-- Outsourcing filter (OPS-112): the Outsourced-to column shows the partner. -->
+        <pf-segmented class="pf-tm-status" data-outsourcing-filter size="sm" [options]="outsourcingOptions()"
+                      [value]="outsourcedOnly() ? 'outsourced' : 'all'"
+                      (valueChange)="outsourcedOnly.set($event === 'outsourced')"
+                      aria-label="Filter by outsourcing"></pf-segmented>
         @if (narrow() && !theme.isNewDesign()) {
           <button type="button" class="pf-btn pf-btn--secondary pf-tm-deptbtn" (click)="openDeptSheet()"
                   aria-haspopup="dialog" [attr.aria-expanded]="deptSheetOpen()">Departments</button>

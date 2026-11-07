@@ -53,6 +53,7 @@ import { AssistantPanelComponent } from '../../../../shared/assistant/assistant-
 import type { AssistantPageContext } from '../../../../shared/assistant/assistant.models';
 import { TM_ALL_PERMS } from '../../../../shared/utils/tm-proposals';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
+import { lineDefaultPartners, type PartnerRow } from '../../../../shared/utils/order-outsourcing';
 import { SegmentedComponent, SegmentedOption } from '../../../../shared/primitives/segmented.component';
 import { webPointerSignal } from '../../../../shared/utils/pointer-mode';
 import { SKELETON_KIT } from '../../../../shared/primitives/skeleton-kit.component';
@@ -444,9 +445,33 @@ export class TestsComponent implements OnInit {
     ];
   });
 
+  /** Outsourcing filter (OPS-112): everything, or only rows sent to a partner
+   *  lab — the test's own partner, or (profile / package) a member's. */
+  readonly outsourcedOnly = signal(false);
+  /** Referral labs, for the partner NAME (best-effort; "Partner lab" otherwise). */
+  readonly partners = signal<PartnerRow[]>([]);
+  private partnerIdsOf(t: Test): string[] {
+    const byId = this.byId();
+    return lineDefaultPartners(t as never, id => byId.get(id) as never);
+  }
+  /** "Quest, Metropolis" — read-only text for the Outsourced column / tooltip. */
+  readonly partnerLabel = (t: Test | undefined | null): string => {
+    if (!t) return '';
+    const names = this.partnerIdsOf(t).map(id => this.partners().find(p => p.id === id)?.name ?? 'Partner lab');
+    return names.join(', ');
+  };
+  readonly outsourcedCount = computed(() => this.ofType().filter(t => this.partnerIdsOf(t).length > 0).length);
+  readonly outsourcingOptions = computed<SegmentedOption<'all' | 'outsourced'>[]>(() => [
+    { value: 'all', label: 'All sources' },
+    { value: 'outsourced', label: 'Outsourced only', count: this.outsourcedCount(),
+      iconPath: ['M7 17 17 7', 'M8 7h9v9'] },
+  ]);
+
   readonly typeTests = computed(() => {
     const st = this.statusFilter();
-    return this.ofType().filter(t => st === 'all' || (st === 'active') === isTestEnabled(t));
+    const out = this.outsourcedOnly();
+    return this.ofType().filter(t => (st === 'all' || (st === 'active') === isTestEnabled(t))
+      && (!out || this.partnerIdsOf(t).length > 0));
   });
 
   readonly search = signal('');
@@ -526,6 +551,7 @@ export class TestsComponent implements OnInit {
     const topType = this._type();
     const dep = this._selectedDept();
     let roots = all.filter(t => t.type === topType);
+    if (this.outsourcedOnly()) roots = roots.filter(t => this.partnerIdsOf(t).length > 0);
     if (dep) roots = roots.filter(t => this.deptKeys(t).includes(dep));
     if (q) {
       roots = roots.filter(t =>
@@ -599,7 +625,7 @@ export class TestsComponent implements OnInit {
 
   protected phoneTrim(cols: ColDef<TestRow>[]): ColDef<TestRow>[] {
     if (!this.isPhone) return cols;
-    const drop = new Set(['shortName', 'section', 'tubeColor', 'unit', 'tatHours', 'status', 'standardCode']);
+    const drop = new Set(['shortName', 'section', 'tubeColor', 'unit', 'tatHours', 'status', 'standardCode', 'outsourced']);
     return cols.filter(c => !drop.has(String(c.field ?? c.colId ?? '')));
   }
 
@@ -610,6 +636,7 @@ export class TestsComponent implements OnInit {
 
   readonly colDefs = computed<ColDef<TestRow>[]>(() => {
     const view = this._type();
+    this.partners();   // names resolve once the referral labs have loaded
 
     if (view === 'individual') {
       return [
@@ -627,6 +654,7 @@ export class TestsComponent implements OnInit {
         // (ND §5); the full name stays in the tooltip.
         { headerName: 'Name', field: 'name', editable: true, width: 250, minWidth: 200, pinned: 'left',
           ...WRAP2, cellRenderer: this.plainNameRenderer, tooltipField: 'name' },
+        this.outsourcedColDef(),
         this.originColDef(),
         { headerName: 'Short', field: 'shortName', editable: true, flex: 1, minWidth: 110 },
         { headerName: 'Section', field: 'section', editable: true, flex: 1, minWidth: 120 },
@@ -662,6 +690,7 @@ export class TestsComponent implements OnInit {
         valueGetter: p => p.data?.name,
       },
       { headerName: 'Code', field: 'testCode', minWidth: 120, maxWidth: 160, sortable: false, filter: false, sort: null, pinned: 'left', cellRenderer: this.codeCellRenderer },
+      { ...this.outsourcedColDef(), sortable: false, filter: false },
       { ...this.originColDef(), sortable: false, filter: false },
       {
         headerName: 'Kind', colId: 'kind', minWidth: 110, maxWidth: 140, sortable: false, filter: false,
@@ -723,6 +752,15 @@ export class TestsComponent implements OnInit {
 
   /** Master / Customised / Branch / Own test chip (+ a dot when a Test
    *  Master update is waiting for this row). */
+  /** Partner lab the test is sent to (Test Master default) — read-only; set in the test editor. */
+  private outsourcedColDef(): ColDef<TestRow> {
+    return {
+      headerName: 'Outsourced to', colId: 'outsourced', minWidth: 160, flex: 1.2, editable: false, ...WRAP2,
+      valueGetter: p => this.partnerLabel(p.data) || '',
+      tooltipValueGetter: p => this.partnerLabel(p.data) || undefined,
+    };
+  }
+
   private originColDef(): ColDef<TestRow> {
     return {
       headerName: 'Origin', colId: 'origin', minWidth: 120, maxWidth: 150, editable: false,
@@ -1005,6 +1043,7 @@ export class TestsComponent implements OnInit {
       if (params['view'] === 'pricing' && this.canEditPrices()) this.pricingView.set(true);
       if (params['view'] === 'pending') { this.wantPending = true; if (this.pendingOn()) this.openPendingView(); }
     });
+    this.loadPartners();
     void this.beta.ensureLoaded().then(() => {
       if (!this.pendingOn()) return;
       this.loadPendingCount();
@@ -1134,6 +1173,13 @@ export class TestsComponent implements OnInit {
     this.listHold.done();
     const cancel = prefetchWhenIdle(TEST_EDITOR_PREFETCH_KEY, loadTestEditor);
     this.destroyRef.onDestroy(cancel);
+  }
+
+  private loadPartners() {
+    this.api.get<PartnerRow[]>('/api/referral-labs?includeInactive=true').subscribe({
+      next: rows => this.partners.set((rows ?? []).map(r => ({ id: r.id, name: r.name, isActive: r.isActive ?? true }))),
+      error: () => { /* names fall back to "Partner lab" */ },
+    });
   }
 
   private loadDepartments() {
