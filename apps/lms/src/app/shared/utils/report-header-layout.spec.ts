@@ -226,6 +226,20 @@ describe('header layout — address as typed, wrap & overflow', () => {
     expect(item(below, 'address').box.y).toBeGreaterThan(item(below, 'accentBar').y);
   });
 
+  it('OPS-81: a taller logo pushes the accent bar and the body below it; a normal logo moves nothing', () => {
+    const normal = pdfOf(tpl({}, { v: 1, items: {} })).layout;
+    expect(item(normal, 'accentBar').y).toBeCloseTo(28 + 54, 3);
+    const tall = pdfOf(tpl({}, setItem(null, 'logo', { size: 30 }))).layout;
+    const logo = item(tall, 'logo');
+    expect(logo.box.h).toBeGreaterThan(80);
+    expect(item(tall, 'accentBar').y).toBeGreaterThanOrEqual(logo.box.y + logo.box.h);
+    expect(tall.bodyTop).toBeGreaterThan(item(tall, 'accentBar').y);
+    expect(detectIssues(tall).filter(i => i.level === 'warn')).toEqual([]);
+    // A logo the lab dragged BELOW the bar's spot stays below it (same rule as text).
+    const dragged = pdfOf(tpl({}, setItem(null, 'logo', { size: 30, y: 40 }))).layout;
+    expect(item(dragged, 'accentBar').y).toBeCloseTo(28 + 54, 3);
+  });
+
   it('a fixed patient-details top that the letterhead crosses is flagged', () => {
     const cfg: HeaderLayoutConfig = { v: 1, items: {}, bodyTop: 30 };
     const { layout } = pdfOf(tpl({ address: ML }, cfg));

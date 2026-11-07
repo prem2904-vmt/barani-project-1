@@ -2085,8 +2085,11 @@ function computeReportLayout(
     // Text fitting on: the Centered preset's bar sits BELOW its measured text block too
     // (it used to be drawn through the tagline and the contact lines). Off: unchanged.
     if (flow || (STYLE.fit.enabled && preset === 'centered')) {
+      // OPS-81: the logo / NABL badge boxes count too - a taller logo (designer size)
+      // pushes the bar down instead of the bar cutting through the picture. A normal
+      // logo ends well above the bar's spot, so nothing moves for it.
       const texts = items
-        .filter(i => i.kind === 'text' && !i.hidden)
+        .filter(i => (i.kind === 'text' || i.kind === 'logo' || i.kind === 'nabl') && !i.hidden)
         .map(i => (ov(i.id).x !== undefined || ov(i.id).y !== undefined ? { b: i.box, moved: true } : { b: i.defBox, moved: false }))
         .filter(t => !t.moved || t.b.y < LH_TOP + 54)
         .map(t => t.b.y + t.b.h + 4);
@@ -2214,8 +2217,11 @@ function computeReportLayout(
           align: 'right', style: tstyle('labContact'), size: tsz('labContact'), color: BLACK, tone: 'plain' });
     if (practice.email) add({ id: 'email', kind: 'text', label: 'Email', text: practice.email, x: contactX, y: LH_TOP + 28,
           align: 'right', style: tstyle('labContact'), size: tsz('labContact'), color: BLACK, tone: 'plain' });
+    // OPS-81: the address sits on its own line UNDER the logo row; a taller logo (designer size)
+    // pushes it down instead of printing over the picture. Zero for every logo up to the large preset.
+    const underLogo = flow && !logo.hidden && ov('logo').y === undefined ? Math.max(0, logo.defBox.y + logo.defBox.h + 6 - (LH_TOP + 46 + g + lead('labAddress', 8 * fs))) : 0;
     if (practice.address) add({ id: 'address', kind: 'text', label: 'Address', text: practice.address, x: MARGIN_X,
-          y: LH_TOP + 46 + g + lead('labAddress', 8 * fs), align: 'left', style: tstyle('labAddress'), size: tsz('labAddress'),
+          y: LH_TOP + 46 + g + lead('labAddress', 8 * fs) + underLogo, align: 'left', style: tstyle('labAddress'), size: tsz('labAddress'),
           color: TEXT_DIM, tone: 'plain',
           ...(fitOn ? wrapIf(fitWrapW(practice.address, tsz('labAddress'), 'labAddress', 'left', MARGIN_X)) : {}) });
     pill(bar());
