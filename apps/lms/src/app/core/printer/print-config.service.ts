@@ -16,6 +16,10 @@ import { BranchLabConfigService } from '../services/branch-lab-config.service';
 export interface PrintConfig {
   labelWidthMm: number;
   labelHeightMm: number;
+  /** Patient ID card paper (mm), per station. Default 92 x 62 (a CR80-style card with a margin);
+   *  A6/A5/A4 also work - the card scales to fit. */
+  idCardWidthMm: number;
+  idCardHeightMm: number;
   /** Thermal "driver" settings for the label printer. Darkness 1–15 (thicker /
    *  bolder), speed 1–5 (slower = crisper). Extensible — add more knobs here. */
   density: number;
@@ -47,6 +51,8 @@ const KEY = 'pf.printConfig';
 const DEFAULTS: PrintConfig = {
   labelWidthMm: 50,
   labelHeightMm: 20,
+  idCardWidthMm: 92,
+  idCardHeightMm: 62,
   density: 5,
   speed: 2,
   offsetXmm: 0,
@@ -88,6 +94,26 @@ export class PrintConfigService {
       labelWidthMm: Math.min(120, Math.max(10, Math.round((widthMm || 0) * 10) / 10)),
       labelHeightMm: Math.min(120, Math.max(10, Math.round((heightMm || 0) * 10) / 10)),
     });
+  }
+  /** Patient ID card paper size: 0.1 mm precision, 50-220 x 30-300 mm (so A5 / A4 fit too). */
+  setIdCardSize(widthMm: number, heightMm: number): void {
+    const clamp = (v: number, lo: number, hi: number, d: number) => {
+      const n = Number.isFinite(v) && v > 0 ? Math.round(v * 10) / 10 : d;
+      return Math.min(hi, Math.max(lo, n));
+    };
+    this.update({
+      idCardWidthMm: clamp(widthMm, 50, 220, DEFAULTS.idCardWidthMm),
+      idCardHeightMm: clamp(heightMm, 30, 300, DEFAULTS.idCardHeightMm),
+    });
+  }
+  /** The configured ID card paper, always valid (a hand-edited store falls back to the default). */
+  idCardSize(): { w: number; h: number } {
+    const c = this._config();
+    const ok = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
+    return {
+      w: ok(c.idCardWidthMm, 50, 220) ? c.idCardWidthMm : DEFAULTS.idCardWidthMm,
+      h: ok(c.idCardHeightMm, 30, 300) ? c.idCardHeightMm : DEFAULTS.idCardHeightMm,
+    };
   }
   setDocumentPrinter(name: string): void { this.update({ documentPrinter: name }); }
   setLabelRoute(route: LabelRoute): void { this.update({ labelRoute: route === 'system' ? 'system' : 'printer' }); }

@@ -6,6 +6,7 @@ import { PlatformService } from '../../../core/services/platform.service';
 import { PrinterService, SystemPrinter, LabelPrinterState } from '../../../core/printer/printer.service';
 import { PrintConfigService } from '../../../core/printer/print-config.service';
 import { LABEL_SIZE_PRESETS, MIN_X_MM, code128Modules, tubeLabelGeometry } from '../../../core/printer/label-layout';
+import { ID_CARD_SIZE_PRESETS } from '../../../shared/utils/print-label';
 import { LabelData, renderLabelBitmap } from '../../../core/printer/label-render';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -158,6 +159,39 @@ export const PREVIEW_LABEL: LabelData = {
               <span>{{ warn }}</span>
             </p>
           }
+        </div>
+      </section>
+
+      <!-- ── PATIENT ID CARD SIZE ───────────────────────────────── -->
+      <section class="pf-card pf-lp-card" data-card="idcard" aria-labelledby="pf-lp-h-idcard">
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="8.5" cy="11" r="2"/><path d="M14 10h5M14 14h3M5.5 16c.6-1.4 1.7-2 3-2s2.4.6 3 2"/></svg></span>
+          <h3 class="pf-card__label" id="pf-lp-h-idcard">ID card size</h3>
+          <span class="pf-card__note">The paper the patient ID card prints on at this station. The card scales to fit.</span>
+        </div>
+        <div class="pf-card__body pf-lp-body">
+          <div class="pf-field">
+            <span class="pf-field__lbl" id="pf-lp-idpresets">Common sizes</span>
+            <div class="pf-lp-presets" role="group" aria-labelledby="pf-lp-idpresets">
+              @for (p of idCardPresets; track p.label) {
+                <button type="button" class="pf-chip pf-lp-preset pf-num" [attr.aria-pressed]="isIdCardPreset(p)"
+                        (click)="printConfig.setIdCardSize(p.widthMm, p.heightMm)">{{ p.label }}</button>
+              }
+            </div>
+          </div>
+          <div class="pf-lp-sizes">
+            <label class="pf-field pf-lp-size">
+              <span class="pf-field__lbl">Width (mm)</span>
+              <input type="number" min="50" max="220" step="0.1" inputmode="decimal" class="pf-input pf-num" data-field="idcard-width"
+                     [value]="cfg().idCardWidthMm" (change)="onIdCardSize('w', $any($event.target).valueAsNumber)">
+            </label>
+            <span class="pf-lp-times" aria-hidden="true">×</span>
+            <label class="pf-field pf-lp-size">
+              <span class="pf-field__lbl">Height (mm)</span>
+              <input type="number" min="30" max="300" step="0.1" inputmode="decimal" class="pf-input pf-num" data-field="idcard-height"
+                     [value]="cfg().idCardHeightMm" (change)="onIdCardSize('h', $any($event.target).valueAsNumber)">
+            </label>
+          </div>
         </div>
       </section>
 
@@ -469,6 +503,16 @@ export class LabelPrinterComponent implements OnInit, OnDestroy {
 
   readonly cfg = this.printConfig.config;
   readonly sizePresets = LABEL_SIZE_PRESETS;
+  readonly idCardPresets = ID_CARD_SIZE_PRESETS;
+  isIdCardPreset(p: { widthMm: number; heightMm: number }): boolean {
+    const c = this.cfg();
+    return Math.abs(c.idCardWidthMm - p.widthMm) < 0.05 && Math.abs(c.idCardHeightMm - p.heightMm) < 0.05;
+  }
+  onIdCardSize(which: 'w' | 'h', value: number): void {
+    const c = this.cfg();
+    if (which === 'w') this.printConfig.setIdCardSize(value, c.idCardHeightMm);
+    else this.printConfig.setIdCardSize(c.idCardWidthMm, value);
+  }
   isPreset(p: { widthMm: number; heightMm: number }): boolean {
     const c = this.cfg();
     return Math.abs(c.labelWidthMm - p.widthMm) < 0.05 && Math.abs(c.labelHeightMm - p.heightMm) < 0.05;

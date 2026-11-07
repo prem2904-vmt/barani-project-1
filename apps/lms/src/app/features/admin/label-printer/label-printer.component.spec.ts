@@ -126,7 +126,7 @@ describe('Printing (ND) — structure', () => {
 describe('Printing (ND) — every control writes the same station config', () => {
   it('size presets apply and show pressed (neutral chip), incl. inch stock', () => {
     const p = render();
-    const presets = Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-lp-preset'));
+    const presets = Array.from(p.el.querySelectorAll<HTMLButtonElement>('[data-card="label"] .pf-lp-preset'));
     expect(presets.map(b => b.textContent!.trim())).toEqual(['50 × 25 mm', '50 × 20 mm', '38 × 25 mm', '2 × 1 in']);
     expect(presets.every(b => b.classList.contains('pf-chip'))).toBe(true);
     expect(presets[1].getAttribute('aria-pressed')).toBe('true'); // default 50 × 20
@@ -141,6 +141,34 @@ describe('Printing (ND) — every control writes the same station config', () =>
     p.click(presets[3]);
     expect(p.cfg.config().labelWidthMm).toBe(50.8);
     expect(p.cfg.config().labelHeightMm).toBe(25.4);
+  });
+
+  it('ID card size row: presets (default pressed), custom width / height, same kit controls', () => {
+    const p = render();
+    const card = p.$('.pf-card[data-card="idcard"]')!;
+    expect(card).not.toBeNull();
+    expect(card.querySelector('.pf-card__head .pf-card__icon svg')).not.toBeNull();
+    expect(card.querySelector('.pf-card__label')!.textContent).toContain('ID card size');
+    const presets = Array.from(card.querySelectorAll<HTMLButtonElement>('.pf-lp-preset'));
+    expect(presets.map(b => b.textContent!.trim())).toEqual([
+      'Card 92 × 62 mm (default)', 'CR80 86 × 54 mm', 'A6 105 × 148 mm', 'A5 148 × 210 mm', 'A4 210 × 297 mm']);
+    expect(presets[0].getAttribute('aria-pressed')).toBe('true');
+    p.click(presets[1]);
+    expect(p.cfg.config().idCardWidthMm).toBe(86);
+    expect(p.cfg.config().idCardHeightMm).toBe(54);
+    expect(presets[1].getAttribute('aria-pressed')).toBe('true');
+    expect(presets[0].getAttribute('aria-pressed')).toBe('false');
+    p.click(presets[4]);
+    expect(p.cfg.idCardSize()).toEqual({ w: 210, h: 297 });
+    const w = p.$<HTMLInputElement>('input[data-field="idcard-width"]')!;
+    const h = p.$<HTMLInputElement>('input[data-field="idcard-height"]')!;
+    expect(w.classList.contains('pf-input')).toBe(true);
+    w.value = '100'; w.dispatchEvent(new Event('change')); p.f.detectChanges();
+    h.value = '1000'; h.dispatchEvent(new Event('change')); p.f.detectChanges();
+    expect(p.cfg.config().idCardWidthMm).toBe(100);
+    expect(p.cfg.config().idCardHeightMm).toBe(300);          // clamped
+    expect(p.cfg.config().labelWidthMm).toBe(50);              // the tube label is untouched
+    hygiene(p.el);
   });
 
   it('custom width / height inputs set the label size', () => {

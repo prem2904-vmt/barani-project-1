@@ -208,7 +208,7 @@ describe('Admin band — Printing (/printing)', () => {
   it('every section is a card in the body at once (web: no Documents card)', () => {
     const p = make();
     const cards = Array.from(p.body()!.querySelectorAll('.pf-card[data-card]')).map((c) => c.getAttribute('data-card'));
-    expect(cards).toEqual(['label', 'printer', 'quality']);
+    expect(cards).toEqual(['label', 'idcard', 'printer', 'quality']);
     expect(p.body()!.querySelector('.pf-nudge svg')).not.toBeNull();
     expect(p.body()!.querySelector('.pf-lp-label canvas')).not.toBeNull();
   });

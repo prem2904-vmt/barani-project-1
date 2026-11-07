@@ -129,9 +129,27 @@ export const ID_CARD_PRINT_STYLE_ID = 'pf-idcard-print-page';
 /** Card paper (mm): a CR80-style card with a little margin around it. */
 export const ID_CARD_PAGE_MM = { w: 92, h: 62 } as const;
 
-/** Print ONLY this patient ID card, on its own @page, never clipped. */
-export function printIdCard(card: HTMLElement, onDone?: () => void): void {
-  const cleanup = prepareIdCardPrint(card);
+export interface IdCardPaper { w: number; h: number }
+/** The card's own design size (mm): the layout is drawn at this width and scaled to the paper. */
+export const ID_CARD_DESIGN_MM = { w: 86, h: 56 } as const;
+export const ID_CARD_MARGIN_MM = 3;
+/** Quick picks in the printer settings (mm). The first is the default. */
+export const ID_CARD_SIZE_PRESETS: readonly { label: string; widthMm: number; heightMm: number }[] = [
+  { label: 'Card 92 × 62 mm (default)', widthMm: 92, heightMm: 62 },
+  { label: 'CR80 86 × 54 mm', widthMm: 86, heightMm: 54 },
+  { label: 'A6 105 × 148 mm', widthMm: 105, heightMm: 148 },
+  { label: 'A5 148 × 210 mm', widthMm: 148, heightMm: 210 },
+  { label: 'A4 210 × 297 mm', widthMm: 210, heightMm: 297 },
+];
+/** Scale that fits the whole card inside the paper minus its margin (1 at the default paper). */
+export function idCardScale(paper: IdCardPaper): number {
+  const k = Math.min((paper.w - 2 * ID_CARD_MARGIN_MM) / ID_CARD_DESIGN_MM.w, (paper.h - 2 * ID_CARD_MARGIN_MM) / ID_CARD_DESIGN_MM.h);
+  return Math.floor(Math.min(4, Math.max(0.3, k)) * 1000) / 1000;   // floor: never round UP past the paper
+}
+
+/** Print ONLY this patient ID card, on its own @page (the configured paper), never clipped. */
+export function printIdCard(card: HTMLElement, onDone?: () => void, paper: IdCardPaper = ID_CARD_PAGE_MM): void {
+  const cleanup = prepareIdCardPrint(card, paper);
   let finished = false;
   const done = () => {
     if (finished) return;
@@ -146,7 +164,7 @@ export function printIdCard(card: HTMLElement, onDone?: () => void): void {
 
 /** Build the print-only DOM + @page rule for the card; returns the cleanup. Exported so the
  *  layout can be asserted without a print dialog. */
-export function prepareIdCardPrint(card: HTMLElement): () => void {
+export function prepareIdCardPrint(card: HTMLElement, paper: IdCardPaper = ID_CARD_PAGE_MM): () => void {
   const doc = document;
   doc.getElementById(ID_CARD_PRINT_ROOT_ID)?.remove();
   doc.getElementById(ID_CARD_PRINT_STYLE_ID)?.remove();
@@ -166,7 +184,7 @@ export function prepareIdCardPrint(card: HTMLElement): () => void {
 
   const style = doc.createElement('style');
   style.id = ID_CARD_PRINT_STYLE_ID;
-  style.textContent = idCardPrintCss();
+  style.textContent = idCardPrintCss(paper);
   doc.head.appendChild(style);
   doc.body.appendChild(root);
   doc.body.classList.add('pf-printing-idcard');
@@ -180,16 +198,17 @@ export function prepareIdCardPrint(card: HTMLElement): () => void {
 
 /** The print stylesheet for the ID card: its own page, the card in normal flow (no absolute
  *  position, no transform, no overflow clip) and its whole height shown. */
-export function idCardPrintCss(): string {
-  const { w, h } = ID_CARD_PAGE_MM;
+export function idCardPrintCss(paper: IdCardPaper = ID_CARD_PAGE_MM): string {
+  const { w, h } = paper;
+  const k = idCardScale(paper);
   return `
 #${ID_CARD_PRINT_ROOT_ID} { display: none; }
 @media print {
   @page { size: ${w}mm ${h}mm; margin: 0; }
   html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
   body.pf-printing-idcard > *:not(#${ID_CARD_PRINT_ROOT_ID}) { display: none !important; }
-  body.pf-printing-idcard #${ID_CARD_PRINT_ROOT_ID} { display: block !important; position: static !important; transform: none !important; overflow: visible !important; width: ${w}mm; padding: 3mm; box-sizing: border-box; }
-  #${ID_CARD_PRINT_ROOT_ID} > * { position: static !important; transform: none !important; overflow: visible !important; width: 100% !important; max-width: none !important; margin: 0 !important; break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; }
+  body.pf-printing-idcard #${ID_CARD_PRINT_ROOT_ID} { display: block !important; position: static !important; transform: none !important; overflow: visible !important; width: ${w}mm; height: ${h}mm; padding: ${ID_CARD_MARGIN_MM}mm; box-sizing: border-box; display: flex !important; align-items: center; justify-content: center; }
+  #${ID_CARD_PRINT_ROOT_ID} > * { position: static !important; transform: none !important; overflow: visible !important; width: ${ID_CARD_DESIGN_MM.w}mm !important; flex: none; zoom: ${k}; max-width: none !important; margin: 0 !important; break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; }
   #${ID_CARD_PRINT_ROOT_ID}, #${ID_CARD_PRINT_ROOT_ID} * { visibility: visible !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }`;
 }

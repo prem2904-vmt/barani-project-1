@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, ElementRef, Input, ViewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Input, ViewChild, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
+import { PrintConfigService } from '../../../core/printer/print-config.service';
 import { printIdCard } from '../../../shared/utils/print-label';
 import { patientProfileQrUrl } from '../../../shared/utils/patient-strip-qr';
 import { environment } from '../../../../environments/environment';
@@ -97,6 +98,7 @@ export function patientIdCardQrUrl(origin: string, patientId: string): string {
   `]
 })
 export class PatientIdCardComponent {
+  private readonly printConfig = inject(PrintConfigService);
   @Input({ required: true }) patient!: Patient;
 
   get name(): string { return patientDisplayName(this.patient); }
@@ -110,5 +112,5 @@ export class PatientIdCardComponent {
     return patientIdCardQrUrl(typeof location !== 'undefined' ? location.origin : '', this.patient.id);
   }
   @ViewChild('card', { static: true }) private card!: ElementRef<HTMLElement>;
-  print(): void { printIdCard(this.card.nativeElement); }
+  print(): void { printIdCard(this.card.nativeElement, undefined, this.printConfig.idCardSize()); }
 }
