@@ -52,6 +52,9 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { plural } from '../../../shared/utils/plural';
 import { lineDepartment } from '../../../shared/utils/shared-tube';
 import { OrderPriority, comparePriorityThenDue } from '../../../shared/utils/lab-priority';
+import { applyLabSort } from '../../../shared/utils/lab-sort';
+import { LabSortService } from '../../../core/services/lab-sort.service';
+import { LabSortComponent } from '../../../shared/components/lab-sort/lab-sort.component';
 import { WorkLine, enrichWorkLines, groupByPriority, soonestDue } from './my-work.priority';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { busyWhile } from '../../../shared/utils/busy';
@@ -69,6 +72,12 @@ const LAST_DEPT_KEY = 'pf-lms.my-work.last-dept-code';
 const INTAKE_PIN_KEY = 'pf-lms.my-work.intake-pinned';
 /** Collection companion collapsed to its strip (remembered per user). */
 const COLLECT_COLLAPSED_KEY = 'pf-lms.my-work.collect-collapsed';
+
+/** The earliest time any of these lines reached the lab (the row's age). */
+function earliestReceived(lines: OrderTest[]): number | null {
+  const t = lines.map(l => Date.parse(l.subOrder?.receivedAtLab ?? '')).filter(Number.isFinite);
+  return t.length ? Math.min(...t) : null;
+}
 
 type Tab = 'intake' | 'my_work' | 'service_queue' | 'rejected' | 'completed' | 'culture';
 /** Queue groups are the ORDER's priority (Urgent / Normal — the only two
@@ -93,7 +102,7 @@ const COUNTERS: CounterSpec[] = [
 @Component({
   selector: 'pf-my-work',
   standalone: true,
-  imports: [DailyNoComponent, BusyDirective, 
+  imports: [LabSortComponent, DailyNoComponent, BusyDirective, 
     PfKeysDirective,
     SamplePresetDirective,
     TileGridDirective, ZoomSourceDirective,
@@ -171,6 +180,9 @@ const COUNTERS: CounterSpec[] = [
           @if (!isPhone()) {
           <pf-segmented class="pf-mw-seg" [options]="tabOptions()" [value]="tab()" size="sm"
                         (valueChange)="setTab($any($event))"></pf-segmented>
+          }
+          @if (tab() !== 'culture') {
+          <pf-lab-sort class="pf-mw-sort" [scope]="tab() === 'completed' ? 'completed' : 'work'" data-testid="lab-sort-band"></pf-lab-sort>
           }
         </ng-container>
         <!-- Refresh is a quiet button up on the band, not a bar icon (owner):
@@ -640,6 +652,7 @@ const COUNTERS: CounterSpec[] = [
            (the unit of entry) back into this same tech's My Work after a
            mandatory reason, which the backend records in the audit trail. -->
       <div class="pf-mw-completed-hdr">
+        @if (!theme.isNewDesign()) { <pf-lab-sort scope="completed" data-testid="lab-sort-classic"></pf-lab-sort> }
         <p class="pf-mw-completed-cap">Showing {{ completedWindowLabel() }}.</p>
         <pf-segmented class="pf-mw-completed-seg" size="sm" [options]="completedWindowOptions"
                       [value]="completedWindow()" (valueChange)="setCompletedWindow($any($event))"></pf-segmented>
@@ -757,6 +770,9 @@ const COUNTERS: CounterSpec[] = [
         </div>
       }
 
+      @if (!theme.isNewDesign() && tab() !== 'completed') {
+        <div class="flex justify-end mb-3"><pf-lab-sort scope="work" data-testid="lab-sort-classic"></pf-lab-sort></div>
+      }
       @for (bucket of buckets(); track bucket.priority) {
         @if (bucket.items.length > 0) {
           <div class="mb-6">
@@ -3317,6 +3333,7 @@ export class MyWorkComponent implements OnInit {
 
   /** edit_result — Lab Technician, Pathologist and Lab Admin hold it; the
    *  front desk never does, so the action simply doesn't render for them. */
+  private readonly sorts = inject(LabSortService);
   readonly canEditResult = computed(() => this.auth.hasPermission('edit_result'));
 
   /** One row per TUBE: the same grouping key the other tabs use
@@ -3339,7 +3356,7 @@ export class MyWorkComponent implements OnInit {
       if (!bySample.has(sid)) bySample.set(sid, []);
       bySample.get(sid)!.push(t);
     }
-    return Array.from(bySample.entries()).map(([sampleId, tests]) => {
+    const rows = Array.from(bySample.entries()).map(([sampleId, tests]) => {
       const first = tests[0];
       const patient = first.subOrder?.order?.patient;
       const stamps = tests
@@ -3363,6 +3380,11 @@ export class MyWorkComponent implements OnInit {
         completedAt: stamps.length ? new Date(Math.max(...stamps)).toISOString() : null
       };
     }).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
+    return applyLabSort(rows, this.sorts.keyFor('completed'), {
+      patient: r => r.patientName,
+      sample: r => r.barcode,
+      at: r => r.completedAt,
+    });
   });
 
   private loadCompleted() {
@@ -3482,7 +3504,7 @@ export class MyWorkComponent implements OnInit {
       if (!byOrder.has(oid)) byOrder.set(oid, []);
       byOrder.get(oid)!.push(t);
     }
-    return Array.from(byOrder.entries()).map(([orderId, group]) => {
+    const groups = Array.from(byOrder.entries()).map(([orderId, group]) => {
       const worst = soonestDue(group);
       const patient = worst.subOrder?.order?.patient;
       return {
@@ -3496,6 +3518,11 @@ export class MyWorkComponent implements OnInit {
         dueAt: worst._dueAt
       };
     }).sort(comparePriorityThenDue);
+    return applyLabSort(groups, this.sorts.keyFor('work'), {
+      patient: g => g.patientName,
+      sample: g => g.items[0]?.subOrder?.barcode,
+      at: g => earliestReceived(g.items),
+    });
   }
 
   // Expand/collapse state per order id within My Work.
@@ -3852,7 +3879,7 @@ export class MyWorkComponent implements OnInit {
     const tubes = this.tubesIn(items).sort((a, b) =>
       ((a.remainingMin ?? Infinity) - (b.remainingMin ?? Infinity))
       || (a.barcode ?? '').localeCompare(b.barcode ?? '', undefined, { numeric: true }));
-    return tubes.map(tube => {
+    const rows = tubes.map(tube => {
       const patient = tube.tests[0]?.subOrder?.order?.patient;
       return {
         ...tube,
@@ -3863,6 +3890,11 @@ export class MyWorkComponent implements OnInit {
         // and trail the identifiers in a muted run instead of one flat string.
         patientMeta: patient ? formatPatientMeta(patient) : ''
       };
+    });
+    return applyLabSort(rows, this.sorts.keyFor('work'), {
+      patient: r => r.patientName,
+      sample: r => r.barcode,
+      at: r => earliestReceived(r.tests),
     });
   }
 

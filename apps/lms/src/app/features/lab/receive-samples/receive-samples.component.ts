@@ -1,3 +1,6 @@
+import { applyLabSort } from '../../../shared/utils/lab-sort';
+import { LabSortService } from '../../../core/services/lab-sort.service';
+import { LabSortComponent } from '../../../shared/components/lab-sort/lab-sort.component';
 import { DatePipe } from '@angular/common';
 import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
 import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
@@ -41,6 +44,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
   selector: 'pf-receive-samples',
   standalone: true,
   imports: [
+    LabSortComponent,
     DailyNoComponent,
     PfKeysDirective,
     SamplePresetDirective,
@@ -337,6 +341,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             </p>
           </div>
         }
+        <div class="flex justify-end mb-2"><pf-lab-sort scope="intake" data-testid="lab-sort-intake"></pf-lab-sort></div>
         <ul class="pf-rs-list" [class.pf-rs-list--compact]="embedded">
           @for (g of (labCfg.sampleFocused() ? dispatchedTubes() : dispatchedOrders()); track $index) {
             @if (embedded) {
@@ -533,8 +538,11 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
       }
 
       @if (inTransit().length > 0 && !queueSkeleton()) {
+        @if (dispatchedOrders().length === 0) {
+          <div class="flex justify-end mb-2"><pf-lab-sort scope="intake" data-testid="lab-sort-intake"></pf-lab-sort></div>
+        }
         <div class="space-y-2.5">
-          @for (s of inTransit(); track s.id) {
+          @for (s of inTransitView(); track s.id) {
             <pf-tile [tone]="isSelected(s.id) ? 'violet' : 'default'" padding="md">
               <div class="flex items-center gap-3 flex-wrap md:flex-nowrap">
                 <label class="pf-check" (click)="$event.stopPropagation()">
@@ -1025,7 +1033,7 @@ export class ReceiveSamplesComponent implements OnInit {
    * "patient X — N tubes — list of tests" instead of per-tube rows so they
    * can scan/click once to mark the whole order received and start TAT.
    */
-  readonly dispatchedOrders = computed(() => this._dispatched().map(o => {
+  private readonly dispatchedOrdersBase = computed(() => this._dispatched().map(o => {
     const samples = o.samples ?? [];
     const dispatched = samples.filter(s => s.status === 'dispatched').length;
     const received = samples.filter(s => s.status === 'received' || s.status === 'processing').length;
@@ -1080,7 +1088,7 @@ export class ReceiveSamplesComponent implements OnInit {
    * the order because arrival is a batch event: the courier hands over the
    * order's tubes together, so sibling rows flip together.
    */
-  readonly dispatchedTubes = computed(() => this._dispatched().flatMap(o => {
+  private readonly dispatchedTubesBase = computed(() => this._dispatched().flatMap(o => {
     const samples = (o.samples ?? []).filter(s =>
       s.status === 'dispatched' || s.status === 'pending' || s.status === 'collected'
       || s.status === 'received' || s.status === 'processing');
@@ -1115,6 +1123,19 @@ export class ReceiveSamplesComponent implements OnInit {
   }).sort((a, b) =>
     (a.sampleId ?? '').localeCompare(b.sampleId ?? '', undefined, { numeric: true })
     || (a.latestAt ?? '').localeCompare(b.latestAt ?? '')));
+
+  // OPS-52: the tech's remembered sort over the intake lists; 'default' leaves
+  // the orders above exactly as they were.
+  private readonly sorts = inject(LabSortService);
+  readonly dispatchedOrders = computed(() => applyLabSort(this.dispatchedOrdersBase(), this.sorts.keyFor('intake'), {
+    patient: r => r.patientName, sample: r => r.sampleId, at: r => r.latestAt,
+  }));
+  readonly dispatchedTubes = computed(() => applyLabSort(this.dispatchedTubesBase(), this.sorts.keyFor('intake'), {
+    patient: r => r.patientName, sample: r => r.sampleId, at: r => r.latestAt,
+  }));
+  readonly inTransitView = computed(() => applyLabSort(this._inTransit(), this.sorts.keyFor('intake'), {
+    patient: s => s.order?.patient?.displayName, sample: s => s.barcode, at: s => s.pickedUpAt ?? s.dispatchedAt,
+  }));
 
   private readonly _selectedIds = signal<Set<string>>(new Set());
   protected readonly scanValue = signal('');

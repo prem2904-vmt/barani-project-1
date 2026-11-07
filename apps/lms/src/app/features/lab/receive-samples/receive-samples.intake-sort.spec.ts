@@ -107,3 +107,28 @@ describe('Lab Intake (sample-focused) — sort order', () => {
     expect(samples).toEqual(['26199', '26200']);
   });
 });
+
+describe('Lab Intake — OPS-52 remembered sort', () => {
+  afterEach(() => { TestBed.resetTestingModule(); try { localStorage.clear(); } catch { /* */ } });
+
+  const orders = () => [
+    dispatchedOrder('o1', 'Zed', [{ barcode: '26001', status: 'dispatched' }]),
+    dispatchedOrder('o2', 'Amy', [{ barcode: '26900', status: 'dispatched' }]),
+  ];
+  const samples = (el: HTMLElement) => [...el.querySelectorAll('.pf-rs-row__sample')].map(n => n.textContent?.trim());
+
+  it('patient-name sort re-orders the rows; the choice is read from storage', () => {
+    localStorage.setItem('pf.labSort.u1.intake', 'patient');
+    expect(samples(render(orders()).el)).toEqual(['26900', '26001']);
+  });
+
+  it('with nothing stored the order is exactly the old sample-number sequence', () => {
+    expect(samples(render(orders()).el)).toEqual(['26001', '26900']);
+  });
+
+  it('a stored value that is not an option is ignored', () => {
+    localStorage.setItem('pf.labSort.u1.intake', 'bogus');
+    expect(samples(render(orders()).el)).toEqual(['26001', '26900']);
+  });
+});
+
