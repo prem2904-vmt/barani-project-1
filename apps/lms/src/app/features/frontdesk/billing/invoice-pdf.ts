@@ -559,9 +559,7 @@ function drawFooter(doc: jsPDF, o: FooterOpts): void {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(TEXT_PRIMARY);
-  doc.text(`For ${o.practice.name ?? "Prefrontal Lab"}`, colRight, A4.h - 92, {
-    align: "right",
-  });
+  // (OPS-47: the "For <lab name>" line is gone on purpose - the rule + label below are the signatory block.)
   doc.setDrawColor(HAIR);
   doc.setLineWidth(0.5);
   doc.line(colRight - 130, A4.h - 56, colRight, A4.h - 56);

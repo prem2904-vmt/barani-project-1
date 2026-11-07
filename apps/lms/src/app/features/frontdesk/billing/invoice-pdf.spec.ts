@@ -237,3 +237,30 @@ describe('invoiceGstinFrom — the bill\'s branch-GST snapshot, never the templa
     expect(invoiceGstinFrom({ supplierGstin: ' 33ABCDE1234F1Z5 ' }, null)).toBe('33ABCDE1234F1Z5');
   });
 });
+
+describe('invoice footer (OPS-47: no "For <lab name>" line)', () => {
+  it('prints the signature label under the rule and never "For <lab>", in every letterhead style', async () => {
+    const { generateInvoicePdf } = await import('./invoice-pdf');
+    const { readPdfRuns } = await import('../../../shared/utils/report-pdf-read.spec-helpers');
+    let blob: Blob | null = null;
+    const orig = URL.createObjectURL;
+    URL.createObjectURL = ((b: Blob) => { blob = b; return 'blob:test'; }) as typeof URL.createObjectURL;
+    try {
+      const bill = { id: 'b', orderId: 'o', patientId: 'p', branchId: 'x', type: 'tax_invoice', isInterstate: false, subTotal: 100, overrideDiscount: 0,
+        totalDiscount: 0, totalTaxable: 100, totalCgst: 0, totalSgst: 0, totalIgst: 0, totalTax: 0, totalPayable: 100, roundOff: 0, totalPaid: 0, balance: 100,
+        status: 'pending', createdAt: '2026-09-19T00:00:00Z', payments: [],
+        items: [{ id: 'i', billId: 'b', testId: 't', testName: 'CBC', price: 100, discount: 0, taxableAmount: 100, taxSlab: 0, cgstRate: 0, sgstRate: 0, igstRate: 0,
+          cgstAmount: 0, sgstAmount: 0, igstAmount: 0, total: 100 }] } as unknown as Bill;
+      for (const template of ['classic', 'modern', 'letterhead'] as const) {
+        blob = null;
+        generateInvoicePdf({ bill, order: null, invoiceNumber: 'INV-1', effectivePayable: 100, tatLabel: '', action: 'blob', template,
+          practice: { name: 'Zeta Test Lab' }, signatureLabel: 'Authorised Signatory' });
+        expect(blob, template).not.toBeNull();
+        const raw = await new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsBinaryString(blob as unknown as Blob); });
+        const texts = readPdfRuns(raw).map(r => r.text);
+        expect(texts.some(t => /^For\s/.test(t)), template).toBe(false);
+        expect(texts, template).toContain('Authorised Signatory');
+      }
+    } finally { URL.createObjectURL = orig; }
+  });
+});
