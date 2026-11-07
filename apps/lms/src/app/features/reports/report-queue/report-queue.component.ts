@@ -961,18 +961,39 @@ export class ReportQueueComponent implements OnInit {
       });
   }
 
+  /** OPS-104: the popup takes whatever the user types (order number, short
+   *  #abcd1234 id, invoice number, GUID); the API only takes a GUID, so resolve
+   *  it through the order lookup first. Returns a GUID or null — never raw text. */
+  async resolveTypedOrder(typed: string): Promise<string | null> {
+    const t = String(typed ?? '').trim();
+    if (!t) return null;
+    const GUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (GUID.test(t)) return t;
+    try {
+      const r = await firstValueFrom(this.api.get<{ orderId?: string }>(`/api/orders/resolve?code=${encodeURIComponent(t)}`));
+      return r?.orderId && GUID.test(r.orderId) ? r.orderId : null;
+    } catch {
+      return null;
+    }
+  }
+
   async promptGenerate() {
     if (!this.canGenerate()) return;
     const oid = await this.dialog.prompt({
       title: "Generate report",
-      message: "Enter the order ID to generate a final report.",
-      placeholder: "order id",
+      message: "Enter the order number (or order ID) to generate a final report.",
+      placeholder: "order number",
       required: true,
       confirmLabel: "Generate",
     });
     if (!oid || this.generatingReport()) return;
+    const orderId = await this.resolveTypedOrder(oid);
+    if (!orderId) {
+      this.toasts.error(`No order matches "${String(oid).trim()}"`);
+      return;
+    }
     this.api
-      .post<Report>("/api/reports/generate", { orderId: oid, type: "final" })
+      .post<Report>("/api/reports/generate", { orderId, type: "final" })
       .pipe(busyWhile(this.generatingReport))
       .subscribe({
         next: (r) => {

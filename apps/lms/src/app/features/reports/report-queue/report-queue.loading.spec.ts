@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { signal } from '@angular/core';
-import { EMPTY, Subject, of } from 'rxjs';
+import { EMPTY, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { ReportQueueComponent } from './report-queue.component';
 import { ApiService } from '../../../core/services/api.service';
@@ -37,13 +37,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function render(opts: { generate$?: Subject<unknown>; prompt?: string | null; backfill$?: Subject<unknown> } = {}) {
+function render(opts: { generate$?: Subject<unknown>; prompt?: string | null; backfill$?: Subject<unknown>; resolve?: unknown } = {}) {
   (window as any).matchMedia = (q: string) => ({
     matches: q.includes('hover'), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
   });
   const api = {
     get: vi.fn((url: string) => {
       if (url.startsWith('/api/reports/queue?view=summary')) return of([rep('r1'), rep('r2')]);
+      if (url.startsWith('/api/orders/resolve')) return opts.resolve instanceof Error ? throwError(() => opts.resolve) : of(opts.resolve ?? null);
       return of([]);
     }),
     post: vi.fn((url: string) => (url === '/api/reports/generate' && opts.generate$ ? opts.generate$
@@ -117,7 +118,7 @@ describe('Reports list — loading feedback', () => {
 
   it('Generate (band): busy while the report is generated, then released', async () => {
     const generate$ = new Subject<unknown>();
-    const { f, el } = render({ generate$, prompt: 'order-1' });
+    const { f, el } = render({ generate$, prompt: '3f2b8c1e-1111-4222-8333-444455556666' });
     const gen = el.querySelector<HTMLButtonElement>('.pf-rq-generate')!;
     expect(gen.disabled).toBe(false);
     gen.click();
@@ -129,5 +130,34 @@ describe('Reports list — loading feedback', () => {
     f.detectChanges();
     expect(gen.disabled).toBe(false);
     expect(gen.getAttribute('aria-busy')).toBeNull();
+  });
+
+  // OPS-104: the popup text is resolved to a GUID before /api/reports/generate.
+  describe('Generate popup (OPS-104)', () => {
+    const GUID = '3f2b8c1e-1111-4222-8333-444455556666';
+    const generated = (api: any) => (api.post.mock.calls as any[][]).filter(a => a[0] === '/api/reports/generate');
+
+    it('a typed order number is resolved first and the GUID is what gets posted', async () => {
+      const { c, api } = render({ prompt: 'lab-2608-000042', resolve: { orderId: GUID } });
+      await c.promptGenerate();
+      expect(api.get).toHaveBeenCalledWith('/api/orders/resolve?code=lab-2608-000042');
+      expect(generated(api)).toEqual([['/api/reports/generate', { orderId: GUID, type: 'final' }]]);
+    });
+
+    it('a typed GUID is posted as is, without a lookup', async () => {
+      const { c, api } = render({ prompt: GUID });
+      await c.promptGenerate();
+      expect(api.get).not.toHaveBeenCalledWith(expect.stringContaining('/api/orders/resolve'));
+      expect(generated(api).length).toBe(1);
+    });
+
+    for (const [label, resolve] of [['no match', null], ['lookup error', new Error('x')]] as const) {
+      it(`${label}: plain message, nothing is generated, never non-GUID`, async () => {
+        const { c, api, toasts } = render({ prompt: 'nope-123', resolve });
+        await c.promptGenerate();
+        expect(generated(api)).toEqual([]);
+        expect(toasts.error).toHaveBeenCalledWith('No order matches "nope-123"');
+      });
+    }
   });
 });
