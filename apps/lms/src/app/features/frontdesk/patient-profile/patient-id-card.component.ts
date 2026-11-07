@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component, Input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, Input, ViewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Patient, patientDisplayName } from '../../../shared/models/patient.model';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
-import { printLabelOnly } from '../../../shared/utils/print-label';
+import { printIdCard } from '../../../shared/utils/print-label';
 import { patientProfileQrUrl } from '../../../shared/utils/patient-strip-qr';
 import { environment } from '../../../../environments/environment';
 import { formatAge } from '../../../shared/utils/patient-age';
@@ -18,9 +18,8 @@ export function patientIdCardQrUrl(origin: string, patientId: string): string {
 /**
  * A printable patient ID card. Shows the patient's identity + a QR that encodes
  * the app's `/p/:id` open-route — scanning it at the front desk (via the global
- * scanner) jumps straight to this patient's profile. The card body is wrapped in
- * `.pf-print-label` so "Print" prints ONLY the card (global print stylesheet in
- * styles.scss). Uses the shared `pf-barcode-display` (QR via the qrcode lib).
+ * scanner) jumps straight to this patient's profile. "Print" clones the card to its
+ * own print root with its own @page (`printIdCard`), so no modal ancestor can clip it. Uses the shared `pf-barcode-display` (QR via the qrcode lib).
  */
 @Component({
   selector: 'pf-patient-id-card',
@@ -29,8 +28,8 @@ export function patientIdCardQrUrl(origin: string, patientId: string): string {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-idc">
-      <!-- Only this block prints (printLabelOnly hides everything else). -->
-      <div class="pf-print-label pf-idc__card">
+      <!-- Only this block prints: printIdCard() clones it to its own page root (OPS-102). -->
+      <div #card class="pf-idc__card">
         <div class="pf-idc__head">
           <span class="pf-idc__brand">PATIENT ID CARD</span>
           @if (patient.mrn) { <span class="pf-idc__mrn">{{ patient.mrn }}</span> }
@@ -110,5 +109,6 @@ export class PatientIdCardComponent {
   get qrValue(): string {
     return patientIdCardQrUrl(typeof location !== 'undefined' ? location.origin : '', this.patient.id);
   }
-  print(): void { printLabelOnly(); }
+  @ViewChild('card', { static: true }) private card!: ElementRef<HTMLElement>;
+  print(): void { printIdCard(this.card.nativeElement); }
 }

@@ -114,3 +114,82 @@ export function tubePrintCss(widthMm: number, heightMm: number): string {
   #${TUBE_PRINT_ROOT_ID}, #${TUBE_PRINT_ROOT_ID} * { visibility: visible !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }`;
 }
+
+
+// ── Patient ID card ──────────────────────────────────────────────────────
+// OPS-102: the ID card used to print through printLabelOnly() + the global
+// `.pf-print-label { position:absolute; left:0; top:0; width:auto }` rule,
+// which is built for tube labels. Inside the profile modal an ancestor's
+// overflow / transform clipped the card, so the QR was cut. The card now has
+// its own path, like the tube labels: it is CLONED to a root on <body>
+// (no ancestor box can clip it), with its own @page size.
+
+export const ID_CARD_PRINT_ROOT_ID = 'pf-idcard-print-root';
+export const ID_CARD_PRINT_STYLE_ID = 'pf-idcard-print-page';
+/** Card paper (mm): a CR80-style card with a little margin around it. */
+export const ID_CARD_PAGE_MM = { w: 92, h: 62 } as const;
+
+/** Print ONLY this patient ID card, on its own @page, never clipped. */
+export function printIdCard(card: HTMLElement, onDone?: () => void): void {
+  const cleanup = prepareIdCardPrint(card);
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    cleanup();
+    window.removeEventListener('afterprint', done);
+    onDone?.();
+  };
+  window.addEventListener('afterprint', done);
+  try { window.print(); } finally { setTimeout(done, 1500); }
+}
+
+/** Build the print-only DOM + @page rule for the card; returns the cleanup. Exported so the
+ *  layout can be asserted without a print dialog. */
+export function prepareIdCardPrint(card: HTMLElement): () => void {
+  const doc = document;
+  doc.getElementById(ID_CARD_PRINT_ROOT_ID)?.remove();
+  doc.getElementById(ID_CARD_PRINT_STYLE_ID)?.remove();
+
+  const root = doc.createElement('div');
+  root.id = ID_CARD_PRINT_ROOT_ID;
+  const clone = card.cloneNode(true) as HTMLElement;
+  clone.classList.remove('pf-print-label');   // the tube-label rule must never position this copy
+  const src = card.querySelectorAll('canvas');
+  clone.querySelectorAll('canvas').forEach((c, i) => {
+    const o = src[i];
+    if (!o) return;
+    c.width = o.width; c.height = o.height;
+    try { c.getContext('2d')?.drawImage(o, 0, 0); } catch { /* ignore */ }
+  });
+  root.appendChild(clone);
+
+  const style = doc.createElement('style');
+  style.id = ID_CARD_PRINT_STYLE_ID;
+  style.textContent = idCardPrintCss();
+  doc.head.appendChild(style);
+  doc.body.appendChild(root);
+  doc.body.classList.add('pf-printing-idcard');
+
+  return () => {
+    doc.body.classList.remove('pf-printing-idcard');
+    root.remove();
+    style.remove();
+  };
+}
+
+/** The print stylesheet for the ID card: its own page, the card in normal flow (no absolute
+ *  position, no transform, no overflow clip) and its whole height shown. */
+export function idCardPrintCss(): string {
+  const { w, h } = ID_CARD_PAGE_MM;
+  return `
+#${ID_CARD_PRINT_ROOT_ID} { display: none; }
+@media print {
+  @page { size: ${w}mm ${h}mm; margin: 0; }
+  html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
+  body.pf-printing-idcard > *:not(#${ID_CARD_PRINT_ROOT_ID}) { display: none !important; }
+  body.pf-printing-idcard #${ID_CARD_PRINT_ROOT_ID} { display: block !important; position: static !important; transform: none !important; overflow: visible !important; width: ${w}mm; padding: 3mm; box-sizing: border-box; }
+  #${ID_CARD_PRINT_ROOT_ID} > * { position: static !important; transform: none !important; overflow: visible !important; width: 100% !important; max-width: none !important; margin: 0 !important; break-inside: avoid; page-break-inside: avoid; box-shadow: none !important; }
+  #${ID_CARD_PRINT_ROOT_ID}, #${ID_CARD_PRINT_ROOT_ID} * { visibility: visible !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}`;
+}

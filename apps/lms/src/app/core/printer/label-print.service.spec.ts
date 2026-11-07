@@ -249,10 +249,15 @@ describe('Every "Print label" caller goes through LabelPrintService', () => {
   }
 
   it('non-label prints are untouched (inventory, stores, patient ID card keep their own print)', () => {
-    for (const f of ['features/admin/inventory/inventory.component.ts', 'features/stores/stores.component.ts', 'features/frontdesk/patient-profile/patient-id-card.component.ts']) {
+    for (const f of ['features/admin/inventory/inventory.component.ts', 'features/stores/stores.component.ts']) {
       const src = read(f);
       expect(src).toContain('printLabelOnly()');
       expect(src).not.toContain('LabelPrintService');
     }
+    // OPS-102: the ID card has its own print path (own @page, never clipped) - not the tube-label rule.
+    const card = read('features/frontdesk/patient-profile/patient-id-card.component.ts');
+    expect(card).toContain('printIdCard(');
+    expect(card).not.toContain('printLabelOnly');
+    expect(card).not.toContain('LabelPrintService');
   });
 });
