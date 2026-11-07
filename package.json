@@ -50,13 +50,18 @@
     "files": [
       "electron/**/*",
       "!electron/test/**",
-      "dist/apps/lms/browser/**/*"
+      "dist/apps/lms/browser/**/*",
+      "!**/node_modules/usb/{libusb,libusb_config,src,test}/**",
+      "!**/node_modules/usb/{binding.gyp,libusb.gypi}",
+      "!**/node_modules/@serialport/bindings-cpp/{src/**,binding.gyp}",
+      "!**/node_modules/node-addon-api/**",
+      "!**/node_modules/{usb,@serialport/bindings-cpp}/prebuilds/android-*/**",
+      "!**/node_modules/*/{test,tests,__tests__,fuzz,example,examples,doc,docs}/**",
+      "!**/node_modules/@*/*/{test,tests,__tests__,fuzz,example,examples,doc,docs}/**",
+      "!**/node_modules/{lightningcss-*,@tailwindcss/oxide-*,@napi-rs/canvas-*}/**"
     ],
     "asarUnpack": [
-      "**/node_modules/usb/**",
-      "**/node_modules/@types/w3c-web-usb/**",
-      "**/node_modules/serialport/**",
-      "**/node_modules/@serialport/**"
+      "**/node_modules/{usb,@serialport/bindings-cpp}/prebuilds/**"
     ],
     "win": {
       "target": [
@@ -82,7 +87,11 @@
         "zip"
       ],
       "icon": "electron/icon.png",
-      "category": "public.app-category.medical"
+      "category": "public.app-category.medical",
+      "signIgnore": [
+        "\\.lproj/locale\\.pak$",
+        "/app\\.asar\\.unpacked/node_modules/.+/prebuilds/(?!darwin-)[^/]+/"
+      ]
     },
     "linux": {
       "target": [

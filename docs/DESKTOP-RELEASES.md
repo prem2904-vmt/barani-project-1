@@ -197,8 +197,9 @@ rejected one is marked `failed` and never retried — rebuild). Windows has no
 notarization and publishes when built.
 
 **Concurrency.** One desktop release per channel (`cancel-in-progress: false`; a
-newer run waits). The single runner serializes everything, so the 90 min poll
-holds the queue — it is last in the run on purpose.
+newer run waits). The Mac runner serializes its jobs, so the 90 min poll holds
+its queue — it is last in the run on purpose. Windows runs on the dev PC in
+parallel (see below).
 
 **If the Mac is off.** Jobs queue (GitHub keeps a queued job up to 24 h, then
 cancels it). Turn the Mac on and the queue drains; if it was off longer, open the
@@ -206,11 +207,46 @@ cancelled run and *Re-run all jobs* (or run release-desktop again) — that is t
 "Re-queue desktop build" step. Only the newest pending dev run is kept when
 several pushes pile up.
 
-**Move Windows to the Oracle Linux runner.** Register it with label `pf-win`
-(needs wine for NSIS cross-build, or use the Mac), then set the repo variable
-`PF_WIN_RUNNER` to `["self-hosted","pf-win"]` (Settings -> Secrets and variables
--> Actions -> Variables). That is the only change; unset it to fall back to the Mac.
-The Oracle box also needs `~/.config/prefrontal/release-spaces.env`.
+**Windows builds on the office dev PC (2026-11-07).** Runner
+`pf-devpc-prefrontal-ui` on `pf-pc` (Ubuntu x86_64, user `prefrontal`), installed in
+`~/actions-runner-prefrontal-ui` as systemd service
+`actions.runner.shuganth-prefrontal-ui.pf-devpc-prefrontal-ui`, labels
+`self-hosted,Linux,X64,pf-devpc,pf-win-build`. The windows job goes there when the
+repo variable `PF_WIN_RUNNER` = `["self-hosted","Linux","X64","pf-win-build"]`
+(Settings -> Secrets and variables -> Actions -> Variables); unset it to fall back
+to the Mac. Then Mac and Windows build in parallel. The PC needs:
+- `wine` + `wine64` (apt): electron-builder builds the NSIS installer on Linux by
+  running the uninstaller stub under wine; `rcedit` (exe icon / version info) works
+  the same way. The job's first step and `tools/desktop-release.mjs` refuse early
+  without it.
+- `~/.config/prefrontal/release-spaces.env` (chmod 600), same file as the Mac.
+- Nothing native compiles: `-c.npmRebuild=false`, and `usb` /
+  `@serialport/bindings-cpp` ship `prebuilds/win32-x64` + `win32-ia32` that
+  `node-gyp-build` picks at runtime. The `.exe` is not code-signed (no Windows
+  certificate yet) — if one is added later, signing needs `signtool` on Windows or
+  a Linux signer (osslsigncode / jsign), decide then.
+A dry `electron-builder --win nsis --x64 --ia32 --publish never` on the PC takes
+~40 s and produces one ~284 MB `… Setup <v>.exe` (PE32 NSIS; x64 = PE32+, ia32 =
+PE32 inside).
+
+**Mac signing time.** `@electron/osx-sign` codesigns (with an Apple timestamp,
+~2.5 s each) EVERY file it thinks is binary; it used to be ~278 files (220 Electron
+`*.lproj/locale.pak` + the whole of `usb`/`@serialport` incl. libusb's fuzz corpus
+and every platform's prebuilds) = 11-12 min, and one flaky timestamp on
+`libusb/tests/fuzz/corpus/bos/min.bos` failed a 48-min run. Now:
+- `build.files` drops native-module sources/tests/fuzz/docs, `node-addon-api`,
+  android prebuilds and the build-only tailwind/lightningcss/napi-rs canvas
+  binaries (never loaded by `electron/`).
+- `asarUnpack` is only `{usb,@serialport/bindings-cpp}/prebuilds/**` (electron-builder
+  still smart-unpacks those two packages' JS next to them).
+- `mac.signIgnore` skips `*.lproj/locale.pak` (resources, sealed by the framework's
+  own signature) and non-darwin prebuilds (ELF/PE, never loaded on macOS). Every
+  Mach-O (app, helpers, frameworks, dylibs, darwin `.node`) is still signed with
+  hardened runtime + timestamp: 25 codesign calls, ~1 min; `codesign --verify
+  --deep --strict` passes.
+- Do NOT put a `files` list under `mac` / `win` / `linux`: electron-builder then
+  uses it INSTEAD of the top-level list for the app files and ships the whole repo
+  (pinned by `electron/test/desktop-pipeline.test.js`).
 
 ## Testing
 

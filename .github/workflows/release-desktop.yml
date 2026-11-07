@@ -2,10 +2,10 @@ name: release-desktop
 run-name: Desktop ${{ inputs.channel || 'dev' }} ${{ inputs.ref || '' }}
 
 # Builds + publishes the Electron desktop app (Windows x64+ia32 NSIS, macOS) to the
-# public update bucket for ONE channel. Runs on the owner's Mac runner (labels
-# self-hosted, macOS, ARM64, pf-mac) because the Developer ID cert, the
+# public update bucket for ONE channel. plan/mac/mac-finish run on the owner's Mac
+# runner (labels self-hosted, macOS, ARM64, pf-mac) because the Developer ID cert, the
 # 'prefrontal-notary' keychain profile and ~/.config/prefrontal/release-spaces.env
-# live there. No secrets are stored in GitHub; nothing here prints them.
+# live there; windows runs on the dev PC (see below). No secrets are stored in GitHub; nothing here prints them.
 #
 #   dev    : automatic on push to main when desktop-relevant files change.
 #            Version = package.json version + "-dev.<run_number>". Mac publishes the
@@ -14,9 +14,13 @@ run-name: Desktop ${{ inputs.channel || 'dev' }} ${{ inputs.ref || '' }}
 #   prod   : package.json version at the ref. Refused if already released unless force.
 #            Windows publishes when built; Mac only after notarization.
 #
-# Windows runner is a repo VARIABLE so it can move to Oracle with one edit:
-#   Settings -> Variables -> PF_WIN_RUNNER = ["self-hosted","pf-win"]
-# (unset = the Mac runner builds Windows too).
+# Windows builds on the office dev PC (Ubuntu x86_64, runner labels pf-devpc,pf-win-build)
+# via the repo VARIABLE PF_WIN_RUNNER = ["self-hosted","Linux","X64","pf-win-build"], so the
+# Mac only builds/signs macOS and both jobs run in parallel. electron-builder makes the NSIS
+# installer on Linux with wine (apt: wine wine64); the .exe is not code-signed (no Windows
+# cert), and the native modules ship win32 prebuilds (npmRebuild=false), so nothing compiles.
+# The PC needs ~/.config/prefrontal/release-spaces.env (chmod 600) like the Mac.
+# Unset PF_WIN_RUNNER = the Mac runner builds Windows too (fallback if the PC is down).
 # A queued job waits up to 24 h for a runner; if the Mac is off longer, re-run the workflow.
 on:
   push:
@@ -162,10 +166,15 @@ jobs:
   windows:
     needs: plan
     if: needs.plan.outputs.do_win == 'true'
-    # one-line switch to the Oracle box: set repo variable PF_WIN_RUNNER (see header)
+    # dev PC via repo variable PF_WIN_RUNNER (see header); unset = the Mac
     runs-on: ${{ fromJSON(vars.PF_WIN_RUNNER || '["self-hosted","macOS","ARM64","pf-mac"]') }}
     timeout-minutes: 90
     steps:
+      - name: Linux runner prerequisites (wine for the NSIS build)
+        if: runner.os == 'Linux'
+        run: |
+          command -v wine >/dev/null || { echo "::error::wine is missing on $RUNNER_NAME - run: sudo apt-get install -y wine wine64"; exit 1; }
+          test -r "$HOME/.config/prefrontal/release-spaces.env" || { echo "::error::$HOME/.config/prefrontal/release-spaces.env is missing on $RUNNER_NAME"; exit 1; }
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.plan.outputs.sha }}

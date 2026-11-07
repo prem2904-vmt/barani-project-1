@@ -200,8 +200,8 @@ function electronBuilderBuild(a, osName, { base, channel, version }) {
   if (APP_ID_BY_CHANNEL[channel]) args.push(`-c.appId=${APP_ID_BY_CHANNEL[channel]}`);
   args.push('-c.npmRebuild=false');
   if (osName !== 'mac') {
-    // electron-builder's default (no arch flag) is the HOST's arch, which on
-    // this Mac is arm64 — wrong for real users. Build BOTH real Windows
+    // electron-builder's default (no arch flag) is the HOST's arch (arm64 on
+    // the Mac fallback runner) — always name the real Windows arches. Build BOTH real Windows
     // arches into ONE NSIS installer (the installer picks x64 / ia32 at
     // install time), so latest.yml keeps a single .exe and existing 64-bit
     // installs auto-update unchanged. `nsis` only: the portable exe is never
@@ -217,6 +217,16 @@ function electronBuilderBuild(a, osName, { base, channel, version }) {
   // electron-builder name the file dev.yml, but installed apps read latest.yml.
   args.push('-c.publish.provider=generic', `-c.publish.url=${base}/${channel}/${osName}`, '-c.publish.channel=latest', '--publish', 'never');
   run('npx', ['electron-builder', ...args]);
+}
+
+// Windows builds run on the Linux dev PC (see .github/workflows/release-desktop.yml).
+// electron-builder needs wine there to build the NSIS installer (it runs the
+// uninstaller stub under it); fail before the long Angular build, not after.
+function assertWinBuildHost() {
+  if (process.platform !== 'linux') return;
+  if (runCapture('sh', ['-c', 'command -v wine']).status !== 0) {
+    fail('building --win on Linux needs wine: sudo apt-get install -y wine wine64');
+  }
 }
 
 // ── secret-leak guard ─────────────────────────────────────────────────────
@@ -434,6 +444,7 @@ async function actionRelease(a) {
   const creds = loadCreds();
   const base = a.base || creds.PF_RELEASE_PUBLIC_BASE;
   const s3 = s3Client(creds);
+  if (a.win) assertWinBuildHost();
   writeVersion(version);
   nxBuild(a.channel); // Angular output is shared between mac/win — build once.
 
