@@ -299,16 +299,30 @@ test('IPC: only the main window may drive the panel', async () => {
   assert.deepEqual(await handlers.get('whatsapp:open')({ sender: fake.mainWc }, 'https://example.com'), { ok: false, error: 'not_click_to_chat' });
 });
 
-test('source pin: no injection, no preload, no automation APIs, no UA spoofing', () => {
+test('source pin: no injection, no preload, no automation APIs; the only UA change is the plain-Chrome one', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'whatsapp-dock.js'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-  for (const banned of ['executeJavaScript', 'insertCSS', 'sendInputEvent', 'setUserAgent', 'userAgent', 'preload:', 'debugger', 'ipcRenderer', 'webFrame', 'executeJavaScriptInIsolatedWorld', 'setPreloads', 'registerPreloadScript']) {
+  for (const banned of ['executeJavaScript', 'insertCSS', 'sendInputEvent', 'preload:', 'debugger', 'ipcRenderer', 'webFrame', 'executeJavaScriptInIsolatedWorld', 'setPreloads', 'registerPreloadScript']) {
     assert.equal(src.includes(banned), false, `whatsapp-dock.js must not use ${banned}`);
   }
+  const uaCalls = src.match(/setUserAgent\(/g) || [];
+  assert.equal(uaCalls.length, 1, 'exactly one setUserAgent call');
+  assert.ok(src.includes('ses.setUserAgent(plainChromeUserAgent(ses.getUserAgent()))'), 'UA is only ever the plain-Chrome form of the real one');
 });
 
 test('main.js: the app-wide navigation guard skips the panel (it has its own)', () => {
   const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
   assert.match(main, /if \(waDock\.owns\(contents\)\) return;/);
   assert.match(main, /whatsappDock\.register\(\(\) => mainWindow\)/);
+});
+
+test('plainChromeUserAgent strips Electron and app tokens, keeps a real Chrome string', () => {
+  const ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Prefrontal/1.2.0 Chrome/140.0.7339.41 Electron/45.2.3 Safari/537.36';
+  assert.equal(dock.plainChromeUserAgent(ua),
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.7339.41 Safari/537.36');
+  const win = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) prefrontal-lms/1.1.1 Chrome/140.0.0.0 Electron/45.0.0 Safari/537.36';
+  assert.equal(dock.plainChromeUserAgent(win),
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36');
+  assert.equal(dock.plainChromeUserAgent(''), '');
+  assert.equal(dock.plainChromeUserAgent('curl/8'), 'curl/8');
 });

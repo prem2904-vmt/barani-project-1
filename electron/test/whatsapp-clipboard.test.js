@@ -137,7 +137,7 @@ const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')
 
 test('source pin: the dock never acts on the WhatsApp view; no preload; no ipc into it', () => {
   const src = strip(fs.readFileSync(path.join(__dirname, '..', 'whatsapp-dock.js'), 'utf8'));
-  for (const banned of ['executeJavaScript', 'insertCSS', 'sendInputEvent', '.paste(', 'insertText', 'setUserAgent', 'userAgent',
+  for (const banned of ['executeJavaScript', 'insertCSS', 'sendInputEvent', '.paste(', 'insertText',
     'preload:', 'debugger', 'ipcRenderer', 'webFrame', 'setPreloads', 'registerPreloadScript', 'wc.send(', 'view.webContents.send', 'wc.focus(', 'view.webContents.focus']) {
     assert.equal(src.includes(banned), false, `whatsapp-dock.js must not use ${banned}`);
   }

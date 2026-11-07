@@ -165,6 +165,7 @@ function createDock(deps) {
     ses.setPermissionRequestHandler((_wc, permission, callback) => callback(decidePermission(permission)));
     ses.setPermissionCheckHandler((_wc, permission) => decidePermission(permission));
     if (typeof ses.setDevicePermissionHandler === 'function') ses.setDevicePermissionHandler(() => false);
+    try { ses.setUserAgent(plainChromeUserAgent(ses.getUserAgent())); } catch { /* keep the default */ }
     hardened = true;
   }
 
@@ -362,8 +363,23 @@ function attach(win, dock) {
   win.on('closed', () => dock.windowGone());
 }
 
+
+/** WhatsApp Web only accepts real browsers ("works with Chrome 100+") and
+ *  refuses Electron's default user agent, which carries "Electron/x" and the
+ *  app's own name. The panel's engine IS Chromium, so it sends the same string
+ *  minus those extra tokens, for the panel's partition only (owner decision
+ *  2026-11-07). This changes how the panel identifies itself; it does not
+ *  touch WhatsApp's page. */
+function plainChromeUserAgent(ua) {
+  const s = String(ua || '');
+  if (!/Chrome\/\d+/.test(s)) return s;
+  const keep = /^(Mozilla|AppleWebKit|Chrome|Safari|Version|Mobile)\//;
+  return s.replace(/(^|\s)([A-Za-z][\w.-]*)\/[\w.+-]+/g, (m, sp, name) =>
+    keep.test(name + '/') ? m : '').replace(/\s{2,}/g, ' ').trim();
+}
+
 module.exports = {
   PARTITION, WA_HOST_SUFFIXES, HEADER_CSS, ALLOWED_PERMISSIONS,
   isWhatsAppUrl, decideWaNavigation, parseClickToChat, appDeepLink, viewWebPreferences,
-  decidePermission, dockWidth, dockLayout, safePdfName, isPdfBytes, createDock, register, attach,
+  decidePermission, plainChromeUserAgent, dockWidth, dockLayout, safePdfName, isPdfBytes, createDock, register, attach,
 };
