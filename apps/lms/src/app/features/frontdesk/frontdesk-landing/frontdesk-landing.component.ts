@@ -2416,6 +2416,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  payment hold — offer "Bill" (→ billing screen) in the Dispatch slot. */
   showBillInsteadOfDispatch(o: Order): boolean {
     if (!o.paymentHold) return false;
+    // OPS-76: billing happens at a SEPARATE counter — the front desk has no
+    // Bill action there (showCreateBillOn gates the same way); the card keeps
+    // its "Awaiting Billing" state and no Dispatch.
+    if (this.labCfg.billingMode() !== 'front_desk') return false;
     // The standing "Bill" button (status 'created') already covers it — don't
     // render two Bill buttons on one card.
     if (o.status === 'created' && this.showCreateBillOn(o)) return false;
