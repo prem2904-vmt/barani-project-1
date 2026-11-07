@@ -33,6 +33,7 @@ import { BarcodeScannerModalComponent } from '../../../shared/components/barcode
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { appRecordRoute } from '../../../shared/utils/scan-route';
+import { appointmentResumeTarget } from './appointment-resume';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
@@ -2823,9 +2824,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Already checked-in but the order wasn't created yet → jump back to the
    *  order page with the pre-booked tests pre-filled to finish it. */
   resumeAppointmentOrder(a: Appointment) {
-    this.router.navigate(['/frontdesk/order'], {
-      queryParams: { patientId: a.patientId, appointmentId: a.id }
+    // OPS-74 / OPS-29 #12: if the appointment already has an order, resume THAT
+    // (collection / the order) instead of opening order-create, whose
+    // Continue-to-Payment would bill a second order.
+    this.api.get<{ orderId?: string | null }>(`/api/orders/by-appointment/${a.id}`).subscribe({
+      next: r => this.goResume(a, r?.orderId ?? null),
+      // Lookup failed: fall back to the order page (the server still refuses a duplicate).
+      error: () => this.goResume(a, null),
     });
+  }
+  private goResume(a: Appointment, orderId: string | null) {
+    const canCollectHere = this.labCfg.collectsAtFrontdesk() && this.auth.hasPermission('collect_sample');
+    const t = appointmentResumeTarget(a, orderId, canCollectHere);
+    this.router.navigate(t.path, { queryParams: t.queryParams });
   }
 
   private firstOfThisMonth(): Date {

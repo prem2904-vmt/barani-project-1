@@ -2033,6 +2033,14 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       error: () => this.toasts.error('Could not load patient details')
     });
   }
+  /** The live order already raised from this appointment, or null (also on a failed lookup:
+   *  the server's own idempotency then still refuses a duplicate). */
+  private async existingAppointmentOrderId(appointmentId: string): Promise<string | null> {
+    try {
+      const r = await firstValueFrom(this.api.get<{ orderId?: string | null }>(`/api/orders/by-appointment/${appointmentId}`));
+      return r?.orderId ?? null;
+    } catch { return null; }
+  }
   /** Order metadata JSON — appointment link + optional trendogram config. */
   private buildOrderMetadata(appointmentId: string | null): string | null {
     const meta: Record<string, unknown> = {};
@@ -2176,7 +2184,15 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       // duplicate. A fresh order carries the discount so the server rejects an
       // over-cap discount BEFORE the order exists.
       const key = cartKey(this._selected(), this.specimenPayload(), this.outsourcingPayload());
-      const plan = planConfirmOrder(this.pendingOrder, p.id, key);
+      // OPS-74: coming from an appointment that ALREADY has an order (checked in,
+      // order created, backed out): adopt that order (its tests re-sync to the
+      // cart) instead of posting a second one.
+      let pending = this.pendingOrder;
+      if (!pending && appointmentId) {
+        const existing = await this.existingAppointmentOrderId(appointmentId);
+        if (existing) pending = { id: existing, patientId: p.id, key: '' };
+      }
+      const plan = planConfirmOrder(pending, p.id, key);
       let order: { id: string };
       if (plan.action === 'create') {
         order = await this.postOrderWithStockGate({
