@@ -3783,6 +3783,12 @@ export function departmentSampleIds(groups: { sampleId?: string; sampleIds?: str
 /** Render panel groups grouped into per-DEPARTMENT sections — each department's
  *  tests render in their own block under THAT department's column layout (with
  *  its merges), so one report can show different columns per department. */
+/** Ink for culture / microbiology text: the template's Body text colour once the lab has picked one
+ *  (anything but the stock #1a1a1a), else the long-standing heading ink - untouched paper is byte-identical. */
+export function cultureInk(): string {
+  return theme.body && theme.body.toLowerCase() !== '#1a1a1a' ? TEXT : BLACK;
+}
+
 /** Room the next department needs (heading band + a couple of rows) to start on the same page. */
 const DEPT_NEXT_BLOCK_MIN = 90;
 
@@ -5807,11 +5813,14 @@ function renderCultureSection(
   const hiddenList = (t.result?.['hidden'] as string[] | undefined) ?? [];
   const isRowHidden = (k: string): boolean => hiddenList.includes(k);
 
+  // OPS-90: the culture lines print in the lab's chosen Body text colour (like every other
+  // body text), not a hard black. A template that never picked one keeps today's ink.
+  const ink = cultureInk();
   const line = (label: string, value?: string): void => {
     if (y > A4.h - MARGIN_BOTTOM - 30) { y = newPage(doc, practice); }
-    typeset(doc, 'cultureLabel'); doc.setTextColor(BLACK);
+    typeset(doc, 'cultureLabel'); doc.setTextColor(ink);
     doc.text(`${label.toUpperCase()}:`, MARGIN_X, y);
-    typeset(doc, 'cultureValue');
+    typeset(doc, 'cultureValue'); doc.setTextColor(ink);
     const lines = doc.splitTextToSize(value && value.trim() ? value : '—', A4.w - 2 * MARGIN_X - 4);
     doc.text(lines, MARGIN_X, y + 11);
     y += 11 + lines.length * 11 + 4;
@@ -5956,7 +5965,7 @@ function renderCultureSection(
         astBlock();
       } else if (sec.type === 'paragraph' && (sec.content ?? '').trim()) {
         if (y > A4.h - MARGIN_BOTTOM - 30) { y = newPage(doc, practice); }
-        typeset(doc, 'narrative'); doc.setTextColor(BLACK);
+        typeset(doc, 'narrative'); doc.setTextColor(ink);
         const lines = doc.splitTextToSize((sec.content ?? '').trim(), A4.w - 2 * MARGIN_X) as string[];
         doc.text(lines, MARGIN_X, y);
         y += lines.length * 11 + 6;
