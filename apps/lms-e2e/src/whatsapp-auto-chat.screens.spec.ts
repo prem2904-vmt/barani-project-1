@@ -154,11 +154,18 @@ for (const d of [false, true]) {
 
   test(`web PDF card (Download PDF) ${mode}`, async ({ page }) => {
     test.setTimeout(120_000);
+    // Chrome on a Mac can share files; this shot is the browser that cannot.
+    await page.addInitScript(() => { (navigator as any).canShare = undefined; (navigator as any).share = undefined; });
     await openReport(page, d, { canSend: false });
     await page.locator('.pf-rv-act--send').click();
     await expect(page.locator('[data-testid=wa-pdf-card]')).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('[data-testid=wa-pdf-download]')).toBeVisible();
     await page.waitForTimeout(500);
+    // The card never sits on the toast stack or under the popup (flush right) / the bottom nav.
+    const rect = (sel: string) => page.evaluate(s => { const b = document.querySelector(s)?.getBoundingClientRect(); return b ? { l: b.left, r: b.right, t: b.top, b: b.bottom } : null; }, sel);
+    const card = await rect('[data-testid=wa-pdf-card]'); const toast = await rect('.toast-item'); 
+    if (toast) expect(card!.r <= toast.l || card!.l >= toast.r || card!.b <= toast.t || card!.t >= toast.b).toBe(true);
+    expect(card!.b).toBeLessThanOrEqual(page.viewportSize()!.height - 56);   // above the bottom nav
     await page.screenshot({ path: `${OUT}/web-pdf-card-download-${mode}.png` });
   });
 

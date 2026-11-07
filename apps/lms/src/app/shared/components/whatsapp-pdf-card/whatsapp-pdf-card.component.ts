@@ -58,13 +58,15 @@ import { WhatsAppManualService, whatsAppBridge } from '../../../core/services/wh
   styles: [`
     :host { display: contents; }
     .pf-wpc {
-      position: fixed; z-index: 40; bottom: 16px; right: 436px; width: min(320px, calc(100vw - 32px));
+      /* Bottom-LEFT of the content, above the bottom nav: the WhatsApp popup is flush right and the
+         toast stack is bottom-centre (desktop) / top-right (phone), so none of them can overlap. */
+      position: fixed; z-index: 40; left: 16px; bottom: calc(72px + env(safe-area-inset-bottom, 0px)); width: min(320px, calc(100vw - 32px));
       display: flex; flex-direction: column; gap: 10px; padding: 14px;
       background: var(--bg-card-solid, #fff); color: var(--text-primary);
       border: 1px solid var(--pf-line); border-radius: var(--pf-radius-card, 14px);
       box-shadow: var(--pf-shadow-pop, 0 12px 32px rgba(0, 0, 0, 0.18));
     }
-    .pf-wpc--phone { left: 16px; right: 16px; width: auto; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+    .pf-wpc--phone { left: 16px; right: 16px; width: auto; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
     .pf-wpc__head { display: flex; align-items: center; gap: 10px; }
     .pf-wpc__ico { color: var(--text-secondary); flex: none; }
     .pf-wpc__titles { display: flex; flex-direction: column; min-width: 0; margin-right: auto; }
