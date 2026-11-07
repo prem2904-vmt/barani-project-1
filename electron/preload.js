@@ -207,6 +207,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updater: {
     getState: () => ipcRenderer.invoke('updater:getState'),
     restartNow: () => ipcRenderer.invoke('updater:restartNow'),
+    // "Check for updates" (avatar menu): starts a check, or restarts when ready.
+    check: () => ipcRenderer.invoke('updater:check'),
     onState: (cb) => {
       const h = (_e, s) => cb(s);
       ipcRenderer.on('updater:state', h);

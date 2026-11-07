@@ -102,6 +102,37 @@ test('IPC: restartNow before anything is downloaded is refused, no quitAndInstal
   assert.equal(fakeAutoUpdater.quitAndInstallCalls.length, 0);
 });
 
+test('IPC: updater:check is refused for a foreign sender and starts a check for our own window', async () => {
+  process.env.PF_DATA_PROFILE = 'dev';
+  const win = fakeWindow();
+  updater.register(() => win, () => []);
+  updater.start();
+  const before = fakeAutoUpdater.checkCalls;
+  const check = handlers.get('updater:check');
+  assert.throws(() => check({ sender: {} }), /forbidden/);
+  assert.throws(() => check(), /forbidden/);
+  assert.equal(fakeAutoUpdater.checkCalls, before);
+  const st = check({ sender: win.webContents });
+  assert.equal(fakeAutoUpdater.checkCalls, before + 1);
+  assert.ok(st && st.phase);
+});
+
+test('checkOrRestart: idle → check; ready → restart (no extra check)', async () => {
+  process.env.PF_DATA_PROFILE = 'dev';
+  const win = fakeWindow();
+  updater.register(() => win, () => []);
+  updater.start();
+  const before = fakeAutoUpdater.checkCalls;
+  updater.checkOrRestart();
+  assert.equal(fakeAutoUpdater.checkCalls, before + 1);
+  fakeAutoUpdater.emit('update-downloaded', { version: '1.2.3' });
+  await tick();
+  updater.checkOrRestart();
+  await tick();
+  assert.equal(fakeAutoUpdater.checkCalls, before + 1);
+  assert.equal(fakeAutoUpdater.quitAndInstallCalls.length, 1);
+});
+
 test('a ready update restarts immediately when no instrument looks busy', async () => {
   process.env.PF_DATA_PROFILE = 'dev';
   const win = fakeWindow();

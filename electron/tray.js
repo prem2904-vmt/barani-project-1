@@ -97,9 +97,7 @@ function handleAction(action) {
     case 'checkUpdates': {
       const updater = safeUpdater();
       if (!updater) break;
-      const st = updater.getState();
-      if (st.phase === 'ready') updater.restartNow();
-      else updater.check();
+      updater.checkOrRestart();
       break;
     }
     case 'toggleLogin': {

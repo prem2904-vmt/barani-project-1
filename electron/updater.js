@@ -112,6 +112,14 @@ function check() {
   try { ensureAutoUpdater().checkForUpdates(); } catch (e) { log(`check failed: ${e && e.message}`); }
 }
 
+/** The one "Check for updates" click, shared by the tray, the application
+ *  menu and the avatar menu: a downloaded update restarts (tryRestart keeps
+ *  the instrument-busy guard), anything else starts a check. */
+function checkOrRestart() {
+  if (state.phase === 'ready') { tryRestart(); return; }
+  check();
+}
+
 function busySnapshot() {
   try { return canRestartNow(statusSnapshot()); } catch { return { safe: true, reasons: [] }; }
 }
@@ -160,6 +168,13 @@ function register(windowGetter, statusSnapshotFn) {
   if (typeof statusSnapshotFn === 'function') statusSnapshot = statusSnapshotFn;
 
   ipcMain.handle('updater:getState', () => state);
+  // Only our own window may start a check (same rule as fullscreen.js).
+  ipcMain.handle('updater:check', (e) => {
+    const w = getWindow();
+    if (!(w && !w.isDestroyed() && e && e.sender === w.webContents)) throw new Error('forbidden');
+    checkOrRestart();
+    return state;
+  });
   ipcMain.handle('updater:restartNow', () => {
     if (state.phase !== 'ready') return { ok: false, reason: 'not-ready' };
     return tryRestart();
@@ -207,5 +222,6 @@ module.exports = {
   // renderer's update banner and the tray can never apply two different
   // "is it safe to restart" decisions.
   restartNow: () => tryRestart(),
+  checkOrRestart,
   _resetForTests,
 };

@@ -89,6 +89,7 @@ import { RouteAccessCtx } from "../../core/auth/route-access";
 import { ProcessWorkflowService } from "../../core/services/process-workflow.service";
 import { isOpdOnly, pickLanding } from "../../core/auth/landing.guard";
 import { DesktopWindowService } from "../../core/services/desktop-window.service";
+import { UpdaterService } from "../../core/services/updater.service";
 import { DesktopClockComponent } from "./desktop-clock.component";
 
 @Component({
@@ -186,6 +187,11 @@ export class TopStripComponent implements OnInit, OnDestroy {
     typeof navigator !== "undefined" && /Mac/i.test(navigator.platform || navigator.userAgent)
       ? "⌃⌘F"
       : "F11";
+  /** Desktop app: "Check for updates" in the avatar menu. */
+  protected readonly updater = inject(UpdaterService);
+  checkUpdates(): void {
+    void this.updater.checkNow();
+  }
   enterFullScreen(): void {
     this.closeProfile();
     void this.desktopWindow.setFullScreen(true);

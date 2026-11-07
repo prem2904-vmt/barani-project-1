@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, ipcMain, nativeTheme, protocol } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, nativeTheme, protocol, Menu } = require('electron');
 const path = require('path');
 const labelPrinter = require('./printer');
 const calls = require('./calls');
@@ -23,6 +23,9 @@ const updater = require('./updater');
 // Close hides to here instead of quitting — see mainWindow.on('close', …)
 // below. electron/tray.js is the single owner of the Tray/icon/menu.
 const tray = require('./tray');
+// Explicit application menu (macOS menu bar / Windows+Linux menu bar) with
+// "Check for Updates…". See app-menu.js.
+const appMenu = require('./app-menu');
 // Don't pull in electron-is-dev — it isn't bundled into the packaged
 // app and falsely reports dev mode, which auto-opens DevTools. Use
 // Electron's canonical app.isPackaged instead.
@@ -296,6 +299,7 @@ app.whenReady().then(async () => {
   // Built AFTER instruments.start() so its first menu/icon already reflects
   // whichever analyzers are paired (status() is empty before load() runs).
   tray.create(() => mainWindow);
+  appMenu.install({ Menu, app, updater });
 
   // macOS: re-open / re-show the window when the dock icon is clicked.
   app.on('activate', () => {

@@ -1,10 +1,11 @@
-import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 
 /** window.electronAPI.updater — electron/preload.js (electron/updater.js in
  *  main). Absent on web / mobile and on a desktop build with no update
  *  channel (no pfDataProfile — see electron/updater-feed.js). */
 export interface ElectronUpdaterBridge {
   getState(): Promise<UpdaterState | null>;
+  check?(): Promise<UpdaterState | null>;
   restartNow(): Promise<{ ok: boolean; deferred?: boolean; reasons?: string[]; reason?: string } | null>;
   onState(cb: (s: UpdaterState) => void): () => void;
 }
@@ -17,6 +18,16 @@ export interface UpdaterState {
   progress: number | null;
   error: string | null;
   deferReasons?: string[] | null;
+}
+
+export function updaterMenuLabel(s: UpdaterState): string {
+  switch (s.phase) {
+    case 'checking': return 'Checking for updates…';
+    case 'downloading': return `Downloading update… ${s.progress || 0}%`;
+    case 'ready': return `Restart to install${s.version ? ` v${s.version}` : ''}`;
+    case 'deferred': return 'Update ready — waiting for instruments to finish';
+    default: return 'Check for updates';
+  }
 }
 
 function electronUpdaterBridge(): ElectronUpdaterBridge | null {
@@ -44,6 +55,12 @@ export class UpdaterService {
 
   readonly state = signal<UpdaterState>({ phase: 'idle', version: null, progress: null, error: null });
 
+  /** Avatar-menu "Check for updates" — same wording as the tray / application
+   *  menu (electron/tray-model.js updaterLabel). */
+  readonly menuLabel = computed(() => updaterMenuLabel(this.state()));
+  /** Nothing to click while a check / download / deferred restart is running. */
+  readonly menuBusy = computed(() => ['checking', 'downloading', 'deferred'].includes(this.state().phase));
+
   /** Show the banner once a verified download is ready, or while we're
    *  waiting out an active analyzer session to retry the restart. */
   readonly bannerVisible = signal(false);
@@ -60,6 +77,13 @@ export class UpdaterService {
   private apply(s: UpdaterState): void {
     this.state.set(s);
     this.bannerVisible.set(s.phase === 'ready' || s.phase === 'deferred');
+  }
+
+  /** Check now, or restart to install when an update is ready (main decides;
+   *  the instrument-busy guard still applies). */
+  async checkNow(): Promise<void> {
+    if (!this.api?.check) return;
+    try { const s = await this.api.check(); if (s) this.apply(s); } catch { /* main logs it */ }
   }
 
   /** "Restart now" — may come back deferred; the banner's own caller reads
