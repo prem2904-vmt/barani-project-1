@@ -6,6 +6,7 @@ import { WaMessage, WaReportStatus, WhatsAppService } from '../../../core/servic
 import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ApiService } from '../../../core/services/api.service';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
@@ -35,6 +36,7 @@ async function render(status: WaReportStatus | 'error', canDeliver = true, extra
       { provide: WhatsAppService, useValue: wa }, { provide: ToastService, useValue: toasts },
       { provide: AuthService, useValue: { hasPermission: () => canDeliver, user: () => null } },
       { provide: ApiService, useValue: { post: vi.fn(() => of({})) } },
+      { provide: TenantEntitlementsService, useValue: { ensureLoaded: async () => {}, moduleEnabled: () => true } },
     ],
   });
   const f = TestBed.createComponent(ReportWhatsAppStatusComponent);
@@ -79,7 +81,7 @@ describe('Report WhatsApp auto-send status', () => {
     await tick();
     f.detectChanges();
     expect(wa.resend).toHaveBeenCalledWith('rep-1');
-    expect(toasts.success).toHaveBeenCalledWith('Sent on WhatsApp to +91 ••••• 43210', 5000);
+    expect(toasts.success).toHaveBeenCalledWith('Sent by WhatsApp Auto to +91 ••••• 43210', 5000);
     expect(wa.reportStatus.mock.calls.length).toBeGreaterThanOrEqual(2);
     TestBed.inject(WhatsAppSendService)['stopWatch']('rep-1');
   });
@@ -103,6 +105,16 @@ describe('Report WhatsApp auto-send status', () => {
     expect(wa.setOptOut).toHaveBeenCalledWith('p1', true);
     expect(sw.getAttribute('aria-checked')).toBe('true');
     expect((el.querySelector('.pf-rwa__btn') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('Prefrontal turned WhatsApp Auto off: no Send now / opt-out, and nothing at all while there is no past message', async () => {
+    const { el } = await render(STATUS({ autoEntitled: false, latest: null, history: [] }));
+    expect(el.querySelector('.pf-rwa')).toBeNull();
+    TestBed.resetTestingModule();
+    const { el: el2 } = await render(STATUS({ autoEntitled: false }));
+    expect(el2.querySelector('.pf-rwa__status')).not.toBeNull();     // a past message is still shown
+    expect(el2.querySelector('.pf-rwa__btn')).toBeNull();
+    expect(el2.querySelector('.pf-rwa__opt')).toBeNull();
   });
 
   it('view-only users see the status but no Resend / opt-out', async () => {

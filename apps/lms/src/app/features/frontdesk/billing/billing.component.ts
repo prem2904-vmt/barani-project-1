@@ -1,4 +1,5 @@
 import { Location } from '@angular/common';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChanges, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -541,12 +542,14 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
               </svg>
               Print invoice
             </button>
+            @if (waChatOn()) {
             <button type="button" class="pf-pay-modal__btn" (click)="sendOnWhatsApp()">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.95.51 3.85 1.48 5.53L2 22l4.7-1.55a9.93 9.93 0 0 0 5.34 1.55h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.02A9.94 9.94 0 0 0 12.04 2zm5.43 13.99c-.23.65-1.34 1.24-1.86 1.32-.5.07-1.13.1-1.82-.11-.42-.13-.96-.31-1.64-.62-2.89-1.31-4.78-4.43-4.92-4.63-.14-.2-1.18-1.62-1.18-3.08 0-1.46.77-2.18 1.04-2.48.27-.3.59-.37.78-.37.2 0 .39.01.56.01.18 0 .42-.07.66.5.23.59.79 2.05.86 2.2.07.14.12.31.02.51-.1.2-.15.31-.29.49-.14.18-.3.4-.43.54-.14.14-.29.31-.13.6.16.3.72 1.18 1.55 1.92 1.07.95 1.97 1.25 2.27 1.4.3.14.47.12.65-.07.18-.2.74-.86.93-1.16.2-.3.39-.25.66-.15.27.1 1.74.82 2.04.97.3.14.5.22.57.34.07.13.07.74-.16 1.39z"/>
               </svg>
-              Send on WhatsApp
+              WhatsApp Chat
             </button>
+            }
             <button type="button" class="pf-pay-modal__btn pf-pay-modal__btn--primary" (click)="finishAfterPayment()">
               Done
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1593,6 +1596,9 @@ export class BillingComponent implements OnInit, OnChanges {
   private readonly location = inject(Location);
   private readonly billingEvents = inject(BillingEventsService);
   private readonly printer = inject(PrinterService);
+  private readonly entitlements = inject(TenantEntitlementsService);
+  /** WhatsApp Chat (staff press Send themselves): Prefrontal's per-lab switch. */
+  readonly waChatOn = computed(() => this.entitlements.moduleEnabled('whatsappChat'));
 
   /** Embedded mode: render inline (e.g. inside the order screen) without the
    *  page header. The orderId comes from {@link embeddedOrderId} instead of the

@@ -420,8 +420,8 @@
                  SAME list with View / Download / More only (route-access.ts). -->
             @if (canDeliver()) {
             <span class="pf-rq-split pf-rq-split--nd">
-              <button type="button" class="pf-rowact pf-rq-split__face" [class.pf-rowact--icon]="!web()" aria-label="Share" [title]="waAuto(r) ? 'WhatsApp (automatic)' : 'Send on WhatsApp'"
-                      [pfBusy]="waSending(r.id)" pfBusyLabel="Sending…" (click)="deliver(r, 'whatsapp')">
+              <button type="button" class="pf-rowact pf-rq-split__face" [class.pf-rowact--icon]="!web()" aria-label="Share" [title]="waLabel(r) || 'Print'"
+                      [pfBusy]="waSending(r.id)" pfBusyLabel="Sending…" (click)="deliver(r, waMode(r) ? 'whatsapp' : 'print')">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 15V3"/><path d="m8 7 4-4 4 4"/>
@@ -437,11 +437,9 @@
               @if (shareFor() === r.id) {
                 <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleShare(r.id)"></div>
                 <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
-                  <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                          (click)="deliver(r, 'whatsapp'); toggleShare(r.id)">{{ waAuto(r) ? 'WhatsApp (automatic)' : 'Send on WhatsApp' }}</button>
-                  @if (waAuto(r)) {
+                  @if (waMode(r)) {
                     <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                            (click)="deliver(r, 'whatsapp-mine'); toggleShare(r.id)">Send on WhatsApp</button>
+                            (click)="deliver(r, 'whatsapp'); toggleShare(r.id)">{{ waLabel(r) }}</button>
                   }
                   <button type="button" class="pf-rq-menu__item press" role="menuitem"
                           (click)="deliver(r, 'print'); toggleShare(r.id)">Print</button>
@@ -570,8 +568,8 @@
                different channel. -->
           @if (canDeliver()) {
           <div class="pf-rq-split">
-            <button type="button" class="pf-rq-act pf-rq-act--face press" [title]="waAuto(r) ? 'WhatsApp (automatic)' : 'Send on WhatsApp'"
-                    [pfBusy]="waSending(r.id)" pfBusyLabel="Sending…" (click)="deliver(r, 'whatsapp')">
+            <button type="button" class="pf-rq-act pf-rq-act--face press" [title]="waLabel(r) || 'Print'"
+                    [pfBusy]="waSending(r.id)" pfBusyLabel="Sending…" (click)="deliver(r, waMode(r) ? 'whatsapp' : 'print')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/>
@@ -588,11 +586,9 @@
             @if (shareFor() === r.id) {
               <div class="pf-rq-menu__bd" aria-hidden="true" (click)="toggleShare(r.id)"></div>
               <div class="pf-rq-menu" role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
-                <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                        (click)="deliver(r, 'whatsapp'); toggleShare(r.id)">{{ waAuto(r) ? 'WhatsApp (automatic)' : 'Send on WhatsApp' }}</button>
-                @if (waAuto(r)) {
+                @if (waMode(r)) {
                   <button type="button" class="pf-rq-menu__item press" role="menuitem"
-                          (click)="deliver(r, 'whatsapp-mine'); toggleShare(r.id)">Send on WhatsApp</button>
+                          (click)="deliver(r, 'whatsapp'); toggleShare(r.id)">{{ waLabel(r) }}</button>
                 }
                 <button type="button" class="pf-rq-menu__item press" role="menuitem"
                         (click)="deliver(r, 'print'); toggleShare(r.id)">Print</button>

@@ -55,15 +55,15 @@
         }
         <!-- THE primary: deliver to the patient (deliver_report only; a
              view_report-only viewer gets a view-only page). -->
-        @if (canDeliver()) {
-        <!-- Lab has WhatsApp Cloud: the server sends to the patient's number
-             (Sending… → Sent → Delivered / Read) = "WhatsApp (automatic)"; else
-             "Send on WhatsApp" — WhatsApp opens on this computer with the
-             message ready and the person presses Send (WhatsAppManualService). -->
+        @if (canDeliver() && waMode()) {
+        <!-- ONE WhatsApp button. WhatsApp Auto (the platform switch is on + the lab has a
+             sender): the server sends to the patient's number (Sending… → Sent → Delivered /
+             Read). Else WhatsApp Chat — WhatsApp opens on this computer with the report
+             ready and the person presses Send (WhatsAppManualService). Neither: no button. -->
         <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-rv-act pf-rv-act--send pf-rv-in" style="--i: 6"
                 [class.pf-rv-act--icon]="!web()" [class.pf-rv-act--done]="done() === 'whatsapp' || waDone()"
-                [attr.aria-label]="waCloud() ? (waDone() ? waLabel() + ' on WhatsApp' : waLabel()) : (done() === 'whatsapp' ? 'WhatsApp opened' : 'Send on WhatsApp')"
-                [title]="waCloud() ? 'The lab\'s WhatsApp number sends the report link' : 'Opens WhatsApp with the message ready; you press Send'"
+                [attr.aria-label]="waCloud() ? (waDone() ? waLabel() + ' by WhatsApp Auto' : waLabel()) : (done() === 'whatsapp' ? 'WhatsApp Chat opened' : 'WhatsApp Chat')"
+                [title]="waCloud() ? 'The lab\'s WhatsApp number sends the report' : 'Opens WhatsApp with the report ready; you press Send'"
                 [disabled]="waState()?.phase === 'sending'" [attr.aria-busy]="waState()?.phase === 'sending'"
                 (click)="deliverWhatsApp()">
           @if (waCloud() && waState()?.phase === 'sending') {
@@ -77,7 +77,7 @@
             <span class="pf-rv-act__t"><svg class="pf-rv-act__check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Opened</span>
           } @else {
             <svg class="pf-rv-act__i" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-            <span class="pf-rv-act__t">{{ waCloud() ? 'WhatsApp (automatic)' : 'Send on WhatsApp' }}</span>
+            <span class="pf-rv-act__t">{{ waCloud() ? 'WhatsApp Auto' : 'WhatsApp Chat' }}</span>
           }
         </button>
         }
@@ -336,8 +336,7 @@
 
         @if (!isPartial()) {
           <!-- Meta WhatsApp Cloud API auto-send status of THIS report version
-               (+ Resend / patient opt-out). The band's Send on WhatsApp button stays as
-               the manual fallback. -->
+               (+ Resend / patient opt-out). The band's ONE WhatsApp button is Auto or Chat. -->
           <pf-report-whatsapp-status [reportId]="r.id" [canDeliver]="canDeliver()" />
         }
 

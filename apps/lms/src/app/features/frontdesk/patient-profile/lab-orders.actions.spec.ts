@@ -58,7 +58,7 @@ async function render(o: { perms?: string[]; withReport?: boolean; waCloud?: boo
       } },
       { provide: ZoomTransitionService, useValue: { holding: signal(false), runLocal: (_d: string, fn: () => void) => fn(), attachTarget() {}, detachTarget() {}, attachSource() {}, detachSource() {} } },
       { provide: Router, useValue: router },
-      { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => o.messages !== false } },
+      { provide: TenantEntitlementsService, useValue: { ensureLoaded: async () => {}, moduleEnabled: (k: string) => (k === 'messages' ? o.messages !== false : true) } },
     ],
   });
   const f = TestBed.createComponent(LabOrdersComponent);
@@ -126,9 +126,9 @@ describe('Patient profile order detail — ⋮ report actions', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/frontdesk/order'], { queryParams: { patientId: 'p1', fromOrderId: 'o1' } });
   });
 
-  it('lab sends WhatsApp from its number: WhatsApp (automatic) + Send on WhatsApp (manual)', async () => {
+  it('lab sends WhatsApp from its number: ONE row, WhatsApp Auto (WhatsApp Chat still runs through its action id)', async () => {
     const { c } = await render({ waCloud: true });
-    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'whatsapp-mine', 'download', 'print', 'open-report', 'repeat']);
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'download', 'print', 'open-report', 'repeat']);
     const svc = TestBed.inject(ReportActionsService);
     const send = vi.spyOn(svc, 'sendWhatsApp').mockImplementation(() => {});
     const mine = vi.spyOn(svc, 'whatsApp').mockResolvedValue(true);

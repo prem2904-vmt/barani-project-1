@@ -40,7 +40,7 @@ const REPORT = {
   }),
 };
 
-type Opts = { current?: { displayName?: string; phone?: string }; narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean | 'attached'; waCloud?: boolean; waStatus?: string; pdfParts?: unknown };
+type Opts = { current?: { displayName?: string; phone?: string }; narrow?: boolean; phone?: boolean; perms?: boolean | string[]; messages?: boolean; fail?: boolean; partial?: boolean; holding?: boolean; partner?: boolean | 'attached'; waCloud?: boolean; platform?: Record<string, boolean>; waStatus?: string; pdfParts?: unknown };
 
 const realMatchMedia = (window as any).matchMedia;
 beforeEach(() => {
@@ -77,6 +77,7 @@ async function render(opts: Opts = {}) {
       if (url === '/api/config/report-template') return of({ dateFormat: 'dd MMM yyyy', timeFormat: '24h' });
       if (url === '/api/directory/users') return of([{ id: 'u2', displayName: 'Priya Nair', email: 'priya@lab', isActive: true }]);
       if (url === '/api/whatsapp/settings') return of({ canSend: !!opts.waCloud });
+      if (url === '/api/tenants/module-config') return of(opts.platform ?? {});
       return of([]);
     }),
     post: vi.fn((url: string) => url.endsWith('/resend')
@@ -104,7 +105,7 @@ async function render(opts: Opts = {}) {
       { provide: AuthService, useValue: { user: () => ({ id: 'u1', displayName: 'Admin User', tenantName: 'Micro World' }), hasPermission: (p: string) => Array.isArray(opts.perms) ? opts.perms.includes(p) : opts.perms !== false } },
       { provide: ChatService, useValue: { openConversationWithContext: vi.fn(async () => 'c1'), shareReport: vi.fn(async () => {}) } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
-      { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => opts.messages !== false } },
+      { provide: TenantEntitlementsService, useValue: { ensureLoaded: async () => {}, moduleEnabled: (k: string) => (k === 'messages' ? opts.messages !== false : opts.platform?.[k] !== false) } },
       { provide: OutsourcingService, useValue: outsourcing },
       { provide: ReportLayoutService, useValue: { preview: () => of({ sections: [] }) } },
       { provide: ZoomTransitionService, useValue: { holding, attachTarget() {}, detachTarget() {}, attachSource() {}, detachSource() {} } },
@@ -112,7 +113,7 @@ async function render(opts: Opts = {}) {
       { provide: Router, useValue: { url: '/reports/view/rep-1', navigate: vi.fn(() => Promise.resolve(true)), events: of() } },
     ],
   });
-  // Send on WhatsApp (manual) on a desktop browser: one click → the named popup (no confirm).
+  // WhatsApp Chat (manual) on a desktop browser: one click → the named popup (no confirm).
   const manual = TestBed.inject(WhatsAppManualService);
   const waOpen = vi.fn((..._a: unknown[]) => ({ opener: null, focus: vi.fn() }));
   manual.win = { open: waOpen, screen: { availWidth: 1440, availHeight: 900 }, navigator: { userAgent: 'Macintosh' } } as never;
@@ -162,11 +163,11 @@ describe('Report view (nd) — band + CONTEXT BAR', () => {
 });
 
 describe('Report view (nd) — actions', () => {
-  it('ONE primary (Send on WhatsApp) in the band; Edit / Print / Share with are quiet secondaries', async () => {
+  it('ONE primary (WhatsApp Chat) in the band; Edit / Print / Share with are quiet secondaries', async () => {
     const { el } = await render();
     const actions = el.querySelector('pf-hero-band .pf-hb__actions') as HTMLElement;
     expect(primaries(el).length).toBe(1);
-    expect(actions.querySelector('.pf-hb-btn--primary')?.getAttribute('aria-label')).toBe('Send on WhatsApp');
+    expect(actions.querySelector('.pf-hb-btn--primary')?.getAttribute('aria-label')).toBe('WhatsApp Chat');
     for (const k of ['edit', 'print', 'share', 'more']) {
       const b = actions.querySelector(`.pf-rv-act--${k}`) as HTMLElement;
       expect(b, k).not.toBeNull();
@@ -178,7 +179,7 @@ describe('Report view (nd) — actions', () => {
     expect(actions.querySelector('.pf-rv-act--print .pf-rv-act__t')?.textContent?.trim()).toBe('Print');
   });
 
-  it('every original action still works: Edit, Print, Share with…, Send on WhatsApp, partner report', async () => {
+  it('every original action still works: Edit, Print, Share with…, WhatsApp Chat, partner report', async () => {
     const { el, c, f, api, waOpen } = await render({ partner: true });
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     (el.querySelector('.pf-rv-act--edit') as HTMLButtonElement).click();
@@ -270,7 +271,7 @@ describe('Report view (nd) — actions', () => {
     expect(api.post).not.toHaveBeenCalledWith(expect.stringContaining('/deliver'), expect.anything());
   });
 
-  it('Send on WhatsApp shows a brief "Opened" state (SVG check), then returns to its label', async () => {
+  it('WhatsApp Chat shows a brief "Opened" state (SVG check), then returns to its label', async () => {
     const { el, f, c } = await render();
     vi.useFakeTimers();
     (el.querySelector('.pf-rv-act--send') as HTMLButtonElement).click();
@@ -284,7 +285,7 @@ describe('Report view (nd) — actions', () => {
     expect(c.deliveryLine()).toBe('Delivered via WhatsApp');
     vi.advanceTimersByTime(RV_DONE_MS + 10);
     f.detectChanges();
-    expect(el.querySelector('.pf-rv-act--send .pf-rv-act__t')?.textContent?.trim()).toBe('Send on WhatsApp');
+    expect(el.querySelector('.pf-rv-act--send .pf-rv-act__t')?.textContent?.trim()).toBe('WhatsApp Chat');
   });
 });
 
@@ -370,7 +371,7 @@ describe('Report view (nd) — phones', () => {
     const menu = document.body.querySelector('[role=menu]') as HTMLElement;
     expect(menu.classList).toContain('pf-am-panel--sheet');
     const rows = Array.from(menu.querySelectorAll('[role=menuitem]')).map(b => b.querySelector('.pf-am-item__t')?.textContent?.trim());
-    expect(rows).toEqual(['Share…', 'Copy patient link', 'Send on WhatsApp', 'Share with a colleague', 'Download PDF', 'Print',
+    expect(rows).toEqual(['Share…', 'Copy patient link', 'WhatsApp Chat', 'Share with a colleague', 'Download PDF', 'Print',
       'Edit results', 'Edit referral', 'Regenerate', 'Open patient', 'Open lab results']);
     (menu.querySelector('[data-action=print]') as HTMLButtonElement).click();
     f.detectChanges();
@@ -378,7 +379,7 @@ describe('Report view (nd) — phones', () => {
     expect(document.body.querySelector('[role=menu]')).toBeNull();
     // Touch → the band buttons are icon buttons with their words kept for AT.
     expect(el.querySelector('.pf-rv-act--send')?.classList).toContain('pf-rv-act--icon');
-    expect(el.querySelector('.pf-rv-act--send')?.getAttribute('aria-label')).toBe('Send on WhatsApp');
+    expect(el.querySelector('.pf-rv-act--send')?.getAttribute('aria-label')).toBe('WhatsApp Chat');
   });
 
   it('phone CSS: 44px icons, full-width preview, sheets above the navbar', () => {
@@ -509,7 +510,7 @@ describe('Report view (nd) — ⋮ report actions: permission + state rules', ()
   });
 });
 
-describe('Report view (nd) — WhatsApp (automatic) through the lab\'s WhatsApp Cloud API number', () => {
+describe('Report view (nd) — WhatsApp Auto through the lab\'s WhatsApp Cloud API number', () => {
   const sendBtn = (el: HTMLElement) => el.querySelector('.pf-rv-act--send') as HTMLButtonElement;
 
   it('lab with a sender: the primary sends from the server (no wa.me window) and shows Sent with the check', async () => {
@@ -525,7 +526,7 @@ describe('Report view (nd) — WhatsApp (automatic) through the lab\'s WhatsApp 
     expect(open).not.toHaveBeenCalled();
     expect(sendBtn(el).textContent).toContain('Sent');
     expect(sendBtn(el).querySelector('svg')).not.toBeNull();
-    expect(sendBtn(el).getAttribute('aria-label')).toBe('Sent on WhatsApp');
+    expect(sendBtn(el).getAttribute('aria-label')).toBe('Sent by WhatsApp Auto');
     expect(c.waState()).toMatchObject({ phase: 'sent', to: '+91 ••••• 43210' });
     // The delivery is recorded like the wa.me flow; the REPORT card reflects it.
     expect(api.post).toHaveBeenCalledWith('/api/reports/rep-1/deliver', { via: 'whatsapp', note: 'WhatsApp Cloud API' });
@@ -533,25 +534,25 @@ describe('Report view (nd) — WhatsApp (automatic) through the lab\'s WhatsApp 
     (TestBed.inject(WhatsAppSendService) as any).stopWatch('rep-1');
   });
 
-  it('a Meta failure keeps the label "WhatsApp (automatic)" and records no delivery', async () => {
+  it('a Meta failure keeps the label "WhatsApp Auto" and records no delivery', async () => {
     const { el, f, api } = await render({ waCloud: true, waStatus: 'failed' });
     sendBtn(el).click();
     await new Promise(r => setTimeout(r, 0));
     f.detectChanges();
-    expect(sendBtn(el).textContent).toContain('WhatsApp (automatic)');
+    expect(sendBtn(el).textContent).toContain('WhatsApp Auto');
     expect(api.post).not.toHaveBeenCalledWith('/api/reports/rep-1/deliver', expect.anything());
   });
 
-  it('the ⋮ offers "WhatsApp (automatic)" + "Send on WhatsApp" (manual)', async () => {
+  it('the ⋮ offers ONE WhatsApp row: "WhatsApp Auto"', async () => {
     const { c, waOpen } = await render({ waCloud: true });
     const rows = c.menuActions().filter((a: { id: string }) => a.id.startsWith('whatsapp')).map((a: { label: string }) => a.label);
-    expect(rows).toEqual(['WhatsApp (automatic)', 'Send on WhatsApp']);
+    expect(rows).toEqual(['WhatsApp Auto']);
     c.runAction('whatsapp-mine');
     await settle();
     expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp', expect.any(String));
   });
 
-  it('Send on WhatsApp goes to the patient AS ON FILE (a corrected name / mobile), not the issued snapshot', async () => {
+  it('WhatsApp Chat goes to the patient AS ON FILE (a corrected name / mobile), not the issued snapshot', async () => {
     const { c, waOpen } = await render({ waCloud: true, current: { displayName: 'Ms. Yamini Rao', phone: '9123456789' } });
     c.runAction('whatsapp-mine');
     await settle();
@@ -561,14 +562,28 @@ describe('Report view (nd) — WhatsApp (automatic) through the lab\'s WhatsApp 
     expect(url).toContain('Dear Ms. Yamini Rao, your report from');
   });
 
-  it('lab without a sender: the band primary is Send on WhatsApp (manual), one WhatsApp row', async () => {
+  it('lab without a sender: the band primary is WhatsApp Chat, one WhatsApp row', async () => {
     const { el, c, api, waOpen } = await render({ waCloud: false });
     expect(c.waCloud()).toBe(false);
-    expect(c.menuActions().filter((a: { id: string }) => a.id.startsWith('whatsapp')).map((a: { label: string }) => a.label)).toEqual(['Send on WhatsApp']);
+    expect(c.menuActions().filter((a: { id: string }) => a.id.startsWith('whatsapp')).map((a: { label: string }) => a.label)).toEqual(['WhatsApp Chat']);
     sendBtn(el).click();
     await settle();
     expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp', expect.any(String));
     expect(api.post).not.toHaveBeenCalledWith('/api/whatsapp/reports/rep-1/resend', {});
+  });
+
+  it('Prefrontal turned WhatsApp Auto off: a lab with a sender gets WhatsApp Chat', async () => {
+    const { el, c } = await render({ waCloud: true, platform: { whatsappAuto: false, whatsappChat: true } });
+    expect(c.waCloud()).toBe(false);
+    expect(c.waMode()).toBe('chat');
+    expect(sendBtn(el).getAttribute('aria-label')).toBe('WhatsApp Chat');
+  });
+
+  it('both WhatsApp switches off: no WhatsApp button and no WhatsApp row', async () => {
+    const { el, c } = await render({ waCloud: true, platform: { whatsappAuto: false, whatsappChat: false } });
+    expect(c.waMode()).toBeNull();
+    expect(sendBtn(el)).toBeNull();
+    expect(c.menuActions().some((a: { id: string }) => a.id.startsWith('whatsapp'))).toBe(false);
   });
 
   it('a preliminary report never goes through the server send', async () => {

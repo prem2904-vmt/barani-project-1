@@ -282,7 +282,7 @@ export class ReportQueueComponent implements OnInit {
       a.push({ id: 'share', label: 'Share…', icon: 'share', group: 'Share', hint: this.reportActions.shareHint() });
       a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
     }
-    // WhatsApp (automatic) when the lab sends from its number + Send on WhatsApp (manual, every lab).
+    // ONE WhatsApp row: WhatsApp Auto (entitled + a sender), else WhatsApp Chat (entitled), else none.
     a.push(...this.reportActions.whatsAppActions(r));
     a.push({ id: 'view', label: 'View report', icon: 'view', group: 'Report' });
     a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
@@ -852,21 +852,24 @@ export class ReportQueueComponent implements OnInit {
     try { await this.storedPdf(r); } catch { /* best-effort */ }
   }
 
-  /** The lab sends this report from its own number ("WhatsApp (automatic)"). */
+  /** The lab sends this report from its own number (WhatsApp Auto). */
   waAuto(r: Report): boolean { return !!this.waSend?.canSend(r); }
+  /** The ONE WhatsApp action for a row: Auto, else Chat, else none. */
+  waMode(r: Report): 'auto' | 'chat' | null { return this.waSend?.mode(r) ?? null; }
+  waLabel(r: Report): string { const m = this.waMode(r); return m === 'auto' ? 'WhatsApp Auto' : m === 'chat' ? 'WhatsApp Chat' : ''; }
 
   deliver(r: Report, via: string) {
     if (!this.canDeliver()) return;
     // The lab sends WhatsApp from its Cloud API number: "WhatsApp" is the
     // server send to the patient's number (Sending… → Sent → Delivered / Read
-    // in the row meta). "whatsapp-mine" is Send on WhatsApp from this computer.
+    // in the row meta). "whatsapp-mine" is WhatsApp Chat from this computer.
     if (via === "whatsapp" && this.waSend?.canSend(r)) {
       if (r.qrToken || r.type === "final") void this.archiveReportPdf(r);
       void this.waSend.send(r.id).then((m) => { if (m && m.status !== "failed") this.refresh(); });
       return;
     }
     if (via === "whatsapp-mine" || via === "whatsapp") {
-      void this.sendOnWhatsApp(r);
+      if (this.waSend?.chatAllowed()) void this.sendOnWhatsApp(r);
       return;
     }
     if (via === "print") {
@@ -878,7 +881,7 @@ export class ReportQueueComponent implements OnInit {
     this.recordDelivery(r, via);
   }
 
-  /** Send on WhatsApp — the manual flow on this computer (every lab):
+  /** WhatsApp Chat — the manual flow on this computer (every lab):
    *  WhatsApp opens with the patient's chat and the report link ready; the
    *  person presses Send. Recorded as delivered once WhatsApp opened. */
   private async sendOnWhatsApp(r: Report) {
@@ -893,6 +896,7 @@ export class ReportQueueComponent implements OnInit {
       reportId: r.id,
       pdf: () => this.storedPdf(r),
       pdfName: `report-${r.id.replace(/-/g, "").slice(-8).toUpperCase()}.pdf`,
+      onHandedOver: () => this.recordDelivery(r, "whatsapp"),
     });
     if (out === "opened") this.recordDelivery(r, "whatsapp");
   }

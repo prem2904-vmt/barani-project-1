@@ -186,7 +186,7 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   ls('rules', 'Rules & gates', 'Require validation for all results', ['validation', 'pathologist', 'direct flow']),
   ls('rules', 'Rules & gates', 'Show "Payments due" tab', ['payments due', 'outstanding balance'], { perms: PAYMENT_RULE_PERMS }),
   ls('report', 'Report', 'Technician notes on report', ['tech notes', 'report notes']),
-  ls('report', 'Report', 'Send WhatsApp automatically when the report is ready', ['whatsapp', 'auto send']),
+  ls('report', 'Report', 'WhatsApp Auto: send the report automatically when it is ready', ['whatsapp', 'auto send', 'whatsapp auto']),
   { title: 'Microbiology / Culture', href: '/admin/microbiology', section: SETTINGS_SECTION.lab, icon: I.micro, kind: 'page',
     keywords: ['culture', 'microbiology', 'culture bench'] },
   on('/admin/microbiology', 'Microbiology / Culture', I.micro, 'Stage lock', ['lock timeout', 'takeover']),

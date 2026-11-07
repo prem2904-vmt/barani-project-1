@@ -1,13 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
 
 /**
- * "Send on WhatsApp" (manual) on the WEB, desktop 1440×900 — FULLY OFFLINE.
+ * "WhatsApp Chat" (manual) on the WEB, desktop 1440×900 — FULLY OFFLINE.
  * No backend, no real accounts, and the REAL WhatsApp site is never loaded:
  * `window.open` is stubbed and records its calls; a second test opens a
  * MOCK WhatsApp page in the real popup (web.whatsapp.com is routed to a
  * local HTML) to check where the phone-shaped window lands.
  *
- * Asserts: the report's ⋮ / band show "Send on WhatsApp" for a lab without
+ * Asserts: the report's ⋮ / band show "WhatsApp Chat" for a lab without
  * any WhatsApp set-up; ONE click opens ONLY the click-to-chat link in ONE
  * named window ("pf-whatsapp", 420 wide, full height, flush right) with NO
  * dialog; the consent reminder is an info toast on the FIRST send of a
@@ -118,22 +118,22 @@ async function dark(page: Page) {
   await page.waitForTimeout(400);
 }
 
-test.describe('Send on WhatsApp (manual) — web, offline', () => {
-  test('every lab: band + ⋮ say "Send on WhatsApp"; one click, no dialog; ONE named phone-shaped window on the right', async ({ page }) => {
+test.describe('WhatsApp Chat (manual) — web, offline', () => {
+  test('every lab: band + ⋮ say "WhatsApp Chat"; one click, no dialog; ONE named phone-shaped window on the right', async ({ page }) => {
     test.setTimeout(120_000);
     await offlineBackend(page, '+919876543210');
     await seed(page, { stubOpen: true });
     await openReport(page);
 
     const send = page.locator('.pf-rv-act--send');
-    await expect(send).toHaveAttribute('aria-label', 'Send on WhatsApp');
-    await expect(send).toContainText('Send on WhatsApp');
+    await expect(send).toHaveAttribute('aria-label', 'WhatsApp Chat');
+    await expect(send).toContainText('WhatsApp Chat');
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/report-actions-light.png` });
 
     // The ⋮: one manual row, no "automatic" for a lab without a sender.
     await page.locator('.pf-rv-act--more').click();
     const menu = page.locator('[role=menu]');
-    await expect(menu.getByRole('menuitem', { name: /Send on WhatsApp/ })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: /WhatsApp Chat/ })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: /automatic/ })).toHaveCount(0);
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/report-menu-light.png` });
     if (SHOTS) { await dark(page); await page.screenshot({ path: `${SHOTS}/report-menu-dark.png` }); }

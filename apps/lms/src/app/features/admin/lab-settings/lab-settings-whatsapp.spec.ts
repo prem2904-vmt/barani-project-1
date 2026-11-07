@@ -47,7 +47,7 @@ function make(settings: unknown) {
   p.cmp.tab.set('report');
   p.f.detectChanges();
   const card = () => p.el.querySelector<HTMLElement>('[data-testid="ls-whatsapp"]');
-  const main = () => card()!.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Send WhatsApp automatically when the report is ready"]')!;
+  const main = () => card()!.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="WhatsApp Auto: send the report automatically when it is ready"]')!;
   return { ...p, card, main };
 }
 
@@ -74,7 +74,7 @@ describe('Lab settings — WhatsApp auto-send', () => {
     p.f.detectChanges();
     expect(p.api.put).toHaveBeenCalledWith('/api/whatsapp/settings', { autoSendEnabled: true, sendUpdatedReports: true });
     expect(p.main().getAttribute('aria-checked')).toBe('true');
-    expect(p.toasts.success).toHaveBeenCalledWith('Reports will be sent on WhatsApp automatically once paid');
+    expect(p.toasts.success).toHaveBeenCalledWith('WhatsApp Auto is on: reports are sent once paid');
   });
 
   it('a connected lab number shows the lab\'s own name; the number card says Connected', () => {

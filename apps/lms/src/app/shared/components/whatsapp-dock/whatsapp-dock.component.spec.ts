@@ -5,7 +5,7 @@ import { WaDockState } from '../../../core/services/whatsapp-manual.service';
 import { WA_DOCKED_CLASS, WhatsAppDockComponent } from './whatsapp-dock.component';
 
 /** Desktop app: the strip above the docked WhatsApp panel + the app reflow. */
-const OPEN: WaDockState = { open: true, width: 380, top: 96, loading: false, failed: false, pdfName: null };
+const OPEN: WaDockState = { open: true, width: 380, top: 128, loading: false, failed: false, pdfName: null };
 
 function setup(bridge: Record<string, unknown> | null, confirm = true) {
   let push: ((s: WaDockState) => void) | null = null;
@@ -90,11 +90,32 @@ describe('WhatsAppDockComponent', () => {
     emit({ ...OPEN, pdfName: 'report-AB.pdf' });
     const chip = el.querySelector('[data-testid="wa-dock-pdf"]') as HTMLElement;
     expect(chip.getAttribute('draggable')).toBe('true');
-    expect(chip.textContent).toContain('Drag the PDF into the chat');
+    expect(chip.textContent).toContain('Report PDF');
     const ev = new Event('dragstart', { cancelable: true });
     chip.dispatchEvent(ev);
     expect(ev.defaultPrevented).toBe(true);
     expect(b!.startDrag).toHaveBeenCalledTimes(1);
+  });
+
+  it('the card line follows the automatic attach: working → attached → press Ctrl/Cmd+V when it did not work', () => {
+    const { el, emit } = setup({});
+    const line = () => (el.querySelector('[data-testid="wa-dock-line"]') as HTMLElement).textContent!.trim();
+    emit({ ...OPEN, pdfName: 'r.pdf', attach: 'working' });
+    expect(line()).toBe('Attaching the report PDF to the chat…');
+    emit({ ...OPEN, pdfName: 'r.pdf', attach: 'attached' });
+    expect(line()).toBe('Report PDF attached — check it, then press Send.');
+    emit({ ...OPEN, pdfName: 'r.pdf', attach: 'manual' });
+    expect(line()).toMatch(/^Report PDF is ready — press (Ctrl|Cmd)\+V in the chat, then Send\./);
+    expect(el.textContent).not.toMatch(/\bAI\b/);
+  });
+
+  it('Copy again puts the PDF back on the clipboard and says how to paste it', async () => {
+    const copyPdf = vi.fn(async () => ({ ok: true }));
+    const { el, emit, f } = setup({ copyPdf });
+    emit({ ...OPEN, pdfName: 'r.pdf', attach: 'manual' });
+    (el.querySelector('[data-testid="wa-dock-copy"]') as HTMLButtonElement).click();
+    await f.whenStable();
+    expect(copyPdf).toHaveBeenCalledTimes(1);
   });
 
   it('destroy undoes the reflow', () => {

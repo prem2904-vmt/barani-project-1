@@ -140,7 +140,7 @@ async function render(opts: Opts = {}) {
       { provide: OrderEntryService, useValue: orderEntry },
       { provide: ProcessWorkflowService, useValue: { isEnabled: () => true, active: signal(null) } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }), ensureLoaded() {} } },
-      { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => opts.messages !== false } },
+      { provide: TenantEntitlementsService, useValue: { ensureLoaded: async () => {}, moduleEnabled: (k: string) => (k === 'messages' ? opts.messages !== false : true) } },
       { provide: ThemeService, useValue: { isDark: () => false, isNewDesign: () => true } },
       { provide: ZoomTransitionService, useValue: zoom },
       { provide: PatientTimelineService, useValue: timeline },

@@ -208,7 +208,7 @@ describe('Pharmacy screens', () => {
     }));
     expect(el.textContent).toContain('Instructions');
     expect(el.textContent).toContain('Take 1 tablet');
-    expect(el.textContent).toContain('Send on WhatsApp');
+    expect(el.textContent).toContain('WhatsApp Chat');
     const wa = el.querySelector('a[href^="https://wa.me/919841022000"]');
     expect(wa).toBeTruthy();
     expect(primaries(el).length).toBe(1);

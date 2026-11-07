@@ -3,6 +3,7 @@ import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { ApiService } from './api.service';
+import { TenantEntitlementsService } from './tenant-entitlements.service';
 import { ToastService } from './toast.service';
 import { WhatsAppService, type WaMessage } from './whatsapp.service';
 
@@ -59,10 +60,14 @@ export class WhatsAppSendService {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
+  private readonly entitlements = inject(TenantEntitlementsService);
 
   private readonly _cloud = signal<boolean | null>(null);
-  /** The lab sends WhatsApp from the server (else: the wa.me fallback). */
-  readonly cloud = () => this._cloud() === true;
+  /** WhatsApp Auto: the platform switch is on AND the lab can send from the server
+   *  (a sender is set up). Else the lab falls back to WhatsApp Chat (when entitled). */
+  readonly cloud = () => this._cloud() === true && this.entitlements.moduleEnabled('whatsappAuto');
+  /** WhatsApp Chat (staff open WhatsApp and press Send): the platform switch. */
+  readonly chatAllowed = () => this.entitlements.moduleEnabled('whatsappChat');
   private loading = false;
 
   private readonly _states = signal<Record<string, WaSendState>>({});
@@ -70,6 +75,7 @@ export class WhatsAppSendService {
 
   /** Warm `cloud()` (idempotent). Only the delivery desk can send. */
   ensure(): void {
+    void this.entitlements.ensureLoaded();
     if (this._cloud() !== null || this.loading || !this.auth.hasPermission('deliver_report')) return;
     this.loading = true;
     this.wa.settings().subscribe({
@@ -82,6 +88,14 @@ export class WhatsAppSendService {
   /** A final report can go through the server; a preliminary one cannot. */
   canSend(r: { type?: string | null } | null | undefined): boolean {
     return !!r && this.cloud() && this.auth.hasPermission('deliver_report') && (r.type ?? 'final') === 'final';
+  }
+
+  /** The ONE button's mode for a report: Auto when entitled + set up (final report),
+   *  else Chat when entitled, else none (no WhatsApp button). */
+  mode(r: { type?: string | null } | null | undefined): 'auto' | 'chat' | null {
+    if (!r || !this.auth.hasPermission('deliver_report')) return null;
+    if (this.canSend(r)) return 'auto';
+    return this.chatAllowed() ? 'chat' : null;
   }
 
   state(reportId: string | null | undefined): WaSendState | null {
@@ -112,8 +126,8 @@ export class WhatsAppSendService {
     } catch (e) {
       const err = ApiError.from(e);
       this.set(reportId, null);
-      if (err.code === 'not_configured' || err.code === 'whatsapp_disabled') this._cloud.set(false);
-      this.toasts.error(err.message || 'Could not send on WhatsApp', 6000);
+      if (err.code === 'not_configured' || err.code === 'whatsapp_disabled' || err.code === 'module_disabled') this._cloud.set(false);
+      this.toasts.error(err.message || 'Could not send with WhatsApp Auto', 6000);
       return null;
     }
     const to = m.toDisplay || m.to || null;
@@ -126,7 +140,7 @@ export class WhatsAppSendService {
     if (phase === 'queued') {
       this.toasts.info(m.errorReason ? `${m.errorReason}` : 'Queued for WhatsApp — it will be retried automatically', 6000);
     } else {
-      this.toasts.success(to ? `Sent on WhatsApp to ${to}` : 'Report link sent on WhatsApp', 5000);
+      this.toasts.success(to ? `Sent by WhatsApp Auto to ${to}` : 'Report sent by WhatsApp Auto', 5000);
       // Handing the link to the patient is the delivery — same record the
       // wa.me flow writes (the webhook's "delivered" never overwrites it).
       this.watch(reportId, m.id, Date.now() + WA_WATCH_MS);

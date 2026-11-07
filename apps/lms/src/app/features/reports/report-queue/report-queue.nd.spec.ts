@@ -513,13 +513,13 @@ describe('Reports list — same reports for every viewer, actions by permission'
       full.c._filter.set('all'); full.f.detectChanges();
       const fullRows = rowNames(full.el);
       expect(fullRows.length).toBeGreaterThan(0);
-      expect(full.el.querySelector('[title="Send on WhatsApp"]')).not.toBeNull();
+      expect(full.el.querySelector('[title="WhatsApp Chat"]')).not.toBeNull();
       TestBed.resetTestingModule();
 
       const viewer = await render({ nd, perms: ['view_report'] });
       viewer.c._filter.set('all'); viewer.f.detectChanges();
       expect(rowNames(viewer.el)).toEqual(fullRows);                       // identical list
-      expect(viewer.el.querySelector('[title="Send on WhatsApp"]')).toBeNull();  // no delivery
+      expect(viewer.el.querySelector('[title="WhatsApp Chat"]')).toBeNull();  // no delivery
       expect(viewer.el.querySelector('[title="View on screen"]')).not.toBeNull();
       expect(viewer.el.querySelector('[title="Download PDF"]')).not.toBeNull();
       // No Generate / Regenerate; branch managers (no edit_result, no bench
@@ -568,7 +568,7 @@ describe('Reports list — same reports for every viewer, actions by permission'
       c._filter.set('all'); f.detectChanges();
       const print = el.querySelector('.pf-rq-print') as HTMLButtonElement;
       expect(print).not.toBeNull();
-      expect(el.querySelector('[title="Send on WhatsApp"]')).toBeNull();
+      expect(el.querySelector('[title="WhatsApp Chat"]')).toBeNull();
       const spy = vi.spyOn(c, 'printReport').mockResolvedValue(undefined);
       print.click();
       expect(spy).toHaveBeenCalled();
@@ -710,13 +710,21 @@ describe('Reports list (nd) — WhatsApp auto-send status', () => {
   });
 });
 
-describe('Reports list — WhatsApp (automatic) + Send on WhatsApp (manual)', () => {
+describe('Reports list — ONE WhatsApp action: Auto, else Chat', () => {
   afterEach(() => closeMenus());
   const ids = (c: any, i = 0) => c.rowActions().get(c.items()[i].id).map((a: { id: string }) => a.id);
 
-  it('the ⋮ offers WhatsApp (automatic) + Send on WhatsApp when the lab has a sender', async () => {
+  it('the ⋮ offers ONE WhatsApp row — WhatsApp Auto — when the lab has a sender', async () => {
     const { c } = await render({ waCloud: true, perms: ['deliver_report', 'view_report', 'view_order'] });
-    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'whatsapp-mine', 'view', 'download', 'print', 'regenerate']);
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'view', 'download', 'print', 'regenerate']);
+    expect(c.rowActions().get(c.items()[0].id).find((a: { id: string }) => a.id === 'whatsapp').label).toBe('WhatsApp Auto');
+  });
+
+  it('no sender: the ONE row is WhatsApp Chat', async () => {
+    const { c } = await render({ waCloud: false, perms: ['deliver_report', 'view_report', 'view_order'] });
+    expect(ids(c)).toContain('whatsapp-mine');
+    expect(ids(c)).not.toContain('whatsapp');
+    expect(c.rowActions().get(c.items()[0].id).find((a: { id: string }) => a.id === 'whatsapp-mine').label).toBe('WhatsApp Chat');
   });
 
   it('WhatsApp posts the server send (no wa.me window) and the row meta shows Sent + the masked number', async () => {
@@ -734,7 +742,7 @@ describe('Reports list — WhatsApp (automatic) + Send on WhatsApp (manual)', ()
     (TestBed.inject(WhatsAppSendService) as any).stopWatch('r1');
   });
 
-  it('Send on WhatsApp: one click (no confirm), the click-to-chat window on this computer; recorded once it opened', async () => {
+  it('WhatsApp Chat: one click (no confirm), the click-to-chat window on this computer; recorded once it opened', async () => {
     const { c, api } = await render({ waCloud: true });
     const manual = TestBed.inject(WhatsAppManualService);
     const open = vi.fn((..._a: unknown[]) => ({ opener: null, focus: vi.fn() }));
@@ -748,7 +756,7 @@ describe('Reports list — WhatsApp (automatic) + Send on WhatsApp (manual)', ()
     expect(api.post).toHaveBeenCalledWith(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: 'WhatsApp opened (manual)' });
   });
 
-  it('Send on WhatsApp, patient opted out and the person cancels: nothing opens, nothing recorded', async () => {
+  it('WhatsApp Chat, patient opted out and the person cancels: nothing opens, nothing recorded', async () => {
     const { c, api } = await render({ waCloud: false });
     const base = api.get.getMockImplementation() as (url: string) => unknown;
     api.get.mockImplementation(((url: string) =>

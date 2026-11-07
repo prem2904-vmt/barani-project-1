@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import { AuthService } from '../auth/auth.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { ApiService } from './api.service';
+import { TenantEntitlementsService } from './tenant-entitlements.service';
 import { ToastService } from './toast.service';
 import { WaMessage, WaReportStatus, WhatsAppService } from './whatsapp.service';
 import { WA_POLL_MS, WA_WATCH_MS, WhatsAppSendService, waSendLabel } from './whatsapp-send.service';
@@ -20,7 +21,7 @@ const STATUS = (latest: WaMessage): WaReportStatus => ({
 describe('WhatsAppSendService (staff Send WhatsApp via the Cloud API)', () => {
   afterEach(() => { vi.useRealTimers(); TestBed.resetTestingModule(); });
 
-  function make(opts: { perms?: string[]; canSend?: boolean; resend?: unknown; statuses?: WaMessage[] } = {}) {
+  function make(opts: { perms?: string[]; canSend?: boolean; resend?: unknown; statuses?: WaMessage[]; platform?: { whatsappAuto?: boolean; whatsappChat?: boolean } } = {}) {
     const perms = opts.perms ?? ['deliver_report'];
     const queue = [...(opts.statuses ?? [])];
     const wa = {
@@ -36,6 +37,10 @@ describe('WhatsAppSendService (staff Send WhatsApp via the Cloud API)', () => {
         { provide: ApiService, useValue: api },
         { provide: ToastService, useValue: toasts },
         { provide: AuthService, useValue: { hasPermission: (p: string) => perms.includes(p) } },
+        { provide: TenantEntitlementsService, useValue: {
+          ensureLoaded: async () => {},
+          moduleEnabled: (k: string) => (opts.platform as Record<string, boolean> | undefined)?.[k] !== false,
+        } },
       ],
     });
     return { svc: TestBed.inject(WhatsAppSendService), wa, api, toasts };
@@ -77,7 +82,7 @@ describe('WhatsAppSendService (staff Send WhatsApp via the Cloud API)', () => {
     expect(wa.resend).toHaveBeenCalledWith('rep-1');
     expect(m?.status).toBe('sent');
     expect(svc.state('rep-1')).toMatchObject({ phase: 'sent', to: '+91 ••••• 79229' });
-    expect(toasts.success).toHaveBeenCalledWith('Sent on WhatsApp to +91 ••••• 79229', 5000);
+    expect(toasts.success).toHaveBeenCalledWith('Sent by WhatsApp Auto to +91 ••••• 79229', 5000);
     expect(api.post).toHaveBeenCalledWith('/api/reports/rep-1/deliver', { via: 'whatsapp', note: 'WhatsApp Cloud API' });
     svc['stopWatch']('rep-1');
   });
@@ -146,5 +151,34 @@ describe('WhatsAppSendService (staff Send WhatsApp via the Cloud API)', () => {
     expect(waSendLabel('delivered')).toBe('Delivered');
     expect(waSendLabel('read')).toBe('Read');
     expect(waSendLabel(null)).toBe('');
+  });
+
+  it('mode(): Auto when the platform switch is on and the lab has a sender; else Chat; else none', () => {
+    const a = make();
+    a.svc.ensure();
+    expect(a.svc.mode({ type: 'final' })).toBe('auto');
+    expect(a.svc.mode({ type: 'partial' })).toBe('chat');
+    TestBed.resetTestingModule();
+    const b = make({ platform: { whatsappAuto: false } });
+    b.svc.ensure();
+    expect(b.svc.mode({ type: 'final' })).toBe('chat');
+    TestBed.resetTestingModule();
+    const c = make({ platform: { whatsappAuto: false, whatsappChat: false } });
+    c.svc.ensure();
+    expect(c.svc.mode({ type: 'final' })).toBeNull();
+    TestBed.resetTestingModule();
+    const d = make({ canSend: false, platform: { whatsappChat: false } });
+    d.svc.ensure();
+    expect(d.svc.mode({ type: 'final' })).toBeNull();
+    TestBed.resetTestingModule();
+    const e = make({ perms: ['view_report'] });
+    expect(e.svc.mode({ type: 'final' })).toBeNull();
+  });
+
+  it('a module_disabled refusal flips the lab off Auto at once', async () => {
+    const { svc } = make({ resend: throwError(() => new ApiError('Turned off by Prefrontal', 'module_disabled')) });
+    svc.ensure();
+    await svc.send('rep-1');
+    expect(svc.cloud()).toBe(false);
   });
 });

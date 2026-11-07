@@ -208,30 +208,23 @@ export class ReportActionsService {
 
   private readonly waSend = inject(WhatsAppSendService);
 
-  /** The ⋮ WhatsApp rows for the delivery desk. Every lab gets **Send on
-   *  WhatsApp** (the manual flow: WhatsApp opens on this computer with the
-   *  chat + message ready, the person presses Send — WhatsAppManualService).
-   *  A lab that also sends from the server (`WhatsAppSendService.cloud()`,
-   *  final report) gets **WhatsApp (automatic)** first: the lab's number →
-   *  the patient's. */
+  /** The ⋮ WhatsApp row for the delivery desk — ONE row: **WhatsApp Auto** when the
+   *  lab has it (platform switch on + a sender set up, final report: the lab's
+   *  number → the patient's), else **WhatsApp Chat** when that is on (WhatsApp
+   *  opens with the chat + message ready, the person presses Send), else none. */
   whatsAppActions(r: ReportRef | null | undefined): PfAction[] {
-    if (!r || !this.auth.hasPermission('deliver_report')) return [];
-    const manual: PfAction = { id: WA_ACTION_MINE, label: 'Send on WhatsApp', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the message ready; you press Send' };
-    if (this.waSend.canSend(r)) {
-      return [
-        { id: WA_ACTION_SEND, label: 'WhatsApp (automatic)', icon: 'whatsapp', group: 'Share', hint: "The lab's WhatsApp number sends the report link" },
-        manual,
-      ];
-    }
-    return [manual];
+    const mode = this.waSend.mode(r);
+    if (mode === 'auto') return [{ id: WA_ACTION_SEND, label: 'WhatsApp Auto', icon: 'whatsapp', group: 'Share', hint: "The lab's WhatsApp number sends the report" }];
+    if (mode === 'chat') return [{ id: WA_ACTION_MINE, label: 'WhatsApp Chat', icon: 'whatsapp', group: 'Share', hint: 'Opens WhatsApp with the report ready; you press Send' }];
+    return [];
   }
 
   /** Warm the "lab sends from the server" flag (screens call it on init —
    *  never from inside a computed). */
   warmWhatsApp(): void { this.waSend.ensure(); }
 
-  /** "WhatsApp (automatic)": the server send when the lab has it, else the
-   *  manual flow. */
+  /** The ONE WhatsApp button: WhatsApp Auto when the lab has it, else WhatsApp Chat
+   *  (when that is on), else nothing. */
   sendWhatsApp(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null }): void {
     if (!this.auth.hasPermission('deliver_report')) return;
     if (this.waSend.canSend(rep)) {
@@ -240,16 +233,16 @@ export class ReportActionsService {
       void this.waSend.send(rep.id);
       return;
     }
-    void this.whatsApp(rep, patient);
+    if (this.waSend.chatAllowed()) void this.whatsApp(rep, patient);
   }
 
   private readonly waManual = inject(WhatsAppManualService);
 
-  /** Send on WhatsApp — the manual flow (deliver_report): click-to-chat with
+  /** WhatsApp Chat — the manual flow (deliver_report): click-to-chat with
    *  the patient's chat and the report link ready; the person presses Send.
    *  Recorded as delivered once WhatsApp opened. */
   async whatsApp(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null }): Promise<boolean> {
-    if (!this.auth.hasPermission('deliver_report')) return false;
+    if (!this.auth.hasPermission('deliver_report') || !this.waSend.chatAllowed()) return false;
     // Archive the PDF first (background) so the public link serves the real file.
     if (rep.qrToken) void this.archive(rep);
     const out = await this.waManual.send({
@@ -260,6 +253,7 @@ export class ReportActionsService {
       reportId: rep.id,
       pdf: () => this.pdfBlob(rep),
       pdfName: this.fileName(rep),
+      onHandedOver: () => this.recordDelivery(rep, 'whatsapp'),
     });
     if (out !== 'opened') return false;
     this.recordDelivery(rep, 'whatsapp');

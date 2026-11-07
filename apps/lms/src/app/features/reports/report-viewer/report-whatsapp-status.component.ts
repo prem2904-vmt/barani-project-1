@@ -28,7 +28,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
   template: `
     @if (visible(); as st) {
       <section class="pf-rwa" aria-labelledby="pf-rwa-t">
-        <h3 class="pf-rwa__sec" id="pf-rwa-t">{{ st.autoSendEnabled ? 'WhatsApp · automatic' : 'WhatsApp' }}</h3>
+        <h3 class="pf-rwa__sec" id="pf-rwa-t">{{ st.autoSendEnabled && st.autoEntitled !== false ? 'WhatsApp Auto' : 'WhatsApp' }}</h3>
 
         @if (st.latest; as m) {
           <div class="pf-rwa__row">
@@ -55,12 +55,12 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
             } @else if (st.autoSendEnabled) {
               Sends automatically, with the report PDF, once this final report is ready and the bill is fully paid.
             } @else {
-              Not sent yet. WhatsApp (automatic) sends the report link to the patient's number.
+              Not sent yet. WhatsApp Auto sends the report to the patient's number.
             }
           </p>
         }
 
-        @if (canDeliver()) {
+        @if (canDeliver() && st.autoEntitled !== false) {
           <div class="pf-rwa__acts">
             <button type="button" class="pf-btn pf-btn--secondary pf-rwa__btn" (click)="resend()"
                     [disabled]="busy() || sending() || st.patientOptOut || (!st.configured && !st.canSend)" [pfBusy]="sending()" pfBusyLabel="Sending…">
@@ -120,6 +120,8 @@ export class ReportWhatsAppStatusComponent {
   readonly visible = computed(() => {
     const st = this.status();
     if (!st) return null;
+    // WhatsApp Auto turned off by Prefrontal: only a past message is worth showing.
+    if (st.autoEntitled === false) return st.latest ? st : null;
     return st.autoSendEnabled || st.canSend || st.latest || st.patientOptOut ? st : null;
   });
   readonly label = computed(() => waStatusLabel(this.status()?.latest?.status));

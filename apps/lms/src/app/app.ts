@@ -20,11 +20,12 @@ import { DesktopWindowService } from './core/services/desktop-window.service';
 import { ElectronMenuActionService } from './core/services/electron-menu-action.service';
 import { SupportSessionService } from './shared/instruments/support-session.service';
 import { WhatsAppDockComponent } from './shared/components/whatsapp-dock/whatsapp-dock.component';
+import { WhatsAppPdfCardComponent } from './shared/components/whatsapp-pdf-card/whatsapp-pdf-card.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent, BusyComponent, WhatsAppDockComponent],
+  imports: [RouterOutlet, LockScreenComponent, SwitchScreenComponent, BusyComponent, WhatsAppDockComponent, WhatsAppPdfCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Navigation feedback is the page OPEN (core/navigation/page-open.service.ts):
@@ -35,6 +36,7 @@ import { WhatsAppDockComponent } from './shared/components/whatsapp-dock/whatsap
     <!-- Desktop app: the strip above the docked WhatsApp Web panel ("Send on
          WhatsApp"); renders nothing on the web / phones. -->
     <pf-wa-dock />
+    <pf-wa-pdf-card />
 
     <!-- 15-minute idle lock (shared lab machines) — PIN to resume. -->
     <pf-lock-screen />

@@ -314,7 +314,7 @@ export class ReportViewerComponent implements OnInit {
       a.push({ id: 'copy-link', label: 'Copy patient link', icon: 'link', group: 'Share' });
     }
     if (this.canDeliver()) {
-      // WhatsApp (automatic) when the lab sends from its number + Send on WhatsApp (manual, every lab).
+      // ONE WhatsApp row: WhatsApp Auto (entitled + a sender), else WhatsApp Chat (entitled), else none.
       a.push(...this.reportActions.whatsAppActions({ ...r, type: this.isPartial() ? 'partial' : r.type }));
       if (this.entitlements.moduleEnabled('messages')) a.push({ id: 'colleague', label: 'Share with a colleague', icon: 'chat', group: 'Share' });
     }
@@ -1062,7 +1062,7 @@ export class ReportViewerComponent implements OnInit {
     }
   }
 
-  // ── WhatsApp (automatic) through the lab's WhatsApp Cloud API number ─────────
+  // ── WhatsApp Auto (the lab's WhatsApp Cloud API number) / WhatsApp Chat (manual) ─────────
   private readonly waSend = inject(WhatsAppSendService);
   private readonly waManual = inject(WhatsAppManualService);
   /** This final report goes out from the server (the lab has a sender). */
@@ -1070,19 +1070,24 @@ export class ReportViewerComponent implements OnInit {
     const r = this._report();
     return !!r && !this.isPartial() && this.waSend.canSend(r);
   });
+  /** The ONE button's mode: Auto, else Chat, else none (no button). */
+  readonly waMode = computed(() => {
+    const r = this._report();
+    return r ? this.waSend.mode({ type: this.isPartial() ? 'partial' : r.type }) : null;
+  });
   /** Live phase of the server send for the report on screen. */
   readonly waState = computed(() => this.waSend.state(this._report()?.id));
-  /** The primary's words: WhatsApp (automatic) → Sending… → Sent → Delivered / Read. */
+  /** The primary's words: WhatsApp Auto → Sending… → Sent → Delivered / Read. */
   readonly waLabel = computed(() => {
     const st = this.waState();
-    return st && st.phase !== 'failed' ? waSendLabel(st.phase) : 'WhatsApp (automatic)';
+    return st && st.phase !== 'failed' ? waSendLabel(st.phase) : 'WhatsApp Auto';
   });
   /** Sent / Delivered / Read: the primary shows the check. */
   readonly waDone = computed(() => ['sent', 'delivered', 'read'].includes(this.waState()?.phase ?? ''));
 
   /** THE primary. Lab has WhatsApp Cloud → the server sends the approved
    *  template with the report link to the patient's number; otherwise (or a
-   *  preliminary report) Send on WhatsApp (manual). */
+   *  preliminary report) WhatsApp Chat. */
   deliverWhatsApp() {
     const r = this._report();
     if (!r || !this.canDeliver()) return;
@@ -1097,17 +1102,17 @@ export class ReportViewerComponent implements OnInit {
       });
       return;
     }
-    void this.shareViaMyWhatsApp();
+    if (this.waSend.chatAllowed()) void this.shareViaMyWhatsApp();
   }
 
-  /** Send on WhatsApp — the manual flow on THIS computer (every lab): the
+  /** WhatsApp Chat — the manual flow on THIS computer (every lab): the
    *  docked panel (desktop app) / a phone-shaped window (browser) / the
    *  WhatsApp app (phone) opens the patient's chat with the message ready;
    *  the person presses Send. The fallback when the lab has no server
-   *  sender, and the ⋮ row beside "WhatsApp (automatic)" when it does. */
+   *  sender (and never when Prefrontal turned WhatsApp Chat off for the lab). */
   async shareViaMyWhatsApp() {
     const r = this._report();
-    if (!r || !this.canDeliver()) return;
+    if (!r || !this.canDeliver() || !this.waSend.chatAllowed()) return;
     // Render + archive the PDF (best-effort, background) so the public link
     // resolves to a real file when the patient opens it.
     if (r.qrToken) this.archiveReportPdf(r);
@@ -1120,9 +1125,17 @@ export class ReportViewerComponent implements OnInit {
       reportId: r.id,
       pdf: async () => { await this.archiveReportPdf(r); return this._pdfBlob ?? null; },
       pdfName: `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`,
+      // Phone "Share PDF" card: the delivery is recorded when the person shares it.
+      onHandedOver: () => this.recordWhatsAppHandOver(r.id),
     });
     if (out !== 'opened') return;
     this.flash('whatsapp');
+    this.recordWhatsAppHandOver(r.id);
+  }
+
+  private recordWhatsAppHandOver(reportId: string) {
+    const r = this._report();
+    if (!r || r.id !== reportId) return;
     this.api.post(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: WA_MANUAL_NOTE }).subscribe({
       next: () => {
         this.toasts.success('WhatsApp is open. Press Send there.');

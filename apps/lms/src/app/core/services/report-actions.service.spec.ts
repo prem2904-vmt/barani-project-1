@@ -40,7 +40,7 @@ function setup(o: { perms?: string[]; trackFails?: boolean; clip?: 'ok' | 'fail'
   const writeText = vi.fn(async () => { if (o.clip === 'fail') throw new Error('denied'); });
   const share = vi.fn(async () => {});
   svc.shareEnv = { capacitor: null, navigator: { share: o.webShare ? share : undefined, clipboard: { writeText } } as never, document: null };
-  // Send on WhatsApp (manual) on a desktop browser: the named popup.
+  // WhatsApp Chat (manual) on a desktop browser: the named popup.
   const manual = TestBed.inject(WhatsAppManualService);
   const open = vi.fn(() => ({ opener: null, focus: vi.fn() }));
   manual.win = { open, screen: { availWidth: 1440, availHeight: 900 }, navigator: { userAgent: 'Macintosh' } } as never;
@@ -117,7 +117,7 @@ describe('ReportActionsService — share / copy', () => {
   });
 });
 
-describe('ReportActionsService — Send on WhatsApp (manual, every lab)', () => {
+describe('ReportActionsService — WhatsApp Chat (manual, every lab)', () => {
   it('needs deliver_report; one click (no confirm), opens the WhatsApp window with the report link and records the delivery', async () => {
     const { svc, api, open, dialog } = setup();
     expect(await svc.whatsApp({ id: 'r1', orderId: 'o1', qrToken: 'q1' }, { name: 'Priya', phone: '9876543210' })).toBe(true);
@@ -148,30 +148,55 @@ describe('ReportActionsService — Send on WhatsApp (manual, every lab)', () => 
 });
 
 describe('ReportActionsService — WhatsApp Cloud API (lab sends from its number)', () => {
-  function cloud(canSend = true) {
+  function cloud(canSend = true, platform: Record<string, boolean> = {}) {
     const ctx = setup();
-    ctx.api.get.mockImplementation(((url: string) => url === '/api/whatsapp/settings' ? of({ canSend }) : of(null)) as never);
+    ctx.api.get.mockImplementation(((url: string) => url === '/api/whatsapp/settings' ? of({ canSend })
+      : url === '/api/tenants/module-config' ? of(platform) : of(null)) as never);
     ctx.api.post.mockImplementation(((url: string) => url.endsWith('/resend')
       ? of({ id: 'm1', reportId: 'r1', trigger: 'resend', kind: 'report_ready', status: 'sent', attempts: 1, toDisplay: '+91 ••••• 43210', createdAt: '' })
       : of({})) as never);
     return ctx;
   }
 
-  it('every lab (no sender, or before the flag is known): one row, Send on WhatsApp (manual)', () => {
+  it('no sender (or before the flag is known): ONE row, WhatsApp Chat', () => {
     const { svc } = cloud(false);
     expect(svc.whatsAppActions({ id: 'r1', type: 'final' }).map(a => a.id)).toEqual(['whatsapp-mine']);
     svc.warmWhatsApp();
     const rows = svc.whatsAppActions({ id: 'r1', type: 'final' });
-    expect(rows.map(a => a.label)).toEqual(['Send on WhatsApp']);
-    expect(rows[0].hint).toBe('Opens WhatsApp with the message ready; you press Send');
+    expect(rows.map(a => a.label)).toEqual(['WhatsApp Chat']);
+    expect(rows[0].hint).toBe('Opens WhatsApp with the report ready; you press Send');
   });
 
-  it('with a sender: WhatsApp (automatic) + Send on WhatsApp — final reports only', () => {
+  it('with a sender: ONE row, WhatsApp Auto — final reports only (a preliminary report is WhatsApp Chat)', () => {
     const { svc } = cloud();
     svc.warmWhatsApp();
     const rows = svc.whatsAppActions({ id: 'r1', type: 'final' });
-    expect(rows.map(a => [a.id, a.label])).toEqual([['whatsapp', 'WhatsApp (automatic)'], ['whatsapp-mine', 'Send on WhatsApp']]);
-    expect(svc.whatsAppActions({ id: 'r1', type: 'partial' }).map(a => a.id)).toEqual(['whatsapp-mine']);
+    expect(rows.map(a => [a.id, a.label])).toEqual([['whatsapp', 'WhatsApp Auto']]);
+    expect(svc.whatsAppActions({ id: 'r1', type: 'partial' }).map(a => [a.id, a.label])).toEqual([['whatsapp-mine', 'WhatsApp Chat']]);
+  });
+
+  it('Prefrontal switched WhatsApp Auto off: the lab with a sender gets WhatsApp Chat instead', () => {
+    const { svc } = cloud(true, { whatsappAuto: false, whatsappChat: true });
+    svc.warmWhatsApp();
+    expect(svc.whatsAppActions({ id: 'r1', type: 'final' }).map(a => [a.id, a.label])).toEqual([['whatsapp-mine', 'WhatsApp Chat']]);
+  });
+
+  it('WhatsApp Chat switched off (no Auto): no WhatsApp row, and the manual flow refuses', async () => {
+    const { svc, api, open } = cloud(false, { whatsappAuto: true, whatsappChat: false });
+    svc.warmWhatsApp();
+    expect(svc.whatsAppActions({ id: 'r1', type: 'final' })).toEqual([]);
+    expect(await svc.whatsApp({ id: 'r1' }, { name: 'Priya', phone: '9876543210' })).toBe(false);
+    svc.sendWhatsApp({ id: 'r1', orderId: 'o1', type: 'final' }, { name: 'Priya', phone: '9876543210' });
+    await new Promise(r => setTimeout(r, 0));
+    expect(open).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('both switches ABSENT (an older server / a lab with an old config row): both modes stay on', () => {
+    const { svc } = cloud(true, { inventory: true } as never);
+    svc.warmWhatsApp();
+    expect(svc.whatsAppActions({ id: 'r1', type: 'final' }).map(a => a.label)).toEqual(['WhatsApp Auto']);
+    expect(svc.whatsAppActions({ id: 'r1', type: 'partial' }).map(a => a.label)).toEqual(['WhatsApp Chat']);
   });
 
   it('sendWhatsApp posts the server send (no wa.me window) when the lab has a sender', async () => {
@@ -182,11 +207,11 @@ describe('ReportActionsService — WhatsApp Cloud API (lab sends from its number
     await new Promise(r => setTimeout(r, 0));
     expect(api.post).toHaveBeenCalledWith('/api/whatsapp/reports/r1/resend', {});
     expect(open).not.toHaveBeenCalled();
-    expect(toasts.success).toHaveBeenCalledWith('Sent on WhatsApp to +91 ••••• 43210', 5000);
+    expect(toasts.success).toHaveBeenCalledWith('Sent by WhatsApp Auto to +91 ••••• 43210', 5000);
     open.mockRestore();
   });
 
-  it('sendWhatsApp falls back to Send on WhatsApp (manual) when the lab has no sender', async () => {
+  it('sendWhatsApp falls back to WhatsApp Chat when the lab has no sender', async () => {
     const { svc, api, open } = cloud(false);
     svc.warmWhatsApp();
     svc.sendWhatsApp({ id: 'r1', orderId: 'o1', type: 'final' }, { name: 'Priya', phone: '9876543210' });

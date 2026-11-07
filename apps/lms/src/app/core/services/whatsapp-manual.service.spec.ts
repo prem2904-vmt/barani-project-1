@@ -6,13 +6,13 @@ import { ToastService } from './toast.service';
 import { WhatsAppService } from './whatsapp.service';
 import { ElectronWhatsAppBridge, WA_CONSENT_REMINDER, WA_REMINDER_KEY, WhatsAppManualService } from './whatsapp-manual.service';
 
-/** "Send on WhatsApp" (manual): one click → WhatsApp opens with the chat and
+/** "WhatsApp Chat" (manual): one click → WhatsApp opens with the chat and
  *  message ready; the person presses Send. Desktop app = the docked panel,
  *  browser = ONE phone-shaped window on the right, phone = wa.me. */
 const SCREEN = { availWidth: 1440, availHeight: 875, availLeft: 0, availTop: 25 } as unknown as Screen;
 const DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/130 Safari/537.36';
 
-function setup(o: { confirm?: boolean; optOut?: boolean | 'error'; ua?: string; popup?: 'ok' | 'blocked'; bridge?: ElectronWhatsAppBridge | null } = {}) {
+function setup(o: { confirm?: boolean; optOut?: boolean | 'error'; ua?: string; popup?: 'ok' | 'blocked'; bridge?: ElectronWhatsAppBridge | null; nav?: Record<string, unknown> } = {}) {
   const dialog = { confirm: vi.fn(async () => o.confirm ?? true), alert: vi.fn(async () => undefined) };
   const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
   const wa = {
@@ -28,7 +28,7 @@ function setup(o: { confirm?: boolean; optOut?: boolean | 'error'; ua?: string; 
   const svc = TestBed.inject(WhatsAppManualService);
   const pop = { opener: {} as unknown, focus: vi.fn() };
   const open = vi.fn(() => (o.popup === 'blocked' ? null : pop));
-  svc.win = { open, screen: SCREEN, navigator: { userAgent: o.ua ?? DESKTOP_UA } } as never;
+  svc.win = { open, screen: SCREEN, navigator: { userAgent: o.ua ?? DESKTOP_UA, ...(o.nav ?? {}) } } as never;
   svc.bridge = () => o.bridge ?? null;
   return { svc, dialog, toasts, wa, open, pop };
 }
@@ -157,7 +157,7 @@ describe('WhatsAppManualService — desktop app (docked panel)', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it('hands the PDF over for the drag helper (never attached)', async () => {
+  it('hands the PDF over for the automatic attach (clipboard paste in main) + drag; the person presses Send', async () => {
     const b = bridge();
     const { svc } = setup({ bridge: b });
     await svc.send({ ...REQ, pdf: async () => new Blob(['%PDF-1.4 x'], { type: 'application/pdf' }), pdfName: 'report-AB.pdf' });
@@ -165,11 +165,107 @@ describe('WhatsAppManualService — desktop app (docked panel)', () => {
     const arg = (b.setPdf.mock.calls[0] as unknown as [{ name: string; bytes: Uint8Array }])[0];
     expect(arg.name).toBe('report-AB.pdf');
     expect(arg.bytes.length).toBe(10);
+    expect((arg as unknown as { autoAttach: boolean }).autoAttach).toBe(true);
   });
 
   it('main refusing → an error toast', async () => {
     const { svc, toasts } = setup({ bridge: bridge(false) });
     expect(await svc.send(REQ)).toBe('blocked');
     expect(toasts.error).toHaveBeenCalled();
+  });
+});
+
+
+describe('WhatsAppManualService — the Report PDF card (web / phone)', () => {
+  const PDF = () => new Blob(['%PDF-1.4 x'], { type: 'application/pdf' });
+  const CAN_SHARE = () => ({ share: vi.fn(async () => undefined), canShare: vi.fn(() => true) });
+  const flush = async () => { for (let i = 0; i < 4; i++) await new Promise(r => setTimeout(r, 0)); };
+
+  it('desktop browser, no file share: the chat window opens AND the card offers Download PDF (paperclip hint)', async () => {
+    const { svc, open } = setup();
+    expect(await svc.send({ ...REQ, pdf: async () => PDF(), pdfName: 'report-AB.pdf' })).toBe('opened');
+    await flush();
+    expect(open).toHaveBeenCalledTimes(1);
+    const c = svc.pdfCard()!;
+    expect(c.name).toBe('report-AB.pdf');
+    expect(c.canShare).toBe(false);
+    expect(c.mode).toBe('popup');
+    expect(c.text).toContain('https://med.prefrontal.health/reports/public/t1');   // the secure link stays in the message
+  });
+
+  it('desktop browser with file share: Share PDF is offered; the share carries the file + the message with the link', async () => {
+    const nav = CAN_SHARE();
+    const { svc } = setup({ nav });
+    await svc.send({ ...REQ, pdf: async () => PDF(), pdfName: 'r.pdf' });
+    await flush();
+    expect(svc.pdfCard()!.canShare).toBe(true);
+    const handed = vi.fn();
+    svc.pdfCard.update(c => ({ ...c!, onHandedOver: handed }));
+    expect(await svc.sharePdf()).toBe(true);
+    const arg = (nav.share.mock.calls[0] as unknown as [{ files: File[]; text: string }])[0];
+    expect(arg.files[0].name).toBe('r.pdf');
+    expect(arg.files[0].type).toBe('application/pdf');
+    expect(arg.text).toContain('/reports/public/t1');
+    expect(handed).toHaveBeenCalledTimes(1);
+    expect(svc.pdfCard()).toBeNull();
+  });
+
+  it('closing the share sheet (AbortError) is not an error and keeps the card', async () => {
+    const nav = CAN_SHARE();
+    nav.share.mockRejectedValue(Object.assign(new Error('x'), { name: 'AbortError' }));
+    const { svc, toasts } = setup({ nav });
+    await svc.send({ ...REQ, pdf: async () => PDF() });
+    await flush();
+    expect(await svc.sharePdf()).toBe(false);
+    expect(toasts.error).not.toHaveBeenCalled();
+    expect(svc.pdfCard()).not.toBeNull();
+  });
+
+  it('a phone that can share files: Share PDF is the PRIMARY step — nothing opens yet, nothing recorded yet', async () => {
+    const nav = CAN_SHARE();
+    const { svc, open } = setup({ ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', nav });
+    const handed = vi.fn();
+    expect(await svc.send({ ...REQ, pdf: async () => PDF(), pdfName: 'r.pdf', onHandedOver: handed })).toBe('card');
+    expect(open).not.toHaveBeenCalled();
+    expect(handed).not.toHaveBeenCalled();
+    const c = svc.pdfCard()!;
+    expect(c.mode).toBe('phone');
+    expect(c.canShare).toBe(true);
+    expect(c.chatUrl).toBe(`https://wa.me/919876543210?text=${encodeURIComponent(TEXT)}`);
+    await svc.sharePdf();
+    expect(handed).toHaveBeenCalledTimes(1);
+  });
+
+  it('phone card, secondary: open the chat with the link (recorded then)', async () => {
+    const { svc, open } = setup({ ua: 'Mozilla/5.0 (Android 14)', nav: CAN_SHARE() });
+    const handed = vi.fn();
+    await svc.send({ ...REQ, pdf: async () => PDF(), onHandedOver: handed });
+    svc.openChatFromCard();
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('https://wa.me/919876543210'), '_blank', 'noopener');
+    expect(handed).toHaveBeenCalledTimes(1);
+    expect(svc.pdfCard()).toBeNull();
+  });
+
+  it('a phone that cannot share files keeps today\'s wa.me flow (no card)', async () => {
+    const { svc, open } = setup({ ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' });
+    expect(await svc.send({ ...REQ, pdf: async () => PDF() })).toBe('opened');
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(svc.pdfCard()).toBeNull();
+  });
+
+  it('Download PDF saves the file under its name; dismiss hides the card; the desktop app never shows it', async () => {
+    const { svc } = setup();
+    await svc.send({ ...REQ, pdf: async () => PDF(), pdfName: 'report-AB.pdf' });
+    await flush();
+    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const clicks: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { clicks.push(this.download); });
+    svc.downloadPdf();
+    expect(created).toHaveBeenCalled();
+    expect(clicks).toEqual(['report-AB.pdf']);
+    click.mockRestore();
+    svc.dismissPdfCard();
+    expect(svc.pdfCard()).toBeNull();
   });
 });

@@ -283,7 +283,7 @@ export function previewFefo(batches: PickBatch[], qty: number, todayIso: string)
               </div>
               <div class="pf-card__foot">
                 <button type="button" class="pf-btn pf-btn--secondary" (click)="print()">Print</button>
-                <a class="pf-btn pf-btn--primary" [href]="waHref()" target="_blank" rel="noopener" (click)="afterSend()">Send on WhatsApp</a>
+                <a class="pf-btn pf-btn--primary" [href]="waHref()" target="_blank" rel="noopener" (click)="afterSend()">WhatsApp Chat</a>
                 <button type="button" class="pf-btn pf-btn--tertiary pf-span" (click)="back()">Back to prescriptions</button>
               </div>
             </aside>

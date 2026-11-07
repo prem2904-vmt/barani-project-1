@@ -42,6 +42,8 @@ export interface WaReportStatus {
   /** Staff can send this lab's reports on WhatsApp from the app right now
    *  (server on + a sender: the lab's own number, else the shared one). */
   canSend?: boolean;
+  /** Prefrontal's per-lab "WhatsApp Auto" switch (older servers omit it = on). */
+  autoEntitled?: boolean;
   latest: WaMessage | null;
   history: WaMessage[];
 }
@@ -221,6 +223,8 @@ export interface WaSettings {
   message?: WaMessageMenu | null;
   /** Staff can send reports on WhatsApp from the app (see WaReportStatus.canSend). */
   canSend?: boolean;
+  /** Prefrontal's per-lab "WhatsApp Auto" switch (older servers omit it = on). false = "turned off by Prefrontal". */
+  autoEntitled?: boolean;
   sender?: WaSender | null;
   platform: {
     enabled: boolean;

@@ -501,14 +501,17 @@ interface AutoAssignConfig {
       <!-- WhatsApp auto-send (Meta Cloud API): tenant switch; the sender
            number + token are platform config on the server. -->
       <section class="pf-card pf-ls__card" data-testid="ls-whatsapp">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Send WhatsApp automatically when the report is ready</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span><span class="pf-card__spacer"></span>
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="pf-card__label pf-ls__title">WhatsApp Auto: send the report automatically when it is ready</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span><span class="pf-card__spacer"></span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.autoSendEnabled"
-                  aria-label="Send WhatsApp automatically when the report is ready" [disabled]="waSaving() || !canManageWa()"
+                  aria-label="WhatsApp Auto: send the report automatically when it is ready" [disabled]="waSaving() || !canManageWa() || waAutoOff()"
                   (click)="saveWa({ autoSendEnabled: !waSettings()!.autoSendEnabled })">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </div>
         <div class="pf-ls__cardbody">
+          @if (waAutoOff()) {
+            <p class="pf-ls__warn" role="status" data-testid="ls-wa-off">WhatsApp Auto is turned off for your lab by Prefrontal. Ask Prefrontal to turn it on. Staff can still use WhatsApp Chat from the report when it is on.</p>
+          }
           <p class="pf-ls__hint">
             When every test on an order is validated and its <strong>final</strong> report is ready, the patient gets
             one WhatsApp message on their registered mobile — the report PDF plus the secure report link (they confirm
@@ -529,7 +532,7 @@ interface AutoAssignConfig {
           <div class="pf-ls__wa-row">
             <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.sendUpdatedReports"
                     data-testid="ls-wa-resend-regen"
-                    [disabled]="waSaving() || !canManageWa()"
+                    [disabled]="waSaving() || !canManageWa() || waAutoOff()"
                     (click)="saveWa({ sendUpdatedReports: !waSettings()!.sendUpdatedReports })">
               <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
               Send again when a report is regenerated or corrected
@@ -538,7 +541,7 @@ interface AutoAssignConfig {
           </div>
           <!-- The message: a pick from the templates Meta approved on this lab's
                sender (labels, never codes) + a live WhatsApp-style preview. -->
-          <pf-wa-message-picker [settings]="waSettings()!" [canEdit]="canManageWa() && !waSaving()" (changed)="applyWa($event)"></pf-wa-message-picker>
+          <pf-wa-message-picker [settings]="waSettings()!" [canEdit]="canManageWa() && !waSaving() && !waAutoOff()" (changed)="applyWa($event)"></pf-wa-message-picker>
           <p class="pf-ls__hint" style="margin-top: 8px;">
             The manual "Send WhatsApp" button on each report keeps working as a fallback.
           </p>
@@ -1041,6 +1044,8 @@ export class LabSettingsComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   protected readonly waSettings = signal<WaSettings | null>(null);
   protected readonly waSaving = signal(false);
+  /** Prefrontal switched WhatsApp Auto off for this lab (the platform console). */
+  protected readonly waAutoOff = computed(() => this.waSettings()?.autoEntitled === false);
   readonly waSender = computed(() => waSenderLine(this.waSettings()?.sender));
   readonly canManageWa = computed(() =>
     this.auth.hasPermission('manage_lab_settings') || this.auth.hasPermission('manage_notifications'));
@@ -1070,7 +1075,7 @@ export class LabSettingsComponent implements OnInit {
         this.waSaving.set(false);
         if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s);
         if (patch.autoSendEnabled !== undefined)
-          this.toasts.success(s.autoSendEnabled ? 'Reports will be sent on WhatsApp automatically once paid' : 'Automatic WhatsApp sending turned off');
+          this.toasts.success(s.autoSendEnabled ? 'WhatsApp Auto is on: reports are sent once paid' : 'WhatsApp Auto is off');
         else this.toasts.success('WhatsApp settings saved');
       },
       error: e => { this.waSaving.set(false); this.applyWa(cur); this.toasts.error(ApiError.from(e).message); },
