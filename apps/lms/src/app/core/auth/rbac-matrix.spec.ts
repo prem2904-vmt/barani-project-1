@@ -28,7 +28,7 @@ const ROLES: Record<string, string[]> = {
   'Microbiology Technician': ['culture_workbench', 'edit_result', 'enter_result', 'print_barcode', 'receive_sample', 'view_order', 'view_patient', 'view_report', 'view_test'],
   'Pathologist': ['deliver_report', 'edit_result', 'lms.critical_value.notify', 'reassign_result', 'reject_result', 'validate_result', 'view_order', 'view_patient', 'view_report', 'view_test'],
   'Microbiologist': ['culture_workbench', 'deliver_report', 'edit_result', 'lms.critical_value.notify', 'reassign_result', 'reject_result', 'validate_result', 'view_order', 'view_patient', 'view_report', 'view_test'],
-  'Branch Manager': ['lms.critical_value.escalate', 'lms.tat_breach.notify', 'manage_branch', 'manage_branches', 'manage_home_collection', 'view_audit_log', 'view_bill', 'view_dashboard', 'view_order', 'view_patient', 'view_report', 'view_tat_dashboard', 'view_test'],
+  'Branch Manager': ['lms.critical_value.escalate', 'lms.tat_breach.notify', 'manage_branch', 'manage_branches', 'manage_home_collection', 'manage_lab_settings', 'view_audit_log', 'view_bill', 'view_dashboard', 'view_order', 'view_patient', 'view_report', 'view_tat_dashboard', 'view_test'],
   'Quality Manager': ['lms.critical_value.escalate', 'lms.tat_breach.notify', 'view_audit_log', 'view_bill', 'view_dashboard', 'view_order', 'view_patient', 'view_report', 'view_tat_dashboard', 'view_test'],
   'Store Keeper': ['inventory_count', 'inventory_issue', 'inventory_receive', 'print_barcode', 'view_test'],
   'Inventory Manager': ['inventory_count', 'inventory_issue', 'inventory_receive', 'inventory_transfer', 'manage_inventory', 'print_barcode', 'view_dashboard', 'view_test'],
@@ -443,5 +443,31 @@ describe('RBAC matrix — owner decisions 2026-09-27', () => {
     it('no route relies on a mode-aware (effective) guard any more', () => {
       expect(Object.entries(ROUTE_ACCESS).filter(([, a]) => a.effective).map(([r]) => r)).toEqual([]);
     });
+  });
+});
+
+describe('OPS-108: Branch Manager holds Lab settings (owner 2026-11-07)', () => {
+  const w = who('Branch Manager');
+  const nav = () => ALL_NAV.filter(i => navItemVisible(i, navCtx(w))).map(i => i.href);
+
+  it('opens the Lab settings hub and the Lab settings page', () => {
+    expect(guardAllows('/lab/settings', w)).toBe(true);
+    expect(guardAllows('/admin/lab-settings', w)).toBe(true);
+    expect(nav()).toContain('/lab/settings');
+  });
+
+  it('does NOT open the admin config shell (manage_branches / lab settings never admit it)', () => {
+    for (const r of ['/admin', '/admin/manage', '/admin/modules', '/setup', '/admin/tests', '/admin/users']) {
+      if (guardChain(r)) expect(guardAllows(r, w)).toBe(false);
+    }
+    expect(navItemVisible(ADMIN_NAV, navCtx(w))).toBe(false);
+    expect(nav()).not.toContain('/admin');
+  });
+
+  it('keeps its own landing (the dashboard), unchanged by the new permission', () => {
+    const ctx: RouteAccessCtx = { hasAny: p => has(w)(p), isEnabled: () => true };
+    const without: Who = { roles: w.roles, dedicated: false, perms: w.perms.filter(c => c !== 'manage_lab_settings') };
+    expect(pickLanding(ctx)).toBe(pickLanding({ hasAny: p => has(without)(p), isEnabled: () => true }));
+    expect(pickLanding(ctx)).not.toBe('/403');
   });
 });
