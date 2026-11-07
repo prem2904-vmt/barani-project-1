@@ -38,6 +38,7 @@ import {
 import { cartKey, discountNeedsSync, planConfirmOrder, type PendingOrder } from './pending-order';
 import { buildOrderDraft, parseOrderDraft, orderDraftKey, orderDraftKeysFor, orderDraftInScope, parseOrderDraftKey, DraftScope } from './order-draft';
 import { discountPctOf, fmtPct, percentDiscountAmount } from '../../../shared/utils/discount';
+import { OrderPartnerPicksComponent } from '../../../shared/components/order-partner-picks/order-partner-picks.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
@@ -86,7 +87,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-order-create',
   standalone: true,
-  imports: [DailyNoComponent, NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective, PfKeysDirective, BusyDirective, PackageSuggestCardComponent, EditReferralDialogComponent],
+  imports: [DailyNoComponent, NgTemplateOutlet, CurrencyInrPipe, HeroBandComponent, BarcodeScannerModalComponent, InlinePaymentPanelComponent, LabelCardComponent, SelectComponent, SegmentedComponent, SkeletonComponent, SkeletonRowsComponent, ZoomTargetDirective, PfKeysDirective, BusyDirective, PackageSuggestCardComponent, EditReferralDialogComponent, OrderPartnerPicksComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-create.component.html',
   styleUrls: ['./order-create.component.scss']
@@ -528,6 +529,11 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private readonly _order = signal<Order | null>(null);
   readonly order = this._order.asReadonly();
+  /** OPS-106: a partner pick on the pay step saved - take the fresh order and the rebuilt bill. */
+  onPartnersChanged(ev: { order: Order | null; bill: Bill | null }): void {
+    if (ev.order) { this._order.set(ev.order); this.hydrateOutsourcingFrom(ev.order); }
+    if (ev.bill && !this.isPaymentSettled()) this.currentBill.set(ev.bill);
+  }
 
   readonly viewOrderId = signal<string | null>(null);
   readonly currentBill = signal<Bill | null>(null);
@@ -1875,6 +1881,8 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
         : `Switched to ${s.bundle.name} — same price, ${s.extraCount} more test${s.extraCount === 1 ? '' : 's'}`);
   }
   findTest(id: string): Test | undefined { return this._tests().find(t => t.id === id); }
+  /** The loaded catalogue, for child pickers that need Test Master partners. */
+  readonly allKnownTests = this._tests.asReadonly();
 
   // ── Billing card phases: CART → PAYMENT ─────────────────────────────
   /** The billing card follows the flow: 'cart' while building the order

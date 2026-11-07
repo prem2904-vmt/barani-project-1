@@ -250,6 +250,9 @@
                   <li class="pf-bc-muted">No tests on this order.</li>
                 }
               </ul>
+              <!-- OPS-106: where each outsourced line runs (read-only once collected / paid). -->
+              <pf-order-partner-picks [order]="o" [locked]="billState() === 'paid'"
+                                      (changed)="onPartnersChanged($event)"></pf-order-partner-picks>
 
               <dl class="pf-bc-dues">
                 @if (dues().discount != null) {

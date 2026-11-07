@@ -290,6 +290,9 @@
           }
           }
         </div>
+        <!-- OPS-106: where each outsourced line runs (read-only once collected / paid). -->
+        <pf-order-partner-picks [order]="order()" [tests]="allKnownTests()" [locked]="isPaymentSettled()"
+                                (changed)="onPartnersChanged($event)"></pf-order-partner-picks>
       </div>
       } @else if (inCardSearch()) {
       <!-- TOUCH search: the card itself is the results (no dropdown). -->

@@ -42,6 +42,7 @@ import { environment } from '../../../environments/environment';
 import { phoneMatches } from '../../shared/utils/indian-phone';
 import { labToday } from '../../shared/utils/lab-clock';
 import { matchesDailyNo } from '../../shared/utils/daily-no';
+import { OrderPartnerPicksComponent } from '../../shared/components/order-partner-picks/order-partner-picks.component';
 import { DailyNoComponent } from '../../shared/components/daily-no/daily-no.component';
 
 /** One row of GET /api/billing/outstanding — a bill with money still moving
@@ -199,7 +200,7 @@ export function waitingLabel(iso: string | null | undefined, now: number): strin
     DailyNoComponent,
     DatePipe, NgTemplateOutlet, CurrencyInrPipe,
     HeroBandComponent, CollectBandButtonComponent, ScanIconComponent, BarcodeScannerModalComponent, PfDateComponent,
-    InlinePaymentPanelComponent, ZoomSourceDirective, ZoomTargetDirective,
+    InlinePaymentPanelComponent, ZoomSourceDirective, ZoomTargetDirective, OrderPartnerPicksComponent,
     BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, SkeletonTableComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -785,6 +786,12 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
       next: res => { this._orders.set(res?.history ?? []); this.loadingOrders.set(false); },
       error: () => { this.loadingOrders.set(false); this.toasts.error('Could not load orders for this patient'); }
     });
+  }
+
+  /** OPS-106: a partner pick saved on the items list - take the fresh order and the rebuilt bill. */
+  onPartnersChanged(ev: { order: Order | null; bill: Bill | null }): void {
+    if (ev.order) this.selectedOrder.set(ev.order);
+    if (ev.bill && this.billState() !== 'paid') this.selectedBill.set(ev.bill);
   }
 
   /** Open one order's cart: the order (tests, patient) and its bill. */
