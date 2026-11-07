@@ -538,6 +538,9 @@
                         {{ phone }}
                       </p>
                       }
+                      @if (a.orderId) {
+                      <p class="pf-card__meta">Order created</p>
+                      }
                       @if (hasOutstanding(patient?.id)) {
                       <span class="pf-card__flag pf-card__flag--balance" title="Outstanding balance">
                         ● ₹ owed
@@ -565,8 +568,7 @@
                       <button type="button" class="pf-ghostbtn press" [disabled]="checkingInId() === a.id"
                         [pfBusy]="checkingInId() === a.id" pfBusyLabel="Checking in…" (click)="checkIn(a)">Check-in</button>
                       } @else if (a.status === 'checked_in') {
-                      <button type="button" class="pf-ghostbtn press" (click)="resumeAppointmentOrder(a)">Resume
-                        order</button>
+                      <button type="button" class="pf-ghostbtn press" (click)="resumeAppointmentOrder(a)">{{ a.orderId ? 'Open order' : 'Resume order' }}</button>
                       }
                     </div>
                   </div>

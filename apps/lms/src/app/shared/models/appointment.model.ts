@@ -12,6 +12,8 @@ export interface Appointment {
   id: string;
   tenantId: string;
   patientId: string;
+  /** The live order already raised from this appointment (server-computed; not stored). */
+  orderId?: string | null;
   branchId: string;
   departmentId?: string;
   type: AppointmentType;

@@ -20,3 +20,12 @@ describe('appointmentResumeTarget (OPS-74 / OPS-29 #12)', () => {
     expect(t.queryParams['appointmentId']).toBeUndefined();
   });
 });
+
+import { readFileSync } from 'node:fs';
+describe('board card for an appointment that already has an order', () => {
+  it('shows "Order created" and an "Open order" action, driven by the feed\'s orderId', () => {
+    const html = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/frontdesk-landing.component.html', 'utf8');
+    expect(html).toContain('@if (a.orderId)');
+    expect(html).toContain("a.orderId ? 'Open order' : 'Resume order'");
+  });
+});

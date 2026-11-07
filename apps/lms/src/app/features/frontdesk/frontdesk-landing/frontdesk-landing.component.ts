@@ -2827,6 +2827,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // OPS-74 / OPS-29 #12: if the appointment already has an order, resume THAT
     // (collection / the order) instead of opening order-create, whose
     // Continue-to-Payment would bill a second order.
+    // The board feed already carries the order (orderId); the lookup covers a stale card.
+    if (a.orderId) { this.goResume(a, a.orderId); return; }
     this.api.get<{ orderId?: string | null }>(`/api/orders/by-appointment/${a.id}`).subscribe({
       next: r => this.goResume(a, r?.orderId ?? null),
       // Lookup failed: fall back to the order page (the server still refuses a duplicate).
