@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
+import { filterTestList } from '../../../../shared/utils/test-search';
 import { TestEditorComponent } from './test-editor.component';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
@@ -111,6 +112,18 @@ describe('Test editor — a package carries no department', () => {
     const body = c.buildSaveBody(c._draft());
     expect(body.type).toBe('package');
     expect(body.departmentId).toBeUndefined();
+  });
+
+  it('OPS-110: a package keeps its short name in the save payload and the order search finds it', () => {
+    const { c } = render({ test: PKG({ shortName: 'WELL' }), type: 'package' });
+    expect(c.buildSaveBody(c._draft()).shortName).toBe('WELL');
+    c.patch({ shortName: 'WB1' });
+    expect(c.buildSaveBody(c._draft()).shortName).toBe('WB1');
+    const catalogue = [
+      { id: 'a', name: 'Wellness Basic', type: 'package', shortName: 'WB1', testCode: null },
+      { id: 'b', name: 'Lipid Profile', type: 'profile', shortName: 'LP', testCode: 'PRO001', parameters: '{"items":[]}' },
+    ];
+    expect(filterTestList(catalogue, 'wb1').map(t => t.id)).toEqual(['a']);
   });
 
   it('single test: the Department field, chip and requirement stay', () => {

@@ -2411,7 +2411,7 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
       tatHours: d.tatHours, sampleType: d.type === 'package' ? undefined : (d.sampleType || undefined),
       tubeColor: d.type === 'package' ? undefined : d.tubeColor,
       // No testCode: the server assigns it on create and it never changes.
-      shortName: pkg ? undefined : d.shortName,
+      shortName: d.shortName,
       section: pkg ? undefined : d.section,
       profile: pkg ? undefined : d.profile,
       sampleVolumeMl: pkg ? undefined : (d.sampleVolumeMl ?? undefined),
