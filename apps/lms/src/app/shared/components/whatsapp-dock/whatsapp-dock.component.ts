@@ -9,10 +9,9 @@ export const WA_DOCKED_CLASS = 'pf-wa-docked';
  * Desktop app only: the strip ABOVE the docked WhatsApp Web panel (main
  * draws WhatsApp itself below it — electron/whatsapp-dock.js) and the app's
  * reflow to the left. Close, sign out, open the chat in the browser / the
- * WhatsApp app when it won't load here. The PDF is attached by main (paste +
- * caption, electron/whatsapp-attach.js) with no UI; only if that fails does
- * the row show one hint ("Press Ctrl+V to add the PDF"). Nothing here touches
- * WhatsApp's page.
+ * WhatsApp app when it won't load here, and one quiet line about the report PDF
+ * (copied by main to OUR clipboard: "press Ctrl+V in the chat"; or drag it).
+ * Nothing here touches WhatsApp's page.
  */
 @Component({
   selector: 'pf-wa-dock',
@@ -40,9 +39,13 @@ export const WA_DOCKED_CLASS = 'pf-wa-docked';
               <span class="pf-wad__note">WhatsApp didn't load here.</span>
               <button type="button" class="pf-btn pf-btn--secondary pf-wad__small" (click)="elsewhere('browser')">Browser</button>
               <button type="button" class="pf-btn pf-btn--secondary pf-wad__small" (click)="elsewhere('app')">WhatsApp app</button>
-            } @else if (s.attach === 'manual' && s.pdfName) {
-              <!-- Attaching failed entirely: the text-only chat stays, the PDF is on the clipboard. -->
-              <span class="pf-wad__note" data-testid="wa-dock-line">{{ hint() }}</span>
+            } @else if (s.pdfName && s.clipboard !== 'idle') {
+              <!-- Our own header (not WhatsApp's page): where the PDF is. -->
+              <span class="pf-wad__note" data-testid="wa-dock-line">{{ line(s) }}</span>
+              <span class="pf-wad__pdf" draggable="true" (dragstart)="drag($event)" role="button" tabindex="0"
+                    title="Or drag the PDF into the chat" aria-label="Drag the report PDF into the chat" data-testid="wa-dock-pdf">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg>
+              </span>
             } @else {
               <span class="pf-wad__note">{{ s.loading ? 'Opening the chat…' : 'Check the message, then press Send in WhatsApp.' }}</span>
             }
@@ -63,7 +66,7 @@ export const WA_DOCKED_CLASS = 'pf-wa-docked';
       border-left: 1px solid var(--pf-line);
     }
     .pf-wad__bar { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 12px; height: 48px; flex: none; }
-    .pf-wad__row { display: flex; align-items: center; gap: 6px; padding: 0 12px; height: 48px; flex: none; border-bottom: 1px solid var(--pf-line); }
+    .pf-wad__row { display: flex; align-items: center; gap: 6px; padding: 0 12px; height: 64px; flex: none; border-bottom: 1px solid var(--pf-line); }
     .pf-wad__mark { color: var(--text-secondary); flex: none; }
     .pf-wad__title { font-size: 14px; font-weight: 600; margin-right: auto; }
     .pf-wad__icon {
@@ -71,7 +74,12 @@ export const WA_DOCKED_CLASS = 'pf-wa-docked';
       border: 0; border-radius: var(--pf-radius-sm, 10px); background: transparent; color: var(--text-secondary); cursor: pointer;
     }
     .pf-wad__icon:hover { background: var(--pf-chip-bg, rgba(127, 127, 127, 0.12)); color: var(--text-primary); }
-    .pf-wad__icon:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px; }
+    .pf-wad__icon:focus-visible, .pf-wad__pdf:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px; }
+    .pf-wad__pdf {
+      display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex: none; cursor: grab; user-select: none;
+      border: 1px dashed var(--pf-sel-border, #9aa4ae); border-radius: var(--pf-radius-chip, 8px); color: var(--text-primary);
+    }
+    .pf-wad__pdf:active { cursor: grabbing; }
     .pf-wad__note { font-size: 12.5px; line-height: 1.35; color: var(--text-secondary); }
     .pf-wad__small { height: 36px; min-height: 34px; padding: 0 10px; font-size: 12.5px; }
     .pf-wad__under { margin: 24px 16px; font-size: 13px; color: var(--text-tertiary); text-align: center; }
@@ -123,10 +131,19 @@ export class WhatsAppDockComponent implements OnInit {
     if (ok) await this.bridge?.signOut();
   }
 
-  /** The ONE inline hint (only when attaching failed entirely): the PDF is already on the clipboard. */
-  hint(): string { return `Press ${this.isMac() ? 'Cmd+V' : 'Ctrl+V'} to add the PDF`; }
+  /** The one quiet line (our header). Copied → paste it; the copy failed → drag it. */
+  line(s: WaDockState): string {
+    if (s.clipboard === 'copied') return `Report PDF copied — press ${this.isMac() ? 'Cmd+V' : 'Ctrl+V'} in the chat to attach it, then Send.`;
+    return 'Drag the report PDF into the chat to attach it, then Send.';
+  }
 
   private isMac(): boolean {
     return /Mac|iPhone|iPad/i.test((typeof navigator !== 'undefined' && (navigator.platform || navigator.userAgent)) || '');
+  }
+
+  /** The person drags the chip from OUR header: a native file drag (main.startDrag on the app's own window). */
+  drag(ev: DragEvent): void {
+    ev.preventDefault();
+    this.bridge?.startDrag();
   }
 }

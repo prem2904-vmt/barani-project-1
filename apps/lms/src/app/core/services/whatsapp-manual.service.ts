@@ -15,17 +15,14 @@ export interface ElectronWhatsAppBridge {
   state(): Promise<WaDockState>;
   onState(cb: (s: WaDockState) => void): () => void;
   openElsewhere(kind: 'browser' | 'app'): Promise<unknown>;
-  /** `autoAttach`: main puts the PDF on the clipboard and pastes it into the chat just opened, then
-   *  drafts `caption` (the message) into WhatsApp's preview — the person only presses Send. Only sent
-   *  for one-click sends from our button. */
-  setPdf(p: { name: string; bytes: Uint8Array; autoAttach?: boolean; caption?: string }): Promise<{ ok: boolean }>;
-  /** "Copy again": the PDF back on the clipboard. */
-  copyPdf?(): Promise<{ ok: boolean }>;
+  /** `copyToClipboard`: main puts the PDF on OUR OS clipboard (the person pastes it into the chat and
+   *  presses Send). Nothing is sent to, run in or read from WhatsApp. Only for one-click sends from our button. */
+  setPdf(p: { name: string; bytes: Uint8Array; copyToClipboard?: boolean }): Promise<{ ok: boolean }>;
   startDrag(): void;
 }
 
-/** Where the automatic PDF attach is (main, electron/whatsapp-attach.js). */
-export type WaAttachState = 'idle' | 'preparing' | 'working' | 'attached' | 'manual';
+/** Where the PDF is: on the clipboard ('copied'), or the copy failed (drag instead). */
+export type WaClipboardState = 'idle' | 'copied' | 'failed';
 
 /** What main tells the page about the panel (electron/whatsapp-dock.js). */
 export interface WaDockState {
@@ -37,8 +34,8 @@ export interface WaDockState {
   failed: boolean;
   /** A report PDF is ready to drag into the chat. */
   pdfName: string | null;
-  /** The automatic attach (paste into the chat): working → attached | manual (press Ctrl/Cmd+V). */
-  attach?: WaAttachState;
+  /** Our OS clipboard: 'copied' → the person presses Ctrl/Cmd+V in the chat. */
+  clipboard?: WaClipboardState;
 }
 
 export function whatsAppBridge(): ElectronWhatsAppBridge | null {
@@ -86,9 +83,9 @@ export const WA_PDF_HINT_KEY = 'pf.wa.manual.pdfhint';
  * chat and the message ready; the PERSON presses Send. See
  * shared/utils/whatsapp-manual.ts for the hard lines.
  *
- * - Desktop app → the docked panel on the right (IPC, main validates the URL); main puts the PDF on
- *   the clipboard, pastes it into the chat and drafts the message as its caption (electron/
- *   whatsapp-attach.js) — the person only presses Send. No card, no toast.
+ * - Desktop app → the docked panel on the right (IPC, main validates the URL) with the message drafted
+ *   by WhatsApp's own click-to-chat link; main copies the PDF to OUR OS clipboard and our panel header
+ *   says "press Ctrl+V" — the person pastes and presses Send. WhatsApp's page is never touched. No toast.
  * - Phone → ONE tap opens the share sheet with the PDF + the message (Web Share with files), else wa.me.
  * - Desktop browser → ONE named phone-shaped window with the text drafted, and the PDF downloaded at
  *   the same moment (a cross-origin page can't be attached to). Silent; one hint, first time only.
@@ -161,8 +158,9 @@ export class WhatsAppManualService {
     if (dock) {
       const res = await dock.open(url).catch(() => ({ ok: false }));
       if (!res?.ok) { this.toasts.error('Could not open WhatsApp. Try again.'); return 'blocked'; }
-      // One click: main attaches the PDF (paste) and drafts the message as its caption — the person presses Send.
-      if (req.pdf) void this.handPdf(dock, req, text);
+      // One click: the message is drafted by WhatsApp's own click-to-chat link; main copies the PDF to OUR
+      // clipboard — the person pastes it (Ctrl/Cmd+V) and presses Send. Nothing touches WhatsApp's page.
+      if (req.pdf) void this.handPdf(dock, req);
       return 'opened';
     }
 
@@ -227,14 +225,13 @@ export class WhatsAppManualService {
     } catch { /* the link in the message is enough */ }
   }
 
-  /** Desktop: hand the report PDF to main — it puts it on the clipboard and pastes it into the chat
-   *  (the person presses Send), and keeps it for drag / "Copy again" (best-effort). */
-  private async handPdf(dock: ElectronWhatsAppBridge, req: WaManualRequest, text: string): Promise<void> {
+  /** Desktop: hand the report PDF to main — it copies it to OUR clipboard and keeps it for the drag chip (best-effort). */
+  private async handPdf(dock: ElectronWhatsAppBridge, req: WaManualRequest): Promise<void> {
     try {
       const blob = await req.pdf!();
       if (!blob) return;
       const bytes = new Uint8Array(await blobBytes(blob));
-      await dock.setPdf({ name: req.pdfName || 'report.pdf', bytes, autoAttach: true, caption: text });
+      await dock.setPdf({ name: req.pdfName || 'report.pdf', bytes, copyToClipboard: true });
     } catch { /* the link in the message is enough */ }
   }
 

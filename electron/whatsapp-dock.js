@@ -9,19 +9,22 @@
  * and cookies — checks the message and presses Send THEMSELVES.
  *
  * Hard lines (legal / WhatsApp terms — pinned by test/whatsapp-dock.test.js):
- *   - Nothing inside WhatsApp is automated BY THIS FILE: no preload, no script
- *     here, Send is never pressed for the person, no bulk. The ONE exception
- *     (owner, 2026-11-07) lives in whatsapp-attach.js: the report PDF goes on
- *     the clipboard and is pasted into the open chat (the person's own Ctrl+V),
- *     so WhatsApp shows its attachment preview — the person presses Send.
+ *   - NOTHING inside WhatsApp is automated, read or modified (WhatsApp's Terms
+ *     prohibit it): no preload, no script injected (no executeJavaScript /
+ *     insertCSS), no paste(), no insertText, no sendInputEvent, no IPC into the
+ *     view, its page is never read, Send is never pressed, no file is attached
+ *     for the person, no bulk. The app only opens the official click-to-chat
+ *     link (the message drafted in its `text` param — WhatsApp's own feature)
+ *     and puts the report PDF on OUR OS clipboard (whatsapp-clipboard.js) so the
+ *     person can paste it themselves.
  *   - Only the click-to-chat link is loaded (`parseClickToChat`); the view
  *     never leaves *.whatsapp.com / *.whatsapp.net — anything else opens in
  *     the system browser.
  *   - The user agent is Electron's own (no Chrome spoofing — an owner
  *     decision, not done). If WhatsApp refuses to load here, the page offers
  *     the same link in the system browser or the WhatsApp app.
- *   - The report PDF is also offered as a NATIVE DRAG the person starts
- *     (webContents.startDrag from their drag gesture) + "Copy again".
+ *   - The report PDF is also offered as a NATIVE DRAG the person starts from OUR
+ *     header (startDrag on the app window's own contents) — never attached.
  *
  * The decisions are plain functions (no Electron) so they are unit-tested;
  * `createDock` takes Electron's pieces as arguments so tests pass fakes.
@@ -31,7 +34,7 @@ const PARTITION = 'persist:whatsapp';
 /** Hosts the panel may show (the host itself or any subdomain). */
 const WA_HOST_SUFFIXES = ['whatsapp.com', 'whatsapp.net'];
 /** The page's header strip above the panel (CSS px; Close / Sign out + one quiet note row). */
-const HEADER_CSS = 96;
+const HEADER_CSS = 112;
 /** Permissions WhatsApp Web may have here: its own message notifications and
  *  copying text. Everything else (camera, microphone, location, screen,
  *  devices, clipboard READ, …) is denied. */
@@ -145,17 +148,11 @@ function createDock(deps) {
   let lastChat = null;
   let pdfPath = null;
   let hardened = false;
-  const state = { open: false, width: 0, top: HEADER_CSS, loading: false, failed: false, pdfName: null, attach: 'idle' };
-  let chatSeq = 0;        // bumps on every open(): an attach only runs for the chat it was asked for
-  let attachedSeq = -1;   // the chat that already had its one attempt
+  const state = { open: false, width: 0, top: HEADER_CSS, loading: false, failed: false, pdfName: null, clipboard: 'idle' };
+  let chatSeq = 0;        // bumps on every open(): the clipboard copy only runs for the chat it was asked for
+  let copiedSeq = -1;     // the chat that already had its one copy
 
   const waSession = () => session.fromPartition(PARTITION);
-  // Clipboard-paste attach (whatsapp-attach.js) — optional so tests of the panel alone need no clipboard.
-  const attacher = deps.createAttacher
-    ? deps.createAttacher({ getContents: () => (view && !view.webContents.isDestroyed() ? view.webContents : null), hostOk: hostAllowed,
-        onStep: (s) => { state.attach = s; emit(); } })
-    : null;
-  let pdfBytes = null;
 
   /** Is this web contents the panel's (or anything in its partition)? The
    *  app-wide navigation guard skips these — the panel has its own. */
@@ -231,7 +228,6 @@ function createDock(deps) {
     }
     lastChat = { url, ...chat };
     chatSeq++;
-    if (attacher) attacher.cancel();
     clearPdf();
     state.open = true;
     state.failed = false;
@@ -243,7 +239,6 @@ function createDock(deps) {
   }
 
   function close() {
-    if (attacher) attacher.cancel();
     const v = view;
     view = null;
     if (v) {
@@ -252,7 +247,7 @@ function createDock(deps) {
     }
     attachedTo = null;
     clearPdf();
-    Object.assign(state, { open: false, width: 0, loading: false, failed: false, pdfName: null, attach: 'idle' });
+    Object.assign(state, { open: false, width: 0, loading: false, failed: false, pdfName: null, clipboard: 'idle' });
     emit();
     return { ok: true };
   }
@@ -278,8 +273,8 @@ function createDock(deps) {
   function clearPdf() {
     if (pdfPath) { try { deps.fs.unlinkSync(pdfPath); } catch { /* */ } }
     pdfPath = null;
-    pdfBytes = null;
     state.pdfName = null;
+    state.clipboard = 'idle';
   }
 
   /** The page hands over the report PDF for the drag helper. */
@@ -294,25 +289,20 @@ function createDock(deps) {
     pdfPath = deps.path.join(dir, name);
     deps.fs.writeFileSync(pdfPath, bytes, { mode: 0o600 });
     state.pdfName = name;
-    pdfBytes = bytes;
     emit();
-    // One-click sends only: the page says autoAttach for the chat IT just opened; one attempt per chat.
-    if (attacher && p.autoAttach === true && attachedSeq !== chatSeq) {
-      attachedSeq = chatSeq;
+    // One-click sends only: the page says copyToClipboard for the chat IT just opened; one copy per chat.
+    // OUR clipboard only — nothing is sent to, run in or read from the WhatsApp view.
+    if (p.copyToClipboard === true && copiedSeq !== chatSeq && deps.writeClipboard) {
+      copiedSeq = chatSeq;
       const seq = chatSeq;
-      const caption = typeof p.caption === 'string' && p.caption.length <= 4000 ? p.caption : '';
-      Promise.resolve(attacher.start({ file: pdfPath, name, bytes, caption })).catch(() => {
-        if (seq === chatSeq) { state.attach = 'manual'; emit(); }
-      });
+      const file = pdfPath;
+      Promise.resolve(deps.writeClipboard(file)).then((r) => {
+        if (seq !== chatSeq || file !== pdfPath) return;
+        state.clipboard = r && r.ok ? 'copied' : 'failed';
+        emit();
+      }).catch(() => { if (seq === chatSeq) { state.clipboard = 'failed'; emit(); } });
     }
     return { ok: true };
-  }
-
-  /** "Copy again": the PDF back on the clipboard (the person pastes it). */
-  async function copyPdf() {
-    if (!attacher || !pdfPath) return { ok: false };
-    const r = await attacher.copyAgain(pdfPath);
-    return { ok: r.ok };
   }
 
   /** The person started dragging the PDF chip: a native file drag they drop
@@ -325,26 +315,25 @@ function createDock(deps) {
   }
 
   function windowGone() {
-    if (attacher) attacher.cancel();
     view = null;
     attachedTo = null;
     clearPdf();
-    Object.assign(state, { open: false, width: 0, loading: false, failed: false, pdfName: null, attach: 'idle' });
+    Object.assign(state, { open: false, width: 0, loading: false, failed: false, pdfName: null, clipboard: 'idle' });
   }
 
-  return { open, close, signOut, openElsewhere, setPdf, copyPdf, startDrag, relayout, owns, windowGone, state: publicState };
+  return { open, close, signOut, openElsewhere, setPdf, startDrag, relayout, owns, windowGone, state: publicState };
 }
 
 /** IPC + window wiring (main.js). Only the main window's page may drive it. */
 function register(getWindow, electron = require('electron')) {
   const { ipcMain, WebContentsView, session, shell, nativeImage, clipboard } = electron;
-  const attachLib = require('./whatsapp-attach');
+  const clip = require('./whatsapp-clipboard');
   const dock = createDock({
     WebContentsView, session, shell, nativeImage, getWindow,
-    createAttacher: (d) => attachLib.createAttacher({
-      ...d, clipboard, platform: process.platform, execFile: require('child_process').execFile,
+    writeClipboard: (file) => clip.writeFileToClipboard({
+      clipboard, platform: process.platform, execFile: require('child_process').execFile,
       pathToFileURL: require('url').pathToFileURL,
-    }),
+    }, file),
     fs: require('fs'), os: require('os'), path: require('path'),
     iconPath: require('path').join(__dirname, 'icon.png'),
   });
@@ -358,7 +347,6 @@ function register(getWindow, electron = require('electron')) {
   ipcMain.handle('whatsapp:state', (e) => (fromApp(e) ? dock.state() : null));
   ipcMain.handle('whatsapp:openElsewhere', (e, kind) => (fromApp(e) ? dock.openElsewhere(kind === 'app' ? 'app' : 'browser') : { ok: false }));
   ipcMain.handle('whatsapp:setPdf', (e, p) => (fromApp(e) ? dock.setPdf(p) : { ok: false }));
-  ipcMain.handle('whatsapp:copyPdf', (e) => (fromApp(e) ? dock.copyPdf() : { ok: false }));
   ipcMain.on('whatsapp:startDrag', (e) => { if (fromApp(e)) dock.startDrag(e.sender); });
   return dock;
 }

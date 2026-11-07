@@ -86,7 +86,7 @@ test('layout: phone-width panel on the right, the app keeps the rest', () => {
   assert.equal(dock.dockLayout({ width: 900, height: 700 }).bounds.width, 340);     // app keeps 560
   // A zoomed page: DIP bounds, CSS width for the page's reflow.
   const z = dock.dockLayout({ width: 1440, height: 900 }, 1.25);
-  assert.equal(z.bounds.y, 120);
+  assert.equal(z.bounds.y, 140);
   assert.equal(z.cssWidth, 304);
   assert.equal(z.cssTop, dock.HEADER_CSS);
 });
@@ -130,6 +130,9 @@ function fakes() {
       wc.insertCSS = () => { throw new Error('insertCSS must never be called on WhatsApp'); };
       wc.sendInputEvent = () => { throw new Error('sendInputEvent must never be called on WhatsApp'); };
       wc.send = () => { throw new Error('nothing is sent into WhatsApp'); };
+      wc.paste = () => { throw new Error('paste must never be called on WhatsApp'); };
+      wc.insertText = () => { throw new Error('insertText must never be called on WhatsApp'); };
+      wc.focus = () => { throw new Error('the WhatsApp view is never focused or driven by us'); };
       this.webContents = wc;
       calls.views.push(this);
     }
@@ -178,12 +181,12 @@ test('open: docks on the right in the whatsapp partition, loads only the link, t
   assert.ok(partitions.every((p) => p === 'persist:whatsapp'));
   assert.deepEqual(calls.added, [v]);
   assert.deepEqual(calls.loaded, [CHAT]);
-  assert.deepEqual(v.bounds, { x: 1060, y: 96, width: 380, height: 804 });
+  assert.deepEqual(v.bounds, { x: 1060, y: 112, width: 380, height: 788 });
   const last = mainWc.sent.at(-1);
   assert.equal(last[0], 'whatsapp:state');
   assert.equal(last[1].open, true);
   assert.equal(last[1].width, 380);
-  assert.equal(last[1].top, 96);
+  assert.equal(last[1].top, 112);
   // A second click reuses the same panel (same view, not re-added).
   d.open('https://web.whatsapp.com/send?phone=919812345678&text=y');
   assert.equal(calls.views.length, 1);
@@ -288,7 +291,7 @@ test('IPC: only the main window may drive the panel', async () => {
     nativeImage: {},
   };
   dock.register(() => fake.win, electron);
-  assert.deepEqual([...handlers.keys()].sort(), ['whatsapp:close', 'whatsapp:copyPdf', 'whatsapp:open', 'whatsapp:openElsewhere', 'whatsapp:setPdf', 'whatsapp:signOut', 'whatsapp:state']);
+  assert.deepEqual([...handlers.keys()].sort(), ['whatsapp:close', 'whatsapp:open', 'whatsapp:openElsewhere', 'whatsapp:setPdf', 'whatsapp:signOut', 'whatsapp:state']);
   assert.ok(ons.has('whatsapp:startDrag'));
   const stranger = { sender: {} };
   assert.deepEqual(await handlers.get('whatsapp:open')(stranger, CHAT), { ok: false });

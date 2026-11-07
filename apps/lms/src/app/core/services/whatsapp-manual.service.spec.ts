@@ -157,7 +157,7 @@ describe('WhatsAppManualService — desktop app (docked panel)', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it('hands the PDF over for the automatic attach (clipboard paste in main) + drag; the person presses Send', async () => {
+  it('hands the PDF to main for OUR clipboard (the person pastes it) + drag; nothing is attached for them', async () => {
     const b = bridge();
     const { svc } = setup({ bridge: b });
     await svc.send({ ...REQ, pdf: async () => new Blob(['%PDF-1.4 x'], { type: 'application/pdf' }), pdfName: 'report-AB.pdf' });
@@ -165,9 +165,10 @@ describe('WhatsAppManualService — desktop app (docked panel)', () => {
     const arg = (b.setPdf.mock.calls[0] as unknown as [{ name: string; bytes: Uint8Array }])[0];
     expect(arg.name).toBe('report-AB.pdf');
     expect(arg.bytes.length).toBe(10);
-    expect((arg as unknown as { autoAttach: boolean }).autoAttach).toBe(true);
-    // the message rides along: main drafts it as the attachment's caption
-    expect((arg as unknown as { caption: string }).caption).toContain('your report from Micro World is ready');
+    expect((arg as unknown as { copyToClipboard: boolean }).copyToClipboard).toBe(true);
+    // the message is drafted by the click-to-chat link itself; nothing else is sent to main for WhatsApp
+    expect(Object.keys(arg).sort()).toEqual(['bytes', 'copyToClipboard', 'name']);
+    expect(b.open).toHaveBeenCalledWith(URL_);
   });
 
   it('desktop one-click success is silent: no toast at all, not even the first-send reminder', async () => {

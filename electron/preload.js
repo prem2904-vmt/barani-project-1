@@ -183,9 +183,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // "Send on WhatsApp" (whatsapp-dock.js): WhatsApp Web docked on the right.
   // open() takes ONLY a click-to-chat link (main re-checks it); the person
-  // presses Send in WhatsApp. setPdf (autoAttach) puts the PDF on the clipboard and pastes
-  // it into the chat (whatsapp-attach.js — the person still presses Send); startDrag =
-  // the "drag the PDF into the chat" helper, copyPdf = "Copy again".
+  // presses Send in WhatsApp. setPdf (copyToClipboard) puts the PDF on OUR OS clipboard
+  // (whatsapp-clipboard.js) for the person to paste; nothing touches WhatsApp's page.
+  // startDrag = the "drag the PDF into the chat" helper (from our own header).
   whatsapp: {
     open: (url) => ipcRenderer.invoke('whatsapp:open', String(url || '')),
     close: () => ipcRenderer.invoke('whatsapp:close'),
@@ -197,8 +197,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('whatsapp:state', h);
     },
     openElsewhere: (kind) => ipcRenderer.invoke('whatsapp:openElsewhere', kind === 'app' ? 'app' : 'browser'),
-    setPdf: (p) => ipcRenderer.invoke('whatsapp:setPdf', { name: String((p && p.name) || 'report.pdf'), bytes: p && p.bytes, autoAttach: !!(p && p.autoAttach), caption: String((p && p.caption) || '').slice(0, 4000) }),
-    copyPdf: () => ipcRenderer.invoke('whatsapp:copyPdf'),
+    setPdf: (p) => ipcRenderer.invoke('whatsapp:setPdf', { name: String((p && p.name) || 'report.pdf'), bytes: p && p.bytes, copyToClipboard: !!(p && p.copyToClipboard) }),
     startDrag: () => ipcRenderer.send('whatsapp:startDrag')
   },
   // Desktop self-update (electron/updater.js). The renderer owns the
