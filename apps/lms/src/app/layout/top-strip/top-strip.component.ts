@@ -1,3 +1,4 @@
+import { SetPinDialogService } from '../../core/services/set-pin-dialog.service';
 import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
 import {
   ChangeDetectionStrategy,
@@ -734,12 +735,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   );
   protected readonly hasPin = computed(() => !!this.auth.user()?.hasPin);
 
-  protected readonly pinFormOpen = signal(false);
-  protected pinCurrent = "";
-  protected pinNew = "";
-  protected readonly pinBusy = signal(false);
-  protected readonly pinError = signal<string | null>(null);
-  protected readonly pinSaved = signal(false);
+  private readonly pinDialog = inject(SetPinDialogService);
 
   accountInitials(a: StoredAccount): string {
     return this.auth.accounts.initials(a);
@@ -764,43 +760,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.router.navigateByUrl("/login?add=1");
   }
 
+  /** Set / change PIN: a real dialog (OPS-107), opened - and its first field focused - inside this tap. */
   openPinForm() {
-    this.pinFormOpen.set(true);
-    this.pinCurrent = "";
-    this.pinNew = "";
-    this.pinError.set(null);
-    this.pinSaved.set(false);
-  }
-  closePinForm() {
-    this.pinFormOpen.set(false);
-  }
-
-  /** PIN fields accept digits only, capped at 4 (iPhone-style). */
-  sanitizePin(v: string): string {
-    return (v ?? "").replace(/\D/g, "").slice(0, 4);
-  }
-
-  async savePin() {
-    if (this.pinBusy() || !/^\d{4}$/.test(this.pinNew)) {
-      this.pinError.set("PIN must be exactly 4 digits.");
-      return;
-    }
-    this.pinBusy.set(true);
-    this.pinError.set(null);
-    try {
-      await this.auth.setPin(
-        this.pinNew,
-        this.hasPin() ? this.pinCurrent : undefined,
-      );
-      this.pinSaved.set(true);
-      setTimeout(() => {
-        this.closePinForm();
-      }, 900);
-    } catch (e) {
-      this.pinError.set((e as Error).message || "Could not update the PIN.");
-    } finally {
-      this.pinBusy.set(false);
-    }
+    this.closeProfile();
+    this.pinDialog.open();
   }
 
   private closeAll() {

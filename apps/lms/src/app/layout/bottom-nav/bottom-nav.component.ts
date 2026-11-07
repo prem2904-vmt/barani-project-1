@@ -26,6 +26,7 @@ import { KeyboardService } from '../../core/services/keyboard.service';
 import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
 import { SessionService } from '../../core/auth/session.service';
+import { SetPinDialogService } from '../../core/services/set-pin-dialog.service';
 import { DOCTOR_NAV, OPD_NAV, opdNavActive, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback, withExpenses, withInsights } from '../nav-items';
 import { opdAreasFor } from '../../features/opd/shared/opd-nav';
 import { RouteAccessCtx } from '../../core/auth/route-access';
@@ -274,35 +275,11 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     this.lock.lock();
   }
 
-  protected readonly pinFormOpen = signal(false);
-  protected pinCurrent = '';
-  protected pinNew = '';
-  protected readonly pinBusy = signal(false);
-  protected readonly pinError = signal<string | null>(null);
-  protected readonly pinSaved = signal(false);
-
+  private readonly pinDialog = inject(SetPinDialogService);
+  /** Set / change PIN: a real dialog (OPS-107), opened - and its first field focused - inside this tap. */
   protected onSetPin(): void {
-    this.pinFormOpen.set(true);
-    this.pinCurrent = '';
-    this.pinNew = '';
-    this.pinError.set(null);
-    this.pinSaved.set(false);
-  }
-  protected sanitizePin(v: string): string { return (v ?? '').replace(/\D/g, '').slice(0, 4); }
-
-  protected async savePin(): Promise<void> {
-    if (this.pinBusy() || !/^\d{4}$/.test(this.pinNew)) { this.pinError.set('PIN must be exactly 4 digits.'); return; }
-    this.pinBusy.set(true);
-    this.pinError.set(null);
-    try {
-      await this.auth.setPin(this.pinNew, this.hasPin() ? this.pinCurrent : undefined);
-      this.pinSaved.set(true);
-      setTimeout(() => this.pinFormOpen.set(false), 900);
-    } catch (e) {
-      this.pinError.set((e as Error).message || 'Could not update the PIN.');
-    } finally {
-      this.pinBusy.set(false);
-    }
+    this.closeMore();
+    this.pinDialog.open();
   }
 
   /** Tap outside the popover closes it. The transparent .pf-more-bd

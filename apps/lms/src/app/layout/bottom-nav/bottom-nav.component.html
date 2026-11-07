@@ -489,29 +489,6 @@
           <span>Passkeys</span>
         </button>
       }
-      @if (pinFormOpen()) {
-        <div class="pf-acct-pinform">
-          <p class="pf-acct-pinlbl">{{ hasPin() ? 'Change PIN' : 'Set a 4-digit PIN' }}</p>
-          @if (hasPin()) {
-            <input class="pf-acct-pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off"
-                   (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"
-                   maxlength="4" placeholder="Current PIN"
-                   [ngModel]="pinCurrent" (ngModelChange)="pinCurrent = sanitizePin($event)" [disabled]="pinBusy()" />
-          }
-          <div class="pf-acct-pinrow">
-            <input class="pf-acct-pin" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off"
-                   (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()"
-                   maxlength="4" placeholder="New PIN"
-                   [ngModel]="pinNew" (ngModelChange)="pinNew = sanitizePin($event)"
-                   (keydown.enter)="savePin()" [disabled]="pinBusy()" />
-            <button type="button" class="pf-acct-pingo press" (click)="savePin()" [disabled]="pinBusy()">
-              {{ pinBusy() ? '…' : (pinSaved() ? '✓' : 'Save') }}
-            </button>
-            <button type="button" class="pf-acct-pinx press" (click)="pinFormOpen.set(false)">✕</button>
-          </div>
-          @if (pinError()) { <p class="pf-acct-pinerr">{{ pinError() }}</p> }
-        </div>
-      } @else {
         <button type="button" role="menuitem" class="pf-more-item press" (click)="onSetPin()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -520,7 +497,6 @@
           </svg>
           <span>{{ hasPin() ? 'Change PIN' : 'Set switch/unlock PIN' }}</span>
         </button>
-      }
       @if (hasPin()) {
         <button type="button" role="menuitem" class="pf-more-item press" (click)="onLockScreen()">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"

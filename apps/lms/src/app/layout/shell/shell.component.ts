@@ -22,6 +22,7 @@ import { takeUntilDestroyed } from "@angular/core/rxjs-interop";
 import { ToastService } from "../../core/services/toast.service";
 import { AmbientBgComponent } from "../../shared/components/ambient-bg/ambient-bg.component";
 import { DialogHostComponent } from "../../shared/components/dialog-host/dialog-host.component";
+import { SetPinDialogComponent } from "../../shared/components/set-pin-dialog/set-pin-dialog.component";
 import { BottomNavComponent } from "../bottom-nav/bottom-nav.component";
 import { TopStripComponent } from "../top-strip/top-strip.component";
 import { ThemeService } from "../../core/services/theme.service";
@@ -70,6 +71,7 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
     TopStripComponent,
     BottomNavComponent,
     DialogHostComponent,
+    SetPinDialogComponent,
     AmbientBgComponent,
     PatientProfileModalComponent,
     CallOverlayComponent,
@@ -148,6 +150,7 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
 
       <!-- Themed prompt / confirm overlay (replaces window.prompt/confirm). -->
       <pf-dialog-host></pf-dialog-host>
+      <pf-set-pin-dialog></pf-set-pin-dialog>
 
       <!-- Chat/calls only exist when the Messages module is in the plan. Gate
            the overlay + people drawer so a disabled tenant has no trace. -->

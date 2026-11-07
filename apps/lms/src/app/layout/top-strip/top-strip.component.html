@@ -607,26 +607,6 @@
           <span>Add account</span>
         </button>
 
-        @if (pinFormOpen()) {
-        <div class="pf-switch-form">
-          <p class="pf-switch-lbl">{{ hasPin() ? 'Change PIN' : 'Set a 4-digit PIN' }}</p>
-          @if (hasPin()) {
-          <input class="pf-pin-input pf-pin-wide" type="password" inputmode="numeric" autocomplete="off" maxlength="4"
-            placeholder="Current PIN" [ngModel]="pinCurrent" (ngModelChange)="pinCurrent = sanitizePin($event)"
-            [disabled]="pinBusy()" />
-          }
-          <div class="pf-switch-row">
-            <input class="pf-pin-input" type="password" inputmode="numeric" autocomplete="off" maxlength="4"
-              placeholder="New PIN" [ngModel]="pinNew" (ngModelChange)="pinNew = sanitizePin($event)"
-              (keydown.enter)="savePin()" [disabled]="pinBusy()" />
-            <button type="button" class="pf-pin-go press" (click)="savePin()" [disabled]="pinBusy()">
-              {{ pinBusy() ? '…' : (pinSaved() ? '✓' : 'Save') }}
-            </button>
-            <button type="button" class="pf-pin-cancel press" (click)="closePinForm()">✕</button>
-          </div>
-          @if (pinError()) { <p class="pf-pin-error">{{ pinError() }}</p> }
-        </div>
-        } @else {
         <button type="button" class="pf-profile-item press" (click)="openPinForm()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
             stroke-linecap="round" stroke-linejoin="round">
@@ -635,7 +615,6 @@
           </svg>
           <span>{{ hasPin() ? 'Change PIN' : 'Set switch/unlock PIN' }}</span>
         </button>
-        }
 
         @if (canPrint()) {
         <button type="button" class="pf-profile-item press" (click)="goPrinting()">
