@@ -39,6 +39,8 @@ export interface Order {
    *  bill isn't settled — a dispatch attempt WILL be rejected, so the UI
    *  offers "Bill" instead of Dispatch. */
   paymentHold?: boolean;
+  /** Server-computed (OPS-75): money currently held for the order (payments − refunds). Absent on un-annotated reads. */
+  netPaid?: number | null;
   patient?: Patient;
   samples: OrderSample[];
 }

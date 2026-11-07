@@ -2127,6 +2127,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this.router.navigate(['/frontdesk/order'], { queryParams: { patientId: o.patientId, editOrderId: o.id } });
   }
 
+  /** OPS-75: is there money to give back? Unknown (un-annotated read) is treated as
+   *  "yes" so a refund is never silently skipped; the server refunds only a real net > 0. */
+  cancelHasPayment(o: Order | null): boolean {
+    if (!o) return false;
+    if (o.netPaid == null) return o.billStatus !== 'unbilled';
+    return o.netPaid > 0;
+  }
+
   openCancel(o: Order) {
     this.cancelReason.set('');
     this.cancelRefundMode.set('cash');
@@ -2137,13 +2145,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const o = this.cancelTarget();
     if (!o || this.cancelling()) return;
     this.cancelling.set(true);
-    this.api.patch(`/api/orders/${o.id}/cancel`, { reason: this.cancelReason().trim() || null, refundMode: this.cancelRefundMode() })
+    const body: { reason: string | null; refundMode?: string } = { reason: this.cancelReason().trim() || null };
+    if (this.cancelHasPayment(o)) body.refundMode = this.cancelRefundMode();
+    this.api.patch(`/api/orders/${o.id}/cancel`, body)
       .subscribe({
         next: () => {
           this.cancelling.set(false);
           this.cancelTarget.set(null);
           this._selectedOrder.set(null);
-          this.toasts.success('Order cancelled — any payment refunded');
+          this.toasts.success(this.cancelHasPayment(o) ? 'Order cancelled — payment refunded' : 'Order cancelled');
           this.refresh();
         },
         error: (e) => {

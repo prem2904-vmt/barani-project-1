@@ -1762,6 +1762,7 @@
   <div class="pf-cancel" role="dialog" aria-modal="true" aria-label="Cancel order">
     <h3 class="pf-cancel__title">Cancel order</h3>
     <p class="pf-cancel__sub">{{ ct.patient?.displayName || 'Patient' }} · #{{ ct.id.slice(0, 8) }}</p>
+    @if (cancelHasPayment(ct)) {
     <p class="pf-cancel__note">The order will be voided. Any amount already paid is refunded in the mode you choose.</p>
     <label class="pf-cancel__label">Refund mode</label>
     <div class="pf-cancel__modes">
@@ -1770,6 +1771,9 @@
         (click)="cancelRefundMode.set(m.key)">{{ m.label }}</button>
       }
     </div>
+    } @else {
+    <p class="pf-cancel__note">The order will be voided. Nothing has been paid, so there is nothing to refund.</p>
+    }
     <label class="pf-cancel__label">Reason</label>
     <input class="pf-cancel__input" [value]="cancelReason()" (input)="cancelReason.set($any($event.target).value)"
       placeholder="e.g. patient left, duplicate order" />
@@ -1777,7 +1781,7 @@
       <button type="button" class="pf-cancel__keep" (click)="cancelTarget.set(null)">Keep order</button>
       <button type="button" class="pf-cancel__confirm" [disabled]="cancelling()" [pfBusy]="cancelling()"
         pfBusyLabel="Cancelling order…" (click)="confirmCancel()">
-        {{ cancelling() ? 'Cancelling…' : 'Cancel & refund' }}
+        {{ cancelling() ? 'Cancelling…' : (cancelHasPayment(ct) ? 'Cancel & refund' : 'Cancel order') }}
       </button>
     </div>
   </div>
