@@ -2219,7 +2219,9 @@ function computeReportLayout(
           align: 'right', style: tstyle('labContact'), size: tsz('labContact'), color: BLACK, tone: 'plain' });
     // OPS-81: the address sits on its own line UNDER the logo row; a taller logo (designer size)
     // pushes it down instead of printing over the picture. Zero for every logo up to the large preset.
-    const underLogo = flow && !logo.hidden && ov('logo').y === undefined ? Math.max(0, logo.defBox.y + logo.defBox.h + 6 - (LH_TOP + 46 + g + lead('labAddress', 8 * fs))) : 0;
+    const addrBase = LH_TOP + 46 + g + lead('labAddress', 8 * fs);
+    const logoFoot = logo.defBox.y + logo.defBox.h;
+    const underLogo = flow && !logo.hidden && ov('logo').y === undefined && logoFoot + 6 > addrBase ? logoFoot + 14 - addrBase : 0;
     if (practice.address) add({ id: 'address', kind: 'text', label: 'Address', text: practice.address, x: MARGIN_X,
           y: LH_TOP + 46 + g + lead('labAddress', 8 * fs) + underLogo, align: 'left', style: tstyle('labAddress'), size: tsz('labAddress'),
           color: TEXT_DIM, tone: 'plain',
