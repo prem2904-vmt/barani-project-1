@@ -485,8 +485,22 @@ export class ReportColumnsEditorComponent implements OnInit {
     { value: 'tested_by', label: 'Whoever tested (entered results)' },
     { value: 'validated_by', label: 'Whoever validated' },
   ];
-  protected readonly sigUserOptions = computed(() =>
-    this.users().map(u => ({ value: u.id, label: u.displayName })));
+  /** Everyone in the lab - only used to NAME a saved signatory who no longer qualifies (OPS-82). */
+  private readonly everyone = signal<Array<{ id: string; displayName: string }>>([]);
+  protected readonly sigUserOptions = computed(() => {
+    const opts = this.users().map(u => ({ value: u.id, label: u.displayName }));
+    // A signatory already saved on this department stays visible - labelled - even when the
+    // person no longer qualifies (lost the permission / went inactive), so a template never
+    // silently loses them.
+    const known = new Set(opts.map(o => o.value));
+    for (const s of this.signatories()) {
+      if (s.mode !== 'user' || !s.userId || known.has(s.userId)) continue;
+      known.add(s.userId);
+      const name = this.everyone().find(u => u.id === s.userId)?.displayName ?? 'Unknown person';
+      opts.push({ value: s.userId, label: `${name} (can no longer sign)` });
+    }
+    return opts;
+  });
   protected readonly signatories = signal<Array<{ _key: string; mode: 'role' | 'user'; role: string; userId: string | null; designation: string }>>([]);
   protected readonly sigSaving = signal(false);
   private sigKey(): string { return 's-' + Math.random().toString(36).slice(2, 9); }
@@ -534,9 +548,14 @@ export class ReportColumnsEditorComponent implements OnInit {
 
   ngOnInit() {
     if (this.hostManaged()) return;   // host seeds columns; no dept/users fetches
-    this.api.get<Array<{ id: string; displayName: string }>>('/api/users/picker').subscribe({
+    // OPS-82: only people who can sign a report (validate permission or a doctor profile).
+    this.api.get<Array<{ id: string; displayName: string }>>('/api/users/picker?signers=true').subscribe({
       next: l => this.users.set((l ?? []).map(u => ({ id: u.id, displayName: u.displayName }))),
       error: () => { /* users list optional */ },
+    });
+    this.api.get<Array<{ id: string; displayName: string }>>('/api/users/picker').subscribe({
+      next: l => this.everyone.set((l ?? []).map(u => ({ id: u.id, displayName: u.displayName }))),
+      error: () => { /* names for a saved signatory are optional */ },
     });
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: list => {
