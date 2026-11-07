@@ -152,44 +152,29 @@ for (const d of [false, true]) {
     await page.screenshot({ path: `${OUT}/report-button-none-${mode}.png` });
   });
 
-  test(`web PDF card (Download PDF) ${mode}`, async ({ page }) => {
+  test(`web: one click, chat popup + PDF download, no card, no toast ${mode}`, async ({ page }) => {
     test.setTimeout(120_000);
-    // Chrome on a Mac can share files; this shot is the browser that cannot.
-    await page.addInitScript(() => { (navigator as any).canShare = undefined; (navigator as any).share = undefined; });
+    await page.addInitScript(() => { (navigator as any).canShare = undefined; (navigator as any).share = undefined; localStorage.setItem('pf.wa.manual.pdfhint', '1'); });
     await openReport(page, d, { canSend: false });
+    const download = page.waitForEvent('download', { timeout: 15_000 });
     await page.locator('.pf-rv-act--send').click();
-    await expect(page.locator('[data-testid=wa-pdf-card]')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('[data-testid=wa-pdf-download]')).toBeVisible();
-    await page.waitForTimeout(500);
-    // The card never sits on the toast stack or under the popup (flush right) / the bottom nav.
-    const rect = (sel: string) => page.evaluate(s => { const b = document.querySelector(s)?.getBoundingClientRect(); return b ? { l: b.left, r: b.right, t: b.top, b: b.bottom } : null; }, sel);
-    const card = await rect('[data-testid=wa-pdf-card]'); const toast = await rect('.toast-item'); 
-    if (toast) expect(card!.r <= toast.l || card!.l >= toast.r || card!.b <= toast.t || card!.t >= toast.b).toBe(true);
-    expect(card!.b).toBeLessThanOrEqual(page.viewportSize()!.height - 56);   // above the bottom nav
-    await page.screenshot({ path: `${OUT}/web-pdf-card-download-${mode}.png` });
+    expect((await download).suggestedFilename()).toMatch(/^report-.*\.pdf$/);
+    await expect.poll(() => page.evaluate(() => (window as any).__waOpens.length)).toBe(1);
+    await page.waitForTimeout(800);
+    await expect(page.locator('[data-testid=wa-pdf-card]')).toHaveCount(0);
+    await expect(page.locator('.toast-item')).toHaveCount(0);
+    await page.screenshot({ path: `${OUT}/web-after-click-${mode}.png` });
   });
 
-  test(`web PDF card (Share PDF primary) ${mode}`, async ({ page }) => {
-    test.setTimeout(120_000);
-    await page.addInitScript(() => {
-      (navigator as any).canShare = () => true;
-      (navigator as any).share = async () => undefined;
-    });
-    await openReport(page, d, { canSend: false });
-    await page.locator('.pf-rv-act--send').click();
-    await expect(page.locator('[data-testid=wa-pdf-share]')).toBeVisible({ timeout: 15_000 });
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: `${OUT}/web-pdf-card-share-${mode}.png` });
-  });
-
-  test(`phone Share PDF card ${mode}`, async ({ browser }) => {
+  test(`phone: one tap → share sheet with the PDF + message, no card ${mode}`, async ({ browser }) => {
     test.setTimeout(120_000);
     const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
       userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148' });
     const page = await ctx.newPage();
     await page.addInitScript(() => {
+      (window as any).__shares = [];
       (navigator as any).canShare = () => true;
-      (navigator as any).share = async () => undefined;
+      (navigator as any).share = async (d: any) => { (window as any).__shares.push({ files: (d.files || []).map((f: File) => [f.name, f.type]), text: d.text }); };
     });
     await offlineBackend(page, '+919876543210', { canSend: false });
     await seed(page, { stubOpen: true });
@@ -198,10 +183,13 @@ for (const d of [false, true]) {
     await setTheme(page, d);
     await page.evaluate(() => localStorage.setItem('pf.wa.manual.reminded', '1'));
     await page.locator('.pf-rv-act--send').click();
-    await expect(page.locator('[data-testid=wa-pdf-card]')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('[data-testid=wa-pdf-share]')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => (window as any).__shares.length)).toBe(1);
+    const sh = await page.evaluate(() => (window as any).__shares[0]);
+    expect(sh.files[0][1]).toBe('application/pdf');
+    expect(sh.text).toContain('your report from');
+    await expect(page.locator('[data-testid=wa-pdf-card]')).toHaveCount(0);
     await page.waitForTimeout(500);
-    await page.screenshot({ path: `${OUT}/phone-pdf-card-${mode}.png` });
+    await page.screenshot({ path: `${OUT}/phone-after-tap-${mode}.png` });
     await ctx.close();
   });
 }

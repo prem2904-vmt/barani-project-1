@@ -30,8 +30,8 @@
 const PARTITION = 'persist:whatsapp';
 /** Hosts the panel may show (the host itself or any subdomain). */
 const WA_HOST_SUFFIXES = ['whatsapp.com', 'whatsapp.net'];
-/** The page's header strip above the panel (CSS px; Close / Sign out + the Report PDF card). */
-const HEADER_CSS = 128;
+/** The page's header strip above the panel (CSS px; Close / Sign out + one quiet note row). */
+const HEADER_CSS = 96;
 /** Permissions WhatsApp Web may have here: its own message notifications and
  *  copying text. Everything else (camera, microphone, location, screen,
  *  devices, clipboard READ, …) is denied. */
@@ -300,7 +300,8 @@ function createDock(deps) {
     if (attacher && p.autoAttach === true && attachedSeq !== chatSeq) {
       attachedSeq = chatSeq;
       const seq = chatSeq;
-      Promise.resolve(attacher.start({ file: pdfPath, name, bytes })).catch(() => {
+      const caption = typeof p.caption === 'string' && p.caption.length <= 4000 ? p.caption : '';
+      Promise.resolve(attacher.start({ file: pdfPath, name, bytes, caption })).catch(() => {
         if (seq === chatSeq) { state.attach = 'manual'; emit(); }
       });
     }

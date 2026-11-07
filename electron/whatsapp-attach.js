@@ -7,9 +7,11 @@
  * Owner decision 2026-11-07 (replaces the old "never attach" line in
  * whatsapp-dock.js). The hard lines that remain, pinned by
  * test/whatsapp-attach.test.js:
- *   - Send is NEVER pressed, nothing is typed: no sendInputEvent, no click(),
+ *   - Send is NEVER pressed and Enter is never sent: no sendInputEvent, no click(),
  *     no selector for the Send button, no keyboard events. The only input is
- *     paste() (and, only if paste fails, one synthetic drop of the PDF).
+ *     paste() (and, only if paste fails, one synthetic drop of the PDF) and, once
+ *     WhatsApp's attachment preview is open, the message text drafted into ITS
+ *     caption box with `webContents.insertText(text)` (only if the caption is empty).
  *   - The page script is limited to the fixed constants below: read-only
  *     probes (is the composer there / is the attachment preview open), one
  *     composer focus(), and the fallback drop. Nothing the renderer sends is
@@ -31,6 +33,8 @@ const SELECTORS = {
   // The attachment preview WhatsApp opens after a paste / drop.
   preview: '[data-testid="media-editor-container"], [data-animate-media-viewer], [data-testid="document-preview"], div[role="dialog"] [contenteditable="true"]',
   dialog: 'div[role="dialog"]',
+  // The caption box of the attachment preview (the message is drafted here; never the Send button).
+  caption: '[data-testid="media-caption"] [contenteditable="true"], div[role="dialog"] [contenteditable="true"], [data-animate-media-viewer] [contenteditable="true"]',
   dropTarget: '#main',
 };
 
@@ -39,6 +43,7 @@ const TIMEOUTS = {
   readyPollMs: 400,
   verifyMs: 4000,     // the attachment preview has to appear after paste / drop
   verifyPollMs: 250,
+  captionMs: 3000,    // the preview's caption box has to appear
   settleMs: 150,      // after focus, before paste
   restoreAfterMs: 1500,
 };
@@ -56,6 +61,22 @@ const q = (sel) => JSON.stringify(sel);
 /** Read-only: { qr, composer, dialog, preview }. */
 function probeScript() {
   return `(() => { const has = (s) => !!document.querySelector(s); return { qr: has(${q(SELECTORS.qr)}), composer: has(${q(SELECTORS.composer)}), dialog: has(${q(SELECTORS.dialog)}), preview: has(${q(SELECTORS.preview)}) }; })()`;
+}
+
+/** Read-only: does the preview's caption box exist, and is it empty? { caption: bool, captionText: string } */
+function captionProbeScript() {
+  return `(() => { const el = document.querySelector(${q(SELECTORS.caption)}); return { caption: !!el, captionText: el ? (el.innerText || el.textContent || '') : '' }; })()`;
+}
+
+/** Focus the caption box (no typing here — main inserts the text). */
+function captionFocusScript() {
+  return `(() => { const el = document.querySelector(${q(SELECTORS.caption)}); if (!el) return false; el.focus(); return true; })()`;
+}
+
+/** The caption needs the message unless WhatsApp already carried it over (never duplicate). */
+function captionNeedsText(p, text) {
+  if (!p || p.caption !== true || !text) return false;
+  return String(p.captionText || '').trim().length === 0;
 }
 
 /** Focus the composer (no typing). */
@@ -148,6 +169,20 @@ function run(execFile, cmd, args, env) {
  */
 async function runAttach(deps, t = TIMEOUTS) {
   const { probe, focus, paste, drop, sleep, now, cancelled } = deps;
+  /** Draft the message into the preview's caption (empty caption only). Never throws. */
+  const caption = async () => {
+    if (!deps.caption) return;
+    try {
+      const end = now() + (t.captionMs ?? 3000);
+      for (;;) {
+        if (cancelled()) return;
+        const p = await deps.captionProbe();
+        if (p && p.caption === true) { if (captionNeedsText(p, deps.captionText)) await deps.caption(); return; }
+        if (now() >= end) return;
+        await sleep(t.verifyPollMs);
+      }
+    } catch { /* the PDF is attached; the text stays wherever WhatsApp put it */ }
+  };
   const poll = async (okFn, totalMs, stepMs) => {
     const end = now() + totalMs;
     let last = null;
@@ -169,13 +204,13 @@ async function runAttach(deps, t = TIMEOUTS) {
   try { paste(); } catch { /* fall to the drop */ }
   const v1 = await poll(previewOpen, t.verifyMs, t.verifyPollMs);
   if (v1.cancelled) return 'cancelled';
-  if (v1.ok) return 'attached';
+  if (v1.ok) { await caption(); return 'attached'; }
 
   if (drop) {
     try { await drop(); } catch { return 'manual'; }
     const v2 = await poll(previewOpen, t.verifyMs, t.verifyPollMs);
     if (v2.cancelled) return 'cancelled';
-    if (v2.ok) return 'attached-drop';
+    if (v2.ok) { await caption(); return 'attached-drop'; }
   }
   return 'manual';
 }
@@ -228,7 +263,7 @@ function createAttacher(deps) {
     return writeFileToClipboard(deps, file);
   }
 
-  async function start({ file, name, bytes }) {
+  async function start({ file, name, bytes, caption }) {
     const mine = ++run;
     const cancelled = () => mine !== run;
     const step = (s) => { if (!cancelled()) deps.onStep(s); };
@@ -249,6 +284,14 @@ function createAttacher(deps) {
       },
       drop: bytes && bytes.length <= MAX_DROP_BYTES
         ? () => exec(dropScript(Buffer.from(bytes).toString('base64'), name)) : null,
+      captionText: caption || '',
+      captionProbe: () => exec(captionProbeScript()),
+      caption: caption ? async () => {
+        const wc = wcOk(); if (!wc) throw new Error('gone');
+        wc.focus();
+        if (!(await exec(captionFocusScript()))) return;
+        wc.insertText(caption);   // drafts the text; Enter / Send are never pressed
+      } : null,
       sleep, now, cancelled,
     }, deps.timeouts || TIMEOUTS);
     if (cancelled()) return 'cancelled';
@@ -267,6 +310,6 @@ function createAttacher(deps) {
 module.exports = {
   createAttacher,
   SELECTORS, TIMEOUTS, MAX_DROP_BYTES, STEP,
-  probeScript, focusScript, dropScript, chatReady, previewOpen,
+  probeScript, focusScript, dropScript, chatReady, previewOpen, captionProbeScript, captionFocusScript, captionNeedsText,
   macFilenamesPlist, gnomeCopiedFiles, writeFileToClipboard, runAttach, snapshotClipboard, restoreClipboard,
 };

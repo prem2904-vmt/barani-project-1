@@ -253,7 +253,6 @@ export class ReportActionsService {
       reportId: rep.id,
       pdf: () => this.pdfBlob(rep),
       pdfName: this.fileName(rep),
-      onHandedOver: () => this.recordDelivery(rep, 'whatsapp'),
     });
     if (out !== 'opened') return false;
     this.recordDelivery(rep, 'whatsapp');

@@ -10,7 +10,7 @@ const { pathToFileURL } = require('url');
 const att = require('../whatsapp-attach');
 const dockLib = require('../whatsapp-dock');
 
-const T = { readyMs: 1000, readyPollMs: 100, verifyMs: 500, verifyPollMs: 100, settleMs: 0, restoreAfterMs: 0 };
+const T = { captionMs: 500, readyMs: 1000, readyPollMs: 100, verifyMs: 500, verifyPollMs: 100, settleMs: 0, restoreAfterMs: 0 };
 
 /** Virtual clock: sleep advances it, so timeouts run instantly. */
 function clock() {
@@ -231,6 +231,72 @@ test('attacher: no clipboard file → no paste (drop is the next step); cancel s
   assert.equal(b.calls.steps.includes('manual'), false);
 });
 
+
+// ── Caption: the message drafted into the preview (never Send / Enter) ────────
+
+function withCaption(probes, caption, captionProbes) {
+  const m = machine(probes);
+  let i = 0;
+  m.deps.captionText = caption;
+  m.deps.captionProbe = async () => captionProbes[Math.min(i++, captionProbes.length - 1)];
+  m.deps.caption = async () => { m.log.push('caption'); };
+  return m;
+}
+
+test('caption: preview open + empty caption box → the message is drafted once', async () => {
+  const m = withCaption([READY, READY, PREVIEW], 'Dear Asha', [{ caption: false, captionText: '' }, { caption: true, captionText: '' }]);
+  assert.equal(await att.runAttach(m.deps, T), 'attached');
+  assert.deepEqual(m.log, ['focus', 'paste', 'caption']);
+});
+
+test('caption: WhatsApp already carried the text over → no duplicate', async () => {
+  const m = withCaption([READY, PREVIEW], 'Dear Asha', [{ caption: true, captionText: 'Dear Asha, your report' }]);
+  assert.equal(await att.runAttach(m.deps, T), 'attached');
+  assert.deepEqual(m.log, ['focus', 'paste']);
+});
+
+test('caption: no caption box found → still attached, nothing typed; also after a drop', async () => {
+  const a = withCaption([READY, PREVIEW], 'x', [{ caption: false, captionText: '' }]);
+  assert.equal(await att.runAttach(a.deps, T), 'attached');
+  assert.deepEqual(a.log, ['focus', 'paste']);
+  const b = withCaption([(log) => (log.includes('drop') ? PREVIEW : READY)], 'x', [{ caption: true, captionText: '' }]);
+  assert.equal(await att.runAttach(b.deps, T), 'attached-drop');
+  assert.ok(b.log.includes('caption'));
+});
+
+test('caption: a throwing caption step never undoes the attach', async () => {
+  const m = withCaption([READY, PREVIEW], 'x', [{ caption: true, captionText: '' }]);
+  m.deps.caption = async () => { throw new Error('boom'); };
+  assert.equal(await att.runAttach(m.deps, T), 'attached');
+});
+
+test('caption pure rule + scripts', () => {
+  assert.equal(att.captionNeedsText({ caption: true, captionText: '  ' }, 'hi'), true);
+  assert.equal(att.captionNeedsText({ caption: true, captionText: 'hi' }, 'hi'), false);
+  assert.equal(att.captionNeedsText({ caption: false, captionText: '' }, 'hi'), false);
+  assert.equal(att.captionNeedsText({ caption: true, captionText: '' }, ''), false);
+  assert.ok(att.captionProbeScript().includes(JSON.stringify(att.SELECTORS.caption)));
+  assert.ok(!/send/i.test(att.SELECTORS.caption));
+});
+
+test('attacher: drafts the caption with insertText after focusing it; never when text is already there', async () => {
+  const a = attacher();
+  const typed = [];
+  let captionText = '';
+  a.wc.insertText = (t) => typed.push(t);
+  const orig = a.wc.executeJavaScript;
+  a.wc.executeJavaScript = async (code) => (code.includes('captionText') ? { caption: true, captionText } : orig(code));
+  assert.equal(await a.a.start({ file: '/tmp/r.pdf', name: 'r.pdf', bytes: Buffer.from('%PDF-1.4'), caption: 'Dear Asha, link' }), 'attached');
+  assert.deepEqual(typed, ['Dear Asha, link']);
+  const b = attacher();
+  const typed2 = [];
+  b.wc.insertText = (t) => typed2.push(t);
+  const orig2 = b.wc.executeJavaScript;
+  b.wc.executeJavaScript = async (code) => (code.includes('captionText') ? { caption: true, captionText: 'Dear Asha, link' } : orig2(code));
+  await b.a.start({ file: '/tmp/r.pdf', name: 'r.pdf', bytes: Buffer.from('%PDF-1.4'), caption: 'Dear Asha, link' });
+  assert.deepEqual(typed2, []);
+});
+
 // ── Dock wiring ─────────────────────────────────────────────────────────
 
 test('dock: autoAttach runs once per chat opened by our button; never without the flag; cancelled on close/new chat', async () => {
@@ -284,11 +350,15 @@ test('dock: autoAttach runs once per chat opened by our button; never without th
 test('source pin: the attach module can paste/focus/drop — and nothing that could press Send or type', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'whatsapp-attach.js'), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-  for (const banned of ['sendInputEvent', '.click(', 'insertText', 'execCommand', 'KeyboardEvent', 'keydown', 'keypress', 'data-icon="send"',
+  for (const banned of ['sendInputEvent', '.click(', 'execCommand', 'KeyboardEvent', 'keydown', 'keypress', 'data-icon="send"',
     'setUserAgent', 'userAgent', 'preload:', 'debugger', 'insertCSS', 'executeJavaScriptInIsolatedWorld', 'webFrame']) {
     assert.equal(src.includes(banned), false, `whatsapp-attach.js must not use ${banned}`);
   }
   assert.equal((src.match(/\.paste\(\)/g) || []).length, 1);
+  // The ONLY text input: the message into the preview's caption, once.
+  assert.equal((src.match(/insertText/g) || []).length, 1);
+  assert.match(src, /wc\.insertText\(caption\)/);
+  assert.equal(/Enter|\\r|\\n'/.test(src.replace(/`copy\\n[^`]*`/, '')) , false);
 });
 
 test('source pin: whatsapp-dock.js itself stays script-free; the IPC trusts only the main window', () => {

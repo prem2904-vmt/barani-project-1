@@ -98,7 +98,7 @@ async function seed(page: Page, opts: { stubOpen: boolean }) {
 
 
 // Same maths as electron/whatsapp-dock.js (dockWidth / dockLayout) at 1440x900.
-const HEADER_CSS = 128;
+const HEADER_CSS = 96;
 const dockWidth = (cw: number) => Math.max(0, Math.min(Math.round(Math.min(480, Math.max(380, cw * 0.24))), cw - 560));
 
 const MSG = 'Dear Meena Iyer, your report from Demo Lab is ready. View it here: https://app.prefrontal.health/r/tok123';
@@ -176,7 +176,6 @@ for (const d of [false, true]) {
       f.style.cssText = `position:fixed;z-index:2147483647;left:${window.innerWidth - (w as number)}px;top:${top}px;width:${w}px;height:${window.innerHeight - (top as number)}px;border:0;border-left:1px solid rgba(127,127,127,.35)`;
       document.body.appendChild(f);
     }, [mockChat(d), w, HEADER_CSS] as const);
-    await expect(page.locator('[data-testid=wa-dock-pdf]')).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(1200);
     fs.mkdirSync(OUT, { recursive: true });
     await page.screenshot({ path: `${OUT}/desktop-panel-${mode}.png` });

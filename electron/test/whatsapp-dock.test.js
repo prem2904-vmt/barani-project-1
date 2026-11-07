@@ -86,7 +86,7 @@ test('layout: phone-width panel on the right, the app keeps the rest', () => {
   assert.equal(dock.dockLayout({ width: 900, height: 700 }).bounds.width, 340);     // app keeps 560
   // A zoomed page: DIP bounds, CSS width for the page's reflow.
   const z = dock.dockLayout({ width: 1440, height: 900 }, 1.25);
-  assert.equal(z.bounds.y, 160);
+  assert.equal(z.bounds.y, 120);
   assert.equal(z.cssWidth, 304);
   assert.equal(z.cssTop, dock.HEADER_CSS);
 });
@@ -178,12 +178,12 @@ test('open: docks on the right in the whatsapp partition, loads only the link, t
   assert.ok(partitions.every((p) => p === 'persist:whatsapp'));
   assert.deepEqual(calls.added, [v]);
   assert.deepEqual(calls.loaded, [CHAT]);
-  assert.deepEqual(v.bounds, { x: 1060, y: 128, width: 380, height: 772 });
+  assert.deepEqual(v.bounds, { x: 1060, y: 96, width: 380, height: 804 });
   const last = mainWc.sent.at(-1);
   assert.equal(last[0], 'whatsapp:state');
   assert.equal(last[1].open, true);
   assert.equal(last[1].width, 380);
-  assert.equal(last[1].top, 128);
+  assert.equal(last[1].top, 96);
   // A second click reuses the same panel (same view, not re-added).
   d.open('https://web.whatsapp.com/send?phone=919812345678&text=y');
   assert.equal(calls.views.length, 1);

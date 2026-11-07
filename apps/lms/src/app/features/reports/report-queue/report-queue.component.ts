@@ -896,7 +896,6 @@ export class ReportQueueComponent implements OnInit {
       reportId: r.id,
       pdf: () => this.storedPdf(r),
       pdfName: `report-${r.id.replace(/-/g, "").slice(-8).toUpperCase()}.pdf`,
-      onHandedOver: () => this.recordDelivery(r, "whatsapp"),
     });
     if (out === "opened") this.recordDelivery(r, "whatsapp");
   }

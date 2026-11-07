@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { DialogService } from '../../../core/services/dialog.service';
-import { ToastService } from '../../../core/services/toast.service';
 import { ElectronWhatsAppBridge, WaDockState, whatsAppBridge } from '../../../core/services/whatsapp-manual.service';
 
 /** html class while the panel is docked (styles.scss reflows app-root). */
@@ -10,10 +9,10 @@ export const WA_DOCKED_CLASS = 'pf-wa-docked';
  * Desktop app only: the strip ABOVE the docked WhatsApp Web panel (main
  * draws WhatsApp itself below it — electron/whatsapp-dock.js) and the app's
  * reflow to the left. Close, sign out, open the chat in the browser / the
- * WhatsApp app when it won't load here, and the "Report PDF" card: main puts
- * the PDF on the clipboard and pastes it into the chat (the person presses
- * Send); the card says where that is and keeps drag + "Copy again". Nothing
- * here touches WhatsApp's page.
+ * WhatsApp app when it won't load here. The PDF is attached by main (paste +
+ * caption, electron/whatsapp-attach.js) with no UI; only if that fails does
+ * the row show one hint ("Press Ctrl+V to add the PDF"). Nothing here touches
+ * WhatsApp's page.
  */
 @Component({
   selector: 'pf-wa-dock',
@@ -41,16 +40,9 @@ export const WA_DOCKED_CLASS = 'pf-wa-docked';
               <span class="pf-wad__note">WhatsApp didn't load here.</span>
               <button type="button" class="pf-btn pf-btn--secondary pf-wad__small" (click)="elsewhere('browser')">Browser</button>
               <button type="button" class="pf-btn pf-btn--secondary pf-wad__small" (click)="elsewhere('app')">WhatsApp app</button>
-            } @else if (s.pdfName) {
-              <p class="pf-wad__line" data-testid="wa-dock-line">{{ line(s) }}</p>
-              <div class="pf-wad__acts">
-                <span class="pf-wad__pdf" draggable="true" (dragstart)="drag($event)" role="button" tabindex="0"
-                      title="Drag this into the chat to attach the PDF yourself" data-testid="wa-dock-pdf">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg>
-                  Report PDF
-                </span>
-                <button type="button" class="pf-btn pf-btn--secondary pf-wad__small" (click)="copyAgain()" data-testid="wa-dock-copy">Copy again</button>
-              </div>
+            } @else if (s.attach === 'manual' && s.pdfName) {
+              <!-- Attaching failed entirely: the text-only chat stays, the PDF is on the clipboard. -->
+              <span class="pf-wad__note" data-testid="wa-dock-line">{{ hint() }}</span>
             } @else {
               <span class="pf-wad__note">{{ s.loading ? 'Opening the chat…' : 'Check the message, then press Send in WhatsApp.' }}</span>
             }
@@ -71,9 +63,7 @@ export const WA_DOCKED_CLASS = 'pf-wa-docked';
       border-left: 1px solid var(--pf-line);
     }
     .pf-wad__bar { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 12px; height: 48px; flex: none; }
-    .pf-wad__row { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 8px; padding: 0 12px; height: 80px; flex: none; border-bottom: 1px solid var(--pf-line); }
-    .pf-wad__line { margin: 0; font-size: 12.5px; line-height: 1.35; color: var(--text-secondary); }
-    .pf-wad__acts { display: flex; align-items: center; gap: 8px; }
+    .pf-wad__row { display: flex; align-items: center; gap: 6px; padding: 0 12px; height: 48px; flex: none; border-bottom: 1px solid var(--pf-line); }
     .pf-wad__mark { color: var(--text-secondary); flex: none; }
     .pf-wad__title { font-size: 14px; font-weight: 600; margin-right: auto; }
     .pf-wad__icon {
@@ -81,21 +71,14 @@ export const WA_DOCKED_CLASS = 'pf-wa-docked';
       border: 0; border-radius: var(--pf-radius-sm, 10px); background: transparent; color: var(--text-secondary); cursor: pointer;
     }
     .pf-wad__icon:hover { background: var(--pf-chip-bg, rgba(127, 127, 127, 0.12)); color: var(--text-primary); }
-    .pf-wad__icon:focus-visible, .pf-wad__pdf:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px; }
+    .pf-wad__icon:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px; }
     .pf-wad__note { font-size: 12.5px; line-height: 1.35; color: var(--text-secondary); }
     .pf-wad__small { height: 36px; min-height: 34px; padding: 0 10px; font-size: 12.5px; }
-    .pf-wad__pdf {
-      display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; cursor: grab; user-select: none;
-      border: 1px dashed var(--pf-sel-border, #9aa4ae); border-radius: var(--pf-radius-chip, 8px);
-      font-size: 13px; font-weight: 600; color: var(--text-primary); background: var(--pf-in-tint, transparent);
-    }
-    .pf-wad__pdf:active { cursor: grabbing; }
     .pf-wad__under { margin: 24px 16px; font-size: 13px; color: var(--text-tertiary); text-align: center; }
   `],
 })
 export class WhatsAppDockComponent implements OnInit {
   private readonly dialog = inject(DialogService);
-  private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
   /** Specs pass a fake; the app reads window.electronAPI.whatsapp. */
@@ -140,33 +123,10 @@ export class WhatsAppDockComponent implements OnInit {
     if (ok) await this.bridge?.signOut();
   }
 
-  /** The card's one line, by where the automatic attach is. The wording is the same on every OS
-   *  except the paste key. */
-  line(s: WaDockState): string {
-    const key = this.isMac() ? 'Cmd+V' : 'Ctrl+V';
-    switch (s.attach) {
-      case 'preparing':
-      case 'working': return 'Attaching the report PDF to the chat…';
-      case 'attached': return 'Report PDF attached — check it, then press Send.';
-      case 'manual': return `Report PDF is ready — press ${key} in the chat, then Send. Or drag it in.`;
-      default: return `Report PDF is ready — press ${key} in the chat, then Send. Or drag it in.`;
-    }
-  }
+  /** The ONE inline hint (only when attaching failed entirely): the PDF is already on the clipboard. */
+  hint(): string { return `Press ${this.isMac() ? 'Cmd+V' : 'Ctrl+V'} to add the PDF`; }
 
   private isMac(): boolean {
     return /Mac|iPhone|iPad/i.test((typeof navigator !== 'undefined' && (navigator.platform || navigator.userAgent)) || '');
-  }
-
-  /** "Copy again": the PDF back on the clipboard (the person pastes it). */
-  async copyAgain(): Promise<void> {
-    const ok = await this.bridge?.copyPdf?.().then((r) => r?.ok).catch(() => false);
-    if (ok) this.toasts.success(`PDF copied — paste it in the chat (${this.isMac() ? 'Cmd+V' : 'Ctrl+V'})`);
-    else this.toasts.error('Could not copy the PDF. Drag it into the chat instead.');
-  }
-
-  /** The person drags the chip: a native file drag (main.startDrag). */
-  drag(ev: DragEvent): void {
-    ev.preventDefault();
-    this.bridge?.startDrag();
   }
 }

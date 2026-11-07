@@ -197,7 +197,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('whatsapp:state', h);
     },
     openElsewhere: (kind) => ipcRenderer.invoke('whatsapp:openElsewhere', kind === 'app' ? 'app' : 'browser'),
-    setPdf: (p) => ipcRenderer.invoke('whatsapp:setPdf', { name: String((p && p.name) || 'report.pdf'), bytes: p && p.bytes, autoAttach: !!(p && p.autoAttach) }),
+    setPdf: (p) => ipcRenderer.invoke('whatsapp:setPdf', { name: String((p && p.name) || 'report.pdf'), bytes: p && p.bytes, autoAttach: !!(p && p.autoAttach), caption: String((p && p.caption) || '').slice(0, 4000) }),
     copyPdf: () => ipcRenderer.invoke('whatsapp:copyPdf'),
     startDrag: () => ipcRenderer.send('whatsapp:startDrag')
   },

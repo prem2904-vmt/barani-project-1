@@ -1125,8 +1125,6 @@ export class ReportViewerComponent implements OnInit {
       reportId: r.id,
       pdf: async () => { await this.archiveReportPdf(r); return this._pdfBlob ?? null; },
       pdfName: `report-${r.id.replace(/-/g, '').slice(-8).toUpperCase()}.pdf`,
-      // Phone "Share PDF" card: the delivery is recorded when the person shares it.
-      onHandedOver: () => this.recordWhatsAppHandOver(r.id),
     });
     if (out !== 'opened') return;
     this.flash('whatsapp');
@@ -1137,13 +1135,12 @@ export class ReportViewerComponent implements OnInit {
     const r = this._report();
     if (!r || r.id !== reportId) return;
     this.api.post(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: WA_MANUAL_NOTE }).subscribe({
+      // Silent: the chat (or the share sheet) is the feedback. Reflect the recorded delivery in the REPORT card.
       next: () => {
-        this.toasts.success('WhatsApp is open. Press Send there.');
-        // Reflect the recorded delivery in the REPORT card without a refetch.
         const cur = this._report();
         if (cur && cur.id === r.id) this._report.set({ ...cur, deliveryStatus: 'delivered', deliveredVia: 'whatsapp' });
       },
-      error: () => this.toasts.info('WhatsApp is open. Press Send there.'),
+      error: () => { /* the handover already happened; the record is best-effort */ },
     });
   }
 

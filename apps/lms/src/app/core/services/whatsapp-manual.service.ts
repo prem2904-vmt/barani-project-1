@@ -1,4 +1,4 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { firstValueFrom, timeout } from 'rxjs';
 import { DialogService } from './dialog.service';
 import { ToastService } from './toast.service';
@@ -15,9 +15,10 @@ export interface ElectronWhatsAppBridge {
   state(): Promise<WaDockState>;
   onState(cb: (s: WaDockState) => void): () => void;
   openElsewhere(kind: 'browser' | 'app'): Promise<unknown>;
-  /** `autoAttach`: main puts the PDF on the clipboard and pastes it into the chat just opened
-   *  (the person still presses Send). Only sent for one-click sends from our button. */
-  setPdf(p: { name: string; bytes: Uint8Array; autoAttach?: boolean }): Promise<{ ok: boolean }>;
+  /** `autoAttach`: main puts the PDF on the clipboard and pastes it into the chat just opened, then
+   *  drafts `caption` (the message) into WhatsApp's preview — the person only presses Send. Only sent
+   *  for one-click sends from our button. */
+  setPdf(p: { name: string; bytes: Uint8Array; autoAttach?: boolean; caption?: string }): Promise<{ ok: boolean }>;
   /** "Copy again": the PDF back on the clipboard. */
   copyPdf?(): Promise<{ ok: boolean }>;
   startDrag(): void;
@@ -69,55 +70,34 @@ export interface WaManualRequest {
   /** Desktop only: the report PDF for the "drag it into the chat" helper. */
   pdf?: () => Promise<Blob | null>;
   pdfName?: string;
-  /** Called when the person actually handed the report over from the PDF card
-   *  (shared / chat opened from it) — the delivery record for the phone path. */
-  onHandedOver?: () => void;
 }
 
-/** 'card' = nothing opened yet: the PDF card (Share PDF) is the next step. */
-export type WaManualOutcome = 'opened' | 'card' | 'cancelled' | 'no-phone' | 'blocked';
-
-/** The small "Report PDF" card beside the chat (web / phone). Desktop shows it in the dock strip. */
-export interface WaPdfCard {
-  name: string;
-  blob: Blob;
-  /** The message text (with the secure report link) for the share sheet. */
-  text: string;
-  /** This device can share the file itself (navigator.canShare({files})). */
-  canShare: boolean;
-  /** Phones: the wa.me chat with the link (secondary). */
-  chatUrl: string | null;
-  /** Why the card is here: 'popup' (desktop web, chat is open beside) or 'phone'. */
-  mode: 'popup' | 'phone';
-  onHandedOver?: () => void;
-}
+export type WaManualOutcome = 'opened' | 'cancelled' | 'no-phone' | 'blocked';
 
 /** The consent reminder (no consent field on the patient yet — owner decision); shown once per device. */
 export const WA_CONSENT_REMINDER = 'Only send if the patient agreed to get reports on WhatsApp.';
 export const WA_REMINDER_KEY = 'pf.wa.manual.reminded';
+/** First-ever web send: the one hint about the downloaded PDF (never again). */
+export const WA_PDF_HINT = 'The PDF was downloaded — attach it with the paperclip.';
+export const WA_PDF_HINT_KEY = 'pf.wa.manual.pdfhint';
 
 /**
  * "WhatsApp Chat" — opens WhatsApp's click-to-chat with the patient's
  * chat and the message ready; the PERSON presses Send. See
  * shared/utils/whatsapp-manual.ts for the hard lines.
  *
- * - Desktop app → the docked panel on the right (IPC, main validates the URL);
- *   the report PDF is put on the clipboard and pasted into the chat by main
- *   (electron/whatsapp-attach.js) — still the person presses Send.
- * - Phone (app / phone browser) → "Share PDF" (the file straight to WhatsApp via
- *   the share sheet) when the device can share files, else wa.me with the link.
- * - Desktop browser → ONE named phone-shaped window at the right edge + the
- *   "Report PDF" card (Share PDF where the browser can, else Download PDF and
- *   attach it with WhatsApp's paperclip). A cross-origin page can't be attached to.
+ * - Desktop app → the docked panel on the right (IPC, main validates the URL); main puts the PDF on
+ *   the clipboard, pastes it into the chat and drafts the message as its caption (electron/
+ *   whatsapp-attach.js) — the person only presses Send. No card, no toast.
+ * - Phone → ONE tap opens the share sheet with the PDF + the message (Web Share with files), else wa.me.
+ * - Desktop browser → ONE named phone-shaped window with the text drafted, and the PDF downloaded at
+ *   the same moment (a cross-origin page can't be attached to). Silent; one hint, first time only.
  */
 @Injectable({ providedIn: 'root' })
 export class WhatsAppManualService {
   private readonly dialog = inject(DialogService);
   private readonly toasts = inject(ToastService);
   private readonly wa = inject(WhatsAppService);
-
-  /** The "Report PDF" card (web / phone); null = hidden. */
-  readonly pdfCard = signal<WaPdfCard | null>(null);
 
   /** Specs swap these in; the app reads the real window. */
   win: Pick<Window, 'open' | 'screen' | 'navigator'> | undefined;
@@ -158,7 +138,8 @@ export class WhatsAppManualService {
       if (!ok) return 'cancelled';
     }
     const out = await this.open(req, text);
-    if (out === 'opened') this.remindOnce();
+    // The consent reminder is a toast: never on the desktop app's one-click path, nor when the PDF hint shows.
+    if (out === 'opened' && !this.bridge() && !(req.pdf && !this.isPhone())) this.remindOnce();
     return out;
   }
 
@@ -175,26 +156,30 @@ export class WhatsAppManualService {
   private async open(req: WaManualRequest, text: string): Promise<WaManualOutcome> {
     const url = waClickToChatUrl(req.phone, text);
     if (!url || !isClickToChatUrl(url)) return 'no-phone';
-    this.pdfCard.set(null);
 
     const dock = this.bridge();
     if (dock) {
       const res = await dock.open(url).catch(() => ({ ok: false }));
       if (!res?.ok) { this.toasts.error('Could not open WhatsApp. Try again.'); return 'blocked'; }
-      // One-click send from our button: main attaches the PDF (paste) — the person presses Send.
-      if (req.pdf) void this.handPdf(dock, req);
+      // One click: main attaches the PDF (paste) and drafts the message as its caption — the person presses Send.
+      if (req.pdf) void this.handPdf(dock, req, text);
       return 'opened';
     }
 
     if (this.isPhone()) {
       const me = waMeUrl(req.phone, text)!;
-      // Phones that can share files: "Share PDF" is the PRIMARY action (the file goes straight to
-      // WhatsApp through the share sheet, with the message); the link chat is secondary.
+      // ONE tap: the share sheet with the PDF + the message (the file goes straight to WhatsApp).
       if (req.pdf && this.canShareFiles()) {
         const blob = await req.pdf().catch(() => null);
         if (blob) {
-          this.pdfCard.set({ name: req.pdfName || 'report.pdf', blob, text, canShare: true, chatUrl: me, mode: 'phone', onHandedOver: req.onHandedOver });
-          return 'card';
+          const file = new File([blob], req.pdfName || 'report.pdf', { type: 'application/pdf' });
+          try {
+            await (this.w().navigator as Navigator).share({ files: [file], text });
+            return 'opened';
+          } catch (e) {
+            if ((e as { name?: string })?.name === 'AbortError') return 'cancelled';   // the person closed the sheet
+            // Sharing refused (e.g. the tap's permission ran out): the chat with the text, as before.
+          }
         }
       }
       this.w().open(me, '_blank', 'noopener');
@@ -210,8 +195,8 @@ export class WhatsAppManualService {
     // next click from finding it by name. WhatsApp's own page sets
     // Cross-Origin-Opener-Policy, which severs it from the app anyway.
     try { pop.focus(); } catch { /* */ }
-    // The chat is a cross-origin page we can't attach to: the PDF card offers Share / Download.
-    if (req.pdf) void this.showPdfCard(req, text);
+    // A cross-origin chat can't be attached to: download the PDF at the same moment (no card).
+    if (req.pdf) void this.downloadPdf(req);
     return 'opened';
   }
 
@@ -222,64 +207,34 @@ export class WhatsAppManualService {
     try { return nav.canShare({ files: [new File([''], 'report.pdf', { type: 'application/pdf' })] }); } catch { return false; }
   }
 
-  private async showPdfCard(req: WaManualRequest, text: string): Promise<void> {
+  /** Web: save the report PDF (the browser's own download indicator is the only UI). The very first
+   *  time on a device, one toast says what to do with it. */
+  private async downloadPdf(req: WaManualRequest): Promise<void> {
     try {
       const blob = await req.pdf!();
       if (!blob) return;
-      this.pdfCard.set({ name: req.pdfName || 'report.pdf', blob, text, canShare: this.canShareFiles(), chatUrl: null, mode: 'popup', onHandedOver: req.onHandedOver });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = req.pdfName || 'report.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      try {
+        if (!localStorage.getItem(WA_PDF_HINT_KEY)) { localStorage.setItem(WA_PDF_HINT_KEY, '1'); this.toasts.info(WA_PDF_HINT); }
+      } catch { /* storage blocked: no hint */ }
     } catch { /* the link in the message is enough */ }
-  }
-
-  dismissPdfCard(): void { this.pdfCard.set(null); }
-
-  /** Card: "Download PDF" — then attach it with WhatsApp's paperclip. */
-  downloadPdf(): void {
-    const c = this.pdfCard();
-    if (!c) return;
-    const url = URL.createObjectURL(c.blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = c.name;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }
-
-  /** Card: "Share PDF" — the file (+ the message with the link) through the share sheet. */
-  async sharePdf(): Promise<boolean> {
-    const c = this.pdfCard();
-    if (!c) return false;
-    const file = new File([c.blob], c.name, { type: 'application/pdf' });
-    try {
-      await (this.w().navigator as Navigator).share({ files: [file], text: c.text });
-    } catch (e) {
-      if ((e as { name?: string })?.name === 'AbortError') return false;   // the person closed the sheet
-      this.toasts.error('Could not share the PDF. Use Download PDF instead.');
-      return false;
-    }
-    c.onHandedOver?.();
-    this.pdfCard.set(null);
-    return true;
-  }
-
-  /** Phone card: the same chat with the report link (secondary). */
-  openChatFromCard(): void {
-    const c = this.pdfCard();
-    if (!c?.chatUrl) return;
-    this.w().open(c.chatUrl, '_blank', 'noopener');
-    c.onHandedOver?.();
-    this.pdfCard.set(null);
   }
 
   /** Desktop: hand the report PDF to main — it puts it on the clipboard and pastes it into the chat
    *  (the person presses Send), and keeps it for drag / "Copy again" (best-effort). */
-  private async handPdf(dock: ElectronWhatsAppBridge, req: WaManualRequest): Promise<void> {
+  private async handPdf(dock: ElectronWhatsAppBridge, req: WaManualRequest, text: string): Promise<void> {
     try {
       const blob = await req.pdf!();
       if (!blob) return;
       const bytes = new Uint8Array(await blobBytes(blob));
-      await dock.setPdf({ name: req.pdfName || 'report.pdf', bytes, autoAttach: true });
+      await dock.setPdf({ name: req.pdfName || 'report.pdf', bytes, autoAttach: true, caption: text });
     } catch { /* the link in the message is enough */ }
   }
 
