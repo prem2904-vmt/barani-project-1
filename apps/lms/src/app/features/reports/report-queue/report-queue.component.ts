@@ -869,7 +869,7 @@ export class ReportQueueComponent implements OnInit {
       return;
     }
     if (via === "whatsapp-mine" || via === "whatsapp") {
-      if (this.waSend?.chatAllowed()) void this.sendOnWhatsApp(r);
+      if (this.waSend?.chatAllowed() !== false) void this.sendOnWhatsApp(r);   // archives + uploads the PDF as before; only an explicit "Chat is off" stops it
       return;
     }
     if (via === "print") {

@@ -227,12 +227,13 @@ describe('WhatsAppManualService — seamless: no card, PDF with the message', ()
     expect(second.toasts.info).not.toHaveBeenCalled();
     TestBed.resetTestingModule();
     localStorage.removeItem(WA_PDF_HINT_KEY);
-    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    // Storage blocked (private window / site data off): every access throws.
+    vi.stubGlobal('localStorage', { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); }, removeItem: () => {} });
     const third = setup();
     await third.svc.send({ ...REQ, pdf: async () => PDF() });
     await flush();
     expect(third.toasts.info).not.toHaveBeenCalled();
-    get.mockRestore();
+    vi.unstubAllGlobals();
   });
 
   it('a PDF that cannot be produced still opens the chat with the link (silently)', async () => {
