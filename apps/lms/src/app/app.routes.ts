@@ -1,5 +1,6 @@
 import { inject } from '@angular/core';
 import { cultureResultRedirectGuard, cultureSampleRedirectGuard, cultureValidateRedirectGuard } from './core/navigation/culture-redirect.guard';
+import { ORDER_PAY_RECREATE_ON } from './core/navigation/identity-reuse.strategy';
 import { CanActivateFn, Route, Router } from '@angular/router';
 import { authGuard } from './core/auth/auth.guard';
 import { consentGuard } from './features/ai-connector/consent-redirect';
@@ -449,6 +450,9 @@ export const appRoutes: Route[] = [
             // Order-create serves walk-ins AND appointment→order conversion —
             // appointment-only tenants (walk_in_order off) must still reach it.
             canActivate: [...routeGuards('/frontdesk/order')],
+            // Modify → Save goes ?editOrderId=X → ?orderId=X on this same route:
+            // rebuild so the pay step shows for the updated amount (OPS-113).
+            data: { recreateOn: ORDER_PAY_RECREATE_ON },
             loadComponent: () => import('./features/frontdesk/order-create/order-create.component').then(m => m.OrderCreateComponent)
           },
           // Legacy OPD desk consult page — OPD-gated (OPD dark build).

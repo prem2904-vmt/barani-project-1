@@ -1,7 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, RouteReuseStrategy, Router, provideRouter } from '@angular/router';
-import { IdentityRouteReuseStrategy } from './identity-reuse.strategy';
+import { IdentityRouteReuseStrategy, ORDER_PAY_RECREATE_ON } from './identity-reuse.strategy';
 
 const created: string[] = [];
 @Component({ template: '' })
@@ -16,6 +16,7 @@ async function setup() {
     providers: [
       provideRouter([
         { path: 'keyed/:id', component: Screen, data: { recreateOn: ['id', '?stage'] } },
+        { path: 'order', component: Screen, data: { recreateOn: ORDER_PAY_RECREATE_ON } },
         { path: 'plain/:id', component: Screen },
       ]),
       { provide: RouteReuseStrategy, useClass: IdentityRouteReuseStrategy },
@@ -49,5 +50,17 @@ describe('IdentityRouteReuseStrategy (record screens that read their id once)', 
     const b = await harness.navigateByUrl('/plain/B', Screen);
     expect(b).toBe(a);
     expect(created).toEqual(['A']);
+  });
+
+  it('OPS-113: Modify -> Save (?editOrderId=X -> ?orderId=X on /order) rebuilds the screen; a patient swap stays in place', async () => {
+    const { harness } = await setup();
+    const edit = await harness.navigateByUrl('/order?editOrderId=X', Screen);
+    const pay = await harness.navigateByUrl('/order?orderId=X', Screen);
+    expect(pay).not.toBe(edit);
+    // same bill again (discount param etc.) -> reused
+    expect(await harness.navigateByUrl('/order?orderId=X&discount=10', Screen)).toBe(pay);
+    // draft shelf: patient A -> patient B, no record id -> reused (swapped in place)
+    const a = await harness.navigateByUrl('/order?patientId=A', Screen);
+    expect(await harness.navigateByUrl('/order?patientId=B', Screen)).toBe(a);
   });
 });

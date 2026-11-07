@@ -4,6 +4,13 @@ import { ActivatedRouteSnapshot, BaseRouteReuseStrategy } from '@angular/router'
 /** Route `data` key: the identity of the record a screen shows. */
 export const RECREATE_ON = 'recreateOn';
 
+/** Order & Payments (/frontdesk/order): the RECORD is the bill / edit id. A
+ *  Modify → Save lands on the same route as `?editOrderId=X` → `?orderId=X`;
+ *  the screen reads those once on init, so it must be rebuilt (OPS-113: the
+ *  pay view never appeared after adding a test). `patientId` is NOT a key —
+ *  the draft shelf swaps the patient in place on the reused screen. */
+export const ORDER_PAY_RECREATE_ON = ['?orderId', '?editOrderId'] as const;
+
 /**
  * Angular REUSES a routed component when only its params/query change
  * (/lab/culture/A → /lab/culture/B). A screen that reads its record id once
