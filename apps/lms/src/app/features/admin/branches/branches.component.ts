@@ -1,3 +1,5 @@
+import { AuthService } from '../../../core/auth/auth.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -117,7 +119,7 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                 <div class="flex items-center gap-3 text-left pf-branch-titlewrap">
                   <span class="pf-branch-badge">{{ codeInitials(b.code) }}</span>
                   <div class="pf-branch-titlecol">
-                    <p class="pf-br-name">{{ b.name }}</p>
+                    <p class="pf-br-name">{{ b.name }}@if (b.isActive === false) { <span class="pf-chip pf-chip--static pf-br-chip" data-testid="br-inactive-chip">Inactive</span> }</p>
                     <p class="pf-br-meta">{{ b.city ?? '—' }} · <span class="pf-num">{{ b.code }}</span></p>
                   </div>
                 </div>
@@ -141,6 +143,13 @@ interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: strin
                        in one space whose tests share a colour share one vial. -->
                   <div class="pf-branch-deps-header">
                     <h4 class="pf-br-sec">Departments & lab spaces</h4>
+                    @if (canRetireBranch()) {
+                      <button type="button" class="pf-dcard-toggle" data-testid="br-toggle-active"
+                              (click)="toggleBranchActive(b)"
+                              [attr.aria-label]="(b.isActive === false ? 'Reactivate ' : 'Deactivate ') + b.name">
+                        {{ b.isActive === false ? 'Reactivate branch' : 'Deactivate branch' }}
+                      </button>
+                    }
                   </div>
                   <!-- Departments are master-provided (TM owner rule 4): a lab
                        places, enables or disables them — it never creates one. -->
@@ -545,6 +554,10 @@ export class BranchesComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   protected readonly theme = inject(ThemeService);
+  private readonly auth = inject(AuthService);
+  private readonly dialog = inject(DialogService);
+  /** Retiring a branch is for tenant-wide admins (the server enforces it too). */
+  protected readonly canRetireBranch = computed(() => this.auth.hasPermission('manage_tenant'));
   /** Row actions: text on web, icon on touch (PF-PATTERN). */
   protected readonly web = webPointerSignal();
 
@@ -599,7 +612,7 @@ export class BranchesComponent implements OnInit {
 
   ngOnInit() {
     this.destroyRef.onDestroy(() => this.listHold.cancel());
-    this.api.get<Branch[]>('/api/tenants/branches').subscribe({
+    this.api.get<Branch[]>('/api/tenants/branches?includeInactive=true').subscribe({
       next: l => { this._branches.set(l ?? []); this.listHold.done(); },
       error: () => this.listHold.done(),
     });
@@ -804,6 +817,27 @@ export class BranchesComponent implements OnInit {
         this._departments.update(list =>
           list.map(d => d.id === dept.id ? { ...d, containerColor, containerLabel } : d));
         this.toasts.success('Container updated');
+      },
+      error: e => this.toasts.error(ApiError.from(e).message)
+    });
+  }
+
+  /** Deactivate / reactivate a whole branch. The server refuses the branch you are
+   *  working in and the last active one; its message is shown as-is. */
+  async toggleBranchActive(b: Branch) {
+    const isActive = b.isActive === false;
+    if (!isActive) {
+      const ok = await this.dialog.confirm({
+        title: `Deactivate ${b.name}?`,
+        message: 'It disappears from branch switchers and pickers. Orders, samples and reports stay as they are; you can reactivate it any time.',
+        confirmLabel: 'Deactivate', tone: 'danger',
+      });
+      if (!ok) return;
+    }
+    this.api.patch<Branch>('/api/tenants/branches/' + b.id, { isActive }).subscribe({
+      next: () => {
+        this._branches.update(list => list.map(x => x.id === b.id ? { ...x, isActive } : x));
+        this.toasts.success(isActive ? `${b.name} reactivated` : `${b.name} deactivated`);
       },
       error: e => this.toasts.error(ApiError.from(e).message)
     });

@@ -5,6 +5,8 @@ import { vi } from 'vitest';
 import { BranchesComponent } from './branches.component';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { DEPARTMENTS_FROM_MASTER } from '../../../shared/utils/test-origin';
 
 /**
@@ -34,6 +36,8 @@ function render() {
       provideRouter([]),
       { provide: ApiService, useValue: api },
       { provide: ToastService, useValue: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() } },
+      { provide: AuthService, useValue: { hasPermission: () => false, user: () => null } },
+      { provide: DialogService, useValue: { confirm: vi.fn(async () => true) } },
     ],
   });
   const f = TestBed.createComponent(BranchesComponent);
@@ -63,5 +67,71 @@ describe('Branches — departments are master-provided', () => {
   it('enable / disable stays (Deactivate toggle on a department card)', () => {
     const { el } = render();
     expect(el.textContent).toMatch(/Deactivate|Reactivate/);
+  });
+});
+
+describe('Branches — OPS-11 deactivate a branch', () => {
+  afterEach(() => TestBed.resetTestingModule());
+  function renderAs(canRetire: boolean, confirmAnswer = true, branchActive = true) {
+    (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+    const api = {
+      get: vi.fn((url: string) => of(url.startsWith('/api/tenants/branches')
+        ? [{ id: 'b2', name: 'Annex', code: 'ANX', city: 'Salem', isActive: branchActive }] : [])),
+      post: vi.fn(() => of({})), patch: vi.fn(() => of({})), put: vi.fn(() => of({})), delete: vi.fn(() => of({})),
+    };
+    const toasts = { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() };
+    const dialog = { confirm: vi.fn(async () => confirmAnswer) };
+    TestBed.configureTestingModule({
+      imports: [BranchesComponent],
+      providers: [
+        provideRouter([]),
+        { provide: ApiService, useValue: api },
+        { provide: ToastService, useValue: toasts },
+        { provide: DialogService, useValue: dialog },
+        { provide: AuthService, useValue: { hasPermission: (p: string) => canRetire && p === 'manage_tenant', user: () => null } },
+      ],
+    });
+    const f = TestBed.createComponent(BranchesComponent);
+    f.detectChanges();
+    (f.componentInstance as any).toggle('b2');
+    f.detectChanges();
+    return { f, api, toasts, dialog, el: f.nativeElement as HTMLElement };
+  }
+
+  it('the board asks for inactive branches too (to offer Reactivate)', () => {
+    const { api } = renderAs(true);
+    expect(api.get).toHaveBeenCalledWith('/api/tenants/branches?includeInactive=true');
+  });
+
+  it('non-admins get no deactivate control', () => {
+    const { el } = renderAs(false);
+    expect(el.querySelector('[data-testid="br-toggle-active"]')).toBeNull();
+  });
+
+  it('admin: confirm, then PATCH isActive=false', async () => {
+    const { f, api, dialog, el } = renderAs(true);
+    (el.querySelector('[data-testid="br-toggle-active"]') as HTMLButtonElement).click();
+    await Promise.resolve(); await Promise.resolve();
+    expect(dialog.confirm).toHaveBeenCalled();
+    expect(api.patch).toHaveBeenCalledWith('/api/tenants/branches/b2', { isActive: false });
+    f.detectChanges();
+    expect(el.querySelector('[data-testid="br-inactive-chip"]')).not.toBeNull();
+  });
+
+  it('declining the confirm changes nothing', async () => {
+    const { api, el } = renderAs(true, false);
+    (el.querySelector('[data-testid="br-toggle-active"]') as HTMLButtonElement).click();
+    await Promise.resolve(); await Promise.resolve();
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it('an inactive branch offers Reactivate with no confirm', async () => {
+    const { api, dialog, el } = renderAs(true, true, false);
+    const btn = el.querySelector('[data-testid="br-toggle-active"]') as HTMLButtonElement;
+    expect(btn.textContent).toContain('Reactivate branch');
+    btn.click();
+    await Promise.resolve();
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(api.patch).toHaveBeenCalledWith('/api/tenants/branches/b2', { isActive: true });
   });
 });
