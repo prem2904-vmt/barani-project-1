@@ -111,8 +111,23 @@
         </div>
       } @else if (detail(); as d) {
         <!-- ─── DETAIL (zoomed in from a grid row / cell / timeline row) ─── -->
-        <section class="pf-card pf-pp-detail" [pfZoomTarget]="detailKeys()" [attr.aria-label]="d.kind === 'order' ? 'Order' : 'Trend'">
-          @if (d.kind === 'trend') {
+        <section class="pf-card pf-pp-detail" [pfZoomTarget]="detailKeys()" [attr.aria-label]="d.kind === 'order' ? 'Order' : d.kind === 'orders' ? 'All orders' : 'Trend'">
+          @if (d.kind === 'orders') {
+            <!-- OPS-109: every order of the patient, whatever its status. -->
+            <header class="pf-card__head pf-pp-detail__head">
+              <button type="button" class="pf-btn pf-btn--icon pf-pp-detail__back" (click)="closeDetail()" aria-label="Back to the profile" title="Back to the profile">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+              </button>
+              <span class="pf-card__label">All orders</span>
+              <span class="pf-pp-detail__t pf-num">{{ history().length }}</span>
+              <pf-segmented class="pf-pp-orders-filter" data-orders-filter size="sm" [options]="bucketOptions()"
+                            [value]="ordersBucket()" (valueChange)="ordersBucket.set($event)"
+                            aria-label="Filter orders by status"></pf-segmented>
+            </header>
+            <div class="pf-card__body pf-pp-detail__body">
+              <pf-lab-orders [orders]="bucketOrders()" [patientId]="patient()!.id" (clearFilters)="ordersBucket.set('all')"></pf-lab-orders>
+            </div>
+          } @else if (d.kind === 'trend') {
             <header class="pf-card__head pf-pp-detail__head">
               <button type="button" class="pf-btn pf-btn--icon pf-pp-detail__back" (click)="closeDetail()" aria-label="Back to results" title="Back to results">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -229,6 +244,11 @@
               </div>
             } @else {
               <p class="pf-pp-quiet">No visits yet.</p>
+            }
+            @if (history().length) {
+              <button type="button" class="pf-btn pf-btn--secondary pf-pp-allorders" data-all-orders (click)="openAllOrders()">
+                All orders <span class="pf-num">({{ history().length }})</span>
+              </button>
             }
           </div>
         </section>

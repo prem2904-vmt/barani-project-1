@@ -30,8 +30,9 @@ import {
 } from './patient-profile.nd';
 import {
   CumRow, CumulativePayload, CumulativeResult, PatientAppointment, ProfileOrder, QuickAction, RESULTS_PERMS, STAGES,
-  TimelineEvent, activeOrders, buildCumulative, buildTimeline, lastVisit, needsAttention, quickActions, shortDate,
+  TimelineEvent, OrderBucket, activeOrders, ordersInBucket, buildCumulative, buildTimeline, lastVisit, needsAttention, quickActions, shortDate,
 } from './patient-profile.clinical';
+import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { BarcodeDisplayComponent } from '../../../shared/components/barcode-display/barcode-display.component';
@@ -68,6 +69,7 @@ interface MergeResult {
 /** What the main column is zoomed into (list → detail). */
 export type PpDetail =
   | { kind: 'order'; id: string; report: boolean }
+  | { kind: 'orders' }
   | { kind: 'trend'; key: string; testId: string; parameter: string; title: string };
 
 /**
@@ -85,7 +87,7 @@ export type PpDetail =
   standalone: true,
   imports: [DatePipe, FormsModule, CurrencyInrPipe, CommonModule, NgTemplateOutlet, PatientIdCardComponent, BarcodeDisplayComponent,
     LabTrendsComponent, LabOrdersComponent, CumulativeResultsComponent, AbhaWizardComponent, HeroBandComponent,
-    ZoomTargetDirective, ZoomSourceDirective, LabelCardComponent, BusyDirective],
+    ZoomTargetDirective, ZoomSourceDirective, LabelCardComponent, BusyDirective, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss', './patient-profile.clinical.scss']
@@ -173,6 +175,24 @@ export class PatientProfileComponent implements OnInit {
     this.moreOpen.set(false);
     this.zoom.runLocal('in', () => this.detail.set({ kind: 'order', id, report }));
   }
+  /** "All orders": every order of the patient in one list, whatever its status (OPS-109). */
+  readonly ordersBucket = signal<OrderBucket>('all');
+  readonly bucketOrders = computed(() => ordersInBucket(this._history(), this.ordersBucket()));
+  readonly bucketOptions = computed<SegmentedOption<OrderBucket>[]>(() => {
+    const h = this._history();
+    const n = (b: OrderBucket) => ordersInBucket(h, b).length;
+    return [
+      { value: 'all', label: 'All', count: n('all') },
+      { value: 'progress', label: 'In progress', count: n('progress') },
+      { value: 'done', label: 'Completed', count: n('done') },
+      { value: 'cancelled', label: 'Cancelled', count: n('cancelled') },
+    ];
+  });
+  openAllOrders(): void {
+    this.moreOpen.set(false);
+    this.ordersBucket.set('all');
+    this.zoom.runLocal('in', () => this.detail.set({ kind: 'orders' }));
+  }
   openTrend(r: CumRow): void {
     this.zoom.runLocal('in', () => this.detail.set({ kind: 'trend', key: r.key, testId: r.testId, parameter: r.name, title: r.title }));
   }
@@ -187,7 +207,7 @@ export class PatientProfileComponent implements OnInit {
   }
   readonly detailKeys = computed(() => {
     const d = this.detail();
-    return d ? [d.kind === 'order' ? d.id : d.key] : [];
+    return d ? [d.kind === 'order' ? d.id : d.kind === 'orders' ? 'all-orders' : d.key] : [];
   });
 
   // ── Side card: timeline | details ───────────────────────────────────────

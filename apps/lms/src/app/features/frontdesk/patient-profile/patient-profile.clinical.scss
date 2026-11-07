@@ -63,6 +63,9 @@
 .pf-pp-last__doc { margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
 .pf-pp-last__foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 4px; }
 .pf-pp-last__view { height: 32px; min-height: 32px; padding: 0 12px; font-size: 12.5px; }
+/* OPS-109: "All orders" entry under Last visit + the list's status chips. */
+.pf-pp-allorders { align-self: flex-start; height: 32px; min-height: 32px; padding: 0 12px; font-size: 12.5px; margin-top: 6px; }
+.pf-pp-orders-filter { margin-left: auto; flex: none; }
 
 /* Timeline feed: a rail of kind icons, rows zoom into the order. */
 .pf-tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
@@ -114,7 +117,7 @@
   .pf-pp-pane--attn { border-bottom: 0; }
   .pf-pp-pane + .pf-pp-pane { border-top: 1px solid var(--pf-line); }
   .pf-pp-attn__row, .pf-pp-prog__row { min-height: 44px; }
-  .pf-pp-pane__more, .pf-pp-last__view { min-height: 44px; height: 44px; }
+  .pf-pp-pane__more, .pf-pp-last__view, .pf-pp-allorders { min-height: 44px; height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

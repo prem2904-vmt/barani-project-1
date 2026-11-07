@@ -1,6 +1,6 @@
 import {
   CumulativeResult, ProfileOrder, activeOrders, toneOf, buildCumulative, buildTimeline, deltaOf, filterCumulative, flagDir,
-  lastVisit, needsAttention, normUnit, orderStage, parseRangeBounds, quickActions, shortDate, sparkline,
+  lastVisit, needsAttention, normUnit, orderBucket, orderStage, ordersInBucket, parseRangeBounds, quickActions, shortDate, sparkline,
 } from './patient-profile.clinical';
 
 /**
@@ -210,6 +210,13 @@ describe('in progress / last visit', () => {
   ];
   it('stages: ordered → collected → in lab → awaiting validation → ready; cancelled is out', () => {
     expect(ORDERS.map(o => orderStage(o))).toEqual([4, 2, 3, 0, 1, -1]);
+  });
+  it('OPS-109 buckets: every order lands in exactly one of In progress / Completed / Cancelled; All is everything', () => {
+    expect(ORDERS.map(o => orderBucket(o))).toEqual(['done', 'progress', 'progress', 'progress', 'progress', 'cancelled']);
+    expect(ordersInBucket(ORDERS, 'all').length).toBe(6);
+    expect(ordersInBucket(ORDERS, 'progress').length).toBe(4);
+    expect(ordersInBucket(ORDERS, 'done').map(o => o.id)).toEqual(['done']);
+    expect(ordersInBucket(null, 'all')).toEqual([]);
   });
   it('active orders, newest first, with a ready-by from the slowest test\'s TAT (overdue flagged)', () => {
     const a = activeOrders(ORDERS, NOW);

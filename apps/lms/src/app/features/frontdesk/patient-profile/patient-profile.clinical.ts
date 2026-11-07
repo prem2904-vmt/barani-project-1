@@ -335,6 +335,16 @@ export function orderStage(o: Order): number {
   if (['sample_collected', 'collected', 'dispatched', 'in_transit'].includes(s)) return 1;
   return 0;
 }
+/** "All orders" filter chips (OPS-109): every order of the patient, whatever its
+ *  status - In progress (stage 0-3) / Completed (ready) / Cancelled (cancelled or rejected). */
+export type OrderBucket = 'all' | 'progress' | 'done' | 'cancelled';
+export function orderBucket(o: Order): Exclude<OrderBucket, 'all'> {
+  const st = orderStage(o);
+  return st < 0 ? 'cancelled' : st >= 4 ? 'done' : 'progress';
+}
+export function ordersInBucket<T extends Order>(orders: readonly T[] | null | undefined, b: OrderBucket): T[] {
+  return (orders ?? []).filter(o => b === 'all' || orderBucket(o) === b);
+}
 export function stageLabel(stage: number): StageLabel {
   return stage <= 0 ? 'Ordered' : STAGES[Math.min(stage, 4) - 1];
 }

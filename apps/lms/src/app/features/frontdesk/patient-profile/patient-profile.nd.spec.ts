@@ -276,6 +276,37 @@ describe('Patient profile (clinical) — SNAPSHOT', () => {
   });
 });
 
+describe('Patient profile — All orders (OPS-109)', () => {
+  it('an "All orders (N)" entry opens one list with EVERY order, whatever its status; Back returns to the profile', async () => {
+    const { el, c, click } = await render();
+    const n = c.history().length;
+    expect(n).toBeGreaterThan(1);
+    expect(txt(el.querySelector('[data-all-orders]'))).toBe(`All orders (${n})`);
+    click('[data-all-orders]');
+    expect(c.detail()).toEqual({ kind: 'orders' });
+    expect(el.querySelectorAll('pf-lab-orders .pf-lo-row').length).toBe(n);
+    expect(el.querySelector('[data-orders-filter]')).not.toBeNull();
+    expect(el.querySelector('select')).toBeNull();
+    // a row opens the order inside the list; the profile's own Back closes the list
+    click(el.querySelector('pf-lab-orders .pf-lo-row')!);
+    expect(el.querySelector('pf-lab-orders .pf-lo-detail')).not.toBeNull();
+    c.closeDetail();
+    expect(c.detail()).toBeNull();
+  });
+
+  it('status chips narrow the list (All / In progress / Completed / Cancelled) with a count each', async () => {
+    const { el, c, f, click } = await render();
+    click('[data-all-orders]');
+    const counts: Record<string, number> = Object.fromEntries(c.bucketOptions().map((o: any) => [o.value, o.count]));
+    expect(counts['all']).toBe(c.history().length);
+    expect(counts['progress'] + counts['done'] + counts['cancelled']).toBe(counts['all']);
+    c.ordersBucket.set('done'); f.detectChanges();
+    expect(el.querySelectorAll('pf-lab-orders .pf-lo-row').length).toBe(counts['done']);
+    c.ordersBucket.set('all'); f.detectChanges();
+    expect(el.querySelectorAll('pf-lab-orders .pf-lo-row').length).toBe(counts['all']);
+  });
+});
+
 describe('Patient profile (clinical) — CUMULATIVE RESULTS', () => {
   it('an analyte × visit grid, newest visit first, grouped, with flagged cells tinted and a sparkline per row', async () => {
     const { el } = await render();
