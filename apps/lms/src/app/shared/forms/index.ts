@@ -6,3 +6,4 @@ export * from './patient-fields';
 export * from './field-type-picker.component';
 export * from './condition-editor.component';
 export * from './validation-editor.component';
+export * from './contact-validate';

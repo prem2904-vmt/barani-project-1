@@ -9,6 +9,8 @@ import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { hospitalErrors, referralDoctorErrors } from '../../../shared/forms/contact-validate';
+import { validatePhoneNumber } from '../../../shared/forms/validate';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
@@ -328,19 +330,23 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
             </label>
             <label class="pf-rn-fld pf-rn-fld--wide">
               <span>Address</span>
-              <input class="pf-input" type="text" [(ngModel)]="he.address" placeholder="21 Greams Lane, Chennai" />
+              <input class="pf-input" type="text" [(ngModel)]="he.address" (input)="clearHospErr('address')" [class.pf-input--error]="hospErr('address')" placeholder="21 Greams Lane, Chennai" />
+              @if (hospErr('address')) { <p class="pf-rn-fld__err">{{ hospErr('address') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Phone</span>
-              <input class="pf-input" type="tel" [(ngModel)]="he.phone" placeholder="+91 44 1234 5678" />
+              <input class="pf-input" type="tel" [(ngModel)]="he.phone" (input)="clearHospErr('phone')" [class.pf-input--error]="hospErr('phone')" placeholder="+91 44 1234 5678" />
+              @if (hospErr('phone')) { <p class="pf-rn-fld__err">{{ hospErr('phone') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Email</span>
-              <input class="pf-input" type="email" [(ngModel)]="he.email" placeholder="referrals@apollo.com" />
+              <input class="pf-input" type="email" [(ngModel)]="he.email" (input)="clearHospErr('email')" [class.pf-input--error]="hospErr('email')" placeholder="referrals@apollo.com" />
+              @if (hospErr('email')) { <p class="pf-rn-fld__err">{{ hospErr('email') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>GSTIN</span>
-              <input class="pf-input" type="text" [(ngModel)]="he.gstin" placeholder="33AABCA1234A1Z5" />
+              <input class="pf-input" type="text" [(ngModel)]="he.gstin" (input)="clearHospErr('gstin')" [class.pf-input--error]="hospErr('gstin')" placeholder="33AABCA1234A1Z5" />
+              @if (hospErr('gstin')) { <p class="pf-rn-fld__err">{{ hospErr('gstin') }}</p> }
             </label>
             <div class="pf-rn-fld pf-rn-fld--wide">
               <span>Doctors <span class="pf-rn-fld__opt">optional</span></span>
@@ -436,19 +442,23 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
             </div>
             <label class="pf-rn-fld">
               <span>Designation</span>
-              <input class="pf-input" type="text" [(ngModel)]="de.designation" placeholder="Consultant Physician" />
+              <input class="pf-input" type="text" [(ngModel)]="de.designation" (input)="clearDocErr('designation')" [class.pf-input--error]="docErr('designation')" placeholder="Consultant Physician" />
+              @if (docErr('designation')) { <p class="pf-rn-fld__err">{{ docErr('designation') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Department</span>
-              <input class="pf-input" type="text" [(ngModel)]="de.department" placeholder="Cardiology" />
+              <input class="pf-input" type="text" [(ngModel)]="de.department" (input)="clearDocErr('department')" [class.pf-input--error]="docErr('department')" placeholder="Cardiology" />
+              @if (docErr('department')) { <p class="pf-rn-fld__err">{{ docErr('department') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Qualification</span>
-              <input class="pf-input" type="text" [(ngModel)]="de.qualification" placeholder="MBBS, MD" />
+              <input class="pf-input" type="text" [(ngModel)]="de.qualification" (input)="clearDocErr('qualification')" [class.pf-input--error]="docErr('qualification')" placeholder="MBBS, MD" />
+              @if (docErr('qualification')) { <p class="pf-rn-fld__err">{{ docErr('qualification') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Registration #</span>
-              <input class="pf-input" type="text" [(ngModel)]="de.registrationNo" placeholder="TN-12345" />
+              <input class="pf-input" type="text" [(ngModel)]="de.registrationNo" (input)="clearDocErr('registrationNo')" [class.pf-input--error]="docErr('registrationNo')" placeholder="TN-12345" />
+              @if (docErr('registrationNo')) { <p class="pf-rn-fld__err">{{ docErr('registrationNo') }}</p> }
             </label>
             <label class="pf-rn-fld">
               <span>Phone</span>
@@ -457,7 +467,8 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
             </label>
             <label class="pf-rn-fld">
               <span>Email</span>
-              <input class="pf-input" type="email" [(ngModel)]="de.email" placeholder="priya@apollo.com" />
+              <input class="pf-input" type="email" [(ngModel)]="de.email" (input)="clearDocErr('email')" [class.pf-input--error]="docErr('email')" placeholder="priya@apollo.com" />
+              @if (docErr('email')) { <p class="pf-rn-fld__err">{{ docErr('email') }}</p> }
             </label>
           </div>
           <footer class="pf-rn-modal__ftr">
@@ -991,6 +1002,9 @@ export class ReferringNetworkComponent implements OnInit {
   async saveHospital(): Promise<void> {
     const draft = this.hospitalEditor();
     if (!draft?.name?.trim()) return;
+    const bad = hospitalErrors(draft);
+    if (Object.keys(bad).length) { this.hospitalFieldErr.set(bad); return; }
+    this.hospitalFieldErr.set({});
     this.savingHospital.set(true);
     try {
       const body = {
@@ -1030,7 +1044,7 @@ export class ReferringNetworkComponent implements OnInit {
       this.toasts.success(draft.id ? 'Hospital updated' : 'Hospital added');
     } catch (err) {
       const e = ApiError.from(err);
-      if (e.field === 'name' || e.field === 'code') this.hospitalFieldErr.set({ [e.field]: e.message });
+      if (e.field) this.hospitalFieldErr.set({ [e.field]: e.message });
       else this.toasts.error(e.message);
     } finally {
       this.savingHospital.set(false);
@@ -1121,6 +1135,9 @@ export class ReferringNetworkComponent implements OnInit {
   async saveDoctor(): Promise<void> {
     const draft = this.doctorEditor();
     if (!draft?.name?.trim()) return;
+    const bad = referralDoctorErrors(draft, validatePhoneNumber);
+    if (Object.keys(bad).length) { this.doctorFieldErr.set(bad); return; }
+    this.doctorFieldErr.set({});
     this.savingDoctor.set(true);
     try {
       const hospitalIds = draft.hospitalIds ?? [];
@@ -1149,7 +1166,7 @@ export class ReferringNetworkComponent implements OnInit {
       this.toasts.success(draft.id ? 'Doctor updated' : 'Doctor added');
     } catch (err) {
       const e = ApiError.from(err);
-      if (e.field === 'name' || e.field === 'phone') this.doctorFieldErr.set({ [e.field]: e.message });
+      if (e.field) this.doctorFieldErr.set({ [e.field]: e.message });
       else this.toasts.error(e.message);
     } finally {
       this.savingDoctor.set(false);

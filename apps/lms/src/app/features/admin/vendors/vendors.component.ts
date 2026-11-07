@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { vendorErrors } from '../../../shared/forms/contact-validate';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
@@ -141,15 +142,20 @@ const EMPTY_DRAFT: NewVendorDraft = {
               <input type="text" class="pf-input pf-num uppercase" [class.pf-input--error]="codeError()" [ngModel]="draft().code" (ngModelChange)="patchDraft({ code: $event.toUpperCase() })" placeholder="APOLLO"/>
               @if (codeError()) { <p class="pf-field-err">{{ codeError() }}</p> }</div>
             <div><label class="pf-field__lbl pf-vn-lbl">Contact name</label>
-              <input type="text" class="pf-input" [ngModel]="draft().contactName" (ngModelChange)="patchDraft({ contactName: $event })"/></div>
+              <input type="text" class="pf-input" [class.pf-input--error]="fieldErr()['contactName']" [ngModel]="draft().contactName" (ngModelChange)="patchDraft({ contactName: $event })"/>
+              @if (fieldErr()['contactName']) { <p class="pf-field-err">{{ fieldErr()['contactName'] }}</p> }</div>
             <div><label class="pf-field__lbl pf-vn-lbl">Contact phone</label>
-              <input type="tel" class="pf-input" [ngModel]="draft().contactPhone" (ngModelChange)="patchDraft({ contactPhone: $event })"/></div>
+              <input type="tel" class="pf-input" [class.pf-input--error]="fieldErr()['contactPhone']" [ngModel]="draft().contactPhone" (ngModelChange)="patchDraft({ contactPhone: $event })"/>
+              @if (fieldErr()['contactPhone']) { <p class="pf-field-err">{{ fieldErr()['contactPhone'] }}</p> }</div>
             <div><label class="pf-field__lbl pf-vn-lbl">Contact email</label>
-              <input type="email" class="pf-input" [ngModel]="draft().contactEmail" (ngModelChange)="patchDraft({ contactEmail: $event })"/></div>
+              <input type="email" class="pf-input" [class.pf-input--error]="fieldErr()['contactEmail']" [ngModel]="draft().contactEmail" (ngModelChange)="patchDraft({ contactEmail: $event })"/>
+              @if (fieldErr()['contactEmail']) { <p class="pf-field-err">{{ fieldErr()['contactEmail'] }}</p> }</div>
             <div><label class="pf-field__lbl pf-vn-lbl">GSTIN</label>
-              <input type="text" class="pf-input" [ngModel]="draft().gstin" (ngModelChange)="patchDraft({ gstin: $event })"/></div>
+              <input type="text" class="pf-input" [class.pf-input--error]="fieldErr()['gstin']" [ngModel]="draft().gstin" (ngModelChange)="patchDraft({ gstin: $event })"/>
+              @if (fieldErr()['gstin']) { <p class="pf-field-err">{{ fieldErr()['gstin'] }}</p> }</div>
             <div class="sm:col-span-2"><label class="pf-field__lbl pf-vn-lbl">Address</label>
-              <input type="text" class="pf-input" [ngModel]="draft().address" (ngModelChange)="patchDraft({ address: $event })"/></div>
+              <input type="text" class="pf-input" [class.pf-input--error]="fieldErr()['address']" [ngModel]="draft().address" (ngModelChange)="patchDraft({ address: $event })"/>
+              @if (fieldErr()['address']) { <p class="pf-field-err">{{ fieldErr()['address'] }}</p> }</div>
             <div>
               <label class="pf-field__lbl pf-vn-lbl">Opening settlement (₹)</label>
               <input type="number" min="0" step="1" class="pf-input"
@@ -584,6 +590,7 @@ export class VendorsComponent implements OnInit {
   protected readonly draft = signal<NewVendorDraft>({ ...EMPTY_DRAFT });
   protected readonly nameError = signal<string | null>(null);
   protected readonly codeError = signal<string | null>(null);
+  protected readonly fieldErr = signal<Record<string, string>>({});
 
   protected readonly topUpVendorId = signal<string | null>(null);
   protected readonly topUpAmount = signal<string>('');
@@ -632,14 +639,22 @@ export class VendorsComponent implements OnInit {
   patchDraft(patch: Partial<NewVendorDraft>) {
     if ('name' in patch) this.nameError.set(null);
     if ('code' in patch) this.codeError.set(null);
+    const keys = Object.keys(patch).filter(k => this.fieldErr()[k]);
+    if (keys.length) this.fieldErr.update(m => { const n = { ...m }; keys.forEach(k => delete n[k]); return n; });
     this.draft.update(d => ({ ...d, ...patch }));
   }
-  private clearFieldErrors() { this.nameError.set(null); this.codeError.set(null); }
+  private clearFieldErrors() { this.nameError.set(null); this.codeError.set(null); this.fieldErr.set({}); }
 
   createVendor() {
     const d = this.draft();
     if (!d.name.trim()) return;
     this.clearFieldErrors();
+    const bad = vendorErrors(d);
+    if (Object.keys(bad).length) {
+      const { name, code, ...rest } = bad;
+      this.nameError.set(name ?? null); this.codeError.set(code ?? null); this.fieldErr.set(rest);
+      return;
+    }
     this.saving.set(true);
     const opening = parseInt(d.openingCredit || '0', 10);
     const threshold = parseInt(d.notifyThreshold || '0', 10);
@@ -666,6 +681,7 @@ export class VendorsComponent implements OnInit {
         const err = ApiError.from(e);
         if (err.field === 'name') this.nameError.set(err.message);
         else if (err.field === 'code') this.codeError.set(err.message);
+        else if (err.field) this.fieldErr.set({ [err.field]: err.message });
         else this.toasts.error(err.message);
       }
     });
