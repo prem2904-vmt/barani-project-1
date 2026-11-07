@@ -488,6 +488,7 @@ export class ReportQueueComponent implements OnInit {
     const page = mode === "more" ? this._pages + 1 : 1;
     const pageSize = mode === "refresh" ? REPORT_QUEUE_PAGE_SIZE * pages : REPORT_QUEUE_PAGE_SIZE;
     if (mode === "more") this._loadingMore.set(true); else this._loading.set(true);
+    const sentQ = this._query().trim().toLowerCase();
     const url = reportQueuePageUrl({
       page, pageSize, status: reportQueueServerStatus(this._filter()), q: this._query(),
     });
@@ -498,6 +499,7 @@ export class ReportQueueComponent implements OnInit {
         this._loadingMore.set(false);
         if (!res || Array.isArray(res)) {
           const l = (res as Report[] | null) ?? [];
+          this._servedQ.set(""); // an unpaged answer is not search-narrowed
           this._items.set(l);
           this._total.set(null);
           this._serverCounts.set(null);
@@ -513,6 +515,7 @@ export class ReportQueueComponent implements OnInit {
           this._pages += 1;
           this.loadWaStatus(fresh, true);
         } else {
+          this._servedQ.set(sentQ);
           this._items.set(items);
           this._pages = mode === "refresh" ? pages : 1;
           this.loadWaStatus(items);
@@ -528,16 +531,23 @@ export class ReportQueueComponent implements OnInit {
     });
   }
 
+  /** The search term the loaded rows were fetched for (lower-cased). When it
+   *  equals the box, the SERVER already narrowed the page (order number,
+   *  invoice number, name, phone…), so the client must not hide any of it. */
+  private readonly _servedQ = signal<string>("");
+
   readonly visible = computed(() => {
     const f = this._filter();
     const q = this._query().trim().toLowerCase();
     let l = this._items();
     if (f !== "all") l = l.filter((r) => r.deliveryStatus === f);
-    if (q) {
+    if (q && q !== this._servedQ()) {
       l = l.filter((r) => {
         const name = (r.order?.patient?.displayName ?? "").toLowerCase();
         const phone = (r.order?.patient?.phone ?? "").toLowerCase();
         const mrn = (r.order?.patient?.mrn ?? "").toLowerCase();
+        const orderNo = (r.order?.orderNumber ?? "").toLowerCase();
+        const invoiceNo = (r.order?.invoiceNumber ?? "").toLowerCase();
         // Match against patient name, phone, MRN, short order id, and
         // short report id — covers every reasonable lookup reception
         // runs from a paper slip.
@@ -546,6 +556,8 @@ export class ReportQueueComponent implements OnInit {
           name.includes(q) ||
           phone.includes(q) ||
           mrn.includes(q) ||
+          orderNo.includes(q) ||
+          invoiceNo.includes(q) ||
           r.orderId.toLowerCase().includes(q) ||
           r.id.toLowerCase().includes(q)
         );
