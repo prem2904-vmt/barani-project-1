@@ -3777,6 +3777,9 @@ export function departmentSampleIds(groups: { sampleId?: string; sampleIds?: str
 /** Render panel groups grouped into per-DEPARTMENT sections — each department's
  *  tests render in their own block under THAT department's column layout (with
  *  its merges), so one report can show different columns per department. */
+/** Room the next department needs (heading band + a couple of rows) to start on the same page. */
+const DEPT_NEXT_BLOCK_MIN = 90;
+
 function renderContinuousTable(
   doc: jsPDF,
   groups: PanelGroup[],
@@ -3874,14 +3877,19 @@ function renderContinuousTable(
         // Sign-off sits at the FOOT of the department's last page, directly
         // above the footer strip — not floating under the last row with a
         // blank half-page beneath (the page-2 bug in REPORT-49289714).
-        const anchored = Math.max(y, A4.h - MARGIN_BOTTOM - sigH);
+        // OPS-80: with "department page break" OFF a department that is not
+        // the last one signs right under its last row (normal flow) so the
+        // next department can follow on the same page; the foot anchor
+        // would always leave no room and force a new page per department.
+        const flowOn = rendered < order.length - 1 && !theme.departmentPageBreak;
+        const anchored = flowOn ? y + 6 : Math.max(y, A4.h - MARGIN_BOTTOM - sigH);
         y = drawInlineSignatures(doc, sigs, anchored, practice);
         // The signatures close this department's page; the next department
         // opens clean rather than squeezing under a sign-off. When the theme
         // already breaks per department, ITS break at the loop top is the one
         // and only feed — adding ours too produced a fully blank page
         // (REPORT-49289714-2 page 3).
-        if (rendered < order.length - 1 && !theme.departmentPageBreak) y = newPage(doc, practice);
+        if (flowOn && y + DEPT_NEXT_BLOCK_MIN > A4.h - MARGIN_BOTTOM) y = newPage(doc, practice);
       }
     }
     rendered++;

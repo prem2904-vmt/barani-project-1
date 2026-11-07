@@ -39,8 +39,10 @@ describe('report density — Compact and squeeze', () => {
     it('the rich multi-department report never grows, and its first results page is shorter', () => {
       const rich = (density?: string) => richInput({ metadata: JSON.stringify({ options: { abnormalSummary: true, specimenLine: true }, ...(density ? { reportStyle: { v: 1, density } } : {}) }) });
       expect(pages(rich('compact'))).toBeLessThanOrEqual(pages(rich()));
-      const last = (density?: string) => Math.max(...runs(buildReportPdf(rich(density))).filter(r => r.page === 2 && r.text === 'Reg. TNMC 88213').map(r => r.y));
-      expect(last('compact')).toBeLessThanOrEqual(last());
+      // The last signatory line's place in document order (PDF y runs up, so later = smaller): Compact never ends later.
+      // Departments share pages now (OPS-80), so this is no longer a fixed page 2.
+      const last = (density?: string) => Math.min(...runs(buildReportPdf(rich(density))).filter(r => r.text === 'Reg. TNMC 88213').map(r => -r.page * 1000 + r.y));
+      expect(last('compact')).toBeGreaterThanOrEqual(last());
     });
 
     it('row rhythm: each test row is at least 18 percent shorter, with its Method beside the name', () => {

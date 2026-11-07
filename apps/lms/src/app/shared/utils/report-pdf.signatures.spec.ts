@@ -28,10 +28,22 @@ describe('report PDF — signature space decider', () => {
   });
 
   describe('department (today)', () => {
-    it('each department signs once, at its own foot, and a department change opens a new page', () => {
-      const r = renderSig(sigInput({ departments: 3, n: 2 }));
+    it('with "department page break" ON each department signs once, at its own foot, and a department change opens a new page', () => {
+      const r = renderSig(sigInput({ departments: 3, n: 2, templatePatch: { departmentPageBreak: true } }));
       expect(r.pages).toBe(3);
       for (const { at } of namesOf(r.boxes, 2)) expect(at.map(b => b.page).sort()).toEqual([1, 2, 3]);
+      expect(r.overlaps).toEqual([]);
+    });
+    it('OPS-80: with "department page break" OFF departments share a page - each still signs once, nothing overlaps', () => {
+      const r = renderSig(sigInput({ departments: 3, n: 2 }));
+      expect(r.pages).toBeLessThan(3);
+      for (const { at } of namesOf(r.boxes, 2)) expect(at).toHaveLength(3);
+      expect(r.overlaps).toEqual([]);
+    });
+    it('OPS-80: OFF still breaks when the next department cannot fit on the page', () => {
+      const r = renderSig(sigInput({ departments: 3, perDept: 14, n: 2 }));
+      expect(r.pages).toBeGreaterThanOrEqual(2);
+      expect(r.pages).toBeLessThan(6);
       expect(r.overlaps).toEqual([]);
     });
   });
@@ -48,7 +60,7 @@ describe('report PDF — signature space decider', () => {
       expect(r.overlaps).toEqual([]);
     });
     it('departments no longer end a page: fewer pages', () => {
-      expect(renderSig(sigInput({ departments: 3, perDept: 3 })).pages).toBe(3);
+      expect(renderSig(sigInput({ departments: 3, perDept: 3, templatePatch: { departmentPageBreak: true } })).pages).toBe(3);
       expect(renderSig(sigInput({ departments: 3, perDept: 3, signatures: { placement: 'end' } })).pages).toBe(1);
     });
     it('each signer keeps their own title; no department names are appended', () => {
