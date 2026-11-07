@@ -32,6 +32,7 @@ import { ToastService } from '../../../core/services/toast.service';
 import { BarcodeScannerModalComponent } from '../../../shared/components/barcode-scanner/barcode-scanner-modal.component';
 import { PatientSearchComponent } from '../../../shared/components/patient-search/patient-search.component';
 import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
+import { appRecordRoute } from '../../../shared/utils/scan-route';
 import { AvatarComponent } from '../../../shared/primitives/avatar.component';
 import { ChipComponent, ChipTone } from '../../../shared/primitives/chip.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
@@ -1912,6 +1913,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     this._qrScannerOpen.set(false);
     const text = (code || '').trim();
     if (!text) return;
+    // Patient ID card (/p/<id>) or order QR (/o/<id>) — the same parser the
+    // top-strip scan uses (OPS-95: a patient card used to fall through to the
+    // patient search and say "No patient matches").
+    const rec = appRecordRoute(text);
+    if (rec) { this.router.navigate(rec); return; }
     const order = text.match(/\/o\/([0-9a-fA-F-]{6,})/);
     if (order) { this.router.navigate(['/o', order[1]]); return; }
     const track = text.match(/\/track\/([^/?#\s]+)/);

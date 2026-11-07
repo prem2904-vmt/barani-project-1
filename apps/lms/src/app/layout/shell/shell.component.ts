@@ -46,6 +46,7 @@ import { WebrtcService } from "../../core/services/webrtc.service";
 import { AuthService } from "../../core/auth/auth.service";
 import { ScanService } from "../../core/services/scan.service";
 import { normalizeTubeScan } from "@prefrontal/shared";
+import { appRecordRoute } from "../../shared/utils/scan-route";
 import { KeyboardService } from "../../core/services/keyboard.service";
 import { ApiService } from "../../core/services/api.service";
 import { CapacitorService } from "../../core/services/capacitor.service";
@@ -753,9 +754,9 @@ export class ShellComponent {
     this.scan.close();
     // A tube QR (`MRN|SampleID`) → the Sample ID; URLs pass through untouched.
     const code = normalizeTubeScan(scanned);
-    const app = /\/(p|o)\/([0-9a-f]{8}-[0-9a-f-]{27,})/i.exec(code);
+    const app = appRecordRoute(code);
     if (app) {
-      this.router.navigate([`/${app[1].toLowerCase()}`, app[2]]);
+      this.router.navigate(app);
       return;
     }
     this.api.get<{ orderId: string }>(`/api/orders/resolve?code=${encodeURIComponent(code)}`).subscribe({
