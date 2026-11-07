@@ -48,9 +48,10 @@ describe('SwitchScreenComponent — expired saved sign-in', () => {
 
   it('a session_expired error from the switch turns into the same recovery (no dead end)', async () => {
     const t = setup(async () => { throw Object.assign(new Error('Admin’s saved sign-in has ended on this device — sign in again to switch.'), { code: 'session_expired' }); });
-    t.switchTarget.set({ ...ADMIN, hasPin: false });
+    t.switchTarget.set({ ...ADMIN, hasPin: true });
     t.f.detectChanges();
     TestBed.tick();
+    await (t.f.componentInstance as unknown as { attempt(p: string): Promise<void> }).attempt('1234');
     await new Promise(r => setTimeout(r, 0));
     await new Promise(r => setTimeout(r, 0));
     t.f.detectChanges();
@@ -59,5 +60,19 @@ describe('SwitchScreenComponent — expired saved sign-in', () => {
     expect(t.el.textContent).toContain('Cancel — stay as Frontdesk');
     // One attempt only — no retry loop (busy() used to be tracked by the effect).
     expect((TestBed.inject(AuthService) as unknown as { switchAccount: { mock: { calls: unknown[] } } }).switchAccount.mock.calls.length).toBe(1);
+  });
+});
+
+describe('SwitchScreenComponent — OPS-26 PIN-less target', () => {
+  it('never opens the profile directly: no switch attempt, sign-in with password offered', () => {
+    const t = setup(async () => undefined);
+    t.switchTarget.set({ ...ADMIN, hasPin: false });
+    t.f.detectChanges();
+    TestBed.tick();
+    t.f.detectChanges();
+    expect((TestBed.inject(AuthService) as unknown as { switchAccount: { mock: { calls: unknown[] } } }).switchAccount.mock.calls.length).toBe(0);
+    expect(t.el.querySelector('pf-pin-dots')).toBeNull();
+    expect(t.el.textContent).toContain('has no PIN');
+    expect(t.el.querySelector('[data-testid="switch-sign-in-again"]')).not.toBeNull();
   });
 });

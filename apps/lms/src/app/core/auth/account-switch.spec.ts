@@ -91,6 +91,17 @@ describe('AuthService.switchAccount', () => {
     expect(t.auth.user()?.id).toBe(ADMIN.id);
   });
 
+  it('OPS-26: a target with NO PIN is refused (no_pin) — the session is NOT switched', async () => {
+    const t = setup([row(FD, jwt(FD.sub), 'rt-fd'), row(ADMIN, jwt(ADMIN.sub), 'rt-admin')], (url) => {
+      if (url.includes('/api/auth/pin/verify')) return json(200, { success: false, error: { code: 'no_pin', message: 'No PIN set for this account.' } });
+      return null;
+    });
+    await t.ready();
+    await expect(t.auth.switchAccount(t.acc.fresh(ADMIN.id)!, '')).rejects.toMatchObject({ code: 'no_pin' });
+    expect(t.auth.user()?.id).toBe(FD.id);
+    expect(t.acc.fresh(ADMIN.id)!.hasPin).toBe(false);
+  });
+
   it('a REJECTED refresh token keeps the profile (flagged) and leaves the current account untouched', async () => {
     const t = setup([row(FD, jwt(FD.sub), 'rt-fd'), row(ADMIN, jwt(ADMIN.sub, -60), 'rt-admin-dead')], (url) => {
       if (url.includes('/auth/v1/token')) return json(400, { error: 'invalid_grant', error_description: 'Invalid Refresh Token: Already Used' });

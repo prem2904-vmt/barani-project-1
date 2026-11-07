@@ -187,7 +187,11 @@ export class SwitchScreenComponent {
         this.needsSignIn.set(!!target.expired);
         if (target.expired) return;
         this.pinNeeded.set(target.hasPin);
-        if (!target.hasPin) void this.attempt('');
+        // OPS-26: no PIN on the target → their password, never a direct open.
+        if (!target.hasPin) {
+          this.error.set(`${target.displayName.split(' ')[0]} has no PIN — sign in with their password to open this profile.`);
+          this.needsSignIn.set(true);
+        }
       });
     });
   }
@@ -203,7 +207,7 @@ export class SwitchScreenComponent {
       location.assign('/');
     } catch (e) {
       const err = e as Error & { code?: string };
-      if (err.code === 'session_expired' || err.code === 'session_mismatch') {
+      if (err.code === 'session_expired' || err.code === 'session_mismatch' || err.code === 'no_pin') {
         // Not a dead end: the profile stays listed, and its owner signs in
         // again right here. Nothing was switched (checked before any state
         // changed), so the current account is untouched.

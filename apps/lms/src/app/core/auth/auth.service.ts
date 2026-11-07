@@ -889,14 +889,16 @@ export class AuthService {
     const json = await res.json().catch(() => null);
     if (!res.ok || !json?.success) {
       const code = typeof json?.error === 'string' ? json.error : json?.error?.code;
-      // No PIN set on the target → the profile opens directly (the server is
-      // authoritative here, not the possibly-stale local hasPin cache).
-      if (code !== 'no_pin') {
-        const err = new Error(json?.error?.message || json?.message || 'Incorrect PIN.');
-        (err as Error & { code?: string }).code = code || 'wrong_pin';
-        throw err;
-      }
-      this.accounts.setHasPin(acc.userId, false);
+      // OPS-26: a profile with NO PIN never opens on the saved device session
+      // alone — whoever is at the screen must prove who they are with that
+      // user's password (the UI sends them to sign-in). The server already
+      // refuses a blank PIN (`no_pin`); the client must not turn that into a yes.
+      if (code === 'no_pin') this.accounts.setHasPin(acc.userId, false);
+      const err = new Error(code === 'no_pin'
+        ? `${first} has no PIN — sign in with ${first}’s password to open this profile.`
+        : (json?.error?.message || json?.message || 'Incorrect PIN.'));
+      (err as Error & { code?: string }).code = code || 'wrong_pin';
+      throw err;
     }
 
     this._session.set(sess);

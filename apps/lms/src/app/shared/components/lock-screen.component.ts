@@ -8,7 +8,7 @@ import { PinDotsComponent } from './pin-dots.component';
  *  becomes a "Who's working?" profile picker — every signed-in profile is a
  *  tile. Picking your own profile unlocks in place; picking someone else's
  *  switches to them. Either way the tile's PIN (4 digits, server-verified)
- *  gates entry; PIN-less profiles open directly. */
+ *  gates entry; PIN-less profiles need their password. */
 @Component({
   selector: 'pf-lock-screen',
   standalone: true,
@@ -44,7 +44,9 @@ import { PinDotsComponent } from './pin-dots.component';
               <p class="pf-lk-hint">Enter PIN</p>
               <pf-pin-dots #dots [disabled]="busy()" (completed)="attempt($event)" />
             } @else {
-              <p class="pf-lk-hint">{{ busy() ? 'Opening profile…' : 'No PIN — opening directly.' }}</p>
+              <!-- OPS-26: a profile without a PIN is never opened from here — its owner's password is. -->
+              <p class="pf-lk-hint" data-testid="lock-no-pin">{{ selected()!.displayName.split(' ')[0] }} has no PIN — sign in with their password to open this profile.</p>
+              <button type="button" class="pf-lk-alt" (click)="lock.abandonToLogin()" data-testid="lock-sign-in">Sign in with password</button>
             }
             @if (error()) { <p class="pf-lk-error">{{ error() }}</p> }
             <button class="pf-lk-alt" (click)="lock.abandonToLogin()">Forgot PIN? Sign in with password</button>
@@ -247,10 +249,9 @@ export class LockScreenComponent {
     this.error.set(null);
     const isMe = a.userId === this.auth.user()?.id;
     // My own profile: the lock only arms for PIN-enabled users, so always ask.
-    // Someone else's: their PIN — or straight in when they don't have one
-    // (the blank attempt lets the SERVER confirm; a stale flag can't bypass).
+    // Someone else's: their PIN. A profile with NO PIN is never opened here
+    // (OPS-26) — its owner's password is the only way in.
     this.pinNeeded.set(isMe ? true : a.hasPin);
-    if (!isMe && !a.hasPin) void this.attempt('');
   }
 
   back() {
@@ -275,7 +276,9 @@ export class LockScreenComponent {
       }
     } catch (e) {
       const err = e as Error & { code?: string };
-      if (pin === '' && (err.code === 'wrong_pin' || err.code === 'locked')) {
+      if (err.code === 'no_pin') {
+        this.pinNeeded.set(false);
+      } else if (pin === '' && (err.code === 'wrong_pin' || err.code === 'locked')) {
         // Stale local "no PIN" — the server says otherwise. Ask for it.
         this.pinNeeded.set(true);
         this.accounts.setHasPin(target.userId, true);
