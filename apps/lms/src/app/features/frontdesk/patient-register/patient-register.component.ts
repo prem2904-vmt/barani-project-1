@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, HostListener, OnInit, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { withClearedIdentifiers } from './patient-edit-body';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -793,7 +794,10 @@ export class PatientRegisterComponent implements OnInit {
     const pid = this.patientId();
     if (pid) {
       // Backend exposes patient update as PATCH /api/patients/{id}; PUT 405s.
-      this.api.patch<Patient>(`/api/patients/${pid}`, body).subscribe({
+      // OPS-72: an emptied ABHA / Aadhaar field is a CLEAR, not "unchanged".
+      const patchBody = withClearedIdentifiers(body, standard,
+        cfg.steps.flatMap(st => st.fields.map(f => f.storageKey)));
+      this.api.patch<Patient>(`/api/patients/${pid}`, patchBody).subscribe({
         next: patient => {
           this._saving.set(false);
           this.toasts.success(`Updated ${patient.displayName}`);
