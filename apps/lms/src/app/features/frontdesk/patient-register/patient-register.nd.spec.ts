@@ -581,6 +581,37 @@ describe('Patient registration — Baby vs Baby of (2026-09-28)', () => {
     expect(checked(r.el, 'sex')).toBe('Male');
   });
 
+  // Drives onValuesChange directly (what the form emits on each pick).
+  const pick = (c: any, field: 'title' | 'sex', v: string) => {
+    c.onValuesChange({ ...c.values(), [`basic::${field}`]: v });
+  };
+  const sexOf = (c: any) => c.values()['basic::sex'];
+
+  it('OPS-118: Mr. → Male, then Baby / Baby of / Dr. clears the AUTO sex (a baby can be any sex)', () => {
+    for (const t of ['Baby', 'Baby of', 'Dr.']) {
+      TestBed.resetTestingModule();
+      const { c } = render({ config: BABY_CONFIG });
+      c.values.set({ 'basic::title': '', 'basic::sex': '' });
+      pick(c, 'title', 'Mr.');
+      expect(sexOf(c)).toBe('Male');
+      pick(c, 'title', t);
+      expect(sexOf(c)).toBe('');
+    }
+  });
+
+  it('OPS-118: Mr. → Male, then Mrs. re-derives Female; a manually picked sex survives a neutral title', () => {
+    const { c } = render({ config: BABY_CONFIG });
+    c.values.set({ 'basic::title': '', 'basic::sex': '' });
+    pick(c, 'title', 'Mr.');
+    pick(c, 'title', 'Mrs.');
+    expect(sexOf(c)).toBe('Female');
+    pick(c, 'title', 'Baby');
+    expect(sexOf(c)).toBe('');
+    pick(c, 'sex', 'Male');          // the user's own choice
+    pick(c, 'title', 'Baby of');
+    expect(sexOf(c)).toBe('Male');
+  });
+
   it('edit mode: a "Baby of" patient loads with its pill on and the mother\'s-name labels', async () => {
     const r = render({ config: BABY_CONFIG, patientId: 'p-9',
       patient: { id: 'p-9', displayName: 'Baby of Priya Kumar', firstName: 'Priya', fathersName: 'Kumar', title: 'Baby of', sex: 'Female' } });

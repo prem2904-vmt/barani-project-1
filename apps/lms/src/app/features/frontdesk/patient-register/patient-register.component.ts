@@ -720,12 +720,20 @@ export class PatientRegisterComponent implements OnInit {
           this.values.set(next);
           this.initialValues.set(next);
         }
+      } else if (this._autoSex && String(v[sexKey] ?? '') === this._autoSex) {
+        // Title implies no sex (Baby, Baby of, Dr.): clear a sex WE auto-set
+        // from the previous title (OPS-118). A manual pick is left alone.
+        this._autoSex = null;
+        const next = { ...v, [sexKey]: '' };
+        this.values.set(next);
+        this.initialValues.set(next);
       }
       return;
     }
 
     // ── Sex → Title ────────────────────────────────────────────────────────
     if (sexChanged) {
+      this._autoSex = null;   // the user (or the title sync) now owns sex
       const suggested = PatientRegisterComponent.SEX_TITLE[sex];
       if (!suggested) return;   // 'Other' → no default title
       const currentTitle = v[titleKey];
