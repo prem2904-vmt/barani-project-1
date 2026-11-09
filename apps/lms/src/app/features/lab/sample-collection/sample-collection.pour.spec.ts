@@ -212,33 +212,41 @@ describe('Sample collection — pour one tube into another', () => {
     expect(c.pourRefusal()).toBe('Only draws taken at the same time can be poured together.');
   });
 
-  it('409 merge_needs_confirm → DialogService names the warning → resend with confirmWarnings', async () => {
-    const { f, c, api, dialog } = render({ mergeFirst: 'confirm', confirm: [true, false] });
+  it('warning already shown on the sheet: ONE press sends confirmWarnings and no dialog opens (OPS-123)', async () => {
+    const { f, c, api, dialog } = render({ mergeFirst: 'confirm' });
     await open(f, c);
     c.openPour(red);
     await settle(f);
+    expect(c.pourWarnings()).toEqual(['Serum test into a fluoride (gray) tube']);
     await c.confirmPour();
     await settle(f);
     const merges = api.post.mock.calls.filter(([u]: any[]) => String(u).endsWith('/merge'));
     expect(merges.map(([u, b]: any[]) => [u, b])).toEqual([
-      ['/api/samples/grey/merge', { sampleIds: ['red'], confirmWarnings: false }],
       ['/api/samples/grey/merge', { sampleIds: ['red'], confirmWarnings: true }],
     ]);
-    const first = dialog.confirm.mock.calls[0][0] as any;
-    expect(first.title).toBe('Pour anyway?');
-    expect(first.items).toEqual(['Serum test into a fluoride (gray) tube']);
-    expect(first.confirmLabel).toBe('Pour anyway');
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(c.pour()).toBeNull();
   });
 
-  it('declining the warning sends nothing more and changes nothing', async () => {
-    const { f, c, api } = render({ mergeFirst: 'confirm', confirm: [false] });
+  it('a warning only the server knew goes ON the sheet (no dialog) and needs one more press', async () => {
+    const { f, c, api, dialog } = render({
+      mergeFirst: 'confirm',
+      candidates: [{ id: 'red', barcode: '26104', tubeColor: 'plain', eligible: true, warnings: [] }],
+    });
     await open(f, c);
     c.openPour(red);
     await settle(f);
     await c.confirmPour();
     await settle(f);
-    expect(api.post.mock.calls.filter(([u]: any[]) => String(u).endsWith('/merge')).length).toBe(1);
-    expect(c.activeGroup().samples.map((s: any) => s.id).sort()).toEqual(['grey', 'red']);
+    expect(c.pour()).not.toBeNull();
+    expect(c.pourWarnings()).toEqual(['Serum test into a fluoride (gray) tube']);
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    await c.confirmPour();
+    await settle(f);
+    const merges = api.post.mock.calls.filter(([u]: any[]) => String(u).endsWith('/merge'));
+    expect(merges.map(([, b]: any[]) => b.confirmWarnings)).toEqual([false, true]);
+    expect(c.pour()).toBeNull();
+    expect(dialog.confirm).not.toHaveBeenCalled();
   });
 
   it('after the pour: poured tube leaves, kept tube shows "+ Red (26104)" and is collected', async () => {
@@ -258,28 +266,15 @@ describe('Sample collection — pour one tube into another', () => {
     expect(c.pour()).toBeNull();
   });
 
-  it('offers to print the kept label again — ONE label, for the kept tube', async () => {
-    const { f, c, printer, dialog } = render({ confirm: [true] });
+  it('after the pour NO relabel prompt appears - the kept tube keeps its ID (OPS-123)', async () => {
+    const { f, c, printer, dialog } = render();
     await open(f, c);
     c.openPour(red);
     await settle(f);
     await c.confirmPour();
     await settle(f); await settle(f);
-    const offer = dialog.confirm.mock.calls.at(-1)![0] as any;
-    expect(offer.confirmLabel).toBe('Print label');
-    expect(offer.cancelLabel).toBe('Not now');
-    const codes = printer.printLabelData.mock.calls.map(([d]: any[]) => d.code);
-    expect(codes).toEqual(['26105']);
-  });
-
-  it('manual mode (no printer) never offers a label reprint', async () => {
-    const { f, c, dialog } = render({ manual: true });
-    await open(f, c);
-    c.openPour(red);
-    await settle(f);
-    await c.confirmPour();
-    await settle(f);
     expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(printer.printLabelData).not.toHaveBeenCalled();
   });
 
   it('a server refusal is toasted in plain words and the sheet stays open', async () => {

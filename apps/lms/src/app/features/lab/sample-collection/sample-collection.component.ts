@@ -1906,6 +1906,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     loadError: string | null;
   } | null>(null);
   protected readonly pourBusy = signal(false);
+  /** Warnings only the merge call knew about; shown inside the sheet (OPS-123). */
+  private readonly pourServerWarn = signal<string[]>([]);
 
   /** "+ Red (26104)" chips on the kept tube. */
   mergeChips(s: OrderSample): string[] {
@@ -1990,7 +1992,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const p = this.pour();
     if (!p?.candidates) return [];
     const ids = new Set([p.sourceId, ...p.alsoIds]);
-    return warningLines(p.candidates.filter(c => ids.has(c.id)).flatMap(c => c.warnings ?? []));
+    const fromCands = warningLines(p.candidates.filter(c => ids.has(c.id)).flatMap(c => c.warnings ?? []));
+    return fromCands.length ? fromCands : this.pourServerWarn();
   }
 
   /** Plain reason the chosen pour is refused (null = allowed / not decided). */
@@ -2013,6 +2016,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     ev?.stopPropagation();
     ev?.preventDefault();
     this.clearPress();
+    this.pourServerWarn.set([]);
     this.pour.set({ sourceId: s.id, targetId: '', alsoIds: [], candidates: null, loadError: null });
     // One other tube: pick it straight away (the common baby case).
     const opts = this.pourTargetOpts();
@@ -2029,6 +2033,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (!p) return;
     // A drop already knows the verdict (cached at drag start): show it at
     // once, then refresh it from the server.
+    this.pourServerWarn.set([]);
     this.pour.set({ ...p, targetId, alsoIds: [], candidates: seed ?? null, loadError: null });
     if (!targetId) return;
     try {
@@ -2046,6 +2051,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   setPourAlso(ids: string[]): void {
+    this.pourServerWarn.set([]);
     this.pour.update(p => (p ? { ...p, alsoIds: ids ?? [] } : p));
   }
 
@@ -2059,24 +2065,19 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const sampleIds = [p.sourceId, ...p.alsoIds.filter(id => id !== p.sourceId)];
     this.pourBusy.set(true);
     try {
+      // ONE confirmation (OPS-123): the sheet IS the confirm, and any additive
+      // warning is printed inside it. Pressing "Pour into ..." with warnings on
+      // show is the acknowledgement; warnings only the server knew are put on
+      // the sheet and need one more press - never a second dialog.
       let res: MergeResult<OrderSample> | null = null;
       try {
-        res = await this.postMerge(p.targetId, sampleIds, false);
+        res = await this.postMerge(p.targetId, sampleIds, this.pourWarnings().length > 0);
       } catch (e) {
         const err = ApiError.from(e);
         if (err.code !== 'merge_needs_confirm') throw err;
         const ws = warningLines(this.warningsFrom(err.data) ?? []);
-        const lines = ws.length ? ws : this.pourWarnings();
-        const ok = await this.dialog.confirm({
-          title: 'Pour anyway?',
-          message: `${this.tubeName(this.pourTarget())} uses a different additive.`,
-          items: lines.length ? lines : undefined,
-          question: 'Pour the tube anyway?',
-          confirmLabel: 'Pour anyway',
-          tone: 'danger',
-        });
-        if (!ok) return;
-        res = await this.postMerge(p.targetId, sampleIds, true);
+        this.pourServerWarn.set(ws.length ? ws : ['This tube uses a different additive.']);
+        return;
       }
       this.applyMerge(p.targetId, sampleIds, res);
       this.pour.set(null);
@@ -2086,7 +2087,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         `Poured into ${this.tubeName(kept)}${retired.length ? ` — ${retired.join(', ')} still scan${retired.length === 1 ? 's' : ''}` : ''}`,
       );
       this.sampleCollected.emit();
-      if (kept) void this.offerKeptLabel(kept);
     } catch (e) {
       const err = ApiError.from(e);
       this.toasts.error(mergeRefusalText(err.code ?? null, err.message));
@@ -2207,6 +2207,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const seed = this._pourCands.get(t.id);
     this.endPourDrag(false, 'in', t.id);
     this.clearPress();
+    this.pourServerWarn.set([]);
     this.pour.set({ sourceId: src.id, targetId: '', alsoIds: [], candidates: null, loadError: null });
     void this.setPourTarget(t.id, seed ?? null);
   }
@@ -2376,22 +2377,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         const upd = res.sample;
         return { ...x, ...upd, order: x.order ?? upd.order, tests: upd.tests ?? x.tests };
       }));
-  }
-
-  /** After a pour: offer to print the kept tube's label again (it now
-   *  carries the poured tests). Manual mode has no printer — nothing to offer. */
-  private async offerKeptLabel(kept: OrderSample): Promise<void> {
-    if (this.scan.manualEntry()) return;
-    const ok = await this.dialog.confirm({
-      title: 'Print the kept tube’s label again?',
-      message: `${this.tubeName(kept)} now carries the poured tests. A fresh label lists them all.`,
-      confirmLabel: 'Print label',
-      cancelLabel: 'Not now',
-      tone: 'primary',
-      icon: 'printer',
-    });
-    if (!ok) return;
-    this.reprintLabel(kept);
   }
 
   /** Print ONE tube's label (the kept tube after a pour). */
