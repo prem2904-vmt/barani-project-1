@@ -4,9 +4,9 @@ import { labToday } from './lab-clock';
 const TODAY = '2026-09-30';
 
 describe('daily patient number (utils/daily-no)', () => {
-  it('labels today as "#12", another day with its date', () => {
-    expect(dailyNoLabel(12, TODAY, TODAY)).toBe('#12');
-    expect(dailyNoLabel(3, '2026-09-29', TODAY)).toBe('#3 · 29 Sep');
+  it('labels today as "12" (no # prefix), another day with its date', () => {
+    expect(dailyNoLabel(12, TODAY, TODAY)).toBe('12');
+    expect(dailyNoLabel(3, '2026-09-29', TODAY)).toBe('3 · 29 Sep');
     expect(dailyNoLabel(null, TODAY, TODAY)).toBe('');
     expect(dailyNoLabel(0, TODAY, TODAY)).toBe('');
   });
@@ -43,11 +43,11 @@ describe('daily patient number (utils/daily-no)', () => {
 
   it('renders the grid chip as escaped HTML with the kit class', () => {
     expect(dailyNoHtml({ dailyNo: 2, dailyNoDay: TODAY }, TODAY))
-      .toBe(`<span class="pf-dayno" title="Today&#39;s patient number 2">#2</span>`);
+      .toBe(`<span class="pf-dayno" title="Today&#39;s patient number 2">2</span>`);
     expect(dailyNoHtml({}, TODAY)).toBe('');
   });
 
   it('defaults "today" to the IST business day (labToday)', () => {
-    expect(dailyNoLabel(1, labToday())).toBe('#1');
+    expect(dailyNoLabel(1, labToday())).toBe('1');
   });
 });

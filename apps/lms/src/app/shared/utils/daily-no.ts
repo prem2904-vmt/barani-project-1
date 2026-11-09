@@ -24,13 +24,13 @@ export function dailyNoOf(x: unknown): DailyNoCarrier {
   return {};
 }
 
-/** The chip text: "#12" today; "#12 · 29 Sep" on any other day (so an older
+/** The chip text: "12" today (no "#" - OPS-125); "12 · 29 Sep" on any other day (so an older
  *  visit's #3 is never mistaken for today's #3). '' when there is none. */
 export function dailyNoLabel(no: number | null | undefined, day?: string | null, today: string = labToday()): string {
   if (no == null || !(no > 0)) return '';
-  if (!day || day === today) return `#${no}`;
+  if (!day || day === today) return `${no}`;
   const [, m, d] = day.split('-').map(Number);
-  return m && d ? `#${no} · ${d} ${MONTHS[m - 1]}` : `#${no}`;
+  return m && d ? `${no} · ${d} ${MONTHS[m - 1]}` : `${no}`;
 }
 
 /** Screen-reader / tooltip wording. */
