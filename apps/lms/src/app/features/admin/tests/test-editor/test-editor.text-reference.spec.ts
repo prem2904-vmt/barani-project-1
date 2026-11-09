@@ -85,7 +85,7 @@ describe('TestEditor - textual reference for a written result (OPS-117)', () => 
     c.setReferenceText(0, '  Negative ');
     expect(saved(c)[0].normalValue).toBe('Negative');
     c.saveTest();
-    const body = JSON.parse((api.patch.mock.calls as any[]).at(-1)[1].parametersJson);
+    const body = JSON.parse((api.patch.mock.calls as any[]).at(-1)![1].parametersJson);
     expect(body.parameters[0].normalValue).toBe('Negative');
     c.setReferenceText(0, '   ');
     expect(saved(c)[0].normalValue ?? null).toBeNull();
