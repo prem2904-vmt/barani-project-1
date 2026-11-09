@@ -637,9 +637,8 @@ export class InlinePaymentPanelComponent {
         return `Bill ${amt} to vendor`;
       case "later": {
         const adv = this.advanceOver() ? 0 : this.advanceNum();
-        return adv > 0
-          ? `Collect ${this.inr.transform(adv)} now, ${this.inr.transform(this.amount() - adv)} due`
-          : `Place order, ${amt} due`;
+        // OPS-115: with an advance the button just says "Collect" (no amount).
+        return adv > 0 ? "Collect" : `Place order, ${amt} due`;
       }
       default:
         return `Confirm ${amt} received`;

@@ -933,7 +933,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
   readonly laterPicked = computed(() => this.payPanel()?.mode() === 'later');
 
   /** The ONE primary: "Collect ₹X" (vendor: "Bill ₹X to vendor"; Pay later:
-   *  "Save — pay later", or "Collect ₹A — rest later" with an advance). */
+   *  "Save — pay later", or plain "Collect" with an advance (OPS-115)). */
   readonly collectLabel = computed(() => {
     const p = this.payPanel();
     const mode = p?.mode();
@@ -941,7 +941,7 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
     const amt = inrFmt.format(this.payAmount());
     if (mode === 'later') {
       const adv = p?.advanceOver() ? 0 : (p?.advanceNum() ?? 0);
-      return adv > 0 ? `Collect ${inrFmt.format(adv)} — rest later` : 'Save — pay later';
+      return adv > 0 ? 'Collect' : 'Save — pay later';
     }
     return mode === 'wallet' ? `Bill ${amt} to vendor` : `Collect ${amt}`;
   });

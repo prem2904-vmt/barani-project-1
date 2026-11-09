@@ -429,7 +429,7 @@ describe('Billing counter — Pay later', () => {
     c.payPanel().setAdvance('300');
     f.detectChanges();
     expect(primaries(el).length).toBe(1);
-    expect(primaries(el)[0].textContent).toMatch(/Collect ₹300(\.00)? — rest later/);
+    expect(primaries(el)[0].textContent?.trim()).toBe('Collect');
   });
 
   it('QA #3b: an advance above the balance is an inline error and the CTA is not ready', async () => {

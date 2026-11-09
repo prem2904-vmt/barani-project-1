@@ -89,7 +89,7 @@ describe('InlinePaymentPanel (designer panel)', () => {
     expect(c.confirmLabel()).toBe('Place order, ₹500.00 due');
     c.setAdvance('200');
     c.setAdvanceMode('upi');
-    expect(c.confirmLabel()).toBe('Collect ₹200.00 now, ₹300.00 due');
+    expect(c.confirmLabel()).toBe('Collect');
     c.emit();
     expect(emitted[0]).toEqual({ mode: 'later', advanceAmount: 200, advanceMode: 'upi' });
   });

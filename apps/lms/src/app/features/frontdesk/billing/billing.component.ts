@@ -495,7 +495,7 @@ const QUICK_ADD = [100, 200, 500, 1000, 2000, 5000];
                 </span>
                 @if (paid()) { Payment received · {{ effectivePayable() | inr }} }
                 @else if (mode() === 'later') {
-                  @if (advanceNum() > 0) { Collect advance · {{ advanceNum() | inr }} }
+                  @if (advanceNum() > 0) { Collect }
                   @else { Mark as pay-later · {{ effectivePayable() | inr }} }
                 }
                 @else { Confirm payment · {{ effectivePayable() | inr }} }
