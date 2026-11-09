@@ -86,7 +86,7 @@ describe('Sample collection — embedded in My Work (Collection companion)', () 
   });
 
   it('collects in place: the tube fills with blood and the host is told', async () => {
-    const { f, c } = render([S('a')]);
+    const { f, c } = render([S('a'), S('b')]);   // a 2nd tube keeps the drawer open (OPS-124 auto-finish)
     await new Promise(r => setTimeout(r, 0));
     const told = vi.fn();
     c.sampleCollected.subscribe(told);

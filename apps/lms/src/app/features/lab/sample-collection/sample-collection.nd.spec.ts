@@ -164,7 +164,7 @@ describe('Collect sample — rendered on the nd pattern', () => {
   });
 
   it('tapping a tile plays the fill: blood y rises 320 → 130 and the tile turns drawn', async () => {
-    const { drawer, f, c } = await renderDrawer([S('a')]);
+    const { drawer, f, c } = await renderDrawer([S('a'), S('b')]);   // 2nd tube: no auto-finish (OPS-124)
     const tile = drawer.querySelector('.pf-sc-tile') as HTMLElement;
     const blood = () => drawer.querySelector('.pf-sc-tile .pf-vial__blood') as SVGElement;
     expect(blood().getAttribute('y')).toBe('320');
@@ -428,5 +428,52 @@ describe('Collect sample — an outsourced tube is just a tube with a small mark
     // No split banner / create-tube button anywhere.
     expect(drawer.querySelector('.pf-sc__splits, .pf-sc__split-btn')).toBeNull();
     expect(drawer.textContent).not.toContain('Draw/split');
+  });
+});
+
+describe('Collect sample — leaves by itself once everything drawable is drawn (OPS-124)', () => {
+  const timed = (id: string) => S(id, 'pending', { repeatOffsetMin: 120, repeatBaseAt: new Date().toISOString() });
+
+  it('tubes still to draw: tapping one keeps the drawer open', async () => {
+    const { c, drawer } = await renderDrawer([S('a'), S('b')]);
+    (drawer.querySelectorAll('.pf-sc-tile')[0] as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 0));
+    expect(c._openOrderId()).toBe('o1');
+  });
+
+  it('the last drawable tube collected: toast + the same exit as "Done" (drawer closed)', async () => {
+    const { c, drawer } = await renderDrawer([S('a'), S('b', 'collected')]);
+    const toast = vi.spyOn(c.toasts, 'success');
+    (drawer.querySelector('.pf-sc-tile:not(.pf-tube--done)') as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 50));
+    expect(c.api.patch).toHaveBeenCalledWith('/api/samples/a/collect');
+    expect(toast).toHaveBeenCalledWith('Collected');
+    expect(c._openOrderId()).toBeNull();
+  });
+
+  it('deep-linked from the front desk: auto-finish navigates back to where it came from', () => {
+    const c = make([], false, [S('a', 'collected')]);
+    c._returnTo = '/frontdesk';
+    c._openOrderId.set('o1');
+    c._pending.set([S('a', 'collected')]);
+    c.autoFinishIfDone('o1');
+    expect(c.router.navigateByUrl).toHaveBeenCalledWith('/frontdesk');
+  });
+
+  it('a dispatch step is the next action: the drawer stays open', () => {
+    const c = make(['dispatch_sample'], true, []);
+    c._openOrderId.set('o1');
+    c._pending.set([S('a', 'collected')]);
+    c.autoFinishIfDone('o1');
+    expect(c._openOrderId()).toBe('o1');
+  });
+
+  it('nothing collected yet (or another order open): never closes', () => {
+    const c = make([], false, []);
+    c._openOrderId.set('o1');
+    c._pending.set([S('a')]);
+    c.autoFinishIfDone('o1');
+    c.autoFinishIfDone('other');
+    expect(c._openOrderId()).toBe('o1');
   });
 });
