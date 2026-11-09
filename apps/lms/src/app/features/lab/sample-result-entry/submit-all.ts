@@ -32,6 +32,8 @@ export interface TabSnapshot {
   /** In-house tests of the tube (outsourced lines already split off). */
   tests: OrderTest[];
   values: ValuesMap;
+  /** The tube's own status (pending = not collected yet). Absent = unknown. */
+  status?: string | null;
   /** "Print in bold" value names per order-test id (the B toggle). Absent =
    *  not known → the submit omits it and the server keeps the saved list. */
   bold?: BoldMap;
@@ -70,6 +72,25 @@ export function paramsOfTest(t: OrderTest): TestParameter[] {
   const params = blob ? readParameters(blob) : [];
   if (params.length === 0 && blob?.microFormat !== 'culture_sensitivity') return [DEFAULT_PARAM];
   return params;
+}
+
+/** OPS-120: a tube that is not in the lab (never collected / rejected) cannot
+ *  take results, so Submit all skips it instead of letting it block the rest. */
+export function tubeInLab(tab: Pick<TabSnapshot, 'status'>): boolean {
+  const st = (tab.status ?? '').toLowerCase();
+  return st !== 'pending' && st !== 'rejected';
+}
+
+/** Why Submit all has nothing to send, in plain words (OPS-120): values that
+ *  are already submitted are not "missing", and tubes not in the lab are named. */
+export function nothingToSubmitMessage(tabs: readonly TabSnapshot[]): string {
+  const away = tabs.filter((t) => !tubeInLab(t) && t.tests.some(isWritableTest));
+  const done = tabs.some((t) => t.tests.some((x) => !isWritableTest(x)));
+  const awayNote = away.length
+    ? ` ${away.map((t) => t.barcode || 'A tube').join(', ')} ${away.length === 1 ? 'is' : 'are'} not collected yet and ${away.length === 1 ? 'is' : 'are'} skipped.`
+    : '';
+  if (done) return `Everything you entered is already submitted - no new value to send.${awayNote}`;
+  return `Enter at least one value before submitting.${awayNote}`;
 }
 
 /** Can this screen still submit the test? */

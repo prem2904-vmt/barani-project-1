@@ -102,6 +102,8 @@ import {
   blankTests,
   tabPayload,
   boldFromTests,
+  tubeInLab,
+  nothingToSubmitMessage,
   type BoldMap,
 } from "./submit-all";
 import { ReportPrestoreService } from '../../../core/services/report-prestore.service';
@@ -2466,7 +2468,7 @@ export class SampleResultEntryComponent {
 
   private readonly liveSnap = computed<TabSnapshot | null>(() => {
     const s = this._sample();
-    return s ? { sampleId: s.id, barcode: s.barcode || "", tests: s.tests ?? [], values: this._values(), bold: this._bold() } : null;
+    return s ? { sampleId: s.id, barcode: s.barcode || "", tests: s.tests ?? [], status: s.status, values: this._values(), bold: this._bold() } : null;
   });
 
   /** One snapshot per tab, in tab order (null = that tube not fetched yet). */
@@ -2485,7 +2487,7 @@ export class SampleResultEntryComponent {
 
   /** Anything left to submit on any tab (unknown tabs count as "maybe"). */
   readonly anyWritableAcrossTabs = computed(() =>
-    this.tabSnaps().some((snap) => !snap || snap.tests.some(isWritableTest)));
+    this.tabSnaps().some((snap) => !snap || (tubeInLab(snap) && snap.tests.some(isWritableTest))));
 
   private readLocalDraft(sampleId: string): ValuesMap | null {
     try {
@@ -2506,6 +2508,7 @@ export class SampleResultEntryComponent {
       sampleId: s.id,
       barcode: s.barcode || "",
       tests,
+      status: s.status,
       values: overlayDraft(prefillFromTests(tests), this.readLocalDraft(s.id)),
       bold: boldFromTests(tests),
     };
@@ -2656,9 +2659,12 @@ export class SampleResultEntryComponent {
         return;
       }
       const snaps = this.tabSnaps().filter((x): x is TabSnapshot => !!x);
-      const targets = snaps.filter((snap) => snap.tests.some(isWritableTest));
+      // OPS-120: a tube not in the lab (not collected / rejected) is skipped, never a blocker.
+      const targets = snaps.filter((snap) => tubeInLab(snap) && snap.tests.some(isWritableTest));
       if (!targets.length) {
-        this.toasts.warning("Every test on these tubes is already submitted or validated.");
+        this.toasts.warning(snaps.some((x) => !tubeInLab(x))
+          ? nothingToSubmitMessage(snaps)
+          : "Every test on these tubes is already submitted or validated.");
         return;
       }
       // 3. The per-tab submit's own check: a number field must hold a number.
@@ -2672,7 +2678,7 @@ export class SampleResultEntryComponent {
       }
       // 3b. Nothing entered on ANY tab → refuse (never close whole tubes).
       if (!targets.some((snap) => snap.tests.some((t) => isWritableTest(t) && testHasValue(snap.values, t.id)))) {
-        this.toasts.warning("Enter at least one value before submitting");
+        this.toasts.warning(nothingToSubmitMessage(snaps));
         return;
       }
       // 4. Empty fields → ONE confirmation; Go back → the first empty field.
@@ -2734,6 +2740,8 @@ export class SampleResultEntryComponent {
       // Submitted tubes leave the draft shelf now.
       this.draftShelf.drop("lab", ok.map((r) => "lab:" + r.sampleId));
       const bad = report.filter((r) => !r.ok);
+      const away = snaps.filter((x) => !tubeInLab(x) && x.tests.some(isWritableTest));
+      if (away.length) this.toasts.info(`${away.map((x) => x.barcode || "Tube").join(", ")} not collected yet - skipped, submit it once it reaches the lab`);
       if (!bad.length) {
         this.toasts.success(`${ok.length} sample${ok.length === 1 ? "" : "s"} submitted — back to your queue`);
         setTimeout(() => this.router.navigate(["/lab/my-work"]), 700);

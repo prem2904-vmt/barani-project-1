@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  tubeInLab,
+  nothingToSubmitMessage,
   TabSnapshot,
   invalidNumbers,
   isFilled,
@@ -125,5 +127,28 @@ describe('Submit all — "print in bold" rides the per-tab payload', () => {
     const t2 = test('t2', 'B', { currentResult: JSON.stringify({ values: {} }) });
     const t3 = test('t3', 'C', { currentResult: 'oops' });
     expect(boldFromTests([t1, t2, t3])).toEqual({ t1: ['target'] });
+  });
+});
+
+describe('OPS-120: tubes not in the lab', () => {
+  const t = (id: string, status = 'pending'): any => ({ id, status, name: id, test: { name: id, parameters: JSON.stringify({ parameters: [{ id: 'v', name: 'v', title: 'V', type: 'number' }] }) } });
+  it('tubeInLab is false only for pending / rejected', () => {
+    expect(tubeInLab({ status: 'pending' })).toBe(false);
+    expect(tubeInLab({ status: 'rejected' })).toBe(false);
+    expect(tubeInLab({ status: 'received' })).toBe(true);
+    expect(tubeInLab({})).toBe(true);
+  });
+  it('names the skipped tube and says already-submitted values are not missing', () => {
+    const tabs: any[] = [
+      { sampleId: 'a', barcode: '26379', status: 'received', tests: [t('1', 'entered')], values: {} },
+      { sampleId: 'b', barcode: '26378', status: 'pending', tests: [t('2')], values: {} },
+    ];
+    const m = nothingToSubmitMessage(tabs);
+    expect(m).toContain('already submitted');
+    expect(m).toContain('26378 is not collected');
+  });
+  it('plain message when nothing was typed', () => {
+    const tabs: any[] = [{ sampleId: 'a', barcode: '1', status: 'received', tests: [t('1')], values: {} }];
+    expect(nothingToSubmitMessage(tabs)).toMatch(/^Enter at least one value/);
   });
 });
