@@ -1156,3 +1156,5 @@ select.pf-input--compact {
 .pf-tp-row--nested .pf-tp-row__name { font-size: 13px; color: var(--text-secondary); }
 .pf-tp-row__elbow { flex: none; color: var(--text-tertiary); }
 .pf-tp-row__infam { margin-left: auto; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+
+.pf-reftext { display: flex; flex-direction: column; gap: 6px; max-width: 520px; }

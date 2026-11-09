@@ -716,6 +716,17 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     return out;
   });
+  /** A written (non-numeric, no option list, not a family) value: it takes a
+   *  textual reference (OPS-117). */
+  isTextRefType(type: FormFieldType): boolean {
+    return !this.isNumericType(type) && !this.typeHasOptions(type) && type !== 'family';
+  }
+  /** Save the textual reference as the value's `normalValue` (the report's
+   *  Reference range fallback); blank clears it. */
+  setReferenceText(i: number, text: string | null) {
+    if (i < 0) return;
+    this.patchField(i, { normalValue: (text ?? '').trim() || null });
+  }
   /** The table's edit — the group list, written back unchanged. */
   setBands(i: number, bands: unknown[]) {
     if (i < 0) return;

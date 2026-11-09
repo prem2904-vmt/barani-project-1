@@ -567,6 +567,22 @@
             </div>
           }
 
+          <!-- A written (free text) result carries a TEXTUAL reference — "Negative",
+               "Non-reactive". It is the parameter's normalValue, which the report
+               prints in the Reference range column (OPS-117). -->
+          <ng-template #refText let-i>
+            <div class="pf-reftext" [attr.data-ref-text]="i">
+              <label class="flex flex-col gap-0.5 min-w-0">
+                <span class="pf-te2-h">Reference — what the report prints as normal</span>
+                <input type="text" class="pf-input pf-input--sm" autocomplete="off"
+                       aria-label="Reference text" placeholder="e.g. Negative, Non-reactive"
+                       [ngModel]="fields()[i]?.normalValue ?? ''"
+                       (ngModelChange)="setReferenceText(i, $event)" />
+              </label>
+              <p class="pf-rr2__sub">Prints in the Reference range column. A written result that differs from it is flagged abnormal; leave blank to print nothing.</p>
+            </div>
+          </ng-template>
+
           <!-- A FAMILY answer (hierarchical): pick the shared family; its tree
                is edited once in Test Master → Families. -->
           <ng-template #familyPick let-i>
@@ -672,7 +688,7 @@
             } @else if (numericFields().length === 0) {
               <div class="pf-rr2__empty">
                 @if (entryKind() === 'text') {
-                  <p>Free-text results print exactly as written — there is no reference range to set.</p>
+                  <ng-container *ngTemplateOutlet="refText; context: { $implicit: 0 }"></ng-container>
                 } @else {
                   <p>No reference range set yet.</p>
                   <pf-touch-btn size="sm" variant="secondary" (pressed)="startReferenceRange()">Add a reference range</pf-touch-btn>
@@ -742,6 +758,9 @@
                     }
                   </div>
 
+                  @if (isTextRefType(p.type)) {
+                    <ng-container *ngTemplateOutlet="refText; context: { $implicit: i }"></ng-container>
+                  }
                   @if (isNumericType(p.type)) {
                     <p class="pf-vbatch__sub">Reference ranges — prints next to the result and decides the flag.</p>
                     <pf-range-table [param]="$any(p)" [unit]="p.unit || ''" (bandsChange)="setBands(i, $event)"></pf-range-table>
