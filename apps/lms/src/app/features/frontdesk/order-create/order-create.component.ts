@@ -46,7 +46,8 @@ import { BarcodeScannerModalComponent } from '../../../shared/components/barcode
 import { extractAbhaNumber } from '../../../shared/components/abha-wizard/abha-prefill.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from '../billing/invoice-pdf';
-import { waLink } from '../../../shared/utils/whatsapp';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
 import { environment } from '../../../../environments/environment';
 import { InlinePaymentPanelComponent, InlinePaymentResult } from './inline-payment-panel.component';
 import { SCOPE_PLACEHOLDERS, SCOPE_PLACEHOLDERS_SHORT, SCOPE_LABELS, SearchScope, ScopeRow, SEARCH_SCOPES, DoctorOption, doctorOptionLabel, toDoctorOptions } from './unified-search';
@@ -2400,36 +2401,84 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
    *  common desk receipt printer. */
   printPaidThermal() { this.runInvoiceAction('thermal', () => this.emitPaidInvoice('print', 'thermal_auto')); }
 
-  /** Post-payment "Share on WhatsApp". On the native shell we hand the real
-   *  invoice PDF to the OS share sheet (WhatsApp is a target and attaches the
-   *  file). On the web, wa.me can't attach a file, so we open a click-to-chat
-   *  pre-filled with the invoice details — same fallback the billing counter's
-   *  "Send on WhatsApp" uses. Replaces the old "Show invoice" preview, which was
-   *  redundant since the itemised cart is already on screen. */
+  private readonly waManual = inject(WhatsAppManualService);
+  private readonly waEntitlements = inject(TenantEntitlementsService);
+  /** WhatsApp Chat is on for this lab (platform switch; default on). */
+  readonly waChatOn = computed(() => this.waEntitlements.moduleEnabled('whatsappChat'));
+
+  /** Post-payment "WhatsApp" (OPS-122/126): the ONE WhatsApp Chat flow reports use, with the real invoice
+   *  PDF - desktop puts the PDF on the clipboard and drafts the message (paste, Send), web downloads it,
+   *  a phone opens the share sheet with the PDF + message. The person presses Send. */
   sharePaidInvoice() {
     const bill = this.paidBill();
     if (!bill) return;
-    if (this.isNativePlatform()) { this.runInvoiceAction('share', () => this.emitPaidInvoice('share')); return; }
-    const p = this._patient();
-    const lab = this.auth.user()?.tenantName || 'our lab';
-    const lines = [
-      `Hi ${p?.displayName ?? ''}, your invoice from ${lab}:`.replace(/\s+/g, ' ').trim(),
-      `${bill.invoiceNumber ?? ''} — Paid ₹${bill.totalPayable}`.trim(),
-      'Your report will be shared here once it is ready. Thank you for choosing us.',
-    ];
-    window.open(waLink(p?.phone, lines.join('\n')), '_blank', 'noopener');
+    this.runInvoiceAction('share', async () => {
+      await this.waManual.sendInvoice({
+        phone: this._patient()?.phone,
+        patientName: this._patient()?.displayName,
+        labName: this.auth.user()?.tenantName,
+        invoiceNumber: bill.invoiceNumber,
+        amount: bill.totalPayable,
+        extra: ['Your report will be shared here once it is ready.'],
+        pdf: () => this.paidInvoiceBlob(),
+      });
+    });
+  }
+
+  /** The paid invoice as a PDF file (same layout as Print). */
+  private async paidInvoiceBlob(): Promise<Blob | null> {
+    const input = await this.paidInvoiceInput();
+    if (!input) return null;
+    const blobUrl = generateInvoicePdf({ ...input, action: 'blob' }) as unknown as string;
+    if (!blobUrl) return null;
+    const blob = await (await fetch(blobUrl)).blob();
+    try { URL.revokeObjectURL(blobUrl); } catch { /* noop */ }
+    return blob;
   }
 
   /** Build the A4 invoice (letterhead + tracking QR) for the paid order and
    *  either print it or open it in the in-app preview. */
   private async emitPaidInvoice(
-    action: 'print' | 'blob' | 'share',
+    action: 'print' | 'blob',
     /** 'thermal_auto' = "a roll, width per the tenant's setting" — resolved
-     *  below once the template has been fetched. */
+     *  in `paidInvoiceInput` once the template has been fetched. */
+    paperOverride?: 'a4' | 'thermal' | 'thermal_3in' | 'thermal_25in' | 'thermal_auto') {
+    const bill = this.paidBill();
+    const input = await this.paidInvoiceInput(paperOverride);
+    if (!bill || !input) return;
+    if (action === 'print' && this.isNativePlatform()) {
+      // The hidden-iframe window.print() is a no-op in the Capacitor WKWebView: render to a blob and hand it
+      // to the native share sheet (Print, Save to Files, AirDrop…).
+      const blobUrl = generateInvoicePdf({ ...input, action: 'blob' }) as unknown as string;
+      if (!blobUrl) return;
+      const blob = await (await fetch(blobUrl)).blob();
+      try { URL.revokeObjectURL(blobUrl); } catch { /* noop */ }
+      const file = new File([blob], `${bill.invoiceNumber || 'invoice'}.pdf`, { type: 'application/pdf' });
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'Invoice', text: `Invoice ${bill.invoiceNumber ?? ''}` });
+        } catch (err) {
+          if ((err as { name?: string })?.name !== 'AbortError') throw err;
+        }
+        return;
+      }
+      // No file-share support — fall back to the in-app preview instead.
+      action = 'blob';
+    }
+    const blobUrl = generateInvoicePdf({ ...input, action });
+    if (action === 'blob' && blobUrl) {
+      this.closeInvoicePreview();
+      this.invoiceBlobUrl = blobUrl;
+      this.invoicePreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(blobUrl));
+    }
+  }
+
+  /** Everything the invoice PDF generator needs for the paid order (template, QR, logo, cashier). */
+  private async paidInvoiceInput(
     paperOverride?: 'a4' | 'thermal' | 'thermal_3in' | 'thermal_25in' | 'thermal_auto') {
     const bill = this.paidBill();
     const oid = this.paidOrderId();
-    if (!bill || !oid) return;
+    if (!bill || !oid) return null;
     let tpl: any = null;
     try { tpl = await firstValueFrom(this.api.get<any>('/api/config/invoice-template')); } catch { /* optional */ }
     // Resolve the roll width now that the saved setting is in hand: reuse it
@@ -2478,37 +2527,7 @@ export class OrderCreateComponent implements OnInit, OnDestroy, AfterViewInit {
       },
     };
 
-    // Print/share on native: the hidden-iframe window.print() is a no-op in the
-    // Capacitor WKWebView, so render to a blob and hand it to the native share
-    // sheet (WhatsApp, Print, Save to Files, AirDrop…) via the Web Share API —
-    // this is how "Share on WhatsApp" attaches the actual invoice PDF.
-    if ((action === 'print' || action === 'share') && this.isNativePlatform()) {
-      const blobUrl = generateInvoicePdf({ ...input, action: 'blob' }) as unknown as string;
-      if (!blobUrl) return;
-      const blob = await (await fetch(blobUrl)).blob();
-      try { URL.revokeObjectURL(blobUrl); } catch { /* noop */ }
-      const file = new File([blob], `${bill.invoiceNumber || 'invoice'}.pdf`, { type: 'application/pdf' });
-      if (navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ files: [file], title: 'Invoice', text: `Invoice ${bill.invoiceNumber ?? ''}` });
-        } catch (err) {
-          if ((err as { name?: string })?.name !== 'AbortError') throw err;
-        }
-        return;
-      }
-      // No file-share support — fall back to the in-app preview instead.
-      action = 'blob';
-    }
-
-    // 'share' only reaches here as the non-native no-canShare fallback → treat
-    // as the in-app preview ('blob'); web share is handled in sharePaidInvoice.
-    const finalAction: 'print' | 'blob' = action === 'print' ? 'print' : 'blob';
-    const blobUrl = generateInvoicePdf({ ...input, action: finalAction });
-    if (finalAction === 'blob' && blobUrl) {
-      this.closeInvoicePreview();
-      this.invoiceBlobUrl = blobUrl;
-      this.invoicePreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(blobUrl));
-    }
+    return input;
   }
 
   /** True inside the Capacitor native shell (iOS/Android), where window.print()

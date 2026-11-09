@@ -4,7 +4,7 @@ import { DialogService } from './dialog.service';
 import { ToastService } from './toast.service';
 import { WhatsAppService } from './whatsapp.service';
 import {
-  WA_POPUP_NAME, isClickToChatUrl, waClickToChatUrl, waDisplayPhone, waE164, waMeUrl, waPopupFeatures, waReportMessage,
+  WA_POPUP_NAME, isClickToChatUrl, waClickToChatUrl, waDisplayPhone, waE164, waInvoiceMessage, waMeUrl, waPopupFeatures, waReportMessage,
 } from '../../shared/utils/whatsapp-manual';
 
 /** window.electronAPI.whatsapp — electron/preload.js (the docked panel). */
@@ -62,6 +62,8 @@ export interface WaManualRequest {
   link?: string | null;
   /** Extra paragraphs (an outside lab's report line). */
   extra?: (string | null | undefined)[];
+  /** A ready-made message (an invoice). Replaces the report wording; `link` / `extra` are then unused. */
+  message?: string | null;
   /** Report id: reads the patient's WhatsApp opt-out (best-effort). */
   reportId?: string | null;
   /** Desktop only: the report PDF for the "drag it into the chat" helper. */
@@ -118,7 +120,7 @@ export class WhatsAppManualService {
       });
       return 'no-phone';
     }
-    const text = waReportMessage({ patient: req.patientName, lab: req.labName, link: req.link, extra: req.extra });
+    const text = req.message?.trim() || waReportMessage({ patient: req.patientName, lab: req.labName, link: req.link, extra: req.extra });
     // One click: no confirm. The only stop is a patient who OPTED OUT of
     // WhatsApp (a recorded "no"). The read is kept short so the browser
     // still treats the window as opened by the click.
@@ -138,6 +140,25 @@ export class WhatsAppManualService {
     // The consent reminder is a toast: never on the desktop app's one-click path, nor when the PDF hint shows.
     if (out === 'opened' && !this.bridge() && !(req.pdf && !this.isPhone())) this.remindOnce();
     return out;
+  }
+
+  /** WhatsApp Chat for an INVOICE (OPS-126): the same flow as a report - the chat opens with the message
+   *  drafted and the invoice PDF goes with it (desktop: our clipboard, paste + Send; web: downloaded; phone:
+   *  the share sheet with the file). The person presses Send. */
+  sendInvoice(p: {
+    phone: string | null | undefined; patientName?: string | null; labName?: string | null;
+    invoiceNumber?: string | null; amount?: number | string | null; extra?: (string | null | undefined)[];
+    pdf: () => Promise<Blob | null>;
+  }): Promise<WaManualOutcome> {
+    const num = (p.invoiceNumber ?? '').toString().replace(/[^A-Za-z0-9._-]+/g, '-');
+    return this.send({
+      phone: p.phone,
+      patientName: p.patientName,
+      labName: p.labName,
+      message: waInvoiceMessage({ patient: p.patientName, lab: p.labName, invoiceNumber: p.invoiceNumber, amount: p.amount, extra: p.extra }),
+      pdf: p.pdf,
+      pdfName: `${num || 'invoice'}.pdf`,
+    });
   }
 
   /** The consent reminder, shown ONCE per device (first send), never again. */

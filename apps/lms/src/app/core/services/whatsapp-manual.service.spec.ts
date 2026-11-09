@@ -279,3 +279,38 @@ describe('WhatsAppManualService — seamless: no card, PDF with the message', ()
     expect(open).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('WhatsAppManualService.sendInvoice (OPS-126) - the invoice PDF goes with the drafted message', () => {
+  const INV = { phone: '98765 43210', patientName: 'Asha Rao', labName: 'Arun Lab', invoiceNumber: 'INV-001031', amount: 400, extra: ['Your report will be shared here once it is ready.'] };
+  const TXT = 'Hi Asha Rao, your invoice from Arun Lab:\nINV-001031 — Paid ₹400\nYour report will be shared here once it is ready.\nThank you for choosing us.';
+  const pdf = async () => new Blob(['%PDF-1.4 x'], { type: 'application/pdf' });
+
+  it('desktop: drafts the invoice text in the click-to-chat link and puts the PDF on OUR clipboard (no opt-out lookup)', async () => {
+    const b = { open: vi.fn(async () => ({ ok: true })), setPdf: vi.fn(async () => ({ ok: true })) } as unknown as ElectronWhatsAppBridge & { open: ReturnType<typeof vi.fn>; setPdf: ReturnType<typeof vi.fn> };
+    const { svc, wa } = setup({ bridge: b });
+    expect(await svc.sendInvoice({ ...INV, pdf })).toBe('opened');
+    expect(b.open).toHaveBeenCalledWith(`https://web.whatsapp.com/send?phone=919876543210&text=${encodeURIComponent(TXT)}`);
+    await vi.waitFor(() => expect(b.setPdf).toHaveBeenCalled());
+    const arg = (b.setPdf.mock.calls[0] as unknown as [{ name: string; copyToClipboard: boolean }])[0];
+    expect(arg.name).toBe('INV-001031.pdf');
+    expect(arg.copyToClipboard).toBe(true);
+    expect(wa.reportStatus).not.toHaveBeenCalled();
+  });
+
+  it('phone: ONE share sheet with the invoice PDF + the text', async () => {
+    const share = vi.fn(async () => undefined);
+    const { svc, open } = setup({ ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', nav: { share, canShare: () => true } });
+    expect(await svc.sendInvoice({ ...INV, pdf })).toBe('opened');
+    const arg = (share.mock.calls[0] as unknown as [{ files: File[]; text: string }])[0];
+    expect(arg.files[0].name).toBe('INV-001031.pdf');
+    expect(arg.text).toBe(TXT);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('no mobile number: says so, opens nothing', async () => {
+    const { svc, open, dialog } = setup();
+    expect(await svc.sendInvoice({ ...INV, phone: '', pdf })).toBe('no-phone');
+    expect(dialog.alert).toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+  });
+});

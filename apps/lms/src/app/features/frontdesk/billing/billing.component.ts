@@ -16,7 +16,7 @@ import { Order } from '../../../shared/models/order.model';
 import { Test } from '../../../shared/models/test.model';
 import { generateInvoicePdf, invoiceTemplateFieldsFrom, loadImageDataUrl, invoiceGstinFrom } from './invoice-pdf';
 import { environment } from '../../../../environments/environment';
-import { waLink } from '../../../shared/utils/whatsapp';
+import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
 import { upiLink, upiQrDataUrl } from '../../../shared/utils/upi';
 import { CurrencyInrPipe } from '../../../shared/pipes/currency-inr.pipe';
 import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.pipe';
@@ -2349,10 +2349,11 @@ export class BillingComponent implements OnInit, OnChanges {
     try { await this.buildAndPrintInvoice(); } finally { this.printing.set(false); }
   }
 
-  private async buildAndPrintInvoice() {
+  /** Everything the invoice PDF generator needs for this bill (template, QR, logo, cashier). */
+  private async invoiceInput() {
     const b = this._bill();
-    if (!b) { this.toasts.warning('Bill is still loading'); return; }
-    try {
+    if (!b) return null;
+    {
       const tpl = this.invoiceTpl();
       // Render the result-tracking link as a QR (PNG) for the printed invoice.
       // Always attempt it — if the token wasn't minted yet at page-load (async
@@ -2403,6 +2404,15 @@ export class BillingComponent implements OnInit, OnChanges {
           gstin: invoiceGstinFrom(b, tpl),   // the bill's branch-GST snapshot
         },
       };
+      return input;
+    }
+  }
+
+  private async buildAndPrintInvoice() {
+    if (!this._bill()) { this.toasts.warning('Bill is still loading'); return; }
+    try {
+      const input = await this.invoiceInput();
+      if (!input) return;
       if (this.isNativePlatform()) {
         // Capacitor WKWebView: the hidden-iframe window.print() is a no-op and
         // doc.save() can't download. Render to a blob and hand it to the native
@@ -2450,22 +2460,32 @@ export class BillingComponent implements OnInit, OnChanges {
       .Capacitor?.isNativePlatform?.();
   }
 
-  /** Post-payment "Send via WhatsApp" — opens wa.me with a pre-filled
-   *  message containing the invoice number, total, and TAT. If we have
-   *  the patient's phone number we deep-link directly; otherwise we
-   *  open the contact-picker variant so reception can paste a number. */
-  sendOnWhatsApp() {
+  private readonly waManual = inject(WhatsAppManualService);
+
+  /** Post-payment "WhatsApp Chat" (OPS-122/126): the same flow reports use - the chat opens with the
+   *  message drafted and the real invoice PDF goes with it (clipboard on desktop, download on the web,
+   *  share sheet on a phone); the person presses Send. */
+  async sendOnWhatsApp() {
     const b = this._bill();
     const p = this._order()?.patient;
     if (!b) return;
-    const lines = [
-      `Hi ${p?.displayName ?? ''}, your invoice from ${this.auth.user()?.tenantName || 'our lab'}:`,
-      `${this.invoiceNumber()} — Paid ₹${b.totalPayable}`,
-    ];
-    const tat = this.tatLabel();
-    if (tat) lines.push(tat);
-    lines.push('Thank you for choosing us.');
-    window.open(waLink(p?.phone, lines.join('\n')), '_blank', 'noopener');
+    await this.waManual.sendInvoice({
+      phone: p?.phone,
+      patientName: p?.displayName,
+      labName: this.auth.user()?.tenantName,
+      invoiceNumber: this.invoiceNumber(),
+      amount: b.totalPayable,
+      extra: [this.tatLabel()],
+      pdf: async () => {
+        const input = await this.invoiceInput();
+        if (!input) return null;
+        const blobUrl = generateInvoicePdf({ ...input, action: 'blob' }) as unknown as string;
+        if (!blobUrl) return null;
+        const blob = await (await fetch(blobUrl)).blob();
+        try { URL.revokeObjectURL(blobUrl); } catch { /* noop */ }
+        return blob;
+      },
+    });
   }
 
   /** Close the dialog and return to the FD landing — payment is done,

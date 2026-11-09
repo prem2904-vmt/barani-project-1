@@ -1,6 +1,6 @@
 import {
   WA_POPUP_NAME, WA_POPUP_WIDTH, WA_REPORT_TEMPLATE, WA_WEB_SEND, isClickToChatUrl, reportPublicLink, waClickToChatUrl,
-  waDisplayPhone, waE164, waMeUrl, waPopupFeatures, waPopupRect, waReportMessage,
+  waDisplayPhone, waE164, waInvoiceMessage, waMeUrl, waPopupFeatures, waPopupRect, waReportMessage,
 } from './whatsapp-manual';
 import { whatsAppPhone } from './indian-phone';
 
@@ -103,5 +103,16 @@ describe('popup placement — phone-shaped at the right edge', () => {
   });
   it('a narrow screen keeps it on screen', () => {
     expect(waPopupRect({ availWidth: 360, availHeight: 700 })).toEqual({ width: 360, height: 700, left: 0, top: 0 });
+  });
+});
+
+describe('waInvoiceMessage (OPS-126) — the invoice words that travel with the PDF', () => {
+  it('greeting, invoice number + amount, extra lines, thanks', () => {
+    expect(waInvoiceMessage({ patient: 'Dr. Nithin R', lab: 'Arun Lab', invoiceNumber: 'INV-001031', amount: 400, extra: ['Your report will be shared here once it is ready.'] }))
+      .toBe('Hi Dr. Nithin R, your invoice from Arun Lab:\nINV-001031 — Paid ₹400\nYour report will be shared here once it is ready.\nThank you for choosing us.');
+  });
+  it('missing name / lab / number / amount degrade without stray punctuation', () => {
+    expect(waInvoiceMessage({})).toBe('Hi, your invoice from our lab:\nThank you for choosing us.');
+    expect(waInvoiceMessage({ patient: 'Asha', invoiceNumber: 'INV-1' })).toBe('Hi Asha, your invoice from our lab:\nINV-1\nThank you for choosing us.');
   });
 });
