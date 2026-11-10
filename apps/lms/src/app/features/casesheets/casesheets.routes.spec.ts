@@ -6,7 +6,11 @@ import { resolveAppMode } from '../../core/app-mode';
 import { ROUTE_ACCESS } from '../../core/auth/route-access';
 import { DOCTOR_NAV, MORE_NAV, PRIMARY_NAV } from '../../layout/nav-items';
 import { environment } from '../../../environments/environment';
-import { CASESHEET_PATHS, CASESHEET_SHELL_ROUTES, CASESHEETS_PUBLIC_GROUP, CASESHEETS_PUBLIC_ROUTES, casesheetLinks } from './casesheets.routes';
+import { CASESHEET_PATHS, CASESHEET_SHELL_ROUTES, CASESHEETS_PUBLIC_GROUP, CASESHEETS_PUBLIC_ROUTES, CASESHEETS_PUBLIC_SHELL_ROUTES, casesheetLinks } from './casesheets.routes';
+import { signal } from '@angular/core';
+import { AuthService } from '../../core/auth/auth.service';
+import { CasesheetGateService } from './shared/casesheet-gate.service';
+import { CS_NAV } from './public/cs-bottom-nav.component';
 
 /**
  * Case sheets (part of IPD, WP0-ui) — every case-sheet route is defined once, gated, and invisible to the lab
@@ -91,7 +95,19 @@ describe('app modes (plan §4.4)', () => {
   it('the public group is first and can match only in casesheets mode', () => {
     expect(appRoutes[0]).toBe(CASESHEETS_PUBLIC_GROUP);
     expect(modeOf(CASESHEETS_PUBLIC_GROUP)).toEqual(['casesheets']);
-    expect(CASESHEETS_PUBLIC_ROUTES.map(r => r.path)).toEqual(['sign-in', 'auth/callback', '', 'cases', 'cases/:id', 'settings', '**']);
+    expect(CASESHEETS_PUBLIC_ROUTES.map(r => r.path)).toEqual(['sign-in', 'auth/callback', 'login', '', '**']);
+    // The signed-in shell holds exactly the three areas (+ one case) — nothing else.
+    expect(CASESHEETS_PUBLIC_SHELL_ROUTES.map(r => r.path)).toEqual(['', 'cases', 'cases/:id', 'settings']);
+    const shellRoute = CASESHEETS_PUBLIC_ROUTES.find(r => r.path === '')!;
+    expect(shellRoute.children).toBe(CASESHEETS_PUBLIC_SHELL_ROUTES);
+    expect((shellRoute.canActivate ?? []).some(g => (g as { casesheetsPublicGuard?: boolean }).casesheetsPublicGuard)).toBe(true);
+    expect(CASESHEETS_PUBLIC_ROUTES.find(r => r.path === 'login')!.redirectTo).toBe('sign-in');
+  });
+
+  it('the bottom nav has exactly Departments · Cases · Settings, each a shell route', () => {
+    expect(CS_NAV.map(n => n.label)).toEqual(['Departments', 'Cases', 'Settings']);
+    expect(CS_NAV.map(n => n.href)).toEqual(['/', '/cases', '/settings']);
+    for (const n of CS_NAV) expect(CASESHEETS_PUBLIC_SHELL_ROUTES.some(r => '/' + r.path === n.href)).toBe(true);
   });
 
   it('every LMS top-level route can match only in LMS mode', () => {
@@ -113,27 +129,84 @@ describe('app modes (plan §4.4)', () => {
   describe('casesheets mode ⇒ only the public case-sheet routes match', () => {
     const env = environment as { mode?: string };
     let saved: string | undefined;
-    beforeEach(() => {
-      saved = env.mode;
-      env.mode = 'casesheets';
+    const user = signal<{ id: string; tenantKind?: string } | null>(null);
+    const gateOpen = signal(true);
+    function boot(who: { id: string; tenantKind?: string } | null, open = true) {
+      user.set(who);
+      gateOpen.set(open);
       TestBed.resetTestingModule();
-      TestBed.configureTestingModule({ providers: [provideRouter(appRoutes)] });
-    });
+      TestBed.configureTestingModule({
+        providers: [
+          provideRouter(appRoutes),
+          { provide: AuthService, useValue: { user, isAuthenticated: () => !!user(), mustChangePassword: () => false, waitForAuth: async () => undefined } },
+          { provide: CasesheetGateService, useValue: { ready: async () => undefined, visible: () => gateOpen() } },
+        ],
+      });
+      return TestBed.inject(Router);
+    }
+    const leafTitle = (router: Router) => {
+      let s = router.routerState.snapshot.root;
+      while (s.firstChild) s = s.firstChild;
+      return s.data['title'];
+    };
+    beforeEach(() => { saved = env.mode; env.mode = 'casesheets'; });
     afterEach(() => { env.mode = saved; });
 
-    it.each(['/cases', '/cases/abc', '/settings', '/sign-in', '/auth/callback'])('%s opens the case-sheet page', async (url) => {
-      const router = TestBed.inject(Router);
+    it.each(['/', '/cases', '/cases/abc', '/settings'])('signed in (personal): %s opens the case-sheet page', async (url) => {
+      const router = boot({ id: 'u', tenantKind: 'personal' });
       expect(await router.navigateByUrl(url)).toBe(true);
       expect(router.url).toBe(url);
     });
 
-    it.each(['/login', '/admin', '/admin/tests', '/frontdesk', '/reports/public/t1', '/track/t1', '/casesheets/s1', '/opd', '/lab/my-work'])(
-      'LMS URL %s is unmatchable → the case-sheet Departments page', async (url) => {
-        const router = TestBed.inject(Router);
+    it.each(['/', '/cases', '/cases/abc', '/settings'])('signed out: %s → the case-sheet sign-in', async (url) => {
+      const router = boot(null);
+      await router.navigateByUrl(url);
+      expect(router.url.split('?')[0]).toBe('/sign-in');
+      expect(leafTitle(router)).toBe('Sign in');
+    });
+
+    it('signed out: sign-in and the Google return open; /login is the case-sheet sign-in', async () => {
+      const router = boot(null);
+      await router.navigateByUrl('/auth/callback');
+      expect(leafTitle(router)).toBe('Signing in');
+      await router.navigateByUrl('/login?reason=expired');
+      expect(router.url).toBe('/sign-in?reason=expired');
+      expect(leafTitle(router)).toBe('Sign in');
+    });
+
+    it('signed in but case sheets not open for the account: every area → sign-in ("not available")', async () => {
+      const router = boot({ id: 'lab-user' }, false);
+      for (const url of ['/', '/cases', '/settings', '/admin']) {
         await router.navigateByUrl(url);
-        expect(router.url).toBe('/');
-        const leaf = (() => { let s = router.routerState.snapshot.root; while (s.firstChild) s = s.firstChild; return s; })();
-        expect(leaf.data['title']).toBe('Departments');
-      });
+        expect(router.url).toBe('/sign-in');
+      }
+    });
+
+    // EVERY LMS URL (each top-level route and each route in the LMS shell, params filled in) is unmatchable: a
+    // signed-in personal user lands on Departments, never an LMS screen.
+    const lmsUrls = Array.from(new Set(all
+      .filter(f => !CASESHEETS_PUBLIC_ROUTES.includes(f.route) && !CASESHEETS_PUBLIC_SHELL_ROUTES.includes(f.route) && f.route !== CASESHEETS_PUBLIC_GROUP)
+      .map(f => f.path)
+      .filter(p => p && !p.includes('*'))
+      .map(p => '/' + p.replace(/:[^/]+/g, 'x'))))
+      // An LMS path that happens to spell a public one IS the public page there (tested above).
+      .filter(u => !['/cases', '/cases/x', '/settings', '/sign-in', '/auth/callback'].includes(u));
+
+    it('the LMS URL list is the real table (sanity)', () => {
+      expect(lmsUrls.length).toBeGreaterThan(50);
+      for (const u of ['/login', '/frontdesk', '/admin', '/set-password', '/reports/public/x', '/track/x', '/casesheets/x', '/oauth/consent'])
+        expect(lmsUrls).toContain(u);
+    });
+
+    it('every LMS URL is unmatchable → the case-sheet Departments page', async () => {
+      const router = boot({ id: 'u', tenantKind: 'personal' });
+      const leaked: string[] = [];
+      for (const url of lmsUrls) {
+        await router.navigateByUrl(url).catch(() => false);
+        const t = leafTitle(router);
+        if (router.url !== '/' || t !== 'Departments') leaked.push(`${url} → ${router.url} (${t})`);
+      }
+      expect(leaked).toEqual([]);
+    });
   });
 });

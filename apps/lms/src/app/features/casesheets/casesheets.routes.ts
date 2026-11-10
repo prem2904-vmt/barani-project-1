@@ -2,6 +2,7 @@ import { Route, Routes } from '@angular/router';
 import { appModeMatch } from '../../core/app-mode';
 import { routeGuards } from '../../core/auth/route-guards';
 import { casesheetGuard } from './shared/casesheet.guard';
+import { casesheetsSignInGuard, casesheetsSignedInGuard } from './public/public-access';
 
 /**
  * EVERY case-sheet route, defined ONCE (plan §4.4 / §8 WP0-ui). Case sheets are PART OF IPD (§11 Q1).
@@ -89,14 +90,47 @@ export const CASESHEET_SHELL_ROUTES: Routes = [
   gated(CASESHEET_PATHS.lab.sheet, 'Case sheet', casePage),
 ];
 
-/** The public case-sheet site: only these can match in casesheets mode. Sign-in + shell arrive in WP7. */
-export const CASESHEETS_PUBLIC_ROUTES: Routes = [
-  { path: CASESHEET_PATHS.public.signIn, data: { title: 'Sign in' }, loadComponent: placeholder },
-  { path: CASESHEET_PATHS.public.authCallback, data: { title: 'Signing in' }, loadComponent: placeholder },
+/**
+ * The public case-sheet site's signed-in pages, inside its shell (WP7: features/casesheets/public). WP5's Departments / sheets /
+ * fill pages; the shell takes any routed child.
+ */
+export const CASESHEETS_PUBLIC_SHELL_ROUTES: Routes = [
   { path: CASESHEET_PATHS.public.departments, pathMatch: 'full', data: { title: 'Departments' }, loadComponent: departmentsPage },
   { path: CASESHEET_PATHS.public.cases, data: { title: 'Cases' }, loadComponent: casesPage },
   { path: CASESHEET_PATHS.public.case, data: { title: 'Case sheet' }, loadComponent: casePage },
-  { path: CASESHEET_PATHS.public.settings, data: { title: 'Settings' }, loadComponent: placeholder },
+  {
+    path: CASESHEET_PATHS.public.settings,
+    data: { title: 'Settings' },
+    loadComponent: () => import('./practice/cs-settings.page').then(m => m.CsSettingsPage),
+  },
+];
+
+/**
+ * The public case-sheet site: only these can match in casesheets mode (plan §4.4). Signed out ⇒ every page but
+ * sign-in / the Google return goes to /sign-in (casesheetsSignedInGuard); signed in but case sheets not open for
+ * the account ⇒ /sign-in's "not available" card with Sign out.
+ */
+export const CASESHEETS_PUBLIC_ROUTES: Routes = [
+  {
+    path: CASESHEET_PATHS.public.signIn,
+    canActivate: [casesheetsSignInGuard],
+    data: { title: 'Sign in' },
+    loadComponent: () => import('./public/cs-sign-in.page').then(m => m.CsSignInPage),
+  },
+  {
+    path: CASESHEET_PATHS.public.authCallback,
+    data: { title: 'Signing in' },
+    loadComponent: () => import('./public/cs-auth-callback.page').then(m => m.CsAuthCallbackPage),
+  },
+  // The shared sign-out sequence (SessionService) and the session-expiry path land on '/login' — here that is the
+  // case-sheet sign-in (query — reason / returnUrl — kept), never the LMS login.
+  { path: 'login', redirectTo: CASESHEET_PATHS.public.signIn },
+  {
+    path: '',
+    canActivate: [casesheetsSignedInGuard],
+    loadComponent: () => import('./public/cs-public-shell.component').then(m => m.CsPublicShellComponent),
+    children: CASESHEETS_PUBLIC_SHELL_ROUTES,
+  },
   // Anything else on the case-sheet site → Departments (never an LMS screen).
   { path: '**', redirectTo: '' },
 ];

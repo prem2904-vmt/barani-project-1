@@ -8,6 +8,8 @@ import { purgeSupabaseIndexedDb, purgeSupabaseLocalStorage } from './supabase-st
 import { opdPreviewHeaders } from '../../features/opd/shared/opd-gate';
 import { casesheetsHeaders } from '../../features/casesheets/shared/casesheet-gate';
 import { betaHeaders } from '../beta/beta-gate';
+import { appMode } from '../app-mode';
+import { readEnterAnswer, safeSessionStorage, startPkce, takePkce } from '../../features/casesheets/public/google-pkce';
 
 interface MeResponse {
   id: string;
@@ -62,6 +64,28 @@ export type SessionEndReason = 'user' | 'expired' | 'suspended' | 'elsewhere';
 
 /** Outcome of loading /api/auth/me (same classification as a refresh). */
 export type ProfileOutcome = 'ok' | 'transient' | 'dead';
+
+/**
+ * Google sign-in on the public case-sheet site (plan §4.3) ended without a session. `code` drives the wording on
+ * the sign-in screen; `message` is already plain words.
+ *  - cancelled   — Google / Supabase sent the person back with an error (cancelled, refused);
+ *  - stale       — no (valid) verifier in this tab: an old / reused / foreign callback link;
+ *  - unavailable — case sheets are switched off here (personal/enter answered the gate's empty 404);
+ *  - refused     — the server refused this account;
+ *  - transient   — couldn't reach Supabase / Prefrontal: try again.
+ */
+export class GoogleSignInError extends Error {
+  constructor(readonly code: 'cancelled' | 'stale' | 'unavailable' | 'refused' | 'transient', message: string) {
+    super(message);
+    this.name = 'GoogleSignInError';
+  }
+}
+
+/** A finished Google sign-in: what personal/enter said, and where to go next (a safe in-app path). */
+export interface GoogleSignInResult {
+  enter: 'personal' | 'lab';
+  next: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -678,6 +702,106 @@ export class AuthService {
     void this.recordSessionStart(tokens.access_token, 'passkey');
   }
 
+  // ── Google sign-in (public case-sheet site ONLY, plan §4.3) ───────────
+  //
+  // PKCE against GoTrue's REST endpoints (features/casesheets/public/google-pkce.ts — never a supabase-js session),
+  // then POST /api/casesheets/personal/enter (idempotent: makes / finds the personal space, or says the account is a
+  // lab user), then the SAME tail as password / passkey sign-in (beginSession). Refused in LMS mode: the LMS has no
+  // Google sign-in (login.no-google.spec.ts).
+
+  /** Leave the page for Google (test seam). */
+  protected leavePage(url: string): void {
+    location.assign(url);
+  }
+
+  /** Start "Continue with Google": remember a PKCE verifier in this tab and leave for Supabase → Google. */
+  async signInWithGoogle(next?: string | null): Promise<void> {
+    if (appMode() !== 'casesheets') throw new GoogleSignInError('unavailable', 'Google sign-in isn’t available here.');
+    const storage = safeSessionStorage();
+    if (!storage) throw new GoogleSignInError('transient', 'This browser is blocking sign-in. Allow site data and try again.');
+    const url = await startPkce({
+      supabaseUrl: environment.auth.supabaseUrl,
+      origin: location.origin,
+      next,
+      storage,
+    }).catch(() => { throw new GoogleSignInError('transient', 'Secure sign-in isn’t available on this page.'); });
+    this.leavePage(url);
+  }
+
+  /**
+   * The Google return (`/auth/callback?code=…`). Exchanges the one-time code (with this tab's verifier, single use),
+   * enters the personal space, then runs beginSession. On any failure no session is left behind (the new token is
+   * revoked) and a {@link GoogleSignInError} says why.
+   */
+  async completeGoogleSignIn(query: { code?: string | null; error?: string | null }): Promise<GoogleSignInResult> {
+    if (appMode() !== 'casesheets') throw new GoogleSignInError('unavailable', 'Google sign-in isn’t available here.');
+    const rec = takePkce(safeSessionStorage());   // always consumed, whatever happens next
+    if (query.error || !query.code) {
+      throw new GoogleSignInError('cancelled', 'Google sign-in didn’t finish. Please try again.');
+    }
+    if (!rec) throw new GoogleSignInError('stale', 'That sign-in has expired. Please try again.');
+
+    const session = await this.exchangePkceCode(query.code, rec.verifier);
+    const enter = await this.enterPersonalSpace(session.access_token);
+    if (enter !== 'personal' && enter !== 'lab') {
+      void this.revokeToken(session.access_token);
+      throw enter === 'unavailable'
+        ? new GoogleSignInError('unavailable', 'Case sheets aren’t available for this account.')
+        : enter === 'transient'
+          ? new GoogleSignInError('transient', 'Couldn’t reach Prefrontal. Check your connection and try again.')
+          : new GoogleSignInError('refused', 'This Google account can’t be used for case sheets.');
+    }
+
+    this._meMustChangePassword = false;
+    try {
+      await this.beginSession(session, { mustChangePassword: false, org: null });
+    } catch (e) {
+      void this.revokeToken(session.access_token);
+      throw new GoogleSignInError(/connection/i.test((e as Error)?.message ?? '') ? 'transient' : 'refused',
+        (e as Error)?.message || 'This account can’t be used here.');
+    }
+    this._signedInWith.set('google');
+    return { enter, next: rec.next };
+  }
+
+  /** `POST {supabase}/auth/v1/token?grant_type=pkce` — the one-time code + verifier → a session. */
+  private async exchangePkceCode(code: string, verifier: string): Promise<Session> {
+    let res: Response;
+    try {
+      res = await fetch(`${environment.auth.supabaseUrl}/auth/v1/token?grant_type=pkce`, {
+        method: 'POST',
+        headers: { apikey: environment.auth.supabaseAnonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auth_code: code, code_verifier: verifier }),
+        cache: 'no-store',
+      });
+    } catch {
+      throw new GoogleSignInError('transient', 'Couldn’t reach the sign-in service. Check your connection and try again.');
+    }
+    const body = await res.json().catch(() => null) as { access_token?: string; refresh_token?: string } | null;
+    if (!res.ok || !body?.access_token || !body.refresh_token) {
+      throw res.status >= 500 || res.status === 429
+        ? new GoogleSignInError('transient', 'The sign-in service is busy. Please try again.')
+        : new GoogleSignInError('stale', 'That sign-in has expired. Please try again.');
+    }
+    return { access_token: body.access_token, refresh_token: body.refresh_token } as Session;
+  }
+
+  /** `POST /api/casesheets/personal/enter` (WP4) with the new token. */
+  private async enterPersonalSpace(token: string): Promise<ReturnType<typeof readEnterAnswer>['kind']> {
+    try {
+      const res = await fetch(`${environment.apiUrl}/api/casesheets/personal/enter`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...casesheetsHeaders() },
+        body: '{}',
+        cache: 'no-store',
+      });
+      const body = await res.json().catch(() => null);
+      return readEnterAnswer(res.status, body).kind;
+    } catch {
+      return 'transient';
+    }
+  }
+
   /** POST /api/auth/session-started — the server writes the "login" audit row
    *  once per session (idempotent on the token's session id). Beta-gated on the
    *  server (`passkeys`), so it carries X-PF-BETA like every beta call. Never throws. */
@@ -694,7 +818,7 @@ export class AuthService {
 
   /** How THIS tab's session started (null = restored / switched profile).
    *  Drives the one-time passkey suggestion (only after a password sign-in). */
-  private readonly _signedInWith = signal<'password' | 'passkey' | null>(null);
+  private readonly _signedInWith = signal<'password' | 'passkey' | 'google' | null>(null);
   readonly signedInWith = this._signedInWith.asReadonly();
   /** /me's `mustChangePassword` (newer servers) from the last profile load. */
   private _meMustChangePassword = false;
@@ -716,10 +840,14 @@ export class AuthService {
     // _locked signal was seeded at construction, before this login).
     try { localStorage.removeItem('pf.lockedAt'); } catch { /* ignore */ }
     try { window.dispatchEvent(new Event('pf:fresh-signin')); } catch { /* ignore */ }
+    this._wrongSite = false;
     const outcome = await this.loadProfile(false, { quiet: true });
     if (outcome !== 'ok') {
       this._session.set(prev);
       this.persistSession(prev);
+      if (this._wrongSite) {
+        throw new Error(`This is a case-sheet account. Sign in at ${AuthService.CASESHEETS_SITE}.`);
+      }
       throw new Error(outcome === 'transient'
         ? `Signed in, but couldn't load your profile. Check your connection and try again.`
         : 'This account can’t be used here. Ask your admin to check it.');
@@ -993,6 +1121,7 @@ export class AuthService {
     try {
       const raw = localStorage.getItem(AuthService.PROFILE_KEY_PREFIX + sub);
       const parsed = raw ? JSON.parse(raw) as { user?: CurrentUser } : null;
+      if (parsed?.user && AuthService.wrongSite(parsed.user.tenantKind)) return null;
       return parsed?.user?.id ? parsed.user : null;
     } catch { return null; }
   }
@@ -1102,6 +1231,13 @@ export class AuthService {
     if (!data) return this.profileUnavailable(opts.quiet);
     // The session may have ended (sign-out) while /me was in flight.
     if (AuthService.jwtSub(this._session()?.access_token ?? '') !== AuthService.jwtSub(token)) return 'transient';
+    // A personal case-sheet space on an LMS host (plan §4.4): never an LMS profile — the session ends here (no shell,
+    // no hubs, nothing prefetched). The sign-in screen says where case sheets live.
+    if (AuthService.wrongSite(data.tenantKind)) {
+      this._wrongSite = true;
+      if (!opts.quiet) await this.endSession('expired');
+      return 'dead';
+    }
 
     const user: CurrentUser = {
       id: data.id,
@@ -1160,6 +1296,17 @@ export class AuthService {
       this.accounts.setActive(data.id);
     }
     return 'ok';
+  }
+
+  /** Set when /me refused the session because it is a personal case-sheet space on an LMS host. */
+  private _wrongSite = false;
+
+  /** Case-sheet spaces belong to the case-sheet site only (prepare.prefrontal.health). */
+  static readonly CASESHEETS_SITE = 'prepare.prefrontal.health';
+
+  /** A personal space outside casesheets mode? (plan §4.4: personal user on an LMS host.) */
+  static wrongSite(tenantKind: string | null | undefined): boolean {
+    return tenantKind === 'personal' && appMode() !== 'casesheets';
   }
 
   /** /me unreachable: keep the session and any profile we hold; if there is

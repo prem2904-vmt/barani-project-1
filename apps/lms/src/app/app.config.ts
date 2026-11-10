@@ -27,6 +27,8 @@ import { casesheetHeaderInterceptor } from './features/casesheets/shared/caseshe
 import { DialogService } from './core/services/dialog.service';
 import { FeDialog } from '@prefrontal/forms-engine/providers';
 import { storageErrorInterceptor } from './core/services/storage-error.interceptor';
+import { appMode } from './core/app-mode';
+import { bootPlan } from './features/casesheets/public/boot-plan';
 
 /**
  * Pick the location strategy at boot. Electron loads the bundle
@@ -111,7 +113,8 @@ export const appConfig: ApplicationConfig = {
     // renderers use for "/uploads/…" assets (see shared/utils/upload-fetch.ts).
     provideAppInitializer(() => { inject(UploadsService); }),
     // Beta UI flags (console switch + server + dev): fetched once in the background — never blocks boot.
-    provideAppInitializer(() => { void inject(BetaFeaturesService).ensureLoaded(); }),
+    // Not on the public case-sheet site (casesheets mode starts no LMS bootstrap — features/casesheets/public/boot-plan.ts).
+    provideAppInitializer(() => { if (bootPlan({ mode: appMode(), publicPatientPage: false }).betaPrefetch) void inject(BetaFeaturesService).ensureLoaded(); }),
     // Case sheets: the forms engine asks its FeDialog token; the app answers with its own DialogService.
     { provide: FeDialog, useExisting: DialogService },
     { provide: APP_BASE_HREF, useValue: '/' },
