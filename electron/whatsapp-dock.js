@@ -106,11 +106,22 @@ function decidePermission(permission) {
   return ALLOWED_PERMISSIONS.includes(permission);
 }
 
-/** Panel width in DIP: about a phone (380–480), ~a quarter of wide windows,
- *  and the app keeps at least 560 px. */
+/** CSS width WhatsApp Web needs to show its chat list AND the open chat side by side. Narrower, it does not
+ *  collapse to one column: it overflows sideways, so the chat a click-to-chat link opens sits off-screen and the
+ *  message only shows as a "Draft" in the list (owner report 2026-11-10, 480 px panel). */
+const WA_LAYOUT_CSS = 1000;
+
+/** Panel width in DIP: ~40% of the window (560–820), and the app keeps at least 600 px. */
 function dockWidth(contentWidth) {
-  const w = Math.round(Math.min(480, Math.max(380, contentWidth * 0.24)));
-  return Math.max(0, Math.min(w, contentWidth - 560));
+  const w = Math.round(Math.min(820, Math.max(560, contentWidth * 0.4)));
+  return Math.max(0, Math.min(w, contentWidth - 600));
+}
+
+/** Browser zoom for the panel (the same as the person pressing Cmd/Ctrl −): makes WhatsApp's layout width fit the
+ *  panel so nothing scrolls sideways. A browser control on OUR view — WhatsApp's page itself is never touched. */
+function waZoom(panelWidth) {
+  if (!(panelWidth > 0)) return 1;
+  return Math.floor(Math.min(1, Math.max(0.5, panelWidth / WA_LAYOUT_CSS)) * 100) / 100; // down, so it always fits
 }
 
 /** Where the panel goes in the window's content area + what the page needs
@@ -197,6 +208,7 @@ function createDock(deps) {
     wc.on('will-redirect', guard);
     wc.on('did-start-loading', () => { state.loading = true; emit(); });
     wc.on('did-stop-loading', () => { state.loading = false; emit(); });
+    wc.on('did-finish-load', () => layout()); // zoom can reset when WhatsApp reloads
     wc.on('did-fail-load', (_e, code, _desc, _url, isMainFrame) => {
       if (isMainFrame && code !== -3) { state.failed = true; state.loading = false; emit(); }   // -3 = aborted
     });
@@ -211,8 +223,15 @@ function createDock(deps) {
     try { zoom = win.webContents.getZoomFactor() || 1; } catch { /* */ }
     const l = dockLayout(win.getContentBounds(), zoom);
     view.setBounds(l.bounds);
+    applyZoom(l.bounds.width);
     state.width = l.cssWidth;
     state.top = l.cssTop;
+  }
+
+  function applyZoom(panelWidth) {
+    const wc = view && view.webContents;
+    if (!wc || wc.isDestroyed()) return;
+    try { wc.setZoomFactor(waZoom(panelWidth)); } catch { /* view going away */ }
   }
 
   function relayout() { if (state.open) { layout(); emit(); } }
@@ -381,5 +400,5 @@ function plainChromeUserAgent(ua) {
 module.exports = {
   PARTITION, WA_HOST_SUFFIXES, HEADER_CSS, ALLOWED_PERMISSIONS,
   isWhatsAppUrl, decideWaNavigation, parseClickToChat, appDeepLink, viewWebPreferences,
-  decidePermission, plainChromeUserAgent, dockWidth, dockLayout, safePdfName, isPdfBytes, createDock, register, attach,
+  decidePermission, plainChromeUserAgent, WA_LAYOUT_CSS, dockWidth, waZoom, dockLayout, safePdfName, isPdfBytes, createDock, register, attach,
 };

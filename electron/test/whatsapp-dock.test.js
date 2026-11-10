@@ -76,19 +76,32 @@ test('permissions: notifications + copying only', () => {
 
 test('layout: phone-width panel on the right, the app keeps the rest', () => {
   const l = dock.dockLayout({ width: 1440, height: 900 }, 1);
-  assert.equal(l.bounds.width, 380);
-  assert.equal(l.bounds.x, 1440 - 380);
+  assert.equal(l.bounds.width, 576);
+  assert.equal(l.bounds.x, 1440 - 576);
   assert.equal(l.bounds.y, dock.HEADER_CSS);
   assert.equal(l.bounds.height, 900 - dock.HEADER_CSS);
-  assert.equal(l.cssWidth, 380);
-  assert.equal(dock.dockLayout({ width: 1920, height: 1080 }).bounds.width, 461);   // ~24%
-  assert.equal(dock.dockLayout({ width: 2560, height: 1440 }).bounds.width, 480);   // capped
-  assert.equal(dock.dockLayout({ width: 900, height: 700 }).bounds.width, 340);     // app keeps 560
+  assert.equal(l.cssWidth, 576);
+  assert.equal(dock.dockLayout({ width: 1920, height: 1080 }).bounds.width, 768);   // ~40%
+  assert.equal(dock.dockLayout({ width: 2560, height: 1440 }).bounds.width, 820);   // capped
+  assert.equal(dock.dockLayout({ width: 1100, height: 700 }).bounds.width, 500);    // app keeps 600
   // A zoomed page: DIP bounds, CSS width for the page's reflow.
   const z = dock.dockLayout({ width: 1440, height: 900 }, 1.25);
   assert.equal(z.bounds.y, 140);
-  assert.equal(z.cssWidth, 304);
+  assert.equal(z.cssWidth, 461);
   assert.equal(z.cssTop, dock.HEADER_CSS);
+});
+
+test('WhatsApp zoom: its two-column layout always fits the panel (no sideways scroll, the opened chat is on screen)', () => {
+  assert.equal(dock.WA_LAYOUT_CSS, 1000);
+  assert.equal(dock.waZoom(820), 0.82);
+  assert.equal(dock.waZoom(576), 0.57);
+  assert.equal(dock.waZoom(1200), 1);      // never zooms in
+  assert.equal(dock.waZoom(300), 0.5);     // floor stays readable
+  assert.equal(dock.waZoom(0), 1);
+  for (const w of [1100, 1440, 1920, 2560]) {
+    const pw = dock.dockWidth(w);
+    assert.ok(pw / dock.waZoom(pw) >= dock.WA_LAYOUT_CSS || dock.waZoom(pw) === 0.5, `window ${w}`);
+  }
 });
 
 test('PDF helper: safe names, real PDFs only', () => {
@@ -125,6 +138,8 @@ function fakes() {
       wc.close = () => { wc.destroyed = true; };
       wc.loadURL = async (u) => { calls.loaded.push(u); };
       wc.setWindowOpenHandler = (fn) => { wc.openHandler = fn; };
+      wc.zoom = 1;
+      wc.setZoomFactor = (z) => { wc.zoom = z; };
       // Tripwires: nothing may ever be run inside WhatsApp.
       wc.executeJavaScript = () => { throw new Error('executeJavaScript must never be called on WhatsApp'); };
       wc.insertCSS = () => { throw new Error('insertCSS must never be called on WhatsApp'); };
@@ -181,11 +196,15 @@ test('open: docks on the right in the whatsapp partition, loads only the link, t
   assert.ok(partitions.every((p) => p === 'persist:whatsapp'));
   assert.deepEqual(calls.added, [v]);
   assert.deepEqual(calls.loaded, [CHAT]);
-  assert.deepEqual(v.bounds, { x: 1060, y: 112, width: 380, height: 788 });
+  assert.deepEqual(v.bounds, { x: 864, y: 112, width: 576, height: 788 });
+  assert.equal(v.webContents.zoom, 0.57);                 // WhatsApp's two columns fit the panel
+  v.webContents.zoom = 1;
+  v.webContents.emit('did-finish-load');                  // a WhatsApp reload gets the zoom back
+  assert.equal(v.webContents.zoom, 0.57);
   const last = mainWc.sent.at(-1);
   assert.equal(last[0], 'whatsapp:state');
   assert.equal(last[1].open, true);
-  assert.equal(last[1].width, 380);
+  assert.equal(last[1].width, 576);
   assert.equal(last[1].top, 112);
   // A second click reuses the same panel (same view, not re-added).
   d.open('https://web.whatsapp.com/send?phone=919812345678&text=y');
