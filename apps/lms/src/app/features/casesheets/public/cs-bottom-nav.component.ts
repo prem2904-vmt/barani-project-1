@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { IconName, PfIconComponent } from '@prefrontal/forms-engine';
+import { FormBarService } from '../data/form-bar/form-bar.service';
 
 export interface CsNavItem {
   id: 'departments' | 'cases' | 'settings';
@@ -23,13 +25,22 @@ export const CS_NAV: readonly CsNavItem[] = [
  * active pill, `--text-tertiary` idle), with only the three case-sheet areas. Deliberately NOT the LMS
  * `<pf-bottom-nav>` itself: that one is wired to presence, branches, chat, the More menu and the LMS nav loaders,
  * none of which may start on the case-sheet site. Bottom on every size (no side rail); SVG icons; light + dark.
+ * While a case sheet is open its Back · Pages · Next take the three areas' place (one bar, like the LMS top strip's
+ * `pf-formbar` slot; FormBarService) — without it the public filler had no way to turn a page or finish (WP11).
  */
 @Component({
   selector: 'pf-cs-bottom-nav',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, PfIconComponent],
+  imports: [RouterLink, RouterLinkActive, PfIconComponent, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (formBar.template(); as formTpl) {
+    <div class="csn csn--form" data-formbar>
+      <div class="csn__pill csn__pill--form">
+        <ng-container [ngTemplateOutlet]="formTpl" />
+      </div>
+    </div>
+    } @else {
     <nav class="csn" aria-label="Case sheets">
       <div class="csn__pill">
         @for (n of items; track n.id) {
@@ -45,6 +56,7 @@ export const CS_NAV: readonly CsNavItem[] = [
         }
       </div>
     </nav>
+    }
   `,
   styles: [`
     :host { display: contents; }
@@ -69,6 +81,8 @@ export const CS_NAV: readonly CsNavItem[] = [
       backdrop-filter: blur(40px) saturate(1.4);
       -webkit-backdrop-filter: blur(40px) saturate(1.4);
     }
+    .csn--form { width: min(640px, calc(100vw - 16px)); }
+    .csn__pill--form { position: relative; overflow: hidden; min-height: 54px; padding: 4px 8px; }
     .csn__btn {
       display: inline-flex;
       align-items: center;
@@ -104,4 +118,5 @@ export const CS_NAV: readonly CsNavItem[] = [
 })
 export class CsBottomNavComponent {
   protected readonly items = CS_NAV;
+  protected readonly formBar = inject(FormBarService);
 }

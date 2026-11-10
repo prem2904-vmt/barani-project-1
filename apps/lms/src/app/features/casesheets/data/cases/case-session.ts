@@ -113,6 +113,25 @@ export function patientFromAnswers(def: FormDefinition, answers: Answers): Parti
 }
 
 /**
+ * The patient block as it will be saved: the sheet's own block, then what the answers say, then what was typed in the
+ * header. A sheet LINKED to a patient record (`patientId`: the lab's LMS patient, the public site's own patient) keeps
+ * its snapshot where the form's name / age / sex field is still empty — an empty answer never blanks the patient's
+ * name (WP11: a personal sheet started for "Lakshmanan Pillai" saved as "No name yet"). Unlinked sheets keep Prepare's
+ * rule: the answers own those fields, even when cleared.
+ */
+export function mergePatient(
+  base: PatientBlock,
+  derived: Partial<PatientBlock>,
+  manual: Partial<PatientBlock>,
+  linked: boolean,
+): PatientBlock {
+  const fromAnswers = linked
+    ? (Object.fromEntries(Object.entries(derived).filter(([, v]) => v !== null && v !== undefined && v !== '')) as Partial<PatientBlock>)
+    : derived;
+  return { ...base, ...fromAnswers, ...manual };
+}
+
+/**
  * One open case sheet: the ONE place it is loaded and saved (plan §6
  * "Autosave"). Provide it per filler page (`providers: [CaseSession]`).
  *
@@ -287,7 +306,7 @@ export class CaseSession {
     const base = this.sheet()?.patient ?? { name: null, age: null, sex: null, ref: null };
     this.answers(); // track
     const derived = def ? patientFromAnswers(def, this.answers()) : {};
-    return { ...base, ...derived, ...this.manualPatient };
+    return mergePatient(base, derived, this.manualPatient, !!this.sheet()?.patientId);
   });
 
   editSection(sectionId: string, text: string): Promise<SaveAck> {

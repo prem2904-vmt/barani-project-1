@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { CASE_CACHE, MemoryCaseCache } from './case-cache';
 import { CaseConflict, FinishRefused } from './case-models';
-import { CaseSession, SESSION_TIMING, normaliseVisited, patientFromAnswers } from './case-session';
+import { CaseSession, SESSION_TIMING, mergePatient, normaliseVisited, patientFromAnswers } from './case-session';
 import { CasesApi } from './cases-api';
 import { MockCasesApi } from './mock-cases-api';
 import { ENT_ANSWERS, ENT_SAMPLE } from '@prefrontal/forms-engine/testing';
@@ -278,6 +278,16 @@ describe('patient block and visited pages', () => {
         { note: 'x' },
       ),
     ).toEqual({});
+  });
+
+  it('a sheet linked to a patient keeps its snapshot while the form\'s name / age / sex are empty (WP11)', () => {
+    const base = { name: 'Lakshmanan Pillai', age: '58 years', sex: 'Male', ref: 'PSC-1' };
+    const empty = patientFromAnswers(ENT_SAMPLE, {});
+    expect(mergePatient(base, empty, {}, true)).toEqual(base);
+    // a typed answer still wins, field by field
+    expect(mergePatient(base, { ...empty, name: 'L. Pillai' }, {}, true)).toEqual({ ...base, name: 'L. Pillai' });
+    // unlinked (Prepare): the answers own the fields, even when cleared
+    expect(mergePatient(base, empty, {}, false)).toEqual({ name: null, age: null, sex: null, ref: 'PSC-1' });
   });
 
   it('visited keeps the last visit of each page, current page last', () => {

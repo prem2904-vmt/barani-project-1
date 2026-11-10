@@ -1,4 +1,4 @@
-import { Component, Type, signal } from '@angular/core';
+import { Component, TemplateRef, Type, signal, viewChild } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 import { vi } from 'vitest';
@@ -7,6 +7,8 @@ import { SessionService } from '../../../core/auth/session.service';
 import { CasesheetGateService } from '../shared/casesheet-gate.service';
 import { CsAuthCallbackPage } from './cs-auth-callback.page';
 import { CsSignInPage } from './cs-sign-in.page';
+import { CsBottomNavComponent } from './cs-bottom-nav.component';
+import { FormBarService } from '../data/form-bar/form-bar.service';
 import { casesheetsSignInGuard, casesheetsSignedInGuard, publicAccess } from './public-access';
 
 /**
@@ -199,6 +201,35 @@ describe('public bottom nav layering (WP11)', () => {
     const src = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/public/cs-bottom-nav.component.ts'), 'utf8');
     const z = src.match(/\.csn \{[^}]*z-index:\s*([^;]+);/)?.[1].trim();
     expect(z).toBe('var(--pf-z-bottom-nav, 35)');
+  });
+});
+
+describe('public bottom nav hosts an open sheet\'s Back · Pages · Next (WP11)', () => {
+  @Component({
+    standalone: true,
+    imports: [CsBottomNavComponent],
+    template: `<pf-cs-bottom-nav /><ng-template #bar><div class="lf-bar" data-test-bar>Back Pages Next</div></ng-template>`,
+  })
+  class NavHost {
+    readonly bar = viewChild.required<TemplateRef<unknown>>('bar');
+  }
+
+  it('shows the three areas, then the lent controls in their place, then the areas again', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+    const f = TestBed.createComponent(NavHost);
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('[data-nav]').length).toBe(3);
+    const formBar = TestBed.inject(FormBarService);
+    const owner = {};
+    formBar.show(owner, f.componentInstance.bar());
+    f.detectChanges();
+    expect(el.querySelector('[data-formbar] [data-test-bar]')).not.toBeNull();
+    expect(el.querySelectorAll('[data-nav]').length).toBe(0);
+    formBar.clear(owner);
+    f.detectChanges();
+    expect(el.querySelectorAll('[data-nav]').length).toBe(3);
   });
 });
 
