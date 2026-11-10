@@ -60,7 +60,6 @@ describe('MockCasesApi (the server rules, in memory)', () => {
     expect(am.amendedFromId).toBe(c.id);
     expect(am.answers).toEqual(done.answers);
     expect((await api.amendCase(c.id)).id).toBe(am.id);
-    expect((await api.pdfLink(c.id)).url).toContain('/api/casesheets/files/');
   });
 
   it('narrative edits are kept apart and go stale when the answers change', async () => {

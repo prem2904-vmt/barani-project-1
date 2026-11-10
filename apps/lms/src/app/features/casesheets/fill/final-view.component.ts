@@ -14,6 +14,7 @@ import { Router } from '@angular/router';
 import { PfIconComponent } from '@prefrontal/forms-engine';
 import { SkeletonRowsComponent } from '@prefrontal/shared';
 import { DialogService } from '../../../core/services/dialog.service';
+import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { CasesheetNav } from '../data/casesheet-nav';
 import { CasesApi } from '../data/cases/cases-api';
 import { CaseSession } from '../data/cases/case-session';
@@ -107,8 +108,8 @@ export function pdfFileName(
           }
         </div>
         <footer class="pf-card__foot">
-          <button type="button" class="pf-btn pf-btn--primary pf-span" [disabled]="busy()" (click)="open()">
-            <pf-icon name="file" [size]="18" /> Open the PDF
+          <button type="button" class="pf-btn pf-btn--primary pf-span" [disabled]="busy()" (click)="print()" data-fv-print>
+            <pf-icon name="file" [size]="18" /> Print the PDF
           </button>
         </footer>
       </aside>
@@ -213,16 +214,12 @@ export class FinalViewComponent {
     }
   }
 
-  protected open(): Promise<void> {
-    // Open the window first (inside the tap) so the browser doesn't block it, then point it at the PDF.
-    const w = typeof window !== 'undefined' ? window.open('', '_blank') : null;
+  /** Print through the LMS's one PDF print path (off-screen A4 frame, shared with lab reports) — the bytes came with the session. */
+  protected print(): Promise<void> {
     return this.run(async () => {
       const b = await this.pdf();
-      const url = URL.createObjectURL(b);
-      if (w) w.location.href = url;
-      else location.assign(url);
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    }, "Couldn't open the PDF just now. Please try again.");
+      printPdfBlobUrl(URL.createObjectURL(b), { revokeOnDone: true });
+    }, "Couldn't print the PDF just now. Use Download or try again.");
   }
 
   protected download(): Promise<void> {

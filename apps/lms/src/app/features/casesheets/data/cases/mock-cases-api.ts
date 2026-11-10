@@ -18,7 +18,6 @@ import {
   NarrativeSection,
   Page,
   PatientBlock,
-  PdfLink,
   PracticeSettings,
   PublishedForm,
   SaveAck,
@@ -552,20 +551,6 @@ export class MockCasesApi extends CasesApi {
     return new Blob([MOCK_PDF_BYTES], { type: 'application/pdf' });
   }
 
-  async pdfLink(id: string): Promise<PdfLink> {
-    await this.gate('pdfLink', id);
-    const s = this.mine(id);
-    if (s.sheet.state !== 'final')
-      throw new HttpErrorResponse({
-        status: 409,
-        error: { code: 'not_final', title: 'The PDF is made when the case sheet is finished.' },
-      });
-    return {
-      url: `http://localhost:5280/api/casesheets/files/mock-${id}?exp=1&sig=x`,
-      expiresAt: new Date(this.now + 300_000).toISOString(),
-    };
-  }
-
   async narrativePreview(formVersionId: string, answers: Answers, visitedPages?: string[]): Promise<CaseNarrative> {
     await this.gate('narrativePreview', formVersionId, answers, visitedPages);
     const entry = [...this.forms.entries()].find(([, f]) => f.versionId === formVersionId) ?? this.notFound();
@@ -631,7 +616,7 @@ export class MockCasesApi extends CasesApi {
         status: 400,
         error: { code: 'unsupported_image', title: 'Use a PNG or a JPEG picture.' },
       });
-    this.practice[kind] = { url: `http://localhost:5280/api/casesheets/files/mock-${kind}?exp=1&sig=x`, width: 200, height: 80 };
+    this.practice[kind] = { url: `http://localhost:5280/api/casesheets/practice-settings/${kind}?v=mock`, width: 200, height: 80 };
     return clone(this.practice);
   }
 

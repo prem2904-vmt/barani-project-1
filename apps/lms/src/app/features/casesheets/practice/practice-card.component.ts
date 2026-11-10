@@ -1,8 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { PfIconComponent } from '@prefrontal/forms-engine';
 import { SkeletonFormComponent } from '@prefrontal/shared';
 import { DialogService } from '../../../core/services/dialog.service';
+import { SessionBlobs } from '../data/session-blobs';
 import { PracticeApi, PracticeSettings } from './practice-api';
 
 type TextKey = 'practiceName' | 'doctorName' | 'addressLine1' | 'addressLine2' | 'phone' | 'email' | 'website';
@@ -38,6 +39,7 @@ export const MAX_IMAGE_BYTES = 1_000_000;
 @Component({
   selector: 'pf-cs-practice-card',
   standalone: true,
+  providers: [SessionBlobs],
   imports: [PfIconComponent, SkeletonFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -82,8 +84,8 @@ export const MAX_IMAGE_BYTES = 1_000_000;
               <div class="pc__img" [attr.data-image]="k.kind">
                 <span class="pf-field__lbl">{{ k.label }}</span>
                 <div class="pc__frame">
-                  @if (form()![k.kind]; as img) {
-                    <img [src]="img.url" [alt]="k.label" />
+                  @if (form()![k.kind]) {
+                    @if (shown()[k.kind]; as src) { <img [src]="src" [alt]="k.label" /> }
                   } @else {
                     <span class="pc__none"><pf-icon name="image" [size]="22" /> {{ k.empty }}</span>
                   }
@@ -154,6 +156,9 @@ export class PracticeCardComponent {
   private readonly api = inject(PracticeApi);
   private readonly dialog = inject(DialogService);
   private readonly fileInput = viewChild<ElementRef<HTMLInputElement>>('file');
+  /** The logo / signature bytes come with the session (no links): object URLs, revoked with this card. */
+  private readonly blobs = inject(SessionBlobs);
+  protected readonly shown = signal<{ logo: string | null; signature: string | null }>({ logo: null, signature: null });
 
   protected readonly rows = ROWS;
   protected readonly images = [
@@ -178,6 +183,17 @@ export class PracticeCardComponent {
 
   constructor() {
     void this.load();
+    effect(() => {
+      const f = this.form();
+      for (const kind of ['logo', 'signature'] as const) {
+        const url = f?.[kind]?.url ?? null;
+        if (!url) { this.shown.update((s) => ({ ...s, [kind]: null })); continue; }
+        void this.blobs.objectUrl(url).then(
+          (src) => { if (this.form()?.[kind]?.url === url) this.shown.update((s) => ({ ...s, [kind]: src })); },
+          () => undefined,
+        );
+      }
+    });
   }
 
   protected async load(): Promise<void> {

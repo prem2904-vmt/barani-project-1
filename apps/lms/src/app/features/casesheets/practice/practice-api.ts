@@ -38,7 +38,7 @@ const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 /** Empty / blank → null on the wire (Prepare's `nul`). */
 const nul = (v: string): string | null => (v && v.trim() ? v.trim() : null);
 
-/** A server-relative file link (`/api/casesheets/files/…?exp=…&sig=…`) → absolute against the API (read lazily). */
+/** A server-relative AUTHENTICATED file path (`/api/casesheets/practice-settings/logo?v=…`) → absolute against the API (read lazily). Fetch it with the session (SessionBlobs). */
 export function absolute(url: string): string {
   return url.startsWith('/') && !url.startsWith('//') ? `${environment.apiUrl}${url}` : url;
 }

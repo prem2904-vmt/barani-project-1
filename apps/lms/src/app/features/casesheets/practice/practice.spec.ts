@@ -31,12 +31,12 @@ describe('PracticeApi', () => {
       practiceName: null,
       doctorName: 'Dr Meera',
       enabled: true,
-      logo: { url: '/api/casesheets/files/a?exp=1&sig=s', width: 10, height: 5 },
+      logo: { url: '/api/casesheets/practice-settings/logo?v=a', width: 10, height: 5 },
       signature: null,
     });
     const s = await g;
     expect(s.practiceName).toBe('');
-    expect(s.logo?.url).toBe(`${environment.apiUrl}/api/casesheets/files/a?exp=1&sig=s`);
+    expect(s.logo?.url).toBe(`${environment.apiUrl}/api/casesheets/practice-settings/logo?v=a`);
 
     const put = api.savePractice({ ...s, practiceName: '  ', phone: '+91 1' });
     const pr = http.expectOne(`${B}/practice-settings`);
@@ -52,8 +52,8 @@ describe('PracticeApi', () => {
     expect(ur.request.method).toBe('PUT');
     expect(ur.request.body).toBe(png);
     expect(ur.request.headers.get('Content-Type')).toBe('image/png');
-    ur.flush({ signature: { url: '/api/casesheets/files/s?exp=1&sig=s' } });
-    expect((await up).signature?.url).toBe(`${environment.apiUrl}/api/casesheets/files/s?exp=1&sig=s`);
+    ur.flush({ signature: { url: '/api/casesheets/practice-settings/signature?v=s' } });
+    expect((await up).signature?.url).toBe(`${environment.apiUrl}/api/casesheets/practice-settings/signature?v=s`);
 
     const rm = api.removePracticeImage('logo');
     http.expectOne(`${B}/practice-settings/logo`).flush(null, { status: 204, statusText: 'No Content' });
@@ -108,5 +108,36 @@ describe('Settings (case-sheet site)', () => {
     await f.whenStable();
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(logout).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('PracticeCardComponent pictures (session only, no links)', () => {
+  it('fetches the logo bytes with HttpClient as a blob and shows an object URL; revokes it when the card goes', async () => {
+    const created: string[] = [];
+    const revoked: string[] = [];
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(() => { const u = `blob:logo-${created.length + 1}`; created.push(u); return u; });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation((u) => void revoked.push(u));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting(), { provide: DialogService, useValue: { confirm: vi.fn() } }],
+    });
+    const { PracticeCardComponent } = await import('./practice-card.component');
+    const f = TestBed.createComponent(PracticeCardComponent);
+    const http = TestBed.inject(HttpTestingController);
+    const B = `${environment.apiUrl}/api/casesheets`;
+    http.expectOne(`${B}/practice-settings`).flush({ enabled: true, logo: { url: '/api/casesheets/practice-settings/logo?v=a', width: 10, height: 5 }, signature: null });
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    f.detectChanges();
+    const bytes = http.expectOne(`${B}/practice-settings/logo?v=a`);
+    expect(bytes.request.responseType).toBe('blob');
+    bytes.flush(new Blob(['png'], { type: 'image/png' }));
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    f.detectChanges();
+    const img = (f.nativeElement as HTMLElement).querySelector<HTMLImageElement>('[data-image="logo"] img')!;
+    expect(img.getAttribute('src')).toBe('blob:logo-1');
+    http.expectNone((r) => r.url.includes('/api/casesheets/files'));
+    f.destroy();
+    expect(revoked).toEqual(['blob:logo-1']);
+    vi.restoreAllMocks();
   });
 });

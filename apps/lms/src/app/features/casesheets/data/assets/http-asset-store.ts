@@ -10,12 +10,9 @@ interface AssetDto {
   mime: string;
   width: number;
   height: number;
+  /** The AUTHENTICATED bytes endpoint (`/api/casesheets/assets/{id}/file`, `/api/casesheets/sheets/{s}/photos/{p}`). Never a link. */
   url?: string | null;
-  expiresAt?: string | null;
 }
-
-/** A signed link is renewed this long before it runs out. */
-const RENEW_MS = 60_000;
 
 const absolute = (u: string) => (/^https?:/.test(u) ? u : api(u));
 
@@ -23,7 +20,9 @@ const absolute = (u: string) => (/^https?:/.test(u) ? u : api(u));
  * Pictures for the image kinds through the API (never `data:` in a form or an answer):
  *  - starter pictures: `GET /api/casesheets/canvas/templates`, `GET /api/casesheets/canvas/templates/{id}` (cached for the session);
  *    their `{id}.svg` needs the session, so it is fetched as a blob and `svgUrl` is an object URL (revoked on destroy);
- *  - `GET /api/casesheets/assets/{id}`: size + a fresh signed link (`/api/casesheets/files/{id}?exp=&sig=`, ~5 min; cached until shortly before);
+ *  - a picture's bytes need the session (no anonymous / signed links, owner rule): `GET /api/casesheets/assets/{id}` (template picture)
+ *    or `GET /api/casesheets/sheets/{s}/photos/{p}/info` (a photo of the open sheet) gives the size + the bytes path; the bytes are
+ *    fetched through HttpClient as a blob and `url` is an object URL (cached by id, revoked when the store goes);
  *  - Studio uploads: `POST /api/casesheets/assets/templates` (owner / admin), raw PNG / JPEG / SVG ≤ 4 MB;
  *  - case photos: `POST /api/casesheets/sheets/{id}/photos` on the sheet that is open (`forSheet`), raw PNG / JPEG ≤ 8 MB,
  *    shrunk on the device first; the width / height answered are the size AS SHOWN (EXIF rotation applied).
@@ -31,7 +30,11 @@ const absolute = (u: string) => (/^https?:/.test(u) ? u : api(u));
 @Injectable()
 export class HttpAssetStore implements AssetStore, OnDestroy {
   private readonly http = inject(HttpClient);
-  private readonly links = new Map<string, { link: AssetLink; until: number }>();
+  private readonly links = new Map<string, Promise<AssetLink>>();
+  /** Sizes + bytes paths an upload already answered (no second lookup). */
+  private readonly known = new Map<string, AssetDto>();
+  /** Every object URL this store handed out (revoked on destroy). */
+  private readonly objectUrls = new Set<string>();
   private readonly starterCache = new Map<string, Promise<StarterPicture>>();
   private list: Promise<StarterInfo[]> | null = null;
   /** Starter SVG id → object URL of its fetched bytes (revoked when the store goes). */
@@ -51,6 +54,10 @@ export class HttpAssetStore implements AssetStore, OnDestroy {
   ngOnDestroy(): void {
     for (const p of this.svgUrls.values()) void p.then((u) => URL.revokeObjectURL(u)).catch(() => undefined);
     this.svgUrls.clear();
+    for (const u of this.objectUrls) URL.revokeObjectURL(u);
+    this.objectUrls.clear();
+    this.links.clear();
+    this.known.clear();
   }
 
   /**
@@ -91,11 +98,37 @@ export class HttpAssetStore implements AssetStore, OnDestroy {
     return p;
   }
 
-  async asset(assetId: string): Promise<AssetLink> {
-    const hit = this.links.get(assetId);
-    if (hit && hit.until > Date.now()) return hit.link;
-    const r = await firstValueFrom(this.http.get<AssetDto>(api(`/api/casesheets/assets/${encodeURIComponent(assetId)}`)));
-    return this.remember(r)!;
+  asset(assetId: string): Promise<AssetLink> {
+    let p = this.links.get(assetId);
+    if (!p) {
+      p = this.lookup(assetId).then((r) => this.link(r));
+      p.catch(() => this.links.delete(assetId));
+      this.links.set(assetId, p);
+    }
+    return p;
+  }
+
+  /** A template picture, else (a draft or finished sheet is open) one of its photos. */
+  private async lookup(assetId: string): Promise<AssetDto> {
+    const seen = this.known.get(assetId);
+    if (seen) return seen;
+    const id = encodeURIComponent(assetId);
+    try {
+      return await firstValueFrom(this.http.get<AssetDto>(api(`/api/casesheets/assets/${id}`)));
+    } catch (e) {
+      const sheet = this.sheet();
+      if (!sheet || (e as { status?: number })?.status !== 404) throw e;
+      return firstValueFrom(this.http.get<AssetDto>(api(`/api/casesheets/sheets/${encodeURIComponent(sheet)}/photos/${id}/info`)));
+    }
+  }
+
+  /** The bytes, with the session → an object URL. */
+  private async link(r: AssetDto): Promise<AssetLink> {
+    if (!r.url) throw new Error('This picture has no file.');
+    const blob = await firstValueFrom(this.http.get(absolute(r.url), { responseType: 'blob' }));
+    const url = URL.createObjectURL(blob);
+    this.objectUrls.add(url);
+    return { assetId: r.id, width: r.width, height: r.height, mime: r.mime, url };
   }
 
   async uploadTemplate(file: Blob): Promise<AssetRef> {
@@ -120,11 +153,8 @@ export class HttpAssetStore implements AssetStore, OnDestroy {
     return { assetId: r.id, width: r.width, height: r.height, mime: r.mime };
   }
 
-  private remember(r: AssetDto): AssetLink | null {
-    if (!r.url) return null;
-    const link: AssetLink = { assetId: r.id, width: r.width, height: r.height, mime: r.mime, url: absolute(r.url) };
-    const exp = r.expiresAt ? Date.parse(r.expiresAt) : Date.now() + 4 * 60_000;
-    this.links.set(r.id, { link, until: exp - RENEW_MS });
-    return link;
+  /** An upload answered the size + bytes path: the first look fetches only the bytes. */
+  private remember(r: AssetDto): void {
+    if (r.url) this.known.set(r.id, r);
   }
 }

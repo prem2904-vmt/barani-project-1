@@ -258,12 +258,12 @@ describe('HttpCasesApi', () => {
       practiceName: null,
       doctorName: 'Dr Meera',
       enabled: true,
-      logo: { url: '/api/casesheets/files/a?exp=1&sig=s', width: 10, height: 5 },
+      logo: { url: '/api/casesheets/practice-settings/logo?v=a', width: 10, height: 5 },
       signature: null,
     });
     const s = await g;
     expect(s.practiceName).toBe('');
-    expect(s.logo?.url).toBe(`${B}/api/casesheets/files/a?exp=1&sig=s`);
+    expect(s.logo?.url).toBe(`${B}/api/casesheets/practice-settings/logo?v=a`);
 
     const put = api.savePractice({ ...s, practiceName: '  ', phone: '+91 1' });
     const pr = http.expectOne(`${B}/api/casesheets/practice-settings`);
@@ -284,8 +284,8 @@ describe('HttpCasesApi', () => {
     expect(ur.request.method).toBe('PUT');
     expect(ur.request.body).toBe(png);
     expect(ur.request.headers.get('Content-Type')).toBe('image/png');
-    ur.flush({ signature: { url: '/api/casesheets/files/s?exp=1&sig=s' } });
-    expect((await up).signature?.url).toBe(`${B}/api/casesheets/files/s?exp=1&sig=s`);
+    ur.flush({ signature: { url: '/api/casesheets/practice-settings/signature?v=s' } });
+    expect((await up).signature?.url).toBe(`${B}/api/casesheets/practice-settings/signature?v=s`);
 
     const rm = api.removePracticeImage('logo');
     http.expectOne(`${B}/api/casesheets/practice-settings/logo`).flush(null, { status: 204, statusText: 'No Content' });
@@ -294,16 +294,12 @@ describe('HttpCasesApi', () => {
     expect((await rm).logo).toBeNull();
   });
 
-  it('pdf as a blob; pdf-link made absolute; narrative preview mapped', async () => {
+  it('pdf as a blob (with the session, never a link); narrative preview mapped', async () => {
     const p = api.casePdf('c1');
     const pr = http.expectOne(`${B}/api/casesheets/sheets/c1/pdf`);
     expect(pr.request.responseType).toBe('blob');
     pr.flush(new Blob(['%PDF'], { type: 'application/pdf' }));
     expect((await p).type).toBe('application/pdf');
-
-    const l = api.pdfLink('c1');
-    http.expectOne(`${B}/api/casesheets/sheets/c1/pdf-link`).flush({ url: '/api/casesheets/files/p?exp=1&sig=s', expiresAt: 'x' });
-    expect((await l).url).toBe(`${B}/api/casesheets/files/p?exp=1&sig=s`);
 
     const n = api.narrativePreview('v1', { a: 1 }, ['p1']);
     const nr = http.expectOne(`${B}/api/casesheets/narrative/preview`);

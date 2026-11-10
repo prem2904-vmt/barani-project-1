@@ -1,4 +1,6 @@
 import { casesheetLinks } from '../../casesheets.routes';
+import { FE_ASSETS } from '@prefrontal/forms-engine';
+import { HttpAssetStore } from '../../data/assets/http-asset-store';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { CASESHEET_FORMS_MANAGE } from '../../shared/casesheet-permissions';
 import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, input, signal, untracked } from '@angular/core';
@@ -70,7 +72,8 @@ const SIDE_TAB_KEY = 'prepare-studio-side-tab';
     PhoneNoteComponent,
     ShortcutsPanelComponent,
   ],
-  providers: [StudioSession, EditorStore, FieldActions],
+  // Template pictures: Studio uploads / shows them through the same session-only store as the filler (bytes as blobs, no links).
+  providers: [StudioSession, EditorStore, FieldActions, HttpAssetStore, { provide: FE_ASSETS, useExisting: HttpAssetStore }],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './editor.page.html',
   styleUrls: ['../shared/page.scss', './editor.page.scss'],

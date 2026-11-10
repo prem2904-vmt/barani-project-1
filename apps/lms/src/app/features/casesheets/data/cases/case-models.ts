@@ -169,11 +169,6 @@ export interface MissingAnswer {
   label: string;
 }
 
-export interface PdfLink {
-  url: string;
-  expiresAt: string;
-}
-
 export interface PracticeImage {
   url: string;
   width: number | null;

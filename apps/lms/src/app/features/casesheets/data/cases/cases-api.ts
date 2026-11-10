@@ -10,7 +10,6 @@ import {
   FormSummary,
   Page,
   PatientBlock,
-  PdfLink,
   PracticeSettings,
   PublishedForm,
   SaveAck,
@@ -68,10 +67,8 @@ export abstract class CasesApi {
   /** A final sheet → a new draft with the same answers (same form version). */
   abstract amendCase(id: string): Promise<CaseSheet>;
   abstract deleteCase(id: string): Promise<void>;
-  /** The PDF bytes (a draft is rendered on the spot, a final one is the stored file). */
+  /** The PDF bytes, with the session (a draft is rendered on the spot, a final one is the stored file). There are no PDF links. */
   abstract casePdf(id: string): Promise<Blob>;
-  /** A short-lived link to a final sheet's PDF (for download / share without the sign-in header). */
-  abstract pdfLink(id: string): Promise<PdfLink>;
 
   /** Narrative from answers that are not saved yet (the API is the truth for the words). */
   abstract narrativePreview(formVersionId: string, answers: Answers, visitedPages?: string[]): Promise<CaseNarrative>;

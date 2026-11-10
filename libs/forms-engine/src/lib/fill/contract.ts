@@ -153,7 +153,7 @@ export interface AssetRef {
   mime: string;
 }
 
-/** An uploaded picture with a short-lived signed link. */
+/** An uploaded picture, with `url` = a URL the page can show (the host fetched the bytes with the session: an object URL). */
 export interface AssetLink extends AssetRef {
   url: string;
 }
@@ -177,7 +177,7 @@ export interface StarterPicture extends StarterInfo {
  *  - template pictures Studio uploads (`POST /api/assets/templates`, owner / admin);
  *  - case photos (`POST /api/case-sheets/{id}/photos`): only while a draft sheet is
  *    open (`canAddPhotos()`), shrunk on the device first;
- *  - `asset(id)`: size + a fresh signed link (cached until shortly before it expires).
+ *  - `asset(id)`: size + a showable URL (the host fetches the bytes with the session; no signed links).
  * No provider = pictures can't be shown or added (the controls say so in plain words).
  */
 export interface AssetStore {

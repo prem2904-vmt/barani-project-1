@@ -21,7 +21,6 @@ import {
   NarrativeSection,
   Page,
   PatientBlock,
-  PdfLink,
   PracticeImage,
   PracticeSettings,
   PublishedForm,
@@ -402,11 +401,6 @@ export class HttpCasesApi extends CasesApi {
     );
   }
 
-  async pdfLink(id: string): Promise<PdfLink> {
-    const r = obj(await this.send('POST', `/api/casesheets/sheets/${enc(id)}/pdf-link`, {}));
-    return { url: absolute(str(r['url'])), expiresAt: str(r['expiresAt']) };
-  }
-
   async narrativePreview(formVersionId: string, answers: Answers, visitedPages?: string[]): Promise<CaseNarrative> {
     const r = await this.send('POST', '/api/casesheets/narrative/preview', {
       formVersionId,
@@ -481,7 +475,7 @@ function enc(s: string): string {
   return encodeURIComponent(s);
 }
 
-/** The API answers signed file links as paths (`/api/casesheets/files/…`): make them absolute on the API host. */
+/** The API answers AUTHENTICATED file paths (`/api/casesheets/practice-settings/logo?v=…`): make them absolute on the API host (fetch with the session). */
 function absolute(url: string): string {
   return /^https?:\/\//i.test(url) ? url : api(url);
 }
