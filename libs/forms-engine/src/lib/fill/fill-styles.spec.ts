@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { TOUCH_CLASSES } from '../testing/render-kind';
 
@@ -13,10 +13,8 @@ const FILL =
   readFileSync(resolve(ROOT, 'libs/forms-engine/src/lib/fill/_fill.scss'), 'utf8') +
   readFileSync(resolve(ROOT, 'libs/forms-engine/src/lib/canvas/_canvas.scss'), 'utf8') +
   readFileSync(resolve(ROOT, 'libs/forms-engine/src/lib/kinds/grid/_grid.scss'), 'utf8');
-// Prepare's apps/prepare/src/styles/_touch.scss is ported by WP5 to the case-sheets styles folder; until it lands
-// the kit-class check below is skipped (re-enable it in WP5, unchanged).
-const TOUCH_PATH = resolve(ROOT, 'apps/lms/src/app/features/casesheets/styles/_touch.scss');
-const TOUCH = existsSync(TOUCH_PATH) ? readFileSync(TOUCH_PATH, 'utf8') : '';
+// Prepare's apps/prepare/src/styles/_touch.scss, ported by WP5 to the case-sheets styles folder (scoped to html.cs-touch).
+const TOUCH = readFileSync(resolve(ROOT, 'apps/lms/src/app/features/casesheets/styles/_touch.scss'), 'utf8');
 
 function minHeightOf(css: string, cls: string): string[] {
   const out: string[] = [];
@@ -39,7 +37,7 @@ describe('fill controls: touch targets', () => {
     }
   });
 
-  it.skipIf(!TOUCH)('kit classes used by the controls are raised in _touch.scss', () => {
+  it('kit classes used by the controls are raised in _touch.scss', () => {
     expect(TOUCH).toMatch(/\.pf-btn \{[^}]*min-height:\s*var\(--pf-touch\)/);
     expect(TOUCH).toMatch(/pf-select \.pf-dd \.pf-dd__trigger \{[^}]*min-height:\s*var\(--pf-touch\)/);
     expect(TOUCH).toMatch(/button\.pf-touch \{[^}]*min-height:\s*var\(--pf-touch\)/);

@@ -32,6 +32,16 @@
             <span class="pf-pp-act__t">New consultation</span>
           </button>
         }
+        @if (!phone() && caseSheets.canView()) {
+          <!-- Case sheets (dark build): a SEPARATE secondary, only while the case-sheet gate is open. -->
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-pp-act pf-pp-act--casesheet pf-pp-in" style="--i: 3.6"
+                  [class.pf-pp-act--icon]="!web() && narrow()" aria-label="Case sheet" title="Case sheet" data-act="casesheet" (click)="openCaseSheet(p)">
+            <svg class="pf-pp-act__i" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/>
+            </svg>
+            <span class="pf-pp-act__t">Case sheet</span>
+          </button>
+        }
         @if (!phone() && canNewOrder()) {
           <!-- THE primary. Phones: full width in the bottom bar instead. -->
           <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-pp-act pf-pp-act--new pf-pp-in" style="--i: 4"
@@ -373,6 +383,14 @@
           </button>
         </li>
         }
+        @if (phone() && caseSheets.canView()) {
+        <li role="none">
+          <button type="button" role="menuitem" class="pf-pp-menu__row" data-act="casesheet" (click)="closeMore(); openCaseSheet(p)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>
+            Case sheet
+          </button>
+        </li>
+        }
         @if (entitlements.moduleEnabled('messages')) {
           <li role="none">
             <button type="button" role="menuitem" class="pf-pp-menu__row" data-act="chat" (click)="closeMore(); openChatPicker()">
@@ -536,6 +554,11 @@
           </button>
         }
       </div>
+    }
+    @if (caseSheets.canView() && patient(); as p) {
+      <!-- Case sheets (dark build): the patient's latest sheets; rendered (and its one request made) only while the
+           case-sheet gate is open and the user has casesheet_view. -->
+      <pf-patient-casesheets [patientId]="p.id" />
     }
   </ng-template>
 

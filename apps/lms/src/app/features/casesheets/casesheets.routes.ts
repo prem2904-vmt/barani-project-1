@@ -57,6 +57,10 @@ export const casesheetLinks = {
 };
 
 const placeholder = () => import('./shared/casesheet-placeholder.page').then(m => m.CasesheetPlaceholderPage);
+// WP5: the doctor's screens (Departments, the filler, the sheet list). WP7 wraps the public ones in its shell.
+const departmentsPage = () => import('./departments/forms.page').then(m => m.FormsPage);
+const casePage = () => import('./fill/case.page').then(m => m.CasePage);
+const casesPage = () => import('./sheets/cases.page').then(m => m.CasesPage);
 
 /** One gated in-shell route: casesheetGuard, then the ROUTE_ACCESS guards of `/${path}`. */
 function gated(path: string, title: string, loadComponent: Route['loadComponent'] = placeholder): Route {
@@ -80,18 +84,18 @@ export const CASESHEET_SHELL_ROUTES: Routes = [
   gated(CASESHEET_PATHS.admin.form, 'Edit case sheet form', studioEditor),
   gated(CASESHEET_PATHS.admin.formHistory, 'Form version history', studioHistory),
   gated(CASESHEET_PATHS.admin.import, 'Bring in an old form', studioImport),
-  gated(CASESHEET_PATHS.lab.patientSheets, 'Case sheets'),
-  gated(CASESHEET_PATHS.lab.start, 'New case sheet'),
-  gated(CASESHEET_PATHS.lab.sheet, 'Case sheet'),
+  gated(CASESHEET_PATHS.lab.patientSheets, 'Case sheets', casesPage),
+  gated(CASESHEET_PATHS.lab.start, 'New case sheet', departmentsPage),
+  gated(CASESHEET_PATHS.lab.sheet, 'Case sheet', casePage),
 ];
 
 /** The public case-sheet site: only these can match in casesheets mode. Sign-in + shell arrive in WP7. */
 export const CASESHEETS_PUBLIC_ROUTES: Routes = [
   { path: CASESHEET_PATHS.public.signIn, data: { title: 'Sign in' }, loadComponent: placeholder },
   { path: CASESHEET_PATHS.public.authCallback, data: { title: 'Signing in' }, loadComponent: placeholder },
-  { path: CASESHEET_PATHS.public.departments, pathMatch: 'full', data: { title: 'Departments' }, loadComponent: placeholder },
-  { path: CASESHEET_PATHS.public.cases, data: { title: 'Cases' }, loadComponent: placeholder },
-  { path: CASESHEET_PATHS.public.case, data: { title: 'Case sheet' }, loadComponent: placeholder },
+  { path: CASESHEET_PATHS.public.departments, pathMatch: 'full', data: { title: 'Departments' }, loadComponent: departmentsPage },
+  { path: CASESHEET_PATHS.public.cases, data: { title: 'Cases' }, loadComponent: casesPage },
+  { path: CASESHEET_PATHS.public.case, data: { title: 'Case sheet' }, loadComponent: casePage },
   { path: CASESHEET_PATHS.public.settings, data: { title: 'Settings' }, loadComponent: placeholder },
   // Anything else on the case-sheet site → Departments (never an LMS screen).
   { path: '**', redirectTo: '' },

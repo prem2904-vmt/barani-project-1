@@ -10,6 +10,8 @@ import { ShareService } from '../../../core/services/share.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OrderEntryService } from '../../../core/services/order-entry.service';
 import { OpdGateService } from '../../opd/shared/opd-gate.service';
+import { CaseSheetLauncher } from '../../casesheets/shared/case-sheet-launcher';
+import { PatientCasesheetsComponent } from '../../casesheets/sheets/patient-casesheets.component';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import type { RouteAccessCtx } from '../../../core/auth/route-access';
@@ -87,7 +89,8 @@ export type PpDetail =
   standalone: true,
   imports: [DatePipe, FormsModule, CurrencyInrPipe, CommonModule, NgTemplateOutlet, PatientIdCardComponent, BarcodeDisplayComponent,
     LabTrendsComponent, LabOrdersComponent, CumulativeResultsComponent, AbhaWizardComponent, HeroBandComponent,
-    ZoomTargetDirective, ZoomSourceDirective, LabelCardComponent, BusyDirective, SegmentedComponent],
+    ZoomTargetDirective, ZoomSourceDirective, LabelCardComponent, BusyDirective, SegmentedComponent,
+    PatientCasesheetsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './patient-profile.component.html',
   styleUrls: ['./patient-profile.component.scss', './patient-profile.clinical.scss']
@@ -101,6 +104,9 @@ export class PatientProfileComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly orderEntry = inject(OrderEntryService);
   protected readonly opdGate = inject(OpdGateService);
+  /** Case sheets (dark build, part of IPD): the "Case sheet" button + list show only while the case-sheet gate is
+   *  open AND the user has casesheet_view (CaseSheetLauncher.canView); closed = the profile is unchanged. */
+  protected readonly caseSheets = inject(CaseSheetLauncher);
   private readonly locationSvc = inject(Location);
   private readonly dialog = inject(DialogService);
   protected readonly toasts = inject(ToastService);
@@ -436,6 +442,12 @@ export class PatientProfileComponent implements OnInit {
    *  only rendered when {@link OpdGateService.visible} is true. */
   startConsult(p: Patient) {
     void this.orderEntry.startConsult(p.id);
+  }
+
+  /** Case sheet: a new one for this patient (casesheet_fill → Departments), else the patient's sheets. */
+  openCaseSheet(p: Patient) {
+    if (this.caseSheets.canFill()) void this.caseSheets.open({ patientId: p.id, context: { kind: 'patient' } });
+    else void this.caseSheets.openList(p.id);
   }
 
   /** Re-order the same tests from a prior order (order-create preselects them). */

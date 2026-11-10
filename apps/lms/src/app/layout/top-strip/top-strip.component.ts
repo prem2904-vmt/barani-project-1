@@ -42,6 +42,8 @@ import {
   ActionsMenuTriggerDirective,
 } from "../../shared/components/actions-menu/actions-menu.component";
 import { draftCap, draftMenuActions, draftSplit, draftTitle } from "./draft-tray";
+import { NgTemplateOutlet } from "@angular/common";
+import { FormBarService } from "../../features/casesheets/data/form-bar/form-bar.service";
 import { BetaFeaturesService } from "../../core/services/beta-features.service";
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from "@angular/router";
 import { filter } from "rxjs/operators";
@@ -106,6 +108,7 @@ import { DesktopClockComponent } from "./desktop-clock.component";
     DesktopClockComponent,
     ActionsMenuComponent,
     ActionsMenuTriggerDirective,
+    NgTemplateOutlet,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./top-strip.component.html",
@@ -113,6 +116,9 @@ import { DesktopClockComponent } from "./desktop-clock.component";
 })
 export class TopStripComponent implements OnInit, OnDestroy {
   protected readonly themeService = inject(ThemeService);
+  /** Case sheets (dark build): an OPEN case sheet lends its Back · Pages · Next to this bar (one bar, owner
+   *  2026-11-02). Null everywhere else, so the lab's bar is unchanged. */
+  protected readonly formBar = inject(FormBarService);
   /** Bottom-bar draft shelf (published by the active work screen). */
   protected readonly draftShelf = inject(DraftShelfService);
   private readonly zoom = inject(ZoomTransitionService);

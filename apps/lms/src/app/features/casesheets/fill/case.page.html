@@ -1,0 +1,412 @@
+<!-- The case sheet in the legacy MyPrefrontal form layout (resident-fe dynamic-form + navbar form mode + tab-nav form
+     mode + step-footer + form-sidebar-desktop), Prepare skin:
+       header : PF logo (tap = Departments, hold = a voice note) · the page title · saved state · Narrative · thin progress line
+       page   : full width, max 896px, 16px (24px ≥768) padding, the form's 12-column field grid, 24px gaps
+       bar    : Back · Pages (tap = the page list, hold = leave) · Next (hold = finish); a hold line fills along its top
+       desktop: the page list is a rail on the left; the bar is a footer (Back left, Next right) -->
+<cs-styles />
+<div class="lf" [class.lf--final]="isFinal()" [style.--lf-color]="pageColor()">
+  <header class="lf-head">
+    <div class="lf-head__in">
+      <button
+        type="button"
+        class="lf-logo pf-touch"
+        aria-label="Departments"
+        aria-description="Hold for a voice note"
+        title="Tap: Departments · Hold: voice note"
+        feHold
+        [holdDelay]="holds.note.delay"
+        [holdMs]="holds.note.fill"
+        [holdCancelSwallowsTap]="true"
+        (feHold)="holdLogo()"
+        (click)="goHome()"
+      >
+        <svg class="lf-logo__white" viewBox="0 0 228 292" aria-hidden="true">
+          <path [attr.d]="glyph[0]" />
+          <path [attr.d]="glyph[1]" />
+        </svg>
+        <svg class="lf-logo__fill" viewBox="0 0 228 292" aria-hidden="true">
+          <defs>
+            <linearGradient id="lfLogoFill" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#7c3aed" />
+              <stop offset="50%" stop-color="#a855f7" />
+              <stop offset="100%" stop-color="#ec4899" />
+            </linearGradient>
+          </defs>
+          <path [attr.d]="glyph[0]" fill="url(#lfLogoFill)" />
+          <path [attr.d]="glyph[1]" fill="url(#lfLogoFill)" />
+        </svg>
+      </button>
+
+      <div class="lf-title">
+        @for (t of [headTitle()]; track t) {
+        <h1 class="lf-title__text" id="cs-page-h">{{ t }}</h1>
+        }
+        @if (sheet() && !isFinal() && !hasNameField()) {
+        <p class="lf-title__meta">
+          @if (patient().name) {
+          <span class="lf-title__who">{{ patient().name }}@if (patient().meta) { · {{ patient().meta }} }</span>
+          } @else {
+          <span class="lf-title__who lf-title__who--add">Add patient's name</span>
+          }
+        </p>
+        }
+        @if (sheet() && !isFinal() && !hasNameField()) {
+        <button
+          type="button"
+          class="lf-title__ask pf-touch"
+          [attr.aria-label]="patient().name ? 'Change the patient\'s name' : 'Add the patient\'s name'"
+          (click)="askPatientName()"
+        ></button>
+        }
+      </div>
+
+      <div class="lf-head__right">
+        @if (sheet()) {
+        <app-save-state [state]="session.saveState()" (resolve)="resolveConflict()" />
+        } @if (sheet() && !isFinal()) {
+        <button
+          type="button"
+          class="lf-hbtn fe-holdable pf-touch"
+          [class.lf-hbtn--on]="narrativeOpen()"
+          [attr.aria-expanded]="narrativeOpen()"
+          aria-controls="cs-narrative"
+          aria-label="Narrative"
+          aria-description="Hold to add a section of your own"
+          feHold
+          [holdDelay]="holds.note.delay"
+          [holdMs]="holds.note.fill"
+          (feHold)="holdNarrative()"
+          (click)="narrativeOpen.set(!narrativeOpen())"
+        >
+          <pf-icon name="text" [size]="20" />
+          <span class="lf-hbtn__lbl">Narrative</span>
+        </button>
+        }
+      </div>
+    </div>
+    @if (!isFinal()) {
+    <span
+      class="lf-progress"
+      role="progressbar"
+      aria-label="Answered so far"
+      [attr.aria-valuenow]="percent()"
+      aria-valuemin="0"
+      aria-valuemax="100"
+    >
+      <span class="lf-progress__bar" [style.width.%]="percent()"></span>
+    </span>
+    }
+  </header>
+
+  @if (loadMessage(); as err) {
+  <div class="lf-scroll pf-card__body">
+    <div class="lf-page lf-msg">
+      <pf-icon name="alert" [size]="32" />
+      <p class="lf-msg__title" id="cs-err">{{ err }}</p>
+      <button type="button" class="pf-btn pf-btn--secondary" (click)="leave()">{{ nav.isLab ? 'Back to the case sheets' : 'Back to Cases' }}</button>
+    </div>
+  </div>
+  } @else if (!sheet() || !def()) {
+  <div class="lf-scroll pf-card__body">
+    <div class="lf-page"><pf-skeleton-form [fields]="6" [cols]="1" label="Opening the case sheet" /></div>
+  </div>
+  } @else if (isFinal()) {
+  <div class="lf-final pg"><app-final-view [session]="session" /></div>
+  } @else {
+  <div class="lf-mid">
+    <!-- desktop: the page list (legacy form-sidebar-desktop) -->
+    <aside class="lf-rail" aria-labelledby="lf-rail-h">
+      <div class="lf-rail__head">
+        <h2 class="lf-rail__title" id="lf-rail-h">Pages</h2>
+        <span class="lf-rail__count">{{ visitedCount() }}/{{ wiz.pages().length }}</span>
+      </div>
+      <div class="lf-rail__prog">
+        <span class="lf-rail__track"><span class="lf-rail__fill" [style.width.%]="stepPercent()"></span></span>
+        <span class="lf-rail__of">{{ wiz.index() + 1 }} of {{ wiz.pages().length }}</span>
+      </div>
+      <ol class="lf-steps pf-card__body">
+        @for (s of steps(); track s.id; let i = $index) {
+        <li>
+          <button
+            type="button"
+            class="lf-step pf-touch"
+            [class.lf-step--on]="s.current"
+            [class.lf-step--done]="s.done"
+            [attr.aria-current]="s.current ? 'step' : null"
+            [attr.data-step]="s.key"
+            (click)="goToPage(s.id)"
+          >
+            <span class="lf-step__n">
+              @if (s.done) { <pf-icon name="check" [size]="14" /> } @else { {{ i + 1 }} }
+            </span>
+            <span class="lf-step__t">{{ s.title }}</span>
+          </button>
+        </li>
+        }
+      </ol>
+    </aside>
+
+    <main
+      #body
+      class="lf-scroll pf-card__body"
+      (pointerdown)="onPointerDown($event)"
+      (pointerup)="onPointerUp($event)"
+      (pointercancel)="onPointerUp($event)"
+    >
+      @if (page(); as wp) { @for (pid of [wp.id]; track pid) {
+      <div class="lf-page cs-page" [attr.data-page]="pid" [class.cs-page--back]="wiz.direction() < 0">
+        @if (wp.page.subtitle) {
+        <p class="lf-page__sub">{{ wp.page.subtitle }}</p>
+        }
+        @if (repeats().length > 1) {
+        <div class="cs-reps fe-chips" role="group" aria-label="The repeated pages">
+          @for (r of repeats(); track r.id) {
+          <button
+            type="button"
+            class="fe-chip cs-rep"
+            [attr.data-repeat]="r.id"
+            [attr.aria-current]="r.current ? 'page' : null"
+            [attr.aria-pressed]="r.current"
+            [attr.aria-label]="r.title + (r.answered ? ', has answers' : '')"
+            (click)="wiz.goTo(r.id)"
+          >
+            @if (r.answered) {
+            <pf-icon name="check" [size]="16" [stroke]="2.4" />
+            }
+            {{ r.title }}
+          </button>
+          }
+        </div>
+        }
+        <div class="fe-grid">
+          @for (f of fields(); track f.key) {
+          <fe-field
+            [field]="f"
+            [scope]="scope()"
+            [lookup]="lookup()"
+            [setValue]="setter"
+            [lockedKeys]="lockedKeys()"
+            [missingKeys]="missingKeys()"
+          />
+          } @empty {
+          <p class="fe-field__hint">Nothing to answer on this page.</p>
+          }
+        </div>
+      </div>
+      } }
+    </main>
+
+    @if (narrativeOpen()) {
+    <div class="cs-backdrop" aria-hidden="true" (click)="narrativeOpen.set(false)"></div>
+    }
+    <aside class="lf-nv" id="cs-narrative" [class.lf-nv--open]="narrativeOpen()" aria-labelledby="cs-nv-h">
+      <header class="lf-nv__head">
+        <h2 class="lf-nv__title" id="cs-nv-h">Narrative</h2>
+        <button
+          type="button"
+          class="pf-btn pf-btn--icon cs-nvclose"
+          aria-label="Close the narrative"
+          (click)="narrativeOpen.set(false)"
+        >
+          <pf-icon name="x" [size]="20" />
+        </button>
+        <span class="lf-nv__note">Written from your answers. Tap Edit to change a section's words.</span>
+      </header>
+      <div class="lf-nv__body pf-card__body">
+        <app-narrative-card
+          [narrative]="session.narrative()"
+          [state]="session.narrativeState()"
+          (edit)="onEdit($event)"
+          (keep)="onEdit($event)"
+          (clear)="onClear($event)"
+          (rename)="onRename($event)"
+          (addOwn)="addOwnSection()"
+          (addNote)="holdNarrative()"
+          (remove)="onRemove($event)"
+          [openSection]="openSection()"
+        />
+      </div>
+    </aside>
+  </div>
+
+  }
+</div>
+
+@if (reportOpen()) {
+<!-- legacy "Edit Your Report" (chief-complaints PDF modal): Edit narrative · PF Listen · PDF preview, then the PDF -->
+<div class="rp__scrim" aria-hidden="true" (click)="closeReport()"></div>
+<section class="rp" role="dialog" aria-modal="true" aria-labelledby="rp-h" data-report>
+  <header class="rp__head">
+    <span class="rp__icon" aria-hidden="true"><pf-icon name="file" [size]="22" /></span>
+    <div class="rp__titles">
+      <h2 class="rp__title" id="rp-h">Edit your report</h2>
+      <p class="rp__sub">Check the words before the PDF is made</p>
+    </div>
+    <button type="button" class="rp__close pf-touch" aria-label="Close and keep filling" (click)="closeReport()">
+      <pf-icon name="x" [size]="24" />
+    </button>
+  </header>
+  <div class="rp__tabs" role="tablist" aria-label="Report">
+    <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'edit'" (click)="reportTab.set('edit')">
+      <pf-icon name="pen" [size]="18" /> Edit narrative
+    </button>
+    <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'listen'" (click)="reportTab.set('listen')">
+      <svg class="rp__pf" viewBox="0 0 228 292" aria-hidden="true"><path [attr.d]="glyph[0]" /><path [attr.d]="glyph[1]" /></svg>
+      PF Listen
+    </button>
+    <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'pdf'" (click)="reportTab.set('pdf')">
+      <pf-icon name="file" [size]="18" /> PDF preview
+    </button>
+  </div>
+  <div class="rp__body pf-card__body" role="tabpanel">
+    @switch (reportTab()) {
+    @case ('edit') {
+    <app-narrative-card
+      [narrative]="session.narrative()"
+      [state]="session.narrativeState()"
+      (edit)="onEdit($event)"
+      (keep)="onEdit($event)"
+      (clear)="onClear($event)"
+      (rename)="onRename($event)"
+      (addOwn)="addOwnSection()"
+      (addNote)="holdNarrative()"
+      (remove)="onRemove($event)"
+      [openSection]="openSection()"
+    />
+    }
+    @case ('listen') {
+    @if (!listen.available()) {
+    <p class="rp__note">This device can't read aloud. The words are on Edit narrative.</p>
+    } @else if (!listenParts().length) {
+    <p class="rp__note">Nothing to read yet. Answer a few questions first.</p>
+    } @else {
+    <div class="rp__listen">
+      <button type="button" class="pf-btn pf-btn--primary" data-listen-all (click)="listen.speaking() === null ? listen.read(listenParts()) : listen.stop()">
+        <pf-icon [name]="listen.speaking() === null ? 'volume' : 'stop'" [size]="18" />
+        {{ listen.speaking() === null ? 'Read it all aloud' : 'Stop reading' }}
+      </button>
+      <p class="rp__note">Read by this device's own voice. Nothing is sent anywhere.</p>
+      <ol class="rp__parts">
+        @for (sec of listenSections(); track sec.id; let i = $index) {
+        <li class="rp__part" [class.rp__part--on]="listen.speaking() === i">
+          <button type="button" class="pf-btn pf-btn--secondary rp__play" [attr.aria-label]="(listen.speaking() === i ? 'Stop reading ' : 'Read from ') + sec.title" (click)="listen.speaking() === i ? listen.stop() : listen.read(listenParts(), i)">
+            <pf-icon [name]="listen.speaking() === i ? 'stop' : 'play'" [size]="18" />
+          </button>
+          <span class="rp__ptxt"><span class="rp__ptitle">{{ sec.title }}</span><span class="rp__pbody">{{ sec.content }}</span></span>
+        </li>
+        }
+      </ol>
+    </div>
+    }
+    }
+    @case ('pdf') {
+    <div class="rp__pdf">
+      <span class="rp__pdficon"><pf-icon name="file" [size]="40" /></span>
+      <p class="rp__pdft">The PDF is made when you finish</p>
+      <p class="rp__note">It carries your practice header and signature from Settings. After finishing the sheet is read-only; Amend starts a new draft.</p>
+    </div>
+    }
+    }
+  </div>
+  <footer class="rp__foot">
+    <button type="button" class="pf-btn pf-btn--secondary" (click)="closeReport()">Not yet</button>
+    <button type="button" class="pf-btn pf-btn--primary" data-finish-now [disabled]="finishing()" (click)="finishNow()">
+      <pf-icon name="check" [size]="18" /> {{ finishing() ? 'Making the PDF…' : 'Finish and make the PDF' }}
+    </button>
+  </footer>
+</section>
+}
+
+<!-- Back · Pages · Next (legacy tab-nav form mode), lent to the LMS bottom bar while the sheet is open (one bar,
+     owner 2026-11-02; FormBarService). The bindings and styles stay here. -->
+<ng-template #formBarTpl>
+  <div class="lf-bar" role="group" aria-label="Pages of this case sheet">
+    <span class="lf-bar__hold" aria-hidden="true"></span>
+    <button type="button" class="lf-bar__item lf-back pf-touch" [disabled]="wiz.isFirst()" (click)="back()">
+      <svg class="lf-bar__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+      <span class="lf-bar__lbl">Back</span>
+    </button>
+
+    <div class="lf-bar__mid">
+      <button
+        type="button"
+        class="lf-bar__item lf-pages pf-touch"
+        [class.lf-bar__item--open]="menuOpen()"
+        [attr.aria-expanded]="menuOpen()"
+        aria-controls="lf-menu"
+        [attr.aria-label]="'Page ' + (wiz.index() + 1) + ' of ' + wiz.pages().length + '. Tap to go to another page, hold to go back to Departments.'"
+        feHold
+        [holdDelay]="holds.leave.delay"
+        [holdMs]="holds.leave.fill"
+        (feHold)="holdLeave()"
+        (click)="menuOpen.set(!menuOpen())"
+      >
+        <svg class="lf-bar__icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+          <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+        </svg>
+        <span class="lf-bar__lbl">Pages</span>
+      </button>
+      @if (menuOpen()) {
+      <div class="lf-menu__scrim" aria-hidden="true" (click)="menuOpen.set(false)"></div>
+      <div class="lf-menu" id="lf-menu" role="dialog" aria-label="Go to a page">
+        <div class="lf-menu__head">
+          <span class="lf-menu__title">Go to a page</span>
+          <span class="lf-menu__track"><span class="lf-menu__fill" [style.width.%]="stepPercent()"></span></span>
+        </div>
+        <ol class="lf-menu__list pf-card__body">
+          @for (s of steps(); track s.id; let i = $index) {
+          <li>
+            <button
+              type="button"
+              class="lf-step pf-touch"
+              [class.lf-step--on]="s.current"
+              [class.lf-step--done]="s.done"
+              [attr.aria-current]="s.current ? 'step' : null"
+              (click)="goToPage(s.id)"
+            >
+              <span class="lf-step__n">
+                @if (s.done) { <pf-icon name="check" [size]="14" /> } @else { {{ i + 1 }} }
+              </span>
+              <span class="lf-step__t">{{ s.title }}</span>
+              @if (s.total) {
+              <span class="lf-step__c">{{ s.answered }}/{{ s.total }}</span>
+              }
+            </button>
+          </li>
+          }
+        </ol>
+        <p class="lf-menu__foot">Hold Pages to go back to Departments</p>
+      </div>
+      }
+    </div>
+
+    @if (wiz.next()) {
+    <button
+      type="button"
+      class="lf-bar__item lf-next pf-touch"
+      aria-description="Hold to finish the case sheet"
+      feHold
+      [holdDelay]="holds.finish.delay"
+      [holdMs]="holds.finish.fill"
+      (holdStart)="holdingNext.set(true)"
+      (feHold)="holdingNext.set(false); finish()"
+      (pointerup)="holdingNext.set(false)"
+      (pointercancel)="holdingNext.set(false)"
+      (pointerleave)="holdingNext.set(false)"
+      (click)="next()"
+    >
+      <span class="lf-bar__lbl lf-bar__lbl--wide">{{ holdingNext() ? 'Hold to finish' : 'Next' }}</span>
+      <svg class="lf-bar__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+      <span class="lf-bar__lbl lf-bar__lbl--narrow">{{ holdingNext() ? 'Hold…' : 'Next' }}</span>
+    </button>
+    } @else {
+    <button type="button" class="lf-bar__item lf-next lf-finish pf-touch" [disabled]="finishing()" (click)="finish()">
+      <span class="lf-bar__lbl lf-bar__lbl--wide">{{ finishing() ? 'Making the PDF…' : 'Finish' }}</span>
+      <svg class="lf-bar__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+      <span class="lf-bar__lbl lf-bar__lbl--narrow">{{ finishing() ? 'Making…' : 'Finish' }}</span>
+    </button>
+    }
+  </div>
+</ng-template>

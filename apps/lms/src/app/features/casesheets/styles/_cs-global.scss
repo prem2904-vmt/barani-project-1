@@ -1,0 +1,6 @@
+// The case-sheet GLOBAL styles, injected once by <cs-styles> (ViewEncapsulation.None) when the first case-sheet screen
+// opens — never part of the lab's global stylesheet (Prepare imported these from its styles.scss):
+//  - the forms engine's fill controls (global `fe-*` classes: the controls render through NgComponentOutlet and nest);
+//  - the touch rules (48px targets), scoped to `html.cs-touch` while a case-sheet screen is open.
+@use '../../../../../../../libs/forms-engine/src/lib/fill/fill';
+@use './touch';

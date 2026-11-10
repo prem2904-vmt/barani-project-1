@@ -1,0 +1,69 @@
+.cl {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cl__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 10px 8px 4px;
+  border-radius: 14px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  transition: border-color var(--pf-dur-fast) ease;
+}
+
+.cl__row:hover {
+  border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
+}
+
+.cl__row[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+.cl__main {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.cl__name {
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.cl__meta {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.cl__acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.cl__more {
+  align-self: center;
+  margin-top: 6px;
+}
+
+.cl__badge {
+  margin-top: 6px;
+  align-self: flex-start;
+}
