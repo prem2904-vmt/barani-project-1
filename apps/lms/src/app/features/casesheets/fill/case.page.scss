@@ -1007,6 +1007,8 @@
 }
 .rp__tabs {
   display: flex;
+  width: 100%;
+  margin: 0;
   border-bottom: 1px solid var(--border-muted);
 }
 .rp__tab {
@@ -1117,6 +1119,8 @@
 }
 .rp__foot {
   display: flex;
+  width: 100%;
+  margin: 0;
   gap: 12px;
   padding: 12px 16px;
   border-top: 1px solid var(--border-muted);

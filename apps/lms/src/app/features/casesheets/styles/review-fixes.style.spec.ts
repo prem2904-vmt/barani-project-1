@@ -12,6 +12,7 @@ const fillHtml = read('apps/lms/src/app/features/casesheets/fill/case.page.html'
 const card = read('apps/lms/src/app/features/casesheets/studio/editor/field-card.component.scss');
 const dept = read('apps/lms/src/app/features/casesheets/departments/forms.page.scss');
 const deptHtml = read('apps/lms/src/app/features/casesheets/departments/forms.page.html');
+const editor = read('apps/lms/src/app/features/casesheets/studio/editor/editor.page.scss');
 const canvas = read('libs/forms-engine/src/lib/canvas/_canvas.scss');
 
 describe('page menu contrast', () => {
@@ -30,6 +31,9 @@ describe('Edit your report on a phone', () => {
   it('the head, tab row and foot keep their height; only the body scrolls', () => {
     expect(fill).toMatch(/\.rp__head,\s*\.rp__tabs,\s*\.rp__foot\s*\{\s*flex:\s*none/);
     expect(fill).toMatch(/\.rp__body\s*\{[^}]*overflow-y:\s*auto/);
+    // the global tab-strip rules once left the tab row and the foot shifted right
+    expect(fill).toMatch(/\.rp__tabs\s*\{[^}]*width:\s*100%/);
+    expect(fill).toMatch(/\.rp__foot\s*\{[^}]*width:\s*100%/);
   });
   it('the PF Listen tab has its own name', () => {
     expect(fillHtml).toMatch(/aria-label="PF Listen"/);
@@ -43,6 +47,14 @@ describe('Studio question title', () => {
   });
   it('on a phone the quick actions leave the title row', () => {
     expect(card).toMatch(/@media \(max-width: 640px\)\s*\{[^@]*\.fc-head\s*\{\s*flex-wrap:\s*wrap/);
+  });
+});
+
+describe('Studio page rail', () => {
+  it('a page name wraps between words, and the grip leaves it room', () => {
+    expect(editor).not.toMatch(/\.ed-pbtn__t\s*\{[^}]*overflow-wrap:\s*anywhere/);
+    expect(editor).toMatch(/\.ed-pbtn__t\s*\{[^}]*overflow-wrap:\s*break-word[^}]*word-break:\s*normal/);
+    expect(editor).toMatch(/\.ed-pages \.ed-grip\s*\{\s*width:\s*28px/);
   });
 });
 

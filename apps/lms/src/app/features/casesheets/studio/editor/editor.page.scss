@@ -33,13 +33,13 @@
 
 .ed-body {
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr) 360px;
+  grid-template-columns: 268px minmax(0, 1fr) 360px;
   gap: 16px;
 }
 
 @media (min-width: 1440px) {
   .ed-body {
-    grid-template-columns: 252px minmax(0, 1fr) 392px;
+    grid-template-columns: 284px minmax(0, 1fr) 392px;
     gap: 18px;
   }
 }
@@ -107,6 +107,11 @@
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.2);
 }
 
+// the rail is narrow: the grip is as wide as its icon, so the page name keeps the room
+.ed-pages .ed-grip {
+  width: 28px;
+}
+
 .ed-grip {
   display: inline-flex;
   align-items: center;
@@ -138,7 +143,10 @@
 .ed-pbtn__t {
   font-size: 15px;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  // normal word wrapping: a page name breaks between words, never inside one ("Informati / on")
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: manual;
 }
 
 .ed-pbtn__m {
