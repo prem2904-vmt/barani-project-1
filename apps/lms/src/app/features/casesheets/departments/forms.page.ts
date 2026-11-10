@@ -70,6 +70,18 @@ export function initialOf(title: string): string {
  * (legacy MyPrefrontal /home/speciality, 1:1 in layout). The department sits in the URL
  * (`?dept=`), so the phone's back gesture returns to the list.
  */
+/**
+ * Picking a department changes only `?dept=`: the other query params stay (merge) — in the lab `?patientId=` (and the
+ * launcher's `ctx` / `deptKey`) must survive, or a reload / Back lands on "open this from a patient" (WP11 finding).
+ */
+export function deptNavigation(name: string | null, current: string | null): {
+  queryParams: { dept: string | null };
+  queryParamsHandling: 'merge';
+  replaceUrl: boolean;
+} {
+  return { queryParams: { dept: name }, queryParamsHandling: 'merge', replaceUrl: !name || !!current };
+}
+
 @Component({
   selector: 'app-forms-page',
   standalone: true,
@@ -166,11 +178,7 @@ export class FormsPage {
   }
 
   protected pick(name: string | null): void {
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { dept: name },
-      replaceUrl: !name || !!this.deptParam(),
-    });
+    void this.router.navigate([], { relativeTo: this.route, ...deptNavigation(name, this.deptParam()) });
   }
 
   protected onSearch(v: string): void {

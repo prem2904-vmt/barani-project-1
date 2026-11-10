@@ -559,6 +559,12 @@ export class CasePage {
     this.narrativeOpen.set(false);
     this.reportTab.set('edit');
     this.reportOpen.set(true);
+    // The words to check must be the LATEST answers: an answer given just before Finish is still waiting for the
+    // autosave debounce, so save it now and fetch the narrative straight after (WP11: the report opened stale).
+    void this.session.flush().then(
+      () => this.session.refreshNarrative(),
+      () => undefined,
+    );
   }
 
   /** "Finish and make the PDF" on Edit your report: the sheet becomes final and its PDF view opens. */

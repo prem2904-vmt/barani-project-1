@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FormSummary } from '../data/cases/case-models';
-import { NO_DEPARTMENT, groupDepartments, initialOf, orderByDepartments } from './forms.page';
+import { NO_DEPARTMENT, deptNavigation, groupDepartments, initialOf, orderByDepartments } from './forms.page';
 
 const f = (key: string, title: string, specialty: string | null, pinned = false, departmentKey: string | null = null): FormSummary => ({
   id: key,
@@ -67,5 +67,16 @@ describe('departments: master departments (Prefrontal, plan §3.3)', () => {
   it('no master departments = the forms as they came (Prepare behaviour)', () => {
     const forms = [f('b', 'B', 'X'), f('a', 'A', 'Y')];
     expect(orderByDepartments(forms, []).map((x) => x.key)).toEqual(['b', 'a']);
+  });
+});
+
+describe('departments: picking a department keeps the patient (lab, WP11)', () => {
+  it('merges ?dept= into the current query params, so ?patientId= survives', () => {
+    expect(deptNavigation('ENT', null)).toEqual({ queryParams: { dept: 'ENT' }, queryParamsHandling: 'merge', replaceUrl: false });
+  });
+
+  it('switching or clearing a department replaces the history entry', () => {
+    expect(deptNavigation('ENT', 'General Medicine').replaceUrl).toBe(true);
+    expect(deptNavigation(null, 'ENT')).toEqual({ queryParams: { dept: null }, queryParamsHandling: 'merge', replaceUrl: true });
   });
 });

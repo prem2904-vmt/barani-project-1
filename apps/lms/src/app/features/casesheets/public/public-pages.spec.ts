@@ -191,3 +191,14 @@ describe('Google return (/auth/callback)', () => {
     expect(router.url).toBe('/sign-in?e=cancelled');
   });
 });
+
+describe('public bottom nav layering (WP11)', () => {
+  it('sits on the LMS bottom-nav layer, below dialogs and sheets (it once covered the patient step\'s buttons)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/public/cs-bottom-nav.component.ts'), 'utf8');
+    const z = src.match(/\.csn \{[^}]*z-index:\s*([^;]+);/)?.[1].trim();
+    expect(z).toBe('var(--pf-z-bottom-nav, 35)');
+  });
+});
+

@@ -18,11 +18,11 @@
       <header class="pf-card__head">
         <span class="pf-card__icon"><pf-icon name="cases" [size]="16" /></span>
         <h1 class="pf-card__label" id="cases-h">{{ patientId() ? 'Case sheets' : 'Cases' }}</h1>
-        @if (patient(); as p) {
-        <span class="pf-card__note" data-patient>{{ p.name }}@if (p.meta) { · {{ p.meta }} }</span>
-        }
         @if (items()) {
         <span class="pf-card__count">{{ total() }}</span>
+        }
+        @if (patient(); as p) {
+        <span class="pf-card__note" data-patient>{{ p.name }}@if (p.meta) { · {{ p.meta }} }</span>
         }
         <span class="pf-card__spacer"></span>
         <pf-segmented [options]="filters" [value]="filter()" (valueChange)="filter.set($event)" ariaLabel="Show" />

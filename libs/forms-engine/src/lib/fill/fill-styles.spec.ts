@@ -48,3 +48,11 @@ describe('fill controls: touch targets', () => {
     expect(FILL).not.toMatch(/overflow(-x|-y)?\s*:\s*(auto|scroll)/);
   });
 });
+
+describe('fill controls: the one-row yes/no card does not leak into follow-up fields', () => {
+  it('its head rule reaches only its own head (child combinators), never the heads of nested follow-ups', () => {
+    expect(FILL).not.toMatch(/\.fe-field--ynrow \.fe-field__head\b/);
+    expect(FILL).toMatch(/\.fe-field--ynrow > \.fe-field__row > \.fe-field__head \{[^}]*flex:\s*1 1 180px/);
+  });
+});
+

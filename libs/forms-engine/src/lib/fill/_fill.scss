@@ -1038,12 +1038,14 @@ textarea.fe-text__input {
   background: var(--pf-card-bg);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
-.fe-field--ynrow .fe-field__head {
+// Child combinators: a chosen option's follow-up fields render INSIDE this field (.fe-follow); a descendant
+// selector gave their (column) heads a 180px flex-basis, i.e. 180px of empty height (WP11 finding, from Prepare).
+.fe-field--ynrow > .fe-field__row > .fe-field__head {
   flex: 1 1 180px;
   min-width: 0;
   margin: 0;
 }
-.fe-field--ynrow .fe-field__lbl {
+.fe-field--ynrow > .fe-field__row > .fe-field__head .fe-field__lbl {
   white-space: normal;
 }
 .fe-field--ynrow .fe-yn {

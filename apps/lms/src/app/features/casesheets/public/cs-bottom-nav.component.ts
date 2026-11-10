@@ -50,7 +50,8 @@ export const CS_NAV: readonly CsNavItem[] = [
     :host { display: contents; }
     .csn {
       position: fixed;
-      z-index: 2000;
+      /* the LMS bottom-nav layer: dialogs, sheets (the patient step) and the filler's drawers stay ABOVE it (WP11) */
+      z-index: var(--pf-z-bottom-nav, 35);
       left: 50%;
       bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
       transform: translateX(-50%);

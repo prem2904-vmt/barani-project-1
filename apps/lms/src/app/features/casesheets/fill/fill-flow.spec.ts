@@ -221,6 +221,20 @@ describe('case sheet filling (legacy gestures, one bottom bar)', () => {
     expect(q('[data-report]')).not.toBeNull();
   });
 
+  it('Finish right after an answer: the answer is saved at once and "Edit your report" reads the narrative after it', async () => {
+    const box = q('fe-field[data-field="complaint"] input, fe-field[data-field="complaint"] textarea') as HTMLInputElement;
+    box.value = 'Cough for two days';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    f.detectChanges();
+    const before = api.calls.length;
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, shiftKey: true, bubbles: true }));
+    await settle(5); // well inside the 50 ms autosave debounce
+    expect(q('[data-report]')).not.toBeNull();
+    const ops = api.calls.slice(before).map((c) => c.op);
+    expect(ops).toContain('saveCase');
+    expect(ops.lastIndexOf('narrative')).toBeGreaterThan(ops.indexOf('saveCase'));
+  });
+
   it('leaving the sheet gives the bottom bar back', async () => {
     expect(bar().querySelector('.lf-bar')).not.toBeNull();
     const formBar = TestBed.inject(FormBarService);
