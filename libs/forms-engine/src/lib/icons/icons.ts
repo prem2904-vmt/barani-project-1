@@ -122,6 +122,8 @@ export const ICONS = {
   'k-eye': ['M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M12 2v1.5', 'M12 20.5V22'],
   // ---- AI connector (Phase 6): something an assistant wrote ----
   message: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', 'M8 9h8', 'M8 13h5'],
+  // Cortex: a small sparkle (four-point star + a spark)
+  sparkle: ['M9.9 4.1L11.2 8.8 15.9 10.1 11.2 11.4 9.9 16.1 8.6 11.4 3.9 10.1 8.6 8.8z', 'M18 3v4', 'M16 5h4', 'M18 15v4', 'M16 17h4'],
 } as const satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof ICONS;

@@ -71,3 +71,51 @@ describe('HttpStudioApi wire mapping', () => {
     expect(r.report.items[0].level).toBe('problem');
   });
 });
+
+describe('HttpStudioApi: Cortex draft from a paper sheet', () => {
+  async function setup() {
+    const { TestBed } = await import('@angular/core/testing');
+    const { provideHttpClient } = await import('@angular/common/http');
+    const { HttpTestingController, provideHttpClientTesting } = await import('@angular/common/http/testing');
+    const { HttpStudioApi } = await import('./http-studio-api');
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    return { api: TestBed.inject(HttpStudioApi), http: TestBed.inject(HttpTestingController) };
+  }
+
+  it('POSTs the pages, department and name as multipart and returns the job id (202)', async () => {
+    const { api, http } = await setup();
+    const files = [new File(['a'], 'a.jpg', { type: 'image/jpeg' }), new File(['b'], 'b.pdf', { type: 'application/pdf' })];
+    const p = api.draftFromSheet({ files, departmentKey: 'ent', title: ' ENT sheet ' });
+    const req = http.expectOne((r) => r.url.endsWith('/api/casesheets/forms/draft-from-sheet'));
+    expect(req.request.method).toBe('POST');
+    const body = req.request.body as FormData;
+    expect(body.getAll('files').map((f) => (f as File).name)).toEqual(['a.jpg', 'b.pdf']);
+    expect(body.get('departmentKey')).toBe('ent');
+    expect(body.get('title')).toBe('ENT sheet');
+    req.flush({ jobId: 'j1' }, { status: 202, statusText: 'Accepted' });
+    expect(await p).toEqual({ jobId: 'j1' });
+  });
+
+  it('leaves the title out when empty, and a refusal carries its code', async () => {
+    const { api, http } = await setup();
+    const p = api.draftFromSheet({ files: [new File(['a'], 'a.jpg', { type: 'image/jpeg' })], departmentKey: 'ent' });
+    const req = http.expectOne((r) => r.url.endsWith('/draft-from-sheet'));
+    expect((req.request.body as FormData).has('title')).toBe(false);
+    req.flush({ code: 'cap_reached', title: 'Daily limit reached' }, { status: 429, statusText: 'Too Many Requests' });
+    await expect(p).rejects.toMatchObject({ code: 'cap_reached', status: 429 });
+  });
+
+  it('reads a job: status, form id, check count, failure code', async () => {
+    const { api, http } = await setup();
+    const p = api.draftJob('j 1');
+    http.expectOne((r) => r.url.endsWith('/api/casesheets/forms/draft-jobs/j%201')).flush({ status: 'done', formId: 'f1', checkCount: 4 });
+    expect(await p).toEqual({ status: 'done', formId: 'f1', checkCount: 4, code: undefined, message: undefined });
+    const q = api.draftJob('j2');
+    http.expectOne((r) => r.url.endsWith('/draft-jobs/j2')).flush({ status: 'failed', code: 'unreadable', message: 'x' });
+    expect(await q).toMatchObject({ status: 'failed', code: 'unreadable' });
+    const u = api.draftJob('j3');
+    http.expectOne((r) => r.url.endsWith('/draft-jobs/j3')).flush({ status: 'something-new' });
+    expect((await u).status).toBe('queued');
+  });
+});

@@ -251,3 +251,23 @@ export function plainError(e: unknown, fallback = "Couldn't do that just now. Pl
   if (status === 0) return "Can't reach the server right now. Your changes are kept on this screen.";
   return fallback;
 }
+
+/* ---------------- Cortex: a case sheet from a paper sheet (beta) ---------------- */
+
+export type DraftJobStatus = 'queued' | 'reading' | 'building' | 'checking' | 'done' | 'failed';
+
+/** What the server says about one "case sheet from paper" job (GET draft-jobs/{jobId}). */
+export interface DraftJob {
+  status: DraftJobStatus;
+  formId?: string;
+  checkCount?: number;
+  /** unreadable | patient_data | model_error | invalid_result (when failed). */
+  code?: string;
+  message?: string;
+}
+
+export interface DraftFromSheetInput {
+  files: File[];
+  departmentKey: string;
+  title?: string;
+}

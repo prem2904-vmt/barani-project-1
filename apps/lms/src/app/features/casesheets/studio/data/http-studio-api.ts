@@ -12,6 +12,8 @@ import {
   DraftConflict,
   Editor,
   DepartmentRow,
+  DraftFromSheetInput,
+  DraftJob,
   FormDetail,
   FormOrigin,
   FormRow,
@@ -410,6 +412,28 @@ export class HttpStudioApi implements StudioApi {
 
   async importLegacy(legacy: unknown, opts: { dryRun: boolean; title?: string }): Promise<ImportResult> {
     return toImport(await this.call(this.http.post(api('/api/casesheets/forms/import'), { legacy, dryRun: opts.dryRun, title: opts.title })));
+  }
+
+  async draftFromSheet(input: DraftFromSheetInput): Promise<{ jobId: string }> {
+    const body = new FormData();
+    for (const f of input.files) body.append('files', f, f.name);
+    body.append('departmentKey', input.departmentKey);
+    if (input.title?.trim()) body.append('title', input.title.trim());
+    const r = obj(await this.call(this.http.post(api('/api/casesheets/forms/draft-from-sheet'), body)));
+    return { jobId: str(r['jobId']) };
+  }
+
+  async draftJob(jobId: string): Promise<DraftJob> {
+    const r = obj(await this.call(this.http.get(api(`/api/casesheets/forms/draft-jobs/${encodeURIComponent(jobId)}`))));
+    const s = str(r['status']);
+    const status: DraftJob['status'] = (['queued', 'reading', 'building', 'checking', 'done', 'failed'] as const).find((x) => x === s) ?? 'queued';
+    return {
+      status,
+      formId: strOrNull(r['formId']) ?? undefined,
+      checkCount: typeof r['checkCount'] === 'number' ? (r['checkCount'] as number) : undefined,
+      code: strOrNull(r['code']) ?? undefined,
+      message: strOrNull(r['message']) ?? undefined,
+    };
   }
 
   async presence(formId: string): Promise<Editor[]> {

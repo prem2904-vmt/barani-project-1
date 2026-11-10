@@ -90,6 +90,16 @@
     </button>
   </header>
 
+  @if (checkNote(); as note) {
+    <div class="fc-cortex" data-check role="group" [attr.aria-label]="'Check this: ' + note">
+      <pf-icon name="sparkle" [size]="16" />
+      <span class="fc-cortex__t"><strong>Check this:</strong> {{ note }}</span>
+      <button type="button" class="pf-btn pf-btn--secondary fc-cortex__ok" data-act="looks-right" [disabled]="store.session.readOnly()" (click)="$event.stopPropagation(); looksRight()">
+        <pf-icon name="check" [size]="16" /> Looks right
+      </button>
+    </div>
+  }
+
   <!-- As the doctor sees it: the real control, with a sample answer; a picture only -->
   @if (known()) {
     <div class="fc-doctor fe-grid st-doctor-size" inert aria-hidden="true">

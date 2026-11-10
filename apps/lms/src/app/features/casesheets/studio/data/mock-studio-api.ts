@@ -11,6 +11,11 @@ import {
   locate,
   sampleAnswers,
   summariseChanges,
+  addField,
+  addPage,
+  emptyDefinition,
+  setLabel,
+  updateField,
 } from '@prefrontal/forms-engine';
 import { StudioApi } from './studio-api';
 import {
@@ -18,6 +23,8 @@ import {
   DraftConflict,
   Editor,
   DepartmentRow,
+  DraftFromSheetInput,
+  DraftJob,
   FormDetail,
   FormOrigin,
   FormRow,
@@ -455,6 +462,33 @@ export class MockStudioApi extends StudioApi {
     if (opts.dryRun) return { saved: false, formId: null, versionId: null, definition, report };
     const r = await this.createForm(title, definition);
     return { saved: true, formId: r.id, versionId: r.version.id, definition, report };
+  }
+
+  /** Cortex import: a job that walks queued → reading → building → checking → done, then a draft with one "Check this". */
+  private readonly jobs = new Map<string, { polls: number; input: DraftFromSheetInput; formId?: string }>();
+
+  async draftFromSheet(input: DraftFromSheetInput): Promise<{ jobId: string }> {
+    await this.tick('draftFromSheet');
+    if (!input.files.length) throw new StudioError('no_files', 'Add at least one page.', 400);
+    const jobId = id('job');
+    this.jobs.set(jobId, { polls: 0, input });
+    return { jobId };
+  }
+
+  async draftJob(jobId: string): Promise<DraftJob> {
+    await this.tick('draftJob');
+    const j = this.jobs.get(jobId);
+    if (!j) throw new StudioError('not_found', 'That job has expired.', 404);
+    const steps: DraftJob['status'][] = ['queued', 'reading', 'building', 'checking'];
+    if (j.polls < steps.length) return { status: steps[j.polls++] };
+    if (!j.formId) {
+      const title = j.input.title?.trim() || 'Cortex draft';
+      let def = addPage(emptyDefinition(title), 'History').def;
+      const q = addField(def, { pageKey: 'history' }, 'text');
+      def = updateField(setLabel(q.def, q.key, 'Complaint'), q.key, (f) => (f.config = { ...f.config, checkNote: 'The handwriting here was hard to read.' }));
+      j.formId = this.seed(title, def, { departmentKey: j.input.departmentKey });
+    }
+    return { status: 'done', formId: j.formId, checkCount: 1 };
   }
 
   async presence(): Promise<Editor[]> {

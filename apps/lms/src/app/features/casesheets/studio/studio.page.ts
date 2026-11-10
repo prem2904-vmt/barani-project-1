@@ -8,6 +8,9 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { casesheetLinks } from '../casesheets.routes';
 import { StudioApi } from './data/studio-api';
 import { DepartmentRow, FormRow, plainError } from './data/studio-models';
+import { CortexImportDialog } from './cortex-import/cortex-import.dialog';
+import { CortexImportService } from './cortex-import/cortex-import.service';
+import { cortexImportOn } from '../shared/cortex-import-gate';
 import { whenText } from './shared/when';
 import { PhoneNoteComponent } from './shared/phone-note.component';
 
@@ -43,7 +46,7 @@ export function groupByDepartment(forms: FormRow[], departments: DepartmentRow[]
 @Component({
   selector: 'app-studio-page',
   standalone: true,
-  imports: [HeroBandComponent, PfIconComponent, SkeletonRowsComponent, RouterLink, PhoneNoteComponent],
+  imports: [HeroBandComponent, PfIconComponent, SkeletonRowsComponent, RouterLink, PhoneNoteComponent, CortexImportDialog],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './studio.page.html',
   styleUrls: ['./shared/page.scss', './studio.page.scss'],
@@ -52,6 +55,12 @@ export class StudioPage {
   private readonly api = inject(StudioApi);
   private readonly dialog = inject(DialogService);
   private readonly router = inject(Router);
+
+  protected readonly cortex = inject(CortexImportService);
+  /** "Start from a paper case sheet" (Cortex, dev beta): the console switch is on and the server hasn't said no. */
+  protected readonly cortexOn = computed(() => cortexImportOn() && !this.cortex.unavailable());
+  protected readonly cortexFormOpen = signal(false);
+  protected readonly cortexDialogOpen = computed(() => this.cortexFormOpen() || this.cortex.viewing());
 
   protected readonly links = casesheetLinks;
   protected readonly query = signal('');

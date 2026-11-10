@@ -21,6 +21,7 @@ import { SentenceComponent } from '../shared/sentence.component';
 import { AutofocusDirective } from '../shared/autofocus.directive';
 import { deskSignal, isMac } from '../shared/desk';
 import { tip } from '../shared/shortcuts';
+import { checkNoteOf } from '../cortex-import/cortex-import';
 import { EditorStore } from './editor-store';
 import { FieldActions } from './field-actions';
 import { PaletteComponent } from './palette.component';
@@ -81,6 +82,8 @@ export class FieldCardComponent {
   protected readonly problems = computed(() => this.store.problemsByField().get(this.field().key) ?? []);
   protected readonly hasError = computed(() => this.problems().some((p) => p.severity === 'error'));
   protected readonly ifNone = computed(() => ifNoneOf(this.field()));
+  /** Cortex's "Check this" reason, until the person says it looks right or edits the question. */
+  protected readonly checkNote = computed(() => checkNoteOf(this.field()));
   protected readonly options = computed(() => this.field().options ?? []);
 
   /** The doctor's view uses the sample answers; it is a picture, not a control (inert). */
@@ -171,6 +174,10 @@ export class FieldCardComponent {
   protected readonly followUps = computed(() => this.options().filter((o) => (o.subFields ?? []).length));
 
   // ---------------- edits ----------------
+
+  protected looksRight(): void {
+    this.store.looksRight(this.field().key);
+  }
 
   protected pick(e: Event): void {
     const t = e.target as HTMLElement;

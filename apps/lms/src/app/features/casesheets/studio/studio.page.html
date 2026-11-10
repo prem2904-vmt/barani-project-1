@@ -7,9 +7,14 @@
     (valueChange)="query.set($event)"
   >
     <div band-actions class="sh-actions">
-      <a class="pf-btn pf-btn--secondary" [routerLink]="links.adminImport()" data-act="import"><pf-icon name="upload" [size]="18" /> Bring in an old form</a>
+      @if (cortexOn()) {
+        <button type="button" class="pf-btn pf-btn--secondary" data-act="cortex-import" (click)="cortexFormOpen.set(true)">
+          <pf-icon name="sparkle" [size]="18" /> <span class="sh-actions__lbl">Start from a paper case sheet</span>
+        </button>
+      }
+      <a class="pf-btn pf-btn--secondary" [routerLink]="links.adminImport()" data-act="import"><pf-icon name="upload" [size]="18" /> <span class="sh-actions__lbl">Bring in an old form</span></a>
       <button type="button" class="pf-btn pf-btn--primary" data-act="new-form" [disabled]="busy() === 'new'" [attr.aria-busy]="busy() === 'new' ? 'true' : null" (click)="newForm()">
-        <pf-icon name="plus" [size]="18" /> New form
+        <pf-icon name="plus" [size]="18" /> <span class="sh-actions__lbl">New form</span>
       </button>
     </div>
   </pf-hero-band>
@@ -27,6 +32,23 @@
       </header>
       <div class="pf-card__body">
         <st-phone-note />
+        @if (cortexOn() && cortex.job(); as j) {
+          <div class="st-cortex" data-cortex-chip [attr.data-state]="j.status === 'done' ? 'done' : j.status === 'failed' ? 'failed' : 'running'" role="status">
+            <span class="st-cortex__ic"><pf-icon name="sparkle" [size]="16" /></span>
+            @if (j.status === 'done') {
+              <span class="st-cortex__t">Cortex made {{ j.name }}.</span>
+              <button type="button" class="pf-btn pf-btn--primary st-cortex__go" data-act="open-draft" (click)="cortex.open()">Open the draft</button>
+              <button type="button" class="pf-btn pf-btn--icon" aria-label="Dismiss" data-act="dismiss-chip" (click)="cortex.dismiss()"><pf-icon name="x" [size]="16" /></button>
+            } @else if (j.status === 'failed') {
+              <span class="st-cortex__t">{{ j.failure }}</span>
+              <button type="button" class="pf-btn pf-btn--secondary st-cortex__go" data-act="show-chip" (click)="cortex.show()">See why</button>
+              <button type="button" class="pf-btn pf-btn--icon" aria-label="Dismiss" data-act="dismiss-chip" (click)="cortex.dismiss()"><pf-icon name="x" [size]="16" /></button>
+            } @else {
+              <span class="st-cortex__t">Cortex is making {{ j.name }}</span>
+              <button type="button" class="pf-btn pf-btn--secondary st-cortex__go" data-act="show-chip" (click)="cortex.show()">See progress</button>
+            }
+          </div>
+        }
         @if (error()) {
           <div class="pf-empty pf-empty--compact" role="alert">
             <h2 class="pf-empty__title">{{ error() }}</h2>
@@ -80,3 +102,6 @@
     </section>
   </div>
 </div>
+@if (cortexOn() && cortexDialogOpen()) {
+  <st-cortex-import [departments]="departments()" (closed)="cortexFormOpen.set(false)" />
+}

@@ -60,12 +60,17 @@ export const CS_NAV: readonly CsNavItem[] = [
   `,
   styles: [`
     :host { display: contents; }
+    /* The layer: the LMS bottom-nav layer, so dialogs, sheets (the patient step) and the filler's drawers stay ABOVE it (WP11). */
     .csn {
       position: fixed;
-      /* the LMS bottom-nav layer: dialogs, sheets (the patient step) and the filler's drawers stay ABOVE it (WP11) */
       z-index: var(--pf-z-bottom-nav, 35);
-      left: 50%;
+    }
+    /* The placement, kept apart from the layer exactly like the LMS pill (layout/bottom-nav: '.pf-bottom-nav' holds only
+       bottom/left/transform; 'fixed' + z come from the element). This bar IS the nav that --pf-nav-h measures, so it sits on the
+       screen edge + safe area; things that must clear it use --pf-nav-h (nav-clearance.spec.ts). */
+    .csn {
       bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+      left: 50%;
       transform: translateX(-50%);
       max-width: calc(100vw - 16px);
     }

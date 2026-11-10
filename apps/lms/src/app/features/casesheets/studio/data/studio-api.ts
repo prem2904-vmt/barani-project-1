@@ -3,6 +3,8 @@ import { Answers, FormDefinition } from '@prefrontal/forms-engine';
 import {
   ComponentKind,
   DepartmentRow,
+  DraftFromSheetInput,
+  DraftJob,
   Editor,
   FormDetail,
   FormRow,
@@ -63,6 +65,11 @@ export abstract class StudioApi {
 
   // legacy import
   abstract importLegacy(legacy: unknown, opts: { dryRun: boolean; title?: string }): Promise<ImportResult>;
+
+  // Cortex: a case sheet from a paper sheet (dev beta)
+  /** Upload the pages; the server starts a job (202 `{ jobId }`). Refusals carry a `code` (StudioError). */
+  abstract draftFromSheet(input: DraftFromSheetInput): Promise<{ jobId: string }>;
+  abstract draftJob(jobId: string): Promise<DraftJob>;
 
   // presence ("Dr X is also editing")
   abstract presence(formId: string): Promise<Editor[]>;
