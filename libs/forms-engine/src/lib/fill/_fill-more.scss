@@ -1,0 +1,285 @@
+// Styles for the date, duration, size, measure and bmi controls (kept apart from _fill.scss so they can grow on their own).
+@use '../../../../shared/src/lib/styles/pf-mixins' as pf;
+
+// ── date: chosen date line + the inline month calendar
+.fe-date {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fe-date__value {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.fe-cal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-chip-bg);
+  animation: fe-open var(--pf-dur) var(--pf-spring) both;
+}
+
+.fe-cal__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fe-cal__month {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fe-cal__year {
+  flex: 0 0 104px;
+}
+
+.fe-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.fe-cal__wd {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  padding: 2px 0;
+}
+
+.fe-cal__day {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--pf-touch);
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: var(--pf-card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fe-cal__day[aria-current='date'] {
+  border-color: var(--pf-sel-border);
+  font-weight: 600;
+}
+
+.fe-cal__day[aria-pressed='true'] {
+  @include pf.neutral-selected;
+  color: var(--violet-text, #7c3aed);
+  font-weight: 700;
+}
+
+.fe-cal__day:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+// ── duration
+.fe-dur {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fe-chip--num {
+  min-width: 56px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fe-dur__says {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+// ── size
+.fe-size {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fe-size__boxes {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fe-size__boxes .fe-numbox {
+  min-width: 88px;
+}
+
+.fe-size__x,
+.fe-size__unit {
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+// ── measure: stepper + a pointer-event slider (48px track and thumb)
+.fe-measure {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fe-slider {
+  position: relative;
+  height: var(--pf-touch);
+  min-height: var(--pf-touch);
+  margin: 22px 24px 0;
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+
+.fe-slider__rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: var(--pf-toggle-off);
+}
+
+.fe-slider__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--pf-switch-on);
+}
+
+.fe-slider__thumb {
+  position: absolute;
+  top: 0;
+  width: var(--pf-touch);
+  height: var(--pf-touch);
+  margin-left: calc(var(--pf-touch) / -2);
+  border-radius: 999px;
+  background: var(--pf-card-bg);
+  border: 1px solid var(--pf-line);
+  box-shadow: var(--pf-shadow-sm);
+  transition: transform 120ms ease;
+}
+
+.fe-slider--empty .fe-slider__thumb {
+  opacity: 0.6;
+}
+
+.fe-slider--drag .fe-slider__thumb {
+  transform: scale(1.06);
+}
+
+.fe-slider:focus-visible .fe-slider__thumb {
+  outline: 2px solid var(--color-violet-600, #7c3aed);
+  outline-offset: 2px;
+}
+
+.fe-slider__bubble {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 8px;
+  background: var(--pf-sel-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.fe-slider__ends {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 4px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+// ── bmi
+.fe-bmi {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fe-bmi__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.fe-bmi__result {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+}
+
+.fe-bmi__figure {
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.fe-bmi__cat {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-chip-bg);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fe-cal,
+  .fe-slider__thumb {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+// date of birth: 12 month chips in a calm grid; day grid without weekdays
+.fe-months {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 520px;
+}
+
+@media (max-width: 640px) {
+  .fe-months {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.fe-cal__grid--plain {
+  max-width: 420px;
+}

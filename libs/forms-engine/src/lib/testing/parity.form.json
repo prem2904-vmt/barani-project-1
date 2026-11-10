@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 2,
+  "title": "Legacy parity check",
+  "specialty": "ENT",
+  "pages": [
+    {
+      "key": "patient",
+      "title": "Patient",
+      "fields": [
+        { "key": "patientName", "kind": "text", "label": "Patient name", "required": true, "width": "half" },
+        {
+          "key": "seenAt",
+          "kind": "choice",
+          "label": "Seen at",
+          "width": "half",
+          "default": "opd",
+          "options": [
+            { "key": "opd", "label": "Out-patient", "description": "Walk-in or booked visit" },
+            { "key": "ward", "label": "Ward", "description": "Admitted patient" },
+            { "key": "camp", "label": "Camp" }
+          ]
+        },
+        {
+          "key": "complaint",
+          "kind": "text",
+          "label": "Main complaint",
+          "says": { "sections": [{ "section": "hpi", "order": 1 }] }
+        },
+        {
+          "key": "temp",
+          "kind": "number",
+          "label": "Temperature",
+          "width": "half",
+          "config": { "unit": "°F", "min": 90, "max": 110, "errorMessage": "Check the thermometer: 90 to 110 °F" }
+        },
+        { "key": "bmi", "kind": "bmi", "label": "Height and weight", "width": "half" },
+        {
+          "key": "sketch",
+          "kind": "unsupported",
+          "label": "Sketch of the nose",
+          "config": { "legacyType": "scribblePad", "legacy": {} }
+        }
+      ]
+    },
+    {
+      "key": "complaints",
+      "title": "Complaints",
+      "fields": [
+        {
+          "key": "symptoms",
+          "kind": "multi",
+          "label": "Complaints",
+          "says": { "sections": [{ "section": "hpi", "order": 2 }] },
+          "options": [
+            {
+              "key": "block",
+              "label": "Nasal block",
+              "linkedPage": "p_block",
+              "description": "One or both sides",
+              "subFields": [
+                { "key": "block_for", "kind": "duration", "label": "For", "config": { "scale": "calendar", "mode": "single", "defaultUnit": "days" } }
+              ]
+            },
+            {
+              "key": "bleed",
+              "label": "Bleeding",
+              "linkedPage": "p_bleed",
+              "subFields": [
+                { "key": "bleed_for", "kind": "duration", "label": "For", "config": { "scale": "calendar", "mode": "single", "defaultUnit": "days" } }
+              ]
+            },
+            {
+              "key": "smell",
+              "label": "Loss of smell",
+              "linkedPage": "p_smell",
+              "subFields": [
+                { "key": "smell_for", "kind": "duration", "label": "For", "config": { "scale": "calendar", "mode": "single", "defaultUnit": "days" } }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "p_block",
+      "title": "Nasal block",
+      "showWhen": { "conditions": [{ "field": "symptoms", "op": "contains", "value": "block" }] },
+      "fields": [{ "key": "block_note", "kind": "text", "label": "About the block", "config": { "multiline": true } }]
+    },
+    {
+      "key": "p_bleed",
+      "title": "Bleeding",
+      "showWhen": { "conditions": [{ "field": "symptoms", "op": "contains", "value": "bleed" }] },
+      "fields": [{ "key": "bleed_note", "kind": "text", "label": "About the bleeding" }]
+    },
+    {
+      "key": "p_smell",
+      "title": "Loss of smell",
+      "showWhen": { "conditions": [{ "field": "symptoms", "op": "contains", "value": "smell" }] },
+      "fields": [{ "key": "smell_note", "kind": "text", "label": "About the smell" }]
+    },
+    {
+      "key": "exam",
+      "title": "Examination",
+      "fields": [
+        { "key": "ulcers", "kind": "repeatPages", "label": "Ulcers", "config": { "pages": ["ulcer"], "mode": "uniform", "minCount": 0, "maxCount": 5, "orderMode": "instance", "narrativeOverride": true, "showIndex": true } },
+        { "key": "findings", "kind": "text", "label": "Findings", "config": { "multiline": true }, "says": { "sections": [{ "section": "exam", "order": 1 }] } }
+      ]
+    },
+    {
+      "key": "ulcer",
+      "title": "Ulcer",
+      "fields": [{ "key": "site", "kind": "text", "label": "Site", "says": { "sections": [{ "section": "exam", "order": 2 }] } }]
+    }
+  ],
+  "narrative": {
+    "sections": [
+      { "key": "hpi", "title": "History", "order": 1, "template": "{{complaint}}. Complaints: {{symptoms}}." },
+      { "key": "exam", "title": "Examination", "order": 2, "template": "{{findings}}" }
+    ]
+  }
+}

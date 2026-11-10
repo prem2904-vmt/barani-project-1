@@ -1,0 +1,40 @@
+{
+  "patientName": "Rajesh Kumar",
+  "patientId": "ENT-2024-001",
+  "age": 42,
+  "sex": "male",
+  "religion": "Hindu",
+  "occupation": "Software Engineer",
+  "address": "123 Gandhi Road, Coimbatore, Tamil Nadu",
+  "phone": "+91 98765 43210",
+  "complaints": ["obstruction", "discharge"],
+  "obstructionSide": "left",
+  "obstructionDuration": {
+    "amount": 6,
+    "unit": "months"
+  },
+  "dischargeSide": "both",
+  "dischargeDuration": {
+    "amount": 2,
+    "unit": "weeks"
+  },
+  "normalSince": 8,
+  "normalSinceUnit": "months",
+  "obstructionSideDetail": "left",
+  "obstructionAlternating": "no",
+  "obstructionOnset": "gradual",
+  "obstructionProgression": "progressive",
+  "obstructionConstancy": "variable",
+  "obstructionAggravated": ["dust", "cold"],
+  "obstructionRelieved": ["drops", "steam"],
+  "dischargeType": "mucoid",
+  "dischargeConsistency": "thick",
+  "dischargeQuantity": "moderate",
+  "dischargeColor": "yellow",
+  "dischargeBloodStained": "no",
+  "dischargeFoulSmelling": "yes",
+  "sneezing": "yes",
+  "itching": "yes",
+  "headache": "no",
+  "earSymptoms": "no"
+}

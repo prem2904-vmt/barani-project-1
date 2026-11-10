@@ -1,0 +1,475 @@
+// ─────────────────────────────────────────────────────────────────────────
+// grid kind (legacy multi-textbox): the legacy layout 1:1, skinned with the kit.
+//  - a framed table: bar (Quick fill + Include in narrative), headings, rows;
+//  - every data column an equal share of the width (fits a phone; never scrolls sideways);
+//  - grid lines = a 1px gap over the line colour, so merged cells and labels keep their borders;
+//  - cells are ≥48px tap targets; the cell sheet opens inline under the row (never floats).
+// Imported from fill/_fill.scss (global classes, like every fill control).
+// ─────────────────────────────────────────────────────────────────────────
+@use '../../../../../shared/src/lib/styles/pf-mixins' as pf;
+@use './grid-studio';
+
+.fe-gridk-host {
+  display: block;
+  min-width: 0;
+}
+
+.fe-gridk {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-card-bg);
+  // legacy: the frame turns quietly violet while the table is in the narrative
+  &:not(.fe-gridk--off):has(.fe-gridk__print) {
+    border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 35%, var(--pf-line));
+  }
+}
+
+.fe-gridk__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--pf-line);
+  background: var(--pf-chip-bg);
+  border-radius: 12px 12px 0 0;
+}
+
+.fe-gridk__qf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.fe-gridk__qf-lbl {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.fe-gridk__chip {
+  padding: 6px 14px;
+}
+
+.fe-gridk__print {
+  width: auto;
+  max-width: none;
+  gap: 12px;
+}
+
+// ── the table (explicit placement; see grid.fill.ts rowLine / colLine) ──
+.fe-gridk__table {
+  display: grid;
+  gap: 1px;
+  background: var(--pf-line);
+  border-radius: 0 0 11px 11px;
+  overflow: hidden; // clips the corners only (no scroller)
+}
+
+.fe-gridk__table > * {
+  min-width: 0;
+  background: var(--pf-card-bg);
+}
+
+.fe-gridk__corner,
+.fe-gridk__band,
+.fe-gridk__head,
+.fe-gridk__rowlab {
+  background: var(--pf-chip-bg);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  @include pf.no-truncate;
+}
+
+.fe-gridk__band {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 6px;
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.fe-gridk__band--empty {
+  background: var(--pf-card-bg);
+}
+
+.fe-gridk__corner {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px 8px 12px;
+}
+
+.fe-gridk__head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--pf-touch);
+  padding: 8px 6px;
+  border: 0;
+  text-align: center;
+}
+
+.fe-gridk__head--tap,
+.fe-gridk__rowlab--tap {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  &:hover {
+    color: var(--text-primary);
+  }
+  &[aria-expanded='true'] {
+    color: var(--violet-text, #7c3aed);
+    box-shadow: inset 0 -2px 0 var(--violet-text, #7c3aed);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--violet-text, #7c3aed);
+    outline-offset: -2px;
+  }
+}
+
+.fe-gridk__labslot,
+.fe-gridk__slot,
+.fe-gridk__panelslot {
+  display: flex;
+}
+
+.fe-gridk__rowlab {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--pf-touch);
+  padding: 10px 10px 10px 12px;
+  border: 0;
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+// ── a cell: shows its answer; tap to open its sheet ──
+.fe-gridk__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: var(--pf-touch);
+  padding: 8px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14.5px;
+  line-height: 1.3;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  @include pf.no-truncate;
+  transition: background var(--pf-dur-fast, 120ms) ease;
+}
+
+.fe-gridk__table .fe-gridk__cell {
+  min-height: 60px; // legacy cell height
+}
+
+button.fe-gridk__cell:hover {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, transparent);
+}
+
+button.fe-gridk__cell:focus-visible {
+  outline: 2px solid var(--violet-text, #7c3aed);
+  outline-offset: -2px;
+}
+
+.fe-gridk__cell--open {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, var(--pf-card-bg));
+  box-shadow: inset 0 0 0 2px var(--violet-text, #7c3aed);
+}
+
+.fe-gridk__cell--none {
+  cursor: default;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 6px,
+    color-mix(in srgb, var(--pf-line) 55%, transparent) 6px 7px
+  );
+}
+
+.fe-gridk__cell--ro {
+  cursor: default;
+}
+
+.fe-gridk__val {
+  font-weight: 500;
+}
+
+.fe-gridk__ph {
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.fe-gridk__line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px 6px;
+  font-size: 13.5px;
+}
+
+.fe-gridk__lk {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.fe-gridk__line--empty .fe-gridk__lk {
+  opacity: 0.8;
+}
+
+.fe-gridk__cellhead {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-tertiary);
+}
+
+// ── stacked: one card per row when the columns would be too narrow to tap ──
+.fe-gridk__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+
+.fe-gridk__card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--pf-line);
+  border-radius: 10px;
+  overflow: hidden; // corners only
+}
+
+.fe-gridk__card .fe-gridk__rowlab {
+  border-bottom: 1px solid var(--pf-line);
+}
+
+.fe-gridk__cardcells {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 1px;
+  background: var(--pf-line);
+}
+
+.fe-gridk__cardcells > * {
+  background: var(--pf-card-bg);
+}
+
+// ── shapes: boxes around a picture (legacy circle / rectangle / triangle / square) ──
+.fe-gridk__shape {
+  position: relative;
+  width: min(100%, 420px);
+  aspect-ratio: 1;
+  margin: 12px auto;
+}
+
+.fe-gridk__centre {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-chip-bg);
+  overflow: hidden; // the picture only
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+}
+
+.fe-gridk__pos {
+  position: absolute;
+  width: 27%;
+  transform: translate(-50%, -50%);
+  .fe-gridk__cell {
+    border: 1px solid var(--pf-line);
+    border-radius: 10px;
+    background: var(--pf-card-bg);
+    padding: 6px 4px;
+  }
+}
+
+.fe-gridk__badge {
+  position: absolute;
+  top: -8px;
+  left: -6px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--violet-text, #7c3aed);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+// ── the sheet (inline, full width under the row) ──
+.fe-gsheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg));
+  border-top: 2px solid var(--violet-text, #7c3aed);
+  animation: fe-gsheet-in 160ms ease-out;
+}
+
+.fe-gridk__stack > .fe-gsheet,
+.fe-gridk > .fe-gsheet {
+  border: 1px solid var(--pf-line);
+  border-top: 2px solid var(--violet-text, #7c3aed);
+  border-radius: 10px;
+}
+
+@keyframes fe-gsheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fe-gsheet {
+    animation: none;
+  }
+}
+
+.fe-gsheet__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fe-gsheet__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fe-gsheet__where {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.fe-gsheet__what {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fe-gsheet__nav {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.fe-gsheet__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fe-gsheet__num {
+  display: flex;
+}
+
+.fe-gsheet__text {
+  width: 100%;
+}
+
+.fe-gsheet__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--pf-line);
+}
+
+.fe-gsheet__scope {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.fe-gsheet__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.fe-gsheet__spacer {
+  flex: 1 1 auto;
+}
+
+// the sheet's host fills its slot (full width under the row)
+fe-grid-cell {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// Whole words in the table (the kit's "anywhere" split "Sound" into "Soun / d" on a phone); a word longer than its
+// column hyphenates (lang="en"). Narrow tables (a phone) use a smaller type and tighter cells, like the legacy one.
+.fe-gridk__table {
+  container-type: inline-size;
+  .fe-gridk__head,
+  .fe-gridk__band,
+  .fe-gridk__rowlab,
+  .fe-gridk__corner,
+  .fe-gridk__cell {
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: auto;
+  }
+}
+@container (max-width: 560px) {
+  .fe-gridk__head,
+  .fe-gridk__band,
+  .fe-gridk__corner,
+  .fe-gridk__rowlab {
+    font-size: 11.5px;
+    padding-left: 3px;
+    padding-right: 3px;
+  }
+  .fe-gridk__rowlab,
+  .fe-gridk__corner {
+    padding-left: 8px;
+  }
+  .fe-gridk__table .fe-gridk__cell {
+    font-size: 13px;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+}

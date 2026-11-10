@@ -1,0 +1,1068 @@
+// ─────────────────────────────────────────────────────────────────────────
+// forms-engine fill controls: the doctor's touch controls (plan §6).
+// GLOBAL classes (the controls are rendered through NgComponentOutlet and
+// nest inside each other, so one stylesheet keeps them identical).
+//  - every tap target ≥ var(--pf-touch) (48px), text ≥ 16px in inputs;
+//  - selected = the kit's NEUTRAL selected state + a violet check (§3);
+//  - no scroll containers: everything grows, the card body scrolls.
+// Imported once from apps/prepare/src/styles.scss.
+// ─────────────────────────────────────────────────────────────────────────
+@use '../../../../shared/src/lib/styles/pf-mixins' as pf;
+@use './fill-more';
+@use '../canvas/canvas';
+@use '../kinds/grid/grid';
+
+// ── page grid: 12 columns, widths from the field (full / half / third / quarter)
+.fe-grid {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 22px 18px;
+  align-items: start;
+}
+
+.fe-grid > .fe-field {
+  grid-column: span 12;
+  min-width: 0;
+}
+
+@container (min-width: 520px) {
+  .fe-grid > .fe-w-half {
+    grid-column: span 6;
+  }
+  .fe-grid > .fe-w-third {
+    grid-column: span 6;
+  }
+  .fe-grid > .fe-w-quarter {
+    grid-column: span 6;
+  }
+}
+
+@container (min-width: 760px) {
+  .fe-grid > .fe-w-third {
+    grid-column: span 4;
+  }
+  .fe-grid > .fe-w-quarter {
+    grid-column: span 3;
+  }
+}
+
+// ── one field: label row, control, hint
+.fe-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-margin: 24px;
+}
+
+.fe-field__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fe-field__lbl {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+  @include pf.no-truncate;
+}
+
+.fe-field__req {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--amber-text, #b45309);
+  flex: none;
+}
+
+.fe-field__note,
+.fe-field__hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+  text-wrap: pretty;
+}
+
+.fe-field__err {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--red-text, #dc2626);
+}
+
+.fe-field--missing > .fe-field__head .fe-field__lbl {
+  color: var(--red-text, #dc2626);
+}
+
+// ── follow-up questions of a chosen option, inline under the control
+.fe-follow {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--pf-line);
+  border-left: 3px solid color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--pf-line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg));
+  animation: fe-open var(--pf-dur) var(--pf-spring) both;
+}
+
+.fe-follow__title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.fe-follow .fe-grid {
+  gap: 16px 14px;
+}
+
+.fe-follow .fe-field__lbl {
+  font-size: 14px;
+}
+
+@keyframes fe-open {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+// ── choice buttons / chips: 48px, neutral selected, violet check
+.fe-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fe-chips--list {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.fe-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--pf-touch);
+  min-width: var(--pf-touch);
+  padding: 8px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    background var(--pf-dur-fast) ease,
+    border-color var(--pf-dur-fast) ease,
+    transform 80ms ease;
+  @include pf.no-truncate;
+}
+
+.fe-chips--list .fe-chip {
+  justify-content: flex-start;
+  text-align: left;
+  padding: 10px 16px;
+}
+
+.fe-chip:hover:not(:disabled):not([aria-pressed='true']):not([aria-checked='true']) {
+  @include pf.border-hover;
+}
+
+.fe-chip:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+// chosen: a solid fill in the primary with white text (legacy: the page colour, solid) — readable light and dark
+.fe-chip[aria-pressed='true'],
+.fe-chip[aria-checked='true'] {
+  background: var(--color-primary, #7c3aed);
+  border-color: var(--color-primary, #7c3aed);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary, #7c3aed) 28%, transparent);
+}
+// a switch row / tick box shows its state in the switch or the box, never as a filled row
+.fe-chip.fe-switchrow[aria-checked='true'],
+.fe-chip.fe-checkrow[aria-checked='true'] {
+  background: var(--pf-card-bg);
+  border-color: var(--pf-line);
+  color: var(--text-primary);
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.fe-chip__check {
+  display: none;
+  color: currentColor;
+}
+
+.fe-chip[aria-pressed='true'] .fe-chip__check,
+.fe-chip[aria-checked='true'] .fe-chip__check {
+  display: inline-flex;
+}
+
+.fe-chip:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+// Big yes / no: equal widths, a little taller.
+.fe-yn {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  max-width: 420px;
+}
+
+.fe-yn .fe-chip {
+  min-height: 52px;
+  font-size: 16px;
+}
+
+// Small caption over a chip row ("For", "Unit").
+.fe-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fe-sub__lbl {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+// ── number box + steppers
+.fe-stepper {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.fe-stepper__btn,
+.fe-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--pf-touch);
+  min-width: var(--pf-touch);
+  height: var(--pf-touch);
+  min-height: var(--pf-touch);
+  border-radius: 12px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-chip-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 80ms ease;
+}
+
+.fe-stepper__btn:active:not(:disabled),
+.fe-iconbtn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.fe-stepper__btn:disabled,
+.fe-iconbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fe-iconbtn[aria-pressed='true'] {
+  @include pf.neutral-selected;
+  color: var(--violet-text, #7c3aed);
+}
+
+.fe-numbox {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  min-width: 112px;
+  min-height: var(--pf-touch);
+  padding: 8px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--input-border, var(--pf-line));
+  background: var(--input-bg, var(--pf-card-bg));
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.fe-numbox[aria-expanded='true'] {
+  border-color: var(--input-border-focus, #8b5cf6);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+
+.fe-numbox__v {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fe-numbox--empty .fe-numbox__v {
+  color: var(--text-tertiary);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.fe-numbox__u {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+// ── the inline number pad
+.fe-pad {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 340px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-chip-bg);
+  animation: fe-open var(--pf-dur) var(--pf-spring) both;
+}
+
+.fe-pad__keys {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.fe-pad__key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 56px;
+  border-radius: 12px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 22px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 80ms ease,
+    background 120ms ease;
+}
+
+.fe-pad__key:active {
+  transform: scale(0.96);
+  background: var(--pf-sel-bg);
+}
+
+.fe-pad__foot {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+// ── text input with the mic
+.fe-text {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.fe-text__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--pf-touch);
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--input-border, var(--pf-line));
+  background: var(--input-bg, var(--pf-card-bg));
+  color: var(--input-text, var(--text-primary));
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.45;
+  outline: none;
+  resize: none;
+  // A textarea GROWS with its text (field-sizing where supported, JS fallback);
+  // it never becomes a second scroller.
+  overflow: hidden;
+  field-sizing: content;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+textarea.fe-text__input {
+  min-height: 96px;
+}
+
+.fe-text__input:focus {
+  border-color: var(--input-border-focus, #8b5cf6);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+
+.fe-text__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.fe-text__input:disabled {
+  opacity: 0.6;
+}
+
+.fe-mic[aria-pressed='true'] {
+  border-color: var(--color-primary, #7c3aed);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, var(--pf-card-bg));
+  color: var(--violet-text, #7c3aed);
+  animation: fe-listen 1.4s ease-in-out infinite;
+}
+
+@keyframes fe-listen {
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+  }
+}
+
+// ── repeat rows
+.fe-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fe-row {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  animation: fe-open var(--pf-dur) var(--pf-spring) both;
+}
+
+.fe-row__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fe-row__title {
+  flex: 1 1 auto;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  @include pf.no-truncate;
+}
+
+.fe-add {
+  align-self: flex-start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fe-follow,
+  .fe-pad,
+  .fe-row,
+  .fe-chip,
+  .fe-pad__key,
+  .fe-stepper__btn,
+  .fe-iconbtn {
+    animation: none !important;
+    transition: none !important;
+  }
+  .fe-mic[aria-pressed='true'] {
+    animation: none;
+  }
+}
+
+// ── yes / no as a switch row or a tick box (48px rows, the label is the row)
+.fe-switchrow,
+.fe-checkrow {
+  justify-content: space-between;
+  width: 100%;
+  max-width: 420px;
+  text-align: left;
+}
+
+.fe-checkrow {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.fe-switchrow[aria-checked],
+.fe-checkrow[aria-checked] {
+  // the row itself stays neutral; the switch / box shows the state
+  background: var(--pf-card-bg);
+  border-color: var(--pf-line);
+  font-weight: 500;
+}
+
+.fe-switch {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--pf-toggle-off);
+  border: 1px solid var(--pf-toggle-border);
+  transition: background var(--pf-dur-fast) ease;
+}
+
+.fe-switch .pf-toggle__knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  transition: transform var(--pf-dur-fast) var(--pf-spring);
+}
+
+.fe-switchrow[aria-checked='true'] .fe-switch {
+  background: var(--pf-switch-on);
+  border-color: var(--pf-switch-on);
+}
+
+.fe-switchrow[aria-checked='true'] .fe-switch .pf-toggle__knob {
+  transform: translateX(22px);
+}
+
+.fe-checkrow__box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1.5px solid var(--pf-sel-border);
+  color: var(--violet-text, #7c3aed);
+  background: var(--pf-card-bg);
+}
+
+.fe-checkrow[aria-checked='true'] .fe-checkrow__box {
+  border-color: var(--color-primary, #7c3aed);
+  background: var(--pf-done-tint);
+}
+
+// ── repeating pages: steppers + jump chips
+.fe-rp {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fe-numbox--static {
+  cursor: default;
+}
+
+// ───────── press-and-hold (HoldDirective): a fill sweeps across while the hold runs ─────────
+.fe-holdable {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.fe-holdable::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 26%, transparent);
+  pointer-events: none;
+}
+// on the gradient primary button the fill is a light sweep, so the progress reads clearly
+.pf-btn--primary.fe-holdable::after {
+  background: rgba(255, 255, 255, 0.3);
+}
+.fe-holdable[data-holding]::after {
+  transform: scaleX(1);
+  transition: transform var(--fe-hold-ms, 0ms) linear;
+}
+
+// ───────── suggestion chips + matching rows (text) ─────────
+.fe-sugg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.fe-sugg__chip {
+  min-height: var(--pf-touch);
+  padding: 8px 14px;
+  border-style: dashed;
+  font-weight: 400;
+  font-size: 14.5px;
+  text-align: left;
+  justify-content: flex-start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  -webkit-touch-callout: none;
+  user-select: none;
+}
+.fe-sugg__chip[data-holding] {
+  @include pf.neutral-selected;
+}
+.fe-sugg-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-card-bg);
+  overflow: hidden;
+}
+.fe-sugg__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--pf-touch);
+  padding: 10px 14px;
+  border: 0;
+  border-top: 1px solid var(--pf-line);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  -webkit-touch-callout: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+.fe-sugg__row:first-child {
+  border-top: 0;
+}
+.fe-sugg__row pf-icon {
+  color: var(--text-tertiary);
+  flex: 0 0 auto;
+}
+.fe-sugg__row[aria-selected='true'],
+.fe-sugg__row:hover,
+.fe-sugg__row[data-holding] {
+  @include pf.neutral-selected;
+}
+
+// ───────── repeating pages in the doctor's order ─────────
+.fe-rp__order {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fe-rp__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fe-rp__go {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+.fe-rp__done {
+  display: inline-flex;
+  color: var(--violet-text, #7c3aed);
+}
+.fe-rp__n {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+
+// ───────── option description (legacy multiselect / imageSelect cards) and tiles ─────────
+.fe-chip__txt {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: inherit;
+  gap: 2px;
+  min-width: 0;
+}
+.fe-chip__desc {
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+.fe-chips--tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+}
+.fe-chips--tiles .fe-chip {
+  flex-direction: column;
+  min-height: 132px;
+  padding: 14px 10px;
+  gap: 8px;
+}
+.fe-tile__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: var(--pf-chip-bg);
+  color: var(--violet-text, #7c3aed);
+  font-size: 20px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+// ───────── a kind that comes later (images, drawings, grids): calm, never an error ─────────
+.fe-later {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px dashed var(--pf-line);
+  background: var(--pf-chip-bg);
+}
+.fe-later__icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--pf-card-bg);
+  color: var(--violet-text, #7c3aed);
+}
+.fe-later__txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fe-later__title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.fe-later__body {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+// ───────── a heavy kind's control on its way (loaded on first use; usually a few ms) ─────────
+.fe-loading {
+  min-height: 96px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--pf-chip-bg) 0%, var(--pf-card-bg) 50%, var(--pf-chip-bg) 100%);
+  background-size: 200% 100%;
+  animation: fe-loading 1.2s ease-in-out infinite;
+}
+@keyframes fe-loading {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fe-loading {
+    animation: none;
+  }
+}
+.fe-later .pf-btn {
+  margin-left: auto;
+  align-self: center;
+}
+
+// ───────── legacy option layouts (fill/option-layout.ts) ─────────
+// legacy buttonSelect: the buttons share the row equally, wrapping only when they don't fit
+.fe-chips--row {
+  gap: 12px;
+}
+.fe-chips--row > .fe-chip {
+  flex: 1 1 0;
+  min-width: max-content;
+  padding: 12px 20px;
+}
+
+// legacy radio (checkbox-group): equal-width grid, 2 per row (3 when the count divides by 3)
+.fe-chips--grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.fe-chips--grid3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.fe-chips--grid > .fe-chip {
+  width: 100%;
+  padding: 12px 16px;
+  text-align: center;
+}
+
+// legacy multiselect-expand: one full-width card per option, the follow-ups inside the chosen card
+.fe-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+.fe-cards--half {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.fe-card {
+  border: 1px solid var(--pf-line);
+  border-radius: 16px;
+  background: var(--pf-card-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+.fe-card--on {
+  border-color: var(--color-primary, #7c3aed);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);
+}
+.fe-card__head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: var(--pf-touch);
+  padding: 20px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.fe-cards--half .fe-card__head {
+  padding: 16px;
+}
+.fe-card__head:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.fe-card__head:focus-visible {
+  outline: 2px solid var(--color-primary, #7c3aed);
+  outline-offset: -2px;
+  border-radius: 16px;
+}
+.fe-card__head:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.fe-card__icon {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent);
+  color: var(--text-tertiary);
+  font-size: 20px;
+  font-weight: 700;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
+}
+.fe-cards--half .fe-card__icon {
+  width: 40px;
+  height: 40px;
+}
+.fe-card--on .fe-card__icon {
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+  color: #fff;
+}
+.fe-card__txt {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fe-card__title {
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 600;
+}
+.fe-cards--half .fe-card__title {
+  font-size: 16px;
+  line-height: 24px;
+}
+.fe-card__desc {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-tertiary);
+}
+.fe-card__tick {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent);
+  display: grid;
+  place-items: center;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease;
+}
+.fe-card__tick svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+.fe-card--on .fe-card__tick {
+  border-color: transparent;
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+}
+.fe-card--on .fe-card__tick svg {
+  opacity: 1;
+}
+.fe-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 0 20px 20px;
+  animation: fe-open var(--pf-dur) var(--pf-spring) both;
+}
+.fe-card__line {
+  height: 1px;
+  background: var(--pf-line);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fe-card__body {
+    animation: none;
+  }
+}
+
+// legacy duration-input: number box(es) + the unit dropdown on one line
+.fe-durbox {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.fe-durbox__num {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.fe-durbox__dash {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.fe-durbox__unit {
+  flex: none;
+  width: 144px;
+}
+
+// legacy number: a plain box, the unit after it
+.fe-numline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.fe-numline__input {
+  flex: 1 1 auto;
+}
+.fe-numline__u {
+  flex: none;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+// a note's mic sits inside its box (legacy voice-text), never a button beside every field
+.fe-text--mic .fe-text__input {
+  padding-right: 56px;
+}
+.fe-mic--inline {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-tertiary);
+}
+.fe-mic--inline:hover:not(:disabled) {
+  color: var(--color-primary, #7c3aed);
+}
+
+// ───────── question + control on one row (legacy yesno-na card) ─────────
+.fe-field__row {
+  display: contents;
+}
+.fe-field--ynrow > .fe-field__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 12px 12px 12px 16px;
+  border: 1px solid var(--pf-line);
+  border-radius: 16px;
+  background: var(--pf-card-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.fe-field--ynrow .fe-field__head {
+  flex: 1 1 180px;
+  min-width: 0;
+  margin: 0;
+}
+.fe-field--ynrow .fe-field__lbl {
+  white-space: normal;
+}
+.fe-field--ynrow .fe-yn {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  max-width: none;
+  margin-left: auto;
+}
+.fe-field--ynrow .fe-yn .fe-chip {
+  min-height: var(--pf-touch);
+  min-width: 64px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 15px;
+}
+
+// a chosen button's description stays readable on the fill
+.fe-chip[aria-pressed='true'] .fe-chip__desc,
+.fe-chip[aria-checked='true'] .fe-chip__desc {
+  color: rgba(255, 255, 255, 0.85);
+}

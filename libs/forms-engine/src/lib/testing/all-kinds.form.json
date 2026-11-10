@@ -1,0 +1,708 @@
+{
+  "schemaVersion": 2,
+  "title": "Every kind (sampler)",
+  "specialty": "General",
+  "pages": [
+    {
+      "key": "patient",
+      "title": "Patient",
+      "fields": [
+        {
+          "key": "patientName",
+          "kind": "text",
+          "label": "Patient name",
+          "required": true,
+          "config": {
+            "multiline": false,
+            "format": "plain",
+            "voice": true,
+            "suggestions": true
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient",
+                "order": 1
+              }
+            ],
+            "subheading": false,
+            "prefix": "Patient name: ",
+            "suffix": "."
+          },
+          "width": "half"
+        },
+        {
+          "key": "age",
+          "kind": "number",
+          "label": "Age",
+          "required": false,
+          "config": {
+            "min": 0,
+            "max": 120
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient",
+                "order": 2
+              }
+            ],
+            "subheading": false,
+            "prefix": "Age: ",
+            "suffix": "."
+          },
+          "width": "quarter"
+        },
+        {
+          "key": "sex",
+          "kind": "choice",
+          "label": "Sex",
+          "width": "quarter",
+          "config": {
+            "display": "buttons"
+          },
+          "options": [
+            {
+              "key": "male",
+              "label": "Male",
+              "subFields": []
+            },
+            {
+              "key": "female",
+              "label": "Female",
+              "subFields": []
+            },
+            {
+              "key": "other",
+              "label": "Other",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient",
+                "order": 3
+              }
+            ],
+            "subheading": false,
+            "prefix": "Sex: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "dob",
+          "kind": "date",
+          "label": "Date of birth",
+          "required": false,
+          "config": {
+            "allowFuture": false,
+            "quickChips": true
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient",
+                "order": 4
+              }
+            ],
+            "subheading": false,
+            "prefix": "Date of birth: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "seenOn",
+          "kind": "date",
+          "label": "Seen on",
+          "required": false,
+          "config": {
+            "allowFuture": false,
+            "quickChips": true
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient",
+                "order": 5
+              }
+            ],
+            "subheading": false,
+            "prefix": "Seen on: ",
+            "suffix": "."
+          },
+          "width": "half"
+        },
+        {
+          "key": "phone",
+          "kind": "text",
+          "label": "Phone",
+          "required": false,
+          "config": {
+            "format": "phone"
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient",
+                "order": 6
+              }
+            ],
+            "subheading": false,
+            "prefix": "Phone: ",
+            "suffix": "."
+          },
+          "width": "half"
+        }
+      ]
+    },
+    {
+      "key": "history",
+      "title": "History",
+      "fields": [
+        {
+          "key": "symptoms",
+          "kind": "multi",
+          "label": "Symptoms",
+          "required": false,
+          "config": {
+            "display": "chips"
+          },
+          "options": [
+            {
+              "key": "fever",
+              "label": "Fever",
+              "subFields": []
+            },
+            {
+              "key": "cough",
+              "label": "Cough",
+              "subFields": []
+            },
+            {
+              "key": "rash",
+              "label": "Rash",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "history",
+                "order": 1
+              }
+            ],
+            "subheading": false,
+            "negativeHistory": {
+              "enabled": true,
+              "prefix": "Denies"
+            },
+            "prefix": "Symptoms: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "fever",
+          "kind": "duration",
+          "label": "Fever for",
+          "required": false,
+          "config": {
+            "scale": "calendar",
+            "mode": "single",
+            "defaultUnit": "days"
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "history",
+                "order": 2
+              }
+            ],
+            "subheading": false,
+            "prefix": "Fever for: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "cough",
+          "kind": "duration",
+          "label": "Cough for",
+          "required": false,
+          "config": {
+            "scale": "calendar",
+            "mode": "range",
+            "defaultUnit": "weeks"
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "history",
+                "order": 3
+              }
+            ],
+            "subheading": false,
+            "prefix": "Cough for: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "worse",
+          "kind": "duration",
+          "label": "Worse in the",
+          "required": false,
+          "config": {
+            "scale": "period"
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "history",
+                "order": 4
+              }
+            ],
+            "subheading": false,
+            "prefix": "Worse in the: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "headache",
+          "kind": "yesno",
+          "label": "Headache",
+          "required": false,
+          "config": {
+            "allowNa": false,
+            "display": "buttons",
+            "labelFallback": false
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label": "Yes",
+              "says": "headache",
+              "subFields": []
+            },
+            {
+              "key": "no",
+              "label": "No",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "history",
+                "order": 5
+              }
+            ],
+            "subheading": false,
+            "prefix": "Headache: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "smoker",
+          "kind": "yesno",
+          "label": "Smoker",
+          "required": false,
+          "config": {
+            "display": "check"
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "history",
+                "order": 6
+              }
+            ],
+            "subheading": false,
+            "whenTrue": "The patient smokes.",
+            "whenFalse": "The patient does not smoke.",
+            "prefix": "Smoker: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "notes",
+          "kind": "text",
+          "label": "Notes",
+          "required": false,
+          "config": {
+            "multiline": true,
+            "format": "plain",
+            "voice": true
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "history",
+                "order": 7
+              }
+            ],
+            "subheading": false,
+            "prefix": "Notes: ",
+            "suffix": "."
+          }
+        }
+      ]
+    },
+    {
+      "key": "exam",
+      "title": "Examination",
+      "fields": [
+        {
+          "key": "weight",
+          "kind": "measure",
+          "label": "Weight",
+          "required": false,
+          "config": {
+            "min": 0,
+            "max": 200,
+            "step": 1,
+            "unit": "kg"
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "exam",
+                "order": 1
+              }
+            ],
+            "subheading": false,
+            "prefix": "Weight: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "systolic",
+          "kind": "measure",
+          "label": "Systolic pressure",
+          "required": false,
+          "config": {
+            "min": 60,
+            "max": 260,
+            "step": 2,
+            "unit": "mmHg"
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "exam",
+                "order": 2
+              }
+            ],
+            "subheading": false,
+            "prefix": "Systolic pressure: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "swelling",
+          "kind": "size",
+          "label": "Swelling",
+          "required": false,
+          "config": {
+            "boxCount": 2,
+            "defaultUnit": "cm"
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "exam",
+                "order": 3
+              }
+            ],
+            "subheading": false,
+            "prefix": "Swelling: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "bmi",
+          "kind": "bmi",
+          "label": "Height and weight",
+          "required": false,
+          "config": {
+            "heightUnit": "m",
+            "weightUnit": "kg",
+            "labels": {
+              "height": "Height",
+              "weight": "Weight",
+              "bmi": "BMI"
+            }
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "exam",
+                "order": 4
+              }
+            ],
+            "subheading": false,
+            "prefix": "Height and weight: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "onset",
+          "kind": "choice",
+          "label": "Onset",
+          "required": false,
+          "config": {
+            "display": "dropdown"
+          },
+          "options": [
+            {
+              "key": "sudden",
+              "label": "Sudden",
+              "subFields": []
+            },
+            {
+              "key": "gradual",
+              "label": "Gradual",
+              "subFields": [
+                {
+                  "key": "onsetNote",
+                  "kind": "text",
+                  "label": "Note",
+                  "required": false,
+                  "config": {
+                    "format": "plain"
+                  },
+                  "options": [],
+                  "children": [],
+                  "says": {
+                    "include": true,
+                    "sections": [
+                      {
+                        "section": "exam",
+                        "order": 50
+                      }
+                    ],
+                    "prefix": "Note: ",
+                    "suffix": ".",
+                    "subheading": false
+                  }
+                }
+              ]
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "exam",
+                "order": 5
+              }
+            ],
+            "subheading": false,
+            "prefix": "Onset: ",
+            "suffix": "."
+          }
+        }
+      ]
+    },
+    {
+      "key": "lesions",
+      "title": "Lesions",
+      "fields": [
+        {
+          "key": "ulcers",
+          "kind": "repeat",
+          "label": "Ulcers",
+          "required": false,
+          "config": {
+            "minCount": 1,
+            "maxCount": 5,
+            "defaultCount": 1,
+            "labelPrefix": "Ulcer",
+            "narrativeTemplate": "{{groupLabel}}: {{ulcerSize}} at the {{ulcerSite}}."
+          },
+          "options": [],
+          "children": [
+            {
+              "key": "ulcerSize",
+              "kind": "size",
+              "label": "Size",
+              "required": false,
+              "config": {
+                "boxCount": 2,
+                "defaultUnit": "cm"
+              },
+              "options": [],
+              "children": [],
+              "says": {
+                "include": true,
+                "sections": [],
+                "subheading": false
+              }
+            },
+            {
+              "key": "ulcerSite",
+              "kind": "text",
+              "label": "Site",
+              "required": false,
+              "config": {
+                "format": "plain"
+              },
+              "options": [],
+              "children": [],
+              "says": {
+                "include": true,
+                "sections": [],
+                "subheading": false
+              }
+            }
+          ],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "lesions",
+                "order": 1
+              }
+            ],
+            "subheading": false,
+            "prefix": "Ulcers: ",
+            "suffix": "."
+          }
+        },
+        {
+          "key": "pregnancies",
+          "kind": "repeatPages",
+          "label": "Pregnancies",
+          "required": false,
+          "config": {
+            "pages": ["pregnancy"],
+            "labelPrefix": "",
+            "showIndex": true,
+            "narrativeOverride": true
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "lesions",
+                "order": 2
+              }
+            ],
+            "subheading": false
+          }
+        }
+      ]
+    },
+    {
+      "key": "pregnancy",
+      "title": "Pregnancy",
+      "fields": [
+        {
+          "key": "outcome",
+          "kind": "choice",
+          "label": "Outcome",
+          "config": {
+            "display": "buttons"
+          },
+          "options": [
+            {
+              "key": "live birth",
+              "label": "Live birth",
+              "subFields": []
+            },
+            {
+              "key": "miscarriage",
+              "label": "Miscarriage",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        }
+      ]
+    }
+  ],
+  "narrative": {
+    "sections": [
+      {
+        "key": "patient",
+        "title": "Patient",
+        "order": 1,
+        "template": "{{patientName}} {{age}} {{sex}} {{dob}} {{seenOn}} {{phone}}"
+      },
+      {
+        "key": "history",
+        "title": "History",
+        "order": 2,
+        "template": "{{symptoms}} {{fever}} {{cough}} {{worse}} {{headache}} {{smoker}} {{notes}}"
+      },
+      {
+        "key": "exam",
+        "title": "Examination",
+        "order": 3,
+        "template": "{{weight}} {{systolic}} {{swelling}} {{bmi}} {{onset}} {{onsetNote}}"
+      },
+      {
+        "key": "lesions",
+        "title": "Lesions",
+        "order": 4,
+        "template": "{{ulcers}}"
+      }
+    ]
+  },
+  "links": [],
+  "triggers": []
+}

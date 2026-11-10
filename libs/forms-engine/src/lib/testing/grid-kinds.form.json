@@ -1,0 +1,654 @@
+{
+ "schemaVersion": 2,
+ "title": "Dental and eye charts",
+ "specialty": "Dentistry",
+ "narrative": {
+  "sections": [
+   {
+    "key": "exam",
+    "title": "Examination",
+    "order": 1,
+    "template": "{{teeth}} {{anterior}} {{vision}}"
+   },
+   {
+    "key": "neuro",
+    "title": "Neurology",
+    "order": 2,
+    "template": "{{reflexes}}. {{quadrants}}"
+   }
+  ]
+ },
+ "pages": [
+  {
+   "key": "dental",
+   "title": "Dental chart",
+   "fields": [
+    {
+     "key": "teeth",
+     "kind": "grid",
+     "label": "Dental chart",
+     "required": false,
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "exam",
+        "order": 1
+       }
+      ]
+     },
+     "config": {
+      "display": "table",
+      "rowHeader": "Tooth",
+      "includeSwitch": true,
+      "columns": [
+       {
+        "key": "status",
+        "label": "Status",
+        "type": "choice",
+        "options": [
+         {
+          "key": "sound",
+          "label": "Sound"
+         },
+         {
+          "key": "caries",
+          "label": "Caries"
+         },
+         {
+          "key": "filled",
+          "label": "Filled"
+         },
+         {
+          "key": "missing",
+          "label": "Missing"
+         },
+         {
+          "key": "crown",
+          "label": "Crown"
+         },
+         {
+          "key": "rct",
+          "label": "Root canal"
+         }
+        ]
+       },
+       {
+        "key": "mobility",
+        "label": "Mobility",
+        "type": "choice",
+        "options": [
+         {
+          "key": "none",
+          "label": "None"
+         },
+         {
+          "key": "g1",
+          "label": "Grade 1"
+         },
+         {
+          "key": "g2",
+          "label": "Grade 2"
+         },
+         {
+          "key": "g3",
+          "label": "Grade 3"
+         }
+        ]
+       },
+       {
+        "key": "pocket",
+        "label": "Pocket",
+        "type": "number",
+        "unit": "mm"
+       },
+       {
+        "key": "bleeding",
+        "label": "Bleeding",
+        "type": "yesno"
+       },
+       {
+        "key": "note",
+        "label": "Note",
+        "type": "text"
+       }
+      ],
+      "headerGroups": [
+       {
+        "label": "Findings",
+        "from": "status",
+        "span": 2
+       },
+       {
+        "label": "Gums",
+        "from": "pocket",
+        "span": 2
+       }
+      ],
+      "rows": [
+       {
+        "key": "t18",
+        "label": "18"
+       },
+       {
+        "key": "t17",
+        "label": "17"
+       },
+       {
+        "key": "t16",
+        "label": "16"
+       },
+       {
+        "key": "t15",
+        "label": "15"
+       },
+       {
+        "key": "t14",
+        "label": "14"
+       },
+       {
+        "key": "t13",
+        "label": "13"
+       },
+       {
+        "key": "t12",
+        "label": "12"
+       },
+       {
+        "key": "t11",
+        "label": "11"
+       },
+       {
+        "key": "t21",
+        "label": "21"
+       },
+       {
+        "key": "t22",
+        "label": "22"
+       },
+       {
+        "key": "t23",
+        "label": "23"
+       },
+       {
+        "key": "t24",
+        "label": "24"
+       },
+       {
+        "key": "t25",
+        "label": "25"
+       },
+       {
+        "key": "t26",
+        "label": "26"
+       },
+       {
+        "key": "t27",
+        "label": "27"
+       },
+       {
+        "key": "t28",
+        "label": "28"
+       },
+       {
+        "key": "t38",
+        "label": "38"
+       },
+       {
+        "key": "t37",
+        "label": "37"
+       },
+       {
+        "key": "t36",
+        "label": "36"
+       },
+       {
+        "key": "t35",
+        "label": "35"
+       },
+       {
+        "key": "t34",
+        "label": "34"
+       },
+       {
+        "key": "t33",
+        "label": "33"
+       },
+       {
+        "key": "t32",
+        "label": "32"
+       },
+       {
+        "key": "t31",
+        "label": "31"
+       },
+       {
+        "key": "t41",
+        "label": "41"
+       },
+       {
+        "key": "t42",
+        "label": "42"
+       },
+       {
+        "key": "t43",
+        "label": "43"
+       },
+       {
+        "key": "t44",
+        "label": "44"
+       },
+       {
+        "key": "t45",
+        "label": "45"
+       },
+       {
+        "key": "t46",
+        "label": "46"
+       },
+       {
+        "key": "t47",
+        "label": "47"
+       },
+       {
+        "key": "t48",
+        "label": "48"
+       }
+      ],
+      "quickFill": {
+       "enabled": true,
+       "presets": [
+        {
+         "label": "All sound",
+         "value": "Sound"
+        },
+        {
+         "label": "No mobility",
+         "value": "None",
+         "scope": "column"
+        },
+        {
+         "label": "NAD",
+         "scope": "row"
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "key": "eyes",
+   "title": "Eyes",
+   "fields": [
+    {
+     "key": "anterior",
+     "kind": "grid",
+     "label": "Anterior segment",
+     "required": false,
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "exam",
+        "order": 2
+       }
+      ]
+     },
+     "config": {
+      "display": "both",
+      "rowHeader": "Part",
+      "columns": [
+       {
+        "key": "re",
+        "label": "RE",
+        "type": "text",
+        "says": {
+         "template": "{column}: {value}"
+        }
+       },
+       {
+        "key": "le",
+        "label": "LE",
+        "type": "text",
+        "says": {
+         "template": "{column}: {value}"
+        }
+       }
+      ],
+      "headerGroups": [
+       {
+        "label": "Eyes",
+        "from": "re",
+        "span": 2
+       }
+      ],
+      "rows": [
+       {
+        "key": "lids",
+        "label": "Lids"
+       },
+       {
+        "key": "conj",
+        "label": "Conjunctiva"
+       },
+       {
+        "key": "cornea",
+        "label": "Cornea"
+       },
+       {
+        "key": "ac",
+        "label": "Anterior chamber"
+       },
+       {
+        "key": "iris",
+        "label": "Iris"
+       },
+       {
+        "key": "pupil",
+        "label": "Pupil"
+       },
+       {
+        "key": "lens",
+        "label": "Lens"
+       }
+      ],
+      "quickFill": {
+       "enabled": true,
+       "presets": [
+        {
+         "label": "All normal",
+         "value": "Normal"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "key": "vision",
+     "kind": "grid",
+     "label": "Vision and pressure",
+     "required": false,
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "exam",
+        "order": 3
+       }
+      ]
+     },
+     "config": {
+      "display": "table",
+      "rowHeader": "Eye",
+      "columns": [
+       {
+        "key": "ucva",
+        "label": "Unaided",
+        "type": "choice",
+        "options": [
+         {
+          "key": "6/6",
+          "label": "6/6"
+         },
+         {
+          "key": "6/9",
+          "label": "6/9"
+         },
+         {
+          "key": "6/12",
+          "label": "6/12"
+         },
+         {
+          "key": "6/18",
+          "label": "6/18"
+         },
+         {
+          "key": "6/24",
+          "label": "6/24"
+         },
+         {
+          "key": "6/36",
+          "label": "6/36"
+         },
+         {
+          "key": "6/60",
+          "label": "6/60"
+         },
+         {
+          "key": "CF",
+          "label": "CF"
+         },
+         {
+          "key": "HM",
+          "label": "HM"
+         },
+         {
+          "key": "PL",
+          "label": "PL"
+         }
+        ]
+       },
+       {
+        "key": "bcva",
+        "label": "Best corrected",
+        "type": "choice",
+        "options": [
+         {
+          "key": "6/6",
+          "label": "6/6"
+         },
+         {
+          "key": "6/9",
+          "label": "6/9"
+         },
+         {
+          "key": "6/12",
+          "label": "6/12"
+         },
+         {
+          "key": "6/18",
+          "label": "6/18"
+         },
+         {
+          "key": "6/24",
+          "label": "6/24"
+         },
+         {
+          "key": "6/36",
+          "label": "6/36"
+         },
+         {
+          "key": "6/60",
+          "label": "6/60"
+         }
+        ]
+       },
+       {
+        "key": "iop",
+        "label": "Pressure",
+        "type": "number",
+        "unit": "mmHg"
+       }
+      ],
+      "rows": [
+       {
+        "key": "re",
+        "label": "Right eye"
+       },
+       {
+        "key": "le",
+        "label": "Left eye"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "key": "neuro",
+   "title": "Neurology",
+   "fields": [
+    {
+     "key": "reflexes",
+     "kind": "grid",
+     "label": "Reflexes",
+     "required": false,
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "neuro",
+        "order": 1
+       }
+      ]
+     },
+     "config": {
+      "display": "sentences",
+      "rowHeader": "Reflex",
+      "sentences": {
+       "row": "{row}: {cells}"
+      },
+      "columns": [
+       {
+        "key": "r",
+        "label": "Right",
+        "type": "choice",
+        "options": [
+         {
+          "key": "0",
+          "label": "Absent"
+         },
+         {
+          "key": "2",
+          "label": "Normal"
+         },
+         {
+          "key": "3",
+          "label": "Brisk"
+         }
+        ],
+        "says": {
+         "template": "{column} {value}"
+        }
+       },
+       {
+        "key": "l",
+        "label": "Left",
+        "type": "choice",
+        "options": [
+         {
+          "key": "0",
+          "label": "Absent"
+         },
+         {
+          "key": "2",
+          "label": "Normal"
+         },
+         {
+          "key": "3",
+          "label": "Brisk"
+         }
+        ],
+        "says": {
+         "template": "{column} {value}"
+        }
+       }
+      ],
+      "rows": [
+       {
+        "key": "biceps",
+        "label": "Biceps",
+        "labelSpan": 1
+       },
+       {
+        "key": "knee",
+        "label": "Knee"
+       },
+       {
+        "key": "ankle",
+        "label": "Ankle",
+        "cells": [
+         {
+          "column": "r",
+          "colSpan": 2,
+          "fields": [
+           {
+            "key": "both",
+            "label": "Both sides",
+            "type": "choice",
+            "options": [
+             {
+              "key": "0",
+              "label": "Absent"
+             },
+             {
+              "key": "2",
+              "label": "Normal"
+             }
+            ]
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "quickFill": {
+       "enabled": true,
+       "presets": [
+        {
+         "label": "Normal"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "key": "quadrants",
+     "kind": "grid",
+     "label": "Pain by quadrant",
+     "required": false,
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "neuro",
+        "order": 2
+       }
+      ]
+     },
+     "config": {
+      "display": "sentences",
+      "shape": {
+       "layout": "circle"
+      },
+      "columns": [
+       {
+        "key": "ru",
+        "label": "Right upper"
+       },
+       {
+        "key": "lu",
+        "label": "Left upper"
+       },
+       {
+        "key": "ll",
+        "label": "Left lower"
+       },
+       {
+        "key": "rl",
+        "label": "Right lower"
+       }
+      ],
+      "rows": [
+       {
+        "key": "row1",
+        "label": ""
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}

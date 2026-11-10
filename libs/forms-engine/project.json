@@ -1,0 +1,9 @@
+{
+  "name": "forms-engine",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/forms-engine/src",
+  "projectType": "library",
+  "tags": ["scope:casesheets", "type:engine"],
+  "// targets": "specs run inside `nx test lms` (apps/lms/tsconfig.spec.json includes libs/forms-engine/src)",
+  "targets": {}
+}

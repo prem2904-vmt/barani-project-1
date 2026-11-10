@@ -1,0 +1,4428 @@
+{
+ "schemaVersion": 2,
+ "kinds": [
+  {
+   "name": "bmi",
+   "title": "Height, weight and BMI",
+   "description": "Height and weight with their units; the BMI is calculated and written with them.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "two-numpads",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "heightUnit": {
+      "enum": [
+       "m",
+       "cm",
+       "ft",
+       "in"
+      ]
+     },
+     "weightUnit": {
+      "enum": [
+       "kg",
+       "lb",
+       "g"
+      ]
+     },
+     "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "height": {
+        "type": "string",
+        "maxLength": 30
+       },
+       "weight": {
+        "type": "string",
+        "maxLength": 30
+       },
+       "bmi": {
+        "type": "string",
+        "maxLength": 30
+       }
+      }
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "height": {
+      "type": [
+       "number",
+       "null"
+      ],
+      "minimum": 0
+     },
+     "heightUnit": {
+      "enum": [
+       "m",
+       "cm",
+       "ft",
+       "in"
+      ]
+     },
+     "weight": {
+      "type": [
+       "number",
+       "null"
+      ],
+      "minimum": 0
+     },
+     "weightUnit": {
+      "enum": [
+       "kg",
+       "lb",
+       "g"
+      ]
+     }
+    }
+   },
+   "defaults": {
+    "heightUnit": "m",
+    "weightUnit": "kg",
+    "labels": {
+     "height": "Height",
+     "weight": "Weight",
+     "bmi": "BMI"
+    }
+   },
+   "examples": [
+    {
+     "name": "metric",
+     "field": {
+      "key": "bmi",
+      "kind": "bmi",
+      "label": "Height and weight",
+      "required": false,
+      "config": {
+       "heightUnit": "m",
+       "weightUnit": "kg",
+       "labels": {
+        "height": "Height",
+        "weight": "Weight",
+        "bmi": "BMI"
+       }
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "bmi": {
+       "height": 1.7,
+       "heightUnit": "m",
+       "weight": 70,
+       "weightUnit": "kg"
+      }
+     }
+    },
+    {
+     "name": "cm and kg",
+     "field": {
+      "key": "body",
+      "kind": "bmi",
+      "label": "Body",
+      "required": false,
+      "config": {
+       "heightUnit": "cm",
+       "weightUnit": "kg"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "body": {
+       "height": 170,
+       "heightUnit": "cm",
+       "weight": 70,
+       "weightUnit": "kg"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "bodyMap",
+   "title": "Body map",
+   "description": "Mark findings on a picture of the body, face, eye or teeth: tap a region (each can write its own sentence), drop pins with a short label, or tap fixed markers that open follow-up questions.",
+   "legacyNames": [
+    "imageinfo"
+   ],
+   "usesOptions": true,
+   "usesChildren": false,
+   "touch": {
+    "control": "canvas",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "template": {
+      "enum": [
+       "abdomen-quadrants",
+       "body-back",
+       "body-front",
+       "ear",
+       "eye-front",
+       "foot",
+       "fundus",
+       "hand",
+       "head-face",
+       "tooth-chart"
+      ]
+     },
+     "templateAssetId": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+     },
+     "canvas": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "width": {
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 4000
+       },
+       "height": {
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 4000
+       }
+      }
+     },
+     "regions": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "id"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9-]{0,39}$"
+        },
+        "label": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "sentence": {
+         "type": "string",
+         "maxLength": 200
+        },
+        "points": {
+         "type": "array",
+         "minItems": 3,
+         "maxItems": 200,
+         "items": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+           "type": "number",
+           "minimum": 0,
+           "maximum": 1
+          }
+         }
+        }
+       }
+      }
+     },
+     "regionSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "pinSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "labelSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "attachedSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "pinLabels": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 40
+      }
+     },
+     "maxPins": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+     },
+     "allowInk": {
+      "type": "boolean"
+     },
+     "allowLabels": {
+      "type": "boolean"
+     },
+     "showDescription": {
+      "type": "boolean"
+     },
+     "descriptionPlaceholder": {
+      "type": "string",
+      "maxLength": 100
+     },
+     "inkColors": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+       "type": "string",
+       "pattern": "^#[0-9a-fA-F]{6}$"
+      }
+     },
+     "markers": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "key",
+        "x",
+        "y"
+       ],
+       "properties": {
+        "key": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 100
+        },
+        "x": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "y": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "size": {
+         "type": "integer",
+         "minimum": 48,
+         "maximum": 120
+        },
+        "color": {
+         "type": "string",
+         "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+       }
+      }
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "description": {
+      "type": "string",
+      "maxLength": 2000
+     },
+     "photo": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+     },
+     "regions": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "id"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9-]{0,39}$"
+        },
+        "note": {
+         "type": "string",
+         "maxLength": 200
+        }
+       }
+      }
+     },
+     "pins": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "x",
+        "y"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "x": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "y": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "label": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "note": {
+         "type": "string",
+         "maxLength": 200
+        }
+       }
+      }
+     },
+     "strokes": {
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "points"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "tool": {
+         "enum": [
+          "pen",
+          "highlighter"
+         ]
+        },
+        "color": {
+         "type": "string",
+         "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "width": {
+         "type": "number",
+         "minimum": 0.0005,
+         "maximum": 0.05
+        },
+        "points": {
+         "type": "array",
+         "minItems": 1,
+         "maxItems": 2000,
+         "items": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": {
+           "type": "number",
+           "minimum": 0,
+           "maximum": 1
+          }
+         }
+        }
+       }
+      }
+     },
+     "labels": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "x",
+        "y",
+        "text"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "x": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "y": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "text": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 80
+        }
+       }
+      }
+     },
+     "markers": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+       "type": "string",
+       "maxLength": 100
+      }
+     }
+    }
+   },
+   "defaults": {
+    "template": "body-front",
+    "allowInk": true,
+    "showDescription": false
+   },
+   "examples": [
+    {
+     "name": "regions with sentences",
+     "field": {
+      "key": "findings",
+      "kind": "bodyMap",
+      "label": "Findings on examination",
+      "required": false,
+      "config": {
+       "template": "body-front",
+       "regions": [
+        {
+         "id": "abdomen",
+         "sentence": "Tenderness over the {region}"
+        },
+        {
+         "id": "right-knee",
+         "sentence": "Swelling of the {region} {note}"
+        }
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "findings": {
+       "regions": [
+        {
+         "id": "abdomen"
+        },
+        {
+         "id": "right-knee",
+         "note": "with warmth"
+        }
+       ],
+       "pins": [
+        {
+         "x": 0.38,
+         "y": 0.18,
+         "label": "Scar"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "name": "fixed markers with follow-ups",
+     "field": {
+      "key": "sites",
+      "kind": "bodyMap",
+      "label": "Painful sites",
+      "required": false,
+      "config": {
+       "template": "head-face",
+       "markers": [
+        {
+         "key": "forehead",
+         "x": 0.5,
+         "y": 0.25
+        },
+        {
+         "key": "jaw",
+         "x": 0.5,
+         "y": 0.85
+        }
+       ]
+      },
+      "options": [
+       {
+        "key": "forehead",
+        "label": "Forehead",
+        "subFields": [
+         {
+          "key": "foreheadSeverity",
+          "kind": "number",
+          "label": "Severity out of 10",
+          "required": false,
+          "config": {
+           "min": 0,
+           "max": 10
+          },
+          "options": [],
+          "children": [],
+          "says": {
+           "include": true,
+           "sections": [],
+           "sentence": "pain in the forehead, severity {value} out of 10",
+           "subheading": false
+          }
+         }
+        ]
+       },
+       {
+        "key": "jaw",
+        "label": "Jaw",
+        "says": "pain in the jaw",
+        "subFields": []
+       }
+      ],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "sites": {
+       "markers": [
+        "forehead",
+        "jaw"
+       ]
+      },
+      "foreheadSeverity": 6
+     }
+    }
+   ]
+  },
+  {
+   "name": "choice",
+   "title": "Choice",
+   "description": "Pick one option from a short list (sex, side, severity). Each option can carry its own sentence and follow-up questions.",
+   "legacyNames": [
+    "select",
+    "radio",
+    "buttonselect",
+    "imageselect"
+   ],
+   "usesOptions": true,
+   "usesChildren": false,
+   "touch": {
+    "control": "buttons",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "display": {
+      "enum": [
+       "dropdown",
+       "list",
+       "buttons",
+       "images"
+      ]
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "string",
+     "null"
+    ]
+   },
+   "defaults": {
+    "display": "buttons"
+   },
+   "examples": [
+    {
+     "name": "side",
+     "field": {
+      "key": "side",
+      "kind": "choice",
+      "label": "Side",
+      "required": false,
+      "config": {
+       "display": "buttons"
+      },
+      "options": [
+       {
+        "key": "left",
+        "label": "Left",
+        "says": "on the left side",
+        "subFields": []
+       },
+       {
+        "key": "right",
+        "label": "Right",
+        "says": "on the right side",
+        "subFields": []
+       }
+      ],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "side": "left"
+     }
+    },
+    {
+     "name": "with a follow-up",
+     "field": {
+      "key": "onset",
+      "kind": "choice",
+      "label": "Onset",
+      "required": false,
+      "config": {
+       "display": "dropdown"
+      },
+      "options": [
+       {
+        "key": "sudden",
+        "label": "Sudden",
+        "subFields": []
+       },
+       {
+        "key": "gradual",
+        "label": "Gradual",
+        "subFields": [
+         {
+          "key": "onsetNote",
+          "kind": "text",
+          "label": "Note",
+          "required": false,
+          "config": {
+           "format": "plain"
+          },
+          "options": [],
+          "children": [],
+          "says": {
+           "include": true,
+           "sections": [],
+           "prefix": "(",
+           "suffix": ")",
+           "subheading": false
+          }
+         }
+        ]
+       }
+      ],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "onset": "gradual",
+      "onsetNote": "over weeks"
+     }
+    }
+   ]
+  },
+  {
+   "name": "date",
+   "title": "Date",
+   "description": "A calendar date (date of birth, onset, last visit). Written as dd/mm/yyyy. Set purpose to 'birth' for a date of birth: a template can then say {{key.age}} (for example '42 years' or '8 months') or {{key.years}}.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "datepicker",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "allowFuture": {
+      "type": "boolean"
+     },
+     "quickChips": {
+      "type": "boolean"
+     },
+     "purpose": {
+      "enum": [
+       "birth",
+       "event"
+      ]
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "string",
+     "null"
+    ],
+    "pattern": "^\\d{4}-\\d{2}-\\d{2}"
+   },
+   "defaults": {
+    "allowFuture": false,
+    "quickChips": true,
+    "purpose": "event"
+   },
+   "examples": [
+    {
+     "name": "date of birth",
+     "field": {
+      "key": "dob",
+      "kind": "date",
+      "label": "Date of birth",
+      "required": false,
+      "config": {
+       "allowFuture": false,
+       "quickChips": false,
+       "purpose": "birth"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "dob": "1982-03-09"
+     }
+    },
+    {
+     "name": "date-time value",
+     "field": {
+      "key": "seenOn",
+      "kind": "date",
+      "label": "Seen on",
+      "required": false,
+      "config": {
+       "allowFuture": true,
+       "purpose": "event"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "seenOn": "2024-01-15T00:00:00Z"
+     }
+    }
+   ]
+  },
+  {
+   "name": "drawing",
+   "title": "Drawing",
+   "description": "A sketch drawn with a pen or finger on a blank sheet or on a body, face, eye or tooth chart, with a few words about it. Tapping a part of the chart marks it and can write its own sentence.",
+   "legacyNames": [
+    "scribblepad"
+   ],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "canvas",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "template": {
+      "enum": [
+       "abdomen-quadrants",
+       "body-back",
+       "body-front",
+       "ear",
+       "eye-front",
+       "foot",
+       "fundus",
+       "hand",
+       "head-face",
+       "tooth-chart"
+      ]
+     },
+     "templateAssetId": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+     },
+     "canvas": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "width": {
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 4000
+       },
+       "height": {
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 4000
+       }
+      }
+     },
+     "regions": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "id"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9-]{0,39}$"
+        },
+        "label": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "sentence": {
+         "type": "string",
+         "maxLength": 200
+        },
+        "points": {
+         "type": "array",
+         "minItems": 3,
+         "maxItems": 200,
+         "items": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+           "type": "number",
+           "minimum": 0,
+           "maximum": 1
+          }
+         }
+        }
+       }
+      }
+     },
+     "regionSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "pinSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "labelSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "attachedSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "pinLabels": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 40
+      }
+     },
+     "maxPins": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+     },
+     "allowInk": {
+      "type": "boolean"
+     },
+     "allowLabels": {
+      "type": "boolean"
+     },
+     "showDescription": {
+      "type": "boolean"
+     },
+     "descriptionPlaceholder": {
+      "type": "string",
+      "maxLength": 100
+     },
+     "inkColors": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+       "type": "string",
+       "pattern": "^#[0-9a-fA-F]{6}$"
+      }
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "description": {
+      "type": "string",
+      "maxLength": 2000
+     },
+     "photo": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+     },
+     "regions": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "id"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9-]{0,39}$"
+        },
+        "note": {
+         "type": "string",
+         "maxLength": 200
+        }
+       }
+      }
+     },
+     "pins": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "x",
+        "y"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "x": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "y": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "label": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "note": {
+         "type": "string",
+         "maxLength": 200
+        }
+       }
+      }
+     },
+     "strokes": {
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "points"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "tool": {
+         "enum": [
+          "pen",
+          "highlighter"
+         ]
+        },
+        "color": {
+         "type": "string",
+         "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "width": {
+         "type": "number",
+         "minimum": 0.0005,
+         "maximum": 0.05
+        },
+        "points": {
+         "type": "array",
+         "minItems": 1,
+         "maxItems": 2000,
+         "items": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": {
+           "type": "number",
+           "minimum": 0,
+           "maximum": 1
+          }
+         }
+        }
+       }
+      }
+     },
+     "labels": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "x",
+        "y",
+        "text"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "x": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "y": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "text": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 80
+        }
+       }
+      }
+     }
+    }
+   },
+   "defaults": {
+    "allowInk": true,
+    "showDescription": true
+   },
+   "examples": [
+    {
+     "name": "sketch on a blank sheet",
+     "field": {
+      "key": "sketch",
+      "kind": "drawing",
+      "label": "Sketch",
+      "required": false,
+      "config": {
+       "allowInk": true,
+       "showDescription": true
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "sketch": {
+       "description": "Lesion on the dorsum of the hand.",
+       "strokes": [
+        {
+         "tool": "pen",
+         "color": "#1d4ed8",
+         "width": 0.004,
+         "points": [
+          [
+           0.2,
+           0.3,
+           0.5
+          ],
+          [
+           0.4,
+           0.35,
+           0.6
+          ],
+          [
+           0.5,
+           0.5,
+           0.6
+          ],
+          [
+           0.35,
+           0.6,
+           0.5
+          ],
+          [
+           0.2,
+           0.3,
+           0.5
+          ]
+         ]
+        }
+       ]
+      }
+     }
+    },
+    {
+     "name": "marked on a body chart",
+     "field": {
+      "key": "site",
+      "kind": "drawing",
+      "label": "Site of pain",
+      "required": false,
+      "config": {
+       "template": "body-front",
+       "allowInk": true,
+       "regions": [
+        {
+         "id": "right-knee",
+         "sentence": "Pain over the {region}"
+        }
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "site": {
+       "regions": [
+        {
+         "id": "right-knee"
+        },
+        {
+         "id": "abdomen"
+        }
+       ],
+       "pins": [
+        {
+         "x": 0.5,
+         "y": 0.37,
+         "label": "Tender"
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "duration",
+   "title": "Duration",
+   "description": "How long something has lasted: a number and a unit (days, weeks, months, years), a range such as 5-7 days, or a time of day.",
+   "legacyNames": [
+    "duration-time",
+    "duration-period"
+   ],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "number-chips",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "scale": {
+      "enum": [
+       "calendar",
+       "clock",
+       "period"
+      ]
+     },
+     "mode": {
+      "enum": [
+       "single",
+       "range"
+      ]
+     },
+     "defaultUnit": {
+      "enum": [
+       "seconds",
+       "minutes",
+       "hours",
+       "days",
+       "weeks",
+       "months",
+       "years"
+      ]
+     },
+     "display": {
+      "enum": [
+       "box",
+       "chips"
+      ]
+     }
+    }
+   },
+   "valueSchema": {
+    "oneOf": [
+     {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+       "unit"
+      ],
+      "properties": {
+       "amount": {
+        "type": "number",
+        "minimum": 0
+       },
+       "value": {
+        "type": "number",
+        "minimum": 0
+       },
+       "valueTo": {
+        "type": [
+         "number",
+         "null"
+        ],
+        "minimum": 0
+       },
+       "unit": {
+        "enum": [
+         "second",
+         "seconds",
+         "minute",
+         "minutes",
+         "hour",
+         "hours",
+         "day",
+         "days",
+         "week",
+         "weeks",
+         "month",
+         "months",
+         "year",
+         "years"
+        ]
+       }
+      }
+     },
+     {
+      "enum": [
+       "morning",
+       "afternoon",
+       "evening",
+       "night"
+      ]
+     },
+     {
+      "type": "null"
+     }
+    ]
+   },
+   "defaults": {
+    "scale": "calendar",
+    "mode": "single",
+    "defaultUnit": "days"
+   },
+   "examples": [
+    {
+     "name": "single",
+     "field": {
+      "key": "fever",
+      "kind": "duration",
+      "label": "Fever for",
+      "required": false,
+      "config": {
+       "scale": "calendar",
+       "mode": "single",
+       "defaultUnit": "days"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "fever": {
+       "amount": 5,
+       "unit": "days"
+      }
+     }
+    },
+    {
+     "name": "range",
+     "field": {
+      "key": "cough",
+      "kind": "duration",
+      "label": "Cough for",
+      "required": false,
+      "config": {
+       "scale": "calendar",
+       "mode": "range",
+       "defaultUnit": "weeks"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "cough": {
+       "amount": 2,
+       "valueTo": 3,
+       "unit": "weeks"
+      }
+     }
+    },
+    {
+     "name": "time of day",
+     "field": {
+      "key": "worse",
+      "kind": "duration",
+      "label": "Worse in the",
+      "required": false,
+      "config": {
+       "scale": "period"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "worse": "night"
+     }
+    }
+   ]
+  },
+  {
+   "name": "eyeDiagram",
+   "title": "Eye diagram",
+   "description": "A paired right-eye / left-eye chart: either the eight eye-movement positions marked full or restricted, or four labelled boxes around each eye for readings. Can be left out of the printout.",
+   "legacyNames": [
+    "eom",
+    "eyefields"
+   ],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "eye-chart",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "preset": {
+      "enum": [
+       "movements",
+       "boxes"
+      ]
+     },
+     "includeSwitch": {
+      "type": "boolean"
+     },
+     "boxes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "re": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+         "top": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+           "label": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "inputType": {
+            "enum": [
+             "text",
+             "dropdown"
+            ]
+           },
+           "defaultValue": {
+            "type": "string",
+            "maxLength": 100
+           },
+           "options": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 60
+            }
+           }
+          }
+         },
+         "bottom": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+           "label": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "inputType": {
+            "enum": [
+             "text",
+             "dropdown"
+            ]
+           },
+           "defaultValue": {
+            "type": "string",
+            "maxLength": 100
+           },
+           "options": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 60
+            }
+           }
+          }
+         },
+         "left": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+           "label": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "inputType": {
+            "enum": [
+             "text",
+             "dropdown"
+            ]
+           },
+           "defaultValue": {
+            "type": "string",
+            "maxLength": 100
+           },
+           "options": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 60
+            }
+           }
+          }
+         },
+         "right": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+           "label": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "inputType": {
+            "enum": [
+             "text",
+             "dropdown"
+            ]
+           },
+           "defaultValue": {
+            "type": "string",
+            "maxLength": 100
+           },
+           "options": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 60
+            }
+           }
+          }
+         }
+        }
+       },
+       "le": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+         "top": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+           "label": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "inputType": {
+            "enum": [
+             "text",
+             "dropdown"
+            ]
+           },
+           "defaultValue": {
+            "type": "string",
+            "maxLength": 100
+           },
+           "options": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 60
+            }
+           }
+          }
+         },
+         "bottom": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+           "label": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "inputType": {
+            "enum": [
+             "text",
+             "dropdown"
+            ]
+           },
+           "defaultValue": {
+            "type": "string",
+            "maxLength": 100
+           },
+           "options": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 60
+            }
+           }
+          }
+         },
+         "left": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+           "label": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "inputType": {
+            "enum": [
+             "text",
+             "dropdown"
+            ]
+           },
+           "defaultValue": {
+            "type": "string",
+            "maxLength": 100
+           },
+           "options": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 60
+            }
+           }
+          }
+         },
+         "right": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+           "label": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "inputType": {
+            "enum": [
+             "text",
+             "dropdown"
+            ]
+           },
+           "defaultValue": {
+            "type": "string",
+            "maxLength": 100
+           },
+           "options": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+             "type": "string",
+             "minLength": 1,
+             "maxLength": 60
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "includeInPdf": {
+      "type": "boolean"
+     },
+     "re": {
+      "anyOf": [
+       {
+        "type": "array",
+        "minItems": 8,
+        "maxItems": 8,
+        "items": {
+         "enum": [
+          "+",
+          "-"
+         ]
+        }
+       },
+       {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+         "top": {
+          "type": "string",
+          "maxLength": 200
+         },
+         "bottom": {
+          "type": "string",
+          "maxLength": 200
+         },
+         "left": {
+          "type": "string",
+          "maxLength": 200
+         },
+         "right": {
+          "type": "string",
+          "maxLength": 200
+         }
+        }
+       }
+      ]
+     },
+     "le": {
+      "anyOf": [
+       {
+        "type": "array",
+        "minItems": 8,
+        "maxItems": 8,
+        "items": {
+         "enum": [
+          "+",
+          "-"
+         ]
+        }
+       },
+       {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+         "top": {
+          "type": "string",
+          "maxLength": 200
+         },
+         "bottom": {
+          "type": "string",
+          "maxLength": 200
+         },
+         "left": {
+          "type": "string",
+          "maxLength": 200
+         },
+         "right": {
+          "type": "string",
+          "maxLength": 200
+         }
+        }
+       }
+      ]
+     }
+    }
+   },
+   "defaults": {
+    "preset": "movements",
+    "includeSwitch": true
+   },
+   "examples": [
+    {
+     "name": "eye movements",
+     "field": {
+      "key": "eom",
+      "kind": "eyeDiagram",
+      "label": "Extra-ocular movements",
+      "required": false,
+      "config": {
+       "preset": "movements",
+       "includeSwitch": true
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "eom": {
+       "re": [
+        "+",
+        "+",
+        "+",
+        "+",
+        "+",
+        "+",
+        "+",
+        "+"
+       ],
+       "le": [
+        "+",
+        "+",
+        "-",
+        "+",
+        "+",
+        "+",
+        "+",
+        "-"
+       ],
+       "includeInPdf": true
+      }
+     }
+    },
+    {
+     "name": "boxes around each eye",
+     "field": {
+      "key": "anterior",
+      "kind": "eyeDiagram",
+      "label": "Anterior segment",
+      "required": false,
+      "config": {
+       "preset": "boxes",
+       "includeSwitch": true,
+       "boxes": {
+        "re": {
+         "top": {
+          "label": "Lids"
+         },
+         "bottom": {
+          "label": "Cornea"
+         },
+         "left": {
+          "label": "Conjunctiva"
+         },
+         "right": {
+          "label": "Lens"
+         }
+        },
+        "le": {
+         "top": {
+          "label": "Lids"
+         },
+         "bottom": {
+          "label": "Cornea"
+         },
+         "left": {
+          "label": "Conjunctiva"
+         },
+         "right": {
+          "label": "Lens"
+         }
+        }
+       }
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "anterior": {
+       "re": {
+        "top": "Normal",
+        "bottom": "Clear",
+        "right": "Early cataract"
+       },
+       "le": {
+        "top": "Normal",
+        "bottom": "Clear"
+       },
+       "includeInPdf": true
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "grid",
+   "title": "Grid",
+   "description": "Rows and columns of small fields (text, number, choice, yes/no) for a chart or table: tap a cell to fill it, or use a Quick Fill chip such as All normal. Prints as a table (with merged header, row and cell spans) and/or reads as sentences.",
+   "legacyNames": [
+    "multitextbox"
+   ],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "grid-sheet",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+     "columns",
+     "rows"
+    ],
+    "properties": {
+     "display": {
+      "enum": [
+       "table",
+       "sentences",
+       "both"
+      ]
+     },
+     "rowHeader": {
+      "type": "string",
+      "maxLength": 60
+     },
+     "columns": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 24,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "key",
+        "label"
+       ],
+       "properties": {
+        "key": {
+         "type": "string",
+         "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+        },
+        "label": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "fieldLabel": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "type": {
+         "enum": [
+          "text",
+          "number",
+          "choice",
+          "yesno"
+         ]
+        },
+        "placeholder": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "unit": {
+         "type": "string",
+         "maxLength": 20
+        },
+        "options": {
+         "type": "array",
+         "maxItems": 100,
+         "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+           "key",
+           "label"
+          ],
+          "properties": {
+           "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+           },
+           "label": {
+            "type": "string",
+            "maxLength": 80
+           }
+          }
+         }
+        },
+        "display": {
+         "enum": [
+          "buttons",
+          "dropdown"
+         ]
+        },
+        "default": {
+         "type": [
+          "string",
+          "number",
+          "boolean"
+         ]
+        },
+        "says": {
+         "type": "object",
+         "additionalProperties": false,
+         "properties": {
+          "include": {
+           "type": "boolean"
+          },
+          "prefix": {
+           "type": "string",
+           "maxLength": 100
+          },
+          "suffix": {
+           "type": "string",
+           "maxLength": 100
+          },
+          "template": {
+           "type": "string",
+           "maxLength": 300
+          }
+         }
+        },
+        "suggestions": {
+         "type": "boolean"
+        },
+        "image": {
+         "type": "string",
+         "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        }
+       }
+      }
+     },
+     "headerGroups": {
+      "type": "array",
+      "maxItems": 24,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "label",
+        "from"
+       ],
+       "properties": {
+        "label": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "from": {
+         "type": "string"
+        },
+        "span": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 24
+        }
+       }
+      }
+     },
+     "rows": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "key",
+        "label"
+       ],
+       "properties": {
+        "key": {
+         "type": "string",
+         "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+        },
+        "label": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "labelSpan": {
+         "type": "integer",
+         "minimum": 1,
+         "maximum": 200
+        },
+        "cells": {
+         "type": "array",
+         "maxItems": 24,
+         "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+           "column"
+          ],
+          "properties": {
+           "column": {
+            "type": "string"
+           },
+           "colSpan": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 24
+           },
+           "fields": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+             "type": "object",
+             "additionalProperties": false,
+             "required": [
+              "key",
+              "label"
+             ],
+             "properties": {
+              "key": {
+               "type": "string",
+               "pattern": "^[A-Za-z][A-Za-z0-9_]{0,31}$"
+              },
+              "label": {
+               "type": "string",
+               "maxLength": 80
+              },
+              "fieldLabel": {
+               "type": "string",
+               "maxLength": 80
+              },
+              "type": {
+               "enum": [
+                "text",
+                "number",
+                "choice",
+                "yesno"
+               ]
+              },
+              "placeholder": {
+               "type": "string",
+               "maxLength": 80
+              },
+              "unit": {
+               "type": "string",
+               "maxLength": 20
+              },
+              "options": {
+               "type": "array",
+               "maxItems": 100,
+               "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                 "key",
+                 "label"
+                ],
+                "properties": {
+                 "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                 },
+                 "label": {
+                  "type": "string",
+                  "maxLength": 80
+                 }
+                }
+               }
+              },
+              "display": {
+               "enum": [
+                "buttons",
+                "dropdown"
+               ]
+              },
+              "default": {
+               "type": [
+                "string",
+                "number",
+                "boolean"
+               ]
+              },
+              "says": {
+               "type": "object",
+               "additionalProperties": false,
+               "properties": {
+                "include": {
+                 "type": "boolean"
+                },
+                "prefix": {
+                 "type": "string",
+                 "maxLength": 100
+                },
+                "suffix": {
+                 "type": "string",
+                 "maxLength": 100
+                },
+                "template": {
+                 "type": "string",
+                 "maxLength": 300
+                }
+               }
+              },
+              "suggestions": {
+               "type": "boolean"
+              },
+              "image": {
+               "type": "string",
+               "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              }
+             }
+            }
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "sentences": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "row": {
+        "type": "string",
+        "maxLength": 200
+       },
+       "rowSeparator": {
+        "type": "string",
+        "maxLength": 10
+       }
+      }
+     },
+     "quickFill": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "enabled": {
+        "type": "boolean"
+       },
+       "presets": {
+        "type": "array",
+        "maxItems": 20,
+        "items": {
+         "type": "object",
+         "additionalProperties": false,
+         "required": [
+          "label"
+         ],
+         "properties": {
+          "label": {
+           "type": "string",
+           "minLength": 1,
+           "maxLength": 40
+          },
+          "value": {
+           "type": "string",
+           "maxLength": 200
+          },
+          "scope": {
+           "enum": [
+            "all",
+            "row",
+            "column"
+           ]
+          }
+         }
+        }
+       }
+      }
+     },
+     "shape": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "layout": {
+        "enum": [
+         "linear",
+         "circle",
+         "rectangle",
+         "triangle",
+         "square"
+        ]
+       },
+       "centerImage": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+       }
+      }
+     },
+     "includeSwitch": {
+      "type": "boolean"
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "print": {
+      "type": "boolean"
+     },
+     "cells": {
+      "type": "object"
+     }
+    }
+   },
+   "defaults": {
+    "display": "table",
+    "rowHeader": "",
+    "columns": [
+     {
+      "key": "finding",
+      "label": "Finding",
+      "type": "text"
+     },
+     {
+      "key": "note",
+      "label": "Note",
+      "type": "text"
+     }
+    ],
+    "rows": [
+     {
+      "key": "row1",
+      "label": "Row 1"
+     },
+     {
+      "key": "row2",
+      "label": "Row 2"
+     }
+    ]
+   },
+   "examples": [
+    {
+     "name": "dental chart",
+     "field": {
+      "key": "teeth",
+      "kind": "grid",
+      "label": "Dental chart",
+      "required": false,
+      "config": {
+       "display": "table",
+       "rowHeader": "Tooth",
+       "columns": [
+        {
+         "key": "status",
+         "label": "Status",
+         "type": "choice",
+         "options": [
+          {
+           "key": "sound",
+           "label": "Sound"
+          },
+          {
+           "key": "caries",
+           "label": "Caries"
+          },
+          {
+           "key": "filled",
+           "label": "Filled"
+          },
+          {
+           "key": "missing",
+           "label": "Missing"
+          }
+         ]
+        },
+        {
+         "key": "mobility",
+         "label": "Mobility",
+         "type": "choice",
+         "options": [
+          {
+           "key": "none",
+           "label": "None"
+          },
+          {
+           "key": "g1",
+           "label": "Grade 1"
+          },
+          {
+           "key": "g2",
+           "label": "Grade 2"
+          }
+         ]
+        },
+        {
+         "key": "note",
+         "label": "Note",
+         "type": "text"
+        }
+       ],
+       "headerGroups": [
+        {
+         "label": "Findings",
+         "from": "status",
+         "span": 2
+        }
+       ],
+       "rows": [
+        {
+         "key": "t18",
+         "label": "18"
+        },
+        {
+         "key": "t17",
+         "label": "17"
+        },
+        {
+         "key": "t16",
+         "label": "16"
+        }
+       ],
+       "quickFill": {
+        "enabled": true,
+        "presets": [
+         {
+          "label": "All sound",
+          "value": "Sound"
+         },
+         {
+          "label": "No mobility",
+          "value": "None",
+          "scope": "column"
+         }
+        ]
+       }
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "teeth": {
+       "print": true,
+       "cells": {
+        "t18": {
+         "status": "caries",
+         "mobility": "g1"
+        },
+        "t17": {
+         "status": "sound"
+        },
+        "t16": {
+         "status": "missing",
+         "note": "extracted last year"
+        }
+       }
+      }
+     }
+    },
+    {
+     "name": "eye examination, as sentences",
+     "field": {
+      "key": "anterior",
+      "kind": "grid",
+      "label": "Anterior segment",
+      "required": false,
+      "config": {
+       "display": "sentences",
+       "rowHeader": "Part",
+       "columns": [
+        {
+         "key": "re",
+         "label": "RE",
+         "type": "text",
+         "says": {
+          "template": "{column}: {value}"
+         }
+        },
+        {
+         "key": "le",
+         "label": "LE",
+         "type": "text",
+         "says": {
+          "template": "{column}: {value}"
+         }
+        }
+       ],
+       "rows": [
+        {
+         "key": "lids",
+         "label": "Lids"
+        },
+        {
+         "key": "cornea",
+         "label": "Cornea"
+        }
+       ],
+       "quickFill": {
+        "enabled": true,
+        "presets": [
+         {
+          "label": "All normal",
+          "value": "Normal"
+         }
+        ]
+       }
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "anterior": {
+       "cells": {
+        "lids": {
+         "re": "Normal",
+         "le": "Normal"
+        },
+        "cornea": {
+         "re": "Clear",
+         "le": "Mild haze"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "measure",
+   "title": "Measurement",
+   "description": "A single reading with a unit, entered on a big stepper or slider (weight, blood pressure, pain score).",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "stepper-slider",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "min": {
+      "type": "number"
+     },
+     "max": {
+      "type": "number"
+     },
+     "step": {
+      "type": "number",
+      "minimum": 0
+     },
+     "unit": {
+      "type": "string",
+      "maxLength": 20
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "value": {
+      "type": [
+       "number",
+       "null"
+      ]
+     },
+     "unit": {
+      "type": "string",
+      "maxLength": 20
+     }
+    }
+   },
+   "defaults": {
+    "min": 0,
+    "max": 200,
+    "step": 1,
+    "unit": "kg"
+   },
+   "examples": [
+    {
+     "name": "weight",
+     "field": {
+      "key": "weight",
+      "kind": "measure",
+      "label": "Weight",
+      "required": false,
+      "config": {
+       "min": 0,
+       "max": 200,
+       "step": 1,
+       "unit": "kg"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "weight": {
+       "value": 70,
+       "unit": "kg"
+      }
+     }
+    },
+    {
+     "name": "pressure",
+     "field": {
+      "key": "systolic",
+      "kind": "measure",
+      "label": "Systolic pressure",
+      "required": false,
+      "config": {
+       "min": 60,
+       "max": 260,
+       "step": 2,
+       "unit": "mmHg"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "systolic": {
+       "value": 124,
+       "unit": "mmHg"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "multi",
+   "title": "Multiple choice",
+   "description": "Pick any number of options (complaints, triggers). Options can have follow-up questions such as side and duration; unticked options can be written as negative history.",
+   "legacyNames": [
+    "multiselect",
+    "checkbox"
+   ],
+   "usesOptions": true,
+   "usesChildren": false,
+   "touch": {
+    "control": "chips",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "display": {
+      "enum": [
+       "chips",
+       "list",
+       "dropdown"
+      ]
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "array",
+     "null"
+    ],
+    "items": {
+     "type": "string"
+    }
+   },
+   "defaults": {
+    "display": "chips"
+   },
+   "examples": [
+    {
+     "name": "triggers",
+     "field": {
+      "key": "triggers",
+      "kind": "multi",
+      "label": "Aggravated by",
+      "required": false,
+      "config": {
+       "display": "chips"
+      },
+      "options": [
+       {
+        "key": "dust",
+        "label": "Dust",
+        "subFields": []
+       },
+       {
+        "key": "cold",
+        "label": "Cold weather",
+        "says": "cold weather",
+        "subFields": []
+       },
+       {
+        "key": "exercise",
+        "label": "Exercise",
+        "subFields": []
+       }
+      ],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "triggers": [
+       "dust",
+       "cold"
+      ]
+     }
+    },
+    {
+     "name": "with negative history",
+     "field": {
+      "key": "symptoms",
+      "kind": "multi",
+      "label": "Symptoms",
+      "required": false,
+      "config": {
+       "display": "chips"
+      },
+      "options": [
+       {
+        "key": "fever",
+        "label": "Fever",
+        "subFields": []
+       },
+       {
+        "key": "cough",
+        "label": "Cough",
+        "subFields": []
+       },
+       {
+        "key": "rash",
+        "label": "Rash",
+        "subFields": []
+       }
+      ],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false,
+       "negativeHistory": {
+        "enabled": true,
+        "prefix": "Denies"
+       }
+      }
+     },
+     "answers": {
+      "symptoms": [
+       "fever"
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "number",
+   "title": "Number",
+   "description": "A number: age, a count, a reading. Optional unit label and limits.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "numpad",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "unit": {
+      "type": "string",
+      "maxLength": 20
+     },
+     "min": {
+      "type": "number"
+     },
+     "max": {
+      "type": "number"
+     },
+     "step": {
+      "type": "number",
+      "minimum": 0
+     },
+     "display": {
+      "enum": [
+       "box",
+       "stepper"
+      ]
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "number",
+     "string",
+     "null"
+    ]
+   },
+   "defaults": {},
+   "examples": [
+    {
+     "name": "age",
+     "field": {
+      "key": "age",
+      "kind": "number",
+      "label": "Age",
+      "required": false,
+      "config": {
+       "min": 0,
+       "max": 120
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "age": 42
+     }
+    },
+    {
+     "name": "with a unit",
+     "field": {
+      "key": "heartRate",
+      "kind": "number",
+      "label": "Heart rate",
+      "required": false,
+      "config": {
+       "unit": "bpm"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "heartRate": 72
+     }
+    }
+   ]
+  },
+  {
+   "name": "photoMarkup",
+   "title": "Photo with markup",
+   "description": "One photo taken or chosen on the spot, marked up with a pen, pins and short labels (a wound, a rash, a swelling), with a few words about it.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "camera-canvas",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "template": {
+      "enum": [
+       "abdomen-quadrants",
+       "body-back",
+       "body-front",
+       "ear",
+       "eye-front",
+       "foot",
+       "fundus",
+       "hand",
+       "head-face",
+       "tooth-chart"
+      ]
+     },
+     "templateAssetId": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+     },
+     "canvas": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "width": {
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 4000
+       },
+       "height": {
+        "type": "integer",
+        "minimum": 100,
+        "maximum": 4000
+       }
+      }
+     },
+     "regions": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "id"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9-]{0,39}$"
+        },
+        "label": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "sentence": {
+         "type": "string",
+         "maxLength": 200
+        },
+        "points": {
+         "type": "array",
+         "minItems": 3,
+         "maxItems": 200,
+         "items": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+           "type": "number",
+           "minimum": 0,
+           "maximum": 1
+          }
+         }
+        }
+       }
+      }
+     },
+     "regionSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "pinSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "labelSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "attachedSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "pinLabels": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+       "type": "string",
+       "minLength": 1,
+       "maxLength": 40
+      }
+     },
+     "maxPins": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+     },
+     "allowInk": {
+      "type": "boolean"
+     },
+     "allowLabels": {
+      "type": "boolean"
+     },
+     "showDescription": {
+      "type": "boolean"
+     },
+     "descriptionPlaceholder": {
+      "type": "string",
+      "maxLength": 100
+     },
+     "inkColors": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+       "type": "string",
+       "pattern": "^#[0-9a-fA-F]{6}$"
+      }
+     },
+     "photoSource": {
+      "enum": [
+       "camera",
+       "upload",
+       "either"
+      ]
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "description": {
+      "type": "string",
+      "maxLength": 2000
+     },
+     "photo": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+     },
+     "regions": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "id"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "pattern": "^[a-z][a-z0-9-]{0,39}$"
+        },
+        "note": {
+         "type": "string",
+         "maxLength": 200
+        }
+       }
+      }
+     },
+     "pins": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "x",
+        "y"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "x": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "y": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "label": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "note": {
+         "type": "string",
+         "maxLength": 200
+        }
+       }
+      }
+     },
+     "strokes": {
+      "type": "array",
+      "maxItems": 300,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "points"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "tool": {
+         "enum": [
+          "pen",
+          "highlighter"
+         ]
+        },
+        "color": {
+         "type": "string",
+         "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "width": {
+         "type": "number",
+         "minimum": 0.0005,
+         "maximum": 0.05
+        },
+        "points": {
+         "type": "array",
+         "minItems": 1,
+         "maxItems": 2000,
+         "items": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 3,
+          "items": {
+           "type": "number",
+           "minimum": 0,
+           "maximum": 1
+          }
+         }
+        }
+       }
+      }
+     },
+     "labels": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "x",
+        "y",
+        "text"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "x": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "y": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "text": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 80
+        }
+       }
+      }
+     }
+    }
+   },
+   "defaults": {
+    "allowInk": true,
+    "showDescription": true,
+    "photoSource": "either"
+   },
+   "examples": [
+    {
+     "name": "photo of a wound",
+     "field": {
+      "key": "wound",
+      "kind": "photoMarkup",
+      "label": "Wound photo",
+      "required": false,
+      "config": {
+       "allowInk": true,
+       "showDescription": true,
+       "photoSource": "either"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "wound": {
+       "description": "Wound on the left shin, day 5.",
+       "photo": "3f2c6c0e-5a1b-4a52-9d0f-2f6d9a1b7c01",
+       "pins": [
+        {
+         "x": 0.5,
+         "y": 0.45,
+         "label": "Slough",
+         "note": "2 cm"
+        }
+       ],
+       "strokes": [
+        {
+         "tool": "pen",
+         "color": "#dc2626",
+         "width": 0.004,
+         "points": [
+          [
+           0.3,
+           0.3
+          ],
+          [
+           0.7,
+           0.3
+          ],
+          [
+           0.7,
+           0.6
+          ],
+          [
+           0.3,
+           0.6
+          ],
+          [
+           0.3,
+           0.3
+          ]
+         ]
+        }
+       ]
+      }
+     }
+    },
+    {
+     "name": "photo with a written note",
+     "field": {
+      "key": "rash",
+      "kind": "photoMarkup",
+      "label": "Rash",
+      "required": false,
+      "config": {
+       "photoSource": "camera",
+       "attachedSentence": "Photo of the rash attached."
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "rash": {
+       "photo": "7c1d0b52-86a4-4c4d-8f3e-0a64d3b9e211",
+       "labels": [
+        {
+         "x": 0.4,
+         "y": 0.2,
+         "text": "Spreading edge"
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "photos",
+   "title": "Photos",
+   "description": "A few photos taken or chosen on the spot, each with a short description and optional pen or pin markup. Printed as a grid with the descriptions as captions.",
+   "legacyNames": [
+    "imagegallery"
+   ],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "camera-grid",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "layout": {
+      "enum": [
+       "1x1",
+       "1x2",
+       "2x1",
+       "2x2",
+       "2x3",
+       "3x2"
+      ]
+     },
+     "maxPhotos": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20
+     },
+     "photoSource": {
+      "enum": [
+       "camera",
+       "upload",
+       "either"
+      ]
+     },
+     "requireDescription": {
+      "type": "boolean"
+     },
+     "descriptionPlaceholder": {
+      "type": "string",
+      "maxLength": 100
+     },
+     "attachedSentence": {
+      "type": "string",
+      "maxLength": 200
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "photos": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "photo"
+       ],
+       "properties": {
+        "id": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "photo": {
+         "type": "string",
+         "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+        },
+        "description": {
+         "type": "string",
+         "maxLength": 500
+        },
+        "pins": {
+         "type": "array",
+         "maxItems": 50,
+         "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+           "x",
+           "y"
+          ],
+          "properties": {
+           "id": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+           },
+           "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+           },
+           "label": {
+            "type": "string",
+            "maxLength": 80
+           },
+           "note": {
+            "type": "string",
+            "maxLength": 200
+           }
+          }
+         }
+        },
+        "strokes": {
+         "type": "array",
+         "maxItems": 100,
+         "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+           "points"
+          ],
+          "properties": {
+           "id": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "tool": {
+            "enum": [
+             "pen",
+             "highlighter"
+            ]
+           },
+           "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+           },
+           "width": {
+            "type": "number",
+            "minimum": 0.0005,
+            "maximum": 0.05
+           },
+           "points": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2000,
+            "items": {
+             "type": "array",
+             "minItems": 2,
+             "maxItems": 3,
+             "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+             }
+            }
+           }
+          }
+         }
+        },
+        "labels": {
+         "type": "array",
+         "maxItems": 20,
+         "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+           "x",
+           "y",
+           "text"
+          ],
+          "properties": {
+           "id": {
+            "type": "string",
+            "maxLength": 40
+           },
+           "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+           },
+           "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+           },
+           "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "defaults": {
+    "layout": "2x2",
+    "maxPhotos": 4,
+    "photoSource": "either"
+   },
+   "examples": [
+    {
+     "name": "two photos with captions",
+     "field": {
+      "key": "photos",
+      "kind": "photos",
+      "label": "Photographs",
+      "required": false,
+      "config": {
+       "layout": "2x2",
+       "maxPhotos": 4,
+       "photoSource": "either"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "photos": {
+       "photos": [
+        {
+         "photo": "0b9f5e1c-2d3a-4c8e-9a41-6e2f7d8c1a01",
+         "description": "Left ear, tympanic membrane"
+        },
+        {
+         "photo": "5a6d1e7f-9b30-4f42-8c15-3e0a2b4d9c02",
+         "description": "Right ear"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "name": "one photo",
+     "field": {
+      "key": "xray",
+      "kind": "photos",
+      "label": "Photo of the report",
+      "required": false,
+      "config": {
+       "layout": "1x1",
+       "maxPhotos": 1,
+       "photoSource": "upload"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "xray": {
+       "photos": [
+        {
+         "photo": "9e4a7c20-1b5d-4f6a-8d33-7c1e0f2a5b03"
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "repeat",
+   "title": "Repeating group",
+   "description": "A group of fields the doctor can add again and again (each ulcer, each scar). Writes one small section per repetition from a template using {{childKey}}, {{index}} and {{groupLabel}}.",
+   "legacyNames": [
+    "recursive"
+   ],
+   "usesOptions": false,
+   "usesChildren": true,
+   "touch": {
+    "control": "add-another",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "minCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+     },
+     "maxCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+     },
+     "defaultCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+     },
+     "labelPrefix": {
+      "type": "string",
+      "maxLength": 60
+     },
+     "labelSuffix": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "maxLength": 60
+     },
+     "narrativeTemplate": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "maxLength": 4000
+     },
+     "separateNarrativeSections": {
+      "type": "boolean"
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "array",
+     "null"
+    ],
+    "maxItems": 50,
+    "items": {
+     "type": "object"
+    }
+   },
+   "defaults": {
+    "minCount": 1,
+    "maxCount": 10,
+    "defaultCount": 1,
+    "labelPrefix": "Item",
+    "separateNarrativeSections": true
+   },
+   "examples": [
+    {
+     "name": "ulcers",
+     "field": {
+      "key": "ulcers",
+      "kind": "repeat",
+      "label": "Ulcers",
+      "required": false,
+      "config": {
+       "minCount": 1,
+       "maxCount": 5,
+       "defaultCount": 1,
+       "labelPrefix": "Ulcer",
+       "narrativeTemplate": "{{groupLabel}}: {{ulcerSize}} at the {{ulcerSite}}."
+      },
+      "options": [],
+      "children": [
+       {
+        "key": "ulcerSize",
+        "kind": "size",
+        "label": "Size",
+        "required": false,
+        "config": {
+         "boxCount": 2,
+         "defaultUnit": "cm"
+        },
+        "options": [],
+        "children": [],
+        "says": {
+         "include": true,
+         "sections": [],
+         "subheading": false
+        }
+       },
+       {
+        "key": "ulcerSite",
+        "kind": "text",
+        "label": "Site",
+        "required": false,
+        "config": {
+         "format": "plain"
+        },
+        "options": [],
+        "children": [],
+        "says": {
+         "include": true,
+         "sections": [],
+         "subheading": false
+        }
+       }
+      ],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "ulcers": [
+       {
+        "ulcerSize": {
+         "dimensions": [
+          2,
+          3
+         ],
+         "unit": "cm"
+        },
+        "ulcerSite": "left leg"
+       },
+       {
+        "ulcerSize": {
+         "dimensions": [
+          1
+         ],
+         "unit": "cm"
+        },
+        "ulcerSite": "right foot"
+       }
+      ]
+     }
+    },
+    {
+     "name": "scars",
+     "field": {
+      "key": "scars",
+      "kind": "repeat",
+      "label": "Scars",
+      "required": false,
+      "config": {
+       "labelPrefix": "Scar",
+       "narrativeTemplate": "{{groupLabel}} is {{scarLength}}."
+      },
+      "options": [],
+      "children": [
+       {
+        "key": "scarLength",
+        "kind": "measure",
+        "label": "Length",
+        "required": false,
+        "config": {
+         "min": 0,
+         "max": 30,
+         "step": 0.5,
+         "unit": "cm"
+        },
+        "options": [],
+        "children": [],
+        "says": {
+         "include": true,
+         "sections": [],
+         "subheading": false
+        }
+       }
+      ],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "scars": [
+       {
+        "scarLength": {
+         "value": 4.5,
+         "unit": "cm"
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "repeatPages",
+   "title": "Repeating pages",
+   "description": "Repeats one or more whole pages as many times as needed (each pregnancy, each operation). Writes one section per repetition using the page's own narrative.",
+   "legacyNames": [
+    "recursivepages"
+   ],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "page-chips",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "pages": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "minItems": 1,
+      "maxItems": 20
+     },
+     "mode": {
+      "enum": [
+       "uniform",
+       "individual"
+      ]
+     },
+     "minCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+     },
+     "maxCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50
+     },
+     "defaultCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 50
+     },
+     "pageEntries": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+       "type": "object"
+      }
+     },
+     "useDropdown": {
+      "type": "boolean"
+     },
+     "dropdownMin": {
+      "type": "integer"
+     },
+     "dropdownMax": {
+      "type": "integer"
+     },
+     "hideDefault": {
+      "type": "boolean"
+     },
+     "labelPrefix": {
+      "type": "string",
+      "maxLength": 60
+     },
+     "labelSuffix": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "maxLength": 60
+     },
+     "showIndex": {
+      "type": "boolean"
+     },
+     "prefixVisibility": {
+      "enum": [
+       "all",
+       "narrativeOnly"
+      ]
+     },
+     "narrativeTemplate": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "maxLength": 4000
+     },
+     "separateNarrativeSections": {
+      "type": "boolean"
+     },
+     "narrativeOverride": {
+      "type": "boolean"
+     },
+     "useSubHeadings": {
+      "type": "boolean"
+     },
+     "orderMode": {
+      "enum": [
+       "static",
+       "custom",
+       "instance"
+      ]
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "required": [
+     "instances"
+    ],
+    "properties": {
+     "instances": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "page",
+        "values"
+       ],
+       "properties": {
+        "page": {
+         "type": "string"
+        },
+        "index": {
+         "type": "integer",
+         "minimum": 0
+        },
+        "values": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   },
+   "defaults": {
+    "mode": "uniform",
+    "minCount": 0,
+    "maxCount": 10,
+    "defaultCount": 1,
+    "labelPrefix": "",
+    "showIndex": true,
+    "prefixVisibility": "all",
+    "separateNarrativeSections": true,
+    "narrativeOverride": true,
+    "useSubHeadings": false,
+    "orderMode": "static"
+   },
+   "examples": [
+    {
+     "name": "two pregnancies",
+     "field": {
+      "key": "pregnancies",
+      "kind": "repeatPages",
+      "label": "Pregnancies",
+      "required": false,
+      "config": {
+       "pages": [
+        "pregnancy"
+       ],
+       "labelPrefix": "",
+       "showIndex": true,
+       "narrativeOverride": true
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "pregnancies": {
+       "instances": [
+        {
+         "page": "pregnancy",
+         "index": 0,
+         "values": {
+          "outcome": "live birth"
+         }
+        },
+        {
+         "page": "pregnancy",
+         "index": 1,
+         "values": {
+          "outcome": "miscarriage"
+         }
+        }
+       ]
+      }
+     }
+    },
+    {
+     "name": "one eye each",
+     "field": {
+      "key": "eyes",
+      "kind": "repeatPages",
+      "label": "Eyes",
+      "required": false,
+      "config": {
+       "pages": [
+        "rightEye",
+        "leftEye"
+       ],
+       "mode": "individual",
+       "labelPrefix": "Examination:",
+       "showIndex": false
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "eyes": {
+       "instances": [
+        {
+         "page": "rightEye",
+         "index": 0,
+         "values": {
+          "acuity": "6/6"
+         }
+        },
+        {
+         "page": "leftEye",
+         "index": 0,
+         "values": {
+          "acuity": "6/9"
+         }
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "size",
+   "title": "Size",
+   "description": "A size with one to five dimensions and a unit (a swelling of 2 x 3 cm).",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "numpad-boxes",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "boxCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5
+     },
+     "defaultUnit": {
+      "enum": [
+       "cm",
+       "mm",
+       "inch",
+       "feet",
+       "meter"
+      ]
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "dimensions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+       "type": [
+        "number",
+        "null"
+       ],
+       "minimum": 0
+      }
+     },
+     "unit": {
+      "type": "string",
+      "maxLength": 10
+     }
+    }
+   },
+   "defaults": {
+    "boxCount": 2,
+    "defaultUnit": "cm"
+   },
+   "examples": [
+    {
+     "name": "two boxes",
+     "field": {
+      "key": "swelling",
+      "kind": "size",
+      "label": "Swelling",
+      "required": false,
+      "config": {
+       "boxCount": 2,
+       "defaultUnit": "cm"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "swelling": {
+       "dimensions": [
+        2,
+        3
+       ],
+       "unit": "cm"
+      }
+     }
+    },
+    {
+     "name": "one box",
+     "field": {
+      "key": "ulcer",
+      "kind": "size",
+      "label": "Ulcer",
+      "required": false,
+      "config": {
+       "boxCount": 1,
+       "defaultUnit": "mm"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "ulcer": {
+       "dimensions": [
+        8
+       ],
+       "unit": "mm"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "text",
+   "title": "Text",
+   "description": "Free text the doctor types or dictates: a name, an address, a note. Can be a phone number or an e-mail address.",
+   "legacyNames": [
+    "textarea",
+    "voice-text",
+    "phone",
+    "email"
+   ],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "text",
+    "needsKeyboard": true
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "multiline": {
+      "type": "boolean"
+     },
+     "format": {
+      "enum": [
+       "plain",
+       "phone",
+       "email"
+      ]
+     },
+     "voice": {
+      "type": "boolean"
+     },
+     "suggestions": {
+      "type": "boolean"
+     },
+     "minLength": {
+      "type": "integer",
+      "minimum": 0
+     },
+     "maxLength": {
+      "type": "integer",
+      "minimum": 1
+     },
+     "pattern": {
+      "type": "string",
+      "maxLength": 200
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "string",
+     "null"
+    ],
+    "maxLength": 20000
+   },
+   "defaults": {
+    "multiline": false,
+    "format": "plain",
+    "voice": true,
+    "suggestions": true
+   },
+   "examples": [
+    {
+     "name": "single line",
+     "field": {
+      "key": "occupation",
+      "kind": "text",
+      "label": "Occupation",
+      "required": false,
+      "config": {
+       "multiline": false,
+       "format": "plain",
+       "voice": true,
+       "suggestions": true
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "occupation": "Teacher"
+     }
+    },
+    {
+     "name": "long note",
+     "field": {
+      "key": "address",
+      "kind": "text",
+      "label": "Address",
+      "required": false,
+      "config": {
+       "multiline": true,
+       "format": "plain",
+       "voice": true
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "address": "12 Park Road, Coimbatore"
+     }
+    },
+    {
+     "name": "phone",
+     "field": {
+      "key": "phone",
+      "kind": "text",
+      "label": "Phone",
+      "required": false,
+      "config": {
+       "format": "phone"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "phone": "+91 98765 43210"
+     }
+    }
+   ]
+  },
+  {
+   "name": "yesno",
+   "title": "Yes / No",
+   "description": "A yes/no question, optionally with Not applicable. Each answer can write its own sentence and ask follow-up questions. Can also be a single tick box (says.whenTrue / whenFalse).",
+   "legacyNames": [
+    "yesnona",
+    "toggle",
+    "checkbox"
+   ],
+   "usesOptions": true,
+   "usesChildren": false,
+   "touch": {
+    "control": "yesno-buttons",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "allowNa": {
+      "type": "boolean"
+     },
+     "display": {
+      "enum": [
+       "buttons",
+       "switch",
+       "check"
+      ]
+     },
+     "labelFallback": {
+      "type": "boolean"
+     }
+    }
+   },
+   "valueSchema": {
+    "oneOf": [
+     {
+      "enum": [
+       "yes",
+       "no",
+       "na"
+      ]
+     },
+     {
+      "type": "boolean"
+     },
+     {
+      "type": "null"
+     }
+    ]
+   },
+   "defaults": {
+    "allowNa": false,
+    "display": "buttons",
+    "labelFallback": false
+   },
+   "examples": [
+    {
+     "name": "symptom",
+     "field": {
+      "key": "headache",
+      "kind": "yesno",
+      "label": "Headache",
+      "required": false,
+      "config": {
+       "allowNa": false,
+       "display": "buttons",
+       "labelFallback": false
+      },
+      "options": [
+       {
+        "key": "yes",
+        "label": "Yes",
+        "says": "headache",
+        "subFields": []
+       },
+       {
+        "key": "no",
+        "label": "No",
+        "subFields": []
+       }
+      ],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "headache": "yes"
+     }
+    },
+    {
+     "name": "tick box",
+     "field": {
+      "key": "smoker",
+      "kind": "yesno",
+      "label": "Smoker",
+      "required": false,
+      "config": {
+       "display": "check"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false,
+       "whenTrue": "The patient smokes.",
+       "whenFalse": "The patient does not smoke."
+      }
+     },
+     "answers": {
+      "smoker": true
+     }
+    }
+   ]
+  }
+ ]
+}

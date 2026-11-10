@@ -1,0 +1,301 @@
+{
+ "schemaVersion": 2,
+ "title": "Skin and eyes",
+ "specialty": "Dermatology",
+ "narrative": {
+  "sections": [
+   {
+    "key": "exam",
+    "title": "Examination",
+    "order": 1,
+    "template": "{{sketch}} {{tender}} {{sites}} {{wound}} {{gallery}} {{eom}} {{anterior}}"
+   }
+  ]
+ },
+ "pages": [
+  {
+   "key": "draw",
+   "title": "Drawing",
+   "fields": [
+    {
+     "required": false,
+     "options": [],
+     "children": [],
+     "key": "sketch",
+     "kind": "drawing",
+     "label": "Sketch",
+     "config": {
+      "allowInk": true,
+      "showDescription": true,
+      "canvas": {
+       "width": 800,
+       "height": 500
+      }
+     },
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "exam",
+        "order": 1
+       }
+      ],
+      "subheading": false
+     }
+    }
+   ]
+  },
+  {
+   "key": "body",
+   "title": "Body map",
+   "fields": [
+    {
+     "required": false,
+     "options": [],
+     "children": [],
+     "key": "tender",
+     "kind": "bodyMap",
+     "label": "Where it hurts",
+     "config": {
+      "template": "body-front",
+      "allowInk": true,
+      "pinLabels": [
+       "Tender",
+       "Swelling",
+       "Scar"
+      ],
+      "regions": [
+       {
+        "id": "abdomen",
+        "sentence": "Tenderness over the {region}"
+       }
+      ]
+     },
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "exam",
+        "order": 2
+       }
+      ],
+      "subheading": false
+     }
+    },
+    {
+     "required": false,
+     "options": [
+      {
+       "key": "forehead",
+       "label": "Forehead",
+       "says": "pain in the forehead",
+       "subFields": [
+        {
+         "required": false,
+         "options": [],
+         "children": [],
+         "key": "foreheadSeverity",
+         "kind": "number",
+         "label": "Severity out of 10",
+         "config": {
+          "min": 0,
+          "max": 10
+         },
+         "says": {
+          "include": true,
+          "sections": [],
+          "subheading": false,
+          "sentence": "severity {value} out of 10"
+         }
+        }
+       ]
+      },
+      {
+       "key": "jaw",
+       "label": "Jaw",
+       "says": "pain in the jaw",
+       "subFields": []
+      }
+     ],
+     "children": [],
+     "key": "sites",
+     "kind": "bodyMap",
+     "label": "Painful sites",
+     "config": {
+      "template": "head-face",
+      "allowInk": false,
+      "maxPins": 0,
+      "markers": [
+       {
+        "key": "forehead",
+        "x": 0.5,
+        "y": 0.22
+       },
+       {
+        "key": "jaw",
+        "x": 0.5,
+        "y": 0.86
+       }
+      ]
+     },
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "exam",
+        "order": 3
+       }
+      ],
+      "subheading": false
+     }
+    }
+   ]
+  },
+  {
+   "key": "photos",
+   "title": "Photos",
+   "fields": [
+    {
+     "required": false,
+     "options": [],
+     "children": [],
+     "key": "wound",
+     "kind": "photoMarkup",
+     "label": "Wound photo",
+     "config": {
+      "allowInk": true,
+      "showDescription": true,
+      "photoSource": "either"
+     },
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "exam",
+        "order": 4
+       }
+      ],
+      "subheading": false
+     }
+    },
+    {
+     "required": false,
+     "options": [],
+     "children": [],
+     "key": "gallery",
+     "kind": "photos",
+     "label": "More photos",
+     "config": {
+      "layout": "2x2",
+      "maxPhotos": 4,
+      "photoSource": "either"
+     },
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "exam",
+        "order": 5
+       }
+      ],
+      "subheading": false
+     }
+    }
+   ]
+  },
+  {
+   "key": "eyes",
+   "title": "Eyes",
+   "fields": [
+    {
+     "required": false,
+     "options": [],
+     "children": [],
+     "key": "eom",
+     "kind": "eyeDiagram",
+     "label": "Eye movements",
+     "config": {
+      "preset": "movements",
+      "includeSwitch": true
+     },
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "exam",
+        "order": 6
+       }
+      ],
+      "subheading": false
+     }
+    },
+    {
+     "required": false,
+     "options": [],
+     "children": [],
+     "key": "anterior",
+     "kind": "eyeDiagram",
+     "label": "Anterior segment",
+     "config": {
+      "preset": "boxes",
+      "includeSwitch": true,
+      "boxes": {
+       "re": {
+        "top": {
+         "label": "Lids",
+         "defaultValue": "Normal"
+        },
+        "bottom": {
+         "label": "Cornea",
+         "inputType": "dropdown",
+         "options": [
+          "Clear",
+          "Hazy",
+          "Ulcer"
+         ]
+        },
+        "left": {
+         "label": "Conjunctiva"
+        },
+        "right": {
+         "label": "Lens"
+        }
+       },
+       "le": {
+        "top": {
+         "label": "Lids",
+         "defaultValue": "Normal"
+        },
+        "bottom": {
+         "label": "Cornea",
+         "inputType": "dropdown",
+         "options": [
+          "Clear",
+          "Hazy",
+          "Ulcer"
+         ]
+        },
+        "left": {
+         "label": "Conjunctiva"
+        },
+        "right": {
+         "label": "Lens"
+        }
+       }
+      }
+     },
+     "says": {
+      "include": true,
+      "sections": [
+       {
+        "section": "exam",
+        "order": 7
+       }
+      ],
+      "subheading": false
+     }
+    }
+   ]
+  }
+ ]
+}

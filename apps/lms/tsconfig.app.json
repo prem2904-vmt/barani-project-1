@@ -4,6 +4,6 @@
     "outDir": "../../dist/out-tsc",
     "types": ["web-bluetooth"]
   },
-  "include": ["src/**/*.ts", "../../libs/shared/src/**/*.ts"],
-  "exclude": ["src/**/*.spec.ts", "src/**/*.test.ts", "src/**/*.spec-helpers.ts", "../../libs/shared/src/**/*.spec.ts", "../../libs/shared/src/**/*.test.ts"]
+  "include": ["src/**/*.ts", "../../libs/shared/src/**/*.ts", "../../libs/forms-engine/src/**/*.ts"],
+  "exclude": ["src/**/*.spec.ts", "src/**/*.test.ts", "src/**/*.spec-helpers.ts", "../../libs/shared/src/**/*.spec.ts", "../../libs/shared/src/**/*.test.ts", "../../libs/forms-engine/src/**/*.spec.ts", "../../libs/forms-engine/src/testing.ts", "../../libs/forms-engine/src/lib/testing/**"]
 }

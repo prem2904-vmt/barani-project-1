@@ -1,0 +1,351 @@
+// ─────────────────────────────────────────────────────────────────────────
+// Studio: the table editor (full screen, desktop first) and its panel.
+// One scroller (the kit's .pf-card__body); the preview stays in view beside
+// the lists on a wide screen and comes first on a tablet. Light + dark by tokens.
+// ─────────────────────────────────────────────────────────────────────────
+@use '../../../../../shared/src/lib/styles/pf-mixins' as pf;
+
+.fe-gedit {
+  position: fixed;
+  z-index: 70;
+  inset: 0 0 var(--pf-nav-h, 0px) 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary, var(--pf-card-bg));
+}
+
+.fe-gedit__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+}
+
+.fe-gedit__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--pf-chip-bg);
+  color: var(--violet-text, #7c3aed);
+}
+
+.fe-gedit__title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  @include pf.no-truncate;
+}
+
+.fe-gedit__sum {
+  font-size: 13.5px;
+  color: var(--text-tertiary);
+}
+
+.fe-gedit__spacer {
+  flex: 1 1 auto;
+}
+
+.fe-gedit__body {
+  padding: 16px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left));
+}
+
+.fe-gedit__cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.fe-gedit__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fe-gedit__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--pf-line);
+  border-radius: 14px;
+  background: var(--pf-card-bg);
+  order: -1; // tablet: the table first
+}
+
+@media (min-width: 1100px) {
+  .fe-gedit__cols {
+    grid-template-columns: minmax(460px, 620px) minmax(0, 1fr);
+  }
+  .fe-gedit__preview {
+    order: 0; // beside the lists (not sticky: a long chart is taller than the screen and would hide its end)
+  }
+}
+
+.fe-gedit__pvhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fe-gedit__pvtitle {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.fe-gedit__tabs {
+  gap: 6px;
+  .fe-chip {
+    padding: 8px 14px;
+    font-size: 14.5px;
+  }
+}
+
+.fe-gedit__note {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-warning, #d97706) 12%, var(--pf-card-bg));
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.fe-gedit__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fe-gedit__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-card-bg);
+}
+
+.fe-gedit__item--under {
+  margin-left: 22px;
+  border-style: dashed;
+}
+
+.fe-gedit__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  > .pf-input {
+    flex: 1 1 auto;
+  }
+}
+
+.fe-gedit__n {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--pf-chip-bg);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.fe-gedit__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0 2px;
+  border-top: 1px dashed var(--pf-line);
+}
+
+.fe-gedit__k {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.fe-gedit__lbl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.fe-gedit__opt {
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.fe-gedit__hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+  list-style: none;
+}
+
+.fe-gedit__short {
+  max-width: 200px;
+}
+
+.fe-gedit__area {
+  min-height: 64px;
+  resize: vertical;
+}
+
+.fe-gedit__add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 12px;
+}
+
+.fe-gedit__opts,
+.fe-gedit__cells {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fe-gedit__cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 4px 0;
+}
+
+.fe-gedit__cellname {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.fe-gedit__cellstate {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.fe-gedit__cellacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.fe-gedit__pair {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.fe-gedit__acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fe-gedit__switch {
+  align-self: flex-start;
+}
+
+.fe-gedit__mini {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+// sentence with placeholders (read as words; edit with Put in chips)
+.fe-gwords__read {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--pf-touch);
+  padding: 8px 12px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: text;
+  &:hover {
+    background: var(--pf-chip-bg);
+  }
+}
+
+.fe-gwords__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fe-gwords__chip {
+  display: inline-block;
+  margin: 0 2px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  color: var(--violet-text, #6d28d9);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.fe-gwords__edit {
+  display: grid;
+  gap: 8px;
+}
+
+.fe-gwords__put {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.fe-gwords__k {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.fe-gwords__tok {
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.fe-gwords__acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

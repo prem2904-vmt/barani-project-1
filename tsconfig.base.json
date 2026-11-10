@@ -2,7 +2,10 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@prefrontal/shared": ["libs/shared/src/index.ts"]
+      "@prefrontal/shared": ["libs/shared/src/index.ts"],
+      "@prefrontal/forms-engine": ["libs/forms-engine/src/index.ts"],
+      "@prefrontal/forms-engine/providers": ["libs/forms-engine/src/providers.ts"],
+      "@prefrontal/forms-engine/testing": ["libs/forms-engine/src/testing.ts"]
     },
     "composite": true,
     "declarationMap": true,

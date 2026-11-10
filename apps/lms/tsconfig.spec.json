@@ -2,7 +2,13 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "../../dist/out-tsc",
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals"],
+    "resolveJsonModule": true,
+    "paths": {
+      "@prefrontal/forms-engine": ["../../libs/forms-engine/src/index.ts"],
+      "@prefrontal/forms-engine/providers": ["../../libs/forms-engine/src/providers.ts"],
+      "@prefrontal/forms-engine/testing": ["../../libs/forms-engine/src/testing.ts"]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "../../libs/forms-engine/src/**/*.ts"]
 }

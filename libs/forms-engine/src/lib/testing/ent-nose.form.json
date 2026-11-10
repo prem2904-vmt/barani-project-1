@@ -1,0 +1,1314 @@
+{
+  "schemaVersion": 2,
+  "title": "Nose History Taking - Complete",
+  "specialty": "ENT",
+  "description": "Complete ENT nose examination form with all sections",
+  "groups": [],
+  "pages": [
+    {
+      "key": "patient_info",
+      "title": "Patient Information",
+      "subtitle": "Basic patient details",
+      "icon": "user",
+      "required": true,
+      "canSkip": false,
+      "fields": [
+        {
+          "key": "patientName",
+          "kind": "text",
+          "label": "Patient Name",
+          "placeholder": "Enter full name",
+          "helper": "As per official records",
+          "required": true,
+          "width": "full",
+          "config": {
+            "multiline": false,
+            "format": "plain",
+            "voice": true,
+            "suggestions": true,
+            "minLength": 2,
+            "maxLength": 100
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient_info",
+                "order": 1
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "patientId",
+          "kind": "text",
+          "label": "Patient ID",
+          "placeholder": "Enter patient ID",
+          "required": false,
+          "width": "half",
+          "config": {
+            "multiline": false,
+            "format": "plain",
+            "voice": true,
+            "suggestions": true
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient_info",
+                "order": 2
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "age",
+          "kind": "number",
+          "label": "Age",
+          "placeholder": "Enter age",
+          "required": true,
+          "width": "half",
+          "config": {
+            "min": 0,
+            "max": 150
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient_info",
+                "order": 3
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "sex",
+          "kind": "choice",
+          "label": "Sex",
+          "required": true,
+          "width": "full",
+          "config": {
+            "display": "list"
+          },
+          "options": [
+            {
+              "key": "male",
+              "label": "Male",
+              "says": "male",
+              "color": "#3B82F6",
+              "subFields": []
+            },
+            {
+              "key": "female",
+              "label": "Female",
+              "says": "female",
+              "color": "#EC4899",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient_info",
+                "order": 4
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "religion",
+          "kind": "text",
+          "label": "Religion",
+          "placeholder": "Enter religion",
+          "required": false,
+          "width": "half",
+          "config": {
+            "multiline": false,
+            "format": "plain",
+            "voice": true,
+            "suggestions": true
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": false,
+            "sections": [],
+            "subheading": false
+          }
+        },
+        {
+          "key": "occupation",
+          "kind": "text",
+          "label": "Occupation",
+          "placeholder": "Enter occupation",
+          "required": false,
+          "width": "half",
+          "config": {
+            "multiline": false,
+            "format": "plain",
+            "voice": true,
+            "suggestions": true
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient_info",
+                "order": 5
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "address",
+          "kind": "text",
+          "label": "Address",
+          "placeholder": "Enter address",
+          "required": false,
+          "width": "full",
+          "config": {
+            "multiline": true,
+            "format": "plain",
+            "voice": true,
+            "suggestions": true
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient_info",
+                "order": 6
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "phone",
+          "kind": "text",
+          "label": "Phone Number",
+          "placeholder": "Enter phone number",
+          "required": false,
+          "width": "full",
+          "config": {
+            "multiline": false,
+            "format": "phone",
+            "voice": true,
+            "suggestions": true
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "patient_info",
+                "order": 7
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "complaints",
+          "kind": "multi",
+          "label": "Chief Complaints",
+          "helper": "Select all that apply",
+          "required": true,
+          "width": "full",
+          "config": {
+            "display": "chips"
+          },
+          "options": [
+            {
+              "key": "obstruction",
+              "label": "Nasal Obstruction",
+              "says": "nasal obstruction",
+              "icon": "wind",
+              "description": "Blocked nose",
+              "subFields": [
+                {
+                  "key": "obstructionSide",
+                  "kind": "choice",
+                  "label": "Which side?",
+                  "required": true,
+                  "width": "full",
+                  "config": {
+                    "display": "buttons"
+                  },
+                  "options": [
+                    {
+                      "key": "left",
+                      "label": "Left",
+                      "says": "left",
+                      "subFields": []
+                    },
+                    {
+                      "key": "right",
+                      "label": "Right",
+                      "says": "right",
+                      "subFields": []
+                    },
+                    {
+                      "key": "both",
+                      "label": "Both",
+                      "says": "bilateral",
+                      "subFields": []
+                    }
+                  ],
+                  "children": [],
+                  "says": {
+                    "include": true,
+                    "sections": [],
+                    "prefix": "affecting the",
+                    "suffix": "nostril",
+                    "subheading": false
+                  }
+                },
+                {
+                  "key": "obstructionDuration",
+                  "kind": "duration",
+                  "label": "Duration",
+                  "placeholder": "Enter duration",
+                  "required": true,
+                  "width": "full",
+                  "config": {
+                    "scale": "calendar",
+                    "mode": "single",
+                    "defaultUnit": "days"
+                  },
+                  "options": [],
+                  "children": [],
+                  "says": {
+                    "include": true,
+                    "sections": [],
+                    "prefix": "present for approximately",
+                    "sentence": "{value} {unit}",
+                    "subheading": false
+                  }
+                }
+              ]
+            },
+            {
+              "key": "discharge",
+              "label": "Nasal Discharge",
+              "says": "nasal discharge",
+              "icon": "droplet",
+              "description": "Runny nose",
+              "subFields": [
+                {
+                  "key": "dischargeSide",
+                  "kind": "choice",
+                  "label": "Which side?",
+                  "required": true,
+                  "width": "full",
+                  "config": {
+                    "display": "buttons"
+                  },
+                  "options": [
+                    {
+                      "key": "left",
+                      "label": "Left",
+                      "says": "left",
+                      "subFields": []
+                    },
+                    {
+                      "key": "right",
+                      "label": "Right",
+                      "says": "right",
+                      "subFields": []
+                    },
+                    {
+                      "key": "both",
+                      "label": "Both",
+                      "says": "bilateral",
+                      "subFields": []
+                    }
+                  ],
+                  "children": [],
+                  "says": {
+                    "include": true,
+                    "sections": [],
+                    "prefix": "from the",
+                    "suffix": "nostril",
+                    "subheading": false
+                  }
+                },
+                {
+                  "key": "dischargeDuration",
+                  "kind": "duration",
+                  "label": "Duration",
+                  "placeholder": "Enter duration",
+                  "required": true,
+                  "width": "full",
+                  "config": {
+                    "scale": "calendar",
+                    "mode": "single",
+                    "defaultUnit": "days"
+                  },
+                  "options": [],
+                  "children": [],
+                  "says": {
+                    "include": true,
+                    "sections": [],
+                    "prefix": "present for approximately",
+                    "sentence": "{value} {unit}",
+                    "subheading": false
+                  }
+                }
+              ]
+            },
+            {
+              "key": "pain",
+              "label": "Nasal or Facial Pain",
+              "says": "nasal or facial pain",
+              "subFields": [
+                {
+                  "key": "painDuration",
+                  "kind": "duration",
+                  "label": "Duration",
+                  "placeholder": "Enter duration",
+                  "required": true,
+                  "width": "full",
+                  "config": {
+                    "scale": "calendar",
+                    "mode": "single",
+                    "defaultUnit": "days"
+                  },
+                  "options": [],
+                  "children": [],
+                  "says": {
+                    "include": true,
+                    "sections": [],
+                    "prefix": "present for approximately",
+                    "sentence": "{value} {unit}",
+                    "subheading": false
+                  }
+                }
+              ]
+            },
+            {
+              "key": "epistaxis",
+              "label": "Epistaxis (Nosebleed)",
+              "says": "epistaxis (nosebleed)",
+              "subFields": [
+                {
+                  "key": "epistaxisDuration",
+                  "kind": "duration",
+                  "label": "Duration",
+                  "placeholder": "Enter duration",
+                  "required": true,
+                  "width": "full",
+                  "config": {
+                    "scale": "calendar",
+                    "mode": "single",
+                    "defaultUnit": "days"
+                  },
+                  "options": [],
+                  "children": [],
+                  "says": {
+                    "include": true,
+                    "sections": [],
+                    "prefix": "present for approximately",
+                    "sentence": "{value} {unit}",
+                    "subheading": false
+                  }
+                }
+              ]
+            },
+            {
+              "key": "smell",
+              "label": "Smell Disturbances",
+              "says": "smell disturbances",
+              "subFields": [
+                {
+                  "key": "smellDuration",
+                  "kind": "duration",
+                  "label": "Duration",
+                  "placeholder": "Enter duration",
+                  "required": true,
+                  "width": "full",
+                  "config": {
+                    "scale": "calendar",
+                    "mode": "single",
+                    "defaultUnit": "days"
+                  },
+                  "options": [],
+                  "children": [],
+                  "says": {
+                    "include": true,
+                    "sections": [],
+                    "prefix": "present for approximately",
+                    "sentence": "{value} {unit}",
+                    "subheading": false
+                  }
+                }
+              ]
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "chief_complaints",
+                "order": 1
+              }
+            ],
+            "subheading": false
+          }
+        }
+      ]
+    },
+    {
+      "key": "timeline",
+      "title": "Timeline",
+      "subtitle": "When symptoms started",
+      "icon": "activity",
+      "required": true,
+      "canSkip": false,
+      "fields": [
+        {
+          "key": "normalSince",
+          "kind": "number",
+          "label": "Patient was normal until",
+          "placeholder": "Enter number",
+          "helper": "How long ago did symptoms start?",
+          "required": true,
+          "width": "half",
+          "config": {
+            "min": 1,
+            "max": 100
+          },
+          "options": [],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "history_present_illness",
+                "order": 1
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "normalSinceUnit",
+          "kind": "choice",
+          "label": "Time Unit",
+          "required": true,
+          "width": "half",
+          "default": "months",
+          "config": {
+            "display": "dropdown"
+          },
+          "options": [
+            {
+              "key": "days",
+              "label": "Days",
+              "says": "days",
+              "subFields": []
+            },
+            {
+              "key": "weeks",
+              "label": "Weeks",
+              "says": "weeks",
+              "subFields": []
+            },
+            {
+              "key": "months",
+              "label": "Months",
+              "says": "months",
+              "subFields": []
+            },
+            {
+              "key": "years",
+              "label": "Years",
+              "says": "years",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "history_present_illness",
+                "order": 2
+              }
+            ],
+            "subheading": false
+          }
+        }
+      ]
+    },
+    {
+      "key": "obstruction_details",
+      "title": "Nasal Obstruction Details",
+      "subtitle": "More details about obstruction",
+      "icon": "wind",
+      "required": true,
+      "canSkip": false,
+      "showWhen": {
+        "logic": "and",
+        "visibility": "show",
+        "conditions": [
+          {
+            "field": "complaints",
+            "op": "contains",
+            "value": "obstruction"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "key": "obstructionSideDetail",
+          "kind": "choice",
+          "label": "Side Affected",
+          "required": true,
+          "width": "full",
+          "config": {
+            "display": "buttons"
+          },
+          "options": [
+            {
+              "key": "right",
+              "label": "Right",
+              "says": "affects the right nostril",
+              "subFields": []
+            },
+            {
+              "key": "left",
+              "label": "Left",
+              "says": "affects the left nostril",
+              "subFields": []
+            },
+            {
+              "key": "bilateral",
+              "label": "Bilateral",
+              "says": "affects both nostrils",
+              "subFields": []
+            },
+            {
+              "key": "r_greater",
+              "label": "R\u003EL",
+              "says": "is more prominent on the right side",
+              "description": "Right more than Left",
+              "subFields": []
+            },
+            {
+              "key": "l_greater",
+              "label": "L\u003ER",
+              "says": "is more prominent on the left side",
+              "description": "Left more than Right",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "associated_symptoms",
+                "order": 1
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "obstructionAlternating",
+          "kind": "yesno",
+          "label": "Does it alternate between nostrils?",
+          "required": true,
+          "width": "full",
+          "config": {
+            "allowNa": true,
+            "display": "buttons",
+            "labelFallback": false
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label": "Yes",
+              "says": "The obstruction alternates between nostrils",
+              "subFields": []
+            },
+            {
+              "key": "no",
+              "label": "No",
+              "says": "The obstruction does not alternate between nostrils",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "associated_symptoms",
+                "order": 2
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "obstructionOnset",
+          "kind": "choice",
+          "label": "Onset",
+          "required": true,
+          "width": "full",
+          "config": {
+            "display": "buttons"
+          },
+          "options": [
+            {
+              "key": "sudden",
+              "label": "Sudden",
+              "says": "sudden",
+              "subFields": []
+            },
+            {
+              "key": "gradual",
+              "label": "Gradual",
+              "says": "gradual",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "associated_symptoms",
+                "order": 3
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "obstructionProgression",
+          "kind": "choice",
+          "label": "Progression",
+          "required": true,
+          "width": "full",
+          "config": {
+            "display": "buttons"
+          },
+          "options": [
+            {
+              "key": "progressive",
+              "label": "Progressive",
+              "says": "progressive",
+              "subFields": []
+            },
+            {
+              "key": "static",
+              "label": "Static",
+              "says": "static",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "associated_symptoms",
+                "order": 4
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "obstructionConstancy",
+          "kind": "choice",
+          "label": "Constancy",
+          "required": true,
+          "width": "full",
+          "config": {
+            "display": "buttons"
+          },
+          "options": [
+            {
+              "key": "constant",
+              "label": "Constant",
+              "says": "constant",
+              "subFields": []
+            },
+            {
+              "key": "variable",
+              "label": "Variable",
+              "says": "variable",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "associated_symptoms",
+                "order": 5
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "obstructionAggravated",
+          "kind": "multi",
+          "label": "Aggravated By",
+          "helper": "Select all that apply",
+          "required": false,
+          "width": "full",
+          "config": {
+            "display": "chips"
+          },
+          "options": [
+            {
+              "key": "dust",
+              "label": "Dust",
+              "says": "dust",
+              "subFields": []
+            },
+            {
+              "key": "cold",
+              "label": "Cold Weather",
+              "says": "cold weather",
+              "subFields": []
+            },
+            {
+              "key": "lying",
+              "label": "Lying Down",
+              "says": "lying down",
+              "subFields": []
+            },
+            {
+              "key": "exercise",
+              "label": "Exercise",
+              "says": "exercise",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "associated_symptoms",
+                "order": 6
+              }
+            ],
+            "subheading": false
+          }
+        },
+        {
+          "key": "obstructionRelieved",
+          "kind": "multi",
+          "label": "Relieved By",
+          "helper": "Select all that apply",
+          "required": false,
+          "width": "full",
+          "config": {
+            "display": "chips"
+          },
+          "options": [
+            {
+              "key": "drops",
+              "label": "Nasal Drops",
+              "says": "nasal drops",
+              "subFields": []
+            },
+            {
+              "key": "steam",
+              "label": "Steam Inhalation",
+              "says": "steam inhalation",
+              "subFields": []
+            },
+            {
+              "key": "warm",
+              "label": "Warm Environment",
+              "says": "warm environment",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [
+              {
+                "section": "associated_symptoms",
+                "order": 7
+              }
+            ],
+            "subheading": false
+          }
+        }
+      ]
+    },
+    {
+      "key": "discharge_details",
+      "title": "Nasal Discharge Details",
+      "subtitle": "More details about discharge",
+      "icon": "droplet",
+      "required": true,
+      "canSkip": false,
+      "showWhen": {
+        "logic": "and",
+        "visibility": "show",
+        "conditions": [
+          {
+            "field": "complaints",
+            "op": "contains",
+            "value": "discharge"
+          }
+        ]
+      },
+      "fields": [
+        {
+          "key": "dischargeType",
+          "kind": "choice",
+          "label": "Type of Discharge",
+          "required": true,
+          "width": "full",
+          "config": {
+            "display": "buttons"
+          },
+          "options": [
+            {
+              "key": "watery",
+              "label": "Watery",
+              "says": "watery",
+              "subFields": []
+            },
+            {
+              "key": "mucoid",
+              "label": "Mucoid",
+              "says": "mucoid",
+              "subFields": []
+            },
+            {
+              "key": "purulent",
+              "label": "Purulent",
+              "says": "purulent",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        },
+        {
+          "key": "dischargeConsistency",
+          "kind": "choice",
+          "label": "Consistency",
+          "required": true,
+          "width": "full",
+          "config": {
+            "display": "buttons"
+          },
+          "options": [
+            {
+              "key": "thin",
+              "label": "Thin",
+              "says": "thin",
+              "subFields": []
+            },
+            {
+              "key": "thick",
+              "label": "Thick",
+              "says": "thick",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        },
+        {
+          "key": "dischargeQuantity",
+          "kind": "choice",
+          "label": "Quantity",
+          "required": true,
+          "width": "full",
+          "config": {
+            "display": "buttons"
+          },
+          "options": [
+            {
+              "key": "scanty",
+              "label": "Scanty",
+              "says": "scanty",
+              "subFields": []
+            },
+            {
+              "key": "moderate",
+              "label": "Moderate",
+              "says": "moderate",
+              "subFields": []
+            },
+            {
+              "key": "profuse",
+              "label": "Profuse",
+              "says": "profuse",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        },
+        {
+          "key": "dischargeColor",
+          "kind": "choice",
+          "label": "Color",
+          "required": true,
+          "width": "full",
+          "config": {
+            "display": "buttons"
+          },
+          "options": [
+            {
+              "key": "clear",
+              "label": "Clear",
+              "says": "clear",
+              "subFields": []
+            },
+            {
+              "key": "white",
+              "label": "White",
+              "says": "white",
+              "subFields": []
+            },
+            {
+              "key": "yellow",
+              "label": "Yellow",
+              "says": "yellow",
+              "subFields": []
+            },
+            {
+              "key": "green",
+              "label": "Green",
+              "says": "green",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        },
+        {
+          "key": "dischargeBloodStained",
+          "kind": "yesno",
+          "label": "Blood-stained?",
+          "required": true,
+          "width": "full",
+          "config": {
+            "allowNa": true,
+            "display": "buttons",
+            "labelFallback": false
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label": "Yes",
+              "says": "The discharge is blood-stained",
+              "subFields": []
+            },
+            {
+              "key": "no",
+              "label": "No",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        },
+        {
+          "key": "dischargeFoulSmelling",
+          "kind": "yesno",
+          "label": "Foul-smelling?",
+          "required": true,
+          "width": "full",
+          "config": {
+            "allowNa": true,
+            "display": "buttons",
+            "labelFallback": false
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label": "Yes",
+              "says": "The discharge has a foul smell",
+              "subFields": []
+            },
+            {
+              "key": "no",
+              "label": "No",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        }
+      ]
+    },
+    {
+      "key": "other_symptoms",
+      "title": "Other Symptoms",
+      "subtitle": "Associated symptoms",
+      "icon": "brain",
+      "required": false,
+      "canSkip": true,
+      "fields": [
+        {
+          "key": "sneezing",
+          "kind": "yesno",
+          "label": "Sneezing",
+          "required": false,
+          "width": "full",
+          "config": {
+            "allowNa": true,
+            "display": "buttons",
+            "labelFallback": false
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label": "Yes",
+              "says": "sneezing",
+              "subFields": []
+            },
+            {
+              "key": "no",
+              "label": "No",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        },
+        {
+          "key": "itching",
+          "kind": "yesno",
+          "label": "Nasal Itching",
+          "required": false,
+          "width": "full",
+          "config": {
+            "allowNa": true,
+            "display": "buttons",
+            "labelFallback": false
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label": "Yes",
+              "says": "nasal itching",
+              "subFields": []
+            },
+            {
+              "key": "no",
+              "label": "No",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        },
+        {
+          "key": "headache",
+          "kind": "yesno",
+          "label": "Headache",
+          "required": false,
+          "width": "full",
+          "config": {
+            "allowNa": true,
+            "display": "buttons",
+            "labelFallback": false
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label": "Yes",
+              "says": "headache",
+              "subFields": []
+            },
+            {
+              "key": "no",
+              "label": "No",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        },
+        {
+          "key": "earSymptoms",
+          "kind": "yesno",
+          "label": "Ear Symptoms",
+          "required": false,
+          "width": "full",
+          "config": {
+            "allowNa": true,
+            "display": "buttons",
+            "labelFallback": false
+          },
+          "options": [
+            {
+              "key": "yes",
+              "label": "Yes",
+              "says": "ear symptoms",
+              "subFields": []
+            },
+            {
+              "key": "no",
+              "label": "No",
+              "subFields": []
+            }
+          ],
+          "children": [],
+          "says": {
+            "include": true,
+            "sections": [],
+            "subheading": false
+          }
+        }
+      ]
+    }
+  ],
+  "narrative": {
+    "sections": [
+      {
+        "key": "patient_info",
+        "title": "PATIENT INFORMATION",
+        "order": 1,
+        "template": "This is {{patientName}}, a {{age}}-year-old {{sex}} patient with ID {{patientId}}. The patient works as a {{occupation}}. Contact number: {{phone}}. Residing at {{address}}.",
+        "pages": [],
+        "yesNoGroups": []
+      },
+      {
+        "key": "chief_complaints",
+        "title": "CHIEF COMPLAINTS",
+        "order": 2,
+        "template": "The patient presents with the following complaints: {{complaints}}.",
+        "pages": [],
+        "sorting": {
+          "enabled": true,
+          "sortBy": "duration",
+          "sortOrder": "desc",
+          "sortUnit": "days",
+          "separator": ", ",
+          "lastSeparator": " and "
+        },
+        "yesNoGroups": []
+      },
+      {
+        "key": "history_present_illness",
+        "title": "HISTORY OF PRESENT ILLNESS",
+        "order": 3,
+        "template": "The patient was apparently normal until {{normalSince}} {{normalSinceUnit}} ago, when the symptoms began to manifest.",
+        "pages": [],
+        "subNarratives": {
+          "enabled": true,
+          "triggerField": "complaints",
+          "displayStyle": "continuous",
+          "sorting": {
+            "enabled": true,
+            "sortBy": "duration",
+            "sortOrder": "desc"
+          },
+          "items": [
+            {
+              "triggeredBy": "obstruction",
+              "template": "The nasal obstruction {{obstructionSideDetail}}. {{obstructionAlternating}} The onset was {{obstructionOnset}}. Progression has been {{obstructionProgression}}. The obstruction is {{obstructionConstancy}} throughout the day. {{obstructionAggravated}} {{obstructionRelieved}}",
+              "weightField": "obstructionDuration"
+            },
+            {
+              "triggeredBy": "discharge",
+              "template": "The patient experiences {{dischargeType}} nasal discharge which is {{dischargeConsistency}} in consistency. The discharge is {{dischargeQuantity}} in quantity and appears {{dischargeColor}} in color. {{dischargeBloodStained}} {{dischargeFoulSmelling}}",
+              "weightField": "dischargeDuration"
+            }
+          ]
+        },
+        "yesNoGroups": []
+      },
+      {
+        "key": "associated_symptoms",
+        "title": "ASSOCIATED SYMPTOMS",
+        "order": 4,
+        "template": "The patient also reports: {{associatedSymptomsList}}.",
+        "pages": [],
+        "yesNoGroups": [
+          {
+            "name": "associatedSymptomsList",
+            "fields": ["obstructionAlternating"],
+            "yesTemplate": "{{items}}",
+            "noTemplate": "",
+            "separator": ", ",
+            "lastSeparator": " and ",
+            "emptyText": "no additional symptoms",
+            "labelFallback": true
+          }
+        ]
+      }
+    ]
+  },
+  "links": [],
+  "triggers": []
+}

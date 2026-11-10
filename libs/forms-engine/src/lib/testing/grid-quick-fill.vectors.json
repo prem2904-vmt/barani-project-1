@@ -1,0 +1,45 @@
+{
+  "about": "Quick Fill test vectors for the grid kind. The server (GridQuickFill) and the filler (TypeScript mirror) must give exactly these results. Each case: the grid's config, the answer before, the chip, where it was tapped (row / column key, or neither = the chip above the grid), whether it is being taken back, and the answer after. A missing cell and an empty row are the same thing: compare after dropping empty rows.",
+  "config": {
+    "columns": [
+      {"key": "status", "label": "Status", "type": "choice", "options": [{"key": "normal", "label": "Normal"}, {"key": "bad", "label": "Bad"}]},
+      {"key": "note", "label": "Note", "type": "text"},
+      {"key": "size", "label": "Size", "type": "number"},
+      {"key": "ok", "label": "Normal", "type": "yesno"}
+    ],
+    "rows": [{"key": "r1", "label": "R1"}, {"key": "r2", "label": "R2"}]
+  },
+  "cases": [
+    {"name": "a chip fills every cell it fits",
+     "before": null, "chip": {"label": "All normal", "value": "Normal"}, "clear": false,
+     "after": {"print": true, "cells": {"r1": {"status": "normal", "note": "Normal", "ok": true}, "r2": {"status": "normal", "note": "Normal", "ok": true}}}},
+    {"name": "a choice matches by label or key, any case",
+     "before": null, "chip": {"label": "bad"}, "clear": false,
+     "after": {"print": true, "cells": {"r1": {"status": "bad", "note": "bad"}, "r2": {"status": "bad", "note": "bad"}}}},
+    {"name": "a number cell takes a number chip only",
+     "before": null, "chip": {"label": "5"}, "clear": false,
+     "after": {"print": true, "cells": {"r1": {"note": "5", "size": 5}, "r2": {"note": "5", "size": 5}}}},
+    {"name": "Yes and No chips set the tick boxes",
+     "before": null, "chip": {"label": "No"}, "clear": false,
+     "after": {"print": true, "cells": {"r1": {"note": "No", "ok": false}, "r2": {"note": "No", "ok": false}}}},
+    {"name": "a row chip fills only that row",
+     "before": null, "chip": {"label": "NAD", "scope": "row"}, "row": "r2", "clear": false,
+     "after": {"print": true, "cells": {"r2": {"note": "NAD"}}}},
+    {"name": "a column chip fills only that column",
+     "before": null, "chip": {"label": "Normal", "scope": "column"}, "column": "status", "clear": false,
+     "after": {"print": true, "cells": {"r1": {"status": "normal"}, "r2": {"status": "normal"}}}},
+    {"name": "a chip overwrites what was there",
+     "before": {"cells": {"r1": {"note": "old"}}}, "chip": {"label": "NAD"}, "clear": false,
+     "after": {"print": true, "cells": {"r1": {"note": "NAD"}, "r2": {"note": "NAD"}}}},
+    {"name": "tapping the chip again clears the cells that still hold its value",
+     "before": {"print": true, "cells": {"r1": {"status": "normal", "note": "Normal", "ok": true}, "r2": {"status": "normal", "note": "typed over", "ok": true}}},
+     "chip": {"label": "All normal", "value": "Normal"}, "clear": true,
+     "after": {"print": true, "cells": {"r2": {"note": "typed over"}}}},
+    {"name": "clearing does not touch cells the chip does not fit",
+     "before": {"cells": {"r1": {"note": "keep", "size": 9}}}, "chip": {"label": "Normal"}, "clear": true,
+     "after": {"cells": {"r1": {"note": "keep", "size": 9}}}},
+    {"name": "a chip that fits nothing changes nothing but the print switch",
+     "before": {"cells": {"r1": {"note": "x"}}}, "chip": {"label": "zzz"}, "row": "r1", "column": "status", "clear": false,
+     "after": {"print": true, "cells": {"r1": {"note": "x"}}}}
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "name": "@prefrontal/forms-engine",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./providers": {
+      "types": "./src/providers.ts",
+      "import": "./src/providers.ts",
+      "default": "./src/providers.ts"
+    },
+    "./testing": {
+      "types": "./src/testing.ts",
+      "import": "./src/testing.ts",
+      "default": "./src/testing.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@angular/common": "~21.2.0",
+    "@angular/core": "~21.2.0",
+    "@prefrontal/shared": "^0.0.1",
+    "perfect-freehand": "1.2.2"
+  }
+}
