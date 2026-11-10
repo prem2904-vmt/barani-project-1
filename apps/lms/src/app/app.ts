@@ -21,6 +21,8 @@ import { DesktopWindowService } from './core/services/desktop-window.service';
 import { ElectronMenuActionService } from './core/services/electron-menu-action.service';
 import { SupportSessionService } from './shared/instruments/support-session.service';
 import { WhatsAppDockComponent } from './shared/components/whatsapp-dock/whatsapp-dock.component';
+import { appMode } from './core/app-mode';
+import { BootPlan, bootPlan } from './features/casesheets/public/boot-plan';
 
 @Component({
   selector: 'app-root',
@@ -33,15 +35,18 @@ import { WhatsAppDockComponent } from './shared/components/whatsapp-dock/whatsap
          transition — no top progress bar. -->
     <router-outlet></router-outlet>
 
-    <!-- Desktop app: the strip above the docked WhatsApp Web panel ("Send on
-         WhatsApp"); renders nothing on the web / phones. -->
-    <pf-wa-dock />
+    <!-- LMS-only root overlays — never on the public case-sheet site (boot-plan.ts). -->
+    @if (plan.lmsOverlays) {
+      <!-- Desktop app: the strip above the docked WhatsApp Web panel ("Send on
+           WhatsApp"); renders nothing on the web / phones. -->
+      <pf-wa-dock />
 
-    <!-- 15-minute idle lock (shared lab machines) — PIN to resume. -->
-    <pf-lock-screen />
+      <!-- 15-minute idle lock (shared lab machines) — PIN to resume. -->
+      <pf-lock-screen />
 
-    <!-- Full-screen profile switch (Windows-style) — target's PIN gates it. -->
-    <pf-switch-screen />
+      <!-- Full-screen profile switch (Windows-style) — target's PIN gates it. -->
+      <pf-switch-screen />
+    }
 
     <!-- Sign-out cover: from the first step of the sign-out sequence until
          the login screen is in place, so the half-cleared app never paints. -->
@@ -178,10 +183,21 @@ import { WhatsAppDockComponent } from './shared/components/whatsapp-dock/whatsap
   `]
 })
 export class App implements OnInit {
+  /** What this page load starts (plan §4.4): the public case-sheet site (casesheets mode) starts NO LMS bootstrap —
+   *  no idle lock, push, calls, password gate or LMS overlays (features/casesheets/public/boot-plan.ts). */
+  protected readonly plan: BootPlan = (() => {
+    const p = inject(PlatformService);
+    return bootPlan({
+      mode: appMode(),
+      publicPatientPage: !p.isCapacitor() && !p.isElectron()
+        && isPublicPatientPath(typeof window !== 'undefined' ? window.location.pathname : ''),
+    });
+  })();
   // Eager-inject so the theme listener attaches on boot.
   private readonly _theme = inject(ThemeService);
   private readonly _capacitor = inject(CapacitorService);
-  private readonly _push = inject(PushService);
+  /** Native push — LMS only (the case-sheet site never registers a push token). */
+  private readonly _push = this.plan.lmsOverlays ? inject(PushService) : null;
   private readonly _platform = inject(PlatformService);
   /** html.device-touch / -tablet / -phone / -desktop: index.html sets it
    *  before the first paint; this keeps it current (mouse attached, etc.). */
@@ -192,10 +208,10 @@ export class App implements OnInit {
    *  an expiry detected there runs the same sequence. */
   protected readonly session = inject(SessionService);
   /** Temp-password gate on a restored session (reload before the change). */
-  private readonly _passwordGate = installPasswordGate();
+  private readonly _passwordGate = this.plan.passwordGate ? installPasswordGate() : undefined;
   /** Root owner of call ringtones — alive on every screen (incl. /login),
    *  so a ring always stops on a terminal call state or account switch. */
-  private readonly _ring = inject(CallRingService);
+  private readonly _ring = this.plan.lmsOverlays ? inject(CallRingService) : null;
   private readonly _injector = inject(Injector);
   /** OPD dark build: installs `window.pf.opd()` silently (no banner, no UI hint). */
   private readonly _opdGate = inject(OpdGateService);
@@ -212,7 +228,7 @@ export class App implements OnInit {
   /** "Allow Prefrontal support" (beta, desktop ≥ 1.1.2): created at start so
    *  a sign-out on ANY screen ends a running support session. Inert on the
    *  web / older desktops (no bridge ⇒ nothing is wired). */
-  private readonly _support = inject(SupportSessionService);
+  private readonly _support = this.plan.lmsOverlays ? inject(SupportSessionService) : null;
   /** The URL the app was opened with, captured before the router's first
    *  navigation can rewrite it — carries a web push's ?pfCall=action:id. */
   private readonly _bootHref = typeof window !== 'undefined' ? window.location.href : '';
@@ -225,10 +241,9 @@ export class App implements OnInit {
     // a phone browser by someone who is not a user of the app: no idle lock,
     // no push / calling hand-offs — keep the page light and self-contained.
     // (Browser only: the installed apps keep their full boot everywhere.)
-    const publicPage = !this._platform.isCapacitor() && !this._platform.isElectron()
-      && isPublicPatientPath(typeof window !== 'undefined' ? window.location.pathname : '');
+    // The public case-sheet site (casesheets mode) starts none of them either.
     // Idle-lock timer for shared lab machines (arms only for PIN-enabled users).
-    if (!publicPage) this._lock.start();
+    if (this.plan.idleLock) this._lock.start();
     // Version handshake — best-effort, fire-and-forget (errors are ignored
     // inside the service so an offline boot never hangs on it).
     void this.version.init();
@@ -244,8 +259,8 @@ export class App implements OnInit {
     // Push + CallKit init lives in its own service so the surface area
     // (token registration, payload routing) stays out of capacitor.service.
     // No-op on web/electron.
-    if (publicPage) return;
-    void this._push.init();
+    if (this.plan.push) void this._push?.init();
+    if (!this.plan.offlineCalling) return;
     // Offline calling hand-offs, lazy-loaded (off the initial bundle):
     //  • answer / decline / show a call rung by PUSH (Android notification
     //    intents, web notification clicks, the Electron call window);
