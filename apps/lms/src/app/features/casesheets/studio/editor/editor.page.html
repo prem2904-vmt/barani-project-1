@@ -7,20 +7,20 @@
     [customSearch]="true"
   >
     <div band-actions class="ed-actions">
-      <button type="button" class="pf-btn pf-btn--icon st-hover-only" data-act="shortcuts" aria-label="Keyboard shortcuts" [attr.data-tip]="tips.keys" (click)="helpOpen.set(true)">
+      <button type="button" class="pf-btn pf-btn--icon st-hover-only ed-desk-only" data-act="shortcuts" aria-label="Keyboard shortcuts" [attr.data-tip]="tips.keys" (click)="helpOpen.set(true)">
         <pf-icon name="keyboard" [size]="18" />
       </button>
       <button type="button" class="pf-btn pf-btn--icon" aria-label="Undo" data-act="undo" [attr.data-tip]="tips.undo" [disabled]="!session.canUndo()" (click)="session.undo()">
         <pf-icon name="undo" [size]="20" />
       </button>
-      <button type="button" class="pf-btn pf-btn--icon st-hover-only" aria-label="Redo" data-act="redo" [attr.data-tip]="tips.redo" [disabled]="!session.canRedo()" (click)="session.redo()">
+      <button type="button" class="pf-btn pf-btn--icon st-hover-only ed-desk-only" aria-label="Redo" data-act="redo" [attr.data-tip]="tips.redo" [disabled]="!session.canRedo()" (click)="session.redo()">
         <pf-icon name="redo" [size]="20" />
       </button>
       <button type="button" class="pf-btn pf-btn--secondary" data-act="preview" [attr.data-tip]="tips.preview" [disabled]="!def()" (click)="preview()">
-        <pf-icon name="eye" [size]="18" /> Preview
+        <pf-icon name="eye" [size]="18" /> <span class="ed-actions__lbl">Preview</span>
       </button>
       <button type="button" class="pf-btn pf-btn--primary" data-act="publish" [disabled]="!def() || publishing() || session.onLive() || session.readOnly()" [attr.aria-busy]="publishing() ? 'true' : null" (click)="publish()">
-        <pf-icon name="send" [size]="18" /> {{ publishing() ? 'Publishing…' : 'Publish' }}
+        <pf-icon name="send" [size]="18" /> <span class="ed-actions__lbl">{{ publishing() ? 'Publishing…' : 'Publish' }}</span>
       </button>
       <button type="button" class="pf-btn pf-btn--icon" aria-label="More: history, copy, discard" data-tip="History, rename, copy, discard" data-tip-end (click)="more()">
         <pf-icon name="more" [size]="20" />

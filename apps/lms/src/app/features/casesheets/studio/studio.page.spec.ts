@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
-import { vi } from 'vitest';
+import { beforeEach, vi } from 'vitest';
 import { addPage, emptyDefinition } from '@prefrontal/forms-engine';
 import { DialogService } from '../../../core/services/dialog.service';
 import { MockStudioApi } from './data/mock-studio-api';
@@ -91,6 +91,20 @@ describe('MyPrefrontal home', () => {
 });
 
 describe('MyPrefrontal home: Start from a paper case sheet (Cortex beta)', () => {
+  // Node 25 ships a global localStorage that is inert without --localstorage-file and shadows jsdom's: give the
+  // flag a real in-memory store so this spec behaves the same on every machine.
+  beforeEach(() => {
+    const mem = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => void mem.set(k, String(v)),
+      removeItem: (k: string) => void mem.delete(k),
+      clear: () => mem.clear(),
+      key: (i: number) => [...mem.keys()][i] ?? null,
+      get length() { return mem.size; },
+    });
+  });
+
   async function open(flagOn: boolean) {
     TestBed.resetTestingModule();
     try { flagOn ? localStorage.setItem('pf.cortexImport', '1') : localStorage.removeItem('pf.cortexImport'); } catch { /* no storage */ }
@@ -107,8 +121,8 @@ describe('MyPrefrontal home: Start from a paper case sheet (Cortex beta)', () =>
   }
 
   afterEach(() => {
-    try { localStorage.removeItem('pf.cortexImport'); } catch { /* no storage */ }
     TestBed.resetTestingModule();
+    vi.unstubAllGlobals();
   });
 
   it('the button is hidden unless the console switch pf.cortexImport() is on', async () => {

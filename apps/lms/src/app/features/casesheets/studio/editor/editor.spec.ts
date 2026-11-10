@@ -217,3 +217,18 @@ describe('Studio editor loads the fill styles itself', () => {
     expect(html).toMatch(/<cs-styles\s+\[touch\]="false"\s*\/>/);
   });
 });
+
+describe('Studio editor: band actions on a phone', () => {
+  it('Preview and Publish keep their words in .ed-actions__lbl (icon-only at ≤640px); shortcuts and redo are desktop-only', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const dir = resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/studio/editor');
+    const html = readFileSync(resolve(dir, 'editor.page.html'), 'utf8');
+    const band = html.slice(html.indexOf('band-actions'), html.indexOf('band-search'));
+    expect(band).toContain('<span class="ed-actions__lbl">Preview</span>');
+    expect(band).toMatch(/<span class="ed-actions__lbl">\{\{ publishing\(\)/);
+    expect(band.match(/ed-desk-only/g)?.length).toBe(2);
+    const scss = readFileSync(resolve(dir, 'editor.page.scss'), 'utf8');
+    expect(scss).toMatch(/@media \(max-width: 640px\)[\s\S]*\.ed-desk-only \{\s*display: none;[\s\S]*\.ed-actions__lbl \{[\s\S]*clip-path: inset\(50%\)/);
+  });
+});
