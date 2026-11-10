@@ -139,3 +139,18 @@ describe('MyPrefrontal home: Start from a paper case sheet (Cortex beta)', () =>
     expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/admin/ipd/myprefrontal/forms/f1']);
   });
 });
+
+describe('MyPrefrontal home: band actions on a phone', () => {
+  it('every band action keeps its words in .sh-actions__lbl (icon-only at ≤640px, the words stay as its accessible name)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const dir = resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/studio');
+    const html = readFileSync(resolve(dir, 'studio.page.html'), 'utf8');
+    const band = html.slice(html.indexOf('band-actions'), html.indexOf('</pf-hero-band>'));
+    for (const words of ['Start from a paper case sheet', 'Bring in an old form', 'New form']) {
+      expect(band).toContain(`<span class="sh-actions__lbl">${words}</span>`);
+    }
+    const scss = readFileSync(resolve(dir, 'studio.page.scss'), 'utf8');
+    expect(scss).toMatch(/@media \(max-width: 640px\)[\s\S]*\.sh-actions__lbl \{[\s\S]*clip-path: inset\(50%\)/);
+  });
+});

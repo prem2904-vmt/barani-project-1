@@ -138,6 +138,19 @@ describe('Cortex import dialog', () => {
     expect(q('[data-start-error]')!.textContent).toContain('limit for Cortex');
   });
 
+  it('a refused sheet says so in the heading, not "Cortex is reading your sheet"', async () => {
+    const { f, dlg, q, el } = await open([DEPTS[0]]);
+    vi.spyOn(api, 'draftJob').mockResolvedValue({ status: 'failed', code: 'patient_data', message: 'x' });
+    expect(q('#ci-title')!.textContent).toBe('Start from a paper case sheet');
+    dlg.addFiles([pic('a.jpg')]);
+    await settle(f);
+    q<HTMLButtonElement>('[data-act="read"]')!.click();
+    await vi.waitFor(async () => { await settle(f); expect(q('[data-failure]')).not.toBeNull(); }, { timeout: 5000 });
+    expect(q('#ci-title')!.textContent).toBe('Cortex could not use this sheet');
+    expect(el.textContent).not.toContain('Hold on');
+    expect(q('[data-failure]')!.textContent).toContain("patient's details");
+  });
+
   it('closing the progress view hides it; the job keeps running', async () => {
     const { f, dlg, q, svc } = await open([DEPTS[0]]);
     const closed = vi.fn();

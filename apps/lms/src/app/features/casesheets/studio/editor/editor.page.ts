@@ -1,5 +1,5 @@
 import { casesheetLinks } from '../../casesheets.routes';
-import { FE_ASSETS } from '@prefrontal/forms-engine';
+import { FE_ASSETS, FE_KINDS, KIND_SPECS } from '@prefrontal/forms-engine';
 import { HttpAssetStore } from '../../data/assets/http-asset-store';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { CASESHEET_FORMS_MANAGE } from '../../shared/casesheet-permissions';
@@ -73,7 +73,13 @@ const SIDE_TAB_KEY = 'prepare-studio-side-tab';
     ShortcutsPanelComponent,
   ],
   // Template pictures: Studio uploads / shows them through the same session-only store as the filler (bytes as blobs, no links).
-  providers: [StudioSession, EditorStore, FieldActions, HttpAssetStore, { provide: FE_ASSETS, useExisting: HttpAssetStore }],
+  // FE_KINDS: every question card previews its control (<fe-field>) and the preview fills the form; the kinds are not
+  // in app.config (case-sheet code stays out of the lab's first download), so the page provides them (WP11: NG0201 — the fix
+  // existed only in the WP11 clone; without it every card preview and the inspector failed to render).
+  providers: [
+    StudioSession, EditorStore, FieldActions, HttpAssetStore, { provide: FE_ASSETS, useExisting: HttpAssetStore },
+    { provide: FE_KINDS, useValue: KIND_SPECS },
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './editor.page.html',
   styleUrls: ['../shared/page.scss', './editor.page.scss'],

@@ -25,8 +25,8 @@ const mb = (n: number): string => (n / (1024 * 1024)).toFixed(n >= 10 * 1024 * 1
         <header class="ci-head">
           <span class="ci-ic" aria-hidden="true"><pf-icon name="sparkle" [size]="20" /></span>
           <div class="ci-head__t">
-            <h2 id="ci-title" class="ci-title">{{ job() ? 'Cortex is reading your sheet' : 'Start from a paper case sheet' }}</h2>
-            <p class="ci-sub">{{ job() ? 'Hold on, this takes about a minute.' : 'Cortex turns a photo or PDF of your blank paper sheet into a draft form you can edit.' }}</p>
+            <h2 id="ci-title" class="ci-title">{{ title() }}</h2>
+            @if (subtitle(); as sub) { <p class="ci-sub">{{ sub }}</p> }
           </div>
           <button type="button" class="pf-btn pf-btn--icon ci-x" aria-label="Close" data-act="close" (click)="close()"><pf-icon name="x" [size]="18" /></button>
         </header>
@@ -132,6 +132,16 @@ export class CortexImportDialog {
 
   protected readonly job = computed(() => (this.svc.viewing() ? this.svc.job() : null));
   protected readonly states = computed(() => stepStates(this.job()?.status ?? 'queued'));
+  /** A failed read says so in the heading too (it used to keep "Cortex is reading your sheet / Hold on" above the refusal). */
+  protected readonly title = computed(() => {
+    const j = this.job();
+    return !j ? 'Start from a paper case sheet' : j.status === 'failed' ? 'Cortex could not use this sheet' : 'Cortex is reading your sheet';
+  });
+  protected readonly subtitle = computed(() => {
+    const j = this.job();
+    return !j ? 'Cortex turns a photo or PDF of your blank paper sheet into a draft form you can edit.'
+      : j.status === 'failed' ? '' : 'Hold on, this takes about a minute.';   // the failure line below says the rest
+  });
   protected readonly deptOptions = computed<PfSelectOption<string>[]>(() => this.departments().map((d) => ({ value: d.key, label: d.name })));
   protected readonly totalMb = computed(() => mb(this.files().reduce((n, f) => n + f.size, 0)));
   private readonly problem = computed(() => pagesProblem(this.files()));

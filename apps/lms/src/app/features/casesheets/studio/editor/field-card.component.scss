@@ -519,8 +519,9 @@
   }
 }
 
-// Cortex's "Check this" marker (dev beta)
-.fc-check {
+// Cortex's "Check this" marker (dev beta). NOT .fc-check: that is the card's hover-only selection tick (opacity 0 until hover),
+// and sharing the name made the marker invisible.
+.fc-cortex {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -538,7 +539,7 @@
   }
 }
 
-.fc-check__t {
+.fc-cortex__t {
   flex: 1 1 12rem;
   min-width: 0;
 }

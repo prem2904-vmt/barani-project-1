@@ -91,10 +91,10 @@
   </header>
 
   @if (checkNote(); as note) {
-    <div class="fc-check" data-check role="group" [attr.aria-label]="'Check this: ' + note">
+    <div class="fc-cortex" data-check role="group" [attr.aria-label]="'Check this: ' + note">
       <pf-icon name="sparkle" [size]="16" />
-      <span class="fc-check__t"><strong>Check this:</strong> {{ note }}</span>
-      <button type="button" class="pf-btn pf-btn--secondary fc-check__ok" data-act="looks-right" [disabled]="store.session.readOnly()" (click)="$event.stopPropagation(); looksRight()">
+      <span class="fc-cortex__t"><strong>Check this:</strong> {{ note }}</span>
+      <button type="button" class="pf-btn pf-btn--secondary fc-cortex__ok" data-act="looks-right" [disabled]="store.session.readOnly()" (click)="$event.stopPropagation(); looksRight()">
         <pf-icon name="check" [size]="16" /> Looks right
       </button>
     </div>

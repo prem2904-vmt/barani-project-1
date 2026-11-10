@@ -133,3 +133,18 @@ describe('Cortex "Check this" in the editor', () => {
     void sub;
   });
 });
+
+describe('the "Check this" marker stays visible', () => {
+  it('never shares a class with the card\'s hover-only selection tick (.fc-check is opacity 0 until hover)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const dir = resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/studio/editor');
+    const html = readFileSync(resolve(dir, 'field-card.component.html'), 'utf8');
+    const marker = html.match(/<div class="([^"]*)"[^>]*data-check[^>]*>/);
+    expect(marker, 'the [data-check] marker').not.toBeNull();
+    const classes = marker![1].split(/\s+/);
+    expect(classes).not.toContain('fc-check');
+    expect(classes.some((c) => c.startsWith('fc-check'))).toBe(false);
+    expect(html).not.toMatch(/fc-check__/);
+  });
+});
