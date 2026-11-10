@@ -180,6 +180,12 @@
               <button type="button" class="pf-btn pf-btn--secondary" (click)="resolve('mine')">Keep mine</button>
             </div>
           }
+          @if (store.checkCount(); as n) {
+            <div class="ed-banner ed-banner--cortex" role="status" data-cortex-banner>
+              <pf-icon name="sparkle" [size]="18" />
+              <span class="ed-banner__t">Cortex made this draft from your sheet. Check the {{ n }} marked {{ n === 1 ? 'question' : 'questions' }}, then publish.</span>
+            </div>
+          }
           @if (session.readOnly()) {
             <div class="ed-banner" role="status" data-master-banner>
               <pf-icon name="info" [size]="18" />

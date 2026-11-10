@@ -6,6 +6,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { MockStudioApi } from './data/mock-studio-api';
 import { StudioApi } from './data/studio-api';
 import { FormRow } from './data/studio-models';
+import { CortexImportService } from './cortex-import/cortex-import.service';
 import { OTHER_DEPARTMENT, StudioPage, groupByDepartment } from './studio.page';
 
 const row = (over: Partial<FormRow>): FormRow => ({
@@ -86,5 +87,55 @@ describe('MyPrefrontal home', () => {
   it('shows no assistant inbox and no people link', async () => {
     const { el } = await open();
     expect(el.textContent).not.toMatch(/assistant|People and roles/i);
+  });
+});
+
+describe('MyPrefrontal home: Start from a paper case sheet (Cortex beta)', () => {
+  async function open(flagOn: boolean) {
+    TestBed.resetTestingModule();
+    try { flagOn ? localStorage.setItem('pf.cortexImport', '1') : localStorage.removeItem('pf.cortexImport'); } catch { /* no storage */ }
+    const api = new MockStudioApi();
+    api.seed('Our general', addPage(emptyDefinition('Our general'), 'History').def, { publish: true, departmentKey: 'general' });
+    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: StudioApi, useValue: api }, DialogService] });
+    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const f = TestBed.createComponent(StudioPage);
+    await f.whenStable();
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    return { f, el: f.nativeElement as HTMLElement, svc: TestBed.inject(CortexImportService) };
+  }
+
+  afterEach(() => {
+    try { localStorage.removeItem('pf.cortexImport'); } catch { /* no storage */ }
+    TestBed.resetTestingModule();
+  });
+
+  it('the button is hidden unless the console switch pf.cortexImport() is on', async () => {
+    expect((await open(false)).el.querySelector('[data-act="cortex-import"]')).toBeNull();
+    const { el } = await open(true);
+    expect(el.querySelector('[data-act="cortex-import"]')!.textContent).toContain('Start from a paper case sheet');
+  });
+
+  it('the button opens the dialog; a 404 from the server hides the button and says why', async () => {
+    const { f, el, svc } = await open(true);
+    (el.querySelector('[data-act="cortex-import"]') as HTMLButtonElement).click();
+    f.detectChanges();
+    expect(el.querySelector('[data-cortex-import]')).not.toBeNull();
+    svc.unavailable.set(true);
+    f.detectChanges();
+    expect(el.querySelector('[data-act="cortex-import"]')).toBeNull();
+  });
+
+  it('a running job shows "Cortex is making ‹name›" on the home; done turns it into Open the draft', async () => {
+    const { f, el, svc } = await open(true);
+    svc.job.set({ jobId: 'j', name: 'Cardiology sheet', status: 'building' });
+    f.detectChanges();
+    expect(el.querySelector('[data-cortex-chip]')!.textContent).toContain('Cortex is making Cardiology sheet');
+    svc.job.set({ jobId: 'j', name: 'Cardiology sheet', status: 'done', formId: 'f1', checkCount: 2 });
+    f.detectChanges();
+    expect(el.querySelector('[data-cortex-chip]')!.textContent).toContain('Cortex made Cardiology sheet');
+    (el.querySelector('[data-act="open-draft"]') as HTMLButtonElement).click();
+    expect(TestBed.inject(Router).navigate).toHaveBeenCalledWith(['/admin/ipd/myprefrontal/forms/f1']);
   });
 });

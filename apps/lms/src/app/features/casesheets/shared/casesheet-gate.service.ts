@@ -3,6 +3,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { isDevEnvironment } from '../../../core/beta/beta-gate';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { environment } from '../../../../environments/environment';
+import { installPfCortexImport } from './cortex-import-gate';
 import { casesheetsVisible, installPfCasesheets, ipdExplicitlyOn, readCasesheetsFlag, safeLocalStorage } from './casesheet-gate';
 
 /**
@@ -32,6 +33,7 @@ export class CasesheetGateService {
   /** Show case sheets anywhere in the UI. */
   readonly visible = computed(() => casesheetsVisible(this.inputs()));
 
+
   /** The tenant's STORED module map; anything unreadable (not loaded, a partial service) ⇒ null ⇒ closed. */
   private storedModules(): ReturnType<TenantEntitlementsService['modules']> {
     try { return typeof this.entitlements.modules === 'function' ? this.entitlements.modules() : null; } catch { return null; }
@@ -55,6 +57,8 @@ export class CasesheetGateService {
   install(): void {
     if (typeof window === 'undefined' || !this.storage) return;
     installPfCasesheets(window as unknown as { pf?: Record<string, unknown> } & Record<string, unknown>,
+      this.storage, () => { try { window.location.reload(); } catch { /* noop */ } });
+    installPfCortexImport(window as unknown as { pf?: Record<string, unknown> } & Record<string, unknown>,
       this.storage, () => { try { window.location.reload(); } catch { /* noop */ } });
   }
 }

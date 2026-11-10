@@ -13,6 +13,7 @@ import {
 import { StudioApi } from '../data/studio-api';
 import { ComponentKind, Problem } from '../data/studio-models';
 import { StudioSession } from '../data/studio-session';
+import { clearCheck, countChecks, dropEditedChecks, markedSignatures } from '../cortex-import/cortex-import';
 
 export type CardArea = 'says' | 'ifNone' | 'showWhen' | 'options' | 'settings' | 'label';
 
@@ -166,11 +167,20 @@ export class EditorStore {
     return structuredClone(this.catalogue().find((k) => k.name === kind)?.defaults ?? {});
   }
 
-  /** One edit to the form. */
+  /** Questions Cortex marked "Check this" (`config.checkNote`), sub-fields included. */
+  readonly checkCount = computed(() => countChecks(this.def()));
+
+  /** One edit to the form. A question that Cortex marked loses its marker when the edit changes it. */
   edit(change: (d: FormDefinition) => FormDefinition): void {
     const d = this.def();
     if (!d) return;
-    this.session.apply(change(d));
+    const next = change(d);
+    this.session.apply(next === d ? next : dropEditedChecks(markedSignatures(d), next));
+  }
+
+  /** "Looks right": take the marker off this question (through the normal save). */
+  looksRight(key: string): void {
+    this.edit((d) => clearCheck(d, key));
   }
 
   selectPage(key: string): void {

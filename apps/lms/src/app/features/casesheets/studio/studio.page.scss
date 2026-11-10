@@ -233,3 +233,31 @@
 .st-edit {
   margin-right: 4px;
 }
+
+// Cortex import chip (dev beta): "Cortex is making ‹name›"
+.st-cortex {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent-primary, #7c5cff) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary, #7c5cff) 25%, transparent);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.st-cortex[data-state='failed'] {
+  background: color-mix(in srgb, var(--danger, #d64545) 8%, transparent);
+  border-color: color-mix(in srgb, var(--danger, #d64545) 25%, transparent);
+}
+.st-cortex__ic {
+  display: grid;
+  place-items: center;
+  color: var(--accent-primary, #7c5cff);
+}
+.st-cortex__t {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
