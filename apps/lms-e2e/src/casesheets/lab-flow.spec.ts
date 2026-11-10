@@ -253,15 +253,8 @@ test('Wound review: a photo and the body map', async ({ browser }) => {
   await ctx.close();
 });
 
-/**
- * KNOWN BUG (WP11, backend): a user who holds casesheet_forms_manage (Lab Admin) gets the BUILDER list from
- * GET /api/casesheets/forms on Departments too, so once a master is forked ("Edit", draft only) it disappears from their
- * Departments until the copy is published — while doctors still see the master (docs/CASESHEETS.md: "a draft-only fork
- * keeps the master live for doctors"). Fix = a filling view of the list for builders (e.g. ?for=fill) used by Departments.
- * test.fail(): flips to a failure the day it is fixed.
- */
+/** A user who may build forms (Lab Admin) still sees a forked, draft-only master in Departments: Departments reads the fill view (?for=fill). */
 test('a Lab Admin still sees a forked (draft-only) master in Departments', async ({ browser }) => {
-  test.fail();
   const forms = await api<{ items: { origin: string; title: string; published: unknown }[] }>(STACK.admin, 'GET', '/api/casesheets/forms?pageSize=100');
   test.skip(!forms.items.some(f => f.origin === 'override' && !f.published), 'needs the draft-only fork studio-flow makes');
   const { ctx, page } = await openAs(browser, STACK.admin, `${LAB_URL}/casesheets/new?patientId=${PATIENT.id}`);
