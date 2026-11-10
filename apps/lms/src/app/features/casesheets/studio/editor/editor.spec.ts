@@ -196,3 +196,15 @@ describe('Studio editor', () => {
     expect(actions.undoable()).toContain('Exam');
   });
 });
+
+describe('Studio editor page providers (WP11)', () => {
+  it('provides the kinds itself: the cards preview each control and app.config has no forms engine', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const src = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/studio/editor/editor.page.ts'), 'utf8');
+    expect(src).toMatch(/providers:\s*\[[^\]]*\{ provide: FE_KINDS, useValue: KIND_SPECS \}/);
+    const cfg = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/app.config.ts'), 'utf8');
+    expect(cfg).not.toContain('provideFormsEngine');
+  });
+});
+
