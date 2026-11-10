@@ -246,6 +246,12 @@ describe('HttpCasesApi', () => {
     expect(await p).toBe('worse at night');
   });
 
+  it('voice config: GET /api/casesheets/voice → {enabled, maxSeconds}', async () => {
+    const p = api.voiceConfig();
+    http.expectOne(`${B}/api/casesheets/voice`).flush({ enabled: true, maxSeconds: 45 });
+    expect(await p).toEqual({ enabled: true, maxSeconds: 45 });
+  });
+
   it('practice settings: nulls ↔ empty strings, file links made absolute, pictures as raw bodies', async () => {
     const g = api.getPractice();
     http.expectOne(`${B}/api/casesheets/practice-settings`).flush({

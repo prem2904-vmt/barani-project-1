@@ -46,7 +46,8 @@ export class CsAuthCallbackPage implements OnInit {
       const r = await this.auth.completeGoogleSignIn({ code: q.get('code'), error: q.get('error') });
       next = r.next;
     } catch (e) {
-      const code = e instanceof GoogleSignInError ? e.code : 'transient';
+      // The server's refusal reason when there is one (worded on the sign-in page), else the general code.
+      const code = e instanceof GoogleSignInError ? (e.reason ?? e.code) : 'transient';
       await this.router.navigate(['/sign-in'], { queryParams: { e: code }, replaceUrl: true });
       return;
     }

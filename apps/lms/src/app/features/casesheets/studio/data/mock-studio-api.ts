@@ -211,6 +211,11 @@ export class MockStudioApi extends StudioApi {
           status: f.status,
           origin: f.origin,
           departmentKey: f.departmentKey,
+          departmentName: this.depts.find((d) => d.key === f.departmentKey)?.name ?? null,
+          catalogKey: f.origin === 'local' ? null : f.key,
+          readOnly: f.origin === 'master',
+          forkedFromVersionId: null,
+          pinned: false,
           newerMaster: false,
           published: p ? { id: p.id, versionNo: p.versionNo, publishedAt: p.publishedAt } : null,
           draft: d ? { id: d.id, versionNo: d.versionNo, state: d.state, source: d.source, updatedAt: d.updatedAt, rowVersion: d.rowVersion } : null,
@@ -228,6 +233,11 @@ export class MockStudioApi extends StudioApi {
       specialty: f.specialty,
       status: f.status,
       origin: f.origin,
+      departmentKey: f.departmentKey,
+      readOnly: f.origin === 'master',
+      catalogKey: f.origin === 'local' ? null : f.key,
+      forkedFromVersionId: null,
+      newerMaster: false,
       currentPublishedVersionId: f.publishedId,
       versions: [...f.versions]
         .sort((a, b) => b.versionNo - a.versionNo)

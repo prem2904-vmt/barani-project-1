@@ -56,16 +56,22 @@ describe('Google sign-in PKCE (case-sheet site)', () => {
       expect(safeNext(bad as string)).toBe('/');
   });
 
-  it('personal/enter answers: personal, lab user (any of the shapes), gate closed, refused, transient', () => {
-    expect(readEnterAnswer(200, { tenantId: 't', tenantKind: 'personal' })).toEqual({ kind: 'personal' });
-    expect(readEnterAnswer(201, { success: true, data: { created: true } })).toEqual({ kind: 'personal' });
-    expect(readEnterAnswer(200, { labUser: true })).toEqual({ kind: 'lab' });
-    expect(readEnterAnswer(200, { success: true, data: { kind: 'lab' } })).toEqual({ kind: 'lab' });
-    expect(readEnterAnswer(200, { status: 'lab_user' })).toEqual({ kind: 'lab' });
-    expect(readEnterAnswer(409, { code: 'lab_user', title: 'x' })).toEqual({ kind: 'lab' });
-    expect(readEnterAnswer(409, { success: false, error: { code: 'lab_user' } })).toEqual({ kind: 'lab' });
+  it('personal/enter answers (final contract): personal, lab with / without case sheets, gate closed, refusals, 424, transient', () => {
+    expect(readEnterAnswer(200, { kind: 'personal', labUser: false, created: true, caseSheets: true, tenantId: 'tp' }))
+      .toEqual({ kind: 'personal', tenantId: 'tp', created: true });
+    expect(readEnterAnswer(200, { kind: 'personal', labUser: false, created: false, caseSheets: true, tenantId: 'tp' }))
+      .toEqual({ kind: 'personal', tenantId: 'tp', created: false });
+    expect(readEnterAnswer(200, { kind: 'lab', labUser: true, created: false, caseSheets: true, tenantId: 't1' }))
+      .toEqual({ kind: 'lab', tenantId: 't1', caseSheets: true });
+    expect(readEnterAnswer(200, { kind: 'lab', labUser: true, created: false, caseSheets: false, tenantId: 't1' }))
+      .toEqual({ kind: 'lab', tenantId: 't1', caseSheets: false });
+    expect(readEnterAnswer(200, { something: 'else' })).toEqual({ kind: 'transient' });
     expect(readEnterAnswer(404, null)).toEqual({ kind: 'unavailable' });
-    for (const st of [400, 401, 403, 409, 422]) expect(readEnterAnswer(st, { code: 'not_google' })).toEqual({ kind: 'refused' });
+    expect(readEnterAnswer(401, { code: 'not_signed_in' })).toEqual({ kind: 'refused', reason: 'not_signed_in' });
+    for (const c of ['provider_not_allowed', 'email_missing', 'email_not_allowed', 'email_not_verified', 'account_blocked', 'account_inactive'])
+      expect(readEnterAnswer(403, { status: 403, code: c })).toEqual({ kind: 'refused', reason: c });
+    expect(readEnterAnswer(403, { code: 'something_new' })).toEqual({ kind: 'refused', reason: 'refused' });
+    expect(readEnterAnswer(424, { code: 'verification_unavailable' })).toEqual({ kind: 'transient', reason: 'verification_unavailable' });
     for (const st of [0, 408, 429, 500, 503]) expect(readEnterAnswer(st, null)).toEqual({ kind: 'transient' });
   });
 });

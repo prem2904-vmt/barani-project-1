@@ -40,10 +40,15 @@ export class CasesheetGateService {
   /** Dev build / runtime? Reads `environment` lazily (overridable in specs). */
   protected isDev(): boolean { return isDevEnvironment(environment); }
 
-  /** Everything the gate reads is loaded (signed-in user + the tenant module map). Never throws. */
+  /**
+   * Everything the gate reads is loaded (signed-in user + the tenant module map). Never throws. A personal space opens
+   * the gate by its KIND and has no lab module map: the server fences every lab endpoint (`/api/tenants/modules`
+   * included) to an empty 404 for it, so the map is never asked for.
+   */
   async ready(): Promise<void> {
     await this.auth.waitForAuth();
-    if (this.auth.user()) await this.entitlements.ensureLoaded?.();
+    const u = this.auth.user();
+    if (u && u.tenantKind !== 'personal') await this.entitlements.ensureLoaded?.();
   }
 
   /** Install `window.pf.casesheets()` silently. Called once at app start. */

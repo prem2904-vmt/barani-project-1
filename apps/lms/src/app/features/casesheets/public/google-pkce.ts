@@ -111,34 +111,51 @@ export function safeSessionStorage(): PkceStorage | null {
   try { return typeof sessionStorage !== 'undefined' ? sessionStorage : null; } catch { return null; }
 }
 
-/** What `POST /api/casesheets/personal/enter` said (plan §4.2; WP4 owns the endpoint). */
+/**
+ * What `POST /api/casesheets/personal/enter` said (plan §4.2; the FINAL backend contract, docs/CASESHEETS.md §1.5):
+ *  - 200 `{kind:"personal", labUser:false, created, caseSheets:true, tenantId}` — a personal space (made now or before);
+ *  - 200 `{kind:"lab", labUser:true, created:false, caseSheets, tenantId}` — already lab staff: no personal space; the case-sheet
+ *    shell runs over their lab when `caseSheets` is true, else case sheets are "not available" for them;
+ *  - empty 404 — case sheets are switched off here;
+ *  - problem+json refusals: 401 `not_signed_in`; 403 `provider_not_allowed` / `email_missing` / `email_not_allowed` /
+ *    `email_not_verified` / `account_blocked` / `account_inactive`; 424 `verification_unavailable`.
+ */
 export type EnterAnswer =
-  /** A personal space exists (created now or before) for this Google account. */
-  | { kind: 'personal' }
-  /** The account is already a lab user: no personal space; the case-sheet shell runs over their lab (if it has them). */
-  | { kind: 'lab' }
+  | { kind: 'personal'; tenantId: string | null; created: boolean }
+  | { kind: 'lab'; tenantId: string | null; caseSheets: boolean }
   /** Case sheets are switched off here (the gate's empty 404). */
   | { kind: 'unavailable' }
-  /** The server refused this account (not Google, unverified e-mail, a staff address…). */
-  | { kind: 'refused' }
-  /** Couldn't reach / the server failed: try again. */
-  | { kind: 'transient' };
+  /** The server refused this account; `reason` is the problem `code` (see {@link ENTER_REFUSALS}). */
+  | { kind: 'refused'; reason: string }
+  /** Couldn't reach / the server failed (or couldn't verify the account right now): try again. */
+  | { kind: 'transient'; reason?: string };
 
-/**
- * Read the enter answer. Accepts the Prepare-style raw body and the LMS `ApiResponse` wrapper, and the lab-user
- * signal as `labUser: true`, `kind|tenantKind|status|result: 'lab' | 'lab_user'` (2xx) or a 409 / problem `code`
- * `lab_user`. Anything unknown in a 2xx is a personal space — the shell is still decided by /me afterwards.
- */
+/** The refusal codes personal/enter sends → plain, kind words for the sign-in page. */
+export const ENTER_REFUSALS: Record<string, string> = {
+  not_signed_in: 'Google sign-in didn’t finish. Please try again.',
+  provider_not_allowed: 'Case sheets use Google sign-in. Please continue with Google.',
+  email_missing: 'Your Google account didn’t share an e-mail address. Please try another Google account.',
+  email_not_allowed: 'This e-mail address can’t be used for case sheets. Please use your own Google account.',
+  email_not_verified: 'Your Google e-mail address isn’t verified yet. Verify it with Google, then try again.',
+  account_blocked: 'This account has been blocked. Please contact Prefrontal support.',
+  account_inactive: 'This account isn’t active. Please contact Prefrontal support.',
+  verification_unavailable: 'We couldn’t check your Google account just now. Please try again in a moment.',
+  lab_no_casesheets: 'Case sheets aren’t switched on for your lab yet. Ask your lab admin to turn them on.',
+};
+
+/** Read the enter answer (raw JSON / problem+json, as the case-sheet API sends it). */
 export function readEnterAnswer(status: number, body: unknown): EnterAnswer {
   const o = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
-  const d = (o['data'] && typeof o['data'] === 'object' ? o['data'] : o) as Record<string, unknown>;
-  const err = (o['error'] && typeof o['error'] === 'object' ? o['error'] : {}) as Record<string, unknown>;
-  const code = String(d['code'] ?? err['code'] ?? o['code'] ?? '').toLowerCase();
-  const isLab = d['labUser'] === true || d['isLabUser'] === true || code === 'lab_user'
-    || ['kind', 'tenantKind', 'status', 'result'].some(k => /^lab(_user)?$/i.test(String(d[k] ?? '')));
-  if (status >= 200 && status < 300) return isLab ? { kind: 'lab' } : { kind: 'personal' };
-  if (status === 409 && isLab) return { kind: 'lab' };
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null);
+  if (status === 200 || status === 201) {
+    if (o['kind'] === 'lab' || o['labUser'] === true) return { kind: 'lab', tenantId: str(o['tenantId']), caseSheets: o['caseSheets'] === true };
+    if (o['kind'] === 'personal') return { kind: 'personal', tenantId: str(o['tenantId']), created: o['created'] === true };
+    return { kind: 'transient' };   // a 2xx we don't understand: never guess a space
+  }
   if (status === 404) return { kind: 'unavailable' };
+  const code = String(o['code'] ?? '').toLowerCase();
+  if (status === 424) return { kind: 'transient', reason: 'verification_unavailable' };
+  if (status === 401 || status === 403) return { kind: 'refused', reason: code in ENTER_REFUSALS ? code : 'refused' };
   if (status === 0 || status === 408 || status === 429 || status >= 500) return { kind: 'transient' };
-  return { kind: 'refused' };
+  return { kind: 'refused', reason: code in ENTER_REFUSALS ? code : 'refused' };
 }

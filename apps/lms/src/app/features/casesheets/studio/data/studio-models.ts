@@ -34,6 +34,16 @@ export interface FormRow {
   origin: FormOrigin;
   /** The department it is filed under (a master department key), or null (shown under "Other"). */
   departmentKey: string | null;
+  /** The department's display name (the API sends it on list rows), or null. */
+  departmentName: string | null;
+  /** The catalogue key a master and its copies share, or null for a lab's own form. */
+  catalogKey: string | null;
+  /** A master seen from a lab: read-only until Edit makes the lab's copy (fork). */
+  readOnly: boolean;
+  /** The master version this copy was made from. */
+  forkedFromVersionId: string | null;
+  /** The signed-in user pinned it. */
+  pinned: boolean;
   /** A fork whose master has a newer published version. */
   newerMaster: boolean;
   published: { id: string; versionNo: number; publishedAt: string | null } | null;
@@ -98,6 +108,11 @@ export interface FormDetail {
   specialty: string | null;
   status: 'active' | 'archived';
   origin: FormOrigin;
+  departmentKey: string | null;
+  readOnly: boolean;
+  catalogKey: string | null;
+  forkedFromVersionId: string | null;
+  newerMaster: boolean;
   currentPublishedVersionId: string | null;
   versions: VersionRow[];
 }

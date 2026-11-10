@@ -85,6 +85,13 @@ describe('CasesheetGateService', () => {
     await TestBed.inject(CasesheetGateService).ready();
     expect(api.get).not.toHaveBeenCalled();
   });
+  it('a personal space never asks for the lab module map (the server fences /api/tenants/* for it)', async () => {
+    const { api } = setup({ tenantKind: 'personal' });
+    const gate = TestBed.inject(CasesheetGateService);
+    await gate.ready();
+    expect(gate.visible()).toBe(true);
+    expect(api.get).not.toHaveBeenCalled();
+  });
   it('opening the case-sheet gate does not switch the IPD module on for anything else', async () => {
     setup({ flag: true });
     const e = TestBed.inject(TenantEntitlementsService);

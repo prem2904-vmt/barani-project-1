@@ -9,7 +9,7 @@ import { FormRow } from './data/studio-models';
 import { OTHER_DEPARTMENT, StudioPage, groupByDepartment } from './studio.page';
 
 const row = (over: Partial<FormRow>): FormRow => ({
-  id: 'f', key: 'k', title: 'T', specialty: null, status: 'active', origin: 'local', departmentKey: null, newerMaster: false, published: null, draft: null, ...over,
+  id: 'f', key: 'k', title: 'T', specialty: null, status: 'active', origin: 'local', departmentKey: null, departmentName: null, catalogKey: null, readOnly: false, forkedFromVersionId: null, pinned: false, newerMaster: false, published: null, draft: null, ...over,
 });
 
 describe('groupByDepartment', () => {

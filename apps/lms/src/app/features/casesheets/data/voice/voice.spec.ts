@@ -22,7 +22,11 @@ class FakeRecorders implements RecorderFactory {
   };
 }
 
-function setup(transcribe: (b: Blob, c: unknown) => Promise<string>, features: Record<string, boolean> = {}) {
+function setup(
+  transcribe: (b: Blob, c: unknown) => Promise<string>,
+  features: Record<string, boolean> = {},
+  voiceConfig?: () => Promise<{ enabled: boolean; maxSeconds: number }>,
+) {
   (environment as { features?: Record<string, boolean> }).features = features;
   const rec = new FakeRecorders();
   const calls: unknown[] = [];
@@ -33,6 +37,7 @@ function setup(transcribe: (b: Blob, c: unknown) => Promise<string>, features: R
       {
         provide: CasesApi,
         useValue: {
+          voiceConfig,
           transcribe: (b: Blob, c: unknown) => {
             calls.push([b.type, c]);
             return transcribe(b, c);
@@ -53,6 +58,18 @@ describe('VoiceService', () => {
     const s = await voice.start({ label: 'Notes', specialty: 'ENT' });
     expect(await s.stop()).toBe('worse at night');
     expect(calls).toEqual([['audio/wav', { label: 'Notes', specialty: 'ENT', durationMs: 1500 }]]);
+  });
+
+  it('GET /api/casesheets/voice enabled:false hides the mics; enabled:true keeps them', async () => {
+    const off = setup(async () => '', {}, async () => ({ enabled: false, maxSeconds: 60 }));
+    await new Promise((r) => setTimeout(r));
+    expect(off.voice.available()).toBe(false);
+    const on = setup(async () => '', {}, async () => ({ enabled: true, maxSeconds: 60 }));
+    await new Promise((r) => setTimeout(r));
+    expect(on.voice.available()).toBe(true);
+    const failed = setup(async () => '', {}, async () => Promise.reject(new Error('net')));
+    await new Promise((r) => setTimeout(r));
+    expect(failed.voice.available()).toBe(true);
   });
 
   it('switched off in /config.json → no mics', () => {

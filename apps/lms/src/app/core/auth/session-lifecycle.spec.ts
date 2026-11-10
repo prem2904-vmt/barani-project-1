@@ -5,6 +5,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Router, provideRouter } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { vi } from 'vitest';
+import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
 import { authGuard } from './auth.guard';
 import { authInterceptor } from './auth.interceptor';
@@ -379,6 +380,22 @@ describe('logout sequence', () => {
     ]);
     // Never the SDK's global scope (which revoked the user on every device).
     expect(t.fetchUrls.some(u => u.includes('scope=global'))).toBe(false);
+  });
+
+  it('on the public case-sheet site no push / test-mapping / socket teardown runs (none was ever started)', async () => {
+    const env = environment as { mode?: unknown };
+    const saved = env.mode;
+    env.mode = 'casesheets';
+    try {
+      const t = setup();
+      await signedIn(t);
+      await t.session.logout();
+      expect(t.steps).toEqual(['revoke', 'push', 'sockets', 'timers', 'clear', 'navigate']);
+      expect(t.order).toEqual(['revoke:scope=local', 'overlays', 'tenant-cache', 'clear']);
+      expect(t.push.unregister).not.toHaveBeenCalled();
+    } finally {
+      env.mode = saved;
+    }
   });
 
   it('clears the session state + keys but keeps per-device conveniences', async () => {

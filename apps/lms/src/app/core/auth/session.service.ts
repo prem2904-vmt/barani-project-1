@@ -1,4 +1,5 @@
 import { Injectable, Injector, inject, signal } from '@angular/core';
+import { appMode } from '../app-mode';
 import { Router } from '@angular/router';
 import { AuthService, SessionEndReason } from './auth.service';
 import { PushService } from '../services/push.service';
@@ -117,17 +118,23 @@ export class SessionService {
 
       // 2. Push — needs the (still valid) access token, so before the clear.
       //    Another tab signing out already dropped this browser's web push.
+      // The public case-sheet site (casesheets mode) never registers push, runs a test mapping or opens a
+      // socket (features/casesheets/public/boot-plan.ts): don't create those LMS services just to tear them down
+      // (their teardown calls lab endpoints a personal space is fenced from).
+      const lms = appMode() !== 'casesheets';
       this.step('push');
-      if (reason !== 'elsewhere') await settle(this.get(PushService)?.unregister());
+      if (lms && reason !== 'elsewhere') await settle(this.get(PushService)?.unregister());
       // An analyzer test mapping ("Test with an analyzer ID") never outlives
       // the session: end it while the token still authenticates.
-      await settle(this.get(TestMappingService)?.end('logout'));
+      if (lms) await settle(this.get(TestMappingService)?.end('logout'));
 
       // 3. Sockets.
       this.step('sockets');
-      await settle(this.get(ChatService)?.disconnect());
-      await settle(this.get(SignalingService)?.disconnect());
-      try { this.get(WebrtcService)?.reset(); } catch { /* no call */ }
+      if (lms) {
+        await settle(this.get(ChatService)?.disconnect());
+        await settle(this.get(SignalingService)?.disconnect());
+        try { this.get(WebrtcService)?.reset(); } catch { /* no call */ }
+      }
 
       // 4. Timers / pollers / overlays / tenant caches. (User-scoped pollers
       //    stop themselves when the user signal clears in step 5.)

@@ -454,6 +454,11 @@ export class HttpCasesApi extends CasesApi {
 
   // ---------------- voice ----------------
 
+  override async voiceConfig(): Promise<{ enabled: boolean; maxSeconds: number }> {
+    const r = obj(await this.get('/api/casesheets/voice'));
+    return { enabled: r['enabled'] === true, maxSeconds: num(r['maxSeconds'], 60) };
+  }
+
   async transcribe(audio: Blob, context: { label: string; specialty?: string; durationMs?: number }): Promise<string> {
     let p = new HttpParams().set('label', context.label.slice(0, 100));
     if (context.specialty) p = p.set('specialty', context.specialty.slice(0, 100));

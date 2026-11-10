@@ -10,6 +10,7 @@ import { CasesheetNav } from '../data/casesheet-nav';
 import { LabPatient, LabPatientService } from '../data/lab-patient';
 import { whenText } from '../data/when';
 import { CsStylesComponent } from '../styles/cs-styles.component';
+import { CsPatientStepComponent } from './patient-step.component';
 import { CASESHEETS_DATA_PROVIDERS } from '../data/casesheets-data.providers';
 
 /** A department (the form's `specialty`) and its case sheets, pinned first. */
@@ -72,7 +73,7 @@ export function initialOf(title: string): string {
 @Component({
   selector: 'app-forms-page',
   standalone: true,
-  imports: [PfIconComponent, SkeletonRowsComponent, RouterLink, CsStylesComponent],
+  imports: [PfIconComponent, SkeletonRowsComponent, RouterLink, CsStylesComponent, CsPatientStepComponent],
   providers: [...CASESHEETS_DATA_PROVIDERS],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './forms.page.html',
@@ -91,6 +92,8 @@ export class FormsPage {
   protected readonly drafts = signal<CaseSummary[] | null>(null);
   protected readonly error = signal('');
   protected readonly starting = signal<string | null>(null);
+  /** Public site: the case sheet waiting for its patient (the patient step is open). */
+  protected readonly pickingFor = signal<FormSummary | null>(null);
   protected readonly when = whenText;
   protected readonly initial = initialOf;
 
@@ -188,6 +191,12 @@ export class FormsPage {
 
   protected async start(f: FormSummary): Promise<void> {
     if (this.starting()) return;
+    // public site (a personal space): every sheet belongs to one of MY patients — choose or add one first (plan §3.5)
+    if (!this.nav.isLab) {
+      this.error.set('');
+      this.pickingFor.set(f);
+      return;
+    }
     this.starting.set(f.id);
     this.error.set('');
     try {
@@ -204,6 +213,23 @@ export class FormsPage {
       } else {
         sheet = await this.api.createCase(f.id);
       }
+      await this.router.navigateByUrl(this.nav.sheet(sheet.id));
+    } catch {
+      this.error.set("Couldn't start a case sheet just now. Please try again.");
+    } finally {
+      this.starting.set(null);
+    }
+  }
+
+  /** Public site: the patient step chose (or added) the patient → the sheet starts for them. */
+  protected async startFor(patientId: string): Promise<void> {
+    const f = this.pickingFor();
+    if (!f || this.starting()) return;
+    this.pickingFor.set(null);
+    this.starting.set(f.id);
+    this.error.set('');
+    try {
+      const sheet = await this.api.createCase(f.id, undefined, { patientId, contextKind: 'patient', contextId: null });
       await this.router.navigateByUrl(this.nav.sheet(sheet.id));
     } catch {
       this.error.set("Couldn't start a case sheet just now. Please try again.");

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import { environment } from '../../../../environments/environment';
 import { AuthService, GoogleSignInError } from '../../../core/auth/auth.service';
-import { PKCE_KEY } from './google-pkce';
+import { ENTER_REFUSALS, PKCE_KEY } from './google-pkce';
 
 /**
  * Google sign-in on the public case-sheet site (plan §4.3): PKCE code → session → POST personal/enter → the SAME
@@ -61,7 +61,7 @@ function setup(o: Opts = {}) {
       const body = JSON.parse(String(init.body)) as Record<string, string>;
       return o.token ? o.token(body) : json(200, { access_token: token, refresh_token: 'ref-g', token_type: 'bearer' });
     }
-    if (url.endsWith('/api/casesheets/personal/enter')) return o.enter ? o.enter(authz) : json(200, { tenantKind: 'personal' });
+    if (url.endsWith('/api/casesheets/personal/enter')) return o.enter ? o.enter(authz) : json(200, { kind: 'personal', labUser: false, created: true, caseSheets: true, tenantId: 'tp' });
     if (url.endsWith('/api/auth/me')) return o.me ? o.me(authz) : json(200, { success: true, data: PERSONAL_ME });
     if (url.includes('/auth/v1/logout')) return new Response(null, { status: 204 });
     return json(404, {});
@@ -124,16 +124,43 @@ describe('AuthService Google sign-in (casesheets mode)', () => {
     await expect(s.auth.completeGoogleSignIn({ code: 'one-time-code' })).rejects.toMatchObject({ code: 'stale' });
   });
 
-  it('lab-user branch: enter says the account is a lab user → session over their lab, enter = lab', async () => {
-    const s = setup({ enter: () => json(409, { code: 'lab_user', title: 'Lab user' }), me: () => json(200, { success: true, data: LAB_ME }) });
+  it('lab-user branch: enter says the account is a lab user whose lab has case sheets → session over their lab, enter = lab', async () => {
+    const s = setup({ enter: () => json(200, { kind: 'lab', labUser: true, created: false, caseSheets: true, tenantId: 't1' }), me: () => json(200, { success: true, data: LAB_ME }) });
     const r = await startAndReturn(s);
     expect(r).toEqual({ enter: 'lab', next: '/' });
     expect(s.auth.user()?.tenantId).toBe('t1');
     expect(s.auth.user()?.tenantKind).toBeUndefined();
   });
 
+  it('a lab user whose lab has NO case sheets → "not available", no session, token revoked', async () => {
+    const s = setup({ enter: () => json(200, { kind: 'lab', labUser: true, created: false, caseSheets: false, tenantId: 't1' }), me: () => json(200, { success: true, data: LAB_ME }) });
+    await expect(startAndReturn(s)).rejects.toMatchObject({ code: 'unavailable', reason: 'lab_no_casesheets', message: ENTER_REFUSALS['lab_no_casesheets'] });
+    expect(s.auth.user()).toBeNull();
+    expect(s.local.getItem('pf.session')).toBeNull();
+    expect(s.calls.some(c => c.url.endsWith('/api/auth/me'))).toBe(false);
+  });
+
+  it('every problem+json refusal maps to its own plain words (and 424 is "try again")', async () => {
+    const cases: [number, string, string][] = [
+      [401, 'not_signed_in', 'refused'], [403, 'provider_not_allowed', 'refused'], [403, 'email_missing', 'refused'],
+      [403, 'email_not_allowed', 'refused'], [403, 'email_not_verified', 'refused'], [403, 'account_blocked', 'refused'],
+      [403, 'account_inactive', 'refused'], [424, 'verification_unavailable', 'transient'],
+    ];
+    for (const [status, code, kind] of cases) {
+      const s = setup({ enter: () => new Response(JSON.stringify({ status, title: 'x', code, traceId: 't' }), { status, headers: { 'Content-Type': 'application/problem+json' } }) });
+      await expect(startAndReturn(s)).rejects.toMatchObject({ code: kind, reason: code, message: ENTER_REFUSALS[code] });
+      expect(s.auth.user()).toBeNull();
+    }
+  });
+
+  it('Google sign-in never calls /api/auth/session-started (the server audits it)', async () => {
+    const s = setup();
+    await startAndReturn(s);
+    expect(s.calls.some(c => c.url.endsWith('/api/auth/session-started'))).toBe(false);
+  });
+
   it('refused by personal/enter → no session left, the new token revoked', async () => {
-    const s = setup({ enter: () => json(403, { code: 'not_google' }) });
+    const s = setup({ enter: () => json(403, { code: 'email_not_verified' }) });
     await expect(startAndReturn(s)).rejects.toMatchObject({ code: 'refused' });
     expect(s.auth.user()).toBeNull();
     expect(s.local.getItem('pf.session')).toBeNull();

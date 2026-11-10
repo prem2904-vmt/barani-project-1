@@ -9,7 +9,7 @@ import { opdPreviewHeaders } from '../../features/opd/shared/opd-gate';
 import { casesheetsHeaders } from '../../features/casesheets/shared/casesheet-gate';
 import { betaHeaders } from '../beta/beta-gate';
 import { appMode } from '../app-mode';
-import { readEnterAnswer, safeSessionStorage, startPkce, takePkce } from '../../features/casesheets/public/google-pkce';
+import { ENTER_REFUSALS, EnterAnswer, readEnterAnswer, safeSessionStorage, startPkce, takePkce } from '../../features/casesheets/public/google-pkce';
 
 interface MeResponse {
   id: string;
@@ -75,7 +75,8 @@ export type ProfileOutcome = 'ok' | 'transient' | 'dead';
  *  - transient   — couldn't reach Supabase / Prefrontal: try again.
  */
 export class GoogleSignInError extends Error {
-  constructor(readonly code: 'cancelled' | 'stale' | 'unavailable' | 'refused' | 'transient', message: string) {
+  /** `reason` = the server's refusal code (personal/enter), when there is one — the sign-in page words it (`?e=`). */
+  constructor(readonly code: 'cancelled' | 'stale' | 'unavailable' | 'refused' | 'transient', message: string, readonly reason?: string) {
     super(message);
     this.name = 'GoogleSignInError';
   }
@@ -742,15 +743,13 @@ export class AuthService {
     if (!rec) throw new GoogleSignInError('stale', 'That sign-in has expired. Please try again.');
 
     const session = await this.exchangePkceCode(query.code, rec.verifier);
-    const enter = await this.enterPersonalSpace(session.access_token);
-    if (enter !== 'personal' && enter !== 'lab') {
+    const answer = await this.enterPersonalSpace(session.access_token);
+    const refusal = enterRefusal(answer);
+    if (refusal) {
       void this.revokeToken(session.access_token);
-      throw enter === 'unavailable'
-        ? new GoogleSignInError('unavailable', 'Case sheets aren’t available for this account.')
-        : enter === 'transient'
-          ? new GoogleSignInError('transient', 'Couldn’t reach Prefrontal. Check your connection and try again.')
-          : new GoogleSignInError('refused', 'This Google account can’t be used for case sheets.');
+      throw refusal;
     }
+    const enter = answer.kind as 'personal' | 'lab';
 
     this._meMustChangePassword = false;
     try {
@@ -787,7 +786,7 @@ export class AuthService {
   }
 
   /** `POST /api/casesheets/personal/enter` (WP4) with the new token. */
-  private async enterPersonalSpace(token: string): Promise<ReturnType<typeof readEnterAnswer>['kind']> {
+  private async enterPersonalSpace(token: string): Promise<EnterAnswer> {
     try {
       const res = await fetch(`${environment.apiUrl}/api/casesheets/personal/enter`, {
         method: 'POST',
@@ -796,9 +795,9 @@ export class AuthService {
         cache: 'no-store',
       });
       const body = await res.json().catch(() => null);
-      return readEnterAnswer(res.status, body).kind;
+      return readEnterAnswer(res.status, body);
     } catch {
-      return 'transient';
+      return { kind: 'transient' };
     }
   }
 
@@ -1319,5 +1318,24 @@ export class AuthService {
       else this.scheduleProfileRetry();
     }
     return 'transient';
+  }
+}
+
+/**
+ * personal/enter's answer → the sign-in error to stop with, or null to go on (a personal space, or a lab user whose lab has case
+ * sheets). A lab user whose lab has NO case sheets gets no session at all: the plain "not available" words, nothing to sign out of.
+ */
+export function enterRefusal(a: EnterAnswer): GoogleSignInError | null {
+  switch (a.kind) {
+    case 'personal': return null;
+    case 'lab':
+      return a.caseSheets ? null : new GoogleSignInError('unavailable', ENTER_REFUSALS['lab_no_casesheets'], 'lab_no_casesheets');
+    case 'unavailable': return new GoogleSignInError('unavailable', 'Case sheets aren’t available here right now.');
+    case 'refused':
+      return new GoogleSignInError('refused', ENTER_REFUSALS[a.reason] ?? 'This Google account can’t be used for case sheets.', a.reason);
+    default:
+      return a.reason
+        ? new GoogleSignInError('transient', ENTER_REFUSALS[a.reason] ?? 'Couldn’t reach Prefrontal. Check your connection and try again.', a.reason)
+        : new GoogleSignInError('transient', 'Couldn’t reach Prefrontal. Check your connection and try again.');
   }
 }

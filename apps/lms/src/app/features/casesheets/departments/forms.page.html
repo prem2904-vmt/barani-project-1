@@ -151,3 +151,6 @@
     </section>
   </div>
 </div>
+@if (pickingFor(); as f) {
+<cs-patient-step [formTitle]="f.title" (chosen)="startFor($event)" (cancelled)="pickingFor.set(null)" />
+}

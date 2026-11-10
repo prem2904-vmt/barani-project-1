@@ -85,4 +85,9 @@ export abstract class CasesApi {
     audio: Blob,
     context: { label: string; specialty?: string; durationMs?: number },
   ): Promise<string>;
+
+  /** `GET /api/casesheets/voice` (replaces Prepare's `/client-config` `features.voice`): can dictation work here, and how long may a clip be. */
+  async voiceConfig(): Promise<{ enabled: boolean; maxSeconds: number }> {
+    return { enabled: true, maxSeconds: 60 };
+  }
 }

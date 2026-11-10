@@ -106,6 +106,11 @@ export function toFormRow(v: unknown): FormRow {
     status: f['status'] === 'archived' ? 'archived' : 'active',
     origin: toOrigin(f['origin']),
     departmentKey: strOrNull(f['departmentKey']) ?? strOrNull(f['specialty']),
+    departmentName: strOrNull(f['departmentName']),
+    catalogKey: strOrNull(f['catalogKey']),
+    readOnly: f['readOnly'] === true,
+    forkedFromVersionId: strOrNull(f['forkedFromVersionId']),
+    pinned: f['pinned'] === true,
     newerMaster: f['newerMaster'] === true,
     published: p ? { id: str(p['id']), versionNo: num(p['versionNo']), publishedAt: strOrNull(p['publishedAt']) } : null,
     draft: d
@@ -285,6 +290,11 @@ export class HttpStudioApi implements StudioApi {
       specialty: strOrNull(f['specialty']),
       status: f['status'] === 'archived' ? 'archived' : 'active',
       origin: toOrigin(f['origin']),
+      departmentKey: strOrNull(f['departmentKey']),
+      readOnly: f['readOnly'] === true,
+      catalogKey: strOrNull(f['catalogKey']),
+      forkedFromVersionId: strOrNull(f['forkedFromVersionId']),
+      newerMaster: f['newerMaster'] === true,
       currentPublishedVersionId: strOrNull(f['currentPublishedVersionId']),
       versions: await this.versions(formId).catch(() => arr(f['versions']).map(toVersionRow)),
     };

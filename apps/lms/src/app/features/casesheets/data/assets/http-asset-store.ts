@@ -1,5 +1,5 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, OnDestroy, inject, signal } from '@angular/core';
 import type { AssetLink, AssetRef, AssetStore, StarterInfo, StarterPicture } from '@prefrontal/forms-engine';
 import { firstValueFrom } from 'rxjs';
 import { api } from '../api-url';
@@ -22,17 +22,20 @@ const absolute = (u: string) => (/^https?:/.test(u) ? u : api(u));
 /**
  * Pictures for the image kinds through the API (never `data:` in a form or an answer):
  *  - starter pictures: `GET /api/casesheets/canvas/templates`, `GET /api/casesheets/canvas/templates/{id}` (cached for the session);
+ *    their `{id}.svg` needs the session, so it is fetched as a blob and `svgUrl` is an object URL (revoked on destroy);
  *  - `GET /api/casesheets/assets/{id}`: size + a fresh signed link (`/api/casesheets/files/{id}?exp=&sig=`, ~5 min; cached until shortly before);
  *  - Studio uploads: `POST /api/casesheets/assets/templates` (owner / admin), raw PNG / JPEG / SVG ≤ 4 MB;
  *  - case photos: `POST /api/casesheets/sheets/{id}/photos` on the sheet that is open (`forSheet`), raw PNG / JPEG ≤ 8 MB,
  *    shrunk on the device first; the width / height answered are the size AS SHOWN (EXIF rotation applied).
  */
 @Injectable()
-export class HttpAssetStore implements AssetStore {
+export class HttpAssetStore implements AssetStore, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly links = new Map<string, { link: AssetLink; until: number }>();
   private readonly starterCache = new Map<string, Promise<StarterPicture>>();
   private list: Promise<StarterInfo[]> | null = null;
+  /** Starter SVG id → object URL of its fetched bytes (revoked when the store goes). */
+  private readonly svgUrls = new Map<string, Promise<string>>();
   /** The draft sheet that is open (photos are uploaded to it). */
   private readonly sheet = signal<string | null>(null);
 
@@ -45,9 +48,30 @@ export class HttpAssetStore implements AssetStore {
     return !!this.sheet();
   }
 
+  ngOnDestroy(): void {
+    for (const p of this.svgUrls.values()) void p.then((u) => URL.revokeObjectURL(u)).catch(() => undefined);
+    this.svgUrls.clear();
+  }
+
+  /**
+   * The starter picture's SVG sits behind the gate + the session, so an `<img src>` / `<image href>` to the API cannot
+   * load it. Fetch it through HttpClient (the auth interceptor adds the token) and hand out an object URL (cached by id).
+   */
+  private svgObjectUrl(id: string, svgUrl: string): Promise<string> {
+    let p = this.svgUrls.get(id);
+    if (!p) {
+      p = firstValueFrom(this.http.get(absolute(svgUrl), { responseType: 'blob' })).then((b) =>
+        URL.createObjectURL(b.type ? b : new Blob([b], { type: 'image/svg+xml' })),
+      );
+      p.catch(() => this.svgUrls.delete(id));
+      this.svgUrls.set(id, p);
+    }
+    return p;
+  }
+
   starters(): Promise<StarterInfo[]> {
     this.list ??= firstValueFrom(this.http.get<{ items: StarterInfo[] }>(api('/api/casesheets/canvas/templates')))
-      .then((r) => (r.items ?? []).map((s) => ({ ...s, svgUrl: absolute(s.svgUrl) })))
+      .then((r) => Promise.all((r.items ?? []).map(async (s) => ({ ...s, svgUrl: await this.svgObjectUrl(s.id, s.svgUrl) }))))
       .catch((e) => {
         this.list = null;
         throw e;
@@ -59,7 +83,7 @@ export class HttpAssetStore implements AssetStore {
     let p = this.starterCache.get(id);
     if (!p) {
       p = firstValueFrom(this.http.get<StarterPicture>(api(`/api/casesheets/canvas/templates/${encodeURIComponent(id)}`))).then(
-        (s) => ({ ...s, svgUrl: absolute(s.svgUrl) }),
+        async (s) => ({ ...s, svgUrl: await this.svgObjectUrl(s.id, s.svgUrl) }),
       );
       p.catch(() => this.starterCache.delete(id));
       this.starterCache.set(id, p);

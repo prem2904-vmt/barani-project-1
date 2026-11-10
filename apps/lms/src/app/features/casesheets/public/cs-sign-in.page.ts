@@ -6,10 +6,12 @@ import { SessionService } from '../../../core/auth/session.service';
 import { LogoMarkComponent } from '../../../shared/primitives/logo-mark.component';
 import { AmbientBgComponent } from '../../../shared/components/ambient-bg/ambient-bg.component';
 import { CasesheetGateService } from '../shared/casesheet-gate.service';
+import { ENTER_REFUSALS } from './google-pkce';
 import { resolvePublicAccess } from './public-access';
 
 /** The `?e=` codes the callback page sends back with (GoogleSignInError.code) → plain words. */
 export const SIGN_IN_ERRORS: Record<string, string> = {
+  ...ENTER_REFUSALS,
   cancelled: 'Google sign-in didn’t finish. Please try again.',
   stale: 'That sign-in has expired. Please try again.',
   refused: 'This Google account can’t be used for case sheets.',

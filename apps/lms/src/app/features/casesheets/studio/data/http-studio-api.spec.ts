@@ -1,8 +1,20 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { mapError, toDiff, toImport, toVersion } from './http-studio-api';
+import { mapError, toFormRow, toDiff, toImport, toVersion } from './http-studio-api';
 import { DraftConflict, PublishRefused, StudioError } from './studio-models';
 
 describe('HttpStudioApi wire mapping', () => {
+  it('a forms list row carries origin, department, readOnly, newerMaster, catalogKey, fork basis and pinned', () => {
+    const r = toFormRow({
+      id: 'f1', key: 'ent', title: 'ENT', specialty: 'Ear, nose and throat', departmentKey: 'ent', departmentName: 'Ear, nose and throat',
+      status: 'active', origin: 'master', catalogKey: 'ent-v1', readOnly: true, forkedFromVersionId: 'v9', newerMaster: false, pinned: true,
+      published: { id: 'v1', versionNo: 1, publishedAt: null }, draft: null,
+    });
+    expect(r).toMatchObject({
+      origin: 'master', departmentKey: 'ent', departmentName: 'Ear, nose and throat', readOnly: true, catalogKey: 'ent-v1',
+      forkedFromVersionId: 'v9', pinned: true, newerMaster: false,
+    });
+  });
+
   it('409 someone_else_saved → DraftConflict with their copy and name', () => {
     const e = mapError(
       new HttpErrorResponse({

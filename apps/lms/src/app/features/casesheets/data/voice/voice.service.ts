@@ -33,6 +33,18 @@ export class VoiceService implements VoiceInput {
   private readonly _available = signal((environment as { features?: Record<string, boolean> }).features?.['voice'] !== false && this.recorders.supported());
   readonly available = this._available.asReadonly();
 
+  constructor() {
+    // The server decides (GET /api/casesheets/voice: no provider = no mic). A failed read leaves the mic as it was.
+    if (this._available()) {
+      void Promise.resolve()
+        .then(() => this.api.voiceConfig())
+        .then((c) => {
+          if (!c.enabled) this._available.set(false);
+        })
+        .catch(() => undefined);
+    }
+  }
+
   async start(context: { label: string; specialty?: string }): Promise<VoiceSession> {
     if (!this._available()) throw new VoiceUnavailable();
     let stopped = false;
