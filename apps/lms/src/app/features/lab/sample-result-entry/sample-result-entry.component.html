@@ -4,7 +4,7 @@
      Submit live in the band's actions (phones: a compact bottom bar). -->
 <!-- pfNumpadScope: the touch numpad's Next walks these fields down the list
      (same set Enter walks) and ends on the visible Submit. -->
-<section class="pf-sre pf-page" [class.pf-sre--view]="viewOnly()"
+<section class="pf-sre pf-page" [class.pf-sre--view]="viewOnly() || notCollected()"
          pfNumpadScope="input.pf-sre__ginput, textarea.pf-sre__ginput, input.pf-sre__cb, .pf-sre__gselect .pf-dd__trigger"
          pfNumpadCta=".pf-sre-submit">
   <input type="file" #attachInput hidden multiple accept="image/*,video/*"
@@ -259,6 +259,13 @@
           <pf-critical-ack-strip class="pf-sre-critical" [events]="critical()" [via]="criticalVia()"
                                  (changed)="onCriticalChanged($event)"></pf-critical-ack-strip>
         }
+        @if (notCollected()) {
+          <!-- OPS-120: a tube that is not in the lab cannot take results — the cards below are locked (inert). -->
+          <div class="pf-sre-warnbar pf-sre-notcollected" role="status" data-not-collected>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            <span>{{ notCollectedMessage() }}</span>
+          </div>
+        }
         @if (missingAnalyzerWarnings().length > 0) {
           <!-- A profile's one-page layout expects an analyzer image this
                sample hasn't received yet (owner decision 2) — informational,
@@ -270,7 +277,7 @@
             </ul>
           </div>
         }
-        @if (showFetchFromAnalyzer()) {
+        @if (showFetchFromAnalyzer() && !notCollected()) {
           <!-- Re-query the server for newly arrived analyzer images/values for
                this tube (the connector pushes automatically — this is a
                refresh, not a device command). Its own small bar, independent
@@ -380,7 +387,7 @@
           } @else {
             <!-- FLAT block: a profile (titled with its name) or a run of
                  single-value tests — one card, one table, one row each. -->
-            <section class="pf-card pf-sre-card pf-sre__test" [pfZoomTarget]="bi === 0 ? zoomKeys() : null">
+            <section class="pf-card pf-sre-card pf-sre__test" [pfZoomTarget]="bi === 0 ? zoomKeys() : null" [attr.inert]="notCollected() ? '' : null">
               <header class="pf-card__head">
                 <span class="pf-card__icon" aria-hidden="true">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3"/></svg>
@@ -807,6 +814,7 @@
         @for (t of cardTests; track t.id; let ti = $index) {
           <section class="pf-card pf-sre-card pf-sre__test"
                    [pfZoomTarget]="first && ti === 0 ? zoomKeys() : null"
+                   [attr.inert]="notCollected() ? '' : null"
                    [class.pf-sre__test--done]="t.status === 'entered' || t.status === 'validated'"
                    [class.pf-sre__test--rejected]="t.status === 're_entry'">
             <header class="pf-card__head">

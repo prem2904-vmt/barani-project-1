@@ -561,3 +561,6 @@
 @media (prefers-reduced-motion: no-preference) {
   .pf-sre__grow--focus td { transition: background-color 600ms ease; }
 }
+
+/* OPS-120: a tube that is not in the lab — its cards are inert; show that they are locked. */
+.pf-sre__test[inert] { opacity: .55; filter: saturate(.6); }

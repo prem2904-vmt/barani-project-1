@@ -1040,9 +1040,19 @@ export class SampleResultEntryComponent {
       (t) => t.status === "entered" || t.status === "validated" || t.status === NOT_REPORTED,
     ),
   );
+  /** OPS-120: this tube is not in the lab (never collected, or rejected) — its results are locked on screen
+   *  (the server refuses them too). */
+  readonly notCollected = computed(() => {
+    const s = this._sample();
+    return !!s && !tubeInLab({ status: s.status });
+  });
+  readonly notCollectedMessage = computed(() =>
+    (this._sample()?.status ?? '').toLowerCase() === 'rejected'
+      ? 'This sample was rejected. Results can be entered once a new sample is collected.'
+      : 'This sample is not collected yet. Results can be entered once it is collected.');
   /** At least one test is in an editable/submittable state. */
   readonly hasWritable = computed(() =>
-    (this._sample()?.tests ?? []).some(
+    !this.notCollected() && (this._sample()?.tests ?? []).some(
       (t) =>
         t.status !== "entered" &&
         t.status !== "validated" &&
@@ -1310,7 +1320,7 @@ export class SampleResultEntryComponent {
   // reset the sample (which would disrupt in-progress typing). The manual
   // Save draft button stays exactly as-is.
   private scheduleServerAutosave() {
-    if (this.viewOnly()) return;   // read-only view never writes drafts
+    if (this.viewOnly() || this.notCollected()) return;   // read-only view / a tube not in the lab never writes drafts
     if (this.autosaveTimer !== null) clearTimeout(this.autosaveTimer);
     this.autosaveTimer = setTimeout(() => {
       this.autosaveTimer = null;
