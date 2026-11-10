@@ -1,0 +1,256 @@
+@let f = field();
+<article
+  class="fc"
+  [attr.data-card]="f.key"
+  [attr.data-kind]="f.kind"
+  [class.fc--sel]="selected()"
+  [class.fc--picked]="picked()"
+  [class.fc--picking]="picking()"
+  [class.fc--flash]="flashing()"
+  [class.fc--err]="hasError()"
+  [class.fc--nested]="nested()"
+  [class.fc--drag]="dragging()"
+  [style.transform]="dragOffset() ? 'translateY(' + dragOffset() + 'px)' : null"
+  [attr.aria-label]="(f.label || 'Untitled question') + ', ' + build().name"
+  tabindex="-1"
+  (click)="pick($event)"
+  (mousedown)="noTextSelect($event)"
+  (dblclick)="rename2($event)"
+  (pointerdown)="actions.longPress.down($event, menuLater)"
+  (pointermove)="actions.longPress.move($event)"
+  (pointerup)="actions.longPress.cancel()"
+  (pointercancel)="actions.longPress.cancel()"
+>
+  <header class="fc-head">
+    @if (!nested()) {
+      <button
+        type="button"
+        role="checkbox"
+        class="pf-check pf-touch fc-check st-hover-only"
+        [attr.aria-checked]="picked()"
+        [attr.aria-label]="'Select ' + (f.label || 'this question')"
+        data-tip="Select (⇧-click for a range)"
+        (click)="$event.stopPropagation(); store.togglePick(f.key)"
+      >
+        <span class="pf-check__box" aria-hidden="true"><pf-icon name="check" [size]="14" /></span>
+      </button>
+    }
+    <button
+      type="button"
+      class="fc-grip pf-touch"
+      [attr.aria-label]="'Move ' + (f.label || 'this question') + ' (drag, or use the arrow keys)'"
+      (pointerdown)="$event.stopPropagation(); gripDown()($event)"
+      (pointermove)="actions.drag.move($event)"
+      (pointerup)="actions.drag.end()"
+      (pointercancel)="actions.drag.end()"
+      (keydown)="gripKey()($event)"
+    >
+      <pf-icon name="grip" [size]="20" />
+    </button>
+    <span class="fc-kind" [attr.title]="build().name"><pf-icon [name]="icon()" [size]="18" /></span>
+    <div class="fc-title">
+      @if (store.isEditing(f.key, 'label')) {
+        <input
+          class="pf-input fc-label-in"
+          type="text"
+          aria-label="Question"
+          [value]="f.label"
+          (keydown.enter)="rename($any($event.target).value)"
+          (keydown.escape)="store.editing.set(null)"
+          (blur)="rename($any($event.target).value)"
+          stAutofocus
+          [stAutofocusSelect]="true"
+        />
+      } @else {
+        <button type="button" class="fc-label pf-touch" [attr.aria-label]="'Rename ' + (f.label || 'this question')" (click)="store.open(f.key, 'label')">
+          <span class="fc-label__t">{{ f.label || 'Untitled question' }}</span>
+          @if (f.required) {
+            <span class="fc-req" title="Must be answered">must be answered</span>
+          }
+        </button>
+      }
+      <span class="fc-kindname">{{ build().name }}</span>
+    </div>
+    <div class="fc-hover st-hover-only" role="group" [attr.aria-label]="'Quick actions for ' + (f.label || 'this question')">
+      <button type="button" class="pf-btn pf-btn--icon fc-act" [attr.aria-label]="'Move ' + (f.label || 'this question') + ' up'" [attr.data-tip]="tips.up" [disabled]="index() === 0" data-act="up" (click)="$event.stopPropagation(); move(-1)">
+        <pf-icon name="arrow-up" [size]="16" />
+      </button>
+      <button type="button" class="pf-btn pf-btn--icon fc-act" [attr.aria-label]="'Move ' + (f.label || 'this question') + ' down'" [attr.data-tip]="tips.down" [disabled]="index() >= count() - 1" data-act="down" (click)="$event.stopPropagation(); move(1)">
+        <pf-icon name="arrow-down" [size]="16" />
+      </button>
+      <button type="button" class="pf-btn pf-btn--icon fc-act" [attr.aria-label]="'Make a copy of ' + (f.label || 'this question')" [attr.data-tip]="tips.dup" data-act="dup" (click)="$event.stopPropagation(); duplicate()">
+        <pf-icon name="copy" [size]="16" />
+      </button>
+      <button type="button" class="pf-btn pf-btn--icon fc-act fc-act--rm" [attr.aria-label]="'Remove ' + (f.label || 'this question')" [attr.data-tip]="tips.rm" data-tip-end data-act="remove" (click)="$event.stopPropagation(); remove()">
+        <pf-icon name="trash" [size]="16" />
+      </button>
+    </div>
+    <button type="button" class="pf-btn pf-btn--icon fc-more" [attr.aria-label]="'More for ' + (f.label || 'this question')" data-tip="More: move to a page, save" data-tip-end (click)="actions.menu(f.key)">
+      <pf-icon name="more" [size]="20" />
+    </button>
+  </header>
+
+  <!-- As the doctor sees it: the real control, with a sample answer; a picture only -->
+  @if (known()) {
+    <div class="fc-doctor fe-grid st-doctor-size" inert aria-hidden="true">
+      <fe-field [field]="f" [scope]="scope()" [lookup]="lookup()" [setValue]="noop" />
+    </div>
+  } @else {
+    <p class="fc-unsupported">
+      <pf-icon name="alert" [size]="16" /> An old kind of question MyPrefrontal can't show yet. It is kept so nothing is lost; doctors don't see it.
+    </p>
+  }
+
+  <dl class="fc-lines">
+    @if (saysMode() !== 'none') {
+      <div class="fc-line" data-line="says">
+        <dt>{{ saysLabel() }}</dt>
+        <dd>
+          <st-sentence
+            [label]="saysLabel()"
+            [value]="saysValue()"
+            [editing]="store.isEditing(f.key, 'says')"
+            [tokens]="saysTokens()"
+            [empty]="saysMode() === 'sentence' ? 'Writes just the answer. Tap to add words around it.' : 'Writes nothing. Tap to write it.'"
+            (open)="store.open(f.key, 'says')"
+            (save)="saveSays($event)"
+            (cancel)="store.editing.set(null)"
+          />
+          @if (optionWords().length) {
+            <ul class="fc-opts" aria-label="What each choice says">
+              @for (o of optionWords(); track o.key) {
+                <li>
+                  <button type="button" class="fc-opt pf-touch" (click)="store.open(f.key, 'options'); store.revealSettings()">
+                    <span class="fc-opt__l">{{ o.label }}</span>
+                    <span class="fc-opt__s">{{ o.says ? '“' + o.says + '”' : 'says its name' }}</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+        </dd>
+      </div>
+    }
+
+    @if (ifNone() === 'negativeHistory') {
+      <div class="fc-line" data-line="if-none">
+        <dt>{{ ifNoneLabel() }}</dt>
+        <dd class="fc-neg">
+          <button
+            type="button"
+            role="switch"
+            class="pf-toggle fc-switch pf-touch"
+            [attr.aria-checked]="negative().enabled"
+            (click)="setNegative(!negative().enabled)"
+          >
+            <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+            <span>{{ negative().enabled ? 'Write the ones not ticked' : 'Writes nothing' }}</span>
+          </button>
+          @if (negative().enabled) {
+            <span class="fc-neg__say">
+              “<input
+                class="pf-input fc-neg__in"
+                type="text"
+                aria-label="Starts with"
+                [value]="negative().prefix"
+                (change)="setNegative(true, $any($event.target).value)"
+              />
+              <span class="sn-tok-like">the ones not ticked</span>.”
+            </span>
+          }
+        </dd>
+      </div>
+    } @else if (ifNone()) {
+      <div class="fc-line" data-line="if-none">
+        <dt>{{ ifNoneLabel() }}</dt>
+        <dd>
+          <st-sentence
+            [label]="ifNoneLabel()"
+            [value]="ifNoneValue()"
+            [editing]="store.isEditing(f.key, 'ifNone')"
+            [tokens]="[]"
+            empty="Writes nothing. Tap to write it."
+            (open)="store.open(f.key, 'ifNone')"
+            (save)="saveIfNone($event)"
+            (cancel)="store.editing.set(null)"
+          />
+        </dd>
+      </div>
+    }
+
+    <div class="fc-line" data-line="show-when">
+      <dt>Shown</dt>
+      <dd>
+        @if (store.isEditing(f.key, 'showWhen') && store.def(); as d) {
+          <st-conditions
+            [definition]="d"
+            [selfKey]="f.key"
+            [subject]="f.label"
+            [value]="f.showWhen"
+            (changed)="setShowWhen($event)"
+            (done)="store.editing.set(null)"
+          />
+        } @else {
+          <button type="button" class="fc-when pf-touch" (click)="store.open(f.key, 'showWhen')">
+            <span>{{ showWhenWords() }}</span>
+            <span class="fc-when__go">{{ f.showWhen?.conditions?.length ? 'Change' : 'Add a condition' }}</span>
+          </button>
+        }
+      </dd>
+    </div>
+
+    @if (!nested() && known()) {
+      <div class="fc-line" data-line="writes-into">
+        <dt>Writes into</dt>
+        <dd>
+          <pf-select class="fc-sec" [options]="sectionOptions()" [value]="writesInto()" (valueChange)="setSection($event)" />
+        </dd>
+      </div>
+    }
+  </dl>
+
+  @if (problems().length) {
+    <ul class="fc-problems" role="list">
+      @for (p of problems(); track $index) {
+        <li [class.fc-problem--err]="p.severity === 'error'">
+          <pf-icon [name]="p.severity === 'error' ? 'alert' : 'info'" [size]="16" /> {{ p.message }}
+        </li>
+      }
+    </ul>
+  }
+
+  @if (expanded() && options().length) {
+    <section class="fc-follow" [attr.aria-label]="'Follow-up questions of ' + f.label">
+      @for (o of options(); track o.key) {
+        @if ((o.subFields ?? []).length || selected()) {
+          <div class="fc-follow__grp">
+            <p class="fc-follow__h">If <strong>{{ o.label }}</strong> is chosen, also ask</p>
+            <div class="fc-follow__list" [attr.data-drag-list]="'opt:' + f.key + ':' + o.key">
+              @for (s of o.subFields ?? []; track s.key; let i = $index) {
+                <st-field-card
+                  [attr.data-drag-index]="i"
+                  [field]="s"
+                  [index]="i"
+                  [count]="(o.subFields ?? []).length"
+                  [nested]="true"
+                  [list]="'opt:' + f.key + ':' + o.key"
+                  [dragOffset]="actions.drag.offset('opt:' + f.key + ':' + o.key, i)"
+                  [dragging]="actions.drag.dragging('opt:' + f.key + ':' + o.key, i)"
+                  [gripDown]="subGripFor(o.key, i)"
+                  [gripKey]="subKeyFor(o.key, i, (o.subFields ?? []).length)"
+                />
+              }
+            </div>
+            @if (isPaletteFor(o.key)) {
+              <st-palette [slot]="{ option: { fieldKey: f.key, optionKey: o.key } }" />
+            } @else {
+              <button type="button" class="pf-btn pf-btn--tertiary fc-follow__add" (click)="addFollowUp(o.key)">
+                <pf-icon name="plus" [size]="18" /> Add a follow-up for {{ o.label }}
+              </button>
+            }
+          </div>
+        }
+      }
+    </section>
+  }
+</article>

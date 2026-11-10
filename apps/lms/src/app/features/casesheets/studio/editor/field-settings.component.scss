@@ -1,0 +1,227 @@
+// The selected question's settings: plain labels, one column, 48px controls.
+:host {
+  display: block;
+}
+
+.fs {
+  display: grid;
+  gap: 4px;
+}
+
+.fs-sec {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-muted, var(--pf-line));
+}
+
+.fs-sec:last-child {
+  border-bottom: 0;
+}
+
+.fs-h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.fs-lbl {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fs-opt,
+.fs-note {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-tertiary);
+}
+
+.fs-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fs-choices {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fs-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--pf-line);
+  border-radius: 14px;
+  background: var(--pf-card-bg);
+  transition: transform var(--pf-dur) var(--pf-spring);
+}
+
+.fs-choice--drag {
+  z-index: 5;
+  transition: none;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.2);
+}
+
+.fs-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--pf-touch);
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: grab;
+  touch-action: none;
+}
+
+.fs-choice__body {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fs-says {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fs-says__k {
+  flex: none;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.fs-says .pf-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fs-follow {
+  justify-self: start;
+  white-space: normal;
+  text-align: left;
+}
+
+.fs-add {
+  display: flex;
+  gap: 8px;
+}
+
+.fs-add .pf-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fs-row {
+  display: grid;
+  gap: 8px;
+}
+
+.fs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fs-num {
+  max-width: 160px;
+}
+
+.fs-more {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fs-more__body {
+  display: grid;
+  gap: 14px;
+}
+
+.fs-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.fs-pair .pf-input {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.sn-tok-like {
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  color: var(--violet-text, #6d28d9);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.fs-sentence {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.fs-trig {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fs-trig-new {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 12px;
+}
+
+.fs-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

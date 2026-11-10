@@ -1,0 +1,82 @@
+<div class="pf-page pg st-desk cs-studio">
+  <pf-hero-band
+    [back]="true"
+    [standardPill]="true"
+    placeholder="Search your forms"
+    [value]="query()"
+    (valueChange)="query.set($event)"
+  >
+    <div band-actions class="sh-actions">
+      <a class="pf-btn pf-btn--secondary" [routerLink]="links.adminImport()" data-act="import"><pf-icon name="upload" [size]="18" /> Bring in an old form</a>
+      <button type="button" class="pf-btn pf-btn--primary" data-act="new-form" [disabled]="busy() === 'new'" [attr.aria-busy]="busy() === 'new' ? 'true' : null" (click)="newForm()">
+        <pf-icon name="plus" [size]="18" /> New form
+      </button>
+    </div>
+  </pf-hero-band>
+  <div class="pf-body">
+    <section class="pf-card main" aria-labelledby="studio-h">
+      <header class="pf-card__head">
+        <span class="pf-card__icon"><pf-icon name="studio" [size]="16" /></span>
+        <h1 class="pf-card__label" id="studio-h">MyPrefrontal forms</h1>
+        <span class="pf-card__count">{{ shownCount() }} {{ shownCount() === 1 ? 'form' : 'forms' }}</span>
+        @if (archivedCount() || showArchived()) {
+          <button type="button" class="fe-chip st-arch" [attr.aria-pressed]="showArchived()" (click)="showArchived.set(!showArchived())">
+            Archived ({{ archivedCount() }})
+          </button>
+        }
+      </header>
+      <div class="pf-card__body">
+        <st-phone-note />
+        @if (error()) {
+          <div class="pf-empty pf-empty--compact" role="alert">
+            <h2 class="pf-empty__title">{{ error() }}</h2>
+            <button type="button" class="pf-btn pf-btn--secondary" (click)="load()"><pf-icon name="refresh" [size]="18" /> Try again</button>
+          </div>
+        }
+        @if (forms() === null) {
+          <pf-skeleton-rows [rows]="4" label="Loading forms" />
+        } @else if (!groups().length) {
+          <div class="pf-empty" data-empty="studio">
+            <span class="pf-empty__icon"><pf-icon name="studio" [size]="26" /></span>
+            @if (query()) {
+              <h2 class="pf-empty__title">No form matches “{{ query() }}”</h2>
+            } @else {
+              <h2 class="pf-empty__title">No forms yet</h2>
+              <p class="pf-empty__body">
+                Build a case-sheet form here: its pages, the questions on each, and the sentence every answer writes. Or bring in a form from the old app.
+              </p>
+            }
+          </div>
+        } @else {
+          @for (g of groups(); track g.key) {
+            <section class="st-dept" [attr.data-dept]="g.key" [attr.aria-labelledby]="'dept-' + g.key">
+              <h2 class="st-dept__h" [id]="'dept-' + g.key">{{ g.name }} <span class="st-dept__n">{{ g.forms.length }}</span></h2>
+              <ul class="st-list" role="list">
+                @for (f of g.forms; track f.id) {
+                  <li class="st-row" [attr.data-form]="f.key" [attr.data-origin]="f.origin">
+                    <a class="st-open pf-touch" [routerLink]="links.adminForm(f.id)">
+                      <span class="st-ic"><pf-icon name="forms" [size]="20" /></span>
+                      <span class="st-t">
+                        <span class="st-title">{{ f.title }}
+                          @if (f.origin === 'master') { <span class="st-tag" data-tag="master">Master</span> }
+                          @if (f.origin === 'override') { <span class="st-tag st-tag--mine" data-tag="copy">Your copy</span> }
+                          @if (f.newerMaster) { <span class="st-tag st-tag--warn" data-tag="newer">Newer master</span> }
+                        </span>
+                        <span class="st-meta">{{ where(f) }}</span>
+                      </span>
+                    </a>
+                    @if (f.origin === 'master') {
+                      <button type="button" class="pf-btn pf-btn--secondary st-edit" data-act="fork" [attr.aria-label]="'Edit ' + f.title + ' (makes your lab copy)'" [disabled]="busy() === f.id" [attr.aria-busy]="busy() === f.id ? 'true' : null" (click)="edit(f)">Edit</button>
+                    } @else {
+                      <button type="button" class="pf-btn pf-btn--icon st-more" [attr.aria-label]="'More for ' + f.title" data-tip="Copy, archive" data-tip-end (click)="menu(f)"><pf-icon name="more" [size]="20" /></button>
+                    }
+                  </li>
+                }
+              </ul>
+            </section>
+          }
+        }
+      </div>
+    </section>
+  </div>
+</div>

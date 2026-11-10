@@ -59,21 +59,27 @@ export const casesheetLinks = {
 const placeholder = () => import('./shared/casesheet-placeholder.page').then(m => m.CasesheetPlaceholderPage);
 
 /** One gated in-shell route: casesheetGuard, then the ROUTE_ACCESS guards of `/${path}`. */
-function gated(path: string, title: string): Route {
+function gated(path: string, title: string, loadComponent: Route['loadComponent'] = placeholder): Route {
   return {
     path,
     canActivate: [casesheetGuard, ...routeGuards(`/${path}`)],
     data: { title },
-    loadComponent: placeholder,
+    loadComponent,
   };
 }
 
+/** WP6 — MyPrefrontal Studio (Admin > IPD > MyPrefrontal). */
+const studioHome = () => import('./studio/studio.page').then(m => m.StudioPage);
+const studioEditor = () => import('./studio/editor/editor.page').then(m => m.StudioEditorPage);
+const studioHistory = () => import('./studio/history/history.page').then(m => m.StudioHistoryPage);
+const studioImport = () => import('./studio/import/import.page').then(m => m.StudioImportPage);
+
 /** Children of the signed-in shell (app.routes.ts spreads them once). Specific paths before `:id`. */
 export const CASESHEET_SHELL_ROUTES: Routes = [
-  gated(CASESHEET_PATHS.admin.home, 'MyPrefrontal'),
-  gated(CASESHEET_PATHS.admin.form, 'Edit case sheet form'),
-  gated(CASESHEET_PATHS.admin.formHistory, 'Form version history'),
-  gated(CASESHEET_PATHS.admin.import, 'Bring in an old form'),
+  gated(CASESHEET_PATHS.admin.home, 'MyPrefrontal', studioHome),
+  gated(CASESHEET_PATHS.admin.form, 'Edit case sheet form', studioEditor),
+  gated(CASESHEET_PATHS.admin.formHistory, 'Form version history', studioHistory),
+  gated(CASESHEET_PATHS.admin.import, 'Bring in an old form', studioImport),
   gated(CASESHEET_PATHS.lab.patientSheets, 'Case sheets'),
   gated(CASESHEET_PATHS.lab.start, 'New case sheet'),
   gated(CASESHEET_PATHS.lab.sheet, 'Case sheet'),

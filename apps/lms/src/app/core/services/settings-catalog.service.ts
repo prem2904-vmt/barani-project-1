@@ -5,6 +5,7 @@ import { BetaFeaturesService } from './beta-features.service';
 import { LabFeaturesService } from './lab-features.service';
 import { ProcessWorkflowService } from './process-workflow.service';
 import { TenantEntitlementsService } from './tenant-entitlements.service';
+import { CasesheetGateService } from '../../features/casesheets/shared/casesheet-gate.service';
 import { SETTINGS_CATALOG, SettingsEntry } from '../../shared/utils/settings-catalog';
 import { searchSettings } from '../../shared/utils/settings-search';
 
@@ -22,6 +23,7 @@ export class SettingsCatalogService {
   private readonly entitlements = inject(TenantEntitlementsService);
   private readonly beta = inject(BetaFeaturesService);
   private readonly features = inject(LabFeaturesService);
+  private readonly casesheetGate = inject(CasesheetGateService);
 
   canSee(e: SettingsEntry): boolean {
     const hasAny = (p: string[]) => this.auth.hasAnyPermission(p);
@@ -33,6 +35,7 @@ export class SettingsCatalogService {
     if (e.perms?.length && !hasAny([...e.perms])) return false;
     if (e.beta && !this.beta.enabled(e.beta)) return false;
     if (e.feature === 'homeCollection' && !this.features.homeCollectionEnabled()) return false;
+    if (e.casesheets && !this.casesheetGate.visible()) return false;
     if (e.module && !this.entitlements.moduleEnabled(e.module)) return false;
     return true;
   }

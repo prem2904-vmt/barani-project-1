@@ -216,7 +216,8 @@ export const appRoutes: Route[] = withAppModes([
       ...CASESHEET_SHELL_ROUTES,
       {
         path: 'admin/ipd', canActivate: [adminGuard], data: { moduleId: 'ipd' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
+        // The module "coming soon" page; with the case-sheet gate open (+ casesheet_forms_manage) a hub with the MyPrefrontal tile.
+        loadComponent: () => import('./features/casesheets/studio/ipd-hub.component').then(m => m.IpdHubComponent)
       },
       {
         path: 'admin/pharmacy', canActivate: [adminGuard], data: { moduleId: 'pharmacy' },

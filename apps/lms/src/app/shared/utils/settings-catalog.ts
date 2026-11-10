@@ -33,6 +33,8 @@ export interface SettingsEntry {
   feature?: 'homeCollection';
   /** Listed only while the tenant has this module. */
   module?: 'inventory';
+  /** Listed only while the case-sheet gate is open (CasesheetGateService.visible; part of IPD, dev only). */
+  casesheets?: true;
 }
 
 /* ── Icons (one per page; a setting uses its page's icon) ── */
@@ -67,6 +69,7 @@ const I = {
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2ZM11 20a1 1 0 0 0 2 0',
   kpi: 'M3 12h4l3-9 4 18 3-9h4',
   inventory: 'M21 8 12 3 3 8l9 5 9-5ZM3 8v8l9 5 9-5V8M12 13v8',
+  casesheet: 'M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1ZM8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 12h8M8 16h5',
   printer: 'M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M8 14h8v6H8z',
 } as const;
 
@@ -197,6 +200,8 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
     keywords: ['prefrontal bridge', 'wifi', 'pi box'] },
   { title: 'AI connectors', href: '/admin/ai-connectors', section: SETTINGS_SECTION.lab, icon: I.connectors, kind: 'page', beta: 'mcp',
     keywords: ['mcp', 'claude', 'connector'] },
+  { title: 'MyPrefrontal', href: '/admin/ipd/myprefrontal', section: 'IPD', icon: I.casesheet, kind: 'page', casesheets: true,
+    keywords: ['case sheet', 'case sheets', 'forms', 'form studio', 'ipd', 'doctor forms', 'department forms', 'history sheet'] },
   { title: 'Home-collection agents', href: '/admin/home-collection', section: SETTINGS_SECTION.lab, icon: I.home, kind: 'page', feature: 'homeCollection',
     keywords: ['home collection', 'agent', 'pickup', 'coverage area', 'pincode'] },
   { title: 'Notifications', href: '/admin/notifications', section: SETTINGS_SECTION.lab, icon: I.bell, kind: 'page',
@@ -279,6 +284,8 @@ export const SETTINGS_PARENT: Readonly<Record<string, string>> = {
   '/admin/inventory': '/admin',
   '/admin/radiology': '/admin',
   '/admin/ipd': '/admin',
+  '/admin/ipd/myprefrontal': '/admin/ipd',
+  '/admin/ipd/myprefrontal/import': '/admin/ipd/myprefrontal',
   '/admin/pharmacy': '/admin',
   '/admin/payroll': '/admin',
   '/admin/insurance': '/admin',

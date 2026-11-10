@@ -1,0 +1,269 @@
+@use '../../../../shared/styles/device-tier' as dt;
+.hi-body {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 1023px) {
+  .hi-body {
+    display: flex;
+    flex-direction: column;
+  }
+  .hi-versions {
+    flex: none;
+    max-height: 38%;
+  }
+  .hi-main {
+    flex: 1 1 auto;
+  }
+}
+
+.hi-list,
+.hi-changes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.hi-row {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.hi-row[aria-current='true'] {
+  background: var(--pf-done-tint, rgba(124, 58, 237, 0.07));
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 35%, transparent);
+}
+
+.hi-row__t {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.hi-row__m {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.hi-state {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--pf-chip-bg);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.hi-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.hi-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hi-head {
+  margin: 4px 0 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.hi-grp {
+  display: grid;
+  gap: 8px;
+}
+
+.hi-grp__t {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.hi-ch {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+}
+
+.hi-ch__w {
+  font-size: 15px;
+}
+
+.hi-ch__w {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.hi-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--text-tertiary);
+  transform: translateY(-1px);
+}
+
+.hi-dot[data-type*='add'] {
+  background: var(--color-primary, #7c3aed);
+}
+
+.hi-dot[data-type*='remov'] {
+  background: var(--red-text, #dc2626);
+}
+
+.hi-was,
+.hi-now {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.hi-empty {
+  display: none;
+}
+
+.hi-act:empty {
+  display: none;
+}
+
+.hi-cols {
+  display: none;
+}
+
+.hi-was {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--text-tertiary) 50%, transparent);
+}
+
+.hi-k {
+  text-decoration: none;
+}
+
+.hi-now {
+  color: var(--text-primary);
+}
+
+.hi-go {
+  justify-self: start;
+}
+
+.hi-err {
+  color: var(--red-text);
+}
+
+// ── wide (≥1280): a table of changes — what changed | was | now | go ──
+@include dt.desktop-only {
+  .hi-body {
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .hi-cols,
+  .hi-ch {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) 170px;
+    align-items: start;
+    gap: 16px;
+  }
+
+  .hi-cols {
+    padding: 0 14px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+
+  .hi-ch {
+    padding: 10px 14px;
+  }
+
+  .hi-empty {
+    display: block;
+  }
+
+  .hi-empty::before {
+    content: '—';
+    color: var(--text-tertiary);
+  }
+
+  .hi-k {
+    display: none;
+  }
+
+  .hi-act {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .hi-act:empty {
+    display: flex;
+  }
+
+  .hi-go {
+    justify-self: end;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :host-context(html.device-desktop) {
+    .hi-list {
+      gap: 4px;
+    }
+    .hi-row {
+      padding: 8px 10px;
+      border-radius: 10px;
+    }
+    .hi-row:hover:not([aria-current='true']) {
+      background: var(--pf-chip-bg);
+    }
+    .hi-row__t {
+      font-size: 14px;
+    }
+    .hi-row__m {
+      font-size: 12.5px;
+    }
+    .hi-changes {
+      gap: 0;
+    }
+    .hi-ch {
+      border-width: 0 0 1px;
+      border-radius: 0;
+    }
+    .hi-ch:hover {
+      background: var(--pf-chip-bg);
+    }
+    .hi-ch__w {
+      font-size: 14px;
+    }
+    .hi-head {
+      font-size: 15px;
+    }
+  }
+}

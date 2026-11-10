@@ -1,0 +1,79 @@
+@use '../../../../shared/styles/device-tier' as dt;
+// Shared frame for the signed-in screens: band, then cards (PF-PATTERN §1).
+// No page scroll: only card bodies scroll.
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pg {
+  // The page has no side padding of its own, so the band must not bleed.
+  --pf-hb-bleed: 0px;
+  padding-top: env(safe-area-inset-top);
+}
+
+.pg .pf-body {
+  padding: 4px 24px 20px;
+}
+
+@media (max-width: 640px) {
+  .pg .pf-body {
+    padding: 4px 16px 16px;
+  }
+}
+
+// Two jobs on one screen: main card + side card (≥1024px), one column below.
+.pg .pf-body--split {
+  gap: 20px;
+}
+
+@include dt.tablet-tier {
+  @media (min-width: 1024px) {
+    .pg .pf-body--split {
+      grid-template-columns: minmax(0, 1fr) 340px;
+    }
+  }
+}
+
+@media (max-width: 1023px) {
+  .pg .pf-body--split > .side {
+    flex: none;
+  }
+  .pg .pf-body--split > .main {
+    flex: 1 1 auto;
+  }
+}
+
+.pf-card__head {
+  min-height: 52px;
+}
+
+.pf-card__count {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-empty__body {
+  max-width: 400px;
+  font-size: 14px;
+}
+
+.pf-empty__title {
+  font-size: 17px;
+}
+
+.pf-empty__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+}
+
+// Headings used as card labels / empty titles carry no browser margins.
+.pf-card__label,
+.pf-empty__title {
+  margin: 0;
+}
