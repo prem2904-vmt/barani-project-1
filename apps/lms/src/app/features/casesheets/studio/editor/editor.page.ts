@@ -34,6 +34,7 @@ import { ShortcutsPanelComponent } from '../shared/shortcuts-panel.component';
 import { PreviewComponent } from '../preview/preview.component';
 import { EditorStore } from './editor-store';
 import { FieldActions } from './field-actions';
+import { CsStylesComponent } from '../../styles/cs-styles.component';
 import { FieldCardComponent } from './field-card.component';
 import { FieldSettingsComponent } from './field-settings.component';
 import { NarrativePanelComponent } from './narrative-panel.component';
@@ -71,6 +72,7 @@ const SIDE_TAB_KEY = 'prepare-studio-side-tab';
     SegmentedComponent,
     PhoneNoteComponent,
     ShortcutsPanelComponent,
+    CsStylesComponent,
   ],
   // Template pictures: Studio uploads / shows them through the same session-only store as the filler (bytes as blobs, no links).
   // FE_KINDS: every question card previews its control (<fe-field>) and the preview fills the form; the kinds are not

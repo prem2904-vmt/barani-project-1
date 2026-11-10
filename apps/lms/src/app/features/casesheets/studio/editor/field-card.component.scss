@@ -358,15 +358,30 @@
 
 @media (max-width: 640px) {
   // the quick actions drop to their own row instead of squeezing the title to one letter a line
+  // row 1: the handles (select, grip, kind) and "more"; row 2: the question gets the WHOLE width, so a label is
+  // never squeezed into a sliver and never breaks inside a word
   .fc-head {
     flex-wrap: wrap;
+    row-gap: 2px;
   }
   .fc-title {
-    flex: 1 1 9rem;
-    min-width: 9rem;
+    order: 10;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .fc-label__t {
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: manual;
   }
   .fc-hover {
     margin-left: auto;
+  }
+  .fc-more {
+    margin-left: auto;
+  }
+  .fc-hover ~ .fc-more {
+    margin-left: 0;
   }
   .fc-line {
     grid-template-columns: minmax(0, 1fr);

@@ -1,5 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, ViewEncapsulation, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, ViewEncapsulation, inject, input } from '@angular/core';
 
 /** The class on <html> while any case-sheet screen is open (styles/_touch.scss scopes the 48px raise to it). */
 export const CS_TOUCH_CLASS = 'cs-touch';
@@ -25,12 +25,18 @@ let open = 0;
 })
 export class CsStylesComponent implements OnInit, OnDestroy {
   private readonly doc = inject(DOCUMENT);
+  /** Studio (the desk editor) needs the `fe-*` controls styled but not the 48px touch raise: `[touch]="false"`. */
+  readonly touch = input(true);
+  private counted = false;
 
   ngOnInit(): void {
+    if (!this.touch()) return;
+    this.counted = true;
     if (open++ === 0) this.doc.documentElement.classList.add(CS_TOUCH_CLASS);
   }
 
   ngOnDestroy(): void {
+    if (!this.counted) return;
     if (--open <= 0) {
       open = 0;
       this.doc.documentElement.classList.remove(CS_TOUCH_CLASS);

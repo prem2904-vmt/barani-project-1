@@ -208,3 +208,12 @@ describe('Studio editor page providers (WP11)', () => {
   });
 });
 
+
+describe('Studio editor loads the fill styles itself', () => {
+  it('its template hosts <cs-styles>: without it the card previews are unstyled when Studio is opened directly (ticks run together)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const html = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/studio/editor/editor.page.html'), 'utf8');
+    expect(html).toMatch(/<cs-styles\s+\[touch\]="false"\s*\/>/);
+  });
+});

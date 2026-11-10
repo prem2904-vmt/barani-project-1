@@ -9,16 +9,27 @@ const TOUCH = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/features/cas
 @Component({
   standalone: true,
   imports: [CsStylesComponent],
-  template: `@if (a()) { <cs-styles /> } @if (b()) { <cs-styles /> }`,
+  template: `@if (a()) { <cs-styles /> } @if (b()) { <cs-styles /> } @if (c()) { <cs-styles [touch]="false" /> }`,
 })
 class Host {
   a = signal(false);
   b = signal(false);
+  c = signal(false);
 }
 
 /** The lab keeps the kit as it is: the 48px raise applies only while a case-sheet screen is open. */
 describe('case-sheet styles', () => {
   afterEach(() => document.documentElement.classList.remove(CS_TOUCH_CLASS));
+
+  it('Studio\'s <cs-styles [touch]="false" /> adds the fill styles without the 48px touch class', () => {
+    const f = TestBed.createComponent(Host);
+    f.componentInstance.c.set(true);
+    f.detectChanges();
+    expect(document.documentElement.classList.contains(CS_TOUCH_CLASS)).toBe(false);
+    f.componentInstance.c.set(false);
+    f.detectChanges();
+    expect(document.documentElement.classList.contains(CS_TOUCH_CLASS)).toBe(false);
+  });
 
   it('html carries cs-touch while at least one case-sheet screen is open, and loses it after', () => {
     const f = TestBed.createComponent(Host);

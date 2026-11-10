@@ -29,6 +29,8 @@ function harness(opts: {
   get?: ReturnType<typeof vi.fn>;
   post?: ReturnType<typeof vi.fn>;
 }) {
+  // MyWorkComponent reads window.matchMedia (phone layout) when constructed; the unit-test DOM has none
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
   const dialogConfirm = vi.fn(() => Promise.resolve(true));
   const toastError = vi.fn();
   const loose = () => new Proxy({}, { get: (_t, k) => (k === 'then' ? undefined : () => undefined) });

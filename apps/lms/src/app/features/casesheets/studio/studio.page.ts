@@ -97,7 +97,8 @@ export class StudioPage {
   protected readonly archivedCount = computed(() => (this.forms() ?? []).filter((f) => f.status === 'archived').length);
 
   protected where(f: FormRow): string {
-    if (f.origin === 'master') return f.published ? `Master · live version ${f.published.versionNo} · read-only` : 'Master · read-only';
+    // the "Master" badge beside the title already says it; the nbsp keeps "read-only" from breaking at its hyphen
+    if (f.origin === 'master') return f.published ? `Live version ${f.published.versionNo} · read\u2011only` : 'Not published · read\u2011only';
     const bits: string[] = [];
     if (f.published) bits.push(`Live · version ${f.published.versionNo}`);
     if (f.draft) {
