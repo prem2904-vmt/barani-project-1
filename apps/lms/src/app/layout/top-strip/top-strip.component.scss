@@ -1723,3 +1723,13 @@ a.pf-ts-tenant:hover {
   position: absolute; width: 1px; height: 1px; overflow: hidden;
   clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
 }
+
+/* ── Case sheets: one bottom bar. An open case sheet's Back · Pages · Next take the work areas' place (the controls
+   and their look belong to the case page; this only gives them the row). Rendered only while a sheet is open. ── */
+.pf-formbar {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  align-items: center;
+}

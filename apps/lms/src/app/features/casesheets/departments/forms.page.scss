@@ -1,0 +1,489 @@
+// Legacy speciality page (resident-fe pages/specialities, standard mode), in Prepare's skin.
+//  max-w-7xl mx-auto, p-2 (lg p-4); one content card filling the height;
+//  ≥768: departments list (w-64, lg w-80) | case sheets (flex-1). <768: one pane at a time.
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  // LMS shell: the routed host is a block child of .shell-main, so it takes the main's full height itself
+  height: 100%;
+  min-height: 0;
+}
+
+.dp {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+}
+
+.dp__card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+  background: var(--pf-card-bg, var(--card-bg));
+  border: 1px solid var(--pf-card-border, var(--card-border));
+  border-radius: 16px;
+  box-shadow: var(--pf-card-shadow, none);
+}
+
+// ───────── left: departments ─────────
+.dp__list {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-muted);
+}
+
+.dp__head {
+  padding: 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.dp__title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dp__sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-tertiary);
+}
+
+.dp__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--input-bg, var(--bg-input));
+  border: 1px solid var(--border-muted);
+  color: var(--text-tertiary);
+}
+
+.dp__search:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent);
+}
+
+.dp__search input {
+  flex: 1;
+  height: var(--pf-touch, 48px);
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 16px; // no iOS zoom
+}
+
+.dp__scroll,
+.dp__gridscroll {
+  display: block;
+  gap: 0;
+}
+
+.dp__scroll {
+  padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.dp__rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dp__rows > li + li {
+  border-top: 1px solid var(--border-muted);
+}
+
+.dp__row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 0;
+  border-left: 4px solid transparent;
+  padding-left: 12px;
+  background: transparent;
+  color: var(--text-muted);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 150ms ease;
+}
+
+.dp__row:hover {
+  background: var(--bg-hover);
+}
+
+.dp__row:hover .dp__name,
+.dp__row:hover > pf-icon {
+  color: var(--violet-text, var(--color-primary));
+}
+
+.dp__row--on {
+  background: var(--bg-active);
+  border-left-color: var(--color-primary);
+}
+
+.dp__row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.dp__num {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--bg-hover);
+  color: var(--violet-text, var(--color-primary));
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dp__rowtext {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.dp__name {
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--text-primary);
+  transition: color 150ms ease;
+}
+
+.dp__count {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-tertiary);
+}
+
+.dp__cont {
+  border-top: 1px solid var(--border-muted);
+}
+
+.dp__conth {
+  margin: 0;
+  padding: 14px 16px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.dp__msg {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.dp__msg-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+// ───────── right: case sheets ─────────
+.dp__sheets {
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.dp__shead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.dp__back {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--pf-touch, 48px);
+  height: var(--pf-touch, 48px);
+  margin: -8px 0 -8px -12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.dp__back:hover {
+  background: var(--bg-hover);
+}
+
+.dp__shtitle {
+  margin: 0 0 4px;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dp__shsub {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.dp__gridscroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+  padding: 24px;
+}
+
+.dp__err {
+  margin: 0 0 16px;
+  color: var(--error-text);
+  font-size: 14px;
+}
+
+.dp__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.dp__cell {
+  position: relative;
+  min-width: 0;
+}
+
+.dp__tile {
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  // legacy tiles sit a shade off the card (card-bg 40% over the card); Prepare's card is opaque, so tint it
+  background: color-mix(in srgb, var(--color-primary) 5%, var(--pf-card-bg, var(--card-bg)));
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 200ms ease,
+    box-shadow 200ms ease,
+    border-color 200ms ease,
+    background-color 200ms ease;
+}
+
+.dp__tile:hover:not(:disabled) {
+  transform: scale(1.05);
+  border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+  background: var(--bg-hover);
+  box-shadow: var(--shadow-lg);
+}
+
+.dp__tile:hover:not(:disabled) .dp__tname {
+  color: var(--violet-text, var(--color-primary));
+}
+
+.dp__tile:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.dp__tile:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.dp__tile:disabled {
+  cursor: progress;
+}
+
+.dp__tile[aria-busy='true'] {
+  border-color: var(--color-primary);
+  background: var(--bg-active);
+}
+
+.dp__disc {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.dp__tname {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  text-align: center;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  max-width: 100%;
+  transition: color 150ms ease;
+}
+
+.dp__tstate {
+  font-size: 13px;
+  color: var(--violet-text, var(--color-primary));
+}
+
+.dp__star {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 200ms ease;
+}
+
+.dp__star:hover {
+  color: var(--violet-text, var(--color-primary));
+}
+
+.dp__star--on {
+  color: var(--violet-text, var(--color-primary));
+}
+
+.dp__star--on ::ng-deep svg {
+  fill: currentColor;
+}
+
+.dp__none {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.dp__noneicon {
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.dp__nonetitle {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.dp__none p {
+  margin: 0;
+}
+
+// ───────── phone (<768): one pane at a time ─────────
+@media (max-width: 767px) {
+  .dp--picked .dp__list {
+    display: none;
+  }
+  .dp--picked .dp__sheets {
+    display: flex;
+  }
+  .dp__shead {
+    padding: 16px;
+  }
+  .dp__gridscroll {
+    padding: 16px;
+  }
+  .dp__tile {
+    min-height: 148px;
+    padding: 20px 12px;
+  }
+  .dp__tname {
+    font-size: 16px;
+  }
+}
+
+// ───────── ≥768: list | sheets ─────────
+@media (min-width: 768px) {
+  .dp__list {
+    width: 256px;
+    flex: none;
+  }
+  .dp__sheets {
+    display: flex;
+  }
+  .dp__back {
+    display: none;
+  }
+  // legacy 3 / 4 columns, but never narrower than a readable tile (a narrow pane gets fewer columns)
+  .dp__grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .dp {
+    padding: calc(16px + env(safe-area-inset-top)) 16px 16px;
+  }
+  .dp__list {
+    width: 320px;
+  }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .dp__tile,
+  .dp__tile:hover:not(:disabled) {
+    transform: none;
+    transition: none;
+  }
+}

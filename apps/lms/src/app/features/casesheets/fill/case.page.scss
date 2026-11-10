@@ -1,0 +1,1162 @@
+// The case sheet in the legacy MyPrefrontal form layout (see case.page.html for the map), Prepare skin.
+// Legacy sources: navbar.css (.navbar.form-mode, .pf-logo-button, .form-title-text), dynamic-form.css
+// (.form-main-content), tab-nav.css (.tab-nav-mobile, .hold-progress-bar, .step-nav-dropdown),
+// step-footer.html, form-sidebar-desktop.css. One scroller: the page (.lf-scroll).
+@use '../../../shared/styles/device-tier' as dt;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  // LMS shell: the routed host is a block child of .shell-main, so it takes the main's full height itself
+  height: 100%;
+  min-height: 0;
+}
+
+.lf {
+  --lf-c: var(--lf-color, var(--color-primary, #7c3aed));
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+}
+
+// ───────── header (legacy navbar, form mode) ─────────
+.lf-head {
+  position: relative;
+  z-index: 20;
+  flex: none;
+  padding-top: env(safe-area-inset-top);
+  color: #fff;
+  background: linear-gradient(
+    135deg,
+    var(--lf-c) 0%,
+    color-mix(in srgb, var(--lf-c) 78%, #ec4899) 100%
+  );
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 6px 18px color-mix(in srgb, var(--lf-c) 22%, transparent);
+}
+
+.lf-head__in {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  min-height: 70px;
+}
+
+.lf-logo {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  transition:
+    transform 150ms ease,
+    filter 200ms ease;
+}
+
+.lf-logo::before {
+  // a 48px target around the 36×46 glyph
+  content: '';
+  position: absolute;
+  inset: -2px -6px;
+}
+
+.lf-logo svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.lf-logo__white {
+  fill: #fff;
+  clip-path: inset(0 0 0 0);
+}
+
+// the brand gradient rises from the bottom like liquid while held (legacy pfHoldProgress)
+.lf-logo__fill {
+  clip-path: inset(100% 0 0 0);
+}
+
+.lf-logo[data-holding] {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.55)) drop-shadow(0 0 14px rgba(236, 72, 153, 0.45));
+}
+
+.lf-logo[data-holding] .lf-logo__fill {
+  clip-path: inset(0 0 0 0);
+  transition: clip-path var(--fe-hold-ms, 1200ms) linear;
+}
+
+.lf-logo[data-holding] .lf-logo__white {
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path var(--fe-hold-ms, 1200ms) linear;
+}
+
+.lf-logo:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+.lf-title {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// forms with no name field: the whole title block asks for the patient's name
+.lf-title__ask {
+  position: absolute;
+  inset: -11px 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 10px;
+}
+
+.lf-title__ask:focus-visible {
+  outline: 2px solid #fff;
+}
+
+// the kit's card-body class is the screen's scroller (no-inner-scroll rule); these are plain blocks
+.lf-scroll,
+.lf-steps,
+.lf-menu__list,
+.lf-nv__body {
+  display: block;
+  gap: 0;
+}
+
+.lf-title__text {
+  margin: 0;
+  font-size: 20px;
+  line-height: 30px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: lf-title-in 400ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes lf-title-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.lf-title__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0;
+  min-height: 18px;
+  font-size: 12px;
+  line-height: 16px;
+  color: rgba(255, 255, 255, 0.86);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.lf-title__who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lf-title__who--add {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(255, 255, 255, 0.5);
+}
+
+.lf-head__right {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lf-head__right ::ng-deep .pf-savestate {
+  color: rgba(255, 255, 255, 0.9);
+}
+.lf-head__right ::ng-deep .pf-savestate > svg,
+.lf-head__right ::ng-deep .pf-savestate__dot {
+  color: #fff;
+  background: currentColor;
+}
+.lf-head__right ::ng-deep .pf-savestate > svg {
+  background: none;
+}
+
+.lf-head__right ::ng-deep .pf-savestate__text {
+  display: none;
+}
+
+.lf-hbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: var(--pf-touch, 48px);
+  height: var(--pf-touch, 48px);
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lf-hbtn:hover,
+.lf-hbtn--on {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.lf-hbtn.fe-holdable::after {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.lf-hbtn__lbl {
+  display: none;
+}
+
+.lf-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.lf-progress__bar {
+  display: block;
+  height: 100%;
+  border-radius: 0 1px 1px 0;
+  background: rgba(255, 255, 255, 0.85);
+  transition: width 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+// ───────── the page (legacy .form-main-content: max-w-4xl, p-4 md:p-6, gap-6) ─────────
+.lf-mid {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.lf-scroll {
+  padding: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: none;
+}
+
+.lf-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.lf-page {
+  width: 100%;
+  max-width: 896px;
+  margin: 0 auto;
+  padding: 16px 16px 32px;
+}
+
+.lf-page .fe-grid {
+  gap: 24px;
+}
+
+.lf-page__sub {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+
+.cs-page {
+  animation: cs-in 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cs-page--back {
+  animation-name: cs-in-back;
+}
+
+@keyframes cs-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cs-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.lf-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding-top: 64px;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.lf-msg__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.lf-final {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: 12px;
+}
+
+// ───────── desktop page list (legacy form-sidebar-desktop) ─────────
+.lf-rail {
+  display: none;
+  flex: none;
+  width: 260px;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--border-muted);
+  background: var(--surface-1);
+}
+
+.lf-rail__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 20px 20px 8px;
+}
+
+.lf-rail__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.lf-rail__count {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.lf-rail__prog,
+.lf-menu__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 12px;
+}
+
+.lf-rail__track,
+.lf-menu__track {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+
+.lf-rail__fill,
+.lf-menu__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #ec4899));
+  transition: width 400ms ease;
+}
+
+.lf-rail__of {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.lf-steps,
+.lf-menu__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 8px 12px;
+  min-height: 0;
+}
+
+.lf-step {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--pf-touch, 48px);
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14.5px;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lf-step:hover {
+  background: var(--bg-hover);
+}
+
+.lf-step--on {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.lf-step--on::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-primary);
+}
+
+.lf-step__n {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-hover);
+  color: var(--text-tertiary);
+}
+
+.lf-step--on .lf-step__n {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.lf-step--done .lf-step__n {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+// legacy step-nav-dropdown: the current page is a gradient pill
+.lf-menu .lf-step--on {
+  background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #ec4899));
+  color: #fff;
+}
+.lf-menu .lf-step--on::before {
+  display: none;
+}
+.lf-menu .lf-step--on .lf-step__n {
+  background: rgba(255, 255, 255, 0.24);
+}
+.lf-menu .lf-step--on .lf-step__c {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.lf-step__t {
+  flex: 1;
+  min-width: 0;
+}
+
+.lf-step__c {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+// ───────── bottom bar (legacy tab-nav form mode: Back · Pages · Next) ─────────
+.lf-bar {
+  // lives inside the LMS bottom bar (FormBarService): it takes the work areas' row, the bar keeps its own look
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: 4px;
+}
+
+// the hold line along the top edge (legacy .hold-progress-bar): Next 1.5 s, Pages 0.8 s
+.lf-bar__hold {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -1px;
+  height: 3px;
+  pointer-events: none;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: var(--gradient-primary, linear-gradient(90deg, #7c3aed, #ec4899));
+}
+
+.lf-bar:has(.lf-next[data-holding]) .lf-bar__hold,
+.lf-bar:has(.lf-pages[data-holding]) .lf-bar__hold {
+  transform: scaleX(1);
+  transition: transform var(--lf-hold-ms) linear;
+}
+
+.lf-bar:has(.lf-next[data-holding]) {
+  --lf-hold-ms: 1500ms;
+}
+
+.lf-bar:has(.lf-pages[data-holding]) {
+  --lf-hold-ms: 800ms;
+}
+
+.lf-bar__mid {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  justify-content: center;
+}
+
+.lf-bar__item {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 60px;
+  min-height: var(--pf-touch, 48px);
+  padding: 2px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  transition:
+    color 200ms ease,
+    transform 200ms ease;
+}
+
+.lf-bar__item:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.lf-bar__item:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lf-bar__item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.lf-bar__item--open,
+.lf-pages[data-holding] {
+  color: var(--text-primary);
+}
+
+.lf-next {
+  color: var(--violet-text, var(--color-primary));
+}
+
+.lf-bar__icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lf-bar__lbl {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.lf-bar__lbl--wide {
+  display: none;
+}
+
+// the page list over the bar (legacy .step-nav-dropdown)
+.lf-menu__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+}
+
+.lf-menu {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(340px, calc(100vw - 24px));
+  max-height: min(60dvh, 480px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  background: var(--pf-card-bg, var(--surface-elevated));
+  border: 1px solid var(--border-muted);
+  box-shadow: var(--shadow-lg);
+  animation: lf-pop 220ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes lf-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.lf-menu__head {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 14px 16px 10px;
+}
+
+.lf-menu__title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.lf-menu__track {
+  flex: none;
+}
+
+.lf-menu__list {
+  flex: 1 1 auto;
+}
+
+.lf-menu__foot {
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-muted);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+// ───────── narrative: a sheet on phones, a drawer from the right on tablets and desktop ─────────
+.lf-nv {
+  display: none;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--pf-card-bg, var(--surface-1));
+  border: 1px solid var(--border-muted);
+}
+
+.lf-nv__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.lf-nv__title {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.lf-nv__note {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.lf-nv__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+  padding: 16px;
+}
+
+.lf-nv--open {
+  display: flex;
+}
+
+.cs-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+@media (max-width: 767px) {
+  .lf-nv--open {
+    position: absolute;
+    z-index: 40;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    height: min(calc(100% - 24px), 680px);
+    border-radius: 20px;
+    box-shadow: 0 -12px 40px rgba(15, 23, 42, 0.25);
+    animation: lf-rise 360ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+}
+
+@media (min-width: 768px) {
+  // The dim reaches the very bottom of the screen, bar included (the bar sits at z-index 40): without this the bar stayed pale under the drawer.
+  // The drawer still ends at the top of the bar (its container ends at --pf-nav-h).
+  .cs-backdrop {
+    position: fixed;
+    z-index: 41;
+  }
+  .lf-nv--open {
+    position: absolute;
+    z-index: 42;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(440px, 92vw);
+    border-width: 0 0 0 1px;
+    box-shadow: -12px 0 40px rgba(15, 23, 42, 0.18);
+    animation: lf-slide 320ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+}
+
+@keyframes lf-rise {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes lf-slide {
+  from {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+// ───────── sizes (legacy title steps: 20 → 22 → 24 → 26px) ─────────
+@media (min-width: 640px) {
+  .lf-title__text {
+    font-size: 24px;
+    line-height: 30px;
+  }
+  .lf-hbtn__lbl {
+    display: inline;
+  }
+  .lf-head__right ::ng-deep .pf-savestate__text {
+    display: inline;
+  }
+}
+
+@media (min-width: 768px) {
+  .lf-head__in {
+    padding: 12px 24px;
+  }
+  .lf-title__text {
+    font-size: 26px;
+    line-height: 32px;
+  }
+  .lf-page {
+    padding: 24px 24px 40px;
+  }
+}
+
+// ───────── desktop (mouse, ≥1280): page list rail + legacy step-footer ─────────
+@include dt.desktop-only {
+  // legacy form-sidebar-desktop: a floating card at the left edge
+  .lf-rail {
+    display: flex;
+    margin: 12px 0 12px 16px;
+    width: 244px;
+    border: 1px solid var(--border-muted);
+    border-radius: 16px;
+    background: var(--pf-card-bg, var(--surface-1));
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  }
+}
+
+// The bar is drawn inside the LMS bottom bar (outside this page's host), so its desktop look cannot use
+// :host-context (dt.desktop-only); a mouse device ≥1280px is matched on <html> directly.
+@media (min-width: dt.$desktop-min) { // device-aware below: html:not(.device-touch)
+  // legacy step-footer, inside the LMS bar: Back on the left, Next on the right (the rail holds the page list)
+  ::ng-deep html:not(.device-touch) .lf-bar {
+    justify-content: space-between;
+    max-width: 896px;
+    margin: 0 auto;
+    padding: 0 16px;
+  }
+  ::ng-deep html:not(.device-touch) .lf-bar__mid {
+    display: none;
+  }
+  ::ng-deep html:not(.device-touch) .lf-bar__item {
+    flex: none;
+    flex-direction: row;
+    gap: 8px;
+    height: 48px;
+    padding: 0 24px;
+    border-radius: 12px;
+    font-size: 15px;
+  }
+  ::ng-deep html:not(.device-touch) .lf-bar__item:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  ::ng-deep html:not(.device-touch) .lf-bar__icon {
+    width: 18px;
+    height: 18px;
+  }
+  ::ng-deep html:not(.device-touch) .lf-bar__lbl {
+    font-size: 15px;
+    line-height: 20px;
+  }
+  ::ng-deep html:not(.device-touch) .lf-bar__lbl--wide {
+    display: inline;
+  }
+  ::ng-deep html:not(.device-touch) .lf-bar__lbl--narrow {
+    display: none;
+  }
+  ::ng-deep html:not(.device-touch) .lf-back {
+    border: 1px solid var(--border-primary);
+    background: var(--pf-card-bg, var(--surface-1));
+    color: var(--text-primary);
+  }
+  ::ng-deep html:not(.device-touch) .lf-back:hover:not(:disabled) {
+    background: var(--bg-hover);
+  }
+  ::ng-deep html:not(.device-touch) .lf-next {
+    position: relative;
+    overflow: hidden;
+    min-width: 160px;
+    background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+    color: #fff;
+    box-shadow: 0 6px 16px color-mix(in srgb, var(--color-primary) 28%, transparent);
+  }
+  ::ng-deep html:not(.device-touch) .lf-next:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+  // on the footer the hold fills the Next button itself (legacy step-footer .hold-progress-bar)
+  ::ng-deep html:not(.device-touch) .lf-bar__hold {
+    display: none;
+  }
+  ::ng-deep html:not(.device-touch) .lf-next::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    transform: scaleX(0);
+    transform-origin: left center;
+    background: rgba(255, 255, 255, 0.3);
+    pointer-events: none;
+  }
+  ::ng-deep html:not(.device-touch) .lf-next[data-holding]::after {
+    transform: scaleX(1);
+    transition: transform var(--fe-hold-ms, 1500ms) linear;
+  }
+  ::ng-deep html:not(.device-touch) .lf-next > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cs-page,
+  .lf-title__text,
+  .lf-nv--open,
+  .lf-menu {
+    animation: none;
+  }
+  .lf-progress__bar,
+  .lf-bar__item {
+    transition: none;
+  }
+}
+
+// ───────── Edit your report (legacy chief-complaints PDF modal, cheif-modal-container) ─────────
+.rp__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.7);
+}
+.rp {
+  position: fixed;
+  z-index: 61;
+  inset: max(8px, env(safe-area-inset-top)) 8px calc(var(--pf-nav-h, 0px) + 8px);
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--pf-card-bg, var(--surface-1));
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+  animation: lf-pop-in 260ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes lf-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rp__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 20px;
+  color: #fff;
+  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
+}
+.rp__titles {
+  flex: 1;
+  min-width: 0;
+}
+.rp__title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+}
+.rp__sub {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+.rp__close {
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+.rp__close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+.rp__tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-muted);
+}
+.rp__tab {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.rp__tab[aria-selected='true'] {
+  color: var(--violet-text, var(--color-primary));
+  border-bottom-color: var(--color-primary);
+  background: var(--bg-hover);
+}
+.rp__pf {
+  width: 16px;
+  height: 20px;
+  fill: currentColor;
+}
+.rp__body {
+  display: block;
+  padding: 20px;
+}
+.rp__note {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  color: var(--text-tertiary);
+}
+.rp__listen > .pf-btn {
+  width: 100%;
+  max-width: 360px;
+}
+.rp__parts {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rp__part {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-muted);
+  border-radius: 12px;
+}
+.rp__part--on {
+  border-color: var(--color-primary);
+  background: var(--bg-hover);
+}
+.rp__play {
+  flex: none;
+  width: var(--pf-touch, 48px);
+  padding: 0;
+}
+.rp__ptxt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rp__ptitle {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.rp__pbody {
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.rp__pdf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 16px;
+}
+.rp__pdficon {
+  display: grid;
+  place-items: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  color: var(--violet-text, var(--color-primary));
+  margin-bottom: 16px;
+}
+.rp__pdft {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.rp__foot {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-muted);
+}
+.rp__foot .pf-btn {
+  flex: 1 1 0;
+}
+@media (min-width: 768px) {
+  .rp__foot {
+    justify-content: flex-end;
+  }
+  .rp__foot .pf-btn {
+    flex: 0 0 auto;
+    min-width: 160px;
+  }
+}
+@media (max-width: 480px) {
+  .rp__foot {
+    flex-direction: column-reverse;
+  }
+  .rp__tab {
+    flex-direction: column;
+    gap: 2px;
+    font-size: 12.5px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rp {
+    animation: none;
+  }
+}
+
+// repeated pages ("Ulcer 1 · Ulcer 2"): the sister pages as chips at the top of the page
+.cs-reps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.cs-rep[aria-current='page'] {
+  font-weight: 600;
+}
+.cs-badge {
+  display: inline-flex;
+  margin-bottom: 12px;
+}

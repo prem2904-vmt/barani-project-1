@@ -73,6 +73,13 @@
   }
   }
 
+  @if (formBar.template(); as formTpl) {
+  <!-- Case sheets: an open case sheet lends its Back · Pages · Next here in place of the work areas and the draft
+       tray (one bar, owner 2026-11-02; FormBarService). Leaving the sheet gives them back. -->
+  <div class="pf-formbar" data-formbar>
+    <ng-container [ngTemplateOutlet]="formTpl" />
+  </div>
+  } @else {
   <!-- Work areas — STATIC, centered in the bar (owner: every page link
          always visible, not tucked into the avatar menu). Quiet text pills
          in the designer vocabulary; active = violet on soft violet.
@@ -184,6 +191,7 @@
 
   <!-- Spacer pushes the nav + right cluster to the far edge -->
   <div class="pf-ts-spacer flex-1 min-w-0"></div>
+  }
 
   <!-- Right cluster — flex-shrink-0 so bell + avatar never overflow the pill.
          Tenant pill is sm:hidden so only bell + avatar show on mobile. -->

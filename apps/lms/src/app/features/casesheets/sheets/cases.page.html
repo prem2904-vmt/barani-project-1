@@ -1,0 +1,92 @@
+<cs-styles />
+<div class="pf-page pg">
+  <pf-hero-band
+    [back]="nav.isLab"
+    [standardPill]="true"
+    [placeholder]="patientId() ? 'Search these case sheets' : 'Search case sheets by patient name'"
+    [value]="query()"
+    (valueChange)="query.set($event)"
+  >
+    @if (patientId() && canFill()) {
+    <button band-actions type="button" class="pf-hb-btn pf-hb-btn--primary" data-new-sheet (click)="startNew()">
+      <pf-icon name="plus" [size]="16" /> New case sheet
+    </button>
+    }
+  </pf-hero-band>
+  <div class="pf-body">
+    <section class="pf-card main" aria-labelledby="cases-h">
+      <header class="pf-card__head">
+        <span class="pf-card__icon"><pf-icon name="cases" [size]="16" /></span>
+        <h1 class="pf-card__label" id="cases-h">{{ patientId() ? 'Case sheets' : 'Cases' }}</h1>
+        @if (patient(); as p) {
+        <span class="pf-card__note" data-patient>{{ p.name }}@if (p.meta) { · {{ p.meta }} }</span>
+        }
+        @if (items()) {
+        <span class="pf-card__count">{{ total() }}</span>
+        }
+        <span class="pf-card__spacer"></span>
+        <pf-segmented [options]="filters" [value]="filter()" (valueChange)="filter.set($event)" ariaLabel="Show" />
+      </header>
+      <div class="pf-card__body">
+        @if (error()) {
+        <div class="pf-empty pf-empty--compact" role="alert">
+          <h2 class="pf-empty__title">{{ error() }}</h2>
+          <button type="button" class="pf-btn pf-btn--secondary" (click)="reload()">
+            <pf-icon name="refresh" [size]="18" /> Try again
+          </button>
+        </div>
+        } @if (items() === null) {
+        <pf-skeleton-rows [rows]="6" label="Loading case sheets" />
+        } @else if (!items()!.length && !error()) {
+        <div class="pf-empty" data-empty="cases">
+          <span class="pf-empty__icon"><pf-icon name="cases" [size]="26" /></span>
+          <h2 class="pf-empty__title">{{ empty().title }}</h2>
+          <p class="pf-empty__body">{{ empty().body }}</p>
+        </div>
+        } @else {
+        <ul class="cl" role="list">
+          @for (c of items(); track c.id) {
+          <li class="cl__row" [attr.data-case]="c.id" [attr.aria-busy]="busyId() === c.id ? 'true' : null">
+            <a class="cl__main pf-touch" [routerLink]="nav.sheet(c.id)">
+              <span class="cl__name">{{ c.patientName || 'No name yet' }}</span>
+              <span class="cl__meta">
+                {{ c.formTitle }} @if (c.patientAge || c.patientSex) { · {{ c.patientAge }} {{ c.patientSex }} } @if
+                (c.state === 'draft' && c.lastPage) { · reached {{ human(c.lastPage) }} }
+              </span>
+              <span class="cl__meta">
+                {{ c.state === 'final' ? 'Finished ' + when(c.finalisedAt) : 'Saved ' + when(c.updatedAt) }}
+              </span>
+            </a>
+            <div class="cl__acts">
+              @if (c.state === 'draft') {
+              <a class="pf-btn pf-btn--secondary" [routerLink]="nav.sheet(c.id)">Continue</a>
+              } @else {
+              <a class="pf-btn pf-btn--secondary" [routerLink]="nav.sheet(c.id)">
+                <pf-icon name="file" [size]="18" /> PDF
+              </a>
+              <button type="button" class="pf-btn pf-btn--tertiary" [disabled]="!!busyId()" (click)="amend(c)">
+                Amend
+              </button>
+              }
+              @if (canDelete(c)) {
+              <button
+                type="button"
+                class="pf-btn pf-btn--icon"
+                [attr.aria-label]="'Delete the case sheet of ' + (c.patientName || 'this patient')"
+                [disabled]="!!busyId()"
+                (click)="remove(c)"
+              >
+                <pf-icon name="trash" [size]="18" />
+              </button>
+              }
+            </div>
+          </li>
+          }
+        </ul>
+        @if (more()) {
+        <button type="button" class="pf-btn pf-btn--secondary cl__more" (click)="loadMore()">Show more</button>
+        } }
+      </div>
+    </section>
+  </div>
+</div>
