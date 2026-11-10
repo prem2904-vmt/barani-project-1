@@ -17,7 +17,8 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { OpdGateService } from '../../opd/shared/opd-gate.service';
-import { OPD_PERMISSION_CODES } from '../../opd/shared/opd-permissions';
+import { CasesheetGateService } from '../../casesheets/shared/casesheet-gate.service';
+import { visibleGatedPermissions } from '../../casesheets/shared/gated-permissions';
 
 /** A permission joined with its plain-language catalog entry. */
 interface PermRow {
@@ -279,6 +280,7 @@ export class RoleEditorComponent implements OnInit {
   protected readonly theme = inject(ThemeService);
   /** OPD dark build: Doctor role type + OPD permission codes only when OPD is visible. */
   protected readonly opdGate = inject(OpdGateService);
+  private readonly casesheetGate = inject(CasesheetGateService);
 
   private readonly _editing = signal<Role | null>(null);
   private readonly _permissions = signal<Permission[]>([]);
@@ -400,7 +402,8 @@ export class RoleEditorComponent implements OnInit {
     this.destroyRef.onDestroy(() => this.recordHold.cancel());
 
     this.api.get<Permission[]>('/api/permissions').subscribe({
-      next: l => { this._permissions.set((l ?? []).filter(p => this.opdGate.visible() || !OPD_PERMISSION_CODES.has(p.code))); landed(); },
+      // Gated codes (OPD, case sheets) are hidden while their gate is closed; grants are preserved on save.
+      next: l => { this._permissions.set(visibleGatedPermissions(l ?? [], { opd: this.opdGate.visible(), casesheets: this.casesheetGate.visible() })); landed(); },
       error: () => landed(),
     });
 

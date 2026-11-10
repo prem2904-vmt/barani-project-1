@@ -10,7 +10,8 @@
  * Shape served by the host:
  *   { "apiUrl": string, "reportPublicBaseUrl": string,
  *     "auth": { "supabaseUrl": string, "supabaseAnonKey": string,
- *               "passkeyRpId"?: string } }   (passkeyRpId: a bare domain)
+ *               "passkeyRpId"?: string },   (passkeyRpId: a bare domain)
+ *     "mode"?: "lms" | "casesheets" }      (core/app-mode.ts; the public case-sheet site sets "casesheets")
  *
  * Only the web production environment sets `runtimeConfig: true`; phone and
  * desktop builds keep their baked-in settings.
@@ -24,6 +25,8 @@ export interface RuntimeConfigTarget {
   apiUrl: string;
   reportPublicBaseUrl?: string;
   auth: { supabaseUrl: string; supabaseAnonKey: string; passkeyRpId?: string };
+  /** Which app this host serves (core/app-mode.ts). Absent = decided by the host, i.e. the LMS. */
+  mode?: 'lms' | 'casesheets';
 }
 
 export interface RuntimeConfigOptions {
@@ -68,6 +71,8 @@ export function mergeRuntimeConfig(target: RuntimeConfigTarget, raw: unknown): n
     // Passkeys: the Supabase project's WebAuthn RP ID (a bare domain only).
     if (isBareDomain(auth['passkeyRpId'])) { target.auth.passkeyRpId = auth['passkeyRpId'].trim().toLowerCase(); applied++; }
   }
+  // App mode (case sheets, plan §4.4): only the two known values; anything else is ignored.
+  if (raw['mode'] === 'lms' || raw['mode'] === 'casesheets') { target.mode = raw['mode']; applied++; }
   return applied;
 }
 

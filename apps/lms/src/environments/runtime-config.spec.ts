@@ -123,6 +123,19 @@ describe('runtime config loader', () => {
     expect(warnings).toEqual([]);
   });
 
+  it('app mode (case sheets, plan §4.4): only "lms" / "casesheets" are applied', async () => {
+    const env = builtIn();
+    await loadRuntimeConfig(env, reply({ mode: 'casesheets' }), { warn });
+    expect(env.mode).toBe('casesheets');
+    expect(mergeRuntimeConfig(env, { mode: 'lms' })).toBe(1);
+    expect(env.mode).toBe('lms');
+    for (const bad of ['admin', 1, true, null, { x: 1 }]) {
+      const e = builtIn();
+      expect(mergeRuntimeConfig(e, { mode: bad })).toBe(0);
+      expect(e).not.toHaveProperty('mode');
+    }
+  });
+
   it('mergeRuntimeConfig counts applied keys', () => {
     expect(mergeRuntimeConfig(builtIn(), { apiUrl: 'https://a.example', auth: { supabaseUrl: 'https://b.example' } })).toBe(2);
   });

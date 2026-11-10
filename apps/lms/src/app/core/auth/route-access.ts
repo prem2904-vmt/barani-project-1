@@ -87,6 +87,14 @@ export const ANALYTICS_PERMS = ['view_analytics'];
 export const FINANCIAL_ANALYTICS_PERMS = ['view_financial_analytics'];
 export const PATIENT_DATA_EXPORT_PERMS = ['export_patient_data'];
 
+/** Case sheets (part of IPD; plan §2). The route ALSO carries casesheetGuard (the case-sheet gate: dev && explicit
+ *  IPD / personal tenant / pf.casesheets()) BEFORE these permission guards — features/casesheets/casesheets.routes.ts.
+ *  Not a `module` entry on purpose: IPD must be EXPLICITLY on and the gate also opens for a personal tenant, which
+ *  moduleGuard ('no row ⇒ on' for live modules) cannot express. */
+export const CASESHEET_FORMS_PERMS = ['casesheet_forms_manage'];
+export const CASESHEET_READ_PERMS = ['casesheet_view', 'casesheet_fill'];
+export const CASESHEET_FILL_PERMS = ['casesheet_fill'];
+
 export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // ── Front desk (parent guard + per-child perms) ────────────────────────
   '/frontdesk':                  { perms: FRONTDESK_PERMS },
@@ -178,6 +186,17 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // Home collection = entitlement AND the workflow's Home Visits action (the
   // ONE rule, core/modules/lab-features) — same pair as its work screens.
   '/admin/home-collection':   { perms: ['manage_home_collection'], workflow: ['home_visits'], module: 'homeCollection' },
+
+  // ── Case sheets (part of IPD; every route also behind casesheetGuard) ─
+  // Admin → IPD → MyPrefrontal: author the lab's case-sheet forms.
+  '/admin/ipd/myprefrontal':                   { perms: CASESHEET_FORMS_PERMS },
+  '/admin/ipd/myprefrontal/forms/:id':         { perms: CASESHEET_FORMS_PERMS },
+  '/admin/ipd/myprefrontal/forms/:id/history': { perms: CASESHEET_FORMS_PERMS },
+  '/admin/ipd/myprefrontal/import':            { perms: CASESHEET_FORMS_PERMS },
+  // The lab's sheets: read with casesheet_view (tenant-wide, branch-filtered, §11 Q2) or casesheet_fill; start one with fill.
+  '/casesheets/patient/:patientId':            { perms: CASESHEET_READ_PERMS },
+  '/casesheets/new':                           { perms: CASESHEET_FILL_PERMS },
+  '/casesheets/:id':                           { perms: CASESHEET_READ_PERMS },
 };
 
 /** Strip query/fragment and a trailing slash: '/admin/manage?cat=x' → '/admin/manage'. */

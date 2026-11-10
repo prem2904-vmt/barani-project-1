@@ -14,6 +14,7 @@ import { ADMIN_PERMS, TEST_MASTER_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
 import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
 import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
+import { CASESHEET_SHELL_ROUTES, withAppModes } from './features/casesheets/casesheets.routes';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
 // KPIs). Deliberately EXCLUDES manage_branch(es): those are read-tier branch
@@ -35,7 +36,9 @@ const setPasswordGuard: CanActivateFn = async () => {
   return true;
 };
 
-export const appRoutes: Route[] = [
+// withAppModes (features/casesheets/casesheets.routes.ts, plan §4.4): the public case-sheet site's routes match
+// ONLY in casesheets mode (core/app-mode.ts) and every route below ONLY in LMS mode.
+export const appRoutes: Route[] = withAppModes([
   {
     path: 'login',
     loadComponent: () => import('./features/login/login.component').then(m => m.LoginComponent)
@@ -208,6 +211,9 @@ export const appRoutes: Route[] = [
       // OPD admin (OPD dark build) — every route adminGuard + opdGuard; defined
       // ONCE in features/opd/opd.routes.ts (feature agents never edit here).
       ...OPD_ADMIN_ROUTES,
+      // Case sheets (part of IPD): Admin → IPD → MyPrefrontal + the lab's sheets, each behind casesheetGuard;
+      // defined ONCE in features/casesheets/casesheets.routes.ts.
+      ...CASESHEET_SHELL_ROUTES,
       {
         path: 'admin/ipd', canActivate: [adminGuard], data: { moduleId: 'ipd' },
         loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
@@ -720,4 +726,4 @@ export const appRoutes: Route[] = [
     ]
   },
   { path: '**', redirectTo: '' }
-];
+]);

@@ -32,6 +32,9 @@ export interface CurrentUser {
   opdAccess?: boolean;
   /** The tenant EXPLICITLY has OPD on (visible without the console flag). */
   opdEntitled?: boolean;
+  /** Case sheets (plan §4.3): 'personal' for a Google user's private case-sheet space; absent / anything else = a
+   *  lab. Read only by CasesheetGateService (older servers omit it ⇒ a lab). */
+  tenantKind?: string;
 }
 
 export interface BranchRef {

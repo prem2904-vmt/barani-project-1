@@ -6,6 +6,7 @@ import { BranchRef, CurrentUser } from './mock-user';
 import { SessionScopeService } from './session-scope.service';
 import { purgeSupabaseIndexedDb, purgeSupabaseLocalStorage } from './supabase-storage';
 import { opdPreviewHeaders } from '../../features/opd/shared/opd-gate';
+import { casesheetsHeaders } from '../../features/casesheets/shared/casesheet-gate';
 import { betaHeaders } from '../beta/beta-gate';
 
 interface MeResponse {
@@ -35,6 +36,8 @@ interface MeResponse {
   opdAccess?: boolean;
   /** The tenant EXPLICITLY has OPD on — visible without the console flag. */
   opdEntitled?: boolean;
+  /** Case sheets: 'personal' for a personal case-sheet space (newer servers); absent = a lab. */
+  tenantKind?: string;
   /** Temp-password gate (newer servers). Read ONLY by the passkey sign-in,
    *  which has no /login response to carry it. */
   mustChangePassword?: boolean;
@@ -367,7 +370,7 @@ export class AuthService {
   private async profileIdFor(token: string): Promise<string | null> {
     try {
       const res = await fetch(`${environment.apiUrl}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}`, ...opdPreviewHeaders() }, cache: 'no-store',
+        headers: { Authorization: `Bearer ${token}`, ...opdPreviewHeaders(), ...casesheetsHeaders() }, cache: 'no-store',
       });
       if (!res.ok) return null;
       const json = await res.json().catch(() => null);
@@ -1069,8 +1072,8 @@ export class AuthService {
       // stuck on "Signing in…" whenever DevTools was closed (DevTools auto-
       // disables the cache, which is why it worked with inspect open).
       res = await fetch(`${environment.apiUrl}/api/auth/me`, {
-        // opdPreviewHeaders: /me.opdAccess reflects pf.opd() (OPD dark build).
-        headers: { Authorization: `Bearer ${token}`, ...opdPreviewHeaders() },
+        // opdPreviewHeaders: /me.opdAccess reflects pf.opd() (OPD dark build); casesheetsHeaders: same for pf.casesheets().
+        headers: { Authorization: `Bearer ${token}`, ...opdPreviewHeaders(), ...casesheetsHeaders() },
         cache: 'no-store'
       });
     } catch {
@@ -1123,7 +1126,9 @@ export class AuthService {
       isDoctor: data.isDoctor ?? false,
       // OPD dark build — older servers omit both → OPD stays hidden.
       opdAccess: data.opdAccess ?? false,
-      opdEntitled: data.opdEntitled ?? false
+      opdEntitled: data.opdEntitled ?? false,
+      // Case sheets (plan §4.3) — older servers omit it ⇒ a lab.
+      ...(data.tenantKind ? { tenantKind: data.tenantKind } : {})
     };
     this._meMustChangePassword = data.mustChangePassword === true;
     // A restored session (reload / reopened app) never passed through the

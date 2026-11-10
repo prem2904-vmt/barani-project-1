@@ -15,6 +15,7 @@ import { SessionService } from './core/auth/session.service';
 import { installPasswordGate } from './core/auth/password-gate';
 import { BusyComponent } from './shared/primitives/skeleton-kit.component';
 import { OpdGateService } from './features/opd/shared/opd-gate.service';
+import { CasesheetGateService } from './features/casesheets/shared/casesheet-gate.service';
 import { BetaFeaturesService } from './core/services/beta-features.service';
 import { DesktopWindowService } from './core/services/desktop-window.service';
 import { ElectronMenuActionService } from './core/services/electron-menu-action.service';
@@ -198,6 +199,8 @@ export class App implements OnInit {
   private readonly _injector = inject(Injector);
   /** OPD dark build: installs `window.pf.opd()` silently (no banner, no UI hint). */
   private readonly _opdGate = inject(OpdGateService);
+  /** Case sheets (part of IPD): installs `window.pf.casesheets()` silently. */
+  private readonly _casesheetGate = inject(CasesheetGateService);
   /** Beta features: installs `window.pf.mcp() / passkeys() / assistant() / beta()` silently. */
   private readonly _beta = inject(BetaFeaturesService);
   /** Desktop kiosk full screen: Esc (when the app didn't use it) leaves it,
@@ -216,6 +219,7 @@ export class App implements OnInit {
 
   async ngOnInit() {
     this._opdGate.install();
+    this._casesheetGate.install();
     this._beta.install();
     // Patient-facing public pages (report link, order tracking) are opened in
     // a phone browser by someone who is not a user of the app: no idle lock,

@@ -3,6 +3,7 @@ import { appRoutes } from '../../app.routes';
 import { DOCTOR_NAV, MORE_NAV, NavVisibilityCtx, PRIMARY_NAV, navItemVisible } from '../../layout/nav-items';
 import { ModuleKey } from '../../core/services/tenant-entitlements.service';
 import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './opd.routes';
+import { CASESHEET_SHELL_ROUTES, CASESHEETS_PUBLIC_GROUP, CASESHEETS_PUBLIC_ROUTES } from '../casesheets/casesheets.routes';
 
 /**
  * OPD dark build — routes + nav with the gate CLOSED are exactly today's lab
@@ -46,14 +47,19 @@ describe('OPD routes are all gated', () => {
   });
 });
 
+/** Case-sheet route objects (gated in-shell routes + the casesheets-mode-only public group) — pinned by
+ *  features/casesheets/casesheets.routes.spec.ts, so the lab set below stays byte-identical. */
+const CASESHEET_ROUTE_OBJECTS = new Set<Route>([...CASESHEET_SHELL_ROUTES, CASESHEETS_PUBLIC_GROUP, ...CASESHEETS_PUBLIC_ROUTES]);
+
 /**
  * Snapshot of today's NON-OPD route paths (origin/dev 0d4db6df, OPD routes
  * removed). With the gate closed the reachable app is exactly this — adding or
- * removing a lab route must update it deliberately.
+ * removing a lab route must update it deliberately. Case-sheet routes (2026-11-10,
+ * WP0-ui) are excluded here on purpose and pinned in casesheets.routes.spec.ts.
  */
 describe('non-OPD routes are exactly today\'s lab set', () => {
   it('matches the snapshot', () => {
-    const lab = all.filter(f => !OPD_ROUTE_OBJECTS.has(f.route)).map(f => f.path);
+    const lab = all.filter(f => !OPD_ROUTE_OBJECTS.has(f.route) && !CASESHEET_ROUTE_OBJECTS.has(f.route)).map(f => f.path);
     expect(lab).toMatchSnapshot();
     expect(lab.some(p => OPD_PATH.test(p))).toBe(false);
   });

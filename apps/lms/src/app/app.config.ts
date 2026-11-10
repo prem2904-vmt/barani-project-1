@@ -23,6 +23,9 @@ import { APP_BASE_HREF } from '@angular/common';
 import { appRoutes } from './app.routes';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import { opdPreviewInterceptor } from './features/opd/shared/opd-preview.interceptor';
+import { casesheetHeaderInterceptor } from './features/casesheets/shared/casesheet-header.interceptor';
+import { DialogService } from './core/services/dialog.service';
+import { FeDialog } from '@prefrontal/forms-engine/providers';
 import { storageErrorInterceptor } from './core/services/storage-error.interceptor';
 
 /**
@@ -100,14 +103,17 @@ export const appConfig: ApplicationConfig = {
     // httpActivityInterceptor only counts in-flight /api calls (the branch
     // switch holds its skeleton until the new screen's data has landed).
     // opdPreviewInterceptor: X-PF-OPD: 1 on API calls only after pf.opd() (OPD dark build).
+    // casesheetHeaderInterceptor: X-PF-CASESHEETS: 1 on API calls only after pf.casesheets() (case sheets).
     // storageErrorInterceptor: a real storage_error (or a masked HTML 502/503/504
     // gateway page on an upload) becomes one clear ApiError message everywhere.
-    provideHttpClient(withFetch(), withInterceptors([httpActivityInterceptor, opdPreviewInterceptor, betaHeaderInterceptor, authInterceptor, storageErrorInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([httpActivityInterceptor, opdPreviewInterceptor, casesheetHeaderInterceptor, betaHeaderInterceptor, authInterceptor, storageErrorInterceptor])),
     // Private uploads: register the session-authenticated fetcher the PDF
     // renderers use for "/uploads/…" assets (see shared/utils/upload-fetch.ts).
     provideAppInitializer(() => { inject(UploadsService); }),
     // Beta UI flags (console switch + server + dev): fetched once in the background — never blocks boot.
     provideAppInitializer(() => { void inject(BetaFeaturesService).ensureLoaded(); }),
+    // Case sheets: the forms engine asks its FeDialog token; the app answers with its own DialogService.
+    { provide: FeDialog, useExisting: DialogService },
     { provide: APP_BASE_HREF, useValue: '/' },
     {
       provide: LocationStrategy,
