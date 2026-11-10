@@ -425,8 +425,12 @@ export class HeroBandComponent {
   /** Enter pressed in the built-in input (intake screens receive-on-enter). */
   readonly submitted = output<string>();
 
-  readonly tenantName = computed(() =>
-    this.tenantState.tenant()?.name || this.auth.user()?.tenantName || 'Your organization');
+  /** A personal case-sheet space has an internal name ("Personal space cc2ee7f1"): the band shows the doctor instead. */
+  readonly tenantName = computed(() => {
+    const u = this.auth.user();
+    if (u?.tenantKind === 'personal') return u.displayName?.trim() || 'My case sheets';
+    return this.tenantState.tenant()?.name || u?.tenantName || 'Your organization';
+  });
 
   /* Branding resolution — mirrors the classic bar's tenant chip: mode
      defaults to 'both'; brandingName falls back to the official name. */

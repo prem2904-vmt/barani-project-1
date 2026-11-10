@@ -219,10 +219,11 @@ export class HttpCasesApi extends CasesApi {
   // ---------------- forms ----------------
 
   async listForms(): Promise<FormSummary[]> {
+    // `for=fill`: what a doctor can start a sheet from, whatever the caller may build (a builder's own draft-only fork must not hide the form here)
     // the API pages (100 at most per page): a practice can have more forms than one page holds
     const items: unknown[] = [];
     for (let page = 1; page <= FORM_PAGES_MAX; page++) {
-      const r = obj(await this.get('/api/casesheets/forms', new HttpParams().set('page', page).set('pageSize', FORM_PAGE)));
+      const r = obj(await this.get('/api/casesheets/forms', new HttpParams().set('for', 'fill').set('page', page).set('pageSize', FORM_PAGE)));
       const got = arr(r['items']);
       items.push(...got);
       if (got.length < FORM_PAGE || items.length >= num(r['total'], 0)) break;

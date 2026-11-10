@@ -62,12 +62,15 @@ const STATE_WORDS: Record<string, string> = { draft: 'Draft', in_review: 'In rev
             @if (error()) { <p class="hi-err" role="alert">{{ error() }}</p> }
             @if (toRow(); as v) {
               <div class="hi-top">
-                <span class="hi-cmp">Compare version {{ v.versionNo }} with</span>
-                <div class="hi-chips" role="radiogroup" aria-label="Compare with">
-                  @for (o of earlier(); track o.id) {
-                    <button type="button" role="radio" class="fe-chip" [attr.aria-checked]="o.id === from()" [attr.aria-pressed]="o.id === from()" (click)="from.set(o.id); compare()">version {{ o.versionNo }}</button>
-                  }
-                </div>
+                <!-- nothing to compare with until there are two versions -->
+                @if (earlier().length > 0) {
+                  <span class="hi-cmp">Compare version {{ v.versionNo }} with</span>
+                  <div class="hi-chips" role="radiogroup" aria-label="Compare with">
+                    @for (o of earlier(); track o.id) {
+                      <button type="button" role="radio" class="fe-chip" [attr.aria-checked]="o.id === from()" [attr.aria-pressed]="o.id === from()" (click)="from.set(o.id); compare()">version {{ o.versionNo }}</button>
+                    }
+                  </div>
+                }
                 @if (v.state !== 'draft' && v.state !== 'in_review') {
                   <button type="button" class="pf-btn pf-btn--secondary" data-act="restore" (click)="restore(v)"><pf-icon name="undo" [size]="18" /> Make this the new draft</button>
                 }

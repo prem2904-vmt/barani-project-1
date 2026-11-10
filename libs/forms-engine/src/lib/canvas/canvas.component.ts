@@ -228,10 +228,11 @@ const TAP_SLOP = 10;
         [attr.aria-label]="summary()"
       >
         <g [attr.transform]="transform()">
-          <rect class="fe-cv__paper" [class.is-doc]="!!imageUrl()" x="0" y="0" [attr.width]="doc().w" [attr.height]="doc().h" />
+          <rect class="fe-cv__paper" [class.is-doc]="!!imageUrl() && !artwork()" x="0" y="0" [attr.width]="doc().w" [attr.height]="doc().h" />
           @if (imageUrl(); as url) {
             <image
               class="fe-cv__image"
+              [class.is-art]="artwork()"
               [attr.href]="url"
               x="0"
               y="0"
@@ -402,6 +403,11 @@ export class CanvasComponent {
   protected readonly imageUrl = computed(() => {
     const b = this.background();
     return b.kind === 'image' ? b.url : null;
+  });
+  /** A bundled starter drawing: paper and lines follow the theme (an uploaded picture or photo stays a white document). */
+  protected readonly artwork = computed(() => {
+    const b = this.background();
+    return b.kind === 'image' && b.art === true;
   });
   protected readonly labelSize = computed(() => Math.round(this.doc().w * LABEL_SIZE * 10) / 10);
   protected readonly regionPaths = computed(() => this.regions().map((r) => ({ key: r.key, d: regionPath(r.shape) })));

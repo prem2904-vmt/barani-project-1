@@ -32,4 +32,21 @@ describe('version history', () => {
     expect(el.querySelector('.hi-grp__t')!.textContent).toBe('History');
     expect(el.querySelector('.hi-now')!.textContent).toContain('Throat pain');
   });
+
+  it('hides the compare control while there is only one version', async () => {
+    TestBed.resetTestingModule();
+    const api = new MockStudioApi();
+    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: StudioApi, useValue: api }] });
+    const def = addPage(emptyDefinition('ENT'), 'History').def;
+    const id = api.seed('ENT', def, { publish: true });
+    const f = TestBed.createComponent(StudioHistoryPage);
+    f.componentRef.setInput('id', id);
+    f.detectChanges();
+    await new Promise((r) => setTimeout(r, 20));
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('.hi-cmp')).toBeNull();
+    expect(el.querySelector('[role=radiogroup]')).toBeNull();
+    expect(el.textContent).toContain('Only one version so far');
+  });
 });

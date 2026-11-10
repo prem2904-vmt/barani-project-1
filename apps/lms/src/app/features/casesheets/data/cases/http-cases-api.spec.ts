@@ -49,6 +49,7 @@ describe('HttpCasesApi', () => {
     const p = api.listForms();
     const row = (i: number) => ({ id: `f${i}`, key: `k${i}`, title: `Form ${i}`, specialty: 'ENT', published: { id: `v${i}`, versionNo: 1, publishedAt: 'x' } });
     const first = http.expectOne((r) => r.url === `${B}/api/casesheets/forms` && r.params.get('page') === '1');
+    expect(first.request.params.get('for')).toBe('fill');
     expect(first.request.params.get('pageSize')).toBe('100');
     first.flush({ total: 130, page: 1, pageSize: 100, items: Array.from({ length: 100 }, (_, i) => row(i)) });
     await Promise.resolve();

@@ -123,7 +123,7 @@ export function resolvePicture(
           return {
             w: s.width,
             h: s.height,
-            background: { kind: 'image' as const, url: s.svgUrl, w: s.width, h: s.height },
+            background: { kind: 'image' as const, url: s.svgUrl, w: s.width, h: s.height, art: true },
             regions: s.regions.map((r) => ({
               key: r.id,
               label: words.get(r.id)?.label?.trim() || r.label,

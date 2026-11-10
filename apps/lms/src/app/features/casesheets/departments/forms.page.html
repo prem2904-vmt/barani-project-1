@@ -17,11 +17,17 @@
           <pf-icon name="search" [size]="16" />
           <input
             type="search"
+            data-dp-search
             placeholder="Search case sheets"
             aria-label="Search case sheets"
             [value]="query()"
             (input)="onSearch($any($event.target).value)"
           />
+          @if (query()) {
+          <button type="button" class="dp__clear" aria-label="Clear search" (click)="onSearch('')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>
+          }
         </label>
       </header>
       <div class="dp__scroll pf-card__body">

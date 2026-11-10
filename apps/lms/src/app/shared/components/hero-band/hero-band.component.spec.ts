@@ -31,12 +31,12 @@ class HostComponent {
   q = signal('');
 }
 
-function make(showBack = true) {
+function make(showBack = true, user: Record<string, unknown> = { tenantName: 'Micro World' }) {
   const navBack = { showBack: signal(showBack), back: vi.fn(), backTo: vi.fn() };
   TestBed.configureTestingModule({
     imports: [HostComponent],
     providers: [
-      { provide: AuthService, useValue: { user: () => ({ tenantName: 'Micro World' }) } },
+      { provide: AuthService, useValue: { user: () => user } },
       { provide: TenantStateService, useValue: { tenant: () => null } },
       { provide: NavBackService, useValue: navBack },
     ],
@@ -139,5 +139,23 @@ describe('pf-hero-band — tenant logo', () => {
     const { el, src } = withLogo('data:image/png;base64,AA==');
     expect(src).not.toHaveBeenCalled();
     expect(el.querySelector<HTMLImageElement>('.pf-hb__logo')?.getAttribute('src')).toBe('data:image/png;base64,AA==');
+  });
+});
+
+describe('pf-hero-band — personal case-sheet space', () => {
+  it('shows the doctor, never the internal "Personal space …" name', () => {
+    const { el } = make(true, { tenantName: 'Personal space cc2ee7f1', tenantKind: 'personal', displayName: 'Dr Meera Raghavan' });
+    expect(el.querySelector('.pf-hb__name')?.textContent?.trim()).toBe('Dr Meera Raghavan');
+    expect(el.textContent).not.toContain('Personal space');
+  });
+
+  it('falls back to "My case sheets" when there is no name', () => {
+    const { el } = make(true, { tenantName: 'Personal space cc2ee7f1', tenantKind: 'personal' });
+    expect(el.querySelector('.pf-hb__name')?.textContent?.trim()).toBe('My case sheets');
+  });
+
+  it('a lab keeps its own name', () => {
+    const { el } = make(true, { tenantName: 'Micro World', tenantKind: 'lab', displayName: 'Dr X' });
+    expect(el.querySelector('.pf-hb__name')?.textContent?.trim()).toBe('Micro World');
   });
 });

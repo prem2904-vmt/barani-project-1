@@ -50,6 +50,11 @@ export function readAge(text: string): number | null {
             <pf-icon name="search" [size]="16" />
             <input type="search" class="ps-search__in" placeholder="Search by name or phone" aria-label="Search my patients"
                    data-ps-search [value]="query()" (input)="onQuery($any($event.target).value)" />
+            @if (query()) {
+              <button type="button" class="ps-search__clr" aria-label="Clear search" (click)="onQuery('')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+              </button>
+            }
           </label>
           <div class="ps-list" aria-live="polite">
             @if (searching()) {
@@ -146,6 +151,11 @@ export function readAge(text: string): number | null {
     .ps-x { border: 0; background: transparent; color: var(--text-secondary); border-radius: 8px; padding: 6px; cursor: pointer; }
     .ps-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 44px; border-radius: 10px;
       border: 1px solid var(--border-color, var(--border-primary)); background: var(--bg-secondary); color: var(--text-secondary); }
+    .ps-search__in::-webkit-search-decoration, .ps-search__in::-webkit-search-cancel-button,
+    .ps-search__in::-webkit-search-results-button, .ps-search__in::-webkit-search-results-decoration { display: none; }
+    .ps-search__clr { display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; border: 0; border-radius: 8px;
+      background: transparent; color: var(--text-tertiary); cursor: pointer; }
+    .ps-search__clr:hover, .ps-search__clr:focus-visible { background: var(--pf-chip-bg); color: var(--text-primary); }
     .ps-search__in { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary); font-size: 16px; }
     .ps-list { min-height: 120px; }
     .ps-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }

@@ -90,6 +90,33 @@
   font-size: 16px; // no iOS zoom
 }
 
+// our own clear button (the browser's blue native one is hidden)
+.dp__search input::-webkit-search-decoration,
+.dp__search input::-webkit-search-cancel-button,
+.dp__search input::-webkit-search-results-button,
+.dp__search input::-webkit-search-results-decoration {
+  display: none;
+}
+
+.dp__clear {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.dp__clear:hover,
+.dp__clear:focus-visible {
+  background: var(--pf-chip-bg);
+  color: var(--text-primary);
+}
+
 .dp__scroll,
 .dp__gridscroll {
   display: block;

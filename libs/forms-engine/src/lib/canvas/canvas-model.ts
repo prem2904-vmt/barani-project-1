@@ -75,7 +75,8 @@ export interface CanvasMarker {
 }
 
 /** What sits behind the ink: nothing, or a picture (a starter SVG, an uploaded template, a photo) by its signed link. */
-export type CanvasBackground = { kind: 'blank' } | { kind: 'image'; url: string | null; w: number; h: number };
+/** `art`: a bundled starter drawing (slate lines on nothing): it follows the theme; an uploaded picture or a photo stays a white document. */
+export type CanvasBackground = { kind: 'blank' } | { kind: 'image'; url: string | null; w: number; h: number; art?: boolean };
 
 /** The pen palette when the form gives none: black, red, blue, green. */
 export const DEFAULT_INKS = ['#111827', '#dc2626', '#1d4ed8', '#16a34a'] as const;

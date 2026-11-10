@@ -19,6 +19,7 @@
   --fe-cv-mark-line: #7c3aed;
   --fe-cv-pin: #7c3aed;
   --fe-cv-surface: #f1f5f9;
+  --fe-cv-art-filter: none;
 }
 
 :root.dark {
@@ -34,6 +35,8 @@
   --fe-cv-mark-line: #a78bfa;
   --fe-cv-pin: #8b5cf6;
   --fe-cv-surface: #020617;
+  // the starter drawings are slate lines: turned light on the dark paper (hue kept, so the slate stays slate)
+  --fe-cv-art-filter: invert(1) hue-rotate(180deg);
 }
 
 .fe-cv {
@@ -1122,6 +1125,10 @@ html.fe-cv-locked body {
 // a starter / uploaded picture is a white document in both themes
 .fe-cv__image {
   pointer-events: none;
+}
+
+.fe-cv__image.is-art {
+  filter: var(--fe-cv-art-filter);
 }
 
 .fe-cv__paper.is-doc {

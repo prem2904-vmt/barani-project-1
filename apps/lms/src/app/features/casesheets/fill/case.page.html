@@ -251,7 +251,7 @@
     <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'edit'" (click)="reportTab.set('edit')">
       <pf-icon name="pen" [size]="18" /> Edit narrative
     </button>
-    <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'listen'" (click)="reportTab.set('listen')">
+    <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'listen'" aria-label="PF Listen" (click)="reportTab.set('listen')">
       <svg class="rp__pf" viewBox="0 0 228 292" aria-hidden="true"><path [attr.d]="glyph[0]" /><path [attr.d]="glyph[1]" /></svg>
       PF Listen
     </button>
