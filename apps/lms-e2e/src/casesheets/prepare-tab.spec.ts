@@ -97,9 +97,10 @@ test('admin: the switch in Settings → IPD turns Prepare off (tab gone, /prepar
   await ctx.close();
 });
 
-test('a lab without IPD: no Prepare tab', async ({ browser }) => {
+// Owner rule 2026-11-11: every dev lab gets Prepare unless an admin switched IPD off (the switch-off path is tested above).
+test('a lab that never set IPD still gets the Prepare tab', async ({ browser }) => {
   const { ctx, page } = await openAs(browser, STACK.plainLab.admin, '/frontdesk');
   await settle(page, 1500);
-  await expect(page.locator('nav').getByText('Prepare', { exact: true })).toHaveCount(0);
+  await expect(page.locator('nav').getByText('Prepare', { exact: true }).first()).toBeVisible();
   await ctx.close();
 });
