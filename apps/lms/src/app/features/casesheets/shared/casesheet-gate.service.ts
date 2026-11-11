@@ -4,6 +4,7 @@ import { isDevEnvironment } from '../../../core/beta/beta-gate';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { environment } from '../../../../environments/environment';
 import { installPfCortexImport } from './cortex-import-gate';
+import { installPfCortexBuilder } from './cortex-builder-gate';
 import { casesheetsVisible, installPfCasesheets, ipdExplicitlyOn, prepareSwitchOn, readCasesheetsFlag, safeLocalStorage } from './casesheet-gate';
 
 /**
@@ -65,6 +66,8 @@ export class CasesheetGateService {
     installPfCasesheets(window as unknown as { pf?: Record<string, unknown> } & Record<string, unknown>,
       this.storage, () => { try { window.location.reload(); } catch { /* noop */ } });
     installPfCortexImport(window as unknown as { pf?: Record<string, unknown> } & Record<string, unknown>,
+      this.storage, () => { try { window.location.reload(); } catch { /* noop */ } });
+    installPfCortexBuilder(window as unknown as { pf?: Record<string, unknown> } & Record<string, unknown>,
       this.storage, () => { try { window.location.reload(); } catch { /* noop */ } });
   }
 }

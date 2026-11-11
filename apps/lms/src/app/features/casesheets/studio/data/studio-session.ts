@@ -97,6 +97,21 @@ export class StudioSession {
     }
   }
 
+  /**
+   * Read the draft again from the server (Cortex changed it). Quiet: a failed read leaves the screen as it is and says
+   * false, it never swaps the editor for an error page. The caller has already saved (or asked about) local edits.
+   */
+  async reloadDraft(): Promise<boolean> {
+    const id = this.formId();
+    if (!id) return false;
+    await this.load(id);
+    if (this.loadError()) {
+      this.loadError.set(null);
+      return false;
+    }
+    return true;
+  }
+
   /** Apply an edit (a new definition). Undo keeps the old one. */
   apply(next: FormDefinition): void {
     const cur = this.definition();
