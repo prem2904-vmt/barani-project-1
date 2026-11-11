@@ -33,7 +33,7 @@ export class ChecksStore {
   private seenSave: string | null | undefined = undefined;
 
   constructor() {
-    // the form opened: read what the server already knows
+    // the case sheet opened: read what the server already knows
     effect(() => {
       const id = this.session.formId();
       if (id && this.status.available()) untracked(() => void this.load());
@@ -90,7 +90,7 @@ export class ChecksStore {
     if (c.source === 'auto') return;
     const ok = await this.dialog.confirm({
       title: 'Remove this check?',
-      message: `“${c.title}” will no longer be played. The form itself does not change.`,
+      message: `“${c.title}” will no longer be played. The case sheet itself does not change.`,
       confirmLabel: 'Remove',
       cancelLabel: 'Keep it',
       tone: 'danger',

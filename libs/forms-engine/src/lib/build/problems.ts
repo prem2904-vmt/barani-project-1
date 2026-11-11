@@ -103,8 +103,8 @@ function plainWords(def: FormDefinition, message: string, area: PlacedProblem['a
   let x: RegExpExecArray | null;
   if ((x = /^Field '(\w+)' does not exist\.?$/.exec(m)))
     return area === 'showWhen'
-      ? '“Show when” uses a question that is no longer in the form. Choose another one or remove the condition.'
-      : 'This uses a question that is no longer in the form.';
+      ? '“Show when” uses a question that is no longer in the case sheet. Choose another one or remove the condition.'
+      : 'This uses a question that is no longer in the case sheet.';
   if (/needs at least one option/.test(m)) return 'Add at least one choice.';
   if (/needs at least one field to repeat/.test(m)) return 'Add at least one question to repeat.';
   if (/This field has no label/.test(m)) return 'Give this question a name.';
@@ -118,7 +118,7 @@ function plainWords(def: FormDefinition, message: string, area: PlacedProblem['a
   if (/must sit directly on a page/.test(m)) return 'This kind of question must be directly on a page, not inside another one.';
   if ((x = /^\{\{(\w+)\}\} is not a field/.exec(m))) {
     const f = findField(def, x[1]);
-    return f ? m : 'A paragraph mentions a question that is no longer in the form; that part stays empty.';
+    return f ? m : 'A paragraph mentions a question that is no longer in the case sheet; that part stays empty.';
   }
   if (/nested too deeply/.test(m)) return 'Follow-up questions go too many levels deep.';
   if (/at most \d+ pages/.test(m)) return m;

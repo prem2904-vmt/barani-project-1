@@ -16,7 +16,7 @@ export interface ChatMessage {
 
 /**
  * The Cortex chat on one form. Cortex only edits the DRAFT on the server; this keeps the screen honest about it:
- * unsaved edits are saved BEFORE the message goes (the server edits the saved draft), and when the form changed the
+ * unsaved edits are saved BEFORE the message goes (the server edits the saved draft), and when the case sheet changed the
  * draft is read again into the editor, asking first if a newer local edit would be replaced.
  */
 @Injectable()
@@ -68,7 +68,7 @@ export class ChatStore {
     if (this.session.saveState() !== 'saved') {
       const keep = await this.dialog.confirm({
         title: 'Use what Cortex changed?',
-        message: 'You changed the form while Cortex was working. Using Cortex’s version replaces those newer changes on this screen.',
+        message: 'You changed the case sheet while Cortex was working. Using Cortex’s version replaces those newer changes on this screen.',
         confirmLabel: 'Use Cortex’s version',
         cancelLabel: 'Keep my changes',
         tone: 'danger',
@@ -80,7 +80,7 @@ export class ChatStore {
     }
     const ok = await this.session.reloadDraft();
     if (!ok) {
-      this.push({ from: 'cortex', error: true, text: "Cortex changed the draft, but it couldn't be loaded here. Reopen the form to see it." });
+      this.push({ from: 'cortex', error: true, text: "Cortex changed the draft, but it couldn't be loaded here. Reopen the case sheet to see it." });
       return;
     }
     void this.checks.run();

@@ -59,14 +59,14 @@ const btn = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector
 
 afterEach(() => { document.body.innerHTML = ''; });
 
-describe('AI connector settings: "Let connected apps build case sheet forms"', () => {
+describe('AI connector settings: "Let connected apps build case sheets"', () => {
   it('shows the row with its plain explanation when the switch is on, the case-sheet gate is open and the server allows changing it', async () => {
     const { f } = setup();
     await loaded(f);
     expect(row(f)).not.toBeNull();
     const text = row(f)!.textContent!;
-    expect(text).toContain('Let connected apps build case sheet forms');
-    expect(text).toContain('DRAFT case sheet forms');
+    expect(text).toContain('Let connected apps build case sheets');
+    expect(text).toContain('DRAFT case sheets');
     expect(text).toMatch(/nothing is published without you/i);
     expect(btn(f)!.getAttribute('aria-checked')).toBe('false');
   });

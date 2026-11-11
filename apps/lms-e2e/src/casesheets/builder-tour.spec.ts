@@ -89,7 +89,7 @@ test('Settings → AI connector: the case-sheet switch', async ({ browser }) => 
   await page.goto(`${LAB_URL}/admin/ai-connectors`);
   await settle(page, 1500);
   await expect(page).toHaveURL(/ai-connectors/);
-  await page.getByText('Let connected apps build case sheet forms').first().scrollIntoViewIfNeeded().catch(() => undefined);
+  await page.getByText('Let connected apps build case sheets').first().scrollIntoViewIfNeeded().catch(() => undefined);
   await shot(page, 'builder-08-connector-settings');
   await ctx.close();
 });

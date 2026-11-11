@@ -108,7 +108,7 @@ export interface SectionEditEvent {
             }
           </header>
           @if (s.formTitle && !readOnly()) {
-            <p class="nv-was">Form's title: {{ s.formTitle }}</p>
+            <p class="nv-was">Case sheet's title: {{ s.formTitle }}</p>
           }
           @if (s.stale && !readOnly()) {
             <div class="nv-stalebox" role="alert">

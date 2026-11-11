@@ -169,7 +169,7 @@ export class FieldActions {
       ...(loc.index < loc.list.length - 1 ? [{ value: 'down', label: 'Move down' }] : []),
       ...(!loc.ownerOption && !loc.parentGroup && d.pages.length > 1 ? [{ value: 'page', label: 'Move to another page' }] : []),
       { value: 'dup', label: 'Make a copy', hint: 'Right under this one' },
-      { value: 'save', label: 'Save as a saved question', hint: 'Use it again in any form' },
+      { value: 'save', label: 'Save as a saved question', hint: 'Use it again in any case sheet' },
       { value: 'remove', label: 'Remove this question' },
     ];
     const pick = await this.dialog.choose({
@@ -232,7 +232,7 @@ export class FieldActions {
     if (!f) return;
     const title = await this.dialog.prompt({
       title: 'Save as a saved question',
-      message: 'Owners and admins can then add it to any form from “Add a question”.',
+      message: 'Owners and admins can then add it to any case sheet from “Add a question”.',
       initialValue: f.label,
       placeholder: 'Name',
       confirmLabel: 'Save',

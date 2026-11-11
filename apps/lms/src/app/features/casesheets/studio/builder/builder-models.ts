@@ -50,7 +50,7 @@ export class BuilderError extends Error {
 
 /** Plain words per contract code (never the server's wording for these). */
 export const BUILDER_WORDS: Record<string, string> = {
-  feature_off: 'Cortex form building is switched off for your lab. A lab admin can turn it on in Settings.',
+  feature_off: 'Cortex case sheet building is switched off for your lab. A lab admin can turn it on in Settings.',
   cortex_unavailable: "Cortex isn't set up here yet, so it can't help right now.",
   cap_reached: "Cortex has reached today's limit. Try again tomorrow.",
 };
@@ -78,6 +78,6 @@ export function summaryLine(s: ChecksSummary): string {
 export const SOURCE_LABEL: Record<CheckSource, string> = { auto: 'Auto', cortex: 'Cortex', connector: 'Connected app', person: 'Person' };
 
 /** The lab switch (Settings → AI connector), in plain words. */
-export const BUILDER_SWITCH_TITLE = 'Let connected apps build case sheet forms';
-export const BUILDER_SWITCH_ON = 'Claude or ChatGPT connected with your sign-in can make and change DRAFT case sheet forms. Nothing is published without you.';
-export const BUILDER_SWITCH_OFF = 'Off. Connected apps can’t make or change case sheet forms. When on, Claude or ChatGPT connected with your sign-in can make and change DRAFT case sheet forms, and nothing is published without you.';
+export const BUILDER_SWITCH_TITLE = 'Let connected apps build case sheets';
+export const BUILDER_SWITCH_ON = 'Claude or ChatGPT connected with your sign-in can make and change DRAFT case sheets. Nothing is published without you.';
+export const BUILDER_SWITCH_OFF = 'Off. Connected apps can’t make or change case sheets. When on, Claude or ChatGPT connected with your sign-in can make and change DRAFT case sheets, and nothing is published without you.';

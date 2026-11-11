@@ -14,7 +14,7 @@ export interface Person {
   email: string;
 }
 
-/** Where a form comes from: the platform's master, this lab's copy of a master (fork), or the lab's own. */
+/** Where a case sheet comes from: the platform's master, this lab's copy of a master (fork), or the lab's own. */
 export type FormOrigin = 'master' | 'override' | 'local';
 
 /**
@@ -71,7 +71,7 @@ export interface Problem {
   pageTitle: string | null;
   fieldKey: string | null;
   fieldLabel: string | null;
-  /** "History · Pain" or "The form". */
+  /** "History · Pain" or "The case sheet". */
   where: string;
   message: string;
   summary: string;
@@ -230,7 +230,7 @@ export class DraftConflict extends Error {
   constructor(
     readonly current: Version,
     readonly savedBy: Person | null,
-    message = 'Someone else saved this form first.',
+    message = 'Someone else saved this case sheet first.',
   ) {
     super(message);
   }

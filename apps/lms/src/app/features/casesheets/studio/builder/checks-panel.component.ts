@@ -63,7 +63,7 @@ import { ChecksStore } from './checks.store';
         </li>
       } @empty {
         @if (!store.busy() && summary()) {
-          <li class="ck-none">This form has nothing to check yet. Add options that open follow-ups or pages.</li>
+          <li class="ck-none">This case sheet has nothing to check yet. Add options that open follow-ups or pages.</li>
         }
       }
     </ul>

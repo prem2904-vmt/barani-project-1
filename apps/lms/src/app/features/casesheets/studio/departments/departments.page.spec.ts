@@ -190,7 +190,7 @@ describe('Settings > IPD > Departments page', () => {
     expect(api.depts.some((d) => d.key === 'cardio')).toBe(true);
     expect(toasts.error).toHaveBeenCalledTimes(1);
     const msg = toasts.error.mock.calls[0][0] as string;
-    expect(msg).toContain('Forms still use this department. Switch it off instead.');
+    expect(msg).toContain('Case sheets still use this department. Switch it off instead.');
     expect(msg).toContain('hide Cardiology');
 
     rm('free').click();

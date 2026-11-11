@@ -26,7 +26,7 @@ export const STARTER_DEPARTMENTS: readonly string[] = [
 const byOrder = (a: DepartmentRow, b: DepartmentRow): number => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name);
 
 /**
- * Settings > IPD > Departments (`casesheet_forms_manage`): the IPD departments the lab's case sheet forms are filed
+ * Settings > IPD > Departments (`casesheet_forms_manage`): the IPD departments the lab's case sheets are filed
  * under. Prefrontal's own departments are listed read-only; the lab adds, renames, reorders, hides and removes its own.
  * Hidden = doctors do not see it on Prepare (its forms stay).
  */
@@ -176,7 +176,7 @@ export class DepartmentsPage {
   protected async remove(d: DepartmentRow): Promise<void> {
     const ok = await this.dialog.confirm({
       title: `Remove ${d.name}?`,
-      message: 'Doctors will no longer see this department. If forms still use it, switch it off instead.',
+      message: 'Doctors will no longer see this department. If case sheets still use it, switch it off instead.',
       confirmLabel: 'Remove',
       cancelLabel: 'Keep it',
       tone: 'danger',

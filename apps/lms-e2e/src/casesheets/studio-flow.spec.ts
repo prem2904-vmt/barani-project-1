@@ -2,14 +2,14 @@ import { test, expect } from '@playwright/test';
 import { STACK, LAB_URL, openAs, settle, shot, expectNoVisibleAiText, expectNoNativeControls, expectNothingBlocked } from './cs-stack';
 
 /**
- * ADMIN → IPD → MyPrefrontal (Studio, desktop-first): the hub tile, the forms grouped by master department with the
+ * ADMIN → IPD → Case sheets (Studio, desktop-first): the hub tile, the case sheets grouped by master department with the
  * Master tag, "Edit" on a master = the lab's own copy (fork) opening in the editor, and the version history.
  */
 test.describe.configure({ mode: 'serial' });
 
-test('IPD hub → MyPrefrontal home: departments, Master tags', async ({ browser }) => {
+test('IPD hub → Case sheets home: departments, Master tags', async ({ browser }) => {
   const { ctx, page } = await openAs(browser, STACK.admin, `${LAB_URL}/admin/ipd`);
-  const tile = page.getByText('MyPrefrontal', { exact: true }).first();
+  const tile = page.getByText('Case sheets', { exact: true }).first();
   await expect(tile).toBeVisible();
   await shot(page, 'studio-01-ipd-hub');
   await tile.click();

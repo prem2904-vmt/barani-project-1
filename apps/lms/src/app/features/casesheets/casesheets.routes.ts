@@ -21,7 +21,7 @@ import { casesheetsSignInGuard, casesheetsSignedInGuard } from './public/public-
 
 /** Route paths (no leading slash), one home. Links: {@link casesheetLinks}. */
 export const CASESHEET_PATHS = {
-  /** Admin → IPD → MyPrefrontal (case-sheet form authoring, grouped by department). */
+  /** Admin → IPD → MyPrefrontal (case sheet authoring, grouped by department). */
   admin: {
     home: 'admin/ipd/myprefrontal',
     form: 'admin/ipd/myprefrontal/forms/:id',
@@ -89,10 +89,10 @@ const studioDepartments = () => import('./studio/departments/departments.page').
 
 /** Children of the signed-in shell (app.routes.ts spreads them once). Specific paths before `:id`. */
 export const CASESHEET_SHELL_ROUTES: Routes = [
-  gated(CASESHEET_PATHS.admin.home, 'MyPrefrontal', studioHome),
-  gated(CASESHEET_PATHS.admin.form, 'Edit case sheet form', studioEditor),
-  gated(CASESHEET_PATHS.admin.formHistory, 'Form version history', studioHistory),
-  gated(CASESHEET_PATHS.admin.import, 'Bring in an old form', studioImport),
+  gated(CASESHEET_PATHS.admin.home, 'Case sheets', studioHome),
+  gated(CASESHEET_PATHS.admin.form, 'Edit case sheet', studioEditor),
+  gated(CASESHEET_PATHS.admin.formHistory, 'Case sheet version history', studioHistory),
+  gated(CASESHEET_PATHS.admin.import, 'Bring in an old case sheet', studioImport),
   gated(CASESHEET_PATHS.admin.departments, 'IPD departments', studioDepartments),
   gated(CASESHEET_PATHS.lab.prepare, 'Prepare', departmentsPage, true),
   gated(CASESHEET_PATHS.lab.prepareCases, 'Case sheets', casesPage, true),

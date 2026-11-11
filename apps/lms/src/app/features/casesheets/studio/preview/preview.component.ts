@@ -111,7 +111,7 @@ type Device = 'tablet' | 'phone' | 'both';
             }
           </div>
         } @else {
-          <p class="pv-empty">This form has no pages yet.</p>
+          <p class="pv-empty">This case sheet has no pages yet.</p>
         }
       </div>
     </ng-template>

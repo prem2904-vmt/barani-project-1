@@ -41,7 +41,7 @@ export interface ShortcutRow {
   words: string;
   /** Keys as shown ("mod" becomes ⌘ or Ctrl). */
   keys: string[][];
-  group: 'Questions' | 'Moving around' | 'The form';
+  group: 'Questions' | 'Moving around' | 'The case sheet';
 }
 
 export const SHORTCUTS: ShortcutRow[] = [
@@ -57,11 +57,11 @@ export const SHORTCUTS: ShortcutRow[] = [
   { command: 'selectAll', words: 'Select every question on the page', keys: [['mod', 'A']], group: 'Moving around' },
   { command: 'prevPage', words: 'Previous / next page', keys: [['['], [']']], group: 'Moving around' },
   { command: 'escape', words: 'Close, or clear the selection', keys: [['Esc']], group: 'Moving around' },
-  { command: 'undo', words: 'Undo', keys: [['mod', 'Z']], group: 'The form' },
-  { command: 'redo', words: 'Redo', keys: [['mod', 'Shift', 'Z'], ['mod', 'Y']], group: 'The form' },
-  { command: 'save', words: 'Save now', keys: [['mod', 'S']], group: 'The form' },
-  { command: 'preview', words: 'Preview', keys: [['P']], group: 'The form' },
-  { command: 'help', words: 'Show these shortcuts', keys: [['?']], group: 'The form' },
+  { command: 'undo', words: 'Undo', keys: [['mod', 'Z']], group: 'The case sheet' },
+  { command: 'redo', words: 'Redo', keys: [['mod', 'Shift', 'Z'], ['mod', 'Y']], group: 'The case sheet' },
+  { command: 'save', words: 'Save now', keys: [['mod', 'S']], group: 'The case sheet' },
+  { command: 'preview', words: 'Preview', keys: [['P']], group: 'The case sheet' },
+  { command: 'help', words: 'Show these shortcuts', keys: [['?']], group: 'The case sheet' },
 ];
 
 /**

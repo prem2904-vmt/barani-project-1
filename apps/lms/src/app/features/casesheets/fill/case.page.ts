@@ -66,7 +66,7 @@ export const PF_GLYPH: readonly [string, string] = [
   'M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z',
 ];
 
-/** A page's own colour for the form header (legacy: page.color), only when it is a plain hex colour. */
+/** A page's own colour for the case sheet header (legacy: page.color), only when it is a plain hex colour. */
 export function headerColor(color: string | null | undefined): string | null {
   return color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color.trim()) ? color.trim() : null;
 }
@@ -189,11 +189,11 @@ export class CasePage {
     return "Can't open this case sheet right now. Please try again.";
   });
   protected readonly percent = computed(() => Math.round(this.wiz.progress().ratio * 100));
-  /** Header title: the page's title while filling (legacy navbar form mode), the form's title when finished. */
+  /** Header title: the page's title while filling (legacy navbar form mode), the case sheet's title when finished. */
   protected readonly headTitle = computed(() =>
     this.isFinal() || !this.page() ? (this.sheet()?.formTitle ?? 'Case sheet') : this.page()!.title,
   );
-  /** The form has its own patient-name field: the header shows the name, it never asks for it. */
+  /** The case sheet has its own patient-name field: the header shows the name, it never asks for it. */
   protected readonly hasNameField = computed(() => {
     const d = this.def();
     if (!d) return true;
@@ -244,7 +244,7 @@ export class CasePage {
       const id = this.id();
       untracked(() => void this.load(id));
     });
-    // Fetch the heavy controls this form uses (pictures, grids) as soon as it opens, so turning a page never waits.
+    // Fetch the heavy controls this case sheet uses (pictures, grids) as soon as it opens, so turning a page never waits.
     const kinds = inject(FE_KINDS);
     effect(() => {
       const d = this.def();
@@ -413,13 +413,13 @@ export class CasePage {
     await this.session.clearSection(sectionId);
   }
 
-  /** Rename a section (legacy: the section title is editable). Empty = the form's own title. */
+  /** Rename a section (legacy: the section title is editable). Empty = the case sheet's own title. */
   protected async onRename(s: NarrativeSection): Promise<void> {
     const title = await this.dialog.prompt({
       title: s.own ? 'Name this section' : 'Rename this section',
       message: s.own
         ? 'It prints above your words.'
-        : `It prints instead of the form's title${s.formTitle ? ` (“${s.formTitle}”)` : ''}. Leave it empty to use the form's title.`,
+        : `It prints instead of the case sheet's title${s.formTitle ? ` (“${s.formTitle}”)` : ''}. Leave it empty to use the case sheet's title.`,
       initialValue: s.title,
       placeholder: s.formTitle ?? s.title,
       confirmLabel: 'Save',
@@ -435,7 +435,7 @@ export class CasePage {
       title ??
       (await this.dialog.prompt({
         title: 'Add a section of your own',
-        message: 'Give it a title. It prints after the form’s sections.',
+        message: 'Give it a title. It prints after the case sheet’s sections.',
         initialValue: '',
         placeholder: 'For example: Plan, Advice, Voice note',
         confirmLabel: 'Add',
@@ -598,7 +598,7 @@ export class CasePage {
     const items = missing.map((m) => (m.pageTitle ? `${m.pageTitle}: ${m.label}` : m.label));
     const r = await this.dialog.actions({
       title: missing.length === 1 ? 'One answer is still needed' : `${missing.length} answers are still needed`,
-      message: 'These are marked as required on this form.',
+      message: 'These are marked as required on this case sheet.',
       items,
       cancelLabel: 'Not now',
       actions: [

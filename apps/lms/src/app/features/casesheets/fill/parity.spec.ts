@@ -160,7 +160,7 @@ describe('narrative card: titles and sections of your own', () => {
     const r = await render([sec({ title: 'Presenting complaint', formTitle: 'History' })]);
     (r.el.querySelector('[aria-label="Rename Presenting complaint"]') as HTMLButtonElement).click();
     expect(r.out.rename).toEqual(['hpi']);
-    expect(r.el.textContent).toContain("Form's title: History");
+    expect(r.el.textContent).toContain("Case sheet's title: History");
     [...r.el.querySelectorAll('button')].find((b) => b.textContent?.includes('Add a section of your own'))!.click();
     expect(r.out.add).toBe(1);
   });

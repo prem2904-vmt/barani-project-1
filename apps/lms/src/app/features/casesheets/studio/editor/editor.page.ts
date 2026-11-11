@@ -50,9 +50,9 @@ const SIDE_TAB_KEY = 'prepare-studio-side-tab';
 
 /**
  * Studio's ONE screen (plan §5), desktop first (owner, 2026-11-02):
- *  - ≥1760: PAGES | the form as the doctor sees it | the question | WHAT IT WRITES (always in view)
- *  - ≥1280: PAGES | the form | the question, with "What it writes" as the side card's second tab
- *  - narrower (tablets): the form with the narrative under it | the question (a sheet below 1024)
+ *  - ≥1760: PAGES | the case sheet as the doctor sees it | the question | WHAT IT WRITES (always in view)
+ *  - ≥1280: PAGES | the case sheet | the question, with "What it writes" as the side card's second tab
+ *  - narrower (tablets): the case sheet with the narrative under it | the question (a sheet below 1024)
  * On a computer: denser rows, hover actions, multi-select, drag a question
  * onto another page, keyboard shortcuts (? lists them). Each question card
  * shows its sentence, "if none" and "show when"; the selected
@@ -81,7 +81,7 @@ const SIDE_TAB_KEY = 'prepare-studio-side-tab';
     BuilderDrawerComponent,
   ],
   // Template pictures: Studio uploads / shows them through the same session-only store as the filler (bytes as blobs, no links).
-  // FE_KINDS: every question card previews its control (<fe-field>) and the preview fills the form; the kinds are not
+  // FE_KINDS: every question card previews its control (<fe-field>) and the preview fills the case sheet; the kinds are not
   // in app.config (case-sheet code stays out of the lab's first download), so the page provides them (WP11: NG0201).
   providers: [
     StudioSession, EditorStore, FieldActions, HttpAssetStore, { provide: FE_ASSETS, useExisting: HttpAssetStore },
@@ -131,7 +131,7 @@ export class StudioEditorPage {
   protected readonly desk = deskSignal();
   protected readonly three = mediaSignal(STUDIO_3COL);
   protected readonly four = mediaSignal(STUDIO_4COL);
-  /** Where the live narrative sits: its own column, a side-card tab, or under the form. */
+  /** Where the live narrative sits: its own column, a side-card tab, or under the case sheet. */
   protected readonly narrativeAt = computed<'column' | 'tab' | 'under'>(() => (this.four() ? 'column' : this.three() ? 'tab' : 'under'));
   protected readonly sideTab = signal<'question' | 'narrative'>(readSideTab());
   protected readonly sideTabs: SegmentedOption<'question' | 'narrative'>[] = [
@@ -185,7 +185,7 @@ export class StudioEditorPage {
   protected readonly links = casesheetLinks;
   protected readonly forking = signal(false);
   protected readonly canManage = computed(() => this.auth.hasPermission(CASESHEET_FORMS_MANAGE));
-  protected readonly title = computed(() => this.def()?.title || 'Untitled form');
+  protected readonly title = computed(() => this.def()?.title || 'Untitled case sheet');
   protected readonly version = this.session.version;
 
   protected readonly status = computed(() => {
@@ -266,7 +266,7 @@ export class StudioEditorPage {
       return;
     }
     if (!list.length) {
-      await this.dialog.alert({ title: 'No saved pages yet', message: 'Open a page’s ⋯ and choose “Save for other forms” to keep one here.', confirmLabel: 'OK' });
+      await this.dialog.alert({ title: 'No saved pages yet', message: 'Open a page’s ⋯ and choose “Save for other case sheets” to keep one here.', confirmLabel: 'OK' });
       return;
     }
     const pick = await this.dialog.choose({
@@ -297,7 +297,7 @@ export class StudioEditorPage {
         { value: 'rename', label: 'Rename' },
         ...(i > 0 ? [{ value: 'up', label: 'Move earlier' }] : []),
         ...(i < d.pages.length - 1 ? [{ value: 'down', label: 'Move later' }] : []),
-        { value: 'save', label: 'Save for other forms', hint: 'A saved page anyone can add' },
+        { value: 'save', label: 'Save for other case sheets', hint: 'A saved page anyone can add' },
         { value: 'remove', label: 'Remove this page' },
       ],
       confirmLabel: 'Do it',
@@ -313,7 +313,7 @@ export class StudioEditorPage {
       if (!name?.trim()) return;
       try {
         await this.api.saveTemplate('page', name.trim(), p);
-        this.actions.notice.set(`Saved “${name.trim()}”. Add it to any form with “Add a saved page”.`);
+        this.actions.notice.set(`Saved “${name.trim()}”. Add it to any case sheet with “Add a saved page”.`);
       } catch (e) {
         this.actions.notice.set(plainError(e, "Couldn't save the page."));
       }
@@ -570,8 +570,8 @@ export class StudioEditorPage {
       title: this.title(),
       choices: [
         { value: 'history', label: 'Version history', hint: 'Who changed what, and compare versions' },
-        { value: 'rename', label: 'Rename the form' },
-        { value: 'dup', label: 'Make a copy of this form' },
+        { value: 'rename', label: 'Rename the case sheet' },
+        { value: 'dup', label: 'Make a copy of this case sheet' },
         ...(!this.session.onLive() ? [{ value: 'discard', label: 'Discard this draft' }] : []),
       ],
       confirmLabel: 'Open',
@@ -581,7 +581,7 @@ export class StudioEditorPage {
       await this.session.flush();
       await this.router.navigate([casesheetLinks.adminFormHistory(this.id())]);
     } else if (pick === 'rename') {
-      const name = await this.dialog.prompt({ title: 'Rename the form', initialValue: this.title(), confirmLabel: 'Rename', required: true });
+      const name = await this.dialog.prompt({ title: 'Rename the case sheet', initialValue: this.title(), confirmLabel: 'Rename', required: true });
       if (name?.trim()) this.store.edit((d) => edit(d, (x) => (x.title = name.trim())));
     } else if (pick === 'dup') {
       const name = await this.dialog.prompt({ title: 'Make a copy', initialValue: `Copy of ${this.title()}`, confirmLabel: 'Make the copy', required: true });
@@ -598,7 +598,7 @@ export class StudioEditorPage {
     }
   }
 
-  /** "Edit" on a master form: this lab's own copy (a fork) with an open draft, then open it. */
+  /** "Edit" on a master case sheet: this lab's own copy (a fork) with an open draft, then open it. */
   protected async forkMaster(): Promise<void> {
     if (this.forking() || !this.session.readOnly()) return;
     const ok = await this.dialog.confirm({
@@ -625,7 +625,7 @@ export class StudioEditorPage {
       title: 'Discard this draft?',
       message:
         this.version()?.versionNo === 1 && !this.version()?.publishedAt
-          ? 'This form was never published, so it goes away completely.'
+          ? 'This case sheet was never published, so it goes away completely.'
           : 'The live version stays as it is.',
       confirmLabel: 'Discard',
       cancelLabel: 'Keep it',

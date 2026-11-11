@@ -14,7 +14,7 @@ import { cortexImportOn } from '../shared/cortex-import-gate';
 import { whenText } from './shared/when';
 import { PhoneNoteComponent } from './shared/phone-note.component';
 
-/** The group a form with no (known) department is filed under. */
+/** The group a case sheet with no (known) department is filed under. */
 export const OTHER_DEPARTMENT = 'other';
 
 export interface DepartmentGroup {
@@ -40,8 +40,8 @@ export function groupByDepartment(forms: FormRow[], departments: DepartmentRow[]
 
 /**
  * MyPrefrontal home (Admin > IPD > MyPrefrontal, `casesheet_forms_manage`): every form this lab can use, grouped by
- * department. Master forms are read-only; Edit makes this lab's own copy (a fork). The lab's own forms show where
- * they stand (live version, open draft). New form and Bring in an old form sit in the band.
+ * department. Master case sheets are read-only; Edit makes this lab's own copy (a fork). The lab's own forms show where
+ * they stand (live version, open draft). New case sheet and Bring in an old case sheet sit in the band.
  */
 @Component({
   selector: 'app-studio-page',
@@ -82,7 +82,7 @@ export class StudioPage {
       this.departments.set(departments);
     } catch (e) {
       this.forms.set(this.forms() ?? []);
-      this.error.set(plainError(e, "Can't load the forms right now."));
+      this.error.set(plainError(e, "Can't load the case sheets right now."));
     }
   }
 
@@ -110,9 +110,9 @@ export class StudioPage {
 
   protected async newForm(): Promise<void> {
     const title = await this.dialog.prompt({
-      title: 'New form',
+      title: 'New case sheet',
       message: 'Give it the name doctors will see, for example “ENT case sheet”.',
-      placeholder: 'Form name',
+      placeholder: 'Case sheet name',
       confirmLabel: 'Create',
       required: true,
     });
@@ -120,14 +120,14 @@ export class StudioPage {
     const departments = this.departments();
     let specialty: string | undefined;
     if (!departments.length) {
-      // No departments yet: say so, and offer the way out here instead of filing the form under nothing.
+      // No departments yet: say so, and offer the way out here instead of filing the case sheet under nothing.
       const what = await this.dialog.choose({
         title: 'Which department?',
         message: 'There are no departments yet. Add one now, or manage them in Settings → IPD.',
         choices: [
-          { value: 'add', label: 'Add a department', hint: 'Type a name and use it for this form' },
+          { value: 'add', label: 'Add a department', hint: 'Type a name and use it for this case sheet' },
           { value: 'manage', label: 'Manage departments', hint: 'Open Settings → IPD → Departments' },
-          { value: 'skip', label: 'Skip for now', hint: 'Make the form without a department' },
+          { value: 'skip', label: 'Skip for now', hint: 'Make the case sheet without a department' },
         ],
         confirmLabel: 'Continue',
         cancelLabel: 'Cancel',
@@ -163,7 +163,7 @@ export class StudioPage {
       const r = await this.api.createForm(title.trim(), emptyDefinition(title.trim()), specialty);
       await this.router.navigate([casesheetLinks.adminForm(r.id)]);
     } catch (e) {
-      this.error.set(plainError(e, "Couldn't create the form."));
+      this.error.set(plainError(e, "Couldn't create the case sheet."));
     } finally {
       this.busy.set(null);
     }

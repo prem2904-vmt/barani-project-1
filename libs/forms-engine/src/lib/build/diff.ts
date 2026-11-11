@@ -3,7 +3,7 @@ import { describeShowWhen } from './conditions';
 import { kindBuild } from '../kinds/build-registry';
 
 /**
- * A readable difference between two versions of a form, in doctor words:
+ * A readable difference between two versions of a case sheet, in doctor words:
  * "Added the question "Pain" on History", "Changed what "Fever" says", not a
  * JSON diff. Grouped by page so history reads like a change note.
  */
@@ -12,7 +12,7 @@ export type ChangeKind = 'added' | 'removed' | 'changed' | 'moved';
 
 export interface FormChange {
   kind: ChangeKind;
-  /** The page the change belongs to (its title), or "Whole form". */
+  /** The page the change belongs to (its title), or "Whole case sheet". */
   where: string;
   text: string;
   /** Before / after words when a sentence or condition changed. */
@@ -46,7 +46,7 @@ const norm = (s: string | null | undefined) => (s ?? '').trim();
 export function diffDefinitions(before: FormDefinition, after: FormDefinition): FormChange[] {
   const out: FormChange[] = [];
   if (norm(before.title) !== norm(after.title))
-    out.push({ kind: 'changed', where: 'Whole form', text: 'Renamed the form', before: norm(before.title), after: norm(after.title) });
+    out.push({ kind: 'changed', where: 'Whole case sheet', text: 'Renamed the case sheet', before: norm(before.title), after: norm(after.title) });
 
   // pages
   const bPages = new Map((before.pages ?? []).map((p, i) => [p.key, { p, i }]));
@@ -57,7 +57,7 @@ export function diffDefinitions(before: FormDefinition, after: FormDefinition): 
     if (!aPages.has(k)) out.push({ kind: 'removed', where: p.title, text: `Removed the page ${q(p.title)}` });
   const bOrder = (before.pages ?? []).map((p) => p.key).filter((k) => aPages.has(k));
   const aOrder = (after.pages ?? []).map((p) => p.key).filter((k) => bPages.has(k));
-  if (bOrder.join('|') !== aOrder.join('|')) out.push({ kind: 'moved', where: 'Whole form', text: 'Changed the order of the pages' });
+  if (bOrder.join('|') !== aOrder.join('|')) out.push({ kind: 'moved', where: 'Whole case sheet', text: 'Changed the order of the pages' });
   for (const [k, { p }] of aPages) {
     const b = bPages.get(k)?.p;
     if (!b) continue;

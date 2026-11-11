@@ -80,8 +80,8 @@ export function mockProblems(def: FormDefinition): Problem[] {
             out.push({
               severity: 'error',
               path: `${path}.showWhen`,
-              message: '“Show when” uses a question that is no longer in the form.',
-              summary: `${where}: “Show when” uses a question that is no longer in the form.`,
+              message: '“Show when” uses a question that is no longer in the case sheet.',
+              summary: `${where}: “Show when” uses a question that is no longer in the case sheet.`,
               ...base,
             });
         for (const o of x.options ?? []) (o.subFields ?? []).forEach((s, si) => walk(s, `${path}.options.subFields[${si}](${s.key})`));
@@ -152,7 +152,7 @@ export class MockStudioApi extends StudioApi {
 
   private get(formId: string): MForm {
     const f = this.forms.get(formId);
-    if (!f) throw new StudioError('not_found', 'That form was not found.', 404);
+    if (!f) throw new StudioError('not_found', 'That case sheet was not found.', 404);
     return f;
   }
 
@@ -162,7 +162,7 @@ export class MockStudioApi extends StudioApi {
 
   private openOrThrow(f: MForm): Version {
     const d = this.open(f);
-    if (!d) throw new StudioError('no_draft', 'This form has no draft. Start one first.', 404);
+    if (!d) throw new StudioError('no_draft', 'This case sheet has no draft. Start one first.', 404);
     return d;
   }
 
@@ -191,7 +191,7 @@ export class MockStudioApi extends StudioApi {
     return { ...clone(v), definition: withDef ? clone(v.definition) : null, problems: mockProblems(v.definition!) };
   }
 
-  /** Seed a form (optionally published), for specs and the mocked world. */
+  /** Seed a case sheet (optionally published), for specs and the mocked world. */
   seed(title: string, def: FormDefinition, opts: { publish?: boolean; origin?: FormOrigin; departmentKey?: string | null } = {}): string {
     const f: MForm = { id: id('f'), key: title.toLowerCase().replace(/\W+/g, '-'), title, specialty: def.specialty ?? null, status: 'active', publishedId: null, origin: opts.origin ?? 'local', departmentKey: opts.departmentKey ?? def.specialty ?? null, versions: [] };
     this.forms.set(f.id, f);
@@ -274,7 +274,7 @@ export class MockStudioApi extends StudioApi {
 
   async createForm(title: string, definition?: FormDefinition): Promise<{ id: string; version: Version }> {
     await this.tick('createForm');
-    if (!title.trim()) throw new StudioError('invalid_title', 'Give the form a title (up to 200 characters).', 400);
+    if (!title.trim()) throw new StudioError('invalid_title', 'Give the case sheet a title (up to 200 characters).', 400);
     const formId = this.seed(title, definition ?? { schemaVersion: 2, title, pages: [], narrative: { sections: [] } });
     const f = this.get(formId);
     return { id: formId, version: this.bare(f.versions[0]) };
@@ -332,18 +332,18 @@ export class MockStudioApi extends StudioApi {
     const row = this.depts.find((d) => d.key === key);
     if (!row) throw new StudioError('not_found', 'That department no longer exists.', 404);
     if (!row.own) throw new StudioError('master_department', 'This department comes from Prefrontal and cannot be removed.', 403);
-    if ([...this.forms.values()].some((f) => f.departmentKey === key)) throw new StudioError('department_in_use', 'Forms still use this department. Switch it off instead.', 409);
+    if ([...this.forms.values()].some((f) => f.departmentKey === key)) throw new StudioError('department_in_use', 'Case sheets still use this department. Switch it off instead.', 409);
     this.depts.splice(this.depts.indexOf(row), 1);
   }
 
   async fork(formId: string): Promise<{ id: string; version: Version }> {
     await this.tick('fork');
     const m = this.get(formId);
-    if (m.origin !== 'master') throw new StudioError('not_master', 'Only a master form can be copied this way.', 409);
+    if (m.origin !== 'master') throw new StudioError('not_master', 'Only a master case sheet can be copied this way.', 409);
     const have = [...this.forms.values()].find((x) => x.forkedFrom === m.id);
     if (have) return { id: have.id, version: this.bare(this.open(have) ?? have.versions[have.versions.length - 1]) };
     const basis = m.versions.find((v) => v.id === m.publishedId);
-    if (!basis) throw new StudioError('not_published', 'This master form is not published yet.', 409);
+    if (!basis) throw new StudioError('not_published', 'This master case sheet is not published yet.', 409);
     const f: MForm = { id: id('f'), key: m.key, title: m.title, specialty: m.specialty, status: 'active', publishedId: null, origin: 'override', departmentKey: m.departmentKey, forkedFrom: m.id, versions: [] };
     this.forms.set(f.id, f);
     return { id: f.id, version: this.bare(this.newVersion(f, basis.definition!, `Copied from master version ${basis.versionNo}`)) };
@@ -357,7 +357,7 @@ export class MockStudioApi extends StudioApi {
   async startDraft(formId: string): Promise<Version> {
     await this.tick('startDraft');
     const f = this.get(formId);
-    if (this.open(f)) throw new StudioError('draft_exists', 'This form already has a draft being edited.', 409);
+    if (this.open(f)) throw new StudioError('draft_exists', 'This case sheet already has a draft being edited.', 409);
     const basis = [...f.versions].sort((a, b) => b.versionNo - a.versionNo)[0];
     return this.bare(this.newVersion(f, basis.definition!, `Started from version ${basis.versionNo}`));
   }
@@ -365,7 +365,7 @@ export class MockStudioApi extends StudioApi {
   async saveDraft(formId: string, definition: FormDefinition, rowVersion: number): Promise<Version> {
     await this.tick('saveDraft');
     const d = this.openOrThrow(this.get(formId));
-    if (d.rowVersion !== rowVersion) throw new DraftConflict(this.bare(d, true), d.savedBy, `${d.savedBy?.name ?? 'Someone else'} saved this form first.`);
+    if (d.rowVersion !== rowVersion) throw new DraftConflict(this.bare(d, true), d.savedBy, `${d.savedBy?.name ?? 'Someone else'} saved this case sheet first.`);
     d.definition = clone(definition);
     d.rowVersion++;
     d.updatedAt = now();
@@ -408,7 +408,7 @@ export class MockStudioApi extends StudioApi {
   async restore(formId: string, versionId: string): Promise<Version> {
     await this.tick('restore');
     const f = this.get(formId);
-    if (this.open(f)) throw new StudioError('draft_exists', 'This form already has a draft being edited.', 409);
+    if (this.open(f)) throw new StudioError('draft_exists', 'This case sheet already has a draft being edited.', 409);
     const basis = f.versions.find((v) => v.id === versionId);
     if (!basis) throw new StudioError('not_found', 'That version was not found.', 404);
     return this.bare(this.newVersion(f, basis.definition!, `Restored from version ${basis.versionNo}`));
@@ -490,8 +490,8 @@ export class MockStudioApi extends StudioApi {
   async importLegacy(legacy: unknown, opts: { dryRun: boolean; title?: string }): Promise<ImportResult> {
     await this.tick('importLegacy');
     const l = legacy as { displayName?: string; name?: string };
-    if (!legacy || typeof legacy !== 'object') throw new StudioError('import_failed', "That file isn't a form.", 400);
-    const title = opts.title || l.displayName || l.name || 'Imported form';
+    if (!legacy || typeof legacy !== 'object') throw new StudioError('import_failed', "That file isn't a case sheet.", 400);
+    const title = opts.title || l.displayName || l.name || 'Imported case sheet';
     const definition: FormDefinition = { schemaVersion: 2, title, pages: [{ key: 'page1', title: 'Page 1', fields: [] }], narrative: { sections: [] } };
     const report = {
       summary: `Imported '${title}': 1 page and 0 fields. Nothing needs fixing.`,

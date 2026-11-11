@@ -182,7 +182,7 @@ describe('Prepare home', () => {
     expect(q('[data-act="add-departments"]')).toBeNull();
   });
 
-  it('departments but no published case sheet: says so; builders get a link to MyPrefrontal, others are told to ask', async () => {
+  it('departments but no published case sheet: says so; builders get a link to Case sheets, others are told to ask', async () => {
     const seed = (a: MockCasesApi) => depts(a);
     const b = await open({ perms: ['casesheet_forms_manage'], seed });
     expect(b.q('[data-empty="forms"]')!.textContent).toContain('No case sheets are published yet');
@@ -215,7 +215,7 @@ describe('Prepare home', () => {
     expect(picked.q('.dp')!.classList.contains('dp--picked')).toBe(true);
   });
 
-  it('a department with no case sheets is still listed, and its pane says so (builders can open MyPrefrontal)', async () => {
+  it('a department with no case sheets is still listed, and its pane says so (builders can open Case sheets)', async () => {
     const { q, el } = await open({ perms: ['casesheet_forms_manage'], dept: 'Orthopaedics', seed: (a) => { depts(a); a.addForm('f1', def('Nose history'), 'nose', 'ent'); } });
     expect([...el.querySelectorAll('[data-dept]')].map((r) => r.getAttribute('data-dept'))).toEqual(['ENT', 'Orthopaedics']);
     expect(q('[data-dept="Orthopaedics"]')!.textContent).toContain('No case sheets yet');

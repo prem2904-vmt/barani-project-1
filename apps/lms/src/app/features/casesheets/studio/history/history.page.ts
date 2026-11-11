@@ -93,7 +93,7 @@ const STATE_WORDS: Record<string, string> = { draft: 'Draft', in_review: 'In rev
                         <span class="hi-now" [class.hi-empty]="!c.after">@if (c.after) { <span class="hi-k">Now: </span>{{ c.after }} }</span>
                         <span class="hi-act">
                           @if (c.fieldKey) {
-                            <button type="button" class="pf-btn pf-btn--tertiary hi-go" (click)="go(c)">Show it in the form <pf-icon name="chevron-right" [size]="14" /></button>
+                            <button type="button" class="pf-btn pf-btn--tertiary hi-go" (click)="go(c)">Show it in the case sheet <pf-icon name="chevron-right" [size]="14" /></button>
                           }
                         </span>
                       </li>
@@ -182,7 +182,7 @@ export class StudioHistoryPage {
   protected readonly groups = computed(() => {
     const out: { title: string; changes: DiffChange[] }[] = [];
     for (const c of this.diff()?.changes ?? []) {
-      const title = c.pageTitle || 'Whole form';
+      const title = c.pageTitle || 'Whole case sheet';
       let g = out.find((x) => x.title === title);
       if (!g) out.push((g = { title, changes: [] }));
       g.changes.push(c);

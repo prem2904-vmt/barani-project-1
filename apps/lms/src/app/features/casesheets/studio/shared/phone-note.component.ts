@@ -14,7 +14,7 @@ import { PfIconComponent } from '@prefrontal/forms-engine';
   template: `
     <p class="pn" role="note" data-phone-note>
       <pf-icon name="monitor" [size]="18" />
-      <span>Studio works best on a computer. Everything works here too; building a form is just easier on a bigger screen.</span>
+      <span>Studio works best on a computer. Everything works here too; building a case sheet is just easier on a bigger screen.</span>
     </p>
   `,
   styles: [

@@ -86,9 +86,9 @@ describe('/admin/ipd hub — the Prepare switch (owner 2026-11-11)', () => {
 describe('/admin/ipd hub', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('gate open + casesheet_forms_manage: the MyPrefrontal tile links to the studio, beside the IPD coming-soon tile', () => {
+  it('gate open + casesheet_forms_manage: the Case sheets tile links to the studio, beside the IPD coming-soon tile', () => {
     const el = render({ gate: true, perms: ['casesheet_forms_manage'] });
-    const tile = el.querySelector('a[data-tile="MyPrefrontal"]') as HTMLAnchorElement;
+    const tile = el.querySelector('a[data-tile="Case sheets"]') as HTMLAnchorElement;
     expect(tile).not.toBeNull();
     expect(tile.getAttribute('href')).toBe('/admin/ipd/myprefrontal');
     const soon = el.querySelector('[data-tile="IPD"]')!;
@@ -97,25 +97,25 @@ describe('/admin/ipd hub', () => {
     expect(el.querySelector('pf-module-placeholder')).toBeNull();
   });
 
-  it('has a Departments tile between MyPrefrontal and the IPD tile, linking to the departments page', () => {
+  it('has a Departments tile between Case sheets and the IPD tile, linking to the departments page', () => {
     const el = render({ gate: true, perms: ['casesheet_forms_manage'] });
     const tiles = [...el.querySelectorAll('[data-tile]')].map((t) => t.getAttribute('data-tile'));
-    expect(tiles).toEqual(['MyPrefrontal', 'Departments', 'IPD']);
+    expect(tiles).toEqual(['Case sheets', 'Departments', 'IPD']);
     const tile = el.querySelector('a[data-tile="Departments"]') as HTMLAnchorElement;
     expect(tile.getAttribute('href')).toBe('/admin/ipd/departments');
-    expect(tile.textContent).toContain('The IPD departments your case sheet forms are grouped by.');
+    expect(tile.textContent).toContain('The IPD departments your case sheets are grouped by.');
   });
 
-  it('gate closed: exactly the old module placeholder, no MyPrefrontal anywhere', () => {
+  it('gate closed: exactly the old module placeholder, no Case sheets anywhere', () => {
     const el = render({ gate: false, perms: ['casesheet_forms_manage'] });
     expect(el.querySelector('pf-module-placeholder')).not.toBeNull();
     expect(el.querySelector('[data-tile]')).toBeNull();
-    expect(el.textContent).not.toContain('MyPrefrontal');
+    expect(el.textContent).not.toContain('Case sheets');
   });
 
   it('gate open but no casesheet_forms_manage: still the placeholder, no tile', () => {
     const el = render({ gate: true, perms: [] });
     expect(el.querySelector('pf-module-placeholder')).not.toBeNull();
-    expect(el.querySelector('[data-tile="MyPrefrontal"]')).toBeNull();
+    expect(el.querySelector('[data-tile="Case sheets"]')).toBeNull();
   });
 });

@@ -64,9 +64,9 @@
         <span class="pf-empty__icon"><pf-icon name="forms" [size]="26" /></span>
         <h2 class="pf-empty__title">No case sheets are published yet</h2>
         @if (nav.isLab && canManage()) {
-        <p class="pf-empty__body">Publish a form in MyPrefrontal and it shows here under its department.</p>
+        <p class="pf-empty__body">Publish a case sheet in IPD settings and it shows here under its department.</p>
         <a class="pf-btn pf-btn--primary pf-empty__action" [routerLink]="links.adminHome()" data-act="open-myprefrontal">
-          <pf-icon name="studio" [size]="18" /> Open MyPrefrontal
+          <pf-icon name="studio" [size]="18" /> Open case sheets
         </a>
         } @else {
         <p class="pf-empty__body">Ask your case sheet admin to publish a case sheet for your department.</p>
@@ -184,9 +184,9 @@
             <span class="pf-empty__icon"><pf-icon name="forms" [size]="26" /></span>
             <h2 class="pf-empty__title">No case sheets in {{ d.name }} yet</h2>
             @if (nav.isLab && canManage()) {
-            <p class="pf-empty__body">Publish a form for this department in MyPrefrontal.</p>
+            <p class="pf-empty__body">Publish a case sheet for this department in IPD settings.</p>
             <a class="pf-btn pf-btn--secondary pf-empty__action" [routerLink]="links.adminHome()" data-act="open-myprefrontal">
-              <pf-icon name="studio" [size]="18" /> Open MyPrefrontal
+              <pf-icon name="studio" [size]="18" /> Open case sheets
             </a>
             } @else {
             <p class="pf-empty__body">Ask your case sheet admin to publish one.</p>

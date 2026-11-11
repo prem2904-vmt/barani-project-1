@@ -39,7 +39,7 @@ interface IpdTile {
           <pf-hero-band [back]="true" placeholder="Search IPD settings" [value]="q()" (valueChange)="q.set($event)"></pf-hero-band>
         }
         <pf-screen-header class="pf-classic-only" eyebrow="IPD" title="IPD settings"
-          subtitle="Case sheet forms for your doctors, and the rest of inpatient care as it arrives."></pf-screen-header>
+          subtitle="Case sheets for your doctors, and the rest of inpatient care as it arrives."></pf-screen-header>
 
         <div class="pf-band-body">
           @if (prepare(); as p) {
@@ -53,7 +53,7 @@ interface IpdTile {
                   <span class="pf-lsh__t" id="ipd-prepare-t">Prepare</span>
                   <span class="pf-lsh__s">{{ p.enabled
                     ? 'On. Doctors see a Prepare tab next to Frontdesk and can start case sheets for any patient.'
-                    : 'Off. Doctors cannot start new case sheets. Forms stay editable here and finished sheets stay readable.' }}</span>
+                    : 'Off. Doctors cannot start new case sheets. Case sheets stay editable here and finished sheets stay readable.' }}</span>
                 </span>
                 <!-- Re-created after a failed save: pf-toggle flips itself on click, so putting the old value back needs a fresh one. -->
                 @for (k of [toggleKey()]; track k) {
@@ -176,11 +176,11 @@ export class IpdHubComponent implements OnInit {
 
   /** MyPrefrontal, Departments, then the IPD "coming soon" tile. */
   readonly tiles: IpdTile[] = [
-    { title: 'MyPrefrontal', href: casesheetLinks.adminHome(),
-      subtitle: 'Case sheet forms for your doctors, grouped by department. Start from a master form or build your own.',
+    { title: 'Case sheets', href: casesheetLinks.adminHome(),
+      subtitle: 'Case sheets for your doctors, grouped by department. Start from a master case sheet or build your own.',
       iconPath: 'M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1ZM8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 12h8M8 16h5' },
     { title: 'Departments', href: casesheetLinks.adminDepartments(),
-      subtitle: 'The IPD departments your case sheet forms are grouped by.',
+      subtitle: 'The IPD departments your case sheets are grouped by.',
       iconPath: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' },
     { title: 'IPD',
       subtitle: 'Admissions, beds and wards, nursing, discharge.',

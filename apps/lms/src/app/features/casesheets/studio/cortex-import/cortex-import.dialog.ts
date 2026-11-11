@@ -164,7 +164,7 @@ export class CortexImportDialog {
   });
   protected readonly subtitle = computed(() => {
     const j = this.job();
-    return !j ? 'Cortex turns a photo or PDF of your blank paper sheet into a draft form you can edit.'
+    return !j ? 'Cortex turns a photo or PDF of your blank paper sheet into a draft case sheet you can edit.'
       : j.status === 'failed' ? '' : 'Hold on, this takes about a minute.';   // the failure line below says the rest
   });
   protected readonly deptOptions = computed<PfSelectOption<string>[]>(() => this.allDepartments().map((d) => ({ value: d.key, label: d.name })));
@@ -267,7 +267,7 @@ export class CortexImportDialog {
     await this.svc.start({ files: this.files(), departmentKey: this.dept(), title: this.name().trim() || undefined });
   }
 
-  /** After a failed job: back to the form (a sheet with a patient's details is not kept at all). */
+  /** After a failed job: back to the case sheet (a sheet with a patient's details is not kept at all). */
   protected again(): void {
     if (this.svc.job()?.failure?.includes("patient's details")) this.files.set([]);
     this.svc.dismiss();

@@ -44,7 +44,7 @@
     <div band-search class="pf-ctx ed-ctx">
       <span class="pf-ctx__primary ed-title" data-title>{{ title() }}</span>
       @if (session.readOnly()) {
-        <span class="pf-ctx__chip ed-chip" data-master>Master form</span>
+        <span class="pf-ctx__chip ed-chip" data-master>Master case sheet</span>
       }
       @if (version()) {
         <span class="pf-ctx__chip ed-chip" data-status>
@@ -60,7 +60,7 @@
           </button>
         }
       } @else {
-        <span class="pf-ctx__k">Opening the form…</span>
+        <span class="pf-ctx__k">Opening the case sheet…</span>
       }
     </div>
   </pf-hero-band>
@@ -72,14 +72,14 @@
           <div class="pf-empty">
             <span class="pf-empty__icon"><pf-icon name="alert" [size]="26" /></span>
             <h1 class="pf-empty__title">{{ err }}</h1>
-            <a class="pf-btn pf-btn--secondary" [routerLink]="links.adminHome()">Back to MyPrefrontal</a>
+            <a class="pf-btn pf-btn--secondary" [routerLink]="links.adminHome()">Back to case sheets</a>
           </div>
         </div>
       </section>
     </div>
   } @else if (!def()) {
     <div class="pf-body ed-body">
-      <section class="pf-card main"><div class="pf-card__body"><pf-skeleton-form [fields]="5" [cols]="1" label="Opening the form" /></div></section>
+      <section class="pf-card main"><div class="pf-card__body"><pf-skeleton-form [fields]="5" [cols]="1" label="Opening the case sheet" /></div></section>
     </div>
   } @else {
     <div class="pf-body ed-body" [class.ed-body--problems]="problemsOpen()">
@@ -143,7 +143,7 @@
         <header class="pf-card__head">
           <span class="pf-card__icon"><pf-icon name="forms" [size]="16" /></span>
           <h1 class="pf-card__label" id="ed-main-h">{{ page()?.title || 'No pages yet' }}</h1>
-          <span class="pf-card__count">{{ count() }} · {{ store.fieldCount() }} in the form</span>
+          <span class="pf-card__count">{{ count() }} · {{ store.fieldCount() }} in the case sheet</span>
         </header>
         @if (selCount()) {
           <div class="ed-selbar" role="toolbar" aria-label="Selected questions" data-selbar>
@@ -191,7 +191,7 @@
           @if (session.conflict()) {
             <div class="ed-banner ed-banner--warn" role="alert" data-conflict>
               <pf-icon name="alert" [size]="18" />
-              <span class="ed-banner__t"><strong>{{ conflictWho() }} saved this form first.</strong> Your last change is still on this screen. Keep theirs, or save yours over it?</span>
+              <span class="ed-banner__t"><strong>{{ conflictWho() }} saved this case sheet first.</strong> Your last change is still on this screen. Keep theirs, or save yours over it?</span>
               <button type="button" class="pf-btn pf-btn--secondary" (click)="resolve('theirs')">Use their version</button>
               <button type="button" class="pf-btn pf-btn--secondary" (click)="resolve('mine')">Keep mine</button>
             </div>
@@ -205,7 +205,7 @@
           @if (session.readOnly()) {
             <div class="ed-banner" role="status" data-master-banner>
               <pf-icon name="info" [size]="18" />
-              <span class="ed-banner__t"><strong>This is a master form.</strong> You are looking at the published version. Edit makes your lab's own copy; the master never changes here.</span>
+              <span class="ed-banner__t"><strong>This is a master case sheet.</strong> You are looking at the published version. Edit makes your lab's own copy; the master never changes here.</span>
               @if (canManage()) {
                 <button type="button" class="pf-btn pf-btn--primary" data-act="fork" [disabled]="forking()" [attr.aria-busy]="forking() ? 'true' : null" (click)="forkMaster()">Edit</button>
               }
@@ -290,13 +290,13 @@
           </header>
           <div class="pf-card__body">
             @if (!listedProblems().length) {
-              <div class="pf-empty pf-empty--compact"><h3 class="pf-empty__title">Nothing to fix</h3><p class="pf-empty__body">This form can be published.</p></div>
+              <div class="pf-empty pf-empty--compact"><h3 class="pf-empty__title">Nothing to fix</h3><p class="pf-empty__body">This case sheet can be published.</p></div>
             }
             <ul class="ed-plist" role="list" data-problem-list>
               @for (pr of listedProblems(); track $index) {
                 <li>
                   <button type="button" class="ed-prob pf-touch" (click)="jump(pr)">
-                    <span class="ed-prob__w">{{ pr.pageTitle || 'The form' }}@if (pr.fieldLabel) { · {{ pr.fieldLabel }} }</span>
+                    <span class="ed-prob__w">{{ pr.pageTitle || 'The case sheet' }}@if (pr.fieldLabel) { · {{ pr.fieldLabel }} }</span>
                     <span class="ed-prob__m">{{ pr.message }}</span>
                     <span class="ed-prob__go">Go there <pf-icon name="chevron-right" [size]="14" /></span>
                   </button>

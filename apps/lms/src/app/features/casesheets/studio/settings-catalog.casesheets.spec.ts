@@ -23,7 +23,7 @@ function svc(gate: boolean, perms: string[]) {
   return TestBed.inject(SettingsCatalogService);
 }
 
-describe('settings catalog: MyPrefrontal entry', () => {
+describe('settings catalog: Case sheets entry', () => {
   const entry = SETTINGS_CATALOG.find((e) => e.href === '/admin/ipd/myprefrontal')!;
 
   it('is listed only with the case-sheet gate open AND casesheet_forms_manage', () => {
@@ -34,7 +34,7 @@ describe('settings catalog: MyPrefrontal entry', () => {
   });
 
   it('searchable by "case sheet" when visible, absent when the gate is closed', () => {
-    expect(svc(true, ['casesheet_forms_manage']).search('case sheet').map((e) => e.title)).toContain('MyPrefrontal');
-    expect(svc(false, ['casesheet_forms_manage']).search('case sheet').map((e) => e.title)).not.toContain('MyPrefrontal');
+    expect(svc(true, ['casesheet_forms_manage']).search('case sheet').map((e) => e.title)).toContain('Case sheets');
+    expect(svc(false, ['casesheet_forms_manage']).search('case sheet').map((e) => e.title)).not.toContain('Case sheets');
   });
 });

@@ -417,7 +417,7 @@ export class AiConnectorsSettingsPage {
   /** The open section — falls back to Settings when "Your apps" goes away. */
   readonly tab = computed<AicTab>(() => (this.picked() === 'apps' && !this.showApps() ? 'settings' : this.picked()));
 
-  // ---- "Let connected apps build case sheet forms" (case-sheet builder beta: console switch + case-sheet gate + the server) ----
+  // ---- "Let connected apps build case sheets" (case-sheet builder beta: console switch + case-sheet gate + the server) ----
   // The services are only created when the console switch is on, so the rest of this screen never touches them.
   private readonly builderFlag = inject(CORTEX_BUILDER_ON)();
   private readonly builderStatus = this.builderFlag ? inject(BuilderStatusService) : null;
@@ -435,14 +435,14 @@ export class AiConnectorsSettingsPage {
     if (!st || !api || this.saving()) return;
     const next = !this.builderOn();
     const ok = await this.dialog.confirm(next
-      ? { title: 'Let connected apps build case sheet forms?', message: BUILDER_SWITCH_ON + ' Nothing is published without a person.', confirmLabel: 'Turn on', tone: 'primary' }
-      : { title: 'Stop connected apps building case sheet forms?', message: 'Connected apps can no longer make or change draft case sheet forms. Drafts they already made stay as they are.', confirmLabel: 'Turn off', tone: 'danger' });
+      ? { title: 'Let connected apps build case sheets?', message: BUILDER_SWITCH_ON + ' Nothing is published without a person.', confirmLabel: 'Turn on', tone: 'primary' }
+      : { title: 'Stop connected apps building case sheets?', message: 'Connected apps can no longer make or change draft case sheets. Drafts they already made stay as they are.', confirmLabel: 'Turn off', tone: 'danger' });
     if (!ok) return;
     this.saving.set(true);
     try {
       await api.setConnector(next);
       st.setSwitch(next);
-      this.toasts.success(next ? 'Connected apps can now build draft case sheet forms' : 'Connected apps can no longer build case sheet forms');
+      this.toasts.success(next ? 'Connected apps can now build draft case sheets' : 'Connected apps can no longer build case sheets');
     } catch (e) {
       this.toasts.error(builderWords(e, 'Couldn’t save — check your connection and try again.'));
     } finally {

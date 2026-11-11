@@ -340,7 +340,7 @@ export class MockCasesApi extends CasesApi {
       if (!keys.has(k))
         throw new HttpErrorResponse({
           status: 400,
-          error: { code: 'unknown_field', title: `The form has no field '${k}'.` },
+          error: { code: 'unknown_field', title: `The case sheet has no field '${k}'.` },
         });
       answers[k] = clone(v);
     }

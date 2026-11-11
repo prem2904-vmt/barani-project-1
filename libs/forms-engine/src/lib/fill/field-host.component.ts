@@ -36,7 +36,7 @@ import { followUpsInside } from './option-layout';
       @if (linked()) {
         <span class="fe-field__note">Filled from another answer</span>
       } @else if (fixed()) {
-        <span class="fe-field__note">Filled in by the form</span>
+        <span class="fe-field__note">Filled in by the case sheet</span>
       }
     </div>
     @if (control(); as c) {
@@ -131,7 +131,7 @@ export class FieldHostComponent {
   protected readonly value = computed(() => this.scope()[this.field().key] ?? null);
   protected readonly linked = computed(() => this.lockedKeys().has(this.field().key));
   protected readonly locked = this.linked;
-  /** The form locks this field (legacy `disabled`): shown, not changeable. */
+  /** The case sheet locks this field (legacy `disabled`): shown, not changeable. */
   protected readonly fixed = computed(() => this.field().config?.['disabled'] === true);
   /** A kind that comes with a later phase (images, drawings, grids): a calm note in plain words, never an error. */
   protected readonly later = computed(() => laterKind(this.field()));
@@ -207,8 +207,8 @@ export function laterKind(f: FieldDef): { kind: string; icon: IconName; title: s
   if (legacy === 'imageinfo') return what('Marked pictures', 'image');
   if (legacy === 'imagegallery') return what('Photos', 'image');
   if (legacy === 'eom' || legacy === 'eyefields') return what('Eye diagrams', 'eye');
-  // tables are filled since Phase 5; a form brought in before that still holds the old field
-  if (legacy === 'multitextbox') return { kind: legacy, icon: 'k-grid', title: 'Bring this form in again to fill this table' };
+  // tables are filled since Phase 5; a case sheet brought in before that still holds the old field
+  if (legacy === 'multitextbox') return { kind: legacy, icon: 'k-grid', title: 'Bring this case sheet in again to fill this table' };
   return what('Answers of this type', 'info');
 }
 

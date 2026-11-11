@@ -10,7 +10,7 @@ import { ImportItem, ImportResult, plainError } from '../data/studio-models';
 const MAX_BYTES = 25_000_000;
 
 /**
- * Bring in a form from the old app: pick its file (the JSON the old Studio
+ * Bring in a case sheet from the old app: pick its file (the JSON the old Studio
  * exported) → a report in plain words (what came in, what needs a look, what
  * must be fixed) → bring it in as a draft and open it. Nothing is live until
  * it is published.
@@ -29,15 +29,15 @@ const MAX_BYTES = 25_000_000;
         <section class="pf-card main" aria-labelledby="im-h">
           <header class="pf-card__head">
             <span class="pf-card__icon"><pf-icon name="upload" [size]="16" /></span>
-            <h1 class="pf-card__label" id="im-h">{{ result() ? 'What came in' : 'Pick the form file' }}</h1>
+            <h1 class="pf-card__label" id="im-h">{{ result() ? 'What came in' : 'Pick the case sheet file' }}</h1>
           </header>
           <div class="pf-card__body">
-            <input #fileEl class="im-file" type="file" accept="application/json,.json" aria-label="Form file" (change)="picked($event)" />
+            <input #fileEl class="im-file" type="file" accept="application/json,.json" aria-label="Case sheet file" (change)="picked($event)" />
             @if (!result()) {
               <div class="pf-empty">
                 <span class="pf-empty__icon"><pf-icon name="file" [size]="26" /></span>
-                <h2 class="pf-empty__title">Choose the old form’s file</h2>
-                <p class="pf-empty__body">MyPrefrontal reads it, tells you in plain words what came across and what needs a look, and only then brings it in as a draft.</p>
+                <h2 class="pf-empty__title">Choose the old case sheet’s file</h2>
+                <p class="pf-empty__body">Prefrontal reads it, tells you in plain words what came across and what needs a look, and only then brings it in as a draft.</p>
                 <button type="button" class="pf-btn pf-btn--primary" data-act="choose-file" [disabled]="busy()" [attr.aria-busy]="busy() ? 'true' : null" (click)="fileEl.click()">
                   <pf-icon name="upload" [size]="18" /> {{ busy() ? 'Reading…' : 'Choose a file' }}
                 </button>
@@ -68,9 +68,9 @@ const MAX_BYTES = 25_000_000;
               }
               </div>
               @if (!groups().length) { <p class="im-ok"><pf-icon name="check" [size]="18" /> Everything came across.</p> }
-              <!-- the form as it will come in: every page and its questions (wide screens: side by side) -->
+              <!-- the case sheet as it will come in: every page and its questions (wide screens: side by side) -->
               <section class="im-outline" aria-labelledby="im-o" data-outline>
-                <h2 class="im-grp__t" id="im-o">The form as it comes in</h2>
+                <h2 class="im-grp__t" id="im-o">The case sheet as it comes in</h2>
                 <ol class="im-pages" role="list">
                   @for (pg of outline(); track pg.key) {
                     <li class="im-page">
@@ -95,7 +95,7 @@ const MAX_BYTES = 25_000_000;
           </header>
           <div class="pf-card__body">
             @if (result()) {
-              <label class="im-lbl" for="im-title">Form name</label>
+              <label class="im-lbl" for="im-title">Case sheet name</label>
               <input id="im-title" class="pf-input" type="text" [value]="title()" (input)="title.set($any($event.target).value)" />
               <p class="im-note">It comes in as a draft: nothing is live until you publish it. {{ result()!.report.canPublish ? 'It can be published as it is.' : 'Fix the things listed first.' }}</p>
               @if (error()) { <p class="im-err" role="alert">{{ error() }}</p> }
@@ -159,7 +159,7 @@ export class StudioImportPage {
   async read(file: Blob): Promise<void> {
     this.error.set('');
     if (file.size > MAX_BYTES) {
-      this.error.set('That file is too big for a form (over 25 MB).');
+      this.error.set('That file is too big for a case sheet (over 25 MB).');
       return;
     }
     this.busy.set(true);
@@ -168,14 +168,14 @@ export class StudioImportPage {
       try {
         this.legacy = JSON.parse(text);
       } catch {
-        this.error.set("That file isn't a form from the old app (it isn't readable form data).");
+        this.error.set("That file isn't a case sheet from the old app (it isn't readable case sheet data).");
         return;
       }
       const r = await this.api.importLegacy(this.legacy, { dryRun: true });
       this.result.set(r);
       this.title.set(r.definition.title ?? '');
     } catch (err) {
-      this.error.set(plainError(err, "Couldn't read that form."));
+      this.error.set(plainError(err, "Couldn't read that case sheet."));
     } finally {
       this.busy.set(false);
     }

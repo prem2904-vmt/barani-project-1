@@ -174,7 +174,7 @@ export class ShortcutsPanelComponent {
   private readonly mac = isMac();
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  protected readonly groups = (['Questions', 'Moving around', 'The form'] as ShortcutRow['group'][]).map((title) => ({
+  protected readonly groups = (['Questions', 'Moving around', 'The case sheet'] as ShortcutRow['group'][]).map((title) => ({
     title,
     rows: SHORTCUTS.filter((r) => r.group === title),
   }));

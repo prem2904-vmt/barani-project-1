@@ -46,7 +46,7 @@ export class StudioSession {
   /** The API's problems for the draft as it is now (from the live preview). */
   readonly problems = signal<Problem[]>([]);
 
-  /** A master form: shown as published, never edited here ("Edit" makes this lab's own copy first). */
+  /** A master case sheet: shown as published, never edited here ("Edit" makes this lab's own copy first). */
   readonly readOnly = signal(false);
   /** True while the screen shows the live version and no draft exists yet. */
   readonly onLive = signal(false);
@@ -92,7 +92,7 @@ export class StudioSession {
       if (open) this.startPresence();
     } catch (e) {
       this.loadError.set(
-        (e as { status?: number })?.status === 404 ? 'This form was not found. It may have been removed.' : plainError(e, "Can't open this form right now."),
+        (e as { status?: number })?.status === 404 ? 'This case sheet was not found. It may have been removed.' : plainError(e, "Can't open this case sheet right now."),
       );
     }
   }
@@ -271,7 +271,7 @@ export class StudioSession {
       if (seq !== this.previewSeq) return;
       const status = (e as { status?: number })?.status;
       // too many previews at once (the API throttles them): keep "Writing…" and try again shortly, never leave
-      // words on screen that no longer match the form
+      // words on screen that no longer match the case sheet
       if (status === 429 && this.previewRetries < PREVIEW_RETRIES) {
         this.previewRetries++;
         this.schedulePreview(PREVIEW_RETRY_MS * this.previewRetries);

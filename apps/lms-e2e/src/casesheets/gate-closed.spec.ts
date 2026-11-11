@@ -27,7 +27,7 @@ test('a lab without ipd explicitly on sees no case sheets anywhere', async ({ br
 
   await page.goto(`${LAB_URL}/admin/ipd`);
   await settle(page, 1200);
-  await expect(page.getByText('MyPrefrontal')).toHaveCount(0);
+  await expect(page.getByText('Case sheets', { exact: true })).toHaveCount(0);
   await shot(page, 'gate-02-plain-lab-admin-ipd');
 
   for (const path of ['/casesheets/new', `/casesheets/patient/${p.id}`, '/admin/ipd/myprefrontal']) {

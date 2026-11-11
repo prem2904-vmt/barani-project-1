@@ -16,6 +16,6 @@ export const MULTI_BUILD: KindBuild = {
     { op: 'notContains', words: 'does not include' },
     ...ANSWERED_OPS,
   ],
-  config: [{ name: 'display', label: 'Shown as', choices: { chips: 'Cards', list: 'Cards (older forms)', dropdown: 'A drop-down (long lists)' } }],
+  config: [{ name: 'display', label: 'Shown as', choices: { chips: 'Cards', list: 'Cards (older case sheets)', dropdown: 'A drop-down (long lists)' } }],
   sample: (f) => (f.options ?? []).slice(0, 2).map((o) => o.key),
 };

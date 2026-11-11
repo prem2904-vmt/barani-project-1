@@ -35,7 +35,7 @@ describe('groupByDepartment', () => {
   });
 });
 
-describe('MyPrefrontal home', () => {
+describe('Case sheets home', () => {
   const dialog = { confirm: vi.fn(async () => true), prompt: vi.fn(async () => 'New one'), choose: vi.fn(async () => 'ent') };
 
   async function open() {
@@ -90,7 +90,7 @@ describe('MyPrefrontal home', () => {
   });
 });
 
-describe('MyPrefrontal home: Start from a paper case sheet (Cortex beta)', () => {
+describe('Case sheets home: Start from a paper case sheet (Cortex beta)', () => {
   // Node 25 ships a global localStorage that is inert without --localstorage-file and shadows jsdom's: give the
   // flag a real in-memory store so this spec behaves the same on every machine.
   beforeEach(() => {
@@ -154,14 +154,14 @@ describe('MyPrefrontal home: Start from a paper case sheet (Cortex beta)', () =>
   });
 });
 
-describe('MyPrefrontal home: band actions on a phone', () => {
+describe('Case sheets home: band actions on a phone', () => {
   it('every band action keeps its words in .sh-actions__lbl (icon-only at ≤640px, the words stay as its accessible name)', async () => {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const dir = resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/studio');
     const html = readFileSync(resolve(dir, 'studio.page.html'), 'utf8');
     const band = html.slice(html.indexOf('band-actions'), html.indexOf('</pf-hero-band>'));
-    for (const words of ['Start from a paper case sheet', 'Bring in an old form', 'New form']) {
+    for (const words of ['Start from a paper case sheet', 'Bring in an old case sheet', 'New case sheet']) {
       expect(band).toContain(`<span class="sh-actions__lbl">${words}</span>`);
     }
     const scss = readFileSync(resolve(dir, 'studio.page.scss'), 'utf8');

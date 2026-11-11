@@ -348,14 +348,14 @@ describe('the field host (G11, G24, G25)', () => {
     expect(el.querySelector('[data-later="scribblepad"]')?.textContent).toContain('Drawings come to Prepare soon');
     expect(el.textContent).toContain("won't print");
     expect(el.textContent).not.toMatch(/unsupported|error|can't be answered/i);
-    expect(laterKind(f('g', 'unsupported', { config: { legacyType: 'multiTextbox' } })).title).toBe('Bring this form in again to fill this table');
+    expect(laterKind(f('g', 'unsupported', { config: { legacyType: 'multiTextbox' } })).title).toBe('Bring this case sheet in again to fill this table');
     expect(laterKind(f('e', 'unsupported', { config: { legacyType: 'eom' } })).icon).toBe('eye');
   });
 
   it('a field the form locks (legacy disabled) is shown but cannot be changed', async () => {
     const fx = await host(f('c', 'choice', { config: { disabled: true }, options: [{ key: 'a', label: 'A' }] }), { c: 'a' });
     const el = fx.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Filled in by the form');
+    expect(el.textContent).toContain('Filled in by the case sheet');
     expect((el.querySelector('[data-option="a"]') as HTMLButtonElement).disabled).toBe(true);
   });
 

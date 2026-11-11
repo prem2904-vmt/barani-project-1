@@ -36,7 +36,7 @@ import { ChatStore } from './chat.store';
         rows="2"
         data-box
         aria-label="Message to Cortex"
-        placeholder="Ask Cortex to change this form"
+        placeholder="Ask Cortex to change this case sheet"
         [value]="text()"
         [disabled]="chat.working()"
         (input)="text.set($any($event.target).value)"

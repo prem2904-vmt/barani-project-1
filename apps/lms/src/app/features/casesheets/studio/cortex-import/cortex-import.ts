@@ -1,7 +1,7 @@
 /**
  * Cortex: a case sheet from a paper sheet (dev beta). The pure parts, with no Angular and no DOM: what the dialog
  * accepts, the plain words for every refusal and failure, the progress steps, and the "Check this" markers
- * (`config.checkNote`) on a form definition.
+ * (`config.checkNote`) on a case sheet definition.
  */
 import { FieldDef, FormDefinition, allFields, updateField } from '@prefrontal/forms-engine';
 import { DraftJobStatus } from '../data/studio-models';
@@ -91,7 +91,7 @@ const FAILURES: Record<string, string> = {
   unreadable: "Cortex couldn't read the sheet. Try a clearer photo.",
   patient_data: "This sheet has a patient's details. Upload a blank one. Nothing was kept.",
   model_error: 'Cortex ran into a problem reading this sheet. Please try again.',
-  invalid_result: "Cortex couldn't turn this sheet into a form that works. Try a clearer photo.",
+  invalid_result: "Cortex couldn't turn this sheet into a case sheet that works. Try a clearer photo.",
 };
 
 /** Words for a job that ended `failed`. */

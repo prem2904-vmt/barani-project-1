@@ -107,7 +107,7 @@ describe('Cortex import service', () => {
     ['unreadable', 'Try a clearer photo.'],
     ['patient_data', "This sheet has a patient's details. Upload a blank one."],
     ['model_error', 'ran into a problem'],
-    ['invalid_result', "couldn't turn this sheet into a form"],
+    ['invalid_result', "couldn't turn this sheet into a case sheet"],
   ])('a failed job (%s) stops with its message and does not navigate', async (code, words) => {
     api.script = [{ status: 'failed', code, message: 'server words' }];
     await svc.start({ files: [png()], departmentKey: 'ent' });

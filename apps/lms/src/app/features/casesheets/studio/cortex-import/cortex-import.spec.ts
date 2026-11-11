@@ -82,7 +82,7 @@ describe('Cortex import: plain words', () => {
     ['unreadable', 'Try a clearer photo.'],
     ['patient_data', "This sheet has a patient's details. Upload a blank one."],
     ['model_error', 'ran into a problem'],
-    ['invalid_result', "couldn't turn this sheet into a form"],
+    ['invalid_result', "couldn't turn this sheet into a case sheet"],
     [undefined, 'could not finish'],
   ])('a failed job with code %s', (code, words) => {
     expect(jobFailure(code)).toContain(words);
