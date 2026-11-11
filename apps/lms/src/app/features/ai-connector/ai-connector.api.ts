@@ -193,9 +193,12 @@ export const AI_CONNECTOR_SUGGEST_OFF = 'Off — connected assistants can read, 
 export const AI_CONNECTOR_SUGGEST_OFF_EFFECT =
   'Turning this off removes every app’s permission to suggest. People will need to allow it again.';
 export const AI_CONNECTOR_SUGGEST_REQUESTED =
-  'This app can suggest changes to your Test Master. Nothing is applied until someone with Test Master permission approves it in Prefrontal.';
-/** The consent-screen choice (unticked by default; shown only when the lab allows suggestions). */
-export const AI_CONNECTOR_SUGGEST_OPTION = 'Also let this app suggest Test Master changes';
+  'This app can suggest changes to your Test Master and case sheets. Nothing is applied until someone with permission approves it in Prefrontal.';
+/** The consent-screen choice (unticked by default; shown only when the lab allows suggestions). ONE per-app grant covers both
+ *  Test Master and case sheet suggestions (`ai_connector_grants.Propose`, approvals 2026-11-11). */
+export const AI_CONNECTOR_SUGGEST_OPTION = 'Also let this app suggest Test Master and case sheet changes';
+/** What one allowed app may do (the per-app grant, Settings → AI connectors → Your apps). */
+export const AI_CONNECTOR_GRANT_LABEL = 'Can suggest Test Master and case sheet changes';
 
 /** Per-browser convenience: the app's name, remembered when the person allows it, so the "apps allowed" list can show a name
  *  (the server keeps only the app's id). Never trusted for anything but display; always rendered as text. */

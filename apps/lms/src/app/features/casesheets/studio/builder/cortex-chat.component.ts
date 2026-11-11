@@ -1,18 +1,25 @@
 import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, signal, viewChild } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { PfIconComponent } from '@prefrontal/forms-engine';
+import { casesheetLinks } from '../../casesheets.routes';
 import { ChatStore } from './chat.store';
 
 /** The Cortex chat: what you ask, what Cortex did step by step in plain words, and what it says back. */
 @Component({
   selector: 'st-cortex-chat',
   standalone: true,
-  imports: [PfIconComponent],
+  imports: [PfIconComponent, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <p class="cc-banner" data-draft-banner><pf-icon name="info" [size]="16" /> <span>Cortex only edits the draft. You publish.</span></p>
+    <p class="cc-banner" data-draft-banner><pf-icon name="info" [size]="16" />
+      <span>Cortex only suggests. Nothing changes until someone approves it in Pending changes.</span></p>
     <div class="cc-list" #list role="log" aria-live="polite" aria-label="Conversation with Cortex" data-messages>
       @if (!chat.messages().length && !chat.working()) {
-        <p class="cc-empty" data-empty>Tell Cortex what to add or change, for example “Add a cough question with a follow-up for how many days.”</p>
+        @if (chat.newSheet()) {
+          <p class="cc-empty" data-empty>Tell Cortex the case sheet you need, for example “An ENT case sheet with history, nose and throat pages.” It comes to Pending changes for approval.</p>
+        } @else {
+          <p class="cc-empty" data-empty>Tell Cortex what to add or change, for example “Add a cough question with a follow-up for how many days.”</p>
+        }
       }
       @for (m of chat.messages(); track m.id) {
         <div class="cc-msg" [attr.data-from]="m.from" [class.cc-msg--err]="m.error" [attr.role]="m.error ? 'alert' : null">
@@ -30,13 +37,35 @@ import { ChatStore } from './chat.store';
         <p class="cc-working" role="status" data-working><span class="cc-dots" aria-hidden="true"></span> Cortex is working…</p>
       }
     </div>
+    @if (chat.proposal(); as p) {
+      <div class="cc-prop" role="status" data-proposal [attr.data-status]="p.status">
+        <span class="cc-prop__ic"><pf-icon [name]="p.status === 'building' ? 'sparkle' : 'check'" [size]="16" /></span>
+        <span class="cc-prop__t">
+          @if (p.status === 'building') {
+            <strong>Cortex’s suggestion is ready to send.</strong> Send it for approval when you’re done asking.
+          } @else if (p.status === 'approved') {
+            <strong>Approved and published.</strong>
+          } @else if (p.status === 'rejected' || p.status === 'withdrawn') {
+            <strong>This suggestion was {{ p.status === 'rejected' ? 'rejected' : 'taken back' }}.</strong> Ask again to start a new one.
+          } @else {
+            <strong>Cortex suggested changes — waiting for approval.</strong>
+          }
+          <a class="cc-prop__link" [routerLink]="links.adminPending()" [queryParams]="{ id: p.id }" data-act="open-suggestion">See the suggestion</a>
+        </span>
+        @if (p.status === 'building') {
+          <button type="button" class="pf-btn pf-btn--secondary cc-prop__send" data-act="submit" [disabled]="!chat.canSubmit()" [attr.aria-busy]="chat.submitting() ? 'true' : null" (click)="chat.submit()">
+            <pf-icon name="send" [size]="16" /> Send for approval
+          </button>
+        }
+      </div>
+    }
     <form class="cc-form" (submit)="submit($event)">
       <textarea
         class="cc-box"
         rows="2"
         data-box
         aria-label="Message to Cortex"
-        placeholder="Ask Cortex to change this case sheet"
+        [placeholder]="chat.newSheet() ? 'Describe the case sheet you need' : 'Ask Cortex to change this case sheet'"
         [value]="text()"
         [disabled]="chat.working()"
         (input)="text.set($any($event.target).value)"
@@ -66,6 +95,12 @@ import { ChatStore } from './chat.store';
     .cc-working { margin: 0 4px; display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-secondary); }
     .cc-dots { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-primary, #7c5cff); animation: cc-pulse 1.1s ease-in-out infinite; }
     @keyframes cc-pulse { 0%, 100% { opacity: .35; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
+    .cc-prop { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--pf-line);
+      background: var(--pf-card-bg); font-size: 13.5px; line-height: 1.45; color: var(--text-primary); }
+    .cc-prop__ic { flex: none; display: inline-flex; color: var(--violet-text, #7c3aed); }
+    .cc-prop__t { flex: 1 1 200px; min-width: 0; }
+    .cc-prop__link { margin-left: 4px; color: var(--violet-text, #6d28d9); font-weight: 600; white-space: nowrap; }
+    .cc-prop__send { flex: none; margin-left: auto; }
     .cc-form { display: flex; gap: 8px; align-items: flex-end; flex: none; }
     .cc-box { flex: 1; min-width: 0; resize: none; font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--pf-line);
       background: var(--pf-card-bg); color: var(--text-primary); min-height: var(--pf-touch, 44px); }
@@ -75,6 +110,7 @@ import { ChatStore } from './chat.store';
 })
 export class CortexChatComponent {
   protected readonly chat = inject(ChatStore);
+  protected readonly links = casesheetLinks;
   protected readonly text = signal('');
   private readonly list = viewChild<ElementRef<HTMLElement>>('list');
 

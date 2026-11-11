@@ -13,12 +13,18 @@ export interface BuilderStatus {
 /** One tool step; changed = false when it was refused or changed nothing (shown with a warning mark, never a tick). */
 export interface CortexStep { tool: string; summary: string; changed: boolean }
 
+/** Where Cortex's suggestion stands: `building` (not sent yet — "Send for approval") or `pending` (waiting in Pending changes). */
+export type CortexProposalStatus = 'building' | 'pending' | 'stale' | 'failed' | 'approved' | 'rejected' | 'withdrawn';
+
 export interface CortexReply {
   conversationId: string;
   reply: string;
   steps: CortexStep[];
+  /** Cortex changed its SUGGESTION (never the case sheet itself: nothing is saved until a person approves it). */
   formChanged: boolean;
-  draftVersion?: number;
+  /** The ONE suggestion this chat edits (null until Cortex changes something). */
+  proposalId: string | null;
+  proposalStatus: CortexProposalStatus | null;
 }
 
 export type CheckSource = 'auto' | 'cortex' | 'connector' | 'person';
@@ -53,6 +59,11 @@ export const BUILDER_WORDS: Record<string, string> = {
   feature_off: 'Cortex case sheet building is switched off for your lab. A lab admin can turn it on in Settings.',
   cortex_unavailable: "Cortex isn't set up here yet, so it can't help right now.",
   cap_reached: "Cortex has reached today's limit. Try again tomorrow.",
+  taken_over: 'Your lab already has its own copy of this case sheet. Open your copy and ask Cortex there.',
+  archived: 'This case sheet is archived, so Cortex can’t suggest changes to it. Bring it back first.',
+  already_sent: 'This suggestion was already sent for approval. Ask again to start a new one.',
+  nothing_changed: 'Cortex hasn’t changed anything yet, so there is nothing to send.',
+  not_found: 'That case sheet or suggestion is no longer there.',
 };
 
 /** Words for anything a builder call throws. */
@@ -79,5 +90,7 @@ export const SOURCE_LABEL: Record<CheckSource, string> = { auto: 'Auto', cortex:
 
 /** The lab switch (Settings → AI connector), in plain words. */
 export const BUILDER_SWITCH_TITLE = 'Let connected apps build case sheets';
-export const BUILDER_SWITCH_ON = 'Claude or ChatGPT connected with your sign-in can make and change DRAFT case sheets. Nothing is published without you.';
-export const BUILDER_SWITCH_OFF = 'Off. Connected apps can’t make or change case sheets. When on, Claude or ChatGPT connected with your sign-in can make and change DRAFT case sheets, and nothing is published without you.';
+export const BUILDER_SWITCH_ON =
+  'On — Claude or ChatGPT connected with your sign-in can suggest new case sheets and changes. Each suggestion waits in Case sheets, Pending changes until someone approves it.';
+export const BUILDER_SWITCH_OFF =
+  'Off — connected apps can’t suggest case sheets. When on, each suggestion waits in Case sheets, Pending changes until someone approves it; nothing changes before that.';

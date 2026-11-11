@@ -3,8 +3,9 @@ import { LAB_URL, STACK, openAs, settle, shot, expectNoNativeControls, expectNoV
 
 /**
  * CASE-SHEET BUILDER (owner 2026-11-11) on the real stack with the scripted model (CaseSheets:Builder:Fake=true):
- * Studio → Cortex chat edits the DRAFT through the builder tools (page, choice, sentence, follow-up) → the editor reloads →
- * Checks (auto + Cortex) are run by the server engine; failing checks only warn. Console flag pf.cortexBuilder on.
+ * Studio → Cortex chat makes ONE SUGGESTION through the builder tools (page, choice, sentence, follow-up; the case sheet itself
+ * never changes) → "Send for approval" → it waits in Pending changes. Checks (auto + Cortex) are run by the server engine;
+ * failing checks only warn. Console flag pf.cortexBuilder on.
  */
 test.describe.configure({ mode: 'serial' });
 let formId = '';
@@ -44,12 +45,13 @@ for (const [theme, vp] of [['light', 'desktop'], ['dark', 'desktop'], ['light', 
     await page.locator('[data-act="cortex"]').click();
     const drawer = page.locator('[data-builder-drawer]');
     await expect(drawer).toBeVisible();
-    await expect(drawer).toContainText('Cortex only edits the draft');
+    await expect(drawer).toContainText('Cortex only suggests');
     await shot(page, 'builder-02-cortex-open', { theme, viewport: vp });
     await drawer.locator('textarea').fill('Add a presenting complaint page with type of pain, and how long for sharp pain.');
     await drawer.locator('[data-act="send"]').click();
     await expect(drawer).toContainText(/Presenting complaint|Type of pain/i, { timeout: 60_000 });
     await settle(page, 1500);
+    await expect(drawer.locator('[data-proposal]')).toBeVisible({ timeout: 30_000 });
     await shot(page, 'builder-03-cortex-done', { theme, viewport: vp });
 
     await drawer.getByText('Checks', { exact: true }).first().click();

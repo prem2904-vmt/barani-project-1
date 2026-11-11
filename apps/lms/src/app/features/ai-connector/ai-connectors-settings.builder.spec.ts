@@ -66,8 +66,9 @@ describe('AI connector settings: "Let connected apps build case sheets"', () => 
     expect(row(f)).not.toBeNull();
     const text = row(f)!.textContent!;
     expect(text).toContain('Let connected apps build case sheets');
-    expect(text).toContain('DRAFT case sheets');
-    expect(text).toMatch(/nothing is published without you/i);
+    expect(text).toContain('can’t suggest case sheets');
+    expect(text).toContain('waits in Case sheets, Pending changes until someone approves it');
+    expect(text).not.toMatch(/draft/i);
     expect(btn(f)!.getAttribute('aria-checked')).toBe('false');
   });
 
@@ -125,5 +126,25 @@ describe('AI connector settings: "Let connected apps build case sheets"', () => 
     await loaded(f);
     expect(toasts.error).toHaveBeenCalledWith(expect.stringContaining('switched off'));
     expect(btn(f)!.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('the case sheet switch alone (Test Master suggestions off) still shows "Your apps": one grant covers both', async () => {
+    const { f } = setup({ status: { cortex: true, connector: true, connectorSwitch: true, canChangeSwitch: true } });
+    await loaded(f);
+    const page = f.componentInstance as unknown as { showApps: () => boolean };
+    expect(page.showApps()).toBe(true);
+    const off = setup();
+    await loaded(off.f);
+    expect((off.f.componentInstance as unknown as { showApps: () => boolean }).showApps()).toBe(false);
+  });
+
+  it('the turn-on confirm says suggestions wait for approval, never "draft"', async () => {
+    const { f, dialog } = setup();
+    await loaded(f);
+    btn(f)!.click();
+    await loaded(f);
+    const req = dialog.confirm.mock.calls[0][0] as { message: string };
+    expect(req.message).toContain('Pending changes');
+    expect(req.message).not.toMatch(/draft/i);
   });
 });

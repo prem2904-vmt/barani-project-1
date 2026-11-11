@@ -8,6 +8,7 @@ import { BusyDirective } from '../../shared/directives/busy.directive';
 import { SkeletonFormComponent } from '../../shared/primitives/skeleton-kit.component';
 import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_NEVER, AI_CONNECTOR_SUGGEST_OPTION, AI_CONNECTOR_SUGGEST_REQUESTED, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorState, rememberAppName } from './ai-connector.api';
 import { ConsentRedirector } from './consent-redirect';
+import { BuilderStatusService, CORTEX_BUILDER_ON } from '../casesheets/studio/builder/builder-status.service';
 import {
   ConsentError, ConsentErrorKind, OAuthAuthorizationDetails, OAuthConsentClient, consentErrorText,
   isConsentNeeded, redirectHost, safeRedirectUrl,
@@ -280,7 +281,11 @@ export class OAuthConsentPage implements OnInit {
   /** Supabase's OAuth server refuses custom scopes, so an app can never ASK to suggest: the person decides here.
    *  The box shows only when the lab switch is on and the request carries the app's id (the grant is per app). */
   readonly appId = computed(() => this.details()?.client?.id?.trim() || '');
-  readonly offerSuggest = computed(() => this.canAllow() && this.connector()?.proposals === true && !!this.appId());
+  readonly offerSuggest = computed(() => this.canAllow() && (this.connector()?.proposals === true || this.caseSheetBuildOn()) && !!this.appId());
+  // The same per-app grant also lets the app suggest case sheets: the box shows when EITHER lab switch is on (Test Master
+  // suggestions, or "let connected apps build case sheets", read only behind the case-sheet builder beta's console switch).
+  private readonly builderStatus = inject(CORTEX_BUILDER_ON)() ? inject(BuilderStatusService) : null;
+  private readonly caseSheetBuildOn = computed(() => !!this.builderStatus?.status()?.connectorSwitch);
   /** Unticked by default, every time. */
   readonly suggestTick = signal(false);
   readonly wantsSuggest = computed(() => this.offerSuggest() && this.suggestTick());
@@ -319,6 +324,7 @@ export class OAuthConsentPage implements OnInit {
   }
 
   ngOnInit(): void {
+    void this.builderStatus?.load();
     // Clickjacking guard: this page is only ever used as a top-level page. Inside a frame we
     // never load the request and never render Allow.
     if (OAuthConsentPage.isFramed()) { this.fail('framed'); return; }

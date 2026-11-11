@@ -1,5 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { BuilderStatusService, CORTEX_BUILDER_ON } from '../casesheets/studio/builder/builder-status.service';
 import { ActivatedRoute, Router, RouterStateSnapshot, UrlTree, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -38,6 +39,8 @@ function setup(opts: {
   deny?: () => Promise<unknown>;
   putGrant?: () => ReturnType<AiConnectorApi['putGrant']>;
   deleteGrant?: () => ReturnType<AiConnectorApi['deleteGrant']>;
+  /** The case-sheet builder beta's lab switch "let connected apps build case sheets" (undefined = beta off). */
+  caseSheetSwitch?: boolean;
 } = {}) {
   const client = {
     getDetails: vi.fn(opts.details ?? (async () => DETAILS)),
@@ -66,6 +69,8 @@ function setup(opts: {
       { provide: AuthService, useValue: { user: () => ({ id: 'u1', displayName: 'Priya Raman', tenantName: 'Micro World' }) } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }) } },
       { provide: NavBackService, useValue: { showBack: () => false, back: vi.fn() } },
+      { provide: CORTEX_BUILDER_ON, useValue: () => opts.caseSheetSwitch !== undefined },
+      { provide: BuilderStatusService, useValue: { load: vi.fn(async () => undefined), status: signal(opts.caseSheetSwitch === undefined ? null : { cortex: true, connector: opts.caseSheetSwitch, connectorSwitch: opts.caseSheetSwitch, canChangeSwitch: true }) } },
       { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(id === null ? {} : { authorization_id: id }) } } },
     ],
   });
@@ -167,7 +172,7 @@ describe('OAuthConsentPage', () => {
       const { f } = setup({ connector: () => of(c) });
       await settle(f);
       expect(box(f)).toBeNull();
-      expect(f.nativeElement.textContent).not.toContain('Also let this app suggest Test Master changes');
+      expect(f.nativeElement.textContent).not.toContain('Also let this app suggest Test Master and case sheet changes');
       expect(f.nativeElement.textContent).toContain('Read only');
     }
     // a request scope never turns it on: Supabase refuses custom scopes, the person decides here
@@ -193,14 +198,24 @@ describe('OAuthConsentPage', () => {
     expect(b.getAttribute('role')).toBe('checkbox');
     expect(b.getAttribute('aria-checked')).toBe('false');
     const text = f.nativeElement.textContent ?? '';
-    expect(text).toContain('Also let this app suggest Test Master changes');
-    expect(text).toContain('Nothing is applied until someone with Test Master permission approves it in Prefrontal.');
+    expect(text).toContain('Also let this app suggest Test Master and case sheet changes');
+    expect(text).toContain('Nothing is applied until someone with permission approves it in Prefrontal.');
     expect(text).toContain('Read only');
     b.click(); await settle(f);
     expect(b.getAttribute('aria-checked')).toBe('true');
     expect(f.nativeElement.textContent).toContain('Read and suggest');
     b.click(); await settle(f);
     expect(b.getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('the SAME box shows when only the case sheet switch is on (one grant covers Test Master and case sheets)', async () => {
+    const on = setup({ connector: () => of({ ...ON, proposals: false }), caseSheetSwitch: true });
+    await settle(on.f);
+    expect(box(on.f)).not.toBeNull();
+    expect(on.f.nativeElement.textContent).toContain('Also let this app suggest Test Master and case sheet changes');
+    const off = setup({ connector: () => of({ ...ON, proposals: false }), caseSheetSwitch: false });
+    await settle(off.f);
+    expect(box(off.f)).toBeNull();
   });
 
   it('ticked Allow WRITES the grant first and only then approves (in that order, grant for this app)', async () => {

@@ -360,7 +360,8 @@ describe('AiConnectorsSettingsPage: let connected assistants suggest Test Master
   });
 
   it('copy shared with the consent screen never says an app only reads when suggestions are allowed', () => {
-    expect(AI_CONNECTOR_SUGGEST_REQUESTED).toContain('Nothing is applied until someone with Test Master permission approves it in Prefrontal.');
+    expect(AI_CONNECTOR_SUGGEST_REQUESTED).toContain('Nothing is applied until someone with permission approves it in Prefrontal.');
+    expect(AI_CONNECTOR_SUGGEST_REQUESTED).toContain('Test Master and case sheets');
     expect(JSON.stringify([...AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST])).not.toMatch(/read-only|read only/i);
     expect(AI_CONNECTOR_NEVER).toContain('can never approve or apply a change');
   });
@@ -429,6 +430,13 @@ describe('AiConnectorsSettingsPage: apps you have allowed to suggest changes', (
     expect(f.nativeElement.textContent).toContain('Only your own apps are listed.');
   });
 
+  it('each allowed app says what the ONE grant covers: Test Master and case sheet suggestions', async () => {
+    const { f } = setup({ state: ON, grants: [G1] });
+    await loaded(f);
+    await openTab(f, 'apps');
+    expect(rows(f)[0].querySelector('[data-grant-label]')!.textContent).toContain('Can suggest Test Master and case sheet changes');
+  });
+
   it('Revoke asks first (danger), then DELETEs that one app and drops it from the list', async () => {
     const { f, api, dialog, toasts } = setup({ state: ON, grants: [G1, G2] });
     await loaded(f);
@@ -474,7 +482,7 @@ describe('AiConnectorsSettingsPage: apps you have allowed to suggest changes', (
     const a = setup({ state: ON, grants: [] });
     await loaded(a.f);
     await openTab(a.f, 'apps');
-    expect(a.f.nativeElement.textContent).toContain('No app can suggest Test Master changes with your account.');
+    expect(a.f.nativeElement.textContent).toContain('No app can suggest Test Master or case sheet changes with your account.');
     expect(rows(a.f)).toHaveLength(0);
     const b = setup({ state: { ...ON, proposals: false }, grants: [] });
     await loaded(b.f);

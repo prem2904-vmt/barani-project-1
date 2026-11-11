@@ -2,14 +2,17 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BuilderError } from './builder-models';
 import { CortexChatComponent } from './cortex-chat.component';
-import { openBuilder } from './builder-testing';
+import { fakeApi, openBuilder } from './builder-testing';
+import { provideRouter } from '@angular/router';
+import { CaseSheetBuilderApi } from './builder-api';
+import { ChatStore } from './chat.store';
 
 afterEach(() => TestBed.resetTestingModule());
 
 describe('Cortex chat', () => {
   it('sends the message with the form id, shows the steps in plain words, and keeps the conversation going', async () => {
     const { api, chat, id } = await openBuilder();
-    api.cortex.mockResolvedValueOnce({ conversationId: 'c9', reply: 'I added it.', steps: [{ tool: 'add_question', summary: "Added 'Cough' with a follow-up 'For how many days'", changed: true }], formChanged: false });
+    api.cortex.mockResolvedValueOnce({ conversationId: 'c9', reply: 'I added it.', steps: [{ tool: 'add_question', summary: "Added 'Cough' with a follow-up 'For how many days'", changed: true }], formChanged: false, proposalId: null, proposalStatus: null });
     await chat.send('  add cough  ');
     expect(api.cortex).toHaveBeenCalledWith(id, 'add cough', undefined);
     expect(chat.messages().map((m) => [m.from, m.text])).toEqual([['user', 'add cough'], ['cortex', 'I added it.']]);
@@ -21,11 +24,11 @@ describe('Cortex chat', () => {
   it('renders the banner, "Cortex is working…" while waiting, and each step', async () => {
     const { api, chat } = await openBuilder();
     let release!: () => void;
-    api.cortex.mockImplementationOnce(() => new Promise((r) => { release = () => r({ conversationId: 'c', reply: 'Ok', steps: [{ tool: 't', summary: 'Added a page', changed: true }], formChanged: false }); }));
+    api.cortex.mockImplementationOnce(() => new Promise((r) => { release = () => r({ conversationId: 'c', reply: 'Ok', steps: [{ tool: 't', summary: 'Added a page', changed: true }], formChanged: false, proposalId: null, proposalStatus: null }); }));
     const f = TestBed.createComponent(CortexChatComponent);
     f.detectChanges();
     const el = f.nativeElement as HTMLElement;
-    expect(el.querySelector('[data-draft-banner]')!.textContent).toContain('Cortex only edits the draft. You publish.');
+    expect(el.querySelector('[data-draft-banner]')!.textContent).toContain('Cortex only suggests. Nothing changes until someone approves it in Pending changes.');
     const p = chat.send('hello');
     await Promise.resolve();
     f.detectChanges();
@@ -55,28 +58,65 @@ describe('Cortex chat', () => {
     expect(api.cortex).toHaveBeenCalledTimes(1);
   });
 
-  it('formChanged reloads the draft into the editor (and re-runs the checks)', async () => {
-    const { api, chat, session, checks } = await openBuilder();
+  it('Cortex never touches the case sheet: formChanged does NOT reload the draft; it keeps the ONE suggestion it made', async () => {
+    const { api, chat, session } = await openBuilder();
     const reload = vi.spyOn(session, 'reloadDraft');
-    const run = vi.spyOn(checks, 'run').mockResolvedValue();
-    api.cortex.mockResolvedValueOnce({ conversationId: 'c', reply: 'Added.', steps: [], formChanged: true, draftVersion: 3 });
+    api.cortex.mockResolvedValueOnce({ conversationId: 'c', reply: 'Added.', steps: [], formChanged: true, proposalId: 'p1', proposalStatus: 'building' });
     await chat.send('add cough');
-    expect(reload).toHaveBeenCalledTimes(1);
-    expect(run).toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(chat.proposal()).toEqual({ id: 'p1', status: 'building' });
+    expect(chat.canSubmit()).toBe(true);
   });
 
-  it('no formChanged, no reload', async () => {
-    const { chat, session } = await openBuilder();
-    const reload = vi.spyOn(session, 'reloadDraft');
+  it('no suggestion in the reply, no proposal (and no Send for approval)', async () => {
+    const { chat } = await openBuilder();
     await chat.send('what can you do?');
-    expect(reload).not.toHaveBeenCalled();
+    expect(chat.proposal()).toBeNull();
+    expect(chat.canSubmit()).toBe(false);
+  });
+
+  it('"Send for approval" submits the suggestion and shows it waiting', async () => {
+    const { api, chat } = await openBuilder();
+    api.cortex.mockResolvedValueOnce({ conversationId: 'c', reply: 'Added.', steps: [], formChanged: true, proposalId: 'p1', proposalStatus: 'building' });
+    await chat.send('add cough');
+    expect(await chat.submit()).toBe(true);
+    expect(api.submit).toHaveBeenCalledWith('p1');
+    expect(chat.proposal()).toEqual({ id: 'p1', status: 'pending' });
+    expect(chat.canSubmit()).toBe(false);
+  });
+
+  it('submit refused (nothing_changed) says so in plain words and keeps it building', async () => {
+    const { api, chat } = await openBuilder();
+    api.cortex.mockResolvedValueOnce({ conversationId: 'c', reply: 'ok', steps: [], formChanged: false, proposalId: 'p1', proposalStatus: 'building' });
+    await chat.send('hi');
+    api.submit.mockRejectedValueOnce(new BuilderError('nothing_changed', 'Cortex hasn’t changed anything yet, so there is nothing to send.', 409));
+    expect(await chat.submit()).toBe(false);
+    expect(chat.proposal()!.status).toBe('building');
+    expect(chat.messages().at(-1)!.text).toMatch(/nothing to send/);
+  });
+
+  it('already_sent: it is shown as waiting', async () => {
+    const { api, chat } = await openBuilder();
+    api.cortex.mockResolvedValueOnce({ conversationId: 'c', reply: 'ok', steps: [], formChanged: true, proposalId: 'p1', proposalStatus: 'building' });
+    await chat.send('hi');
+    api.submit.mockRejectedValueOnce(new BuilderError('already_sent', 'already', 409));
+    await chat.submit();
+    expect(chat.proposal()!.status).toBe('pending');
+  });
+
+  it('the server may answer straight away with a pending suggestion (sent by Cortex)', async () => {
+    const { api, chat } = await openBuilder();
+    api.cortex.mockResolvedValueOnce({ conversationId: 'c', reply: 'Sent.', steps: [], formChanged: true, proposalId: 'p2', proposalStatus: 'pending' });
+    await chat.send('add cough and send it');
+    expect(chat.proposal()).toEqual({ id: 'p2', status: 'pending' });
+    expect(chat.canSubmit()).toBe(false);
   });
 
   it('unsaved edits are saved BEFORE the message goes', async () => {
     const { chat, session, api } = await openBuilder();
     const order: string[] = [];
     vi.spyOn(session, 'flush').mockImplementation(async () => { order.push('flush'); });
-    api.cortex.mockImplementationOnce(async () => { order.push('cortex'); return { conversationId: 'c', reply: 'ok', steps: [], formChanged: false }; });
+    api.cortex.mockImplementationOnce(async () => { order.push('cortex'); return { conversationId: 'c', reply: 'ok', steps: [], formChanged: false, proposalId: null, proposalStatus: null }; });
     await chat.send('hi');
     expect(order).toEqual(['flush', 'cortex']);
   });
@@ -90,33 +130,6 @@ describe('Cortex chat', () => {
     const last = chat.messages().at(-1)!;
     expect(last.error).toBe(true);
     expect(last.text).toMatch(/aren't saved/);
-  });
-
-  it('a local edit made while Cortex worked asks before it is replaced; "Keep my changes" does not reload', async () => {
-    const { chat, session, api, dialog } = await openBuilder();
-    const reload = vi.spyOn(session, 'reloadDraft');
-    api.cortex.mockImplementationOnce(async () => {
-      session.saveState.set('dirty'); // the person kept typing
-      return { conversationId: 'c', reply: 'Added.', steps: [], formChanged: true };
-    });
-    dialog.confirm.mockResolvedValueOnce(false);
-    await chat.send('add cough');
-    expect(dialog.confirm).toHaveBeenCalledTimes(1);
-    expect(dialog.confirm.mock.calls[0][0]).toMatchObject({ tone: 'danger' });
-    expect(reload).not.toHaveBeenCalled();
-    expect(chat.messages().at(-1)!.text).toMatch(/Kept your changes/);
-  });
-
-  it('"Use Cortex’s version" reloads', async () => {
-    const { chat, session, api, dialog } = await openBuilder();
-    const reload = vi.spyOn(session, 'reloadDraft');
-    api.cortex.mockImplementationOnce(async () => {
-      session.saveState.set('dirty');
-      return { conversationId: 'c', reply: 'Added.', steps: [], formChanged: true };
-    });
-    dialog.confirm.mockResolvedValueOnce(true);
-    await chat.send('add cough');
-    expect(reload).toHaveBeenCalledTimes(1);
   });
 
   it.each([
@@ -135,9 +148,59 @@ describe('Cortex chat', () => {
     expect(chat.working()).toBe(false);
   });
 
-  it('a master (read-only) form cannot be chatted into', async () => {
-    const { chat, session } = await openBuilder();
+  it('a Prefrontal master (read-only on screen) CAN be chatted into: the approved suggestion becomes the lab copy', async () => {
+    const { chat, session, api, id } = await openBuilder();
     session.readOnly.set(true);
+    expect(chat.canSend()).toBe(true);
+    await chat.send('add fever');
+    expect(api.cortex).toHaveBeenCalledWith(id, 'add fever', undefined);
+  });
+
+  it('a save conflict blocks sending (Cortex would start from an older copy)', async () => {
+    const { chat, session } = await openBuilder();
+    session.saveState.set('conflict');
     expect(chat.canSend()).toBe(false);
+  });
+
+  it('after Cortex suggests: "ready to send" + Send for approval; after sending: "waiting for approval" with a link to the suggestion', async () => {
+    const { api } = await openBuilder();
+    api.cortex.mockResolvedValueOnce({ conversationId: 'c', reply: 'Added.', steps: [], formChanged: true, proposalId: 'p 7', proposalStatus: 'building' });
+    const f = TestBed.createComponent(CortexChatComponent);
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-proposal]')).toBeNull();
+    const box = el.querySelector('[data-box]') as HTMLTextAreaElement;
+    box.value = 'add cough';
+    box.dispatchEvent(new Event('input'));
+    f.detectChanges();
+    (el.querySelector('[data-act="send"]') as HTMLButtonElement).click();
+    await f.whenStable();
+    f.detectChanges();
+    const card = el.querySelector('[data-proposal]')!;
+    expect(card.getAttribute('data-status')).toBe('building');
+    expect(card.textContent).toContain('ready to send');
+    const link = card.querySelector('[data-act="open-suggestion"]') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/admin/ipd/myprefrontal/pending?id=p%207');
+    (card.querySelector('[data-act="submit"]') as HTMLButtonElement).click();
+    await f.whenStable();
+    f.detectChanges();
+    expect(api.submit).toHaveBeenCalledWith('p 7');
+    const after = el.querySelector('[data-proposal]')!;
+    expect(after.getAttribute('data-status')).toBe('pending');
+    expect(after.textContent).toContain('Cortex suggested changes — waiting for approval');
+    expect(after.querySelector('[data-act="submit"]')).toBeNull();
+  });
+
+  it('no case sheet open: the chat starts a NEW case sheet through builder/cortex', async () => {
+    TestBed.resetTestingModule();
+    const api = fakeApi();
+    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: CaseSheetBuilderApi, useValue: api }, ChatStore] });
+    const chat = TestBed.inject(ChatStore);
+    expect(chat.newSheet()).toBe(true);
+    api.cortexNew.mockResolvedValueOnce({ conversationId: 'n1', reply: 'Made a draft suggestion.', steps: [], formChanged: true, proposalId: 'p9', proposalStatus: 'building' });
+    await chat.send('An ENT case sheet');
+    expect(api.cortexNew).toHaveBeenCalledWith('An ENT case sheet', undefined);
+    expect(api.cortex).not.toHaveBeenCalled();
+    expect(chat.proposal()).toEqual({ id: 'p9', status: 'building' });
   });
 });

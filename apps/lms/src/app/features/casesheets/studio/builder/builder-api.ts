@@ -3,7 +3,7 @@ import { Injectable, Injector, inject } from '@angular/core';
 import { firstValueFrom, Observable } from 'rxjs';
 import { api } from '../../data/api-url';
 import {
-  BUILDER_WORDS, BuilderError, BuilderStatus, CheckSource, CheckView, ChecksResult, CortexReply,
+  BUILDER_WORDS, BuilderError, BuilderStatus, CheckSource, CheckView, ChecksResult, CortexProposalStatus, CortexReply,
 } from './builder-models';
 
 type Json = Record<string, unknown>;
@@ -11,6 +11,7 @@ const obj = (v: unknown): Json => (v && typeof v === 'object' && !Array.isArray(
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 const n = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const SOURCES: CheckSource[] = ['auto', 'cortex', 'connector', 'person'];
+const PROPOSAL_STATUSES: CortexProposalStatus[] = ['building', 'pending', 'stale', 'failed', 'approved', 'rejected', 'withdrawn'];
 
 export function toStatus(v: unknown): BuilderStatus {
   const r = obj(v);
@@ -24,7 +25,8 @@ export function toReply(v: unknown): CortexReply {
     reply: typeof r['reply'] === 'string' ? r['reply'] : '',
     steps: (Array.isArray(r['steps']) ? r['steps'] : []).map((s) => ({ tool: String(obj(s)['tool'] ?? ''), summary: String(obj(s)['summary'] ?? ''), changed: obj(s)['changed'] !== false })).filter((s) => s.summary),
     formChanged: r['formChanged'] === true,
-    draftVersion: typeof r['draftVersion'] === 'number' ? (r['draftVersion'] as number) : undefined,
+    proposalId: typeof r['proposalId'] === 'string' && r['proposalId'] ? (r['proposalId'] as string) : null,
+    proposalStatus: PROPOSAL_STATUSES.find((s) => s === r['proposalStatus']) ?? null,
   };
 }
 
@@ -86,6 +88,19 @@ export class CaseSheetBuilderApi {
     const body: Json = { message };
     if (conversationId) body['conversationId'] = conversationId;
     return toReply(await this.call(this.http.post(api(`/api/casesheets/forms/${encodeURIComponent(formId)}/cortex`), body)));
+  }
+
+  /** No case sheet open: Cortex may start a NEW case sheet (a `create` suggestion; nothing exists until it is approved). */
+  async cortexNew(message: string, conversationId?: string): Promise<CortexReply> {
+    const body: Json = { message };
+    if (conversationId) body['conversationId'] = conversationId;
+    return toReply(await this.call(this.http.post(api('/api/casesheets/builder/cortex'), body)));
+  }
+
+  /** "Send for approval": the chat's building suggestion → pending. Returns the new status. */
+  async submit(proposalId: string): Promise<CortexProposalStatus> {
+    const r = obj(await this.call(this.http.post(api(`/api/casesheets/proposals/${encodeURIComponent(proposalId)}/submit`), {})));
+    return PROPOSAL_STATUSES.find((s) => s === r['status']) ?? 'pending';
   }
 
   async checks(formId: string): Promise<ChecksResult> {

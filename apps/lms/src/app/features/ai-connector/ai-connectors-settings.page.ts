@@ -18,7 +18,7 @@ import { BUILDER_SWITCH_OFF, BUILDER_SWITCH_ON, BUILDER_SWITCH_TITLE, builderWor
 import { BuilderStatusService, CORTEX_BUILDER_ON } from '../casesheets/studio/builder/builder-status.service';
 import {
   AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_NEVER_ITEMS,
-  AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_OFF_EFFECT, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_PRIVACY_LEVELS,
+  AI_CONNECTOR_GRANT_LABEL, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_OFF_EFFECT, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_PRIVACY_LEVELS,
   AiConnectorApi, AiConnectorGrant, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS, rememberedAppName,
 } from './ai-connector.api';
 
@@ -218,13 +218,14 @@ export type AicTab = 'settings' | 'can' | 'apps';
                       @if (grantsError()) {
                         <p class="pf-field__hint" role="alert">Couldn’t load your list. <button type="button" class="pf-btn pf-btn--tertiary press" (click)="loadGrants()">Try again</button></p>
                       } @else if (grants().length === 0) {
-                        <p class="pf-aic__empty">None. No app can suggest Test Master changes with your account.</p>
+                        <p class="pf-aic__empty">None. No app can suggest Test Master or case sheet changes with your account.</p>
                       } @else {
                         <ul class="pf-aic__grants" aria-labelledby="pf-aic-grants-label">
                           @for (g of grants(); track g.clientId) {
                             <li class="pf-aic__grant">
                               <span class="pf-aic__granttext">
                                 <span class="pf-aic__grantname">{{ grantName(g) }}</span>
+                                <span class="pf-aic__grantsub" data-grant-label>{{ grantLabel }}</span>
                                 <span class="pf-aic__grantsub">Allowed {{ grantDate(g) }} · app {{ shortId(g) }}</span>
                               </span>
                               <button type="button" class="pf-btn pf-btn--secondary press pf-aic__revoke" [disabled]="revoking() === g.clientId"
@@ -391,6 +392,7 @@ export class AiConnectorsSettingsPage {
   readonly never = AI_CONNECTOR_NEVER;
   readonly neverItems = AI_CONNECTOR_NEVER_ITEMS;
   readonly suggestTitle = AI_CONNECTOR_SUGGEST_TITLE;
+  readonly grantLabel = AI_CONNECTOR_GRANT_LABEL;
   readonly suggestOn = AI_CONNECTOR_SUGGEST_ON;
   readonly suggestOff = AI_CONNECTOR_SUGGEST_OFF;
   readonly suggestOffEffect = AI_CONNECTOR_SUGGEST_OFF_EFFECT;
@@ -411,8 +413,9 @@ export class AiConnectorsSettingsPage {
   readonly skeleton = this.loadHold.active;
   /** The switch + connector address are for lab admins only. */
   readonly isAdmin = computed(() => this.auth.hasAnyPermission(AI_CONNECTOR_ADMIN_PERMS));
-  /** "Your apps" shows while the lab allows suggestions, or while the person still has an old grant to revoke. */
-  readonly showApps = computed(() => !!this.state()?.proposals || this.grants().length > 0);
+  /** "Your apps" shows while the lab allows suggestions (Test Master, or case sheets through the builder switch), or while the
+   *  person still has an old grant to revoke. ONE per-app grant covers both. */
+  readonly showApps = computed(() => !!this.state()?.proposals || this.builderOn() || this.grants().length > 0);
   private readonly picked = signal<AicTab>('settings');
   /** The open section — falls back to Settings when "Your apps" goes away. */
   readonly tab = computed<AicTab>(() => (this.picked() === 'apps' && !this.showApps() ? 'settings' : this.picked()));
@@ -435,14 +438,14 @@ export class AiConnectorsSettingsPage {
     if (!st || !api || this.saving()) return;
     const next = !this.builderOn();
     const ok = await this.dialog.confirm(next
-      ? { title: 'Let connected apps build case sheets?', message: BUILDER_SWITCH_ON + ' Nothing is published without a person.', confirmLabel: 'Turn on', tone: 'primary' }
-      : { title: 'Stop connected apps building case sheets?', message: 'Connected apps can no longer make or change draft case sheets. Drafts they already made stay as they are.', confirmLabel: 'Turn off', tone: 'danger' });
+      ? { title: 'Let connected apps build case sheets?', message: BUILDER_SWITCH_ON + ' Each person still allows each app, with the box “Also let this app suggest Test Master and case sheet changes”.', confirmLabel: 'Turn on', tone: 'primary' }
+      : { title: 'Stop connected apps building case sheets?', message: 'Connected apps can no longer suggest case sheets. Suggestions already waiting in Pending changes stay there until someone approves or rejects them.', confirmLabel: 'Turn off', tone: 'danger' });
     if (!ok) return;
     this.saving.set(true);
     try {
       await api.setConnector(next);
       st.setSwitch(next);
-      this.toasts.success(next ? 'Connected apps can now build draft case sheets' : 'Connected apps can no longer build case sheets');
+      this.toasts.success(next ? 'Connected apps can now suggest case sheets' : 'Connected apps can no longer suggest case sheets');
     } catch (e) {
       this.toasts.error(builderWords(e, 'Couldn’t save — check your connection and try again.'));
     } finally {
@@ -511,7 +514,7 @@ export class AiConnectorsSettingsPage {
     const name = this.grantName(g);
     const ok = await this.dialog.confirm({
       title: `Revoke ${name}?`,
-      message: `${name} will no longer be able to suggest Test Master changes with your account, starting now. It can still read what your account may see. Suggestions it already made stay in Pending changes.`,
+      message: `${name} will no longer be able to suggest Test Master or case sheet changes with your account, starting now. It can still read what your account may see. Suggestions it already made stay in Pending changes.`,
       confirmLabel: 'Revoke',
       tone: 'danger',
     });

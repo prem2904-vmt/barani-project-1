@@ -22,16 +22,16 @@ export type BuilderTab = 'cortex' | 'checks';
     <aside class="pf-card bd" role="dialog" aria-modal="false" aria-labelledby="bd-h" data-builder-drawer>
       <header class="pf-card__head bd-head">
         <span class="pf-card__icon"><pf-icon [name]="tab() === 'cortex' ? 'sparkle' : 'check'" [size]="16" /></span>
-        <h2 class="pf-card__label" id="bd-h">{{ tab() === 'cortex' ? 'Cortex' : 'Checks' }}</h2>
+        <h2 class="pf-card__label" id="bd-h">{{ newSheet() ? 'New case sheet with Cortex' : tab() === 'cortex' ? 'Cortex' : 'Checks' }}</h2>
         @if (tabs().length > 1) {
           <pf-segmented class="bd-tabs" ariaLabel="Show" [options]="tabs()" [value]="tab()" (valueChange)="tabChange.emit($event)" />
         }
         <button type="button" class="pf-btn pf-btn--icon bd-x" aria-label="Close" data-act="close-builder" (click)="closed.emit()"><pf-icon name="x" [size]="20" /></button>
       </header>
       <div class="pf-card__body bd-body">
-        @if (tab() === 'cortex' && status.cortex()) {
+        @if ((tab() === 'cortex' || newSheet()) && status.cortex()) {
           <st-cortex-chat />
-        } @else {
+        } @else if (!newSheet()) {
           <st-checks-panel />
         }
       </div>
@@ -59,13 +59,15 @@ export type BuilderTab = 'cortex' | 'checks';
 })
 export class BuilderDrawerComponent {
   protected readonly status = inject(BuilderStatusService);
-  private readonly checks = inject(ChecksStore);
+  private readonly checks = inject(ChecksStore, { optional: true });
   readonly tab = input.required<BuilderTab>();
+  /** No case sheet open (Case sheets home): only the chat, which may suggest a NEW case sheet. */
+  readonly newSheet = input(false);
   readonly tabChange = output<BuilderTab>();
   readonly closed = output<void>();
 
   protected readonly tabs = computed<SegmentedOption<BuilderTab>[]>(() => [
     ...(this.status.cortex() ? [{ value: 'cortex' as const, label: 'Cortex' }] : []),
-    { value: 'checks' as const, label: 'Checks', count: this.checks.failing() || null, warn: this.checks.failing() > 0 },
+    ...(this.newSheet() || !this.checks ? [] : [{ value: 'checks' as const, label: 'Checks', count: this.checks.failing() || null, warn: this.checks.failing() > 0 }]),
   ]);
 }

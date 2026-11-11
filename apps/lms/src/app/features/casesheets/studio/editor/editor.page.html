@@ -16,8 +16,8 @@
       <button type="button" class="pf-btn pf-btn--icon st-hover-only ed-desk-only" aria-label="Redo" data-act="redo" [attr.data-tip]="tips.redo" [disabled]="!session.canRedo()" (click)="session.redo()">
         <pf-icon name="redo" [size]="20" />
       </button>
-      @if (builder.cortex() && !session.readOnly()) {
-        <button type="button" class="pf-btn pf-btn--secondary" data-act="cortex" aria-label="Cortex" data-tip="Ask Cortex to change this draft" [attr.aria-pressed]="builderTab() === 'cortex'" [disabled]="!def()" (click)="openBuilder('cortex')">
+      @if (builder.cortex()) {
+        <button type="button" class="pf-btn pf-btn--secondary" data-act="cortex" aria-label="Cortex" data-tip="Ask Cortex to suggest changes" [attr.aria-pressed]="builderTab() === 'cortex'" [disabled]="!def()" (click)="openBuilder('cortex')">
           <pf-icon name="sparkle" [size]="18" /> <span class="ed-actions__lbl">Cortex</span>
         </button>
       }

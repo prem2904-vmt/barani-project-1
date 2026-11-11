@@ -63,7 +63,7 @@ describe('Studio editor: Cortex + Checks (dev beta)', () => {
     cortex.click();
     await settle(f);
     expect(el.querySelector('[data-builder-drawer]')).not.toBeNull();
-    expect(el.querySelector('st-cortex-chat [data-draft-banner]')!.textContent).toContain('Cortex only edits the draft. You publish.');
+    expect(el.querySelector('st-cortex-chat [data-draft-banner]')!.textContent).toContain('Cortex only suggests. Nothing changes until someone approves it in Pending changes.');
     (el.querySelector('[data-act="checks"]') as HTMLButtonElement).click();
     await settle(f);
     expect(el.querySelector('st-checks-panel')).not.toBeNull();

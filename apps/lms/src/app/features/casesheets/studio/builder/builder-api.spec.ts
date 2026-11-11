@@ -42,21 +42,50 @@ describe('CaseSheetBuilderApi', () => {
     await p;
   });
 
-  it('POST forms/{id}/cortex sends message (+ conversationId) and maps steps, formChanged, draftVersion', async () => {
+  it('POST forms/{id}/cortex sends message (+ conversationId) and maps steps, formChanged and the SUGGESTION (proposalId / status)', async () => {
     const p = svc.cortex('f1', 'add cough', 'conv1');
     const r = http.expectOne(`${base()}/api/casesheets/forms/f1/cortex`);
     expect(r.request.method).toBe('POST');
     expect(r.request.body).toEqual({ message: 'add cough', conversationId: 'conv1' });
-    r.flush({ conversationId: 'conv1', reply: 'Done.', steps: [{ tool: 'add_question', summary: "Added 'Cough'" }], formChanged: true, draftVersion: 4 });
-    expect(await p).toEqual({ conversationId: 'conv1', reply: 'Done.', steps: [{ tool: 'add_question', summary: "Added 'Cough'", changed: true }], formChanged: true, draftVersion: 4 });
+    r.flush({ conversationId: 'conv1', reply: 'Done.', steps: [{ tool: 'add_question', summary: "Added 'Cough'" }], formChanged: true, proposalId: 'p1', proposalStatus: 'building' });
+    expect(await p).toEqual({
+      conversationId: 'conv1', reply: 'Done.', steps: [{ tool: 'add_question', summary: "Added 'Cough'", changed: true }], formChanged: true,
+      proposalId: 'p1', proposalStatus: 'building',
+    });
   });
 
-  it('the first message has no conversationId', async () => {
+  it('the first message has no conversationId; no suggestion yet = nulls (draftVersion is gone)', async () => {
     const p = svc.cortex('f1', 'hi');
     const r = http.expectOne(`${base()}/api/casesheets/forms/f1/cortex`);
     expect(r.request.body).toEqual({ message: 'hi' });
-    r.flush({ conversationId: 'c', reply: 'Hello', steps: [], formChanged: false });
-    expect((await p).draftVersion).toBeUndefined();
+    r.flush({ conversationId: 'c', reply: 'Hello', steps: [], formChanged: false, proposalId: null, proposalStatus: null, draftVersion: 9 });
+    const out = await p;
+    expect(out.proposalId).toBeNull();
+    expect(out.proposalStatus).toBeNull();
+    expect('draftVersion' in out).toBe(false);
+  });
+
+  it('an unknown proposalStatus is dropped, never shown', async () => {
+    const p = svc.cortex('f1', 'hi');
+    http.expectOne(`${base()}/api/casesheets/forms/f1/cortex`).flush({ conversationId: 'c', reply: 'ok', steps: [], formChanged: true, proposalId: 'p1', proposalStatus: 'weird' });
+    expect((await p).proposalStatus).toBeNull();
+  });
+
+  it('POST builder/cortex (no case sheet open) for a NEW case sheet suggestion', async () => {
+    const p = svc.cortexNew('An ENT case sheet', 'c2');
+    const r = http.expectOne(`${base()}/api/casesheets/builder/cortex`);
+    expect(r.request.method).toBe('POST');
+    expect(r.request.body).toEqual({ message: 'An ENT case sheet', conversationId: 'c2' });
+    r.flush({ conversationId: 'c2', reply: 'Made it.', steps: [], formChanged: true, proposalId: 'p9', proposalStatus: 'building' });
+    expect((await p).proposalId).toBe('p9');
+  });
+
+  it('POST proposals/{id}/submit = "Send for approval" and returns the new status', async () => {
+    const p = svc.submit('p 1');
+    const r = http.expectOne(`${base()}/api/casesheets/proposals/p%201/submit`);
+    expect(r.request.method).toBe('POST');
+    r.flush({ id: 'p 1', status: 'pending' });
+    expect(await p).toBe('pending');
   });
 
   it.each([

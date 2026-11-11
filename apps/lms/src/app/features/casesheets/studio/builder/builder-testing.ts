@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { vi } from 'vitest';
 import { addPage, emptyDefinition } from '@prefrontal/forms-engine';
 import { DialogService } from '../../../../core/services/dialog.service';
@@ -29,7 +30,9 @@ export function fakeApi(initial: ChecksResult = checksOf([])) {
   return {
     status: vi.fn(async () => STATUS_ON),
     setConnector: vi.fn(async () => undefined),
-    cortex: vi.fn(async (): Promise<CortexReply> => ({ conversationId: 'c1', reply: 'Done.', steps: [], formChanged: false })),
+    cortex: vi.fn(async (): Promise<CortexReply> => ({ conversationId: 'c1', reply: 'Done.', steps: [], formChanged: false, proposalId: null, proposalStatus: null })),
+    cortexNew: vi.fn(async (): Promise<CortexReply> => ({ conversationId: 'n1', reply: 'Done.', steps: [], formChanged: false, proposalId: null, proposalStatus: null })),
+    submit: vi.fn(async (_id?: string) => 'pending' as const),
     checks: vi.fn(async () => initial),
     runChecks: vi.fn(async () => initial),
     suggestChecks: vi.fn(async () => initial),
@@ -50,6 +53,7 @@ export async function openBuilder(opts: { api?: FakeApi; dialog?: ReturnType<typ
   const dialog = opts.dialog ?? fakeDialog();
   TestBed.configureTestingModule({
     providers: [
+      provideRouter([]),
       { provide: StudioApi, useValue: studio },
       { provide: CaseSheetBuilderApi, useValue: api },
       { provide: DialogService, useValue: dialog },
