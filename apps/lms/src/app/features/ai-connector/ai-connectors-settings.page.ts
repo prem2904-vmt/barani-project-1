@@ -12,6 +12,10 @@ import { SkeletonFormComponent } from '../../shared/primitives/skeleton-kit.comp
 import { createLoadHold } from '../../shared/utils/min-duration';
 import { copyText } from '../../shared/utils/report-share';
 import { SelectComponent } from '../../shared/primitives/select.component';
+import { CasesheetGateService } from '../casesheets/shared/casesheet-gate.service';
+import { CaseSheetBuilderApi } from '../casesheets/studio/builder/builder-api';
+import { BUILDER_SWITCH_OFF, BUILDER_SWITCH_ON, BUILDER_SWITCH_TITLE, builderWords } from '../casesheets/studio/builder/builder-models';
+import { BuilderStatusService, CORTEX_BUILDER_ON } from '../casesheets/studio/builder/builder-status.service';
 import {
   AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_NEVER_ITEMS,
   AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_OFF_EFFECT, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_PRIVACY_LEVELS,
@@ -132,6 +136,18 @@ export type AicTab = 'settings' | 'can' | 'apps';
                             <span class="pf-aic__state"><span class="pf-aic__dot" [attr.data-on]="!!s.proposals" aria-hidden="true"></span>{{ s.proposals ? 'On' : 'Off' }}</span>
                           }
                         </li>
+                        @if (builderSwitchShown()) {
+                          <li class="pf-aic__row" data-builder-switch>
+                            <div class="pf-aic__rowtext">
+                              <span class="pf-aic__rowtitle" id="pf-aic-builder-label">{{ builderTitle }}</span>
+                              <span class="pf-aic__rowsub">{{ builderOn() ? builderOnWords : builderOffWords }}</span>
+                            </div>
+                            <button type="button" class="pf-toggle pf-aic__toggle press" role="switch" id="pf-aic-builder" [attr.aria-checked]="builderOn()"
+                                    aria-labelledby="pf-aic-builder-label" [disabled]="saving()" (click)="toggleBuilder()">
+                              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                            </button>
+                          </li>
+                        }
                         <li class="pf-aic__row pf-aic__row--level">
                           <div class="pf-aic__rowtext">
                             <span class="pf-aic__rowtitle" id="pf-aic-level-label">What apps may see about patients</span>
@@ -401,8 +417,42 @@ export class AiConnectorsSettingsPage {
   /** The open section — falls back to Settings when "Your apps" goes away. */
   readonly tab = computed<AicTab>(() => (this.picked() === 'apps' && !this.showApps() ? 'settings' : this.picked()));
 
+  // ---- "Let connected apps build case sheet forms" (case-sheet builder beta: console switch + case-sheet gate + the server) ----
+  // The services are only created when the console switch is on, so the rest of this screen never touches them.
+  private readonly builderFlag = inject(CORTEX_BUILDER_ON)();
+  private readonly builderStatus = this.builderFlag ? inject(BuilderStatusService) : null;
+  private readonly builderApi = this.builderFlag ? inject(CaseSheetBuilderApi) : null;
+  private readonly csGate = this.builderFlag ? inject(CasesheetGateService) : null;
+  readonly builderTitle = BUILDER_SWITCH_TITLE;
+  readonly builderOnWords = BUILDER_SWITCH_ON;
+  readonly builderOffWords = BUILDER_SWITCH_OFF;
+  readonly builderSwitchShown = computed(() => !!this.csGate?.visible() && !!this.builderStatus?.canChangeSwitch());
+  readonly builderOn = computed(() => !!this.builderStatus?.status()?.connectorSwitch);
+
+  async toggleBuilder(): Promise<void> {
+    const st = this.builderStatus;
+    const api = this.builderApi;
+    if (!st || !api || this.saving()) return;
+    const next = !this.builderOn();
+    const ok = await this.dialog.confirm(next
+      ? { title: 'Let connected apps build case sheet forms?', message: BUILDER_SWITCH_ON + ' Nothing is published without a person.', confirmLabel: 'Turn on', tone: 'primary' }
+      : { title: 'Stop connected apps building case sheet forms?', message: 'Connected apps can no longer make or change draft case sheet forms. Drafts they already made stay as they are.', confirmLabel: 'Turn off', tone: 'danger' });
+    if (!ok) return;
+    this.saving.set(true);
+    try {
+      await api.setConnector(next);
+      st.setSwitch(next);
+      this.toasts.success(next ? 'Connected apps can now build draft case sheet forms' : 'Connected apps can no longer build case sheet forms');
+    } catch (e) {
+      this.toasts.error(builderWords(e, 'Couldn’t save — check your connection and try again.'));
+    } finally {
+      this.saving.set(false);
+    }
+  }
+
   constructor() {
     void this.load();
+    void this.builderStatus?.load();
   }
 
   pick(t: AicTab): void { this.picked.set(t); }
