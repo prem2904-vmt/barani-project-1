@@ -9,7 +9,6 @@ import {
   Editor,
   FormDetail,
   FormRow,
-  ImportResult,
   LivePreview,
   Page,
   TemplateKind,
@@ -70,8 +69,6 @@ export abstract class StudioApi {
   /** The template's page / field with keys that don't clash with the form it goes into. */
   abstract expandTemplate(id: string, usedFieldKeys: string[], usedPageKeys: string[]): Promise<{ kind: TemplateKind; body: unknown }>;
 
-  // legacy import
-  abstract importLegacy(legacy: unknown, opts: { dryRun: boolean; title?: string }): Promise<ImportResult>;
 
   // Cortex: a case sheet from a paper sheet (dev beta)
   /** Upload the pages; the server starts a job (202 `{ jobId }`). Refusals carry a `code` (StudioError). */

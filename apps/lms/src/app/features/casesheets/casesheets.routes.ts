@@ -26,7 +26,6 @@ export const CASESHEET_PATHS = {
     home: 'admin/ipd/myprefrontal',
     form: 'admin/ipd/myprefrontal/forms/:id',
     formHistory: 'admin/ipd/myprefrontal/forms/:id/history',
-    import: 'admin/ipd/myprefrontal/import',
     /** Pending changes: suggestions from Cortex / a connected app, and updates from Prefrontal (approvals). */
     pending: 'admin/ipd/myprefrontal/pending',
     /** Admin → IPD → Departments (the lab's IPD departments forms are grouped by). */
@@ -57,7 +56,6 @@ export const casesheetLinks = {
   adminHome: (): string => '/admin/ipd/myprefrontal',
   adminForm: (id: string): string => `/admin/ipd/myprefrontal/forms/${enc(id)}`,
   adminFormHistory: (id: string): string => `/admin/ipd/myprefrontal/forms/${enc(id)}/history`,
-  adminImport: (): string => '/admin/ipd/myprefrontal/import',
   adminPending: (): string => '/admin/ipd/myprefrontal/pending',
   /** One suggestion in Pending changes. */
   adminPendingItem: (proposalId: string): string => `/admin/ipd/myprefrontal/pending?id=${enc(proposalId)}`,
@@ -89,7 +87,6 @@ function gated(path: string, title: string, loadComponent: Route['loadComponent'
 const studioHome = () => import('./studio/studio.page').then(m => m.StudioPage);
 const studioEditor = () => import('./studio/editor/editor.page').then(m => m.StudioEditorPage);
 const studioHistory = () => import('./studio/history/history.page').then(m => m.StudioHistoryPage);
-const studioImport = () => import('./studio/import/import.page').then(m => m.StudioImportPage);
 const studioDepartments = () => import('./studio/departments/departments.page').then(m => m.DepartmentsPage);
 const studioPending = () => import('./studio/approvals/pending.page').then(m => m.StudioPendingPage);
 
@@ -99,7 +96,6 @@ export const CASESHEET_SHELL_ROUTES: Routes = [
   gated(CASESHEET_PATHS.admin.pending, 'Pending changes', studioPending),
   gated(CASESHEET_PATHS.admin.form, 'Edit case sheet', studioEditor),
   gated(CASESHEET_PATHS.admin.formHistory, 'Case sheet version history', studioHistory),
-  gated(CASESHEET_PATHS.admin.import, 'Bring in an old case sheet', studioImport),
   gated(CASESHEET_PATHS.admin.departments, 'IPD departments', studioDepartments),
   gated(CASESHEET_PATHS.lab.prepare, 'Prepare', departmentsPage, true),
   gated(CASESHEET_PATHS.lab.prepareCases, 'Case sheets', casesPage, true),

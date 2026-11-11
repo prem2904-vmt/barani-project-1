@@ -29,7 +29,6 @@ import {
   FormDetail,
   FormOrigin,
   FormRow,
-  ImportResult,
   LivePreview,
   Page,
   Person,
@@ -485,23 +484,6 @@ export class MockStudioApi extends StudioApi {
     const t = this.tpl.get(tid);
     if (!t) throw new StudioError('not_found', 'That template was not found.', 404);
     return { kind: t.kind, body: clone(t.body) };
-  }
-
-  async importLegacy(legacy: unknown, opts: { dryRun: boolean; title?: string }): Promise<ImportResult> {
-    await this.tick('importLegacy');
-    const l = legacy as { displayName?: string; name?: string };
-    if (!legacy || typeof legacy !== 'object') throw new StudioError('import_failed', "That file isn't a case sheet.", 400);
-    const title = opts.title || l.displayName || l.name || 'Imported case sheet';
-    const definition: FormDefinition = { schemaVersion: 2, title, pages: [{ key: 'page1', title: 'Page 1', fields: [] }], narrative: { sections: [] } };
-    const report = {
-      summary: `Imported '${title}': 1 page and 0 fields. Nothing needs fixing.`,
-      canPublish: true,
-      counts: { pages: 1, fields: 0, unsupported: 0, attention: 0, problems: 0 },
-      items: [],
-    };
-    if (opts.dryRun) return { saved: false, formId: null, versionId: null, definition, report };
-    const r = await this.createForm(title, definition);
-    return { saved: true, formId: r.id, versionId: r.version.id, definition, report };
   }
 
   /** Cortex import: a job that walks queued → reading → building → checking → done, then a draft with one "Check this". */

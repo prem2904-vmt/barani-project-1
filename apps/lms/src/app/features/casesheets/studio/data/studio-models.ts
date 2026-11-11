@@ -194,30 +194,6 @@ export interface TemplateRow {
   rowVersion: number;
 }
 
-export interface ImportItem {
-  level: 'problem' | 'attention' | 'info';
-  pageKey: string | null;
-  pageTitle: string | null;
-  fieldKey: string | null;
-  fieldLabel: string | null;
-  message: string;
-}
-
-export interface ImportReport {
-  summary: string;
-  canPublish: boolean;
-  counts: { pages: number; fields: number; unsupported: number; attention: number; problems: number };
-  items: ImportItem[];
-}
-
-export interface ImportResult {
-  saved: boolean;
-  formId: string | null;
-  versionId: string | null;
-  definition: FormDefinition;
-  report: ImportReport;
-}
-
 export interface Page<T> {
   items: T[];
   total: number;

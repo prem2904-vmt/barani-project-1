@@ -192,7 +192,6 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/ipd/myprefrontal':                   { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/myprefrontal/forms/:id':         { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/myprefrontal/forms/:id/history': { perms: CASESHEET_FORMS_PERMS },
-  '/admin/ipd/myprefrontal/import':            { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/myprefrontal/pending':           { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/departments':                    { perms: CASESHEET_FORMS_PERMS },
   // The lab's sheets: read with casesheet_view (tenant-wide, branch-filtered, §11 Q2) or casesheet_fill; start one with fill.

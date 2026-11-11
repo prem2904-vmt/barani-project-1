@@ -184,7 +184,7 @@ describe('Case sheets home: band actions on a phone', () => {
     const dir = resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/studio');
     const html = readFileSync(resolve(dir, 'studio.page.html'), 'utf8');
     const band = html.slice(html.indexOf('band-actions'), html.indexOf('</pf-hero-band>'));
-    for (const words of ['Start from a paper case sheet', 'Bring in an old case sheet', 'New case sheet']) {
+    for (const words of ['Start from a paper case sheet', 'New case sheet']) {
       expect(band).toContain(`<span class="sh-actions__lbl">${words}</span>`);
     }
     const scss = readFileSync(resolve(dir, 'studio.page.scss'), 'utf8');

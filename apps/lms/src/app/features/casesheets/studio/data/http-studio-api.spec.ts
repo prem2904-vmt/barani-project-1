@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { mapError, toFormRow, toDiff, toImport, toVersion } from './http-studio-api';
+import { mapError, toFormRow, toDiff, toVersion } from './http-studio-api';
 import { DraftConflict, PublishRefused, StudioError } from './studio-models';
 
 describe('HttpStudioApi wire mapping', () => {
@@ -56,7 +56,7 @@ describe('HttpStudioApi wire mapping', () => {
     expect(mapError(off)).toBe(off);
   });
 
-  it('diff, version and import report shapes', () => {
+  it('diff and version shapes', () => {
     const d = toDiff({
       from: { id: 'a', versionNo: 1, state: 'published' },
       to: { id: 'b', versionNo: 2, state: 'draft' },
@@ -66,9 +66,6 @@ describe('HttpStudioApi wire mapping', () => {
     expect(d).toMatchObject({ headline: '1 field added', total: 1, to: { versionNo: 2 } });
     expect(d.changes[0]).toMatchObject({ type: 'field_added', fieldKey: 'smell', pageKey: null });
     expect(toVersion({ state: 'weird' }).state).toBe('draft');
-    const r = toImport({ saved: false, definition: { pages: [] }, report: { summary: 'Imported', canPublish: false, counts: { pages: 5 }, items: [{ level: 'problem', message: 'x' }] } });
-    expect(r.report).toMatchObject({ canPublish: false, counts: { pages: 5, fields: 0 } });
-    expect(r.report.items[0].level).toBe('problem');
   });
 });
 

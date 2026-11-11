@@ -40,7 +40,6 @@ describe('case-sheet routes: defined once, all gated', () => {
       'admin/ipd/myprefrontal/pending',
       'admin/ipd/myprefrontal/forms/:id',
       'admin/ipd/myprefrontal/forms/:id/history',
-      'admin/ipd/myprefrontal/import',
       'admin/ipd/departments',
       'prepare',
       'prepare/cases',

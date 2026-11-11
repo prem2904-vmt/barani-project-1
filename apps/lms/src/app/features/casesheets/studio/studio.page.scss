@@ -4,7 +4,7 @@
 }
 
 // Phones: three labelled buttons cannot fit beside the back button and the lab name (the band clipped "New form", and
-// with Cortex's button even "Bring in an old form"). They become icon buttons; the label stays as the accessible name.
+// with Cortex's button even the long ones). They become icon buttons; the label stays as the accessible name.
 @media (max-width: 640px) {
   .sh-actions {
     gap: 6px;

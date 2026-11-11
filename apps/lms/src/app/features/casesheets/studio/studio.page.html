@@ -22,7 +22,6 @@
           <pf-icon name="sparkle" [size]="18" /> <span class="sh-actions__lbl">Start from a paper case sheet</span>
         </button>
       }
-      <a class="pf-btn pf-btn--secondary" [routerLink]="links.adminImport()" data-act="import"><pf-icon name="upload" [size]="18" /> <span class="sh-actions__lbl">Bring in an old case sheet</span></a>
       <button type="button" class="pf-btn pf-btn--primary" data-act="new-form" [disabled]="busy() === 'new'" [attr.aria-busy]="busy() === 'new' ? 'true' : null" (click)="newForm()">
         <pf-icon name="plus" [size]="18" /> <span class="sh-actions__lbl">New case sheet</span>
       </button>

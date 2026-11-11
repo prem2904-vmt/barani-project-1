@@ -18,8 +18,6 @@ import {
   FormDetail,
   FormOrigin,
   FormRow,
-  ImportItem,
-  ImportResult,
   LivePreview,
   Page,
   Person,
@@ -214,41 +212,6 @@ function toTemplate(v: unknown): TemplateRow {
   };
 }
 
-export function toImport(v: unknown): ImportResult {
-  const x = obj(v);
-  const r = obj(x['report']);
-  const c = obj(r['counts']);
-  return {
-    saved: x['saved'] === true,
-    formId: strOrNull(x['formId']),
-    versionId: strOrNull(x['versionId']),
-    definition: (x['definition'] ?? { pages: [] }) as FormDefinition,
-    report: {
-      summary: str(r['summary']),
-      canPublish: r['canPublish'] !== false,
-      counts: {
-        pages: num(c['pages']),
-        fields: num(c['fields']),
-        unsupported: num(c['unsupported']),
-        attention: num(c['attention']),
-        problems: num(c['problems']),
-      },
-      items: arr(r['items']).map((i): ImportItem => {
-        const o = obj(i);
-        const level = o['level'] === 'problem' || o['level'] === 'info' ? o['level'] : 'attention';
-        return {
-          level,
-          pageKey: strOrNull(o['pageKey']),
-          pageTitle: strOrNull(o['pageTitle']),
-          fieldKey: strOrNull(o['fieldKey']),
-          fieldLabel: strOrNull(o['fieldLabel']),
-          message: str(o['message']),
-        };
-      }),
-    },
-  };
-}
-
 /** The diff summary: a list of plain lines, or one line of text. */
 function toSummary(v: unknown): string[] {
   if (typeof v === 'string') return v.trim() ? [v.trim()] : [];
@@ -424,10 +387,6 @@ export class HttpStudioApi implements StudioApi {
   async expandTemplate(id: string, usedFieldKeys: string[], usedPageKeys: string[]): Promise<{ kind: TemplateKind; body: unknown }> {
     const r = obj(await this.call(this.http.post(api(`/api/casesheets/templates/${id}/expand`), { usedFieldKeys, usedPageKeys })));
     return { kind: r['kind'] === 'page' ? 'page' : 'field', body: r['body'] };
-  }
-
-  async importLegacy(legacy: unknown, opts: { dryRun: boolean; title?: string }): Promise<ImportResult> {
-    return toImport(await this.call(this.http.post(api('/api/casesheets/forms/import'), { legacy, dryRun: opts.dryRun, title: opts.title })));
   }
 
   async draftFromSheet(input: DraftFromSheetInput): Promise<{ jobId: string }> {

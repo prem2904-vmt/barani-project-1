@@ -46,7 +46,7 @@ export function groupByDepartment(forms: FormRow[], departments: DepartmentRow[]
 /**
  * MyPrefrontal home (Admin > IPD > MyPrefrontal, `casesheet_forms_manage`): every form this lab can use, grouped by
  * department. Master case sheets are read-only; Edit makes this lab's own copy (a fork). The lab's own forms show where
- * they stand (live version, open draft). New case sheet and Bring in an old case sheet sit in the band.
+ * they stand (live version, open draft). New case sheet sits in the band.
  */
 @Component({
   selector: 'app-studio-page',
