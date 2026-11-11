@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
+import { CdkDrag, CdkDragDrop, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
 import { ToggleComponent, SelectComponent, PfSelectOption } from '@prefrontal/shared';
 import { AuthService } from '../../core/auth/auth.service';
 import { ApiService } from '../../core/services/api.service';
@@ -21,21 +22,30 @@ export const SM_ICONS = {
   home: ['m3 11 9-8 9 8', 'M5 10v10h5v-6h4v6h5V10'],
   roles: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
   back: ['m15 18-6-6 6-6'],
+  edit: ['M4 20h4L19 9l-4-4L4 16z', 'M13.5 6.5l4 4'],
+  close: ['M18 6 6 18', 'm6 6 12 12'],
+  minus: ['M6 12h12'],
+  plus: ['M12 5v14', 'M5 12h14'],
+  /** Six dots drawn as round-capped zero-length strokes (stroke icons only). */
+  grip: ['M9 6h.01', 'M15 6h.01', 'M9 12h.01', 'M15 12h.01', 'M9 18h.01', 'M15 18h.01'],
+  chevron: ['m9 18 6-6-6-6'],
 } as const;
 
-interface MenuRow { kind: 'home' | 'item'; item?: NavItem; label: string; iconPath: readonly string[]; pinned: boolean; locked: boolean; canUp: boolean; canDown: boolean }
-interface MenuSection { key: string; title: string; rows: MenuRow[] }
+interface MenuRow { kind: 'home' | 'item'; item?: NavItem; label: string; iconPath: readonly string[]; active: boolean }
+interface EditRow { item: NavItem; locked: boolean; canUp: boolean; canDown: boolean }
 
 /**
- * The Start menu: every screen the person may open, with pin / unpin onto the bar, icons-only,
- * "reset to my role's defaults" and (manage_roles) the per-role defaults editor. Opened from the PF
- * logo in both shells. The bar is decided only by nav-pins.ts; this component renders the layout it is
- * given and writes the person's choices through NavPrefsService.
+ * The Start menu ("B · Pinned tiles", owner 2026-11-11). Normal view: who is signed in, the screens on
+ * the bar as tiles, every other screen as a plain row; search hides behind a quiet button ("/" or just
+ * typing opens it). Customize mode: reorder (drag or Alt+Arrow), take off, add back, icons only, reset,
+ * and (manage_roles) the per-role defaults editor. Opened from the PF logo in both shells. The bar is
+ * decided only by nav-pins.ts; this component renders the layout it is given and writes the person's
+ * choices through NavPrefsService.
  */
 @Component({
   selector: 'pf-start-menu',
   standalone: true,
-  imports: [ToggleComponent, SelectComponent],
+  imports: [ToggleComponent, SelectComponent, CdkDropList, CdkDrag],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './start-menu.component.html',
   styleUrl: './start-menu.component.scss',
@@ -52,11 +62,11 @@ export class StartMenuComponent {
   /** The layout the shell computed (computeNavLayout). */
   readonly layout = input.required<NavLayout>();
   readonly open = input(false);
-  /** Where the landing link goes (the "Home" row). */
+  /** Where the landing link goes (the "Home" tile). */
   readonly homeHref = input<string | string[]>('/');
   /** 'bar' = rises above the desktop bar; 'sheet' = full-width phone sheet; 'rail' = beside the iPad rail. */
   readonly placement = input<'bar' | 'sheet' | 'rail'>('bar');
-  /** Desktop focuses the search box on open; touch devices must not pop the keyboard. */
+  /** Desktop moves focus into the menu on open; touch devices must not pop the keyboard. */
   readonly autofocusSearch = input(true);
   /** Phone / iPad: the PF button no longer opens the account menu, so the Start menu offers it. */
   readonly showAccount = input(false);
@@ -65,11 +75,30 @@ export class StartMenuComponent {
 
   protected readonly icons = SM_ICONS;
   protected readonly query = signal('');
-  protected readonly mode = signal<'list' | 'roles'>('list');
+  /** list = tiles + rows; search = the quiet search line replaces the header; edit = Customize; roles = role defaults. */
+  protected readonly mode = signal<'list' | 'search' | 'edit' | 'roles'>('list');
+  /** A DialogService confirm is up: the panel steps aside (the dialog host sits below it). */
+  protected readonly asking = signal(false);
+  private readonly currentUrl = signal('');
   private readonly panel = viewChild<ElementRef<HTMLElement>>('panel');
   private readonly searchBox = viewChild<ElementRef<HTMLInputElement>>('search');
 
   protected readonly canManageRoles = computed(() => this.auth.hasPermission('manage_roles'));
+
+  // ── Who is signed in ───────────────────────────────────────────────────
+  protected readonly userName = computed(() => {
+    const u = this.auth.user();
+    return (u?.displayName || [u?.firstName, u?.fathersName].filter(Boolean).join(' ') || 'You').trim();
+  });
+  protected readonly userLine = computed(() => {
+    const u = this.auth.user();
+    return [u?.tenantName, (u?.roles ?? []).join(', ')].filter(Boolean).join(' · ');
+  });
+  protected readonly initials = computed(() => {
+    const words = this.userName().split(/\s+/).filter(Boolean);
+    const s = words.length > 1 ? words[0][0] + words[words.length - 1][0] : (words[0] ?? '?').slice(0, 2);
+    return s.toUpperCase();
+  });
 
   constructor() {
     effect(() => {
@@ -77,42 +106,47 @@ export class StartMenuComponent {
         this.prefs.ensureDefaults();
         this.query.set('');
         this.mode.set('list');
-        if (this.autofocusSearch()) setTimeout(() => this.searchBox()?.nativeElement.focus(), 0);
+        this.asking.set(false);
+        this.currentUrl.set(((this.router as Partial<Router>).url ?? '').split(/[?#]/)[0]);
+        if (this.autofocusSearch()) setTimeout(() => this.focusFirst(), 0);
       }
     });
   }
 
-  // ── The list ────────────────────────────────────────────────────────────
-  protected readonly sections = computed<MenuSection[]>(() => {
-    const l = this.layout();
-    const q = this.query().trim().toLowerCase();
-    const match = (i: NavItem) => !q || i.label.toLowerCase().includes(q);
-    const locked = l.lockedIds;
-    const pinnedIds = l.pinned.map(p => p.id);
-    const row = (i: NavItem, pinned: boolean): MenuRow => {
-      const at = pinnedIds.indexOf(i.id);
-      return {
-        kind: 'item', item: i, label: i.label, iconPath: i.iconPath, pinned, locked: locked.has(i.id),
-        canUp: pinned && !locked.has(i.id) && at > 0 && !locked.has(pinnedIds[at - 1]),
-        canDown: pinned && !locked.has(i.id) && at >= 0 && at < pinnedIds.length - 1,
-      };
-    };
-    const out: MenuSection[] = [];
-    if (!q || 'home'.includes(q)) {
-      out.push({ key: 'home', title: '', rows: [{ kind: 'home', label: 'Home', iconPath: SM_ICONS.home, pinned: false, locked: false, canUp: false, canDown: false }] });
-    }
-    const add = (key: string, title: string, items: NavItem[], pinned: boolean) => {
-      const rows = items.filter(match).map(i => row(i, pinned));
-      if (rows.length) out.push({ key, title, rows });
-    };
-    add('pinned', 'Pinned', l.menu.pinned, true);
-    add('work', 'Work', l.menu.work, false);
-    add('more', 'More', l.menu.more, false);
-    add('settings', 'Settings', l.menu.settings, false);
-    return out;
+  private focusFirst(): void {
+    this.panel()?.nativeElement.querySelector<HTMLElement>('[data-sm-row]')?.focus();
+  }
+
+  private isActive(i: NavItem): boolean {
+    const url = this.currentUrl();
+    if (!url || !i.href) return false;
+    const href = i.href.split(/[?#]/)[0];
+    return url === href || (!i.exact && href !== '/' && url.startsWith(href + '/'));
+  }
+
+  // ── Normal view ────────────────────────────────────────────────────────
+  private readonly homeRow = computed<MenuRow>(() => {
+    const h = this.homeHref();
+    const href = Array.isArray(h) ? h.join('/').replace(/\/+/g, '/') : h;
+    return { kind: 'home', label: 'Home', iconPath: SM_ICONS.home, active: !!href && href !== '/' && this.currentUrl() === href };
   });
-  protected readonly flatRows = computed(() => this.sections().flatMap(s => s.rows));
-  protected readonly hasResults = computed(() => this.flatRows().length > 0);
+  private toRow(i: NavItem): MenuRow {
+    return { kind: 'item', item: i, label: i.label, iconPath: i.iconPath, active: this.isActive(i) };
+  }
+  /** Home, then the pinned screens in bar order. */
+  protected readonly tiles = computed<MenuRow[]>(() => [this.homeRow(), ...this.layout().pinned.map(i => this.toRow(i))]);
+  /** Every other screen the person may open (each once). */
+  protected readonly others = computed<MenuRow[]>(() => {
+    const m = this.layout().menu;
+    return [...m.work, ...m.more, ...m.settings].map(i => this.toRow(i));
+  });
+  /** Search results: one flat list, Home only when asked for. */
+  protected readonly results = computed<MenuRow[]>(() => {
+    const q = this.query().trim().toLowerCase();
+    const all = [...this.layout().pinned.map(i => this.toRow(i)), ...this.others()];
+    const hits = q ? all.filter(r => r.label.toLowerCase().includes(q)) : all;
+    return !q || 'home'.includes(q) ? [this.homeRow(), ...hits] : hits;
+  });
   /** Pinned screens past the bar's capacity are still pinned, just not visible at this width. */
   protected readonly hiddenPins = computed(() => Math.max(0, this.layout().pinned.length - this.layout().bar.length));
 
@@ -135,24 +169,100 @@ export class StartMenuComponent {
     this.account.emit();
   }
 
+  // ── Search ──────────────────────────────────────────────────────────────
+  protected openSearch(initial = ''): void {
+    this.query.set(initial);
+    this.mode.set('search');
+    setTimeout(() => {
+      const box = this.searchBox()?.nativeElement;
+      if (!box) return;
+      box.focus();
+      box.setSelectionRange(box.value.length, box.value.length);
+    }, 0);
+  }
+
+  protected closeSearch(): void {
+    this.query.set('');
+    this.mode.set('list');
+    setTimeout(() => this.panel()?.nativeElement.querySelector<HTMLElement>('[data-sm-search-btn]')?.focus(), 0);
+  }
+
   protected onSearchKey(ev: KeyboardEvent): void {
     if (ev.key === 'Enter') {
       // The first screen that matches (Home only when it is the only match).
-      const first = this.flatRows().find(r => r.kind === 'item') ?? this.flatRows()[0];
+      const rows = this.results();
+      const first = rows.find(r => r.kind === 'item') ?? rows[0];
       if (first) { ev.preventDefault(); this.openRow(first); }
     }
   }
 
-  // ── Pin / unpin / order (this person, this browser) ─────────────────────
-  protected toggle(r: MenuRow): void {
-    if (!r.item || r.locked) return;
-    const l = this.layout();
-    this.prefs.setPinned(togglePinned(l.pinned.map(p => p.id), r.item.id, l.lockedIds));
+  // ── Customize (this person, this browser) ───────────────────────────────
+  protected startEdit(): void {
+    this.query.set('');
+    this.mode.set('edit');
+    setTimeout(() => this.panel()?.nativeElement.querySelector<HTMLElement>('[data-sm-done]')?.focus(), 0);
   }
 
-  protected move(r: MenuRow, dir: -1 | 1): void {
-    if (!r.item) return;
-    this.prefs.setPinned(movePinned(this.layout().pinned.map(p => p.id), r.item.id, dir));
+  protected doneEdit(): void {
+    this.mode.set('list');
+    setTimeout(() => this.panel()?.nativeElement.querySelector<HTMLElement>('[data-sm-edit-btn]')?.focus(), 0);
+  }
+
+  private pinnedIds(): string[] {
+    return this.layout().pinned.map(p => p.id);
+  }
+
+  protected readonly editRows = computed<EditRow[]>(() => {
+    const l = this.layout();
+    const ids = l.pinned.map(p => p.id);
+    return l.pinned.map((i, at) => {
+      const locked = l.lockedIds.has(i.id);
+      return {
+        item: i, locked,
+        canUp: !locked && at > 0 && !l.lockedIds.has(ids[at - 1]),
+        canDown: !locked && at < ids.length - 1,
+      };
+    });
+  });
+  /** Screens not on the bar, offered as "+ Label" chips. */
+  protected readonly addable = computed<NavItem[]>(() => {
+    const m = this.layout().menu;
+    return [...m.work, ...m.more, ...m.settings];
+  });
+  /** Touch lifts after a still hold (moving sooner scrolls the list); mouse lifts at once. */
+  protected readonly dragDelay = { touch: 300, mouse: 0 };
+  private readonly lockedCount = computed(() => this.editRows().filter(r => r.locked).length);
+  /** Nothing moves above the admin's locked screens (they are always first). */
+  protected readonly sortPredicate = (index: number): boolean => index >= this.lockedCount();
+
+  protected unpin(i: NavItem): void {
+    const l = this.layout();
+    if (l.lockedIds.has(i.id)) return;
+    this.prefs.setPinned(togglePinned(this.pinnedIds(), i.id, l.lockedIds));
+  }
+
+  protected pin(i: NavItem): void {
+    const l = this.layout();
+    this.prefs.setPinned(togglePinned(this.pinnedIds(), i.id, l.lockedIds));
+  }
+
+  protected onDrop(ev: CdkDragDrop<unknown>): void {
+    if (ev.previousIndex === ev.currentIndex) return;
+    const ids = this.pinnedIds();
+    if (this.layout().lockedIds.has(ids[ev.previousIndex])) return;
+    moveItemInArray(ids, ev.previousIndex, Math.max(this.lockedCount(), ev.currentIndex));
+    this.prefs.setPinned(ids);
+  }
+
+  /** Keyboard reorder: Alt+ArrowUp / Alt+ArrowDown on a focused row. */
+  protected onEditRowKey(ev: KeyboardEvent, r: EditRow): void {
+    if (!ev.altKey || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const dir = ev.key === 'ArrowUp' ? -1 : 1;
+    if ((dir < 0 && !r.canUp) || (dir > 0 && !r.canDown)) return;
+    this.prefs.setPinned(movePinned(this.pinnedIds(), r.item.id, dir));
+    setTimeout(() => this.panel()?.nativeElement.querySelector<HTMLElement>(`[data-sm-edit="${r.item.id}"]`)?.focus(), 0);
   }
 
   protected setIconsOnly(on: boolean): void {
@@ -160,35 +270,56 @@ export class StartMenuComponent {
   }
 
   protected async reset(): Promise<void> {
-    const ok = await this.dialog.confirm({
-      title: "Reset to your role's defaults?",
-      message: 'Your pinned screens go back to what your role starts with. Icons only stays as it is.',
-      confirmLabel: 'Reset',
-    });
-    if (ok) this.prefs.resetPins();
+    this.asking.set(true);
+    try {
+      const ok = await this.dialog.confirm({
+        title: "Reset to your role's defaults?",
+        message: 'Your pinned screens go back to what your role starts with. Icons only stays as it is.',
+        confirmLabel: 'Reset',
+      });
+      if (ok) this.prefs.resetPins();
+    } finally {
+      this.asking.set(false);
+    }
   }
 
-  // ── Keyboard: arrows move between rows, Esc closes, Tab stays inside ────
+  // ── Keyboard: "/" or typing opens search, arrows move, Esc steps back, Tab stays inside ──
   @HostListener('document:keydown', ['$event'])
   protected onDocKey(ev: KeyboardEvent): void {
-    if (!this.open()) return;
-    if (ev.key === 'Escape') { ev.preventDefault(); this.close(); return; }
+    if (!this.open() || this.asking()) return;
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      if (this.mode() === 'search') this.closeSearch();
+      else this.close();
+      return;
+    }
     const root = this.panel()?.nativeElement;
     if (!root) return;
-    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+    const active = document.activeElement as HTMLElement | null;
+    const inField = !!active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+    if (this.mode() === 'list' && !inField && !ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key.length === 1) {
+      if (ev.key === '/') { ev.preventDefault(); this.openSearch(); return; }
+      if (ev.key.trim()) { ev.preventDefault(); this.openSearch(ev.key); return; }
+    }
+    // Keys typed before the search line took focus still land in it.
+    if (this.mode() === 'search' && !inField && !ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key.length === 1) {
+      ev.preventDefault();
+      this.openSearch(this.query() + ev.key);
+      return;
+    }
+    if ((ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && !ev.altKey) {
       const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-sm-row]'));
       const search = this.searchBox()?.nativeElement;
-      const at = rows.indexOf(document.activeElement as HTMLElement);
-      if (!rows.length || (at < 0 && document.activeElement !== search)) return;
+      const at = rows.indexOf(active as HTMLElement);
+      if (!rows.length || (at < 0 && (!search || active !== search))) return;
       ev.preventDefault();
       const next = ev.key === 'ArrowDown' ? (at < 0 ? 0 : Math.min(rows.length - 1, at + 1)) : at <= 0 ? -1 : at - 1;
       if (next < 0) search?.focus(); else rows[next].focus();
     } else if (ev.key === 'Tab') {
-      const f = Array.from(root.querySelectorAll<HTMLElement>('input, button, [role="combobox"]'))
+      const f = Array.from(root.querySelectorAll<HTMLElement>('input, button, [role="combobox"], [tabindex="0"]'))
         .filter(e => !(e as HTMLButtonElement).disabled);
       if (!f.length) return;
       const first = f[0], last = f[f.length - 1];
-      const active = document.activeElement;
       if (!root.contains(active)) { ev.preventDefault(); first.focus(); }
       else if (ev.shiftKey && active === first) { ev.preventDefault(); last.focus(); }
       else if (!ev.shiftKey && active === last) { ev.preventDefault(); first.focus(); }
@@ -198,10 +329,11 @@ export class StartMenuComponent {
   /** Outside click closes; the PF logo (data-start-trigger) toggles it, so it never counts as outside. */
   @HostListener('document:pointerdown', ['$event'])
   protected onDocPointer(ev: Event): void {
-    if (!this.open()) return;
+    if (!this.open() || this.asking()) return;
     const t = ev.target as HTMLElement | null;
     if (!t) return;
-    if (this.host.nativeElement.contains(t) || t.closest?.('[data-start-trigger]') || t.closest?.('.pf-dd__panel')) return;
+    if (this.host.nativeElement.contains(t) || t.closest?.('[data-start-trigger]') || t.closest?.('.pf-dd__panel')
+      || t.closest?.('.cdk-drag-preview')) return;
     this.close();
   }
 
@@ -226,7 +358,7 @@ export class StartMenuComponent {
   }
 
   protected backToList(): void {
-    this.mode.set('list');
+    this.mode.set('edit');
   }
 
   /** Candidates for a role: every screen the editor's admin can open (the list the menu shows). */

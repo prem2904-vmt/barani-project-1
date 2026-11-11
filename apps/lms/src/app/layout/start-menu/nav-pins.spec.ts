@@ -85,6 +85,11 @@ describe('computeNavLayout', () => {
     expect([...l.lockedIds].sort()).toEqual(['frontdesk', 'validate']);
   });
 
+  it('reports the capacity it was computed for (the Start menu says "N fit on this screen")', () => {
+    expect(computeNavLayout({ ...base, capacity: 6 }).capacity).toBe(6);
+    expect(computeNavLayout({ ...base, capacity: 4.7 }).capacity).toBe(4);
+  });
+
   it('locked screens survive the capacity cut', () => {
     const l = computeNavLayout({
       ...base,

@@ -89,6 +89,8 @@ export interface NavLayout {
   menu: NavMenuGroups;
   /** False when neither role defaults nor personal pins exist: today's bar, untouched. */
   configured: boolean;
+  /** How many screens fit on the bar (the capacity the layout was computed for). */
+  capacity: number;
 }
 
 /** The admin's Settings link is the only item in the Settings group. */
@@ -146,6 +148,7 @@ export function computeNavLayout(input: NavLayoutInput): NavLayout {
       settings: rest(allUnique.filter(i => i.id === SETTINGS_ID)),
     },
     configured,
+    capacity: cap,
   };
 }
 
