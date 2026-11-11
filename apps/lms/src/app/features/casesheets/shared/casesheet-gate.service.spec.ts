@@ -59,20 +59,26 @@ async function visible(opts: Parameters<typeof setup>[0] = {}): Promise<boolean>
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('CasesheetGateService', () => {
-  it('is closed for a lab with no module row (the "every module on" default never counts)', async () => {
-    expect(await visible({ modulesJson: null })).toBe(false);
+  // Owner 2026-11-11: on dev every signed-in lab has case sheets, whatever is stored for ipd.
+  it('opens for a lab with no module row', async () => {
+    expect(await visible({ modulesJson: null })).toBe(true);
   });
-  it('is closed when ipd is stored off, absent, or only opd is on', async () => {
+  it('closes when an admin switched IPD off', async () => {
     expect(await visible({ modulesJson: '{"ipd":{"enabled":false}}' })).toBe(false);
-    expect(await visible({ modulesJson: '{"lab":{"enabled":true}}' })).toBe(false);
-    expect(await visible({ modulesJson: '{"opd":{"enabled":true}}' })).toBe(false);
+  });
+  it('opens when ipd is absent or only opd is on', async () => {
+    expect(await visible({ modulesJson: '{"lab":{"enabled":true}}' })).toBe(true);
+    expect(await visible({ modulesJson: '{"opd":{"enabled":true}}' })).toBe(true);
+  });
+  it('stays closed when signed out', async () => {
+    expect(await visible({ signedIn: false })).toBe(false);
   });
   it('opens for a tenant that EXPLICITLY has ipd on', async () => {
     expect(await visible({ modulesJson: '{"ipd":{"enabled":true}}' })).toBe(true);
   });
   it('opens for a personal case-sheet tenant', async () => {
     expect(await visible({ tenantKind: 'personal' })).toBe(true);
-    expect(await visible({ tenantKind: 'lab' })).toBe(false);
+    expect(await visible({ tenantKind: 'lab' })).toBe(true);
   });
   it('opens with pf.casesheets() in this browser', async () => {
     expect(await visible({ flag: true })).toBe(true);
@@ -104,7 +110,7 @@ describe('CasesheetGateService', () => {
 describe('casesheetGuard', () => {
   const run = () => TestBed.runInInjectionContext(() => casesheetGuard({} as never, {} as never)) as Promise<unknown>;
   it('gate closed ⇒ the unknown-URL bounce to "/" (never a 403)', async () => {
-    setup({});
+    setup({ notDev: true });
     expect(await run()).toEqual({ bounced: ['/'] });
   });
   it('gate open ⇒ admits', async () => {

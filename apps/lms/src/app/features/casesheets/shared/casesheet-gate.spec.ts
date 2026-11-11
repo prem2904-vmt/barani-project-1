@@ -19,6 +19,18 @@ describe('casesheetsVisible — dev && (explicit IPD || personal tenant || conso
   });
 });
 
+describe('casesheetsVisible — every lab on dev (owner 2026-11-11)', () => {
+  it('opens for a signed-in lab without IPD, only on dev', () => {
+    expect(casesheetsVisible({ isDev: true, labTenant: true, ipdExplicit: false, personalTenant: false, consoleFlag: false })).toBe(true);
+    expect(casesheetsVisible({ isDev: false, labTenant: true, ipdExplicit: true, personalTenant: false, consoleFlag: true })).toBe(false);
+    expect(casesheetsVisible({ isDev: true, labTenant: false, ipdExplicit: false, personalTenant: false, consoleFlag: false })).toBe(false);
+  });
+  it('closes when an admin switched IPD off (the console flag still previews)', () => {
+    expect(casesheetsVisible({ isDev: true, labTenant: true, ipdOff: true, ipdExplicit: false, personalTenant: false, consoleFlag: false })).toBe(false);
+    expect(casesheetsVisible({ isDev: true, labTenant: true, ipdOff: true, ipdExplicit: false, personalTenant: false, consoleFlag: true })).toBe(true);
+  });
+});
+
 describe('ipdExplicitlyOn — IPD must be EXPLICIT (owner 2026-11-10)', () => {
   it('only a stored ipd.enabled === true counts', () => {
     expect(ipdExplicitlyOn({ ipd: { enabled: true } })).toBe(true);

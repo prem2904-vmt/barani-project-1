@@ -6,6 +6,9 @@
  *   1. the build / runtime environment is DEV (the beta gate's dev check, core/beta/beta-gate.ts
  *      `isDevEnvironment`) — the server adds `CaseSheets:Enabled` on top; AND
  *   2. one of:
+ *      - the person is signed in to a lab whose IPD is not switched off (owner 2026-11-11: "I don't want to hide the prepare
+ *        stuffs" + "the admin on disable ipd it gets disabled" — only a stored ipd.enabled === false closes it; the lab admin's
+ *        Prepare switch in Settings → IPD decides the Prepare tab);
  *      - the tenant EXPLICITLY has IPD on — its stored ModulesJson says `ipd.enabled === true`. The "no module row ⇒
  *        every module on" default and the catalog default never count;
  *      - the tenant is a personal case-sheet space (`/me.tenantKind === 'personal'`, plan §4.1);
@@ -36,11 +39,20 @@ export interface CasesheetGateInputs {
   ipdExplicit: boolean;
   /** /me tenantKind === 'personal'. */
   personalTenant: boolean;
+  /** Signed in to a lab (any non-personal tenant). Optional so older callers keep the old rule. */
+  labTenant?: boolean;
+  /** The stored module map says ipd.enabled === false (an admin switched IPD off). */
+  ipdOff?: boolean;
 }
 
-/** visible = dev && (explicit IPD || personal tenant || console flag). */
+/** visible = dev && ((lab tenant && IPD not switched off) || explicit IPD || personal tenant || console flag). */
 export function casesheetsVisible(i: CasesheetGateInputs): boolean {
-  return i.isDev && (i.ipdExplicit || i.personalTenant || i.consoleFlag);
+  return i.isDev && ((!!i.labTenant && !i.ipdOff) || i.ipdExplicit || i.personalTenant || i.consoleFlag);
+}
+
+/** An admin switched IPD off: the stored map's ipd.enabled is literally false. */
+export function ipdSwitchedOff(modules: Record<string, { enabled?: unknown } | undefined> | null | undefined): boolean {
+  return modules?.['ipd']?.enabled === false;
 }
 
 /**

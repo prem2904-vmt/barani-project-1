@@ -5,7 +5,7 @@ import { TenantEntitlementsService } from '../../../core/services/tenant-entitle
 import { environment } from '../../../../environments/environment';
 import { installPfCortexImport } from './cortex-import-gate';
 import { installPfCortexBuilder } from './cortex-builder-gate';
-import { casesheetsVisible, installPfCasesheets, ipdExplicitlyOn, prepareSwitchOn, readCasesheetsFlag, safeLocalStorage } from './casesheet-gate';
+import { casesheetsVisible, installPfCasesheets, ipdExplicitlyOn, ipdSwitchedOff, prepareSwitchOn, readCasesheetsFlag, safeLocalStorage } from './casesheet-gate';
 
 /**
  * THE case-sheet gate for the UI (case sheets are part of IPD). Every case-sheet surface — routes
@@ -29,6 +29,8 @@ export class CasesheetGateService {
     consoleFlag: this.flag(),
     ipdExplicit: ipdExplicitlyOn(this.storedModules()),
     personalTenant: this.auth.user()?.tenantKind === 'personal',
+    labTenant: !!this.auth.user() && this.auth.user()?.tenantKind !== 'personal',
+    ipdOff: ipdSwitchedOff(this.storedModules()),
   }));
 
   /** Show case sheets anywhere in the UI. */
