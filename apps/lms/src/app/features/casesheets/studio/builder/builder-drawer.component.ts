@@ -39,9 +39,11 @@ export type BuilderTab = 'cortex' | 'checks';
   `,
   styles: [`
     :host { display: contents; }
-    .bd { position: fixed; z-index: 40; top: 12px; right: 12px; bottom: 12px; width: min(420px, calc(100vw - 24px)); display: flex; flex-direction: column;
+    /* Desktop: below the band (Preview / Publish stay reachable) and above the bottom nav. */
+    .bd { position: fixed; z-index: 40; top: var(--pf-band-clear, 132px); right: 12px; bottom: calc(var(--pf-nav-h, 88px) + 8px); width: min(420px, calc(100vw - 24px)); display: flex; flex-direction: column;
       box-shadow: 0 12px 40px rgba(15, 23, 42, 0.22); }
-    .bd-head { flex: none; flex-wrap: wrap; row-gap: 6px; }
+    .bd-head { flex: none; flex-wrap: nowrap; gap: 8px; }
+    @media (max-width: 640px) { .bd-head .pf-card__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } }
     .bd-tabs { margin-left: auto; }
     .bd-x { margin-left: 4px; }
     .bd-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }

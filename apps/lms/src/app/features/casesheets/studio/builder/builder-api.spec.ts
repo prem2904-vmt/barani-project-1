@@ -48,7 +48,7 @@ describe('CaseSheetBuilderApi', () => {
     expect(r.request.method).toBe('POST');
     expect(r.request.body).toEqual({ message: 'add cough', conversationId: 'conv1' });
     r.flush({ conversationId: 'conv1', reply: 'Done.', steps: [{ tool: 'add_question', summary: "Added 'Cough'" }], formChanged: true, draftVersion: 4 });
-    expect(await p).toEqual({ conversationId: 'conv1', reply: 'Done.', steps: [{ tool: 'add_question', summary: "Added 'Cough'" }], formChanged: true, draftVersion: 4 });
+    expect(await p).toEqual({ conversationId: 'conv1', reply: 'Done.', steps: [{ tool: 'add_question', summary: "Added 'Cough'", changed: true }], formChanged: true, draftVersion: 4 });
   });
 
   it('the first message has no conversationId', async () => {
@@ -122,5 +122,25 @@ describe('builder words', () => {
     expect(summaryLine({ total: 1, passed: 1, failed: 0, coverage: { rules: 1, tested: 1 } })).toBe('1 check · 1 pass · covers 1 of 1 rule');
     expect(failsWords(1)).toBe('1 check fails');
     expect(failsWords(3)).toBe('3 checks fail');
+  });
+});
+
+describe('CaseSheetBuilderApi — a refused step is not a tick', () => {
+  it('maps changed: false from the server and defaults to true', async () => {
+    const { TestBed } = await import('@angular/core/testing');
+    const { provideHttpClient } = await import('@angular/common/http');
+    const { provideHttpClientTesting, HttpTestingController } = await import('@angular/common/http/testing');
+    const { CaseSheetBuilderApi } = await import('./builder-api');
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideHttpClient(), provideHttpClientTesting()] });
+    const api = TestBed.inject(CaseSheetBuilderApi);
+    const http = TestBed.inject(HttpTestingController);
+    const p = api.cortex('f1', 'hi');
+    http.expectOne(r => r.url.endsWith('/api/casesheets/forms/f1/cortex')).flush({
+      conversationId: 'c', reply: 'ok', formChanged: false,
+      steps: [{ tool: 'add_page', summary: 'Added the page' }, { tool: 'add_option', summary: 'Nothing changed: no such question', changed: false }],
+    });
+    const r = await p;
+    expect(r.steps.map(s => s.changed)).toEqual([true, false]);
   });
 });

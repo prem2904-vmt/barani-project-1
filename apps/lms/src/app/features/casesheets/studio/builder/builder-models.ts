@@ -10,7 +10,8 @@ export interface BuilderStatus {
   canChangeSwitch: boolean;
 }
 
-export interface CortexStep { tool: string; summary: string }
+/** One tool step; changed = false when it was refused or changed nothing (shown with a warning mark, never a tick). */
+export interface CortexStep { tool: string; summary: string; changed: boolean }
 
 export interface CortexReply {
   conversationId: string;

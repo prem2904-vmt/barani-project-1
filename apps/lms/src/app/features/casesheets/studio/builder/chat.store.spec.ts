@@ -9,7 +9,7 @@ afterEach(() => TestBed.resetTestingModule());
 describe('Cortex chat', () => {
   it('sends the message with the form id, shows the steps in plain words, and keeps the conversation going', async () => {
     const { api, chat, id } = await openBuilder();
-    api.cortex.mockResolvedValueOnce({ conversationId: 'c9', reply: 'I added it.', steps: [{ tool: 'add_question', summary: "Added 'Cough' with a follow-up 'For how many days'" }], formChanged: false });
+    api.cortex.mockResolvedValueOnce({ conversationId: 'c9', reply: 'I added it.', steps: [{ tool: 'add_question', summary: "Added 'Cough' with a follow-up 'For how many days'", changed: true }], formChanged: false });
     await chat.send('  add cough  ');
     expect(api.cortex).toHaveBeenCalledWith(id, 'add cough', undefined);
     expect(chat.messages().map((m) => [m.from, m.text])).toEqual([['user', 'add cough'], ['cortex', 'I added it.']]);
@@ -21,7 +21,7 @@ describe('Cortex chat', () => {
   it('renders the banner, "Cortex is working…" while waiting, and each step', async () => {
     const { api, chat } = await openBuilder();
     let release!: () => void;
-    api.cortex.mockImplementationOnce(() => new Promise((r) => { release = () => r({ conversationId: 'c', reply: 'Ok', steps: [{ tool: 't', summary: 'Added a page' }], formChanged: false }); }));
+    api.cortex.mockImplementationOnce(() => new Promise((r) => { release = () => r({ conversationId: 'c', reply: 'Ok', steps: [{ tool: 't', summary: 'Added a page', changed: true }], formChanged: false }); }));
     const f = TestBed.createComponent(CortexChatComponent);
     f.detectChanges();
     const el = f.nativeElement as HTMLElement;

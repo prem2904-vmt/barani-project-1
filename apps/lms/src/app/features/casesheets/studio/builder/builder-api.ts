@@ -22,7 +22,7 @@ export function toReply(v: unknown): CortexReply {
   return {
     conversationId: typeof r['conversationId'] === 'string' ? r['conversationId'] : '',
     reply: typeof r['reply'] === 'string' ? r['reply'] : '',
-    steps: (Array.isArray(r['steps']) ? r['steps'] : []).map((s) => ({ tool: String(obj(s)['tool'] ?? ''), summary: String(obj(s)['summary'] ?? '') })).filter((s) => s.summary),
+    steps: (Array.isArray(r['steps']) ? r['steps'] : []).map((s) => ({ tool: String(obj(s)['tool'] ?? ''), summary: String(obj(s)['summary'] ?? ''), changed: obj(s)['changed'] !== false })).filter((s) => s.summary),
     formChanged: r['formChanged'] === true,
     draftVersion: typeof r['draftVersion'] === 'number' ? (r['draftVersion'] as number) : undefined,
   };

@@ -20,7 +20,7 @@ import { ChatStore } from './chat.store';
           @if (m.steps?.length) {
             <ul class="cc-steps" data-steps>
               @for (s of m.steps; track $index) {
-                <li><pf-icon name="check" [size]="14" /> <span>{{ s.summary }}</span></li>
+                <li [class.cc-step--skip]="!s.changed" [attr.data-changed]="s.changed"><pf-icon [name]="s.changed ? 'check' : 'alert'" [size]="14" /> <span>{{ s.summary }}</span></li>
               }
             </ul>
           }
@@ -62,6 +62,7 @@ import { ChatStore } from './chat.store';
     .cc-steps { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid var(--pf-line); display: grid; gap: 5px; font-size: 13px; color: var(--text-secondary); }
     .cc-steps li { display: flex; gap: 7px; align-items: flex-start; }
     .cc-steps pf-icon { flex: none; margin-top: 2px; color: var(--accent-primary, #7c5cff); }
+    .cc-step--skip pf-icon { color: var(--amber-text, #b45309); }
     .cc-working { margin: 0 4px; display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-secondary); }
     .cc-dots { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-primary, #7c5cff); animation: cc-pulse 1.1s ease-in-out infinite; }
     @keyframes cc-pulse { 0%, 100% { opacity: .35; transform: scale(.8); } 50% { opacity: 1; transform: scale(1); } }
