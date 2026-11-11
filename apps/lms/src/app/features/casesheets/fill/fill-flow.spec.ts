@@ -16,10 +16,10 @@ import { CasePage, HOLD_FINISH, HOLD_LEAVE, HOLD_NOTE } from './case.page';
 
 /**
  * The filling flow, legacy-faithful (memory prepare-legacy-fidelity; pf-work/plans/prepare-legacy-fidelity.md
- * "Gestures and timings"), in the lab: the sheet opens at page 1, its Back · Pages · Next ride the ONE bottom bar
- * (FormBarService — the host below stands in for the LMS top-strip's `pf-formbar` slot), tap Next turns the page,
+ * "Gestures and timings"), in the lab: the sheet opens at page 1, its Back · Pages · Next sit in the page under the form
+ * column (owner 2026-11-11; the LMS bar keeps its work areas — the host's lent-bar slot stays empty), tap Next turns the page,
  * HOLD Next (200 ms + 1.5 s) finishes from any page → "Edit your report", HOLD Pages (200 ms + 0.8 s) goes back to
- * Departments for the patient, tap the PF logo goes to Departments, HOLD the logo (300 ms + 1.2 s) adds a "Voice note"
+ * Departments for the patient, tap the lab's mark in the band goes to Departments, HOLD the mark (300 ms + 1.2 s) adds a "Voice note"
  * section, and letting go mid-hold is never a tap.
  */
 const FLOW: FormDefinition = {
@@ -53,7 +53,7 @@ let current: MockCasesApi;
 const press = (el: Element, type: string) =>
   el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: 5, clientY: 5 }));
 
-describe('case sheet filling (legacy gestures, one bottom bar)', () => {
+describe('case sheet filling (legacy gestures, the lab step foot)', () => {
   let api: MockCasesApi;
   let f: ComponentFixture<Host>;
   let el: HTMLElement;
@@ -68,8 +68,10 @@ describe('case sheet filling (legacy gestures, one bottom bar)', () => {
     await vi.advanceTimersByTimeAsync(0);
     f.detectChanges();
   };
-  const title = () => el.querySelector('.lf-title__text')?.textContent?.trim();
-  const bar = () => el.querySelector('[data-bar]') as HTMLElement;
+  const title = () => el.querySelector('#cs-page-h')?.textContent?.trim();
+  /** The lab's step foot (in the page). */
+  const bar = () => el.querySelector('[data-step-foot]') as HTMLElement;
+  const lent = () => el.querySelector('[data-bar]') as HTMLElement;
   const q = (sel: string) => el.querySelector(sel) as HTMLElement;
 
   beforeEach(async () => {
@@ -113,11 +115,17 @@ describe('case sheet filling (legacy gestures, one bottom bar)', () => {
     TestBed.resetTestingModule();
   });
 
-  it('opens at page 1 with the page title in the header and Back · Pages · Next in the bottom bar', () => {
+  it('opens at page 1: the band names the sheet, the page and the patient; Back · Pages · Next sit under the form', () => {
     expect(title()).toBe('Complaint');
-    // the lab sheet carries the LMS patient: the header's second line names them (the form has no name field)
-    expect(q('.lf-title__who')?.textContent).toContain('Asha');
+    expect(q('pf-hero-band #cs-title')?.textContent?.trim()).toBe('Flow');
+    expect(q('[data-page-chip]')?.textContent).toContain('Page 1 of 3');
+    // the lab sheet carries the LMS patient: the pill's patient chip names them (the form has no name field)
+    expect(q('pf-hero-band [data-patient]')?.textContent).toContain('Asha');
     expect(bar().querySelector('.lf-bar')).not.toBeNull();
+    // the foot is inside the form's column (beside the rail, under the scroller), not in the LMS bar
+    expect(bar().closest('.lf-col')?.querySelector(':scope > main.lf-scroll')).not.toBeNull();
+    expect(lent().querySelector('.lf-bar')).toBeNull();
+    expect(TestBed.inject(FormBarService).template()).toBeNull();
     expect((bar().querySelector('.lf-back') as HTMLButtonElement).disabled).toBe(true);
     expect(bar().querySelector('.lf-pages')).not.toBeNull();
     expect(bar().querySelector('.lf-next')?.textContent).toContain('Next');
@@ -154,7 +162,7 @@ describe('case sheet filling (legacy gestures, one bottom bar)', () => {
     q('[data-finish-now]').click();
     await settle(100);
     expect(api.sheets.get(sheetId)!.sheet.state).toBe('final');
-    expect(bar().querySelector('.lf-bar')).toBeNull(); // finished: the bar's work areas come back
+    expect(bar()).toBeNull(); // finished: the PDF view, no step foot
   });
 
   it('letting go of Next before the fill completes neither finishes nor taps', async () => {
@@ -180,15 +188,19 @@ describe('case sheet filling (legacy gestures, one bottom bar)', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/casesheets/new'], { queryParams: { patientId: 'p1' } });
   });
 
-  it('tap the PF logo: Departments for the patient (after saving)', async () => {
-    q('.lf-logo').click();
+  it('tap the lab\'s mark in the band: Departments for the patient (after saving); the back chevron does the same', async () => {
+    q('pf-hero-band [data-brand]').click();
+    await settle(50);
+    expect(router.navigate).toHaveBeenCalledWith(['/casesheets/new'], { queryParams: { patientId: 'p1' } });
+    (router.navigate as ReturnType<typeof vi.fn>).mockClear();
+    q('pf-hero-band .pf-hb__back').click();
     await settle(50);
     expect(router.navigate).toHaveBeenCalledWith(['/casesheets/new'], { queryParams: { patientId: 'p1' } });
   });
 
-  it('HOLD the PF logo (300 ms + 1.2 s): a "Voice note" section of your own; letting go mid-hold is no tap', async () => {
+  it('HOLD the lab\'s mark (300 ms + 1.2 s): a "Voice note" section of your own; letting go mid-hold is no tap', async () => {
     expect(HOLD_NOTE).toEqual({ delay: 300, fill: 1200 });
-    const logo = q('.lf-logo');
+    const logo = q('pf-hero-band [data-brand]');
     // mid-hold release: nothing, and the click that follows is swallowed (no navigation)
     press(logo, 'pointerdown');
     await settle(HOLD_NOTE.delay + 200);
@@ -235,7 +247,16 @@ describe('case sheet filling (legacy gestures, one bottom bar)', () => {
     expect(ops.lastIndexOf('narrative')).toBeGreaterThan(ops.indexOf('saveCase'));
   });
 
-  it('leaving the sheet gives the bottom bar back', async () => {
+  it('Back on page 1 is disabled; on page 2 it is live (the foot keeps one Back, one Next)', async () => {
+    expect(bar().querySelectorAll('.lf-back').length).toBe(1);
+    expect(bar().querySelectorAll('.lf-next').length).toBe(1);
+    expect((bar().querySelector('.lf-back') as HTMLButtonElement).disabled).toBe(true);
+    (bar().querySelector('.lf-next') as HTMLElement).click();
+    await settle();
+    expect((bar().querySelector('.lf-back') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('leaving the sheet leaves nothing lent to the bar', async () => {
     expect(bar().querySelector('.lf-bar')).not.toBeNull();
     const formBar = TestBed.inject(FormBarService);
     f.destroy();

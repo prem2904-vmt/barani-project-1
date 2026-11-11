@@ -1,8 +1,6 @@
-import { ChangeDetectionStrategy, Component, Injector, computed, inject, input, output } from '@angular/core';
-import { AuthService } from '../../../core/auth/auth.service';
+import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
 import { NavBackService } from '../../../core/services/nav-back.service';
-import { TenantStateService } from '../../../core/services/tenant-state.service';
-import { brandingSrc } from '../../../core/services/uploads.service';
+import { injectTenantBrand } from './tenant-brand';
 import { PfKeysDirective } from '../numpad/pf-keys.directive';
 import { SamplePresetDirective } from '../../directives/sample-preset.directive';
 import { PfKeysKind } from '../numpad/pf-keys-layouts';
@@ -56,7 +54,11 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
           <!-- Real tenant branding (same resolution as the classic bar chip):
                admin-uploaded logo when branding allows it, initial disc
                otherwise; name honors brandingName + mode. -->
-          @if (showLogo() && tenantLogo()) {
+          <!-- customBrand: the screen projects its own button around the SAME mark ([band-brand], resolved by
+               injectTenantBrand) — the case sheet's tap = Departments / hold = voice note (owner 2026-11-11). -->
+          @if (customBrand()) {
+            <ng-content select="[band-brand]"></ng-content>
+          } @else if (showLogo() && tenantLogo()) {
             <img class="pf-hb__logo" [src]="tenantLogo()!" [alt]="tenantName()" />
           } @else {
             <span class="pf-hb__avatar" aria-hidden="true">{{ tenantInitial() }}</span>
@@ -374,8 +376,6 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
   `]
 })
 export class HeroBandComponent {
-  private readonly auth = inject(AuthService);
-  private readonly tenantState = inject(TenantStateService);
   protected readonly navBack = inject(NavBackService);
 
   /** Show the back chevron at the band's top-left (admin sub-pages). It only
@@ -425,22 +425,16 @@ export class HeroBandComponent {
   /** Enter pressed in the built-in input (intake screens receive-on-enter). */
   readonly submitted = output<string>();
 
-  /** A personal case-sheet space has an internal name ("Personal space cc2ee7f1"): the band shows the doctor instead. */
-  readonly tenantName = computed(() => {
-    const u = this.auth.user();
-    if (u?.tenantKind === 'personal') return u.displayName?.trim() || 'My case sheets';
-    return this.tenantState.tenant()?.name || u?.tenantName || 'Your organization';
-  });
-
-  /* Branding resolution — mirrors the classic bar's tenant chip: mode
-     defaults to 'both'; brandingName falls back to the official name. */
-  private readonly brandingMode = computed(() => this.tenantState.tenant()?.brandingMode ?? 'both');
-  private readonly injector = inject(Injector);
+  /** The lab's mark + name: ONE resolution (tenant-brand.ts), shared with screens that project [band-brand].
+   *  A personal case-sheet space shows the doctor instead of "Personal space cc2ee7f1". */
+  private readonly brand = injectTenantBrand();
+  readonly tenantName = this.brand.name;
   /** A private "/uploads/…" logo shows through the session (blob: URL). */
-  readonly tenantLogo = computed(() => brandingSrc(this.injector, this.tenantState.tenant()?.logoUrl));
-  readonly brandingName = computed(() => this.tenantState.tenant()?.brandingName?.trim() || null);
-  readonly showLogo = computed(() => this.brandingMode() === 'logo' || this.brandingMode() === 'both');
-  readonly showName = computed(() => this.brandingMode() === 'name' || this.brandingMode() === 'both');
-  readonly tenantInitial = computed(() =>
-    ((this.brandingName() || this.tenantName()).trim()[0] ?? 'P').toUpperCase());
+  readonly tenantLogo = this.brand.logo;
+  readonly brandingName = this.brand.brandingName;
+  readonly showLogo = this.brand.showLogo;
+  readonly showName = this.brand.showName;
+  readonly tenantInitial = this.brand.initial;
+  /** The screen projects its own brand button ([band-brand]) in place of the plain logo / initial disc. */
+  readonly customBrand = input<boolean>(false);
 }

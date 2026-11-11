@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
@@ -125,6 +127,41 @@ describe('the patient step', () => {
     // (the kit pf-date keeps a hidden, aria-hidden helper input; nothing visible is native)
     expect(t.el.querySelector('select, datalist, input[type=date]:not(.pf-date__native)')).toBeNull();
     expect(t.el.querySelector('pf-date')).not.toBeNull();
+  });
+});
+
+/** Owner 2026-11-11: "Choose the patient" was clipped at the top and Cancel / New patient floated over the rows. */
+describe('the patient step dialog layout', () => {
+  const src = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/departments/patient-step.component.ts'), 'utf8');
+  const css = src.slice(src.indexOf('styles: [`'));
+
+  it('is head · search · list · foot, in that order, the foot a sibling AFTER the list (never inside or over it)', async () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({ id: `p${i}`, name: `Patient ${i}`, age: null, sex: null, phone: null, mrn: null }));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [{ provide: CasePatientsApi, useValue: { search: vi.fn(async () => many), create: vi.fn() } }] });
+    const fx = TestBed.createComponent(CsPatientStepComponent);
+    fx.componentRef.setInput('formTitle', 'CNS case proforma');
+    await tick(); fx.detectChanges();
+    const card = (fx.nativeElement as HTMLElement).querySelector('.ps-card')!;
+    const kids = [...card.children].map((c) => c.getAttribute('data-ps-head') !== null ? 'head' : c.classList.contains('ps-search') ? 'search'
+      : c.hasAttribute('data-ps-list') ? 'list' : c.hasAttribute('data-ps-foot') ? 'foot' : c.className);
+    expect(kids).toEqual(['head', 'search', 'list', 'foot']);
+    expect(card.querySelector('[data-ps-list] [data-ps-foot]')).toBeNull();
+    expect(card.querySelectorAll('[data-ps-list] [data-ps-pick]').length).toBe(30);
+    expect(card.querySelector('#ps-h')?.textContent).toBe('Choose the patient');
+    expect(card.querySelector('.ps-sub')?.textContent).toBe('CNS case proforma');
+  });
+
+  it('only the list scrolls: head, search and foot keep their height; the card clips instead of scrolling as a whole', () => {
+    expect(css).toMatch(/\.ps-head, \.ps-search, \.ps-actions, \.ps-err \{ flex: none; \}/);
+    expect(css).toMatch(/\.ps-list, \.ps-scroll \{ flex: 1 1 auto; min-height: 0; overflow-y: auto;/);
+    expect(css).toMatch(/\.ps-card \{[^}]*display: flex; flex-direction: column; min-height: 0; overflow: hidden;/);
+    expect(css).not.toMatch(/\.ps-card \{[^}]*overflow: auto/);
+  });
+
+  it('the foot is its own band in the flow (static, under a hairline) — never absolute or sticky over the rows', () => {
+    expect(css).toMatch(/\.ps-actions \{ position: static;[^}]*border-top: 1px solid/);
+    expect(css).not.toMatch(/\.ps-actions \{[^}]*position: (absolute|fixed|sticky)/);
   });
 });
 

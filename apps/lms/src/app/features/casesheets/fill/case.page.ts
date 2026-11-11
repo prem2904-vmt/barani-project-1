@@ -35,6 +35,9 @@ import {
 } from '@prefrontal/forms-engine';
 import { PfIconComponent } from '@prefrontal/forms-engine';
 import { SkeletonFormComponent } from '@prefrontal/shared';
+import { NgTemplateOutlet } from '@angular/common';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { injectTenantBrand } from '../../../shared/components/hero-band/tenant-brand';
 import { DialogService } from '../../../core/services/dialog.service';
 import { CasesheetNav } from '../data/casesheet-nav';
 import { CsStylesComponent } from '../styles/cs-styles.component';
@@ -57,16 +60,10 @@ export const AUTO_ADVANCE_MS = 500;
 export const HOLD_FINISH = { delay: 200, fill: 1500 };
 /** Hold Pages to go back to Departments (legacy tab-nav "hold step indicator to exit": 200 ms + 800 ms). */
 export const HOLD_LEAVE = { delay: 200, fill: 800 };
-/** Hold the PF logo (or Narrative) for a voice note / a section of your own (legacy navbar.ts:117-118, PF Circle: 300 ms + 1.2 s). */
+/** Hold the lab's mark in the band (legacy: the PF logo) or Narrative for a voice note / a section of your own (legacy navbar.ts:117-118, PF Circle: 300 ms + 1.2 s). */
 export const HOLD_NOTE = { delay: 300, fill: 1200 };
 
-/** The PF glyph (two paths, viewBox 0 0 228 292), as in the legacy form header and the LMS brand mark. */
-export const PF_GLYPH: readonly [string, string] = [
-  'M0 131.126V292H30.1634C29.572 247.788 28.744 156.113 30.1634 143.106C31.5829 130.099 40.2179 118.861 44.358 114.867C79.8444 80.639 117.696 104.599 132.187 120.857V81.4947C125.799 74.649 101.136 70.0852 89.6031 68.659C39.9222 63.1824 9.16731 108.022 0 131.126Z',
-  'M99 204C76.2887 212.215 47.6109 193.023 38.1479 182.469V220.976C126.154 259.996 162.35 199.583 169.447 164.499H227.113V136.26L171.222 137.116V72.0819C177.609 35.1151 211.735 26.4439 228 26.7291V0.201972C161.463 -4.07659 142.833 60.9576 140.171 68.659C137.51 76.3604 141.058 161.932 136.623 172.2L136.585 172.287C132.16 182.532 127.31 193.76 99 204Z',
-];
-
-/** A page's own colour for the case sheet header (legacy: page.color), only when it is a plain hex colour. */
+/** A page's own colour (legacy: page.color, which tinted the old header), only when it is a plain hex colour. */
 export function headerColor(color: string | null | undefined): string | null {
   return color && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color.trim()) ? color.trim() : null;
 }
@@ -100,6 +97,8 @@ const SWIPE_MIN_PX = 80;
     FinalViewComponent,
     HoldDirective,
     CsStylesComponent,
+    HeroBandComponent,
+    NgTemplateOutlet,
   ],
   providers: [
     ...CASESHEETS_DATA_PROVIDERS,
@@ -138,7 +137,10 @@ export class CasePage {
   protected readonly holdingNext = signal(false);
   /** The page list over the bar (legacy tab-nav "Navigate to Step"). */
   protected readonly menuOpen = signal(false);
-  protected readonly glyph = PF_GLYPH;
+  /** The lab's own mark for the band's brand button (the band's ONE branding resolution). */
+  protected readonly brand = injectTenantBrand();
+  /** The band's back chevron: Departments, like the brand (everything is saved first). */
+  protected readonly backFn = () => void this.goHome();
   protected readonly finishing = signal(false);
   /** Edit your report (legacy chief-complaints PDF modal): open, and which tab. */
   protected readonly reportOpen = signal(false);
@@ -265,11 +267,12 @@ export class CasePage {
         this.body()?.nativeElement.scrollTo?.({ top: 0 });
       });
     });
-    // One bottom bar: while the sheet is open (not loading, not finished) its Back · Pages · Next replace the
-    // LMS bar's work areas; leaving the sheet (or finishing it) gives the bar back.
+    // The public site has one bottom pill: while the sheet is open (not loading, not finished) its Back · Pages · Next
+    // replace the pill's three areas; leaving the sheet (or finishing it) gives the pill back. In the lab the page shows
+    // them itself, under the form column (.lf-foot), and the LMS bar keeps its work areas (owner 2026-11-11).
     effect(() => {
       const tpl = this.formBarTpl();
-      const open = !!this.sheet() && !!this.def() && !this.isFinal() && !this.loadMessage();
+      const open = !this.nav.isLab && !!this.sheet() && !!this.def() && !this.isFinal() && !this.loadMessage();
       untracked(() => (open && tpl ? this.formBar.show(this, tpl) : this.formBar.clear(this)));
     });
     // case photos go to the draft that is open, and only while it is open
@@ -364,7 +367,7 @@ export class CasePage {
     this.wiz.goTo(id);
   }
 
-  /** Tap the PF logo: back to Departments (legacy: the logo goes home). Everything is already saved. */
+  /** Tap the lab's mark (or the band's back chevron): back to Departments (legacy: the logo goes home). Everything is already saved. */
   protected async goHome(): Promise<void> {
     this.cancelAdvance();
     try {
@@ -376,7 +379,12 @@ export class CasePage {
     await this.router.navigate([to.path], { queryParams: to.queryParams });
   }
 
-  /** Hold the PF logo: a voice note (legacy PF Circle) — a section of your own, open and ready to dictate. */
+  /** The hold fill's mask: the lab's logo itself, so the fill rises inside the logo's own shape. */
+  protected maskOf(src: string): string {
+    return `url("${src.replace(/["\\]/g, (c) => `\\${c}`)}")`;
+  }
+
+  /** Hold the lab's mark: a voice note (legacy PF Circle) — a section of your own, open and ready to dictate. */
   protected holdLogo(): void {
     if (!this.sheet() || this.isFinal()) return;
     void this.addOwnSection('Voice note');
@@ -512,7 +520,7 @@ export class CasePage {
   protected async showShortcuts(): Promise<void> {
     await this.dialog.alert({
       title: 'Keyboard shortcuts',
-      message: 'With a keyboard attached. Holds work with a finger too: hold Next to finish, hold Pages to go back to Departments, hold the PF logo (or Narrative) for a voice note.',
+      message: 'With a keyboard attached. Holds work with a finger too: hold Next to finish, hold Pages to go back to Departments, hold your lab’s logo at the top (or Narrative) for a voice note.',
       items: SHORTCUTS.map((k) => `${k.keys} — ${k.does}`),
       confirmLabel: 'OK',
     });

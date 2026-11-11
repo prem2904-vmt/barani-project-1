@@ -35,8 +35,8 @@ export function readAge(text: string): number | null {
     <div class="ps-root" role="dialog" aria-modal="true" aria-labelledby="ps-h" data-patient-step>
       <div class="ps-backdrop" (click)="cancel()"></div>
       <div class="ps-card">
-        <header class="ps-head">
-          <div>
+        <header class="ps-head" data-ps-head>
+          <div class="ps-titles">
             <h2 class="ps-title" id="ps-h">{{ adding() ? 'New patient' : 'Choose the patient' }}</h2>
             <p class="ps-sub">{{ formTitle() }}</p>
           </div>
@@ -46,7 +46,7 @@ export function readAge(text: string): number | null {
         </header>
 
         @if (!adding()) {
-          <label class="ps-search">
+          <label class="ps-search ps-pad">
             <pf-icon name="search" [size]="16" />
             <input type="search" class="ps-search__in" placeholder="Search by name or phone" aria-label="Search my patients"
                    data-ps-search [value]="query()" (input)="onQuery($any($event.target).value)" />
@@ -56,7 +56,7 @@ export function readAge(text: string): number | null {
               </button>
             }
           </label>
-          <div class="ps-list" aria-live="polite">
+          <div class="ps-list" aria-live="polite" data-ps-list>
             @if (searching()) {
               <p class="ps-note">Searching…</p>
             } @else if (results().length) {
@@ -76,15 +76,15 @@ export function readAge(text: string): number | null {
               <p class="ps-note">Search your patients, or add a new one.</p>
             }
           </div>
-          @if (error()) { <p class="ps-err" role="alert">{{ error() }}</p> }
-          <footer class="ps-actions">
+          @if (error()) { <p class="ps-err ps-pad" role="alert">{{ error() }}</p> }
+          <footer class="ps-actions" data-ps-foot>
             <button type="button" class="pf-btn pf-btn--secondary" (click)="cancel()" [disabled]="busy()">Cancel</button>
             <button type="button" class="pf-btn pf-btn--primary" data-ps-new (click)="startAdding()" [disabled]="busy()">
               <pf-icon name="plus" [size]="16" /> New patient
             </button>
           </footer>
         } @else {
-          <div class="ps-form">
+          <div class="ps-form ps-scroll">
             <div class="ps-grid">
               <label class="pf-field">
                 <span class="pf-field__lbl">First name</span>
@@ -118,7 +118,7 @@ export function readAge(text: string): number | null {
               </p>
             } @else if (error()) { <p class="ps-err" role="alert">{{ error() }}</p> }
           </div>
-          <footer class="ps-actions">
+          <footer class="ps-actions" data-ps-foot>
             <button type="button" class="pf-btn pf-btn--secondary" (click)="backToSearch()" [disabled]="busy()">Back</button>
             @if (duplicateOf(); as dup) {
               <button type="button" class="pf-btn pf-btn--secondary" data-ps-use-existing (click)="choose(dup)" [disabled]="busy()">Use that patient</button>
@@ -135,41 +135,66 @@ export function readAge(text: string): number | null {
   `,
   styles: [`
     :host { display: contents; }
+    /* One dialog layout (owner 2026-11-11: the title was clipped and Cancel / New patient floated over the list):
+       head, search and foot keep their height (flex: none); ONLY the list (or the new-patient fields) scrolls and takes
+       what is left; the foot is its own band under a hairline, never on top of a row. Phone: a bottom sheet (the
+       global auto-sheet rule styles .ps-card as the sheet panel). */
     .ps-root { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: flex-end; justify-content: center; }
-    @media (min-width: 640px) { .ps-root { align-items: center; } }
+    @media (min-width: 640px) { .ps-root { align-items: center; padding: 24px; } }
     .ps-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); }
     .ps-card {
-      position: relative; width: min(560px, 100%); max-height: min(88dvh, 720px); display: flex; flex-direction: column; gap: 12px;
-      padding: 18px 16px calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--bg-primary); color: var(--text-primary);
+      position: relative; width: min(560px, 100%); height: auto; max-height: min(88dvh, 720px);
+      display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+      padding: 0; background: var(--pf-card-bg, var(--bg-primary)); color: var(--text-primary);
       border: 1px solid var(--border-color, var(--border-primary)); border-radius: 16px 16px 0 0; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
-      overflow: auto;
     }
-    @media (min-width: 640px) { .ps-card { border-radius: 16px; padding: 20px; } }
-    .ps-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-    .ps-title { margin: 0; font-size: 17px; font-weight: 600; }
-    .ps-sub { margin: 2px 0 0; font-size: 13px; color: var(--text-secondary); }
-    .ps-x { border: 0; background: transparent; color: var(--text-secondary); border-radius: 8px; padding: 6px; cursor: pointer; }
-    .ps-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 44px; border-radius: 10px;
+    @media (min-width: 640px) { .ps-card { border-radius: 16px; } }
+    .ps-head, .ps-search, .ps-actions, .ps-err { flex: none; }
+    .ps-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 12px 12px 20px; }
+    .ps-titles { min-width: 0; flex: 1 1 auto; }
+    .ps-title { margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; overflow-wrap: break-word; }
+    .ps-sub { margin: 2px 0 0; font-size: 13px; line-height: 18px; color: var(--text-secondary); overflow-wrap: break-word; }
+    .ps-x { flex: none; display: inline-grid; place-items: center; width: 40px; height: 40px; border: 0; background: transparent;
+      color: var(--text-secondary); border-radius: 10px; cursor: pointer; }
+    .ps-x:hover, .ps-x:focus-visible { background: var(--pf-chip-bg); color: var(--text-primary); }
+    .ps-pad { margin-inline: 20px; }
+    .ps-search { display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; height: 44px; margin-bottom: 12px; border-radius: 10px;
       border: 1px solid var(--border-color, var(--border-primary)); background: var(--bg-secondary); color: var(--text-secondary); }
+    .ps-search:focus-within { border-color: var(--color-primary); }
     .ps-search__in::-webkit-search-decoration, .ps-search__in::-webkit-search-cancel-button,
     .ps-search__in::-webkit-search-results-button, .ps-search__in::-webkit-search-results-decoration { display: none; }
     .ps-search__clr { display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; border: 0; border-radius: 8px;
       background: transparent; color: var(--text-tertiary); cursor: pointer; }
     .ps-search__clr:hover, .ps-search__clr:focus-visible { background: var(--pf-chip-bg); color: var(--text-primary); }
     .ps-search__in { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary); font-size: 16px; }
-    .ps-list { min-height: 120px; }
+    /* the one scroller: takes the height left between the search and the foot */
+    .ps-list, .ps-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 20px 12px; }
+    .ps-list { min-height: 96px; }
+    .ps-scroll { padding-top: 4px; }
     .ps-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-    .ps-row { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px;
-      border: 1px solid var(--border-color, var(--border-primary)); background: var(--bg-primary); color: var(--text-primary); cursor: pointer; }
+    .ps-row { width: 100%; min-height: 48px; text-align: left; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding: 8px 12px; border-radius: 10px;
+      border: 1px solid var(--border-color, var(--border-primary)); background: transparent; color: var(--text-primary); cursor: pointer; }
     .ps-row:hover { background: var(--bg-secondary); }
-    .ps-row__name { font-weight: 600; font-size: 15px; }
-    .ps-row__meta { font-size: 13px; color: var(--text-secondary); }
+    .ps-row:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+    .ps-row__name { font-weight: 600; font-size: 14px; }
+    .ps-row__meta { font-size: 12.5px; color: var(--text-secondary); }
     .ps-note { margin: 16px 0; text-align: center; color: var(--text-secondary); font-size: 14px; }
-    .ps-err { margin: 0; color: var(--danger-text, var(--color-danger, #b42318)); font-size: 14px; }
+    .ps-err { margin: 0 20px 8px; color: var(--danger-text, var(--color-danger, #b42318)); font-size: 14px; }
+    .ps-form .ps-err { margin: 12px 0 0; }
     .ps-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
     @media (min-width: 640px) { .ps-grid { grid-template-columns: 1fr 1fr; } }
     .ps-opt { color: var(--text-tertiary, var(--text-secondary)); font-weight: 400; }
-    .ps-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+    /* the foot: its own band under the list (static, in flow — never absolute / sticky over the rows) */
+    .ps-actions { position: static; display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--pf-line, var(--border-muted)); }
+    @media (max-width: 639px) {
+      .ps-head { padding: 14px 8px 10px 16px; }
+      .ps-pad { margin-inline: 16px; }
+      .ps-list, .ps-scroll { padding-inline: 16px; }
+      .ps-err { margin-inline: 16px; }
+      .ps-actions { padding: 12px 16px 0; flex-wrap: nowrap; } /* the sheet panel itself carries the safe-area bottom */
+      .ps-actions > .pf-btn { flex: 1 1 0; min-height: 44px; }
+    }
   `],
 })
 export class CsPatientStepComponent implements OnDestroy {

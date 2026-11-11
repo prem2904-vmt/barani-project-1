@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 // Case-sheet touch rules (ported from prefrontal-prepare-ui apps/prepare/src/styles/_touch.scss @ bca8282, plan §6):
-// doctors use tablets with hurried or gloved hands, so EVERY tap target is at least 48px (the kit's 44px is raised
-// here). Inputs are at least 16px so iOS never zooms.
+// doctors use tablets with hurried or gloved hands, so every tap target IN THE FORM BODY is at least 48px (the kit's
+// 44px is raised inside .cs-page only). Inputs are at least 16px so iOS never zooms.
 //
 // SCOPED (Prefrontal): Prepare raised the kit for its whole app; here the raise applies only while a case-sheet screen
 // is open (`html.cs-touch`, set by <cs-styles>), so every lab screen keeps the kit as it is. `html` (not a page
@@ -18,81 +18,65 @@
 
 :root.cs-touch {
 
-  .pf-btn {
-    min-height: var(--pf-touch);
-    height: var(--pf-touch);
-    padding: 0 18px;
-    font-size: 15px;
-    border-radius: 12px;
-  }
+  // Owner 2026-11-11: ONLY the case sheet's own form body (.cs-page — the questions on the fill page) is touch-sized.
+  // Everything around it — the band, the step foot, the pages rail, dialogs, list rows, band actions, chips — keeps the
+  // kit's normal sizes exactly like every other LMS screen. Never raise the kit outside .cs-page again.
+  .cs-page {
 
-  .pf-btn.pf-btn--icon {
-    width: var(--pf-touch);
-  }
+    .pf-btn {
+      min-height: var(--pf-touch);
+      height: var(--pf-touch);
+      padding: 0 18px;
+      font-size: 15px;
+      border-radius: 12px;
+    }
 
-  .pf-btn--lg {
-    min-height: 56px;
-    height: 56px;
-    font-size: 16px;
-    padding: 0 24px;
-  }
+    .pf-btn.pf-btn--icon {
+      width: var(--pf-touch);
+    }
 
-  .pf-input {
-    min-height: var(--pf-touch);
-    font-size: 16px;
-  }
+    .pf-btn--lg {
+      min-height: 56px;
+      height: 56px;
+      font-size: 16px;
+      padding: 0 24px;
+    }
 
-  // pf-segmented (kit size md is 36px) → a 56px track with 48px segments.
-  // Selectors out-rank the component's encapsulated `.sz-md .seg-item`.
-  pf-segmented .pf-seg.bar {
-    height: calc(var(--pf-touch) + 8px) !important;
-    padding: 4px !important;
-  }
+    .pf-input {
+      min-height: var(--pf-touch);
+      font-size: 16px;
+    }
 
-  pf-segmented .pf-seg.bar .pf-seg__item.seg-item {
-    height: var(--pf-touch) !important;
-    max-height: var(--pf-touch) !important;
-    min-height: var(--pf-touch) !important;
-    min-width: var(--pf-touch) !important;
-    padding: 0 18px;
-    font-size: 14px;
-  }
+    // pf-segmented (kit size md is 36px) → a 56px track with 48px segments.
+    // Selectors out-rank the component's encapsulated `.sz-md .seg-item`.
+    pf-segmented .pf-seg.bar {
+      height: calc(var(--pf-touch) + 8px) !important;
+      padding: 4px !important;
+    }
 
-  // Links that act as buttons get the same box.
-  a.pf-touch,
-  button.pf-touch {
-    min-height: var(--pf-touch);
-    min-width: var(--pf-touch);
-  }
+    pf-segmented .pf-seg.bar .pf-seg__item.seg-item {
+      height: var(--pf-touch) !important;
+      max-height: var(--pf-touch) !important;
+      min-height: var(--pf-touch) !important;
+      min-width: var(--pf-touch) !important;
+      padding: 0 18px;
+      font-size: 14px;
+    }
 
-  // Dialog buttons (kit DialogService host uses pf-touch-btn size sm = 44px).
-  .pf-dh-actions pf-touch-btn button.sz-sm {
-    height: var(--pf-touch);
-    min-height: var(--pf-touch);
-    padding: 0 20px;
-    font-size: 15px;
-  }
+    // Links that act as buttons get the same box.
+    a.pf-touch,
+    button.pf-touch {
+      min-height: var(--pf-touch);
+      min-width: var(--pf-touch);
+    }
 
-  // pf-select (kit trigger is 38px; options ~36px) → 48px trigger and rows, 16px text.
-  pf-select .pf-dd .pf-dd__trigger {
-    min-height: var(--pf-touch);
-    height: auto;
-    font-size: 16px;
-    border-radius: 12px;
-  }
-
-  .pf-dd__panel .pf-dd__option {
-    min-height: var(--pf-touch);
-    font-size: 15px;
-  }
-
-  // The band's back chevron (kit 36px) → 48px.
-  pf-hero-band button.pf-hb__back.press {
-    width: var(--pf-touch);
-    min-width: var(--pf-touch);
-    height: var(--pf-touch);
-    min-height: var(--pf-touch);
-    border-radius: 12px;
+    // pf-select (kit trigger is 38px) → a 48px trigger, 16px text.
+    pf-select .pf-dd .pf-dd__trigger {
+      min-height: var(--pf-touch);
+      height: auto;
+      font-size: 16px;
+      border-radius: 12px;
+    }
   }
 
   // A link that looks like a button (Studio: "Review") reads as a button: no underline.

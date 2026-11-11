@@ -6,6 +6,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { UploadsService } from '../../../core/services/uploads.service';
+import { injectTenantBrand } from './tenant-brand';
 
 /**
  * pf-hero-band — the ONE band every screen renders. Admin sub-pages
@@ -157,5 +158,58 @@ describe('pf-hero-band — personal case-sheet space', () => {
   it('a lab keeps its own name', () => {
     const { el } = make(true, { tenantName: 'Micro World', tenantKind: 'lab', displayName: 'Dr X' });
     expect(el.querySelector('.pf-hb__name')?.textContent?.trim()).toBe('Micro World');
+  });
+});
+
+/** A screen may wrap the lab's mark in its own button (the case sheet: tap = Departments, hold = a voice note): the band
+ *  projects [band-brand] in place of its plain logo / disc, keeps the name, and the mark comes from the ONE resolution. */
+@Component({
+  standalone: true,
+  imports: [HeroBandComponent],
+  template: `
+    <pf-hero-band [customBrand]="true">
+      <button band-brand type="button" class="mine">{{ brand.initial() }}</button>
+    </pf-hero-band>
+  `,
+})
+class BrandHostComponent {
+  readonly brand = injectTenantBrand();
+}
+
+describe('pf-hero-band — customBrand', () => {
+  it('renders the projected brand instead of the logo / disc, with the same name and initial', () => {
+    TestBed.configureTestingModule({
+      imports: [BrandHostComponent],
+      providers: [
+        { provide: AuthService, useValue: { user: () => ({ tenantName: 'Sunrise Diagnostics' }) } },
+        { provide: TenantStateService, useValue: { tenant: () => ({ name: 'Sunrise Diagnostics', logoUrl: null, brandingMode: 'both' }) } },
+        { provide: NavBackService, useValue: { showBack: signal(false), back: vi.fn(), backTo: vi.fn() } },
+      ],
+    });
+    const f = TestBed.createComponent(BrandHostComponent);
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('.pf-hb__tenant .mine')?.textContent?.trim()).toBe('S');
+    expect(el.querySelector('.pf-hb__avatar')).toBeNull();
+    expect(el.querySelector('.pf-hb__logo')).toBeNull();
+    expect(el.querySelector('.pf-hb__name')?.textContent?.trim()).toBe('Sunrise Diagnostics');
+  });
+
+  it('the shared resolution gives the uploaded logo when branding shows it, nothing when the mode is name-only', () => {
+    const at = (brandingMode: string) => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: AuthService, useValue: { user: () => ({ tenantName: 'Sunrise Diagnostics' }) } },
+          { provide: TenantStateService, useValue: { tenant: () => ({ name: 'Sunrise Diagnostics', logoUrl: 'data:image/png;base64,AA==', brandingMode }) } },
+        ],
+      });
+      return TestBed.runInInjectionContext(() => injectTenantBrand());
+    };
+    const both = at('both');
+    expect(both.showLogo() && both.logo()).toBe('data:image/png;base64,AA==');
+    const name = at('name');
+    expect(name.showLogo()).toBe(false);
+    expect(name.initial()).toBe('S');
   });
 });

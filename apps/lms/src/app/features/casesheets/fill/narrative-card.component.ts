@@ -230,7 +230,7 @@ export interface SectionEditEvent {
         flex-wrap: wrap;
         align-items: center;
         gap: 4px 8px;
-        min-height: var(--pf-touch);
+        min-height: 44px; /* the kit button row (owner 2026-11-11: only the form body is touch-sized) */
       }
       .nv-sec__actions {
         flex: 0 0 auto;
@@ -255,9 +255,7 @@ export interface SectionEditEvent {
         flex: 1 1 auto;
       }
       .nv-edit {
-        height: var(--pf-touch);
         padding: 0 12px;
-        font-size: 14px;
       }
       .nv-tag {
         height: 24px;
@@ -265,7 +263,7 @@ export interface SectionEditEvent {
       }
       .nv-p {
         margin: 0;
-        font-size: 15.5px;
+        font-size: 14.5px;
         line-height: 1.6;
         color: var(--text-primary);
         text-wrap: pretty;
@@ -328,7 +326,6 @@ export interface SectionEditEvent {
       }
       .nv-add {
         align-self: flex-start;
-        height: var(--pf-touch);
       }
       .nv-hint {
         margin: -8px 0 0;

@@ -1,103 +1,121 @@
-<!-- The case sheet in the legacy MyPrefrontal form layout (resident-fe dynamic-form + navbar form mode + tab-nav form
-     mode + step-footer + form-sidebar-desktop), Prepare skin:
-       header : PF logo (tap = Departments, hold = a voice note) · the page title · saved state · Narrative · thin progress line
-       page   : full width, max 896px, 16px (24px ≥768) padding, the form's 12-column field grid, 24px gaps
-       bar    : Back · Pages (tap = the page list, hold = leave) · Next (hold = finish); a hold line fills along its top
-       desktop: the page list is a rail on the left; the bar is a footer (Back left, Next right) -->
+<!-- The case sheet in the legacy MyPrefrontal form layout (resident-fe dynamic-form + tab-nav form mode + step-footer +
+     form-sidebar-desktop); the skin is the LMS new design (owner 2026-11-11: no purple Prepare header):
+       band   : pf-hero-band — back chevron (= Departments), the LAB's own mark (tap = Departments, hold = a voice note; the
+                hold fills whatever logo the lab uploaded, or its initial disc) + name; actions: saved state · Narrative.
+                The pill is the context bar: the case sheet's title, the page, the patient, how much is answered.
+       page   : the form column (max 896px, 16px / 24px ≥768 padding), the form's 12-column field grid, 24px gaps
+       foot   : Back · Pages (tap = the page list, hold = leave) · Next (hold = finish), in the page under the form column and
+                exactly as wide (Back on its left edge, Next on its right), above the bottom nav. The public site lends the
+                same controls to its own bottom pill instead (FormBarService).
+       desktop: the page list is a rail on the left; the foot drops Pages (the rail holds the list) -->
 <cs-styles />
-<div class="lf" [class.lf--final]="isFinal()" [style.--lf-color]="pageColor()">
-  <header class="lf-head">
-    <div class="lf-head__in">
+<div class="lf pf-page pg" [class.lf--final]="isFinal()" [class.lf--lab]="nav.isLab">
+  <pf-hero-band [back]="true" [backAction]="backFn" [customBrand]="true" [contextBar]="true" [customSearch]="true">
+    <button
+      band-brand
+      type="button"
+      class="lf-brand pf-touch"
+      aria-label="Departments"
+      aria-description="Hold for a voice note"
+      title="Tap: Departments · Hold: voice note"
+      data-brand
+      feHold
+      [holdDelay]="holds.note.delay"
+      [holdMs]="holds.note.fill"
+      [holdCancelSwallowsTap]="true"
+      (feHold)="holdLogo()"
+      (click)="goHome()"
+    >
+      @if (brand.showLogo() && brand.logo(); as src) {
+      <span class="lf-brand__logo">
+        <img class="pf-hb__logo lf-brand__img" [src]="src" alt="" />
+        <!-- the hold fill takes the logo's own shape (its transparency is the mask) -->
+        <span class="lf-brand__fill" aria-hidden="true" [style.mask-image]="maskOf(src)" [style.-webkit-mask-image]="maskOf(src)"></span>
+      </span>
+      } @else {
+      <span class="lf-brand__disc" aria-hidden="true">
+        <span class="lf-brand__fill"></span>
+        <span class="lf-brand__ch">{{ brand.initial() }}</span>
+      </span>
+      }
+    </button>
+
+    <div band-actions class="lf-actions">
+      @if (sheet()) {
+      <app-save-state [state]="session.saveState()" (resolve)="resolveConflict()" />
+      } @if (sheet() && !isFinal()) {
       <button
         type="button"
-        class="lf-logo pf-touch"
-        aria-label="Departments"
-        aria-description="Hold for a voice note"
-        title="Tap: Departments · Hold: voice note"
+        class="pf-hb-btn pf-hb-btn--ghost lf-hbtn fe-holdable pf-touch"
+        [class.lf-hbtn--on]="narrativeOpen()"
+        [attr.aria-expanded]="narrativeOpen()"
+        aria-controls="cs-narrative"
+        aria-label="Narrative"
+        aria-description="Hold to add a section of your own"
         feHold
         [holdDelay]="holds.note.delay"
         [holdMs]="holds.note.fill"
-        [holdCancelSwallowsTap]="true"
-        (feHold)="holdLogo()"
-        (click)="goHome()"
+        (feHold)="holdNarrative()"
+        (click)="narrativeOpen.set(!narrativeOpen())"
       >
-        <svg class="lf-logo__white" viewBox="0 0 228 292" aria-hidden="true">
-          <path [attr.d]="glyph[0]" />
-          <path [attr.d]="glyph[1]" />
-        </svg>
-        <svg class="lf-logo__fill" viewBox="0 0 228 292" aria-hidden="true">
-          <defs>
-            <linearGradient id="lfLogoFill" x1="0%" y1="100%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#7c3aed" />
-              <stop offset="50%" stop-color="#a855f7" />
-              <stop offset="100%" stop-color="#ec4899" />
-            </linearGradient>
-          </defs>
-          <path [attr.d]="glyph[0]" fill="url(#lfLogoFill)" />
-          <path [attr.d]="glyph[1]" fill="url(#lfLogoFill)" />
-        </svg>
+        <pf-icon name="text" [size]="18" />
+        <span class="lf-hbtn__lbl">Narrative</span>
       </button>
-
-      <div class="lf-title">
-        @for (t of [headTitle()]; track t) {
-        <h1 class="lf-title__text" id="cs-page-h">{{ t }}</h1>
-        }
-        @if (sheet() && !isFinal() && !hasNameField()) {
-        <p class="lf-title__meta">
-          @if (patient().name) {
-          <span class="lf-title__who">{{ patient().name }}@if (patient().meta) { · {{ patient().meta }} }</span>
-          } @else {
-          <span class="lf-title__who lf-title__who--add">Add patient's name</span>
-          }
-        </p>
-        }
-        @if (sheet() && !isFinal() && !hasNameField()) {
-        <button
-          type="button"
-          class="lf-title__ask pf-touch"
-          [attr.aria-label]="patient().name ? 'Change the patient\'s name' : 'Add the patient\'s name'"
-          (click)="askPatientName()"
-        ></button>
-        }
-      </div>
-
-      <div class="lf-head__right">
-        @if (sheet()) {
-        <app-save-state [state]="session.saveState()" (resolve)="resolveConflict()" />
-        } @if (sheet() && !isFinal()) {
-        <button
-          type="button"
-          class="lf-hbtn fe-holdable pf-touch"
-          [class.lf-hbtn--on]="narrativeOpen()"
-          [attr.aria-expanded]="narrativeOpen()"
-          aria-controls="cs-narrative"
-          aria-label="Narrative"
-          aria-description="Hold to add a section of your own"
-          feHold
-          [holdDelay]="holds.note.delay"
-          [holdMs]="holds.note.fill"
-          (feHold)="holdNarrative()"
-          (click)="narrativeOpen.set(!narrativeOpen())"
-        >
-          <pf-icon name="text" [size]="20" />
-          <span class="lf-hbtn__lbl">Narrative</span>
-        </button>
-        }
-      </div>
+      }
     </div>
-    @if (!isFinal()) {
-    <span
-      class="lf-progress"
-      role="progressbar"
-      aria-label="Answered so far"
-      [attr.aria-valuenow]="percent()"
-      aria-valuemin="0"
-      aria-valuemax="100"
-    >
-      <span class="lf-progress__bar" [style.width.%]="percent()"></span>
-    </span>
-    }
-  </header>
+
+    <div band-search class="pf-ctx lf-ctx" data-ctx>
+      <h1 class="pf-ctx__primary lf-ctx__title" id="cs-title" data-title>{{ sheet()?.formTitle || 'Case sheet' }}</h1>
+      @if (sheet() && def()) {
+      @if (isFinal()) {
+      <span class="pf-ctx__chip" data-page-chip><span class="pf-ctx__k">Finished</span></span>
+      } @else if (page(); as wp) {
+      <span class="pf-ctx__chip" data-page-chip>
+        @if (pageColor(); as c) { <span class="lf-ctx__dot" aria-hidden="true" [style.background]="c"></span> }
+        <span class="pf-ctx__k">Page {{ wiz.index() + 1 }} of {{ wiz.pages().length }}</span>
+        @for (t of [headTitle()]; track t) {
+        <span class="lf-ctx__page" id="cs-page-h">{{ t }}</span>
+        }
+      </span>
+      }
+      @if (!isFinal() && !hasNameField()) {
+      <button
+        type="button"
+        class="pf-ctx__chip lf-ctx__who pf-touch"
+        data-patient
+        [class.lf-ctx__who--add]="!patient().name"
+        [attr.aria-label]="patient().name ? 'Change the patient\'s name' : 'Add the patient\'s name'"
+        (click)="askPatientName()"
+      >
+        <pf-icon name="user" [size]="14" />
+        @if (patient().name) {
+        <span class="lf-title__who">{{ patient().name }}@if (patient().meta) { <span class="pf-ctx__k"> · {{ patient().meta }}</span> }</span>
+        } @else {
+        <span class="lf-title__who">Add patient's name</span>
+        }
+      </button>
+      } @else if (patient().name) {
+      <span class="pf-ctx__chip lf-ctx__who" data-patient>
+        <pf-icon name="user" [size]="14" />
+        <span class="lf-title__who">{{ patient().name }}@if (patient().meta) { <span class="pf-ctx__k"> · {{ patient().meta }}</span> }</span>
+      </span>
+      }
+      @if (!isFinal()) {
+      <span
+        class="pf-ctx__chip lf-prog"
+        role="progressbar"
+        aria-label="Answered so far"
+        [attr.aria-valuenow]="percent()"
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
+        <span class="lf-prog__track"><span class="lf-prog__bar" [style.width.%]="percent()"></span></span>
+        <span class="pf-ctx__k">{{ percent() }}% answered</span>
+      </span>
+      }
+      }
+    </div>
+  </pf-hero-band>
 
   @if (loadMessage(); as err) {
   <div class="lf-scroll pf-card__body">
@@ -147,6 +165,7 @@
       </ol>
     </aside>
 
+    <div class="lf-col">
     <main
       #body
       class="lf-scroll pf-card__body"
@@ -196,6 +215,14 @@
       </div>
       } }
     </main>
+    @if (nav.isLab) {
+    <!-- the lab: Back · Pages · Next under the form column, exactly its width (owner 2026-11-11: they sat in the bottom nav,
+         out of line with the form); the bottom nav keeps the work areas -->
+    <footer class="lf-foot" data-step-foot>
+      <div class="lf-foot__in"><ng-container [ngTemplateOutlet]="formBarTpl" /></div>
+    </footer>
+    }
+    </div>
 
     @if (narrativeOpen()) {
     <div class="cs-backdrop" aria-hidden="true" (click)="narrativeOpen.set(false)"></div>
@@ -252,8 +279,7 @@
       <pf-icon name="pen" [size]="18" /> Edit narrative
     </button>
     <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'listen'" aria-label="PF Listen" (click)="reportTab.set('listen')">
-      <svg class="rp__pf" viewBox="0 0 228 292" aria-hidden="true"><path [attr.d]="glyph[0]" /><path [attr.d]="glyph[1]" /></svg>
-      PF Listen
+      <pf-icon name="volume" [size]="18" /> PF Listen
     </button>
     <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'pdf'" (click)="reportTab.set('pdf')">
       <pf-icon name="file" [size]="18" /> PDF preview
@@ -323,7 +349,7 @@
 <ng-template #formBarTpl>
   <div class="lf-bar" role="group" aria-label="Pages of this case sheet">
     <span class="lf-bar__hold" aria-hidden="true"></span>
-    <button type="button" class="lf-bar__item lf-back pf-touch" [disabled]="wiz.isFirst()" (click)="back()">
+    <button type="button" class="lf-back pf-touch" [class.lf-bar__item]="!nav.isLab" [class.pf-btn]="nav.isLab" [class.pf-btn--secondary]="nav.isLab" [disabled]="wiz.isFirst()" (click)="back()">
       <svg class="lf-bar__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
       <span class="lf-bar__lbl">Back</span>
     </button>
@@ -331,7 +357,10 @@
     <div class="lf-bar__mid">
       <button
         type="button"
-        class="lf-bar__item lf-pages pf-touch"
+        class="lf-pages pf-touch"
+        [class.lf-bar__item]="!nav.isLab"
+        [class.pf-btn]="nav.isLab"
+        [class.pf-btn--tertiary]="nav.isLab"
         [class.lf-bar__item--open]="menuOpen()"
         [attr.aria-expanded]="menuOpen()"
         aria-controls="lf-menu"
@@ -385,7 +414,10 @@
     @if (wiz.next()) {
     <button
       type="button"
-      class="lf-bar__item lf-next pf-touch"
+      class="lf-next pf-touch"
+      [class.lf-bar__item]="!nav.isLab"
+      [class.pf-btn]="nav.isLab"
+      [class.pf-btn--primary]="nav.isLab"
       aria-description="Hold to finish the case sheet"
       feHold
       [holdDelay]="holds.finish.delay"
@@ -402,7 +434,7 @@
       <span class="lf-bar__lbl lf-bar__lbl--narrow">{{ holdingNext() ? 'Hold…' : 'Next' }}</span>
     </button>
     } @else {
-    <button type="button" class="lf-bar__item lf-next lf-finish pf-touch" [disabled]="finishing()" (click)="finish()">
+    <button type="button" class="lf-next lf-finish pf-touch" [class.lf-bar__item]="!nav.isLab" [class.pf-btn]="nav.isLab" [class.pf-btn--primary]="nav.isLab" [disabled]="finishing()" (click)="finish()">
       <span class="lf-bar__lbl lf-bar__lbl--wide">{{ finishing() ? 'Making the PDF…' : 'Finish' }}</span>
       <svg class="lf-bar__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
       <span class="lf-bar__lbl lf-bar__lbl--narrow">{{ finishing() ? 'Making…' : 'Finish' }}</span>
