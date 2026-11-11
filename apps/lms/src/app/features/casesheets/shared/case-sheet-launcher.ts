@@ -47,9 +47,9 @@ export class CaseSheetLauncher {
     return this.gate.visible() && this.auth.hasAnyPermission([CASESHEET_VIEW]);
   }
 
-  /** Gate open AND may start one. */
+  /** Gate open, Prepare switched on (Settings → IPD) AND may start one. */
   canFill(): boolean {
-    return this.gate.visible() && this.auth.hasAnyPermission([CASESHEET_FILL]);
+    return this.gate.prepareOn() && this.auth.hasAnyPermission([CASESHEET_FILL]);
   }
 
   open(l: CaseSheetLaunch): Promise<boolean> {

@@ -149,7 +149,7 @@ async function render(opts: Opts = {}) {
       { provide: PatientTimelineService, useValue: timeline },
       { provide: ActivatedRoute, useValue: { paramMap: of(convertToParamMap({ id: 'p1' })), queryParamMap: of(convertToParamMap(opts.query ?? {})), snapshot: { paramMap: convertToParamMap({ id: 'p1' }) } } },
       { provide: Router, useValue: router },
-      { provide: CasesheetGateService, useValue: { visible: signal(!!opts.gate), ready: async () => {} } },
+      { provide: CasesheetGateService, useValue: { visible: signal(!!opts.gate), prepareOn: signal(!!opts.gate), ready: async () => {} } },
       provideHttpClient(),
       provideHttpClientTesting(),
     ],

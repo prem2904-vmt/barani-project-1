@@ -14,7 +14,7 @@ describe('CaseSheetLauncher', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: Router, useValue: router },
-        { provide: CasesheetGateService, useValue: { visible: signal(open) } },
+        { provide: CasesheetGateService, useValue: { visible: signal(open), prepareOn: signal(open) } },
         { provide: AuthService, useValue: { hasAnyPermission: (p: string[]) => p.some((x) => perms.includes(x)) } },
       ],
     });

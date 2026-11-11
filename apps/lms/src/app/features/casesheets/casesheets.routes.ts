@@ -1,7 +1,7 @@
 import { Route, Routes } from '@angular/router';
 import { appModeMatch } from '../../core/app-mode';
 import { routeGuards } from '../../core/auth/route-guards';
-import { casesheetGuard } from './shared/casesheet.guard';
+import { casesheetGuard, casesheetPrepareGuard } from './shared/casesheet.guard';
 import { casesheetsSignInGuard, casesheetsSignedInGuard } from './public/public-access';
 
 /**
@@ -28,8 +28,10 @@ export const CASESHEET_PATHS = {
     formHistory: 'admin/ipd/myprefrontal/forms/:id/history',
     import: 'admin/ipd/myprefrontal/import',
   },
-  /** In-lab sheets (from the patient profile). */
+  /** In-lab sheets: the Prepare tab (owner 2026-11-11) and the patient profile. */
   lab: {
+    prepare: 'prepare',
+    prepareCases: 'prepare/cases',
     patientSheets: 'casesheets/patient/:patientId',
     start: 'casesheets/new',
     sheet: 'casesheets/:id',
@@ -52,6 +54,8 @@ export const casesheetLinks = {
   adminForm: (id: string): string => `/admin/ipd/myprefrontal/forms/${enc(id)}`,
   adminFormHistory: (id: string): string => `/admin/ipd/myprefrontal/forms/${enc(id)}/history`,
   adminImport: (): string => '/admin/ipd/myprefrontal/import',
+  prepare: (): string => '/prepare',
+  prepareCases: (): string => '/prepare/cases',
   patientSheets: (patientId: string): string => `/casesheets/patient/${enc(patientId)}`,
   start: (): string => '/casesheets/new',
   sheet: (id: string): string => `/casesheets/${enc(id)}`,
@@ -64,10 +68,10 @@ const casePage = () => import('./fill/case.page').then(m => m.CasePage);
 const casesPage = () => import('./sheets/cases.page').then(m => m.CasesPage);
 
 /** One gated in-shell route: casesheetGuard, then the ROUTE_ACCESS guards of `/${path}`. */
-function gated(path: string, title: string, loadComponent: Route['loadComponent'] = placeholder): Route {
+function gated(path: string, title: string, loadComponent: Route['loadComponent'] = placeholder, prepare = false): Route {
   return {
     path,
-    canActivate: [casesheetGuard, ...routeGuards(`/${path}`)],
+    canActivate: [casesheetGuard, ...(prepare ? [casesheetPrepareGuard] : []), ...routeGuards(`/${path}`)],
     data: { title },
     loadComponent,
   };
@@ -85,8 +89,10 @@ export const CASESHEET_SHELL_ROUTES: Routes = [
   gated(CASESHEET_PATHS.admin.form, 'Edit case sheet form', studioEditor),
   gated(CASESHEET_PATHS.admin.formHistory, 'Form version history', studioHistory),
   gated(CASESHEET_PATHS.admin.import, 'Bring in an old form', studioImport),
+  gated(CASESHEET_PATHS.lab.prepare, 'Prepare', departmentsPage, true),
+  gated(CASESHEET_PATHS.lab.prepareCases, 'Case sheets', casesPage, true),
   gated(CASESHEET_PATHS.lab.patientSheets, 'Case sheets', casesPage),
-  gated(CASESHEET_PATHS.lab.start, 'New case sheet', departmentsPage),
+  gated(CASESHEET_PATHS.lab.start, 'New case sheet', departmentsPage, true),
   gated(CASESHEET_PATHS.lab.sheet, 'Case sheet', casePage),
 ];
 

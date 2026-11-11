@@ -35,6 +35,7 @@ const PAGE_SIZE = 30;
  *    casesheet_view (branch-filtered by the API, §11 Q2), with "New case sheet" for casesheet_fill. A lab never deletes
  *    a finished sheet (plan §3.1: Amend = a new version).
  */
+import { CasesheetGateService } from '../shared/casesheet-gate.service';
 @Component({
   selector: 'app-cases-page',
   standalone: true,
@@ -55,7 +56,9 @@ export class CasesPage {
   /** Lab route param (`casesheets/patient/:patientId`); absent on the public site. */
   readonly patientId = input<string | undefined>(undefined);
   protected readonly patient = signal<LabPatient | null>(null);
-  protected readonly canFill = computed(() => this.auth.hasAnyPermission([CASESHEET_FILL]));
+  private readonly gate = inject(CasesheetGateService);
+  /** May start a sheet: the permission AND Prepare switched on (Settings → IPD; always on for a personal space). */
+  protected readonly canFill = computed(() => this.gate.prepareOn() && this.auth.hasAnyPermission([CASESHEET_FILL]));
   protected readonly query = signal('');
   protected readonly filter = signal<CaseFilter>('drafts');
   protected readonly filters: SegmentedOption<CaseFilter>[] = [

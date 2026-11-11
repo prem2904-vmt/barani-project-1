@@ -22,8 +22,8 @@ export function readAge(text: string): number | null {
 }
 
 /**
- * The public site's "whose case sheet is this?" step (plan §3.5; personal spaces only — a lab sheet starts from the LMS patient
- * profile). Search my patients, or add one in a few fields (name, age or date of birth, sex, phone), then the sheet starts.
+ * The "whose case sheet is this?" step (plan §3.5): the public site, and the lab's Prepare tab (owner 2026-11-11; a sheet from the
+ * patient profile skips it). Search the patients, or add one in a few fields (name, age or date of birth, sex, phone), then the sheet starts.
  * Plain words, LMS inputs (pf-select, pf-date), no native pickers. Emits the chosen patient's id.
  */
 @Component({

@@ -40,6 +40,8 @@ describe('case-sheet routes: defined once, all gated', () => {
       'admin/ipd/myprefrontal/forms/:id',
       'admin/ipd/myprefrontal/forms/:id/history',
       'admin/ipd/myprefrontal/import',
+      'prepare',
+      'prepare/cases',
       'casesheets/patient/:patientId',
       'casesheets/new',
       'casesheets/:id',
@@ -65,7 +67,7 @@ describe('case-sheet routes: defined once, all gated', () => {
   });
 
   it('nothing case-sheet-looking anywhere else in the LMS table is ungated', () => {
-    const csish = all.filter(f => /(^|\/)(casesheets|myprefrontal)(\/|$)/.test(f.path));
+    const csish = all.filter(f => /(^|\/)(casesheets|myprefrontal|prepare)(\/|$)/.test(f.path));
     expect(csish.map(f => f.route).every(r => CASESHEET_SHELL_ROUTES.includes(r))).toBe(true);
     expect(csish.length).toBe(CASESHEET_SHELL_ROUTES.length);
   });

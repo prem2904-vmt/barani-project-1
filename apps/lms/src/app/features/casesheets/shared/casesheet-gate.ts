@@ -51,6 +51,15 @@ export function ipdExplicitlyOn(modules: Record<string, { enabled?: unknown } | 
   return modules?.['ipd']?.enabled === true;
 }
 
+/**
+ * Prepare (owner 2026-11-11): the lab admin's switch in Settings → IPD, stored as `ipd.features.prepare`. ON unless it is literally
+ * `false` (absent ⇒ on, so a lab that already has IPD keeps working). Off hides the Prepare tab and starting new sheets; MyPrefrontal
+ * (form authoring) and reading old sheets stay. A personal space and the console flag ignore it (the server's PrepareOn rule).
+ */
+export function prepareSwitchOn(modules: Record<string, { features?: Record<string, unknown> } | undefined> | null | undefined): boolean {
+  return modules?.['ipd']?.features?.['prepare'] !== false;
+}
+
 export function readCasesheetsFlag(storage: FlagStorage | null | undefined): boolean {
   try { return storage?.getItem(CASESHEETS_FLAG_KEY) === '1'; } catch { return false; }
 }

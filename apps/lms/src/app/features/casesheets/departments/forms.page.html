@@ -7,7 +7,14 @@
     <!-- Left: departments -->
     <section class="dp__list" aria-labelledby="dp-h">
       <header class="dp__head">
-        <h1 class="dp__title" id="dp-h">Departments</h1>
+        <div class="dp__titlerow">
+          <h1 class="dp__title" id="dp-h">Departments</h1>
+          @if (fromPrepare) {
+          <a class="pf-btn pf-btn--secondary pf-btn--sm dp__mine" routerLink="/prepare/cases" data-my-sheets>
+            <pf-icon name="cases" [size]="15" /> My case sheets
+          </a>
+          }
+        </div>
         @if (patient(); as p) {
         <p class="dp__sub" data-patient>Case sheet for {{ p.name }}@if (p.meta) { · {{ p.meta }} }</p>
         } @else {
@@ -38,13 +45,7 @@
             <pf-icon name="refresh" [size]="18" /> Try again
           </button>
         </div>
-        } @if (needsPatient) {
-        <div class="dp__msg" data-empty="patient">
-          <h2 class="dp__msg-title">Start from the patient</h2>
-          <p>Open the patient's profile and tap Case sheet. The sheet is kept with that patient.</p>
-          <a class="pf-btn pf-btn--secondary" routerLink="/frontdesk">Find the patient</a>
-        </div>
-        } @else if (forms() === null) {
+        } @if (forms() === null) {
         <pf-skeleton-rows [rows]="5" label="Loading departments" />
         } @else if (!departments().length && !error()) {
         <div class="dp__msg" data-empty="forms">

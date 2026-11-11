@@ -7,7 +7,7 @@
     [value]="query()"
     (valueChange)="query.set($event)"
   >
-    @if (patientId() && canFill()) {
+    @if ((patientId() || nav.isLab) && canFill()) {
     <button band-actions type="button" class="pf-hb-btn pf-hb-btn--primary" data-new-sheet (click)="startNew()">
       <pf-icon name="plus" [size]="16" /> New case sheet
     </button>
@@ -17,7 +17,7 @@
     <section class="pf-card main" aria-labelledby="cases-h">
       <header class="pf-card__head">
         <span class="pf-card__icon"><pf-icon name="cases" [size]="16" /></span>
-        <h1 class="pf-card__label" id="cases-h">{{ patientId() ? 'Case sheets' : 'Cases' }}</h1>
+        <h1 class="pf-card__label" id="cases-h">{{ patientId() || nav.isLab ? 'Case sheets' : 'Cases' }}</h1>
         @if (items()) {
         <span class="pf-card__count">{{ total() }}</span>
         }

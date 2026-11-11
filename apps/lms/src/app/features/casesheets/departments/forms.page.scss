@@ -514,3 +514,7 @@
     transition: none;
   }
 }
+
+/* Prepare tab: "My case sheets" beside the title. */
+.dp__titlerow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dp__mine { flex: none; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }

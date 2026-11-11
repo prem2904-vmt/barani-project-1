@@ -4,7 +4,7 @@ import { isDevEnvironment } from '../../../core/beta/beta-gate';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { environment } from '../../../../environments/environment';
 import { installPfCortexImport } from './cortex-import-gate';
-import { casesheetsVisible, installPfCasesheets, ipdExplicitlyOn, readCasesheetsFlag, safeLocalStorage } from './casesheet-gate';
+import { casesheetsVisible, installPfCasesheets, ipdExplicitlyOn, prepareSwitchOn, readCasesheetsFlag, safeLocalStorage } from './casesheet-gate';
 
 /**
  * THE case-sheet gate for the UI (case sheets are part of IPD). Every case-sheet surface — routes
@@ -32,6 +32,12 @@ export class CasesheetGateService {
 
   /** Show case sheets anywhere in the UI. */
   readonly visible = computed(() => casesheetsVisible(this.inputs()));
+
+  /** Prepare is on: the Prepare tab and starting new sheets (the lab admin's Settings → IPD switch; see prepareSwitchOn). */
+  readonly prepareOn = computed(() => {
+    const i = this.inputs();
+    return this.visible() && (i.personalTenant || i.consoleFlag || prepareSwitchOn(this.storedModules() as never));
+  });
 
 
   /** The tenant's STORED module map; anything unreadable (not loaded, a partial service) ⇒ null ⇒ closed. */

@@ -68,6 +68,27 @@ export const DOCTOR_NAV: NavItem = {
              'M8 15a6 6 0 0 0 12 0v-3', 'M20 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z']
 };
 
+/** Prepare (owner 2026-11-11): the case-sheet work area — Departments → pick a form → pick or add the patient → fill, plus every
+ *  sheet the user may read. Appended by the nav shells (like OPD), right after Frontdesk, only while Prepare is on for the lab
+ *  (CasesheetGateService.prepareOn) AND the user holds a case-sheet permission. A reader without casesheet_fill lands on the list. */
+export function prepareNav(canFill: boolean): NavItem {
+  return {
+    id: 'prepare',
+    label: 'Prepare',
+    href: canFill ? '/prepare' : '/prepare/cases',
+    iconPath: ['M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1Z', 'M8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2', 'M8 12h8M8 16h5'],
+  };
+}
+
+/** Put the Prepare tab right after Frontdesk (or first when there is no Frontdesk tab). Pure. */
+export function withPrepare(items: NavItem[], prepare: NavItem | null): NavItem[] {
+  if (!prepare) return items;
+  const at = items.findIndex(i => i.id === 'frontdesk');
+  const out = items.filter(i => i.id !== 'prepare');
+  out.splice(at >= 0 ? at + 1 : 0, 0, prepare);
+  return out;
+}
+
 /** OPD home hub — the general "OPD" tab, shown alongside Consults (never
  *  replacing it) whenever the OPD gate is open AND the user can open at
  *  least one OPD area (OPD_AREAS' own permission rule — see

@@ -104,7 +104,7 @@ export class FormsPage {
   protected readonly drafts = signal<CaseSummary[] | null>(null);
   protected readonly error = signal('');
   protected readonly starting = signal<string | null>(null);
-  /** Public site: the case sheet waiting for its patient (the patient step is open). */
+  /** The case sheet waiting for its patient (the patient step is open): the public site, and the lab's Prepare tab (no patient yet). */
   protected readonly pickingFor = signal<FormSummary | null>(null);
   protected readonly when = whenText;
   protected readonly initial = initialOf;
@@ -124,8 +124,8 @@ export class FormsPage {
     id: this.route.snapshot?.queryParamMap?.get('ctxId') ?? null,
   };
   protected readonly patient = signal<LabPatient | null>(null);
-  /** Lab without a patient: nothing can start here (the sheet starts from the patient's profile). */
-  protected readonly needsPatient = this.nav.isLab && !this.patientId;
+  /** Lab's Prepare tab (no ?patientId=): Departments for any patient — the patient step asks whose sheet it is (owner 2026-11-11). */
+  protected readonly fromPrepare = this.nav.isLab && !this.patientId;
 
   protected readonly departments = computed(() => groupDepartments(this.forms() ?? [], this.query()));
 
@@ -150,11 +150,6 @@ export class FormsPage {
 
   protected async load(): Promise<void> {
     this.error.set('');
-    if (this.needsPatient) {
-      this.forms.set([]);
-      this.drafts.set([]);
-      return;
-    }
     if (this.patientId && !this.patient())
       void this.patients
         .load(this.patientId)
@@ -199,8 +194,8 @@ export class FormsPage {
 
   protected async start(f: FormSummary): Promise<void> {
     if (this.starting()) return;
-    // public site (a personal space): every sheet belongs to one of MY patients — choose or add one first (plan §3.5)
-    if (!this.nav.isLab) {
+    // public site (a personal space), and the lab's Prepare tab: every sheet belongs to a patient — choose or add one first (plan §3.5)
+    if (!this.nav.isLab || !this.patientId) {
       this.error.set('');
       this.pickingFor.set(f);
       return;
@@ -219,7 +214,7 @@ export class FormsPage {
           contextId: this.context.id,
         });
       } else {
-        sheet = await this.api.createCase(f.id);
+        throw new Error('patient_required');
       }
       await this.router.navigateByUrl(this.nav.sheet(sheet.id));
     } catch {

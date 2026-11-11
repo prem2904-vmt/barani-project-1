@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -9,6 +9,10 @@ import { ModulePlaceholderComponent } from '../../modules/module-placeholder.com
 import { casesheetLinks } from '../casesheets.routes';
 import { CASESHEET_FORMS_MANAGE } from '../shared/casesheet-permissions';
 import { CasesheetGateService } from '../shared/casesheet-gate.service';
+import { PrepareSwitchApi } from '../data/prepare-switch-api';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { ToggleComponent } from '@prefrontal/shared';
 
 interface IpdTile {
   title: string;
@@ -26,7 +30,7 @@ interface IpdTile {
 @Component({
   selector: 'pf-ipd-hub',
   standalone: true,
-  imports: [RouterLink, ScreenHeaderComponent, HeroBandComponent, ModulePlaceholderComponent],
+  imports: [RouterLink, ScreenHeaderComponent, HeroBandComponent, ModulePlaceholderComponent, ToggleComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (showHub()) {
@@ -38,6 +42,27 @@ interface IpdTile {
           subtitle="Case sheet forms for your doctors, and the rest of inpatient care as it arrives."></pf-screen-header>
 
         <div class="pf-band-body">
+          @if (prepare(); as p) {
+            @if (p.canChange) {
+              <!-- Owner 2026-11-11: Prepare on = a Prepare tab next to Frontdesk + the patient's Case sheet button. -->
+              <section class="pf-card pf-ipd-switch" data-prepare-switch>
+                <span class="pf-card__icon pf-lsh__ic">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1ZM8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 12h8M8 16h5"></path></svg>
+                </span>
+                <span class="pf-lsh__text">
+                  <span class="pf-lsh__t" id="ipd-prepare-t">Prepare</span>
+                  <span class="pf-lsh__s">{{ p.enabled
+                    ? 'On. Doctors see a Prepare tab next to Frontdesk and can start case sheets for any patient.'
+                    : 'Off. Doctors cannot start new case sheets. Forms stay editable here and finished sheets stay readable.' }}</span>
+                </span>
+                <!-- Re-created after a failed save: pf-toggle flips itself on click, so putting the old value back needs a fresh one. -->
+                @for (k of [toggleKey()]; track k) {
+                  <pf-toggle [checked]="p.enabled" [disabled]="saving()" (checkedChange)="setPrepare($event)"
+                             aria-labelledby="ipd-prepare-t"></pf-toggle>
+                }
+              </section>
+            }
+          }
           <div class="pf-lsh" data-hub="ipd">
             @for (t of visibleTiles(); track t.title) {
               @if (t.href) {
@@ -92,6 +117,10 @@ interface IpdTile {
     .pf-lsh__t { font-size: 15px; font-weight: 600; color: var(--text-primary); }
     .pf-lsh__s { font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
     .pf-lsh__soon { margin-left: 6px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--text-secondary); background: color-mix(in srgb, var(--text-tertiary) 16%, transparent); }
+    .pf-ipd-switch { display: flex; flex-direction: row; align-items: center; justify-content: flex-start; text-align: left; gap: 14px; padding: 16px 18px; margin-top: 8px; }
+    .pf-ipd-switch .pf-lsh__ic { margin-bottom: 0; flex: none; }
+    .pf-ipd-switch .pf-lsh__text { flex: 1; align-items: flex-start; }
+    .pf-ipd-switch pf-toggle { flex: none; }
     .pf-lsh__chev { display: none; color: var(--text-muted, #94a3b8); flex-shrink: 0; }
     @media (max-width: 640px) {
       .pf-lsh { grid-template-columns: 1fr; gap: 8px; }
@@ -103,8 +132,40 @@ interface IpdTile {
     }
   `],
 })
-export class IpdHubComponent {
+export class IpdHubComponent implements OnInit {
   protected readonly theme = inject(ThemeService);
+  private readonly prepareApi = inject(PrepareSwitchApi);
+  private readonly entitlements = inject(TenantEntitlementsService);
+  private readonly toasts = inject(ToastService);
+  /** The Prepare switch; null until loaded (or when the server can't say). */
+  readonly prepare = signal<{ enabled: boolean; canChange: boolean } | null>(null);
+  readonly saving = signal(false);
+  readonly toggleKey = signal(0);
+
+  ngOnInit(): void {
+    void this.gate.ready().then(() => {
+      if (!this.showHub()) return;
+      this.prepareApi.get().then((p) => this.prepare.set(p)).catch(() => undefined);
+    });
+  }
+
+  async setPrepare(on: boolean): Promise<void> {
+    const before = this.prepare();
+    if (!before || this.saving()) return;
+    this.saving.set(true);
+    this.prepare.set({ ...before, enabled: on });
+    try {
+      this.prepare.set(await this.prepareApi.set(on));
+      this.entitlements.refresh();   // the gate re-reads ipd.features.prepare: the Prepare tab shows / hides now
+      this.toasts.success(on ? 'Prepare is on' : 'Prepare is off');
+    } catch {
+      this.prepare.set(before);
+      this.toggleKey.update((k) => k + 1);
+      this.toasts.error("Couldn't change Prepare just now. Please try again.");
+    } finally {
+      this.saving.set(false);
+    }
+  }
   private readonly gate = inject(CasesheetGateService);
   private readonly auth = inject(AuthService);
 

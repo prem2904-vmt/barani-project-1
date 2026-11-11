@@ -7,7 +7,7 @@ import { casesheetLinks } from '../casesheets.routes';
  *  - public site (casesheets mode, plan §4): Departments `/`, Cases `/cases`, a sheet `/cases/:id`;
  *  - lab (LMS mode): Departments FOR a patient `/casesheets/new?patientId=` (a sheet always starts from the patient,
  *    never a patient picker — plan §3.5), the patient's sheets `/casesheets/patient/:patientId`, a sheet
- *    `/casesheets/:id`. Without a patient, "home" is the patient's sheets list's parent: the front desk.
+ *    `/casesheets/:id`. Without a patient, "home" is the Prepare tab: Departments `/prepare`, all sheets `/prepare/cases`.
  * Pure (the mode is a parameter) so it is unit-tested; {@link CasesheetNav} binds it to this page load's mode.
  */
 export interface CasesheetLinks {
@@ -32,9 +32,9 @@ export function casesheetNavFor(mode: AppMode): CasesheetLinks {
   return {
     mode,
     departments: (patientId) =>
-      patientId ? { path: casesheetLinks.start(), queryParams: { patientId } } : { path: '/frontdesk' },
+      patientId ? { path: casesheetLinks.start(), queryParams: { patientId } } : { path: casesheetLinks.prepare() },
     sheet: (id) => casesheetLinks.sheet(id),
-    list: (patientId) => (patientId ? casesheetLinks.patientSheets(patientId) : '/frontdesk'),
+    list: (patientId) => (patientId ? casesheetLinks.patientSheets(patientId) : casesheetLinks.prepareCases()),
   };
 }
 

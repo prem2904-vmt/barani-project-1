@@ -15,3 +15,14 @@ export const casesheetGuard: CanActivateFn = async () => {
 };
 /** Marker the route specs read to prove a route is case-sheet-gated. */
 (casesheetGuard as unknown as { casesheetGate: true }).casesheetGate = true;
+
+/**
+ * The Prepare tab and starting a sheet (owner 2026-11-11): the gate open AND Prepare switched on in Settings → IPD. Off ⇒ the same
+ * silent bounce. Runs after casesheetGuard.
+ */
+export const casesheetPrepareGuard: CanActivateFn = async () => {
+  const gate = inject(CasesheetGateService);
+  const router = inject(Router);
+  await gate.ready();
+  return gate.prepareOn() ? true : router.createUrlTree(['/']);
+};

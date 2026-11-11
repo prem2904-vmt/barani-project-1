@@ -50,6 +50,8 @@ import { filter } from "rxjs/operators";
 import { FormsModule } from "@angular/forms";
 import { AuthService } from "../../core/auth/auth.service";
 import { OpdGateService } from "../../features/opd/shared/opd-gate.service";
+import { CasesheetGateService } from "../../features/casesheets/shared/casesheet-gate.service";
+import { CASESHEET_FILL, CASESHEET_VIEW } from "../../features/casesheets/shared/casesheet-permissions";
 import { StoredAccount } from "../../core/auth/accounts.service";
 import { LockService } from "../../core/auth/lock.service";
 import { BranchRef } from "../../core/auth/mock-user";
@@ -74,6 +76,8 @@ import { SessionService } from "../../core/auth/session.service";
 import {
   DOCTOR_NAV,
   OPD_NAV,
+  prepareNav,
+  withPrepare,
   opdNavActive,
   ADMIN_NAV,
   MORE_NAV,
@@ -211,6 +215,11 @@ export class TopStripComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   /** OPD dark build: the ONE OPD visibility rule. */
   private readonly opdGate = inject(OpdGateService);
+  private readonly casesheetGate = inject(CasesheetGateService);
+  /** Prepare tab: Prepare on for the lab AND a case-sheet permission (nav-items.ts prepareNav). */
+  private readonly prepareItem = computed(() =>
+    this.casesheetGate.prepareOn() && this.auth.hasAnyPermission([CASESHEET_FILL, CASESHEET_VIEW])
+      ? prepareNav(this.auth.hasAnyPermission([CASESHEET_FILL])) : null);
   private readonly lock = inject(LockService);
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
@@ -449,7 +458,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   );
 
   readonly primary = computed(() => {
-    let items = this.navAll();
+    let items = withPrepare(this.navAll(), this.prepareItem());
     // NEW design: Messages is a chat surface (bar icon → panel + floating
     // windows), never a page — drop its work area from the nav.
     if (this.themeService.isNewDesign())

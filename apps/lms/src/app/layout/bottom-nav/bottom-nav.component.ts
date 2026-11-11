@@ -11,6 +11,8 @@ import { Subscription } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
 import { OpdGateService } from '../../features/opd/shared/opd-gate.service';
+import { CasesheetGateService } from '../../features/casesheets/shared/casesheet-gate.service';
+import { CASESHEET_FILL, CASESHEET_VIEW } from '../../features/casesheets/shared/casesheet-permissions';
 import { StoredAccount } from '../../core/auth/accounts.service';
 import { BranchRef } from '../../core/auth/mock-user';
 import { LockService } from '../../core/auth/lock.service';
@@ -27,7 +29,7 @@ import { PresenceService } from '../../core/services/presence.service';
 import { PRESENCE_OPTIONS, PresenceOption, presenceLabel } from '../../shared/models/presence.model';
 import { SessionService } from '../../core/auth/session.service';
 import { SetPinDialogService } from '../../core/services/set-pin-dialog.service';
-import { DOCTOR_NAV, OPD_NAV, opdNavActive, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback, withExpenses, withInsights } from '../nav-items';
+import { prepareNav, withPrepare, DOCTOR_NAV, OPD_NAV, opdNavActive, ADMIN_NAV, MORE_NAV, NavItem, PRIMARY_NAV, WorkflowNavCtx, menusFromWorkflow, NavVisibilityCtx, navItemVisible, withCollectionFallback, withExpenses, withInsights } from '../nav-items';
 import { opdAreasFor } from '../../features/opd/shared/opd-nav';
 import { RouteAccessCtx } from '../../core/auth/route-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
@@ -48,6 +50,11 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly beta = inject(BetaFeaturesService);
   /** OPD dark build: the ONE OPD visibility rule. */
   private readonly opdGate = inject(OpdGateService);
+  private readonly casesheetGate = inject(CasesheetGateService);
+  /** Prepare tab: Prepare on for the lab AND a case-sheet permission (nav-items.ts prepareNav). */
+  private readonly prepareItem = computed(() =>
+    this.casesheetGate.prepareOn() && this.auth.hasAnyPermission([CASESHEET_FILL, CASESHEET_VIEW])
+      ? prepareNav(this.auth.hasAnyPermission([CASESHEET_FILL])) : null);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly dialog = inject(DialogService);
   private readonly entitlements = inject(TenantEntitlementsService);
@@ -522,7 +529,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     // rule), after the lab work items; the scrollable pill keeps every tab
     // reachable (no overflow menu).
     const base = this.visible(menusFromWorkflow(this.process.active(), this.navCtx()) ?? PRIMARY_NAV);
-    const items = this.withCollection(this.withInventory(withInsights(withExpenses(base, i => this.visible([i]).length > 0), i => this.visible([i]).length > 0)));
+    const items = withPrepare(this.withCollection(this.withInventory(withInsights(withExpenses(base, i => this.visible([i]).length > 0), i => this.visible([i]).length > 0))), this.prepareItem());
     // OPD: doctors get "Consults"; anyone who can open at least one OPD area
     // gets the general "OPD" tab — both only while the OPD gate is open
     // (tenant explicitly entitled, or the owner's pf.opd() preview). OPD dark
