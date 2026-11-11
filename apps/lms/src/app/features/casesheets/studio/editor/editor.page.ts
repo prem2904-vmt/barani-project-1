@@ -39,6 +39,11 @@ import { FieldCardComponent } from './field-card.component';
 import { FieldSettingsComponent } from './field-settings.component';
 import { NarrativePanelComponent } from './narrative-panel.component';
 import { PaletteComponent } from './palette.component';
+import { BuilderDrawerComponent, BuilderTab } from '../builder/builder-drawer.component';
+import { BuilderStatusService } from '../builder/builder-status.service';
+import { ChatStore } from '../builder/chat.store';
+import { ChecksStore } from '../builder/checks.store';
+import { failsWords } from '../builder/builder-models';
 
 /** Which side-card tab the desktop shows (remembered per computer). */
 const SIDE_TAB_KEY = 'prepare-studio-side-tab';
@@ -73,6 +78,7 @@ const SIDE_TAB_KEY = 'prepare-studio-side-tab';
     PhoneNoteComponent,
     ShortcutsPanelComponent,
     CsStylesComponent,
+    BuilderDrawerComponent,
   ],
   // Template pictures: Studio uploads / shows them through the same session-only store as the filler (bytes as blobs, no links).
   // FE_KINDS: every question card previews its control (<fe-field>) and the preview fills the form; the kinds are not
@@ -80,6 +86,7 @@ const SIDE_TAB_KEY = 'prepare-studio-side-tab';
   providers: [
     StudioSession, EditorStore, FieldActions, HttpAssetStore, { provide: FE_ASSETS, useExisting: HttpAssetStore },
     { provide: FE_KINDS, useValue: KIND_SPECS },
+    ChecksStore, ChatStore,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './editor.page.html',
@@ -109,6 +116,17 @@ export class StudioEditorPage {
   protected readonly pageRuleOpen = signal(false);
   protected readonly helpOpen = signal(false);
 
+  // ---------------- Cortex + Checks (dev beta: pf.cortexBuilder() + the server's status) ----------------
+  protected readonly builder = inject(BuilderStatusService);
+  protected readonly checks = inject(ChecksStore);
+  /** Which builder tool the drawer shows (null = closed). */
+  protected readonly builderTab = signal<BuilderTab | null>(null);
+  protected readonly failsText = computed(() => failsWords(this.checks.failing()));
+
+  protected openBuilder(tab: BuilderTab): void {
+    this.builderTab.set(this.builderTab() === tab ? null : tab);
+  }
+
   // ---------------- desktop ----------------
   protected readonly desk = deskSignal();
   protected readonly three = mediaSignal(STUDIO_3COL);
@@ -134,6 +152,7 @@ export class StudioEditorPage {
   };
 
   constructor() {
+    void this.builder.load();
     effect(() => {
       const id = this.id();
       untracked(() => void this.load(id));
@@ -386,6 +405,7 @@ export class StudioEditorPage {
   /** Something on screen that Esc should close first; true when it closed something. */
   private closeOne(): boolean {
     if (this.helpOpen()) return this.helpOpen.set(false), true;
+    if (this.builderTab()) return this.builderTab.set(null), true;
     if (this.previewOpen()) return this.previewOpen.set(false), true;
     if (this.store.paletteAt()) return this.store.paletteAt.set(null), true;
     if (this.store.editing()) return this.store.editing.set(null), true;
@@ -505,7 +525,9 @@ export class StudioEditorPage {
     const v = this.version();
     const ok = await this.dialog.confirm({
       title: `Publish version ${v?.versionNo ?? ''}?`,
-      message: 'Doctors get this version for new case sheets. Case sheets already started keep the version they began with.',
+      message:
+        'Doctors get this version for new case sheets. Case sheets already started keep the version they began with.' +
+        (this.builder.available() && this.checks.failing() ? ` ${this.failsText()} right now. You can still publish, but look at it first.` : ''),
       confirmLabel: 'Publish',
       cancelLabel: 'Not yet',
     });

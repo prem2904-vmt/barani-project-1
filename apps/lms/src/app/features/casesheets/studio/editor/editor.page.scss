@@ -555,3 +555,8 @@
 .ed-banner--cortex {
   background: color-mix(in srgb, var(--accent-primary, #7c5cff) 10%, transparent);
 }
+
+.ed-failchip {
+  color: var(--red-text, #b91c1c);
+  font-weight: 600;
+}

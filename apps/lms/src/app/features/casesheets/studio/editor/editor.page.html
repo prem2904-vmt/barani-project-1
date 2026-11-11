@@ -16,9 +16,24 @@
       <button type="button" class="pf-btn pf-btn--icon st-hover-only ed-desk-only" aria-label="Redo" data-act="redo" [attr.data-tip]="tips.redo" [disabled]="!session.canRedo()" (click)="session.redo()">
         <pf-icon name="redo" [size]="20" />
       </button>
+      @if (builder.cortex() && !session.readOnly()) {
+        <button type="button" class="pf-btn pf-btn--secondary" data-act="cortex" aria-label="Cortex" data-tip="Ask Cortex to change this draft" [attr.aria-pressed]="builderTab() === 'cortex'" [disabled]="!def()" (click)="openBuilder('cortex')">
+          <pf-icon name="sparkle" [size]="18" /> <span class="ed-actions__lbl">Cortex</span>
+        </button>
+      }
+      @if (builder.available()) {
+        <button type="button" class="pf-btn pf-btn--secondary" data-act="checks" aria-label="Checks" data-tip="If this option is picked, what shows" [attr.aria-pressed]="builderTab() === 'checks'" [disabled]="!def()" (click)="openBuilder('checks')">
+          <pf-icon name="check" [size]="18" /> <span class="ed-actions__lbl">Checks</span>
+        </button>
+      }
       <button type="button" class="pf-btn pf-btn--secondary" data-act="preview" [attr.data-tip]="tips.preview" [disabled]="!def()" (click)="preview()">
         <pf-icon name="eye" [size]="18" /> <span class="ed-actions__lbl">Preview</span>
       </button>
+      @if (builder.available() && checks.failing()) {
+        <button type="button" class="pf-btn pf-btn--tertiary ed-failchip" data-act="checks-fail" [attr.aria-label]="failsText()" (click)="openBuilder('checks')">
+          <pf-icon name="alert" [size]="16" /> <span class="ed-actions__lbl">{{ failsText() }}</span>
+        </button>
+      }
       <button type="button" class="pf-btn pf-btn--primary" data-act="publish" [disabled]="!def() || publishing() || session.onLive() || session.readOnly()" [attr.aria-busy]="publishing() ? 'true' : null" (click)="publish()">
         <pf-icon name="send" [size]="18" /> <span class="ed-actions__lbl">{{ publishing() ? 'Publishing…' : 'Publish' }}</span>
       </button>
@@ -326,6 +341,11 @@
 
   @if (previewOpen() && def()) {
     <st-preview [definition]="def()!" (closed)="previewOpen.set(false)" />
+  }
+  @if (builderTab(); as t) {
+    @if (def()) {
+      <st-builder-drawer [tab]="t" (tabChange)="builderTab.set($event)" (closed)="builderTab.set(null)" />
+    }
   }
   @if (helpOpen()) {
     <st-shortcuts (closed)="helpOpen.set(false)" />
