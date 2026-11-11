@@ -254,7 +254,7 @@ export class HttpCasesApi extends CasesApi {
     return items
       .map(obj)
       .filter((d) => d['isActive'] !== false && str(d['key']))
-      .map((d) => ({ key: str(d['key']), name: str(d['name']) || str(d['key']), sortOrder: num(d['sortOrder']) }))
+      .map((d) => ({ key: str(d['key']), name: str(d['name']) || str(d['key']), sortOrder: num(d['sortOrder']), own: d['own'] === true }))
       .sort((a, b) => a.sortOrder - b.sortOrder);
   }
 

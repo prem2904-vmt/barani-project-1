@@ -85,6 +85,51 @@ describe('HttpStudioApi: the master / department contract', () => {
     expect((await p).map((d) => d.key)).toEqual(['a', 'b']);
   });
 
+  it('departments({ includeInactive }): asks for hidden ones too and keeps them, with own', async () => {
+    const { api, http } = setup();
+    const p = api.departments({ includeInactive: true });
+    const req = http.expectOne((r) => r.url.endsWith('/api/casesheets/departments'));
+    expect(req.request.params.get('includeInactive')).toBe('true');
+    req.flush({ items: [
+      { key: 'ent', name: 'ENT', sortOrder: 1, isActive: true, own: false },
+      { key: 'derm', name: 'Dermatology', sortOrder: 2, isActive: false, own: true },
+    ] });
+    expect(await p).toEqual([
+      { key: 'ent', name: 'ENT', sortOrder: 1, isActive: true, own: false },
+      { key: 'derm', name: 'Dermatology', sortOrder: 2, isActive: false, own: true },
+    ]);
+  });
+
+  it('createDepartment / updateDepartment / removeDepartment hit the department endpoints; refusals become StudioError with the code', async () => {
+    const { api, http } = setup();
+    const c = api.createDepartment({ name: 'Cardiology' });
+    const post = http.expectOne((r) => r.url.endsWith('/api/casesheets/departments'));
+    expect(post.request.method).toBe('POST');
+    expect(post.request.body).toEqual({ name: 'Cardiology' });
+    post.flush({ key: 'cardiology', name: 'Cardiology', sortOrder: 3, isActive: true, own: true }, { status: 201, statusText: 'Created' });
+    expect((await c).key).toBe('cardiology');
+
+    const u = api.updateDepartment('cardiology', { sortOrder: 1 });
+    const put = http.expectOne((r) => r.url.endsWith('/api/casesheets/departments/cardiology'));
+    expect(put.request.method).toBe('PUT');
+    expect(put.request.body).toEqual({ sortOrder: 1 });
+    put.flush({ key: 'cardiology', name: 'Cardiology', sortOrder: 1, isActive: true, own: true });
+    expect((await u).sortOrder).toBe(1);
+
+    const d = api.removeDepartment('cardiology');
+    const del = http.expectOne((r) => r.url.endsWith('/api/casesheets/departments/cardiology'));
+    expect(del.request.method).toBe('DELETE');
+    del.flush(null, { status: 409, statusText: 'Conflict' });
+    await expect(d).rejects.toBeDefined();
+
+    const d2 = api.removeDepartment('ent');
+    http.expectOne((r) => r.url.endsWith('/api/casesheets/departments/ent')).flush(
+      { code: 'department_in_use', detail: 'Forms still use this department. Switch it off instead.' },
+      { status: 409, statusText: 'Conflict' },
+    );
+    await expect(d2).rejects.toMatchObject({ code: 'department_in_use', status: 409, message: 'Forms still use this department. Switch it off instead.' });
+  });
+
   it('fork(): POST forms/{id}/fork', async () => {
     const { api, http } = setup();
     const p = api.fork('m1');

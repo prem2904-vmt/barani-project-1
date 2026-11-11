@@ -119,7 +119,37 @@ export class StudioPage {
     if (!title?.trim()) return;
     const departments = this.departments();
     let specialty: string | undefined;
-    if (departments.length) {
+    if (!departments.length) {
+      // No departments yet: say so, and offer the way out here instead of filing the form under nothing.
+      const what = await this.dialog.choose({
+        title: 'Which department?',
+        message: 'There are no departments yet. Add one now, or manage them in Settings → IPD.',
+        choices: [
+          { value: 'add', label: 'Add a department', hint: 'Type a name and use it for this form' },
+          { value: 'manage', label: 'Manage departments', hint: 'Open Settings → IPD → Departments' },
+          { value: 'skip', label: 'Skip for now', hint: 'Make the form without a department' },
+        ],
+        confirmLabel: 'Continue',
+        cancelLabel: 'Cancel',
+      });
+      if (!what) return;
+      if (what === 'manage') {
+        await this.router.navigate([casesheetLinks.adminDepartments()]);
+        return;
+      }
+      if (what === 'add') {
+        const name = await this.dialog.prompt({ title: 'Add a department', placeholder: 'Department name, for example Cardiology', confirmLabel: 'Add', required: true });
+        if (!name?.trim()) return;
+        try {
+          const row = await this.api.createDepartment({ name: name.trim() });
+          this.departments.set(await this.api.departments().catch(() => [row]));
+          specialty = row.key;
+        } catch (e) {
+          this.error.set(plainError(e, "Couldn't add the department."));
+          return;
+        }
+      }
+    } else {
       const pick = await this.dialog.choose({
         title: 'Which department?',
         choices: [...departments.map((d) => ({ value: d.key, label: d.name })), { value: OTHER_DEPARTMENT, label: 'Other', hint: 'Not one of the listed departments' }],

@@ -358,8 +358,8 @@ describe('HttpCasesApi', () => {
       ],
     });
     expect(await d).toEqual([
-      { key: 'ent', name: 'ENT', sortOrder: 1 },
-      { key: 'ortho', name: 'Orthopaedics', sortOrder: 2 },
+      { key: 'ent', name: 'ENT', sortOrder: 1, own: false },
+      { key: 'ortho', name: 'Orthopaedics', sortOrder: 2, own: false },
     ]);
   });
 

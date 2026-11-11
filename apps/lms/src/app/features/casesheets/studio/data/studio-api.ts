@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Answers, FormDefinition } from '@prefrontal/forms-engine';
 import {
   ComponentKind,
+  DepartmentInput,
   DepartmentRow,
   DraftFromSheetInput,
   DraftJob,
@@ -36,8 +37,14 @@ export abstract class StudioApi {
   abstract version(formId: string, versionId: string): Promise<Version>;
   abstract createForm(title: string, definition?: FormDefinition, specialty?: string): Promise<{ id: string; version: Version }>;
   abstract duplicate(formId: string, title?: string): Promise<{ id: string; version: Version }>;
-  /** The master departments forms are filed under (labs cannot create departments). */
-  abstract departments(): Promise<DepartmentRow[]>;
+  /** The departments forms are filed under: Prefrontal's masters, then the lab's own. `includeInactive` (managers only) adds hidden ones. */
+  abstract departments(opts?: { includeInactive?: boolean }): Promise<DepartmentRow[]>;
+  /** Add a department of the lab's own (the key is made from the name). StudioError codes: invalid_name, name_taken, key_taken. */
+  abstract createDepartment(input: DepartmentInput & { name: string; key?: string }): Promise<DepartmentRow>;
+  /** Rename / reorder / hide one of the lab's own departments. StudioError codes: master_department, not_found. */
+  abstract updateDepartment(key: string, patch: DepartmentInput): Promise<DepartmentRow>;
+  /** Remove one of the lab's own departments. StudioError codes: department_in_use, master_department. */
+  abstract removeDepartment(key: string): Promise<void>;
   /** "Edit" on a master form: this lab's own copy (same catalogue key) with an open draft. Idempotent per form. */
   abstract fork(formId: string): Promise<{ id: string; version: Version }>;
   abstract archive(formId: string, archived: boolean): Promise<void>;

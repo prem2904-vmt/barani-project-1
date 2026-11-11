@@ -193,6 +193,7 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/ipd/myprefrontal/forms/:id':         { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/myprefrontal/forms/:id/history': { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/myprefrontal/import':            { perms: CASESHEET_FORMS_PERMS },
+  '/admin/ipd/departments':                    { perms: CASESHEET_FORMS_PERMS },
   // The lab's sheets: read with casesheet_view (tenant-wide, branch-filtered, §11 Q2) or casesheet_fill; start one with fill.
   // The Prepare tab (owner 2026-11-11): Departments to start a sheet (fill), every sheet the user may read (view or fill).
   '/prepare':                                  { perms: CASESHEET_FILL_PERMS },

@@ -1,7 +1,12 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { PfIconComponent } from '@prefrontal/forms-engine';
 import { PfSelectOption, SelectComponent } from '@prefrontal/shared';
+import { AuthService } from '../../../../core/auth/auth.service';
+import { casesheetLinks } from '../../casesheets.routes';
+import { CASESHEET_FORMS_MANAGE } from '../../shared/casesheet-permissions';
 import { DepartmentRow } from '../data/studio-models';
+import { DepartmentAddComponent } from '../shared/department-add.component';
 import { ACCEPT, MAX_FILES, MAX_TOTAL_BYTES, STEPS, addPages, fileType, moveItem, pagesProblem, stepStates } from './cortex-import';
 import { CortexImportService } from './cortex-import.service';
 
@@ -15,7 +20,7 @@ const mb = (n: number): string => (n / (1024 * 1024)).toFixed(n >= 10 * 1024 * 1
 @Component({
   selector: 'st-cortex-import',
   standalone: true,
-  imports: [PfIconComponent, SelectComponent],
+  imports: [PfIconComponent, SelectComponent, RouterLink, DepartmentAddComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '(document:keydown.escape)': 'close()' },
   template: `
@@ -58,10 +63,14 @@ const mb = (n: number): string => (n / (1024 * 1024)).toFixed(n >= 10 * 1024 * 1
           <div class="ci-body">
             <div class="ci-field">
               <span class="ci-lbl" id="ci-dept-l">Department</span>
-              @if (departments().length) {
+              @if (allDepartments().length) {
                 <pf-select class="ci-dept" aria-labelledby="ci-dept-l" data-dept [options]="deptOptions()" [value]="dept()" placeholder="Pick a department" (valueChange)="dept.set($event)" />
+              } @else if (canManage()) {
+                <p class="ci-hint" data-no-depts>Add the first department to file this case sheet under. You can add more later.</p>
+                <st-dept-add data-add-dept (added)="deptAdded($event)" />
+                <a class="ci-link" data-act="manage-depts" [routerLink]="manageLink" (click)="close()">Manage departments</a>
               } @else {
-                <p class="ci-hint">No departments to pick from yet.</p>
+                <p class="ci-hint" data-no-depts>Ask your case sheet admin to add a department in Settings → IPD.</p>
               }
             </div>
             <div class="ci-field">
@@ -83,7 +92,8 @@ const mb = (n: number): string => (n / (1024 * 1024)).toFixed(n >= 10 * 1024 * 1
                       </span>
                       <span class="ci-page__t">
                         <span class="ci-page__n">Page {{ i + 1 }}</span>
-                        <span class="ci-page__f">{{ f.name }} · {{ size(f.size) }} MB</span>
+                        <span class="ci-page__f" [attr.title]="f.name">{{ f.name }}</span>
+                        <span class="ci-page__s">{{ size(f.size) }} MB</span>
                       </span>
                       <button type="button" class="pf-btn pf-btn--icon" [attr.aria-label]="'Move page ' + (i + 1) + ' up'" data-act="up" [disabled]="i === 0" (click)="move(i, i - 1)"><pf-icon name="arrow-up" [size]="16" /></button>
                       <button type="button" class="pf-btn pf-btn--icon" [attr.aria-label]="'Move page ' + (i + 1) + ' down'" data-act="down" [disabled]="i === files().length - 1" (click)="move(i, i + 1)"><pf-icon name="arrow-down" [size]="16" /></button>
@@ -101,11 +111,14 @@ const mb = (n: number): string => (n / (1024 * 1024)).toFixed(n >= 10 * 1024 * 1
             </p>
             @if (svc.startError(); as e) { <p class="ci-err" role="alert" data-start-error>{{ e }}</p> }
           </div>
-          <footer class="ci-foot">
-            <button type="button" class="pf-btn pf-btn--secondary" data-act="cancel" (click)="close()">Cancel</button>
-            <button type="button" class="pf-btn pf-btn--primary" data-act="read" [disabled]="!canRead()" [attr.aria-busy]="svc.starting() ? 'true' : null" (click)="read()">
-              <pf-icon name="sparkle" [size]="18" /> {{ svc.starting() ? 'Sending…' : 'Read the sheet' }}
-            </button>
+          <footer class="ci-foot ci-foot--form">
+            @if (readHint(); as why) { <p class="ci-why" data-read-hint>{{ why }}</p> }
+            <div class="ci-btns">
+              <button type="button" class="pf-btn pf-btn--secondary" data-act="cancel" (click)="close()">Cancel</button>
+              <button type="button" class="pf-btn pf-btn--primary" data-act="read" [disabled]="!canRead()" [attr.aria-busy]="svc.starting() ? 'true' : null" (click)="read()">
+                <pf-icon name="sparkle" [size]="18" /> {{ svc.starting() ? 'Sending…' : 'Read the sheet' }}
+              </button>
+            </div>
           </footer>
         }
       </div>
@@ -116,8 +129,20 @@ const mb = (n: number): string => (n / (1024 * 1024)).toFixed(n >= 10 * 1024 * 1
 export class CortexImportDialog {
   readonly departments = input<DepartmentRow[]>([]);
   readonly closed = output<void>();
+  /** A department was added from here (the page behind refreshes its list). */
+  readonly departmentAdded = output<DepartmentRow>();
 
   protected readonly svc = inject(CortexImportService);
+  private readonly auth = inject(AuthService);
+  /** May add and manage departments (the case-sheet builder permission). */
+  protected readonly canManage = computed(() => this.auth.hasPermission(CASESHEET_FORMS_MANAGE));
+  protected readonly manageLink = casesheetLinks.adminDepartments();
+  /** Departments added from this dialog, shown before the page behind has reloaded. */
+  private readonly added = signal<DepartmentRow[]>([]);
+  protected readonly allDepartments = computed(() => {
+    const have = this.departments();
+    return [...have, ...this.added().filter((a) => !have.some((d) => d.key === a.key))];
+  });
 
   protected readonly accept = ACCEPT;
   protected readonly max = MAX_FILES;
@@ -142,7 +167,7 @@ export class CortexImportDialog {
     return !j ? 'Cortex turns a photo or PDF of your blank paper sheet into a draft form you can edit.'
       : j.status === 'failed' ? '' : 'Hold on, this takes about a minute.';   // the failure line below says the rest
   });
-  protected readonly deptOptions = computed<PfSelectOption<string>[]>(() => this.departments().map((d) => ({ value: d.key, label: d.name })));
+  protected readonly deptOptions = computed<PfSelectOption<string>[]>(() => this.allDepartments().map((d) => ({ value: d.key, label: d.name })));
   protected readonly totalMb = computed(() => mb(this.files().reduce((n, f) => n + f.size, 0)));
   private readonly problem = computed(() => pagesProblem(this.files()));
   /** The reason the pages can't go, shown once there is something to say (not before the first page is added). */
@@ -153,6 +178,14 @@ export class CortexImportDialog {
   });
   protected readonly canRead = computed(() => !this.problem() && !!this.dept() && !this.svc.starting() && !this.svc.running());
 
+  /** Why "Read the sheet" is off, in one line under the buttons (nothing once it can go, or while the pages say their own problem). */
+  protected readonly readHint = computed(() => {
+    if (this.canRead() || this.svc.starting() || this.svc.running()) return '';
+    if (!this.dept()) return this.allDepartments().length ? 'Pick a department to continue.' : 'Add a department first, then Cortex can read the sheet.';
+    if (!this.files().length) return 'Add at least one page to continue.';
+    return '';
+  });
+
   private readonly urls = new Map<File, string>();
 
   constructor() {
@@ -162,9 +195,16 @@ export class CortexImportDialog {
     });
     // a single department needs no picking
     effect(() => {
-      const d = this.departments();
+      const d = this.allDepartments();
       if (d.length === 1 && !untracked(() => this.dept())) this.dept.set(d[0].key);
     });
+  }
+
+  /** The department the user just added: chosen straight away. */
+  protected deptAdded(row: DepartmentRow): void {
+    this.added.update((a) => [...a, row]);
+    this.dept.set(row.key);
+    this.departmentAdded.emit(row);
   }
 
   protected size(n: number): string {

@@ -202,6 +202,8 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
     keywords: ['mcp', 'claude', 'connector'] },
   { title: 'MyPrefrontal', href: '/admin/ipd/myprefrontal', section: 'IPD', icon: I.casesheet, kind: 'page', casesheets: true,
     keywords: ['case sheet', 'case sheets', 'forms', 'form studio', 'ipd', 'doctor forms', 'department forms', 'history sheet'] },
+  { title: 'IPD departments', href: '/admin/ipd/departments', section: 'IPD', icon: I.casesheet, kind: 'page', casesheets: true,
+    keywords: ['departments', 'department', 'case sheet', 'case sheets', 'ipd', 'specialty', 'ward'] },
   { title: 'Home-collection agents', href: '/admin/home-collection', section: SETTINGS_SECTION.lab, icon: I.home, kind: 'page', feature: 'homeCollection',
     keywords: ['home collection', 'agent', 'pickup', 'coverage area', 'pincode'] },
   { title: 'Notifications', href: '/admin/notifications', section: SETTINGS_SECTION.lab, icon: I.bell, kind: 'page',

@@ -59,10 +59,10 @@ describe('Studio page rail', () => {
 });
 
 describe('case-sheet search box', () => {
-  it('hides the browser clear button and offers our own SVG one', () => {
-    expect(dept).toMatch(/::-webkit-search-cancel-button/);
-    expect(deptHtml).toMatch(/class="dp__clear"[^>]*aria-label="Clear search"/);
-    expect(deptHtml).toMatch(/<svg[^>]*>\s*<path d="M18 6 6 18M6 6l12 12"/);
+  it('Prepare home searches in the band (no native search field, so no browser clear button to hide)', () => {
+    expect(deptHtml).toMatch(/<pf-hero-band[^>]*placeholder="Search departments and case sheets"/);
+    expect(deptHtml).not.toMatch(/type="search"/);
+    expect(dept).not.toMatch(/dp__search/);
   });
 });
 

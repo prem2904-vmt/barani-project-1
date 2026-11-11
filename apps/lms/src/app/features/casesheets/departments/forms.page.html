@@ -1,161 +1,209 @@
-<!-- Legacy MyPrefrontal speciality page, 1:1 in layout (resident-fe pages/specialities, standard mode):
-     one card; departments on the left (numbered, "N case sheets"), the chosen department's case sheets on the right
-     (initial disc, name, star). Phone: the list, then the department on its own with a back arrow. -->
+<!-- Prepare home: the band (back + search), a header row (title, subtitle, "My case sheets"), then one card:
+     departments on the left (numbered, "N case sheets"), the open department's case sheets on the right (initial disc,
+     name, star). Wide screens open the first department by itself; phones show the list, then the department with a
+     back arrow. -->
 <cs-styles />
-<div class="dp" [class.dp--picked]="!!pickedDept()">
-  <div class="dp__card">
-    <!-- Left: departments -->
-    <section class="dp__list" aria-labelledby="dp-h">
-      <header class="dp__head">
-        <div class="dp__titlerow">
-          <h1 class="dp__title" id="dp-h">Departments</h1>
-          @if (fromPrepare) {
-          <a class="pf-btn pf-btn--secondary pf-btn--sm dp__mine" routerLink="/prepare/cases" data-my-sheets>
-            <pf-icon name="cases" [size]="15" /> My case sheets
-          </a>
-          }
-        </div>
+<div class="pf-page pg dp" [class.dp--picked]="!!chosenDept()">
+  <pf-hero-band
+    [back]="nav.isLab"
+    [standardPill]="true"
+    placeholder="Search departments and case sheets"
+    [value]="query()"
+    (valueChange)="onSearch($event)"
+  ></pf-hero-band>
+  <div class="pf-body dp__body">
+    <header class="dp__top">
+      <div class="dp__titles">
+        <h1 class="dp__title" id="dp-h">{{ patient() ? 'New case sheet' : 'Prepare' }}</h1>
         @if (patient(); as p) {
         <p class="dp__sub" data-patient>Case sheet for {{ p.name }}@if (p.meta) { · {{ p.meta }} }</p>
         } @else {
-        <p class="dp__sub">Case sheets</p>
+        <p class="dp__sub" data-sub>Pick a department and a case sheet to start</p>
         }
-        <label class="dp__search">
-          <pf-icon name="search" [size]="16" />
-          <input
-            type="search"
-            data-dp-search
-            placeholder="Search case sheets"
-            aria-label="Search case sheets"
-            [value]="query()"
-            (input)="onSearch($any($event.target).value)"
-          />
-          @if (query()) {
-          <button type="button" class="dp__clear" aria-label="Clear search" (click)="onSearch('')">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-          </button>
-          }
-        </label>
-      </header>
-      <div class="dp__scroll pf-card__body">
-        @if (error()) {
-        <div class="dp__msg" role="alert">
-          <p>{{ error() }}</p>
-          <button type="button" class="pf-btn pf-btn--secondary" (click)="load()">
-            <pf-icon name="refresh" [size]="18" /> Try again
-          </button>
-        </div>
-        } @if (forms() === null) {
-        <pf-skeleton-rows [rows]="5" label="Loading departments" />
-        } @else if (!departments().length && !error()) {
-        <div class="dp__msg" data-empty="forms">
-          @if (query()) {
-          <h2 class="dp__msg-title">No case sheet matches “{{ query() }}”</h2>
-          } @else {
-          <h2 class="dp__msg-title">No case sheets yet</h2>
-          <p>Case sheets for your department show here once they are published.</p>
-          }
-        </div>
+      </div>
+      @if (fromPrepare) {
+      <a class="pf-btn pf-btn--secondary dp__mine" routerLink="/prepare/cases" data-my-sheets>
+        <pf-icon name="cases" [size]="18" /> My case sheets
+      </a>
+      }
+    </header>
+
+    @if (loadError()) {
+    <div class="dp__card dp__card--msg">
+      <div class="dp__msg" role="alert">
+        <p>{{ loadError() }}</p>
+        <button type="button" class="pf-btn pf-btn--secondary" (click)="load()">
+          <pf-icon name="refresh" [size]="18" /> Try again
+        </button>
+      </div>
+    </div>
+    } @else if (forms() === null) {
+    <div class="dp__card dp__card--msg"><pf-skeleton-rows [rows]="5" label="Loading departments" /></div>
+    } @else if (!hasDepartments()) {
+    <!-- no departments at all: one clear empty state across the page -->
+    <div class="dp__card dp__card--msg">
+      <div class="pf-empty" data-empty="departments">
+        <span class="pf-empty__icon"><pf-icon name="cases" [size]="26" /></span>
+        <h2 class="pf-empty__title">No IPD departments yet</h2>
+        @if (nav.isLab && canManage()) {
+        <p class="pf-empty__body">Add the departments your doctors work in. Case sheets are grouped by them.</p>
+        <a class="pf-btn pf-btn--primary pf-empty__action" [routerLink]="links.adminDepartments()" data-act="add-departments">
+          <pf-icon name="plus" [size]="18" /> Add departments
+        </a>
+        } @else if (nav.isLab) {
+        <p class="pf-empty__body">Ask your case sheet admin to add departments in Settings → IPD.</p>
         } @else {
-        <ul class="dp__rows" role="list">
-          @for (d of departments(); track d.name; let i = $index) {
-          <li>
-            <button
-              type="button"
-              class="dp__row pf-touch"
-              [class.dp__row--on]="pickedDept()?.name === d.name"
-              [attr.aria-current]="pickedDept()?.name === d.name ? 'true' : null"
-              [attr.data-dept]="d.name"
-              (click)="pick(d.name)"
-            >
-              <span class="dp__num">{{ i + 1 }}</span>
-              <span class="dp__rowtext">
-                <span class="dp__name">{{ d.name }}</span>
-                <span class="dp__count">{{ d.forms.length }} {{ d.forms.length === 1 ? 'case sheet' : 'case sheets' }}</span>
-              </span>
-              <pf-icon name="chevron-right" [size]="20" />
-            </button>
-          </li>
-          }
-        </ul>
-        } @if (drafts()?.length) {
-        <div class="dp__cont" aria-labelledby="dp-cont">
-          <h2 class="dp__conth" id="dp-cont">Continue</h2>
+        <p class="pf-empty__body">Case sheets for your departments show here once they are published.</p>
+        }
+      </div>
+    </div>
+    } @else if (!hasForms()) {
+    <!-- departments exist but no case sheet is published in any of them -->
+    <div class="dp__card dp__card--msg">
+      <div class="pf-empty" data-empty="forms">
+        <span class="pf-empty__icon"><pf-icon name="forms" [size]="26" /></span>
+        <h2 class="pf-empty__title">No case sheets are published yet</h2>
+        @if (nav.isLab && canManage()) {
+        <p class="pf-empty__body">Publish a form in MyPrefrontal and it shows here under its department.</p>
+        <a class="pf-btn pf-btn--primary pf-empty__action" [routerLink]="links.adminHome()" data-act="open-myprefrontal">
+          <pf-icon name="studio" [size]="18" /> Open MyPrefrontal
+        </a>
+        } @else {
+        <p class="pf-empty__body">Ask your case sheet admin to publish a case sheet for your department.</p>
+        }
+      </div>
+    </div>
+    } @else {
+    <div class="dp__card">
+      <!-- Left: departments -->
+      <section class="dp__list" aria-labelledby="dp-lh">
+        <header class="dp__head">
+          <h2 class="dp__lh" id="dp-lh">Departments</h2>
+          <span class="dp__lc" data-dept-count>{{ departments().length }}</span>
+        </header>
+        <div class="dp__scroll pf-card__body">
+          @if (!departments().length) {
+          <div class="dp__msg" data-empty="search">
+            <h2 class="dp__msg-title">Nothing matches “{{ query() }}”</h2>
+            <p>Try a department name or the name of a case sheet.</p>
+          </div>
+          } @else {
           <ul class="dp__rows" role="list">
-            @for (d of drafts(); track d.id) {
+            @for (d of departments(); track d.name; let i = $index) {
             <li>
-              <a class="dp__row dp__row--draft pf-touch" [routerLink]="nav.sheet(d.id)" [attr.data-case]="d.id">
-                <span class="dp__num dp__num--draft"><pf-icon name="pen" [size]="16" /></span>
+              <button
+                type="button"
+                class="dp__row pf-touch"
+                [class.dp__row--on]="pickedDept()?.name === d.name"
+                [attr.aria-current]="pickedDept()?.name === d.name ? 'true' : null"
+                [attr.data-dept]="d.name"
+                (click)="pick(d.name)"
+              >
+                <span class="dp__num">{{ i + 1 }}</span>
                 <span class="dp__rowtext">
-                  <span class="dp__name">{{ d.patientName || 'No name yet' }}</span>
-                  <span class="dp__count">{{ d.formTitle }} · saved {{ when(d.updatedAt) }}</span>
+                  <span class="dp__name">{{ d.name }}</span>
+                  <span class="dp__count">{{ d.forms.length ? d.forms.length + (d.forms.length === 1 ? ' case sheet' : ' case sheets') : 'No case sheets yet' }}</span>
                 </span>
                 <pf-icon name="chevron-right" [size]="20" />
-              </a>
+              </button>
             </li>
             }
           </ul>
-        </div>
-        }
-      </div>
-    </section>
-
-    <!-- Right: the department's case sheets -->
-    <section class="dp__sheets" [attr.aria-labelledby]="pickedDept() ? 'dp-sh' : null">
-      @if (pickedDept(); as d) {
-      <header class="dp__shead">
-        <button type="button" class="dp__back pf-touch" aria-label="All departments" (click)="pick(null)">
-          <pf-icon name="chevron-left" [size]="24" />
-        </button>
-        <div class="dp__shtext">
-          <h2 class="dp__shtitle" id="dp-sh">{{ d.name }}</h2>
-          <p class="dp__shsub">Select a case sheet to begin</p>
-        </div>
-      </header>
-      <div class="dp__gridscroll pf-card__body">
-        @if (error()) {
-        <p class="dp__err" role="alert">{{ error() }}</p>
-        }
-        <ul class="dp__grid" role="list">
-          @for (f of d.forms; track f.id) {
-          <li class="dp__cell">
-            <button
-              type="button"
-              class="dp__tile pf-touch"
-              [attr.data-form]="f.key"
-              [attr.aria-busy]="starting() === f.id ? 'true' : null"
-              [disabled]="!!starting()"
-              (click)="start(f)"
-            >
-              <span class="dp__disc" aria-hidden="true">{{ initial(f.title) }}</span>
-              <span class="dp__tname">{{ f.title }}</span>
-              @if (starting() === f.id) {
-              <span class="dp__tstate">Starting…</span>
+          } @if (drafts()?.length) {
+          <div class="dp__cont" aria-labelledby="dp-cont">
+            <h2 class="dp__conth" id="dp-cont">Continue</h2>
+            <ul class="dp__rows" role="list">
+              @for (d of drafts(); track d.id) {
+              <li>
+                <a class="dp__row dp__row--draft pf-touch" [routerLink]="nav.sheet(d.id)" [attr.data-case]="d.id">
+                  <span class="dp__num dp__num--draft"><pf-icon name="pen" [size]="16" /></span>
+                  <span class="dp__rowtext">
+                    <span class="dp__name">{{ d.patientName || 'No name yet' }}</span>
+                    <span class="dp__count">{{ d.formTitle }} · saved {{ when(d.updatedAt) }}</span>
+                  </span>
+                  <pf-icon name="chevron-right" [size]="20" />
+                </a>
+              </li>
               }
-            </button>
-            <button
-              type="button"
-              class="dp__star pf-touch"
-              [class.dp__star--on]="f.pinned"
-              [attr.data-pin]="f.key"
-              [attr.aria-pressed]="f.pinned"
-              [attr.aria-label]="(f.pinned ? 'Unpin ' : 'Pin ') + f.title + (f.pinned ? '' : ' to the top')"
-              (click)="togglePin(f)"
-            >
-              <pf-icon name="star" [size]="20" />
-            </button>
-          </li>
+            </ul>
+          </div>
           }
-        </ul>
-      </div>
-      } @else {
-      <div class="dp__none">
-        <span class="dp__noneicon"><pf-icon name="forms" [size]="56" /></span>
-        <h2 class="dp__nonetitle">Select a department</h2>
-        <p>Choose a department from the left to get started</p>
-      </div>
-      }
-    </section>
+        </div>
+      </section>
+
+      <!-- Right: the department's case sheets -->
+      <section class="dp__sheets" [attr.aria-labelledby]="pickedDept() ? 'dp-sh' : null">
+        @if (pickedDept(); as d) {
+        <header class="dp__shead">
+          <button type="button" class="dp__back pf-touch" aria-label="All departments" (click)="pick(null)">
+            <pf-icon name="chevron-left" [size]="24" />
+          </button>
+          <div class="dp__shtext">
+            <h2 class="dp__shtitle" id="dp-sh">{{ d.name }}</h2>
+            <p class="dp__shsub">{{ d.forms.length ? 'Select a case sheet to begin' : 'No case sheets in this department yet' }}</p>
+          </div>
+        </header>
+        <div class="dp__gridscroll pf-card__body">
+          @if (error()) {
+          <p class="dp__err" role="alert">{{ error() }}</p>
+          }
+          @if (d.forms.length) {
+          <ul class="dp__grid" role="list">
+            @for (f of d.forms; track f.id) {
+            <li class="dp__cell">
+              <button
+                type="button"
+                class="dp__tile pf-touch"
+                [attr.data-form]="f.key"
+                [attr.aria-busy]="starting() === f.id ? 'true' : null"
+                [disabled]="!!starting()"
+                (click)="start(f)"
+              >
+                <span class="dp__disc" aria-hidden="true">{{ initial(f.title) }}</span>
+                <span class="dp__tname">{{ f.title }}</span>
+                @if (starting() === f.id) {
+                <span class="dp__tstate">Starting…</span>
+                }
+              </button>
+              <button
+                type="button"
+                class="dp__star pf-touch"
+                [class.dp__star--on]="f.pinned"
+                [attr.data-pin]="f.key"
+                [attr.aria-pressed]="f.pinned"
+                [attr.aria-label]="(f.pinned ? 'Unpin ' : 'Pin ') + f.title + (f.pinned ? '' : ' to the top')"
+                (click)="togglePin(f)"
+              >
+                <pf-icon name="star" [size]="20" />
+              </button>
+            </li>
+            }
+          </ul>
+          } @else {
+          <div class="pf-empty" data-empty="dept-forms">
+            <span class="pf-empty__icon"><pf-icon name="forms" [size]="26" /></span>
+            <h2 class="pf-empty__title">No case sheets in {{ d.name }} yet</h2>
+            @if (nav.isLab && canManage()) {
+            <p class="pf-empty__body">Publish a form for this department in MyPrefrontal.</p>
+            <a class="pf-btn pf-btn--secondary pf-empty__action" [routerLink]="links.adminHome()" data-act="open-myprefrontal">
+              <pf-icon name="studio" [size]="18" /> Open MyPrefrontal
+            </a>
+            } @else {
+            <p class="pf-empty__body">Ask your case sheet admin to publish one.</p>
+            }
+          </div>
+          }
+        </div>
+        } @else {
+        <div class="dp__none">
+          <span class="dp__noneicon"><pf-icon name="forms" [size]="56" /></span>
+          <h2 class="dp__nonetitle">Pick a department</h2>
+          <p>Its case sheets show here.</p>
+        </div>
+        }
+      </section>
+    </div>
+    }
   </div>
 </div>
 @if (pickingFor(); as f) {

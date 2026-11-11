@@ -103,5 +103,5 @@
   </div>
 </div>
 @if (cortexOn() && cortexDialogOpen()) {
-  <st-cortex-import [departments]="departments()" (closed)="cortexFormOpen.set(false)" />
+  <st-cortex-import [departments]="departments()" (departmentAdded)="load()" (closed)="cortexFormOpen.set(false)" />
 }

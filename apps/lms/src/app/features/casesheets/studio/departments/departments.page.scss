@@ -1,0 +1,157 @@
+.dd {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dd__lead {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.dd__add {
+  max-width: 480px;
+}
+
+.dd__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.dd__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  min-height: 56px;
+  border: 1px solid var(--pf-line);
+  border-radius: 14px;
+  background: var(--pf-card-bg);
+}
+
+.dd__row--off .dd__name {
+  color: var(--text-tertiary);
+}
+
+.dd__move {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.dd__mv {
+  width: 32px;
+  height: 24px;
+  min-height: 24px;
+}
+
+.dd__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.dd__name {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.dd__name--edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  margin-left: -8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: text;
+  color: var(--text-primary);
+}
+
+.dd__name--edit pf-icon {
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.dd__name--edit:hover,
+.dd__name--edit:focus-visible {
+  background: var(--bg-hover);
+}
+
+.dd__name--edit:hover pf-icon,
+.dd__name--edit:focus-visible pf-icon {
+  opacity: 1;
+}
+
+.dd__name--edit:focus-visible {
+  outline: 2px solid var(--color-primary);
+}
+
+@media (hover: none) {
+  .dd__name--edit pf-icon {
+    opacity: 0.7;
+  }
+}
+
+.dd__edit {
+  width: 100%;
+  max-width: 360px;
+}
+
+.dd__tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dd__chip {
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-tertiary) 16%, transparent);
+}
+
+.dd__chip--off {
+  color: var(--warning-text, #a16207);
+  background: color-mix(in srgb, var(--warning-text, #a16207) 14%, transparent);
+}
+
+.dd__acts {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .dd__add {
+    max-width: none;
+  }
+  .dd__row {
+    padding: 8px;
+    gap: 6px;
+  }
+  .dd__edit {
+    font-size: 16px;
+  }
+}

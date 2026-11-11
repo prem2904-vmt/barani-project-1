@@ -17,11 +17,24 @@ export interface Person {
 /** Where a form comes from: the platform's master, this lab's copy of a master (fork), or the lab's own. */
 export type FormOrigin = 'master' | 'override' | 'local';
 
-/** A department (master-only list; labs cannot create departments). */
+/**
+ * An IPD department forms are filed under. Masters come from Prefrontal (`own` false, read-only); the lab adds and
+ * manages its own (`own` true). `isActive` false = hidden from doctors (only listed with `includeInactive`).
+ */
 export interface DepartmentRow {
   key: string;
   name: string;
   sortOrder: number;
+  isActive?: boolean;
+  /** True when this lab owns (and can edit) the row. */
+  own?: boolean;
+}
+
+/** What a lab may change on one of its own departments. */
+export interface DepartmentInput {
+  name?: string;
+  sortOrder?: number;
+  isActive?: boolean;
 }
 
 export interface FormRow {

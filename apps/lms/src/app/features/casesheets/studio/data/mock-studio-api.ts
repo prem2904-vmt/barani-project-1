@@ -22,6 +22,7 @@ import {
   ComponentKind,
   DraftConflict,
   Editor,
+  DepartmentInput,
   DepartmentRow,
   DraftFromSheetInput,
   DraftJob,
@@ -287,13 +288,52 @@ export class MockStudioApi extends StudioApi {
   }
 
   readonly depts: DepartmentRow[] = [
-    { key: 'ent', name: 'ENT', sortOrder: 1 },
-    { key: 'general', name: 'General medicine', sortOrder: 2 },
+    { key: 'ent', name: 'ENT', sortOrder: 1, isActive: true, own: false },
+    { key: 'general', name: 'General medicine', sortOrder: 2, isActive: true, own: false },
   ];
 
-  async departments(): Promise<DepartmentRow[]> {
+  async departments(opts: { includeInactive?: boolean } = {}): Promise<DepartmentRow[]> {
     await this.tick('departments');
-    return clone(this.depts);
+    return clone(this.depts)
+      .filter((d) => opts.includeInactive || d.isActive !== false)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  async createDepartment(input: DepartmentInput & { name: string; key?: string }): Promise<DepartmentRow> {
+    await this.tick('createDepartment');
+    const name = input.name.trim();
+    if (!name) throw new StudioError('invalid_name', 'Give the department a name.', 400);
+    if (this.depts.some((d) => d.name.toLowerCase() === name.toLowerCase())) throw new StudioError('name_taken', `There is already a department called ${name}.`, 409);
+    const key = (input.key?.trim() || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')) || 'department';
+    if (this.depts.some((d) => d.key === key)) throw new StudioError('key_taken', 'That department already exists.', 409);
+    const row: DepartmentRow = { key, name, sortOrder: input.sortOrder ?? Math.max(0, ...this.depts.map((d) => d.sortOrder)) + 1, isActive: input.isActive !== false, own: true };
+    this.depts.push(row);
+    return clone(row);
+  }
+
+  async updateDepartment(key: string, patch: DepartmentInput): Promise<DepartmentRow> {
+    await this.tick('updateDepartment');
+    const row = this.depts.find((d) => d.key === key);
+    if (!row) throw new StudioError('not_found', 'That department no longer exists.', 404);
+    if (!row.own) throw new StudioError('master_department', 'This department comes from Prefrontal and cannot be changed.', 403);
+    if (patch.name !== undefined) {
+      const name = patch.name.trim();
+      if (!name) throw new StudioError('invalid_name', 'Give the department a name.', 400);
+      if (this.depts.some((d) => d !== row && d.name.toLowerCase() === name.toLowerCase())) throw new StudioError('name_taken', `There is already a department called ${name}.`, 409);
+      row.name = name;
+    }
+    if (patch.sortOrder !== undefined) row.sortOrder = patch.sortOrder;
+    if (patch.isActive !== undefined) row.isActive = patch.isActive;
+    return clone(row);
+  }
+
+  async removeDepartment(key: string): Promise<void> {
+    await this.tick('removeDepartment');
+    const row = this.depts.find((d) => d.key === key);
+    if (!row) throw new StudioError('not_found', 'That department no longer exists.', 404);
+    if (!row.own) throw new StudioError('master_department', 'This department comes from Prefrontal and cannot be removed.', 403);
+    if ([...this.forms.values()].some((f) => f.departmentKey === key)) throw new StudioError('department_in_use', 'Forms still use this department. Switch it off instead.', 409);
+    this.depts.splice(this.depts.indexOf(row), 1);
   }
 
   async fork(formId: string): Promise<{ id: string; version: Version }> {

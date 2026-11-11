@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { vi } from 'vitest';
+import { AuthService } from '../../../../core/auth/auth.service';
 import { MockStudioApi } from '../data/mock-studio-api';
 import { StudioApi } from '../data/studio-api';
 import { CortexImportDialog } from './cortex-import.dialog';
@@ -13,25 +14,28 @@ const pic = (name: string, type = 'image/jpeg', size = 1000) => {
   return f;
 };
 const settle = async (f: { detectChanges(): void; whenStable(): Promise<unknown> }) => {
-  f.detectChanges();
-  await f.whenStable();
+  for (let i = 0; i < 4; i++) {
+    f.detectChanges();
+    await f.whenStable();
+    await new Promise((r) => setTimeout(r, 0));
+  }
   f.detectChanges();
 };
 
 describe('Cortex import dialog', () => {
   let api: MockStudioApi;
 
-  async function open(depts = DEPTS) {
+  async function open(depts = DEPTS, perms: string[] = ['casesheet_forms_manage']) {
     TestBed.resetTestingModule();
     api = new MockStudioApi();
-    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: StudioApi, useValue: api }] });
+    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: StudioApi, useValue: api }, { provide: AuthService, useValue: { hasPermission: (c: string) => perms.includes(c) } }] });
     const f = TestBed.createComponent(CortexImportDialog);
     f.componentRef.setInput('departments', depts);
     await settle(f);
     const dlg = f.componentInstance;
     const el = f.nativeElement as HTMLElement;
     const q = <T extends HTMLElement>(s: string) => el.querySelector<T>(s);
-    return { f, dlg, el, q, svc: TestBed.inject(CortexImportService) };
+    return { f, dlg, el, q, api, svc: TestBed.inject(CortexImportService) };
   }
 
   afterEach(() => TestBed.resetTestingModule());
@@ -166,5 +170,70 @@ describe('Cortex import dialog', () => {
     expect(svc.viewing()).toBe(false);
     expect(svc.running()).toBe(true);
     svc.dismiss();
+  });
+
+  describe('no departments yet', () => {
+    it('a case sheet builder adds the first department right there, and it is picked for them', async () => {
+      const { f, dlg, q, el, api } = await open([]);
+      api.depts.splice(0);
+      expect(el.textContent).not.toContain('No departments to pick from yet.');
+      expect(q('[data-no-depts]')!.textContent).toContain('Add the first department');
+      expect(q('[data-act="manage-depts"]')!.getAttribute('href')).toBe('/admin/ipd/departments');
+      const added = vi.fn();
+      dlg.departmentAdded.subscribe(added);
+
+      const input = q<HTMLInputElement>('[data-dept-name]')!;
+      input.value = 'Cardiology';
+      input.dispatchEvent(new Event('input'));
+      f.detectChanges();
+      q<HTMLButtonElement>('[data-act="add-dept"]')!.click();
+      await settle(f);
+
+      expect(api.depts.map((d) => d.name)).toEqual(['Cardiology']);
+      expect(added).toHaveBeenCalledWith(expect.objectContaining({ key: 'cardiology', name: 'Cardiology' }));
+      // the picker now exists with the new department chosen; with a page, Read the sheet can go
+      expect(q('[data-dept]')).not.toBeNull();
+      expect(q('[data-dept-name]')).toBeNull();
+      dlg.addFiles([pic('a.jpg')]);
+      await settle(f);
+      expect(q<HTMLButtonElement>('[data-act="read"]')!.disabled).toBe(false);
+    });
+
+    it('someone without the builder permission is told who to ask, with nothing to add', async () => {
+      const { q, el } = await open([], []);
+      expect(q('[data-no-depts]')!.textContent).toContain('Ask your case sheet admin to add a department in Settings → IPD.');
+      expect(q('[data-dept-name]')).toBeNull();
+      expect(q('[data-act="manage-depts"]')).toBeNull();
+      expect(el.textContent).not.toMatch(/\bAI\b/);
+    });
+
+    it('Read the sheet stays off without a department and says why in one line under the buttons', async () => {
+      const { f, dlg, q } = await open([]);
+      dlg.addFiles([pic('a.jpg')]);
+      await settle(f);
+      expect(q<HTMLButtonElement>('[data-act="read"]')!.disabled).toBe(true);
+      expect(q('[data-read-hint]')!.textContent).toContain('Add a department first');
+    });
+  });
+
+  it('with departments but none picked, the hint says to pick one; with a department and no page, to add a page', async () => {
+    const { f, dlg, q } = await open();
+    expect(q('[data-read-hint]')!.textContent).toContain('Pick a department');
+    (dlg as unknown as { dept: { set(v: string): void } }).dept.set('ent');
+    await settle(f);
+    expect(q('[data-read-hint]')!.textContent).toContain('Add at least one page');
+    dlg.addFiles([pic('a.jpg')]);
+    await settle(f);
+    expect(q('[data-read-hint]')).toBeNull();
+  });
+
+  it('a long file name is not cut by script: the whole name is the tooltip and the label may wrap', async () => {
+    const { f, dlg, q } = await open([DEPTS[0]]);
+    const name = 'IMG_2026-11-11_very_long_case_sheet_scan_page_one_of_two.jpg';
+    dlg.addFiles([pic(name)]);
+    await settle(f);
+    const label = q('[data-page="0"] .ci-page__f')!;
+    expect(label.getAttribute('title')).toBe(name);
+    expect(label.textContent!.trim()).toBe(name);
   });
 });

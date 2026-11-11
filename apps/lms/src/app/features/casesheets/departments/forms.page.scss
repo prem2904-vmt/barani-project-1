@@ -1,23 +1,79 @@
-// Legacy speciality page (resident-fe pages/specialities, standard mode), in Prepare's skin.
-//  max-w-7xl mx-auto, p-2 (lg p-4); one content card filling the height;
-//  ≥768: departments list (w-64, lg w-80) | case sheets (flex-1). <768: one pane at a time.
-:host {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  // LMS shell: the routed host is a block child of .shell-main, so it takes the main's full height itself
-  height: 100%;
-  min-height: 0;
+// Prepare home. The band page frame is styles/_page.scss; one content card fills the height:
+//  ≥768: departments list (256, lg 320) | case sheets (flex-1). <768: one pane at a time.
+.dp__body {
+  gap: 16px;
 }
 
-.dp {
-  flex: 1 1 auto;
-  min-height: 0;
+// header row: title + subtitle left, "My case sheets" right; wraps on a phone instead of squeezing the title
+.dp__top {
+  flex: none;
   display: flex;
-  width: 100%;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.dp__titles {
+  min-width: 0;
+}
+
+.dp__title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 30px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dp__sub {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+
+.dp__mine {
+  flex: none;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dp__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.dp__lh {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.dp__lc {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.dp__card--msg {
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.dp__card--msg > * {
+  flex: 1 1 auto;
 }
 
 .dp__card {
@@ -40,82 +96,6 @@
   border-right: 1px solid var(--border-muted);
 }
 
-.dp__head {
-  padding: 16px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border-muted);
-}
-
-.dp__title {
-  margin: 0;
-  font-size: 18px;
-  line-height: 28px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.dp__sub {
-  margin: 2px 0 0;
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--text-tertiary);
-}
-
-.dp__search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-  padding: 0 12px;
-  border-radius: 10px;
-  background: var(--input-bg, var(--bg-input));
-  border: 1px solid var(--border-muted);
-  color: var(--text-tertiary);
-}
-
-.dp__search:focus-within {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 28%, transparent);
-}
-
-.dp__search input {
-  flex: 1;
-  height: var(--pf-touch, 48px);
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 16px; // no iOS zoom
-}
-
-// our own clear button (the browser's blue native one is hidden)
-.dp__search input::-webkit-search-decoration,
-.dp__search input::-webkit-search-cancel-button,
-.dp__search input::-webkit-search-results-button,
-.dp__search input::-webkit-search-results-decoration {
-  display: none;
-}
-
-.dp__clear {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-}
-
-.dp__clear:hover,
-.dp__clear:focus-visible {
-  background: var(--pf-chip-bg);
-  color: var(--text-primary);
-}
 
 .dp__scroll,
 .dp__gridscroll {
@@ -498,9 +478,6 @@
 }
 
 @media (min-width: 1024px) {
-  .dp {
-    padding: calc(16px + env(safe-area-inset-top)) 16px 16px;
-  }
   .dp__list {
     width: 320px;
   }
@@ -515,6 +492,3 @@
   }
 }
 
-/* Prepare tab: "My case sheets" beside the title. */
-.dp__titlerow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.dp__mine { flex: none; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }

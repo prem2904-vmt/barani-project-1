@@ -24,11 +24,13 @@ export interface FormSummary {
   pinned: boolean;
 }
 
-/** A master-owned department (plan §3.3: `casesheet_departments`, authored in the admin console; labs can't add one). */
+/** An IPD department: a master from Prefrontal or one the lab added itself (Settings > IPD > Departments). */
 export interface CaseSheetDepartment {
   key: string;
   name: string;
   sortOrder: number;
+  /** True when this lab added it (the lab can edit it); masters come from Prefrontal. */
+  own?: boolean;
 }
 
 /**

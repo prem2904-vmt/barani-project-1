@@ -27,6 +27,8 @@ export const CASESHEET_PATHS = {
     form: 'admin/ipd/myprefrontal/forms/:id',
     formHistory: 'admin/ipd/myprefrontal/forms/:id/history',
     import: 'admin/ipd/myprefrontal/import',
+    /** Admin → IPD → Departments (the lab's IPD departments forms are grouped by). */
+    departments: 'admin/ipd/departments',
   },
   /** In-lab sheets: the Prepare tab (owner 2026-11-11) and the patient profile. */
   lab: {
@@ -54,6 +56,7 @@ export const casesheetLinks = {
   adminForm: (id: string): string => `/admin/ipd/myprefrontal/forms/${enc(id)}`,
   adminFormHistory: (id: string): string => `/admin/ipd/myprefrontal/forms/${enc(id)}/history`,
   adminImport: (): string => '/admin/ipd/myprefrontal/import',
+  adminDepartments: (): string => '/admin/ipd/departments',
   prepare: (): string => '/prepare',
   prepareCases: (): string => '/prepare/cases',
   patientSheets: (patientId: string): string => `/casesheets/patient/${enc(patientId)}`,
@@ -82,6 +85,7 @@ const studioHome = () => import('./studio/studio.page').then(m => m.StudioPage);
 const studioEditor = () => import('./studio/editor/editor.page').then(m => m.StudioEditorPage);
 const studioHistory = () => import('./studio/history/history.page').then(m => m.StudioHistoryPage);
 const studioImport = () => import('./studio/import/import.page').then(m => m.StudioImportPage);
+const studioDepartments = () => import('./studio/departments/departments.page').then(m => m.DepartmentsPage);
 
 /** Children of the signed-in shell (app.routes.ts spreads them once). Specific paths before `:id`. */
 export const CASESHEET_SHELL_ROUTES: Routes = [
@@ -89,6 +93,7 @@ export const CASESHEET_SHELL_ROUTES: Routes = [
   gated(CASESHEET_PATHS.admin.form, 'Edit case sheet form', studioEditor),
   gated(CASESHEET_PATHS.admin.formHistory, 'Form version history', studioHistory),
   gated(CASESHEET_PATHS.admin.import, 'Bring in an old form', studioImport),
+  gated(CASESHEET_PATHS.admin.departments, 'IPD departments', studioDepartments),
   gated(CASESHEET_PATHS.lab.prepare, 'Prepare', departmentsPage, true),
   gated(CASESHEET_PATHS.lab.prepareCases, 'Case sheets', casesPage, true),
   gated(CASESHEET_PATHS.lab.patientSheets, 'Case sheets', casesPage),

@@ -97,6 +97,15 @@ describe('/admin/ipd hub', () => {
     expect(el.querySelector('pf-module-placeholder')).toBeNull();
   });
 
+  it('has a Departments tile between MyPrefrontal and the IPD tile, linking to the departments page', () => {
+    const el = render({ gate: true, perms: ['casesheet_forms_manage'] });
+    const tiles = [...el.querySelectorAll('[data-tile]')].map((t) => t.getAttribute('data-tile'));
+    expect(tiles).toEqual(['MyPrefrontal', 'Departments', 'IPD']);
+    const tile = el.querySelector('a[data-tile="Departments"]') as HTMLAnchorElement;
+    expect(tile.getAttribute('href')).toBe('/admin/ipd/departments');
+    expect(tile.textContent).toContain('The IPD departments your case sheet forms are grouped by.');
+  });
+
   it('gate closed: exactly the old module placeholder, no MyPrefrontal anywhere', () => {
     const el = render({ gate: false, perms: ['casesheet_forms_manage'] });
     expect(el.querySelector('pf-module-placeholder')).not.toBeNull();

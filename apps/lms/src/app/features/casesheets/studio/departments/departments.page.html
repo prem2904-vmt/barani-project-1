@@ -1,0 +1,78 @@
+<div class="pf-page pg st-desk cs-depts">
+  <pf-hero-band [back]="true" [standardPill]="true" placeholder="Search departments" [value]="query()" (valueChange)="query.set($event)"></pf-hero-band>
+  <div class="pf-body">
+    <section class="pf-card main" aria-labelledby="dept-h">
+      <header class="pf-card__head">
+        <span class="pf-card__icon"><pf-icon name="cases" [size]="16" /></span>
+        <h1 class="pf-card__label" id="dept-h">IPD departments</h1>
+        @if (rows() !== null) {
+          <span class="pf-card__count" data-count>{{ count() }} {{ count() === 1 ? 'department' : 'departments' }}</span>
+        }
+      </header>
+      <div class="pf-card__body dd">
+        <p class="dd__lead">Your case sheet forms are grouped by these departments, and doctors pick one on Prepare.</p>
+        <div class="dd__add">
+          <st-dept-add (added)="added($event)" />
+        </div>
+
+        @if (error()) {
+          <div class="pf-empty pf-empty--compact" role="alert">
+            <h2 class="pf-empty__title">{{ error() }}</h2>
+            <button type="button" class="pf-btn pf-btn--secondary" (click)="load()"><pf-icon name="refresh" [size]="18" /> Try again</button>
+          </div>
+        }
+        @if (rows() === null) {
+          <pf-skeleton-rows [rows]="5" label="Loading departments" />
+        } @else if (!count() && !error()) {
+          <div class="pf-empty" data-empty="departments">
+            <span class="pf-empty__icon"><pf-icon name="cases" [size]="26" /></span>
+            <h2 class="pf-empty__title">No departments yet</h2>
+            <p class="pf-empty__body">Add the departments your doctors work in, one at a time above, or start with the common ones and change them later.</p>
+            <button type="button" class="pf-btn pf-btn--primary pf-empty__action" data-act="starter" [disabled]="busy() === 'starter'" [attr.aria-busy]="busy() === 'starter' ? 'true' : null" (click)="addStarter()">
+              <pf-icon name="plus" [size]="18" /> {{ busy() === 'starter' ? 'Adding…' : 'Add common departments' }}
+            </button>
+          </div>
+        } @else if (!shown().length) {
+          <div class="pf-empty pf-empty--compact" data-empty="search">
+            <h2 class="pf-empty__title">No department matches “{{ query() }}”</h2>
+          </div>
+        } @else {
+          <ul class="dd__list" role="list">
+            @for (d of shown(); track d.key) {
+              <li class="dd__row" [class.dd__row--off]="!active(d)" [attr.data-dept]="d.key" [attr.data-own]="d.own ? 'true' : 'false'">
+                @if (d.own) {
+                  <span class="dd__move">
+                    <button type="button" class="pf-btn pf-btn--icon dd__mv" data-act="up" [attr.aria-label]="'Move ' + d.name + ' up'" [disabled]="!canMove(d, -1)" (click)="move(d, -1)"><pf-icon name="arrow-up" [size]="16" /></button>
+                    <button type="button" class="pf-btn pf-btn--icon dd__mv" data-act="down" [attr.aria-label]="'Move ' + d.name + ' down'" [disabled]="!canMove(d, 1)" (click)="move(d, 1)"><pf-icon name="arrow-down" [size]="16" /></button>
+                  </span>
+                }
+                <div class="dd__text">
+                  @if (editing() === d.key) {
+                    <input class="pf-input dd__edit" type="text" data-edit maxlength="80" [attr.aria-label]="'Rename ' + d.name" [value]="editText()"
+                      (input)="editText.set($any($event.target).value)" (keydown.enter)="$event.preventDefault(); saveEdit(d)" (keydown.escape)="$event.stopPropagation(); cancelEdit()" (blur)="saveEdit(d)" />
+                  } @else if (d.own) {
+                    <button type="button" class="dd__name dd__name--edit" data-act="rename" [attr.title]="'Rename ' + d.name" (click)="startEdit(d)">{{ d.name }}<pf-icon name="pen" [size]="14" /></button>
+                  } @else {
+                    <span class="dd__name">{{ d.name }}</span>
+                  }
+                  <span class="dd__tags">
+                    @if (!d.own) { <span class="dd__chip" data-tag="master">From Prefrontal</span> }
+                    @if (!active(d)) { <span class="dd__chip dd__chip--off" data-tag="hidden">Hidden from doctors</span> }
+                  </span>
+                </div>
+                @if (d.own) {
+                  <div class="dd__acts">
+                    @for (k of [d.key + ':' + active(d) + ':' + rev()]; track k) {
+                      <pf-toggle size="sm" [checked]="active(d)" [disabled]="busy() === d.key" [attr.data-toggle]="d.key" [attr.aria-label]="'Show ' + d.name + ' to doctors'" (checkedChange)="setActive(d, $event)"></pf-toggle>
+                    }
+                    <button type="button" class="pf-btn pf-btn--icon" data-act="remove" [attr.aria-label]="'Remove ' + d.name" [disabled]="busy() === d.key" (click)="remove(d)"><pf-icon name="trash" [size]="18" /></button>
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </section>
+  </div>
+</div>

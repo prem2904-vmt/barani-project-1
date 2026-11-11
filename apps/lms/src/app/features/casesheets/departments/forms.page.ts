@@ -1,9 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
 import { PfIconComponent } from '@prefrontal/forms-engine';
 import { SkeletonRowsComponent } from '@prefrontal/shared';
+import { AuthService } from '../../../core/auth/auth.service';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { casesheetLinks } from '../casesheets.routes';
+import { CASESHEET_FORMS_MANAGE } from '../shared/casesheet-permissions';
 import { CaseSheetDepartment, CaseSummary, FormSummary } from '../data/cases/case-models';
 import { CasesApi } from '../data/cases/cases-api';
 import { CasesheetNav } from '../data/casesheet-nav';
@@ -15,6 +19,8 @@ import { CASESHEETS_DATA_PROVIDERS } from '../data/casesheets-data.providers';
 
 /** A department (the form's `specialty`) and its case sheets, pinned first. */
 export interface Department {
+  /** The department's key when it is one of the lab's departments (absent for a form's free-text specialty). */
+  key?: string;
   name: string;
   forms: FormSummary[];
 }
@@ -60,6 +66,31 @@ export function groupDepartments(forms: readonly FormSummary[], query = ''): Dep
   }));
 }
 
+/**
+ * Prepare's department list: every active department of the lab (in its order, even with no case sheet yet), then any
+ * other name the published forms sit under (a free-text specialty, or "General"). `forms` must already be named by
+ * their department ({@link orderByDepartments}). A search keeps a department whose name matches (with all its case
+ * sheets) or that has matching case sheets (just those); everything else drops out.
+ */
+export function buildDepartmentRows(
+  forms: readonly FormSummary[],
+  departments: readonly CaseSheetDepartment[],
+  query = '',
+): Department[] {
+  const groups = groupDepartments(forms);
+  const used = new Set<string>();
+  const rows: Department[] = departments.map((d) => {
+    used.add(d.name);
+    return { key: d.key, name: d.name, forms: groups.find((g) => g.name === d.name)?.forms ?? [] };
+  });
+  for (const g of groups) if (!used.has(g.name)) rows.push({ name: g.name, forms: g.forms });
+  const q = query.trim().toLowerCase();
+  if (!q) return rows;
+  return rows
+    .map((r) => (r.name.toLowerCase().includes(q) ? r : { ...r, forms: r.forms.filter((f) => f.title.toLowerCase().includes(q)) }))
+    .filter((r) => r.name.toLowerCase().includes(q) || r.forms.length > 0);
+}
+
 /** The big letter on a case-sheet tile (legacy: the specialty's first character). */
 export function initialOf(title: string): string {
   return (title.trim().match(/[\p{L}\p{N}]/u)?.[0] ?? '?').toUpperCase();
@@ -85,24 +116,31 @@ export function deptNavigation(name: string | null, current: string | null): {
 @Component({
   selector: 'app-forms-page',
   standalone: true,
-  imports: [PfIconComponent, SkeletonRowsComponent, RouterLink, CsStylesComponent, CsPatientStepComponent],
+  imports: [PfIconComponent, SkeletonRowsComponent, RouterLink, CsStylesComponent, CsPatientStepComponent, HeroBandComponent],
   providers: [...CASESHEETS_DATA_PROVIDERS],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './forms.page.html',
-  styleUrls: ['./forms.page.scss'],
+  styleUrls: ['../styles/_page.scss', './forms.page.scss'],
 })
 export class FormsPage {
   private readonly api = inject(CasesApi);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly patients = inject(LabPatientService);
+  private readonly auth = inject(AuthService);
+  /** A case-sheet builder (adds departments, publishes forms): empty states offer the way forward instead of "ask someone". */
+  protected readonly canManage = computed(() => this.auth.hasPermission(CASESHEET_FORMS_MANAGE));
+  protected readonly links = casesheetLinks;
   /** Public site vs the lab (Prepare: /cases/:id). */
   protected readonly nav = inject(CasesheetNav);
 
   protected readonly query = signal('');
   protected readonly forms = signal<FormSummary[] | null>(null);
+  protected readonly deptList = signal<CaseSheetDepartment[]>([]);
   protected readonly drafts = signal<CaseSummary[] | null>(null);
   protected readonly error = signal('');
+  /** The lists could not be read (a start that failed says so in `error`, beside the case sheets). */
+  protected readonly loadError = signal('');
   protected readonly starting = signal<string | null>(null);
   /** The case sheet waiting for its patient (the patient step is open): the public site, and the lab's Prepare tab (no patient yet). */
   protected readonly pickingFor = signal<FormSummary | null>(null);
@@ -127,29 +165,51 @@ export class FormsPage {
   /** Lab's Prepare tab (no ?patientId=): Departments for any patient — the patient step asks whose sheet it is (owner 2026-11-11). */
   protected readonly fromPrepare = this.nav.isLab && !this.patientId;
 
-  protected readonly departments = computed(() => groupDepartments(this.forms() ?? [], this.query()));
+  /** Every department with its case sheets (searched). */
+  protected readonly departments = computed(() => buildDepartmentRows(this.forms() ?? [], this.deptList(), this.query()));
+  /** Without the search: is there any department at all, and any case sheet at all? */
+  private readonly allDepartments = computed(() => buildDepartmentRows(this.forms() ?? [], this.deptList()));
+  protected readonly hasDepartments = computed(() => this.allDepartments().length > 0);
+  protected readonly hasForms = computed(() => (this.forms() ?? []).length > 0);
 
-  /** The open department; while searching with one department left, that one opens by itself. */
-  protected readonly pickedDept = computed<Department | null>(() => {
+  /** Wide screens show the list and the open department side by side; phones show one at a time. */
+  private readonly wideQuery =
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(min-width: 768px)') : null;
+  protected readonly wide = signal(this.wideQuery ? this.wideQuery.matches : true);
+
+  /** The department the doctor chose (the URL), or the launcher's, or the only one left while searching. */
+  protected readonly chosenDept = computed<Department | null>(() => {
     const all = this.departments();
     const want = this.deptParam();
     const key = this.deptKeyParam();
     const hit = want
       ? all.find((d) => d.name === want)
       : key
-        ? all.find((d) => d.forms.some((f) => f.departmentKey === key))
+        ? all.find((d) => d.key === key || d.forms.some((f) => f.departmentKey === key))
         : undefined;
     if (hit) return hit;
     if (this.query().trim() && all.length === 1) return all[0];
     return null;
   });
 
+  /** The open department: the chosen one; on a wide screen the first one, so the right side is never an empty placeholder. */
+  protected readonly pickedDept = computed<Department | null>(
+    () => this.chosenDept() ?? (this.wide() ? (this.departments()[0] ?? null) : null),
+  );
+
   constructor() {
+    const mq = this.wideQuery;
+    if (mq && typeof mq.addEventListener === 'function') {
+      const on = () => this.wide.set(mq.matches);
+      mq.addEventListener('change', on);
+      inject(DestroyRef).onDestroy(() => mq.removeEventListener('change', on));
+    }
     void this.load();
   }
 
   protected async load(): Promise<void> {
     this.error.set('');
+    this.loadError.set('');
     if (this.patientId && !this.patient())
       void this.patients
         .load(this.patientId)
@@ -163,12 +223,15 @@ export class FormsPage {
           .listCases({ state: 'draft', pageSize: 4, ...(this.patientId ? { patientId: this.patientId } : {}) })
           .catch(() => null),
       ]);
-      this.forms.set(orderByDepartments(forms, departments));
+      this.deptList.set(departments);
+      // a department the lab switched off is not offered: its forms stay in MyPrefrontal but doctors don't see them here
+      const offered = departments.length ? forms.filter((f) => !f.departmentKey || departments.some((d) => d.key === f.departmentKey)) : forms;
+      this.forms.set(orderByDepartments(offered, departments));
       this.drafts.set(drafts?.items ?? []);
     } catch {
       this.forms.set([]);
       this.drafts.set([]);
-      this.error.set("Can't reach Prefrontal right now. Check the connection and try again.");
+      this.loadError.set("Can't reach Prefrontal right now. Check the connection and try again.");
     }
   }
 

@@ -174,11 +174,14 @@ export class IpdHubComponent implements OnInit {
   /** The hub needs the gate open AND the permission; otherwise the page is the module placeholder it always was. */
   readonly showHub = computed(() => this.gate.visible() && this.auth.hasPermission(CASESHEET_FORMS_MANAGE));
 
-  /** MyPrefrontal first, then the IPD "coming soon" tile. */
+  /** MyPrefrontal, Departments, then the IPD "coming soon" tile. */
   readonly tiles: IpdTile[] = [
     { title: 'MyPrefrontal', href: casesheetLinks.adminHome(),
       subtitle: 'Case sheet forms for your doctors, grouped by department. Start from a master form or build your own.',
       iconPath: 'M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1ZM8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 12h8M8 16h5' },
+    { title: 'Departments', href: casesheetLinks.adminDepartments(),
+      subtitle: 'The IPD departments your case sheet forms are grouped by.',
+      iconPath: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' },
     { title: 'IPD',
       subtitle: 'Admissions, beds and wards, nursing, discharge.',
       iconPath: 'M3 7v12M3 13h18v6M21 19v-4a3 3 0 0 0-3-3h-7v4M7 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z' },

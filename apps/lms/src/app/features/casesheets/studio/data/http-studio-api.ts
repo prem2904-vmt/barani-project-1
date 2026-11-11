@@ -11,6 +11,7 @@ import {
   DiffChange,
   DraftConflict,
   Editor,
+  DepartmentInput,
   DepartmentRow,
   DraftFromSheetInput,
   DraftJob,
@@ -90,6 +91,12 @@ export function toVersion(v: unknown): Version {
 function toEditor(v: unknown): Editor {
   const e = obj(v);
   return { userId: str(e['userId']), name: str(e['name']) || 'Someone', seenAt: str(e['seenAt']) };
+}
+
+export function toDepartment(v: unknown): DepartmentRow {
+  const d = obj(v);
+  const key = str(d['key']);
+  return { key, name: str(d['name']) || key, sortOrder: num(d['sortOrder']), isActive: d['isActive'] !== false, own: d['own'] === true };
 }
 
 export function toOrigin(v: unknown): FormOrigin {
@@ -321,17 +328,26 @@ export class HttpStudioApi implements StudioApi {
     return { id: str(r['id']), version: toVersion(r['version']) };
   }
 
-  async departments(): Promise<DepartmentRow[]> {
-    const r = await this.call(this.http.get(api('/api/casesheets/departments')));
+  async departments(opts: { includeInactive?: boolean } = {}): Promise<DepartmentRow[]> {
+    const params = opts.includeInactive ? new HttpParams().set('includeInactive', 'true') : undefined;
+    const r = await this.call(this.http.get(api('/api/casesheets/departments'), { params }));
     const items = Array.isArray(r) ? r : arr(obj(r)['items']);
     return items
-      .map((v) => {
-        const d = obj(v);
-        return { key: str(d['key']), name: str(d['name']), sortOrder: num(d['sortOrder']), isActive: d['isActive'] !== false };
-      })
-      .filter((d) => d.key && d.isActive)
-      .map(({ key, name, sortOrder }) => ({ key, name: name || key, sortOrder }))
+      .map(toDepartment)
+      .filter((d) => d.key && (opts.includeInactive || d.isActive))
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  }
+
+  async createDepartment(input: DepartmentInput & { name: string; key?: string }): Promise<DepartmentRow> {
+    return toDepartment(await this.call(this.http.post(api('/api/casesheets/departments'), input)));
+  }
+
+  async updateDepartment(key: string, patch: DepartmentInput): Promise<DepartmentRow> {
+    return toDepartment(await this.call(this.http.put(api(`/api/casesheets/departments/${encodeURIComponent(key)}`), patch)));
+  }
+
+  async removeDepartment(key: string): Promise<void> {
+    await this.call(this.http.delete(api(`/api/casesheets/departments/${encodeURIComponent(key)}`)));
   }
 
   async fork(formId: string): Promise<{ id: string; version: Version }> {
