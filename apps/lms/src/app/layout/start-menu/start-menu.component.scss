@@ -1,0 +1,165 @@
+:host { display: contents; }
+
+/* Rises from the bar (the bar is always at the bottom): absolute above the desktop bar, a fixed full-width
+   sheet above the phone pill, a fixed card beside the iPad rail. Tokens only; no bespoke colours. */
+.sm-panel {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 12px;
+  z-index: 2100;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  max-height: min(72vh, 640px);
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  background: var(--bg-card-solid, var(--card-bg));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  transform-origin: bottom left;
+  animation: sm-in 160ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.sm-panel:hover { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35); }
+.sm-panel--sheet {
+  position: fixed;
+  z-index: 2100;
+  left: 8px;
+  right: auto;
+  /* An ancestor bar may be a containing block (transform / backdrop-filter) wider than the screen:
+     size from the viewport, never from that box, so the sheet can't run off the right edge. */
+  width: calc(100vw - 16px);
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  bottom: calc(var(--pf-nav-h, 72px) + 8px);
+  max-height: min(72dvh, 640px);
+  transform-origin: bottom center;
+}
+.sm-panel--rail {
+  position: fixed;
+  z-index: 2100;
+  left: calc(var(--pf-nav-left, 72px) + 10px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  transform-origin: bottom left;
+}
+@keyframes sm-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sm-panel { animation: none; }
+  .sm-row__open, .sm-ico { transition: none; }
+}
+
+.sm-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 40px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-muted);
+  color: var(--text-muted);
+}
+.sm-search:focus-within { border-color: var(--color-primary, #7c3aed); }
+.sm-search__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.sm-search__input::placeholder { color: var(--text-muted); }
+
+.sm-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  flex: 1;
+}
+.sm-sec { padding-bottom: 4px; }
+.sm-sec__t {
+  margin: 8px 12px 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.sm-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 10px;
+}
+.sm-row:hover, .sm-row:focus-within { background: var(--bg-hover); }
+.sm-row__open {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+}
+.sm-row__open--static { cursor: default; }
+.sm-row__open:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: -2px; }
+.sm-row__open svg { flex-shrink: 0; color: var(--text-muted); }
+.sm-row__lbl { white-space: normal; overflow-wrap: anywhere; }
+.sm-row__acts { display: inline-flex; align-items: center; gap: 2px; padding-right: 6px; flex-shrink: 0; }
+
+.sm-ico, .sm-lock {
+  all: unset;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.sm-lock { cursor: default; }
+.sm-ico:hover:not(:disabled) { background: var(--bg-hover); color: var(--text-primary); }
+.sm-ico:disabled { opacity: 0.3; cursor: default; }
+.sm-ico:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: -2px; }
+.sm-pin--on { color: #7c3aed; }
+:host-context(.dark) .sm-pin--on, :host-context(:root:not(.light)) .sm-pin--on { color: var(--color-primary, #a855f7); }
+@media (pointer: coarse) {
+  .sm-ico, .sm-lock { width: 40px; height: 40px; }
+}
+
+.sm-empty, .sm-note {
+  margin: 8px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.sm-note--top { margin-top: 0; }
+
+.sm-foot {
+  margin-top: 6px;
+  padding: 8px 4px 2px;
+  border-top: 1px solid var(--border-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sm-foot__line { display: flex; align-items: center; justify-content: space-between; padding: 0 8px; }
+.sm-foot__lbl { font-size: 14px; color: var(--text-primary); }
+.sm-foot__btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.sm-btn { flex: 1 1 auto; font-size: 13px; }
+
+.sm-roles-head { display: flex; align-items: center; gap: 4px; padding: 0 4px; }
+.sm-roles-head__t { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.sm-roles-pick { padding: 0 8px 6px; }

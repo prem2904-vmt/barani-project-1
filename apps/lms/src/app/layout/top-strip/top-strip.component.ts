@@ -98,6 +98,9 @@ import { isOpdOnly, pickLanding } from "../../core/auth/landing.guard";
 import { DesktopWindowService } from "../../core/services/desktop-window.service";
 import { UpdaterService } from "../../core/services/updater.service";
 import { DesktopClockComponent } from "./desktop-clock.component";
+import { StartMenuComponent } from "../start-menu/start-menu.component";
+import { NavPrefsService } from "../start-menu/nav-prefs.service";
+import { computeNavLayout } from "../start-menu/nav-pins";
 
 @Component({
   selector: "pf-top-strip",
@@ -113,6 +116,7 @@ import { DesktopClockComponent } from "./desktop-clock.component";
     ActionsMenuComponent,
     ActionsMenuTriggerDirective,
     NgTemplateOutlet,
+    StartMenuComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./top-strip.component.html",
@@ -525,6 +529,30 @@ export class TopStripComponent implements OnInit, OnDestroy {
   }
   readonly more = computed(() => this.visible(MORE_NAV));
 
+  /** Start menu (owner 2026-11-11): the PF logo opens it; the bar shows only the PINNED screens that fit.
+   *  The bar is decided ONLY by layout/start-menu/nav-pins.ts (pins never grant access). */
+  protected readonly navPrefs = inject(NavPrefsService);
+  protected readonly startOpen = signal(false);
+  /** Every screen this person can open from the bar: the work areas, then Settings (a normal pinnable item, id `admin`). */
+  private readonly navAllItems = computed<NavItem[]>(() => [...this.primary(), ...(this.showAdmin() ? [ADMIN_NAV] : [])]);
+  readonly navLayout = computed(() =>
+    computeNavLayout({
+      all: this.navAllItems(),
+      more: this.more(),
+      roleDefaults: this.navPrefs.roleDefaults(),
+      userPins: this.navPrefs.pinned(),
+      capacity: this.navPrefs.capacity(),
+    }),
+  );
+  /** What the bar renders. */
+  readonly bar = computed(() => this.navLayout().bar);
+  protected readonly iconsOnly = this.navPrefs.iconsOnly;
+  protected toggleStart(): void {
+    const next = !this.startOpen();
+    this.closeAll();
+    this.startOpen.set(next);
+  }
+
   /** Show the Admin icon-button (in the right cluster) only when the
    *  current user holds at least one manage_* permission. Mirrors the
    *  permission gate from ADMIN_NAV so admins still get one click to
@@ -643,7 +671,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.currentUrl.set(this.router.url);
     this.routerSub = this.router.events
       .pipe(filter((e) => e instanceof NavigationEnd))
-      .subscribe(() => this.currentUrl.set(this.router.url));
+      .subscribe(() => { this.currentUrl.set(this.router.url); this.startOpen.set(false); });
   }
   ngOnDestroy() {
     this.routerSub?.unsubscribe();
@@ -682,10 +710,22 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.moreOpen.set(false);
   }
 
+  /** Phone-width bar (new design, nav at the bottom, < 768px): the PF logo is hidden and the PF badge in the
+   *  avatar slot stands in for it, so that badge opens the Start menu (account lives in the menu's footer). */
+  protected readonly compactBar = computed(
+    () => this.themeService.isNewDesign() && this.themeService.bottomNav() && this.viewportW() < 768,
+  );
   toggleProfile() {
+    if (this.compactBar() && !this.profileOpen()) { this.toggleStart(); return; }
     const next = !this.profileOpen();
     this.closeAll();
     this.profileOpen.set(next);
+  }
+  /** "Account and status" from the Start menu footer (compact bar only). */
+  protected openAccount(): void {
+    this.closeAll();
+    this.startOpen.set(false);
+    this.profileOpen.set(true);
   }
   closeProfile() {
     this.profileOpen.set(false);

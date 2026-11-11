@@ -1,0 +1,153 @@
+@if (open()) {
+<div #panel class="sm-panel pf-card pf-modal-centered" [class.sm-panel--sheet]="placement() === 'sheet'" [class.sm-panel--rail]="placement() === 'rail'"
+  role="dialog" aria-label="Start menu" data-start-menu>
+
+  @if (mode() === 'list') {
+  <div class="sm-search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+      stroke-linejoin="round" aria-hidden="true">
+      @for (p of icons.search; track p) { <path [attr.d]="p" /> }
+    </svg>
+    <input #search type="text" class="sm-search__input" placeholder="Search screens" aria-label="Search screens" autocomplete="off"
+      [value]="query()" (input)="query.set($any($event.target).value)" (keydown)="onSearchKey($event)" />
+  </div>
+
+  <div class="sm-scroll">
+    @for (s of sections(); track s.key) {
+    <section class="sm-sec" [attr.aria-label]="s.title || 'Home'">
+      @if (s.title) { <h3 class="sm-sec__t">{{ s.title }}</h3> }
+      @for (r of s.rows; track r.item?.id ?? 'home') {
+      <div class="sm-row" [attr.data-sm-item]="r.item?.id ?? 'home'">
+        <button type="button" class="sm-row__open press" data-sm-row (click)="openRow(r)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            @for (p of r.iconPath; track p) { <path [attr.d]="p" /> }
+          </svg>
+          <span class="sm-row__lbl">{{ r.label }}</span>
+        </button>
+        @if (r.kind === 'item') {
+        <span class="sm-row__acts">
+          @if (r.pinned && !r.locked) {
+          <button type="button" class="sm-ico press" aria-label="Move {{ r.label }} up" title="Move up" [disabled]="!r.canUp"
+            (click)="move(r, -1)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">@for (p of icons.up; track p) { <path [attr.d]="p" /> }</svg>
+          </button>
+          <button type="button" class="sm-ico press" aria-label="Move {{ r.label }} down" title="Move down" [disabled]="!r.canDown"
+            (click)="move(r, 1)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">@for (p of icons.down; track p) { <path [attr.d]="p" /> }</svg>
+          </button>
+          }
+          @if (r.locked) {
+          <span class="sm-lock" title="Your admin keeps this on the bar" aria-label="Locked on the bar by your admin">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+              stroke-linejoin="round" aria-hidden="true">@for (p of icons.lock; track p) { <path [attr.d]="p" /> }</svg>
+          </span>
+          } @else {
+          <button type="button" class="sm-ico sm-pin press" [class.sm-pin--on]="r.pinned" [attr.aria-pressed]="r.pinned"
+            [attr.aria-label]="(r.pinned ? 'Unpin ' : 'Pin ') + r.label" [title]="r.pinned ? 'Unpin from the bar' : 'Pin to the bar'"
+            (click)="toggle(r)">
+            <svg width="15" height="15" viewBox="0 0 24 24" [attr.fill]="r.pinned ? 'currentColor' : 'none'" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              @for (p of icons.pin; track p) { <path [attr.d]="p" /> }
+            </svg>
+          </button>
+          }
+        </span>
+        }
+      </div>
+      }
+    </section>
+    }
+    @if (!hasResults()) {
+    <p class="sm-empty">No screen matches "{{ query() }}".</p>
+    }
+    @if (hiddenPins() > 0 && !query()) {
+    <p class="sm-note">{{ hiddenPins() }} pinned {{ hiddenPins() === 1 ? 'screen does' : 'screens do' }} not fit on the bar at this width. They are all here.</p>
+    }
+  </div>
+
+  <div class="sm-foot">
+    <div class="sm-foot__line">
+      <span id="sm-icons-only-lbl" class="sm-foot__lbl">Icons only</span>
+      <pf-toggle size="sm" [checked]="prefs.iconsOnly()" (checkedChange)="setIconsOnly($event)" />
+    </div>
+    <div class="sm-foot__btns">
+      <button type="button" class="pf-btn pf-btn--tertiary sm-btn" [disabled]="prefs.pinned() === null" (click)="reset()">
+        Reset to my role's defaults
+      </button>
+      @if (showAccount()) {
+      <button type="button" class="pf-btn pf-btn--secondary sm-btn" (click)="openAccount()">Account and status</button>
+      }
+      @if (canManageRoles()) {
+      <button type="button" class="pf-btn pf-btn--secondary sm-btn" (click)="openRoles()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">@for (p of icons.roles; track p) { <path [attr.d]="p" /> }</svg>
+        Role defaults
+      </button>
+      }
+    </div>
+  </div>
+  } @else {
+  <div class="sm-roles-head">
+    <button type="button" class="sm-ico press" aria-label="Back to the Start menu" title="Back" (click)="backToList()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+        stroke-linejoin="round" aria-hidden="true">@for (p of icons.back; track p) { <path [attr.d]="p" /> }</svg>
+    </button>
+    <h2 class="sm-roles-head__t">Role defaults</h2>
+  </div>
+  <p class="sm-note sm-note--top">Choose the screens a role starts with. Lock a screen to keep it on the bar for everyone in that role. People can still change their own bar unless a screen is locked.</p>
+  <div class="sm-roles-pick">
+    <pf-select [options]="roleOptions()" [value]="roleName()" [searchable]="true" placeholder="Pick a role" size="sm"
+      (valueChange)="roleName.set($event)" />
+  </div>
+  <div class="sm-scroll">
+    @for (r of roleRows(); track r.item.id) {
+    <div class="sm-row" [attr.data-role-item]="r.item.id">
+      <span class="sm-row__open sm-row__open--static">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">@for (p of r.item.iconPath; track p) { <path [attr.d]="p" /> }</svg>
+        <span class="sm-row__lbl">{{ r.item.label }}</span>
+      </span>
+      <span class="sm-row__acts">
+        @if (r.pinned) {
+        <button type="button" class="sm-ico press" [attr.aria-label]="'Move ' + r.item.label + ' up'" title="Move up" [disabled]="!r.canUp"
+          (click)="roleMove(r.item.id, -1)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">@for (p of icons.up; track p) { <path [attr.d]="p" /> }</svg>
+        </button>
+        <button type="button" class="sm-ico press" [attr.aria-label]="'Move ' + r.item.label + ' down'" title="Move down" [disabled]="!r.canDown"
+          (click)="roleMove(r.item.id, 1)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">@for (p of icons.down; track p) { <path [attr.d]="p" /> }</svg>
+        </button>
+        }
+        <button type="button" class="sm-ico press" [class.sm-pin--on]="r.locked" [attr.aria-pressed]="r.locked"
+          [attr.aria-label]="(r.locked ? 'Unlock ' : 'Lock ') + r.item.label" [title]="r.locked ? 'Unlock' : 'Lock on the bar'"
+          (click)="roleLock(r.item.id)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">@for (p of icons.lock; track p) { <path [attr.d]="p" /> }</svg>
+        </button>
+        <button type="button" class="sm-ico sm-pin press" [class.sm-pin--on]="r.pinned" [attr.aria-pressed]="r.pinned"
+          [attr.aria-label]="(r.pinned ? 'Unpin ' : 'Pin ') + r.item.label" [title]="r.pinned ? 'Unpin' : 'Pin'"
+          (click)="rolePin(r.item.id)">
+          <svg width="15" height="15" viewBox="0 0 24 24" [attr.fill]="r.pinned ? 'currentColor' : 'none'" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            @for (p of icons.pin; track p) { <path [attr.d]="p" /> }
+          </svg>
+        </button>
+      </span>
+    </div>
+    }
+  </div>
+  <div class="sm-foot">
+    <div class="sm-foot__btns">
+      <button type="button" class="pf-btn pf-btn--primary sm-btn" [disabled]="saving() || !roleName()" (click)="saveRoles()">
+        {{ saving() ? 'Saving' : 'Save role defaults' }}
+      </button>
+    </div>
+  </div>
+  }
+</div>
+}

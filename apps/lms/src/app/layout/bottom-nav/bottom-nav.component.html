@@ -38,6 +38,9 @@
         @for (n of displayedItems(); track n.id; let i = $index) {
           <button #navBtn type="button"
                   (click)="onTabClick(i, $event)"
+                  (pointerdown)="onBtnPointerDown(n, $event)" (pointerup)="cancelLongPress()" (pointerleave)="cancelLongPress()"
+                  (pointercancel)="cancelLongPress()" (contextmenu)="$event.preventDefault()"
+                  [attr.title]="iconsOnly() ? n.label : null" [attr.aria-label]="iconsOnly() ? n.label : null"
                   class="pf-nav-btn press rounded-full flex items-center justify-center gap-1.5
                          shrink-0 text-[11px] font-semibold leading-none transition-colors"
                   [class.pf-nav-btn--compact]="compactMode()"
@@ -52,7 +55,7 @@
                 }
               </svg>
             }
-            <span class="pf-nav-btn__lbl">{{ n.label }}</span>
+            @if (!iconsOnly()) { <span class="pf-nav-btn__lbl">{{ n.label }}</span> }
           </button>
         }
       </div>
@@ -62,29 +65,15 @@
         <!-- Hairline separator between the scrollable strip and the fixed dock -->
         <div class="pf-nav-fixed__sep" aria-hidden="true"></div>
 
-        @if (showAdminTab()) {
-          <!-- Admin: direct nav to /admin; routerLinkActive handles highlight -->
-          <a routerLink="/admin" routerLinkActive="pf-nav-btn--active"
-             class="pf-nav-btn pf-nav-btn--compact press rounded-full flex items-center
-                    justify-center shrink-0 transition-colors no-underline"
-             aria-label="Admin">
-            <!-- Settings wheel icon -->
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
-              <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
-            </svg>
-          </a>
-        }
-
         <!-- PF More / account button — always pinned -->
         <button type="button"
                 class="pf-nav-btn press pf-nav-btn--more rounded-full flex items-center justify-center
                        shrink-0 transition-colors"
-                [class.pf-nav-btn--more-on]="moreOpen()"
-                (click)="toggleMore($event)"
-                aria-label="More"
-                [attr.aria-expanded]="moreOpen()">
+                [class.pf-nav-btn--more-on]="moreOpen() || startOpen()"
+                data-start-trigger
+                (click)="toggleStart($event)"
+                aria-label="Start menu" aria-haspopup="dialog"
+                [attr.aria-expanded]="startOpen()">
           <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
                xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <defs>
@@ -126,6 +115,9 @@
       @for (n of displayedItems(); track n.id; let i = $index) {
         <button #navBtn type="button"
                 (click)="onTabClick(i, $event)"
+                (pointerdown)="onBtnPointerDown(n, $event)" (pointerup)="cancelLongPress()" (pointerleave)="cancelLongPress()"
+                (pointercancel)="cancelLongPress()" (contextmenu)="$event.preventDefault()"
+                [attr.title]="iconsOnly() ? n.label : null" [attr.aria-label]="iconsOnly() ? n.label : null"
                 class="pf-nav-btn press rounded-full flex items-center justify-center gap-1.5
                        shrink-0 text-[11px] font-semibold leading-none transition-colors"
                 [class.pf-nav-btn--compact]="compactMode()"
@@ -140,24 +132,8 @@
               }
             </svg>
           }
-          <span class="pf-nav-btn__lbl">{{ n.label }}</span>
+          @if (!iconsOnly()) { <span class="pf-nav-btn__lbl">{{ n.label }}</span> }
         </button>
-      }
-
-      @if (showAdminTab()) {
-        <div class="w-px h-8 mx-0.5 shrink-0" style="background: var(--border-muted);"></div>
-        <a #navBtn routerLink="/admin" routerLinkActive="pf-nav-btn--active"
-           class="pf-nav-btn press rounded-full flex items-center justify-center gap-1.5
-                  shrink-0 text-[11px] font-semibold leading-none transition-colors no-underline"
-           [class.pf-nav-btn--compact]="compactMode()"
-           aria-label="Admin">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
-            <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z"/>
-          </svg>
-          <span class="pf-nav-btn__lbl">Settings</span>
-        </a>
       }
 
       <!-- Rail footer: notifications, people, then the PF More/account button -->
@@ -188,11 +164,12 @@
               class="pf-nav-btn press pf-nav-btn--more rounded-full flex items-center justify-center
                      shrink-0 transition-colors"
               [class.pf-nav-btn--compact]="compactMode()"
-              [class.pf-nav-btn--more-on]="moreOpen()"
+              [class.pf-nav-btn--more-on]="moreOpen() || startOpen()"
               [class.pf-nav-btn--active]="isOverflowActive()"
-              (click)="toggleMore($event)"
-              aria-label="Account & more"
-              [attr.aria-expanded]="moreOpen()">
+              data-start-trigger
+              (click)="toggleStart($event)"
+              aria-label="Start menu" aria-haspopup="dialog"
+              [attr.aria-expanded]="startOpen()">
         <svg class="pf-more-brand" viewBox="0 0 228 292" fill="none"
              xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
           <defs>
@@ -522,3 +499,14 @@
     </div>
   }
 </nav>
+
+<!-- Start menu (owner 2026-11-11): the PF button opens every screen; the bar shows only the pinned ones.
+     A sheet above the phone pill, a card beside the iPad rail. Account, status and sign out stay one tap away inside it. -->
+<pf-start-menu [layout]="navLayout()" [open]="startOpen()" [homeHref]="homeHref()"
+  [placement]="railMode() ? 'rail' : 'sheet'" [autofocusSearch]="!touchDevice()" [showAccount]="true"
+  (closed)="startOpen.set(false)" (account)="openAccount()" />
+
+@if (tip(); as t) {
+  <!-- Icons only + long-press on touch: the label bubble (hover shows the title on desktop). -->
+  <div class="pf-nav-tip" role="tooltip" [style.left.px]="t.x" [style.bottom.px]="t.y">{{ t.label }}</div>
+}

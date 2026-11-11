@@ -827,3 +827,22 @@
   color: var(--text-muted, rgba(148, 163, 184, 0.5));
 }
 
+
+/* Icons only + long-press on touch: the label bubble above the pressed icon. */
+.pf-nav-tip {
+  position: fixed;
+  z-index: 2200;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--text-primary);
+  background: var(--bg-card-solid, rgba(15, 15, 25, 0.96));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  animation: pf-more-in 140ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) { .pf-nav-tip { animation: none; } }

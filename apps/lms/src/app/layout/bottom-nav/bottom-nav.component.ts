@@ -34,13 +34,17 @@ import { opdAreasFor } from '../../features/opd/shared/opd-nav';
 import { RouteAccessCtx } from '../../core/auth/route-access';
 import { ProcessWorkflowService } from '../../core/services/process-workflow.service';
 import { BranchSwitchService } from '../../core/services/branch-switch.service';
+import { isOpdOnly, pickLanding } from '../../core/auth/landing.guard';
+import { StartMenuComponent } from '../start-menu/start-menu.component';
+import { NavPrefsService } from '../start-menu/nav-prefs.service';
+import { computeNavLayout } from '../start-menu/nav-pins';
 
 const DRAG_THRESHOLD_PX = 4;
 
 @Component({
   selector: 'pf-bottom-nav',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, FormsModule],
+  imports: [RouterLink, RouterLinkActive, FormsModule, StartMenuComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './bottom-nav.component.html',
   styleUrl: './bottom-nav.component.scss'
@@ -113,7 +117,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected readonly railMode = signal<boolean>(this.computeRailMode());
   /** Show all primary items — the pill is now a horizontally-scrollable
    *  slider so every tab is always reachable without a "More" overflow. */
-  protected readonly displayedItems = computed(() => this.primary());
+  protected readonly displayedItems = computed(() => this.navLayout().bar);
   /** No overflow items — all tabs are in the scrollable pill. */
   protected readonly overflowItems = computed(() => [] as {item: import('../nav-items').NavItem; index: number}[]);
   protected readonly isOverflowActive = computed(() => false);
@@ -301,7 +305,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   // ─── Active state ────────────────────────────────────────────────
   protected readonly activeIdx = signal<number>(0);
-  protected readonly moreActive = computed(() => this.activeIdx() === this.primary().length);
+  protected readonly moreActive = computed(() => this.activeIdx() === this.displayedItems().length);
 
   // ─── Indicator geometry ──────────────────────────────────────────
   protected readonly indicator = signal<{ x: number; w: number; h: number }>({ x: 0, w: 56, h: 40 });
@@ -410,7 +414,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     this.routerSub = this.router.events
       .pipe(filter(e => e instanceof NavigationEnd))
-      .subscribe(() => this.recomputeActiveFromUrl());
+      .subscribe(() => { this.startOpen.set(false); this.recomputeActiveFromUrl(); });
     this.recomputeActiveFromUrl();
 
     this.resizeListener = () => {
@@ -432,6 +436,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.cancelLongPress();
+    if (this.tipHideTimer) clearTimeout(this.tipHideTimer);
     this.routerSub?.unsubscribe();
     if (this.resizeListener) window.removeEventListener('resize', this.resizeListener);
     if (this.scrollListener) {
@@ -567,6 +573,71 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
    *  tablet/phone still have one tap to /admin. The permission
    *  filter (`visible`) already gates it for non-admins. */
   readonly more = computed(() => this.visible([ADMIN_NAV, ...MORE_NAV]));
+
+  // ─── Start menu (owner 2026-11-11) ───────────────────────────────
+  // The bar shows only the PINNED screens that fit; the PF button opens the Start menu with every screen.
+  // The bar is decided ONLY by layout/start-menu/nav-pins.ts (pins never grant access).
+  protected readonly navPrefs = inject(NavPrefsService);
+  protected readonly startOpen = signal(false);
+  protected readonly iconsOnly = this.navPrefs.iconsOnly;
+  /** Everything this person can open from the bar: the work areas, then Settings (a normal pinnable item, id `admin`). */
+  private readonly navAllItems = computed<NavItem[]>(() => [...this.primary(), ...(this.showAdminTab() ? [ADMIN_NAV] : [])]);
+  protected readonly navLayout = computed(() =>
+    computeNavLayout({
+      all: this.navAllItems(),
+      more: this.visible(MORE_NAV),
+      roleDefaults: this.navPrefs.roleDefaults(),
+      userPins: this.navPrefs.pinned(),
+      capacity: this.navPrefs.capacity(),
+    }));
+  protected homeHref(): string {
+    return pickLanding({
+      ...this.routeCtx(),
+      moduleEnabled: m => this.entitlements.moduleEnabled(m),
+      opdDoctor: this.auth.isDoctor() && this.opdGate.visible(),
+      opdOnlyDoctor: isOpdOnly(this.auth.user()?.modules),
+    });
+  }
+  /** Touch devices must not get a focused search box (it would raise the keyboard over the sheet). */
+  protected touchDevice(): boolean {
+    if (typeof document === 'undefined') return false;
+    const native = !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+    return native || document.documentElement.classList.contains('device-touch');
+  }
+  protected toggleStart(ev?: Event): void {
+    ev?.stopPropagation?.();
+    const next = !this.startOpen();
+    this.closeMore();
+    this.startOpen.set(next);
+  }
+  /** "Account and status" inside the Start menu: swap to the account popover. */
+  protected openAccount(): void {
+    this.startOpen.set(false);
+    this.moreOpen.set(true);
+  }
+
+  // ─── Icons only: long-press shows the label on touch ─────────────
+  protected readonly tip = signal<{ label: string; x: number; y: number } | null>(null);
+  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  private tipHideTimer: ReturnType<typeof setTimeout> | null = null;
+  private suppressNextClick = false;
+  private static readonly LONG_PRESS_MS = 450;
+  protected onBtnPointerDown(n: NavItem, ev: PointerEvent): void {
+    this.suppressNextClick = false;
+    if (!this.iconsOnly() || ev.pointerType === 'mouse') return;
+    this.cancelLongPress();
+    const el = ev.currentTarget as HTMLElement;
+    this.longPressTimer = setTimeout(() => {
+      this.longPressTimer = null;
+      const r = el.getBoundingClientRect();
+      this.suppressNextClick = true;
+      this.tip.set({ label: n.label, x: r.left + r.width / 2, y: window.innerHeight - r.top + 10 });
+      this.tipHideTimer = setTimeout(() => this.tip.set(null), 1600);
+    }, BottomNavComponent.LONG_PRESS_MS);
+  }
+  protected cancelLongPress(): void {
+    if (this.longPressTimer) { clearTimeout(this.longPressTimer); this.longPressTimer = null; }
+  }
   /** The Admin tab on the floating pill renders only when the user
    *  has at least one manage_* permission (i.e. ADMIN_NAV would
    *  appear in their visible list). Non-admin users see only their
@@ -579,8 +650,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
    *  fewer the bar would otherwise look like a tiny floating widget;
    *  showing labels at low counts gives each button room to breathe. */
   readonly compactMode = computed(() => {
-    const total = this.primary().length + (this.showAdminTab() ? 1 : 0);
-    return total >= 4;
+    return this.displayedItems().length >= 4;
   });
 
   get pillClasses(): string {
@@ -600,6 +670,13 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       ev.stopPropagation();
       return;
     }
+    // The finger that long-pressed to read a label must not also open the screen.
+    if (this.suppressNextClick) {
+      this.suppressNextClick = false;
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
     this.setActive(idx, /* navigate */ true);
   }
 
@@ -609,7 +686,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       ev.stopPropagation();
       return;
     }
-    this.activeIdx.set(this.primary().length);
+    this.activeIdx.set(this.displayedItems().length);
     this.toggleMore();
   }
 
@@ -655,6 +732,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       // Crossed the threshold — promote to drag mode (turns off the
       // indicator's spring transition so it tracks the finger 1:1).
       this.dragMoved = true;
+      this.cancelLongPress();
       this.dragging.set(true);
     }
 
@@ -678,6 +756,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   }
 
   onPillPointerUp(ev: PointerEvent): void {
+    // The pill holds the pointer capture, so the button never sees this pointerup: end a pending long-press here.
+    this.cancelLongPress();
     if (this.dragPointerId !== ev.pointerId) return;
     const wasDrag = this.dragMoved;
     this.dragPointerId = null;
@@ -694,7 +774,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
       // Navigate to the snapped tab. If it's the More button index,
       // open the sheet instead.
       const idx = this.activeIdx();
-      if (idx === this.primary().length) {
+      if (idx === this.displayedItems().length) {
         this.toggleMore();
       } else {
         this.navigateTo(idx);
@@ -729,7 +809,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   /** Navigate to the URL of the primary tab at `idx`. */
   private navigateTo(idx: number): void {
-    const items = this.primary();
+    const items = this.displayedItems();
     if (idx < 0 || idx >= items.length) return;
     this.router.navigateByUrl(items[idx].href);
   }
@@ -745,17 +825,14 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private recomputeActiveFromUrl(): void {
     if (this.dragging()) return; // user is mid-drag — they own the indicator
     const url = this.router.url.split('?')[0];
-    const primary = this.primary();
-    const idx = primary.findIndex(n => this.matches(url, n));
+    const shown = this.displayedItems();
+    const idx = shown.findIndex(n => this.matches(url, n));
     if (idx >= 0) {
       this.activeIdx.set(idx);
       return;
     }
-    if (this.more().length > 0 && this.more().some(n => this.matches(url, n))) {
-      this.activeIdx.set(primary.length);
-      return;
-    }
-    this.activeIdx.set(0);
+    // A screen opened from the Start menu that is not on the bar: nothing on the bar is lit.
+    this.activeIdx.set(-1);
   }
 
   private matches(url: string, n: NavItem): boolean {
@@ -775,7 +852,11 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     const btns = this.btns();
     const idx = this.activeIdx();
     const ref = btns[idx];
-    if (!ref) return;
+    if (!ref) {
+      // Opened from the Start menu and not on the bar: no tab is lit.
+      if (idx < 0) this.indicatorReady.set(false);
+      return;
+    }
     const el = ref.nativeElement;
     this.indicator.set({ x: el.offsetLeft, w: el.offsetWidth, h: el.offsetHeight });
     if (!this.indicatorReady()) {
