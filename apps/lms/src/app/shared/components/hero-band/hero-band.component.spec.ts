@@ -1,3 +1,4 @@
+import { provideRouter } from '@angular/router';
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
@@ -40,6 +41,7 @@ function make(showBack = true, user: Record<string, unknown> = { tenantName: 'Mi
       { provide: AuthService, useValue: { user: () => user } },
       { provide: TenantStateService, useValue: { tenant: () => null } },
       { provide: NavBackService, useValue: navBack },
+      provideRouter([]),
     ],
   });
   const f = TestBed.createComponent(HostComponent);
@@ -108,6 +110,23 @@ describe('pf-hero-band — admin band pill', () => {
 /** Uploads are private: a tenant logo stored as "/uploads/…" 404s as a bare
  *  <img src>. The band shows it through the session (UploadsService blob:
  *  URL); data: logos from the branding wizard pass straight through. */
+describe('pf-hero-band — the lab logo goes Home', () => {
+  it('the logo + name are one link to "/" (the landing guard picks each person\'s home)', () => {
+    const { el } = make(false);
+    const a = el.querySelector<HTMLAnchorElement>('a.pf-hb__home')!;
+    expect(a).not.toBeNull();
+    expect(a.getAttribute('href')).toBe('/');
+    expect(a.getAttribute('aria-label')).toBe('Home, Micro World');
+    expect(a.querySelector('.pf-hb__avatar')?.textContent?.trim()).toBe('M');
+    expect(a.querySelector('.pf-hb__name')?.textContent?.trim()).toBe('Micro World');
+  });
+
+  it('the back chevron stays outside the Home link', () => {
+    const { el } = make(true);
+    expect(el.querySelector('a.pf-hb__home .pf-hb__back')).toBeNull();
+  });
+});
+
 describe('pf-hero-band — tenant logo', () => {
   function withLogo(logoUrl: string, src = vi.fn(() => 'blob:tenant-logo')) {
     TestBed.configureTestingModule({
@@ -117,6 +136,7 @@ describe('pf-hero-band — tenant logo', () => {
         { provide: TenantStateService, useValue: { tenant: () => ({ name: 'Micro World', logoUrl, brandingMode: 'both' }) } },
         { provide: NavBackService, useValue: { showBack: signal(false), back: vi.fn(), backTo: vi.fn() } },
         { provide: UploadsService, useValue: { src } },
+        provideRouter([]),
       ],
     });
     const f = TestBed.createComponent(HostComponent);

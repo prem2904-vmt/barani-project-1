@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { injectTenantBrand } from './tenant-brand';
 import { PfKeysDirective } from '../numpad/pf-keys.directive';
@@ -37,7 +38,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
 @Component({
   selector: 'pf-hero-band',
   standalone: true,
-  imports: [PfKeysDirective, SamplePresetDirective],
+  imports: [PfKeysDirective, SamplePresetDirective, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-hb">
@@ -55,16 +56,24 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
                admin-uploaded logo when branding allows it, initial disc
                otherwise; name honors brandingName + mode. -->
           <!-- customBrand: the screen projects its own button around the SAME mark ([band-brand], resolved by
-               injectTenantBrand) — the case sheet's tap = Departments / hold = voice note (owner 2026-11-11). -->
+               injectTenantBrand) — the case sheet's tap = Departments / hold = voice note (owner 2026-11-11).
+               Everywhere else the lab's logo + name go Home ('/', landingGuard); the PF logo opens the Start menu. -->
           @if (customBrand()) {
             <ng-content select="[band-brand]"></ng-content>
-          } @else if (showLogo() && tenantLogo()) {
-            <img class="pf-hb__logo" [src]="tenantLogo()!" [alt]="tenantName()" />
+            @if (showName()) {
+              <span class="pf-hb__name">{{ brandingName() || tenantName() }}</span>
+            }
           } @else {
-            <span class="pf-hb__avatar" aria-hidden="true">{{ tenantInitial() }}</span>
-          }
-          @if (showName()) {
-            <span class="pf-hb__name">{{ brandingName() || tenantName() }}</span>
+            <a class="pf-hb__home press" routerLink="/" [attr.aria-label]="'Home, ' + (brandingName() || tenantName())" title="Home">
+              @if (showLogo() && tenantLogo()) {
+                <img class="pf-hb__logo" [src]="tenantLogo()!" [alt]="tenantName()" />
+              } @else {
+                <span class="pf-hb__avatar" aria-hidden="true">{{ tenantInitial() }}</span>
+              }
+              @if (showName()) {
+                <span class="pf-hb__name">{{ brandingName() || tenantName() }}</span>
+              }
+            </a>
           }
         </div>
         <div class="pf-hb__actions"><ng-content select="[band-actions]"></ng-content></div>
@@ -139,6 +148,8 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
     }
 
     .pf-hb__tenant { display: flex; align-items: center; gap: 12px; min-width: 0; flex-shrink: 0; }
+    .pf-hb__home { display: flex; align-items: center; gap: inherit; min-width: 0; color: inherit; text-decoration: none; border-radius: 10px; }
+    .pf-hb__home:focus-visible { outline: 2px solid var(--pf-accent, currentColor); outline-offset: 3px; }
     .pf-hb__logo {
       /* The tenant uploads a PNG with transparency — no backing plate
          (owner); it sits directly on the band gradient. */
