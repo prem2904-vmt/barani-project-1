@@ -7,6 +7,16 @@
     (valueChange)="query.set($event)"
   >
     <div band-actions class="sh-actions">
+      <a class="pf-btn pf-btn--secondary st-pending-btn" [routerLink]="links.adminPending()" data-act="pending"
+         [attr.aria-label]="pending.total() ? 'Pending changes, ' + pendingWords() : 'Pending changes'">
+        <pf-icon name="list-check" [size]="18" /> <span class="sh-actions__lbl">Pending changes</span>
+        @if (pending.total()) { <span class="st-badge pf-num" data-pending-badge aria-hidden="true">{{ pending.total() }}</span> }
+      </a>
+      @if (builder.cortex()) {
+        <button type="button" class="pf-btn pf-btn--secondary" data-act="cortex-new" [attr.aria-pressed]="chatOpen()" (click)="chatOpen.set(!chatOpen())">
+          <pf-icon name="sparkle" [size]="18" /> <span class="sh-actions__lbl">Ask Cortex</span>
+        </button>
+      }
       @if (cortexOn()) {
         <button type="button" class="pf-btn pf-btn--secondary" data-act="cortex-import" (click)="cortexFormOpen.set(true)">
           <pf-icon name="sparkle" [size]="18" /> <span class="sh-actions__lbl">Start from a paper case sheet</span>
@@ -24,6 +34,11 @@
         <span class="pf-card__icon"><pf-icon name="studio" [size]="16" /></span>
         <h1 class="pf-card__label" id="studio-h">Case sheets</h1>
         <span class="pf-card__count">{{ shownCount() }} {{ shownCount() === 1 ? 'case sheet' : 'case sheets' }}</span>
+        @if (pending.total()) {
+          <a class="fe-chip st-waiting" [routerLink]="links.adminPending()" data-pending-chip>
+            <span class="st-waiting__dot" aria-hidden="true"></span>{{ pendingWords() }}
+          </a>
+        }
         @if (archivedCount() || showArchived()) {
           <button type="button" class="fe-chip st-arch" [attr.aria-pressed]="showArchived()" (click)="showArchived.set(!showArchived())">
             Archived ({{ archivedCount() }})
@@ -88,6 +103,8 @@
                           @if (f.origin === 'master') { <span class="st-tag" data-tag="master">Master</span> }
                           @if (f.origin === 'override') { <span class="st-tag st-tag--mine" data-tag="copy">Your copy</span> }
                           @if (f.newerMaster) { <span class="st-tag st-tag--warn" data-tag="newer">Newer master</span> }
+                          @if (pending.byForm().get(f.id); as n) { <span class="st-tag st-tag--mine" data-tag="suggested">{{ n === 1 ? 'Suggested change' : n + ' suggested changes' }}</span> }
+                          @if (pending.offerForms().has(f.id)) { <span class="st-tag st-tag--mine" data-tag="update">Update from Prefrontal</span> }
                         </span>
                         <span class="st-meta">{{ where(f) }}</span>
                       </span>
@@ -107,6 +124,9 @@
     </section>
   </div>
 </div>
+@if (chatOpen() && builder.cortex()) {
+  <st-builder-drawer tab="cortex" [newSheet]="true" (closed)="chatOpen.set(false); pending.refresh()" />
+}
 @if (cortexOn() && cortexDialogOpen()) {
   <st-cortex-import [departments]="departments()" (departmentAdded)="load()" (closed)="cortexFormOpen.set(false)" />
 }

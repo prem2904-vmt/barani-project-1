@@ -1,0 +1,377 @@
+// Pending changes (PF-PATTERN): band, then the list card; one item = the before / after (main) + the review (side, the one decision).
+
+.pd-ctx-title {
+  max-width: min(360px, 40vw);
+}
+.pd-ctx-title .pf-ctx__k {
+  overflow-wrap: anywhere;
+}
+
+.pd-list__head {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pd-tabs {
+  margin-left: 6px;
+}
+.pd-filter {
+  min-width: 150px;
+}
+.pd-intro {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+
+.pd-open {
+  width: 100%;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  border-radius: 14px;
+}
+.pd-open:focus-visible {
+  outline: 2px solid var(--color-primary, #7c3aed);
+  outline-offset: 2px;
+}
+.pd-row .st-t {
+  flex: 1 1 auto;
+}
+.pd-first {
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.pd-more {
+  color: var(--text-tertiary);
+}
+.pd-status {
+  flex: none;
+  margin-left: auto;
+}
+.pd-status-m {
+  display: none;
+}
+.pd-chev {
+  flex: none;
+  color: var(--text-tertiary);
+}
+.pd-more-note {
+  margin: 12px 2px 0;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+// ---------------- one item ----------------
+.pd-split {
+  position: relative;
+}
+@media (min-width: 1024px) {
+  .pd-split {
+    grid-template-columns: minmax(0, 1fr) 400px;
+  }
+}
+.pd-panes {
+  flex: none;
+}
+.pd-try {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+.pd-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.pd-cols--one {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 760px;
+}
+@media (max-width: 1279px) {
+  .pd-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.pd-col {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.pd-col__h {
+  position: sticky;
+  top: -1px;
+  z-index: 1;
+  margin: 0;
+  padding: 6px 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--pf-card-bg);
+}
+.pd-col__k {
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.pd-review__body {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+.pd-top {
+  display: grid;
+  gap: 6px;
+}
+.pd-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.pd-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.pd-who,
+.pd-explain {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.pd-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  background: var(--pf-chip-bg, rgba(15, 23, 42, 0.05));
+}
+.pd-banner > span {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.pd-banner pf-icon {
+  flex: none;
+  margin-top: 2px;
+}
+.pd-banner--warn {
+  background: color-mix(in srgb, var(--amber-text, #b45309) 10%, var(--pf-card-bg));
+}
+.pd-banner--warn pf-icon {
+  color: var(--amber-text, #b45309);
+}
+.pd-banner--bad {
+  color: var(--red-text, #b91c1c);
+  background: color-mix(in srgb, var(--red-text, #b91c1c) 8%, var(--pf-card-bg));
+}
+.pd-banner__go {
+  margin-left: auto;
+  min-height: 36px;
+  height: 36px;
+}
+.pd-note {
+  color: var(--text-secondary);
+}
+
+.pd-sec {
+  display: grid;
+  gap: 8px;
+}
+.pd-sec__h {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.pd-headline {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.pd-grp {
+  display: grid;
+  gap: 4px;
+}
+.pd-grp__t {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.pd-changes {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+.pd-changes li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  min-width: 0;
+}
+.pd-changes li > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pd-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: var(--color-primary, #7c3aed);
+}
+.pd-dot[data-type*='remov'] {
+  background: var(--text-tertiary);
+}
+.pd-ch__ba {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.pd-k {
+  color: var(--text-tertiary);
+}
+
+// offers: one row per change, yours vs Prefrontal's side by side on a computer
+.pd-grp--wide {
+  margin-bottom: 14px;
+}
+.pd-changes--wide li {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--pf-line);
+}
+.pd-ch__was,
+.pd-ch__now {
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .pd-changes--wide li {
+    grid-template-columns: 7px minmax(0, 1fr);
+  }
+  .pd-ch__was,
+  .pd-ch__now {
+    grid-column: 2;
+  }
+}
+
+.pd-probs {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pd-prob {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.pd-prob pf-icon {
+  flex: none;
+  margin-top: 2px;
+}
+.pd-prob--err {
+  color: var(--red-text, #b91c1c);
+}
+.pd-checks {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.pd-checks--bad {
+  color: var(--red-text, #b91c1c);
+}
+
+.pd-foot {
+  align-items: center;
+}
+.pd-act-err {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--red-text, #b91c1c);
+}
+.pd-err-link {
+  color: inherit;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .pd-list__head .pf-card__label {
+    flex: 1 1 auto;
+  }
+  .pd-tabs {
+    order: 3;
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+  .pd-filter {
+    order: 4;
+    flex: 1 1 100%;
+  }
+  .pd-status {
+    display: none;
+  }
+  .pd-status-m {
+    display: inline-flex;
+    white-space: normal;
+  }
+  .pd-chev {
+    display: none;
+  }
+  .pd-try {
+    display: none;
+  }
+}
+
+// Phones / tablets: ONE card at a time fills the space (its body scrolls, its footer stays in view above the nav).
+@media (max-width: 1023px) {
+  .pg .pd-split.pf-body--split > .pf-card {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+}
+@media (max-width: 640px) {
+  .pd-ctx-title {
+    display: none;
+  }
+}

@@ -281,3 +281,42 @@
   flex: 1 1 12rem;
   min-width: 0;
 }
+
+// Pending changes: the band button's count and the list header's link (neutral; the count is the only signal)
+.st-pending-btn {
+  position: relative;
+}
+.st-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--violet-text, #6d28d9);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 16%, var(--pf-card-bg));
+}
+@media (max-width: 640px) {
+  .st-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+  }
+}
+.st-waiting {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--text-primary);
+}
+.st-waiting__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--color-primary, #7c3aed);
+}

@@ -37,6 +37,7 @@ describe('case-sheet routes: defined once, all gated', () => {
     // Deliberate list: adding / removing a case-sheet route updates it here.
     expect(CASESHEET_SHELL_ROUTES.map(r => r.path)).toEqual([
       'admin/ipd/myprefrontal',
+      'admin/ipd/myprefrontal/pending',
       'admin/ipd/myprefrontal/forms/:id',
       'admin/ipd/myprefrontal/forms/:id/history',
       'admin/ipd/myprefrontal/import',

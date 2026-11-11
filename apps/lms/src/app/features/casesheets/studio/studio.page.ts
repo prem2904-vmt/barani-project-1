@@ -13,6 +13,11 @@ import { CortexImportService } from './cortex-import/cortex-import.service';
 import { cortexImportOn } from '../shared/cortex-import-gate';
 import { whenText } from './shared/when';
 import { PhoneNoteComponent } from './shared/phone-note.component';
+import { PendingCountService } from './approvals/pending-count.service';
+import { BuilderDrawerComponent } from './builder/builder-drawer.component';
+import { BuilderStatusService } from './builder/builder-status.service';
+import { ChatStore } from './builder/chat.store';
+import { waitingWords } from './approvals/approvals-models';
 
 /** The group a case sheet with no (known) department is filed under. */
 export const OTHER_DEPARTMENT = 'other';
@@ -46,7 +51,9 @@ export function groupByDepartment(forms: FormRow[], departments: DepartmentRow[]
 @Component({
   selector: 'app-studio-page',
   standalone: true,
-  imports: [HeroBandComponent, PfIconComponent, SkeletonRowsComponent, RouterLink, PhoneNoteComponent, CortexImportDialog],
+  imports: [HeroBandComponent, PfIconComponent, SkeletonRowsComponent, RouterLink, PhoneNoteComponent, CortexImportDialog, BuilderDrawerComponent],
+  // the "New case sheet with Cortex" chat (no case sheet open: Cortex may suggest a new one, which waits for approval)
+  providers: [ChatStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './studio.page.html',
   styleUrls: ['./shared/page.scss', './studio.page.scss'],
@@ -63,6 +70,12 @@ export class StudioPage {
   protected readonly cortexDialogOpen = computed(() => this.cortexFormOpen() || this.cortex.viewing());
 
   protected readonly links = casesheetLinks;
+  /** What waits for approval (suggestions + updates from Prefrontal): the band button's badge and the row tags. */
+  protected readonly pending = inject(PendingCountService);
+  protected readonly pendingWords = computed(() => waitingWords(this.pending.total()));
+  /** The Cortex builder (dev beta pf.cortexBuilder() + the server's status). */
+  protected readonly builder = inject(BuilderStatusService);
+  protected readonly chatOpen = signal(false);
   protected readonly query = signal('');
   protected readonly forms = signal<FormRow[] | null>(null);
   protected readonly departments = signal<DepartmentRow[]>([]);
@@ -72,6 +85,8 @@ export class StudioPage {
 
   constructor() {
     void this.load();
+    void this.pending.refresh();
+    void this.builder.load();
   }
 
   async load(): Promise<void> {

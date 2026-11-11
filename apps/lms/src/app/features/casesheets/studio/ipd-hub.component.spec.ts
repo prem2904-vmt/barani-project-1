@@ -8,8 +8,10 @@ import { PrepareSwitchApi } from '../data/prepare-switch-api';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { vi } from 'vitest';
+import { PendingCountService } from './approvals/pending-count.service';
 
-function render(opts: { gate: boolean; perms: string[]; prepare?: { enabled: boolean; canChange: boolean }; fail?: boolean }) {
+function render(opts: { gate: boolean; perms: string[]; prepare?: { enabled: boolean; canChange: boolean }; fail?: boolean; pending?: number }) {
+  const pending = { total: signal(opts.pending ?? 0), refresh: vi.fn(async () => undefined) };
   const prepareApi = {
     get: vi.fn(async () => opts.prepare ?? { enabled: true, canChange: true }),
     set: vi.fn(async (enabled: boolean) => { if (opts.fail) throw new Error('x'); return { enabled, canChange: true }; }),
@@ -30,12 +32,13 @@ function render(opts: { gate: boolean; perms: string[]; prepare?: { enabled: boo
       { provide: PrepareSwitchApi, useValue: prepareApi },
       { provide: TenantEntitlementsService, useValue: { refresh } },
       { provide: ToastService, useValue: toasts },
+      { provide: PendingCountService, useValue: pending },
     ],
   });
   const f = TestBed.createComponent(IpdHubComponent);
   f.detectChanges();
   const el = f.nativeElement as HTMLElement;
-  return Object.assign(el, { f, prepareApi, refresh, toasts });
+  return Object.assign(el, { f, prepareApi, refresh, toasts, pending });
 }
 
 const settle = async (el: HTMLElement & { f: { detectChanges(): void; whenStable(): Promise<unknown> } }) => {
@@ -117,5 +120,15 @@ describe('/admin/ipd hub', () => {
     const el = render({ gate: true, perms: [] });
     expect(el.querySelector('pf-module-placeholder')).not.toBeNull();
     expect(el.querySelector('[data-tile="Case sheets"]')).toBeNull();
+  });
+
+  it('the Case sheets tile says how many changes wait for approval (and nothing when none)', async () => {
+    const el = render({ gate: true, perms: ['casesheet_forms_manage'], pending: 3 });
+    await settle(el);
+    expect(el.pending.refresh).toHaveBeenCalled();
+    expect(el.querySelector('a[data-tile="Case sheets"] [data-pending-badge]')!.textContent).toContain('3 waiting for approval');
+    const none = render({ gate: true, perms: ['casesheet_forms_manage'], pending: 0 });
+    await settle(none);
+    expect(none.querySelector('[data-pending-badge]')).toBeNull();
   });
 });

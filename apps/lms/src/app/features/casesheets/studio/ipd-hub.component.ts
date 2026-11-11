@@ -13,6 +13,8 @@ import { PrepareSwitchApi } from '../data/prepare-switch-api';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ToggleComponent } from '@prefrontal/shared';
+import { PendingCountService } from './approvals/pending-count.service';
+import { waitingWords } from './approvals/approvals-models';
 
 interface IpdTile {
   title: string;
@@ -73,6 +75,9 @@ interface IpdTile {
                   <span class="pf-lsh__text">
                     <span class="pf-lsh__t">{{ t.title }}</span>
                     <span class="pf-lsh__s">{{ t.subtitle }}</span>
+                    @if (t.href === casesheetsHome && pending.total()) {
+                      <span class="pf-lsh__pending" data-pending-badge><span class="pf-lsh__dot" aria-hidden="true"></span>{{ pendingWords() }}</span>
+                    }
                   </span>
                   <svg class="pf-lsh__chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
                 </a>
@@ -121,6 +126,8 @@ interface IpdTile {
     .pf-ipd-switch .pf-lsh__ic { margin-bottom: 0; flex: none; }
     .pf-ipd-switch .pf-lsh__text { flex: 1; align-items: flex-start; }
     .pf-ipd-switch pf-toggle { flex: none; }
+    .pf-lsh__pending { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12.5px; font-weight: 600; color: var(--violet-text, #6d28d9); }
+    .pf-lsh__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--color-primary, #7c3aed); flex: none; }
     .pf-lsh__chev { display: none; color: var(--text-muted, #94a3b8); flex-shrink: 0; }
     @media (max-width: 640px) {
       .pf-lsh { grid-template-columns: 1fr; gap: 8px; }
@@ -142,10 +149,16 @@ export class IpdHubComponent implements OnInit {
   readonly saving = signal(false);
   readonly toggleKey = signal(0);
 
+  /** Suggestions + updates from Prefrontal waiting for approval: shown on the Case sheets tile. */
+  protected readonly pending = inject(PendingCountService);
+  protected readonly pendingWords = computed(() => waitingWords(this.pending.total()));
+  protected readonly casesheetsHome = casesheetLinks.adminHome();
+
   ngOnInit(): void {
     void this.gate.ready().then(() => {
       if (!this.showHub()) return;
       this.prepareApi.get().then((p) => this.prepare.set(p)).catch(() => undefined);
+      void this.pending.refresh();
     });
   }
 

@@ -8,6 +8,8 @@ import { StudioApi } from './data/studio-api';
 import { FormRow } from './data/studio-models';
 import { CortexImportService } from './cortex-import/cortex-import.service';
 import { OTHER_DEPARTMENT, StudioPage, groupByDepartment } from './studio.page';
+import { PendingCountService } from './approvals/pending-count.service';
+import { signal } from '@angular/core';
 
 const row = (over: Partial<FormRow>): FormRow => ({
   id: 'f', key: 'k', title: 'T', specialty: null, status: 'active', origin: 'local', departmentKey: null, departmentName: null, catalogKey: null, readOnly: false, forkedFromVersionId: null, pinned: false, newerMaster: false, published: null, draft: null, ...over,
@@ -82,6 +84,27 @@ describe('Case sheets home', () => {
     (el.querySelector('[data-act="fork"]') as HTMLButtonElement).click();
     await new Promise((r) => setTimeout(r, 0));
     expect(api.calls).not.toContain('fork');
+  });
+
+  it('the band links to Pending changes with the waiting count; rows show a suggested change / an update from Prefrontal', async () => {
+    TestBed.resetTestingModule();
+    const api = new MockStudioApi();
+    const own = api.seed('Our general', addPage(emptyDefinition('Our general'), 'History').def, { publish: true, departmentKey: 'general' });
+    const pending = {
+      total: signal(3), refresh: vi.fn(async () => undefined),
+      byForm: signal(new Map([[own, 2]])), offerForms: signal(new Set([own])),
+    };
+    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: StudioApi, useValue: api }, { provide: DialogService, useValue: dialog }, { provide: PendingCountService, useValue: pending }] });
+    const f = TestBed.createComponent(StudioPage);
+    await f.whenStable(); f.detectChanges(); await f.whenStable(); f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    const btn = el.querySelector('[data-act="pending"]') as HTMLAnchorElement;
+    expect(btn.getAttribute('href')).toBe('/admin/ipd/myprefrontal/pending');
+    expect(btn.querySelector('[data-pending-badge]')!.textContent).toContain('3');
+    expect(el.querySelector('[data-pending-chip]')!.textContent).toContain('3 waiting for approval');
+    expect(el.querySelector('[data-tag="suggested"]')!.textContent).toContain('2 suggested changes');
+    expect(el.querySelector('[data-tag="update"]')!.textContent).toContain('Update from Prefrontal');
+    expect(pending.refresh).toHaveBeenCalled();
   });
 
   it('shows no assistant inbox and no people link', async () => {

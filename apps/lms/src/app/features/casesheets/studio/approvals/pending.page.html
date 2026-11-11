@@ -1,0 +1,373 @@
+<cs-styles [touch]="false" />
+<div class="pf-page pg st-desk cs-studio pd" [attr.data-view]="view()">
+  <pf-hero-band [back]="true" [backTo]="view() === 'list' ? links.adminHome() : null" [backAction]="view() === 'list' ? null : backFn" [contextBar]="true" [customSearch]="true">
+    <div band-search class="pf-ctx">
+      <span class="pf-ctx__chip"><span class="pf-ctx__primary">Pending changes</span>
+        <span class="pf-ctx__k" data-waiting>{{ waitingLabel() }}</span>
+      </span>
+      @if (view() === 'suggestion' && detail(); as p) {
+        <span class="pf-ctx__chip pd-ctx-title"><span class="pf-ctx__k">{{ p.title }}</span></span>
+      }
+      @if (view() === 'offer' && shownOffer(); as o) {
+        <span class="pf-ctx__chip pd-ctx-title"><span class="pf-ctx__k">{{ o.title }}</span></span>
+      }
+    </div>
+  </pf-hero-band>
+
+  @switch (view()) {
+    @case ('list') {
+      <div class="pf-body">
+        <section class="pf-card main pd-list" aria-labelledby="pd-h">
+          <header class="pf-card__head pd-list__head">
+            <span class="pf-card__icon"><pf-icon name="list-check" [size]="16" /></span>
+            <span class="pf-card__label" role="heading" aria-level="1" id="pd-h">Pending changes</span>
+            <pf-segmented class="pd-tabs" ariaLabel="Show" [options]="tabs()" [value]="activeTab()" (valueChange)="setTab($event)" />
+            <span class="pf-card__spacer"></span>
+            @if (activeTab() === 'suggested') {
+              <pf-select class="pd-filter" size="sm" [options]="filterOptions" [value]="filter()" (valueChange)="filter.set($event)" aria-label="Which suggestions" />
+            }
+          </header>
+          <div class="pf-card__body">
+            <p class="pd-intro">
+              @if (activeTab() === 'suggested') {
+                Changes Cortex or a connected app suggested. Nothing changes until someone approves it here, one at a time. Approving publishes it straight away.
+              } @else {
+                Prefrontal published newer versions of case sheets your lab has its own copy of. Take Prefrontal’s version, or keep yours.
+              }
+            </p>
+            @if (listError()) {
+              <div class="pf-empty pf-empty--compact" role="alert">
+                <h2 class="pf-empty__title">{{ listError() }}</h2>
+                <button type="button" class="pf-btn pf-btn--secondary" (click)="activeTab() === 'prefrontal' ? loadOffers() : loadList()"><pf-icon name="refresh" [size]="18" /> Try again</button>
+              </div>
+            }
+            @if (activeTab() === 'suggested') {
+              @if (items() === null) {
+                <pf-skeleton-rows [rows]="4" label="Loading suggestions" />
+              } @else if (!items()!.length) {
+                <div class="pf-empty" data-empty="suggested">
+                  <span class="pf-empty__icon"><pf-icon name="check" [size]="26" /></span>
+                  <h2 class="pf-empty__title">{{ filter() === 'open' ? 'Nothing waiting for approval' : 'No suggestions here' }}</h2>
+                  @if (filter() === 'open') {
+                    <p class="pf-empty__body">When Cortex or a connected app suggests a change to a case sheet, it waits here for you.</p>
+                  }
+                </div>
+              } @else {
+                <ul class="st-list pd-rows" role="list">
+                  @for (p of items(); track p.id) {
+                    <li class="st-row pd-row" [attr.data-proposal]="p.id" [attr.data-status]="p.status">
+                      <button type="button" class="st-open pf-touch pd-open" (click)="open(p)">
+                        <span class="st-ic"><pf-icon [name]="p.source === 'cortex' ? 'sparkle' : 'link'" [size]="20" /></span>
+                        <span class="st-t">
+                          <span class="st-title">{{ p.title }}
+                            <span class="st-tag" data-tag="kind">{{ kindLabel(p) }}</span>
+                          </span>
+                          <span class="pd-first">{{ firstLine(p) }}@if (p.summary.length > 1) { <span class="pd-more"> · {{ p.summary.length - 1 }} more</span> }</span>
+                          <span class="st-meta">{{ sourceLine(p) }} · {{ when(p.updatedAt) }}</span>
+                          <span class="pf-sdot pd-status-m" [attr.data-tone]="tone(p.status)">{{ statusLabel(p.status) }}</span>
+                        </span>
+                        <span class="pf-sdot pd-status" [attr.data-tone]="tone(p.status)">{{ statusLabel(p.status) }}</span>
+                        <pf-icon class="pd-chev" name="chevron-right" [size]="18" />
+                      </button>
+                    </li>
+                  }
+                </ul>
+                @if (total() > items()!.length) {
+                  <p class="pd-more-note">Showing the newest {{ items()!.length }} of {{ total() }}. The rest appear as these are done.</p>
+                }
+              }
+            } @else {
+              @if (offers() === null) {
+                <pf-skeleton-rows [rows]="3" label="Loading updates" />
+              } @else if (!offers()!.length) {
+                <div class="pf-empty" data-empty="prefrontal">
+                  <span class="pf-empty__icon"><pf-icon name="check" [size]="26" /></span>
+                  <h2 class="pf-empty__title">Your copies are up to date</h2>
+                  <p class="pf-empty__body">When Prefrontal publishes a newer version of a case sheet you have your own copy of, it shows here.</p>
+                </div>
+              } @else {
+                <ul class="st-list pd-rows" role="list">
+                  @for (o of offers(); track o.id) {
+                    <li class="st-row pd-row" [attr.data-offer]="o.id">
+                      <button type="button" class="st-open pf-touch pd-open" (click)="openOffer(o)">
+                        <span class="st-ic"><pf-icon name="download" [size]="20" /></span>
+                        <span class="st-t">
+                          <span class="st-title">{{ o.title }} <span class="st-tag" data-tag="version">Version {{ o.masterVersionNo }}</span></span>
+                          <span class="pd-first">{{ o.headline ?? 'A newer version from Prefrontal' }}</span>
+                          <span class="st-meta">{{ offerLine(o) }}</span>
+                          @if (o.youHaveADraft) { <span class="pf-sdot pd-status-m" data-tone="warn">You have a draft open</span> }
+                        </span>
+                        @if (o.youHaveADraft) { <span class="pf-sdot pd-status" data-tone="warn">You have a draft open</span> }
+                        <pf-icon class="pd-chev" name="chevron-right" [size]="18" />
+                      </button>
+                    </li>
+                  }
+                </ul>
+              }
+            }
+          </div>
+        </section>
+      </div>
+    }
+
+    @case ('suggestion') {
+      <div class="pf-body pf-body--split pd-split" [attr.data-pane]="wide() ? null : pane()">
+        @if (!wide()) {
+          <pf-segmented class="pd-panes" ariaLabel="Show" [options]="panes" [value]="pane()" (valueChange)="pane.set($event)" />
+        }
+        <!-- MAIN: the case sheet as it is now next to the suggestion, drawn by the real forms engine -->
+        @if (wide() || pane() === 'compare') {
+        <section class="pf-card main pd-compare" aria-labelledby="pd-c">
+          <header class="pf-card__head">
+            <span class="pf-card__icon"><pf-icon name="columns" [size]="16" /></span>
+            <span class="pf-card__label" role="heading" aria-level="2" id="pd-c">Before and after</span>
+            <span class="pf-card__note pd-try">Tap an answer to see its follow-ups. Nothing is saved.</span>
+          </header>
+          <div class="pf-card__body">
+            @if (detail(); as p) {
+              <div class="pd-cols" [class.pd-cols--one]="!before()">
+                @if (before(); as b) {
+                  <div class="pd-col" data-side="before">
+                    <h3 class="pd-col__h">Now <span class="pd-col__k">version {{ p.detail!.current!.versionNo }}{{ p.sharedMaster ? ' · Prefrontal’s' : '' }}</span></h3>
+                    <st-sheet-render [definition]="b" [answers]="answers()" [setValue]="setAnswer" side="before" [marked]="markedBefore()" />
+                  </div>
+                }
+                @if (after(); as a) {
+                  <div class="pd-col" data-side="after">
+                    <h3 class="pd-col__h">{{ p.kind === 'create' ? 'The new case sheet' : 'Suggested' }}</h3>
+                    <st-sheet-render [definition]="a" [answers]="answers()" [setValue]="setAnswer" side="after" [marked]="markedAfter()" />
+                  </div>
+                }
+              </div>
+            } @else if (!detailError()) {
+              <pf-skeleton-rows [rows]="5" label="Loading the case sheet" />
+            }
+          </div>
+        </section>
+        }
+
+        <!-- SIDE: the review — what changes, checks, and the one decision -->
+        @if (wide() || pane() === 'review') {
+        <aside class="pf-card side pd-review" aria-labelledby="pd-r">
+          <header class="pf-card__head">
+            <span class="pf-card__icon"><pf-icon name="list-check" [size]="16" /></span>
+            <span class="pf-card__label" role="heading" aria-level="2" id="pd-r">Review</span>
+          </header>
+          <div class="pf-card__body pd-review__body">
+            @if (detailError()) {
+              <div class="pf-empty pf-empty--compact" role="alert"><h2 class="pf-empty__title">{{ detailError() }}</h2></div>
+            }
+            @if (detail(); as p) {
+              <div class="pd-top" data-detail [attr.data-status]="p.status">
+                <h3 class="pd-title">{{ p.title }}</h3>
+                <div class="pd-chips">
+                  <span class="pf-chip pf-chip--static">{{ kindLabel(p) }}</span>
+                  <span class="pf-sdot" [attr.data-tone]="tone(p.status)" data-status-chip>{{ statusLabel(p.status) }}</span>
+                </div>
+                <p class="pd-who">Suggested by {{ sourceLine(p) }} · {{ when(p.createdAt) }}</p>
+              </div>
+
+              @switch (p.status) {
+                @case ('stale') {
+                  <div class="pd-banner pd-banner--warn" role="status" data-banner="stale">
+                    <pf-icon name="refresh" [size]="16" />
+                    <span>This case sheet changed after the suggestion was made, so it can’t be approved as it is. <strong>Look again</strong> to compare it with today’s version.</span>
+                  </div>
+                }
+                @case ('failed') {
+                  <div class="pd-banner pd-banner--bad" role="alert" data-banner="failed">
+                    <pf-icon name="alert" [size]="16" />
+                    <span>{{ failedWords(p) }}</span>
+                  </div>
+                }
+                @case ('approved') {
+                  <div class="pd-banner" role="status" data-banner="approved">
+                    <pf-icon name="check" [size]="16" />
+                    <span>Approved{{ p.decidedByName ? ' by ' + p.decidedByName : '' }}{{ p.decidedAt ? ' ' + when(p.decidedAt) : '' }} and published.</span>
+                    @if (p.appliedFormId) { <a class="pf-btn pf-btn--tertiary pd-banner__go" [routerLink]="links.adminForm(p.appliedFormId)">Open the case sheet</a> }
+                  </div>
+                }
+                @case ('rejected') {
+                  <div class="pd-banner" role="status" data-banner="rejected">
+                    <pf-icon name="x" [size]="16" />
+                    <span>Rejected{{ p.decidedByName ? ' by ' + p.decidedByName : '' }}{{ p.decidedAt ? ' ' + when(p.decidedAt) : '' }}.@if (p.note) { <br /><span class="pd-note">“{{ p.note }}”</span> }</span>
+                  </div>
+                }
+                @case ('withdrawn') {
+                  <div class="pd-banner" role="status" data-banner="withdrawn"><pf-icon name="undo" [size]="16" /><span>Taken back by whoever suggested it.</span></div>
+                }
+                @case ('building') {
+                  <div class="pd-banner" role="status" data-banner="building"><pf-icon name="sparkle" [size]="16" /><span>Still being made. It comes here for approval when it is sent.</span></div>
+                }
+              }
+
+              <section class="pd-sec" aria-labelledby="pd-what">
+                <h4 class="pd-sec__h" id="pd-what">What changes</h4>
+                @if (p.detail?.headline) { <p class="pd-headline" data-headline>{{ p.detail!.headline }}</p> }
+                @if (groups().length) {
+                  @for (g of groups(); track g.title) {
+                    <div class="pd-grp">
+                      <span class="pd-grp__t">{{ g.title }}</span>
+                      <ul class="pd-changes" role="list">
+                        @for (c of g.changes; track $index) {
+                          <li [attr.data-type]="c.type"><span class="pd-dot" [attr.data-type]="c.type" aria-hidden="true"></span>
+                            <span><span class="pd-ch__w">{{ c.words }}</span>
+                              @if (c.before || c.after) {
+                                <span class="pd-ch__ba">@if (c.before) { <span class="pd-k">Was:</span> {{ c.before }} }@if (c.before && c.after) { <br /> }@if (c.after) { <span class="pd-k">Now:</span> {{ c.after }} }</span>
+                              }
+                            </span>
+                          </li>
+                        }
+                      </ul>
+                    </div>
+                  }
+                } @else {
+                  <ul class="pd-changes" role="list" data-summary>
+                    @for (s of p.summary; track $index) { <li><span class="pd-dot" aria-hidden="true"></span><span>{{ s }}</span></li> }
+                  </ul>
+                }
+              </section>
+
+              @if (errors().length || warnings().length) {
+                <section class="pd-sec" aria-labelledby="pd-prob">
+                  <h4 class="pd-sec__h" id="pd-prob">Needs fixing</h4>
+                  <ul class="pd-probs" role="list">
+                    @for (x of errors(); track $index) { <li class="pd-prob pd-prob--err" data-problem="error"><pf-icon name="alert" [size]="14" /> <span>{{ x.summary }}</span></li> }
+                    @for (x of warnings(); track $index) { <li class="pd-prob" data-problem="warning"><pf-icon name="info" [size]="14" /> <span>{{ x.summary }}</span></li> }
+                  </ul>
+                </section>
+              }
+
+              @if (p.detail && p.detail.checks.summary.total) {
+                <section class="pd-sec" aria-labelledby="pd-chk">
+                  <h4 class="pd-sec__h" id="pd-chk">Option checks</h4>
+                  <p class="pd-checks" [class.pd-checks--bad]="failing().length" data-checks>
+                    {{ p.detail!.checks.summary.passed }} of {{ p.detail!.checks.summary.total }} pass@if (failing().length) { · {{ failing().length }} {{ failing().length === 1 ? 'fails' : 'fail' }} (warns only) }
+                  </p>
+                  @if (failing().length) {
+                    <ul class="pd-probs" role="list">
+                      @for (c of failing(); track c.id) {
+                        <li class="pd-prob pd-prob--err" data-check-fail><pf-icon name="alert" [size]="14" /> <span><strong>{{ c.title }}</strong>@for (f of c.result!.failures; track $index) { <br />{{ f }} }</span></li>
+                      }
+                    </ul>
+                  }
+                </section>
+              }
+            } @else if (!detailError()) {
+              <pf-skeleton-rows [rows]="4" label="Loading the suggestion" />
+            }
+          </div>
+          @if (detail(); as p) {
+            @if (!decided() && p.status !== 'building') {
+              <footer class="pf-card__foot pd-foot">
+                @if (actionError()) { <p class="pd-act-err pf-span" role="alert" data-action-error>{{ actionError() }}</p> }
+                @else if (p.status === 'pending' && failing().length) {
+                  <p class="pd-act-err pf-span" data-check-warn><pf-icon name="alert" [size]="14" /> {{ failing().length === 1 ? '1 check fails' : failing().length + ' checks fail' }} — you can still approve.</p>
+                }
+                @else if (p.status === 'pending' && !canApprove()) {
+                  <p class="pd-act-err pf-span" data-cant-approve>This suggestion can’t be published as it is. Reject it and ask for a corrected one.</p>
+                }
+                <button type="button" class="pf-btn pf-btn--secondary" data-act="reject" [disabled]="!!busy()" [attr.aria-busy]="busy() === 'reject' ? 'true' : null" (click)="reject()">Reject</button>
+                @if (needsLook()) {
+                  <button type="button" class="pf-btn pf-btn--primary" data-act="look-again" [disabled]="!!busy()" [attr.aria-busy]="busy() === 'rereview' ? 'true' : null" (click)="lookAgain()"><pf-icon name="refresh" [size]="16" /> Look again</button>
+                } @else if (canApprove()) {
+                  <button type="button" class="pf-btn pf-btn--primary" data-act="approve" [disabled]="!!busy()" [attr.aria-busy]="busy() === 'approve' ? 'true' : null" (click)="approve()"><pf-icon name="check" [size]="16" /> Approve and publish</button>
+                } @else {
+                  <button type="button" class="pf-btn pf-btn--secondary" data-act="approve" disabled>Approve and publish</button>
+                }
+                @if (mine()) {
+                  <button type="button" class="pf-btn pf-btn--tertiary pf-span" data-act="withdraw" [disabled]="!!busy()" (click)="withdraw()">Take my suggestion back</button>
+                }
+              </footer>
+            } @else if (p.status === 'building' && mine()) {
+              <footer class="pf-card__foot pd-foot">
+                <button type="button" class="pf-btn pf-btn--tertiary pf-span" data-act="withdraw" [disabled]="!!busy()" (click)="withdraw()">Take my suggestion back</button>
+              </footer>
+            }
+          }
+        </aside>
+        }
+      </div>
+    }
+
+    @case ('offer') {
+      <div class="pf-body pf-body--split pd-split">
+        <section class="pf-card main pd-compare" aria-labelledby="pd-oc">
+          <header class="pf-card__head">
+            <span class="pf-card__icon"><pf-icon name="columns" [size]="16" /></span>
+            <span class="pf-card__label" role="heading" aria-level="2" id="pd-oc">What is different</span>
+            @if (shownOffer(); as o) { <span class="pf-card__count">your copy → Prefrontal’s version {{ o.masterVersionNo }}</span> }
+          </header>
+          <div class="pf-card__body">
+            @if (shownOffer(); as o) {
+              @if (o.headline) { <p class="pd-headline" data-headline>{{ o.headline }}</p> }
+              @for (g of offerGroups(); track g.title) {
+                <section class="pd-grp pd-grp--wide">
+                  <h3 class="pd-grp__t">{{ g.title }}</h3>
+                  <ul class="pd-changes pd-changes--wide" role="list">
+                    @for (c of g.changes; track $index) {
+                      <li [attr.data-type]="c.type"><span class="pd-dot" [attr.data-type]="c.type" aria-hidden="true"></span>
+                        <span class="pd-ch__w">{{ c.words }}</span>
+                        <span class="pd-ch__was">@if (c.before) { <span class="pd-k">Yours:</span> {{ c.before }} }</span>
+                        <span class="pd-ch__now">@if (c.after) { <span class="pd-k">Prefrontal’s:</span> {{ c.after }} }</span>
+                      </li>
+                    }
+                  </ul>
+                </section>
+              } @empty {
+                <p class="pd-intro">The wording is the same; only small settings changed.</p>
+              }
+            } @else if (offers() === null) {
+              <pf-skeleton-rows [rows]="4" label="Loading the update" />
+            } @else {
+              <div class="pf-empty pf-empty--compact" data-empty="offer"><h2 class="pf-empty__title">This update is no longer waiting</h2>
+                <button type="button" class="pf-btn pf-btn--secondary" (click)="toList()">Back to the list</button></div>
+            }
+          </div>
+        </section>
+        <aside class="pf-card side pd-review" aria-labelledby="pd-or">
+          <header class="pf-card__head">
+            <span class="pf-card__icon"><pf-icon name="download" [size]="16" /></span>
+            <span class="pf-card__label" role="heading" aria-level="2" id="pd-or">From Prefrontal</span>
+          </header>
+          <div class="pf-card__body pd-review__body">
+            @if (shownOffer(); as o) {
+              <div class="pd-top" data-offer-detail [attr.data-status]="o.status">
+                <h3 class="pd-title">{{ o.title }}</h3>
+                <p class="pd-who">{{ offerLine(o) }}</p>
+              </div>
+              @if (o.status === 'accepted') {
+                <div class="pd-banner" role="status" data-banner="accepted"><pf-icon name="check" [size]="16" /><span>Your copy now has Prefrontal’s version {{ o.masterVersionNo }}. Earlier versions stay in Version history.</span>
+                  <a class="pf-btn pf-btn--tertiary pd-banner__go" [routerLink]="links.adminForm(o.formId)">Open your copy</a></div>
+              } @else if (o.status === 'dismissed') {
+                <div class="pd-banner" role="status" data-banner="dismissed"><pf-icon name="check" [size]="16" /><span>Kept your version. Version {{ o.masterVersionNo }} won’t be offered again.</span></div>
+              } @else {
+                @if (o.youHaveADraft) {
+                  <div class="pd-banner pd-banner--warn" role="status" data-banner="draft">
+                    <pf-icon name="pen" [size]="16" />
+                    <span>Your copy has a draft that is still being edited. Publish or discard it first, then take Prefrontal’s version.</span>
+                    <a class="pf-btn pf-btn--tertiary pd-banner__go" [routerLink]="links.adminForm(o.formId)">Open your copy</a>
+                  </div>
+                }
+                <p class="pd-explain">Taking Prefrontal’s version publishes it as your copy’s new live version. Keeping yours leaves your copy as it is.</p>
+              }
+            }
+          </div>
+          @if (shownOffer(); as o) {
+            @if (o.status === 'pending') {
+              <footer class="pf-card__foot pd-foot">
+                @if (actionError()) {
+                  <p class="pd-act-err pf-span" role="alert" data-action-error>{{ actionError() }}
+                    @if (actionError() && o.formId) { <a class="pd-err-link" [routerLink]="links.adminForm(o.formId)">Open your copy</a> }
+                  </p>
+                }
+                <button type="button" class="pf-btn pf-btn--secondary" data-act="keep-mine" [disabled]="!!busy()" [attr.aria-busy]="busy() === 'dismiss' ? 'true' : null" (click)="keepMine()">Keep mine</button>
+                <button type="button" class="pf-btn pf-btn--primary" data-act="take" [disabled]="!!busy()" [attr.aria-busy]="busy() === 'accept' ? 'true' : null" (click)="acceptOffer()">Take Prefrontal’s version</button>
+              </footer>
+            }
+          }
+        </aside>
+      </div>
+    }
+  }
+</div>
