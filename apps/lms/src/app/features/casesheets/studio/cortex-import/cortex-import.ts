@@ -4,7 +4,7 @@
  * (`config.checkNote`) on a case sheet definition.
  */
 import { FieldDef, FormDefinition, allFields, updateField } from '@prefrontal/forms-engine';
-import { DraftJobStatus } from '../data/studio-models';
+import { DraftJob, DraftJobStatus, DraftMade } from '../data/studio-models';
 
 export const MAX_FILES = 8;
 export const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
@@ -73,7 +73,8 @@ const START_REFUSALS: Record<string, string> = {
   unknown_department: 'Pick a department from the list.',
   feature_off: "Cortex isn't switched on for your lab.",
   cortex_unavailable: "Cortex isn't set up yet.",
-  cap_reached: "Today's limit for Cortex is reached. Try again tomorrow.",
+  cap_reached: "This month's limit for Cortex is reached. Ask your admin.",
+  too_long: 'This file has more pages than Cortex reads at once (60). Upload it in parts.',
 };
 export const NOT_AVAILABLE = "Starting a case sheet from a paper sheet isn't available here yet.";
 
@@ -90,13 +91,46 @@ export function startRefusal(e: unknown): string {
 const FAILURES: Record<string, string> = {
   unreadable: "Cortex couldn't read the sheet. Try a clearer photo.",
   patient_data: "This sheet has a patient's details. Upload a blank one. Nothing was kept.",
-  model_error: 'Cortex ran into a problem reading this sheet. Please try again.',
   invalid_result: "Cortex couldn't turn this sheet into a case sheet that works. Try a clearer photo.",
+  timeout: 'Cortex took too long to read this sheet, even in parts. Try again in a few minutes, or upload fewer pages at a time.',
+  bad_reply: "Cortex's answer for this sheet came back incomplete, even in parts. Try again; if it happens again, upload fewer pages at a time.",
+  call_failed: "Cortex couldn't be reached just now. Try again in a moment.",
+  cortex_unavailable: "Cortex isn't set up yet. Ask your admin.",
+  cap_reached: "This month's limit for Cortex is reached. Ask your admin.",
+  feature_off: "Cortex isn't switched on for your lab.",
+  model_error: 'Something went wrong on our side while reading this sheet. Nothing was kept. Try again, and tell support if it happens again.',
 };
 
 /** Words for a job that ended `failed`. */
 export function jobFailure(code: string | undefined): string {
   return (code && FAILURES[code]) || 'Cortex could not finish this sheet. Please try again.';
+}
+
+/* ---------------- what a finished job made ---------------- */
+
+/** Every case sheet a done job made, in page order. An older server sends only `formId`: that is one case sheet. */
+export function madeDrafts(job: Pick<DraftJob, 'formId' | 'checkCount' | 'drafts'>, name = ''): DraftMade[] {
+  if (job.drafts?.length) return job.drafts;
+  if (!job.formId) return [];
+  return [{ formId: job.formId, title: name, departmentKey: '', departmentName: '', fromPage: 1, toPage: 1, checkCount: job.checkCount ?? 0, warnings: [] }];
+}
+
+/** "4 case sheets made: Gastrointestinal system, CNS, Respiratory system, CVS" (or "1 case sheet made"). */
+export function madeSummary(drafts: readonly DraftMade[]): string {
+  const n = drafts.length;
+  const head = `${n} case sheet${n === 1 ? '' : 's'} made`;
+  const names = drafts.map((d) => d.title.trim()).filter(Boolean);
+  return names.length && n > 1 ? `${head}: ${names.join(', ')}` : head;
+}
+
+/** "Pages 10–20" / "Page 4". */
+export function pagesLabel(from: number, to: number): string {
+  return from === to ? `Page ${from}` : `Pages ${from}–${to}`;
+}
+
+/** A finished job opens straight in the editor only when it made ONE case sheet with nothing to warn about; else the list shows. */
+export function opensStraightAway(drafts: readonly DraftMade[], warnings: readonly string[] | undefined): boolean {
+  return drafts.length === 1 && !drafts[0].warnings.length && !warnings?.length;
 }
 
 /* ---------------- progress ---------------- */

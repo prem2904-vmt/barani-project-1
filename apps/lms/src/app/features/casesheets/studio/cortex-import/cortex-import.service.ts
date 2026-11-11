@@ -2,8 +2,8 @@ import { Injectable, OnDestroy, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { casesheetLinks } from '../../casesheets.routes';
 import { StudioApi } from '../data/studio-api';
-import { DraftFromSheetInput, DraftJobStatus } from '../data/studio-models';
-import { NOT_AVAILABLE, jobFailure, startRefusal } from './cortex-import';
+import { DraftFromSheetInput, DraftJobStatus, DraftMade, DraftProgress } from '../data/studio-models';
+import { NOT_AVAILABLE, jobFailure, madeDrafts, opensStraightAway, startRefusal } from './cortex-import';
 
 export const POLL_MS = 2000;
 /** Lost connection this many polls in a row ⇒ stop and say so. */
@@ -14,9 +14,15 @@ export interface RunningImport {
   /** What the chip calls it: the name the user typed, else "your case sheet". */
   name: string;
   status: DraftJobStatus;
-  /** Set when the job is done. */
+  /** Set when the job is done (the first case sheet). */
   formId?: string;
   checkCount?: number;
+  /** Set when the job is done: every case sheet made (a booklet of several proformas makes several). */
+  drafts?: DraftMade[];
+  /** Set when the job is done: the job's own notes (pages left out, a case sheet that could not be made). */
+  warnings?: string[];
+  /** While reading: the server's words and parts done of parts planned. */
+  progress?: DraftProgress;
   /** Plain words, when the job failed. */
   failure?: string;
 }
@@ -24,7 +30,9 @@ export interface RunningImport {
 /**
  * One "case sheet from a paper sheet" job at a time (the app's, not the dialog's: the dialog can be closed and the job keeps
  * going). Starts the job, polls it every 2 s, and when it is done opens the editor, or, if the progress view was
- * closed, leaves the finished draft on Studio's chip to open. Never throws; every refusal ends up as words.
+ * closed, leaves the finished draft on Studio's chip to open. A job that made SEVERAL case sheets (a long booklet), or
+ * left a warning, never jumps away: the progress view lists them, each with its own Open. Never throws; every refusal
+ * ends up as words.
  */
 @Injectable({ providedIn: 'root' })
 export class CortexImportService implements OnDestroy {
@@ -87,14 +95,18 @@ export class CortexImportService implements OnDestroy {
     this.startError.set('');
   }
 
-  /** Open the finished draft in the editor. */
-  async open(): Promise<void> {
+  /**
+   * Open a finished case sheet in the editor (the first one when no id is given). With one case sheet the job is
+   * done with; with several the list stays (on the chip) so the others can still be opened.
+   */
+  async open(formId?: string): Promise<void> {
     const j = this.job();
-    if (!j?.formId) return;
+    const id = formId ?? j?.formId;
+    if (!j || !id) return;
     this.stop();
-    this.job.set(null);
+    if ((j.drafts?.length ?? 1) <= 1) this.job.set(null);
     this.viewing.set(false);
-    await this.router.navigate([casesheetLinks.adminForm(j.formId)]);
+    await this.router.navigate([casesheetLinks.adminForm(id)]);
   }
 
   ngOnDestroy(): void {
@@ -122,12 +134,13 @@ export class CortexImportService implements OnDestroy {
         this.job.set({ ...cur, status: 'failed', failure: jobFailure(r.code) });
         return;
       }
-      if (r.status === 'done' && r.formId) {
-        this.job.set({ ...cur, status: 'done', formId: r.formId, checkCount: r.checkCount ?? 0 });
-        if (this.viewing()) await this.open();
+      const drafts = r.status === 'done' ? madeDrafts(r, cur.name) : [];
+      if (drafts.length) {
+        this.job.set({ ...cur, status: 'done', formId: drafts[0].formId, checkCount: drafts[0].checkCount, drafts, warnings: r.warnings ?? [], progress: undefined });
+        if (this.viewing() && opensStraightAway(drafts, r.warnings)) await this.open();
         return;
       }
-      this.job.set({ ...cur, status: r.status === 'done' ? 'checking' : r.status });
+      this.job.set({ ...cur, status: r.status === 'done' ? 'checking' : r.status, progress: r.progress ?? cur.progress });
       this.schedule(POLL_MS);
     } catch (e) {
       if (this.job()?.jobId !== cur.jobId) return;

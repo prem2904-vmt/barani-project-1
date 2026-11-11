@@ -269,12 +269,40 @@ export function plainError(e: unknown, fallback = "Couldn't do that just now. Pl
 
 export type DraftJobStatus = 'queued' | 'reading' | 'building' | 'checking' | 'done' | 'failed';
 
+/** One case sheet a "case sheet from paper" job made (a long booklet of several proformas makes several). */
+export interface DraftMade {
+  formId: string;
+  title: string;
+  departmentKey: string;
+  departmentName: string;
+  /** Where it came from in the upload (printed pages, from 1). */
+  fromPage: number;
+  toPage: number;
+  checkCount: number;
+  /** Plain words: pages of this case sheet Cortex could not read. */
+  warnings: string[];
+}
+
+/** While the server reads: its own words ("Found 4 case sheets. Reading part 3 of 9.") and parts done of parts planned. */
+export interface DraftProgress {
+  text: string;
+  done: number;
+  total: number;
+  sheets: number;
+}
+
 /** What the server says about one "case sheet from paper" job (GET draft-jobs/{jobId}). */
 export interface DraftJob {
   status: DraftJobStatus;
+  /** Done: the FIRST case sheet (what a one-sheet answer always had). */
   formId?: string;
   checkCount?: number;
-  /** unreadable | patient_data | model_error | invalid_result (when failed). */
+  /** Done: every case sheet made, in page order (an older server sends none: use formId). */
+  drafts?: DraftMade[];
+  /** Done: the job's own notes (a cover page left out, a case sheet that could not be made). */
+  warnings?: string[];
+  progress?: DraftProgress;
+  /** When failed: unreadable | patient_data | invalid_result | timeout | bad_reply | call_failed | cortex_unavailable | cap_reached | feature_off | model_error. */
   code?: string;
   message?: string;
 }

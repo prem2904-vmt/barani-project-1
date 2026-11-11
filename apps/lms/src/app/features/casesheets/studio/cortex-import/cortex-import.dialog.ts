@@ -5,9 +5,9 @@ import { PfSelectOption, SelectComponent } from '@prefrontal/shared';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { casesheetLinks } from '../../casesheets.routes';
 import { CASESHEET_FORMS_MANAGE } from '../../shared/casesheet-permissions';
-import { DepartmentRow } from '../data/studio-models';
+import { DepartmentRow, DraftMade } from '../data/studio-models';
 import { DepartmentAddComponent } from '../shared/department-add.component';
-import { ACCEPT, MAX_FILES, MAX_TOTAL_BYTES, STEPS, addPages, fileType, moveItem, pagesProblem, stepStates } from './cortex-import';
+import { ACCEPT, MAX_FILES, MAX_TOTAL_BYTES, STEPS, addPages, fileType, madeSummary, moveItem, pagesLabel, pagesProblem, stepStates } from './cortex-import';
 import { CortexImportService } from './cortex-import.service';
 
 const mb = (n: number): string => (n / (1024 * 1024)).toFixed(n >= 10 * 1024 * 1024 ? 0 : 1);
@@ -37,27 +37,67 @@ const mb = (n: number): string => (n / (1024 * 1024)).toFixed(n >= 10 * 1024 * 1
         </header>
 
         @if (job(); as j) {
-          <ol class="ci-steps" aria-label="Progress" data-steps>
-            @for (s of steps; track s; let i = $index) {
-              <li class="ci-step" [attr.data-state]="states()[i]" [class.is-failed]="j.status === 'failed' && states()[i] === 'active'">
-                <span class="ci-mark" aria-hidden="true">
-                  @if (states()[i] === 'done') { <pf-icon name="check" [size]="14" /> }
-                </span>
-                <span class="ci-step__t">{{ s }}</span>
-              </li>
-            }
-          </ol>
-          @if (j.status === 'failed') {
-            <p class="ci-fail" role="alert" data-failure>{{ j.failure }}</p>
+          @if (j.status === 'done') {
+            <div class="ci-body ci-made" data-made>
+              <ul class="ci-sheets" role="list" data-sheets>
+                @for (d of made(); track d.formId) {
+                  <li class="ci-sheet" [attr.data-sheet]="d.formId">
+                    <span class="ci-sheet__ic" aria-hidden="true"><pf-icon name="file" [size]="18" /></span>
+                    <span class="ci-sheet__t">
+                      <span class="ci-sheet__n">{{ d.title || 'Case sheet' }}</span>
+                      <span class="ci-sheet__m">{{ sheetMeta(d) }}</span>
+                      @for (w of d.warnings; track w) {
+                        <span class="ci-warn" data-sheet-warning><pf-icon name="alert" [size]="14" /><span>{{ w }}</span></span>
+                      }
+                    </span>
+                    <button type="button" class="pf-btn pf-btn--secondary ci-sheet__go" data-act="open-sheet" [attr.aria-label]="'Open ' + (d.title || 'the case sheet') + ' in Studio'" (click)="svc.open(d.formId)">
+                      Open <pf-icon name="arrow-right" [size]="16" />
+                    </button>
+                  </li>
+                }
+              </ul>
+              @for (w of j.warnings ?? []; track w) {
+                <p class="ci-warn ci-warn--job" data-job-warning><pf-icon name="alert" [size]="14" /><span>{{ w }}</span></p>
+              }
+              <p class="ci-note ci-note--flush">Each one is a draft. Check the questions in Studio before you publish.</p>
+            </div>
             <footer class="ci-foot">
               <button type="button" class="pf-btn pf-btn--secondary" data-act="cancel" (click)="close()">Close</button>
-              <button type="button" class="pf-btn pf-btn--primary" data-act="again" (click)="again()">Try again</button>
+              <button type="button" class="pf-btn pf-btn--primary" data-act="done" (click)="finish()">Done</button>
             </footer>
           } @else {
-            <p class="ci-note" data-bg-note>You can close this. Cortex keeps working, and Studio shows it until the draft is ready.</p>
-            <footer class="ci-foot">
-              <button type="button" class="pf-btn pf-btn--secondary" data-act="cancel" (click)="close()">Close</button>
-            </footer>
+            <ol class="ci-steps" aria-label="Progress" data-steps>
+              @for (s of steps; track s; let i = $index) {
+                <li class="ci-step" [attr.data-state]="states()[i]" [class.is-failed]="j.status === 'failed' && states()[i] === 'active'">
+                  <span class="ci-mark" aria-hidden="true">
+                    @if (states()[i] === 'done') { <pf-icon name="check" [size]="14" /> }
+                  </span>
+                  <span class="ci-step__t">{{ s }}</span>
+                </li>
+              }
+            </ol>
+            @if (j.status !== 'failed' && j.progress; as p) {
+              <div class="ci-progress" data-progress aria-live="polite">
+                <p class="ci-progress__t">{{ p.text }}</p>
+                @if (p.total > 1) {
+                  <div class="ci-bar" role="progressbar" aria-label="Parts read" [attr.aria-valuenow]="p.done" aria-valuemin="0" [attr.aria-valuemax]="p.total">
+                    <span class="ci-bar__fill" [style.width.%]="(100 * p.done) / p.total"></span>
+                  </div>
+                }
+              </div>
+            }
+            @if (j.status === 'failed') {
+              <p class="ci-fail" role="alert" data-failure>{{ j.failure }}</p>
+              <footer class="ci-foot">
+                <button type="button" class="pf-btn pf-btn--secondary" data-act="cancel" (click)="close()">Close</button>
+                <button type="button" class="pf-btn pf-btn--primary" data-act="again" (click)="again()">Try again</button>
+              </footer>
+            } @else {
+              <p class="ci-note" data-bg-note>You can close this. Cortex keeps working, and Studio shows it until the draft is ready.</p>
+              <footer class="ci-foot">
+                <button type="button" class="pf-btn pf-btn--secondary" data-act="cancel" (click)="close()">Close</button>
+              </footer>
+            }
           }
         } @else {
           <div class="ci-body">
@@ -158,14 +198,21 @@ export class CortexImportDialog {
   protected readonly job = computed(() => (this.svc.viewing() ? this.svc.job() : null));
   protected readonly states = computed(() => stepStates(this.job()?.status ?? 'queued'));
   /** A failed read says so in the heading too (it used to keep "Cortex is reading your sheet / Hold on" above the refusal). */
+  /** The case sheets a finished job made (several for a booklet of proformas). */
+  protected readonly made = computed<DraftMade[]>(() => this.job()?.drafts ?? []);
   protected readonly title = computed(() => {
     const j = this.job();
-    return !j ? 'Start from a paper case sheet' : j.status === 'failed' ? 'Cortex could not use this sheet' : 'Cortex is reading your sheet';
+    if (!j) return 'Start from a paper case sheet';
+    if (j.status === 'failed') return 'Cortex could not use this sheet';
+    if (j.status === 'done') return this.made().length > 1 ? `Cortex made ${this.made().length} case sheets` : 'Cortex made your case sheet';
+    return 'Cortex is reading your sheet';
   });
   protected readonly subtitle = computed(() => {
     const j = this.job();
-    return !j ? 'Cortex turns a photo or PDF of your blank paper sheet into a draft case sheet you can edit.'
-      : j.status === 'failed' ? '' : 'Hold on, this takes about a minute.';   // the failure line below says the rest
+    if (!j) return 'Cortex turns a photo or PDF of your blank paper sheet into a draft case sheet you can edit.';
+    if (j.status === 'failed') return '';   // the failure line below says the rest
+    if (j.status === 'done') return madeSummary(this.made()) + '.';
+    return (j.progress?.total ?? 0) > 1 ? 'A long sheet is read a few pages at a time. This can take a few minutes.' : 'Hold on, this takes about a minute.';
   });
   protected readonly deptOptions = computed<PfSelectOption<string>[]>(() => this.allDepartments().map((d) => ({ value: d.key, label: d.name })));
   protected readonly totalMb = computed(() => mb(this.files().reduce((n, f) => n + f.size, 0)));
@@ -205,6 +252,21 @@ export class CortexImportDialog {
     this.added.update((a) => [...a, row]);
     this.dept.set(row.key);
     this.departmentAdded.emit(row);
+  }
+
+  /** "Pages 1–9 · General Medicine · 2 to check". */
+  protected sheetMeta(d: DraftMade): string {
+    const parts = [];
+    if (d.toPage > 1 || d.fromPage > 1) parts.push(pagesLabel(d.fromPage, d.toPage));
+    if (d.departmentName) parts.push(d.departmentName);
+    parts.push(d.checkCount ? `${d.checkCount} to check` : 'Nothing to check');
+    return parts.join(' · ');
+  }
+
+  /** The list was seen: forget the job (the case sheets are in Studio's list). */
+  protected finish(): void {
+    this.svc.dismiss();
+    this.closed.emit();
   }
 
   protected size(n: number): string {

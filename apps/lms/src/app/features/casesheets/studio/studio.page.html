@@ -36,8 +36,13 @@
           <div class="st-cortex" data-cortex-chip [attr.data-state]="j.status === 'done' ? 'done' : j.status === 'failed' ? 'failed' : 'running'" role="status">
             <span class="st-cortex__ic"><pf-icon name="sparkle" [size]="16" /></span>
             @if (j.status === 'done') {
-              <span class="st-cortex__t">Cortex made {{ j.name }}.</span>
-              <button type="button" class="pf-btn pf-btn--primary st-cortex__go" data-act="open-draft" (click)="cortex.open()">Open the draft</button>
+              @if ((j.drafts?.length ?? 1) > 1 || j.warnings?.length || j.drafts?.[0]?.warnings?.length) {
+                <span class="st-cortex__t">Cortex made {{ (j.drafts?.length ?? 1) > 1 ? j.drafts!.length + ' case sheets' : j.name }}.</span>
+                <button type="button" class="pf-btn pf-btn--primary st-cortex__go" data-act="show-made" (click)="cortex.show()">{{ (j.drafts?.length ?? 1) > 1 ? 'See them' : 'See what to check' }}</button>
+              } @else {
+                <span class="st-cortex__t">Cortex made {{ j.name }}.</span>
+                <button type="button" class="pf-btn pf-btn--primary st-cortex__go" data-act="open-draft" (click)="cortex.open()">Open the draft</button>
+              }
               <button type="button" class="pf-btn pf-btn--icon" aria-label="Dismiss" data-act="dismiss-chip" (click)="cortex.dismiss()"><pf-icon name="x" [size]="16" /></button>
             } @else if (j.status === 'failed') {
               <span class="st-cortex__t">{{ j.failure }}</span>

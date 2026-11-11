@@ -9,6 +9,10 @@ import {
   countChecks,
   dropEditedChecks,
   jobFailure,
+  madeDrafts,
+  madeSummary,
+  opensStraightAway,
+  pagesLabel,
   markedSignatures,
   moveItem,
   pagesProblem,
@@ -81,15 +85,26 @@ describe('Cortex import: plain words', () => {
   it.each([
     ['unreadable', 'Try a clearer photo.'],
     ['patient_data', "This sheet has a patient's details. Upload a blank one."],
-    ['model_error', 'ran into a problem'],
+    ['model_error', 'went wrong on our side'],
     ['invalid_result', "couldn't turn this sheet into a case sheet"],
+    ['timeout', 'took too long'],
+    ['bad_reply', 'came back incomplete'],
+    ['call_failed', "couldn't be reached"],
+    ['cortex_unavailable', "isn't set up yet"],
     [undefined, 'could not finish'],
   ])('a failed job with code %s', (code, words) => {
     expect(jobFailure(code)).toContain(words);
   });
 
-  it('never says AI', () => {
-    for (const c of ['unreadable', 'patient_data', 'model_error', 'invalid_result', undefined]) expect(jobFailure(c)).not.toMatch(/\bAI\b/);
+  it('never says AI or "form", and a known reason never gets the generic "try again" words', () => {
+    const codes = ['unreadable', 'patient_data', 'model_error', 'invalid_result', 'timeout', 'bad_reply', 'call_failed', 'cortex_unavailable', 'cap_reached', 'feature_off', undefined];
+    for (const c of codes) {
+      expect(jobFailure(c)).not.toMatch(/\bAI\b/);
+      expect(jobFailure(c)).not.toMatch(/\bform\b/);
+    }
+    const words = codes.filter(Boolean).map((c) => jobFailure(c));
+    expect(new Set(words).size).toBe(words.length);
+    expect(startRefusal({ code: 'too_long' })).toContain('Upload it in parts');
   });
 });
 
@@ -147,5 +162,32 @@ describe('Cortex import: "Check this" markers', () => {
     const edited = dropEditedChecks(markedSignatures(def), setLabel(def, sub, 'Since when?'));
     expect(checkNoteOf(findField(edited, sub)!)).toBe('');
     expect(checkNoteOf(findField(edited, a)!)).toBe('Is it left or right?');
+  });
+});
+
+describe('Cortex import: what a finished job made', () => {
+  const d = (title: string, warnings: string[] = []) => ({ formId: 'f-' + title, title, departmentKey: 'm', departmentName: 'Medicine', fromPage: 1, toPage: 9, checkCount: 1, warnings });
+
+  it('a list of case sheets, or the one formId an older server sends', () => {
+    expect(madeDrafts({ drafts: [d('A'), d('B')] }).map((x) => x.title)).toEqual(['A', 'B']);
+    expect(madeDrafts({ formId: 'f1', checkCount: 2 }, 'ENT')).toEqual([expect.objectContaining({ formId: 'f1', checkCount: 2, title: 'ENT', warnings: [] })]);
+    expect(madeDrafts({})).toEqual([]);
+  });
+
+  it('says how many were made and their names', () => {
+    expect(madeSummary([d('Gastrointestinal system'), d('CNS'), d('Respiratory system'), d('CVS')])).toBe(
+      '4 case sheets made: Gastrointestinal system, CNS, Respiratory system, CVS',
+    );
+    expect(madeSummary([d('ENT')])).toBe('1 case sheet made');
+    expect(pagesLabel(4, 4)).toBe('Page 4');
+    expect(pagesLabel(10, 20)).toBe('Pages 10–20');
+  });
+
+  it('opens straight in the editor only for ONE case sheet with nothing to warn about', () => {
+    expect(opensStraightAway([d('A')], [])).toBe(true);
+    expect(opensStraightAway([d('A')], undefined)).toBe(true);
+    expect(opensStraightAway([d('A'), d('B')], [])).toBe(false);
+    expect(opensStraightAway([d('A', ['Pages 3–4 could not be read.'])], [])).toBe(false);
+    expect(opensStraightAway([d('A')], ['Page 1 had no questions.'])).toBe(false);
   });
 });

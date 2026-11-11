@@ -443,10 +443,29 @@ export class HttpStudioApi implements StudioApi {
     const r = obj(await this.call(this.http.get(api(`/api/casesheets/forms/draft-jobs/${encodeURIComponent(jobId)}`))));
     const s = str(r['status']);
     const status: DraftJob['status'] = (['queued', 'reading', 'building', 'checking', 'done', 'failed'] as const).find((x) => x === s) ?? 'queued';
+    const num = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+    const words = (v: unknown): string[] => arr(v).filter((x): x is string => typeof x === 'string' && !!x.trim());
+    const drafts = arr(r['drafts'])
+      .map(obj)
+      .map((d) => ({
+        formId: str(d['formId']),
+        title: str(d['title']),
+        departmentKey: str(d['departmentKey']),
+        departmentName: str(d['departmentName']),
+        fromPage: num(d['fromPage'], 1),
+        toPage: num(d['toPage'], 1),
+        checkCount: num(d['checkCount']),
+        warnings: words(d['warnings']),
+      }))
+      .filter((d) => !!d.formId);
+    const p = r['progress'] && typeof r['progress'] === 'object' ? obj(r['progress']) : null;
     return {
       status,
       formId: strOrNull(r['formId']) ?? undefined,
       checkCount: typeof r['checkCount'] === 'number' ? (r['checkCount'] as number) : undefined,
+      drafts: drafts.length ? drafts : undefined,
+      warnings: words(r['warnings']).length ? words(r['warnings']) : undefined,
+      progress: p && str(p['text']) ? { text: str(p['text']), done: num(p['done']), total: num(p['total']), sheets: num(p['sheets']) } : undefined,
       code: strOrNull(r['code']) ?? undefined,
       message: strOrNull(r['message']) ?? undefined,
     };

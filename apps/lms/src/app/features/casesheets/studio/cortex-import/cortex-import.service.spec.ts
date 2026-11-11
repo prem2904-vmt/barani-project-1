@@ -106,8 +106,10 @@ describe('Cortex import service', () => {
   it.each([
     ['unreadable', 'Try a clearer photo.'],
     ['patient_data', "This sheet has a patient's details. Upload a blank one."],
-    ['model_error', 'ran into a problem'],
+    ['model_error', 'went wrong on our side'],
     ['invalid_result', "couldn't turn this sheet into a case sheet"],
+    ['timeout', 'took too long'],
+    ['bad_reply', 'came back incomplete'],
   ])('a failed job (%s) stops with its message and does not navigate', async (code, words) => {
     api.script = [{ status: 'failed', code, message: 'server words' }];
     await svc.start({ files: [png()], departmentKey: 'ent' });
@@ -166,6 +168,46 @@ describe('Cortex import service', () => {
     expect(await svc.start({ files: [png()], departmentKey: 'ent' })).toBe(false);
     expect(svc.startError()).toContain("isn't available here yet");
     expect(svc.unavailable()).toBe(true);
+  });
+
+  it('reading a long sheet in parts: the server\'s progress words are kept between polls', async () => {
+    api.script = [
+      { status: 'reading', progress: { text: 'Finding the case sheets in this file.', done: 0, total: 0, sheets: 0 } },
+      { status: 'reading', progress: { text: 'Found 4 case sheets. Reading part 3 of 9.', done: 2, total: 9, sheets: 4 } },
+      { status: 'building' },
+    ];
+    await svc.start({ files: [png()], departmentKey: 'ent' });
+    await tick(0);
+    expect(svc.job()!.progress!.text).toContain('Finding');
+    await tick(POLL_MS);
+    expect(svc.job()!.progress).toEqual({ text: 'Found 4 case sheets. Reading part 3 of 9.', done: 2, total: 9, sheets: 4 });
+    await tick(POLL_MS);
+    expect(svc.job()!.status).toBe('building');
+    expect(svc.job()!.progress!.done).toBe(2);
+  });
+
+  const made = (id: string, title: string, warnings: string[] = []) => ({ formId: id, title, departmentKey: 'm', departmentName: 'Medicine', fromPage: 1, toPage: 9, checkCount: 1, warnings });
+
+  it('several case sheets made: no jump to the editor; the list stays, each opens on its own', async () => {
+    api.script = [{ status: 'done', formId: 'g', checkCount: 1, drafts: [made('g', 'Gastrointestinal system'), made('c', 'CNS'), made('r', 'Respiratory system'), made('v', 'CVS')] }];
+    await svc.start({ files: [png()], departmentKey: 'ent' });
+    await tick(0);
+    expect(nav).not.toHaveBeenCalled();
+    expect(svc.job()).toMatchObject({ status: 'done', formId: 'g' });
+    expect(svc.job()!.drafts!.map((d) => d.title)).toEqual(['Gastrointestinal system', 'CNS', 'Respiratory system', 'CVS']);
+    expect(svc.viewing()).toBe(true);
+    await svc.open('c');
+    expect(nav).toHaveBeenCalledWith(['/admin/ipd/myprefrontal/forms/c']);
+    expect(svc.job()!.drafts).toHaveLength(4);   // the others can still be opened from the chip
+    expect(svc.viewing()).toBe(false);
+  });
+
+  it('one case sheet with a warning also waits, so the warning is seen', async () => {
+    api.script = [{ status: 'done', formId: 'f1', checkCount: 0, drafts: [made('f1', 'CNS', ['Pages 10–14 could not be read (Cortex took too long on them). Add those questions in Studio.'])] }];
+    await svc.start({ files: [png()], departmentKey: 'ent' });
+    await tick(0);
+    expect(nav).not.toHaveBeenCalled();
+    expect(svc.job()!.drafts![0].warnings[0]).toContain('Pages 10–14');
   });
 
   it('only one job at a time', async () => {

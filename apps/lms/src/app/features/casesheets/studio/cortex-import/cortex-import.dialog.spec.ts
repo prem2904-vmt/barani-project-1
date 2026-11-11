@@ -172,6 +172,45 @@ describe('Cortex import dialog', () => {
     svc.dismiss();
   });
 
+  it('a long sheet shows the server\'s progress words and a bar while it reads in parts', async () => {
+    const { f, dlg, q, svc } = await open([DEPTS[0]]);
+    vi.spyOn(api, 'draftJob').mockResolvedValue({ status: 'reading', progress: { text: 'Found 4 case sheets. Reading part 3 of 9.', done: 2, total: 9, sheets: 4 } });
+    dlg.addFiles([pic('booklet.pdf', 'application/pdf')]);
+    await settle(f);
+    q<HTMLButtonElement>('[data-act="read"]')!.click();
+    await vi.waitFor(async () => { await settle(f); expect(q('[data-progress]')).not.toBeNull(); }, { timeout: 5000 });
+    expect(q('[data-progress]')!.textContent).toContain('Reading part 3 of 9');
+    expect(q('[role="progressbar"]')!.getAttribute('aria-valuenow')).toBe('2');
+    expect(q('.ci-sub')!.textContent).toContain('a few pages at a time');
+    svc.dismiss();
+  });
+
+  it('several case sheets made: the dialog lists them with their warnings, and each opens in Studio', async () => {
+    const { f, dlg, q, el, svc } = await open([DEPTS[0]]);
+    const m = (id: string, title: string, from: number, to: number, warnings: string[] = []) => ({ formId: id, title, departmentKey: 'ent', departmentName: 'ENT', fromPage: from, toPage: to, checkCount: 2, warnings });
+    vi.spyOn(api, 'draftJob').mockResolvedValue({
+      status: 'done', formId: 'g', checkCount: 2,
+      drafts: [m('g', 'Gastrointestinal system', 1, 9), m('c', 'CNS', 10, 20, ['Pages 10–14 could not be read (Cortex took too long on them). Add those questions in Studio.']), m('r', 'Respiratory system', 21, 29), m('v', 'CVS', 30, 38)],
+      warnings: ['Page 1 had no questions (a cover or an index), so Cortex left it out.'],
+    });
+    const go = vi.spyOn(svc, 'open').mockResolvedValue();
+    dlg.addFiles([pic('booklet.pdf', 'application/pdf')]);
+    await settle(f);
+    q<HTMLButtonElement>('[data-act="read"]')!.click();
+    await vi.waitFor(async () => { await settle(f); expect(q('[data-made]')).not.toBeNull(); }, { timeout: 5000 });
+    expect(q('#ci-title')!.textContent).toBe('Cortex made 4 case sheets');
+    expect(q('.ci-sub')!.textContent).toContain('4 case sheets made: Gastrointestinal system, CNS, Respiratory system, CVS');
+    expect(el.querySelectorAll('[data-sheet]')).toHaveLength(4);
+    expect(q('[data-sheet="c"]')!.textContent).toContain('Pages 10–20 · ENT · 2 to check');
+    expect(q('[data-sheet="c"] [data-sheet-warning]')!.textContent).toContain('Pages 10–14 could not be read');
+    expect(q('[data-job-warning]')!.textContent).toContain('Page 1 had no questions');
+    expect(el.textContent).not.toMatch(/\bform\b/i);
+    expect(el.textContent).not.toMatch(/\bAI\b/);
+    q<HTMLButtonElement>('[data-sheet="r"] [data-act="open-sheet"]')!.click();
+    expect(go).toHaveBeenCalledWith('r');
+    svc.dismiss();
+  });
+
   describe('no departments yet', () => {
     it('a case sheet builder adds the first department right there, and it is picked for them', async () => {
       const { f, dlg, q, el, api } = await open([]);

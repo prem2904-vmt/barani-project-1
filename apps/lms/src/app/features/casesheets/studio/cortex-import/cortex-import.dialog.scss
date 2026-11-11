@@ -312,3 +312,124 @@
     font-size: 16px;
   }
 }
+
+/* ---- reading in parts ---- */
+.ci-progress {
+  padding: 4px 20px 4px 54px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ci-progress__t {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+.ci-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  overflow: hidden;
+}
+.ci-bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent-primary, #7c5cff);
+  transition: width 0.4s ease;
+}
+
+/* ---- what was made ---- */
+.ci-made {
+  gap: 12px;
+}
+.ci-sheets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ci-sheet {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 12px;
+  background: var(--bg-input, color-mix(in srgb, var(--text-primary) 5%, transparent));
+  border: 1px solid var(--glass-border);
+}
+.ci-sheet__ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 2px;
+  border-radius: 9px;
+  color: var(--accent-primary, #7c5cff);
+  background: color-mix(in srgb, var(--accent-primary, #7c5cff) 12%, transparent);
+}
+.ci-sheet__t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ci-sheet__n {
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.ci-sheet__m {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-tertiary);
+}
+.ci-sheet__go {
+  flex: none;
+  min-height: 44px;
+  align-self: center;
+}
+.ci-warn {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);   // readable in both themes; the icon carries the warning colour
+  pf-icon {
+    flex: none;
+    margin-top: 2px;
+    color: var(--warning-text, #d97706);
+  }
+}
+.ci-warn--job {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  background: var(--warning-bg, rgba(245, 158, 11, 0.15));
+  border: 1px solid var(--warning-border, rgba(245, 158, 11, 0.3));
+}
+.ci-note--flush {
+  padding: 0;
+}
+@media (max-width: 640px) {
+  .ci-progress {
+    padding-left: 20px;
+  }
+  .ci-sheet {
+    flex-wrap: wrap;
+  }
+  .ci-sheet__go {
+    width: 100%;
+    justify-content: center;
+  }
+}
