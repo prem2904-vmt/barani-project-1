@@ -28,6 +28,15 @@ export interface AiConnectorState {
   privacyLevel?: AiPrivacyLevel;
   /** Connected assistants may suggest Test Master changes (they wait for a person to approve). Absent (older server) = off. */
   proposals?: boolean;
+  /** The lab's "let connected apps build case sheets" switch. Absent (older server) = off. */
+  caseSheetBuild?: boolean;
+  /** Offer the per-app grant "Can suggest Test Master and case sheet changes" (= proposals || caseSheetBuild). */
+  offerAppGrant?: boolean;
+}
+
+/** Offer the ONE per-app grant: the server's `offerAppGrant`, or (older server) either switch. */
+export function offersAppGrant(s: AiConnectorState | null | undefined): boolean {
+  return !!s && (s.offerAppGrant === true || s.proposals === true || s.caseSheetBuild === true);
 }
 
 /** One app the signed-in person allowed to suggest Test Master changes (their own list only). */

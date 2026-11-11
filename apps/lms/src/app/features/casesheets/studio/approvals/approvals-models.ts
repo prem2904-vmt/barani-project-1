@@ -82,6 +82,14 @@ export interface OfferView {
   youHaveADraft: boolean;
   headline: string | null;
   changes: DiffChange[];
+  /** GET master-offers/{id} (and accept / dismiss): your copy's newest version vs Prefrontal's new version, for the before / after. */
+  detail: OfferDetail | null;
+}
+
+export interface OfferDetail {
+  /** The copy's newest version: what taking Prefrontal's version would replace. */
+  yours: ProposalCurrent | null;
+  master: ProposalCurrent | null;
 }
 
 /** A refusal from the approvals endpoints: `code` is the problem+json code, `message` plain words. */
@@ -152,12 +160,18 @@ function headline(v: unknown): string | null {
 
 const definition = (v: unknown): FormDefinition | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as FormDefinition) : null);
 
+function toCurrent(v: unknown): ProposalCurrent | null {
+  if (!v || typeof v !== 'object') return null;
+  const c = obj(v);
+  return { versionId: str(c['versionId']), versionNo: num(c['versionNo']), state: str(c['state']), definition: definition(c['definition']) };
+}
+
 export function toDetail(v: unknown): ProposalDetail | null {
   if (!v || typeof v !== 'object') return null;
   const d = obj(v);
   const c = d['current'] && typeof d['current'] === 'object' ? obj(d['current']) : null;
   return {
-    current: c ? { versionId: str(c['versionId']), versionNo: num(c['versionNo']), state: str(c['state']), definition: definition(c['definition']) } : null,
+    current: c ? toCurrent(c) : null,
     proposed: definition(d['proposed']) ?? ({ pages: [] } as unknown as FormDefinition),
     headline: headline(d['changeSummary']),
     changes: arr(d['changes']).map(toChange).filter((x) => x.words),
@@ -227,6 +241,7 @@ export function toOffer(v: unknown): OfferView {
     youHaveADraft: o['youHaveADraft'] === true,
     headline: headline(o['changeSummary']),
     changes: arr(o['changes']).map(toChange).filter((x) => x.words),
+    detail: o['detail'] && typeof o['detail'] === 'object' ? { yours: toCurrent(obj(o['detail'])['yours']), master: toCurrent(obj(o['detail'])['master']) } : null,
   };
 }
 

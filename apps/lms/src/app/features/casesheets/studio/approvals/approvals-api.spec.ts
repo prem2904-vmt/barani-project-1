@@ -7,7 +7,7 @@ import {
   ApprovalError, approvalWords, failedWords, groupChanges, kindLabel, openTotal, sourceLine, statusTone, toOffer, toPage, toProposal, waitingWords,
 } from './approvals-models';
 import { changedKeys } from './sheet-render.component';
-import { WIRE_PROPOSAL } from './approvals-testing';
+import { WIRE_OFFER_FULL, WIRE_PROPOSAL } from './approvals-testing';
 
 const base = () => environment.apiUrl.replace(/\/+$/, '');
 
@@ -150,6 +150,28 @@ describe('CaseSheetApprovalsApi', () => {
     const d = svc.dismissOffer('o1');
     http.expectOne(`${base()}/api/casesheets/master-offers/o1/dismiss`).flush({ id: 'o1', status: 'dismissed' });
     expect((await d).status).toBe('dismissed');
+  });
+
+  it('GET master-offers/{id} maps both definitions; the list keeps detail null', async () => {
+    const one = svc.offer('o 1');
+    http.expectOne(`${base()}/api/casesheets/master-offers/o%201`).flush(WIRE_OFFER_FULL);
+    const o = await one;
+    expect(o.detail!.yours!.versionNo).toBe(3);
+    expect(o.detail!.master!.definition!.pages[0].fields).toHaveLength(2);
+    const l = svc.offers();
+    http.expectOne(`${base()}/api/casesheets/master-offers`).flush({ items: [{ ...WIRE_OFFER_FULL, detail: null }] });
+    expect((await l)[0].detail).toBeNull();
+    const a = svc.acceptOffer('o1');
+    http.expectOne(`${base()}/api/casesheets/master-offers/o1/accept`).flush({ ...WIRE_OFFER_FULL, status: 'accepted' });
+    expect((await a).detail!.master!.versionNo).toBe(5);
+  });
+
+  it('a proposal action answers with the whole suggestion, detail included', async () => {
+    const p = svc.reReview('p1');
+    http.expectOne(`${base()}/api/casesheets/proposals/p1/re-review`).flush({ ...WIRE_PROPOSAL, status: 'pending' });
+    const r = await p;
+    expect(r.detail!.current!.versionNo).toBe(3);
+    expect(r.detail!.changes.length).toBeGreaterThan(0);
   });
 
   it.each([

@@ -291,33 +291,39 @@
     }
 
     @case ('offer') {
-      <div class="pf-body pf-body--split pd-split">
+      <div class="pf-body pf-body--split pd-split" [attr.data-pane]="wide() ? null : pane()">
+        @if (!wide()) {
+          <pf-segmented class="pd-panes" ariaLabel="Show" [options]="panes" [value]="pane()" (valueChange)="pane.set($event)" />
+        }
+        <!-- MAIN: your copy next to Prefrontal's new version, drawn by the real forms engine -->
+        @if (wide() || pane() === 'compare') {
         <section class="pf-card main pd-compare" aria-labelledby="pd-oc">
           <header class="pf-card__head">
             <span class="pf-card__icon"><pf-icon name="columns" [size]="16" /></span>
-            <span class="pf-card__label" role="heading" aria-level="2" id="pd-oc">What is different</span>
-            @if (shownOffer(); as o) { <span class="pf-card__count">your copy → Prefrontal’s version {{ o.masterVersionNo }}</span> }
+            <span class="pf-card__label" role="heading" aria-level="2" id="pd-oc">Before and after</span>
+            <span class="pf-card__note pd-try">Tap an answer to see its follow-ups. Nothing is saved.</span>
           </header>
           <div class="pf-card__body">
             @if (shownOffer(); as o) {
-              @if (o.headline) { <p class="pd-headline" data-headline>{{ o.headline }}</p> }
-              @for (g of offerGroups(); track g.title) {
-                <section class="pd-grp pd-grp--wide">
-                  <h3 class="pd-grp__t">{{ g.title }}</h3>
-                  <ul class="pd-changes pd-changes--wide" role="list">
-                    @for (c of g.changes; track $index) {
-                      <li [attr.data-type]="c.type"><span class="pd-dot" [attr.data-type]="c.type" aria-hidden="true"></span>
-                        <span class="pd-ch__w">{{ c.words }}</span>
-                        <span class="pd-ch__was">@if (c.before) { <span class="pd-k">Yours:</span> {{ c.before }} }</span>
-                        <span class="pd-ch__now">@if (c.after) { <span class="pd-k">Prefrontal’s:</span> {{ c.after }} }</span>
-                      </li>
-                    }
-                  </ul>
-                </section>
-              } @empty {
-                <p class="pd-intro">The wording is the same; only small settings changed.</p>
+              @if (offerMaster(); as m) {
+                <div class="pd-cols" [class.pd-cols--one]="!offerYours()">
+                  @if (offerYours(); as y) {
+                    <div class="pd-col" data-side="yours">
+                      <h3 class="pd-col__h">Your copy <span class="pd-col__k">version {{ o.detail!.yours!.versionNo }}</span></h3>
+                      <st-sheet-render [definition]="y" [answers]="answers()" [setValue]="setAnswer" side="before" [marked]="offerMarkedYours()" />
+                    </div>
+                  }
+                  <div class="pd-col" data-side="master">
+                    <h3 class="pd-col__h">Prefrontal’s <span class="pd-col__k">version {{ o.masterVersionNo }}</span></h3>
+                    <st-sheet-render [definition]="m" [answers]="answers()" [setValue]="setAnswer" side="after" [marked]="offerMarkedMaster()" />
+                  </div>
+                </div>
+              } @else if (offerLoading()) {
+                <pf-skeleton-rows [rows]="5" label="Loading the case sheets" />
+              } @else {
+                <p class="pd-intro" data-no-detail>The two versions can’t be shown side by side right now. The differences are listed beside this.</p>
               }
-            } @else if (offers() === null) {
+            } @else if (offers() === null || offerLoading()) {
               <pf-skeleton-rows [rows]="4" label="Loading the update" />
             } @else {
               <div class="pf-empty pf-empty--compact" data-empty="offer"><h2 class="pf-empty__title">This update is no longer waiting</h2>
@@ -325,6 +331,8 @@
             }
           </div>
         </section>
+        }
+        @if (wide() || pane() === 'review') {
         <aside class="pf-card side pd-review" aria-labelledby="pd-or">
           <header class="pf-card__head">
             <span class="pf-card__icon"><pf-icon name="download" [size]="16" /></span>
@@ -351,6 +359,31 @@
                 }
                 <p class="pd-explain">Taking Prefrontal’s version publishes it as your copy’s new live version. Keeping yours leaves your copy as it is.</p>
               }
+              <section class="pd-sec" aria-labelledby="pd-odiff">
+                <h4 class="pd-sec__h" id="pd-odiff">What is different</h4>
+                @if (o.headline) { <p class="pd-headline" data-headline>{{ o.headline }}</p> }
+                @for (g of offerGroups(); track g.title) {
+                  <div class="pd-grp">
+                    <span class="pd-grp__t">{{ g.title }}</span>
+                    <ul class="pd-changes" role="list">
+                      @for (c of g.changes; track $index) {
+                        <li [attr.data-type]="c.type"><span class="pd-dot" [attr.data-type]="c.type" aria-hidden="true"></span>
+                          <span><span class="pd-ch__w">{{ c.words }}</span>
+                            @if (c.before || c.after) {
+                              <span class="pd-ch__ba">@if (c.before) { <span class="pd-k">Yours:</span> {{ c.before }} }@if (c.before && c.after) { <br /> }@if (c.after) { <span class="pd-k">Prefrontal’s:</span> {{ c.after }} }</span>
+                            }
+                          </span>
+                        </li>
+                      }
+                    </ul>
+                  </div>
+                } @empty {
+                  <p class="pd-explain">The wording is the same; only small settings changed.</p>
+                }
+              </section>
+            } @else if (!wide() && offers() !== null && !offerLoading()) {
+              <div class="pf-empty pf-empty--compact" data-empty="offer"><h2 class="pf-empty__title">This update is no longer waiting</h2>
+                <button type="button" class="pf-btn pf-btn--secondary" (click)="toList()">Back to the list</button></div>
             }
           </div>
           @if (shownOffer(); as o) {
@@ -367,6 +400,7 @@
             }
           }
         </aside>
+        }
       </div>
     }
   }

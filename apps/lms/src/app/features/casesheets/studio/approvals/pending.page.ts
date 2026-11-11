@@ -129,8 +129,14 @@ export class StudioPendingPage {
   });
 
   protected readonly theOffer = computed(() => (this.offers() ?? []).find((o) => o.id === this.offer()) ?? null);
-  protected readonly offerGroups = computed(() => groupChanges(this.theOffer()?.changes ?? []));
+  /** GET master-offers/{id}: the update with both definitions (yours / Prefrontal's) for the before / after. */
+  protected readonly offerFull = signal<OfferView | null>(null);
+  protected readonly offerLoading = signal(false);
   protected readonly offerDecided = signal<OfferView | null>(null);
+  protected readonly offerYours = computed(() => this.shownOffer()?.detail?.yours?.definition ?? null);
+  protected readonly offerMaster = computed(() => this.shownOffer()?.detail?.master?.definition ?? null);
+  protected readonly offerMarkedYours = computed(() => changedKeys(this.shownOffer()?.changes ?? [], 'before'));
+  protected readonly offerMarkedMaster = computed(() => changedKeys(this.shownOffer()?.changes ?? [], 'after'));
 
   protected readonly backFn = () => this.toList();
 
@@ -157,7 +163,11 @@ export class StudioPendingPage {
       untracked(() => {
         this.actionError.set('');
         this.offerDecided.set(null);
+        this.offerFull.set(null);
+        this.answers.set({});
+        this.pane.set('review');
         if (o && this.offers() === null) void this.loadOffers();
+        if (o) void this.loadOffer(o);
       });
     });
   }
@@ -174,6 +184,18 @@ export class StudioPendingPage {
     } catch (e) {
       this.items.set(this.items() ?? []);
       this.listError.set(approvalWords(e, 'Can’t load the suggestions right now.'));
+    }
+  }
+
+  private async loadOffer(id: string): Promise<void> {
+    this.offerLoading.set(true);
+    try {
+      const o = await this.api.offer(id);
+      if (this.offer() === id) this.offerFull.set(o);
+    } catch {
+      /* gone / another lab's: the list decides what shows ("no longer waiting") */
+    } finally {
+      if (this.offer() === id) this.offerLoading.set(false);
     }
   }
 
@@ -218,10 +240,12 @@ export class StudioPendingPage {
 
   // ---------------- one suggestion ----------------
 
-  private async after_(p: ProposalView, done: string): Promise<void> {
+  /** Every action answers with the whole suggestion, detail included: show it as it stands now (read again only if an older server left the detail out). */
+  private async after_(p: ProposalView, done: string, r: ProposalView): Promise<void> {
     this.toasts.success(done);
-    // the decision response has no before / after: read the suggestion again so the screen shows where it stands now
-    await this.loadDetail(p.id);
+    if (r.detail && r.id === p.id) {
+      if (this.id() === p.id) this.detail.set(r);
+    } else await this.loadDetail(p.id);
     void this.count.refresh();
     void this.loadList();
   }
@@ -249,8 +273,8 @@ export class StudioPendingPage {
     this.busy.set('approve');
     this.actionError.set('');
     try {
-      await this.api.approve(p.id);
-      await this.after_(p, `Published “${p.title}”`);
+      const r = await this.api.approve(p.id);
+      await this.after_(p, `Published “${p.title}”`, r);
     } catch (e) {
       this.actionError.set(approvalWords(e, 'Couldn’t publish it just now. Please try again.'));
       // stale (changed since) or failed: the row moved — show where it stands now
@@ -279,8 +303,8 @@ export class StudioPendingPage {
     this.busy.set('reject');
     this.actionError.set('');
     try {
-      await this.api.reject(p.id, note);
-      await this.after_(p, 'Suggestion rejected');
+      const r = await this.api.reject(p.id, note);
+      await this.after_(p, 'Suggestion rejected', r);
     } catch (e) {
       this.actionError.set(approvalWords(e));
       if (errorCode(e) === 'not_pending') await this.loadDetail(p.id);
@@ -296,8 +320,8 @@ export class StudioPendingPage {
     this.busy.set('rereview');
     this.actionError.set('');
     try {
-      await this.api.reReview(p.id);
-      await this.after_(p, 'Now compared with today’s version');
+      const r = await this.api.reReview(p.id);
+      await this.after_(p, 'Now compared with today’s version', r);
     } catch (e) {
       this.actionError.set(approvalWords(e));
     } finally {
@@ -320,8 +344,8 @@ export class StudioPendingPage {
     this.busy.set('withdraw');
     this.actionError.set('');
     try {
-      await this.api.withdraw(p.id);
-      await this.after_(p, 'Suggestion taken back');
+      const r = await this.api.withdraw(p.id);
+      await this.after_(p, 'Suggestion taken back', r);
     } catch (e) {
       this.actionError.set(approvalWords(e));
     } finally {
@@ -332,8 +356,8 @@ export class StudioPendingPage {
   // ---------------- one update from Prefrontal ----------------
 
   async acceptOffer(): Promise<void> {
-    const o = this.theOffer();
-    if (!o || this.busy()) return;
+    const o = this.shownOffer();
+    if (!o || o.status !== 'pending' || this.busy()) return;
     const ok = await this.dialog.confirm({
       title: 'Take Prefrontal’s version?',
       message: `Your copy of “${o.title}” publishes Prefrontal’s version ${o.masterVersionNo} straight away as its new live version. Your earlier versions stay in Version history.`,
@@ -345,7 +369,7 @@ export class StudioPendingPage {
     this.actionError.set('');
     try {
       const r = await this.api.acceptOffer(o.id);
-      this.offerDecided.set({ ...o, ...r, changes: o.changes, headline: o.headline });
+      this.offerDecided.set(this.merged(o, r));
       this.toasts.success(`Your copy of “${o.title}” now has Prefrontal’s version`);
       await this.loadOffers();
     } catch (e) {
@@ -357,8 +381,8 @@ export class StudioPendingPage {
   }
 
   async keepMine(): Promise<void> {
-    const o = this.theOffer();
-    if (!o || this.busy()) return;
+    const o = this.shownOffer();
+    if (!o || o.status !== 'pending' || this.busy()) return;
     const ok = await this.dialog.confirm({
       title: 'Keep your version?',
       message: `Your copy of “${o.title}” stays as it is. Prefrontal’s version ${o.masterVersionNo} won’t be offered again; a later version will be.`,
@@ -370,7 +394,7 @@ export class StudioPendingPage {
     this.actionError.set('');
     try {
       const r = await this.api.dismissOffer(o.id);
-      this.offerDecided.set({ ...o, ...r, changes: o.changes, headline: o.headline });
+      this.offerDecided.set(this.merged(o, r));
       this.toasts.success('Kept your version');
       await this.loadOffers();
     } catch (e) {
@@ -382,7 +406,20 @@ export class StudioPendingPage {
   }
 
   /** The offer on screen: the live one, or the one just decided (it leaves the pending list). */
-  protected readonly shownOffer = computed(() => this.theOffer() ?? (this.offerDecided()?.id === this.offer() ? this.offerDecided() : null));
+  protected readonly shownOffer = computed<OfferView | null>(() => {
+    const id = this.offer();
+    const decided = this.offerDecided();
+    if (decided && decided.id === id) return decided;
+    const full = this.offerFull();
+    if (full && full.id === id && full.status === 'pending') return full;
+    return this.theOffer();
+  });
+  protected readonly offerGroups = computed(() => groupChanges(this.shownOffer()?.changes ?? []));
+
+  /** The decision's answer, keeping what it may leave out (the differences, the before / after). */
+  private merged(o: OfferView, r: OfferView): OfferView {
+    return { ...o, ...r, changes: r.changes.length ? r.changes : o.changes, headline: r.headline ?? o.headline, detail: r.detail ?? o.detail };
+  }
 
   protected offerLine(o: OfferView): string {
     const yours = o.yourBasisVersionNo ? `Your copy started from version ${o.yourBasisVersionNo}` : 'Your own copy';

@@ -1,6 +1,5 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BuilderStatusService, CORTEX_BUILDER_ON } from '../casesheets/studio/builder/builder-status.service';
 import { ActivatedRoute, Router, RouterStateSnapshot, UrlTree, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -39,8 +38,6 @@ function setup(opts: {
   deny?: () => Promise<unknown>;
   putGrant?: () => ReturnType<AiConnectorApi['putGrant']>;
   deleteGrant?: () => ReturnType<AiConnectorApi['deleteGrant']>;
-  /** The case-sheet builder beta's lab switch "let connected apps build case sheets" (undefined = beta off). */
-  caseSheetSwitch?: boolean;
 } = {}) {
   const client = {
     getDetails: vi.fn(opts.details ?? (async () => DETAILS)),
@@ -69,8 +66,6 @@ function setup(opts: {
       { provide: AuthService, useValue: { user: () => ({ id: 'u1', displayName: 'Priya Raman', tenantName: 'Micro World' }) } },
       { provide: TenantStateService, useValue: { tenant: signal({ name: 'Micro World' }) } },
       { provide: NavBackService, useValue: { showBack: () => false, back: vi.fn() } },
-      { provide: CORTEX_BUILDER_ON, useValue: () => opts.caseSheetSwitch !== undefined },
-      { provide: BuilderStatusService, useValue: { load: vi.fn(async () => undefined), status: signal(opts.caseSheetSwitch === undefined ? null : { cortex: true, connector: opts.caseSheetSwitch, connectorSwitch: opts.caseSheetSwitch, canChangeSwitch: true }) } },
       { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(id === null ? {} : { authorization_id: id }) } } },
     ],
   });
@@ -208,12 +203,12 @@ describe('OAuthConsentPage', () => {
     expect(b.getAttribute('aria-checked')).toBe('false');
   });
 
-  it('the SAME box shows when only the case sheet switch is on (one grant covers Test Master and case sheets)', async () => {
-    const on = setup({ connector: () => of({ ...ON, proposals: false }), caseSheetSwitch: true });
+  it('the SAME box shows when the server says offerAppGrant (only the case sheet switch on): one grant covers both', async () => {
+    const on = setup({ connector: () => of({ ...ON, proposals: false, caseSheetBuild: true, offerAppGrant: true }) });
     await settle(on.f);
     expect(box(on.f)).not.toBeNull();
     expect(on.f.nativeElement.textContent).toContain('Also let this app suggest Test Master and case sheet changes');
-    const off = setup({ connector: () => of({ ...ON, proposals: false }), caseSheetSwitch: false });
+    const off = setup({ connector: () => of({ ...ON, proposals: false, caseSheetBuild: false, offerAppGrant: false }) });
     await settle(off.f);
     expect(box(off.f)).toBeNull();
   });

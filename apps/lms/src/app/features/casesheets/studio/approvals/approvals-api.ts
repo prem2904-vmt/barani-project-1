@@ -22,6 +22,9 @@ export function mapApprovalError(e: unknown): unknown {
 const enc = encodeURIComponent;
 
 /**
+ * Every proposal action (approve / reject / re-review / withdraw / submit) answers with the full `GET proposals/{id}` shape,
+ * detail included, so the screen never has to read it again.
+ *
  * The case-sheet approvals endpoints (raw JSON, like the rest of /api/casesheets). One call per action, ONE suggestion at a time:
  * there is no bulk method here because the server has no bulk route (owner rule, same as Test Master).
  */
@@ -75,6 +78,11 @@ export class CaseSheetApprovalsApi {
 
   async offers(): Promise<OfferView[]> {
     return toOffers(await this.call(this.http.get(api('/api/casesheets/master-offers'))));
+  }
+
+  /** One update with `detail: { yours, master }` (both definitions) for the before / after. */
+  async offer(id: string): Promise<OfferView> {
+    return toOffer(await this.call(this.http.get(api(`/api/casesheets/master-offers/${enc(id)}`))));
   }
 
   /** "Take Prefrontal's version": the copy publishes the master's version (history kept). */

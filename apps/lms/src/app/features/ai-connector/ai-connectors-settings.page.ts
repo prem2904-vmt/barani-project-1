@@ -18,7 +18,7 @@ import { BUILDER_SWITCH_OFF, BUILDER_SWITCH_ON, BUILDER_SWITCH_TITLE, builderWor
 import { BuilderStatusService, CORTEX_BUILDER_ON } from '../casesheets/studio/builder/builder-status.service';
 import {
   AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_NEVER_ITEMS,
-  AI_CONNECTOR_GRANT_LABEL, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_OFF_EFFECT, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_PRIVACY_LEVELS,
+  AI_CONNECTOR_GRANT_LABEL, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_OFF_EFFECT, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_PRIVACY_LEVELS, offersAppGrant,
   AiConnectorApi, AiConnectorGrant, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS, rememberedAppName,
 } from './ai-connector.api';
 
@@ -415,7 +415,7 @@ export class AiConnectorsSettingsPage {
   readonly isAdmin = computed(() => this.auth.hasAnyPermission(AI_CONNECTOR_ADMIN_PERMS));
   /** "Your apps" shows while the lab allows suggestions (Test Master, or case sheets through the builder switch), or while the
    *  person still has an old grant to revoke. ONE per-app grant covers both. */
-  readonly showApps = computed(() => !!this.state()?.proposals || this.builderOn() || this.grants().length > 0);
+  readonly showApps = computed(() => offersAppGrant(this.state()) || this.builderOn() || this.grants().length > 0);
   private readonly picked = signal<AicTab>('settings');
   /** The open section — falls back to Settings when "Your apps" goes away. */
   readonly tab = computed<AicTab>(() => (this.picked() === 'apps' && !this.showApps() ? 'settings' : this.picked()));

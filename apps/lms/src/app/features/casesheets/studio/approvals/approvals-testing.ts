@@ -28,4 +28,14 @@ export const WIRE_OFFER = {
   yourBasisVersionNo: 3, status: 'pending', createdAt: '2026-11-10T09:00:00Z', decidedAt: null, decidedByName: null, youHaveADraft: false,
   changeSummary: { headline: '1 field added' },
   changes: [{ type: 'field_added', pageKey: 'h', pageTitle: 'History', fieldKey: 'smoke', fieldLabel: 'Smoking', what: null, before: null, after: 'Smoking', words: "Added the question 'Smoking'" }],
+  detail: null as unknown,
+};
+
+/** GET master-offers/{id}: the same update with both definitions. */
+export const WIRE_OFFER_FULL = {
+  ...WIRE_OFFER,
+  detail: {
+    yours: { versionId: 'v3', versionNo: 3, state: 'published', definition: { title: 'General medicine', pages: [{ key: 'h', title: 'History', fields: [{ key: 'fever', kind: 'yesno', label: 'Fever' }] }] } },
+    master: { versionId: 'mv5', versionNo: 5, state: 'published', definition: { title: 'General medicine', pages: [{ key: 'h', title: 'History', fields: [{ key: 'fever', kind: 'yesno', label: 'Fever' }, { key: 'smoke', kind: 'yesno', label: 'Smoking' }] }] } },
+  },
 };

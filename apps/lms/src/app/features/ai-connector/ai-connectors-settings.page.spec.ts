@@ -430,6 +430,12 @@ describe('AiConnectorsSettingsPage: apps you have allowed to suggest changes', (
     expect(f.nativeElement.textContent).toContain('Only your own apps are listed.');
   });
 
+  it('"Your apps" shows when the server offers the grant for case sheets only (offerAppGrant)', async () => {
+    const { f } = setup({ state: { ...ON, proposals: false, caseSheetBuild: true, offerAppGrant: true }, grants: [] });
+    await loaded(f);
+    expect(tabBtn(f, 'apps')).not.toBeNull();
+  });
+
   it('each allowed app says what the ONE grant covers: Test Master and case sheet suggestions', async () => {
     const { f } = setup({ state: ON, grants: [G1] });
     await loaded(f);

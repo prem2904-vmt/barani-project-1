@@ -7,7 +7,7 @@ import { DialogService } from '../../../../core/services/dialog.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { CaseSheetApprovalsApi } from './approvals-api';
 import { ApprovalError, OfferView, ProposalView, toOffer, toProposal } from './approvals-models';
-import { WIRE_OFFER, WIRE_PROPOSAL } from './approvals-testing';
+import { WIRE_OFFER, WIRE_OFFER_FULL, WIRE_PROPOSAL } from './approvals-testing';
 import { PendingCountService } from './pending-count.service';
 import { StudioPendingPage } from './pending.page';
 
@@ -19,14 +19,16 @@ function fakeApi(o: { items?: ProposalView[]; one?: ProposalView; offers?: Offer
   return {
     list: vi.fn(async (_o?: unknown) => ({ items: o.items ?? [P()], total: (o.items ?? [P()]).length, counts })),
     get: vi.fn(async (_id: string) => o.one ?? P()),
-    approve: vi.fn(async (_id: string) => P({ status: 'approved', detail: null })),
-    reject: vi.fn(async (_id: string, _n?: string) => P({ status: 'rejected', detail: null })),
-    withdraw: vi.fn(async (_id: string) => P({ status: 'withdrawn', detail: null })),
-    reReview: vi.fn(async (_id: string) => P({ status: 'pending', detail: null })),
+    // every action answers with the whole suggestion, detail included (contract, UI feedback round)
+    approve: vi.fn(async (_id: string) => P({ status: 'approved', appliedFormId: 'f1', decidedByName: 'Priya Raman' })),
+    reject: vi.fn(async (_id: string, _n?: string) => P({ status: 'rejected' })),
+    withdraw: vi.fn(async (_id: string) => P({ status: 'withdrawn' })),
+    reReview: vi.fn(async (_id: string) => P({ status: 'pending' })),
     submit: vi.fn(async (_id: string) => P()),
     offers: vi.fn(async () => o.offers ?? [O()]),
-    acceptOffer: vi.fn(async (_id: string) => O({ status: 'accepted' })),
-    dismissOffer: vi.fn(async (_id: string) => O({ status: 'dismissed' })),
+    offer: vi.fn(async (id: string) => { if (id !== 'o1') throw new ApprovalError('not_found', 'gone', 404); return toOffer({ ...WIRE_OFFER_FULL, ...(o.offers?.[0] ? { youHaveADraft: o.offers[0].youHaveADraft } : {}) }); }),
+    acceptOffer: vi.fn(async (_id: string) => toOffer({ ...WIRE_OFFER_FULL, status: 'accepted' })),
+    dismissOffer: vi.fn(async (_id: string) => toOffer({ ...WIRE_OFFER_FULL, status: 'dismissed' })),
   };
 }
 type Api = ReturnType<typeof fakeApi>;
@@ -170,7 +172,23 @@ describe('Pending changes — one suggestion', () => {
     expect(req.confirmLabel).toBe('Approve and publish');
     expect(api.approve).toHaveBeenCalledWith('p1');
     expect(toasts.success).toHaveBeenCalledWith('Published “ENT case sheet”');
-    expect(api.get).toHaveBeenCalledTimes(2); // read again: it shows where it stands now
+    expect(api.get).toHaveBeenCalledTimes(1); // the approve answer carries the detail: no second read
+  });
+
+  it('after approving, the screen shows the answer it got back (approved, link to the case sheet)', async () => {
+    const { el, click } = await open({ id: 'p1' });
+    await click('[data-act="approve"]');
+    expect(el.querySelector('[data-banner="approved"]')!.textContent).toContain('Approved by Priya Raman');
+    expect(el.querySelector('[data-act="approve"]')).toBeNull();
+    expect(el.querySelector('[data-side="after"]')).not.toBeNull(); // the before / after stays: the detail came back too
+  });
+
+  it('an older server that leaves the detail out: read it again', async () => {
+    const api = fakeApi();
+    api.approve.mockResolvedValueOnce(P({ status: 'approved', detail: null }));
+    const { click } = await open({ id: 'p1' }, { api });
+    await click('[data-act="approve"]');
+    expect(api.get).toHaveBeenCalledTimes(2);
   });
 
   it('cancelling the confirm publishes nothing', async () => {
@@ -204,7 +222,6 @@ describe('Pending changes — one suggestion', () => {
     expect(el.querySelector('[data-banner="stale"]')!.textContent).toContain('Look again');
     expect(el.querySelector('[data-act="approve"]')).toBeNull();
     expect(el.querySelector('[data-act="look-again"]')!.classList).toContain('pf-btn--primary');
-    api.get.mockResolvedValueOnce(P({ status: 'pending' }));
     await click('[data-act="look-again"]');
     expect(api.reReview).toHaveBeenCalledWith('p1');
     expect(toasts.success).toHaveBeenCalledWith('Now compared with today’s version');
@@ -230,7 +247,7 @@ describe('Pending changes — one suggestion', () => {
   it('Reject asks (danger) with an optional note, sends it, and shows the rejected state', async () => {
     const api = fakeApi();
     const { el, dialog, click } = await open({ id: 'p1' }, { api });
-    api.get.mockResolvedValueOnce(P({ status: 'rejected', note: 'Not needed', decidedByName: 'Dr Anand' }));
+    api.reject.mockResolvedValueOnce(P({ status: 'rejected', note: 'Not needed', decidedByName: 'Dr Anand' }));
     await click('[data-act="reject"]');
     expect(dialog.prompt).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', confirmLabel: 'Reject' }));
     expect(api.reject).toHaveBeenCalledWith('p1', 'Not needed');
@@ -273,6 +290,26 @@ describe('Pending changes — one suggestion', () => {
 });
 
 describe('Pending changes — From Prefrontal', () => {
+  it('draws your copy next to Prefrontal’s version with the real forms engine (GET master-offers/{id})', async () => {
+    const { el, api } = await open({ tab: 'prefrontal', offer: 'o1' });
+    expect(api.offer).toHaveBeenCalledWith('o1');
+    const yours = el.querySelector('[data-side="yours"]')!;
+    const master = el.querySelector('[data-side="master"]')!;
+    expect(yours.textContent).toContain('version 3');
+    expect(master.textContent).toContain('version 5');
+    expect(yours.querySelectorAll('fe-field')).toHaveLength(1);
+    expect(master.querySelectorAll('fe-field')).toHaveLength(2);
+    expect(master.querySelector('[data-changed="after"] [data-field="smoke"]')).not.toBeNull();
+  });
+
+  it('without the detail (older server) the differences still show and say why there is no side by side', async () => {
+    const api = fakeApi();
+    api.offer.mockResolvedValueOnce(O());
+    const { el } = await open({ tab: 'prefrontal', offer: 'o1' }, { api });
+    expect(el.querySelector('[data-no-detail]')).not.toBeNull();
+    expect(el.textContent).toContain("Added the question 'Smoking'");
+  });
+
   it('shows the differences and the two choices (one primary: Take Prefrontal’s version)', async () => {
     const { el } = await open({ tab: 'prefrontal', offer: 'o1' });
     expect(el.querySelector('[data-headline]')!.textContent).toContain('1 field added');
