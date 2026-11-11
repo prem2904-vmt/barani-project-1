@@ -4,49 +4,36 @@
   gap: 16px;
 }
 
-// header row: title + subtitle left, "My case sheets" right; wraps on a phone instead of squeezing the title
-.dp__top {
+// with a patient: one quiet line above the card (who the new case sheet is for)
+.dp__for {
   flex: none;
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 10px 16px;
-}
-
-.dp__titles {
-  min-width: 0;
-}
-
-.dp__title {
+  gap: 4px 6px;
   margin: 0;
-  font-size: 22px;
-  line-height: 30px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.dp__sub {
-  margin: 2px 0 0;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 18px;
   color: var(--text-secondary);
 }
 
+.dp__for strong {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 .dp__mine {
-  flex: none;
   text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
 }
 
 .dp__head {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 14px 16px;
+  min-height: 52px;
+  padding: 0 16px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border-muted);
 }
@@ -125,10 +112,10 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
+  min-height: 56px;
+  padding: 10px 14px 10px 13px;
   border: 0;
-  border-left: 4px solid transparent;
-  padding-left: 12px;
+  border-left: 3px solid transparent;
   background: transparent;
   color: var(--text-muted);
   text-align: left;
@@ -160,8 +147,9 @@
 
 .dp__num {
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
+  font-size: 13px;
   border-radius: 999px;
   display: grid;
   place-items: center;
@@ -179,9 +167,9 @@
 }
 
 .dp__name {
-  font-weight: 600;
-  font-size: 16px;
-  line-height: 24px;
+  font-weight: 500;
+  font-size: 14.5px;
+  line-height: 20px;
   color: var(--text-primary);
   transition: color 150ms ease;
 }
@@ -230,10 +218,13 @@
 }
 
 .dp__shead {
+  flex: none;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 24px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  min-height: 52px;
+  padding: 14px 16px;
   background: var(--surface-2);
   border-bottom: 1px solid var(--border-muted);
 }
@@ -244,7 +235,10 @@
   place-items: center;
   width: var(--pf-touch, 48px);
   height: var(--pf-touch, 48px);
-  margin: -8px 0 -8px -12px;
+  align-self: center;
+  width: 40px;
+  height: 40px;
+  margin: -10px -4px -10px -8px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -256,25 +250,27 @@
   background: var(--bg-hover);
 }
 
+// the department's name in the card-header style (uppercase label), the hint quiet beside it
 .dp__shtitle {
-  margin: 0 0 4px;
-  font-size: 24px;
-  line-height: 32px;
-  font-weight: 700;
-  color: var(--text-primary);
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
 }
 
 .dp__shsub {
-  margin: 0;
-  font-size: 16px;
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 
 .dp__gridscroll {
   flex: 1 1 auto;
   min-height: 0;
   overscroll-behavior: contain;
-  padding: 24px;
+  padding: 16px;
 }
 
 .dp__err {
@@ -283,13 +279,16 @@
   font-size: 14px;
 }
 
+// Case sheets: row tiles wide enough for the whole title (never hyphenated: it wraps between words), the app's tile
+// type scale, a small violet icon chip like every card header (owner 2026-11-11: narrow tiles, huge gradient disc,
+// "CNS case profor-ma").
 .dp__grid {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
 }
 
 .dp__cell {
@@ -300,34 +299,27 @@
 .dp__tile {
   width: 100%;
   height: 100%;
-  min-height: 160px;
+  min-height: 64px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 12px;
-  padding: 24px;
+  padding: 12px 48px 12px 14px;
   border-radius: 12px;
-  border: 1px solid transparent;
-  // legacy tiles sit a shade off the card (card-bg 40% over the card); Prepare's card is opaque, so tint it
-  background: color-mix(in srgb, var(--color-primary) 5%, var(--pf-card-bg, var(--card-bg)));
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  border: 1px solid var(--pf-line, var(--border-muted));
+  background: var(--pf-card-bg, var(--card-bg));
   color: var(--text-primary);
   font: inherit;
+  text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition:
-    transform 200ms ease,
-    box-shadow 200ms ease,
-    border-color 200ms ease,
-    background-color 200ms ease;
+    border-color 150ms ease,
+    background-color 150ms ease;
 }
 
 .dp__tile:hover:not(:disabled) {
-  transform: scale(1.05);
-  border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
   background: var(--bg-hover);
-  box-shadow: var(--shadow-lg);
 }
 
 .dp__tile:hover:not(:disabled) .dp__tname {
@@ -335,7 +327,7 @@
 }
 
 .dp__tile:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: translateY(1px);
 }
 
 .dp__tile:focus-visible {
@@ -353,25 +345,27 @@
 }
 
 .dp__disc {
-  width: 64px;
-  height: 64px;
-  border-radius: 999px;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
-  background: var(--gradient-primary, linear-gradient(135deg, #7c3aed, #ec4899));
-  color: #fff;
-  font-size: 24px;
-  font-weight: 700;
+  background: var(--bg-active, var(--bg-hover));
+  color: var(--violet-text, var(--color-primary));
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .dp__tname {
-  font-size: 18px;
-  line-height: 24px;
-  font-weight: 600;
-  text-align: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14.5px;
+  line-height: 20px;
+  font-weight: 500;
   overflow-wrap: break-word;
-  hyphens: auto;
-  max-width: 100%;
+  word-break: normal;
+  hyphens: none;
   transition: color 150ms ease;
 }
 
@@ -382,8 +376,9 @@
 
 .dp__star {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
   z-index: 1;
   display: grid;
   place-items: center;
@@ -422,12 +417,12 @@
 
 .dp__noneicon {
   color: var(--text-muted);
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .dp__nonetitle {
-  margin: 0 0 8px;
-  font-size: 20px;
+  margin: 0 0 4px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -444,18 +439,8 @@
   .dp--picked .dp__sheets {
     display: flex;
   }
-  .dp__shead {
-    padding: 16px;
-  }
   .dp__gridscroll {
-    padding: 16px;
-  }
-  .dp__tile {
-    min-height: 148px;
-    padding: 20px 12px;
-  }
-  .dp__tname {
-    font-size: 16px;
+    padding: 12px;
   }
 }
 
@@ -471,10 +456,6 @@
   .dp__back {
     display: none;
   }
-  // legacy 3 / 4 columns, but never narrower than a readable tile (a narrow pane gets fewer columns)
-  .dp__grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  }
 }
 
 @media (min-width: 1024px) {
@@ -486,7 +467,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dp__tile,
-  .dp__tile:hover:not(:disabled) {
+  .dp__tile:active:not(:disabled) {
     transform: none;
     transition: none;
   }

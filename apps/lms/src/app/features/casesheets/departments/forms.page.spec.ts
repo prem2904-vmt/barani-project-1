@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
@@ -157,15 +159,28 @@ describe('Prepare home', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
-  it('header row: "Prepare", the subtitle and "My case sheets" as a secondary button; no stray "Case sheets" subtitle', async () => {
+  it('ND header (owner 2026-11-11 "too zoomed"): no big page heading; "My case sheets" is a band action; an sr-only title', async () => {
     const { el, q } = await open({ seed: (a) => { depts(a); a.addForm('f1', def('Nose history'), 'nose', 'ent'); } });
-    expect(q('.dp__title')!.textContent!.trim()).toBe('Prepare');
-    expect(q('[data-sub]')!.textContent).toContain('Pick a department and a case sheet to start');
-    const mine = q('[data-my-sheets]')!;
-    expect(mine.classList.contains('pf-btn--secondary')).toBe(true);
+    const h1 = q('h1#dp-h')!;
+    expect(h1.textContent!.trim()).toBe('Prepare');
+    expect(h1.classList.contains('sr-only')).toBe(true);
+    expect(q('[data-sub]')!.classList.contains('sr-only')).toBe(true);
+    expect(el.querySelector('.dp__top, .dp__title')).toBeNull();
+    const mine = q('pf-hero-band .pf-hb__actions [data-my-sheets]')!;
+    expect(mine.classList.contains('pf-hb-btn--ghost')).toBe(true);
     expect(mine.textContent).toContain('My case sheets');
-    expect(el.querySelector('.dp__sub')!.textContent!.trim()).not.toBe('Case sheets');
     expect(el.querySelector('pf-hero-band')).not.toBeNull();
+  });
+
+  it('case-sheet tiles: the whole title, a small icon chip, no hyphenation; headers at the card scale', () => {
+    const scss = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/departments/forms.page.scss'), 'utf8');
+    expect(scss).toMatch(/\.dp__tname\s*\{[^}]*word-break:\s*normal[^}]*hyphens:\s*none/);
+    expect(scss).not.toMatch(/hyphens:\s*auto/);
+    expect(scss).toMatch(/\.dp__grid\s*\{[^}]*minmax\(min\(100%, 260px\), 1fr\)/);
+    expect(scss).toMatch(/\.dp__disc\s*\{[^}]*width:\s*32px[^}]*background:\s*var\(--bg-active/);
+    expect(scss).not.toMatch(/\.dp__disc\s*\{[^}]*gradient/);
+    expect(scss).toMatch(/\.dp__shtitle\s*\{[^}]*font-size:\s*12px[^}]*text-transform:\s*uppercase/);
+    expect(scss).not.toMatch(/scale\(1\.05\)/);
   });
 
   it('no departments + builder permission: one empty state with "Add departments" to the new page', async () => {

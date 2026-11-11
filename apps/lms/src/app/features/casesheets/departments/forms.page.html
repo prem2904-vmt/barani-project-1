@@ -1,4 +1,5 @@
-<!-- Prepare home: the band (back + search), a header row (title, subtitle, "My case sheets"), then one card:
+<!-- Prepare home (ND, owner 2026-11-11 "too zoomed"): the band (back + search; "My case sheets" in its action slot), then one
+     card at the app's type scale:
      departments on the left (numbered, "N case sheets"), the open department's case sheets on the right (initial disc,
      name, star). Wide screens open the first department by itself; phones show the list, then the department with a
      back arrow. -->
@@ -10,23 +11,21 @@
     placeholder="Search departments and case sheets"
     [value]="query()"
     (valueChange)="onSearch($event)"
-  ></pf-hero-band>
+  >
+    @if (fromPrepare) {
+    <a band-actions class="pf-hb-btn pf-hb-btn--ghost dp__mine" routerLink="/prepare/cases" data-my-sheets>
+      <pf-icon name="cases" [size]="16" /> My case sheets
+    </a>
+    }
+  </pf-hero-band>
   <div class="pf-body dp__body">
-    <header class="dp__top">
-      <div class="dp__titles">
-        <h1 class="dp__title" id="dp-h">{{ patient() ? 'New case sheet' : 'Prepare' }}</h1>
-        @if (patient(); as p) {
-        <p class="dp__sub" data-patient>Case sheet for {{ p.name }}@if (p.meta) { · {{ p.meta }} }</p>
-        } @else {
-        <p class="dp__sub" data-sub>Pick a department and a case sheet to start</p>
-        }
-      </div>
-      @if (fromPrepare) {
-      <a class="pf-btn pf-btn--secondary dp__mine" routerLink="/prepare/cases" data-my-sheets>
-        <pf-icon name="cases" [size]="18" /> My case sheets
-      </a>
-      }
-    </header>
+    <!-- the band + the card say where you are: the page title is for screen readers only -->
+    <h1 class="sr-only" id="dp-h">{{ patient() ? 'New case sheet' : 'Prepare' }}</h1>
+    @if (patient(); as p) {
+    <p class="dp__for" data-patient><pf-icon name="user" [size]="14" /> Case sheet for <strong>{{ p.name }}</strong>@if (p.meta) { · {{ p.meta }} }</p>
+    } @else {
+    <p class="sr-only" data-sub>Pick a department and a case sheet to start</p>
+    }
 
     @if (loadError()) {
     <div class="dp__card dp__card--msg">
@@ -136,12 +135,10 @@
         @if (pickedDept(); as d) {
         <header class="dp__shead">
           <button type="button" class="dp__back pf-touch" aria-label="All departments" (click)="pick(null)">
-            <pf-icon name="chevron-left" [size]="24" />
+            <pf-icon name="chevron-left" [size]="20" />
           </button>
-          <div class="dp__shtext">
-            <h2 class="dp__shtitle" id="dp-sh">{{ d.name }}</h2>
-            <p class="dp__shsub">{{ d.forms.length ? 'Select a case sheet to begin' : 'No case sheets in this department yet' }}</p>
-          </div>
+          <h2 class="dp__shtitle" id="dp-sh">{{ d.name }}</h2>
+          <span class="dp__shsub">{{ d.forms.length ? 'Select a case sheet to begin' : 'No case sheets in this department yet' }}</span>
         </header>
         <div class="dp__gridscroll pf-card__body">
           @if (error()) {
@@ -196,7 +193,7 @@
         </div>
         } @else {
         <div class="dp__none">
-          <span class="dp__noneicon"><pf-icon name="forms" [size]="56" /></span>
+          <span class="dp__noneicon"><pf-icon name="forms" [size]="32" /></span>
           <h2 class="dp__nonetitle">Pick a department</h2>
           <p>Its case sheets show here.</p>
         </div>
