@@ -287,6 +287,7 @@ export const SETTINGS_PARENT: Readonly<Record<string, string>> = {
   '/admin/radiology': '/admin',
   '/admin/ipd': '/admin',
   '/admin/ipd/myprefrontal': '/admin/ipd',
+  '/admin/ipd/departments': '/admin/ipd',
   '/admin/ipd/myprefrontal/import': '/admin/ipd/myprefrontal',
   '/admin/pharmacy': '/admin',
   '/admin/payroll': '/admin',
