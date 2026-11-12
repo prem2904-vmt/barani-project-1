@@ -1,0 +1,105 @@
+<section class="fs-sec cb" data-sec="combinations">
+  <button type="button" class="fs-more pf-touch cb__head" [attr.aria-expanded]="open()" data-act="combinations-toggle" (click)="open.set(!open())">
+    <span>Sentences for combinations</span>
+    <span class="fs-note">{{ count() ? count() + (count() === 1 ? ' sentence' : ' sentences') : 'none yet' }}</span>
+    <pf-icon [name]="open() ? 'arrow-up' : 'arrow-down'" [size]="18" />
+  </button>
+  @if (open()) {
+    <div class="cb__body">
+      <p class="fs-note cb__lead">
+        When the doctor picks a particular set of choices, the case sheet can write one sentence for them instead of each choice’s own words. The first sentence that fits is the one used, so put the most specific first.
+      </p>
+      @if (rules().length) {
+        <ul class="cb__list" role="list" [attr.data-drag-list]="listId()">
+          @for (r of rules(); track r.id; let i = $index) {
+            <li
+              class="cb__rule"
+              [attr.data-drag-index]="i"
+              [attr.data-combo]="r.id"
+              [class.cb__rule--drag]="drag.dragging(listId(), i)"
+              [style.transform]="drag.offset(listId(), i) ? 'translateY(' + drag.offset(listId(), i) + 'px)' : null"
+            >
+              <button
+                type="button"
+                class="fs-grip pf-touch"
+                [attr.aria-label]="'Move sentence ' + (i + 1)"
+                (pointerdown)="drag.start($event, listId(), i)"
+                (pointermove)="drag.move($event)"
+                (pointerup)="drag.end()"
+                (pointercancel)="drag.end()"
+                (keydown)="drag.keyMove($event, listId(), i, rules().length)"
+              >
+                <pf-icon name="grip" [size]="18" />
+              </button>
+              <div class="cb__fields">
+                <span class="cb__no">Sentence {{ i + 1 }}</span>
+                <span class="fs-lbl">When the choices are</span>
+                @if (isPicture()) {
+                  <fe-picturechoice-mini [field]="field()" [picked]="r.options" [label]="'Parts for sentence ' + (i + 1)" (pick)="tapPart(i, $event)" />
+                }
+                <pf-select
+                  [options]="choices()"
+                  [multiple]="true"
+                  [values]="r.options"
+                  [searchable]="true"
+                  placeholder="Pick the choices"
+                  (valuesChange)="setOptions(i, $event)"
+                />
+                <div class="fs-chips" role="radiogroup" [attr.aria-label]="'Match for sentence ' + (i + 1)">
+                  <button type="button" role="radio" class="fe-chip cb__chip" [attr.aria-checked]="r.match === 'exact'" [attr.aria-pressed]="r.match === 'exact'" (click)="setMatch(i, 'exact')">
+                    Exactly these
+                  </button>
+                  <button type="button" role="radio" class="fe-chip cb__chip" [attr.aria-checked]="r.match === 'includes'" [attr.aria-pressed]="r.match === 'includes'" (click)="setMatch(i, 'includes')">
+                    These plus anything else
+                  </button>
+                </div>
+                <label class="fs-lbl" [for]="'cb-text-' + r.id">The case sheet writes</label>
+                <input
+                  class="pf-input"
+                  type="text"
+                  [id]="'cb-text-' + r.id"
+                  [placeholder]="r.match === 'includes' ? 'e.g. Both upper limbs are involved, along with {others}' : 'e.g. Both upper limbs are involved'"
+                  [value]="r.text"
+                  (change)="setText(i, $any($event.target).value)"
+                />
+                @if (r.match === 'includes') {
+                  <span class="fs-note">Write <span class="sn-tok-like">{{ '{others}' }}</span> where the other choices’ own words go. Without it they follow the sentence.</span>
+                }
+                @for (p of problems().get(i) ?? []; track p) {
+                  <p class="cb__warn" role="status"><pf-icon name="alert" [size]="16" /> {{ p }}</p>
+                }
+              </div>
+              <button type="button" class="pf-btn pf-btn--icon" [attr.aria-label]="'Remove sentence ' + (i + 1)" (click)="remove(i)">
+                <pf-icon name="x" [size]="18" />
+              </button>
+            </li>
+          }
+        </ul>
+      }
+      <div class="fs-acts">
+        <button type="button" class="pf-btn pf-btn--secondary" data-act="add-combination" (click)="add()">
+          <pf-icon name="plus" [size]="18" /> Add a combination
+        </button>
+      </div>
+
+      @if (rules().length) {
+        <div class="cb__try" data-combo-preview>
+          <span class="fs-lbl">Try it</span>
+          @if (isPicture()) {
+            <fe-picturechoice-mini [field]="field()" [picked]="sample()" label="Parts to try" (pick)="tapSample($event)" />
+          } @else {
+            <pf-select [options]="choices()" [multiple]="true" [values]="sample()" [searchable]="true" placeholder="Pick some choices to try" (valuesChange)="setSample($event)" />
+          }
+          <p class="cb__line" aria-live="polite">
+            @if (sample().length) {
+              <span class="fs-note">The case sheet writes{{ previewRule() ? ' (sentence ' + previewRule() + ')' : ' (no sentence fits, so each choice says its own words)' }}</span>
+              <span class="cb__text">{{ preview() }}</span>
+            } @else {
+              <span class="fs-note">Pick some choices to see the sentence.</span>
+            }
+          </p>
+        </div>
+      }
+    </div>
+  }
+</section>

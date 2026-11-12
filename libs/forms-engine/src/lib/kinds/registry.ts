@@ -15,7 +15,7 @@ import { TextFill } from './text/text.fill';
 import { YesnoFill } from './yesno/yesno.fill';
 
 /** Kinds whose control is loaded on first use (heavy: the canvas engine, the grid). */
-export const LAZY_KINDS: readonly string[] = ['drawing', 'bodyMap', 'photoMarkup', 'photos', 'eyeDiagram', 'grid'];
+export const LAZY_KINDS: readonly string[] = ['drawing', 'bodyMap', 'photoMarkup', 'photos', 'eyeDiagram', 'grid', 'pictureChoice'];
 
 /**
  * Every plain kind → its touch control. The ONLY place kinds are listed in
@@ -42,6 +42,7 @@ export const KIND_SPECS: Record<KnownKind, KindSpec> = {
   photos: { load: () => import('./photos/photos.fill').then((m) => m.PhotosFill) },
   eyeDiagram: { load: () => import('./eyeDiagram/eyeDiagram.fill').then((m) => m.EyeDiagramFill) },
   grid: { load: () => import('./grid/grid.fill').then((m) => m.GridFill) },
+  pictureChoice: { load: () => import('./pictureChoice/pictureChoice.fill').then((m) => m.PictureChoiceFill) },
 };
 
 export const REGISTERED_KINDS: readonly string[] = KNOWN_KINDS;

@@ -3594,6 +3594,240 @@
    ]
   },
   {
+   "name": "pictureChoice",
+   "title": "Picture choice",
+   "description": "Pictures laid out in a box (a hand, a leg, a tooth): the doctor taps the ones that apply and they light up. A set of picks like Multiple choice, or one pick when multiple is off. Each part is an option with a place in the box, a picture and its own words; any combination of parts can have its own sentence (says.combinations).",
+   "legacyNames": [],
+   "usesOptions": true,
+   "usesChildren": false,
+   "touch": {
+    "control": "picture-box",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "multiple": {
+      "type": "boolean"
+     },
+     "aspect": {
+      "type": "number",
+      "minimum": 0.4,
+      "maximum": 3
+     },
+     "background": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "maxLength": 64
+     },
+     "showLabels": {
+      "type": "boolean"
+     },
+     "total": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "label": {
+        "type": "string",
+        "maxLength": 60
+       },
+       "unit": {
+        "type": "string",
+        "maxLength": 10
+       },
+       "decimals": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4
+       }
+      }
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "array",
+     "null"
+    ],
+    "items": {
+     "type": "string"
+    }
+   },
+   "defaults": {
+    "multiple": true,
+    "aspect": 1,
+    "showLabels": true
+   },
+   "examples": [
+    {
+     "name": "limbs",
+     "field": {
+      "key": "limbs",
+      "kind": "pictureChoice",
+      "label": "Limbs affected",
+      "required": false,
+      "config": {
+       "multiple": true,
+       "aspect": 1,
+       "showLabels": true
+      },
+      "options": [
+       {
+        "key": "rh",
+        "label": "Right hand",
+        "says": "the right hand",
+        "subFields": [],
+        "place": {
+         "x": 0.05,
+         "y": 0.05,
+         "w": 0.4,
+         "h": 0.4
+        }
+       },
+       {
+        "key": "lh",
+        "label": "Left hand",
+        "says": "the left hand",
+        "subFields": [],
+        "place": {
+         "x": 0.55,
+         "y": 0.05,
+         "w": 0.4,
+         "h": 0.4
+        }
+       },
+       {
+        "key": "rl",
+        "label": "Right leg",
+        "says": "the right leg",
+        "subFields": [],
+        "place": {
+         "x": 0.05,
+         "y": 0.55,
+         "w": 0.4,
+         "h": 0.4
+        }
+       },
+       {
+        "key": "ll",
+        "label": "Left leg",
+        "says": "the left leg",
+        "subFields": [],
+        "place": {
+         "x": 0.55,
+         "y": 0.55,
+         "w": 0.4,
+         "h": 0.4
+        }
+       }
+      ],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "limbs": [
+       "rh",
+       "lh"
+      ]
+     }
+    },
+    {
+     "name": "with a sentence for a combination",
+     "field": {
+      "key": "limbs",
+      "kind": "pictureChoice",
+      "label": "Limbs affected",
+      "required": false,
+      "config": {
+       "multiple": true,
+       "aspect": 1,
+       "showLabels": true
+      },
+      "options": [
+       {
+        "key": "rh",
+        "label": "Right hand",
+        "says": "the right hand",
+        "subFields": [],
+        "place": {
+         "x": 0.05,
+         "y": 0.05,
+         "w": 0.4,
+         "h": 0.4
+        }
+       },
+       {
+        "key": "lh",
+        "label": "Left hand",
+        "says": "the left hand",
+        "subFields": [],
+        "place": {
+         "x": 0.55,
+         "y": 0.05,
+         "w": 0.4,
+         "h": 0.4
+        }
+       },
+       {
+        "key": "rl",
+        "label": "Right leg",
+        "says": "the right leg",
+        "subFields": [],
+        "place": {
+         "x": 0.05,
+         "y": 0.55,
+         "w": 0.4,
+         "h": 0.4
+        }
+       },
+       {
+        "key": "ll",
+        "label": "Left leg",
+        "says": "the left leg",
+        "subFields": [],
+        "place": {
+         "x": 0.55,
+         "y": 0.55,
+         "w": 0.4,
+         "h": 0.4
+        }
+       }
+      ],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false,
+       "combinations": [
+        {
+         "id": "c1",
+         "options": [
+          "rh",
+          "lh"
+         ],
+         "match": "exact",
+         "text": "Both upper limbs are involved"
+        }
+       ]
+      }
+     },
+     "answers": {
+      "limbs": [
+       "rh",
+       "lh"
+      ]
+     }
+    }
+   ]
+  },
+  {
    "name": "repeat",
    "title": "Repeating group",
    "description": "A group of fields the doctor can add again and again (each ulcer, each scar). Writes one small section per repetition from a template using {{childKey}}, {{index}} and {{groupLabel}}.",

@@ -1,0 +1,93 @@
+// Sentences for combinations: Studio chrome, kit sizes (no touch raise beyond the grip / chips the choices list uses).
+:host {
+  display: block;
+}
+
+.cb__head {
+  margin: 0;
+}
+
+.cb__body {
+  display: grid;
+  gap: 12px;
+}
+
+.cb__lead {
+  margin: 0;
+}
+
+.cb__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cb__rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--pf-line);
+  border-radius: 14px;
+  background: var(--pf-card-bg);
+  transition: transform var(--pf-dur) var(--pf-spring);
+}
+
+.cb__rule--drag {
+  z-index: 5;
+  transition: none;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.2);
+}
+
+.cb__fields {
+  display: grid;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cb__no {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.cb__chip {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 14px;
+}
+
+.cb__warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--warning-text, var(--text-secondary));
+}
+
+.cb__try {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-chip-bg);
+}
+
+.cb__line {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.cb__text {
+  font-size: 15px;
+  color: var(--text-primary);
+  overflow-wrap: break-word;
+}

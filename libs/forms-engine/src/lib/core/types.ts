@@ -32,9 +32,13 @@ export type ImageKind = (typeof IMAGE_KINDS)[number];
 export const TABLE_KINDS = ['grid'] as const;
 export type TableKind = (typeof TABLE_KINDS)[number];
 
+/** Options that are pictures laid out in a box (`pictureChoice`; a multi-select, or a single choice when `multiple` is off). */
+export const PICTURE_CHOICE_KINDS = ['pictureChoice'] as const;
+export type PictureChoiceKind = (typeof PICTURE_CHOICE_KINDS)[number];
+
 /** Every kind the UI can fill and build. */
-export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS] as const;
-export type KnownKind = PlainKind | ImageKind | TableKind;
+export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS, ...PICTURE_CHOICE_KINDS] as const;
+export type KnownKind = PlainKind | ImageKind | TableKind | PictureChoiceKind;
 export type KindName = KnownKind | 'unsupported' | (string & {});
 
 export type ConditionOp =
@@ -62,8 +66,23 @@ export interface ShowWhenDef {
   conditions: ConditionDef[];
 }
 
+/**
+ * One sentence for a particular set of picks in a multi-select question (`says.combinations`; engine:
+ * `narrative/combinations.ts`, mirror of the API's). `exact` fires only when the picked set equals `options`;
+ * `includes` when every one of them is picked (others may be too). First match wins; `{others}` in `text` is
+ * where the other picks' own sentences go.
+ */
+export interface CombinationDef {
+  id: string;
+  options: string[];
+  match: 'exact' | 'includes';
+  text: string;
+}
+
 export interface SaysDef {
   include?: boolean;
+  /** Sentences for combinations of picks (multi-select kinds only; absent or empty = every pick says its own words). */
+  combinations?: CombinationDef[];
   sections?: { section: string; order: number }[];
   prefix?: string;
   suffix?: string;
@@ -84,6 +103,22 @@ export interface OptionDef {
   description?: string;
   linkedPage?: string;
   subFields?: FieldDef[];
+  /** pictureChoice: a number this part is worth (a burns chart: its share of the body); picked parts add up to `config.total`. */
+  value?: number;
+  /** pictureChoice: where this part sits in the box, as fractions of the box (scales with it). */
+  place?: PicturePlace;
+  /** pictureChoice: the part's picture, an uploaded image / SVG asset id … */
+  asset?: string;
+  /** … or path data drawn in Studio (a 0–100 square; the API sanitises it). */
+  drawn?: string;
+}
+
+/** A part's rectangle in the box: fractions 0..1 of its width / height. */
+export interface PicturePlace {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export type FieldWidth = 'full' | 'half' | 'third' | 'quarter';
