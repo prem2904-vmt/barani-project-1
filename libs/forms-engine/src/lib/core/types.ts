@@ -32,9 +32,13 @@ export type ImageKind = (typeof IMAGE_KINDS)[number];
 export const TABLE_KINDS = ['grid'] as const;
 export type TableKind = (typeof TABLE_KINDS)[number];
 
+/** Timed readings and reference charts (growth, audiogram, partograph). */
+export const CHART_KINDS = ['readings', 'plotChart'] as const;
+export type ChartKind = (typeof CHART_KINDS)[number];
+
 /** Every kind the UI can fill and build. */
-export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS] as const;
-export type KnownKind = PlainKind | ImageKind | TableKind;
+export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS, ...CHART_KINDS] as const;
+export type KnownKind = PlainKind | ImageKind | TableKind | ChartKind;
 export type KindName = KnownKind | 'unsupported' | (string & {});
 
 export type ConditionOp =
