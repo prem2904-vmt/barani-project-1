@@ -320,3 +320,35 @@
   border-radius: 999px;
   background: var(--color-primary, #7c3aed);
 }
+
+// The grid card's header: the label never wraps (it matched Test Master's TESTS), the long hint gives way before it does,
+// and on a phone the two filters drop onto their own row instead of scrolling off the side.
+.cs-studio .pf-tm-main {
+  container-type: inline-size;
+  container-name: cs-main;
+}
+.cs-studio .pf-tm-main__head .pf-card__label,
+.cs-studio .pf-tm-main__head .pf-card__icon,
+.cs-studio .pf-tm-main__head .pf-tm-count {
+  flex: none;
+  white-space: nowrap;
+}
+@container cs-main (max-width: 1180px) {
+  .cs-studio .pf-tm-main__head .pf-tm-hint {
+    display: none;
+  }
+}
+@container cs-main (max-width: 640px) {
+  .cs-studio .pf-tm-main__head {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .cs-studio .pf-tm-main__head .pf-tm-count {
+    display: none;
+  }
+  .cs-studio .pf-tm-main__head .pf-tm-status {
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-x: auto;
+  }
+}

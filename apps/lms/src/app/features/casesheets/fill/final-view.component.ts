@@ -140,6 +140,17 @@ export function pdfFileName(
       .fv-btn {
         justify-content: flex-start;
       }
+      /* Below the two-column layout the page scrolls as a whole: neither card is squeezed, so Amend is never clipped
+         by the pinned Print button. */
+      @media (max-width: 1023px) {
+        .pf-body {
+          overflow-y: auto;
+        }
+        .main,
+        .side {
+          flex: none;
+        }
+      }
       .fv-note {
         margin: 0 0 4px;
         font-size: 13px;

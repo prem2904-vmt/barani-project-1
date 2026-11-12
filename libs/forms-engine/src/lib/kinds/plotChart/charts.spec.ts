@@ -177,6 +177,17 @@ describe('chart model', () => {
     expect(xs).toEqual([...xs].sort((a, b) => a - b));
   });
 
+  it('number labels of two stacked panels never touch where the panels meet', () => {
+    const laid = layoutChart(partographChart([{ hour: 1, dilatation: 5, fhr: 150 }]));
+    const FONT = 11;
+    for (let i = 1; i < laid.panels.length; i++) {
+      const above = laid.panels[i - 1];
+      const labelBottom = Math.max(...above.hgrid.map((t) => t.y)) + FONT / 2;
+      const labelTop = Math.min(...laid.panels[i].hgrid.map((t) => t.y)) - FONT / 2;
+      expect(labelTop - labelBottom).toBeGreaterThanOrEqual(2);
+    }
+  });
+
   it('niceScale gives round ticks that cover the data', () => {
     const s = niceScale(8.1, 13.7, 5);
     expect(s.min).toBeLessThanOrEqual(8.1);

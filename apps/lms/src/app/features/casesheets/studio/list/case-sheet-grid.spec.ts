@@ -46,6 +46,16 @@ describe('case-sheet list (Test Master pattern)', () => {
     expect(cols.map((c) => c.headerName)).toEqual(['Name', 'Department', 'Origin', 'Version', 'Status', 'Pending', 'Updated', '']);
     expect(cols[0].pinned).toBe('left');
     expect(cols[cols.length - 1].pinned).toBe('right');
-    expect(sheetColumns(false, true).map((c) => c.headerName)).toEqual(['Name', 'Origin', 'Status', '']);
+    // Phone: Name (wraps, not pinned) + Origin + the actions - everything fits a 390px screen, no sideways scroll.
+    const phone = sheetColumns(false, true);
+    expect(phone.map((c) => c.headerName)).toEqual(['Name', 'Origin', '']);
+    expect(phone[0].pinned).toBeNull();
+    const fixed = phone.reduce((n, c) => n + (c.flex ? 0 : (c.width ?? 0)), 0);
+    expect(fixed + (phone[0].minWidth ?? 0)).toBeLessThanOrEqual(390 - 32 - 2);
+  });
+
+  it('columns: every desktop column fits the card at 1440 with the department rail open (about 1000px)', () => {
+    const need = sheetColumns(true, false).reduce((n, c) => n + (c.minWidth ?? c.width ?? 0), 0);
+    expect(need).toBeLessThanOrEqual(1000);
   });
 });

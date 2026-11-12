@@ -151,30 +151,38 @@ export const sheetRowClass = (p: RowClassParams<FormRow>): string | undefined =>
 export function sheetColumns(web: boolean, isPhone: boolean): ColDef<FormRow>[] {
   const cols: ColDef<FormRow>[] = [
     {
-      headerName: 'Name', field: 'title', width: 280, minWidth: 220, pinned: 'left', wrapText: true, autoHeight: true, tooltipField: 'title',
+      headerName: 'Name', field: 'title', colId: 'name', width: 210, minWidth: 170, pinned: 'left', wrapText: true, autoHeight: true, tooltipField: 'title',
+      cellClass: 'pf-tm-wrap',
       cellRenderer: (p: ICellRendererParams<FormRow>) => {
+        // Test Master's wrapped-name cell: up to two lines, the row grows to fit, the tooltip keeps the full name.
+        const wrap = document.createElement('div');
+        wrap.className = 'pf-tm-wrapcell';
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'pf-tm-tree-name';
-        b.style.cssText = 'background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;';
-        b.textContent = p.data?.title ?? '';
+        b.style.cssText = 'background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;min-width:0;line-height:1.35;';
+        const t = document.createElement('span');
+        t.className = 'pf-tm-clamp2';
+        t.textContent = p.data?.title ?? '';
+        b.appendChild(t);
         b.addEventListener('click', (e) => {
           e.stopPropagation();
           if (p.data) (p.context as SheetGridContext).open(p.data);
         });
-        return b;
+        wrap.appendChild(b);
+        return wrap;
       },
     },
-    { headerName: 'Department', colId: 'department', flex: 1, minWidth: 180, valueGetter: (p) => p.data?.departmentName ?? 'Other' },
+    { headerName: 'Department', colId: 'department', flex: 1.4, minWidth: 180, valueGetter: (p) => p.data?.departmentName ?? 'Other' },
     {
-      headerName: 'Origin', colId: 'origin', minWidth: 110, maxWidth: 160, editable: false,
+      headerName: 'Origin', colId: 'origin', flex: 1, minWidth: 110, maxWidth: 130, editable: false,
       valueGetter: (p) => (p.data ? ORIGIN_WORDS[p.data.origin].label : ''),
       cellRenderer: (p: ICellRendererParams<FormRow>) => (p.data ? originElement(p.data.origin, p.data.newerMaster) : document.createElement('span')),
     },
-    { headerName: 'Version', colId: 'version', minWidth: 90, maxWidth: 110, valueGetter: (p) => (p.data?.published ? `v${p.data.published.versionNo}` : '—') },
-    { headerName: 'Status', colId: 'status', minWidth: 120, valueGetter: (p) => (p.data ? statusLabel(p.data) : '') },
+    { headerName: 'Version', colId: 'version', flex: 0.7, minWidth: 88, maxWidth: 96, valueGetter: (p) => (p.data?.published ? `v${p.data.published.versionNo}` : '—') },
+    { headerName: 'Status', colId: 'status', flex: 1, minWidth: 96, valueGetter: (p) => (p.data ? statusLabel(p.data) : '') },
     {
-      headerName: 'Pending', colId: 'pending', minWidth: 90, maxWidth: 110, type: 'numericColumn',
+      headerName: 'Pending', colId: 'pending', flex: 0.8, minWidth: 92, maxWidth: 98, type: 'numericColumn',
       valueGetter: (p) => (p.data ? (p.context as SheetGridContext).pendingOf(p.data) : 0),
       cellRenderer: (p: ICellRendererParams<FormRow>) => {
         const s = document.createElement('span');
@@ -184,7 +192,7 @@ export function sheetColumns(web: boolean, isPhone: boolean): ColDef<FormRow>[] 
       },
     },
     {
-      headerName: 'Updated', colId: 'updated', minWidth: 110,
+      headerName: 'Updated', colId: 'updated', flex: 1, minWidth: 100,
       valueGetter: (p) => p.data?.draft?.updatedAt ?? p.data?.published?.publishedAt ?? '',
       valueFormatter: (p) => (p.value ? whenText(p.value as string) : '—'),
     },
@@ -203,5 +211,9 @@ export function sheetColumns(web: boolean, isPhone: boolean): ColDef<FormRow>[] 
       },
     },
   ];
-  return isPhone ? cols.filter((c) => !['version', 'updated', 'pending', 'department'].includes(String(c.colId ?? ''))) : cols;
+  if (!isPhone) return cols;
+  // Phone: Name (wraps, scrolls with the page, not pinned) + Origin + the row actions, so nothing is cut off sideways.
+  return cols
+    .filter((c) => ['name', 'origin', 'actions'].includes(String(c.colId ?? '')))
+    .map((c) => (c.colId === 'name' ? { ...c, pinned: null, flex: 1, width: undefined, minWidth: 130 } : c.colId === 'origin' ? { ...c, flex: undefined, width: 104, minWidth: 104, maxWidth: 110 } : c));
 }

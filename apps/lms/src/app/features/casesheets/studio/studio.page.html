@@ -89,7 +89,7 @@
       <section class="pf-card pf-tm-main" aria-label="Case sheets" data-case-sheets>
         <header class="pf-card__head pf-tm-main__head">
           <span class="pf-card__icon" aria-hidden="true"><pf-icon name="studio" [size]="16" /></span>
-          <h1 class="pf-card__label">{{ view() === 'archived' ? 'Archived' : 'Case sheets' }}</h1>
+          <span class="pf-card__label" role="heading" aria-level="1">{{ view() === 'archived' ? 'Archived' : 'Case sheets' }}</span>
           <span class="pf-card__note pf-tm-hint">Open one to edit it · a master makes your lab's copy first</span>
           <span class="pf-tm-count pf-num" data-count>{{ shownCount() }} {{ shownCount() === 1 ? 'case sheet' : 'case sheets' }}</span>
           <pf-segmented class="pf-tm-status" data-status-filter size="sm" [options]="statusOptions()" [value]="statusFilter()" (valueChange)="statusFilter.set($event)" aria-label="Filter by status"></pf-segmented>

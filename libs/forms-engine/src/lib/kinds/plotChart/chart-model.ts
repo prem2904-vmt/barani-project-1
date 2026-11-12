@@ -253,7 +253,7 @@ const LEFT = 38;
 const RIGHT = 12;
 const TOP = 8;
 const BOTTOM = 22;
-const GAP = 10;
+const GAP = 18; // two 11px number labels meet at a panel boundary: the gap must hold both without touching
 export const CHART_W = 600;
 
 /** Where everything goes in a 600-wide box. Pure; the component draws what this returns. */
