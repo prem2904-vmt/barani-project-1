@@ -14,3 +14,7 @@ the "case sheets into Prefrontal" project (plan `pf-work/plans/prepare-into-pref
 - Specs run inside `nx test lms` (`apps/lms/tsconfig.spec.json` includes `libs/forms-engine/src`).
 
 Port rule: keep the files diff-able against Prepare — adapt imports only; don't rewrite logic.
+
+## Group "pair" (2026-11-12)
+- `sidePair` ("Left and right", `kinds/sidePair`): the field's one child asked once per side; answer `{right,left}`. Fill = two `fe-row` cards (columns from 480 px, stacked below), "Same on both sides" copies the answered side. Studio panel chooses the inner kind and what it needs.
+- `shorthand` ("Clinical shorthand", `kinds/shorthand`): five presets (obstetric score, periods, vision, glasses power, muscle power). `shorthand-math.ts` mirrors the server's `ShorthandMath` and is held to `docs/vectors/casesheet-pair.json` (identical copy in prefrontal-mw).

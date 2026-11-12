@@ -9,6 +9,8 @@ import {
   diffDefinitions,
   findField,
   locate,
+  pairWords,
+  presetOf,
   sampleAnswers,
   summariseChanges,
   addField,
@@ -16,6 +18,7 @@ import {
   emptyDefinition,
   setLabel,
   updateField,
+  writeShorthand,
 } from '@prefrontal/forms-engine';
 import { StudioApi } from './studio-api';
 import {
@@ -118,6 +121,8 @@ function words(f: FieldDef, v: unknown): string {
     return o ? o.says || o.label.toLowerCase() : String(k);
   };
   if (Array.isArray(v)) return v.map(opt).join(', ');
+  if (f.kind === 'shorthand') return writeShorthand(presetOf(f.config), (v ?? {}) as Record<string, unknown>, f.config?.['lmp'] !== false);
+  if (f.kind === 'sidePair') return pairWords(f, v, words);
   if (v && typeof v === 'object') {
     const o = v as Record<string, unknown>;
     if ('amount' in o) return `${o['amount']} ${o['unit']}`;
@@ -455,9 +460,13 @@ export class MockStudioApi extends StudioApi {
       title: b.name,
       description: b.hint,
       usesOptions: !!b.starterOptions,
-      usesChildren: b.kind === 'repeat',
+      usesChildren: b.kind === 'repeat' || b.kind === 'sidePair',
       defaults: {},
-      configSchema: { properties: Object.fromEntries(b.config.map((c) => [c.name, c.choices ? { enum: Object.keys(c.choices) } : {}])) },
+      configSchema: {
+        properties: Object.fromEntries(
+          b.config.map((c) => [c.name, c.choices ? { enum: Object.keys(c.choices) } : typeof b.starterConfig?.[c.name] === 'boolean' ? { type: 'boolean' } : {}]),
+        ),
+      },
     }));
   }
 

@@ -77,7 +77,7 @@ export class FieldSettingsComponent {
     if (!f) return [];
     const schema = this.store.catalogue().find((k) => k.name === f.kind)?.configSchema?.properties ?? {};
     return this.build()
-      .config.filter((c) => c.name in schema || !this.store.catalogue().length)
+      .config.filter((c) => (c.name in schema || !this.store.catalogue().length) && (!c.when || c.when(f)))
       .map((c) => {
         const s = schema[c.name] ?? {};
         const t = Array.isArray(s.type) ? s.type.find((x) => x !== 'null') : s.type;

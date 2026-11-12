@@ -34,3 +34,6 @@ export * from './lib/canvas/canvas.component';
 // Phase 5: tables in the narrative (grids).
 export * from './lib/narrative/narrative-table';
 export * from './lib/narrative/narrative-table.component';
+// Group "pair": one question for both sides, and the clinical shorthand notation.
+export * from './lib/kinds/shorthand/shorthand-math';
+export * from './lib/kinds/sidePair/side-pair-model';

@@ -15,6 +15,8 @@ import { MULTI_BUILD } from './multi/multi.build';
 import { NUMBER_BUILD } from './number/number.build';
 import { REPEAT_BUILD } from './repeat/repeat.build';
 import { REPEAT_PAGES_BUILD } from './repeatPages/repeatPages.build';
+import { SHORTHAND_BUILD } from './shorthand/shorthand.build';
+import { SIDE_PAIR_BUILD } from './sidePair/sidePair.build';
 import { SIZE_BUILD } from './size/size.build';
 import { TEXT_BUILD } from './text/text.build';
 import { YESNO_BUILD } from './yesno/yesno.build';
@@ -42,6 +44,8 @@ export const KIND_BUILDS: Record<KnownKind, KindBuild> = {
   photos: PHOTOS_BUILD,
   eyeDiagram: EYE_DIAGRAM_BUILD,
   grid: GRID_BUILD,
+  sidePair: SIDE_PAIR_BUILD,
+  shorthand: SHORTHAND_BUILD,
 };
 
 /** A kind the UI has no descriptor for (an imported legacy field). */

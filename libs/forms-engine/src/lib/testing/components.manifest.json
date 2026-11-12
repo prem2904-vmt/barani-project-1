@@ -4050,6 +4050,411 @@
    ]
   },
   {
+   "name": "shorthand",
+   "title": "Clinical shorthand",
+   "description": "Small boxes that write standard clinical notation: obstetric score (G P L A), periods, vision, glasses power, muscle power. Use it alone or once per side in a left-and-right question.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "small-boxes",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "preset": {
+      "enum": [
+       "obstetricScore",
+       "menstrual",
+       "visualAcuity",
+       "refraction",
+       "musclePower"
+      ]
+     },
+     "deaths": {
+      "type": "boolean"
+     },
+     "lmp": {
+      "type": "boolean"
+     },
+     "near": {
+      "type": "boolean"
+     },
+     "pinhole": {
+      "type": "boolean"
+     },
+     "glasses": {
+      "type": "boolean"
+     },
+     "add": {
+      "type": "boolean"
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ]
+   },
+   "defaults": {
+    "preset": "obstetricScore",
+    "deaths": false,
+    "lmp": true,
+    "near": true,
+    "pinhole": true,
+    "glasses": true,
+    "add": true
+   },
+   "examples": [
+    {
+     "name": "obstetric score",
+     "field": {
+      "key": "score",
+      "kind": "shorthand",
+      "label": "Obstetric score",
+      "required": false,
+      "config": {
+       "preset": "obstetricScore"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "score": {
+       "g": 3,
+       "p": 2,
+       "l": 2,
+       "a": 0
+      }
+     }
+    },
+    {
+     "name": "periods",
+     "field": {
+      "key": "periods",
+      "kind": "shorthand",
+      "label": "Periods",
+      "required": false,
+      "config": {
+       "preset": "menstrual",
+       "lmp": true
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "periods": {
+       "flowDays": 5,
+       "cycleDays": 28,
+       "regularity": "regular"
+      }
+     }
+    },
+    {
+     "name": "vision",
+     "field": {
+      "key": "va",
+      "kind": "shorthand",
+      "label": "Vision",
+      "required": false,
+      "config": {
+       "preset": "visualAcuity"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "va": {
+       "distance": "6/9",
+       "pinhole": "6/6",
+       "near": "N6"
+      }
+     }
+    },
+    {
+     "name": "glasses power",
+     "field": {
+      "key": "rx",
+      "kind": "shorthand",
+      "label": "Glasses power",
+      "required": false,
+      "config": {
+       "preset": "refraction",
+       "add": true
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "rx": {
+       "sph": -1.25,
+       "cyl": -0.5,
+       "axis": 180
+      }
+     }
+    },
+    {
+     "name": "muscle power",
+     "field": {
+      "key": "power",
+      "kind": "shorthand",
+      "label": "Power",
+      "required": false,
+      "config": {
+       "preset": "musclePower"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "power": {
+       "grade": 4
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "sidePair",
+   "title": "Left and right",
+   "description": "One question asked for both sides, side by side (vision of each eye, power of each limb, a finding in each ear). Writes \"RE 6/9, LE 6/12\", or \"Bilateral ...\" when both sides are the same.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": true,
+   "touch": {
+    "control": "two-columns",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "sideWords": {
+      "enum": [
+       "rightLeft",
+       "eyes",
+       "ears"
+      ]
+     },
+     "rightLabel": {
+      "type": "string",
+      "maxLength": 20
+     },
+     "leftLabel": {
+      "type": "string",
+      "maxLength": 20
+     },
+     "order": {
+      "enum": [
+       "rightFirst",
+       "leftFirst"
+      ]
+     },
+     "bilateral": {
+      "type": "boolean"
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "right": {},
+     "left": {}
+    }
+   },
+   "defaults": {
+    "sideWords": "rightLeft",
+    "order": "rightFirst",
+    "bilateral": true
+   },
+   "examples": [
+    {
+     "name": "vision of each eye",
+     "field": {
+      "key": "vision",
+      "kind": "sidePair",
+      "label": "Vision",
+      "required": false,
+      "config": {
+       "sideWords": "eyes",
+       "order": "rightFirst",
+       "bilateral": true
+      },
+      "options": [],
+      "children": [
+       {
+        "key": "visionEach",
+        "kind": "shorthand",
+        "label": "Vision",
+        "required": false,
+        "config": {
+         "preset": "visualAcuity"
+        },
+        "options": [],
+        "children": [],
+        "says": {
+         "include": true,
+         "sections": [],
+         "subheading": false
+        }
+       }
+      ],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "vision": {
+       "right": {
+        "distance": "6/9",
+        "pinhole": "6/6",
+        "near": "N6"
+       },
+       "left": {
+        "distance": "6/12",
+        "near": "N8"
+       }
+      }
+     }
+    },
+    {
+     "name": "a finding in each ear",
+     "field": {
+      "key": "tm",
+      "kind": "sidePair",
+      "label": "Eardrum",
+      "required": false,
+      "config": {
+       "sideWords": "ears",
+       "order": "rightFirst",
+       "bilateral": true
+      },
+      "options": [],
+      "children": [
+       {
+        "key": "tmEach",
+        "kind": "choice",
+        "label": "Eardrum",
+        "required": false,
+        "config": {
+         "display": "buttons"
+        },
+        "options": [
+         {
+          "key": "intact",
+          "label": "Intact",
+          "says": "intact",
+          "subFields": []
+         },
+         {
+          "key": "perforated",
+          "label": "Perforated",
+          "says": "perforated",
+          "subFields": []
+         }
+        ],
+        "children": [],
+        "says": {
+         "include": true,
+         "sections": [],
+         "subheading": false
+        }
+       }
+      ],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "tm": {
+       "right": "intact",
+       "left": "intact"
+      }
+     }
+    },
+    {
+     "name": "pulse each side",
+     "field": {
+      "key": "pulse",
+      "kind": "sidePair",
+      "label": "Radial pulse",
+      "required": false,
+      "config": {
+       "sideWords": "rightLeft",
+       "order": "leftFirst",
+       "bilateral": false
+      },
+      "options": [],
+      "children": [
+       {
+        "key": "pulseEach",
+        "kind": "number",
+        "label": "Radial pulse",
+        "required": false,
+        "config": {
+         "unit": "bpm"
+        },
+        "options": [],
+        "children": [],
+        "says": {
+         "include": true,
+         "sections": [],
+         "subheading": false
+        }
+       }
+      ],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "pulse": {
+       "right": 72,
+       "left": 72
+      }
+     }
+    }
+   ]
+  },
+  {
    "name": "size",
    "title": "Size",
    "description": "A size with one to five dimensions and a unit (a swelling of 2 x 3 cm).",

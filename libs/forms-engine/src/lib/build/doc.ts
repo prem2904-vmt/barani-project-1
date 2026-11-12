@@ -276,7 +276,7 @@ export function newField(def: FormDefinition, kind: PlainKind | string, defaults
     required: false,
     config: structuredClone({ ...(b.starterConfig ?? {}), ...(defaults ?? {}) }),
     options: structuredClone(b.starterOptions ?? []),
-    children: [],
+    children: b.starterChild ? [{ ...structuredClone(b.starterChild), key: keyFrom(`${name} each`, def) }] : [],
     says: { include: true, sections: [], sentence: b.sentence(name) || undefined },
   };
   if (kind === 'multi') field.says!.negativeHistory = { enabled: false, prefix: 'Denies' };

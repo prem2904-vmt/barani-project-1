@@ -333,7 +333,9 @@ export class PaletteComponent {
     const all = Object.values(KIND_BUILDS);
     const offered = names.length ? all.filter((b) => names.includes(b.kind)) : all;
     // a follow-up can't be a repeating group or repeating pages (the API refuses them inside an option)
-    return this.slot().option ? offered.filter((b) => b.group !== 'Repeat' && b.group !== 'Picture' && b.group !== 'Table') : offered;
+    return this.slot().option
+      ? offered.filter((b) => b.group !== 'Repeat' && b.group !== 'Picture' && b.group !== 'Table' && b.kind !== 'sidePair')
+      : offered;
   });
 
   protected readonly groups = computed(() =>
