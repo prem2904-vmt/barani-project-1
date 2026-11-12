@@ -67,7 +67,7 @@ describe('choice fill', () => {
     expect(r.el.querySelector('pf-select')).not.toBeNull();
   });
 
-  it('options with icons are full-width cards with a round tick; descriptions alone stay buttons (legacy)', async () => {
+  it('options with icons are full-width cards with a round tick; descriptions alone stay buttons and are not printed (legacy buttonSelect)', async () => {
     const plain = f('seen', 'choice', {
       label: 'Seen at',
       options: [
@@ -77,7 +77,7 @@ describe('choice fill', () => {
     });
     const b = await renderKind(ChoiceFill, plain, 'opd');
     expect(b.el.querySelector('.fe-card')).toBeNull();
-    expect(b.el.querySelector('[data-option="opd"] .fe-chip__desc')?.textContent).toBe('Walk-in or booked visit');
+    expect(b.el.querySelector('.fe-chip__desc')).toBeNull();
     const seen = f('seen', 'choice', {
       label: 'Seen at',
       options: [
@@ -90,6 +90,15 @@ describe('choice fill', () => {
     expect(card.getAttribute('role')).toBe('radio');
     expect(card.getAttribute('aria-checked')).toBe('true');
     expect(r.el.querySelector('.fe-card__desc')?.textContent).toBe('Walk-in or booked visit');
+  });
+
+  it('a dropdown says "Select an option" (legacy select)', async () => {
+    const r = await renderKind(
+      ChoiceFill,
+      f('side', 'choice', { label: 'Side', config: { display: 'dropdown' }, options: [{ key: 'l', label: 'Left' }, { key: 'r', label: 'Right' }] }),
+      null,
+    );
+    expect(r.el.textContent).toContain('Select an option');
   });
 
   it(`more than ${CHOICE_BUTTONS_MAX} options → the searchable pf-select, never a native select`, async () => {

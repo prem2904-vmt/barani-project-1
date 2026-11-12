@@ -3,8 +3,11 @@ import { PfIconComponent } from '../../kit';
 import { KindFill } from '../../fill/contract';
 
 interface YnChoice {
-  key: 'yes' | 'no' | 'na';
+  /** The stored value: the option's own key ('yes' / 'no' / 'na' keep their canonical lower-case spelling). */
+  key: string;
   label: string;
+  /** Selected colour: legacy yesNoNa paints Yes green and No red; any other word uses the primary. */
+  tone: 'yes' | 'no' | 'other';
 }
 
 /**
@@ -52,6 +55,22 @@ interface YnChoice {
           <span>{{ field().label }}</span>
         </button>
       }
+      @case ('slider') {
+        <!-- legacy toggle-switch: a three-position slider, option A · — · option B (the dash clears the answer) -->
+        <div
+          class="fe-tslider"
+          role="radiogroup"
+          [attr.aria-labelledby]="labelId()"
+          [class.fe-tslider--left]="current() === sliderA().key.toLowerCase()"
+          [class.fe-tslider--right]="current() === sliderB().key.toLowerCase()"
+          [class.fe-tslider--center]="current() !== sliderA().key.toLowerCase() && current() !== sliderB().key.toLowerCase()"
+        >
+          <span class="fe-tslider__pill" aria-hidden="true"></span>
+          <button type="button" class="fe-tslider__opt" role="radio" [attr.aria-checked]="current() === sliderA().key.toLowerCase()" [attr.data-option]="sliderA().key" [disabled]="disabled()" (click)="emit(sliderA().key)">{{ sliderA().label }}</button>
+          <button type="button" class="fe-tslider__opt fe-tslider__none" role="radio" [attr.aria-checked]="current() === null" aria-label="No answer" data-option="" [disabled]="disabled()" (click)="emit(undefined)">—</button>
+          <button type="button" class="fe-tslider__opt" role="radio" [attr.aria-checked]="current() === sliderB().key.toLowerCase()" [attr.data-option]="sliderB().key" [disabled]="disabled()" (click)="emit(sliderB().key)">{{ sliderB().label }}</button>
+        </div>
+      }
       @default {
         <div class="fe-yn" role="radiogroup" [attr.aria-labelledby]="labelId()">
           @for (c of choices(); track c.key) {
@@ -59,8 +78,9 @@ interface YnChoice {
               type="button"
               class="fe-chip"
               role="radio"
-              [attr.aria-checked]="current() === c.key"
+              [attr.aria-checked]="current() === c.key.toLowerCase()"
               [attr.data-option]="c.key"
+              [attr.data-tone]="c.tone"
               [disabled]="disabled()"
               (click)="pick(c.key)"
             >
@@ -74,18 +94,31 @@ interface YnChoice {
   `,
 })
 export class YesnoFill extends KindFill {
-  protected readonly display = computed(() => (this.config()['display'] as string) ?? 'buttons');
+  private readonly rawDisplay = computed(() => (this.config()['display'] as string) ?? 'buttons');
+  /** A legacy toggle ("Present / Absent", "Impaired / Normal"): an imported toggle (switch + labelFallback) with two worded options is the slider. */
+  protected readonly display = computed(() =>
+    this.rawDisplay() === 'switch' && this.config()['labelFallback'] === true && (this.field().options?.length ?? 0) === 2 ? 'slider' : this.rawDisplay(),
+  );
+  protected readonly sliderA = computed(() => this.field().options![0]);
+  protected readonly sliderB = computed(() => this.field().options![1]);
   private optionLabel(key: string, fallback: string): string {
     return this.field().options?.find((o) => o.key.toLowerCase() === key)?.label || fallback;
   }
   protected readonly yesLabel = computed(() => this.optionLabel('yes', 'Yes'));
   protected readonly noLabel = computed(() => this.optionLabel('no', 'No'));
   protected readonly choices = computed<YnChoice[]>(() => {
-    const out: YnChoice[] = [
-      { key: 'yes', label: this.yesLabel() },
-      { key: 'no', label: this.noLabel() },
-    ];
-    if (this.config()['allowNa'] === true) out.push({ key: 'na', label: this.optionLabel('na', 'Not applicable') });
+    const tone = (k: string): YnChoice['tone'] => (k === 'yes' ? 'yes' : k === 'no' ? 'no' : 'other');
+    const canon = (k: string) => (['yes', 'no', 'na'].includes(k.toLowerCase()) ? k.toLowerCase() : k);
+    const own = this.field().options ?? [];
+    // legacy yesNoNa shows the question's own options as they are written ("Taken / Not taken", "Yes / No")
+    const out: YnChoice[] = own.length
+      ? own.map((o) => ({ key: canon(o.key), label: o.label, tone: tone(o.key.toLowerCase()) }))
+      : [
+          { key: 'yes', label: this.yesLabel(), tone: 'yes' },
+          { key: 'no', label: this.noLabel(), tone: 'no' },
+        ];
+    if (this.config()['allowNa'] === true && !out.some((c) => c.key.toLowerCase() === 'na'))
+      out.push({ key: 'na', label: this.optionLabel('na', 'Not applicable'), tone: 'other' });
     return out;
   });
   /** 'yes' | 'no' | 'na' | null, whatever was stored (booleans from a tick box read as yes / no). */
@@ -93,12 +126,12 @@ export class YesnoFill extends KindFill {
     const v = this.value();
     if (v === true) return 'yes';
     if (v === false) return 'no';
-    return typeof v === 'string' ? v.toLowerCase() : null;
+    return typeof v === 'string' && v ? v.toLowerCase() : null;
   });
   protected readonly isTrue = computed(() => this.current() === 'yes');
 
-  protected pick(key: YnChoice['key']): void {
-    this.emit(this.current() === key ? undefined : key);
+  protected pick(key: string): void {
+    this.emit(this.current() === key.toLowerCase() ? undefined : key);
   }
 
   protected flip(): void {

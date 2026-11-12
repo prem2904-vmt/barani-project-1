@@ -176,9 +176,7 @@
     >
       @if (page(); as wp) { @for (pid of [wp.id]; track pid) {
       <div class="lf-page cs-page" [attr.data-page]="pid" [class.cs-page--back]="wiz.direction() < 0">
-        @if (wp.page.subtitle) {
-        <p class="lf-page__sub">{{ wp.page.subtitle }}</p>
-        }
+        <!-- legacy dynamic-page printed no page subtitle (commented out); the title in the header is enough -->
         @if (repeats().length > 1) {
         <div class="cs-reps fe-chips" role="group" aria-label="The repeated pages">
           @for (r of repeats(); track r.id) {
@@ -261,8 +259,8 @@
   <header class="rp__head">
     <span class="rp__icon" aria-hidden="true"><pf-icon name="file" [size]="22" /></span>
     <div class="rp__titles">
-      <h2 class="rp__title" id="rp-h">Edit your report</h2>
-      <p class="rp__sub">Check the words before the PDF is made</p>
+      <h2 class="rp__title" id="rp-h">Edit Your Report</h2>
+      <p class="rp__sub">Customize before generating PDF</p>
     </div>
     <button type="button" class="rp__close pf-touch" aria-label="Close and keep filling" (click)="closeReport()">
       <pf-icon name="x" [size]="24" />
@@ -270,13 +268,13 @@
   </header>
   <div class="rp__tabs" role="tablist" aria-label="Report">
     <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'edit'" (click)="reportTab.set('edit')">
-      <pf-icon name="pen" [size]="18" /> Edit narrative
+      <pf-icon name="pen" [size]="18" /> Edit Narrative
     </button>
     <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'listen'" aria-label="PF Listen" (click)="reportTab.set('listen')">
       <pf-icon name="volume" [size]="18" /> PF Listen
     </button>
     <button type="button" role="tab" class="rp__tab pf-touch" [attr.aria-selected]="reportTab() === 'pdf'" (click)="reportTab.set('pdf')">
-      <pf-icon name="file" [size]="18" /> PDF preview
+      <pf-icon name="file" [size]="18" /> PDF Preview
     </button>
   </div>
   <div class="rp__body pf-card__body" role="tabpanel">
@@ -297,7 +295,7 @@
     }
     @case ('listen') {
     @if (!listen.available()) {
-    <p class="rp__note">This device can't read aloud. The words are on Edit narrative.</p>
+    <p class="rp__note">This device can't read aloud. The words are on Edit Narrative.</p>
     } @else if (!listenParts().length) {
     <p class="rp__note">Nothing to read yet. Answer a few questions first.</p>
     } @else {
@@ -330,9 +328,12 @@
     }
   </div>
   <footer class="rp__foot">
-    <button type="button" class="pf-btn pf-btn--secondary" (click)="closeReport()">Not yet</button>
+    <button type="button" class="pf-btn pf-btn--secondary rp__home" data-report-home [disabled]="finishing()" (click)="goHome()">
+      <pf-icon name="home" [size]="18" /> Back to Home
+    </button>
+    <button type="button" class="pf-btn pf-btn--secondary" (click)="closeReport()">Close</button>
     <button type="button" class="pf-btn pf-btn--primary" data-finish-now [disabled]="finishing()" (click)="finishNow()">
-      <pf-icon name="check" [size]="18" /> {{ finishing() ? 'Making the PDF…' : 'Finish and make the PDF' }}
+      <pf-icon name="check" [size]="18" /> {{ finishing() ? 'Generating…' : 'Generate PDF' }}
     </button>
   </footer>
 </section>

@@ -61,4 +61,42 @@ describe('yesno fill', () => {
     expect(sw.last()).toBe(false);
     expect(untouchable(sw.el)).toEqual([]);
   });
+
+  it('legacy yesNoNa shows the question\'s own words and tones Yes green / No red', async () => {
+    const taken = f('bp', 'yesno', {
+      label: 'BP',
+      options: [
+        { key: 'taken', label: 'Taken' },
+        { key: 'not_taken', label: 'Not taken' },
+      ],
+    });
+    const r = await renderKind(YesnoFill, taken, null);
+    expect(r.el.querySelectorAll('[role="radio"]').length).toBe(2);
+    await r.click(r.byText('Not taken'));
+    expect(r.last()).toBe('not_taken');
+    const yn = await renderKind(YesnoFill, f('x', 'yesno', { label: 'X', options: [{ key: 'yes', label: 'Yes' }, { key: 'no', label: 'No' }] }), 'no');
+    expect(yn.el.querySelector('[data-option="yes"]')!.getAttribute('data-tone')).toBe('yes');
+    expect(yn.el.querySelector('[data-option="no"]')!.getAttribute('data-tone')).toBe('no');
+    expect(yn.el.querySelectorAll('[role="radio"]').length).toBe(2);
+  });
+
+  it('a legacy toggle is a three-position slider: option A, a dash that clears, option B', async () => {
+    const t = f('hearing', 'yesno', {
+      label: 'Hearing',
+      config: { display: 'switch', labelFallback: true },
+      options: [
+        { key: 'impaired', label: 'Impaired' },
+        { key: 'normal', label: 'Normal' },
+      ],
+    });
+    const r = await renderKind(YesnoFill, t, null);
+    expect(r.el.querySelector('.fe-tslider--center')).not.toBeNull();
+    expect(r.el.querySelectorAll('.fe-tslider__opt').length).toBe(3);
+    await r.click(r.byText('Normal'));
+    expect(r.last()).toBe('normal');
+    const on = await renderKind(YesnoFill, t, 'impaired');
+    expect(on.el.querySelector('.fe-tslider--left')).not.toBeNull();
+    await on.click('.fe-tslider__none');
+    expect(on.last()).toBeUndefined();
+  });
 });

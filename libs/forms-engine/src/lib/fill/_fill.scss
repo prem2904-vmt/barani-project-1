@@ -15,12 +15,13 @@
 @use '../kinds/plotChart/plotchart';
 @use '../kinds/family/family';
 
-// ── page grid: 12 columns, widths from the field (full / half / third / quarter)
+// ── page grid: 12 columns, gap 24 (legacy dynamic-page: grid-cols-12 gap-6); widths apply from 768 (legacy md):
+// half 6, third 4, quarter 3 of 12. A multiple-choice field is always full width (legacy: multiselect ignores width).
 .fe-grid {
   container-type: inline-size;
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 22px 18px;
+  gap: 24px;
   align-items: start;
 }
 
@@ -29,23 +30,14 @@
   min-width: 0;
 }
 
-@container (min-width: 520px) {
-  .fe-grid > .fe-w-half {
+@media (min-width: 768px) {
+  .fe-grid > .fe-w-half:not([data-kind='multi']) {
     grid-column: span 6;
   }
-  .fe-grid > .fe-w-third {
-    grid-column: span 6;
-  }
-  .fe-grid > .fe-w-quarter {
-    grid-column: span 6;
-  }
-}
-
-@container (min-width: 760px) {
-  .fe-grid > .fe-w-third {
+  .fe-grid > .fe-w-third:not([data-kind='multi']) {
     grid-column: span 4;
   }
-  .fe-grid > .fe-w-quarter {
+  .fe-grid > .fe-w-quarter:not([data-kind='multi']) {
     grid-column: span 3;
   }
 }
@@ -54,7 +46,7 @@
 .fe-field {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 4px;
   scroll-margin: 24px;
 }
 
@@ -66,19 +58,21 @@
 }
 
 .fe-field__lbl {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.3;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.5;
   color: var(--text-primary);
   @include pf.no-truncate;
 }
 
 .fe-field__req {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--amber-text, #b45309);
   flex: none;
+  color: var(--red-text, #dc2626);
+  font-size: 16px;
+  line-height: 1;
+  &::before {
+    content: '*';
+  }
 }
 
 .fe-field__note,
@@ -101,33 +95,35 @@
   color: var(--red-text, #dc2626);
 }
 
-// ── follow-up questions of a chosen option, inline under the control
+// ── follow-up questions of a chosen option, inline under the control (legacy button-select / select panel:
+// surface-2 box, rounded-xl, 1px border, a thin line on top, the questions stacked one per row with a 12px gap)
 .fe-follow {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 14px 16px 16px;
+  gap: 12px;
+  padding: 8px 16px 16px;
+  position: relative;
+  margin-top: 8px;
   border: 1px solid var(--pf-line);
-  border-left: 3px solid color-mix(in srgb, var(--color-primary, #7c3aed) 45%, var(--pf-line));
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg));
+  border-radius: 12px;
+  background: var(--surface-2, var(--pf-card-bg));
   animation: fe-open var(--pf-dur) var(--pf-spring) both;
 }
 
 .fe-follow__title {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
+  // read by screen readers only (legacy had no heading over a follow-up panel)
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .fe-follow .fe-grid {
-  gap: 16px 14px;
-}
-
-.fe-follow .fe-field__lbl {
-  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 @keyframes fe-open {
@@ -1109,4 +1105,122 @@ textarea.fe-text__input {
 .fe-chip[aria-pressed='true'] .fe-chip__desc,
 .fe-chip[aria-checked='true'] .fe-chip__desc {
   color: rgba(255, 255, 255, 0.85);
+}
+
+// legacy yesNoNa: a chosen Yes is green, a chosen No is red (green-500 / red-500), any other word the primary
+.fe-field--ynrow .fe-yn .fe-chip[data-tone='yes'][aria-checked='true'] {
+  background: var(--green-solid, #22c55e);
+  border-color: var(--green-solid, #22c55e);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+.fe-field--ynrow .fe-yn .fe-chip[data-tone='no'][aria-checked='true'] {
+  background: var(--red-solid, #ef4444);
+  border-color: var(--red-solid, #ef4444);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+// legacy toggle-switch: a three-position slider (option A · dash · option B), the pill slides under the chosen one
+.fe-tslider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 200px;
+  min-height: var(--pf-touch);
+  padding: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 1px solid var(--pf-line);
+  background: var(--surface-1, var(--pf-card-bg));
+  flex: 0 0 auto;
+}
+.fe-tslider__pill {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  z-index: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  transition:
+    left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.3s ease;
+}
+.fe-tslider--left .fe-tslider__pill {
+  left: 3px;
+  width: calc(50% - 22px);
+  background: var(--color-primary, #7c3aed);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent);
+}
+.fe-tslider--right .fe-tslider__pill {
+  left: calc(50% + 19px);
+  width: calc(50% - 22px);
+  background: var(--color-primary, #7c3aed);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary, #7c3aed) 30%, transparent);
+}
+.fe-tslider--center .fe-tslider__pill {
+  left: calc(50% - 18px);
+  width: 36px;
+  background: var(--bg-hover, rgba(127, 127, 127, 0.14));
+}
+.fe-tslider__opt {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  min-height: calc(var(--pf-touch) - 8px);
+  padding: 8px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-align: center;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+.fe-tslider__opt[aria-checked='true'] {
+  color: #fff;
+}
+.fe-tslider--center .fe-tslider__none[aria-checked='true'] {
+  color: var(--text-secondary);
+}
+.fe-tslider__none {
+  flex: 0 0 36px;
+  padding: 8px 2px;
+  font-size: 16px;
+}
+.fe-tslider__opt:disabled {
+  opacity: 0.5;
+}
+@media (max-width: 767px) {
+  .fe-field--ynrow .fe-tslider {
+    width: 100%;
+    min-width: 0;
+  }
+  .fe-tslider__opt {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
+// the follow-ups of a Yes / No card row (legacy subfields-section): 16px padding, gap and radius
+.fe-field--ynrow > .fe-follow {
+  margin-top: 16px;
+  padding: 16px;
+  gap: 16px;
+  border-radius: 16px;
+}
+.fe-field--ynrow > .fe-follow .fe-grid {
+  gap: 16px;
+}
+
+// label-to-control rhythm per control (legacy: text gap-1, buttons gap-2, radio gap-3, cards gap-4)
+.fe-field[data-kind='choice'],
+.fe-field[data-kind='duration'] {
+  gap: 8px;
+}
+.fe-field[data-kind='multi'] {
+  gap: 16px;
 }

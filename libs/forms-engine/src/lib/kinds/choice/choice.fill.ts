@@ -24,7 +24,7 @@ export { CHOICE_BUTTONS_MAX } from '../../fill/option-layout';
         [value]="current()"
         [searchable]="true"
         [disabled]="disabled()"
-        [placeholder]="'Choose ' + field().label.toLowerCase()"
+        placeholder="Select an option"
         (valueChange)="pick($event)"
       />
     } @else if (layout() === 'cards') {
@@ -66,9 +66,7 @@ export { CHOICE_BUTTONS_MAX } from '../../fill/option-layout';
             <span class="fe-chip__check"><pf-icon name="check" [size]="16" [stroke]="2.4" /></span>
             <span class="fe-chip__txt">
               <span>{{ o.label }}</span>
-              @if (o.description) {
-                <span class="fe-chip__desc">{{ o.description }}</span>
-              }
+              <!-- legacy buttonSelect / radio print the label only; an option's description is for cards -->
             </span>
           </button>
         }

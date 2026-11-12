@@ -164,7 +164,7 @@ describe('case sheet filling (legacy gestures, the lab step foot)', () => {
     next.click(); // the release's click
     await settle();
     expect(q('[data-report]')).not.toBeNull();
-    expect(q('[data-report]').textContent).toContain('Edit your report');
+    expect(q('[data-report]').textContent).toContain('Edit Your Report');
     expect(title()).toBe('Complaint'); // the swallowed click did not turn the page
     q('[data-finish-now]').click();
     await settle(100);

@@ -140,7 +140,9 @@ export class FieldHostComponent {
   protected readonly ynRow = computed(() => {
     const f = this.field();
     const d = f.config?.['display'];
-    return f.kind === 'yesno' && d !== 'switch' && d !== 'check' && !!this.spec();
+    // a legacy toggle (the three-position slider) is a card row too (legacy toggle-switch)
+    const slider = d === 'switch' && f.config?.['labelFallback'] === true && (f.options?.length ?? 0) === 2;
+    return f.kind === 'yesno' && (slider || (d !== 'switch' && d !== 'check')) && !!this.spec();
   });
   protected readonly widthClass = computed(() => `fe-field fe-w-${this.field().width ?? 'full'}`);
 

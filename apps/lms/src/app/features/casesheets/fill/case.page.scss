@@ -1255,6 +1255,11 @@
     flex: 0 0 auto;
     min-width: 160px;
   }
+  // legacy: Back to Home on the left, Close and Generate PDF on the right
+  .rp__foot .rp__home {
+    margin-right: auto;
+    min-width: 0;
+  }
 }
 @media (max-width: 480px) {
   .rp__foot {
