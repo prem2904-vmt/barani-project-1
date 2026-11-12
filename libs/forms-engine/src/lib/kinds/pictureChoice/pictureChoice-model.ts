@@ -1,5 +1,5 @@
 import { FieldDef, OptionDef, PicturePlace } from '../../core/types';
-import { totalConfig } from '../../narrative/combinations';
+import { TotalConfig, totalConfig } from '../../narrative/combinations';
 
 /**
  * pictureChoice: the pure half (no DOM, no Angular). Config, where a part sits in the box, the pick toggle, the

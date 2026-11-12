@@ -110,8 +110,4 @@ describe('choice fill', () => {
     expect(d.el.querySelector('pf-select')).not.toBeNull();
     expect(d.el.querySelector('select')).toBeNull();
   });
-    const r = await renderKind(ChoiceFill, many, null);
-    expect(r.el.querySelector('pf-select')).not.toBeNull();
-    expect(r.el.querySelector('select')).toBeNull();
-  });
 });

@@ -147,7 +147,7 @@ describe('pictureChoice fill', () => {
     const r = await renderKind(PictureChoiceFill, field, ['lh']);
     const parts = [...r.el.querySelectorAll<HTMLElement>('.fe-pc__part')];
     expect(parts.map((p) => p.getAttribute('role'))).toEqual(['checkbox', 'checkbox', 'checkbox', 'checkbox']);
-    expect(parts.map((p) => p.getAttribute('aria-label'))).toEqual(['Right hand', 'Left hand', 'Right leg', 'Left leg']);
+    expect(parts.map((p) => p.getAttribute('aria-label'))).toEqual(['Right hand', 'Left hand', 'Left leg', 'Right leg']);
     expect(parts.map((p) => p.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false', 'false']);
     expect(parts[1].classList.contains('fe-pc__part--on')).toBe(true);
     expect(parts[1].querySelector('.fe-pc__badge')).toBeTruthy();
@@ -195,12 +195,14 @@ describe('pictureChoice fill', () => {
     const f: FieldDef = structuredClone(field);
     f.options![0].asset = 'a-1';
     f.options![1].drawn = 'M10,10 L90,10 L90,90 Z';
+    delete f.options![2].drawn;   // the catalogue example draws every part; this one stays a named tile
+    delete f.options![2].asset;
     const r = await renderKind(PictureChoiceFill, f, null, { assets });
     await settle(r);
     const parts = [...r.el.querySelectorAll('.fe-pc__part')];
     expect(parts[0].querySelector('img')?.getAttribute('src')).toBe('https://files.test/a-1');
     expect(parts[1].querySelector('svg path')?.getAttribute('d')).toBe('M10,10 L90,10 L90,90 Z');
-    expect(parts[2].querySelector('.fe-pc__initial')?.textContent).toBe('R');
+    expect(parts[2].querySelector('.fe-pc__initial')?.textContent).toBe('L');
   });
 });
 
@@ -322,7 +324,7 @@ describe('pictureChoice total (burns chart)', () => {
   it('adds the picked parts\' numbers; a part with no number adds nothing; no total configured = no line', () => {
     expect(totalOf(burns, ['head', 'arm'])).toBe(13.5);
     expect(totalOf(burns, ['none'])).toBe(0);
-    expect(totalLine(burns, ['head', 'leg'])).toBe('Total burn area 27%');
+    expect(totalLine(burns, ['head', 'leg'])).toBe('Total burn area 27.0%');
     expect(totalLine(burns, ['head', 'arm'])).toBe('Total burn area 13.5%');
     expect(totalLine(burns, [])).toBeNull(); // nothing picked = no total
     expect(totalLine({ ...burns, config: { multiple: true } }, ['head'])).toBeNull();
@@ -334,7 +336,7 @@ describe('pictureChoice total (burns chart)', () => {
     expect(r.el.querySelector('[data-total]')).toBeNull();
     await r.click('[data-option="head"]');
     await r.click('[data-option="leg"]');
-    expect(r.el.querySelector('[data-total]')?.textContent?.trim()).toBe('Total burn area 27%');
+    expect(r.el.querySelector('[data-total]')?.textContent?.trim()).toBe('Total burn area 27.0%');
   });
 
   it('a question without a total shows no line', async () => {

@@ -298,7 +298,10 @@ describe('options and BMI (G8–G10, G20)', () => {
       const r = await renderKind(cmp, f('d', cmp === ChoiceFill ? 'choice' : 'multi', { options: opts }), null);
       // the description under the label: in a button (choice) or a card (multi, legacy multiselect-expand)
       const desc = '.fe-chip__desc, .fe-card__desc';
-      expect(r.el.querySelector(`[data-option="clear"] :is(${desc})`)?.textContent).toBe('Watery, like tap water');
+      // legacy buttonSelect / radio print the label only (2026-11-12): a choice's buttons carry no description, a multi's cards do
+      const shown = r.el.querySelector(`[data-option="clear"] :is(${desc})`)?.textContent;
+      if (cmp === ChoiceFill) expect(shown).toBeUndefined();
+      else expect(shown).toBe('Watery, like tap water');
       expect(r.el.querySelector(`[data-option="pus"] :is(${desc})`)).toBeNull();
     }
   });

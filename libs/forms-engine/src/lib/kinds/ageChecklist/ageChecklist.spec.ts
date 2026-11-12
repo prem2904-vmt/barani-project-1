@@ -93,7 +93,7 @@ describe('ageChecklist fill', () => {
     await r.stable();
     await r.click('[data-unit="years"]');
     await r.click('[data-act="set-age"]');
-    expect(r.last()).toEqual({ ageDays: 730 });
+    expect(r.last()).toEqual({ ageDays: 731 })   // 2 x 365.25, half rounds up (the server's AgeText agrees);
     expect(r.el.querySelector('[data-age]')?.textContent?.trim()).toBe('2 years');
   });
 

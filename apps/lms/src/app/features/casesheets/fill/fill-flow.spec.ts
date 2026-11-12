@@ -169,7 +169,7 @@ describe('case sheet filling (legacy gestures, the lab step foot)', () => {
     q('[data-finish-now]').click();
     await settle(100);
     expect(api.sheets.get(sheetId)!.sheet.state).toBe('final');
-    expect(bar()).toBeNull(); // finished: the PDF view, no step foot
+    expect(bar().querySelector('.lf-bar')).toBeNull(); // finished: the PDF view, the slot is given back (the test host's container stays)
   });
 
   it('letting go of Next before the fill completes neither finishes nor taps', async () => {

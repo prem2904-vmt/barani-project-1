@@ -253,13 +253,17 @@ describe('StartMenuComponent', () => {
       expect(rowLabels(el)).toEqual(['Validate']);
     });
 
-    it('letters typed before the box takes focus still land in it', async () => {
+    it('the first letter lands in the box and the box takes focus, so the next letters type into it natively', async () => {
       const { f, el } = setup();
       await flush(f);
       key(document, 'r');
-      key(document, 'e');
       await flush(f);
-      expect((q(el, '.sm-search__input') as HTMLInputElement).value).toBe('re');
+      const box = q(el, '.sm-search__input') as HTMLInputElement;
+      expect(box.value).toBe('r');
+      expect(document.activeElement).toBe(box);
+      key(document, 'e');   // the box is focused now: the document handler leaves the key to the field
+      await flush(f);
+      expect(box.value).toBe('r');
     });
 
     it('ignores shortcuts with Ctrl / Cmd', async () => {

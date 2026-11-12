@@ -23,7 +23,7 @@ describe('option cards: segmented row for short single choices', () => {
 
   it('picking still works as a radio', async () => {
     const r = await renderKind(ChoiceFill, f('sex', 'choice', { label: 'Sex', options: opts(['Male', 'Female']) }), null);
-    await r.click(r.byText('Female'));
+    await r.click(r.el.querySelector('[data-option="female"]') as HTMLElement);
     expect(r.last()).toBe('female');
   });
 });

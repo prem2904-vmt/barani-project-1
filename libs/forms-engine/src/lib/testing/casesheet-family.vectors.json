@@ -1,196 +1,718 @@
 {
   "about": "Shared by prefrontal-mw (Prefrontal.Tests/CaseSheets/FamilyKindsTests) and prefrontal-ui (libs/forms-engine parity). Inputs are hand-written; every expected value is written by the server code (PF_WRITE_VECTORS=1 dotnet test --filter FamilyVectors). Copy the file to prefrontal-ui libs/forms-engine/src/lib/testing/casesheet-family.vectors.json unchanged.",
-  "dataSha256": {},
+  "dataSha256": {
+    "milestones.json": "9a47336f5d0e7ae263a4cedec47769486d855f6aa9402562d11956b8d5cbb6ec",
+    "vaccines-uip.json": "fd35bd6f302f77a3c80cc3ac402d3b0ab5c682ad8e05c257d1d89c948b62fa25"
+  },
   "ageParse": [
     {
-      "text": "18 months"
+      "text": "18 months",
+      "days": 548
     },
     {
-      "text": "1y 6m"
+      "text": "1y 6m",
+      "days": 548
     },
     {
-      "text": "6 weeks"
+      "text": "6 weeks",
+      "days": 42
     },
     {
-      "text": "10 d"
+      "text": "10 d",
+      "days": 10
     },
     {
-      "text": "5"
+      "text": "5",
+      "days": 1826
     },
     {
-      "text": "1.5"
+      "text": "1.5",
+      "days": 548
     },
     {
-      "text": "2 years 6 months"
+      "text": "2 years 6 months",
+      "days": 913
     },
     {
-      "text": "3 yrs"
+      "text": "3 yrs",
+      "days": 1096
     },
     {
-      "text": "18months"
+      "text": "18months",
+      "days": 548
     },
     {
-      "text": "9 mos"
+      "text": "9 mos",
+      "days": 274
     },
     {
-      "text": "2w 3d"
+      "text": "2w 3d",
+      "days": 17
     },
     {
-      "text": "abc"
+      "text": "abc",
+      "days": null
     },
     {
-      "text": ""
+      "text": "",
+      "days": null
     },
     {
       "text": "2020-06-15",
-      "asOf": "2024-06-15"
+      "asOf": "2024-06-15",
+      "days": 1461
     },
     {
-      "text": "2020-06-15"
+      "text": "2020-06-15",
+      "days": null
     },
     {
       "text": "2024-06-16",
-      "asOf": "2024-06-15"
+      "asOf": "2024-06-15",
+      "days": null
     }
   ],
   "ageWords": [
     {
-      "days": 0
+      "days": 0,
+      "words": "0 days"
     },
     {
-      "days": 1
+      "days": 1,
+      "words": "1 day"
     },
     {
-      "days": 5
+      "days": 5,
+      "words": "5 days"
     },
     {
-      "days": 13
+      "days": 13,
+      "words": "13 days"
     },
     {
-      "days": 14
+      "days": 14,
+      "words": "2 weeks"
     },
     {
-      "days": 42
+      "days": 42,
+      "words": "6 weeks"
     },
     {
-      "days": 61
+      "days": 61,
+      "words": "9 weeks"
     },
     {
-      "days": 70
+      "days": 70,
+      "words": "10 weeks"
     },
     {
-      "days": 89
+      "days": 89,
+      "words": "13 weeks"
     },
     {
-      "days": 91
+      "days": 91,
+      "words": "13 weeks"
     },
     {
-      "days": 274
+      "days": 274,
+      "words": "9 months"
     },
     {
-      "days": 548
+      "days": 548,
+      "words": "18 months"
     },
     {
-      "days": 730
+      "days": 730,
+      "words": "23 months"
     },
     {
-      "days": 731
+      "days": 731,
+      "words": "2 years"
     },
     {
-      "days": 1096
+      "days": 1096,
+      "words": "3 years"
     },
     {
-      "days": 1826
+      "days": 1826,
+      "words": "4 years 11 months"
     },
     {
-      "days": 2200
+      "days": 2200,
+      "words": "6 years"
     }
   ],
-  "items": {},
+  "items": {
+    "milestones": [
+      {
+        "key": "headSteady",
+        "label": "Holds head steady",
+        "group": "Gross motor",
+        "fromDays": 61,
+        "flagDays": 122
+      },
+      {
+        "key": "rolls",
+        "label": "Rolls from tummy to back",
+        "group": "Gross motor",
+        "fromDays": 122,
+        "flagDays": 183
+      },
+      {
+        "key": "sits",
+        "label": "Sits without support",
+        "group": "Gross motor",
+        "fromDays": 122,
+        "flagDays": 274
+      },
+      {
+        "key": "crawls",
+        "label": "Moves on hands and knees",
+        "group": "Gross motor",
+        "fromDays": 183,
+        "flagDays": 426
+      },
+      {
+        "key": "pullsToStand",
+        "label": "Pulls up to stand",
+        "group": "Gross motor",
+        "fromDays": 152,
+        "flagDays": 365
+      },
+      {
+        "key": "cruises",
+        "label": "Walks holding on to furniture",
+        "group": "Gross motor",
+        "fromDays": 183,
+        "flagDays": 426
+      },
+      {
+        "key": "walks",
+        "label": "Walks alone",
+        "group": "Gross motor",
+        "fromDays": 274,
+        "flagDays": 548
+      },
+      {
+        "key": "runs",
+        "label": "Runs",
+        "group": "Gross motor",
+        "fromDays": 457,
+        "flagDays": 731
+      },
+      {
+        "key": "jumps",
+        "label": "Jumps off the ground with both feet",
+        "group": "Gross motor",
+        "fromDays": 731,
+        "flagDays": 913
+      },
+      {
+        "key": "hops",
+        "label": "Hops on one foot",
+        "group": "Gross motor",
+        "fromDays": 1461,
+        "flagDays": 1826
+      },
+      {
+        "key": "holdsToy",
+        "label": "Holds a toy put in the hand",
+        "group": "Fine motor",
+        "fromDays": 61,
+        "flagDays": 122
+      },
+      {
+        "key": "reachesToy",
+        "label": "Reaches for a toy",
+        "group": "Fine motor",
+        "fromDays": 122,
+        "flagDays": 183
+      },
+      {
+        "key": "passesHands",
+        "label": "Moves things from one hand to the other",
+        "group": "Fine motor",
+        "fromDays": 183,
+        "flagDays": 274
+      },
+      {
+        "key": "pincer",
+        "label": "Picks up small food with thumb and finger",
+        "group": "Fine motor",
+        "fromDays": 274,
+        "flagDays": 365
+      },
+      {
+        "key": "stacks",
+        "label": "Stacks two small blocks",
+        "group": "Fine motor",
+        "fromDays": 365,
+        "flagDays": 457
+      },
+      {
+        "key": "scribbles",
+        "label": "Scribbles",
+        "group": "Fine motor",
+        "fromDays": 365,
+        "flagDays": 548
+      },
+      {
+        "key": "spoon",
+        "label": "Eats with a spoon",
+        "group": "Fine motor",
+        "fromDays": 457,
+        "flagDays": 731
+      },
+      {
+        "key": "circle",
+        "label": "Draws a circle",
+        "group": "Fine motor",
+        "fromDays": 913,
+        "flagDays": 1096
+      },
+      {
+        "key": "pencilGrip",
+        "label": "Holds a crayon between fingers and thumb",
+        "group": "Fine motor",
+        "fromDays": 1096,
+        "flagDays": 1461
+      },
+      {
+        "key": "buttons",
+        "label": "Buttons some buttons",
+        "group": "Fine motor",
+        "fromDays": 1461,
+        "flagDays": 1826
+      },
+      {
+        "key": "sounds",
+        "label": "Makes sounds other than crying",
+        "group": "Language",
+        "fromDays": 0,
+        "flagDays": 61
+      },
+      {
+        "key": "coos",
+        "label": "Coos and turns to a voice",
+        "group": "Language",
+        "fromDays": 61,
+        "flagDays": 122
+      },
+      {
+        "key": "babbles",
+        "label": "Babbles (mamama, bababa)",
+        "group": "Language",
+        "fromDays": 183,
+        "flagDays": 274
+      },
+      {
+        "key": "name",
+        "label": "Looks when their name is called",
+        "group": "Language",
+        "fromDays": 183,
+        "flagDays": 274
+      },
+      {
+        "key": "waves",
+        "label": "Waves bye-bye",
+        "group": "Language",
+        "fromDays": 274,
+        "flagDays": 365
+      },
+      {
+        "key": "parentWord",
+        "label": "Calls a parent mama or dada",
+        "group": "Language",
+        "fromDays": 274,
+        "flagDays": 365
+      },
+      {
+        "key": "threeWords",
+        "label": "Says three or more words besides mama and dada",
+        "group": "Language",
+        "fromDays": 365,
+        "flagDays": 548
+      },
+      {
+        "key": "twoWords",
+        "label": "Puts two words together",
+        "group": "Language",
+        "fromDays": 548,
+        "flagDays": 731
+      },
+      {
+        "key": "clearSpeech",
+        "label": "Speech others understand most of the time",
+        "group": "Language",
+        "fromDays": 913,
+        "flagDays": 1096
+      },
+      {
+        "key": "sentences",
+        "label": "Speaks in sentences of four or more words",
+        "group": "Language",
+        "fromDays": 1096,
+        "flagDays": 1461
+      },
+      {
+        "key": "story",
+        "label": "Tells a story with at least two events",
+        "group": "Language",
+        "fromDays": 1461,
+        "flagDays": 1826
+      },
+      {
+        "key": "socialSmile",
+        "label": "Smiles when spoken to or smiled at",
+        "group": "Social",
+        "fromDays": 0,
+        "flagDays": 61
+      },
+      {
+        "key": "laughs",
+        "label": "Laughs",
+        "group": "Social",
+        "fromDays": 91,
+        "flagDays": 183
+      },
+      {
+        "key": "knowsFamiliar",
+        "label": "Knows familiar people",
+        "group": "Social",
+        "fromDays": 122,
+        "flagDays": 183
+      },
+      {
+        "key": "peekaboo",
+        "label": "Smiles or laughs at peek-a-boo",
+        "group": "Social",
+        "fromDays": 183,
+        "flagDays": 274
+      },
+      {
+        "key": "playsGames",
+        "label": "Plays games such as pat-a-cake",
+        "group": "Social",
+        "fromDays": 274,
+        "flagDays": 365
+      },
+      {
+        "key": "pointsToShow",
+        "label": "Points to show something interesting",
+        "group": "Social",
+        "fromDays": 365,
+        "flagDays": 548
+      },
+      {
+        "key": "playsNear",
+        "label": "Plays next to other children",
+        "group": "Social",
+        "fromDays": 731,
+        "flagDays": 913
+      },
+      {
+        "key": "joinsPlay",
+        "label": "Notices other children and joins their play",
+        "group": "Social",
+        "fromDays": 913,
+        "flagDays": 1096
+      },
+      {
+        "key": "pretend",
+        "label": "Pretends in play",
+        "group": "Social",
+        "fromDays": 1096,
+        "flagDays": 1461
+      },
+      {
+        "key": "takesTurns",
+        "label": "Takes turns in games",
+        "group": "Social",
+        "fromDays": 1461,
+        "flagDays": 1826
+      }
+    ],
+    "vaccines": [
+      {
+        "key": "bcg",
+        "label": "BCG",
+        "group": "Birth",
+        "fromDays": 0,
+        "flagDays": 29
+      },
+      {
+        "key": "opv0",
+        "label": "OPV 0",
+        "group": "Birth",
+        "fromDays": 0,
+        "flagDays": 29
+      },
+      {
+        "key": "hepB0",
+        "label": "Hep B birth dose",
+        "group": "Birth",
+        "fromDays": 0,
+        "flagDays": 29
+      },
+      {
+        "key": "opv1",
+        "label": "OPV 1",
+        "group": "6 weeks",
+        "fromDays": 42,
+        "flagDays": 71
+      },
+      {
+        "key": "penta1",
+        "label": "Penta 1",
+        "group": "6 weeks",
+        "fromDays": 42,
+        "flagDays": 71
+      },
+      {
+        "key": "rota1",
+        "label": "Rota 1",
+        "group": "6 weeks",
+        "fromDays": 42,
+        "flagDays": 71
+      },
+      {
+        "key": "fipv1",
+        "label": "fIPV 1",
+        "group": "6 weeks",
+        "fromDays": 42,
+        "flagDays": 71
+      },
+      {
+        "key": "pcv1",
+        "label": "PCV 1",
+        "group": "6 weeks",
+        "fromDays": 42,
+        "flagDays": 71
+      },
+      {
+        "key": "opv2",
+        "label": "OPV 2",
+        "group": "10 weeks",
+        "fromDays": 70,
+        "flagDays": 99
+      },
+      {
+        "key": "penta2",
+        "label": "Penta 2",
+        "group": "10 weeks",
+        "fromDays": 70,
+        "flagDays": 99
+      },
+      {
+        "key": "rota2",
+        "label": "Rota 2",
+        "group": "10 weeks",
+        "fromDays": 70,
+        "flagDays": 99
+      },
+      {
+        "key": "opv3",
+        "label": "OPV 3",
+        "group": "14 weeks",
+        "fromDays": 98,
+        "flagDays": 127
+      },
+      {
+        "key": "penta3",
+        "label": "Penta 3",
+        "group": "14 weeks",
+        "fromDays": 98,
+        "flagDays": 127
+      },
+      {
+        "key": "fipv2",
+        "label": "fIPV 2",
+        "group": "14 weeks",
+        "fromDays": 98,
+        "flagDays": 127
+      },
+      {
+        "key": "rota3",
+        "label": "Rota 3",
+        "group": "14 weeks",
+        "fromDays": 98,
+        "flagDays": 127
+      },
+      {
+        "key": "pcv2",
+        "label": "PCV 2",
+        "group": "14 weeks",
+        "fromDays": 98,
+        "flagDays": 127
+      },
+      {
+        "key": "mr1",
+        "label": "MR 1",
+        "group": "9 to 12 months",
+        "fromDays": 274,
+        "flagDays": 366
+      },
+      {
+        "key": "je1",
+        "label": "JE 1",
+        "group": "9 to 12 months",
+        "fromDays": 274,
+        "flagDays": 366
+      },
+      {
+        "key": "pcvBooster",
+        "label": "PCV booster",
+        "group": "9 to 12 months",
+        "fromDays": 274,
+        "flagDays": 366
+      },
+      {
+        "key": "mr2",
+        "label": "MR 2",
+        "group": "16 to 24 months",
+        "fromDays": 487,
+        "flagDays": 732
+      },
+      {
+        "key": "je2",
+        "label": "JE 2",
+        "group": "16 to 24 months",
+        "fromDays": 487,
+        "flagDays": 732
+      },
+      {
+        "key": "dptB1",
+        "label": "DPT booster 1",
+        "group": "16 to 24 months",
+        "fromDays": 487,
+        "flagDays": 732
+      },
+      {
+        "key": "opvBooster",
+        "label": "OPV booster",
+        "group": "16 to 24 months",
+        "fromDays": 487,
+        "flagDays": 732
+      },
+      {
+        "key": "dptB2",
+        "label": "DPT booster 2",
+        "group": "5 to 6 years",
+        "fromDays": 1826,
+        "flagDays": 2193
+      },
+      {
+        "key": "td10",
+        "label": "Td (10 years)",
+        "group": "10 years",
+        "fromDays": 3653,
+        "flagDays": 4019
+      },
+      {
+        "key": "td16",
+        "label": "Td (16 years)",
+        "group": "16 years",
+        "fromDays": 5844,
+        "flagDays": 6210
+      }
+    ]
+  },
   "states": [
     {
       "preset": "milestones",
       "key": "walks",
       "answer": "notDone",
       "age": 548,
-      "unsetIsMissing": false
+      "unsetIsMissing": false,
+      "state": "flagged"
     },
     {
       "preset": "milestones",
       "key": "walks",
       "answer": "notDone",
       "age": 547,
-      "unsetIsMissing": false
+      "unsetIsMissing": false,
+      "state": "open"
     },
     {
       "preset": "milestones",
       "key": "walks",
       "answer": "notDone",
       "age": 100,
-      "unsetIsMissing": false
+      "unsetIsMissing": false,
+      "state": "later"
     },
     {
       "preset": "milestones",
       "key": "walks",
       "answer": "notDone",
       "age": null,
-      "unsetIsMissing": false
+      "unsetIsMissing": false,
+      "state": "flagged"
     },
     {
       "preset": "milestones",
       "key": "walks",
       "answer": "done",
       "age": null,
-      "unsetIsMissing": false
+      "unsetIsMissing": false,
+      "state": "done"
     },
     {
       "preset": "milestones",
       "key": "walks",
       "answer": null,
       "age": 600,
-      "unsetIsMissing": false
+      "unsetIsMissing": false,
+      "state": "open"
     },
     {
       "preset": "milestones",
       "key": "walks",
       "answer": null,
       "age": 600,
-      "unsetIsMissing": true
+      "unsetIsMissing": true,
+      "state": "flagged"
     },
     {
       "preset": "vaccines",
       "key": "mr2",
       "answer": "notDone",
       "age": 730,
-      "unsetIsMissing": false
+      "unsetIsMissing": false,
+      "state": "open"
     },
     {
       "preset": "vaccines",
       "key": "mr2",
       "answer": "notDone",
       "age": 731,
-      "unsetIsMissing": false
+      "unsetIsMissing": false,
+      "state": "open"
     },
     {
       "preset": "vaccines",
       "key": "mr2",
       "answer": "notDone",
       "age": 486,
-      "unsetIsMissing": false
+      "unsetIsMissing": false,
+      "state": "later"
     },
     {
       "preset": "vaccines",
       "key": "bcg",
       "answer": null,
       "age": 28,
-      "unsetIsMissing": true
+      "unsetIsMissing": true,
+      "state": "open"
     },
     {
       "preset": "vaccines",
       "key": "bcg",
       "answer": null,
       "age": 29,
-      "unsetIsMissing": true
+      "unsetIsMissing": true,
+      "state": "flagged"
     }
   ],
   "layouts": [
@@ -217,7 +739,101 @@
         "consanguinity": {
           "parents": true
         }
-      }
+      },
+      "nodes": [
+        {
+          "id": "p0",
+          "number": 1,
+          "relation": "father",
+          "shape": "square",
+          "x": 80,
+          "y": 40
+        },
+        {
+          "id": "p1",
+          "number": 2,
+          "relation": "mother",
+          "shape": "circle",
+          "x": 160,
+          "y": 40
+        },
+        {
+          "id": "p2",
+          "number": 3,
+          "relation": "brother",
+          "shape": "square",
+          "x": 40,
+          "y": 160
+        },
+        {
+          "id": "p3",
+          "number": 4,
+          "relation": "sister",
+          "shape": "circle",
+          "x": 120,
+          "y": 160
+        },
+        {
+          "id": "self",
+          "number": 5,
+          "relation": "self",
+          "shape": "square",
+          "x": 200,
+          "y": 160
+        }
+      ],
+      "lines": [
+        [
+          "marriage",
+          102,
+          40,
+          138,
+          40,
+          true
+        ],
+        [
+          "descent",
+          120,
+          40,
+          120,
+          100,
+          false
+        ],
+        [
+          "descent",
+          40,
+          100,
+          200,
+          100,
+          false
+        ],
+        [
+          "descent",
+          40,
+          100,
+          40,
+          138,
+          false
+        ],
+        [
+          "descent",
+          120,
+          100,
+          120,
+          138,
+          false
+        ],
+        [
+          "descent",
+          200,
+          100,
+          200,
+          138,
+          false
+        ]
+      ],
+      "width": 240,
+      "height": 200
     },
     {
       "name": "three generations with spouse and children",
@@ -267,7 +883,173 @@
           "parents": true,
           "spouse": false
         }
-      }
+      },
+      "nodes": [
+        {
+          "id": "p2",
+          "number": 1,
+          "relation": "maternalGrandmother",
+          "shape": "circle",
+          "x": 120,
+          "y": 40
+        },
+        {
+          "id": "p0",
+          "number": 2,
+          "relation": "father",
+          "shape": "square",
+          "x": 40,
+          "y": 160
+        },
+        {
+          "id": "p1",
+          "number": 3,
+          "relation": "mother",
+          "shape": "circle",
+          "x": 120,
+          "y": 160
+        },
+        {
+          "id": "p3",
+          "number": 4,
+          "relation": "brother",
+          "shape": "square",
+          "x": 40,
+          "y": 280
+        },
+        {
+          "id": "self",
+          "number": 5,
+          "relation": "self",
+          "shape": "circle",
+          "x": 120,
+          "y": 280
+        },
+        {
+          "id": "p4",
+          "number": 6,
+          "relation": "spouse",
+          "shape": "square",
+          "x": 200,
+          "y": 280
+        },
+        {
+          "id": "p5",
+          "number": 7,
+          "relation": "son",
+          "shape": "square",
+          "x": 120,
+          "y": 400
+        },
+        {
+          "id": "p6",
+          "number": 8,
+          "relation": "daughter",
+          "shape": "circle",
+          "x": 200,
+          "y": 400
+        }
+      ],
+      "lines": [
+        [
+          "marriage",
+          62,
+          160,
+          98,
+          160,
+          true
+        ],
+        [
+          "marriage",
+          142,
+          280,
+          178,
+          280,
+          false
+        ],
+        [
+          "descent",
+          120,
+          62,
+          120,
+          100,
+          false
+        ],
+        [
+          "descent",
+          120,
+          100,
+          120,
+          138,
+          false
+        ],
+        [
+          "descent",
+          80,
+          160,
+          80,
+          220,
+          false
+        ],
+        [
+          "descent",
+          40,
+          220,
+          120,
+          220,
+          false
+        ],
+        [
+          "descent",
+          40,
+          220,
+          40,
+          258,
+          false
+        ],
+        [
+          "descent",
+          120,
+          220,
+          120,
+          258,
+          false
+        ],
+        [
+          "descent",
+          160,
+          280,
+          160,
+          340,
+          false
+        ],
+        [
+          "descent",
+          120,
+          340,
+          200,
+          340,
+          false
+        ],
+        [
+          "descent",
+          120,
+          340,
+          120,
+          378,
+          false
+        ],
+        [
+          "descent",
+          200,
+          340,
+          200,
+          378,
+          false
+        ]
+      ],
+      "width": 240,
+      "height": 440
     },
     {
       "name": "one parent, spouse and three children",
@@ -295,7 +1077,125 @@
         "consanguinity": {
           "spouse": true
         }
-      }
+      },
+      "nodes": [
+        {
+          "id": "p0",
+          "number": 1,
+          "relation": "mother",
+          "shape": "circle",
+          "x": 80,
+          "y": 40
+        },
+        {
+          "id": "self",
+          "number": 2,
+          "relation": "self",
+          "shape": "square",
+          "x": 80,
+          "y": 160
+        },
+        {
+          "id": "p1",
+          "number": 3,
+          "relation": "spouse",
+          "shape": "circle",
+          "x": 160,
+          "y": 160
+        },
+        {
+          "id": "p2",
+          "number": 4,
+          "relation": "son",
+          "shape": "square",
+          "x": 40,
+          "y": 280
+        },
+        {
+          "id": "p3",
+          "number": 5,
+          "relation": "son",
+          "shape": "square",
+          "x": 120,
+          "y": 280
+        },
+        {
+          "id": "p4",
+          "number": 6,
+          "relation": "daughter",
+          "shape": "circle",
+          "x": 200,
+          "y": 280
+        }
+      ],
+      "lines": [
+        [
+          "marriage",
+          102,
+          160,
+          138,
+          160,
+          true
+        ],
+        [
+          "descent",
+          80,
+          62,
+          80,
+          100,
+          false
+        ],
+        [
+          "descent",
+          80,
+          100,
+          80,
+          138,
+          false
+        ],
+        [
+          "descent",
+          120,
+          160,
+          120,
+          220,
+          false
+        ],
+        [
+          "descent",
+          40,
+          220,
+          200,
+          220,
+          false
+        ],
+        [
+          "descent",
+          40,
+          220,
+          40,
+          258,
+          false
+        ],
+        [
+          "descent",
+          120,
+          220,
+          120,
+          258,
+          false
+        ],
+        [
+          "descent",
+          200,
+          220,
+          200,
+          258,
+          false
+        ]
+      ],
+      "width": 240,
+      "height": 320
     },
     {
       "name": "grandparents on both sides",
@@ -332,11 +1232,230 @@
             "relation": "brother"
           }
         ]
-      }
+      },
+      "nodes": [
+        {
+          "id": "p0",
+          "number": 1,
+          "relation": "paternalGrandfather",
+          "shape": "square",
+          "x": 60,
+          "y": 40
+        },
+        {
+          "id": "p1",
+          "number": 2,
+          "relation": "paternalGrandmother",
+          "shape": "circle",
+          "x": 140,
+          "y": 40
+        },
+        {
+          "id": "p2",
+          "number": 3,
+          "relation": "maternalGrandfather",
+          "shape": "square",
+          "x": 260,
+          "y": 40
+        },
+        {
+          "id": "p3",
+          "number": 4,
+          "relation": "maternalGrandmother",
+          "shape": "circle",
+          "x": 340,
+          "y": 40
+        },
+        {
+          "id": "p6",
+          "number": 5,
+          "relation": "paternalUncle",
+          "shape": "square",
+          "x": 40,
+          "y": 160
+        },
+        {
+          "id": "p4",
+          "number": 6,
+          "relation": "father",
+          "shape": "square",
+          "x": 160,
+          "y": 160
+        },
+        {
+          "id": "p5",
+          "number": 7,
+          "relation": "mother",
+          "shape": "circle",
+          "x": 240,
+          "y": 160
+        },
+        {
+          "id": "p7",
+          "number": 8,
+          "relation": "maternalAunt",
+          "shape": "circle",
+          "x": 360,
+          "y": 160
+        },
+        {
+          "id": "p8",
+          "number": 9,
+          "relation": "brother",
+          "shape": "square",
+          "x": 160,
+          "y": 280
+        },
+        {
+          "id": "self",
+          "number": 10,
+          "relation": "self",
+          "shape": "square",
+          "x": 240,
+          "y": 280
+        }
+      ],
+      "lines": [
+        [
+          "marriage",
+          182,
+          160,
+          218,
+          160,
+          false
+        ],
+        [
+          "marriage",
+          82,
+          40,
+          118,
+          40,
+          false
+        ],
+        [
+          "marriage",
+          282,
+          40,
+          318,
+          40,
+          false
+        ],
+        [
+          "descent",
+          100,
+          40,
+          100,
+          100,
+          false
+        ],
+        [
+          "descent",
+          40,
+          100,
+          160,
+          100,
+          false
+        ],
+        [
+          "descent",
+          40,
+          100,
+          40,
+          138,
+          false
+        ],
+        [
+          "descent",
+          160,
+          100,
+          160,
+          138,
+          false
+        ],
+        [
+          "descent",
+          300,
+          40,
+          300,
+          100,
+          false
+        ],
+        [
+          "descent",
+          240,
+          100,
+          360,
+          100,
+          false
+        ],
+        [
+          "descent",
+          240,
+          100,
+          240,
+          138,
+          false
+        ],
+        [
+          "descent",
+          360,
+          100,
+          360,
+          138,
+          false
+        ],
+        [
+          "descent",
+          200,
+          160,
+          200,
+          220,
+          false
+        ],
+        [
+          "descent",
+          160,
+          220,
+          240,
+          220,
+          false
+        ],
+        [
+          "descent",
+          160,
+          220,
+          160,
+          258,
+          false
+        ],
+        [
+          "descent",
+          240,
+          220,
+          240,
+          258,
+          false
+        ]
+      ],
+      "width": 400,
+      "height": 320
     },
     {
       "name": "only the patient",
-      "answer": {}
+      "answer": {},
+      "nodes": [
+        {
+          "id": "self",
+          "number": 1,
+          "relation": "self",
+          "shape": "diamond",
+          "x": 40,
+          "y": 160
+        }
+      ],
+      "lines": [],
+      "width": 80,
+      "height": 200
     },
     {
       "name": "a second father is ignored",
@@ -352,7 +1471,69 @@
             "relation": "sister"
           }
         ]
-      }
+      },
+      "nodes": [
+        {
+          "id": "p0",
+          "number": 1,
+          "relation": "father",
+          "shape": "square",
+          "x": 80,
+          "y": 40
+        },
+        {
+          "id": "p2",
+          "number": 2,
+          "relation": "sister",
+          "shape": "circle",
+          "x": 40,
+          "y": 160
+        },
+        {
+          "id": "self",
+          "number": 3,
+          "relation": "self",
+          "shape": "diamond",
+          "x": 120,
+          "y": 160
+        }
+      ],
+      "lines": [
+        [
+          "descent",
+          80,
+          62,
+          80,
+          100,
+          false
+        ],
+        [
+          "descent",
+          40,
+          100,
+          120,
+          100,
+          false
+        ],
+        [
+          "descent",
+          40,
+          100,
+          40,
+          138,
+          false
+        ],
+        [
+          "descent",
+          120,
+          100,
+          120,
+          138,
+          false
+        ]
+      ],
+      "width": 160,
+      "height": 200
     },
     {
       "name": "uncles without parents",
@@ -371,7 +1552,44 @@
             "relation": "maternalUncle"
           }
         ]
-      }
+      },
+      "nodes": [
+        {
+          "id": "p0",
+          "number": 1,
+          "relation": "paternalUncle",
+          "shape": "square",
+          "x": 40,
+          "y": 40
+        },
+        {
+          "id": "p1",
+          "number": 2,
+          "relation": "paternalAunt",
+          "shape": "circle",
+          "x": 120,
+          "y": 40
+        },
+        {
+          "id": "p2",
+          "number": 3,
+          "relation": "maternalUncle",
+          "shape": "square",
+          "x": 280,
+          "y": 40
+        },
+        {
+          "id": "self",
+          "number": 4,
+          "relation": "self",
+          "shape": "circle",
+          "x": 40,
+          "y": 160
+        }
+      ],
+      "lines": [],
+      "width": 320,
+      "height": 200
     }
   ],
   "teeth": {
@@ -413,6 +1631,107 @@
         "tooth": "54",
         "surface": "B"
       }
+    ],
+    "valid": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ],
+    "names": [
+      "upper right central incisor",
+      "upper right third molar",
+      "lower left first molar",
+      "lower right first molar",
+      "baby upper right second molar",
+      "baby upper left second molar",
+      "baby lower left second molar",
+      "baby lower right second molar",
+      null,
+      null,
+      null
+    ],
+    "surfaceWords": [
+      "incisal",
+      "labial",
+      "occlusal",
+      "lingual",
+      "palatal",
+      "buccal"
+    ],
+    "upperAdult": [
+      "18",
+      "17",
+      "16",
+      "15",
+      "14",
+      "13",
+      "12",
+      "11",
+      "21",
+      "22",
+      "23",
+      "24",
+      "25",
+      "26",
+      "27",
+      "28"
+    ],
+    "lowerAdult": [
+      "48",
+      "47",
+      "46",
+      "45",
+      "44",
+      "43",
+      "42",
+      "41",
+      "31",
+      "32",
+      "33",
+      "34",
+      "35",
+      "36",
+      "37",
+      "38"
+    ],
+    "upperBaby": [
+      "55",
+      "54",
+      "53",
+      "52",
+      "51",
+      "61",
+      "62",
+      "63",
+      "64",
+      "65"
+    ],
+    "lowerBaby": [
+      "85",
+      "84",
+      "83",
+      "82",
+      "81",
+      "71",
+      "72",
+      "73",
+      "74",
+      "75"
+    ],
+    "surfaceOrder": [
+      "M",
+      "O",
+      "D",
+      "B",
+      "L"
     ]
   }
 }

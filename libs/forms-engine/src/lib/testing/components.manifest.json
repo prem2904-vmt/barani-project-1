@@ -2,6 +2,236 @@
  "schemaVersion": 2,
  "kinds": [
   {
+   "name": "ageChecklist",
+   "title": "Checklist by age",
+   "description": "A checklist that follows the patient\u0027s age: developmental milestones, the India immunisation schedule, or your own list. Each line is done or not yet; the case note reports only what is late.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "age-checklist",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "preset": {
+      "enum": [
+       "milestones",
+       "vaccines",
+       "custom"
+      ]
+     },
+     "ageField": {
+      "type": "string",
+      "maxLength": 100
+     },
+     "domains": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+       "enum": [
+        "gross",
+        "fine",
+        "language",
+        "social"
+       ]
+      }
+     },
+     "exclude": {
+      "type": "array",
+      "maxItems": 80,
+      "items": {
+       "type": "string",
+       "maxLength": 40
+      }
+     },
+     "unsetIsMissing": {
+      "type": "boolean"
+     },
+     "normalSentence": {
+      "type": "string",
+      "maxLength": 200
+     },
+     "items": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "key",
+        "label"
+       ],
+       "properties": {
+        "key": {
+         "type": "string",
+         "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+         "maxLength": 40
+        },
+        "label": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 80
+        },
+        "delay": {
+         "type": "string",
+         "maxLength": 80
+        },
+        "byMonths": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1200
+        },
+        "group": {
+         "type": "string",
+         "maxLength": 40
+        }
+       }
+      }
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "ageDays": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 43830
+     },
+     "items": {
+      "type": "object",
+      "additionalProperties": {
+       "enum": [
+        "done",
+        "notDone"
+       ]
+      }
+     },
+     "note": {
+      "type": "string",
+      "maxLength": 500
+     }
+    }
+   },
+   "defaults": {
+    "preset": "milestones"
+   },
+   "examples": [
+    {
+     "name": "milestones",
+     "field": {
+      "key": "development",
+      "kind": "ageChecklist",
+      "label": "Development",
+      "required": false,
+      "config": {
+       "preset": "milestones"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "development": {
+       "ageDays": 548,
+       "items": {
+        "sits": "done",
+        "pullsToStand": "done",
+        "walks": "notDone",
+        "threeWords": "done"
+       }
+      }
+     }
+    },
+    {
+     "name": "vaccines",
+     "field": {
+      "key": "immunisation",
+      "kind": "ageChecklist",
+      "label": "Immunisation",
+      "required": false,
+      "config": {
+       "preset": "vaccines",
+       "exclude": [
+        "je1",
+        "je2"
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "immunisation": {
+       "ageDays": 1096,
+       "items": {
+        "bcg": "done",
+        "penta3": "done",
+        "mr1": "done",
+        "mr2": "notDone",
+        "dptB1": "notDone"
+       }
+      }
+     }
+    },
+    {
+     "name": "own list",
+     "field": {
+      "key": "screen",
+      "kind": "ageChecklist",
+      "label": "Newborn screen",
+      "required": false,
+      "config": {
+       "preset": "custom",
+       "items": [
+        {
+         "key": "hearing",
+         "label": "Hearing screen",
+         "delay": "hearing screen not done",
+         "byMonths": 1
+        },
+        {
+         "key": "tsh",
+         "label": "Thyroid screen"
+        }
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "screen": {
+       "ageDays": 20,
+       "items": {
+        "hearing": "done",
+        "tsh": "notDone"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
    "name": "bmi",
    "title": "Height, weight and BMI",
    "description": "Height and weight with their units; the BMI is calculated and written with them.",
@@ -769,7 +999,7 @@
   {
    "name": "date",
    "title": "Date",
-   "description": "A calendar date (date of birth, onset, last visit). Written as dd/mm/yyyy. Set purpose to 'birth' for a date of birth: a template can then say {{key.age}} (for example '42 years' or '8 months') or {{key.years}}.",
+   "description": "A calendar date (date of birth, onset, last visit). Written as dd/mm/yyyy. Set purpose to \u0027birth\u0027 for a date of birth: a template can then say {{key.age}} (for example \u002742 years\u0027 or \u00278 months\u0027) or {{key.years}}.",
    "legacyNames": [],
    "usesOptions": false,
    "usesChildren": false,
@@ -1756,7 +1986,7 @@
         "maxItems": 8,
         "items": {
          "enum": [
-          "+",
+          "\u002B",
           "-"
          ]
         }
@@ -1793,7 +2023,7 @@
         "maxItems": 8,
         "items": {
          "enum": [
-          "+",
+          "\u002B",
           "-"
          ]
         }
@@ -1851,23 +2081,23 @@
      "answers": {
       "eom": {
        "re": [
-        "+",
-        "+",
-        "+",
-        "+",
-        "+",
-        "+",
-        "+",
-        "+"
+        "\u002B",
+        "\u002B",
+        "\u002B",
+        "\u002B",
+        "\u002B",
+        "\u002B",
+        "\u002B",
+        "\u002B"
        ],
        "le": [
-        "+",
-        "+",
+        "\u002B",
+        "\u002B",
         "-",
-        "+",
-        "+",
-        "+",
-        "+",
+        "\u002B",
+        "\u002B",
+        "\u002B",
+        "\u002B",
         "-"
        ],
        "includeInPdf": true
@@ -1935,6 +2165,359 @@
         "bottom": "Clear"
        },
        "includeInPdf": true
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "familyTree",
+   "title": "Family tree",
+   "description": "A family tree around the patient: parents, brothers and sisters, spouse, children, grandparents, uncles and aunts. Mark who has each condition you list, who has died and whether parents are blood relatives. Writes who is affected and prints the tree.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "family-tree",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "conditions": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "key",
+        "label"
+       ],
+       "properties": {
+        "key": {
+         "type": "string",
+         "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+         "maxLength": 40
+        },
+        "label": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 60
+        },
+        "color": {
+         "type": "string",
+         "pattern": "^#[0-9a-fA-F]{6}$"
+        }
+       }
+      }
+     },
+     "chart": {
+      "type": "boolean"
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "self": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "sex": {
+        "enum": [
+         "male",
+         "female",
+         "unknown"
+        ]
+       },
+       "conditions": {
+        "type": "array",
+        "maxItems": 12,
+        "items": {
+         "type": "string",
+         "maxLength": 40
+        }
+       }
+      }
+     },
+     "people": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "relation"
+       ],
+       "properties": {
+        "relation": {
+         "enum": [
+          "paternalGrandfather",
+          "paternalGrandmother",
+          "maternalGrandfather",
+          "maternalGrandmother",
+          "paternalUncle",
+          "paternalAunt",
+          "father",
+          "mother",
+          "maternalUncle",
+          "maternalAunt",
+          "brother",
+          "sister",
+          "spouse",
+          "son",
+          "daughter"
+         ]
+        },
+        "sex": {
+         "enum": [
+          "male",
+          "female",
+          "unknown"
+         ]
+        },
+        "name": {
+         "type": "string",
+         "maxLength": 60
+        },
+        "age": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 120
+        },
+        "deceased": {
+         "type": "boolean"
+        },
+        "ageAtDeath": {
+         "type": "integer",
+         "minimum": 0,
+         "maximum": 120
+        },
+        "conditions": {
+         "type": "array",
+         "maxItems": 12,
+         "items": {
+          "type": "string",
+          "maxLength": 40
+         }
+        },
+        "note": {
+         "type": "string",
+         "maxLength": 200
+        }
+       }
+      }
+     },
+     "consanguinity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+       "parents": {
+        "type": "boolean"
+       },
+       "spouse": {
+        "type": "boolean"
+       }
+      }
+     },
+     "noHistory": {
+      "type": "boolean"
+     }
+    }
+   },
+   "defaults": {
+    "chart": true,
+    "conditions": [
+     {
+      "key": "diabetes",
+      "label": "Diabetes"
+     },
+     {
+      "key": "hypertension",
+      "label": "Hypertension"
+     },
+     {
+      "key": "heartDisease",
+      "label": "Heart disease"
+     },
+     {
+      "key": "cancer",
+      "label": "Cancer"
+     },
+     {
+      "key": "stroke",
+      "label": "Stroke"
+     },
+     {
+      "key": "thyroid",
+      "label": "Thyroid disorder"
+     }
+    ]
+   },
+   "examples": [
+    {
+     "name": "family history",
+     "field": {
+      "key": "family",
+      "kind": "familyTree",
+      "label": "Family history",
+      "required": false,
+      "config": {
+       "chart": true,
+       "conditions": [
+        {
+         "key": "diabetes",
+         "label": "Diabetes"
+        },
+        {
+         "key": "hypertension",
+         "label": "Hypertension"
+        },
+        {
+         "key": "heartDisease",
+         "label": "Heart disease"
+        },
+        {
+         "key": "cancer",
+         "label": "Cancer"
+        },
+        {
+         "key": "stroke",
+         "label": "Stroke"
+        },
+        {
+         "key": "thyroid",
+         "label": "Thyroid disorder"
+        }
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "family": {
+       "self": {
+        "sex": "male"
+       },
+       "people": [
+        {
+         "relation": "father",
+         "age": 62,
+         "conditions": [
+          "diabetes",
+          "hypertension"
+         ]
+        },
+        {
+         "relation": "mother",
+         "age": 58,
+         "conditions": [
+          "hypertension"
+         ]
+        },
+        {
+         "relation": "paternalUncle",
+         "conditions": [
+          "diabetes"
+         ]
+        },
+        {
+         "relation": "sister",
+         "age": 30
+        }
+       ],
+       "consanguinity": {
+        "parents": true
+       }
+      }
+     }
+    },
+    {
+     "name": "three generations",
+     "field": {
+      "key": "pedigree",
+      "kind": "familyTree",
+      "label": "Pedigree",
+      "required": false,
+      "config": {
+       "conditions": [
+        {
+         "key": "thalassemia",
+         "label": "Thalassemia"
+        },
+        {
+         "key": "deafness",
+         "label": "Hearing loss",
+         "color": "#2563eb"
+        }
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "pedigree": {
+       "self": {
+        "sex": "female",
+        "conditions": [
+         "thalassemia"
+        ]
+       },
+       "people": [
+        {
+         "relation": "father",
+         "deceased": true,
+         "ageAtDeath": 55,
+         "conditions": [
+          "thalassemia"
+         ]
+        },
+        {
+         "relation": "mother"
+        },
+        {
+         "relation": "maternalGrandmother",
+         "conditions": [
+          "deafness"
+         ]
+        },
+        {
+         "relation": "brother",
+         "conditions": [
+          "thalassemia"
+         ]
+        },
+        {
+         "relation": "spouse",
+         "sex": "male"
+        },
+        {
+         "relation": "son"
+        },
+        {
+         "relation": "daughter"
+        }
+       ],
+       "consanguinity": {
+        "parents": true,
+        "spouse": false
+       }
       }
      }
     }
@@ -3596,12 +4179,12 @@
   {
    "name": "pictureChoice",
    "title": "Picture choice",
-   "description": "Pictures laid out in a box (a hand, a leg, a tooth): the doctor taps the ones that apply and they light up. A set of picks like Multiple choice, or one pick when multiple is off. Each part is an option with a place in the box, a picture and its own words; any combination of parts can have its own sentence (says.combinations).",
+   "description": "Pick from pictures laid out in a box (right hand, left hand, left leg, right leg): tap a picture and it lights up. Pictures work like a multiple choice, and combinations of pictures can have their own sentences.",
    "legacyNames": [],
    "usesOptions": true,
    "usesChildren": false,
    "touch": {
-    "control": "picture-box",
+    "control": "pictures",
     "needsKeyboard": false
    },
    "configSchema": {
@@ -3613,15 +4196,12 @@
      },
      "aspect": {
       "type": "number",
-      "minimum": 0.4,
-      "maximum": 3
+      "minimum": 0.2,
+      "maximum": 5
      },
      "background": {
-      "type": [
-       "string",
-       "null"
-      ],
-      "maxLength": 64
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
      },
      "showLabels": {
       "type": "boolean"
@@ -3629,10 +4209,14 @@
      "total": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+       "label"
+      ],
       "properties": {
        "label": {
         "type": "string",
-        "maxLength": 60
+        "minLength": 1,
+        "maxLength": 80
        },
        "unit": {
         "type": "string",
@@ -3652,6 +4236,7 @@
      "array",
      "null"
     ],
+    "maxItems": 60,
     "items": {
      "type": "string"
     }
@@ -3663,11 +4248,11 @@
    },
    "examples": [
     {
-     "name": "limbs",
+     "name": "hands and legs",
      "field": {
       "key": "limbs",
       "kind": "pictureChoice",
-      "label": "Limbs affected",
+      "label": "Limbs involved",
       "required": false,
       "config": {
        "multiple": true,
@@ -3678,50 +4263,54 @@
        {
         "key": "rh",
         "label": "Right hand",
-        "says": "the right hand",
+        "says": "right hand",
         "subFields": [],
         "place": {
          "x": 0.05,
          "y": 0.05,
          "w": 0.4,
          "h": 0.4
-        }
+        },
+        "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
        },
        {
         "key": "lh",
         "label": "Left hand",
-        "says": "the left hand",
+        "says": "left hand",
         "subFields": [],
         "place": {
          "x": 0.55,
          "y": 0.05,
          "w": 0.4,
          "h": 0.4
-        }
-       },
-       {
-        "key": "rl",
-        "label": "Right leg",
-        "says": "the right leg",
-        "subFields": [],
-        "place": {
-         "x": 0.05,
-         "y": 0.55,
-         "w": 0.4,
-         "h": 0.4
-        }
+        },
+        "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
        },
        {
         "key": "ll",
         "label": "Left leg",
-        "says": "the left leg",
+        "says": "left leg",
         "subFields": [],
         "place": {
          "x": 0.55,
          "y": 0.55,
          "w": 0.4,
          "h": 0.4
-        }
+        },
+        "drawn": "M25,5 L75,5 L75,95 L25,95 Z"
+       },
+       {
+        "key": "rl",
+        "label": "Right leg",
+        "says": "right leg",
+        "subFields": [],
+        "place": {
+         "x": 0.05,
+         "y": 0.55,
+         "w": 0.4,
+         "h": 0.4
+        },
+        "drawn": "M25,5 L75,5 L75,95 L25,95 Z"
        }
       ],
       "children": [],
@@ -3739,11 +4328,11 @@
      }
     },
     {
-     "name": "with a sentence for a combination",
+     "name": "with combination sentences",
      "field": {
-      "key": "limbs",
+      "key": "limbsWords",
       "kind": "pictureChoice",
-      "label": "Limbs affected",
+      "label": "Limbs involved",
       "required": false,
       "config": {
        "multiple": true,
@@ -3754,50 +4343,54 @@
        {
         "key": "rh",
         "label": "Right hand",
-        "says": "the right hand",
+        "says": "right hand",
         "subFields": [],
         "place": {
          "x": 0.05,
          "y": 0.05,
          "w": 0.4,
          "h": 0.4
-        }
+        },
+        "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
        },
        {
         "key": "lh",
         "label": "Left hand",
-        "says": "the left hand",
+        "says": "left hand",
         "subFields": [],
         "place": {
          "x": 0.55,
          "y": 0.05,
          "w": 0.4,
          "h": 0.4
-        }
-       },
-       {
-        "key": "rl",
-        "label": "Right leg",
-        "says": "the right leg",
-        "subFields": [],
-        "place": {
-         "x": 0.05,
-         "y": 0.55,
-         "w": 0.4,
-         "h": 0.4
-        }
+        },
+        "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
        },
        {
         "key": "ll",
         "label": "Left leg",
-        "says": "the left leg",
+        "says": "left leg",
         "subFields": [],
         "place": {
          "x": 0.55,
          "y": 0.55,
          "w": 0.4,
          "h": 0.4
-        }
+        },
+        "drawn": "M25,5 L75,5 L75,95 L25,95 Z"
+       },
+       {
+        "key": "rl",
+        "label": "Right leg",
+        "says": "right leg",
+        "subFields": [],
+        "place": {
+         "x": 0.05,
+         "y": 0.55,
+         "w": 0.4,
+         "h": 0.4
+        },
+        "drawn": "M25,5 L75,5 L75,95 L25,95 Z"
        }
       ],
       "children": [],
@@ -3814,15 +4407,811 @@
          ],
          "match": "exact",
          "text": "Both upper limbs are involved"
+        },
+        {
+         "id": "c2",
+         "options": [
+          "rh",
+          "lh"
+         ],
+         "match": "includes",
+         "text": "Both upper limbs are involved, along with {others}"
         }
        ]
       }
      },
      "answers": {
-      "limbs": [
+      "limbsWords": [
        "rh",
-       "lh"
+       "lh",
+       "ll"
       ]
+     }
+    }
+   ]
+  },
+  {
+   "name": "plotChart",
+   "title": "Plotted chart",
+   "description": "Values plotted on a reference chart: a growth chart (weight, height, head circumference on the WHO curves), an audiogram (hearing thresholds per ear) or a partograph (labour progress with alert and action lines). Writes the centile, the hearing grade or where the lines were crossed.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "chart-entry",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "preset": {
+      "enum": [
+       "growth",
+       "audiogram",
+       "partograph"
+      ]
+     },
+     "measures": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+       "enum": [
+        "weight",
+        "height",
+        "head"
+       ]
+      }
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "sex": {
+      "enum": [
+       "boy",
+       "girl"
+      ]
+     },
+     "points": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "measure",
+        "age",
+        "value"
+       ],
+       "properties": {
+        "measure": {
+         "enum": [
+          "weight",
+          "height",
+          "head"
+         ]
+        },
+        "age": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 228
+        },
+        "value": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 300
+        }
+       }
+      }
+     },
+     "right": {
+      "type": [
+       "object",
+       "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+       "air": {
+        "type": [
+         "object",
+         "null"
+        ],
+        "additionalProperties": false,
+        "properties": {
+         "250": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "500": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "1000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "2000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "4000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "8000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         }
+        }
+       },
+       "bone": {
+        "type": [
+         "object",
+         "null"
+        ],
+        "additionalProperties": false,
+        "properties": {
+         "250": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "500": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "1000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "2000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "4000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "8000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         }
+        }
+       }
+      }
+     },
+     "left": {
+      "type": [
+       "object",
+       "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+       "air": {
+        "type": [
+         "object",
+         "null"
+        ],
+        "additionalProperties": false,
+        "properties": {
+         "250": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "500": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "1000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "2000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "4000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "8000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         }
+        }
+       },
+       "bone": {
+        "type": [
+         "object",
+         "null"
+        ],
+        "additionalProperties": false,
+        "properties": {
+         "250": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "500": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "1000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "2000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "4000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         },
+         "8000": {
+          "type": [
+           "number",
+           "null"
+          ],
+          "minimum": -10,
+          "maximum": 120
+         }
+        }
+       }
+      }
+     },
+     "readings": {
+      "type": "array",
+      "maxItems": 60,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "hour"
+       ],
+       "properties": {
+        "hour": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 24
+        },
+        "dilatation": {
+         "type": [
+          "number",
+          "null"
+         ],
+         "minimum": 0,
+         "maximum": 10
+        },
+        "descent": {
+         "type": [
+          "integer",
+          "null"
+         ],
+         "minimum": 0,
+         "maximum": 5
+        },
+        "fhr": {
+         "type": [
+          "number",
+          "null"
+         ],
+         "minimum": 30,
+         "maximum": 260
+        },
+        "contractions": {
+         "type": [
+          "integer",
+          "null"
+         ],
+         "minimum": 0,
+         "maximum": 10
+        }
+       }
+      }
+     }
+    }
+   },
+   "defaults": {
+    "preset": "growth",
+    "measures": [
+     "weight",
+     "height",
+     "head"
+    ]
+   },
+   "examples": [
+    {
+     "name": "growth chart",
+     "field": {
+      "key": "growth",
+      "kind": "plotChart",
+      "label": "Growth",
+      "required": false,
+      "config": {
+       "preset": "growth",
+       "measures": [
+        "weight",
+        "height"
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "growth": {
+       "sex": "girl",
+       "points": [
+        {
+         "measure": "weight",
+         "age": 12,
+         "value": 9.4
+        },
+        {
+         "measure": "weight",
+         "age": 18,
+         "value": 11.2
+        },
+        {
+         "measure": "height",
+         "age": 18,
+         "value": 81
+        }
+       ]
+      }
+     }
+    },
+    {
+     "name": "audiogram",
+     "field": {
+      "key": "hearing",
+      "kind": "plotChart",
+      "label": "Hearing test",
+      "required": false,
+      "config": {
+       "preset": "audiogram"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "hearing": {
+       "right": {
+        "air": {
+         "250": 40,
+         "500": 45,
+         "1000": 45,
+         "2000": 50,
+         "4000": 50,
+         "8000": 60
+        },
+        "bone": {
+         "500": 40,
+         "1000": 40,
+         "2000": 45,
+         "4000": 50
+        }
+       },
+       "left": {
+        "air": {
+         "250": 10,
+         "500": 10,
+         "1000": 15,
+         "2000": 10,
+         "4000": 15,
+         "8000": 20
+        }
+       }
+      }
+     }
+    },
+    {
+     "name": "partograph",
+     "field": {
+      "key": "labour",
+      "kind": "plotChart",
+      "label": "Labour progress",
+      "required": false,
+      "config": {
+       "preset": "partograph"
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "labour": {
+       "readings": [
+        {
+         "hour": 0,
+         "dilatation": 4,
+         "descent": 4,
+         "fhr": 140,
+         "contractions": 2
+        },
+        {
+         "hour": 2,
+         "dilatation": 5,
+         "descent": 4,
+         "fhr": 136,
+         "contractions": 3
+        },
+        {
+         "hour": 4,
+         "dilatation": 6,
+         "descent": 3,
+         "fhr": 128,
+         "contractions": 3
+        },
+        {
+         "hour": 6,
+         "dilatation": 7,
+         "descent": 3,
+         "fhr": 152,
+         "contractions": 4
+        }
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "readings",
+   "title": "Readings over time",
+   "description": "Timed readings of a few columns the author defines (pulse, temperature, blood sugar, intake and output), one row per time; writes the latest, highest and lowest with their times, and totals for intake and output.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "reading-rows",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "columns": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "key",
+        "label"
+       ],
+       "properties": {
+        "key": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 40,
+         "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+        },
+        "label": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 60
+        },
+        "unit": {
+         "type": "string",
+         "maxLength": 20
+        },
+        "min": {
+         "type": "number"
+        },
+        "max": {
+         "type": "number"
+        },
+        "step": {
+         "type": "number",
+         "minimum": 0
+        },
+        "role": {
+         "enum": [
+          "intake",
+          "output"
+         ]
+        }
+       }
+      }
+     },
+     "showCharts": {
+      "type": "boolean"
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "rows": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "time"
+       ],
+       "properties": {
+        "time": {
+         "type": "string",
+         "maxLength": 32
+        },
+        "values": {
+         "type": "object"
+        }
+       }
+      }
+     }
+    }
+   },
+   "defaults": {
+    "columns": [
+     {
+      "key": "pulse",
+      "label": "Pulse",
+      "unit": "bpm",
+      "min": 30,
+      "max": 220,
+      "step": 1
+     },
+     {
+      "key": "spo2",
+      "label": "Oxygen saturation",
+      "unit": "%",
+      "min": 50,
+      "max": 100,
+      "step": 1
+     }
+    ],
+    "showCharts": true
+   },
+   "examples": [
+    {
+     "name": "vitals",
+     "field": {
+      "key": "vitals",
+      "kind": "readings",
+      "label": "Vitals chart",
+      "required": false,
+      "config": {
+       "columns": [
+        {
+         "key": "pulse",
+         "label": "Pulse",
+         "unit": "bpm",
+         "min": 30,
+         "max": 220
+        },
+        {
+         "key": "temp",
+         "label": "Temperature",
+         "unit": "\u00B0F",
+         "min": 93,
+         "max": 108,
+         "step": 0.1
+        }
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "vitals": {
+       "rows": [
+        {
+         "time": "2026-11-12T04:00",
+         "values": {
+          "pulse": 78,
+          "temp": 98.6
+         }
+        },
+        {
+         "time": "2026-11-12T08:00",
+         "values": {
+          "pulse": 96,
+          "temp": 101.2
+         }
+        },
+        {
+         "time": "2026-11-12T12:00",
+         "values": {
+          "pulse": 88,
+          "temp": 100.4
+         }
+        }
+       ]
+      }
+     }
+    },
+    {
+     "name": "intake and output",
+     "field": {
+      "key": "fluids",
+      "kind": "readings",
+      "label": "Intake and output",
+      "required": false,
+      "config": {
+       "columns": [
+        {
+         "key": "oral",
+         "label": "Oral",
+         "unit": "mL",
+         "min": 0,
+         "max": 1000,
+         "step": 50,
+         "role": "intake"
+        },
+        {
+         "key": "drip",
+         "label": "IV fluid",
+         "unit": "mL",
+         "min": 0,
+         "max": 1000,
+         "step": 50,
+         "role": "intake"
+        },
+        {
+         "key": "urine",
+         "label": "Urine",
+         "unit": "mL",
+         "min": 0,
+         "max": 1500,
+         "step": 50,
+         "role": "output"
+        }
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "fluids": {
+       "rows": [
+        {
+         "time": "2026-11-12T06:00",
+         "values": {
+          "oral": 200,
+          "drip": 500,
+          "urine": 300
+         }
+        },
+        {
+         "time": "2026-11-12T12:00",
+         "values": {
+          "oral": 300,
+          "urine": 400
+         }
+        }
+       ]
+      }
      }
     }
    ]
@@ -4035,7 +5424,7 @@
   {
    "name": "repeatPages",
    "title": "Repeating pages",
-   "description": "Repeats one or more whole pages as many times as needed (each pregnancy, each operation). Writes one section per repetition using the page's own narrative.",
+   "description": "Repeats one or more whole pages as many times as needed (each pregnancy, each operation). Writes one section per repetition using the page\u0027s own narrative.",
    "legacyNames": [
     "recursivepages"
    ],
@@ -4479,7 +5868,7 @@
   {
    "name": "sidePair",
    "title": "Left and right",
-   "description": "One question asked for both sides, side by side (vision of each eye, power of each limb, a finding in each ear). Writes \"RE 6/9, LE 6/12\", or \"Bilateral ...\" when both sides are the same.",
+   "description": "One question asked for both sides, side by side (vision of each eye, power of each limb, a finding in each ear). Writes \u0022RE 6/9, LE 6/12\u0022, or \u0022Bilateral ...\u0022 when both sides are the same.",
    "legacyNames": [],
    "usesOptions": false,
    "usesChildren": true,
@@ -4939,7 +6328,311 @@
       }
      },
      "answers": {
-      "phone": "+91 98765 43210"
+      "phone": "\u002B91 98765 43210"
+     }
+    }
+   ]
+  },
+  {
+   "name": "toothChart",
+   "title": "Tooth chart",
+   "description": "A tooth chart with FDI numbers for adult, child or mixed teeth. Tap a tooth, then a condition from your list (caries, missing, filled, root canal, crown, mobile). Some conditions can be put on single surfaces. Writes the teeth grouped by condition and prints the chart.",
+   "legacyNames": [],
+   "usesOptions": false,
+   "usesChildren": false,
+   "touch": {
+    "control": "tooth-chart",
+    "needsKeyboard": false
+   },
+   "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "dentition": {
+      "enum": [
+       "adult",
+       "child",
+       "mixed"
+      ]
+     },
+     "conditions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "key",
+        "label"
+       ],
+       "properties": {
+        "key": {
+         "type": "string",
+         "pattern": "^[A-Za-z][A-Za-z0-9_]*$",
+         "maxLength": 40
+        },
+        "label": {
+         "type": "string",
+         "minLength": 1,
+         "maxLength": 40
+        },
+        "phrase": {
+         "type": "string",
+         "maxLength": 120
+        },
+        "color": {
+         "type": "string",
+         "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "surfaces": {
+         "type": "boolean"
+        },
+        "cross": {
+         "type": "boolean"
+        }
+       }
+      }
+     },
+     "chart": {
+      "type": "boolean"
+     }
+    }
+   },
+   "valueSchema": {
+    "type": [
+     "object",
+     "null"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "marks": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+       "type": "object",
+       "additionalProperties": false,
+       "required": [
+        "tooth",
+        "condition"
+       ],
+       "properties": {
+        "tooth": {
+         "type": "string",
+         "pattern": "^[1-8][1-8]$"
+        },
+        "condition": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "surfaces": {
+         "type": "array",
+         "maxItems": 5,
+         "items": {
+          "enum": [
+           "M",
+           "O",
+           "D",
+           "B",
+           "L"
+          ]
+         }
+        }
+       }
+      }
+     },
+     "note": {
+      "type": "string",
+      "maxLength": 500
+     }
+    }
+   },
+   "defaults": {
+    "dentition": "adult",
+    "chart": true,
+    "conditions": [
+     {
+      "key": "caries",
+      "label": "Caries",
+      "surfaces": true
+     },
+     {
+      "key": "filled",
+      "label": "Filled",
+      "phrase": "Filling in {teeth}",
+      "surfaces": true
+     },
+     {
+      "key": "missing",
+      "label": "Missing",
+      "phrase": "{teeth} missing",
+      "cross": true
+     },
+     {
+      "key": "rootCanal",
+      "label": "Root canal",
+      "phrase": "Root canal treatment in {teeth}"
+     },
+     {
+      "key": "crown",
+      "label": "Crown",
+      "phrase": "Crown on {teeth}"
+     },
+     {
+      "key": "mobile",
+      "label": "Mobile",
+      "phrase": "{teeth} mobile"
+     },
+     {
+      "key": "fractured",
+      "label": "Fractured",
+      "phrase": "{teeth} fractured"
+     },
+     {
+      "key": "impacted",
+      "label": "Impacted",
+      "phrase": "{teeth} impacted"
+     }
+    ]
+   },
+   "examples": [
+    {
+     "name": "adult teeth",
+     "field": {
+      "key": "teeth",
+      "kind": "toothChart",
+      "label": "Teeth",
+      "required": false,
+      "config": {
+       "dentition": "adult",
+       "chart": true,
+       "conditions": [
+        {
+         "key": "caries",
+         "label": "Caries",
+         "surfaces": true
+        },
+        {
+         "key": "filled",
+         "label": "Filled",
+         "phrase": "Filling in {teeth}",
+         "surfaces": true
+        },
+        {
+         "key": "missing",
+         "label": "Missing",
+         "phrase": "{teeth} missing",
+         "cross": true
+        },
+        {
+         "key": "rootCanal",
+         "label": "Root canal",
+         "phrase": "Root canal treatment in {teeth}"
+        },
+        {
+         "key": "crown",
+         "label": "Crown",
+         "phrase": "Crown on {teeth}"
+        },
+        {
+         "key": "mobile",
+         "label": "Mobile",
+         "phrase": "{teeth} mobile"
+        },
+        {
+         "key": "fractured",
+         "label": "Fractured",
+         "phrase": "{teeth} fractured"
+        },
+        {
+         "key": "impacted",
+         "label": "Impacted",
+         "phrase": "{teeth} impacted"
+        }
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "teeth": {
+       "marks": [
+        {
+         "tooth": "36",
+         "condition": "caries",
+         "surfaces": [
+          "O",
+          "D"
+         ]
+        },
+        {
+         "tooth": "46",
+         "condition": "caries"
+        },
+        {
+         "tooth": "46",
+         "condition": "missing"
+        },
+        {
+         "tooth": "16",
+         "condition": "rootCanal"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "name": "child teeth",
+     "field": {
+      "key": "milkTeeth",
+      "kind": "toothChart",
+      "label": "Baby teeth",
+      "required": false,
+      "config": {
+       "dentition": "child",
+       "conditions": [
+        {
+         "key": "caries",
+         "label": "Caries",
+         "surfaces": true
+        },
+        {
+         "key": "pulpotomy",
+         "label": "Pulpotomy",
+         "phrase": "Pulpotomy of {teeth}"
+        }
+       ]
+      },
+      "options": [],
+      "children": [],
+      "says": {
+       "include": true,
+       "sections": [],
+       "subheading": false
+      }
+     },
+     "answers": {
+      "milkTeeth": {
+       "marks": [
+        {
+         "tooth": "54",
+         "condition": "caries",
+         "surfaces": [
+          "O"
+         ]
+        },
+        {
+         "tooth": "84",
+         "condition": "pulpotomy"
+        }
+       ],
+       "note": "Child anxious."
+      }
      }
     }
    ]

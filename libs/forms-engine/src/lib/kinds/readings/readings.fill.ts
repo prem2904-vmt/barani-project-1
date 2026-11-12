@@ -119,9 +119,9 @@ export function rowsOf(v: unknown): ReadingRow[] {
                   type="button"
                   class="fe-numbox"
                   [attr.data-cell]="i + '-' + c.key"
-                  [class.fe-numbox--empty]="valueOf(row, c.key) === null"
+                  [class.fe-numbox--empty]="cellValue(row, c.key) === null"
                   [attr.aria-expanded]="isOpen(i, c.key)"
-                  [attr.aria-label]="c.label + (c.unit ? ', ' + c.unit : '') + ', reading ' + (i + 1) + ': ' + (valueOf(row, c.key) ?? 'not set') + '. Tap to type.'"
+                  [attr.aria-label]="c.label + (c.unit ? ', ' + c.unit : '') + ', reading ' + (i + 1) + ': ' + (cellValue(row, c.key) ?? 'not set') + '. Tap to type.'"
                   [disabled]="disabled()"
                   (click)="toggleCell(i, c.key)"
                 >
@@ -181,11 +181,11 @@ export class ReadingsFill extends KindFill {
   protected decimalsOf(key: string): boolean {
     return !Number.isInteger(this.colOf(key).step);
   }
-  protected valueOf(row: ReadingRow, key: string): number | null {
+  protected cellValue(row: ReadingRow, key: string): number | null {
     return row.values[key] ?? null;
   }
   protected shownText(row: ReadingRow, i: number, key: string): string {
-    return this.isOpen(i, key) && this.typing() !== null ? this.typing()! : numberText(this.valueOf(row, key));
+    return this.isOpen(i, key) && this.typing() !== null ? this.typing()! : numberText(this.cellValue(row, key));
   }
   protected isOpen(i: number, key: string): boolean {
     const o = this.open();

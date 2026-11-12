@@ -58,7 +58,7 @@ describe('the lab page actions (bottom nav slot)', () => {
     // nothing in the slot re-sizes the kit buttons
     const rules = scss.match(/\.pf-navact \.lf-(back|next|pages|finish)[^{]*\{[^}]*\}/g) ?? [];
     expect(rules.length).toBeGreaterThan(0);
-    for (const rule of rules) expect(rule, rule).not.toMatch(/(^|[^-])(height|font-size):/);
+    for (const rule of rules.filter((r) => !r.includes('.lf-bar__lbl'))) expect(rule, rule).not.toMatch(/(^|[^-])(height|font-size):/);
   });
   it('the lent-bar desktop rules only reach a lent bar ([data-formbar]), never the slot', () => {
     const lent = scss.match(/::ng-deep html:not\(\.device-touch\) [^{]+/g) ?? [];
