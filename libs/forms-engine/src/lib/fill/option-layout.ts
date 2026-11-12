@@ -1,6 +1,6 @@
 import { FieldDef } from '../core/types';
 
-/** More options than this and buttons stop being quicker than a searchable list (plan §4). */
+/** Kept for callers; buttons no longer turn into a dropdown by count (owner 2026-11-12, legacy buttonSelect). */
 export const CHOICE_BUTTONS_MAX = 8;
 /** A dropdown only pays off for long lists; short lists stay on the page even when the form says dropdown. */
 export const MULTI_CHIPS_MAX = 12;
@@ -27,7 +27,8 @@ export function optionLayout(f: FieldDef): OptionLayout {
     return 'cards';
   }
   if (display === 'images') return 'images';
-  if (display === 'dropdown' || opts.length > CHOICE_BUTTONS_MAX) return 'select';
+  // legacy buttonSelect shows every option as a button however many there are; only an author's `dropdown` is a list
+  if (display === 'dropdown') return 'select';
   if (opts.some((o) => !!o.icon)) return 'cards';
   return display === 'list' ? 'grid' : 'row';
 }

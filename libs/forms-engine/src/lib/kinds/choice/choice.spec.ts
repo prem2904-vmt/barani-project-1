@@ -101,11 +101,15 @@ describe('choice fill', () => {
     expect(r.el.textContent).toContain('Select an option');
   });
 
-  it(`more than ${CHOICE_BUTTONS_MAX} options → the searchable pf-select, never a native select`, async () => {
-    const many = f('town', 'choice', {
-      label: 'Town',
-      options: Array.from({ length: CHOICE_BUTTONS_MAX + 1 }, (_, i) => ({ key: `t${i}`, label: `Town ${i}` })),
-    });
+  it('a long list stays buttons (legacy buttonSelect); only an authored dropdown is a pf-select', async () => {
+    const options = Array.from({ length: CHOICE_BUTTONS_MAX + 4 }, (_, i) => ({ key: `t${i}`, label: `Town ${i}` }));
+    const r = await renderKind(ChoiceFill, f('town', 'choice', { label: 'Town', options }), null);
+    expect(r.el.querySelector('pf-select')).toBeNull();
+    expect(r.el.querySelectorAll('[role="radio"]').length).toBe(CHOICE_BUTTONS_MAX + 4);
+    const d = await renderKind(ChoiceFill, f('town', 'choice', { label: 'Town', config: { display: 'dropdown' }, options }), null);
+    expect(d.el.querySelector('pf-select')).not.toBeNull();
+    expect(d.el.querySelector('select')).toBeNull();
+  });
     const r = await renderKind(ChoiceFill, many, null);
     expect(r.el.querySelector('pf-select')).not.toBeNull();
     expect(r.el.querySelector('select')).toBeNull();

@@ -177,6 +177,17 @@
       @if (page(); as wp) { @for (pid of [wp.id]; track pid) {
       <div class="lf-page cs-page" [attr.data-page]="pid" [class.cs-page--back]="wiz.direction() < 0">
         <!-- legacy dynamic-page printed no page subtitle (commented out); the title in the header is enough -->
+        @if (isPatientPage()) {
+        <!-- legacy "Fetch from ABHA" box on the patient page, shown but switched off until ABHA is connected -->
+        <div class="cs-abha" data-abha>
+          <button type="button" class="cs-abha__btn" disabled aria-describedby="cs-abha-h">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h7v7h-7z" /></svg>
+            <span>Fetch from ABHA</span>
+            <span class="cs-abha__badge">ABDM</span>
+          </button>
+          <p class="cs-abha__hint" id="cs-abha-h">Scan ABHA QR or enter ABHA number to auto-fill patient details. Coming soon.</p>
+        </div>
+        }
         @if (repeats().length > 1) {
         <div class="cs-reps fe-chips" role="group" aria-label="The repeated pages">
           @for (r of repeats(); track r.id) {

@@ -103,3 +103,14 @@ describe('touch sizes stay inside the form body', () => {
     expect(scss).toMatch(/\.lf-nv__title\s*\{[^}]*font-size:\s*15px/);
   });
 });
+
+/** Owner 2026-11-12: the patient page keeps legacy's "Fetch from ABHA" box, switched off with a coming-soon note; subtitles stay hidden. */
+describe('the patient page ABHA box and the page subtitle', () => {
+  it('shows a disabled "Fetch from ABHA" button with a coming-soon hint on a patient page only', () => {
+    expect(html).toMatch(/@if \(isPatientPage\(\)\)[\s\S]*?data-abha[\s\S]*?<button[^>]*class="cs-abha__btn"[^>]*disabled[\s\S]*?Fetch from ABHA[\s\S]*?Coming soon/);
+    expect(ts).toMatch(/isPatientPage = computed[\s\S]*?includes\('patient'\)/);
+  });
+  it('prints no page subtitle (legacy dynamic-page had it commented out)', () => {
+    expect(html).not.toMatch(/lf-page__sub|page\.subtitle/);
+  });
+});

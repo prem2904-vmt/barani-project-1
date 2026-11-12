@@ -164,6 +164,11 @@ export class CasePage {
   private advanceTimer: ReturnType<typeof setTimeout> | null = null;
 
   protected readonly page = this.wiz.page;
+  /** Legacy dynamic-form `isPatientInfoPage`: a page named or titled "patient" carries the ABHA box (disabled: coming soon). */
+  protected readonly isPatientPage = computed(() => {
+    const p = this.page()?.page;
+    return !!p && (p.key.toLowerCase().includes('patient') || p.title.toLowerCase().includes('patient'));
+  });
   protected readonly scope = computed<Answers>(() => {
     const wp = this.page();
     return wp ? pageScope(wp, this.wiz.answers()) : {};
