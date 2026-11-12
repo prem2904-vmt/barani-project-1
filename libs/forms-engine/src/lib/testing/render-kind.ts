@@ -161,6 +161,10 @@ export const TOUCH_CLASSES = [
   'fe-gridk__cell',
   'fe-gridk__head',
   'fe-gridk__rowlab',
+  // family kinds (kinds/family/_family.scss)
+  'fe-fam__open',
+  'fe-tooth__t',
+  'fe-tooth__s',
 ];
 
 export function untouchable(el: HTMLElement): string[] {

@@ -32,9 +32,13 @@ export type ImageKind = (typeof IMAGE_KINDS)[number];
 export const TABLE_KINDS = ['grid'] as const;
 export type TableKind = (typeof TABLE_KINDS)[number];
 
+/** Family tree, checklist by age, tooth chart (group "family", department components). */
+export const FAMILY_KINDS = ['familyTree', 'ageChecklist', 'toothChart'] as const;
+export type FamilyKind = (typeof FAMILY_KINDS)[number];
+
 /** Every kind the UI can fill and build. */
-export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS] as const;
-export type KnownKind = PlainKind | ImageKind | TableKind;
+export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS, ...FAMILY_KINDS] as const;
+export type KnownKind = PlainKind | ImageKind | TableKind | FamilyKind;
 export type KindName = KnownKind | 'unsupported' | (string & {});
 
 export type ConditionOp =

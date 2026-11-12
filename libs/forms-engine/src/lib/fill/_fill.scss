@@ -11,6 +11,7 @@
 @use './fill-more';
 @use '../canvas/canvas';
 @use '../kinds/grid/grid';
+@use '../kinds/family/family';
 
 // ── page grid: 12 columns, widths from the field (full / half / third / quarter)
 .fe-grid {

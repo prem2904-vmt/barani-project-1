@@ -15,7 +15,7 @@ import { TextFill } from './text/text.fill';
 import { YesnoFill } from './yesno/yesno.fill';
 
 /** Kinds whose control is loaded on first use (heavy: the canvas engine, the grid). */
-export const LAZY_KINDS: readonly string[] = ['drawing', 'bodyMap', 'photoMarkup', 'photos', 'eyeDiagram', 'grid'];
+export const LAZY_KINDS: readonly string[] = ['drawing', 'bodyMap', 'photoMarkup', 'photos', 'eyeDiagram', 'grid', 'familyTree', 'ageChecklist', 'toothChart'];
 
 /**
  * Every plain kind → its touch control. The ONLY place kinds are listed in
@@ -42,6 +42,9 @@ export const KIND_SPECS: Record<KnownKind, KindSpec> = {
   photos: { load: () => import('./photos/photos.fill').then((m) => m.PhotosFill) },
   eyeDiagram: { load: () => import('./eyeDiagram/eyeDiagram.fill').then((m) => m.EyeDiagramFill) },
   grid: { load: () => import('./grid/grid.fill').then((m) => m.GridFill) },
+  familyTree: { load: () => import('./familyTree/familyTree.fill').then((m) => m.FamilyTreeFill) },
+  ageChecklist: { load: () => import('./ageChecklist/ageChecklist.fill').then((m) => m.AgeChecklistFill) },
+  toothChart: { load: () => import('./toothChart/toothChart.fill').then((m) => m.ToothChartFill) },
 };
 
 export const REGISTERED_KINDS: readonly string[] = KNOWN_KINDS;

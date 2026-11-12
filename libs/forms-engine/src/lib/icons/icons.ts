@@ -120,6 +120,12 @@ export const ICONS = {
   'k-body': ['M12 2.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4z', 'M5 9l7 1.5L19 9', 'M12 10.5V15', 'M9 21.5l3-6.5 3 6.5'],
   'k-photo': ['M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z', 'M12 10a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
   'k-eye': ['M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M12 2v1.5', 'M12 20.5V22'],
+  // ---- family kinds: chevrons for open / close rows, and the three palette glyphs ----
+  'chevron-down': ['M6 9l6 6 6-6'],
+  'chevron-up': ['M18 15l-6-6-6 6'],
+  'k-family': ['M3 4h6v6H3z', 'M18 4a3 3 0 1 0 0 6 3 3 0 0 0 0-6z', 'M9 7h6', 'M12 7v5', 'M12 12l-3 4 3 4 3-4z'],
+  'k-tooth': ['M7 3c-2 0-4 2-4 5 0 4 2 6 2 9 0 2 1 4 2 4 1.5 0 1.5-4 3-4s1.5 4 3 4c1 0 2-2 2-4 0-3 2-5 2-9 0-3-2-5-4-5-2 0-2 1-3 1S9 3 7 3z'],
+  'k-checklist': ['M9 6h11', 'M9 12h11', 'M9 18h11', 'M3 6l1 1 2-2', 'M3 12l1 1 2-2', 'M3 18l1 1 2-2'],
   // ---- AI connector (Phase 6): something an assistant wrote ----
   message: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', 'M8 9h8', 'M8 13h5'],
   // Cortex: a small sparkle (four-point star + a spark)
