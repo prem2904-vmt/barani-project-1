@@ -8,6 +8,7 @@ import {
   DraftJob,
   Editor,
   FormDetail,
+  FormPatched,
   FormRow,
   LivePreview,
   Page,
@@ -47,6 +48,11 @@ export abstract class StudioApi {
   /** "Edit" on a master form: this lab's own copy (same catalogue key) with an open draft. Idempotent per form. */
   abstract fork(formId: string): Promise<{ id: string; version: Version }>;
   abstract archive(formId: string, archived: boolean): Promise<void>;
+  /**
+   * Change the case sheet's key and / or department (PATCH forms/{id}). A key change re-points lab copies, offers and suggestions in one
+   * transaction and answers with the counts. StudioError codes: key_taken (409), invalid_key (400).
+   */
+  abstract updateForm(formId: string, patch: { key?: string; departmentKey?: string }): Promise<FormPatched>;
 
   // the one open draft
   abstract startDraft(formId: string): Promise<Version>;

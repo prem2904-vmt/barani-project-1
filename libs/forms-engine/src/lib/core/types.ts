@@ -221,7 +221,8 @@ export interface FormDefinition {
   description?: string;
   groups?: GroupDef[];
   pages: PageDef[];
-  narrative?: { sections: NarrativeSectionDef[] };
+  /** `mode`: "legacy" writes the old app's words and printout exactly; "new" (or absent) is the improved wording. */
+  narrative?: { sections: NarrativeSectionDef[]; mode?: 'legacy' | 'new' };
   links?: LinkDef[];
   triggers?: TriggerDef[];
 }

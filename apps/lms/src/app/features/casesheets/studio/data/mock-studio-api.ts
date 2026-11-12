@@ -30,6 +30,7 @@ import {
   DraftFromSheetInput,
   DraftJob,
   FormDetail,
+  FormPatched,
   FormOrigin,
   FormRow,
   LivePreview,
@@ -356,6 +357,24 @@ export class MockStudioApi extends StudioApi {
   async archive(formId: string, archived: boolean): Promise<void> {
     await this.tick('archive');
     this.get(formId).status = archived ? 'archived' : 'active';
+  }
+
+  async updateForm(formId: string, patch: { key?: string; departmentKey?: string }): Promise<FormPatched> {
+    await this.tick('updateForm');
+    const f = this.get(formId);
+    let rename: FormPatched['rename'] = null;
+    if (patch.key !== undefined) {
+      const key = patch.key.trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(key)) throw new StudioError('invalid_key', 'A case sheet key uses lower-case letters, digits and hyphens.', 400);
+      if ([...this.forms.values()].some((x) => x.id !== f.id && x.key === key)) throw new StudioError('key_taken', 'A case sheet with that key already exists.', 409);
+      if (key !== f.key) {
+        const copies = f.origin === 'master' ? [...this.forms.values()].filter((x) => x.forkedFrom === f.id).length : 0;
+        rename = { from: f.key, to: key, labCopies: copies, offers: 0, proposals: 0 };
+        f.key = key;
+      }
+    }
+    if (patch.departmentKey !== undefined) f.departmentKey = patch.departmentKey || null;
+    return { id: f.id, key: f.key, title: f.title, departmentKey: f.departmentKey, rename };
   }
 
   async startDraft(formId: string): Promise<Version> {

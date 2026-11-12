@@ -1,7 +1,7 @@
 import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import { FormDefinition } from '@prefrontal/forms-engine';
 import { StudioApi } from './studio-api';
-import { DraftConflict, Editor, LivePreview, Problem, PublishRefused, Version, plainError } from './studio-models';
+import { DraftConflict, Editor, FormDetail, LivePreview, Problem, PublishRefused, Version, plainError } from './studio-models';
 
 export type StudioSaveState = 'saved' | 'dirty' | 'saving' | 'offline' | 'conflict' | 'error';
 
@@ -33,6 +33,8 @@ export class StudioSession {
 
   readonly formId = signal<string | null>(null);
   readonly version = signal<Version | null>(null);
+  /** The case sheet itself (key, origin, department): what the Settings box edits. */
+  readonly form = signal<FormDetail | null>(null);
   readonly definition = signal<FormDefinition | null>(null);
   readonly loadError = signal<string | null>(null);
   readonly saveState = signal<StudioSaveState>('saved');
@@ -74,6 +76,7 @@ export class StudioSession {
     this.loadError.set(null);
     try {
       const form = await this.api.form(formId);
+      this.form.set(form);
       this.readOnly.set(form.origin === 'master');
       const open = form.versions.find((v) => v.state === 'draft' || v.state === 'in_review');
       const live = form.versions.find((v) => v.id === form.currentPublishedVersionId);

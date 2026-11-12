@@ -130,6 +130,24 @@ export interface FormDetail {
   versions: VersionRow[];
 }
 
+/** What a key rename touched (PATCH forms/{id} {key}): the counts the confirm and the result sentence name. */
+export interface KeyRename {
+  from: string;
+  to: string;
+  labCopies: number;
+  offers: number;
+  proposals: number;
+}
+
+/** The answer of PATCH forms/{id}: the new key, and what following it took along (null when the key did not change). */
+export interface FormPatched {
+  id: string;
+  key: string;
+  title: string;
+  departmentKey: string | null;
+  rename: KeyRename | null;
+}
+
 export interface DiffChange {
   /** added | removed | changed | moved (+ the API's finer types). */
   type: string;

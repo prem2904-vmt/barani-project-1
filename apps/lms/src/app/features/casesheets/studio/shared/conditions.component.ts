@@ -103,7 +103,9 @@ import { PfSelectOption, SelectComponent } from '@prefrontal/shared';
           <button type="button" class="pf-btn pf-btn--tertiary" (click)="clear()">Always show</button>
         }
         <span class="cb-spacer"></span>
-        <button type="button" class="pf-btn pf-btn--secondary" (click)="done.emit()"><pf-icon name="check" [size]="18" /> Done</button>
+        @if (showDone()) {
+          <button type="button" class="pf-btn pf-btn--secondary" (click)="done.emit()"><pf-icon name="check" [size]="18" /> Done</button>
+        }
       </div>
     </div>
   `,
@@ -200,6 +202,8 @@ export class ConditionsComponent {
   readonly value = input<ShowWhenDef | null | undefined>(null);
   readonly changed = output<ShowWhenDef | null>();
   readonly done = output<void>();
+  /** The settings panels keep the builder open all the time, so they have no Done. */
+  readonly showDone = input(true);
 
   protected readonly set = signal<ConditionSet>({ rows: [], match: 'all', visibility: 'show' });
 

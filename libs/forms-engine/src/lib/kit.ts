@@ -12,3 +12,4 @@ export type { FeDialogAction, FeDialogActionResult, FeDialogApi, FeDialogRequest
 export { PfGoogleMarkComponent, PfIconComponent } from './icons/icon.component';
 export { ICONS } from './icons/icons';
 export type { IconName } from './icons/icons';
+export { MEDICAL_ICONS, medicalIcon } from './icons/medical-icons';

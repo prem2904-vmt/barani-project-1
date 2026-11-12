@@ -1,4 +1,4 @@
-import { FieldDef, FormDefinition, NarrativeSectionDef, OptionDef, PageDef, PlainKind, ShowWhenDef } from '../core/types';
+import { FieldDef, FormDefinition, GroupDef, NarrativeSectionDef, OptionDef, PageDef, PlainKind, ShowWhenDef } from '../core/types';
 import { kindBuild } from '../kinds/build-registry';
 
 /**
@@ -253,6 +253,77 @@ export function removePage(def: FormDefinition, pageKey: string): FormDefinition
     forget(d, gone);
     renumberSections(d);
   });
+}
+
+// ---------------------------------------------------------------- sections of pages (legacy "sections", the definition's `groups`)
+
+export function addGroup(def: FormDefinition, title: string): { def: FormDefinition; key: string } {
+  let key = '';
+  const next = edit(def, (d) => {
+    d.groups ??= [];
+    key = keyFrom(title, new Set(d.groups.map((g) => g.key)), 'section');
+    d.groups.push({ key, title, order: d.groups.length + 1 });
+  });
+  return { def: next, key };
+}
+
+export function updateGroup(def: FormDefinition, key: string, change: (g: GroupDef) => void): FormDefinition {
+  return edit(def, (d) => {
+    const g = (d.groups ?? []).find((x) => x.key === key);
+    if (g) change(g);
+  });
+}
+
+/** Take a section away; its pages stay, uncategorised. */
+export function removeGroup(def: FormDefinition, key: string): FormDefinition {
+  return edit(def, (d) => {
+    d.groups = (d.groups ?? []).filter((g) => g.key !== key);
+    d.groups.forEach((g, i) => (g.order = i + 1));
+    for (const p of d.pages) if (p.group === key) delete p.group;
+  });
+}
+
+/** Put a page in a section (null = uncategorised). */
+export function setPageGroup(def: FormDefinition, pageKey: string, groupKey: string | null): FormDefinition {
+  return edit(def, (d) => {
+    const p = d.pages.find((x) => x.key === pageKey);
+    if (!p) return;
+    if (groupKey && (d.groups ?? []).some((g) => g.key === groupKey)) p.group = groupKey;
+    else delete p.group;
+  });
+}
+
+// ---------------------------------------------------------------- narrative sections (the Narrative Sections tab)
+
+/** Take a narrative section away; every sentence that wrote into it goes back to "not in the narrative". */
+export function removeSection(def: FormDefinition, key: string): FormDefinition {
+  return edit(def, (d) => {
+    d.narrative!.sections = sections(d).filter((s) => s.key !== key);
+    const walk = (fs: FieldDef[]) => {
+      for (const f of fs) {
+        if (f.says?.sections) f.says.sections = f.says.sections.filter((r) => r.section !== key);
+        walk(f.children ?? []);
+        for (const o of f.options ?? []) walk(o.subFields ?? []);
+      }
+    };
+    for (const p of d.pages) walk(p.fields ?? []);
+    sections(d).forEach((s, i) => (s.order = i + 1));
+  });
+}
+
+export function moveSection(def: FormDefinition, from: number, to: number): FormDefinition {
+  return edit(def, (d) => {
+    const list = sections(d);
+    if (from === to || from < 0 || from >= list.length) return;
+    const [s] = list.splice(from, 1);
+    list.splice(Math.max(0, Math.min(to, list.length)), 0, s);
+    list.forEach((x, i) => (x.order = i + 1));
+  });
+}
+
+/** The `{{keys}}` a section's template names. */
+export function templateKeys(template: string | undefined): string[] {
+  return [...new Set([...(template ?? '').matchAll(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g)].map((m) => m[1]))];
 }
 
 // ---------------------------------------------------------------- fields

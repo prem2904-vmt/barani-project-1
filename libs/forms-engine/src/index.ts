@@ -41,3 +41,4 @@ export * from './lib/kinds/pictureChoice/pictureChoice-mini.component';
 // Group "pair": one question for both sides, and the clinical shorthand notation.
 export * from './lib/kinds/shorthand/shorthand-math';
 export * from './lib/kinds/sidePair/side-pair-model';
+export * from './lib/build/legacy-palette';

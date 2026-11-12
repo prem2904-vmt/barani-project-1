@@ -1,0 +1,10 @@
+// The component host IS the overlay (page settings, case-sheet settings).
+:host {
+  position: fixed;
+  inset: 0 0 var(--pf-nav-h, 0px) 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+

@@ -16,6 +16,7 @@ import {
   DraftFromSheetInput,
   DraftJob,
   FormDetail,
+  FormPatched,
   FormOrigin,
   FormRow,
   LivePreview,
@@ -320,6 +321,20 @@ export class HttpStudioApi implements StudioApi {
 
   async archive(formId: string, archived: boolean): Promise<void> {
     await this.call(this.http.post(api(`/api/casesheets/forms/${formId}/${archived ? 'archive' : 'unarchive'}`), {}));
+  }
+
+  async updateForm(formId: string, patch: { key?: string; departmentKey?: string }): Promise<FormPatched> {
+    const r = obj(await this.call(this.http.patch(api(`/api/casesheets/forms/${formId}`), patch)));
+    const rn = r['rename'] && typeof r['rename'] === 'object' ? obj(r['rename']) : null;
+    return {
+      id: str(r['id']),
+      key: str(r['key']),
+      title: str(r['title']),
+      departmentKey: typeof r['departmentKey'] === 'string' ? (r['departmentKey'] as string) : null,
+      rename: rn
+        ? { from: str(rn['from']), to: str(rn['to']), labCopies: num(rn['labCopies']), offers: num(rn['offers']), proposals: num(rn['proposals']) }
+        : null,
+    };
   }
 
   async startDraft(formId: string): Promise<Version> {

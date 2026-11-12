@@ -1,5 +1,11 @@
 import { FormDefinition } from '../core/types';
 import {
+  addGroup,
+  moveSection,
+  removeGroup,
+  removeSection,
+  setPageGroup,
+  templateKeys,
   addField,
   addOption,
   addPage,
@@ -152,5 +158,43 @@ describe('Studio definition edits', () => {
     const d = removePage(twoPages(), 'history');
     expect(d.pages.map((p) => p.key)).toEqual(['complaints']);
     expect(sectionOf(d, 'history')).toBeNull();
+  });
+});
+
+describe('sections of pages and narrative sections (the legacy editor)', () => {
+  const base = () => addPage(addPage(emptyDefinition('ENT'), 'History').def, 'Exam').def;
+
+  it('addGroup / setPageGroup / removeGroup keep pages and never lose one', () => {
+    const { def, key } = addGroup(base(), 'Examination');
+    expect(def.groups).toEqual([{ key, title: 'Examination', order: 1 }]);
+    const withPage = setPageGroup(def, 'exam', key);
+    expect(withPage.pages.find((p) => p.key === 'exam')!.group).toBe(key);
+    expect(setPageGroup(withPage, 'exam', 'nope').pages.find((p) => p.key === 'exam')!.group).toBeUndefined();
+    const gone = removeGroup(withPage, key);
+    expect(gone.groups).toEqual([]);
+    expect(gone.pages.map((p) => p.key)).toEqual(['history', 'exam']);
+    expect(gone.pages.every((p) => p.group === undefined)).toBe(true);
+  });
+
+  it('removeSection takes a paragraph away and releases the questions that wrote into it', () => {
+    let d = base();
+    const a = addField(d, { pageKey: 'history' }, 'text');
+    d = a.def;
+    expect(findField(d, a.key)!.says!.sections![0].section).toBe('history');
+    d = removeSection(d, 'history');
+    expect(sectionOf(d, 'history')).toBeNull();
+    expect(findField(d, a.key)!.says!.sections).toEqual([]);
+    expect(d.narrative!.sections.map((s) => s.order)).toEqual([1]);
+  });
+
+  it('moveSection reorders and renumbers', () => {
+    const d = moveSection(base(), 0, 1);
+    expect(d.narrative!.sections.map((s) => s.key)).toEqual(['exam', 'history']);
+    expect(d.narrative!.sections.map((s) => s.order)).toEqual([1, 2]);
+  });
+
+  it('templateKeys lists the {{variables}} of a template once each', () => {
+    expect(templateKeys('The patient has {{pain}} and {{ side }}. {{pain}}')).toEqual(['pain', 'side']);
+    expect(templateKeys(undefined)).toEqual([]);
   });
 });
