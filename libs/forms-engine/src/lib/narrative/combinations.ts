@@ -145,7 +145,7 @@ export function totalOf(f: Pick<FieldDef, 'options' | 'config'>, picked: readonl
 export function totalLine(f: Pick<FieldDef, 'options' | 'config'>, picked: readonly string[]): string | null {
   const t = totalConfig(f);
   if (!t || !picked.length) return null;
-  const n = String(totalOf(f, picked));
+  const n = totalOf(f, picked).toFixed(t.decimals); // the server writes "F<decimals>": trailing zeros are kept (27.50)
   const unit = !t.unit ? '' : /^[%°]/.test(t.unit) ? t.unit : ` ${t.unit}`;
   return `${t.label} ${n}${unit}`;
 }

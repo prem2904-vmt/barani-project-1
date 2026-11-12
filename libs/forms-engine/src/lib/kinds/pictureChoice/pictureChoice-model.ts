@@ -26,7 +26,7 @@ export const MIN_PART = 0.06;
 /** The "light" snap grid: 2.5% of the box. */
 export const SNAP = 0.025;
 export const DRAW_BOX = 100;
-export const MAX_DRAWN = 8000;
+export const MAX_DRAWN = 20000;
 
 const num = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
