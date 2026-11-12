@@ -1,0 +1,780 @@
+{
+ "note": "Shared by prefrontal-mw (Prefrontal.Tests/CaseSheets/ChartsTests.cs) and prefrontal-ui (libs/forms-engine/src/lib/testing/casesheet-charts.vectors.json, charts.spec.ts). Expected values were worked out by an independent Python implementation of the published formulas, not by either engine. Do not edit one copy without the other.",
+ "referenceSha256": "6c04832ae1c113b38de7aad7a2e269b30940d4c5ca11a6121b8e65b478ba5398",
+ "tolerance": 1e-09,
+ "lms": [
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 0,
+   "L": 0.3809,
+   "M": 3.2322,
+   "S": 0.14171
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 17.5,
+   "L": -0.2599,
+   "M": 10.126000000000001,
+   "S": 0.12307000000000001
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 60,
+   "L": -0.1506,
+   "M": 18.3352,
+   "S": 0.13517
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 60.5,
+   "L": -0.1766,
+   "M": 18.420450000000002,
+   "S": 0.132525
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 120,
+   "L": -0.5958,
+   "M": 31.8578,
+   "S": 0.17262
+  },
+  {
+   "measure": "height",
+   "sex": "boy",
+   "age": 23.5,
+   "L": 1.0,
+   "M": 87.03475,
+   "S": 0.034765000000000004
+  },
+  {
+   "measure": "height",
+   "sex": "boy",
+   "age": 24,
+   "L": 1,
+   "M": 87.1303,
+   "S": 0.03508
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 100,
+   "L": 1,
+   "M": 128.5109,
+   "S": 0.04594
+  },
+  {
+   "measure": "head",
+   "sex": "girl",
+   "age": 30.25,
+   "L": 1.0,
+   "M": 47.960825,
+   "S": 0.02932
+  },
+  {
+   "measure": "head",
+   "sex": "boy",
+   "age": 60,
+   "L": 1,
+   "M": 50.7372,
+   "S": 0.02945
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 228,
+   "L": 1,
+   "M": 163.1548,
+   "S": 0.04009
+  }
+ ],
+ "growth": [
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 12,
+   "value": 9.4,
+   "z": 0.40135422825694156,
+   "band": 4,
+   "words": "50th-75th centile"
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 18,
+   "value": 11.2,
+   "z": 0.7253773851720936,
+   "band": 5,
+   "words": "75th-90th centile"
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 18,
+   "value": 81,
+   "z": 0.09913838932585117,
+   "band": 4,
+   "words": "50th-75th centile"
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 0,
+   "value": 3.2,
+   "z": -0.30398052411501786,
+   "band": 3,
+   "words": "25th-50th centile"
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 36,
+   "value": 11.0,
+   "z": -2.211124593146218,
+   "band": 0,
+   "words": "below the 3rd centile"
+  },
+  {
+   "measure": "head",
+   "sex": "girl",
+   "age": 9,
+   "value": 43,
+   "z": -0.620928460494525,
+   "band": 3,
+   "words": "25th-50th centile"
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 60,
+   "value": 17,
+   "z": -0.472574504248208,
+   "band": 3,
+   "words": "25th-50th centile"
+  },
+  {
+   "measure": "height",
+   "sex": "boy",
+   "age": 120,
+   "value": 128,
+   "z": -1.5343569972665438,
+   "band": 1,
+   "words": "3rd-10th centile"
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 100,
+   "value": 45,
+   "z": 3.160920377263812,
+   "band": 7,
+   "words": "above the 97th centile"
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 200,
+   "value": 150,
+   "z": -1.8992076360553471,
+   "band": 0,
+   "words": "below the 3rd centile"
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 6.5,
+   "value": 5.0,
+   "z": -3.3550288300612365,
+   "band": 0,
+   "words": "below the 3rd centile"
+  },
+  {
+   "measure": "head",
+   "sex": "boy",
+   "age": 24,
+   "value": 55,
+   "z": 4.959608227949054,
+   "band": 7,
+   "words": "above the 97th centile"
+  }
+ ],
+ "curve": [
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 12,
+   "line": 0,
+   "value": 7.140135278144043
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 12,
+   "line": 1,
+   "value": 7.663492189723917
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 12,
+   "line": 2,
+   "value": 8.241428289956907
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 12,
+   "line": 3,
+   "value": 8.9462
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 12,
+   "line": 4,
+   "value": 9.724694576763566
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 12,
+   "line": 5,
+   "value": 10.495952545150322
+  },
+  {
+   "measure": "weight",
+   "sex": "girl",
+   "age": 12,
+   "line": 6,
+   "value": 11.330530563510257
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 36.5,
+   "line": 0,
+   "value": 11.50270022154498
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 36.5,
+   "line": 1,
+   "value": 12.35875641813592
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 36.5,
+   "line": 2,
+   "value": 13.295944343310891
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 36.5,
+   "line": 3,
+   "value": 14.42725
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 36.5,
+   "line": 4,
+   "value": 15.662260746369963
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 36.5,
+   "line": 5,
+   "value": 16.87088826301433
+  },
+  {
+   "measure": "weight",
+   "sex": "boy",
+   "age": 36.5,
+   "line": 6,
+   "value": 18.162403980516697
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 80,
+   "line": 0,
+   "value": 108.8513779692737
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 80,
+   "line": 1,
+   "value": 112.05960842754638
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 80,
+   "line": 2,
+   "value": 115.30970571455217
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 80,
+   "line": 3,
+   "value": 118.9208
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 80,
+   "line": 4,
+   "value": 122.53189428544783
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 80,
+   "line": 5,
+   "value": 125.78199157245362
+  },
+  {
+   "measure": "height",
+   "sex": "girl",
+   "age": 80,
+   "line": 6,
+   "value": 128.9902220307263
+  },
+  {
+   "measure": "height",
+   "sex": "boy",
+   "age": 150,
+   "line": 0,
+   "value": 138.78636269899764
+  },
+  {
+   "measure": "height",
+   "sex": "boy",
+   "age": 150,
+   "line": 1,
+   "value": 143.1373607501012
+  },
+  {
+   "measure": "height",
+   "sex": "boy",
+   "age": 150,
+   "line": 2,
+   "value": 147.54513854087526
+  },
+  {
+   "measure": "height",
+   "sex": "boy",
+   "age": 150,
+   "line": 3,
+   "value": 152.4425
+  },
+  {
+   "measure": "height",
+   "sex": "boy",
+   "age": 150,
+   "line": 4,
+   "value": 157.33986145912473
+  },
+  {
+   "measure": "height",
+   "sex": "boy",
+   "age": 150,
+   "line": 5,
+   "value": 161.74763924989878
+  },
+  {
+   "measure": "height",
+   "sex": "boy",
+   "age": 150,
+   "line": 6,
+   "value": 166.09863730100233
+  },
+  {
+   "measure": "head",
+   "sex": "girl",
+   "age": 18,
+   "line": 0,
+   "value": 43.645194236210784
+  },
+  {
+   "measure": "head",
+   "sex": "girl",
+   "age": 18,
+   "line": 1,
+   "value": 44.47291606311185
+  },
+  {
+   "measure": "head",
+   "sex": "girl",
+   "age": 18,
+   "line": 2,
+   "value": 45.31143951053747
+  },
+  {
+   "measure": "head",
+   "sex": "girl",
+   "age": 18,
+   "line": 3,
+   "value": 46.2431
+  },
+  {
+   "measure": "head",
+   "sex": "girl",
+   "age": 18,
+   "line": 4,
+   "value": 47.17476048946253
+  },
+  {
+   "measure": "head",
+   "sex": "girl",
+   "age": 18,
+   "line": 5,
+   "value": 48.01328393688814
+  },
+  {
+   "measure": "head",
+   "sex": "girl",
+   "age": 18,
+   "line": 6,
+   "value": 48.84100576378921
+  }
+ ],
+ "audiogram": [
+  {
+   "air": {
+    "500": 45,
+    "1000": 45,
+    "2000": 50,
+    "4000": 50
+   },
+   "bone": {
+    "500": 40,
+    "1000": 40,
+    "2000": 45,
+    "4000": 50
+   },
+   "pta": 48,
+   "grade": "moderate",
+   "type": "sensorineural",
+   "hasAir": true
+  },
+  {
+   "air": {
+    "500": 40,
+    "1000": 45,
+    "2000": 40,
+    "4000": 35
+   },
+   "bone": {
+    "500": 5,
+    "1000": 10,
+    "2000": 5,
+    "4000": 10
+   },
+   "pta": 40,
+   "grade": "moderate",
+   "type": "conductive",
+   "hasAir": true
+  },
+  {
+   "air": {
+    "500": 70,
+    "1000": 75,
+    "2000": 70,
+    "4000": 75
+   },
+   "bone": {
+    "500": 35,
+    "1000": 40,
+    "2000": 40,
+    "4000": 45
+   },
+   "pta": 73,
+   "grade": "severe",
+   "type": "mixed",
+   "hasAir": true
+  },
+  {
+   "air": {
+    "500": 30,
+    "1000": 30,
+    "2000": 35,
+    "4000": 35
+   },
+   "bone": {},
+   "pta": 33,
+   "grade": "mild",
+   "type": null,
+   "hasAir": true
+  },
+  {
+   "air": {
+    "500": 30,
+    "1000": 30
+   },
+   "bone": {},
+   "pta": null,
+   "grade": null,
+   "type": null,
+   "hasAir": true
+  },
+  {
+   "air": {},
+   "bone": {
+    "500": 10
+   },
+   "pta": null,
+   "grade": null,
+   "type": null,
+   "hasAir": false
+  },
+  {
+   "air": {
+    "500": 80,
+    "1000": 80,
+    "2000": 80,
+    "4000": 80
+   },
+   "bone": {
+    "500": 80,
+    "1000": 80,
+    "2000": 80,
+    "4000": 80
+   },
+   "pta": 80,
+   "grade": "profound",
+   "type": "sensorineural",
+   "hasAir": true
+  },
+  {
+   "air": {
+    "500": 35,
+    "1000": 35,
+    "2000": 35,
+    "4000": 34
+   },
+   "bone": {},
+   "pta": 35,
+   "grade": "moderate",
+   "type": null,
+   "hasAir": true
+  },
+  {
+   "air": {
+    "500": 10,
+    "1000": 15,
+    "2000": 10,
+    "4000": 15
+   },
+   "bone": {
+    "500": 10
+   },
+   "pta": 13,
+   "grade": "normal hearing",
+   "type": null,
+   "hasAir": true
+  },
+  {
+   "air": {
+    "500": 15,
+    "1000": 20,
+    "2000": 20,
+    "4000": 15
+   },
+   "bone": {
+    "500": 10,
+    "1000": 10,
+    "2000": 10,
+    "4000": 10
+   },
+   "pta": 18,
+   "grade": "normal hearing",
+   "type": null,
+   "hasAir": true
+  },
+  {
+   "air": {
+    "500": 95,
+    "1000": 95,
+    "2000": 95,
+    "4000": 95
+   },
+   "bone": {
+    "1000": 45,
+    "2000": 50
+   },
+   "pta": 95,
+   "grade": "complete",
+   "type": "mixed",
+   "hasAir": true
+  },
+  {
+   "air": {
+    "500": 30,
+    "1000": 30,
+    "2000": 30,
+    "4000": 30
+   },
+   "bone": {
+    "500": 20,
+    "1000": 20,
+    "2000": 25,
+    "4000": 20
+   },
+   "pta": 30,
+   "grade": "mild",
+   "type": "sensorineural",
+   "hasAir": true
+  },
+  {
+   "air": {
+    "500": 50,
+    "1000": 55,
+    "2000": 50,
+    "4000": 55,
+    "250": 20,
+    "8000": 70
+   },
+   "bone": {
+    "500": 40,
+    "1000": 50,
+    "2000": 45,
+    "4000": 50
+   },
+   "pta": 53,
+   "grade": "moderately severe",
+   "type": "sensorineural",
+   "hasAir": true
+  }
+ ],
+ "partograph": [
+  {
+   "readings": [
+    {
+     "hour": 0,
+     "dilatation": 4
+    },
+    {
+     "hour": 2,
+     "dilatation": 5
+    },
+    {
+     "hour": 4,
+     "dilatation": 6
+    },
+    {
+     "hour": 6,
+     "dilatation": 7
+    }
+   ],
+   "alertAt": 2,
+   "actionAt": null
+  },
+  {
+   "readings": [
+    {
+     "hour": 0,
+     "dilatation": 4
+    },
+    {
+     "hour": 4,
+     "dilatation": 5
+    },
+    {
+     "hour": 8,
+     "dilatation": 6
+    }
+   ],
+   "alertAt": 4,
+   "actionAt": 8
+  },
+  {
+   "readings": [
+    {
+     "hour": 0,
+     "dilatation": 4
+    },
+    {
+     "hour": 1,
+     "dilatation": 5
+    },
+    {
+     "hour": 2,
+     "dilatation": 6.5
+    },
+    {
+     "hour": 3,
+     "dilatation": 8
+    }
+   ],
+   "alertAt": null,
+   "actionAt": null
+  },
+  {
+   "readings": [
+    {
+     "hour": 6,
+     "dilatation": 9
+    },
+    {
+     "hour": 3,
+     "dilatation": 6
+    },
+    {
+     "hour": 0,
+     "dilatation": 4
+    }
+   ],
+   "alertAt": 3,
+   "actionAt": null
+  },
+  {
+   "readings": [
+    {
+     "hour": 4,
+     "dilatation": 4
+    }
+   ],
+   "alertAt": 4,
+   "actionAt": null
+  },
+  {
+   "readings": [
+    {
+     "hour": 5,
+     "dilatation": 4
+    },
+    {
+     "hour": 9.5,
+     "dilatation": 5
+    }
+   ],
+   "alertAt": 5,
+   "actionAt": 5
+  },
+  {
+   "readings": [
+    {
+     "hour": 3
+    }
+   ],
+   "alertAt": null,
+   "actionAt": null
+  },
+  {
+   "readings": [],
+   "alertAt": null,
+   "actionAt": null
+  }
+ ]
+}

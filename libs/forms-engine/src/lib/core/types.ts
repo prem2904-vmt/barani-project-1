@@ -40,9 +40,13 @@ export type PictureChoiceKind = (typeof PICTURE_CHOICE_KINDS)[number];
 export const PAIR_KINDS = ['sidePair', 'shorthand'] as const;
 export type PairKind = (typeof PAIR_KINDS)[number];
 
+/** Timed readings and reference charts (growth, audiogram, partograph). */
+export const CHART_KINDS = ['readings', 'plotChart'] as const;
+export type ChartKind = (typeof CHART_KINDS)[number];
+
 /** Every kind the UI can fill and build. */
-export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS, ...PICTURE_CHOICE_KINDS, ...PAIR_KINDS] as const;
-export type KnownKind = PlainKind | ImageKind | TableKind | PictureChoiceKind | PairKind;
+export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS, ...PICTURE_CHOICE_KINDS, ...PAIR_KINDS, ...CHART_KINDS] as const;
+export type KnownKind = PlainKind | ImageKind | TableKind | PictureChoiceKind | PairKind | ChartKind;
 export type KindName = KnownKind | 'unsupported' | (string & {});
 
 export type ConditionOp =

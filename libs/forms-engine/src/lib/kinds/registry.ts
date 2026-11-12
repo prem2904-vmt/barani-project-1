@@ -8,6 +8,7 @@ import { DurationFill } from './duration/duration.fill';
 import { MeasureFill } from './measure/measure.fill';
 import { MultiFill } from './multi/multi.fill';
 import { NumberFill } from './number/number.fill';
+import { ReadingsFill } from './readings/readings.fill';
 import { RepeatFill } from './repeat/repeat.fill';
 import { RepeatPagesFill } from './repeatPages/repeatPages.fill';
 import { ShorthandFill } from './shorthand/shorthand.fill';
@@ -17,7 +18,7 @@ import { TextFill } from './text/text.fill';
 import { YesnoFill } from './yesno/yesno.fill';
 
 /** Kinds whose control is loaded on first use (heavy: the canvas engine, the grid). */
-export const LAZY_KINDS: readonly string[] = ['drawing', 'bodyMap', 'photoMarkup', 'photos', 'eyeDiagram', 'grid', 'pictureChoice'];
+export const LAZY_KINDS: readonly string[] = ['drawing', 'bodyMap', 'photoMarkup', 'photos', 'eyeDiagram', 'grid', 'pictureChoice', 'plotChart'];
 
 /**
  * Every plain kind → its touch control. The ONLY place kinds are listed in
@@ -48,6 +49,9 @@ export const KIND_SPECS: Record<KnownKind, KindSpec> = {
   // group "pair": one question for both sides, and the clinical shorthand boxes (small, bundled)
   sidePair: { component: SidePairFill },
   shorthand: { component: ShorthandFill },
+  // readings over time: plain; the charts (curves, audiogram, partograph) load on first use
+  readings: { component: ReadingsFill },
+  plotChart: { load: () => import('./plotChart/plotChart.fill').then((m) => m.PlotChartFill) },
 };
 
 export const REGISTERED_KINDS: readonly string[] = KNOWN_KINDS;

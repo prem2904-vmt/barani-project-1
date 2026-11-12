@@ -1,0 +1,337 @@
+// ─────────────────────────────────────────────────────────────────────────
+// readings + plotChart (fill) and their Studio panels. Global classes, imported from fill/_fill.scss like every fill control.
+// Touch size lives on the existing classes (fe-chip, fe-numbox, fe-iconbtn, pf-btn); nothing here makes a smaller button.
+// ─────────────────────────────────────────────────────────────────────────
+@use '../../../../../shared/src/lib/styles/pf-mixins' as pf;
+
+// ── the chart picture
+.fe-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+  border-radius: 12px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+}
+
+.fe-chart__grid {
+  stroke: var(--pf-line);
+  stroke-width: 0.6;
+}
+
+.fe-chart__frame {
+  stroke: var(--text-tertiary);
+  stroke-opacity: 0.7;
+  stroke-width: 0.9;
+}
+
+.fe-chart__num {
+  fill: var(--text-secondary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fe-chart__dot {
+  stroke: var(--pf-card-bg);
+  stroke-width: 1;
+}
+
+.fe-chart__ring {
+  fill: var(--pf-card-bg);
+}
+
+// ── plotChart
+.fe-pc {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fe-pc__entry {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.fe-pc__fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.fe-pc__cell,
+.fe-rd__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fe-pc__lab,
+.fe-rd__lab {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.fe-pc .fe-numbox {
+  min-width: 96px;
+}
+
+.fe-pc__list,
+.fe-pc__flags {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fe-pc__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+}
+
+.fe-pc__item-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  @include pf.no-truncate;
+}
+
+.fe-pc__result {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--pf-chip-bg);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-wrap: pretty;
+}
+
+.fe-pc__result--none {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+// audiogram: a 6-frequency grid (air, bone) of thresholds
+.fe-pc__aud {
+  display: grid;
+  grid-template-columns: 40px repeat(6, minmax(0, 1fr));
+  gap: 6px 4px;
+  align-items: center;
+}
+
+.fe-pc__aud-head,
+.fe-pc__aud-row {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.fe-pc__aud-row {
+  text-align: left;
+}
+
+.fe-chip.fe-pc__tcell {
+  min-width: 0;
+  padding: 4px 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fe-pc__step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.fe-pc__step-name {
+  flex: 1 1 100%;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.fe-pc__step-v {
+  min-width: 64px;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+// partograph: where the lines were crossed
+.fe-pc__flag {
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.fe-pc__flag--warn {
+  border-color: color-mix(in srgb, #d97706 55%, var(--pf-line));
+  background: color-mix(in srgb, #f59e0b 12%, var(--pf-card-bg));
+}
+
+// ── readings
+.fe-rd {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fe-rd__cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.fe-rd .fe-numbox {
+  min-width: 96px;
+}
+
+.fe-rd__time {
+  font-variant-numeric: tabular-nums;
+}
+
+.fe-rd__shift {
+  margin-top: -4px;
+}
+
+// ── Studio panels (chrome: kit sizes, not touch sizes)
+.fe-cs {
+  display: grid;
+  gap: 10px;
+}
+
+.fe-cs__h {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.fe-cs__note {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.45;
+  color: var(--text-tertiary);
+}
+
+.fe-cs__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fe-cs__col {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+}
+
+.fe-cs__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fe-cs__row .pf-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fe-cs__row--small {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: end;
+}
+
+.fe-cs__f {
+  display: grid;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  min-width: 0;
+}
+
+.fe-cs__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.fe-cs__chip,
+.fe-cs__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.fe-cs__icon {
+  width: 36px;
+  padding: 0;
+  flex: none;
+}
+
+.fe-cs__icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.fe-cs__chip[aria-checked='true'],
+.fe-cs__chip[aria-pressed='true'] {
+  background: var(--color-primary, #7c3aed);
+  border-color: var(--color-primary, #7c3aed);
+  color: #fff;
+  font-weight: 600;
+}
+
+.fe-cs__add {
+  justify-self: start;
+}
