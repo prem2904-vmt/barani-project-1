@@ -125,7 +125,7 @@ describe('pictureChoice model', () => {
     expect(safePath('<script>alert(1)</script>')).toBeNull();
     expect(safePath('M0,0 L1,1 url(x)')).toBeNull();
     expect(safePath('L1,1')).toBeNull();
-    expect(safePath('M0,0 ' + '1 '.repeat(5000))).toBeNull();
+    expect(safePath('M0,0 ' + '1 '.repeat(11000))).toBeNull();
     expect(safePath(5)).toBeNull();
   });
 });
