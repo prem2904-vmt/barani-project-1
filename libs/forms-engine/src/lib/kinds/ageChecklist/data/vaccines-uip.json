@@ -1,0 +1,377 @@
+{
+  "id": "vaccines-uip",
+  "title": "India Universal Immunisation Programme (UIP)",
+  "source": [
+    "Ministry of Health and Family Welfare, Government of India: Universal Immunisation Programme national immunisation schedule table (as published by PIB, March 2026: https://static.pib.gov.in/WriteReadData/specificdocs/documents/2026/mar/doc2026320830601.pdf). Vaccines and the age each is given at are exactly as in that table; JE is for endemic districts only.",
+    "NOT included: the Indian Academy of Pediatrics (ACVIP) schedule, which could not be verified from a primary source; Td for pregnant women (not an age-based item); the 2026 HPV campaign for 14-year-old girls (a campaign, not part of the routine table)."
+  ],
+  "meaning": "due = the age the dose is given from. until = the last day it is on time. A dose not given after the 'until' age is overdue. DEFAULT RULES (clinic decisions, not part of the national table): infant doses (birth, 6, 10, 14 weeks) are overdue 4 weeks after the due age; a dose given in a window (9-12 months, 16-24 months) is overdue after the window ends; later single-age doses (5-6 years, 10 and 16 years) are overdue after the stated range or one year.",
+  "items": [
+    {
+      "key": "bcg",
+      "label": "BCG",
+      "name": "Bacillus Calmette-Guerin",
+      "due": {
+        "n": 0,
+        "unit": "days"
+      },
+      "until": {
+        "n": 28,
+        "unit": "days"
+      },
+      "group": "Birth"
+    },
+    {
+      "key": "opv0",
+      "label": "OPV 0",
+      "name": "Oral polio vaccine, zero dose",
+      "due": {
+        "n": 0,
+        "unit": "days"
+      },
+      "until": {
+        "n": 28,
+        "unit": "days"
+      },
+      "group": "Birth"
+    },
+    {
+      "key": "hepB0",
+      "label": "Hep B birth dose",
+      "name": "Hepatitis B, birth dose",
+      "due": {
+        "n": 0,
+        "unit": "days"
+      },
+      "until": {
+        "n": 28,
+        "unit": "days"
+      },
+      "group": "Birth"
+    },
+    {
+      "key": "opv1",
+      "label": "OPV 1",
+      "name": "Oral polio vaccine 1",
+      "due": {
+        "n": 6,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 70,
+        "unit": "days"
+      },
+      "group": "6 weeks"
+    },
+    {
+      "key": "penta1",
+      "label": "Penta 1",
+      "name": "Pentavalent 1 (DPT, Hep B, Hib)",
+      "due": {
+        "n": 6,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 70,
+        "unit": "days"
+      },
+      "group": "6 weeks"
+    },
+    {
+      "key": "rota1",
+      "label": "Rota 1",
+      "name": "Rotavirus vaccine 1",
+      "due": {
+        "n": 6,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 70,
+        "unit": "days"
+      },
+      "group": "6 weeks"
+    },
+    {
+      "key": "fipv1",
+      "label": "fIPV 1",
+      "name": "Fractional inactivated polio vaccine 1",
+      "due": {
+        "n": 6,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 70,
+        "unit": "days"
+      },
+      "group": "6 weeks"
+    },
+    {
+      "key": "pcv1",
+      "label": "PCV 1",
+      "name": "Pneumococcal conjugate vaccine 1",
+      "due": {
+        "n": 6,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 70,
+        "unit": "days"
+      },
+      "group": "6 weeks"
+    },
+    {
+      "key": "opv2",
+      "label": "OPV 2",
+      "name": "Oral polio vaccine 2",
+      "due": {
+        "n": 10,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 98,
+        "unit": "days"
+      },
+      "group": "10 weeks"
+    },
+    {
+      "key": "penta2",
+      "label": "Penta 2",
+      "name": "Pentavalent 2 (DPT, Hep B, Hib)",
+      "due": {
+        "n": 10,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 98,
+        "unit": "days"
+      },
+      "group": "10 weeks"
+    },
+    {
+      "key": "rota2",
+      "label": "Rota 2",
+      "name": "Rotavirus vaccine 2",
+      "due": {
+        "n": 10,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 98,
+        "unit": "days"
+      },
+      "group": "10 weeks"
+    },
+    {
+      "key": "opv3",
+      "label": "OPV 3",
+      "name": "Oral polio vaccine 3",
+      "due": {
+        "n": 14,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 126,
+        "unit": "days"
+      },
+      "group": "14 weeks"
+    },
+    {
+      "key": "penta3",
+      "label": "Penta 3",
+      "name": "Pentavalent 3 (DPT, Hep B, Hib)",
+      "due": {
+        "n": 14,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 126,
+        "unit": "days"
+      },
+      "group": "14 weeks"
+    },
+    {
+      "key": "fipv2",
+      "label": "fIPV 2",
+      "name": "Fractional inactivated polio vaccine 2",
+      "due": {
+        "n": 14,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 126,
+        "unit": "days"
+      },
+      "group": "14 weeks"
+    },
+    {
+      "key": "rota3",
+      "label": "Rota 3",
+      "name": "Rotavirus vaccine 3",
+      "due": {
+        "n": 14,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 126,
+        "unit": "days"
+      },
+      "group": "14 weeks"
+    },
+    {
+      "key": "pcv2",
+      "label": "PCV 2",
+      "name": "Pneumococcal conjugate vaccine 2",
+      "due": {
+        "n": 14,
+        "unit": "weeks"
+      },
+      "until": {
+        "n": 126,
+        "unit": "days"
+      },
+      "group": "14 weeks"
+    },
+    {
+      "key": "mr1",
+      "label": "MR 1",
+      "name": "Measles and rubella 1",
+      "due": {
+        "n": 9,
+        "unit": "months"
+      },
+      "until": {
+        "n": 12,
+        "unit": "months"
+      },
+      "group": "9 to 12 months"
+    },
+    {
+      "key": "je1",
+      "label": "JE 1",
+      "name": "Japanese encephalitis 1",
+      "due": {
+        "n": 9,
+        "unit": "months"
+      },
+      "until": {
+        "n": 12,
+        "unit": "months"
+      },
+      "group": "9 to 12 months",
+      "note": "Given in endemic districts only."
+    },
+    {
+      "key": "pcvBooster",
+      "label": "PCV booster",
+      "name": "Pneumococcal conjugate vaccine booster",
+      "due": {
+        "n": 9,
+        "unit": "months"
+      },
+      "until": {
+        "n": 12,
+        "unit": "months"
+      },
+      "group": "9 to 12 months"
+    },
+    {
+      "key": "mr2",
+      "label": "MR 2",
+      "name": "Measles and rubella 2",
+      "due": {
+        "n": 16,
+        "unit": "months"
+      },
+      "until": {
+        "n": 24,
+        "unit": "months"
+      },
+      "group": "16 to 24 months"
+    },
+    {
+      "key": "je2",
+      "label": "JE 2",
+      "name": "Japanese encephalitis 2",
+      "due": {
+        "n": 16,
+        "unit": "months"
+      },
+      "until": {
+        "n": 24,
+        "unit": "months"
+      },
+      "group": "16 to 24 months",
+      "note": "Given in endemic districts only."
+    },
+    {
+      "key": "dptB1",
+      "label": "DPT booster 1",
+      "name": "Diphtheria, pertussis and tetanus booster 1",
+      "due": {
+        "n": 16,
+        "unit": "months"
+      },
+      "until": {
+        "n": 24,
+        "unit": "months"
+      },
+      "group": "16 to 24 months"
+    },
+    {
+      "key": "opvBooster",
+      "label": "OPV booster",
+      "name": "Oral polio vaccine booster",
+      "due": {
+        "n": 16,
+        "unit": "months"
+      },
+      "until": {
+        "n": 24,
+        "unit": "months"
+      },
+      "group": "16 to 24 months"
+    },
+    {
+      "key": "dptB2",
+      "label": "DPT booster 2",
+      "name": "Diphtheria, pertussis and tetanus booster 2",
+      "due": {
+        "n": 5,
+        "unit": "years"
+      },
+      "until": {
+        "n": 6,
+        "unit": "years"
+      },
+      "group": "5 to 6 years"
+    },
+    {
+      "key": "td10",
+      "label": "Td (10 years)",
+      "name": "Tetanus and adult diphtheria at 10 years",
+      "due": {
+        "n": 10,
+        "unit": "years"
+      },
+      "until": {
+        "n": 11,
+        "unit": "years"
+      },
+      "group": "10 years"
+    },
+    {
+      "key": "td16",
+      "label": "Td (16 years)",
+      "name": "Tetanus and adult diphtheria at 16 years",
+      "due": {
+        "n": 16,
+        "unit": "years"
+      },
+      "until": {
+        "n": 17,
+        "unit": "years"
+      },
+      "group": "16 years"
+    }
+  ]
+}

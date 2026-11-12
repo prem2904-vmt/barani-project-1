@@ -44,9 +44,13 @@ export type PairKind = (typeof PAIR_KINDS)[number];
 export const CHART_KINDS = ['readings', 'plotChart'] as const;
 export type ChartKind = (typeof CHART_KINDS)[number];
 
+/** Family tree, checklist by age, tooth chart (group "family", department components). */
+export const FAMILY_KINDS = ['familyTree', 'ageChecklist', 'toothChart'] as const;
+export type FamilyKind = (typeof FAMILY_KINDS)[number];
+
 /** Every kind the UI can fill and build. */
-export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS, ...PICTURE_CHOICE_KINDS, ...PAIR_KINDS, ...CHART_KINDS] as const;
-export type KnownKind = PlainKind | ImageKind | TableKind | PictureChoiceKind | PairKind | ChartKind;
+export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS, ...PICTURE_CHOICE_KINDS, ...PAIR_KINDS, ...CHART_KINDS, ...FAMILY_KINDS] as const;
+export type KnownKind = PlainKind | ImageKind | TableKind | PictureChoiceKind | PairKind | ChartKind | FamilyKind;
 export type KindName = KnownKind | 'unsupported' | (string & {});
 
 export type ConditionOp =

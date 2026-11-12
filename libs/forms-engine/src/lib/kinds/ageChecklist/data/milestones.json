@@ -1,0 +1,398 @@
+{
+  "id": "milestones",
+  "title": "Developmental milestones",
+  "source": [
+    "CDC 'Learn the Signs. Act Early.' milestone checklists, 2022 revision (Zubler JM et al., Pediatrics 2022;149(3):e2021052138): checkpoint age at which the milestone is listed.",
+    "WHO Multicentre Growth Reference Study Group, Acta Paediatrica Suppl 2006;450:86-95: windows of achievement for six gross motor milestones; the upper limit of the window is used as byMonths."
+  ],
+  "meaning": "fromMonths = age the item starts to be asked. byMonths = age at which it is expected; a milestone not achieved at or after this age is written as a delay. Values are screening prompts, not diagnoses; review with a paediatrician before relying on them.",
+  "domains": [
+    {
+      "key": "gross",
+      "label": "Gross motor"
+    },
+    {
+      "key": "fine",
+      "label": "Fine motor"
+    },
+    {
+      "key": "language",
+      "label": "Language"
+    },
+    {
+      "key": "social",
+      "label": "Social"
+    }
+  ],
+  "items": [
+    {
+      "key": "headSteady",
+      "domain": "gross",
+      "label": "Holds head steady",
+      "delay": "no steady head control",
+      "fromMonths": 2,
+      "byMonths": 4,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "rolls",
+      "domain": "gross",
+      "label": "Rolls from tummy to back",
+      "delay": "not rolling over",
+      "fromMonths": 4,
+      "byMonths": 6,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "sits",
+      "domain": "gross",
+      "label": "Sits without support",
+      "delay": "not sitting without support",
+      "fromMonths": 4,
+      "byMonths": 9,
+      "basis": "WHO MGRS 2006 window (upper limit); CDC 2022 (9 months)"
+    },
+    {
+      "key": "crawls",
+      "domain": "gross",
+      "label": "Moves on hands and knees",
+      "delay": "not crawling",
+      "fromMonths": 6,
+      "byMonths": 14,
+      "basis": "WHO MGRS 2006 window (upper limit)"
+    },
+    {
+      "key": "pullsToStand",
+      "domain": "gross",
+      "label": "Pulls up to stand",
+      "delay": "not pulling to stand",
+      "fromMonths": 5,
+      "byMonths": 12,
+      "basis": "WHO MGRS 2006 window (upper limit); CDC 2022 (12 months)"
+    },
+    {
+      "key": "cruises",
+      "domain": "gross",
+      "label": "Walks holding on to furniture",
+      "delay": "not walking with support",
+      "fromMonths": 6,
+      "byMonths": 14,
+      "basis": "WHO MGRS 2006 window (upper limit)"
+    },
+    {
+      "key": "walks",
+      "domain": "gross",
+      "label": "Walks alone",
+      "delay": "not walking",
+      "fromMonths": 9,
+      "byMonths": 18,
+      "basis": "WHO MGRS 2006 window (upper limit); CDC 2022 (18 months)"
+    },
+    {
+      "key": "runs",
+      "domain": "gross",
+      "label": "Runs",
+      "delay": "not running",
+      "fromMonths": 15,
+      "byMonths": 24,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "jumps",
+      "domain": "gross",
+      "label": "Jumps off the ground with both feet",
+      "delay": "not jumping with both feet",
+      "fromMonths": 24,
+      "byMonths": 30,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "hops",
+      "domain": "gross",
+      "label": "Hops on one foot",
+      "delay": "not hopping on one foot",
+      "fromMonths": 48,
+      "byMonths": 60,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "holdsToy",
+      "domain": "fine",
+      "label": "Holds a toy put in the hand",
+      "delay": "not holding a toy",
+      "fromMonths": 2,
+      "byMonths": 4,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "reachesToy",
+      "domain": "fine",
+      "label": "Reaches for a toy",
+      "delay": "not reaching for toys",
+      "fromMonths": 4,
+      "byMonths": 6,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "passesHands",
+      "domain": "fine",
+      "label": "Moves things from one hand to the other",
+      "delay": "not passing objects between hands",
+      "fromMonths": 6,
+      "byMonths": 9,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "pincer",
+      "domain": "fine",
+      "label": "Picks up small food with thumb and finger",
+      "delay": "no pincer grasp",
+      "fromMonths": 9,
+      "byMonths": 12,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "stacks",
+      "domain": "fine",
+      "label": "Stacks two small blocks",
+      "delay": "not stacking blocks",
+      "fromMonths": 12,
+      "byMonths": 15,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "scribbles",
+      "domain": "fine",
+      "label": "Scribbles",
+      "delay": "not scribbling",
+      "fromMonths": 12,
+      "byMonths": 18,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "spoon",
+      "domain": "fine",
+      "label": "Eats with a spoon",
+      "delay": "not feeding with a spoon",
+      "fromMonths": 15,
+      "byMonths": 24,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "circle",
+      "domain": "fine",
+      "label": "Draws a circle",
+      "delay": "cannot draw a circle",
+      "fromMonths": 30,
+      "byMonths": 36,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "pencilGrip",
+      "domain": "fine",
+      "label": "Holds a crayon between fingers and thumb",
+      "delay": "no mature pencil grip",
+      "fromMonths": 36,
+      "byMonths": 48,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "buttons",
+      "domain": "fine",
+      "label": "Buttons some buttons",
+      "delay": "cannot do buttons",
+      "fromMonths": 48,
+      "byMonths": 60,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "sounds",
+      "domain": "language",
+      "label": "Makes sounds other than crying",
+      "delay": "not making sounds",
+      "fromMonths": 0,
+      "byMonths": 2,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "coos",
+      "domain": "language",
+      "label": "Coos and turns to a voice",
+      "delay": "not cooing",
+      "fromMonths": 2,
+      "byMonths": 4,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "babbles",
+      "domain": "language",
+      "label": "Babbles (mamama, bababa)",
+      "delay": "not babbling",
+      "fromMonths": 6,
+      "byMonths": 9,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "name",
+      "domain": "language",
+      "label": "Looks when their name is called",
+      "delay": "not responding to name",
+      "fromMonths": 6,
+      "byMonths": 9,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "waves",
+      "domain": "language",
+      "label": "Waves bye-bye",
+      "delay": "not waving",
+      "fromMonths": 9,
+      "byMonths": 12,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "parentWord",
+      "domain": "language",
+      "label": "Calls a parent mama or dada",
+      "delay": "no meaningful words",
+      "fromMonths": 9,
+      "byMonths": 12,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "threeWords",
+      "domain": "language",
+      "label": "Says three or more words besides mama and dada",
+      "delay": "fewer than three words",
+      "fromMonths": 12,
+      "byMonths": 18,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "twoWords",
+      "domain": "language",
+      "label": "Puts two words together",
+      "delay": "no two-word phrases",
+      "fromMonths": 18,
+      "byMonths": 24,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "clearSpeech",
+      "domain": "language",
+      "label": "Speech others understand most of the time",
+      "delay": "speech not clear to others",
+      "fromMonths": 30,
+      "byMonths": 36,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "sentences",
+      "domain": "language",
+      "label": "Speaks in sentences of four or more words",
+      "delay": "not speaking in sentences",
+      "fromMonths": 36,
+      "byMonths": 48,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "story",
+      "domain": "language",
+      "label": "Tells a story with at least two events",
+      "delay": "not telling a story",
+      "fromMonths": 48,
+      "byMonths": 60,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "socialSmile",
+      "domain": "social",
+      "label": "Smiles when spoken to or smiled at",
+      "delay": "no social smile",
+      "fromMonths": 0,
+      "byMonths": 2,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "laughs",
+      "domain": "social",
+      "label": "Laughs",
+      "delay": "not laughing",
+      "fromMonths": 3,
+      "byMonths": 6,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "knowsFamiliar",
+      "domain": "social",
+      "label": "Knows familiar people",
+      "delay": "not recognising familiar people",
+      "fromMonths": 4,
+      "byMonths": 6,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "peekaboo",
+      "domain": "social",
+      "label": "Smiles or laughs at peek-a-boo",
+      "delay": "no response to peek-a-boo",
+      "fromMonths": 6,
+      "byMonths": 9,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "playsGames",
+      "domain": "social",
+      "label": "Plays games such as pat-a-cake",
+      "delay": "not playing interactive games",
+      "fromMonths": 9,
+      "byMonths": 12,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "pointsToShow",
+      "domain": "social",
+      "label": "Points to show something interesting",
+      "delay": "not pointing to show things",
+      "fromMonths": 12,
+      "byMonths": 18,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "playsNear",
+      "domain": "social",
+      "label": "Plays next to other children",
+      "delay": "no play near other children",
+      "fromMonths": 24,
+      "byMonths": 30,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "joinsPlay",
+      "domain": "social",
+      "label": "Notices other children and joins their play",
+      "delay": "not joining other children",
+      "fromMonths": 30,
+      "byMonths": 36,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "pretend",
+      "domain": "social",
+      "label": "Pretends in play",
+      "delay": "no pretend play",
+      "fromMonths": 36,
+      "byMonths": 48,
+      "basis": "CDC 2022"
+    },
+    {
+      "key": "takesTurns",
+      "domain": "social",
+      "label": "Takes turns in games",
+      "delay": "cannot take turns",
+      "fromMonths": 48,
+      "byMonths": 60,
+      "basis": "CDC 2022"
+    }
+  ]
+}

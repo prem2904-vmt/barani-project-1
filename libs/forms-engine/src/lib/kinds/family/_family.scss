@@ -1,0 +1,478 @@
+// ─────────────────────────────────────────────────────────────────────────
+// Group "family": familyTree, ageChecklist, toothChart.
+// Only the question controls are touch-sized (>= var(--pf-touch)); the Studio panels use the kit's normal sizes.
+// Imported from fill/_fill.scss (global classes, like every fill control). Light and dark come from the kit tokens.
+// ─────────────────────────────────────────────────────────────────────────
+
+.fe-fam {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fe-fam__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.fe-fam__k {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.fe-fam__card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  min-width: 0;
+}
+
+.fe-fam__card--edit {
+  border-color: var(--fe-cv-mark-line);
+  box-shadow: 0 0 0 2px var(--fe-cv-mark);
+}
+
+// a person / a tooth row you tap to open: a full-width 48px+ button
+.fe-fam__open {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--pf-touch);
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fe-fam__open:hover:not(:disabled) {
+  background: var(--pf-chip-bg);
+}
+
+.fe-fam__open[aria-expanded='true'] {
+  border-color: var(--fe-cv-mark-line);
+}
+
+.fe-fam__n {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.fe-fam__who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.fe-fam__name {
+  font-size: 16px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fe-fam__sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.fe-fam__dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  border: 1px solid color-mix(in srgb, #000 25%, transparent);
+}
+
+.fe-fam__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.fe-fam__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+// ── the pedigree picture
+.fe-fam__chart {
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--pf-line);
+  background: var(--fe-cv-surface);
+}
+
+.fe-fam__svg {
+  display: block;
+  width: 100%;
+  max-height: 340px;
+  margin: 0 auto;
+}
+
+.fe-ped__line {
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+}
+
+.fe-ped__shape {
+  fill: var(--fe-cv-paper);
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+}
+
+.fe-ped__outline {
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+}
+
+.fe-ped__slash,
+.fe-ped__arrow {
+  stroke: var(--text-primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.fe-ped__badge {
+  fill: var(--fe-cv-paper);
+  stroke: var(--text-secondary);
+  stroke-width: 1.5;
+}
+
+.fe-ped__num {
+  fill: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.fe-ped__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+// ── age checklist
+.fe-agec__age {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--pf-chip-bg);
+}
+
+.fe-agec__age strong {
+  font-size: 16px;
+}
+
+.fe-agec__ageinput {
+  flex: 0 1 120px;
+}
+
+.fe-agec__group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fe-agec__ghead {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.fe-agec__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+}
+
+.fe-agec__item.is-flagged {
+  border-color: var(--amber-text, #b45309);
+  background: color-mix(in srgb, var(--amber-text, #b45309) 8%, var(--pf-card-bg));
+}
+
+.fe-agec__item.is-later {
+  opacity: 0.75;
+}
+
+.fe-agec__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.fe-agec__label {
+  font-size: 16px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.fe-agec__hint {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+.fe-agec__late {
+  font-weight: 700;
+  color: var(--amber-text, #b45309);
+}
+
+.fe-agec__btns {
+  display: inline-flex;
+  gap: 6px;
+}
+
+// ── tooth chart
+.fe-tooth {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fe-tooth__arch {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.fe-tooth__quad {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fe-tooth__qname {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.fe-tooth__teeth {
+  display: flex;
+  gap: 2px;
+}
+
+// a tooth: number over a five-surface square; as wide as the row allows, never under 38px, always >= 48px tall
+.fe-tooth__t {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--pf-touch);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 0;
+  border-radius: 10px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fe-tooth__t[aria-pressed='true'] {
+  border-color: var(--fe-cv-mark-line);
+  box-shadow: 0 0 0 2px var(--fe-cv-mark);
+}
+
+.fe-tooth__glyph {
+  display: block;
+  width: 70%;
+  max-width: 30px;
+  aspect-ratio: 1;
+}
+
+.fe-tooth__cell {
+  fill: var(--fe-cv-paper);
+  stroke: var(--text-secondary);
+  stroke-width: 1.2;
+}
+
+.fe-tooth__lines {
+  fill: none;
+  stroke: var(--text-secondary);
+  stroke-width: 0.8;
+}
+
+.fe-tooth__cross {
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  fill: none;
+}
+
+// one picture of the arch when there is room (two quadrants side by side, upper over lower)
+@container (min-width: 640px) {
+  .fe-tooth__arch {
+    grid-template-columns: 1fr 1fr;
+    column-gap: 18px;
+  }
+  .fe-tooth__quad--q1,
+  .fe-tooth__quad--q2,
+  .fe-tooth__quad--q5,
+  .fe-tooth__quad--q6 {
+    order: 0;
+  }
+  .fe-tooth__quad--q4,
+  .fe-tooth__quad--q3,
+  .fe-tooth__quad--q8,
+  .fe-tooth__quad--q7 {
+    order: 1;
+  }
+  .fe-tooth__t {
+    min-height: 56px;
+  }
+}
+
+.fe-tooth__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--fe-cv-mark-line);
+  background: var(--pf-card-bg);
+}
+
+.fe-tooth__ptitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.fe-tooth__cross5 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(64px, 84px));
+  grid-template-rows: repeat(3, 56px);
+  gap: 4px;
+  align-self: flex-start;
+}
+
+.fe-tooth__s {
+  min-height: var(--pf-touch);
+  padding: 2px 4px;
+  border-radius: 10px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.fe-tooth__s[aria-pressed='true'] {
+  background: var(--color-primary, #7c3aed);
+  border-color: var(--color-primary, #7c3aed);
+  color: #fff;
+}
+
+.fe-tooth__s[data-pos='top'] {
+  grid-area: 1 / 2;
+}
+.fe-tooth__s[data-pos='left'] {
+  grid-area: 2 / 1;
+}
+.fe-tooth__s[data-pos='centre'] {
+  grid-area: 2 / 2;
+}
+.fe-tooth__s[data-pos='right'] {
+  grid-area: 2 / 3;
+}
+.fe-tooth__s[data-pos='bottom'] {
+  grid-area: 3 / 2;
+}
+
+// ── Studio panels (kit sizes, not touch sizes)
+.fe-famp__list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fe-famp__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--pf-line);
+  background: var(--pf-card-bg);
+}
+
+.fe-famp__item .pf-input {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.fe-famp__tick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

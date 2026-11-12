@@ -13,7 +13,8 @@ const FILL =
   readFileSync(resolve(ROOT, 'libs/forms-engine/src/lib/fill/_fill.scss'), 'utf8') +
   readFileSync(resolve(ROOT, 'libs/forms-engine/src/lib/canvas/_canvas.scss'), 'utf8') +
   readFileSync(resolve(ROOT, 'libs/forms-engine/src/lib/kinds/grid/_grid.scss'), 'utf8') +
-  readFileSync(resolve(ROOT, 'libs/forms-engine/src/lib/kinds/pictureChoice/_picture-choice.scss'), 'utf8');
+  readFileSync(resolve(ROOT, 'libs/forms-engine/src/lib/kinds/pictureChoice/_picture-choice.scss'), 'utf8') +
+  readFileSync(resolve(ROOT, 'libs/forms-engine/src/lib/kinds/family/_family.scss'), 'utf8');
 // Prepare's apps/prepare/src/styles/_touch.scss, ported by WP5 to the case-sheets styles folder (scoped to html.cs-touch).
 const TOUCH = readFileSync(resolve(ROOT, 'apps/lms/src/app/features/casesheets/styles/_touch.scss'), 'utf8');
 

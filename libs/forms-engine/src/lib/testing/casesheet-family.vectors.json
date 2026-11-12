@@ -1,0 +1,418 @@
+{
+  "about": "Shared by prefrontal-mw (Prefrontal.Tests/CaseSheets/FamilyKindsTests) and prefrontal-ui (libs/forms-engine parity). Inputs are hand-written; every expected value is written by the server code (PF_WRITE_VECTORS=1 dotnet test --filter FamilyVectors). Copy the file to prefrontal-ui libs/forms-engine/src/lib/testing/casesheet-family.vectors.json unchanged.",
+  "dataSha256": {},
+  "ageParse": [
+    {
+      "text": "18 months"
+    },
+    {
+      "text": "1y 6m"
+    },
+    {
+      "text": "6 weeks"
+    },
+    {
+      "text": "10 d"
+    },
+    {
+      "text": "5"
+    },
+    {
+      "text": "1.5"
+    },
+    {
+      "text": "2 years 6 months"
+    },
+    {
+      "text": "3 yrs"
+    },
+    {
+      "text": "18months"
+    },
+    {
+      "text": "9 mos"
+    },
+    {
+      "text": "2w 3d"
+    },
+    {
+      "text": "abc"
+    },
+    {
+      "text": ""
+    },
+    {
+      "text": "2020-06-15",
+      "asOf": "2024-06-15"
+    },
+    {
+      "text": "2020-06-15"
+    },
+    {
+      "text": "2024-06-16",
+      "asOf": "2024-06-15"
+    }
+  ],
+  "ageWords": [
+    {
+      "days": 0
+    },
+    {
+      "days": 1
+    },
+    {
+      "days": 5
+    },
+    {
+      "days": 13
+    },
+    {
+      "days": 14
+    },
+    {
+      "days": 42
+    },
+    {
+      "days": 61
+    },
+    {
+      "days": 70
+    },
+    {
+      "days": 89
+    },
+    {
+      "days": 91
+    },
+    {
+      "days": 274
+    },
+    {
+      "days": 548
+    },
+    {
+      "days": 730
+    },
+    {
+      "days": 731
+    },
+    {
+      "days": 1096
+    },
+    {
+      "days": 1826
+    },
+    {
+      "days": 2200
+    }
+  ],
+  "items": {},
+  "states": [
+    {
+      "preset": "milestones",
+      "key": "walks",
+      "answer": "notDone",
+      "age": 548,
+      "unsetIsMissing": false
+    },
+    {
+      "preset": "milestones",
+      "key": "walks",
+      "answer": "notDone",
+      "age": 547,
+      "unsetIsMissing": false
+    },
+    {
+      "preset": "milestones",
+      "key": "walks",
+      "answer": "notDone",
+      "age": 100,
+      "unsetIsMissing": false
+    },
+    {
+      "preset": "milestones",
+      "key": "walks",
+      "answer": "notDone",
+      "age": null,
+      "unsetIsMissing": false
+    },
+    {
+      "preset": "milestones",
+      "key": "walks",
+      "answer": "done",
+      "age": null,
+      "unsetIsMissing": false
+    },
+    {
+      "preset": "milestones",
+      "key": "walks",
+      "answer": null,
+      "age": 600,
+      "unsetIsMissing": false
+    },
+    {
+      "preset": "milestones",
+      "key": "walks",
+      "answer": null,
+      "age": 600,
+      "unsetIsMissing": true
+    },
+    {
+      "preset": "vaccines",
+      "key": "mr2",
+      "answer": "notDone",
+      "age": 730,
+      "unsetIsMissing": false
+    },
+    {
+      "preset": "vaccines",
+      "key": "mr2",
+      "answer": "notDone",
+      "age": 731,
+      "unsetIsMissing": false
+    },
+    {
+      "preset": "vaccines",
+      "key": "mr2",
+      "answer": "notDone",
+      "age": 486,
+      "unsetIsMissing": false
+    },
+    {
+      "preset": "vaccines",
+      "key": "bcg",
+      "answer": null,
+      "age": 28,
+      "unsetIsMissing": true
+    },
+    {
+      "preset": "vaccines",
+      "key": "bcg",
+      "answer": null,
+      "age": 29,
+      "unsetIsMissing": true
+    }
+  ],
+  "layouts": [
+    {
+      "name": "parents and siblings",
+      "answer": {
+        "self": {
+          "sex": "male"
+        },
+        "people": [
+          {
+            "relation": "father"
+          },
+          {
+            "relation": "mother"
+          },
+          {
+            "relation": "brother"
+          },
+          {
+            "relation": "sister"
+          }
+        ],
+        "consanguinity": {
+          "parents": true
+        }
+      }
+    },
+    {
+      "name": "three generations with spouse and children",
+      "answer": {
+        "self": {
+          "sex": "female",
+          "conditions": [
+            "a"
+          ]
+        },
+        "people": [
+          {
+            "relation": "father",
+            "deceased": true,
+            "ageAtDeath": 55,
+            "conditions": [
+              "a"
+            ]
+          },
+          {
+            "relation": "mother"
+          },
+          {
+            "relation": "maternalGrandmother",
+            "conditions": [
+              "b"
+            ]
+          },
+          {
+            "relation": "brother",
+            "conditions": [
+              "a"
+            ]
+          },
+          {
+            "relation": "spouse",
+            "sex": "male"
+          },
+          {
+            "relation": "son"
+          },
+          {
+            "relation": "daughter"
+          }
+        ],
+        "consanguinity": {
+          "parents": true,
+          "spouse": false
+        }
+      }
+    },
+    {
+      "name": "one parent, spouse and three children",
+      "answer": {
+        "self": {
+          "sex": "male"
+        },
+        "people": [
+          {
+            "relation": "mother"
+          },
+          {
+            "relation": "spouse"
+          },
+          {
+            "relation": "son"
+          },
+          {
+            "relation": "son"
+          },
+          {
+            "relation": "daughter"
+          }
+        ],
+        "consanguinity": {
+          "spouse": true
+        }
+      }
+    },
+    {
+      "name": "grandparents on both sides",
+      "answer": {
+        "self": {
+          "sex": "male"
+        },
+        "people": [
+          {
+            "relation": "paternalGrandfather"
+          },
+          {
+            "relation": "paternalGrandmother"
+          },
+          {
+            "relation": "maternalGrandfather"
+          },
+          {
+            "relation": "maternalGrandmother"
+          },
+          {
+            "relation": "father"
+          },
+          {
+            "relation": "mother"
+          },
+          {
+            "relation": "paternalUncle"
+          },
+          {
+            "relation": "maternalAunt"
+          },
+          {
+            "relation": "brother"
+          }
+        ]
+      }
+    },
+    {
+      "name": "only the patient",
+      "answer": {}
+    },
+    {
+      "name": "a second father is ignored",
+      "answer": {
+        "people": [
+          {
+            "relation": "father"
+          },
+          {
+            "relation": "father"
+          },
+          {
+            "relation": "sister"
+          }
+        ]
+      }
+    },
+    {
+      "name": "uncles without parents",
+      "answer": {
+        "self": {
+          "sex": "female"
+        },
+        "people": [
+          {
+            "relation": "paternalUncle"
+          },
+          {
+            "relation": "paternalAunt"
+          },
+          {
+            "relation": "maternalUncle"
+          }
+        ]
+      }
+    }
+  ],
+  "teeth": {
+    "samples": [
+      "11",
+      "18",
+      "36",
+      "46",
+      "55",
+      "65",
+      "75",
+      "85",
+      "19",
+      "56",
+      "90"
+    ],
+    "surfaceCases": [
+      {
+        "tooth": "11",
+        "surface": "O"
+      },
+      {
+        "tooth": "11",
+        "surface": "B"
+      },
+      {
+        "tooth": "36",
+        "surface": "O"
+      },
+      {
+        "tooth": "36",
+        "surface": "L"
+      },
+      {
+        "tooth": "16",
+        "surface": "L"
+      },
+      {
+        "tooth": "54",
+        "surface": "B"
+      }
+    ]
+  }
+}

@@ -18,7 +18,7 @@ import { TextFill } from './text/text.fill';
 import { YesnoFill } from './yesno/yesno.fill';
 
 /** Kinds whose control is loaded on first use (heavy: the canvas engine, the grid). */
-export const LAZY_KINDS: readonly string[] = ['drawing', 'bodyMap', 'photoMarkup', 'photos', 'eyeDiagram', 'grid', 'pictureChoice', 'plotChart'];
+export const LAZY_KINDS: readonly string[] = ['drawing', 'bodyMap', 'photoMarkup', 'photos', 'eyeDiagram', 'grid', 'pictureChoice', 'plotChart', 'familyTree', 'ageChecklist', 'toothChart'];
 
 /**
  * Every plain kind → its touch control. The ONLY place kinds are listed in
@@ -52,6 +52,9 @@ export const KIND_SPECS: Record<KnownKind, KindSpec> = {
   // readings over time: plain; the charts (curves, audiogram, partograph) load on first use
   readings: { component: ReadingsFill },
   plotChart: { load: () => import('./plotChart/plotChart.fill').then((m) => m.PlotChartFill) },
+  familyTree: { load: () => import('./familyTree/familyTree.fill').then((m) => m.FamilyTreeFill) },
+  ageChecklist: { load: () => import('./ageChecklist/ageChecklist.fill').then((m) => m.AgeChecklistFill) },
+  toothChart: { load: () => import('./toothChart/toothChart.fill').then((m) => m.ToothChartFill) },
 };
 
 export const REGISTERED_KINDS: readonly string[] = KNOWN_KINDS;

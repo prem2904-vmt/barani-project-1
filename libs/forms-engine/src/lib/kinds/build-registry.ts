@@ -8,6 +8,9 @@ import { GRID_BUILD } from './grid/grid.build';
 import { PICTURE_CHOICE_BUILD } from './pictureChoice/pictureChoice.build';
 import { PLOT_CHART_BUILD } from './plotChart/plotChart.build';
 import { READINGS_BUILD } from './readings/readings.build';
+import { AGE_CHECKLIST_BUILD } from './ageChecklist/ageChecklist.build';
+import { FAMILY_TREE_BUILD } from './familyTree/familyTree.build';
+import { TOOTH_CHART_BUILD } from './toothChart/toothChart.build';
 import { PHOTO_MARKUP_BUILD } from './photoMarkup/photoMarkup.build';
 import { PHOTOS_BUILD } from './photos/photos.build';
 import { CHOICE_BUILD } from './choice/choice.build';
@@ -52,6 +55,9 @@ export const KIND_BUILDS: Record<KnownKind, KindBuild> = {
   shorthand: SHORTHAND_BUILD,
   readings: READINGS_BUILD,
   plotChart: PLOT_CHART_BUILD,
+  familyTree: FAMILY_TREE_BUILD,
+  ageChecklist: AGE_CHECKLIST_BUILD,
+  toothChart: TOOTH_CHART_BUILD,
 };
 
 /** A kind the UI has no descriptor for (an imported legacy field). */
