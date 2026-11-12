@@ -97,7 +97,7 @@ type Which = 'from' | 'to';
           (valueChange)="pickUnit($event)"
         />
       </div>
-      @if (preview()) {
+      @if (preview() && !legacy()) {
         <p class="fe-dur__says" aria-live="polite">{{ preview() }}</p>
       }
     } @else {
@@ -170,7 +170,7 @@ type Which = 'from' | 'to';
   `,
 })
 export class DurationFill extends KindFill {
-  private readonly legacy = injectLegacy();
+  protected readonly legacy = injectLegacy();
   protected readonly numbers = DURATION_NUMBERS;
   protected readonly periods = PERIODS;
 
