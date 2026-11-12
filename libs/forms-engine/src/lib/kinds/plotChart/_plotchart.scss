@@ -47,6 +47,12 @@
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  max-width: 100%;
+}
+
+.fe-pc > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .fe-pc__entry {
@@ -160,12 +166,27 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.fe-pc__step > * {
+  min-width: 0;
 }
 
 .fe-pc__step-name {
-  flex: 1 1 100%;
+  flex: 0 0 100%;
   font-size: 13px;
   color: var(--text-secondary);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.fe-pc__step .fe-chip {
+  flex: 0 1 auto;
+  padding: 8px 14px;
+  white-space: nowrap;
 }
 
 .fe-pc__step-v {

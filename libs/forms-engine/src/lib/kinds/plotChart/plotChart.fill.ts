@@ -162,10 +162,10 @@ export const PARTO_COLS: PartoCol[] = [
           </div>
           @if (cell(); as c) {
             <div class="fe-pc__step" role="group" [attr.aria-label]="'Adjust ' + c.name + ' ' + c.freq + ' Hz'">
-              <span class="fe-pc__step-name">{{ earName() }}, {{ c.name }}, {{ c.freq }} Hz</span>
-              <button type="button" class="fe-chip" data-act="less" [disabled]="disabled()" (click)="stepCell(-5)">Lower 5 dB</button>
+              <span class="fe-pc__step-name">{{ earName() }}, {{ c.name }} conduction, {{ c.freq }} Hz</span>
+              <button type="button" class="fe-chip" data-act="less" [disabled]="disabled()" (click)="stepCell(-5)">−5 dB</button>
               <span class="fe-pc__step-v" aria-live="polite">{{ threshold(c.key, c.freq) ?? '–' }} dB</span>
-              <button type="button" class="fe-chip" data-act="more" [disabled]="disabled()" (click)="stepCell(5)">Higher 5 dB</button>
+              <button type="button" class="fe-chip" data-act="more" [disabled]="disabled()" (click)="stepCell(5)">+5 dB</button>
               <button type="button" class="fe-chip" data-act="clear-cell" [disabled]="disabled() || threshold(c.key, c.freq) === null" (click)="clearCell()">Clear</button>
             </div>
           }
