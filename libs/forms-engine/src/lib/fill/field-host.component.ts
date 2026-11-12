@@ -28,7 +28,7 @@ import { followUpsInside } from './option-layout';
   template: `
     <!-- the question and its control; a Yes / No question is ONE card row (legacy yesno-na: question left, pills right) -->
     <div class="fe-field__row">
-    <div class="fe-field__head">
+    <div class="fe-field__head" [class.fe-sr-only]="cardLabel()">
       <!-- the old duration-time box (Recovery time, Duration of episode) printed no question above it -->
       <span class="fe-field__lbl" [id]="labelId" [class.fe-sr-only]="bareClock()">{{ field().label }}</span>
       @if (field().required && !(legacy() && field().kind === 'duration')) {
@@ -109,6 +109,11 @@ export class FieldHostComponent {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   /** Old app: a required duration showed no star. */
   protected readonly legacy = injectLegacy();
+  /** The old measure card and the old switch carry their own question inside the control (so the head above is for screen readers only). */
+  protected readonly cardLabel = computed(() => {
+    const f = this.field();
+    return (this.legacy() && f.kind === 'measure') || (f.kind === 'yesno' && f.config?.['display'] === 'check');
+  });
   protected readonly bareClock = computed(() => this.legacy() && this.field().kind === 'duration' && this.field().config?.['scale'] === 'clock');
 
   readonly field = input.required<FieldDef>();

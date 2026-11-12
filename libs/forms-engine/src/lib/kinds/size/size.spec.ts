@@ -56,3 +56,23 @@ describe('size fill', () => {
     expect(r.calls).toEqual([]);
   });
 });
+
+describe('size fill: legacy card row (G19)', () => {
+  const nav = { goTo: () => undefined, pageTitle: (k: string) => k, isLegacy: () => true };
+  it('one card row: boxes x boxes and the old unit list (cm, mm, inch, feet, meter) as a dropdown', async () => {
+    const r = await renderKind(SizeFill, f('sz', 'size', { label: 'Size', config: { boxCount: 2 } }), null, { wizard: nav });
+    expect(r.el.querySelector('.fe-size--legacy')).not.toBeNull();
+    expect(r.el.querySelector('.fe-chip')).toBeNull();
+    expect(r.el.querySelectorAll('.fe-size__in').length).toBe(2);
+    const opts = (r.instance(SizeFill) as unknown as { unitOptions: { label: string }[] }).unitOptions.map((o) => o.label);
+    expect(opts).toEqual(['cm', 'mm', 'inch', 'feet', 'meter']);
+    const [a, b] = [...r.el.querySelectorAll<HTMLInputElement>('.fe-size__in')];
+    a.value = '2';
+    a.dispatchEvent(new Event('input'));
+    await r.stable();
+    b.value = '3';
+    b.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(r.last()).toEqual({ dimensions: [2, 3], unit: 'cm' });
+  });
+});

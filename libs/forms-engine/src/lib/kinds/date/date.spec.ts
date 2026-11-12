@@ -156,3 +156,40 @@ describe('date of birth: year first, no recent-day chips', () => {
     expect(unnamed(r.el)).toEqual([]);
   });
 });
+
+describe('date fill: legacy box (G8)', () => {
+  const nav = { goTo: () => undefined, pageTitle: (k: string) => k, isLegacy: () => true };
+  const lmp = f('lmp', 'date', { label: 'LMP', config: { allowFuture: true, quickChips: true } });
+
+  it('a text box with a calendar icon instead of the quick chips; the month calendar opens under it', async () => {
+    const r = await renderKind(DateFill, lmp, null, { wizard: nav });
+    expect(r.el.querySelector('.fe-datebox')).not.toBeNull();
+    expect(r.el.textContent).not.toContain('Yesterday');
+    expect(r.el.textContent).not.toContain('Pick a date');
+    expect(r.el.querySelector('.fe-cal')).toBeNull();
+    await r.click('.fe-datebox__in');
+    expect(r.el.querySelector('.fe-cal')).not.toBeNull();
+  });
+
+  it('typing dd/mm/yyyy writes the date; half a date or an impossible one writes nothing; a future date is fine here', async () => {
+    const r = await renderKind(DateFill, lmp, null, { wizard: nav });
+    const box = r.el.querySelector<HTMLInputElement>('.fe-datebox__in')!;
+    box.value = '10/01/20';
+    box.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(r.last()).toBeUndefined();
+    box.value = '31/02/2025';
+    box.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(r.last()).toBeUndefined();
+    box.value = '10/01/2031';
+    box.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(r.last()).toBe('2031-01-10');
+  });
+
+  it('a new case sheet keeps the quick chips', async () => {
+    const r = await renderKind(DateFill, lmp);
+    expect(r.el.textContent).toContain('Yesterday');
+  });
+});

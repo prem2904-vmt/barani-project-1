@@ -73,3 +73,27 @@ describe('measure fill', () => {
     expect(r.calls).toEqual([]);
   });
 });
+
+describe('measure fill: legacy card row (G5)', () => {
+  const nav = { goTo: () => undefined, pageTitle: (k: string) => k, isLegacy: () => true };
+  const temp = f('temp', 'measure', { label: 'Temperature', config: { min: 0, max: 45, step: 1, unit: 'degree Celsius' } });
+
+  it('one row: the question, a slider, a number box and the unit; no stepper, no big slider', async () => {
+    const r = await renderKind(MeasureFill, temp, null, { wizard: nav });
+    expect(r.el.querySelector('.fe-measure--legacy')).not.toBeNull();
+    expect(r.el.querySelector('.fe-stepper')).toBeNull();
+    expect(r.el.querySelector('[role="slider"]')).toBeNull();
+    expect(r.el.querySelector('.fe-measure__q')?.textContent).toContain('Temperature');
+    expect(r.el.querySelector('.fe-measure__unit')?.textContent?.trim()).toBe('degree Celsius');
+    const num = r.el.querySelector<HTMLInputElement>('.fe-measure__num')!;
+    num.value = '37';
+    num.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(r.last()).toEqual({ value: 37, unit: 'degree Celsius' });
+    const range = r.el.querySelector<HTMLInputElement>('.fe-measure__range')!;
+    range.value = '12';
+    range.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(r.last()).toEqual({ value: 12, unit: 'degree Celsius' });
+  });
+});

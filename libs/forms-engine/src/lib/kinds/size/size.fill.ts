@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
-import { PfIconComponent } from '../../kit';
-import { KindFill } from '../../fill/contract';
+import { PfIconComponent, PfSelectOption, SelectComponent } from '../../kit';
+import { KindFill, injectLegacy } from '../../fill/contract';
 import { NumpadComponent, numberText, parseNumber } from '../../fill/numpad.component';
 
 export const SIZE_UNITS = ['cm', 'mm', 'inch', 'feet', 'meter'];
@@ -20,9 +20,38 @@ export function boxName(i: number, count: number): string {
 @Component({
   selector: 'fe-size-fill',
   standalone: true,
-  imports: [NumpadComponent, PfIconComponent],
+  imports: [NumpadComponent, PfIconComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (legacy()) {
+      <!-- legacy size-input: ONE card row; the question left; boxes x boxes and the unit dropdown right -->
+      <div class="fe-measure--legacy fe-size--legacy" role="group" [attr.aria-labelledby]="labelId()">
+        <span class="fe-measure__q">{{ field().label }}@if (field().required) {<span class="fe-field__req" aria-hidden="true"></span>}</span>
+        <span class="fe-measure__ctl">
+          @for (i of boxes(); track i) {
+            @if (i > 0) {
+              <span class="fe-size__x" aria-hidden="true">×</span>
+            }
+            <input
+              type="number"
+              step="0.01"
+              class="fe-measure__num fe-size__in"
+              [attr.aria-label]="name(i)"
+              [value]="textOf(i)"
+              [disabled]="disabled()"
+              (input)="typeBox(i, $any($event.target).value)"
+            />
+          }
+          <pf-select
+            class="fe-size__unitsel"
+            [options]="unitOptions"
+            [value]="unit()"
+            [disabled]="disabled()"
+            (valueChange)="pickUnit($event ?? 'cm')"
+          />
+        </span>
+      </div>
+    } @else {
     <div class="fe-size" role="group" [attr.aria-labelledby]="labelId()">
       <div class="fe-size__boxes">
         @for (i of boxes(); track i) {
@@ -69,9 +98,13 @@ export function boxName(i: number, count: number): string {
         }
       </div>
     </div>
+    }
   `,
 })
 export class SizeFill extends KindFill {
+  protected readonly legacy = injectLegacy();
+  /** The old unit list, as written there (cm, mm, inch, feet, meter). */
+  protected readonly unitOptions: PfSelectOption<string>[] = SIZE_UNITS.map((u) => ({ value: u, label: u }));
   protected readonly units = SIZE_UNITS;
   protected readonly open = signal<number | null>(null);
   private readonly typing = signal<string | null>(null);
@@ -112,6 +145,13 @@ export class SizeFill extends KindFill {
   protected close(): void {
     this.typing.set(null);
     this.open.set(null);
+  }
+
+  /** Legacy number box: the raw text; an empty box leaves that dimension unset. */
+  protected typeBox(i: number, raw: string): void {
+    const d = [...this.dims()];
+    d[i] = parseNumber(raw);
+    this.write(d, this.unit());
   }
 
   protected type(i: number, t: string): void {

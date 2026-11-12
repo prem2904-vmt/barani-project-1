@@ -76,7 +76,8 @@ type Which = 'from' | 'to';
           }
           <input
             class="fe-text__input fe-durbox__num"
-            type="text"
+            type="number"
+            min="0"
             inputmode="numeric"
             autocomplete="off"
             [attr.data-row]="row"
@@ -246,7 +247,8 @@ export class DurationFill extends KindFill {
   /** Legacy `<input type=number>`: letters never land in the box (only digits and one point stay). */
   protected typeInBox(row: Which, input: HTMLInputElement): void {
     const clean = input.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.\d*)\..*$/, '$1');
-    if (clean !== input.value) input.value = clean;
+    // a number box already refuses letters itself; do not rewrite it while a point is half typed
+    if (input.type !== 'number' && clean !== input.value) input.value = clean;
     this.typed(row, clean);
   }
 

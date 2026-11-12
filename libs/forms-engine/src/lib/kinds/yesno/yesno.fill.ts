@@ -49,7 +49,7 @@ interface YnChoice {
         >
           <!-- legacy checkbox: ONE small switch with the question beside it (never option cards) -->
           <span class="pf-toggle__track fe-switch fe-switch--sm" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-          <span>{{ field().label }}</span>
+          <span>{{ field().label }}@if (field().required) {<span class="fe-field__req" aria-hidden="true"></span>}</span>
         </button>
       }
       @case ('slider') {

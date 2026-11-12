@@ -44,6 +44,14 @@ describe('G12: the required star', () => {
   });
 });
 
+describe('G6: a tick box carries its own question', () => {
+  it('the switch shows the question once (the head above it is for screen readers) and the star beside it', async () => {
+    const el = await host(f('p', 'yesno', { label: 'All pulses felt', required: true, config: { display: 'check' } }), true);
+    expect(el.querySelector('.fe-field__head')?.classList.contains('fe-sr-only')).toBe(true);
+    expect(el.querySelector('.fe-checkrow .fe-field__req')).not.toBeNull();
+  });
+});
+
 describe('G16: the old duration-time box printed no question above it', () => {
   it('legacy: the clock-scale label is for screen readers only; a new sheet shows it', async () => {
     const clock = f('rt', 'duration', { label: 'Recovery time', config: { scale: 'clock' } });
@@ -56,6 +64,9 @@ describe('G9: choices fill their panel (stylesheet proof)', () => {
   const css = readFileSync(resolve(process.cwd(), 'libs/forms-engine/src/lib/fill/_fill.scss'), 'utf8');
   it('a follow-up panel stretches its controls, the page grid no longer makes them content-width', () => {
     expect(css).toMatch(/\.fe-follow \.fe-grid \{[^}]*align-items: stretch/);
+  });
+  it('G14: the dropdown (Duration since ...) is as wide as its panel, as the old select was', () => {
+    expect(css).toMatch(/fe-choice-fill > pf-select,\s*fe-multi-fill > pf-select \{[^}]*width: 100%/);
   });
   it('buttons share a row equally and wrap by word, not by letter', () => {
     expect(css).toMatch(/\.fe-chips--row > \.fe-chip \{[^}]*flex: 1 1 0;[^}]*min-width: min-content;[^}]*overflow-wrap: break-word/);

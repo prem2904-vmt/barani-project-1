@@ -140,10 +140,10 @@ describe('duration fill: legacy parity (G13, G16)', () => {
     await r.stable();
     expect(box.value).toBe('');
     expect(r.last()).toBeUndefined();
-    box.value = '5x';
+    expect(box.type).toBe('number');
+    box.value = '5';
     box.dispatchEvent(new Event('input'));
     await r.stable();
-    expect(box.value).toBe('5');
     expect(r.last()).toMatchObject({ amount: 5 });
   });
 

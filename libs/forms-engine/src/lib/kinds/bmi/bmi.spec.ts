@@ -67,3 +67,35 @@ describe('bmi fill', () => {
     expect(r.calls).toEqual([]);
   });
 });
+
+describe('bmi fill: legacy layout (G4)', () => {
+  const nav = { goTo: () => undefined, pageTitle: (k: string) => k, isLegacy: () => true };
+
+  it('Height, Weight and the worked-out BMI sit on one row; plain number boxes with the unit beside them', async () => {
+    const r = await renderKind(BmiFill, body, null, { wizard: nav });
+    expect(r.el.querySelector('.fe-bmi--legacy')).not.toBeNull();
+    expect(r.el.querySelector('.fe-numbox')).toBeNull();
+    expect(r.el.querySelector('.fe-chip')).toBeNull();
+    expect([...r.el.querySelectorAll('.fe-bmi__unit')].map((x) => x.textContent?.trim())).toEqual(['m', 'kg']);
+    expect(r.el.querySelector('.fe-bmi__figure')?.textContent?.trim()).toBe('—');
+    const [h, w] = [...r.el.querySelectorAll<HTMLInputElement>('.fe-bmi__in')];
+    h.value = '5';
+    h.dispatchEvent(new Event('input'));
+    await r.stable();
+    w.value = '5';
+    w.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(r.last()).toEqual({ height: 5, heightUnit: 'm', weight: 5, weightUnit: 'kg' });
+    expect(r.el.querySelector('.fe-bmi__figure')?.textContent?.trim()).toBe('0.2');
+    expect(r.el.querySelector('.fe-bmi__cat')?.textContent?.trim()).toBe('Underweight');
+  });
+
+  it('letters never land in the boxes', async () => {
+    const r = await renderKind(BmiFill, body, null, { wizard: nav });
+    const h = r.el.querySelector<HTMLInputElement>('.fe-bmi__in')!;
+    h.value = 'abc';
+    h.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(h.value).toBe('');
+  });
+});

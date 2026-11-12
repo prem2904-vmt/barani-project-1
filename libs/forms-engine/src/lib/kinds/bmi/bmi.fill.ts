@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { PfIconComponent } from '../../kit';
-import { KindFill } from '../../fill/contract';
+import { KindFill, injectLegacy } from '../../fill/contract';
 import { NumpadComponent, numberText, parseNumber } from '../../fill/numpad.component';
 
 export const HEIGHT_UNITS = ['m', 'cm', 'ft', 'in'];
@@ -37,6 +37,45 @@ interface BmiVal {
   imports: [NumpadComponent, PfIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (legacy()) {
+      <!-- legacy bmi-input: Height, Weight and the worked-out BMI on ONE row, plain number boxes with the unit beside them -->
+      <div class="fe-bmi fe-bmi--legacy" role="group" [attr.aria-labelledby]="labelId()">
+        @for (p of parts; track p) {
+          <div class="fe-sub">
+            <span class="fe-sub__lbl">{{ label(p) }}</span>
+            <div class="fe-bmi__box">
+              <input
+                class="fe-bmi__in"
+                type="number"
+                min="0"
+                step="any"
+                inputmode="decimal"
+                autocomplete="off"
+                placeholder="0"
+                [attr.data-part]="p"
+                [attr.aria-label]="label(p) + ' in ' + unitOf(p)"
+                [value]="textOf(p)"
+                [disabled]="disabled()"
+                (input)="typeBox(p, $any($event.target))"
+              />
+              <span class="fe-bmi__unit">{{ unitOf(p) }}</span>
+            </div>
+          </div>
+        }
+        <div class="fe-sub">
+          <span class="fe-sub__lbl">{{ labels().bmi }}</span>
+          <div class="fe-bmi__result-box" [class.fe-bmi__result-box--on]="bmi() !== null" aria-live="polite">
+            <span class="fe-bmi__figure">{{ bmi() !== null ? bmi() : '—' }}</span>
+            @if (bmi() !== null) {
+              <span class="fe-bmi__ru">kg/m²</span>
+              @if (category(); as c) {
+                <span class="fe-bmi__cat" [attr.data-category]="c">{{ c }}</span>
+              }
+            }
+          </div>
+        </div>
+      </div>
+    } @else {
     <div class="fe-bmi" role="group" [attr.aria-labelledby]="labelId()">
       @for (p of parts; track p) {
         <div class="fe-sub">
@@ -92,9 +131,11 @@ interface BmiVal {
         </p>
       }
     </div>
+    }
   `,
 })
 export class BmiFill extends KindFill {
+  protected readonly legacy = injectLegacy();
   protected readonly parts: Part[] = ['height', 'weight'];
   protected readonly open = signal<Part | null>(null);
   private readonly typing = signal<string | null>(null);
@@ -153,6 +194,15 @@ export class BmiFill extends KindFill {
   protected type(p: Part, t: string): void {
     this.typing.set(t);
     this.write({ ...this.val(), [p]: parseNumber(t) });
+  }
+
+  /** Legacy `<input type=number>`: only digits and one point stay. */
+  protected typeBox(p: Part, input: HTMLInputElement): void {
+    const clean = input.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.\d*)\..*$/, '$1');
+    if (input.type !== 'number' && clean !== input.value) input.value = clean;
+    this.open.set(p);
+    this.typing.set(clean);
+    this.write({ ...this.val(), [p]: parseNumber(clean) });
   }
 
   protected pickUnit(p: Part, u: string): void {

@@ -96,6 +96,13 @@
   color: var(--red-text, #dc2626);
 }
 
+// legacy select: the dropdown is as wide as the panel it sits in
+fe-choice-fill > pf-select,
+fe-multi-fill > pf-select {
+  display: block;
+  width: 100%;
+}
+
 // read by screen readers only
 .fe-sr-only {
   position: absolute;
