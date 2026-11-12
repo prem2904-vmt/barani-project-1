@@ -1,9 +1,7 @@
 @use '../../../../shared/styles/device-tier' as dt;
-// Studio's one screen (plan §5), desktop first (owner, 2026-11-02).
-// ≥1760: PAGES | the form | the question | WHAT IT WRITES.
-// 1280–1759: PAGES | the form | the question (+ "What it writes" tab).
-// 1024–1279 (tablets): the form + narrative under it | the question (pages as chips).
-// Narrow: the form; the question opens as a sheet above the nav. Only card bodies scroll.
+// The editor, the legacy Studio's way (owner 2026-11-12): PAGES | the page and its fields | COMPONENTS / Configure Field.
+// 1024–1279 (tablets): the page | the right pane (pages as chips).
+// Narrow: the page; the right pane opens as a sheet above the nav. Only card bodies scroll.
 
 .ed-actions {
   display: flex;
@@ -73,7 +71,7 @@
 // scrolls (the kit's no-page-scroll rule); the heads share one height so the first rows line up too
 .ed-body {
   display: grid;
-  grid-template-columns: 268px minmax(0, 1fr) 360px;
+  grid-template-columns: 280px minmax(0, 1fr) 400px;
   grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
   gap: 16px;
@@ -95,14 +93,7 @@
 
 @media (min-width: 1440px) {
   .ed-body {
-    grid-template-columns: 284px minmax(0, 1fr) 392px;
-  }
-}
-
-// the narrative gets its own column, always in view
-@media (min-width: 1760px) {
-  .ed-body {
-    grid-template-columns: 260px minmax(560px, 1fr) 400px 380px;
+    grid-template-columns: 296px minmax(0, 1fr) 420px;
   }
 }
 
@@ -583,4 +574,569 @@
 
 .ed-failchip {
   color: var(--red-text, #b91c1c);
+}
+
+// ───────────── the legacy editor ─────────────
+.lg-name {
+  flex: 1 1 220px;
+  min-width: 160px;
+  max-width: 420px;
+  min-height: 34px;
+  font-weight: 600;
+}
+
+.lg-maintabs {
+  flex: none;
+  margin: 0 24px;
+  padding-top: 2px;
+}
+
+@media (max-width: 640px) {
+  .lg-maintabs {
+    margin: 0 16px;
+  }
+}
+
+.lg-banner {
+  flex: none;
+  margin: 8px 24px 0;
+}
+
+@media (max-width: 640px) {
+  .lg-banner {
+    margin: 8px 16px 0;
+  }
+}
+
+.lg-tabbody {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.lg-tabcard {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+}
+
+.lg-side-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.lg-addpage {
+  min-height: 32px;
+  padding-inline: 12px;
+}
+
+// sections of pages
+.lg-sec {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.lg-sec__h {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.lg-sec__t {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lg-sec__n {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.lg-sec__c {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.lg-sec__list {
+  padding-left: 14px;
+}
+
+.lg-sec__empty {
+  padding: 8px 10px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+.lg-root-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.lg-pages-empty {
+  padding: 8px 4px;
+}
+
+.lg-prow__i {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-secondary);
+}
+
+.lg-prow__c {
+  display: inline-flex;
+  color: var(--violet-text, #6d28d9);
+}
+
+// the page header card
+.lg-pagehead {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--pf-line);
+  border-radius: 14px;
+  background: var(--pf-card-bg);
+}
+
+.lg-pagehead__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lg-pagehead__f {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.lg-pagehead__t {
+  min-height: 38px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.lg-pagehead__s {
+  min-height: 32px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+.lg-pagehead__a {
+  display: flex;
+  gap: 8px;
+}
+
+.lg-pagehead__c {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, transparent);
+  color: var(--violet-text, #6d28d9);
+  font-size: 13px;
+}
+
+.lg-link {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lg-fieldshead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.lg-fieldshead__t {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.lg-addnarrow {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .lg-addnarrow {
+    display: inline-flex;
+  }
+}
+
+.lg-fieldsempty {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 36px 16px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 14px;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.lg-fieldsempty__i {
+  color: var(--text-tertiary);
+}
+
+.lg-fieldsempty__t {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+// the fields: a 12-column grid, like the old canvas (full 12, half 6, third 4, quarter 3)
+.lg-fields {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lg-fcard {
+  display: grid;
+  grid-column: span 12;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-card-bg);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.lg-fcard[data-w='half'] {
+  grid-column: span 6;
+}
+
+.lg-fcard[data-w='third'] {
+  grid-column: span 4;
+}
+
+.lg-fcard[data-w='quarter'] {
+  grid-column: span 3;
+}
+
+@media (max-width: 760px) {
+  .lg-fcard[data-w] {
+    grid-column: span 12;
+  }
+}
+
+.lg-fcard:hover {
+  border-color: var(--color-primary, #7c3aed);
+}
+
+.lg-fcard--sel {
+  border-color: var(--color-primary, #7c3aed);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, var(--pf-card-bg));
+  box-shadow: 0 0 0 1px var(--color-primary, #7c3aed);
+}
+
+.lg-fcard--picked {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, var(--pf-card-bg));
+}
+
+.lg-fcard--err {
+  border-color: color-mix(in srgb, var(--red-text, #b91c1c) 60%, var(--pf-line));
+}
+
+.lg-fcard--flash {
+  animation: lg-flash 1.2s ease;
+}
+
+.lg-fcard--drag {
+  opacity: 0.85;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+}
+
+@keyframes lg-flash {
+  from {
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 22%, var(--pf-card-bg));
+  }
+}
+
+.lg-fcard__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.lg-fcard__check {
+  flex: none;
+  opacity: 0;
+}
+
+.lg-fcard:hover .lg-fcard__check,
+.lg-fcard:focus-within .lg-fcard__check,
+.lg-fcard--picked .lg-fcard__check {
+  opacity: 1;
+}
+
+.lg-fcard__grip {
+  display: inline-flex;
+  flex: none;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: grab;
+  touch-action: none;
+}
+
+.lg-fcard__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent);
+  color: var(--violet-text, #6d28d9);
+}
+
+.lg-fcard__info {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.lg-fcard__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.lg-fcard__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.lg-badge {
+  display: inline-flex;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.lg-badge--req {
+  background: color-mix(in srgb, var(--red-text, #b91c1c) 12%, transparent);
+  color: var(--red-text, #b91c1c);
+}
+
+.lg-badge--cond {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent);
+  color: var(--violet-text, #6d28d9);
+}
+
+.lg-fcard__acts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.lg-fcard__act {
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.lg-fcard__note {
+  margin-left: 34px;
+}
+
+.lg-fcard__problems {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 0 34px;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.lg-fcard__problems li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lg-fcard__problem--err {
+  color: var(--red-text, #b91c1c);
+}
+
+// the right pane
+.lg-right {
+  padding: 14px 16px 20px;
+}
+
+.lg-sheetx {
+  display: none;
+}
+
+.ed-side {
+  position: relative;
+}
+
+@media (max-width: 1023px) {
+  .ed-side--open .lg-sheetx {
+    display: inline-flex;
+    position: absolute;
+    top: 8px;
+    right: 8px;
+  }
+}
+
+// Cortex's "Check this" (it lived in the old card's stylesheet)
+.fc-cortex {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, transparent);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.fc-cortex__t {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+// page rows: the two small buttons float over the right edge (on hover / for the open page) instead of taking room
+.lg-prow {
+  position: relative;
+}
+
+.lg-prow .ed-pmore {
+  position: absolute;
+  top: 50%;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  transform: translateY(-50%);
+  background: var(--pf-card-bg);
+  border-radius: 8px;
+}
+
+.lg-prow .ed-pmore:last-of-type {
+  right: 6px;
+}
+
+.lg-prow .ed-pmore:nth-last-of-type(2) {
+  right: 40px;
+}
+
+.lg-prow .ed-pbtn {
+  padding-right: 4px;
+}
+
+@media (hover: none) {
+  .lg-prow .ed-pmore:nth-last-of-type(2) {
+    display: none;
+  }
+  .lg-prow .ed-pmore {
+    opacity: 1;
+  }
+}
+
+// a field row: the quick actions float over the right edge; on touch only the ⋯ stays
+.lg-fcard {
+  position: relative;
+}
+
+.lg-fcard__acts {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  padding-left: 6px;
+  transform: translateY(-50%);
+  background: var(--pf-card-bg);
+  border-radius: 10px;
+}
+
+.lg-fcard--sel .lg-fcard__acts {
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 6%, var(--pf-card-bg));
+}
+
+.lg-fcard__label {
+  padding-right: 40px;
+}
+
+@media (hover: none) {
+  .lg-fcard__acts .lg-fcard__act:not(.lg-fcard__more) {
+    display: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lg-fcard__acts {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .lg-fcard:hover .lg-fcard__acts,
+  .lg-fcard:focus-within .lg-fcard__acts,
+  .lg-fcard--sel .lg-fcard__acts {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .lg-fcard__acts .lg-fcard__act:not(.lg-fcard__more) {
+    opacity: 1 !important;
+  }
 }

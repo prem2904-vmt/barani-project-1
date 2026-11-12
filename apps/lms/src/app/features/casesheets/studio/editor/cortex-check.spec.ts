@@ -10,7 +10,7 @@ import { StudioApi } from '../data/studio-api';
 import { StudioSession } from '../data/studio-session';
 import { EditorStore } from './editor-store';
 import { FieldActions } from './field-actions';
-import { FieldCardComponent } from './field-card.component';
+import { ConfigPanelComponent } from './config-panel.component';
 import { StudioEditorPage } from './editor.page';
 
 /** A form like Cortex makes one: two marked questions (one of them a follow-up) and one clean one. */
@@ -51,27 +51,26 @@ async function open(def: FormDefinition) {
 describe('Cortex "Check this" in the editor', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('a marked question shows "Check this: reason" with Looks right; an unmarked one shows nothing', async () => {
+  it('a marked question shows "Check this: reason" with Looks right in its panel; an unmarked one shows nothing', async () => {
     const { def, side, notes } = draft();
     const { store } = await open(def);
-    const marked = TestBed.createComponent(FieldCardComponent);
-    marked.componentRef.setInput('field', findField(store.def()!, side)!);
+    store.select(side);
+    const marked = TestBed.createComponent(ConfigPanelComponent);
     await settle(marked);
     const chip = (marked.nativeElement as HTMLElement).querySelector('[data-check]')!;
     expect(chip.textContent).toContain('Check this: Is it left or right?');
     expect(chip.querySelector('[data-act="looks-right"]')!.textContent).toContain('Looks right');
 
-    const clean = TestBed.createComponent(FieldCardComponent);
-    clean.componentRef.setInput('field', findField(store.def()!, notes)!);
-    await settle(clean);
-    expect((clean.nativeElement as HTMLElement).querySelector('[data-check]')).toBeNull();
+    store.select(notes);
+    await settle(marked);
+    expect((marked.nativeElement as HTMLElement).querySelector('[data-check]')).toBeNull();
   });
 
   it('Looks right clears the marker through the normal save, and only that one', async () => {
     const { def, side, sub } = draft();
     const { store, api, id } = await open(def);
-    const f = TestBed.createComponent(FieldCardComponent);
-    f.componentRef.setInput('field', findField(store.def()!, side)!);
+    store.select(side);
+    const f = TestBed.createComponent(ConfigPanelComponent);
     await settle(f);
     (f.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-check] [data-act="looks-right"]')!.click();
     expect(checkNoteOf(findField(store.def()!, side)!)).toBe('');
@@ -89,9 +88,8 @@ describe('Cortex "Check this" in the editor', () => {
   it('Looks right works on a follow-up question too', async () => {
     const { def, sub } = draft();
     const { store } = await open(def);
-    const f = TestBed.createComponent(FieldCardComponent);
-    f.componentRef.setInput('field', findField(store.def()!, sub)!);
-    f.componentRef.setInput('nested', true);
+    store.select(sub);
+    const f = TestBed.createComponent(ConfigPanelComponent);
     await settle(f);
     (f.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('[data-check] [data-act="looks-right"]')!.click();
     expect(store.checkCount()).toBe(1);
@@ -120,13 +118,16 @@ describe('Cortex "Check this" in the editor', () => {
     const id = api.seed('Cardiology', def);
     const f = TestBed.createComponent(StudioEditorPage);
     f.componentRef.setInput('id', id);
+    const store = f.debugElement.injector.get(EditorStore);
     const el = f.nativeElement as HTMLElement;
     await vi.waitFor(async () => {
       await settle(f);
       expect(el.querySelector('[data-cortex-banner]'), el.textContent ?? '').not.toBeNull();
     });
     expect(el.querySelector('[data-cortex-banner]')!.textContent).toContain('Cortex made this draft from your sheet. Check the 2 marked questions, then publish.');
-    el.querySelectorAll<HTMLButtonElement>('[data-check] [data-act="looks-right"]').forEach((b) => b.click());
+    for (const k of [side, sub]) {
+      store.looksRight(k);
+    }
     await settle(f);
     expect(el.querySelector('[data-cortex-banner]')).toBeNull();
     void side;
@@ -135,16 +136,14 @@ describe('Cortex "Check this" in the editor', () => {
 });
 
 describe('the "Check this" marker stays visible', () => {
-  it('never shares a class with the card\'s hover-only selection tick (.fc-check is opacity 0 until hover)', async () => {
+  it('never shares a class with the row\'s hover-only selection tick (.lg-fcard__check is opacity 0 until hover)', async () => {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const dir = resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/studio/editor');
-    const html = readFileSync(resolve(dir, 'field-card.component.html'), 'utf8');
+    const html = readFileSync(resolve(dir, 'editor.page.html'), 'utf8');
     const marker = html.match(/<div class="([^"]*)"[^>]*data-check[^>]*>/);
     expect(marker, 'the [data-check] marker').not.toBeNull();
     const classes = marker![1].split(/\s+/);
-    expect(classes).not.toContain('fc-check');
-    expect(classes.some((c) => c.startsWith('fc-check'))).toBe(false);
-    expect(html).not.toMatch(/fc-check__/);
+    expect(classes.some((c) => c.includes('check') && c !== 'fc-cortex__ok')).toBe(false);
   });
 });

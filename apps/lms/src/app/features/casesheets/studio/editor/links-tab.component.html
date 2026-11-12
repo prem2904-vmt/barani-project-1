@@ -1,0 +1,141 @@
+<div class="lk" data-links-tab>
+  <header class="lk-head">
+    <div>
+      <h2 class="lk-title">Conditional Links</h2>
+      <p class="lg-help">Define triggers that automatically set component values based on conditions.</p>
+    </div>
+    <button type="button" class="pf-btn pf-btn--primary" data-act="add-trigger" [disabled]="readOnly()" (click)="openAdd()"><pf-icon name="plus" [size]="16" /> Add Trigger</button>
+  </header>
+
+  @if (!triggers().length) {
+    <div class="lg-card lg-empty" data-empty="links">
+      <pf-icon name="link" [size]="26" />
+      <p class="lk-empty__t">No conditional links defined yet.</p>
+      <p class="lg-help">Create a trigger to automatically set values when conditions are met.</p>
+    </div>
+  } @else {
+    <ul class="lk-list" role="list">
+      @for (t of triggers(); track $index; let i = $index) {
+        <li class="lg-card lk-card" [class.lk-card--off]="t.enabled === false" [attr.data-trigger]="i">
+          <div class="lk-card__h">
+            <button type="button" role="switch" class="pf-toggle lk-sw" [attr.aria-checked]="t.enabled !== false" [attr.aria-label]="'Trigger ' + (t.name || 'untitled') + ' is ' + (t.enabled !== false ? 'on' : 'off')" [disabled]="readOnly()" (click)="toggle(i)">
+              <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+            </button>
+            <div class="lk-card__i">
+              <h3 class="lk-card__t">{{ t.name || 'Untitled trigger' }}</h3>
+              <span class="lg-help">{{ t.conditions.length }} condition(s) → {{ t.actions.length }} action(s)</span>
+            </div>
+            <button type="button" class="pf-btn pf-btn--icon" data-act="edit-trigger" [attr.aria-label]="'Edit ' + (t.name || 'the trigger')" [disabled]="readOnly()" (click)="openEdit(i)"><pf-icon name="pen" [size]="16" /></button>
+            <button type="button" class="pf-btn pf-btn--icon" data-act="delete-trigger" [attr.aria-label]="'Delete ' + (t.name || 'the trigger')" [disabled]="readOnly()" (click)="remove(i)"><pf-icon name="trash" [size]="16" /></button>
+          </div>
+          <div class="lk-card__d">
+            <div class="lk-col">
+              <strong class="lk-col__h">When ({{ t.logic === 'or' ? 'OR' : 'AND' }}):</strong>
+              @for (c of t.conditions; track $index) {
+                <div class="lk-item">
+                  <span class="lk-src">{{ labelOf(c.source) }}</span>
+                  <span class="lk-op">{{ words(c.op) }}</span>
+                  @if (needsValue(c.op) && valueWords(c) !== '') {
+                    <span class="lk-val">"{{ valueWords(c) }}"</span>
+                  }
+                </div>
+              }
+            </div>
+            <span class="lk-arrow" aria-hidden="true">→</span>
+            <div class="lk-col">
+              <strong class="lk-col__h">Then:</strong>
+              @for (a of t.actions; track $index) {
+                <div class="lk-item">
+                  @if (a.action === 'setValue') {
+                    <span>Set <strong>{{ labelOf(a.target) }}</strong> to "{{ a.value }}"</span>
+                  } @else {
+                    <span>Copy <strong>{{ labelOf(a.source) }}</strong> to <strong>{{ labelOf(a.target) }}</strong></span>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</div>
+
+@if (editing() !== null) {
+  <div class="lg-scrim lg-scrim--fixed" aria-hidden="true" (click)="editing.set(null)"></div>
+  <section class="lg-modal lg-modal--lg lg-modal--fixed" role="dialog" aria-modal="true" aria-labelledby="lk-h" data-trigger-editor (keydown.escape)="editing.set(null)">
+    <header class="lg-modal__head">
+      <h2 class="lg-modal__title" id="lk-h">{{ editing()! >= 0 ? 'Edit' : 'Add' }} Conditional Trigger</h2>
+      <button type="button" class="pf-btn pf-btn--icon" aria-label="Close" (click)="editing.set(null)"><pf-icon name="x" [size]="18" /></button>
+    </header>
+    <div class="lg-modal__body">
+      <div class="lg-field">
+        <label class="lg-lbl" for="lk-name">Trigger Name</label>
+        <input id="lk-name" class="pf-input" type="text" placeholder="e.g., Smoker sets the pack-years box" [value]="draft().name" (input)="patch(d => d.name = $any($event.target).value)" />
+      </div>
+
+      <div class="lg-field" data-conditions>
+        <div class="lk-sec__h">
+          <h4 class="lg-h">Conditions</h4>
+          <div class="lk-logic" role="radiogroup" aria-label="Condition logic">
+            <button type="button" role="radio" class="lk-logic__b" [attr.aria-checked]="draft().logic === 'and'" (click)="patch(d => d.logic = 'and')">AND (all)</button>
+            <button type="button" role="radio" class="lk-logic__b" [attr.aria-checked]="draft().logic === 'or'" (click)="patch(d => d.logic = 'or')">OR (any)</button>
+          </div>
+          <button type="button" class="pf-btn pf-btn--secondary" data-act="add-condition" (click)="addCondition()"><pf-icon name="plus" [size]="16" /> Add Condition</button>
+        </div>
+        @if (!draft().conditions.length) {
+          <p class="lk-none">No conditions added yet</p>
+        }
+        @for (c of draft().conditions; track $index; let i = $index) {
+          <div class="lk-row" data-cond-row>
+            <pf-select class="lk-row__src" [options]="fieldOptions()" [value]="c.source" [searchable]="true" placeholder="Select field…" (valueChange)="setCondSource(i, $event)" />
+            <pf-select class="lk-row__op" [options]="opsFor(c.op)" [value]="c.op" (valueChange)="patch(d => d.conditions[i].op = $event ?? 'equals')" />
+            @if (needsValue(c.op)) {
+              @if (choicesOf(c.source); as ch) {
+                <pf-select class="lk-row__val" [options]="ch" [value]="'' + (c.value ?? '')" placeholder="Select value…" (valueChange)="patch(d => d.conditions[i].value = $event ?? '')" />
+              } @else {
+                <input class="pf-input lk-row__val" type="text" placeholder="Value" aria-label="Value" [value]="c.value ?? ''" (input)="patch(d => d.conditions[i].value = $any($event.target).value)" />
+              }
+            }
+            <button type="button" class="pf-btn pf-btn--icon" [attr.aria-label]="'Remove condition ' + (i + 1)" (click)="patch(d => d.conditions.splice(i, 1))"><pf-icon name="trash" [size]="16" /></button>
+          </div>
+        }
+      </div>
+
+      <div class="lg-field" data-actions>
+        <div class="lk-sec__h">
+          <h4 class="lg-h">Actions</h4>
+          <button type="button" class="pf-btn pf-btn--secondary" data-act="add-action" (click)="addAction()"><pf-icon name="plus" [size]="16" /> Add Action</button>
+        </div>
+        @if (!draft().actions.length) {
+          <p class="lk-none">No actions added yet</p>
+        }
+        @for (a of draft().actions; track $index; let i = $index) {
+          <div class="lk-row" data-action-row>
+            <pf-select class="lk-row__op" [options]="actionOptions" [value]="a.action" (valueChange)="patch(d => d.actions[i].action = $event ?? 'setValue')" />
+            <pf-select class="lk-row__src" [options]="fieldOptions()" [value]="a.target" [searchable]="true" placeholder="Select field…" (valueChange)="setActionTarget(i, $event)" />
+            @if (a.action === 'setValue') {
+              @if (choicesOf(a.target); as ch) {
+                <pf-select class="lk-row__val" [options]="ch" [value]="'' + (a.value ?? '')" placeholder="Value to set" (valueChange)="patch(d => d.actions[i].value = $event ?? '')" />
+              } @else {
+                <input class="pf-input lk-row__val" type="text" placeholder="Value to set" aria-label="Value to set" [value]="a.value ?? ''" (input)="patch(d => d.actions[i].value = $any($event.target).value)" />
+              }
+            } @else {
+              <pf-select class="lk-row__val" [options]="fieldOptions()" [value]="a.source ?? ''" [searchable]="true" placeholder="Select source…" (valueChange)="patch(d => d.actions[i].source = $event ?? '')" />
+            }
+            <button type="button" class="pf-btn pf-btn--icon" [attr.aria-label]="'Remove action ' + (i + 1)" (click)="patch(d => d.actions.splice(i, 1))"><pf-icon name="trash" [size]="16" /></button>
+          </div>
+        }
+      </div>
+
+      <button type="button" role="switch" class="pf-toggle lg-switch" data-flag="trigger-enabled" [attr.aria-checked]="draft().enabled" (click)="patch(d => d.enabled = !d.enabled)">
+        <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+        <span>Trigger enabled</span>
+      </button>
+    </div>
+    <footer class="lg-modal__foot">
+      <button type="button" class="pf-btn pf-btn--secondary" (click)="editing.set(null)">Cancel</button>
+      <button type="button" class="pf-btn pf-btn--primary" data-act="save-trigger" [disabled]="!valid()" (click)="save()">{{ editing()! >= 0 ? 'Save Changes' : 'Create Trigger' }}</button>
+    </footer>
+  </section>
+}

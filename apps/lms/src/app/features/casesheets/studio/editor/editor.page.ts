@@ -3,31 +3,37 @@ import { FE_ASSETS, FE_KINDS, KIND_SPECS } from '@prefrontal/forms-engine';
 import { HttpAssetStore } from '../../data/assets/http-asset-store';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { CASESHEET_FORMS_MANAGE } from '../../shared/casesheet-permissions';
+import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import {
+  FieldDef,
+  IconName,
   PageDef,
-  ShowWhenDef,
+  addGroup,
   addPage,
   allFields,
   describeShowWhen,
   edit,
   insertPageTemplate,
+  kindBuild,
+  medicalIcon,
   movePage,
   placeProblem,
+  removeGroup,
   removePage,
   renamePage,
+  setPageGroup,
 } from '@prefrontal/forms-engine';
 import { PfIconComponent } from '@prefrontal/forms-engine';
-import { SegmentedComponent, SegmentedOption, SkeletonFormComponent } from '@prefrontal/shared';
+import { SkeletonFormComponent } from '@prefrontal/shared';
 import { DialogService } from '../../../../core/services/dialog.service';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
 import { StudioApi } from '../data/studio-api';
 import { DraftConflict, Problem, PublishRefused, plainError } from '../data/studio-models';
 import { StudioSession } from '../data/studio-session';
 import { whenText as when } from '../shared/when';
-import { ConditionsComponent } from '../shared/conditions.component';
-import { STUDIO_3COL, STUDIO_4COL, deskSignal, isMac, isTyping, mediaSignal } from '../shared/desk';
+import { deskSignal, isMac, isTyping, mediaSignal } from '../shared/desk';
 import { PhoneNoteComponent } from '../shared/phone-note.component';
 import { commandFor, tip } from '../shared/shortcuts';
 import { ShortcutsPanelComponent } from '../shared/shortcuts-panel.component';
@@ -35,30 +41,29 @@ import { PreviewComponent } from '../preview/preview.component';
 import { EditorStore } from './editor-store';
 import { FieldActions } from './field-actions';
 import { CsStylesComponent } from '../../styles/cs-styles.component';
-import { FieldCardComponent } from './field-card.component';
-import { FieldSettingsComponent } from './field-settings.component';
-import { NarrativePanelComponent } from './narrative-panel.component';
-import { PaletteComponent } from './palette.component';
+import { checkNoteOf } from '../cortex-import/cortex-import';
+import { ComponentsPanelComponent } from './components-panel.component';
+import { ConfigPanelComponent } from './config-panel.component';
+import { FormSettingsComponent } from './form-settings.component';
+import { LinksTabComponent } from './links-tab.component';
+import { NarrativeTabComponent } from './narrative-tab.component';
+import { PageSettingsComponent } from './page-settings.component';
 import { BuilderDrawerComponent, BuilderTab } from '../builder/builder-drawer.component';
 import { BuilderStatusService } from '../builder/builder-status.service';
 import { ChatStore } from '../builder/chat.store';
 import { ChecksStore } from '../builder/checks.store';
 import { failsWords } from '../builder/builder-models';
 
-/** Which side-card tab the desktop shows (remembered per computer). */
-const SIDE_TAB_KEY = 'prepare-studio-side-tab';
+type MainTab = 'pages' | 'narrative' | 'links';
 
 /**
- * Studio's ONE screen (plan §5), desktop first (owner, 2026-11-02):
- *  - ≥1760: PAGES | the case sheet as the doctor sees it | the question | WHAT IT WRITES (always in view)
- *  - ≥1280: PAGES | the case sheet | the question, with "What it writes" as the side card's second tab
- *  - narrower (tablets): the case sheet with the narrative under it | the question (a sheet below 1024)
- * On a computer: denser rows, hover actions, multi-select, drag a question
- * onto another page, keyboard shortcuts (? lists them). Each question card
- * shows its sentence, "if none" and "show when"; the selected
- * question's settings. Draft → Preview on a tablet → Publish (problems listed
- * per question, tap to jump) → History. Saves itself; tells you when someone
- * else saved first or is also editing.
+ * Studio's editor, the way the legacy "Prefrontal Studio" works (owner 2026-11-12):
+ *  - the header: back, the case sheet's name (editable), department / status / version, then Settings, Preview, Save, Publish;
+ *  - the tabs: Pages and Fields, Narrative Sections, Conditional Links;
+ *  - Pages and Fields is three panes: PAGES (with sections) | the page and its fields | the Components palette, which
+ *    becomes "Configure Field" (General, Validation, Options, Narrative, Conditions …) when a field is selected.
+ * Kept from before, by the owner's answer: undo / redo, bulk select and the keyboard shortcuts. Saves itself (Save saves
+ * now); tells you when someone else saved first or is also editing.
  */
 @Component({
   selector: 'app-studio-editor',
@@ -68,13 +73,14 @@ const SIDE_TAB_KEY = 'prepare-studio-side-tab';
     HeroBandComponent,
     PfIconComponent,
     SkeletonFormComponent,
-    FieldCardComponent,
-    FieldSettingsComponent,
-    NarrativePanelComponent,
-    PaletteComponent,
+    NgTemplateOutlet,
+    ComponentsPanelComponent,
+    ConfigPanelComponent,
+    NarrativeTabComponent,
+    LinksTabComponent,
+    PageSettingsComponent,
+    FormSettingsComponent,
     PreviewComponent,
-    ConditionsComponent,
-    SegmentedComponent,
     PhoneNoteComponent,
     ShortcutsPanelComponent,
     CsStylesComponent,
@@ -90,7 +96,7 @@ const SIDE_TAB_KEY = 'prepare-studio-side-tab';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './editor.page.html',
-  styleUrls: ['../shared/page.scss', './editor.page.scss'],
+  styleUrls: ['../shared/page.scss', '../shared/lg-form.scss', './editor.page.scss'],
 })
 export class StudioEditorPage {
   /** Route param. */
@@ -113,7 +119,15 @@ export class StudioEditorPage {
   protected readonly publishing = signal(false);
   protected readonly publishProblems = signal<Problem[] | null>(null);
   protected readonly published = signal<string | null>(null);
-  protected readonly pageRuleOpen = signal(false);
+  protected readonly pageSettingsOpen = signal(false);
+  protected readonly formSettingsOpen = signal(false);
+  /** The legacy main tabs. */
+  protected readonly tab = signal<MainTab>('pages');
+  protected readonly mainTabs: { id: MainTab; label: string; icon: IconName }[] = [
+    { id: 'pages', label: 'Pages & Fields', icon: 'forms' },
+    { id: 'narrative', label: 'Narrative Sections', icon: 'text' },
+    { id: 'links', label: 'Conditional Links', icon: 'link' },
+  ];
   protected readonly helpOpen = signal(false);
 
   // ---------------- Cortex + Checks (dev beta: pf.cortexBuilder() + the server's status) ----------------
@@ -129,15 +143,6 @@ export class StudioEditorPage {
 
   // ---------------- desktop ----------------
   protected readonly desk = deskSignal();
-  protected readonly three = mediaSignal(STUDIO_3COL);
-  protected readonly four = mediaSignal(STUDIO_4COL);
-  /** Where the live narrative sits: its own column, a side-card tab, or under the case sheet. */
-  protected readonly narrativeAt = computed<'column' | 'tab' | 'under'>(() => (this.four() ? 'column' : this.three() ? 'tab' : 'under'));
-  protected readonly sideTab = signal<'question' | 'narrative'>(readSideTab());
-  protected readonly sideTabs: SegmentedOption<'question' | 'narrative'>[] = [
-    { value: 'question', label: 'Question' },
-    { value: 'narrative', label: 'What it writes' },
-  ];
   private readonly mac = isMac();
   protected readonly tips = {
     undo: tip('undo', 'Undo', this.mac),
@@ -153,24 +158,19 @@ export class StudioEditorPage {
 
   constructor() {
     void this.builder.load();
+    void this.api
+      .departments()
+      .then((d) => this.deptNames.set(new Map(d.map((x) => [x.key, x.name]))))
+      .catch(() => undefined);
     effect(() => {
       const id = this.id();
       untracked(() => void this.load(id));
     });
     inject(DestroyRef).onDestroy(() => this.session.close());
-    // something asked for the question's settings: the desktop side card shows them
-    effect(() => {
-      if (this.store.settingsAsked()) untracked(() => this.setSideTab('question'));
-    });
   }
 
-  protected setSideTab(t: 'question' | 'narrative'): void {
-    this.sideTab.set(t);
-    try {
-      localStorage.setItem(SIDE_TAB_KEY, t);
-    } catch {
-      /* private window: not remembered */
-    }
+  protected setTab(t: MainTab): void {
+    this.tab.set(t);
   }
 
   private async load(id: string): Promise<void> {
@@ -238,24 +238,209 @@ export class StudioEditorPage {
 
   // ---------------- pages ----------------
 
-  protected async addPage(): Promise<void> {
+  protected async addPage(groupKey?: string): Promise<void> {
     const name = await this.dialog.prompt({
-      title: 'Add a page',
-      message: 'Each page is one step for the doctor, with its own paragraph in the narrative.',
-      placeholder: 'Page name, for example “History”',
-      confirmLabel: 'Add page',
+      title: 'Add New Page',
+      message: 'Each page is one step for the doctor, with its own section in the narrative.',
+      placeholder: 'e.g., Patient Information',
+      confirmLabel: 'Add Page',
       required: true,
     });
     if (!name?.trim()) return;
     let key = '';
     const at = this.def() ? this.def()!.pages.findIndex((p) => p.key === this.page()?.key) + 1 : undefined;
     this.store.edit((d) => {
-      const r = addPage(d, name.trim(), at || undefined);
+      const r = addPage(d, name.trim(), groupKey ? undefined : at || undefined);
       key = r.key;
-      return r.def;
+      return groupKey ? setPageGroup(r.def, r.key, groupKey) : r.def;
     });
     this.store.selectPage(key);
   }
+
+  // ---------------- sections (legacy: groups of pages) ----------------
+
+  private readonly collapsed = signal<ReadonlySet<string>>(new Set());
+
+  /** Pages with their index in the definition (the drag lists and the wizard order are by that index). */
+  private readonly indexed = computed(() => (this.def()?.pages ?? []).map((page, index) => ({ page, index })));
+
+  protected readonly groupViews = computed(() => {
+    const d = this.def();
+    const groups = d?.groups ?? [];
+    return groups.map((g) => ({
+      key: g.key,
+      title: g.title,
+      collapsed: this.collapsed().has(g.key),
+      pages: this.indexed().filter((v) => v.page.group === g.key),
+    }));
+  });
+
+  protected readonly rootViews = computed(() => {
+    const keys = new Set((this.def()?.groups ?? []).map((g) => g.key));
+    return this.indexed().filter((v) => !v.page.group || !keys.has(v.page.group));
+  });
+
+  protected toggleGroup(key: string): void {
+    const next = new Set(this.collapsed());
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    this.collapsed.set(next);
+  }
+
+  protected async addSection(): Promise<void> {
+    const title = await this.dialog.prompt({
+      title: 'Add Section',
+      message: 'A section groups pages in the list, for example “History” or “Examination”.',
+      placeholder: 'Section name',
+      confirmLabel: 'Add Section',
+      required: true,
+    });
+    if (title?.trim()) this.store.edit((d) => addGroup(d, title.trim()).def);
+  }
+
+  protected async removeSection(key: string, title: string): Promise<void> {
+    const ok = await this.dialog.confirm({
+      title: `Delete the section “${title}”?`,
+      message: 'Its pages stay, uncategorized. You can undo this.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep it',
+      tone: 'danger',
+    });
+    if (ok) this.store.edit((d) => removeGroup(d, key));
+  }
+
+  protected pageIcon(p: PageDef): IconName {
+    return medicalIcon(p.icon) ?? 'k-pages';
+  }
+
+  protected async savePage(p: PageDef): Promise<void> {
+    const name = await this.dialog.prompt({ title: 'Save as Template', message: 'Anyone can add a saved page to a case sheet.', initialValue: p.title, confirmLabel: 'Save', required: true });
+    if (!name?.trim()) return;
+    try {
+      await this.api.saveTemplate('page', name.trim(), p);
+      this.actions.notice.set(`Saved “${name.trim()}”. Add it to any case sheet with “Add a saved page”.`);
+    } catch (e) {
+      this.actions.notice.set(plainError(e, "Couldn't save the page."));
+    }
+  }
+
+  // ---------------- the header ----------------
+
+  private readonly deptNames = signal<ReadonlyMap<string, string>>(new Map());
+  protected readonly departmentName = computed(() => {
+    const f = this.session.form();
+    return (f?.departmentKey ? this.deptNames().get(f.departmentKey) : '') || f?.specialty || f?.departmentKey || '';
+  });
+
+  /** Nothing waits to be saved. */
+  protected readonly saveIdle = computed(() => this.session.saveState() === 'saved');
+
+  protected saveNow(): void {
+    void this.session.flush();
+  }
+
+  protected renameTitle(name: string): void {
+    const t = name.trim();
+    if (!t || t === this.title()) return;
+    this.store.edit((d) => edit(d, (x) => (x.title = t)));
+  }
+
+  protected onSettingsSaved(note: string): void {
+    if (note) this.actions.notice.set(note);
+  }
+
+  // ---------------- the page header on the canvas ----------------
+
+  protected renameCurrentPage(title: string): void {
+    const p = this.page();
+    const t = title.trim();
+    if (p && t && t !== p.title) this.store.edit((d) => renamePage(d, p.key, t));
+  }
+
+  protected setSubtitle(v: string): void {
+    const key = this.page()?.key;
+    if (!key) return;
+    this.store.edit((d) =>
+      edit(d, (x) => {
+        const p = x.pages.find((y) => y.key === key);
+        if (p) p.subtitle = v.trim() || undefined;
+      }),
+    );
+  }
+
+  protected async deletePage(p: PageDef): Promise<void> {
+    const ok = await this.dialog.confirm({
+      title: `Delete the page “${p.title}”?`,
+      message: `Its ${p.fields.length} field${p.fields.length === 1 ? '' : 's'} go with it. You can undo this.`,
+      confirmLabel: 'Delete Page',
+      cancelLabel: 'Keep it',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    this.store.edit((x) => removePage(x, p.key));
+    const first = this.def()?.pages[0];
+    if (first) this.store.selectPage(first.key);
+  }
+
+  // ---------------- a field's row on the canvas ----------------
+
+  protected kindName(kind: string): string {
+    return kindBuild(kind).name;
+  }
+
+  protected kindIcon(kind: string): IconName {
+    return kindBuild(kind).icon as IconName;
+  }
+
+  protected checkNote(f: FieldDef): string {
+    return checkNoteOf(f);
+  }
+
+  protected hasError(key: string): boolean {
+    return (this.store.problemsByField().get(key) ?? []).some((p) => p.severity === 'error');
+  }
+
+  protected rowClick(e: MouseEvent, f: FieldDef): void {
+    const t = e.target as HTMLElement;
+    if (t.closest('button, input, textarea, pf-select, a')) return;
+    if (this.desk()) {
+      if (e.metaKey || e.ctrlKey) {
+        this.store.togglePick(f.key);
+        return;
+      }
+      if (e.shiftKey) {
+        this.store.pickRange(f.key);
+        return;
+      }
+    }
+    this.store.select(f.key, true);
+  }
+
+  /** Shift / ⌘-click picks questions; it must not select the page's text too. */
+  protected noTextSelect(e: MouseEvent): void {
+    if (this.desk() && (e.shiftKey || e.metaKey || e.ctrlKey) && !(e.target as HTMLElement).closest('input, textarea')) e.preventDefault();
+  }
+
+  /** The questions a quick action works on: the whole selection when this row is in it, else this one. */
+  private targets(key: string): string[] {
+    return this.store.picked().has(key) ? this.store.selection() : [key];
+  }
+
+  protected duplicateRow(key: string): void {
+    this.actions.duplicateMany(this.targets(key));
+  }
+
+  protected removeRow(key: string): void {
+    this.actions.removeMany(this.targets(key));
+  }
+
+  /** A long press on touch opens the row's menu (the same menu as ⋯). */
+  protected menuLater(key: string): () => void {
+    return () => void this.actions.menu(key);
+  }
+
+  /** Wide enough that the right pane is a column, not a sheet. */
+  protected readonly wide = mediaSignal('(min-width: 1024px)');
 
   protected async addSavedPage(): Promise<void> {
     let list;
@@ -297,6 +482,7 @@ export class StudioEditorPage {
         { value: 'rename', label: 'Rename' },
         ...(i > 0 ? [{ value: 'up', label: 'Move earlier' }] : []),
         ...(i < d.pages.length - 1 ? [{ value: 'down', label: 'Move later' }] : []),
+        ...((d.groups ?? []).length ? [{ value: 'section', label: 'Move to a section' }] : []),
         { value: 'save', label: 'Save for other case sheets', hint: 'A saved page anyone can add' },
         { value: 'remove', label: 'Remove this page' },
       ],
@@ -308,6 +494,15 @@ export class StudioEditorPage {
       if (name?.trim()) this.store.edit((x) => renamePage(x, p.key, name.trim()));
     } else if (pick === 'up' || pick === 'down') {
       this.store.edit((x) => movePage(x, i, pick === 'up' ? i - 1 : i + 1));
+    } else if (pick === 'section') {
+      const to = await this.dialog.choose({
+        title: `Move “${p.title}” to a section`,
+        choices: [...(d.groups ?? []).map((g) => ({ value: g.key, label: g.title })), { value: '-', label: 'Uncategorized' }],
+        initialChoice: p.group ?? '-',
+        confirmLabel: 'Move',
+        cancelLabel: 'Cancel',
+      });
+      if (to) this.store.edit((x) => setPageGroup(x, p.key, to === '-' ? null : to));
     } else if (pick === 'save') {
       const name = await this.dialog.prompt({ title: 'Save this page', initialValue: p.title, confirmLabel: 'Save', required: true });
       if (!name?.trim()) return;
@@ -332,17 +527,6 @@ export class StudioEditorPage {
     }
   }
 
-  protected setPageRule(sw: ShowWhenDef | null): void {
-    const key = this.page()?.key;
-    if (!key) return;
-    this.store.edit((d) =>
-      edit(d, (x) => {
-        const p = x.pages.find((y) => y.key === key);
-        if (p) p.showWhen = sw;
-      }),
-    );
-  }
-
   protected pageGrip(e: PointerEvent, i: number): void {
     this.actions.drag.start(e, 'pages', i);
   }
@@ -357,17 +541,12 @@ export class StudioEditorPage {
 
   // ---------------- add a question / multi-select ----------------
 
-  /** "Add a question" right after the selected question (or at the end of the page). */
+  /** "N" / "/": the palette (nothing selected) takes the right pane, ready to add at the end of the page. */
   protected addAfterSelection(): void {
-    const p = this.page();
-    if (!p) return;
-    const keys = this.store.pageKeys();
-    const sel = this.store.selection();
-    const last = sel.length ? Math.max(...sel.map((k) => keys.indexOf(k))) : -1;
-    const at = last >= 0 && last < keys.length - 1 ? last + 1 : undefined;
+    if (!this.page()) return;
     this.store.editing.set(null);
-    this.store.paletteAt.set({ pageKey: p.key, at });
-    setTimeout(() => document.querySelector('st-palette')?.scrollIntoView?.({ block: 'nearest' }), 0);
+    this.store.select(null);
+    if (!this.wide()) this.store.settingsOpen.set(true);
   }
 
   protected removeSelection(): void {
@@ -409,10 +588,11 @@ export class StudioEditorPage {
     if (this.previewOpen()) return this.previewOpen.set(false), true;
     if (this.store.paletteAt()) return this.store.paletteAt.set(null), true;
     if (this.store.editing()) return this.store.editing.set(null), true;
-    if (this.pageRuleOpen()) return this.pageRuleOpen.set(false), true;
+    if (this.pageSettingsOpen()) return this.pageSettingsOpen.set(false), true;
+    if (this.formSettingsOpen()) return this.formSettingsOpen.set(false), true;
     if (this.store.picked().size) return this.store.clearPicks(), true;
     if (this.problemsOpen()) return this.problemsOpen.set(false), true;
-    if (this.store.settingsOpen() && !this.three()) return this.store.settingsOpen.set(false), true;
+    if (this.store.settingsOpen() && !this.wide()) return this.store.settingsOpen.set(false), true;
     return false;
   }
 
@@ -650,12 +830,4 @@ export class StudioEditorPage {
     const c = this.session.conflict();
     return c?.savedBy?.name || c?.savedBy?.email || 'Someone else';
   });
-}
-
-function readSideTab(): 'question' | 'narrative' {
-  try {
-    return localStorage.getItem(SIDE_TAB_KEY) === 'narrative' ? 'narrative' : 'question';
-  } catch {
-    return 'question';
-  }
 }

@@ -7,7 +7,7 @@ import { StudioSession } from '../data/studio-session';
 import { ConditionsComponent } from '../shared/conditions.component';
 import { EditorStore } from './editor-store';
 import { FieldActions } from './field-actions';
-import { FieldCardComponent } from './field-card.component';
+import { ConfigPanelComponent } from './config-panel.component';
 import { PaletteComponent } from './palette.component';
 
 function form(): { def: FormDefinition; pain: string; notes: string } {
@@ -42,13 +42,15 @@ const settle = async (f: { detectChanges(): void; whenStable(): Promise<unknown>
 describe('Studio editor', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('says-on-field: editing the sentence on the card changes the definition', async () => {
+  it('the Narrative tab of a question edits its sentence', async () => {
     const { def, notes } = form();
     const { store } = await open(def);
-    const f = TestBed.createComponent(FieldCardComponent);
-    f.componentRef.setInput('field', findField(store.def()!, notes)!);
+    store.select(notes);
+    const f = TestBed.createComponent(ConfigPanelComponent);
     await settle(f);
     const el = f.nativeElement as HTMLElement;
+    (el.querySelector('[data-tab="narrative"]') as HTMLElement).click();
+    await settle(f);
     // reads as words with the answer as a chip, never {value}
     expect(el.querySelector('[data-line="says"]')!.textContent).toContain('the answer');
     expect(el.textContent).not.toContain('{value}');
@@ -62,15 +64,17 @@ describe('Studio editor', () => {
     expect(findField(store.def()!, notes)!.says!.sentence).toBe('The patient says {value}.');
   });
 
-  it('a Yes / No card edits what Yes and No say, on the card', async () => {
+  it('a Yes / No question edits what Yes and No say, in its Narrative tab', async () => {
     const { def, pain } = form();
     const { store } = await open(def);
-    const f = TestBed.createComponent(FieldCardComponent);
-    f.componentRef.setInput('field', findField(store.def()!, pain)!);
+    store.select(pain);
+    const f = TestBed.createComponent(ConfigPanelComponent);
     await settle(f);
     const el = f.nativeElement as HTMLElement;
-    expect(el.querySelector('[data-line="says"] dt')!.textContent).toBe('If Yes, says');
-    expect(el.querySelector('[data-line="if-none"] dt')!.textContent).toBe('If No, says');
+    (el.querySelector('[data-tab="narrative"]') as HTMLElement).click();
+    await settle(f);
+    expect(el.querySelector('[data-line="says"] .lg-lbl')!.textContent).toBe('If Yes, says');
+    expect(el.querySelector('[data-line="if-none"] .lg-lbl')!.textContent).toBe('If No, says');
     (el.querySelector('[data-line="if-none"] .sn-read') as HTMLElement).click();
     await settle(f);
     const box = el.querySelector('[data-line="if-none"] textarea') as HTMLTextAreaElement;
@@ -227,7 +231,7 @@ describe('Studio editor: band actions on a phone', () => {
     const band = html.slice(html.indexOf('band-actions'), html.indexOf('band-search'));
     expect(band).toContain('<span class="ed-actions__lbl">Preview</span>');
     expect(band).toMatch(/<span class="ed-actions__lbl">\{\{ publishing\(\)/);
-    expect(band.match(/ed-desk-only/g)?.length).toBe(2);
+    expect(band.match(/ed-desk-only/g)?.length).toBe(4);
     const scss = readFileSync(resolve(dir, 'editor.page.scss'), 'utf8');
     expect(scss).toMatch(/@media \(max-width: 640px\)[\s\S]*\.ed-desk-only \{\s*display: none;[\s\S]*\.ed-actions__lbl \{[\s\S]*clip-path: inset\(50%\)/);
   });

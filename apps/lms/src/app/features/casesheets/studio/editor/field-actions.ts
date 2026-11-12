@@ -8,6 +8,7 @@ import {
   moveFieldToPage,
   moveOption,
   movePage,
+  moveSection,
   removeField,
 } from '@prefrontal/forms-engine';
 import { DialogService } from '../../../../core/services/dialog.service';
@@ -143,6 +144,10 @@ export class FieldActions {
     if (!d) return;
     if (list === 'pages') {
       this.store.edit((x) => movePage(x, from, to));
+      return;
+    }
+    if (list === 'sections') {
+      this.store.edit((x) => moveSection(x, from, to));
       return;
     }
     if (list.startsWith('options:')) {

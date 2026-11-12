@@ -1,5 +1,5 @@
 <cs-styles [touch]="false" />
-<div class="pf-page pg ed st-desk cs-studio" [attr.data-layout]="narrativeAt()">
+<div class="pf-page pg ed lg-ed st-desk cs-studio">
   <pf-hero-band
     [back]="true"
     [backTo]="links.adminHome()"
@@ -27,6 +27,9 @@
           <pf-icon name="check" [size]="16" /> <span class="ed-actions__lbl">Checks</span>
         </button>
       }
+      <button type="button" class="pf-hb-btn pf-hb-btn--ghost press ed-desk-only" data-act="settings" [attr.data-tip]="'The name, key, department and description'" [disabled]="!def() || session.readOnly()" (click)="formSettingsOpen.set(true)">
+        <pf-icon name="settings" [size]="16" /> <span class="ed-actions__lbl">Settings</span>
+      </button>
       <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-act="preview" [attr.data-tip]="tips.preview" [disabled]="!def()" (click)="preview()">
         <pf-icon name="eye" [size]="16" /> <span class="ed-actions__lbl">Preview</span>
       </button>
@@ -35,19 +38,34 @@
           <pf-icon name="alert" [size]="16" /> <span class="ed-actions__lbl">{{ failsText() }}</span>
         </button>
       }
+      <button type="button" class="pf-hb-btn pf-hb-btn--secondary press ed-desk-only" data-act="save" [disabled]="!def() || session.readOnly() || saveIdle()" [attr.aria-busy]="session.saveState() === 'saving' ? 'true' : null" (click)="saveNow()">
+        <pf-icon name="check" [size]="16" /> <span class="ed-actions__lbl">{{ session.saveState() === 'saving' ? 'Saving…' : 'Save' }}</span>
+      </button>
       <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-act="publish" [disabled]="!def() || publishing() || session.onLive() || session.readOnly()" [attr.aria-busy]="publishing() ? 'true' : null" (click)="publish()">
         <pf-icon name="send" [size]="16" /> <span class="ed-actions__lbl">{{ publishing() ? 'Publishing…' : 'Publish' }}</span>
       </button>
-      <button type="button" class="pf-hb-tool" aria-label="More: history, copy, discard" data-tip="History, rename, copy, discard" data-tip-end (click)="more()">
+      <button type="button" class="pf-hb-tool" aria-label="More: history, copy, discard" data-tip="History, copy, discard" data-tip-end (click)="more()">
         <pf-icon name="more" [size]="16" />
       </button>
     </div>
     <div band-search class="pf-ctx ed-ctx">
-      <span class="pf-ctx__primary ed-title" data-title>{{ title() }}</span>
-      @if (session.readOnly()) {
-        <span class="pf-ctx__chip ed-chip" data-master>Master case sheet</span>
-      }
       @if (version()) {
+        <input
+          class="pf-input lg-name"
+          type="text"
+          data-title
+          aria-label="Case sheet name"
+          [value]="title()"
+          [readOnly]="session.readOnly()"
+          (change)="renameTitle($any($event.target).value)"
+          (keydown.enter)="$any($event.target).blur()"
+        />
+        @if (departmentName()) {
+          <span class="pf-ctx__chip ed-chip" data-department>{{ departmentName() }}</span>
+        }
+        @if (session.readOnly()) {
+          <span class="pf-ctx__chip ed-chip" data-master>Master case sheet</span>
+        }
         <span class="pf-ctx__chip ed-chip" data-status>
           <span class="ed-chip__st">{{ status() }}</span>
           <span class="pf-ctx__k" [attr.data-save]="session.saveState()" [attr.title]="desk() ? saveTip() : null">{{ saveWords() }}</span>
@@ -61,6 +79,7 @@
           </button>
         }
       } @else {
+        <span class="pf-ctx__primary ed-title" data-title>{{ title() }}</span>
         <span class="pf-ctx__k">Opening the case sheet…</span>
       }
     </div>
@@ -83,265 +102,405 @@
       <section class="pf-card main"><div class="pf-card__body"><pf-skeleton-form [fields]="5" [cols]="1" label="Opening the case sheet" /></div></section>
     </div>
   } @else {
-    <div class="pf-body ed-body" [class.ed-body--problems]="problemsOpen()">
-      <!-- PAGES (wide screens) -->
-      <aside class="pf-card ed-pages" aria-labelledby="ed-pages-h">
-        <header class="pf-card__head">
-          <span class="pf-card__icon"><pf-icon name="k-pages" [size]="16" /></span>
-          <h2 class="pf-card__label" id="ed-pages-h">Pages</h2>
-          <span class="pf-card__count">{{ def()!.pages.length }}</span>
-        </header>
-        <div class="pf-card__body">
-          <ol class="ed-plist" data-drag-list="pages">
-            @for (p of def()!.pages; track p.key; let i = $index) {
-              <li
-                class="ed-prow"
-                [attr.data-drag-index]="i"
-                [attr.data-page]="p.key"
-                [attr.aria-current]="page()?.key === p.key ? 'page' : null"
-                [attr.data-drop-page]="p.key"
-                [class.ed-prow--drop]="actions.drag.overPage() === p.key"
-                [class.ed-prow--drag]="actions.drag.dragging('pages', i)"
-                [style.transform]="actions.drag.offset('pages', i) ? 'translateY(' + actions.drag.offset('pages', i) + 'px)' : null"
-              >
-                <button
-                  type="button"
-                  class="ed-grip pf-touch"
-                  [attr.aria-label]="'Move the page ' + p.title"
-                  (pointerdown)="pageGrip($event, i)"
-                  (pointermove)="actions.drag.move($event)"
-                  (pointerup)="actions.drag.end()"
-                  (pointercancel)="actions.drag.end()"
-                  (keydown)="actions.drag.keyMove($event, 'pages', i, def()!.pages.length)"
-                >
-                  <pf-icon name="grip" [size]="18" />
-                </button>
-                <button type="button" class="ed-pbtn pf-touch" (click)="store.selectPage(p.key)" (dblclick)="pageMenu(p)">
-                  <span class="ed-pbtn__t">{{ p.title }}</span>
-                  <span class="ed-pbtn__m">
-                    {{ fieldsIn(p) }} {{ fieldsIn(p) === 1 ? 'question' : 'questions' }}
-                    @if (store.problemsByPage().get(p.key); as n) {
-                      · <span class="ed-errtxt">{{ n }} to fix</span>
+    <!-- the legacy main tabs -->
+    <nav class="lg-tabs lg-maintabs" role="tablist" aria-label="Case sheet sections">
+      @for (t of mainTabs; track t.id) {
+        <button type="button" role="tab" class="lg-tab" [attr.data-main-tab]="t.id" [attr.aria-selected]="tab() === t.id" (click)="setTab(t.id)">
+          <pf-icon [name]="t.icon" [size]="16" /> {{ t.label }}
+        </button>
+      }
+    </nav>
+
+    @if (session.conflict()) {
+      <div class="ed-banner ed-banner--warn lg-banner" role="alert" data-conflict>
+        <pf-icon name="alert" [size]="18" />
+        <span class="ed-banner__t"><strong>{{ conflictWho() }} saved this case sheet first.</strong> Your last change is still on this screen. Keep theirs, or save yours over it?</span>
+        <button type="button" class="pf-btn pf-btn--secondary" (click)="resolve('theirs')">Use their version</button>
+        <button type="button" class="pf-btn pf-btn--secondary" (click)="resolve('mine')">Keep mine</button>
+      </div>
+    }
+    @if (session.readOnly()) {
+      <div class="ed-banner lg-banner" role="status" data-master-banner>
+        <pf-icon name="info" [size]="18" />
+        <span class="ed-banner__t"><strong>This is a master case sheet.</strong> You are looking at the published version. Edit makes your lab's own copy; the master never changes here.</span>
+        @if (canManage()) {
+          <button type="button" class="pf-btn pf-btn--primary" data-act="fork" [disabled]="forking()" [attr.aria-busy]="forking() ? 'true' : null" (click)="forkMaster()">Edit</button>
+        }
+      </div>
+    }
+    @if (published(); as msg) {
+      <div class="ed-banner lg-banner" role="status" data-published>
+        <pf-icon name="check" [size]="18" /> <span class="ed-banner__t">{{ msg }}</span>
+        <button type="button" class="pf-btn pf-btn--icon" aria-label="Close" (click)="published.set(null)"><pf-icon name="x" [size]="16" /></button>
+      </div>
+    }
+    @if (actions.notice(); as msg) {
+      <div class="ed-banner lg-banner" role="status">
+        <pf-icon name="info" [size]="18" /> <span class="ed-banner__t">{{ msg }}</span>
+        <button type="button" class="pf-btn pf-btn--icon" aria-label="Close" (click)="actions.notice.set(null)"><pf-icon name="x" [size]="16" /></button>
+      </div>
+    }
+    @if (store.checkCount(); as n) {
+      <div class="ed-banner ed-banner--cortex lg-banner" role="status" data-cortex-banner>
+        <pf-icon name="sparkle" [size]="18" />
+        <span class="ed-banner__t">Cortex made this draft from your sheet. Check the {{ n }} marked {{ n === 1 ? 'question' : 'questions' }}, then publish.</span>
+      </div>
+    }
+
+    @switch (tab()) {
+      @case ('pages') {
+        <div class="pf-body ed-body" [class.ed-body--problems]="problemsOpen()">
+          <!-- LEFT: the pages -->
+          <aside class="pf-card ed-pages" aria-labelledby="ed-pages-h">
+            <header class="pf-card__head">
+              <span class="pf-card__icon"><pf-icon name="k-pages" [size]="16" /></span>
+              <h2 class="pf-card__label" id="ed-pages-h">Pages</h2>
+              <span class="lg-side-acts">
+                <button type="button" class="pf-btn pf-btn--icon" data-act="add-section" aria-label="Add a section" data-tip="Add a section to group pages" [disabled]="session.readOnly()" (click)="addSection()"><pf-icon name="cases" [size]="16" /></button>
+                <button type="button" class="pf-btn pf-btn--primary lg-addpage" data-act="add-page" [disabled]="session.readOnly()" (click)="addPage()"><pf-icon name="plus" [size]="16" /> Page</button>
+              </span>
+            </header>
+            <div class="pf-card__body">
+              @for (g of groupViews(); track g.key) {
+                <div class="lg-sec" [attr.data-section]="g.key">
+                  <div class="lg-sec__h">
+                    <button type="button" class="lg-sec__t" [attr.aria-expanded]="!g.collapsed" (click)="toggleGroup(g.key)">
+                      <pf-icon [name]="g.collapsed ? 'chevron-right' : 'chevron-down'" [size]="16" />
+                      <span class="lg-sec__n">{{ g.title }}</span>
+                      <span class="lg-sec__c">{{ g.pages.length }} pages</span>
+                    </button>
+                    <button type="button" class="pf-btn pf-btn--icon" [attr.aria-label]="'Add a page to ' + g.title" (click)="addPage(g.key)"><pf-icon name="plus" [size]="16" /></button>
+                    <button type="button" class="pf-btn pf-btn--icon" [attr.aria-label]="'Delete the section ' + g.title" (click)="removeSection(g.key, g.title)"><pf-icon name="trash" [size]="16" /></button>
+                  </div>
+                  @if (!g.collapsed) {
+                    <ol class="ed-plist lg-sec__list">
+                      @for (v of g.pages; track v.page.key) {
+                        <ng-container *ngTemplateOutlet="pageRow; context: { v: v, flat: false }" />
+                      } @empty {
+                        <li class="lg-sec__empty">Add a page here with +</li>
+                      }
+                    </ol>
+                  }
+                </div>
+              }
+              @if (groupViews().length) {
+                <div class="lg-root-h"><pf-icon name="cases" [size]="14" /> Uncategorized</div>
+              }
+              <ol class="ed-plist" [attr.data-drag-list]="groupViews().length ? null : 'pages'">
+                @for (v of rootViews(); track v.page.key) {
+                  <ng-container *ngTemplateOutlet="pageRow; context: { v: v, flat: !groupViews().length }" />
+                }
+              </ol>
+              @if (!def()!.pages.length) {
+                <p class="lg-help lg-pages-empty">There are no pages. Add the first with + Page.</p>
+              }
+              @if (desk() && actions.drag.state()?.list === 'page') {
+                <p class="ed-drophint" role="status">Drop on a page to move it there</p>
+              }
+            </div>
+          </aside>
+
+          <!-- CENTRE: the page and its fields -->
+          <section class="pf-card ed-main" aria-label="The page">
+            @if (selCount() > 1 || store.picked().size) {
+              <div class="ed-selbar" role="toolbar" aria-label="Selected questions" data-selbar>
+                <span class="ed-selbar__n">{{ selCount() }} selected</span>
+                @if (selCount() < store.pageKeys().length) {
+                  <button type="button" class="pf-btn pf-btn--tertiary ed-selbar__all" (click)="store.pickAll()">Select all</button>
+                }
+                <span class="ed-selbar__sp"></span>
+                <button type="button" class="pf-btn pf-btn--icon" data-bulk="up" aria-label="Move up" [attr.data-tip]="tips.up" (click)="actions.moveMany(store.selection(), -1)"><pf-icon name="arrow-up" [size]="16" /></button>
+                <button type="button" class="pf-btn pf-btn--icon" data-bulk="down" aria-label="Move down" [attr.data-tip]="tips.down" (click)="actions.moveMany(store.selection(), 1)"><pf-icon name="arrow-down" [size]="16" /></button>
+                @if (def()!.pages.length > 1) {
+                  <button type="button" class="pf-btn pf-btn--secondary" data-bulk="page" (click)="actions.moveManyToPage(store.selection())">Move to…</button>
+                }
+                <button type="button" class="pf-btn pf-btn--secondary" data-bulk="dup" [attr.data-tip]="tips.dup" (click)="actions.duplicateMany(store.selection())"><pf-icon name="copy" [size]="16" /> Copy</button>
+                <button type="button" class="pf-btn pf-btn--danger" data-bulk="remove" [attr.data-tip]="tips.rm" data-tip-end (click)="removeSelection()"><pf-icon name="trash" [size]="16" /> Remove</button>
+                <button type="button" class="pf-btn pf-btn--icon" aria-label="Clear the selection" data-tip="Clear (Esc)" data-tip-end (click)="store.clearPicks()"><pf-icon name="x" [size]="18" /></button>
+              </div>
+            }
+            @if (actions.undoable(); as words) {
+              <div class="ed-undobar" role="status" data-undobar>
+                <pf-icon name="check" [size]="16" />
+                <span class="ed-undobar__t">{{ words }}</span>
+                <button type="button" class="pf-btn pf-btn--secondary" data-act="undo-last" [attr.data-tip]="tips.undo" data-tip-end (click)="actions.undoLast()"><pf-icon name="undo" [size]="16" /> Undo</button>
+                <button type="button" class="pf-btn pf-btn--icon" aria-label="Close" (click)="actions.undoable.set(null)"><pf-icon name="x" [size]="16" /></button>
+              </div>
+            }
+            <div class="pf-card__body ed-mainbody">
+              <st-phone-note />
+              <!-- narrow screens: pages as chips -->
+              <nav class="ed-pchips" aria-label="Pages">
+                @for (p of def()!.pages; track p.key) {
+                  <button type="button" class="fe-chip ed-pchip" [attr.aria-pressed]="page()?.key === p.key" [attr.data-page]="p.key" (click)="store.selectPage(p.key)">
+                    {{ p.title }}
+                    @if (store.problemsByPage().get(p.key)) {
+                      <span class="ed-dot" aria-label="has things to fix"></span>
                     }
-                  </span>
-                </button>
-                <button type="button" class="pf-btn pf-btn--icon ed-pmore" [attr.aria-label]="'More for the page ' + p.title" data-tip="Rename, move, save, remove" data-tip-end (click)="pageMenu(p)">
-                  <pf-icon name="more" [size]="18" />
-                </button>
-              </li>
-            }
-          </ol>
-          <button type="button" class="pf-btn pf-btn--secondary" data-act="add-page" (click)="addPage()"><pf-icon name="plus" [size]="18" /> Add a page</button>
-          <button type="button" class="pf-btn pf-btn--tertiary" (click)="addSavedPage()"><pf-icon name="copy" [size]="18" /> Add a saved page</button>
-          @if (desk() && actions.drag.state()?.list === 'page') {
-            <p class="ed-drophint" role="status">Drop on a page to move it there</p>
-          }
-        </div>
-      </aside>
-
-      <!-- THE FORM, as the doctor sees it, with the narrative under it -->
-      <section class="pf-card ed-main" aria-labelledby="ed-main-h">
-        <header class="pf-card__head">
-          <span class="pf-card__icon"><pf-icon name="forms" [size]="16" /></span>
-          <h1 class="pf-card__label ed-main__title" id="ed-main-h">{{ page()?.title || 'The case sheet' }}</h1>
-          <span class="pf-card__count">{{ count() }} · {{ store.fieldCount() }} in the case sheet</span>
-        </header>
-        @if (selCount()) {
-          <div class="ed-selbar" role="toolbar" aria-label="Selected questions" data-selbar>
-            <span class="ed-selbar__n">{{ selCount() }} selected</span>
-            @if (selCount() < store.pageKeys().length) {
-              <button type="button" class="pf-btn pf-btn--tertiary ed-selbar__all" (click)="store.pickAll()">Select all</button>
-            }
-            <span class="ed-selbar__sp"></span>
-            <button type="button" class="pf-btn pf-btn--icon" data-bulk="up" aria-label="Move up" [attr.data-tip]="tips.up" (click)="actions.moveMany(store.selection(), -1)"><pf-icon name="arrow-up" [size]="16" /></button>
-            <button type="button" class="pf-btn pf-btn--icon" data-bulk="down" aria-label="Move down" [attr.data-tip]="tips.down" (click)="actions.moveMany(store.selection(), 1)"><pf-icon name="arrow-down" [size]="16" /></button>
-            @if (def()!.pages.length > 1) {
-              <button type="button" class="pf-btn pf-btn--secondary" data-bulk="page" (click)="actions.moveManyToPage(store.selection())">Move to…</button>
-            }
-            <button type="button" class="pf-btn pf-btn--secondary" data-bulk="dup" [attr.data-tip]="tips.dup" (click)="actions.duplicateMany(store.selection())"><pf-icon name="copy" [size]="16" /> Copy</button>
-            <button type="button" class="pf-btn pf-btn--danger" data-bulk="remove" [attr.data-tip]="tips.rm" data-tip-end (click)="removeSelection()"><pf-icon name="trash" [size]="16" /> Remove</button>
-            <button type="button" class="pf-btn pf-btn--icon" aria-label="Clear the selection" data-tip="Clear (Esc)" data-tip-end (click)="store.clearPicks()"><pf-icon name="x" [size]="18" /></button>
-          </div>
-        }
-        @if (actions.undoable(); as words) {
-          <div class="ed-undobar" role="status" data-undobar>
-            <pf-icon name="check" [size]="16" />
-            <span class="ed-undobar__t">{{ words }}</span>
-            <button type="button" class="pf-btn pf-btn--secondary" data-act="undo-last" [attr.data-tip]="tips.undo" data-tip-end (click)="actions.undoLast()"><pf-icon name="undo" [size]="16" /> Undo</button>
-            <button type="button" class="pf-btn pf-btn--icon" aria-label="Close" (click)="actions.undoable.set(null)"><pf-icon name="x" [size]="16" /></button>
-          </div>
-        }
-        <div class="pf-card__body ed-mainbody">
-          <st-phone-note />
-          <!-- narrow screens: pages as chips -->
-          <nav class="ed-pchips" aria-label="Pages">
-            @for (p of def()!.pages; track p.key) {
-              <button type="button" class="fe-chip ed-pchip" [attr.aria-pressed]="page()?.key === p.key" [attr.data-page]="p.key" (click)="store.selectPage(p.key)" (contextmenu)="$event.preventDefault(); pageMenu(p)">
-                {{ p.title }}
-                @if (store.problemsByPage().get(p.key)) {
-                  <span class="ed-dot" aria-label="has things to fix"></span>
-                }
-              </button>
-            }
-            <button type="button" class="fe-chip" (click)="addPage()"><pf-icon name="plus" [size]="16" /> Page</button>
-            @if (page(); as p) {
-              <button type="button" class="pf-btn pf-btn--icon" [attr.aria-label]="'More for the page ' + p.title" (click)="pageMenu(p)"><pf-icon name="more" [size]="18" /></button>
-            }
-          </nav>
-
-          @if (session.conflict()) {
-            <div class="ed-banner ed-banner--warn" role="alert" data-conflict>
-              <pf-icon name="alert" [size]="18" />
-              <span class="ed-banner__t"><strong>{{ conflictWho() }} saved this case sheet first.</strong> Your last change is still on this screen. Keep theirs, or save yours over it?</span>
-              <button type="button" class="pf-btn pf-btn--secondary" (click)="resolve('theirs')">Use their version</button>
-              <button type="button" class="pf-btn pf-btn--secondary" (click)="resolve('mine')">Keep mine</button>
-            </div>
-          }
-          @if (store.checkCount(); as n) {
-            <div class="ed-banner ed-banner--cortex" role="status" data-cortex-banner>
-              <pf-icon name="sparkle" [size]="18" />
-              <span class="ed-banner__t">Cortex made this draft from your sheet. Check the {{ n }} marked {{ n === 1 ? 'question' : 'questions' }}, then publish.</span>
-            </div>
-          }
-          @if (session.readOnly()) {
-            <div class="ed-banner" role="status" data-master-banner>
-              <pf-icon name="info" [size]="18" />
-              <span class="ed-banner__t"><strong>This is a master case sheet.</strong> You are looking at the published version. Edit makes your lab's own copy; the master never changes here.</span>
-              @if (canManage()) {
-                <button type="button" class="pf-btn pf-btn--primary" data-act="fork" [disabled]="forking()" [attr.aria-busy]="forking() ? 'true' : null" (click)="forkMaster()">Edit</button>
-              }
-            </div>
-          }
-          @if (published(); as msg) {
-            <div class="ed-banner" role="status" data-published>
-              <pf-icon name="check" [size]="18" /> <span class="ed-banner__t">{{ msg }}</span>
-              <button type="button" class="pf-btn pf-btn--icon" aria-label="Close" (click)="published.set(null)"><pf-icon name="x" [size]="16" /></button>
-            </div>
-          }
-          @if (actions.notice(); as msg) {
-            <div class="ed-banner" role="status">
-              <pf-icon name="info" [size]="18" /> <span class="ed-banner__t">{{ msg }}</span>
-              <button type="button" class="pf-btn pf-btn--icon" aria-label="Close" (click)="actions.notice.set(null)"><pf-icon name="x" [size]="16" /></button>
-            </div>
-          }
-
-          @if (page(); as p) {
-            <div class="ed-pagerule">
-              @if (pageRuleOpen()) {
-                <st-conditions [definition]="def()!" [subject]="'the page ' + p.title" [value]="p.showWhen" (changed)="setPageRule($event)" (done)="pageRuleOpen.set(false)" />
-              } @else {
-                <button type="button" class="ed-rule pf-touch" (click)="pageRuleOpen.set(true)">
-                  <span class="ed-rule__k">This page</span> {{ pageRule() }} <span class="ed-rule__go">Change</span>
-                </button>
-              }
-            </div>
-
-            <div class="ed-fields" data-drag-list="page">
-              @for (f of pageFields(); track f.key; let i = $index) {
-                @if (store.paletteAt()?.pageKey === p.key && store.paletteAt()?.at === i) {
-                  <st-palette [slot]="{ pageKey: p.key, at: i }" />
-                }
-                <st-field-card
-                  [attr.data-drag-index]="i"
-                  [field]="f"
-                  [index]="i"
-                  [count]="pageFields().length"
-                  [dragOffset]="actions.drag.offset('page', i)"
-                  [dragging]="actions.drag.dragging('page', i)"
-                  [gripDown]="gripFor(i)"
-                  [gripKey]="keyFor(i)"
-                />
-              }
-            </div>
-            @if (store.paletteAt()?.pageKey === p.key && store.paletteAt()?.at === undefined) {
-              <st-palette [slot]="{ pageKey: p.key }" />
-            } @else {
-              <button type="button" class="ed-add pf-touch" data-act="add-question" (click)="store.paletteAt.set({ pageKey: p.key })">
-                <pf-icon name="plus" [size]="20" /> Add a question
-                @if (desk()) {
-                  <kbd class="ed-kbd" aria-hidden="true">N</kbd>
-                }
-              </button>
-            }
-          } @else {
-            <div class="pf-empty pf-empty--compact" data-empty="pages">
-              <span class="pf-empty__icon"><pf-icon name="k-pages" [size]="20" /></span>
-              <h2 class="pf-empty__title">Start with a page</h2>
-              <p class="pf-empty__body">A page is one step for the doctor, like “Complaints” or “Examination”. Add one, then add its questions.</p>
-              <button type="button" class="pf-btn pf-btn--primary" data-act="first-page" (click)="addPage()"><pf-icon name="plus" [size]="18" /> Add the first page</button>
-            </div>
-          }
-
-          @if (narrativeAt() === 'under') {
-            <st-narrative />
-          }
-        </div>
-      </section>
-
-      <!-- THE SELECTED QUESTION (or the problems list) -->
-      @if (store.settingsOpen() || problemsOpen()) {
-        <div class="ed-backdrop" aria-hidden="true" (click)="store.settingsOpen.set(false); problemsOpen.set(false)"></div>
-      }
-      <aside class="pf-card ed-side" [class.ed-side--open]="store.settingsOpen() || problemsOpen()" aria-labelledby="ed-side-h">
-        @if (problemsOpen()) {
-          <header class="pf-card__head">
-            <span class="pf-card__icon"><pf-icon name="alert" [size]="16" /></span>
-            <h2 class="pf-card__label" id="ed-side-h">To fix before publishing</h2>
-            <button type="button" class="pf-btn pf-btn--icon ed-close" aria-label="Close" (click)="problemsOpen.set(false)"><pf-icon name="x" [size]="20" /></button>
-          </header>
-          <div class="pf-card__body">
-            @if (!listedProblems().length) {
-              <div class="pf-empty pf-empty--compact"><h3 class="pf-empty__title">Nothing to fix</h3><p class="pf-empty__body">This case sheet can be published.</p></div>
-            }
-            <ul class="ed-plist" role="list" data-problem-list>
-              @for (pr of listedProblems(); track $index) {
-                <li>
-                  <button type="button" class="ed-prob pf-touch" (click)="jump(pr)">
-                    <span class="ed-prob__w">{{ pr.pageTitle || 'The case sheet' }}@if (pr.fieldLabel) { · {{ pr.fieldLabel }} }</span>
-                    <span class="ed-prob__m">{{ pr.message }}</span>
-                    <span class="ed-prob__go">Go there <pf-icon name="chevron-right" [size]="14" /></span>
                   </button>
-                </li>
-              }
-            </ul>
-          </div>
-        } @else if (narrativeAt() === 'tab') {
-          <header class="pf-card__head ed-sidehead">
-            <span class="pf-card__icon"><pf-icon [name]="sideTab() === 'narrative' ? 'text' : 'settings'" [size]="16" /></span>
-            <h2 class="pf-card__label ed-sr" id="ed-side-h">{{ sideTab() === 'narrative' ? 'What it writes' : 'Question' }}</h2>
-            <pf-segmented class="ed-tabs" ariaLabel="Show" [options]="sideTabs" [value]="sideTab()" (valueChange)="setSideTab($event)" />
-          </header>
-          @if (sideTab() === 'narrative') {
-            <div class="pf-card__body ed-nvbody"><st-narrative [docked]="true" /></div>
-          } @else {
-            <div class="ed-sidesub">{{ store.selected()?.field?.label || 'No question selected' }}</div>
-            <div class="pf-card__body"><st-field-settings /></div>
-          }
-        } @else {
-          <header class="pf-card__head">
-            <span class="pf-card__icon"><pf-icon name="settings" [size]="16" /></span>
-            <h2 class="pf-card__label" id="ed-side-h">{{ store.selected()?.field?.label || 'Question' }}</h2>
-            <button type="button" class="pf-btn pf-btn--icon ed-close" aria-label="Close" (click)="store.settingsOpen.set(false)"><pf-icon name="x" [size]="20" /></button>
-          </header>
-          <div class="pf-card__body"><st-field-settings /></div>
-        }
-      </aside>
+                }
+                <button type="button" class="fe-chip" (click)="addPage()"><pf-icon name="plus" [size]="16" /> Page</button>
+              </nav>
 
-      <!-- ≥1760: the narrative has its own column, always in view -->
-      @if (narrativeAt() === 'column') {
-        <aside class="pf-card ed-nv" aria-labelledby="ed-nv-h">
-          <header class="pf-card__head">
-            <span class="pf-card__icon"><pf-icon name="text" [size]="16" /></span>
-            <h2 class="pf-card__label" id="ed-nv-h">What it writes</h2>
-          </header>
-          <div class="pf-card__body ed-nvbody"><st-narrative [docked]="true" /></div>
-        </aside>
+              @if (page(); as p) {
+                <header class="lg-pagehead" data-page-header>
+                  <div class="lg-pagehead__row">
+                    <div class="lg-pagehead__f">
+                      <input
+                        class="pf-input lg-pagehead__t"
+                        type="text"
+                        data-page-title
+                        aria-label="Page title"
+                        [value]="p.title"
+                        [readOnly]="session.readOnly()"
+                        (change)="renameCurrentPage($any($event.target).value)"
+                        (keydown.enter)="$any($event.target).blur()"
+                      />
+                      <input
+                        class="pf-input lg-pagehead__s"
+                        type="text"
+                        data-page-subtitle
+                        aria-label="Page subtitle"
+                        placeholder="Add subtitle..."
+                        [value]="p.subtitle ?? ''"
+                        [readOnly]="session.readOnly()"
+                        (change)="setSubtitle($any($event.target).value)"
+                        (keydown.enter)="$any($event.target).blur()"
+                      />
+                    </div>
+                    <div class="lg-pagehead__a">
+                      <button type="button" class="pf-btn pf-btn--secondary" data-act="page-settings" [disabled]="session.readOnly()" (click)="pageSettingsOpen.set(true)">Page Settings</button>
+                      <button type="button" class="pf-btn pf-btn--danger" data-act="delete-page" [disabled]="session.readOnly()" (click)="deletePage(p)">Delete Page</button>
+                    </div>
+                  </div>
+                  @if (page()?.showWhen?.conditions?.length) {
+                    <p class="lg-pagehead__c">
+                      <pf-icon name="zap" [size]="16" /> This page has visibility conditions
+                      <button type="button" class="lg-link" (click)="pageSettingsOpen.set(true)">Edit</button>
+                    </p>
+                  }
+                </header>
+
+                <div class="lg-fieldshead">
+                  <h3 class="lg-fieldshead__t">Fields ({{ pageFields().length }})</h3>
+                  <button type="button" class="pf-btn pf-btn--secondary lg-addnarrow" data-act="add-narrow" (click)="store.select(null); store.settingsOpen.set(true)"><pf-icon name="plus" [size]="16" /> Add a field</button>
+                </div>
+
+                @if (!pageFields().length) {
+                  <div class="lg-fieldsempty" data-empty="fields">
+                    <span class="lg-fieldsempty__i"><pf-icon name="forms" [size]="26" /></span>
+                    <p class="lg-fieldsempty__t">No fields yet</p>
+                    <p class="lg-help">Click a component in the palette to add it here</p>
+                  </div>
+                }
+
+                <ol class="lg-fields" data-drag-list="page">
+                  @for (f of pageFields(); track f.key; let i = $index) {
+                    <li
+                      class="lg-fcard"
+                      [attr.data-card]="f.key"
+                      [attr.data-kind]="f.kind"
+                      [attr.data-drag-index]="i"
+                      [attr.data-w]="f.width ?? 'full'"
+                      [class.lg-fcard--sel]="store.selectedKey() === f.key"
+                      [class.lg-fcard--picked]="store.picked().has(f.key)"
+                      [class.lg-fcard--flash]="store.flash() === f.key"
+                      [class.lg-fcard--err]="hasError(f.key)"
+                      [class.lg-fcard--drag]="actions.drag.dragging('page', i)"
+                      [style.transform]="actions.drag.offset('page', i) ? 'translateY(' + actions.drag.offset('page', i) + 'px)' : null"
+                      tabindex="-1"
+                      (click)="rowClick($event, f)"
+                      (mousedown)="noTextSelect($event)"
+                      (pointerdown)="actions.longPress.down($event, menuLater(f.key))"
+                      (pointermove)="actions.longPress.move($event)"
+                      (pointerup)="actions.longPress.cancel()"
+                      (pointercancel)="actions.longPress.cancel()"
+                    >
+                      <div class="lg-fcard__main">
+                        <button
+                          type="button"
+                          role="checkbox"
+                          class="pf-check pf-touch lg-fcard__check st-hover-only"
+                          [attr.aria-checked]="store.picked().has(f.key)"
+                          [attr.aria-label]="'Select ' + (f.label || 'this question')"
+                          data-tip="Select (⇧-click for a range)"
+                          (click)="$event.stopPropagation(); store.togglePick(f.key)"
+                        >
+                          <span class="pf-check__box" aria-hidden="true"><pf-icon name="check" [size]="14" /></span>
+                        </button>
+                        <button
+                          type="button"
+                          class="lg-fcard__grip"
+                          [attr.aria-label]="'Move ' + (f.label || 'this question') + ' (drag, or use the arrow keys)'"
+                          (pointerdown)="$event.stopPropagation(); gripFor(i)($event)"
+                          (pointermove)="actions.drag.move($event)"
+                          (pointerup)="actions.drag.end()"
+                          (pointercancel)="actions.drag.end()"
+                          (keydown)="keyFor(i)($event)"
+                        >
+                          <pf-icon name="grip" [size]="18" />
+                        </button>
+                        <span class="lg-fcard__badge" [attr.title]="kindName(f.kind)"><pf-icon [name]="kindIcon(f.kind)" [size]="18" /></span>
+                        <div class="lg-fcard__info">
+                          <span class="lg-fcard__label">{{ f.label || 'Untitled question' }}</span>
+                          <span class="lg-fcard__meta">
+                            {{ kindName(f.kind) }}
+                            @if (f.required) {
+                              <span class="lg-badge lg-badge--req">Required</span>
+                            }
+                            @if (f.showWhen?.conditions?.length) {
+                              <span class="lg-badge lg-badge--cond">Conditional</span>
+                            }
+                          </span>
+                        </div>
+                        <div class="lg-fcard__acts" role="group" [attr.aria-label]="'Quick actions for ' + (f.label || 'this question')">
+                          <button type="button" class="pf-btn pf-btn--icon lg-fcard__act" data-act="dup" [attr.aria-label]="'Make a copy of ' + (f.label || 'this question')" [attr.data-tip]="tips.dup" [disabled]="session.readOnly()" (click)="$event.stopPropagation(); duplicateRow(f.key)"><pf-icon name="copy" [size]="16" /></button>
+                          <button type="button" class="pf-btn pf-btn--icon lg-fcard__act" data-act="remove" [attr.aria-label]="'Remove ' + (f.label || 'this question')" [attr.data-tip]="tips.rm" data-tip-end [disabled]="session.readOnly()" (click)="$event.stopPropagation(); removeRow(f.key)"><pf-icon name="trash" [size]="16" /></button>
+                          <button type="button" class="pf-btn pf-btn--icon lg-fcard__act lg-fcard__more" [attr.aria-label]="'More for ' + (f.label || 'this question')" data-tip="More: move to a page, save" data-tip-end (click)="$event.stopPropagation(); actions.menu(f.key)"><pf-icon name="more" [size]="16" /></button>
+                        </div>
+                      </div>
+                      @if (checkNote(f); as note) {
+                        <div class="fc-cortex lg-fcard__note" data-check role="group" [attr.aria-label]="'Check this: ' + note">
+                          <pf-icon name="sparkle" [size]="16" />
+                          <span class="fc-cortex__t"><strong>Check this:</strong> {{ note }}</span>
+                          <button type="button" class="pf-btn pf-btn--secondary fc-cortex__ok" data-act="looks-right" [disabled]="session.readOnly()" (click)="$event.stopPropagation(); store.looksRight(f.key)">
+                            <pf-icon name="check" [size]="16" /> Looks right
+                          </button>
+                        </div>
+                      }
+                      @if (store.problemsByField().get(f.key); as ps) {
+                        <ul class="lg-fcard__problems" role="list">
+                          @for (pr of ps; track $index) {
+                            <li [class.lg-fcard__problem--err]="pr.severity === 'error'"><pf-icon [name]="pr.severity === 'error' ? 'alert' : 'info'" [size]="14" /> {{ pr.message }}</li>
+                          }
+                        </ul>
+                      }
+                    </li>
+                  }
+                </ol>
+              } @else {
+                <div class="pf-empty pf-empty--compact" data-empty="pages">
+                  <span class="pf-empty__icon"><pf-icon name="k-pages" [size]="20" /></span>
+                  <h2 class="pf-empty__title">No Page Selected</h2>
+                  <p class="pf-empty__body">Select a page from the sidebar or create a new one.</p>
+                  <button type="button" class="pf-btn pf-btn--primary" data-act="first-page" [disabled]="session.readOnly()" (click)="addPage()"><pf-icon name="plus" [size]="18" /> Create First Page</button>
+                </div>
+              }
+            </div>
+          </section>
+
+          <!-- RIGHT: the components palette, or the selected field's settings, or the problems list -->
+          @if (store.settingsOpen() || problemsOpen()) {
+            <div class="ed-backdrop" aria-hidden="true" (click)="store.settingsOpen.set(false); problemsOpen.set(false)"></div>
+          }
+          <aside class="pf-card ed-side" [class.ed-side--open]="store.settingsOpen() || problemsOpen()" aria-label="Components and field settings" data-right-pane>
+            @if (problemsOpen()) {
+              <header class="pf-card__head">
+                <span class="pf-card__icon"><pf-icon name="alert" [size]="16" /></span>
+                <h2 class="pf-card__label" id="ed-side-h">To fix before publishing</h2>
+                <button type="button" class="pf-btn pf-btn--icon ed-close" aria-label="Close" (click)="problemsOpen.set(false)"><pf-icon name="x" [size]="20" /></button>
+              </header>
+              <div class="pf-card__body">
+                @if (!listedProblems().length) {
+                  <div class="pf-empty pf-empty--compact"><h3 class="pf-empty__title">Nothing to fix</h3><p class="pf-empty__body">This case sheet can be published.</p></div>
+                }
+                <ul class="ed-plist" role="list" data-problem-list>
+                  @for (pr of listedProblems(); track $index) {
+                    <li>
+                      <button type="button" class="ed-prob pf-touch" (click)="jump(pr)">
+                        <span class="ed-prob__w">{{ pr.pageTitle || 'The case sheet' }}@if (pr.fieldLabel) { · {{ pr.fieldLabel }} }</span>
+                        <span class="ed-prob__m">{{ pr.message }}</span>
+                        <span class="ed-prob__go">Go there <pf-icon name="chevron-right" [size]="14" /></span>
+                      </button>
+                    </li>
+                  }
+                </ul>
+              </div>
+            } @else {
+              <div class="pf-card__body lg-right">
+                @if (store.selected()) {
+                  <st-config-panel />
+                } @else {
+                  <st-components-panel />
+                }
+              </div>
+              @if (store.settingsOpen()) {
+                <button type="button" class="pf-btn pf-btn--icon ed-close lg-sheetx" aria-label="Close" (click)="store.settingsOpen.set(false)"><pf-icon name="x" [size]="20" /></button>
+              }
+            }
+          </aside>
+        </div>
       }
-    </div>
+      @case ('narrative') {
+        <div class="pf-body lg-tabbody" data-tab-body="narrative">
+          <section class="pf-card lg-tabcard"><div class="pf-card__body"><st-narrative-tab /></div></section>
+        </div>
+      }
+      @case ('links') {
+        <div class="pf-body lg-tabbody" data-tab-body="links">
+          <section class="pf-card lg-tabcard"><div class="pf-card__body"><st-links-tab /></div></section>
+        </div>
+      }
+    }
   }
+
+  <!-- one page row of the sidebar (flat list or inside a section) -->
+  <ng-template #pageRow let-v="v" let-flat="flat">
+    @let p = v.page;
+    <li
+      class="ed-prow lg-prow"
+      [attr.data-drag-index]="flat ? v.index : null"
+      [attr.data-page]="p.key"
+      [attr.aria-current]="page()?.key === p.key ? 'page' : null"
+      [attr.data-drop-page]="p.key"
+      [class.ed-prow--drop]="actions.drag.overPage() === p.key"
+      [class.ed-prow--drag]="flat && actions.drag.dragging('pages', v.index)"
+      [style.transform]="flat && actions.drag.offset('pages', v.index) ? 'translateY(' + actions.drag.offset('pages', v.index) + 'px)' : null"
+    >
+      @if (flat) {
+        <button
+          type="button"
+          class="ed-grip pf-touch"
+          [attr.aria-label]="'Move the page ' + p.title"
+          (pointerdown)="pageGrip($event, v.index)"
+          (pointermove)="actions.drag.move($event)"
+          (pointerup)="actions.drag.end()"
+          (pointercancel)="actions.drag.end()"
+          (keydown)="actions.drag.keyMove($event, 'pages', v.index, def()!.pages.length)"
+        >
+          <pf-icon name="grip" [size]="18" />
+        </button>
+      }
+      <span class="lg-prow__i" [style.color]="p.color || null"><pf-icon [name]="pageIcon(p)" [size]="18" /></span>
+      <button type="button" class="ed-pbtn pf-touch" (click)="store.selectPage(p.key)" (dblclick)="pageMenu(p)">
+        <span class="ed-pbtn__t">{{ p.title }}</span>
+        <span class="ed-pbtn__m">
+          {{ p.fields.length }} {{ p.fields.length === 1 ? 'field' : 'fields' }}
+          @if (store.problemsByPage().get(p.key); as n) {
+            · <span class="ed-errtxt">{{ n }} to fix</span>
+          }
+        </span>
+      </button>
+      @if (p.showWhen?.conditions?.length) {
+        <span class="lg-prow__c" title="This page has visibility conditions"><pf-icon name="zap" [size]="14" /></span>
+      }
+      <button type="button" class="pf-btn pf-btn--icon ed-pmore" [attr.aria-label]="'Save the page ' + p.title + ' as a template'" data-tip="Save as template" data-tip-end (click)="savePage(p)">
+        <pf-icon name="upload" [size]="16" />
+      </button>
+      <button type="button" class="pf-btn pf-btn--icon ed-pmore" [attr.aria-label]="'More for the page ' + p.title" data-tip="Rename, move, remove" data-tip-end (click)="pageMenu(p)">
+        <pf-icon name="more" [size]="16" />
+      </button>
+    </li>
+  </ng-template>
 
   @if (previewOpen() && def()) {
     <st-preview [definition]="def()!" (closed)="previewOpen.set(false)" />
+  }
+  @if (pageSettingsOpen() && page(); as p) {
+    <st-page-settings [page]="p" (closed)="pageSettingsOpen.set(false)" />
+  }
+  @if (formSettingsOpen()) {
+    <st-form-settings (closed)="formSettingsOpen.set(false)" (saved)="onSettingsSaved($event)" />
   }
   @if (builderTab(); as t) {
     @if (def()) {

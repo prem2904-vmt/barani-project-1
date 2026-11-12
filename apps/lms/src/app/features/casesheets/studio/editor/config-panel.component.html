@@ -1,0 +1,510 @@
+@if (f(); as fld) {
+  <div class="cfg" [attr.data-config-panel]="fld.key">
+    <header class="cfg-head">
+      <h3 class="cfg-title">Configure Field</h3>
+      <button type="button" class="pf-btn pf-btn--tertiary cfg-tpl" data-act="save-template" (click)="saveTemplate()"><pf-icon name="upload" [size]="16" /> Save Template</button>
+      <button type="button" class="pf-btn pf-btn--icon cfg-x" data-act="close-config" aria-label="Close the settings" (click)="close()"><pf-icon name="x" [size]="18" /></button>
+    </header>
+    @if (owner(); as o) {
+      <button type="button" class="cfg-back" data-act="back-to-owner" (click)="backToOwner()">
+        <pf-icon name="chevron-left" [size]="16" /> Back to “{{ o.label || 'the question' }}”
+      </button>
+    }
+    @if (checkNote(); as note) {
+      <div class="fc-cortex cfg-check" data-check role="group" [attr.aria-label]="'Check this: ' + note">
+        <pf-icon name="sparkle" [size]="16" />
+        <span class="fc-cortex__t"><strong>Check this:</strong> {{ note }}</span>
+        <button type="button" class="pf-btn pf-btn--secondary fc-cortex__ok" data-act="looks-right" [disabled]="store.session.readOnly()" (click)="store.looksRight(fld.key)"><pf-icon name="check" [size]="16" /> Looks right</button>
+      </div>
+    }
+    <div class="lg-tabs cfg-tabs" role="tablist" aria-label="Field settings">
+      @for (t of tabs(); track t.id) {
+        <button type="button" role="tab" class="lg-tab" [attr.data-tab]="t.id" [attr.aria-selected]="activeTab() === t.id" (click)="setTab(t.id)">{{ t.label }}</button>
+      }
+    </div>
+
+    <div class="cfg-body">
+      @switch (activeTab()) {
+        <!-- ================= GENERAL ================= -->
+        @case ('general') {
+          <div class="lg-sec" data-pane="general">
+            <div class="lg-field">
+              <label class="lg-lbl" for="cfg-label">Label *</label>
+              <input id="cfg-label" class="pf-input" type="text" [value]="fld.label" (change)="setLabel($any($event.target).value)" />
+            </div>
+            <div class="lg-field">
+              <span class="lg-lbl">Internal Name</span>
+              <span class="cfg-name"><code class="lg-code">{{ '{{' + fld.key + '}}' }}</code></span>
+              <p class="lg-help">The name the narrative uses for this answer. It stays the same when you rename the label.</p>
+            </div>
+            <div class="lg-row2">
+              <div class="lg-field">
+                <span class="lg-lbl">Type</span>
+                @if (typeOptions().length > 1) {
+                  <pf-select [options]="typeOptions()" [value]="typeNow()" (valueChange)="setType($event)" />
+                } @else {
+                  <span class="cfg-type"><pf-icon [name]="icon()" [size]="16" /> {{ build().name }}</span>
+                }
+              </div>
+              <div class="lg-field">
+                <span class="lg-lbl">Width</span>
+                <pf-select [options]="widths" [value]="fld.width ?? 'full'" (valueChange)="setWidth($event)" />
+              </div>
+            </div>
+            @if (isText() || isNumber() || fld.kind === 'date' || fld.kind === 'choice') {
+              <div class="lg-field">
+                <label class="lg-lbl" for="cfg-ph">Placeholder</label>
+                <input id="cfg-ph" class="pf-input" type="text" [value]="fld.placeholder ?? ''" (change)="setText('placeholder', $any($event.target).value)" />
+              </div>
+            }
+            <div class="lg-field">
+              <label class="lg-lbl" for="cfg-help">Helper Text</label>
+              <input id="cfg-help" class="pf-input" type="text" [value]="fld.helper ?? ''" (change)="setText('helper', $any($event.target).value)" />
+              <p class="lg-help">Shown under the question.</p>
+            </div>
+
+            @if (!special() && config().length) {
+              @for (c of config(); track c.name) {
+                <div class="lg-field" [attr.data-config]="c.name">
+                  @if (c.type === 'switch') {
+                    <button type="button" role="switch" class="pf-toggle lg-switch" [attr.aria-checked]="!!c.value" (click)="setConfig(c.name, !c.value)">
+                      <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+                      <span>{{ c.label }}</span>
+                    </button>
+                  } @else {
+                    <span class="lg-lbl">{{ c.label }}</span>
+                    @if (c.type === 'choices') {
+                      <pf-select [options]="c.choices" [value]="'' + (c.value ?? '')" (valueChange)="setConfig(c.name, $event)" />
+                    } @else if (c.type === 'number') {
+                      <input class="pf-input" type="text" inputmode="decimal" [attr.aria-label]="c.label" [value]="c.value ?? ''" (change)="setConfig(c.name, num($any($event.target).value))" />
+                    } @else {
+                      <input class="pf-input" type="text" [attr.aria-label]="c.label" [value]="c.value ?? ''" (change)="setConfig(c.name, $any($event.target).value)" />
+                    }
+                    @if (c.hint) {
+                      <p class="lg-help">{{ c.hint }}</p>
+                    }
+                  }
+                </div>
+              }
+            }
+
+            <div class="lg-rule"></div>
+            <button type="button" role="switch" class="pf-toggle lg-switch" data-flag="required" [attr.aria-checked]="!!fld.required" (click)="patch(toggleRequired)">
+              <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+              <span>Required field</span>
+            </button>
+            <button type="button" role="switch" class="pf-toggle lg-switch" data-flag="disabled" [attr.aria-checked]="cfgOn('disabled')" (click)="toggleConfig('disabled')">
+              <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+              <span>Disabled</span>
+            </button>
+
+            @if (linkOptions().length) {
+              <div class="lg-rule"></div>
+              <div class="lg-field" data-more="links">
+                <span class="lg-lbl">Linking</span>
+                <p class="lg-help">Link this component with other components. Linked components will share values.</p>
+                <pf-select [options]="linkOptions()" [multiple]="true" [values]="linked()" [searchable]="true" placeholder="No other question" (valuesChange)="setLinks($event)" />
+                @if (linkWords()) {
+                  <p class="lg-help">{{ linkWords() }}</p>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- ================= VALIDATION ================= -->
+        @case ('validation') {
+          <div class="lg-sec" data-pane="validation">
+            @if (isText()) {
+              <div class="lg-row2">
+                <div class="lg-field">
+                  <label class="lg-lbl" for="v-min">Min Length</label>
+                  <input id="v-min" class="pf-input" type="text" inputmode="numeric" [value]="cfg('minLength')" (change)="setConfig('minLength', int($any($event.target).value))" />
+                </div>
+                <div class="lg-field">
+                  <label class="lg-lbl" for="v-max">Max Length</label>
+                  <input id="v-max" class="pf-input" type="text" inputmode="numeric" [value]="cfg('maxLength')" (change)="setConfig('maxLength', int($any($event.target).value) || null)" />
+                </div>
+              </div>
+              <div class="lg-field">
+                <label class="lg-lbl" for="v-pat">Pattern (Regex)</label>
+                <input id="v-pat" class="pf-input" type="text" placeholder="e.g., [A-Za-z ]+" [value]="cfg('pattern')" (change)="setConfig('pattern', $any($event.target).value.trim())" />
+                <p class="lg-help">The whole answer has to match. The server checks it too.</p>
+              </div>
+              <div class="lg-field">
+                <label class="lg-lbl" for="v-msg">Custom Error Message</label>
+                <input id="v-msg" class="pf-input" type="text" placeholder="e.g., Please enter a valid name" [value]="cfg('errorMessage')" (change)="setConfig('errorMessage', $any($event.target).value.trim())" />
+                <p class="lg-help">Shown when the answer is too short, too long or not in the pattern.</p>
+              </div>
+            } @else if (isNumber()) {
+              <div class="lg-row2">
+                <div class="lg-field">
+                  <label class="lg-lbl" for="v-lo">Min Value</label>
+                  <input id="v-lo" class="pf-input" type="text" inputmode="decimal" [value]="cfg('min')" (change)="setConfig('min', num($any($event.target).value))" />
+                </div>
+                <div class="lg-field">
+                  <label class="lg-lbl" for="v-hi">Max Value</label>
+                  <input id="v-hi" class="pf-input" type="text" inputmode="decimal" [value]="cfg('max')" (change)="setConfig('max', num($any($event.target).value))" />
+                </div>
+              </div>
+              <div class="lg-field">
+                <label class="lg-lbl" for="v-msg2">Custom Error Message</label>
+                <input id="v-msg2" class="pf-input" type="text" placeholder="e.g., Please enter a valid number" [value]="cfg('errorMessage')" (change)="setConfig('errorMessage', $any($event.target).value.trim())" />
+              </div>
+            } @else {
+              <div class="lg-empty" data-empty="validation">
+                <p class="lg-help">This kind of question has no length or pattern checks.</p>
+                <p class="lg-help">Use “Required field” in General to make it compulsory.</p>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- ================= OPTIONS ================= -->
+        @case ('options') {
+          <div class="lg-sec" data-pane="options">
+            <div class="opt-head">
+              <span class="lg-count">{{ fld.options?.length || 0 }} options</span>
+              @if (!isToggle()) {
+                <button type="button" class="pf-btn pf-btn--secondary" data-act="add-option" (click)="addOption()"><pf-icon name="plus" [size]="16" /> Add Option</button>
+              } @else {
+                <span class="lg-help">Toggle switch has 2 options - labels and values are configurable</span>
+              }
+            </div>
+            <ul class="opt-list" role="list" [attr.data-drag-list]="'options:' + fld.key">
+              @for (o of fld.options ?? []; track o.key; let i = $index) {
+                <li
+                  class="lg-card opt"
+                  [attr.data-drag-index]="i"
+                  [attr.data-choice]="o.key"
+                  [class.opt--open]="expanded() === o.key"
+                  [class.opt--drag]="actions.drag.dragging('options:' + fld.key, i)"
+                  [style.transform]="actions.drag.offset('options:' + fld.key, i) ? 'translateY(' + actions.drag.offset('options:' + fld.key, i) + 'px)' : null"
+                >
+                  <div class="opt-h">
+                    <button
+                      type="button"
+                      class="opt-grip"
+                      [attr.aria-label]="'Move ' + o.label"
+                      (pointerdown)="optionGrip($event, i)"
+                      (pointermove)="actions.drag.move($event)"
+                      (pointerup)="actions.drag.end()"
+                      (pointercancel)="actions.drag.end()"
+                      (keydown)="actions.drag.keyMove($event, 'options:' + fld.key, i, (fld.options ?? []).length)"
+                    >
+                      <pf-icon name="grip" [size]="16" />
+                    </button>
+                    <button type="button" class="opt-t" [attr.aria-expanded]="expanded() === o.key" (click)="toggleOption(o.key)">
+                      @if (glyph(o.icon); as g) {
+                        <pf-icon [name]="g" [size]="16" />
+                      }
+                      <span class="opt-t__l">{{ o.label || 'Untitled' }}</span>
+                      @if (o.linkedPage) {
+                        <span class="lg-badge lg-badge--cond">Page</span>
+                      }
+                      @if ((o.subFields ?? []).length) {
+                        <span class="lg-badge">{{ (o.subFields ?? []).length }} sub-field{{ (o.subFields ?? []).length === 1 ? '' : 's' }}</span>
+                      }
+                      <pf-icon class="opt-t__c" [name]="expanded() === o.key ? 'chevron-up' : 'chevron-down'" [size]="16" />
+                    </button>
+                  </div>
+                  @if (expanded() === o.key) {
+                    <div class="opt-b">
+                      <div class="lg-field">
+                        <label class="lg-lbl" [for]="'o-l-' + o.key">Label</label>
+                        <input [id]="'o-l-' + o.key" class="pf-input" type="text" [value]="o.label" (change)="setOptionText(o.key, 'label', $any($event.target).value)" />
+                      </div>
+                      <div class="lg-field">
+                        <span class="lg-lbl">Value</span>
+                        <span><code class="lg-code">{{ o.key }}</code></span>
+                      </div>
+                      <div class="lg-field">
+                        <label class="lg-lbl" [for]="'o-s-' + o.key">Narrative Text</label>
+                        <input [id]="'o-s-' + o.key" class="pf-input" type="text" placeholder="Text for the narrative (e.g., affects the left nostril)" [value]="o.says ?? ''" (change)="setOptionText(o.key, 'says', $any($event.target).value)" />
+                        <p class="lg-help">Leave empty to use the label.</p>
+                      </div>
+                      <div class="lg-field">
+                        <span class="lg-lbl">Medical Icon</span>
+                        <div class="opt-icon">
+                          @if (glyph(o.icon); as g) {
+                            <span class="opt-icon__p"><pf-icon [name]="g" [size]="22" /></span>
+                          } @else {
+                            <span class="opt-icon__n">No icon</span>
+                          }
+                          <button type="button" class="pf-btn pf-btn--secondary" (click)="iconFor.set(iconFor() === o.key ? null : o.key)">{{ o.icon ? 'Change' : 'Browse' }}</button>
+                          @if (o.icon) {
+                            <button type="button" class="pf-btn pf-btn--tertiary" (click)="setOptionIcon(o.key, null)">Remove</button>
+                          }
+                        </div>
+                        @if (iconFor() === o.key) {
+                          <st-icon-picker [value]="o.icon" label="Choose an icon for this option" (valueChange)="setOptionIcon(o.key, $event)" />
+                        }
+                      </div>
+                      <div class="lg-field">
+                        <span class="lg-lbl">Color</span>
+                        <div class="lg-chips">
+                          @for (c of colorOptions; track c) {
+                            <button type="button" class="opt-sw" [style.background]="c" [attr.aria-label]="'Colour ' + c" [attr.aria-pressed]="o.color === c" (click)="setOptionText(o.key, 'color', o.color === c ? '' : c)"></button>
+                          }
+                          <input class="pf-input opt-hex" type="text" placeholder="#000000" aria-label="Colour as a hex code" [value]="o.color ?? ''" (change)="setOptionText(o.key, 'color', $any($event.target).value)" />
+                        </div>
+                      </div>
+                      <div class="lg-field">
+                        <label class="lg-lbl" [for]="'o-d-' + o.key">Description</label>
+                        <input [id]="'o-d-' + o.key" class="pf-input" type="text" placeholder="Help text below the option" [value]="o.description ?? ''" (change)="setOptionText(o.key, 'description', $any($event.target).value)" />
+                      </div>
+
+                      @if (isMulti()) {
+                        <div class="lg-field opt-linker" data-pagelinker>
+                          <span class="lg-lbl">Page Linker</span>
+                          <p class="lg-help">Link to a page for chronological ordering. Nothing is hidden: the linked pages are only put in order.</p>
+                          <div class="opt-linker__row">
+                            <pf-select [options]="pageOptions()" [value]="o.linkedPage ?? ''" (valueChange)="setLinkedPage(o.key, $event)" />
+                            <button type="button" class="pf-btn pf-btn--secondary" data-act="new-linked-page" data-tip="Create a new page linked to this option" (click)="newLinkedPage(o)"><pf-icon name="plus" [size]="16" /> New Page</button>
+                          </div>
+                          @if (o.linkedPage && chrono().enabled && !(o.subFields ?? []).some(s => s.kind === 'duration')) {
+                            <p class="lg-help opt-warn"><pf-icon name="alert" [size]="14" /> Add a duration sub-field for chronological sorting</p>
+                          }
+                        </div>
+                      }
+
+                      <div class="lg-field opt-subs" data-subfields>
+                        <div class="opt-subs__h">
+                          <span class="lg-lbl">Sub-fields ({{ (o.subFields ?? []).length }})</span>
+                          <button type="button" class="pf-btn pf-btn--secondary" data-act="add-subfield" (click)="addSubField(o.key)"><pf-icon name="plus" [size]="16" /> Add</button>
+                        </div>
+                        @for (s of o.subFields ?? []; track s.key) {
+                          <div class="opt-sub" [class.opt-sub--warn]="!hasNarrative(s)" [attr.data-sub]="s.key">
+                            <span class="opt-sub__i"><pf-icon [name]="subIcon(s)" [size]="16" /></span>
+                            <span class="opt-sub__t">
+                              <span class="opt-sub__l">{{ s.label }}</span>
+                              @if (subCheck(s)) {
+                                <span class="opt-sub__w"><pf-icon name="sparkle" [size]="12" /> Check this</span>
+                              } @else if (!hasNarrative(s)) {
+                                <span class="opt-sub__w"><pf-icon name="alert" [size]="12" /> No narrative</span>
+                              }
+                            </span>
+                            <button type="button" class="pf-btn pf-btn--icon" [attr.aria-label]="'Edit ' + s.label" (click)="store.select(s.key)"><pf-icon name="pen" [size]="16" /></button>
+                            <button type="button" class="pf-btn pf-btn--icon" [attr.aria-label]="'Delete ' + s.label" (click)="removeSub(s)"><pf-icon name="x" [size]="16" /></button>
+                          </div>
+                        }
+                        @if (isPaletteFor(o.key)) {
+                          <st-palette [slot]="{ option: { fieldKey: fld.key, optionKey: o.key } }" />
+                        }
+                      </div>
+
+                      @if (!isToggle()) {
+                        <div class="opt-del">
+                          <button type="button" class="pf-btn pf-btn--danger" data-act="delete-option" (click)="removeOption(o)"><pf-icon name="trash" [size]="16" /> Delete Option</button>
+                        </div>
+                      }
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        }
+
+        <!-- ================= NARRATIVE ================= -->
+        @case ('narrative') {
+          <div class="lg-sec" data-pane="narrative">
+            <button type="button" role="switch" class="pf-toggle lg-switch" data-flag="include" [attr.aria-checked]="fld.says?.include !== false" (click)="patch(toggleInclude)">
+              <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+              <span>Include in PDF narrative</span>
+            </button>
+            @if (fld.says?.include !== false) {
+              @if (!isSub()) {
+                <div class="lg-field" data-line="writes-into">
+                  <span class="lg-lbl">Narrative Section</span>
+                  <pf-select [options]="sectionOptions()" [value]="writesInto()" (valueChange)="setSection($event)" />
+                  <p class="lg-help">The paragraph of the narrative this answer is written into. Sections are edited in the Narrative Sections tab.</p>
+                </div>
+              } @else {
+                <p class="lg-help">A follow-up is written in its question's paragraph, right after the choice that asks it.</p>
+              }
+              <button type="button" role="switch" class="pf-toggle lg-switch" data-flag="subheading" [attr.aria-checked]="!!fld.says?.subheading" (click)="patch(toggleHeading)">
+                <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+                <span>Render as Subheading</span>
+              </button>
+              <div class="lg-row2">
+                <div class="lg-field">
+                  <label class="lg-lbl" for="n-pre">Narrative Prefix</label>
+                  <input id="n-pre" class="pf-input" type="text" [value]="fld.says?.prefix ?? ''" (change)="setAffix('prefix', $any($event.target).value)" />
+                </div>
+                <div class="lg-field">
+                  <label class="lg-lbl" for="n-suf">Narrative Suffix</label>
+                  <input id="n-suf" class="pf-input" type="text" [value]="fld.says?.suffix ?? ''" (change)="setAffix('suffix', $any($event.target).value)" />
+                </div>
+              </div>
+
+              @if (saysMode() !== 'none') {
+                <div class="lg-field" data-line="says">
+                  <span class="lg-lbl">{{ saysLabel() }}</span>
+                  <st-sentence
+                    [label]="saysLabel()"
+                    [value]="saysValue()"
+                    [editing]="store.isEditing(fld.key, 'says')"
+                    [tokens]="saysTokens()"
+                    [empty]="saysMode() === 'sentence' ? 'Writes just the answer. Tap to add words around it.' : 'Writes nothing. Tap to write it.'"
+                    (open)="store.open(fld.key, 'says')"
+                    (save)="saveSays($event)"
+                    (cancel)="store.editing.set(null)"
+                  />
+                </div>
+              }
+              @if (ifNone() === 'negativeHistory') {
+                <div class="lg-rule"></div>
+                <h4 class="lg-h">Negative History</h4>
+                <div class="lg-field" data-line="if-none">
+                  <button type="button" role="switch" class="pf-toggle lg-switch" [attr.aria-checked]="negative().enabled" (click)="setNegative(!negative().enabled)">
+                    <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+                    <span>Include Negative History</span>
+                  </button>
+                  @if (negative().enabled) {
+                    <label class="lg-lbl" for="n-neg">Negative History Prefix</label>
+                    <input id="n-neg" class="pf-input" type="text" [value]="negative().prefix" (change)="setNegative(true, $any($event.target).value)" />
+                    <p class="lg-help">Writes “{{ negative().prefix }} the ones not ticked.”</p>
+                  }
+                </div>
+              } @else if (ifNone()) {
+                <div class="lg-field" data-line="if-none">
+                  <span class="lg-lbl">{{ ifNoneLabel() }}</span>
+                  <st-sentence
+                    [label]="ifNoneLabel()"
+                    [value]="ifNoneValue()"
+                    [editing]="store.isEditing(fld.key, 'ifNone')"
+                    [tokens]="[]"
+                    empty="Writes nothing. Tap to write it."
+                    (open)="store.open(fld.key, 'ifNone')"
+                    (save)="saveIfNone($event)"
+                    (cancel)="store.editing.set(null)"
+                  />
+                </div>
+              }
+              @if (combos()) {
+                <st-combinations [field]="fld" [apply]="applier" />
+              }
+            }
+          </div>
+        }
+
+        <!-- ================= CONDITIONS ================= -->
+        @case ('conditions') {
+          <div class="lg-sec" data-pane="conditions">
+            <p class="lg-help">Show or hide this field depending on other answers.</p>
+            @if (def(); as d) {
+              <st-conditions [definition]="d" [selfKey]="fld.key" [subject]="fld.label" [value]="fld.showWhen" [showDone]="false" (changed)="setShowWhen($event)" />
+            }
+          </div>
+        }
+
+        <!-- ================= CHRONOLOGICAL ================= -->
+        @case ('chronological') {
+          <div class="lg-sec" data-pane="chronological">
+            <p class="lg-help">Enable chronological ordering to sort the linked pages by the duration entered in each option's sub-field.</p>
+            <button type="button" role="switch" class="pf-toggle lg-switch" data-flag="chrono" [attr.aria-checked]="chrono().enabled" (click)="setChrono(toggleChrono)">
+              <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+              <span>Enable chronological page ordering</span>
+            </button>
+            @if (chrono().enabled) {
+              <div class="lg-field">
+                <span class="lg-lbl">Sort Order</span>
+                <pf-select [options]="sortChoices" [value]="chrono().sortOrder" (valueChange)="setChrono(sortBy($event))" />
+              </div>
+              <div class="lg-card cfg-how">
+                <h4 class="lg-h">How it works</h4>
+                <ol>
+                  <li>Link each option to a page with the Page Linker in the Options tab.</li>
+                  <li>Each option with a linked page needs a <strong>duration</strong> sub-field.</li>
+                  <li>When the case sheet is filled, the linked pages come in the order of those durations. No page is hidden.</li>
+                </ol>
+              </div>
+              @if (linkedOptionsMissingDuration().length) {
+                <div class="lg-card cfg-warn">
+                  <strong>Missing duration sub-fields</strong>
+                  <ul>
+                    @for (o of linkedOptionsMissingDuration(); track o.key) {
+                      <li>{{ o.label }} needs a duration sub-field</li>
+                    }
+                  </ul>
+                </div>
+              }
+              @if (optionsWithoutPage().length) {
+                <div class="lg-card cfg-info">
+                  <strong>Options without a linked page</strong>
+                  <p class="lg-help">These do not take part in the ordering.</p>
+                  <ul>
+                    @for (o of optionsWithoutPage(); track o.key) {
+                      <li>{{ o.label }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+              <div class="lg-rule"></div>
+              <h4 class="lg-h">Nested Chronology</h4>
+              <p class="lg-help">Also order a second list inside each linked page the same way.</p>
+              <button type="button" role="switch" class="pf-toggle lg-switch" data-flag="nested" [attr.aria-checked]="chrono().nested.enabled" (click)="setChrono(toggleNested)">
+                <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+                <span>Enable nested chronological ordering</span>
+              </button>
+              @if (chrono().nested.enabled) {
+                <div class="lg-field">
+                  <span class="lg-lbl">Trigger Component</span>
+                  <pf-select [options]="triggerOptions()" [value]="chrono().nested.trigger" [searchable]="true" placeholder="Select a component" (valueChange)="setChrono(nestedProp('trigger', $event))" />
+                </div>
+                <div class="lg-row2">
+                  <div class="lg-field">
+                    <span class="lg-lbl">Sort By</span>
+                    <pf-select [options]="nestedSortChoices" [value]="chrono().nested.sortBy" (valueChange)="setChrono(nestedProp('sortBy', $event))" />
+                  </div>
+                  <div class="lg-field">
+                    <span class="lg-lbl">Nested Sort Order</span>
+                    <pf-select [options]="sortChoices" [value]="chrono().nested.sortOrder" (valueChange)="setChrono(nestedProp('sortOrder', $event))" />
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        }
+
+        <!-- ================= THE KIND'S OWN TAB ================= -->
+        @case ('special') {
+          <div class="lg-sec" data-pane="special">
+            @if (build().panel; as panel) {
+              <ng-container [ngComponentOutlet]="panel" [ngComponentOutletInputs]="{ field: fld, apply: applier }" />
+            }
+            @if (special()) {
+              @for (c of config(); track c.name) {
+                <div class="lg-field" [attr.data-config]="c.name">
+                  @if (c.type === 'switch') {
+                    <button type="button" role="switch" class="pf-toggle lg-switch" [attr.aria-checked]="!!c.value" (click)="setConfig(c.name, !c.value)">
+                      <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+                      <span>{{ c.label }}</span>
+                    </button>
+                  } @else {
+                    <span class="lg-lbl">{{ c.label }}</span>
+                    @if (c.type === 'choices') {
+                      <pf-select [options]="c.choices" [value]="'' + (c.value ?? '')" (valueChange)="setConfig(c.name, $event)" />
+                    } @else if (c.type === 'number') {
+                      <input class="pf-input" type="text" inputmode="decimal" [attr.aria-label]="c.label" [value]="c.value ?? ''" (change)="setConfig(c.name, num($any($event.target).value))" />
+                    } @else {
+                      <input class="pf-input" type="text" [attr.aria-label]="c.label" [value]="c.value ?? ''" (change)="setConfig(c.name, $any($event.target).value)" />
+                    }
+                    @if (c.hint) {
+                      <p class="lg-help">{{ c.hint }}</p>
+                    }
+                  }
+                </div>
+              }
+            }
+          </div>
+        }
+      }
+    </div>
+  </div>
+} @else {
+  <div class="lg-empty" data-empty="settings">
+    <p class="lg-help">Select a field to configure it.</p>
+  </div>
+}

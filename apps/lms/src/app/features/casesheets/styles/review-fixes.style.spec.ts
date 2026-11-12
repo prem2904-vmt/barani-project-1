@@ -9,7 +9,6 @@ import { resolve } from 'node:path';
 const read = (rel: string) => readFileSync(resolve(process.cwd(), rel), 'utf8');
 const fill = read('apps/lms/src/app/features/casesheets/fill/case.page.scss');
 const fillHtml = read('apps/lms/src/app/features/casesheets/fill/case.page.html');
-const card = read('apps/lms/src/app/features/casesheets/studio/editor/field-card.component.scss');
 const dept = read('apps/lms/src/app/features/casesheets/departments/forms.page.scss');
 const deptHtml = read('apps/lms/src/app/features/casesheets/departments/forms.page.html');
 const editor = read('apps/lms/src/app/features/casesheets/studio/editor/editor.page.scss');
@@ -40,13 +39,10 @@ describe('Edit your report on a phone', () => {
   });
 });
 
-describe('Studio question title', () => {
-  it('wraps at word boundaries, never letter by letter', () => {
-    expect(card).not.toMatch(/\.fc-label__t\s*\{[^}]*overflow-wrap:\s*anywhere/);
-    expect(card).toMatch(/\.fc-label__t\s*\{[^}]*min-width:\s*0[^}]*overflow-wrap:\s*break-word/);
-  });
-  it('on a phone the quick actions leave the title row', () => {
-    expect(card).toMatch(/@media \(max-width: 640px\)\s*\{[^@]*\.fc-head\s*\{\s*flex-wrap:\s*wrap/);
+describe('Studio question row', () => {
+  it('its title may shrink and never breaks letter by letter', () => {
+    expect(editor).not.toMatch(/\.lg-fcard__label\s*\{[^}]*overflow-wrap:\s*anywhere/);
+    expect(editor).toMatch(/\.lg-fcard__info\s*\{[^}]*min-width:\s*0/);
   });
 });
 

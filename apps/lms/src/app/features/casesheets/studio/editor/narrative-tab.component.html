@@ -1,0 +1,152 @@
+<div class="nt" data-narrative-tab>
+  <div class="nt-main">
+    <header class="nt-head">
+      <div>
+        <h2 class="nt-title">Narrative Sections</h2>
+        <p class="lg-help">Configure PDF narrative sections and templates</p>
+      </div>
+      <button type="button" class="pf-btn pf-btn--primary" data-act="add-section" [disabled]="readOnly()" (click)="add()"><pf-icon name="plus" [size]="16" /> Add Section</button>
+    </header>
+
+    <section class="lg-card nt-mode" data-narrative-mode>
+      <div class="nt-mode__h">
+        <h3 class="nt-mode__t">Narrative mode</h3>
+        <div class="nt-seg" role="radiogroup" aria-label="Narrative mode">
+          @for (m of modes; track m) {
+            <button type="button" role="radio" class="nt-seg__b" [attr.data-mode]="m" [attr.aria-checked]="mode() === m" [disabled]="readOnly()" (click)="setMode(m)">{{ words[m].name }}</button>
+          }
+        </div>
+      </div>
+      <p class="lg-help nt-mode__w" data-mode-words><strong>{{ words[mode()].name }}:</strong> {{ words[mode()].body }}</p>
+      <p class="lg-help">Changing it changes the words and the PDF of this case sheet only. It shows in History as “The narrative is now written in {{ words[mode()].name }}”.</p>
+    </section>
+
+    @if (sections().length === 0) {
+      <div class="lg-card lg-empty" data-empty="narrative">
+        <pf-icon name="text" [size]="26" />
+        <h3 class="nt-empty__t">No Narrative Sections</h3>
+        <p class="lg-help">Create sections to define how case sheet data appears in the PDF.</p>
+        <button type="button" class="pf-btn pf-btn--primary" [disabled]="readOnly()" (click)="add()">Add First Section</button>
+      </div>
+    } @else {
+      <ol class="nt-list" role="list" data-drag-list="sections">
+        @for (s of sections(); track s.key; let i = $index) {
+          <li
+            class="lg-card nt-sec"
+            [attr.data-section]="s.key"
+            [attr.data-drag-index]="i"
+            [class.nt-sec--drag]="actions.drag.dragging('sections', i)"
+            [style.transform]="actions.drag.offset('sections', i) ? 'translateY(' + actions.drag.offset('sections', i) + 'px)' : null"
+          >
+            <div class="nt-sec__h">
+              <button
+                type="button"
+                class="nt-grip"
+                [attr.aria-label]="'Move ' + s.title"
+                [disabled]="readOnly()"
+                (pointerdown)="grip($event, i)"
+                (pointermove)="actions.drag.move($event)"
+                (pointerup)="actions.drag.end()"
+                (pointercancel)="actions.drag.end()"
+                (keydown)="actions.drag.keyMove($event, 'sections', i, sections().length)"
+              >
+                <pf-icon name="grip" [size]="16" />
+              </button>
+              <span class="nt-num">{{ i + 1 }}</span>
+              <div class="nt-sec__i">
+                <h3 class="nt-sec__t">{{ s.title }}</h3>
+                <span class="lg-code">{{ s.key }}</span>
+              </div>
+              <div class="nt-sec__a">
+                <button type="button" class="pf-btn pf-btn--secondary" data-act="edit-section" [disabled]="readOnly()" (click)="openEdit(s)">Edit</button>
+                <button type="button" class="pf-btn pf-btn--danger" data-act="delete-section" [disabled]="readOnly()" (click)="remove(s)">Delete</button>
+              </div>
+            </div>
+            <div class="nt-sec__b">
+              <span class="lg-lbl">Template</span>
+              <p class="nt-tpl" [class.nt-tpl--none]="!s.template">{{ s.template || 'No template defined' }}</p>
+              @if (badges(s).length) {
+                <div class="lg-chips">
+                  @for (b of badges(s); track b) {
+                    <span class="lg-badge">{{ b }}</span>
+                  }
+                </div>
+              }
+            </div>
+            <div class="nt-sec__f">{{ linked(s).length }} linked fields</div>
+          </li>
+        }
+      </ol>
+
+      <section class="lg-card nt-vars" data-template-vars>
+        <h4 class="nt-vars__t">Template Variables</h4>
+        <p class="lg-help">Use these placeholders in your templates. Click one to copy it.</p>
+        <div class="lg-chips">
+          @for (f of shownVars(); track f.key) {
+            <button type="button" class="nt-var lg-code" [attr.title]="f.label" (click)="copyVar(f.key)">{{ '{{' + f.key + '}}' }}</button>
+          }
+          @if (variables().length > 12) {
+            <button type="button" class="pf-btn pf-btn--tertiary" (click)="allVars.set(!allVars())">{{ allVars() ? 'Show fewer' : '+' + (variables().length - 12) + ' more' }}</button>
+          }
+        </div>
+      </section>
+    }
+  </div>
+
+  <aside class="lg-card nt-live" aria-label="What the narrative writes">
+    <h3 class="nt-live__t">What it writes now</h3>
+    <st-narrative [docked]="true" />
+  </aside>
+</div>
+
+@if (editSection(); as s) {
+  <div class="nt-scrim" aria-hidden="true" (click)="editing.set(null)"></div>
+  <section class="nt-modal" role="dialog" aria-modal="true" aria-labelledby="nt-eh" data-section-editor (keydown.escape)="editing.set(null)">
+    <header class="nt-modal__h">
+      <h2 class="nt-modal__t" id="nt-eh">Edit Section</h2>
+      <button type="button" class="pf-btn pf-btn--icon" aria-label="Close" (click)="editing.set(null)"><pf-icon name="x" [size]="18" /></button>
+    </header>
+    <div class="nt-modal__b">
+      <div class="lg-row2">
+        <div class="lg-field">
+          <label class="lg-lbl" for="ns-t">Title</label>
+          <input id="ns-t" class="pf-input" type="text" [value]="draftTitle()" (input)="draftTitle.set($any($event.target).value)" />
+        </div>
+        <div class="lg-field">
+          <span class="lg-lbl">Internal Name</span>
+          <span><code class="lg-code">{{ s.key }}</code></span>
+        </div>
+      </div>
+      <div class="lg-field">
+        <label class="lg-lbl" for="ns-tpl">Template</label>
+        <textarea #tplBox id="ns-tpl" class="pf-input nt-tplbox" rows="8" spellcheck="false" placeholder="Click fields below or type to build your template…" [value]="draftTemplate()" (input)="draftTemplate.set($any($event.target).value)"></textarea>
+        <p class="lg-help">Put an answer in with its name between double curly brackets, like <code class="lg-code">{{ '{{pain}}' }}</code>.</p>
+        <div class="lg-chips" data-insert>
+          @for (f of variables(); track f.key) {
+            <button type="button" class="nt-var lg-code" [attr.title]="f.label" (click)="insertVar(f.key)">{{ '{{' + f.key + '}}' }}</button>
+          }
+        </div>
+      </div>
+      <div class="lg-field">
+        <span class="lg-lbl">Fields Linked to This Section</span>
+        @if (!editLinked().length) {
+          <p class="lg-help">No fields linked yet. In Pages and Fields, select a field and pick its Narrative Section.</p>
+        } @else {
+          <ul class="nt-linked" role="list">
+            @for (f of editLinked(); track f.key) {
+              <li class="nt-linked__r"><span class="nt-linked__l">{{ f.label }}</span> <code class="lg-code">{{ '{{' + f.key + '}}' }}</code></li>
+            }
+          </ul>
+        }
+      </div>
+      <button type="button" role="switch" class="pf-toggle lg-switch" data-flag="section-sort" [attr.aria-checked]="sortingOn(s)" (click)="toggleSort(s)">
+        <span class="pf-toggle__track"><span class="pf-toggle__knob"></span></span>
+        <span>List longest-lasting complaints first (sorted by duration)</span>
+      </button>
+    </div>
+    <footer class="nt-modal__f">
+      <button type="button" class="pf-btn pf-btn--secondary" (click)="editing.set(null)">Cancel</button>
+      <button type="button" class="pf-btn pf-btn--primary" data-act="save-section" [disabled]="!draftTitle().trim()" (click)="saveEdit()">Save Changes</button>
+    </footer>
+  </section>
+}

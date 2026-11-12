@@ -183,13 +183,22 @@ export class EditorStore {
     this.edit((d) => clearCheck(d, key));
   }
 
+  /** Open a page. Nothing is selected, so the right panel shows the Components palette (legacy). */
   selectPage(key: string): void {
     this.pageKey.set(key);
     this.paletteAt.set(null);
     this.editing.set(null);
     this.clearPicks();
-    const p = this.def()?.pages.find((x) => x.key === key);
-    this.selectedKey.set(p?.fields[0]?.key ?? null);
+    this.selectedKey.set(null);
+  }
+
+  /** A question was just added (palette tile, saved template): select it, so its settings open, and show it. */
+  afterAdd(key: string): void {
+    this.paletteAt.set(null);
+    this.picked.set(new Set());
+    this.selectedKey.set(key);
+    this.settingsOpen.set(true);
+    this.pulse(key);
   }
 
   select(key: string | null, openSheet = false): void {
