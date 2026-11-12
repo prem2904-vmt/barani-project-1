@@ -13,7 +13,7 @@ import {
 import { StudioApi } from '../data/studio-api';
 import { ComponentKind, Problem } from '../data/studio-models';
 import { StudioSession } from '../data/studio-session';
-import { clearCheck, countChecks, dropEditedChecks, markedSignatures } from '../cortex-import/cortex-import';
+import { clearCheck, countChecks, dropEditedChecks, markedSignatures } from '../shared/check-marks';
 
 export type CardArea = 'says' | 'ifNone' | 'showWhen' | 'options' | 'settings' | 'label';
 

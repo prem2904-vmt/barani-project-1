@@ -41,7 +41,7 @@ import { PreviewComponent } from '../preview/preview.component';
 import { EditorStore } from './editor-store';
 import { FieldActions } from './field-actions';
 import { CsStylesComponent } from '../../styles/cs-styles.component';
-import { checkNoteOf } from '../cortex-import/cortex-import';
+import { checkNoteOf } from '../shared/check-marks';
 import { ComponentsPanelComponent } from './components-panel.component';
 import { ConfigPanelComponent } from './config-panel.component';
 import { FormSettingsComponent } from './form-settings.component';

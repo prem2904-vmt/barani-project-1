@@ -30,7 +30,7 @@ import {
 } from '@prefrontal/forms-engine';
 import { PfSelectOption, SelectComponent } from '@prefrontal/shared';
 import { DialogService } from '../../../../core/services/dialog.service';
-import { checkNoteOf } from '../cortex-import/cortex-import';
+import { checkNoteOf } from '../shared/check-marks';
 import { ConditionsComponent } from '../shared/conditions.component';
 import { IconPickerComponent } from '../shared/icon-picker.component';
 import { SentenceComponent } from '../shared/sentence.component';
