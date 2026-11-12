@@ -165,7 +165,7 @@ export function sheetColumns(web: boolean, isPhone: boolean): ColDef<FormRow>[] 
         return b;
       },
     },
-    { headerName: 'Department', colId: 'department', flex: 1, minWidth: 140, valueGetter: (p) => p.data?.departmentName ?? 'Other' },
+    { headerName: 'Department', colId: 'department', flex: 1, minWidth: 200, valueGetter: (p) => p.data?.departmentName ?? 'Other' },
     {
       headerName: 'Origin', colId: 'origin', minWidth: 120, maxWidth: 160, editable: false,
       valueGetter: (p) => (p.data ? ORIGIN_WORDS[p.data.origin].label : ''),

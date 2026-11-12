@@ -3,6 +3,71 @@
   display: block;
 }
 
+// The field-settings shared classes (fs-*) are scoped to that component, so this child restates the ones it uses.
+.fs-sec {
+  display: grid;
+  gap: 10px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-muted, var(--pf-line));
+}
+
+.fs-sec:last-child {
+  border-bottom: 0;
+}
+
+.fs-lbl {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fs-note {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-tertiary);
+}
+
+.fs-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--pf-touch);
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: grab;
+  touch-action: none;
+}
+
+.fs-more {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fs-chips,
+.fs-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+
 .cb__head {
   margin: 0;
 }

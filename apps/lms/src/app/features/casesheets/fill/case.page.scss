@@ -154,6 +154,18 @@
   margin: 0;
 }
 
+// Phones: the kit's one-row-that-scrolls hides the page name behind the title. Here the page is the point, so the bar wraps.
+@media (max-width: 640px) {
+  .lf-ctx.pf-ctx {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .lf-ctx.pf-ctx > * {
+    flex-shrink: 1;
+  }
+}
+
 .lf-ctx__page {
   font-weight: 500;
 }
@@ -460,6 +472,7 @@
 .lf-step__t {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere; // long unbroken page names (TREATMENT/MEDICAL/SURGICAL) wrap, never clip
 }
 
 .lf-step__c {
