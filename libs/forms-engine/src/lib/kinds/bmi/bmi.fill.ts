@@ -57,6 +57,7 @@ interface BmiVal {
                 [value]="textOf(p)"
                 [disabled]="disabled()"
                 (input)="typeBox(p, $any($event.target))"
+                (blur)="lastTyped = {}"
               />
               <span class="fe-bmi__unit">{{ unitOf(p) }}</span>
             </div>
@@ -136,6 +137,7 @@ interface BmiVal {
 })
 export class BmiFill extends KindFill {
   protected readonly legacy = injectLegacy();
+  protected lastTyped: Partial<BmiVal> = {};
   protected readonly parts: Part[] = ['height', 'weight'];
   protected readonly open = signal<Part | null>(null);
   private readonly typing = signal<string | null>(null);
@@ -202,7 +204,10 @@ export class BmiFill extends KindFill {
     if (input.type !== 'number' && clean !== input.value) input.value = clean;
     this.open.set(p);
     this.typing.set(clean);
-    this.write({ ...this.val(), [p]: parseNumber(clean) });
+    // the other box may have been typed a moment ago, before the page handed its value back: keep what was typed
+    const n = parseNumber(clean);
+    this.lastTyped = { ...this.lastTyped, [p]: n };
+    this.write({ ...this.val(), ...this.lastTyped, [p]: n } as BmiVal);
   }
 
   protected pickUnit(p: Part, u: string): void {

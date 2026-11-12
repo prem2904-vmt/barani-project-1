@@ -212,3 +212,29 @@ describe('triggers', () => {
     expect(applyChange(def, {}, { fever: 'yes' })).toEqual({ fever: 'yes', rash: 'yes', count: 9 });
   });
 });
+
+describe('G1: the "How many Ulcer?" box and the "No. of Ulcer" box mirror each other', () => {
+  const def: FormDefinition = {
+    pages: [
+      {
+        key: 'cc',
+        title: 'CC',
+        fields: [
+          { key: 'ulcerPages', kind: 'repeatPages', label: 'Ulcer', config: { pages: ['u', 'p'], maxCount: 10 } },
+          { key: 'ulcers', kind: 'repeat', label: 'No. of Ulcer', config: { maxCount: 10 }, children: [{ key: 'site', kind: 'text', label: 'Site' }] },
+        ],
+      },
+      { key: 'u', title: 'Ulcer', fields: [] },
+      { key: 'p', title: 'Pain', fields: [] },
+    ],
+    links: [{ name: 'count', fields: ['ulcerPages', 'ulcers'], mode: 'mirror' }],
+  } as unknown as FormDefinition;
+
+  it('five pages of each become five blocks, and five blocks become five pages of each', () => {
+    const inst = (n: number) => ({ instances: ['u', 'p'].flatMap((page) => Array.from({ length: n }, (_, index) => ({ page, index, values: {} }))) });
+    const a = applyLinks(def, {}, { ulcerPages: inst(5) });
+    expect((a['ulcers'] as unknown[]).length).toBe(5);
+    const b = applyLinks(def, {}, { ulcers: [{}, {}, {}] });
+    expect((b['ulcerPages'] as { instances: unknown[] }).instances.length).toBe(6);
+  });
+});

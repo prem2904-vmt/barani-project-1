@@ -259,8 +259,9 @@
 }
 
 // legacy measure-input: one card row, question left, slider + number + unit right
-.fe-measure--legacy {
+.fe-measure.fe-measure--legacy {
   display: flex;
+  flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
