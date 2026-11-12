@@ -2,6 +2,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Location } from '@angular/common';
 import { NavigationEnd, Router } from '@angular/router';
 import { PRIMARY_NAV } from '../../layout/nav-items';
+import { OverlayBackService } from './overlay-back.service';
 import { PERSONAL_SETTINGS_PAGES, SETTINGS_HUBS, SETTINGS_PARENT } from '../../shared/utils/settings-catalog';
 
 /**
@@ -21,6 +22,7 @@ import { PERSONAL_SETTINGS_PAGES, SETTINGS_HUBS, SETTINGS_PARENT } from '../../s
 export class NavBackService {
   private readonly router = inject(Router);
   private readonly location = inject(Location);
+  private readonly overlays = inject(OverlayBackService);
 
   /** Exact routes that are app roots — never show a back affordance. */
   private readonly roots = new Set<string>([
@@ -247,6 +249,8 @@ export class NavBackService {
    * link, a sibling-tube tab) can't change where back takes you.
    */
   back(): void {
+    // An open menu (Start / account) closes first.
+    if (this.overlays.closeTop()) return;
     // An in-page handler (e.g. close the open chat thread) takes precedence.
     if (this.interceptor && this.interceptor()) return;
 

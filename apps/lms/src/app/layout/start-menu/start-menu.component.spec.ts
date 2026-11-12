@@ -26,12 +26,13 @@ class FakeStorage {
   standalone: true,
   imports: [StartMenuComponent],
   template: `<pf-start-menu [layout]="layout()" [open]="open()" homeHref="/frontdesk" [showAccount]="showAccount()"
-    (closed)="closes = closes + 1; open.set(false)" (account)="accounts = accounts + 1" />`,
+    [autofocusSearch]="autofocus()" (closed)="closes = closes + 1; open.set(false)" (account)="accounts = accounts + 1" />`,
 })
 class Host {
   prefs = TestBed.inject(NavPrefsService);
   open = signal(true);
   showAccount = signal(true);
+  autofocus = signal(true);
   cap = signal(10);
   closes = 0;
   accounts = 0;
@@ -40,7 +41,7 @@ class Host {
   }));
 }
 
-function setup(opts: { manageRoles?: boolean; roleMap?: unknown; confirm?: boolean; url?: string; showAccount?: boolean; cap?: number } = {}) {
+function setup(opts: { autofocusSearch?: boolean; manageRoles?: boolean; roleMap?: unknown; confirm?: boolean; url?: string; showAccount?: boolean; cap?: number } = {}) {
   const store = new FakeStorage();
   const roleMap = opts.roleMap ?? { roles: {} };
   const api = {
@@ -65,6 +66,7 @@ function setup(opts: { manageRoles?: boolean; roleMap?: unknown; confirm?: boole
   });
   const f = TestBed.createComponent(Host);
   if (opts.showAccount === false) f.componentInstance.showAccount.set(false);
+  if (opts.autofocusSearch === false) f.componentInstance.autofocus.set(false);
   if (opts.cap !== undefined) f.componentInstance.cap.set(opts.cap);
   f.detectChanges();
   return { f, el: f.nativeElement as HTMLElement, host: f.componentInstance, api, router, dialog, toast, store, prefs: f.componentInstance.prefs };
@@ -110,15 +112,19 @@ describe('StartMenuComponent', () => {
       expect(titles).toEqual(['On your bar', 'More screens']);
     });
 
-    it('has no pin / arrow buttons on tiles or rows, and no always-visible search box', async () => {
+    it('has no pin / arrow buttons on tiles or rows; the search box is docked at the bottom, always visible', async () => {
       const { f, el } = setup();
       await flush(f);
-      expect(el.querySelector('.sm-search__input')).toBeNull();
       expect(el.querySelector('.sm-pin')).toBeNull();
       expect(el.querySelectorAll('.sm-tile button, .sm-row button').length).toBe(0);
       expect(el.querySelector('[aria-label^="Move"], [aria-label^="Pin"], [aria-label^="Unpin"]')).toBeNull();
-      const search = q(el, '[aria-label="Find a screen"]');
-      expect(search.getAttribute('title')).toBe('Find a screen (/)');
+      // No search icon button in the header any more.
+      expect(el.querySelector('.sm-head [aria-label="Find a screen"], [data-sm-search-btn]')).toBeNull();
+      // The search box is the LAST thing in the panel, after the scrolling list.
+      const panel = q(el, '.sm-panel');
+      expect(panel.lastElementChild!.classList).toContain('sm-search');
+      expect(panel.querySelector('.sm-scroll')!.nextElementSibling).toBe(panel.lastElementChild);
+      expect(q(el, '.sm-search__input').getAttribute('aria-label')).toBe('Find a screen');
     });
 
     it('highlights the current screen', async () => {
@@ -202,36 +208,43 @@ describe('StartMenuComponent', () => {
     });
   });
 
-  describe('search', () => {
-    it('the search button reveals a search line in place of the header; Close goes back', async () => {
+  describe('search (docked at the bottom)', () => {
+    it('typing in the box filters the list in place (header stays), the clear button empties it', async () => {
       const { f, el } = setup();
       await flush(f);
-      q<HTMLButtonElement>(el, '[aria-label="Find a screen"]').click();
+      expect(el.querySelector('.sm-search__clear')).toBeNull();
+      type(el, 'lab');
       await flush(f);
-      expect(el.querySelector('.sm-head')).toBeNull();
-      expect(el.querySelector('.sm-search__input')).not.toBeNull();
+      expect(el.querySelector('.sm-head')).not.toBeNull();
       expect(el.querySelector('.sm-tiles')).toBeNull();
-      q<HTMLButtonElement>(el, '[aria-label="Close search"]').click();
+      expect(rowLabels(el)).toEqual(['Lab', 'Lab settings']);
+      q<HTMLButtonElement>(el, '[aria-label="Clear search"]').click();
       await flush(f);
-      expect(el.querySelector('.sm-search__input')).toBeNull();
+      expect((q(el, '.sm-search__input') as HTMLInputElement).value).toBe('');
       expect(el.querySelector('.sm-tiles')).not.toBeNull();
     });
 
-    it('"/" opens search; Escape goes back to the menu without closing it', async () => {
+    it('"/" focuses the search box without typing a slash; Esc clears first, then closes', async () => {
       const { f, el, host } = setup();
       await flush(f);
       const ev = new KeyboardEvent('keydown', { key: '/', bubbles: true, cancelable: true });
       document.dispatchEvent(ev);
       await flush(f);
       expect(ev.defaultPrevented).toBe(true);
-      expect(el.querySelector('.sm-search__input')).not.toBeNull();
+      expect(document.activeElement).toBe(q(el, '.sm-search__input'));
+      expect((q(el, '.sm-search__input') as HTMLInputElement).value).toBe('');
+      type(el, 'lab');
+      await flush(f);
       key(document, 'Escape');
       await flush(f);
       expect(host.closes).toBe(0);
-      expect(el.querySelector('.sm-search__input')).toBeNull();
+      expect((q(el, '.sm-search__input') as HTMLInputElement).value).toBe('');
+      expect(el.querySelector('.sm-tiles')).not.toBeNull();
+      key(document, 'Escape');
+      expect(host.closes).toBe(1);
     });
 
-    it('just typing opens search with that letter and filters', async () => {
+    it('just typing goes to the search box with that letter and filters', async () => {
       const { f, el } = setup();
       await flush(f);
       key(document, 'v');
@@ -240,7 +253,7 @@ describe('StartMenuComponent', () => {
       expect(rowLabels(el)).toEqual(['Validate']);
     });
 
-    it('letters typed before the search line takes focus still land in it', async () => {
+    it('letters typed before the box takes focus still land in it', async () => {
       const { f, el } = setup();
       await flush(f);
       key(document, 'r');
@@ -254,13 +267,28 @@ describe('StartMenuComponent', () => {
       await flush(f);
       key(document, 'k', { metaKey: true });
       await flush(f);
-      expect(el.querySelector('.sm-search__input')).toBeNull();
+      expect((q(el, '.sm-search__input') as HTMLInputElement).value).toBe('');
+    });
+
+    it('on desktop focus lands in the search box when the menu opens', async () => {
+      const { f, el } = setup();
+      await flush(f);
+      await tick();
+      await tick();
+      f.detectChanges();
+      expect(document.activeElement).toBe(q(el, '.sm-search__input'));
+    });
+
+    it('on a phone (autofocusSearch off) the box is NOT focused on open', async () => {
+      const { f, el } = setup({ autofocusSearch: false });
+      await flush(f);
+      await tick();
+      await tick();
+      expect(document.activeElement).not.toBe(q(el, '.sm-search__input'));
     });
 
     it('filters and Enter opens the first match', async () => {
       const { f, el, router, host } = setup();
-      await flush(f);
-      q<HTMLButtonElement>(el, '[aria-label="Find a screen"]').click();
       await flush(f);
       type(el, 'lab');
       await flush(f);
@@ -270,16 +298,69 @@ describe('StartMenuComponent', () => {
       expect(host.closes).toBe(1);
     });
 
-    it('says so when nothing matches, and Enter does nothing', async () => {
+    it('Enter on an empty box does nothing; no match says so and Enter does nothing', async () => {
       const { f, el, router } = setup();
       await flush(f);
-      q<HTMLButtonElement>(el, '[aria-label="Find a screen"]').click();
-      await flush(f);
+      key(q(el, '.sm-search__input'), 'Enter');
+      expect(router.navigateByUrl).not.toHaveBeenCalled();
       type(el, 'zzz');
       await flush(f);
       expect(el.querySelector('.sm-empty')).not.toBeNull();
       key(q(el, '.sm-search__input'), 'Enter');
       expect(router.navigateByUrl).not.toHaveBeenCalled();
+    });
+
+    it('arrows go from the last row to the box and from the box back into the list', async () => {
+      const { f, el } = setup();
+      await flush(f);
+      const rows = Array.from(el.querySelectorAll<HTMLElement>('[data-sm-row]'));
+      rows[rows.length - 1].focus();
+      key(rows[rows.length - 1], 'ArrowDown');
+      expect(document.activeElement).toBe(q(el, '.sm-search__input'));
+      key(q(el, '.sm-search__input'), 'ArrowDown');
+      expect(document.activeElement).toBe(rows[0]);
+    });
+  });
+
+  describe('open / close motion', () => {
+    it('grows in (sm-panel--in) after mounting and plays a short close before unmounting', async () => {
+      vi.useFakeTimers();
+      try {
+        const { f, el, host } = setup();
+        f.detectChanges();
+        expect(q(el, '.sm-panel').classList).not.toContain('sm-panel--in');
+        vi.advanceTimersByTime(5);
+        f.detectChanges();
+        expect(q(el, '.sm-panel').classList).toContain('sm-panel--in');
+        host.open.set(false);
+        f.detectChanges();
+        expect(el.querySelector('.sm-panel')).not.toBeNull();
+        expect(q(el, '.sm-panel').classList).toContain('sm-panel--out');
+        vi.advanceTimersByTime(200);
+        f.detectChanges();
+        expect(el.querySelector('.sm-panel')).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('reopening during the close keeps the panel', async () => {
+      vi.useFakeTimers();
+      try {
+        const { f, el, host } = setup();
+        f.detectChanges();
+        vi.advanceTimersByTime(5);
+        host.open.set(false);
+        f.detectChanges();
+        host.open.set(true);
+        f.detectChanges();
+        vi.advanceTimersByTime(300);
+        f.detectChanges();
+        expect(el.querySelector('.sm-panel')).not.toBeNull();
+        expect(q(el, '.sm-panel').classList).toContain('sm-panel--in');
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 

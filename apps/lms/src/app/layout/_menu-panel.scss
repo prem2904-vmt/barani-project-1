@@ -1,0 +1,41 @@
+/* ONE look + motion for every menu that rises from the bottom bar: the Start menu (the PF logo) and the
+   account / user menu (avatar or More). Phone + iPad pill: a full-width sheet 8px above the pill; iPad rail: a
+   360px card beside the rail; desktop: a card above the bar. Same radius, surface, shadow, ease and duration, so
+   the two never look like different systems. Tokens only. */
+$pf-menu-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+$pf-menu-in: 200ms;
+$pf-menu-out: 120ms;
+
+@mixin menu-surface {
+  border-radius: var(--pf-radius-card, 16px);
+  background: var(--bg-card-solid, var(--card-bg));
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+/* Keyframe entrance for menus that mount with their trigger state (the account menus). The Start menu uses
+   the same numbers through a transition, because it also needs the reverse on close. */
+@mixin menu-enter($origin: bottom center) {
+  transform-origin: $origin;
+  animation: pf-menu-in $pf-menu-in $pf-menu-ease both;
+}
+@mixin menu-keyframes {
+  @keyframes pf-menu-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    @keyframes pf-menu-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+  }
+}
+
+/* Sized from the viewport (never from an ancestor box), side safe areas respected. */
+@mixin menu-sheet-size {
+  width: calc(100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  max-width: calc(100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+  max-height: min(72dvh, 640px);
+}

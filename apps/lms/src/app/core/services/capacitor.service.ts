@@ -6,6 +6,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { App } from '@capacitor/app';
 import { Capacitor } from '@capacitor/core';
 import { PlatformService } from './platform.service';
+import { OverlayBackService } from './overlay-back.service';
 
 /**
  * Capacitor-side services.
@@ -23,6 +24,7 @@ import { PlatformService } from './platform.service';
 @Injectable({ providedIn: 'root' })
 export class CapacitorService {
   private readonly platform = inject(PlatformService);
+  private readonly overlays = inject(OverlayBackService);
 
   readonly isOnline = signal<boolean>(true);
   private readonly _initialised = signal<boolean>(false);
@@ -76,6 +78,7 @@ export class CapacitorService {
     try {
       // Android hardware back: collapse one history entry, exit at root.
       App.addListener('backButton', ({ canGoBack }) => {
+        if (this.overlays.closeTop()) return; // an open Start / account menu closes first
         if (!canGoBack) App.exitApp();
         else window.history.back();
       });

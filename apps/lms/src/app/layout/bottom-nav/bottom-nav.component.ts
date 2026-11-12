@@ -1,5 +1,6 @@
 import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
 import { DesktopWindowService } from '../../core/services/desktop-window.service';
+import { OverlayBackService } from '../../core/services/overlay-back.service';
 import {
   AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, NgZone, OnDestroy,
   Injector, computed, effect, inject, signal, viewChild, viewChildren
@@ -219,7 +220,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected toggleMore(ev?: Event): void {
     ev?.stopPropagation?.();
     this.moreOpen.update(v => !v);
-    if (!this.moreOpen()) this.statusListOpen.set(false);
+    if (this.moreOpen()) this.startOpen.set(false); // never both open
+    else this.statusListOpen.set(false);
   }
   protected closeMore(): void { this.moreOpen.set(false); this.statusListOpen.set(false); }
 
@@ -295,6 +297,12 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   /** Tap outside the popover closes it. The transparent .pf-more-bd
    *  div catches most taps; this listener catches anything else. */
+  /** Esc closes the account menu (the Start menu handles its own Esc). */
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (this.moreOpen()) this.closeMore();
+  }
+
   @HostListener('document:click', ['$event'])
   onDocClick(_ev: MouseEvent): void {
     if (!this.moreOpen()) return;
@@ -400,6 +408,13 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
     this.entitlements.ensureLoaded();
     this.tenantState.ensureLoaded();
     this.process.loadActive();
+
+    // One menu system: the account menu registers for the back gesture / Android back while it is open
+    // (the Start menu registers itself).
+    effect((onCleanup) => {
+      if (!this.moreOpen()) return;
+      onCleanup(this.overlays.register(() => this.closeMore()));
+    });
 
     // Re-measure whenever the visible nav set changes (perm reload, mode
     // toggle, etc) so the indicator stays glued to the active button.
@@ -579,6 +594,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   // The bar is decided ONLY by layout/start-menu/nav-pins.ts (pins never grant access).
   protected readonly navPrefs = inject(NavPrefsService);
   protected readonly startOpen = signal(false);
+  private readonly overlays = inject(OverlayBackService);
   protected readonly iconsOnly = this.navPrefs.iconsOnly;
   /** Everything this person can open from the bar: the work areas, then Settings (a normal pinnable item, id `admin`). */
   private readonly navAllItems = computed<NavItem[]>(() => [...this.primary(), ...(this.showAdminTab() ? [ADMIN_NAV] : [])]);
