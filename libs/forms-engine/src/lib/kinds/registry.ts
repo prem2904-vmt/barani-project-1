@@ -10,6 +10,8 @@ import { MultiFill } from './multi/multi.fill';
 import { NumberFill } from './number/number.fill';
 import { RepeatFill } from './repeat/repeat.fill';
 import { RepeatPagesFill } from './repeatPages/repeatPages.fill';
+import { ShorthandFill } from './shorthand/shorthand.fill';
+import { SidePairFill } from './sidePair/sidePair.fill';
 import { SizeFill } from './size/size.fill';
 import { TextFill } from './text/text.fill';
 import { YesnoFill } from './yesno/yesno.fill';
@@ -43,6 +45,9 @@ export const KIND_SPECS: Record<KnownKind, KindSpec> = {
   eyeDiagram: { load: () => import('./eyeDiagram/eyeDiagram.fill').then((m) => m.EyeDiagramFill) },
   grid: { load: () => import('./grid/grid.fill').then((m) => m.GridFill) },
   pictureChoice: { load: () => import('./pictureChoice/pictureChoice.fill').then((m) => m.PictureChoiceFill) },
+  // group "pair": one question for both sides, and the clinical shorthand boxes (small, bundled)
+  sidePair: { component: SidePairFill },
+  shorthand: { component: ShorthandFill },
 };
 
 export const REGISTERED_KINDS: readonly string[] = KNOWN_KINDS;

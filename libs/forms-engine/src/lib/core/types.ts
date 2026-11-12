@@ -36,9 +36,13 @@ export type TableKind = (typeof TABLE_KINDS)[number];
 export const PICTURE_CHOICE_KINDS = ['pictureChoice'] as const;
 export type PictureChoiceKind = (typeof PICTURE_CHOICE_KINDS)[number];
 
+/** One question asked for both sides, and the clinical shorthand boxes (group "pair"). */
+export const PAIR_KINDS = ['sidePair', 'shorthand'] as const;
+export type PairKind = (typeof PAIR_KINDS)[number];
+
 /** Every kind the UI can fill and build. */
-export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS, ...PICTURE_CHOICE_KINDS] as const;
-export type KnownKind = PlainKind | ImageKind | TableKind | PictureChoiceKind;
+export const KNOWN_KINDS = [...PLAIN_KINDS, ...IMAGE_KINDS, ...TABLE_KINDS, ...PICTURE_CHOICE_KINDS, ...PAIR_KINDS] as const;
+export type KnownKind = PlainKind | ImageKind | TableKind | PictureChoiceKind | PairKind;
 export type KindName = KnownKind | 'unsupported' | (string & {});
 
 export type ConditionOp =

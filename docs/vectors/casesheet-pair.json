@@ -1,0 +1,569 @@
+{
+ "about": "Clinical shorthand test vectors (kind 'shorthand', group 'pair'). The server (ShorthandMath) and the filler (shorthand-math.ts) must give exactly these results. Each case: the preset, optional config overrides (lmp), the stored value, the words it writes (text; omitted when the value is a problem), whether the value is a problem (rejected on save), and for the obstetric score the warnings (they warn, never block).",
+ "cases": [
+  {
+   "name": "full score",
+   "preset": "obstetricScore",
+   "value": {
+    "g": 3,
+    "p": 2,
+    "l": 2,
+    "a": 0
+   },
+   "text": "G3 P2 L2 A0",
+   "problem": false,
+   "warnings": []
+  },
+  {
+   "name": "only gravida",
+   "preset": "obstetricScore",
+   "value": {
+    "g": 1
+   },
+   "text": "G1",
+   "problem": false,
+   "warnings": []
+  },
+  {
+   "name": "deaths box",
+   "preset": "obstetricScore",
+   "value": {
+    "g": 2,
+    "p": 1,
+    "l": 1,
+    "a": 1,
+    "d": 0
+   },
+   "text": "G2 P1 L1 A1 D0",
+   "problem": false,
+   "warnings": []
+  },
+  {
+   "name": "nothing entered",
+   "preset": "obstetricScore",
+   "value": {},
+   "text": "",
+   "problem": false,
+   "warnings": []
+  },
+  {
+   "name": "para above gravida warns",
+   "preset": "obstetricScore",
+   "value": {
+    "g": 1,
+    "p": 2
+   },
+   "text": "G1 P2",
+   "problem": false,
+   "warnings": [
+    "p>g"
+   ]
+  },
+  {
+   "name": "abortions above gravida warns",
+   "preset": "obstetricScore",
+   "value": {
+    "g": 2,
+    "a": 3
+   },
+   "text": "G2 A3",
+   "problem": false,
+   "warnings": [
+    "a>g"
+   ]
+  },
+  {
+   "name": "para plus abortions above gravida warns",
+   "preset": "obstetricScore",
+   "value": {
+    "g": 3,
+    "p": 2,
+    "a": 2
+   },
+   "text": "G3 P2 A2",
+   "problem": false,
+   "warnings": [
+    "p+a>g"
+   ]
+  },
+  {
+   "name": "para plus abortions equal to gravida is fine",
+   "preset": "obstetricScore",
+   "value": {
+    "g": 3,
+    "p": 2,
+    "l": 2,
+    "a": 1
+   },
+   "text": "G3 P2 L2 A1",
+   "problem": false,
+   "warnings": []
+  },
+  {
+   "name": "twins: living above para is not warned",
+   "preset": "obstetricScore",
+   "value": {
+    "g": 1,
+    "p": 1,
+    "l": 2,
+    "a": 0
+   },
+   "text": "G1 P1 L2 A0",
+   "problem": false,
+   "warnings": []
+  },
+  {
+   "name": "too many",
+   "preset": "obstetricScore",
+   "value": {
+    "g": 31
+   },
+   "problem": true
+  },
+  {
+   "name": "not whole",
+   "preset": "obstetricScore",
+   "value": {
+    "g": 2.5
+   },
+   "problem": true
+  },
+  {
+   "name": "negative",
+   "preset": "obstetricScore",
+   "value": {
+    "p": -1
+   },
+   "problem": true
+  },
+  {
+   "name": "regular cycle",
+   "preset": "menstrual",
+   "value": {
+    "flowDays": 5,
+    "cycleDays": 28,
+    "regularity": "regular"
+   },
+   "text": "5/28 days, regular",
+   "problem": false
+  },
+  {
+   "name": "with the last period",
+   "preset": "menstrual",
+   "value": {
+    "flowDays": 5,
+    "cycleDays": 28,
+    "regularity": "regular",
+    "lmp": "2026-10-20"
+   },
+   "text": "5/28 days, regular, LMP 20/10/2026",
+   "problem": false
+  },
+  {
+   "name": "last period hidden by the setting",
+   "preset": "menstrual",
+   "config": {
+    "lmp": false
+   },
+   "value": {
+    "flowDays": 5,
+    "cycleDays": 28,
+    "regularity": "regular",
+    "lmp": "2026-10-20"
+   },
+   "text": "5/28 days, regular",
+   "problem": false
+  },
+  {
+   "name": "irregular long cycle",
+   "preset": "menstrual",
+   "value": {
+    "cycleDays": 35,
+    "regularity": "irregular"
+   },
+   "text": "cycle 35 days, irregular",
+   "problem": false
+  },
+  {
+   "name": "flow only",
+   "preset": "menstrual",
+   "value": {
+    "flowDays": 3
+   },
+   "text": "flow 3 days",
+   "problem": false
+  },
+  {
+   "name": "regularity only",
+   "preset": "menstrual",
+   "value": {
+    "regularity": "regular"
+   },
+   "text": "regular",
+   "problem": false
+  },
+  {
+   "name": "only the last period",
+   "preset": "menstrual",
+   "value": {
+    "lmp": "2026-01-05"
+   },
+   "text": "LMP 05/01/2026",
+   "problem": false
+  },
+  {
+   "name": "flow too long",
+   "preset": "menstrual",
+   "value": {
+    "flowDays": 40
+   },
+   "problem": true
+  },
+  {
+   "name": "unknown regularity",
+   "preset": "menstrual",
+   "value": {
+    "regularity": "sometimes"
+   },
+   "problem": true
+  },
+  {
+   "name": "not a date",
+   "preset": "menstrual",
+   "value": {
+    "lmp": "not a date"
+   },
+   "problem": true
+  },
+  {
+   "name": "distance, pinhole and near",
+   "preset": "visualAcuity",
+   "value": {
+    "distance": "6/9",
+    "pinhole": "6/6",
+    "near": "N6"
+   },
+   "text": "6/9 (PH 6/6), N6",
+   "problem": false
+  },
+  {
+   "name": "distance only",
+   "preset": "visualAcuity",
+   "value": {
+    "distance": "6/6"
+   },
+   "text": "6/6",
+   "problem": false
+  },
+  {
+   "name": "with glasses",
+   "preset": "visualAcuity",
+   "value": {
+    "distance": "6/60",
+    "glasses": true
+   },
+   "text": "6/60, with glasses",
+   "problem": false
+  },
+  {
+   "name": "near only",
+   "preset": "visualAcuity",
+   "value": {
+    "near": "N12"
+   },
+   "text": "N12",
+   "problem": false
+  },
+  {
+   "name": "counting fingers",
+   "preset": "visualAcuity",
+   "value": {
+    "distance": "CF"
+   },
+   "text": "CF",
+   "problem": false
+  },
+  {
+   "name": "pinhole improves",
+   "preset": "visualAcuity",
+   "value": {
+    "distance": "6/18",
+    "pinhole": "6/9"
+   },
+   "text": "6/18 (PH 6/9)",
+   "problem": false
+  },
+  {
+   "name": "pinhole alone",
+   "preset": "visualAcuity",
+   "value": {
+    "pinhole": "6/6"
+   },
+   "text": "PH 6/6",
+   "problem": false
+  },
+  {
+   "name": "glasses alone says nothing",
+   "preset": "visualAcuity",
+   "value": {
+    "glasses": true
+   },
+   "text": "",
+   "problem": false
+  },
+  {
+   "name": "no perception of light with near",
+   "preset": "visualAcuity",
+   "value": {
+    "distance": "NPL",
+    "near": "N36"
+   },
+   "text": "NPL, N36",
+   "problem": false
+  },
+  {
+   "name": "not a chart line",
+   "preset": "visualAcuity",
+   "value": {
+    "distance": "6/7"
+   },
+   "problem": true
+  },
+  {
+   "name": "not a near line",
+   "preset": "visualAcuity",
+   "value": {
+    "near": "N7"
+   },
+   "problem": true
+  },
+  {
+   "name": "sphere, cylinder and axis",
+   "preset": "refraction",
+   "value": {
+    "sph": -1.25,
+    "cyl": -0.5,
+    "axis": 180
+   },
+   "text": "-1.25 / -0.50 x 180",
+   "problem": false
+  },
+  {
+   "name": "plus sphere with add",
+   "preset": "refraction",
+   "value": {
+    "sph": 1.5,
+    "cyl": -0.75,
+    "axis": 90,
+    "add": 2
+   },
+   "text": "+1.50 / -0.75 x 90, add +2.00",
+   "problem": false
+  },
+  {
+   "name": "sphere only",
+   "preset": "refraction",
+   "value": {
+    "sph": -2
+   },
+   "text": "-2.00 DS",
+   "problem": false
+  },
+  {
+   "name": "plano",
+   "preset": "refraction",
+   "value": {
+    "sph": 0
+   },
+   "text": "plano",
+   "problem": false
+  },
+  {
+   "name": "plano with cylinder",
+   "preset": "refraction",
+   "value": {
+    "sph": 0,
+    "cyl": -1,
+    "axis": 10
+   },
+   "text": "plano / -1.00 x 10",
+   "problem": false
+  },
+  {
+   "name": "cylinder only",
+   "preset": "refraction",
+   "value": {
+    "cyl": -0.5,
+    "axis": 20
+   },
+   "text": "-0.50 DC x 20",
+   "problem": false
+  },
+  {
+   "name": "sphere with add",
+   "preset": "refraction",
+   "value": {
+    "sph": -1,
+    "add": 1.5
+   },
+   "text": "-1.00 DS, add +1.50",
+   "problem": false
+  },
+  {
+   "name": "add only",
+   "preset": "refraction",
+   "value": {
+    "add": 2.25
+   },
+   "text": "add +2.25",
+   "problem": false
+  },
+  {
+   "name": "plus cylinder",
+   "preset": "refraction",
+   "value": {
+    "sph": 0.25,
+    "cyl": 0.5,
+    "axis": 45
+   },
+   "text": "+0.25 / +0.50 x 45",
+   "problem": false
+  },
+  {
+   "name": "zero cylinder is left out",
+   "preset": "refraction",
+   "value": {
+    "sph": -1.5,
+    "cyl": 0,
+    "axis": 0
+   },
+   "text": "-1.50 DS",
+   "problem": false
+  },
+  {
+   "name": "axis zero is allowed",
+   "preset": "refraction",
+   "value": {
+    "sph": 1,
+    "cyl": -1,
+    "axis": 0
+   },
+   "text": "+1.00 / -1.00 x 0",
+   "problem": false
+  },
+  {
+   "name": "off the quarter steps",
+   "preset": "refraction",
+   "value": {
+    "sph": -1.1
+   },
+   "problem": true
+  },
+  {
+   "name": "axis too big",
+   "preset": "refraction",
+   "value": {
+    "axis": 181
+   },
+   "problem": true
+  },
+  {
+   "name": "sphere too big",
+   "preset": "refraction",
+   "value": {
+    "sph": 21
+   },
+   "problem": true
+  },
+  {
+   "name": "add too big",
+   "preset": "refraction",
+   "value": {
+    "add": 5
+   },
+   "problem": true
+  },
+  {
+   "name": "plain grade",
+   "preset": "musclePower",
+   "value": {
+    "grade": 4
+   },
+   "text": "4/5",
+   "problem": false
+  },
+  {
+   "name": "grade plus",
+   "preset": "musclePower",
+   "value": {
+    "grade": 4,
+    "sign": "+"
+   },
+   "text": "4+/5",
+   "problem": false
+  },
+  {
+   "name": "five minus",
+   "preset": "musclePower",
+   "value": {
+    "grade": 5,
+    "sign": "-"
+   },
+   "text": "5-/5",
+   "problem": false
+  },
+  {
+   "name": "zero",
+   "preset": "musclePower",
+   "value": {
+    "grade": 0
+   },
+   "text": "0/5",
+   "problem": false
+  },
+  {
+   "name": "three minus",
+   "preset": "musclePower",
+   "value": {
+    "grade": 3,
+    "sign": "-"
+   },
+   "text": "3-/5",
+   "problem": false
+  },
+  {
+   "name": "grade too high",
+   "preset": "musclePower",
+   "value": {
+    "grade": 6
+   },
+   "problem": true
+  },
+  {
+   "name": "five plus does not exist",
+   "preset": "musclePower",
+   "value": {
+    "grade": 5,
+    "sign": "+"
+   },
+   "problem": true
+  },
+  {
+   "name": "zero cannot carry a sign",
+   "preset": "musclePower",
+   "value": {
+    "grade": 0,
+    "sign": "+"
+   },
+   "problem": true
+  },
+  {
+   "name": "a sign alone is not an answer",
+   "preset": "musclePower",
+   "value": {
+    "sign": "+"
+   },
+   "problem": true
+  }
+ ]
+}

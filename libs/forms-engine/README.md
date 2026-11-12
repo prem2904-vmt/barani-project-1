@@ -22,3 +22,7 @@ against `docs/vectors/casesheet-combinations.json`). "Sentences for combinations
 (prefrontal-admin-ui) needs: `FE_ASSETS` (asset store: `asset`, `uploadTemplate`), `FE_KINDS` (`KIND_SPECS`), `FeDialog`, `<cs-styles />`-equivalent
 global CSS (`fill/_fill.scss` now `@use`s `kinds/pictureChoice/_picture-choice.scss`), and its own copy of the combinations editor
 (or the drag helper moved into this lib).
+
+## Group "pair" (2026-11-12)
+- `sidePair` ("Left and right", `kinds/sidePair`): the field's one child asked once per side; answer `{right,left}`. Fill = two `fe-row` cards (columns from 480 px, stacked below), "Same on both sides" copies the answered side. Studio panel chooses the inner kind and what it needs.
+- `shorthand` ("Clinical shorthand", `kinds/shorthand`): five presets (obstetric score, periods, vision, glasses power, muscle power). `shorthand-math.ts` mirrors the server's `ShorthandMath` and is held to `docs/vectors/casesheet-pair.json` (identical copy in prefrontal-mw).

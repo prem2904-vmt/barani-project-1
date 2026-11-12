@@ -38,3 +38,6 @@ export * from './lib/narrative/narrative-table.component';
 export * from './lib/narrative/combinations';
 export * from './lib/kinds/pictureChoice/pictureChoice-model';
 export * from './lib/kinds/pictureChoice/pictureChoice-mini.component';
+// Group "pair": one question for both sides, and the clinical shorthand notation.
+export * from './lib/kinds/shorthand/shorthand-math';
+export * from './lib/kinds/sidePair/side-pair-model';

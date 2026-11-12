@@ -38,6 +38,8 @@ export interface ConfigWords {
   hint?: string;
   /** enum value → plain words */
   choices?: Record<string, string>;
+  /** Show this setting only for fields where it applies (a setting that belongs to one preset). Default: always. */
+  when?: (f: FieldDef) => boolean;
 }
 
 export interface KindBuild {
@@ -54,6 +56,8 @@ export interface KindBuild {
   starterOptions?: OptionDef[];
   /** A new field of this kind starts with these settings (under the catalogue's defaults). */
   starterConfig?: Record<string, unknown>;
+  /** A new field of this kind starts with this one question inside (left and right: the question asked for each side). Its key is made unique. */
+  starterChild?: Omit<FieldDef, 'key'>;
   /** A new field's sentence ({value} is the answer). */
   sentence(label: string): string;
   /** The placeholders its sentence understands, in doctor words (default: {value} = "the answer"). */
