@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, viewChild,
+  ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, untracked, viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import { CdkDrag, CdkDragDrop, CdkDropList, moveItemInArray } from '@angular/cdk/drag-drop';
@@ -9,6 +9,7 @@ import { ApiService } from '../../core/services/api.service';
 import { DialogService } from '../../core/services/dialog.service';
 import { ToastService } from '../../core/services/toast.service';
 import { NavItem } from '../nav-items';
+import { OverlayBackService } from '../../core/services/overlay-back.service';
 import { NavPrefsService } from './nav-prefs.service';
 import { NavLayout, RoleNav, movePinned, normalizeRoleNav, togglePinned } from './nav-pins';
 
@@ -58,6 +59,7 @@ export class StartMenuComponent {
   private readonly dialog = inject(DialogService);
   private readonly toast = inject(ToastService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly overlays = inject(OverlayBackService);
 
   /** The layout the shell computed (computeNavLayout). */
   readonly layout = input.required<NavLayout>();
@@ -75,8 +77,17 @@ export class StartMenuComponent {
 
   protected readonly icons = SM_ICONS;
   protected readonly query = signal('');
-  /** list = tiles + rows; search = the quiet search line replaces the header; edit = Customize; roles = role defaults. */
-  protected readonly mode = signal<'list' | 'search' | 'edit' | 'roles'>('list');
+  /** list = tiles + rows with the search box docked at the bottom; edit = Customize; roles = role defaults. */
+  protected readonly mode = signal<'list' | 'edit' | 'roles'>('list');
+  /** The panel stays mounted while it plays its close; `phase` drives the grow / fade classes. */
+  protected readonly shown = signal(false);
+  protected readonly phase = signal<'pre' | 'in' | 'out'>('pre');
+  /** True for the first moments after opening: the list items fade in with a very small stagger. */
+  protected readonly intro = signal(false);
+  private hideTimer: ReturnType<typeof setTimeout> | null = null;
+  private introTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The PF button (or avatar badge) the person pressed last; the panel grows out of it. */
+  private lastTrigger: HTMLElement | null = null;
   /** A DialogService confirm is up: the panel steps aside (the dialog host sits below it). */
   protected readonly asking = signal(false);
   private readonly currentUrl = signal('');
@@ -103,18 +114,79 @@ export class StartMenuComponent {
   constructor() {
     effect(() => {
       if (this.open()) {
-        this.prefs.ensureDefaults();
-        this.query.set('');
-        this.mode.set('list');
-        this.asking.set(false);
-        this.currentUrl.set(((this.router as Partial<Router>).url ?? '').split(/[?#]/)[0]);
-        if (this.autofocusSearch()) setTimeout(() => this.focusFirst(), 0);
+        untracked(() => this.onOpen());
+      } else {
+        untracked(() => this.onClose());
       }
+    });
+    // The back gesture / Android back closes the menu before it touches the page.
+    effect((onCleanup) => {
+      if (!this.open()) return;
+      onCleanup(this.overlays.register(() => this.close()));
     });
   }
 
-  private focusFirst(): void {
-    this.panel()?.nativeElement.querySelector<HTMLElement>('[data-sm-row]')?.focus();
+  private onOpen(): void {
+    if (this.hideTimer) { clearTimeout(this.hideTimer); this.hideTimer = null; }
+    this.prefs.ensureDefaults();
+    this.query.set('');
+    this.mode.set('list');
+    this.asking.set(false);
+    this.currentUrl.set(((this.router as Partial<Router>).url ?? '').split(/[?#]/)[0]);
+    this.shown.set(true);
+    this.phase.set('pre');
+    this.intro.set(true);
+    if (this.introTimer) clearTimeout(this.introTimer);
+    this.introTimer = setTimeout(() => this.intro.set(false), 600);
+    // Next tick the panel exists: aim its origin at the logo, then let it grow.
+    setTimeout(() => {
+      if (!this.open()) return;
+      this.aimOrigin();
+      this.phase.set('in');
+      if (this.autofocusSearch()) this.focusSearch();
+    }, 0);
+  }
+
+  private onClose(): void {
+    if (!this.shown()) return;
+    this.phase.set('out');
+    if (this.hideTimer) clearTimeout(this.hideTimer);
+    this.hideTimer = setTimeout(() => { this.hideTimer = null; this.shown.set(false); }, 130);
+  }
+
+  /** transform-origin = the centre of the button that opened it, in the panel's own coordinates. */
+  private aimOrigin(): void {
+    const el = this.panel()?.nativeElement;
+    if (!el) return;
+    const trig = this.triggerEl();
+    if (!trig) return;
+    const prevT = el.style.transition, prevX = el.style.transform;
+    el.style.transition = 'none';
+    el.style.transform = 'none';
+    const p = el.getBoundingClientRect();
+    const t = trig.getBoundingClientRect();
+    el.style.transition = prevT;
+    el.style.transform = prevX;
+    if (!p.width || !t.width) return;
+    const ox = Math.max(-80, Math.min(p.width + 80, t.left + t.width / 2 - p.left));
+    const oy = Math.max(-80, Math.min(p.height + 80, t.top + t.height / 2 - p.top));
+    el.style.transformOrigin = `${Math.round(ox)}px ${Math.round(oy)}px`;
+    void el.offsetWidth; // commit the 'pre' look before the transition starts
+  }
+
+  private triggerEl(): HTMLElement | null {
+    const visible = (e: Element | null): e is HTMLElement => !!e && (e as HTMLElement).getBoundingClientRect().width > 0;
+    if (this.lastTrigger?.isConnected && visible(this.lastTrigger)) return this.lastTrigger;
+    const a = (document.activeElement as HTMLElement | null)?.closest?.('[data-start-trigger]') ?? null;
+    if (visible(a)) return a;
+    return Array.from(document.querySelectorAll('[data-start-trigger]')).find(visible) ?? null;
+  }
+
+  private focusSearch(select = false): void {
+    const box = this.searchBox()?.nativeElement;
+    if (!box) return;
+    box.focus();
+    if (select) box.setSelectionRange(box.value.length, box.value.length);
   }
 
   private isActive(i: NavItem): boolean {
@@ -141,6 +213,7 @@ export class StartMenuComponent {
     return [...m.work, ...m.more, ...m.settings].map(i => this.toRow(i));
   });
   /** Search results: one flat list, Home only when asked for. */
+  protected readonly searching = computed(() => this.query().trim().length > 0);
   protected readonly results = computed<MenuRow[]>(() => {
     const q = this.query().trim().toLowerCase();
     const all = [...this.layout().pinned.map(i => this.toRow(i)), ...this.others()];
@@ -169,31 +242,18 @@ export class StartMenuComponent {
     this.account.emit();
   }
 
-  // ── Search ──────────────────────────────────────────────────────────────
-  protected openSearch(initial = ''): void {
-    this.query.set(initial);
-    this.mode.set('search');
-    setTimeout(() => {
-      const box = this.searchBox()?.nativeElement;
-      if (!box) return;
-      box.focus();
-      box.setSelectionRange(box.value.length, box.value.length);
-    }, 0);
-  }
-
-  protected closeSearch(): void {
+  // ── Search (docked at the bottom, always there in the list view) ─────────
+  protected clearSearch(): void {
     this.query.set('');
-    this.mode.set('list');
-    setTimeout(() => this.panel()?.nativeElement.querySelector<HTMLElement>('[data-sm-search-btn]')?.focus(), 0);
+    this.focusSearch();
   }
 
   protected onSearchKey(ev: KeyboardEvent): void {
-    if (ev.key === 'Enter') {
-      // The first screen that matches (Home only when it is the only match).
-      const rows = this.results();
-      const first = rows.find(r => r.kind === 'item') ?? rows[0];
-      if (first) { ev.preventDefault(); this.openRow(first); }
-    }
+    if (ev.key !== 'Enter' || !this.searching()) return;
+    // The first screen that matches (Home only when it is the only match).
+    const rows = this.results();
+    const first = rows.find(r => r.kind === 'item') ?? rows[0];
+    if (first) { ev.preventDefault(); this.openRow(first); }
   }
 
   // ── Customize (this person, this browser) ───────────────────────────────
@@ -283,13 +343,13 @@ export class StartMenuComponent {
     }
   }
 
-  // ── Keyboard: "/" or typing opens search, arrows move, Esc steps back, Tab stays inside ──
+  // ── Keyboard: typing or "/" goes to the search box, arrows move, Esc clears then closes, Tab stays inside ──
   @HostListener('document:keydown', ['$event'])
   protected onDocKey(ev: KeyboardEvent): void {
     if (!this.open() || this.asking()) return;
     if (ev.key === 'Escape') {
       ev.preventDefault();
-      if (this.mode() === 'search') this.closeSearch();
+      if (this.mode() === 'list' && this.query()) { this.query.set(''); this.focusSearch(); }
       else this.close();
       return;
     }
@@ -298,23 +358,19 @@ export class StartMenuComponent {
     const active = document.activeElement as HTMLElement | null;
     const inField = !!active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
     if (this.mode() === 'list' && !inField && !ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key.length === 1) {
-      if (ev.key === '/') { ev.preventDefault(); this.openSearch(); return; }
-      if (ev.key.trim()) { ev.preventDefault(); this.openSearch(ev.key); return; }
+      if (ev.key === '/') { ev.preventDefault(); this.focusSearch(true); return; }
+      if (ev.key.trim()) { ev.preventDefault(); this.query.set(this.query() + ev.key); this.focusSearch(true); return; }
     }
-    // Keys typed before the search line took focus still land in it.
-    if (this.mode() === 'search' && !inField && !ev.ctrlKey && !ev.metaKey && !ev.altKey && ev.key.length === 1) {
-      ev.preventDefault();
-      this.openSearch(this.query() + ev.key);
-      return;
-    }
-    if ((ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && !ev.altKey) {
+    if ((ev.key === 'ArrowDown' || ev.key === 'ArrowUp') && !ev.altKey && this.mode() === 'list') {
       const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-sm-row]'));
       const search = this.searchBox()?.nativeElement;
       const at = rows.indexOf(active as HTMLElement);
       if (!rows.length || (at < 0 && (!search || active !== search))) return;
       ev.preventDefault();
-      const next = ev.key === 'ArrowDown' ? (at < 0 ? 0 : Math.min(rows.length - 1, at + 1)) : at <= 0 ? -1 : at - 1;
-      if (next < 0) search?.focus(); else rows[next].focus();
+      // The search box sits under the list: Down from the last row (or Up from the first) lands in it.
+      if (active === search) { rows[ev.key === 'ArrowDown' ? 0 : rows.length - 1].focus(); return; }
+      const next = at + (ev.key === 'ArrowDown' ? 1 : -1);
+      if (next < 0 || next >= rows.length) search?.focus(); else rows[next].focus();
     } else if (ev.key === 'Tab') {
       const f = Array.from(root.querySelectorAll<HTMLElement>('input, button, [role="combobox"], [tabindex="0"]'))
         .filter(e => !(e as HTMLButtonElement).disabled);
@@ -329,8 +385,10 @@ export class StartMenuComponent {
   /** Outside click closes; the PF logo (data-start-trigger) toggles it, so it never counts as outside. */
   @HostListener('document:pointerdown', ['$event'])
   protected onDocPointer(ev: Event): void {
-    if (!this.open() || this.asking()) return;
     const t = ev.target as HTMLElement | null;
+    const trig = t?.closest?.('[data-start-trigger]') as HTMLElement | null | undefined;
+    if (trig) this.lastTrigger = trig;
+    if (!this.open() || this.asking()) return;
     if (!t) return;
     if (this.host.nativeElement.contains(t) || t.closest?.('[data-start-trigger]') || t.closest?.('.pf-dd__panel')
       || t.closest?.('.cdk-drag-preview')) return;

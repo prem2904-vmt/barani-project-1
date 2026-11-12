@@ -66,3 +66,30 @@ describe('bottom nav (phone / iPad)', () => {
     expect(bottomTs).toContain('onBtnPointerDown');
   });
 });
+
+describe('Start menu + account menu are one system', () => {
+  it('top strip: opening the account / branch / more menus closes the Start menu (closeAll includes it); Esc and outside clicks leave the Start menu to its own handlers', () => {
+    expect(stripTs).toMatch(/private closeAll\(keepStart = false\)[\s\S]*?if \(!keepStart\) this\.startOpen\.set\(false\)/);
+    expect(stripTs).toMatch(/onEscape\(\) \{\s*this\.closeAll\(true\)/);
+    expect(stripTs).toMatch(/if \(!inside\) this\.closeAll\(true\)/);
+    expect(stripTs).toMatch(/toggleProfile\(\)[\s\S]*?this\.closeAll\(\);\s*this\.profileOpen\.set\(next\)/);
+  });
+  it('bottom nav: opening the account menu closes the Start menu and Esc closes the account menu', () => {
+    expect(bottomTs).toMatch(/if \(this\.moreOpen\(\)\) this\.startOpen\.set\(false\)/);
+    expect(bottomTs).toMatch(/protected openAccount\(\): void \{\s*this\.startOpen\.set\(false\);\s*this\.moreOpen\.set\(true\)/);
+    expect(bottomTs).toMatch(/document:keydown\.escape[\s\S]*?this\.closeMore\(\)/);
+  });
+  it('both menus register with the back gesture / Android back', () => {
+    expect(bottomTs).toContain('this.overlays.register(() => this.closeMore())');
+    expect(stripTs).toContain('this.overlays.register(() => this.closeProfile())');
+    expect(read('start-menu/start-menu.component.ts')).toContain('this.overlays.register(() => this.close())');
+  });
+  it('the account menu uses the same sheet geometry, surface and motion as the Start menu', () => {
+    const scss = read('bottom-nav/bottom-nav.component.scss');
+    expect(scss).toContain("@use '../menu-panel' as mp;");
+    expect(scss).toMatch(/\.pf-bottom-nav:not\(\.pf-bottom-nav--rail\) \.pf-more-pop \{[\s\S]*?mp\.menu-sheet-size/);
+    expect(scss).toContain('mp.menu-surface');
+    expect(read('top-strip/top-strip.component.scss')).toMatch(/max-width: 767px\)[\s\S]*?\.pf-profile-pop[\s\S]*?position: fixed/);
+    expect(read('start-menu/start-menu.component.scss')).toContain('mp.menu-sheet-size');
+  });
+});

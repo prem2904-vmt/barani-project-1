@@ -1,4 +1,5 @@
 @use '../../shared/styles/device-tier' as dt;
+@use '../menu-panel' as mp;
 /* Top strip bar — fixed 64px+ height so every interactive element
  * inside it can adopt a consistent vertical rhythm. Padding + children
  * (44px pills) = 64px exact. */
@@ -1733,4 +1734,33 @@ a.pf-ts-tenant:hover {
   min-width: 0;
   align-self: stretch;
   align-items: center;
+}
+
+
+/* ── One menu system with the Start menu (compact bar, < 768px) ──────────────
+   The account menu is the same full-width sheet 8px above the bar, with the same surface, ease and duration,
+   so opening one and then the other never changes the geometry. Desktop keeps the anchored card. */
+@include mp.menu-keyframes;
+:host-context(.design-new.nav-bottom) .pf-profile-pop {
+  border-radius: var(--pf-radius-card, 16px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  transform-origin: bottom right;
+  animation: pf-menu-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (max-width: 767px) {
+  :host-context(.design-new.nav-bottom) .pf-profile-pop {
+    position: fixed;
+    left: max(8px, env(safe-area-inset-left, 0px));
+    right: auto;
+    width: calc(100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
+    max-width: calc(100vw - 16px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
+    box-sizing: border-box;
+    top: auto !important;
+    bottom: calc(var(--pf-nav-h, var(--pf-botbar-h, 58px)) + 8px) !important;
+    max-height: min(72dvh, 640px) !important;
+    transform-origin: bottom center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :host-context(.design-new.nav-bottom) .pf-profile-pop { animation: pf-menu-in 160ms linear both; }
 }

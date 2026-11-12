@@ -1,7 +1,8 @@
+@use '../menu-panel' as mp;
 :host { display: contents; }
 
-/* Rises from the bar (the bar is always at the bottom): absolute above the desktop bar, a fixed full-width
-   sheet above the phone pill, a fixed card beside the iPad rail. Tokens only; no bespoke colours. */
+/* Grows out of the PF logo (transform-origin is aimed at the button in the component), the same 200 ms ease as the
+   account menu; a quick reverse on close. Tokens only; no bespoke colours. */
 .sm-panel {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -13,26 +14,29 @@
   display: flex;
   flex-direction: column;
   padding: 14px 12px 10px;
-  border-radius: var(--pf-radius-card, 16px);
-  background: var(--bg-card-solid, var(--card-bg));
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  @include mp.menu-surface;
   transform-origin: bottom left;
-  animation: sm-in 160ms cubic-bezier(0.32, 0.72, 0, 1);
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+  transition: opacity mp.$pf-menu-out ease-in, transform mp.$pf-menu-out ease-in;
+  will-change: opacity, transform;
 }
+.sm-panel--in {
+  opacity: 1;
+  transform: none;
+  transition: opacity mp.$pf-menu-in mp.$pf-menu-ease, transform mp.$pf-menu-in mp.$pf-menu-ease;
+}
+.sm-panel--out { pointer-events: none; }
 .sm-panel:hover { box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35); }
 .sm-panel--sheet {
   position: fixed;
   z-index: 2100;
-  left: 8px;
+  left: max(8px, env(safe-area-inset-left, 0px));
   right: auto;
   /* An ancestor bar may be a containing block (transform / backdrop-filter) wider than the screen:
      size from the viewport, never from that box, so the sheet can't run off the right edge. */
-  width: calc(100vw - 16px);
-  max-width: calc(100vw - 16px);
-  box-sizing: border-box;
+  @include mp.menu-sheet-size;
   bottom: calc(var(--pf-nav-h, 72px) + 8px);
-  max-height: min(72dvh, 640px);
   transform-origin: bottom center;
 }
 .sm-panel--rail {
@@ -43,12 +47,23 @@
   transform-origin: bottom left;
 }
 .sm-panel--aside { visibility: hidden; }
-@keyframes sm-in {
-  from { opacity: 0; transform: translateY(8px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+
+/* Very subtle stagger on the first open only (never while typing in the search box). */
+.sm-scroll--intro .sm-tile,
+.sm-scroll--intro .sm-row {
+  animation: sm-item-in 180ms ease-out both;
+  animation-delay: calc(min(var(--i, 0), 10) * 14ms + 40ms);
+}
+@keyframes sm-item-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sm-panel { animation: none; }
+  /* Fade only: no scale, no travel, no stagger. */
+  .sm-panel, .sm-panel--in { transform: none; }
+  .sm-panel { transition: opacity 120ms linear; }
+  .sm-panel--in { transition: opacity 160ms linear; }
+  .sm-scroll--intro .sm-tile, .sm-scroll--intro .sm-row { animation: none; }
   .sm-tile, .sm-row, .sm-hbtn, .sm-ico, .sm-chip, .sm-erow { transition: none; }
   .cdk-drag-animating, .sm-edit-list.cdk-drop-list-dragging .sm-erow:not(.cdk-drag-placeholder) { transition: none !important; }
 }
@@ -123,19 +138,25 @@
 .sm-hbtn:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 .sm-hbtn--bare { background: transparent; }
 
-/* ── Search: a quiet filled line in place of the header ────────────────── */
+/* ── Search: docked at the bottom, always visible (kit input look, compact) ── */
 .sm-search {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
-  margin: 0 0 10px;
+  height: 40px;
+  margin: 8px 0 0;
   padding: 0 4px 0 12px;
-  border-radius: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--pf-line);
   background: var(--pf-chip-bg);
   color: var(--text-muted);
 }
-.sm-search:focus-within { outline: 2px solid color-mix(in srgb, var(--text-primary) 16%, transparent); outline-offset: 0; }
+.sm-search:focus-within {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+  outline-offset: 0;
+}
 .sm-search__input {
   flex: 1;
   min-width: 0;
@@ -147,6 +168,7 @@
   font-size: 16px; /* no iOS zoom */
 }
 .sm-search__input::placeholder { color: var(--text-muted); }
+.sm-search__clear { width: 32px; height: 32px; }
 
 .sm-scroll {
   overflow-y: auto;

@@ -1,3 +1,4 @@
+@use '../menu-panel' as mp;
 /* Default (phone) — floating bottom pill, horizontally centred,
    8px above the screen edge PLUS the bottom safe-area inset so on
    notched iPhones the pill floats clear of the home-indicator
@@ -616,16 +617,34 @@
   right: 4px;
   min-width: 220px;
   padding: 6px;
-  border-radius: 14px;
-  background: var(--bg-card-solid, rgba(15, 15, 25, 0.96));
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  @include mp.menu-surface; /* same surface as the Start menu */
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   z-index: 31;
   display: flex; flex-direction: column; gap: 2px;
-  animation: pf-more-in 180ms cubic-bezier(0.32, 0.72, 0, 1);
-  transform-origin: bottom right;
+  @include mp.menu-enter(bottom right);
+}
+@include mp.menu-keyframes;
+/* One menu system with the Start menu: on the phone / iPad pill the account menu is the same full-width sheet,
+   8px above the pill, side safe areas respected. (The pill is its containing block: it is centred, so the
+   sheet centres on it with the independent `translate`.) */
+.pf-bottom-nav:not(.pf-bottom-nav--rail) .pf-more-pop {
+  bottom: calc(100% + 8px);
+  left: 50%;
+  right: auto;
+  translate: -50% 0;
+  @include mp.menu-sheet-size;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform-origin: bottom center;
+}
+/* iPad rail: the same 360px card beside the rail as the Start menu. */
+.pf-bottom-nav--rail .pf-more-pop {
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  max-height: min(72dvh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 @keyframes pf-more-in {
   from { opacity: 0; transform: translateY(6px) scale(0.97); }

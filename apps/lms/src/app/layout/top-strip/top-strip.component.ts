@@ -1,4 +1,5 @@
 import { SetPinDialogService } from '../../core/services/set-pin-dialog.service';
+import { OverlayBackService } from '../../core/services/overlay-back.service';
 import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
 import {
   ChangeDetectionStrategy,
@@ -533,6 +534,12 @@ export class TopStripComponent implements OnInit, OnDestroy {
    *  The bar is decided ONLY by layout/start-menu/nav-pins.ts (pins never grant access). */
   protected readonly navPrefs = inject(NavPrefsService);
   protected readonly startOpen = signal(false);
+  private readonly overlays = inject(OverlayBackService);
+  /** Account menu open on the compact bar: the back gesture closes it (the Start menu registers itself). */
+  private readonly _profileBack = effect((onCleanup) => {
+    if (!this.profileOpen() || !this.compactBar()) return;
+    onCleanup(this.overlays.register(() => this.closeProfile()));
+  });
   /** Every screen this person can open from the bar: the work areas, then Settings (a normal pinnable item, id `admin`). */
   private readonly navAllItems = computed<NavItem[]>(() => [...this.primary(), ...(this.showAdmin() ? [ADMIN_NAV] : [])]);
   readonly navLayout = computed(() =>
@@ -724,7 +731,6 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** "Account and status" from the Start menu footer (compact bar only). */
   protected openAccount(): void {
     this.closeAll();
-    this.startOpen.set(false);
     this.profileOpen.set(true);
   }
   closeProfile() {
@@ -821,11 +827,13 @@ export class TopStripComponent implements OnInit, OnDestroy {
     this.pinDialog.open();
   }
 
-  private closeAll() {
+  /** Closes every popover; the Start menu too unless `keepStart` (Esc / outside clicks: it handles its own). */
+  private closeAll(keepStart = false) {
     this.branchOpen.set(false);
     this.moreOpen.set(false);
     this.profileOpen.set(false);
     this.statusListOpen.set(false);
+    if (!keepStart) this.startOpen.set(false); // the Start menu and the account menu are never open together
   }
 
   pickLanding() {
@@ -841,11 +849,11 @@ export class TopStripComponent implements OnInit, OnDestroy {
   onDocClick(ev: MouseEvent) {
     if (!this.branchOpen() && !this.moreOpen() && !this.profileOpen()) return;
     const inside = this.host.nativeElement.contains(ev.target as Node);
-    if (!inside) this.closeAll();
+    if (!inside) this.closeAll(true);
   }
 
   @HostListener("document:keydown.escape")
   onEscape() {
-    this.closeAll();
+    this.closeAll(true);
   }
 }
