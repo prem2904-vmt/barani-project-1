@@ -4,10 +4,10 @@
                 hold fills whatever logo the lab uploaded, or its initial disc) + name; actions: saved state · Narrative.
                 The pill is the context bar: the case sheet's title, the page, the patient, how much is answered.
        page   : the form column (max 896px, 16px / 24px ≥768 padding), the form's 12-column field grid, 24px gaps
-       foot   : Back · Pages (tap = the page list, hold = leave) · Next (hold = finish), in the page under the form column and
-                exactly as wide (Back on its left edge, Next on its right), above the bottom nav. The public site lends the
-                same controls to its own bottom pill instead (FormBarService).
-       desktop: the page list is a rail on the left; the foot drops Pages (the rail holds the list) -->
+       nav    : Back · Pages (tap = the page list, hold = leave) · Next (hold = finish) sit in the BOTTOM NAV, on the right before
+                Messages / bell / avatar (NavActionsService, owner 2026-11-12). The public site lends the same controls to
+                its own bottom pill instead (FormBarService).
+       desktop: the page list is a rail on the left, the form sits next to it; the nav drops Pages (the rail holds the list) -->
 <cs-styles />
 <div class="lf pf-page pg" [class.lf--final]="isFinal()" [class.lf--lab]="nav.isLab">
   <pf-hero-band [back]="true" [backAction]="backFn" [customBrand]="true" [contextBar]="true" [customSearch]="true">
@@ -72,9 +72,11 @@
       } @else if (page(); as wp) {
       <span class="pf-ctx__chip" data-page-chip>
         @if (pageColor(); as c) { <span class="lf-ctx__dot" aria-hidden="true" [style.background]="c"></span> }
-        <span class="pf-ctx__k">Page {{ wiz.index() + 1 }} of {{ wiz.pages().length }}</span>
-        @for (t of [headTitle()]; track t) {
+        <span class="pf-ctx__k" id="cs-page-of">Page {{ wiz.index() + 1 }} of {{ wiz.pages().length }}</span>
+        @if (pageTitleShown(); as t) {
         <span class="lf-ctx__page" id="cs-page-h">{{ t }}</span>
+        } @else {
+        <span class="lf-sr" id="cs-page-h">{{ headTitle() }}</span>
         }
       </span>
       }
@@ -137,11 +139,10 @@
     <aside class="lf-rail" aria-labelledby="lf-rail-h">
       <div class="lf-rail__head">
         <h2 class="lf-rail__title" id="lf-rail-h">Pages</h2>
-        <span class="lf-rail__count">{{ visitedCount() }}/{{ wiz.pages().length }}</span>
+        <span class="lf-rail__count">{{ wiz.index() + 1 }} of {{ wiz.pages().length }}</span>
       </div>
-      <div class="lf-rail__prog">
+      <div class="lf-rail__prog" aria-hidden="true">
         <span class="lf-rail__track"><span class="lf-rail__fill" [style.width.%]="stepPercent()"></span></span>
-        <span class="lf-rail__of">{{ wiz.index() + 1 }} of {{ wiz.pages().length }}</span>
       </div>
       <ol class="lf-steps pf-card__body">
         @for (s of steps(); track s.id; let i = $index) {
@@ -215,13 +216,6 @@
       </div>
       } }
     </main>
-    @if (nav.isLab) {
-    <!-- the lab: Back · Pages · Next under the form column, exactly its width (owner 2026-11-11: they sat in the bottom nav,
-         out of line with the form); the bottom nav keeps the work areas -->
-    <footer class="lf-foot" data-step-foot>
-      <div class="lf-foot__in"><ng-container [ngTemplateOutlet]="formBarTpl" /></div>
-    </footer>
-    }
     </div>
 
     @if (narrativeOpen()) {
@@ -344,8 +338,8 @@
 </section>
 }
 
-<!-- Back · Pages · Next (legacy tab-nav form mode), lent to the LMS bottom bar while the sheet is open (one bar,
-     owner 2026-11-02; FormBarService). The bindings and styles stay here. -->
+<!-- Back · Pages · Next (legacy tab-nav form mode), lent to the LMS bottom bar while the sheet is open (the lab: the
+     bar's page-actions slot, NavActionsService; the public site: its pill, FormBarService). The bindings and styles stay here. -->
 <ng-template #formBarTpl>
   <div class="lf-bar" role="group" aria-label="Pages of this case sheet">
     <span class="lf-bar__hold" aria-hidden="true"></span>

@@ -7,38 +7,39 @@
     [customSearch]="true"
   >
     <div band-actions class="ed-actions">
-      <button type="button" class="pf-btn pf-btn--icon st-hover-only ed-desk-only" data-act="shortcuts" aria-label="Keyboard shortcuts" [attr.data-tip]="tips.keys" (click)="helpOpen.set(true)">
-        <pf-icon name="keyboard" [size]="18" />
+      <!-- the band's own companions (pf-hb-btn / pf-hb-tool, like every other band): compact, one row -->
+      <button type="button" class="pf-hb-tool st-hover-only ed-desk-only" data-act="shortcuts" aria-label="Keyboard shortcuts" [attr.data-tip]="tips.keys" (click)="helpOpen.set(true)">
+        <pf-icon name="keyboard" [size]="16" />
       </button>
-      <button type="button" class="pf-btn pf-btn--icon" aria-label="Undo" data-act="undo" [attr.data-tip]="tips.undo" [disabled]="!session.canUndo()" (click)="session.undo()">
-        <pf-icon name="undo" [size]="20" />
+      <button type="button" class="pf-hb-tool" aria-label="Undo" data-act="undo" [attr.data-tip]="tips.undo" [disabled]="!session.canUndo()" (click)="session.undo()">
+        <pf-icon name="undo" [size]="16" />
       </button>
-      <button type="button" class="pf-btn pf-btn--icon st-hover-only ed-desk-only" aria-label="Redo" data-act="redo" [attr.data-tip]="tips.redo" [disabled]="!session.canRedo()" (click)="session.redo()">
-        <pf-icon name="redo" [size]="20" />
+      <button type="button" class="pf-hb-tool st-hover-only ed-desk-only" aria-label="Redo" data-act="redo" [attr.data-tip]="tips.redo" [disabled]="!session.canRedo()" (click)="session.redo()">
+        <pf-icon name="redo" [size]="16" />
       </button>
       @if (builder.cortex()) {
-        <button type="button" class="pf-btn pf-btn--secondary" data-act="cortex" aria-label="Cortex" data-tip="Ask Cortex to suggest changes" [attr.aria-pressed]="builderTab() === 'cortex'" [disabled]="!def()" (click)="openBuilder('cortex')">
-          <pf-icon name="sparkle" [size]="18" /> <span class="ed-actions__lbl">Cortex</span>
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-act="cortex" aria-label="Cortex" data-tip="Ask Cortex to suggest changes" [attr.aria-pressed]="builderTab() === 'cortex'" [disabled]="!def()" (click)="openBuilder('cortex')">
+          <pf-icon name="sparkle" [size]="16" /> <span class="ed-actions__lbl">Cortex</span>
         </button>
       }
       @if (builder.available()) {
-        <button type="button" class="pf-btn pf-btn--secondary" data-act="checks" aria-label="Checks" data-tip="If this option is picked, what shows" [attr.aria-pressed]="builderTab() === 'checks'" [disabled]="!def()" (click)="openBuilder('checks')">
-          <pf-icon name="check" [size]="18" /> <span class="ed-actions__lbl">Checks</span>
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-act="checks" aria-label="Checks" data-tip="If this option is picked, what shows" [attr.aria-pressed]="builderTab() === 'checks'" [disabled]="!def()" (click)="openBuilder('checks')">
+          <pf-icon name="check" [size]="16" /> <span class="ed-actions__lbl">Checks</span>
         </button>
       }
-      <button type="button" class="pf-btn pf-btn--secondary" data-act="preview" [attr.data-tip]="tips.preview" [disabled]="!def()" (click)="preview()">
-        <pf-icon name="eye" [size]="18" /> <span class="ed-actions__lbl">Preview</span>
+      <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-act="preview" [attr.data-tip]="tips.preview" [disabled]="!def()" (click)="preview()">
+        <pf-icon name="eye" [size]="16" /> <span class="ed-actions__lbl">Preview</span>
       </button>
       @if (builder.available() && checks.failing()) {
-        <button type="button" class="pf-btn pf-btn--tertiary ed-failchip" data-act="checks-fail" [attr.aria-label]="failsText()" (click)="openBuilder('checks')">
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost ed-failchip press" data-act="checks-fail" [attr.aria-label]="failsText()" (click)="openBuilder('checks')">
           <pf-icon name="alert" [size]="16" /> <span class="ed-actions__lbl">{{ failsText() }}</span>
         </button>
       }
-      <button type="button" class="pf-btn pf-btn--primary" data-act="publish" [disabled]="!def() || publishing() || session.onLive() || session.readOnly()" [attr.aria-busy]="publishing() ? 'true' : null" (click)="publish()">
-        <pf-icon name="send" [size]="18" /> <span class="ed-actions__lbl">{{ publishing() ? 'Publishing…' : 'Publish' }}</span>
+      <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-act="publish" [disabled]="!def() || publishing() || session.onLive() || session.readOnly()" [attr.aria-busy]="publishing() ? 'true' : null" (click)="publish()">
+        <pf-icon name="send" [size]="16" /> <span class="ed-actions__lbl">{{ publishing() ? 'Publishing…' : 'Publish' }}</span>
       </button>
-      <button type="button" class="pf-btn pf-btn--icon" aria-label="More: history, copy, discard" data-tip="History, rename, copy, discard" data-tip-end (click)="more()">
-        <pf-icon name="more" [size]="20" />
+      <button type="button" class="pf-hb-tool" aria-label="More: history, copy, discard" data-tip="History, rename, copy, discard" data-tip-end (click)="more()">
+        <pf-icon name="more" [size]="16" />
       </button>
     </div>
     <div band-search class="pf-ctx ed-ctx">
@@ -48,7 +49,7 @@
       }
       @if (version()) {
         <span class="pf-ctx__chip ed-chip" data-status>
-          <span class="pf-ctx__primary">{{ status() }}</span>
+          <span class="ed-chip__st">{{ status() }}</span>
           <span class="pf-ctx__k" [attr.data-save]="session.saveState()" [attr.title]="desk() ? saveTip() : null">{{ saveWords() }}</span>
         </span>
         @if (alsoEditing()) {
@@ -142,7 +143,7 @@
       <section class="pf-card ed-main" aria-labelledby="ed-main-h">
         <header class="pf-card__head">
           <span class="pf-card__icon"><pf-icon name="forms" [size]="16" /></span>
-          <h1 class="pf-card__label" id="ed-main-h">{{ page()?.title || 'No pages yet' }}</h1>
+          <h1 class="pf-card__label ed-main__title" id="ed-main-h">{{ page()?.title || 'The case sheet' }}</h1>
           <span class="pf-card__count">{{ count() }} · {{ store.fieldCount() }} in the case sheet</span>
         </header>
         @if (selCount()) {
@@ -263,8 +264,8 @@
               </button>
             }
           } @else {
-            <div class="pf-empty">
-              <span class="pf-empty__icon"><pf-icon name="k-pages" [size]="26" /></span>
+            <div class="pf-empty pf-empty--compact" data-empty="pages">
+              <span class="pf-empty__icon"><pf-icon name="k-pages" [size]="20" /></span>
               <h2 class="pf-empty__title">Start with a page</h2>
               <p class="pf-empty__body">A page is one step for the doctor, like “Complaints” or “Examination”. Add one, then add its questions.</p>
               <button type="button" class="pf-btn pf-btn--primary" data-act="first-page" (click)="addPage()"><pf-icon name="plus" [size]="18" /> Add the first page</button>

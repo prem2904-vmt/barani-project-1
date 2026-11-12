@@ -46,6 +46,7 @@ import { FinishRefused, MissingAnswer } from '../data/cases/case-models';
 import { CaseSession } from '../data/cases/case-session';
 import { HttpAssetStore } from '../data/assets/http-asset-store';
 import { FormBarService } from '../data/form-bar/form-bar.service';
+import { NavActionsService } from '../../../layout/nav-actions/nav-actions.service';
 import { ReadAloud, listenScript } from '../data/voice/read-aloud';
 import { CaseSuggestions } from '../data/suggestions/case-suggestions';
 import { NarrativeSection } from '../data/cases/case-models';
@@ -159,6 +160,7 @@ export class CasePage {
   private readonly body = viewChild<ElementRef<HTMLElement>>('body');
   private readonly formBarTpl = viewChild<TemplateRef<unknown>>('formBarTpl');
   private readonly formBar = inject(FormBarService);
+  private readonly navActions = inject(NavActionsService);
   private advanceTimer: ReturnType<typeof setTimeout> | null = null;
 
   protected readonly page = this.wiz.page;
@@ -195,6 +197,12 @@ export class CasePage {
   protected readonly headTitle = computed(() =>
     this.isFinal() || !this.page() ? (this.sheet()?.formTitle ?? 'Case sheet') : this.page()!.title,
   );
+  /** The page's own title in the band chip — only when it adds something (page 1 is often titled like the sheet). */
+  protected readonly pageTitleShown = computed(() => {
+    const t = this.headTitle();
+    const sheet = (this.sheet()?.formTitle ?? '').trim().toLowerCase();
+    return t && t.trim().toLowerCase() !== sheet ? t : '';
+  });
   /** The case sheet has its own patient-name field: the header shows the name, it never asks for it. */
   protected readonly hasNameField = computed(() => {
     const d = this.def();
@@ -267,13 +275,19 @@ export class CasePage {
         this.body()?.nativeElement.scrollTo?.({ top: 0 });
       });
     });
-    // The public site has one bottom pill: while the sheet is open (not loading, not finished) its Back · Pages · Next
-    // replace the pill's three areas; leaving the sheet (or finishing it) gives the pill back. In the lab the page shows
-    // them itself, under the form column (.lf-foot), and the LMS bar keeps its work areas (owner 2026-11-11).
+    // Back · Pages · Next live in the bottom bar. The lab lends them to the bar's page-actions slot (NavActionsService:
+    // right side, before Messages / bell / avatar; the work areas stay); the public site has one bottom pill, so there
+    // they replace the pill's three areas (FormBarService). Not while loading, finished or failed; leaving the sheet
+    // (or finishing it) gives the bar back.
     effect(() => {
       const tpl = this.formBarTpl();
-      const open = !this.nav.isLab && !!this.sheet() && !!this.def() && !this.isFinal() && !this.loadMessage();
-      untracked(() => (open && tpl ? this.formBar.show(this, tpl) : this.formBar.clear(this)));
+      const open = !!this.sheet() && !!this.def() && !this.isFinal() && !this.loadMessage();
+      const lab = this.nav.isLab;
+      untracked(() => {
+        const slot = lab ? this.navActions : this.formBar;
+        if (open && tpl) slot.show(this, tpl);
+        else slot.clear(this);
+      });
     });
     // case photos go to the draft that is open, and only while it is open
     effect(() => {
@@ -283,6 +297,7 @@ export class CasePage {
     inject(DestroyRef).onDestroy(() => {
       this.cancelAdvance();
       this.formBar.clear(this);
+      this.navActions.clear(this);
       this.listen.stop();
       this.pictures?.forSheet(null);
     });

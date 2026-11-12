@@ -312,10 +312,11 @@
 }
 
 .lf-rail__head {
+  flex: none;
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 20px 20px 8px;
+  padding: 16px 16px 8px;
 }
 
 .lf-rail__title {
@@ -335,10 +336,11 @@
 
 .lf-rail__prog,
 .lf-menu__head {
+  flex: none;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 20px 12px;
+  padding: 0 16px 12px;
 }
 
 .lf-rail__track,
@@ -371,6 +373,14 @@
   margin: 0;
   padding: 0 8px 12px;
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: 8px;
+}
+
+// the rail's list is the only thing in it that scrolls: it takes what is left under the head, never more
+.lf-rail .lf-steps {
+  flex: 1 1 0;
 }
 
 .lf-step {
@@ -764,15 +774,34 @@
 
 // ───────── desktop (mouse, ≥1280): page list rail + legacy step-footer ─────────
 @include dt.desktop-only {
-  // legacy form-sidebar-desktop: a floating card at the left edge
+  // legacy form-sidebar-desktop: a floating card at the left edge; the form sits right next to it (no dead zone between),
+  // the pair centred when the screen is wider than both
+  .lf {
+    --lf-col-max: 1080px;
+  }
+  .lf-mid {
+    justify-content: center;
+    gap: 8px;
+  }
   .lf-rail {
     display: flex;
+    flex: none;
     margin: 12px 0 12px 16px;
     width: 244px;
+    min-height: 0;
+    overflow: hidden;
     border: 1px solid var(--border-muted);
     border-radius: 16px;
     background: var(--pf-card-bg, var(--surface-1));
     box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+  }
+  .lf-col {
+    flex: 1 1 auto;
+    max-width: var(--lf-col-max);
+  }
+  .lf-col .lf-page {
+    max-width: none;
+    margin: 0;
   }
 }
 
@@ -780,7 +809,7 @@
 // :host-context (dt.desktop-only); a mouse device ≥1280px is matched on <html> directly.
 @media (min-width: dt.$desktop-min) { // device-aware below: html:not(.device-touch)
   // legacy step-footer, inside a LENT bar (the public site's pill): Back on the left, Next on the right (the rail holds the
-  // page list). The lab's in-page foot (.lf-foot below) has its own rules.
+  // page list). The lab's Back / Next are the bottom nav's page-actions slot (.pf-navact below).
   ::ng-deep html:not(.device-touch) [data-formbar] .lf-bar {
     justify-content: space-between;
     max-width: 896px;
@@ -859,78 +888,56 @@
   }
 }
 
-// ───────── the lab's step foot (legacy step-footer): Back · Pages · Next under the form column ─────────
-// In the page, under the scroller, above the bottom nav (shell-main clears it). Its inner box IS the form column (same
-// max width, same side padding), so Back starts at the fields' left edge and Next ends at their right edge.
-.lf-foot {
+// ───────── the lab's Back · Pages · Next: the bottom nav's page-actions slot (NavActionsService) ─────────
+// Rendered inside the LMS bar (.pf-navact > .lf-bar), on the right before Messages / bell / avatar. The buttons ARE the
+// kit's (pf-btn secondary / tertiary / primary at their normal size — owner 2026-11-11: only the form body is touch-sized);
+// here only the layout, the icon size, the labels and the hold fills. The hold line along the bar's top is not used.
+.pf-navact .lf-bar {
   flex: none;
-  position: relative;
-  z-index: 3;
-  border-top: 1px solid var(--pf-line, var(--border-muted));
-  background: var(--bg-primary);
-  padding: 10px 0;
-}
-
-.lf-foot__in {
-  width: 100%;
-  max-width: var(--lf-col-max);
-  margin: 0 auto;
-  padding: 0 var(--lf-col-pad);
-}
-
-.lf-foot .lf-bar {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.lf-foot .lf-back {
-  grid-column: 1;
-  justify-self: start;
+.pf-navact .lf-bar__hold {
+  display: none;
 }
 
-.lf-foot .lf-bar__mid {
-  grid-column: 2;
-}
-
-.lf-foot .lf-next {
-  grid-column: 3;
-  justify-self: end;
-}
-
-// the buttons ARE the kit's (pf-btn secondary / tertiary / primary at their normal size — owner 2026-11-11: only the form
-// body is touch-sized); here only their icon size and the labels the lent bar swaps
-.lf-foot .lf-bar__icon {
+.pf-navact .lf-bar__icon {
   width: 16px;
   height: 16px;
 }
 
-.lf-foot .lf-bar__lbl {
+.pf-navact .lf-bar__lbl {
   font: inherit;
 }
 
-.lf-foot .lf-bar__lbl--wide {
+.pf-navact .lf-bar__lbl--wide {
   display: inline;
 }
 
-.lf-foot .lf-bar__lbl--narrow {
+.pf-navact .lf-bar__lbl--narrow {
   display: none;
 }
 
-.lf-foot .lf-next {
+.pf-navact .lf-bar__mid {
+  flex: none;
+}
+
+.pf-navact .lf-next,
+.pf-navact .lf-pages {
   position: relative;
   overflow: hidden;
-  min-width: 120px;
 }
 
-// Next fills itself while held (legacy step-footer); the line along the foot's top is for Pages' hold only
-.lf-foot .lf-bar:has(.lf-next[data-holding]) .lf-bar__hold {
-  transform: scaleX(0);
-  transition: none;
+.pf-navact .lf-next {
+  min-width: 104px;
 }
 
-.lf-foot .lf-next::after {
+// Next / Pages fill themselves while held (legacy step-footer)
+.pf-navact .lf-next::after,
+.pf-navact .lf-pages::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -941,27 +948,86 @@
   pointer-events: none;
 }
 
-.lf-foot .lf-next[data-holding]::after {
+.pf-navact .lf-pages::after {
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.pf-navact .lf-next[data-holding]::after,
+.pf-navact .lf-pages[data-holding]::after {
   transform: scaleX(1);
   transition: transform var(--fe-hold-ms, 1500ms) linear;
 }
 
-.lf-foot .lf-next > * {
+.pf-navact .lf-next > *,
+.pf-navact .lf-pages > * {
   position: relative;
   z-index: 1;
 }
 
-// mouse desktop: the rail holds the page list, so the foot is just Back · Next
+// the Pages menu opens upward from the bar's right edge (not centred on the button: it would run off the screen)
+.pf-navact .lf-menu {
+  left: auto;
+  right: 0;
+  transform: none;
+  animation-name: lf-pop-end;
+}
+
+@keyframes lf-pop-end {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+// mouse desktop: the rail holds the page list, so the bar only has Back · Next
 @include dt.desktop-only {
-  .lf-foot .lf-bar__mid {
+  .pf-navact .lf-bar__mid {
     display: none;
   }
 }
 
-@media (max-width: 480px) {
-  .lf-foot .lf-bar {
-    gap: 8px;
+// phones: Back and Pages are icon-only so Next keeps its word beside Messages / bell / avatar
+@media (max-width: 639px) {
+  .pf-navact .lf-back,
+  .pf-navact .lf-pages {
+    width: 44px;
+    padding: 0;
   }
+  .pf-navact .lf-back .lf-bar__lbl,
+  .pf-navact .lf-pages .lf-bar__lbl {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .pf-navact .lf-next {
+    min-width: 0;
+    padding: 0 12px;
+  }
+  .pf-navact .lf-bar__lbl--wide {
+    display: none;
+  }
+  .pf-navact .lf-bar__lbl--narrow {
+    display: inline;
+  }
+  .pf-navact .lf-bar {
+    gap: 6px;
+  }
+}
+
+.lf-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {

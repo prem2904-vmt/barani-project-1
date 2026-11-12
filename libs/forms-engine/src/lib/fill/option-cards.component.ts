@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, effect, forwardRef, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, forwardRef, inject, input, output } from '@angular/core';
 import { Lookup, isShown } from '../core/rules';
 import { Answers, FieldDef, OptionDef } from '../core/types';
 import { FieldHostComponent } from './field-host.component';
@@ -19,6 +19,8 @@ import { FieldHostComponent } from './field-host.component';
     <div
       class="fe-cards"
       [class.fe-cards--half]="field().width === 'half'"
+      [class.fe-cards--seg]="seg()"
+      [style.--fe-seg-n]="seg() ? (field().options?.length ?? 0) : null"
       [attr.role]="multiple() ? 'group' : 'radiogroup'"
       [attr.aria-labelledby]="labelId()"
     >
@@ -82,6 +84,17 @@ export class OptionCardsComponent {
   readonly toggle = output<string>();
 
   private seen: Set<string> | null = null;
+
+  /** A single choice of 2-4 short options (Male / Female) sits side by side as one segmented row, not stacked cards. */
+  protected readonly seg = computed(() => {
+    const opts = this.field().options ?? [];
+    return (
+      !this.multiple() &&
+      opts.length >= 2 &&
+      opts.length <= 4 &&
+      opts.every((o) => !o.description && !(o.subFields?.length) && o.label.length <= 16)
+    );
+  });
 
   constructor() {
     effect(() => {

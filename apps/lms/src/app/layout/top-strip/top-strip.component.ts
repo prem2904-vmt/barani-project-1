@@ -44,6 +44,7 @@ import {
 import { draftCap, draftMenuActions, draftSplit, draftTitle } from "./draft-tray";
 import { NgTemplateOutlet } from "@angular/common";
 import { FormBarService } from "../../features/casesheets/data/form-bar/form-bar.service";
+import { NavActionsService } from "../nav-actions/nav-actions.service";
 import { BetaFeaturesService } from "../../core/services/beta-features.service";
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from "@angular/router";
 import { filter } from "rxjs/operators";
@@ -127,6 +128,8 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Case sheets (dark build): an OPEN case sheet lends its Back · Pages · Next to this bar (one bar, owner
    *  2026-11-02). Null everywhere else, so the lab's bar is unchanged. */
   protected readonly formBar = inject(FormBarService);
+  /** A page's contextual actions (e.g. a case sheet's Back / Next), shown on the right of the bar. */
+  protected readonly navActions = inject(NavActionsService);
   /** Bottom-bar draft shelf (published by the active work screen). */
   protected readonly draftShelf = inject(DraftShelfService);
   private readonly zoom = inject(ZoomTransitionService);

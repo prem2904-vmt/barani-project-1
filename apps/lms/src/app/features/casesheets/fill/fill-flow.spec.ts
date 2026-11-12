@@ -12,6 +12,7 @@ import { CasesApi } from '../data/cases/cases-api';
 import { SESSION_TIMING } from '../data/cases/case-session';
 import { MockCasesApi } from '../data/cases/mock-cases-api';
 import { FormBarService } from '../data/form-bar/form-bar.service';
+import { NavActionsService } from '../../../layout/nav-actions/nav-actions.service';
 import { CasePage, HOLD_FINISH, HOLD_LEAVE, HOLD_NOTE } from './case.page';
 
 /**
@@ -39,11 +40,16 @@ const FLOW: FormDefinition = {
     <nav class="test-bar" data-bar>
       @if (bar.template(); as t) { <ng-container [ngTemplateOutlet]="t" /> }
     </nav>
+    <!-- the LMS bar's page-actions slot (top-strip renders the same) -->
+    <div class="pf-navact" data-step-foot data-nav-actions>
+      @if (actions.template(); as t) { <ng-container [ngTemplateOutlet]="t" /> }
+    </div>
   `,
 })
 class Host {
   readonly id = input.required<string>();
   protected readonly bar = inject(FormBarService);
+  protected readonly actions = inject(NavActionsService);
 }
 
 // The page provides its own CasesApi (CASESHEETS_DATA_PROVIDERS); the spec adds the mock on top. The added provider
@@ -122,8 +128,9 @@ describe('case sheet filling (legacy gestures, the lab step foot)', () => {
     // the lab sheet carries the LMS patient: the pill's patient chip names them (the form has no name field)
     expect(q('pf-hero-band [data-patient]')?.textContent).toContain('Asha');
     expect(bar().querySelector('.lf-bar')).not.toBeNull();
-    // the foot is inside the form's column (beside the rail, under the scroller), not in the LMS bar
-    expect(bar().closest('.lf-col')?.querySelector(':scope > main.lf-scroll')).not.toBeNull();
+    // the controls are the bottom nav's page-actions slot, not a strip in the page and not the public pill
+    expect(el.querySelector('app-case-page [data-step-foot], app-case-page .lf-foot')).toBeNull();
+    expect(TestBed.inject(NavActionsService).template()).not.toBeNull();
     expect(lent().querySelector('.lf-bar')).toBeNull();
     expect(TestBed.inject(FormBarService).template()).toBeNull();
     expect((bar().querySelector('.lf-back') as HTMLButtonElement).disabled).toBe(true);
@@ -259,9 +266,11 @@ describe('case sheet filling (legacy gestures, the lab step foot)', () => {
   it('leaving the sheet leaves nothing lent to the bar', async () => {
     expect(bar().querySelector('.lf-bar')).not.toBeNull();
     const formBar = TestBed.inject(FormBarService);
+    const actions = TestBed.inject(NavActionsService);
     f.destroy();
     destroyed = true;
     expect(formBar.template()).toBeNull();
+    expect(actions.template()).toBeNull();
     expect(document.documentElement.classList.contains('cs-touch')).toBe(false);
   });
 });

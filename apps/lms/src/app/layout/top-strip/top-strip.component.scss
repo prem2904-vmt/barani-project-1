@@ -1734,3 +1734,16 @@ a.pf-ts-tenant:hover {
   align-self: stretch;
   align-items: center;
 }
+
+/* ── Page actions (NavActionsService): a page's own Back / Next sit on the right of the bar, before Messages / bell /
+   avatar. Kit pf-btn at their normal size; on phones only the primary keeps its label. ── */
+.pf-navact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 4px;
+  min-width: 0;
+}
+@media (max-width: 639px) {
+  .pf-navact { gap: 6px; margin-right: 0; }
+}
