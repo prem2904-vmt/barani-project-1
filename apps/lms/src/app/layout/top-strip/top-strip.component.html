@@ -191,6 +191,13 @@
          Tenant pill is sm:hidden so only bell + avatar show on mobile. -->
   <div class="pf-ts-right flex items-center gap-2 flex-shrink-0">
 
+    @if (navActions.template(); as actionsTpl) {
+    <!-- A page's own actions (case sheet: Back · Pages · Next), lent through NavActionsService; the work areas stay. -->
+    <div class="pf-navact" data-nav-actions role="group" aria-label="Page actions">
+      <ng-container [ngTemplateOutlet]="actionsTpl" />
+    </div>
+    }
+
     @if (!themeService.isNewDesign()) {
     <!-- CLASSIC primary nav — icon-first hybrid on the right: the active
            item shows its label, the others slide theirs out on hover. -->

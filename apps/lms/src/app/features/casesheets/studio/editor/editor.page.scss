@@ -21,9 +21,10 @@
     flex-wrap: nowrap;
     margin-inline-end: 8px; // matches the back button's 8px gutter; More sat flush on the screen edge
   }
-  .ed-actions .pf-btn {
-    min-width: 44px;
-    padding-inline: 12px;
+  .ed-actions .pf-hb-btn {
+    min-width: 34px;
+    justify-content: center;
+    padding-inline: 10px;
   }
   .ed-desk-only {
     display: none;
@@ -44,28 +45,57 @@
   min-width: 0;
 }
 
+// the chips are the kit's own (30px); the status strip (Draft · version 1 · Saved just now) is one of them, inside the band
 .ed-chip {
-  min-height: 40px;
   gap: 8px;
-  white-space: normal;
+}
+
+.ed-chip__st {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .ed-chip--err {
-  min-height: var(--pf-touch);
   color: var(--red-text, #b91c1c);
   cursor: pointer;
 }
 
+// the card title is the page's own name (authored), so it keeps its case; the rail / side card keep the kit's caps label
+.ed-main__title {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+// ONE row that fills the body: every column starts at the same top and ends at the same bottom, and each card's body
+// scrolls (the kit's no-page-scroll rule); the heads share one height so the first rows line up too
 .ed-body {
   display: grid;
   grid-template-columns: 268px minmax(0, 1fr) 360px;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
   gap: 16px;
+}
+
+.ed-body > .pf-card {
+  margin: 0;
+}
+
+.ed-body > .pf-card > .pf-card__head {
+  min-height: 52px;
+  flex-wrap: nowrap;
+}
+
+.ed-main__title,
+.ed-body .pf-card__count {
+  white-space: nowrap;
 }
 
 @media (min-width: 1440px) {
   .ed-body {
     grid-template-columns: 284px minmax(0, 1fr) 392px;
-    gap: 18px;
   }
 }
 
@@ -73,7 +103,6 @@
 @media (min-width: 1760px) {
   .ed-body {
     grid-template-columns: 260px minmax(560px, 1fr) 400px 380px;
-    gap: 20px;
   }
 }
 
@@ -468,10 +497,6 @@
 
 @media (hover: hover) and (pointer: fine) {
   :host-context(html.device-desktop) {
-    .ed-body {
-      padding-top: 2px;
-    }
-
     .ed-mainbody {
       gap: 10px;
       padding: 12px 16px 24px;
@@ -558,5 +583,4 @@
 
 .ed-failchip {
   color: var(--red-text, #b91c1c);
-  font-weight: 600;
 }

@@ -232,3 +232,35 @@ describe('Studio editor: band actions on a phone', () => {
     expect(scss).toMatch(/@media \(max-width: 640px\)[\s\S]*\.ed-desk-only \{\s*display: none;[\s\S]*\.ed-actions__lbl \{[\s\S]*clip-path: inset\(50%\)/);
   });
 });
+
+describe('Studio editor: polish (owner 2026-11-12)', () => {
+  const read = async (f: string) => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    return readFileSync(resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/studio/editor', f), 'utf8');
+  };
+  it('band actions are the band companions (pf-hb-btn / pf-hb-tool), not the 44px pf-btn', async () => {
+    const html = await read('editor.page.html');
+    const band = html.slice(html.indexOf('band-actions'), html.indexOf('band-search'));
+    expect(band).not.toContain('pf-btn');
+    expect(band).toContain('pf-hb-btn pf-hb-btn--primary');
+    expect(band).toContain('pf-hb-tool');
+  });
+  it('the status strip is an ordinary kit chip in the band context bar (no oversized override)', async () => {
+    const scss = await read('editor.page.scss');
+    expect(scss).not.toMatch(/\.ed-chip\s*\{[^}]*min-height/);
+    expect(scss).not.toMatch(/\.ed-chip--err\s*\{[^}]*min-height/);
+  });
+  it('the three columns share one row (same top and bottom) and one head height', async () => {
+    const scss = await read('editor.page.scss');
+    expect(scss).toMatch(/\.ed-body\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\)[^}]*align-items:\s*stretch/);
+    expect(scss).toMatch(/\.ed-body > \.pf-card > \.pf-card__head\s*\{[^}]*min-height:\s*52px/);
+  });
+  it('the canvas title is sentence case and the empty state is compact', async () => {
+    const html = await read('editor.page.html');
+    const scss = await read('editor.page.scss');
+    expect(html).not.toContain('No pages yet');
+    expect(html).toMatch(/pf-empty pf-empty--compact" data-empty="pages"/);
+    expect(scss).toMatch(/\.ed-main__title\s*\{[^}]*text-transform:\s*none/);
+  });
+});

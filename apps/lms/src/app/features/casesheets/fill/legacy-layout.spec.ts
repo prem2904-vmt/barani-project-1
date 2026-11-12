@@ -41,35 +41,47 @@ describe('the fill screen header is the standard band', () => {
   });
 });
 
-/** Owner 2026-11-11: "the next button is not getting synced" — Back / Next sit under the form column, as wide as it. */
-describe('the lab step foot', () => {
-  it('lives in the page under the scroller, inside the form column', () => {
-    expect(html).toMatch(/<div class="lf-col">\s*<main[\s\S]*?<\/main>\s*@if \(nav\.isLab\) \{[\s\S]*?<footer class="lf-foot" data-step-foot>\s*<div class="lf-foot__in"><ng-container \[ngTemplateOutlet\]="formBarTpl" \/>/);
+/** Owner 2026-11-12: "the Next can come in the nav bar" — Back · Pages · Next are the bottom nav's page-actions slot. */
+describe('the lab page actions (bottom nav slot)', () => {
+  it('there is no footer strip in the page any more', () => {
+    expect(html).not.toMatch(/lf-foot|data-step-foot/);
+    expect(scss).not.toMatch(/\.lf-foot/);
   });
-  it('the foot\'s inner box IS the form column (same max width + side padding as the page)', () => {
-    expect(scss).toMatch(/\.lf-page\s*\{[^}]*max-width:\s*var\(--lf-col-max\)[^}]*padding:\s*16px var\(--lf-col-pad\) 32px/);
-    expect(scss).toMatch(/\.lf-foot__in\s*\{[^}]*max-width:\s*var\(--lf-col-max\)[^}]*margin:\s*0 auto[^}]*padding:\s*0 var\(--lf-col-pad\)/);
-    // Back at the column's left edge, Next at its right edge, whatever is in the middle
-    expect(scss).toMatch(/\.lf-foot \.lf-bar\s*\{[^}]*grid-template-columns:\s*1fr auto 1fr/);
-    expect(scss).toMatch(/\.lf-foot \.lf-back\s*\{[^}]*justify-self:\s*start/);
-    expect(scss).toMatch(/\.lf-foot \.lf-next\s*\{[^}]*justify-self:\s*end/);
+  it('the lab lends the controls to NavActionsService, the public site to its own pill (FormBarService)', () => {
+    expect(ts).toMatch(/const slot = lab \? this\.navActions : this\.formBar;/);
+    expect(ts).toMatch(/this\.navActions\.clear\(this\)/);
   });
-  it('in the lab the foot\'s buttons are the kit\'s at their normal size (owner: only the form body is touch-sized)', () => {
+  it('the buttons are the kit\'s at their normal size (owner: only the form body is touch-sized)', () => {
     expect(html).toMatch(/class="lf-back pf-touch" \[class\.lf-bar__item\]="!nav\.isLab" \[class\.pf-btn\]="nav\.isLab" \[class\.pf-btn--secondary\]="nav\.isLab"/);
     expect(html).toMatch(/class="lf-next pf-touch"\s+\[class\.lf-bar__item\]="!nav\.isLab"\s+\[class\.pf-btn\]="nav\.isLab"\s+\[class\.pf-btn--primary\]="nav\.isLab"/);
     expect(html).toMatch(/\[class\.pf-btn--tertiary\]="nav\.isLab"/);
-    // nothing in the foot re-sizes the kit buttons
-    const foot = scss.match(/\.lf-foot \.lf-(back|next|pages|finish)[^{]*\{[^}]*\}/g) ?? [];
-    expect(foot.length).toBeGreaterThan(0);
-    for (const rule of foot) expect(rule, rule).not.toMatch(/(^|[^-])(height|font-size|padding):/);
+    // nothing in the slot re-sizes the kit buttons
+    const rules = scss.match(/\.pf-navact \.lf-(back|next|pages|finish)[^{]*\{[^}]*\}/g) ?? [];
+    expect(rules.length).toBeGreaterThan(0);
+    for (const rule of rules) expect(rule, rule).not.toMatch(/(^|[^-])(height|font-size):/);
   });
-  it('the lent-bar desktop rules only reach a lent bar ([data-formbar]), never the lab foot', () => {
+  it('the lent-bar desktop rules only reach a lent bar ([data-formbar]), never the slot', () => {
     const lent = scss.match(/::ng-deep html:not\(\.device-touch\) [^{]+/g) ?? [];
     expect(lent.length).toBeGreaterThan(0);
     for (const sel of lent) expect(sel).toContain('[data-formbar]');
   });
-  it('the lab never lends the controls to the LMS bar', () => {
-    expect(ts).toMatch(/const open = !this\.nav\.isLab && /);
+});
+
+describe('band, rail and layout polish (owner 2026-11-12)', () => {
+  it('the title is shown once: the page chip carries "Page x of y" and the page title only when it differs', () => {
+    expect(html).toMatch(/@if \(pageTitleShown\(\); as t\)/);
+    expect(ts).toMatch(/pageTitleShown = computed/);
+  });
+  it('the rail shows the position once ("x of y"), not a second counter', () => {
+    expect(html).not.toContain('lf-rail__of');
+    expect(html).not.toContain('visitedCount()');
+    expect((html.match(/ of \{\{ wiz\.pages\(\)\.length \}\}/g) ?? []).length).toBe(2); // band chip + rail head
+  });
+  it('the rail list scrolls inside the rail (no clipped last page) and the form sits next to the rail', () => {
+    expect(scss).toMatch(/\.lf-rail \.lf-steps\s*\{[^}]*flex:\s*1 1 0/);
+    expect(scss).toMatch(/\.lf-steps,\s*\.lf-menu__list\s*\{[^}]*overflow-y:\s*auto/);
+    expect(scss).toMatch(/\.lf-mid\s*\{[^}]*justify-content:\s*center/);
+    expect(scss).toMatch(/\.lf-col \.lf-page\s*\{[^}]*margin:\s*0/);
   });
 });
 
