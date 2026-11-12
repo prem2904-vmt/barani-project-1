@@ -165,14 +165,14 @@ export function sheetColumns(web: boolean, isPhone: boolean): ColDef<FormRow>[] 
         return b;
       },
     },
-    { headerName: 'Department', colId: 'department', flex: 1, minWidth: 200, valueGetter: (p) => p.data?.departmentName ?? 'Other' },
+    { headerName: 'Department', colId: 'department', flex: 1, minWidth: 180, valueGetter: (p) => p.data?.departmentName ?? 'Other' },
     {
-      headerName: 'Origin', colId: 'origin', minWidth: 120, maxWidth: 160, editable: false,
+      headerName: 'Origin', colId: 'origin', minWidth: 110, maxWidth: 160, editable: false,
       valueGetter: (p) => (p.data ? ORIGIN_WORDS[p.data.origin].label : ''),
       cellRenderer: (p: ICellRendererParams<FormRow>) => (p.data ? originElement(p.data.origin, p.data.newerMaster) : document.createElement('span')),
     },
     { headerName: 'Version', colId: 'version', minWidth: 90, maxWidth: 110, valueGetter: (p) => (p.data?.published ? `v${p.data.published.versionNo}` : '—') },
-    { headerName: 'Status', colId: 'status', minWidth: 160, valueGetter: (p) => (p.data ? statusLabel(p.data) : '') },
+    { headerName: 'Status', colId: 'status', minWidth: 120, valueGetter: (p) => (p.data ? statusLabel(p.data) : '') },
     {
       headerName: 'Pending', colId: 'pending', minWidth: 90, maxWidth: 110, type: 'numericColumn',
       valueGetter: (p) => (p.data ? (p.context as SheetGridContext).pendingOf(p.data) : 0),
@@ -184,7 +184,7 @@ export function sheetColumns(web: boolean, isPhone: boolean): ColDef<FormRow>[] 
       },
     },
     {
-      headerName: 'Updated', colId: 'updated', minWidth: 130,
+      headerName: 'Updated', colId: 'updated', minWidth: 110,
       valueGetter: (p) => p.data?.draft?.updatedAt ?? p.data?.published?.publishedAt ?? '',
       valueFormatter: (p) => (p.value ? whenText(p.value as string) : '—'),
     },
