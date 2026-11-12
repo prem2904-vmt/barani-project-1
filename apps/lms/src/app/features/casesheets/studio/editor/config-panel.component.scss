@@ -259,6 +259,15 @@
   color: var(--text-secondary);
 }
 
+.cfg-how ol {
+  list-style: decimal;
+}
+
+.cfg-warn ul,
+.cfg-info ul {
+  list-style: disc;
+}
+
 .cfg-warn {
   border-color: color-mix(in srgb, var(--amber-text, #b45309) 45%, var(--pf-line));
 }
