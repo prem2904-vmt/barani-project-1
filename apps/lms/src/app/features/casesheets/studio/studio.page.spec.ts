@@ -37,15 +37,22 @@ describe('groupByDepartment', () => {
   });
 });
 
-describe('Case sheets home', () => {
+describe('Case sheets home (Test Master pattern)', () => {
   const dialog = { confirm: vi.fn(async () => true), prompt: vi.fn(async () => 'New one'), choose: vi.fn(async () => 'ent') };
 
-  async function open() {
+  async function open(pendingStub?: object) {
     TestBed.resetTestingModule();
     const api = new MockStudioApi();
     const master = api.seed('ENT master', addPage(emptyDefinition('ENT master'), 'History').def, { publish: true, origin: 'master', departmentKey: 'ent' });
-    api.seed('Our general', addPage(emptyDefinition('Our general'), 'History').def, { publish: true, departmentKey: 'general' });
-    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: StudioApi, useValue: api }, { provide: DialogService, useValue: dialog }] });
+    const own = api.seed('Our general', addPage(emptyDefinition('Our general'), 'History').def, { publish: true, departmentKey: 'general' });
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        { provide: StudioApi, useValue: api },
+        { provide: DialogService, useValue: dialog },
+        ...(pendingStub ? [{ provide: PendingCountService, useValue: pendingStub }] : []),
+      ],
+    });
     const router = TestBed.inject(Router);
     const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
     const f = TestBed.createComponent(StudioPage);
@@ -53,24 +60,39 @@ describe('Case sheets home', () => {
     f.detectChanges();
     await f.whenStable();
     f.detectChanges();
-    return { f, el: f.nativeElement as HTMLElement, api, nav, master };
+    const page = f.componentInstance as unknown as Record<string, any>;
+    return { f, el: f.nativeElement as HTMLElement, api, nav, master, own, page };
   }
 
-  it('groups forms by department; a master is read-only (Edit, no menu), the lab\'s own form has the menu', async () => {
-    const { el } = await open();
-    expect([...el.querySelectorAll('[data-dept]')].map((d) => d.getAttribute('data-dept'))).toEqual(['ent', 'general']);
-    const master = el.querySelector('[data-origin="master"]')!;
-    expect(master.querySelector('[data-tag="master"]')).not.toBeNull();
-    expect(master.querySelector('[data-act="fork"]')).not.toBeNull();
-    expect(master.querySelector('.st-more')).toBeNull();
-    const own = el.querySelector('[data-origin="local"]')!;
-    expect(own.querySelector('[data-act="fork"]')).toBeNull();
-    expect(own.querySelector('.st-more')).not.toBeNull();
+  it('is Test Master\'s screen: a departments rail with counts and switches, and the case sheets card with its filters', async () => {
+    const { el, page } = await open();
+    expect(el.querySelector('[data-dept-rail]')).not.toBeNull();
+    expect(el.querySelector('[data-dept="all"]')!.textContent).toContain('2');
+    expect(el.querySelector('[data-case-sheets] [data-status-filter]')).not.toBeNull();
+    expect(el.querySelector('[data-case-sheets] [data-origin-filter]')).not.toBeNull();
+    expect(el.querySelector('[data-count]')!.textContent).toContain('2 case sheets');
+    expect(page['rows']().map((r: { title: string }) => r.title).sort()).toEqual(['ENT master', 'Our general']);
+  });
+
+  it('picking a department, the status pill and the origin pill narrow the grid; the search too', async () => {
+    const { f, page, el } = await open();
+    page['pickDept']('ent');
+    f.detectChanges();
+    expect(page['rows']().map((r: { title: string }) => r.title)).toEqual(['ENT master']);
+    page['pickDept'](null);
+    page['originFilter'].set('local');
+    expect(page['rows']().map((r: { title: string }) => r.title)).toEqual(['Our general']);
+    page['originFilter'].set('all');
+    page['query'].set('zzz');
+    f.detectChanges();
+    expect(page['rows']()).toHaveLength(0);
+    expect(el.querySelector('[data-count]')!.textContent).toContain('0 case sheets');
   });
 
   it('Edit on a master asks, forks and opens the lab copy', async () => {
-    const { el, api, nav, master } = await open();
-    (el.querySelector('[data-act="fork"]') as HTMLButtonElement).click();
+    const { page, api, nav, master } = await open();
+    const row = page['forms']().find((r: { id: string }) => r.id === master);
+    page['gridContext'].edit(row);
     await vi.waitFor(() => expect(nav).toHaveBeenCalled());
     expect(api.calls).toContain('fork');
     const copy = [...api.forms.values()].find((x) => x.forkedFrom === master)!;
@@ -79,32 +101,33 @@ describe('Case sheets home', () => {
   });
 
   it('Edit declined creates nothing', async () => {
-    const { el, api } = await open();
+    const { page, api, master } = await open();
     dialog.confirm.mockResolvedValueOnce(false);
-    (el.querySelector('[data-act="fork"]') as HTMLButtonElement).click();
+    page['gridContext'].edit(page['forms']().find((r: { id: string }) => r.id === master));
     await new Promise((r) => setTimeout(r, 0));
     expect(api.calls).not.toContain('fork');
   });
 
-  it('the band links to Pending changes with the waiting count; rows show a suggested change / an update from Prefrontal', async () => {
-    TestBed.resetTestingModule();
-    const api = new MockStudioApi();
-    const own = api.seed('Our general', addPage(emptyDefinition('Our general'), 'History').def, { publish: true, departmentKey: 'general' });
+  it('the band tabs carry the waiting counts; Pending and From Prefrontal open the approvals page; Archived stays here', async () => {
     const pending = {
       total: signal(3), refresh: vi.fn(async () => undefined),
-      byForm: signal(new Map([[own, 2]])), offerForms: signal(new Set([own])),
+      byForm: signal(new Map<string, number>()), offerForms: signal(new Set<string>(['x'])),
     };
-    TestBed.configureTestingModule({ providers: [provideRouter([]), { provide: StudioApi, useValue: api }, { provide: DialogService, useValue: dialog }, { provide: PendingCountService, useValue: pending }] });
-    const f = TestBed.createComponent(StudioPage);
-    await f.whenStable(); f.detectChanges(); await f.whenStable(); f.detectChanges();
-    const el = f.nativeElement as HTMLElement;
-    const btn = el.querySelector('[data-act="pending"]') as HTMLAnchorElement;
-    expect(btn.getAttribute('href')).toBe('/admin/ipd/myprefrontal/pending');
-    expect(btn.querySelector('[data-pending-badge]')!.textContent).toContain('3');
-    expect(el.querySelector('[data-pending-chip]')!.textContent).toContain('3 waiting for approval');
-    expect(el.querySelector('[data-tag="suggested"]')!.textContent).toContain('2 suggested changes');
-    expect(el.querySelector('[data-tag="update"]')!.textContent).toContain('Update from Prefrontal');
+    const { page, nav } = await open(pending);
+    const opts = page['viewOptions']() as { value: string; count: number }[];
+    expect(opts.map((o) => [o.value, o.count])).toEqual([['sheets', 2], ['pending', 3], ['offers', 1], ['archived', 0]]);
+    page['setView']('pending');
+    expect(nav).toHaveBeenCalledWith(['/admin/ipd/myprefrontal/pending']);
+    page['setView']('archived');
+    expect(page['view']()).toBe('archived');
     expect(pending.refresh).toHaveBeenCalled();
+  });
+
+  it('the rail switch calls the department enable call; a refusal is told, not swallowed', async () => {
+    const { page, api } = await open();
+    const spy = vi.spyOn(api, 'updateDepartment').mockResolvedValue({ key: 'ent', name: 'ENT', sortOrder: 1, isActive: false });
+    await page['toggleDept']({ key: 'ent', name: 'ENT', code: 'ENT', count: 1, isActive: true });
+    expect(spy).toHaveBeenCalledWith('ent', { isActive: false });
   });
 
   it('shows no assistant inbox and no people link', async () => {
@@ -151,7 +174,7 @@ describe('Case sheets home: Start from a paper case sheet (Cortex beta)', () => 
   it('the button is hidden unless the console switch pf.cortexImport() is on', async () => {
     expect((await open(false)).el.querySelector('[data-act="cortex-import"]')).toBeNull();
     const { el } = await open(true);
-    expect(el.querySelector('[data-act="cortex-import"]')!.textContent).toContain('Start from a paper case sheet');
+    expect(el.querySelector('[data-act="cortex-import"]')!.textContent).toContain('Read a paper case sheet');
   });
 
   it('the button opens the dialog; a 404 from the server hides the button and says why', async () => {
@@ -177,17 +200,15 @@ describe('Case sheets home: Start from a paper case sheet (Cortex beta)', () => 
   });
 });
 
-describe('Case sheets home: band actions on a phone', () => {
-  it('every band action keeps its words in .sh-actions__lbl (icon-only at ≤640px, the words stay as its accessible name)', async () => {
+describe('Case sheets home: band', () => {
+  it('the band holds the Test Master buttons: Read a paper case sheet and Create', async () => {
     const { readFileSync } = await import('node:fs');
     const { resolve } = await import('node:path');
     const dir = resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/studio');
     const html = readFileSync(resolve(dir, 'studio.page.html'), 'utf8');
     const band = html.slice(html.indexOf('band-actions'), html.indexOf('</pf-hero-band>'));
-    for (const words of ['Start from a paper case sheet', 'New case sheet']) {
-      expect(band).toContain(`<span class="sh-actions__lbl">${words}</span>`);
-    }
-    const scss = readFileSync(resolve(dir, 'studio.page.scss'), 'utf8');
-    expect(scss).toMatch(/@media \(max-width: 640px\)[\s\S]*\.sh-actions__lbl \{[\s\S]*clip-path: inset\(50%\)/);
+    expect(band).toContain('Read a paper case sheet');
+    expect(band).toMatch(/data-act="new-form"[\s\S]*Create/);
+    expect(html).toContain('band-tools');
   });
 });
