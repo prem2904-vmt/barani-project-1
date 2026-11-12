@@ -63,3 +63,34 @@ describe('repeat fill', () => {
     expect(r.last()).toBeUndefined();
   });
 });
+
+describe('repeat fill: legacy count box and Remove (G1)', () => {
+  const nav = { goTo: () => undefined, pageTitle: (k: string) => k, isLegacy: () => true };
+  const ulcers = f('ulcers', 'repeat', {
+    label: 'No. of Ulcer',
+    config: { minCount: 1, maxCount: 10, defaultCount: 1, labelPrefix: 'Ulcer' },
+    children: [f('site', 'text', { label: 'Site' })],
+  });
+
+  it('a count box with the question beside it; one block per count, each with Remove; no Add another', async () => {
+    const r = await renderKind(RepeatFill, ulcers, null, { wizard: nav });
+    expect(r.el.querySelector('.fe-countrow__lbl')?.textContent?.trim()).toBe('No. of Ulcer');
+    expect(r.el.querySelectorAll('.fe-row').length).toBe(1);
+    expect(r.el.querySelector('.fe-add')).toBeNull();
+    const box = r.el.querySelector<HTMLInputElement>('input[data-count="rows"]')!;
+    box.value = '3';
+    box.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect((r.last() as unknown[]).length).toBe(3);
+    await r.setValue([{}, {}, {}]);
+    expect(r.el.querySelectorAll('.fe-row').length).toBe(3);
+    expect(r.el.querySelectorAll('.fe-row__remove').length).toBe(3);
+    expect(r.el.querySelector('.fe-row__title')?.textContent?.trim()).toBe('Ulcer 1');
+  });
+
+  it('a new case sheet keeps Add another and the bin', async () => {
+    const r = await renderKind(RepeatFill, ulcers, null);
+    expect(r.el.querySelector('.fe-add')).not.toBeNull();
+    expect(r.el.querySelector('.fe-countrow')).toBeNull();
+  });
+});

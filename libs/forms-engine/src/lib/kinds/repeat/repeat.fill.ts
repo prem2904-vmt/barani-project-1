@@ -3,7 +3,7 @@ import { FeDialog, PfIconComponent } from '../../kit';
 import { isAnswered, withValue } from '../../core/pages';
 import { lookupIn, isShown } from '../../core/rules';
 import { Answers, FieldDef } from '../../core/types';
-import { KindFill } from '../../fill/contract';
+import { KindFill, injectLegacy } from '../../fill/contract';
 import { FieldHostComponent } from '../../fill/field-host.component';
 
 /**
@@ -19,12 +19,40 @@ import { FieldHostComponent } from '../../fill/field-host.component';
   imports: [FieldHostComponent, PfIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="fe-rows" role="group" [attr.aria-labelledby]="labelId()">
+    <div class="fe-rows" [class.fe-rows--legacy]="legacy()" role="group" [attr.aria-labelledby]="labelId()">
+      @if (legacy()) {
+        <!-- legacy recursive-input: the question and a count box on one row, then one block per count -->
+        <div class="fe-countrow">
+          <span class="fe-countrow__lbl">{{ field().label }}</span>
+          <input
+            type="number"
+            class="fe-countrow__in"
+            data-count="rows"
+            [attr.min]="minCount()"
+            [attr.max]="maxCount()"
+            [attr.aria-label]="field().label"
+            [value]="rows().length"
+            [disabled]="disabled()"
+            (input)="typeCount($any($event.target).value)"
+          />
+        </div>
+      }
       @for (row of rows(); track $index; let i = $index) {
         <section class="fe-row" [attr.aria-label]="rowTitle(i)" [attr.data-row]="i">
           <header class="fe-row__head">
             <span class="fe-row__title">{{ rowTitle(i) }}</span>
-            @if (rows().length > minCount()) {
+            @if (rows().length > minCount() && legacy()) {
+              <button
+                type="button"
+                class="fe-row__remove"
+                [attr.aria-label]="'Remove ' + rowTitle(i)"
+                [disabled]="disabled()"
+                (click)="remove(i)"
+              >
+                <pf-icon name="x" [size]="14" />
+                Remove
+              </button>
+            } @else if (rows().length > minCount()) {
               <button
                 type="button"
                 class="fe-iconbtn"
@@ -49,7 +77,7 @@ import { FieldHostComponent } from '../../fill/field-host.component';
           </div>
         </section>
       }
-      @if (rows().length < maxCount()) {
+      @if (rows().length < maxCount() && !legacy()) {
         <button type="button" class="pf-btn pf-btn--secondary fe-add" [disabled]="disabled()" (click)="add()">
           <pf-icon name="plus" [size]="18" />
           {{ rows().length ? 'Add another' : 'Add ' + prefix().toLowerCase() }}
@@ -60,6 +88,7 @@ import { FieldHostComponent } from '../../fill/field-host.component';
 })
 export class RepeatFill extends KindFill {
   private readonly dialog = inject(FeDialog);
+  protected readonly legacy = injectLegacy();
   protected readonly noKeys: ReadonlySet<string> = new Set();
 
   protected readonly minCount = computed(() => (this.config()['minCount'] as number) ?? 0);
@@ -103,6 +132,15 @@ export class RepeatFill extends KindFill {
       this.setters.set(i, s);
     }
     return s;
+  }
+
+  /** Legacy count box: grow with empty blocks or cut from the end (the legacy box did not ask). */
+  protected typeCount(raw: string): void {
+    const n = parseInt(raw, 10);
+    const count = Math.max(this.minCount(), Math.min(this.maxCount(), Number.isNaN(n) ? this.minCount() : n));
+    const rows = this.rows().slice(0, count);
+    while (rows.length < count) rows.push({});
+    this.emit(rows);
   }
 
   protected add(): void {
