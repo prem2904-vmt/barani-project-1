@@ -1,8 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { AgGridAngular } from 'ag-grid-angular';
 import { Router, RouterLink } from '@angular/router';
 import { emptyDefinition } from '@prefrontal/forms-engine';
 import { PfIconComponent } from '@prefrontal/forms-engine';
-import { SkeletonRowsComponent } from '@prefrontal/shared';
+import { SegmentedComponent, SegmentedOption, SkeletonRowsComponent } from '@prefrontal/shared';
+import { ThemeService } from '../../../core/services/theme.service';
+import { ToastService } from '../../../core/services/toast.service';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
+import { DeptRailRow, SheetFilters, SheetGridContext, SheetOriginFilter, SheetStatusFilter, filterSheets, railRows, sheetColumns, sheetRowClass, sheetRowId } from './list/case-sheet-grid';
 import { DialogService } from '../../../core/services/dialog.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { casesheetLinks } from '../casesheets.routes';
@@ -51,12 +58,13 @@ export function groupByDepartment(forms: FormRow[], departments: DepartmentRow[]
 @Component({
   selector: 'app-studio-page',
   standalone: true,
-  imports: [HeroBandComponent, PfIconComponent, SkeletonRowsComponent, RouterLink, PhoneNoteComponent, CortexImportDialog, BuilderDrawerComponent],
+  imports: [HeroBandComponent, PfIconComponent, SkeletonRowsComponent, RouterLink, PhoneNoteComponent, CortexImportDialog, BuilderDrawerComponent, AgGridAngular, NgTemplateOutlet, SegmentedComponent],
   // the "New case sheet with Cortex" chat (no case sheet open: Cortex may suggest a new one, which waits for approval)
   providers: [ChatStore],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './studio.page.html',
-  styleUrls: ['./shared/page.scss', './studio.page.scss'],
+  // the list wears Test Master's stylesheet (pf-tm-*), so it is the same screen across the app
+  styleUrls: ['./shared/page.scss', '../../admin/tests/tests/tests.component.scss', './studio.page.scss'],
 })
 export class StudioPage {
   private readonly api = inject(StudioApi);
@@ -101,15 +109,114 @@ export class StudioPage {
     }
   }
 
-  private readonly shown = computed(() => {
-    const q = this.query().trim().toLowerCase();
-    return (this.forms() ?? [])
-      .filter((f) => (this.showArchived() ? f.status === 'archived' : f.status === 'active'))
-      .filter((f) => !q || f.title.toLowerCase().includes(q) || (f.specialty ?? '').toLowerCase().includes(q) || (f.departmentKey ?? '').toLowerCase().includes(q));
-  });
-  protected readonly groups = computed(() => groupByDepartment(this.shown(), this.departments()));
-  protected readonly shownCount = computed(() => this.shown().length);
+  private readonly toasts = inject(ToastService);
+  protected readonly theme = inject(ThemeService);
+  private readonly destroyRef = inject(DestroyRef);
+
+  // ---- Test Master's anatomy: DEPARTMENTS rail (left), case sheets in AG-Grid (right) ----
+  /** The department picked in the rail (null = All). */
+  protected readonly dept = signal<string | null>(null);
+  protected readonly statusFilter = signal<SheetStatusFilter>('all');
+  protected readonly originFilter = signal<SheetOriginFilter>('all');
+  /** Band tabs: the grid, or the archived case sheets (Pending / From Prefrontal open the approvals page). */
+  protected readonly view = signal<'sheets' | 'archived'>('sheets');
+  protected readonly sideCollapsed = signal(false);
+  protected readonly deptSheetOpen = signal(false);
+  protected readonly narrow = signal(this.watch('(max-width: 900px)', (m) => this.narrow.set(m)));
+  protected readonly isPhone = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+  protected readonly web = webPointerSignal();
+  protected readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  protected readonly defaultColDef = { filter: true, sortable: true, resizable: true, flex: 1, minWidth: 110 };
+  protected readonly rowId = sheetRowId;
+  protected readonly rowClass = sheetRowClass;
+
+  private watch(query: string, on: (m: boolean) => void): boolean {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    const m = window.matchMedia(query);
+    const h = (e: MediaQueryListEvent) => on(e.matches);
+    m.addEventListener?.('change', h);
+    this.destroyRef.onDestroy(() => m.removeEventListener?.('change', h));
+    return m.matches;
+  }
+
+  protected readonly gridContext: SheetGridContext = {
+    open: (f) => void this.router.navigate([casesheetLinks.adminForm(f.id)]),
+    edit: (f) => void this.edit(f),
+    menu: (f) => void this.menu(f),
+    pendingOf: (f) => this.pending.byForm().get(f.id) ?? 0,
+    web: true,
+  };
+
+  /** Everything the view shows before the department / status / origin filters. */
+  private readonly inView = computed(() => (this.forms() ?? []).filter((f) => f.status === (this.view() === 'archived' ? 'archived' : 'active')));
+  private filters(over: Partial<SheetFilters> = {}): SheetFilters {
+    return { query: this.query(), dept: this.dept(), status: this.statusFilter(), origin: this.originFilter(), ...over };
+  }
+  protected readonly rows = computed(() => filterSheets(this.inView(), this.departments(), this.filters()));
+  protected readonly shownCount = computed(() => this.rows().length);
+  /** The rail counts what the other filters leave, so All = the sum. */
+  protected readonly rail = computed<DeptRailRow[]>(() => railRows(filterSheets(this.inView(), this.departments(), this.filters({ dept: null })), this.departments()));
+  protected readonly railTotal = computed(() => filterSheets(this.inView(), this.departments(), this.filters({ dept: null })).length);
+  protected readonly colDefs = computed(() => sheetColumns(this.web(), this.isPhone));
   protected readonly archivedCount = computed(() => (this.forms() ?? []).filter((f) => f.status === 'archived').length);
+  protected readonly fromPrefrontalCount = computed(() => this.pending.offerForms().size);
+
+  protected readonly viewOptions = computed<SegmentedOption<string>[]>(() => [
+    { value: 'sheets', label: 'Case sheets', count: (this.forms() ?? []).filter((f) => f.status === 'active').length },
+    { value: 'pending', label: 'Pending', count: this.pending.total() },
+    { value: 'offers', label: 'From Prefrontal', count: this.fromPrefrontalCount() },
+    { value: 'archived', label: 'Archived', count: this.archivedCount() },
+  ]);
+  protected readonly statusOptions = computed<SegmentedOption<SheetStatusFilter>[]>(() => {
+    const base = filterSheets(this.inView(), this.departments(), this.filters({ status: 'all' }));
+    const pub = base.filter((f) => !!f.published).length;
+    return [
+      { value: 'all', label: 'All', count: base.length },
+      { value: 'published', label: 'Published', count: pub },
+      { value: 'draft', label: 'Draft', count: base.length - pub },
+    ];
+  });
+  protected readonly originOptions = computed<SegmentedOption<SheetOriginFilter>[]>(() => {
+    const base = filterSheets(this.inView(), this.departments(), this.filters({ origin: 'all' }));
+    const n = (o: string) => base.filter((f) => (o === 'master' ? f.origin === 'master' : o === 'copy' ? f.origin === 'override' : f.origin === 'local')).length;
+    return [
+      { value: 'all', label: 'All', count: base.length },
+      { value: 'master', label: 'Master', count: n('master') },
+      { value: 'copy', label: 'Lab copy', count: n('copy') },
+      { value: 'local', label: 'Local', count: n('local') },
+    ];
+  });
+  protected readonly deptName = computed(() => this.rail().find((d) => d.key === this.dept())?.name ?? null);
+
+  protected setView(v: string): void {
+    if (v === 'pending' || v === 'offers') {
+      void this.router.navigate([casesheetLinks.adminPending()]);
+      return;
+    }
+    this.view.set(v === 'archived' ? 'archived' : 'sheets');
+  }
+  protected pickDept(key: string | null): void {
+    this.dept.set(key);
+    this.deptSheetOpen.set(false);
+  }
+  protected toggleSide(): void {
+    this.sideCollapsed.set(!this.sideCollapsed());
+  }
+
+  /**
+   * The rail's switch: the department is shown to doctors on Prepare (same call as Settings > IPD > Departments).
+   * A master department is Prefrontal's: the server answers `master_department` until it has a per-lab switch
+   * (gaps file, "For data agent"); the switch then snaps back and says why.
+   */
+  protected async toggleDept(d: DeptRailRow): Promise<void> {
+    try {
+      await this.api.updateDepartment(d.key, { isActive: !d.isActive });
+      this.toasts.success(d.isActive ? `${d.name} is hidden from doctors` : `${d.name} is shown to doctors`);
+    } catch (e) {
+      this.toasts.error(plainError(e, "Couldn't change that department just now."));
+    }
+    await this.load();
+  }
 
   protected where(f: FormRow): string {
     // the "Master" badge beside the title already says it; the nbsp keeps "read-only" from breaking at its hyphen

@@ -1,51 +1,35 @@
-<div class="pf-page pg st-desk cs-studio">
-  <pf-hero-band
-    [back]="true"
-    [standardPill]="true"
-    placeholder="Search your case sheets"
-    [value]="query()"
-    (valueChange)="query.set($event)"
-  >
-    <div band-actions class="sh-actions">
-      <a class="pf-btn pf-btn--secondary st-pending-btn" [routerLink]="links.adminPending()" data-act="pending"
-         [attr.aria-label]="pending.total() ? 'Pending changes, ' + pendingWords() : 'Pending changes'">
-        <pf-icon name="list-check" [size]="18" /> <span class="sh-actions__lbl">Pending changes</span>
-        @if (pending.total()) { <span class="st-badge pf-num" data-pending-badge aria-hidden="true">{{ pending.total() }}</span> }
-      </a>
+<section class="pf-tm pf-band-page px-4 md:px-8 pt-6 pb-10 cs-studio st-desk">
+  <!-- Test Master's band: search + the view switch in the pill, buttons top-right -->
+  <pf-hero-band [back]="true" placeholder="Search case sheets" [value]="query()" (valueChange)="query.set($event)">
+    <ng-container band-tools>
+      @if (narrow()) {
+        <button type="button" class="pf-chip pf-tm-deptchip press" (click)="deptSheetOpen.set(true)" aria-haspopup="dialog" [attr.aria-expanded]="deptSheetOpen()" [attr.aria-pressed]="!!dept()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          <span class="pf-tm-deptchip__t">Departments</span>
+        </button>
+      }
+      <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions()" [value]="view()" (valueChange)="setView($event)"></pf-segmented>
+    </ng-container>
+    <ng-container band-actions>
       @if (builder.cortex()) {
-        <button type="button" class="pf-btn pf-btn--secondary" data-act="cortex-new" [attr.aria-pressed]="chatOpen()" (click)="chatOpen.set(!chatOpen())">
-          <pf-icon name="sparkle" [size]="18" /> <span class="sh-actions__lbl">Ask Cortex</span>
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-act="cortex-new" [attr.aria-pressed]="chatOpen()" (click)="chatOpen.set(!chatOpen())">
+          <pf-icon name="sparkle" [size]="16" /> Ask Cortex
         </button>
       }
       @if (cortexOn()) {
-        <button type="button" class="pf-btn pf-btn--secondary" data-act="cortex-import" (click)="cortexFormOpen.set(true)">
-          <pf-icon name="sparkle" [size]="18" /> <span class="sh-actions__lbl">Start from a paper case sheet</span>
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-act="cortex-import" (click)="cortexFormOpen.set(true)">
+          <pf-icon name="sparkle" [size]="16" /> Read a paper case sheet
         </button>
       }
-      <button type="button" class="pf-btn pf-btn--primary" data-act="new-form" [disabled]="busy() === 'new'" [attr.aria-busy]="busy() === 'new' ? 'true' : null" (click)="newForm()">
-        <pf-icon name="plus" [size]="18" /> <span class="sh-actions__lbl">New case sheet</span>
+      <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-act="new-form" [disabled]="busy() === 'new'" [attr.aria-busy]="busy() === 'new' ? 'true' : null" (click)="newForm()" title="Create" aria-label="Create">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        Create
       </button>
-    </div>
+    </ng-container>
   </pf-hero-band>
-  <div class="pf-body">
-    <section class="pf-card main" aria-labelledby="studio-h">
-      <header class="pf-card__head">
-        <span class="pf-card__icon"><pf-icon name="studio" [size]="16" /></span>
-        <h1 class="pf-card__label" id="studio-h">Case sheets</h1>
-        <span class="pf-card__count">{{ shownCount() }} {{ shownCount() === 1 ? 'case sheet' : 'case sheets' }}</span>
-        @if (pending.total()) {
-          <a class="fe-chip st-waiting" [routerLink]="links.adminPending()" data-pending-chip>
-            <span class="st-waiting__dot" aria-hidden="true"></span>{{ pendingWords() }}
-          </a>
-        }
-        @if (archivedCount() || showArchived()) {
-          <button type="button" class="fe-chip st-arch" [attr.aria-pressed]="showArchived()" (click)="showArchived.set(!showArchived())">
-            Archived ({{ archivedCount() }})
-          </button>
-        }
-      </header>
-      <div class="pf-card__body">
-        <st-phone-note />
+
+  <div class="pf-band-body pf-tm-body pf-band-body--fill">
+    <st-phone-note />
         @if (cortexOn() && cortex.job(); as j) {
           <div class="st-cortex" data-cortex-chip [attr.data-state]="j.status === 'done' ? 'done' : j.status === 'failed' ? 'failed' : 'running'" role="status">
             <span class="st-cortex__ic"><pf-icon name="sparkle" [size]="16" /></span>
@@ -68,61 +52,118 @@
             }
           </div>
         }
-        @if (error()) {
-          <div class="pf-empty pf-empty--compact" role="alert">
-            <h2 class="pf-empty__title">{{ error() }}</h2>
-            <button type="button" class="pf-btn pf-btn--secondary" (click)="load()"><pf-icon name="refresh" [size]="18" /> Try again</button>
-          </div>
-        }
-        @if (forms() === null) {
-          <pf-skeleton-rows [rows]="4" label="Loading case sheets" />
-        } @else if (!groups().length) {
-          <div class="pf-empty" data-empty="studio">
-            <span class="pf-empty__icon"><pf-icon name="studio" [size]="26" /></span>
-            @if (query()) {
-              <h2 class="pf-empty__title">No case sheet matches “{{ query() }}”</h2>
-            } @else {
-              <h2 class="pf-empty__title">No case sheets yet</h2>
-              <p class="pf-empty__body">
-                Build a case sheet here: its pages, the questions on each, and the sentence every answer writes. Or bring in a case sheet from the old app.
-              </p>
-            }
-          </div>
-        } @else {
-          @for (g of groups(); track g.key) {
-            <section class="st-dept" [attr.data-dept]="g.key" [attr.aria-labelledby]="'dept-' + g.key">
-              <h2 class="st-dept__h" [id]="'dept-' + g.key">{{ g.name }} <span class="st-dept__n">{{ g.forms.length }}</span></h2>
-              <ul class="st-list" role="list">
-                @for (f of g.forms; track f.id) {
-                  <li class="st-row" [attr.data-form]="f.key" [attr.data-origin]="f.origin">
-                    <a class="st-open pf-touch" [routerLink]="links.adminForm(f.id)">
-                      <span class="st-ic"><pf-icon name="forms" [size]="20" /></span>
-                      <span class="st-t">
-                        <span class="st-title">{{ f.title }}
-                          @if (f.origin === 'master') { <span class="st-tag" data-tag="master">Master</span> }
-                          @if (f.origin === 'override') { <span class="st-tag st-tag--mine" data-tag="copy">Your copy</span> }
-                          @if (f.newerMaster) { <span class="st-tag st-tag--warn" data-tag="newer">Newer master</span> }
-                          @if (pending.byForm().get(f.id); as n) { <span class="st-tag st-tag--mine" data-tag="suggested">{{ n === 1 ? 'Suggested change' : n + ' suggested changes' }}</span> }
-                          @if (pending.offerForms().has(f.id)) { <span class="st-tag st-tag--mine" data-tag="update">Update from Prefrontal</span> }
-                        </span>
-                        <span class="st-meta">{{ where(f) }}</span>
-                      </span>
-                    </a>
-                    @if (f.origin === 'master') {
-                      <button type="button" class="pf-btn pf-btn--secondary st-edit" data-act="fork" [attr.aria-label]="'Edit ' + f.title + ' (makes your lab copy)'" [disabled]="busy() === f.id" [attr.aria-busy]="busy() === f.id ? 'true' : null" (click)="edit(f)">Edit</button>
-                    } @else {
-                      <button type="button" class="pf-btn pf-btn--icon st-more" [attr.aria-label]="'More for ' + f.title" data-tip="Copy, archive" data-tip-end (click)="menu(f)"><pf-icon name="more" [size]="20" /></button>
-                    }
-                  </li>
-                }
-              </ul>
-            </section>
-          }
-        }
+    @if (error()) {
+      <div class="pf-empty pf-empty--compact" role="alert">
+        <h2 class="pf-empty__title">{{ error() }}</h2>
+        <button type="button" class="pf-btn pf-btn--secondary" (click)="load()"><pf-icon name="refresh" [size]="18" /> Try again</button>
       </div>
-    </section>
+    }
+    <div class="pf-tm-panels" [class.pf-tm-panels--collapsed]="sideCollapsed()" [class.pf-tm-panels--narrow]="narrow()">
+      <!-- DEPARTMENTS: the filter comes first, on the left -->
+      @if (narrow()) {
+        @if (deptSheetOpen()) {
+          <div class="pf-sheet-backdrop pf-tm-sheet-backdrop" (click)="deptSheetOpen.set(false)"></div>
+          <aside class="pf-card pf-tm-side pf-tm-side--sheet" role="dialog" aria-modal="true" aria-label="Departments" (keydown.escape)="deptSheetOpen.set(false)">
+            <span class="pf-sheet__handle pf-tm-sheet-handle" aria-hidden="true"></span>
+            <ng-container *ngTemplateOutlet="deptHead; context: { sheet: true }"></ng-container>
+            <ng-container *ngTemplateOutlet="deptBody"></ng-container>
+          </aside>
+        }
+      } @else if (sideCollapsed()) {
+        <aside class="pf-card pf-tm-strip" aria-label="Departments">
+          <button type="button" class="pf-tm-strip__btn" (click)="toggleSide()" title="Show departments" aria-label="Show departments" aria-expanded="false">
+            <span class="pf-btn pf-btn--icon pf-tm-strip__expand" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+            <span class="pf-tm-strip__label">Departments</span>
+            @if (dept()) { <span class="pf-tm-strip__dot" aria-hidden="true"></span> }
+          </button>
+        </aside>
+      } @else {
+        <aside class="pf-card pf-tm-side" aria-label="Departments">
+          <ng-container *ngTemplateOutlet="deptHead; context: { sheet: false }"></ng-container>
+          <ng-container *ngTemplateOutlet="deptBody"></ng-container>
+        </aside>
+      }
+
+      <!-- CASE SHEETS: the grid -->
+      <section class="pf-card pf-tm-main" aria-label="Case sheets" data-case-sheets>
+        <header class="pf-card__head pf-tm-main__head">
+          <span class="pf-card__icon" aria-hidden="true"><pf-icon name="studio" [size]="16" /></span>
+          <h1 class="pf-card__label">{{ view() === 'archived' ? 'Archived' : 'Case sheets' }}</h1>
+          <span class="pf-card__note pf-tm-hint">Open one to edit it · a master makes your lab's copy first</span>
+          <span class="pf-tm-count pf-num" data-count>{{ shownCount() }} {{ shownCount() === 1 ? 'case sheet' : 'case sheets' }}</span>
+          <pf-segmented class="pf-tm-status" data-status-filter size="sm" [options]="statusOptions()" [value]="statusFilter()" (valueChange)="statusFilter.set($event)" aria-label="Filter by status"></pf-segmented>
+          <pf-segmented class="pf-tm-status" data-origin-filter size="sm" [options]="originOptions()" [value]="originFilter()" (valueChange)="originFilter.set($event)" aria-label="Filter by source"></pf-segmented>
+        </header>
+        <div class="pf-tm-main__body">
+          @if (forms() === null) {
+            <pf-skeleton-rows [rows]="6" label="Loading case sheets" />
+          } @else {
+            <ag-grid-angular
+              class="pf-tm-grid"
+              [theme]="gridTheme()"
+              [rowData]="rows()"
+              [columnDefs]="colDefs()"
+              [defaultColDef]="defaultColDef"
+              [getRowId]="rowId"
+              [getRowClass]="rowClass"
+              [context]="gridContext"
+              [animateRows]="true"
+              [overlayNoRowsTemplate]="'No case sheets here yet.'">
+            </ag-grid-angular>
+          }
+        </div>
+      </section>
+    </div>
+
+    <ng-template #deptHead let-sheet="sheet">
+      <header class="pf-card__head pf-tm-side__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+        <span class="pf-card__label">Departments</span>
+        <span class="pf-card__spacer"></span>
+        @if (sheet) {
+          <button type="button" class="pf-btn pf-btn--icon pf-tm-side__close" (click)="deptSheetOpen.set(false)" aria-label="Close departments"><pf-icon name="x" [size]="16" /></button>
+        } @else {
+          <button type="button" class="pf-btn pf-btn--icon pf-tm-side__collapse" (click)="toggleSide()" title="Hide departments" aria-label="Hide departments" aria-expanded="true"><pf-icon name="chevron-left" [size]="16" /></button>
+        }
+      </header>
+    </ng-template>
+
+    <ng-template #deptBody>
+      <ul class="pf-card__body pf-tm-dept-list" data-dept-rail>
+        <li class="pf-tm-dept-row">
+          <button type="button" class="pf-tm-dept" data-dept="all" [attr.aria-pressed]="!dept()" (click)="pickDept(null)">
+            <span class="pf-tm-dept-name">All</span>
+            <span class="pf-tm-dept-count pf-num">{{ railTotal() }}</span>
+          </button>
+        </li>
+        @for (d of rail(); track d.key) {
+          <li class="pf-tm-dept-row" [class.pf-tm-dept-row--off]="!d.isActive">
+            <button type="button" class="pf-tm-dept" [attr.data-dept]="d.key" [attr.aria-pressed]="dept() === d.key" (click)="pickDept(d.key)">
+              <span class="pf-tm-dept-name">
+                <span class="pf-tm-dept-text">{{ d.name }}</span>
+                @if (d.code) { <span class="pf-tm-dept-code pf-num">{{ d.code }}</span> }
+                @if (!d.isActive) { <span class="pf-tm-dept-off">Off</span> }
+              </span>
+              <span class="pf-tm-dept-count pf-num">{{ d.count }}</span>
+            </button>
+            @if (d.key !== 'other') {
+              <button type="button" class="pf-toggle pf-tm-dept-switch" role="switch" [attr.data-switch]="d.key" [attr.aria-checked]="d.isActive" (click)="toggleDept(d)"
+                      [title]="d.isActive ? 'Turn department off' : 'Turn department on'" [attr.aria-label]="'Department ' + d.name + ' on'">
+                <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+              </button>
+            } @else {
+              <span class="pf-tm-dept-switch-gap" aria-hidden="true"></span>
+            }
+          </li>
+        }
+        @if (!rail().length) {
+          <li class="pf-tm-dept-empty">No departments yet.</li>
+        }
+      </ul>
+    </ng-template>
   </div>
-</div>
+</section>
 @if (chatOpen() && builder.cortex()) {
   <st-builder-drawer tab="cortex" [newSheet]="true" (closed)="chatOpen.set(false); pending.refresh()" />
 }
