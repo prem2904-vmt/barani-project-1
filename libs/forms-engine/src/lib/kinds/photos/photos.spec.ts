@@ -58,3 +58,15 @@ describe('photos fill', () => {
     expect(shrinkSize(800, 600)).toEqual({ w: 800, h: 600 });
   });
 });
+
+describe('photos fill: legacy gallery (G3)', () => {
+  const nav = { goTo: () => undefined, pageTitle: (k: string) => k, isLegacy: () => true };
+  it('label with a 0 / 6 count, Camera and Upload first, then the dashed "No images added yet" box', async () => {
+    const r = await renderKind(PhotosFill, f('endo', 'photos', { label: 'Diagnostic nasal endoscopy', config: { maxPhotos: 6 } }), null, { wizard: nav, assets: new TestAssetStore() });
+    await settle(r);
+    expect(r.el.querySelector('.fe-img__count')?.textContent?.trim()).toBe('0 / 6');
+    expect([...r.el.querySelectorAll('.fe-img__act')].map((b) => b.textContent?.trim())).toEqual(['Camera', 'Upload']);
+    expect(r.el.querySelector('.fe-img__none-t')?.textContent?.trim()).toBe('No images added yet');
+    expect(r.el.textContent).toContain('Use camera or upload to add up to 6 images');
+  });
+});

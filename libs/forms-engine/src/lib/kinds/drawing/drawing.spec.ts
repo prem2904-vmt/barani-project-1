@@ -92,3 +92,18 @@ describe('drawing fill', () => {
     expect(r.calls).toEqual([]);
   });
 });
+
+describe('drawing fill: legacy cell (G3)', () => {
+  const nav = { goTo: () => undefined, pageTitle: (k: string) => k, isLegacy: () => true };
+  const diagram = f('diag', 'drawing', { label: 'Anterior Rhinoscopy - Diagram Right', config: {} });
+  it('a small dashed Draw box until it is tapped; a legacy cell never shows the big canvas up front', async () => {
+    const r = await renderKind(DrawingFill, diagram, null, { wizard: nav, assets: new TestAssetStore() });
+    await settle(r);
+    expect(r.el.querySelector('fe-canvas')).toBeNull();
+    expect(r.el.querySelector('.fe-drawcell__btn')?.textContent).toContain('Draw');
+    await r.click('.fe-drawcell__btn');
+    await settle(r);
+    expect(r.el.querySelector('.fe-drawcell')).toBeNull();
+    expect(r.el.querySelector('fe-canvas')).not.toBeNull();
+  });
+});

@@ -473,3 +473,40 @@ fe-grid-cell {
     padding-right: 2px;
   }
 }
+
+// ── legacy cells: the box itself (multi-textbox-input), a default value shows grey and clears on focus ──
+.fe-gridk__cell--in {
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px;
+  cursor: default;
+}
+.fe-gridk__in {
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--input-border, var(--pf-line));
+  border-radius: 8px;
+  background: var(--input-bg, var(--pf-card-bg));
+  color: var(--input-text, var(--text-primary));
+  font: inherit;
+  font-size: 14px;
+  text-align: center;
+  outline: none;
+}
+.fe-gridk__in:focus {
+  border-color: var(--input-border-focus, #8b5cf6);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+.fe-gridk__dflt {
+  font-style: italic;
+  color: var(--text-tertiary);
+}
+.fe-gridk__sel {
+  display: block;
+  width: 100%;
+}
+.fe-gridk__cell--in .fe-gridk__lk {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}

@@ -266,3 +266,39 @@ describe('grid: the catalogue', () => {
     });
   });
 });
+
+describe('grid fill: legacy cells (G3, G19)', () => {
+  const nav = { goTo: () => undefined, pageTitle: (k: string) => k, isLegacy: () => true };
+  const exam = f('ext', 'grid', {
+    label: 'External framework',
+    config: {
+      includeSwitch: true,
+      rowHeader: '',
+      columns: [
+        { key: 'right', label: 'Right', type: 'text', default: 'Normal' },
+        { key: 'sign', label: 'Sign', type: 'choice', options: [{ key: 'pos', label: '+ ve' }, { key: 'neg', label: '- ve' }], default: 'neg' },
+      ],
+      rows: [{ key: 'root', label: 'Root' }],
+    },
+  });
+
+  it('cells are boxes and dropdowns, a default shows grey, focusing it clears it, and the first edit switches Include in Narrative on', async () => {
+    const answer = { cells: { root: { right: 'Normal', sign: 'neg' } } };
+    const r = await renderKind(GridFill, exam, answer, { wizard: nav });
+    const sw = r.el.querySelector('[role="switch"]')!;
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    const box = r.el.querySelector<HTMLInputElement>('input.fe-gridk__in')!;
+    expect(box.classList.contains('fe-gridk__dflt')).toBe(true);
+    expect(r.el.querySelector('pf-select.fe-gridk__sel')).not.toBeNull();
+    box.dispatchEvent(new Event('focus'));
+    await r.stable();
+    expect(r.last()).toMatchObject({ print: true });
+    expect((r.last() as { cells?: Record<string, Record<string, unknown>> }).cells?.['root']?.['right']).toBeUndefined();
+  });
+
+  it('a new case sheet keeps the tap-to-open cells and the switch on', async () => {
+    const r = await renderKind(GridFill, exam, { cells: { root: { right: 'Normal' } } });
+    expect(r.el.querySelector('input.fe-gridk__in')).toBeNull();
+    expect(r.el.querySelector('[role="switch"]')!.getAttribute('aria-checked')).toBe('true');
+  });
+});

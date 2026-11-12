@@ -112,7 +112,7 @@ export class FieldHostComponent {
   /** The old measure card and the old switch carry their own question inside the control (so the head above is for screen readers only). */
   protected readonly cardLabel = computed(() => {
     const f = this.field();
-    return (this.legacy() && (f.kind === 'measure' || f.kind === 'size' || f.kind === 'repeat' || f.kind === 'repeatPages')) || (f.kind === 'yesno' && f.config?.['display'] === 'check');
+    return (this.legacy() && (f.kind === 'measure' || f.kind === 'size' || f.kind === 'repeat' || f.kind === 'repeatPages' || f.kind === 'photos' || f.kind === 'drawing')) || (f.kind === 'yesno' && f.config?.['display'] === 'check');
   });
   protected readonly bareClock = computed(() => this.legacy() && this.field().kind === 'duration' && this.field().config?.['scale'] === 'clock');
 

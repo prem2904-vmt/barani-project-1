@@ -364,6 +364,91 @@
   border-radius: 16px;
 }
 
+// legacy image-gallery: label + count, dashed Camera / Upload, a dashed empty box
+.fe-img__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fe-img__title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.fe-img__count {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.fe-img__acts--legacy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.fe-img__act {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 16px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.fe-img__none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 32px 16px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 16px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+.fe-img__none-t {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+.fe-img__none-s {
+  margin: 0;
+  font-size: 13px;
+}
+
+// legacy grid cell: the small dashed Draw box
+.fe-drawcell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fe-drawcell__lbl {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.fe-drawcell__btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  align-self: flex-start;
+  min-width: 160px;
+  min-height: 48px;
+  padding: 6px 16px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 10px;
+  background: var(--pf-chip-bg);
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 // legacy bmi-input: Height, Weight, BMI on one row (a phone keeps the three side by side too)
 .fe-bmi--legacy {
   flex-direction: row;
