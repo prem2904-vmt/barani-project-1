@@ -1,0 +1,383 @@
+// ─────────────────────────────────────────────────────────────────────────
+// pictureChoice: pictures laid out in a box (doctor's fill + Studio's layout editor).
+// Imported from fill/_fill.scss (global classes, like every fill control). Theme tokens only, so light and dark
+// follow the page. A chosen part is never colour alone: accent tint + 3px outline + a tick badge.
+// ─────────────────────────────────────────────────────────────────────────
+
+.fe-pc {
+  display: block;
+  min-width: 0;
+}
+
+.fe-pc__box {
+  position: relative;
+  container-type: inline-size;
+  width: 100%;
+  margin-inline: auto;
+  border: 1px solid var(--pf-line);
+  border-radius: 14px;
+  background: var(--pf-card-bg);
+}
+
+.fe-pc__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: inherit;
+  pointer-events: none;
+  user-select: none;
+}
+
+.fe-pc__part {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  // a part is never smaller than a finger
+  min-width: var(--pf-touch);
+  min-height: var(--pf-touch);
+  box-sizing: border-box;
+  padding: 4px;
+  border: 1.5px solid color-mix(in srgb, var(--text-tertiary) 45%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--pf-card-bg) 88%, transparent);
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    background var(--pf-dur-fast, 120ms) ease,
+    border-color var(--pf-dur-fast, 120ms) ease,
+    box-shadow var(--pf-dur-fast, 120ms) ease,
+    transform 80ms ease;
+}
+
+.fe-pc__part:hover:not(:disabled):not(.fe-pc__part--on) {
+  border-color: var(--text-secondary);
+}
+
+.fe-pc__part:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.fe-pc__part:focus-visible {
+  outline: 3px solid var(--color-primary, #7c3aed);
+  outline-offset: 2px;
+}
+
+.fe-pc__part:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.fe-pc__part--on {
+  border-color: var(--color-primary, #7c3aed);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 17%, var(--pf-card-bg));
+  box-shadow:
+    0 0 0 2px var(--color-primary, #7c3aed),
+    0 4px 14px color-mix(in srgb, var(--color-primary, #7c3aed) 28%, transparent);
+  color: var(--text-primary);
+}
+
+.fe-pc__art {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 8px;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  svg {
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+
+    path {
+      fill: currentColor;
+    }
+  }
+}
+
+.fe-pc__part--on .fe-pc__art svg path {
+  fill: var(--color-primary, #7c3aed);
+}
+
+.fe-pc__initial {
+  font-size: clamp(18px, 6cqw, 34px);
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.fe-pc__part--on .fe-pc__initial {
+  color: var(--color-primary, #7c3aed);
+}
+
+.fe-pc__label {
+  flex: none;
+  padding: 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: break-word;
+  min-width: 0;
+}
+
+.fe-pc__badge {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  display: none;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-primary, #7c3aed);
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--pf-card-bg);
+}
+
+.fe-pc__part--on .fe-pc__badge {
+  display: grid;
+}
+
+@media (forced-colors: active) {
+  .fe-pc__part--on {
+    outline: 3px solid Highlight;
+  }
+}
+
+// ── Studio: the layout editor and its panel ──
+.fe-pcp__row {
+  display: grid;
+  gap: 6px;
+}
+
+.fe-pcp__lbl {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fe-pcp__switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fe-pcp__switch--inline {
+  width: auto;
+}
+
+.fe-pcp__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.fe-pcp__hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.fe-pcp__sel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-chip-bg);
+}
+
+.fe-pcl__box {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  margin-inline: auto;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: var(--fe-cv-surface, var(--pf-card-bg));
+  container-type: inline-size;
+  touch-action: none;
+}
+
+.fe-pcl--grid .fe-pcl__box {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--text-tertiary) 14%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--text-tertiary) 14%, transparent) 1px, transparent 1px);
+  background-size: 10% 10%;
+}
+
+.fe-pcl__part {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+  padding: 3px;
+  border: 1.5px dashed var(--text-tertiary);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--pf-card-bg) 85%, transparent);
+  color: var(--text-secondary);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+
+  .fe-pc__label {
+    font-size: 12px;
+  }
+}
+
+.fe-pcl__part:focus-visible {
+  outline: 3px solid var(--color-primary, #7c3aed);
+  outline-offset: 1px;
+}
+
+.fe-pcl__part--sel {
+  border-style: solid;
+  border-color: var(--color-primary, #7c3aed);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, var(--pf-card-bg));
+  color: var(--text-primary);
+  z-index: 2;
+}
+
+.fe-pcl__h {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-primary, #7c3aed);
+  border-radius: 4px;
+  background: var(--pf-card-bg);
+  touch-action: none;
+
+  // a finger-sized hit area around the small handle
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -14px;
+  }
+}
+
+.fe-pcl__h--nw {
+  top: -8px;
+  left: -8px;
+  cursor: nwse-resize;
+}
+
+.fe-pcl__h--ne {
+  top: -8px;
+  right: -8px;
+  cursor: nesw-resize;
+}
+
+.fe-pcl__h--sw {
+  bottom: -8px;
+  left: -8px;
+  cursor: nesw-resize;
+}
+
+.fe-pcl__h--se {
+  bottom: -8px;
+  right: -8px;
+  cursor: nwse-resize;
+}
+
+// the pad where a part's picture is drawn
+.fe-pcd {
+  display: grid;
+  gap: 8px;
+}
+
+.fe-pcd__surface {
+  position: relative;
+  width: 100%;
+  max-width: 280px;
+  aspect-ratio: 1;
+  margin-inline: auto;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: var(--fe-cv-surface, var(--pf-card-bg));
+  touch-action: none;
+  cursor: crosshair;
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.fe-pcd__ink {
+  fill: var(--text-primary);
+}
+
+.fe-pcd__hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+// Studio's small tap copy of the box (combination sentences)
+.fe-pc--mini {
+  max-width: 200px;
+
+  .fe-pc__box {
+    border-radius: 10px;
+  }
+
+  .fe-pcm__part {
+    min-width: 0;
+    min-height: 0;
+    padding: 2px;
+    border-radius: 6px;
+  }
+
+  .fe-pc__badge {
+    top: -6px;
+    right: -6px;
+    width: 16px;
+    height: 16px;
+  }
+}
+
+// the live total under the picture
+.fe-pc__total {
+  margin: 10px auto 0;
+  max-width: 100%;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--color-primary, #7c3aed);
+}
+
+.fe-pcp__total {
+  display: grid;
+  gap: 8px;
+}

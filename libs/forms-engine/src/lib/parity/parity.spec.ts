@@ -1,9 +1,11 @@
 import { Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { vi } from 'vitest';
 import { chronological, durationWeight, visibleFields, wizardPages } from '../core/pages';
 import { lookupIn, resizeInstances } from '../core/rules';
-import { FormDefinition } from '../core/types';
+import { FieldDef, FormDefinition } from '../core/types';
 import { FE_KINDS, FieldSuggestion, SuggestionSource } from '../fill/contract';
 import { FieldHostComponent, laterKind } from '../fill/field-host.component';
 import { HoldDirective } from '../fill/hold.directive';
@@ -14,6 +16,8 @@ import { NumberFill } from '../kinds/number/number.fill';
 import { KIND_SPECS } from '../kinds/registry';
 import { RepeatPagesFill } from '../kinds/repeatPages/repeatPages.fill';
 import { SUGGESTION_DEBOUNCE_MS, TextFill } from '../kinds/text/text.fill';
+import { narratePicks, picksWords, pickedKeys } from '../narrative/combinations';
+import combos from '../testing/casesheet-combinations.vectors.json';
 import { f, renderKind, untouchable } from '../testing/render-kind';
 
 /**
@@ -519,4 +523,29 @@ describe('kinds that come later never block a page', () => {
     };
     expect(visibleFields(page, lookupIn({})).map((x) => x.key)).toEqual(['a']);
   });
+});
+
+
+// ───────────────────────── sentences for combinations (shared vectors) ─────────────────────────
+// docs/vectors/casesheet-combinations.json is authored with the server (prefrontal-mw, MultiNarration) and must stay
+// byte-identical in both repos. The TS engine does not write the whole narrative (the API does, with follow-up
+// questions): it decides which combination fires and writes the picks' words, the total and "Denies …" (Studio's
+// preview line). Cases with follow-up questions are checked for the rule that fires only.
+describe('combination sentences match the server (shared vectors docs/vectors/casesheet-combinations.json)', () => {
+  type Case = { name: string; field: FieldDef; answers: Record<string, unknown>; expect: string; fires: string | null };
+  const cases = (combos as unknown as { cases: Case[] }).cases;
+
+  it('the copy under testing/ is the repo\'s docs/vectors file', () => {
+    const docs = readFileSync(resolve(process.cwd(), 'docs/vectors/casesheet-combinations.json'), 'utf8');
+    expect(JSON.parse(docs)).toEqual(combos);
+  });
+
+  for (const c of cases) {
+    it(c.name, () => {
+      const picked = pickedKeys(c.field, c.answers[c.field.key]);
+      expect(picksWords(c.field, picked).fires).toBe(c.fires);
+      const hasFollowUps = (c.field.options ?? []).some((o) => (o.subFields ?? []).length > 0);
+      if (!hasFollowUps) expect(narratePicks(c.field, picked)).toBe(c.expect);
+    });
+  }
 });

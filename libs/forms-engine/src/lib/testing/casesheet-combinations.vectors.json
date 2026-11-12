@@ -1,0 +1,3171 @@
+{
+ "about": "Combination-sentence test vectors for every multi-select question (multi, pictureChoice). The server (MultiNarration) and the filler / Studio preview (TypeScript mirror) must give exactly these words. Each case: a field (v2 definition, says.combinations), the answers, the words the field writes (as the case note's only template '{{key}}'), and the id of the combination that fires (null = none, the plain loop). Rules are tried top to bottom and the FIRST that fits wins: exact = the picked set equals the rule's options; includes = every option of the rule is picked. {others} = the other picks' own sentences (the rule's text without {others}: the others follow it with the field's normal joiner; with nothing else picked the {others} and the clause before it up to the last comma, semicolon or linking word are dropped). Option keys match in any case. Narrate with the field alone on one page with the section template '{{key}}'. pictureChoice only: config.total {label, unit?, decimals?} with each option's value: after the picked words (and before negative history) the sentence '{label} {sum}{unit}' is added, sum of the PICKED options' value (missing = 0), rounded half away from zero to decimals (default 0, dot), the unit set against the number when it starts with % or a degree sign, otherwise after a space; nothing picked = no total.",
+ "cases": [
+  {
+   "name": "[multi] an empty list of combinations is the plain loop",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ]
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "right hand and left hand",
+   "fires": null
+  },
+  {
+   "name": "[multi] an exact combination does not fire when something else is picked too",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh",
+     "ll"
+    ]
+   },
+   "expect": "right hand, left hand and left leg",
+   "fires": null
+  },
+  {
+   "name": "[multi] an exact combination writes its own sentence",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "Both upper limbs are involved",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] the first rule that fits wins: a narrow rule above a broad one",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      },
+      {
+       "id": "c2",
+       "options": [
+        "rh"
+       ],
+       "match": "includes",
+       "text": "The right hand is involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "Both upper limbs are involved",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] the first rule that fits wins: a broad rule above a narrow one",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh"
+       ],
+       "match": "includes",
+       "text": "The right hand is involved"
+      },
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "The right hand is involved and left hand",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] follow-ups of the other picks still write with their own sentence",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "subFields": [
+       {
+        "key": "rhNote",
+        "kind": "text",
+        "label": "Note",
+        "config": {},
+        "says": {
+         "prefix": "with"
+        }
+       }
+      ]
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "lh",
+     "ll",
+     "rh"
+    ],
+    "rhNote": "swelling"
+   },
+   "expect": "Both upper limbs are involved with swelling and left leg",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] a matched option's follow-up answers still write after the rule text",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "subFields": [
+       {
+        "key": "rhNote",
+        "kind": "text",
+        "label": "Note",
+        "config": {},
+        "says": {
+         "prefix": "with"
+        }
+       }
+      ]
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ],
+    "rhNote": "swelling"
+   },
+   "expect": "Both upper limbs are involved with swelling",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] with no other picks {others} and the clause before it are trimmed",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved, along with {others}"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "lh",
+     "rh"
+    ]
+   },
+   "expect": "Both upper limbs are involved",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] one other pick fills {others}",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved, along with {others}"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "ll",
+     "lh"
+    ]
+   },
+   "expect": "Both upper limbs are involved, along with left leg",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] an includes combination puts the other picks where {others} is",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved, along with {others}"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh",
+     "ll",
+     "rl"
+    ]
+   },
+   "expect": "Both upper limbs are involved, along with left leg and right leg",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] an includes rule with nothing else picked is just its text",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "Both upper limbs are involved",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] one other pick follows the rule text with and",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh",
+     "ll"
+    ]
+   },
+   "expect": "Both upper limbs are involved and left leg",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] without {others} the rule text comes first and the others follow in the normal list",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "lh",
+     "rh",
+     "ll",
+     "rl"
+    ]
+   },
+   "expect": "Both upper limbs are involved, left leg and right leg",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] option keys in a rule match the picked keys in any case",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "RH",
+        "Lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "Both upper limbs are involved",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] negative history after a rule with others",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved, along with {others}"
+      }
+     ],
+     "negativeHistory": {
+      "enabled": true,
+      "prefix": "Denies"
+     }
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh",
+     "ll"
+    ]
+   },
+   "expect": "Both upper limbs are involved, along with left leg. Denies right leg.",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] negative history still names what was not picked",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      }
+     ],
+     "negativeHistory": {
+      "enabled": true,
+      "prefix": "Denies"
+     }
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "Both upper limbs are involved. Denies left leg and right leg.",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] no rule fits so each option writes its own sentence",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      },
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "ll"
+    ]
+   },
+   "expect": "right hand and left leg",
+   "fires": null
+  },
+  {
+   "name": "[multi] the other picks keep the order they were picked",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved, along with {others}"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "rl",
+     "lh",
+     "ll"
+    ]
+   },
+   "expect": "Both upper limbs are involved, along with right leg and left leg",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] prefix and suffix wrap the combined result",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      }
+     ],
+     "prefix": "Involves",
+     "suffix": "today"
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "Involves Both upper limbs are involved today",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] a clause that leads to {others} with a linking word goes when there are no others",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved together with {others}"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "Both upper limbs are involved",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] a later rule fires when the earlier ones do not fit",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      },
+      {
+       "id": "c2",
+       "options": [
+        "ll",
+        "rl"
+       ],
+       "match": "exact",
+       "text": "Both lower limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rl",
+     "ll"
+    ]
+   },
+   "expect": "Both lower limbs are involved",
+   "fires": "c2"
+  },
+  {
+   "name": "[pictureChoice] a combination of pictures writes its own sentence",
+   "field": {
+    "key": "limbs",
+    "kind": "pictureChoice",
+    "label": "Limbs",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg",
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg",
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "lh",
+     "rh"
+    ]
+   },
+   "expect": "Both upper limbs are involved",
+   "fires": "c1"
+  },
+  {
+   "name": "[pictureChoice] pictures with others follow the rule text where {others} is",
+   "field": {
+    "key": "limbs",
+    "kind": "pictureChoice",
+    "label": "Limbs",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg",
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg",
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved, along with {others}"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh",
+     "rl"
+    ]
+   },
+   "expect": "Both upper limbs are involved, along with right leg",
+   "fires": "c1"
+  },
+  {
+   "name": "[pictureChoice] no combination fits so each picture writes its own sentence",
+   "field": {
+    "key": "limbs",
+    "kind": "pictureChoice",
+    "label": "Limbs",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg",
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg",
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "ll"
+    ]
+   },
+   "expect": "right hand and left leg",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] a picture's follow-up questions write like a multiple choice's",
+   "field": {
+    "key": "limbs",
+    "kind": "pictureChoice",
+    "label": "Limbs",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z",
+      "subFields": [
+       {
+        "key": "rhNote",
+        "kind": "text",
+        "label": "Note",
+        "config": {},
+        "says": {
+         "prefix": "with"
+        }
+       }
+      ]
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg",
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg",
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ],
+    "rhNote": "swelling"
+   },
+   "expect": "right hand with swelling and left hand",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] pictures not picked can be written as denied",
+   "field": {
+    "key": "limbs",
+    "kind": "pictureChoice",
+    "label": "Limbs",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg",
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg",
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ],
+    "says": {
+     "negativeHistory": {
+      "enabled": true,
+      "prefix": "Denies"
+     }
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "right hand and left hand. Denies left leg and right leg.",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] nothing picked writes nothing",
+   "field": {
+    "key": "limbs",
+    "kind": "pictureChoice",
+    "label": "Limbs",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg",
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg",
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "limbs": []
+   },
+   "expect": "",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] one picked picture writes its sentence",
+   "field": {
+    "key": "limbs",
+    "kind": "pictureChoice",
+    "label": "Limbs",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg",
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg",
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "limbs": [
+     "rh"
+    ]
+   },
+   "expect": "right hand",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] a picture with no sentence writes its label",
+   "field": {
+    "key": "limbs",
+    "kind": "pictureChoice",
+    "label": "Limbs",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "limbs": [
+     "rh"
+    ]
+   },
+   "expect": "Right hand",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] a single-select picture choice still stores a list",
+   "field": {
+    "key": "limbs",
+    "kind": "pictureChoice",
+    "label": "Limbs",
+    "config": {
+     "multiple": false,
+     "aspect": 1,
+     "showLabels": true
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg",
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg",
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "limbs": [
+     "rl"
+    ]
+   },
+   "expect": "right leg",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] several pictures are joined like a multiple choice",
+   "field": {
+    "key": "limbs",
+    "kind": "pictureChoice",
+    "label": "Limbs",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand",
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg",
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg",
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "ll"
+    ]
+   },
+   "expect": "right hand and left leg",
+   "fires": null
+  },
+  {
+   "name": "[multi] a rule naming an option the question does not have never fires",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "zz"
+       ],
+       "match": "exact",
+       "text": "Never"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "right hand and left hand",
+   "fires": null
+  },
+  {
+   "name": "[multi] a rule with no options is skipped",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [],
+       "match": "includes",
+       "text": "Never"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh"
+    ]
+   },
+   "expect": "right hand",
+   "fires": null
+  },
+  {
+   "name": "[multi] a blank rule sentence writes nothing for the matched options but the others still write",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": ""
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh",
+     "ll"
+    ]
+   },
+   "expect": "left leg",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] {others} used twice is filled twice",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh"
+       ],
+       "match": "includes",
+       "text": "A {others} B {others}"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "ll"
+    ]
+   },
+   "expect": "A left leg B left leg",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] a semicolon ends the clause that led to {others}",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs; together with {others}"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "Both upper limbs",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] text after {others} is kept when others are picked",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved, along with {others}, on examination"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh",
+     "ll"
+    ]
+   },
+   "expect": "Both upper limbs are involved, along with left leg, on examination",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] text after {others} is kept when nothing else is picked",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "includes",
+       "text": "Both upper limbs are involved, along with {others}, on examination"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "Both upper limbs are involved, on examination",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] a key picked twice counts once",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "rh",
+        "lh"
+       ],
+       "match": "exact",
+       "text": "Both upper limbs are involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rh",
+     "rh",
+     "lh"
+    ]
+   },
+   "expect": "Both upper limbs are involved",
+   "fires": "c1"
+  },
+  {
+   "name": "[multi] an includes rule of one option fires for any set holding it",
+   "field": {
+    "key": "limbs",
+    "kind": "multi",
+    "label": "Limbs",
+    "config": {
+     "display": "chips"
+    },
+    "options": [
+     {
+      "key": "rh",
+      "label": "Right hand",
+      "says": "right hand"
+     },
+     {
+      "key": "lh",
+      "label": "Left hand",
+      "says": "left hand"
+     },
+     {
+      "key": "ll",
+      "label": "Left leg",
+      "says": "left leg"
+     },
+     {
+      "key": "rl",
+      "label": "Right leg",
+      "says": "right leg"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "ll"
+       ],
+       "match": "includes",
+       "text": "The left leg is involved"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "limbs": [
+     "rl",
+     "ll"
+    ]
+   },
+   "expect": "The left leg is involved and right leg",
+   "fires": "c1"
+  },
+  {
+   "name": "[pictureChoice] the picked values add up to a total sentence",
+   "field": {
+    "key": "burn",
+    "kind": "pictureChoice",
+    "label": "Burnt areas",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true,
+     "total": {
+      "label": "Total burn area",
+      "unit": "%"
+     }
+    },
+    "options": [
+     {
+      "key": "head",
+      "label": "Head",
+      "says": "head",
+      "value": 9,
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "arm",
+      "label": "Left arm",
+      "says": "left arm",
+      "value": 9,
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "trunk",
+      "label": "Front of trunk",
+      "says": "front of trunk",
+      "value": 18,
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ear",
+      "label": "Ear",
+      "says": "ear",
+      "value": 4.5,
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "burn": [
+     "head",
+     "arm",
+     "trunk"
+    ]
+   },
+   "expect": "head, left arm and front of trunk. Total burn area 36%",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] decimals and half away from zero rounding",
+   "field": {
+    "key": "burn",
+    "kind": "pictureChoice",
+    "label": "Burnt areas",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true,
+     "total": {
+      "label": "Total burn area",
+      "unit": "%",
+      "decimals": 1
+     }
+    },
+    "options": [
+     {
+      "key": "head",
+      "label": "Head",
+      "says": "head",
+      "value": 9,
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "arm",
+      "label": "Left arm",
+      "says": "left arm",
+      "value": 9,
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "trunk",
+      "label": "Front of trunk",
+      "says": "front of trunk",
+      "value": 18,
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ear",
+      "label": "Ear",
+      "says": "ear",
+      "value": 4.5,
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "burn": [
+     "ear",
+     "head"
+    ]
+   },
+   "expect": "ear and head. Total burn area 13.5%",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] a half rounds away from zero with no decimals",
+   "field": {
+    "key": "burn",
+    "kind": "pictureChoice",
+    "label": "Burnt areas",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true,
+     "total": {
+      "label": "Total burn area",
+      "unit": "%"
+     }
+    },
+    "options": [
+     {
+      "key": "head",
+      "label": "Head",
+      "says": "head",
+      "value": 9,
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "arm",
+      "label": "Left arm",
+      "says": "left arm",
+      "value": 9,
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "trunk",
+      "label": "Front of trunk",
+      "says": "front of trunk",
+      "value": 18,
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ear",
+      "label": "Ear",
+      "says": "ear",
+      "value": 4.5,
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "burn": [
+     "ear",
+     "head"
+    ]
+   },
+   "expect": "ear and head. Total burn area 14%",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] a unit that is not a percent sign is set after a space",
+   "field": {
+    "key": "burn",
+    "kind": "pictureChoice",
+    "label": "Burnt areas",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true,
+     "total": {
+      "label": "Total area",
+      "unit": "cm2"
+     }
+    },
+    "options": [
+     {
+      "key": "head",
+      "label": "Head",
+      "says": "head",
+      "value": 9,
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "arm",
+      "label": "Left arm",
+      "says": "left arm",
+      "value": 9,
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "trunk",
+      "label": "Front of trunk",
+      "says": "front of trunk",
+      "value": 18,
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ear",
+      "label": "Ear",
+      "says": "ear",
+      "value": 4.5,
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "burn": [
+     "arm"
+    ]
+   },
+   "expect": "left arm. Total area 9 cm2",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] no unit writes just the number",
+   "field": {
+    "key": "burn",
+    "kind": "pictureChoice",
+    "label": "Burnt areas",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true,
+     "total": {
+      "label": "Score"
+     }
+    },
+    "options": [
+     {
+      "key": "head",
+      "label": "Head",
+      "says": "head",
+      "value": 9,
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "arm",
+      "label": "Left arm",
+      "says": "left arm",
+      "value": 9,
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "trunk",
+      "label": "Front of trunk",
+      "says": "front of trunk",
+      "value": 18,
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ear",
+      "label": "Ear",
+      "says": "ear",
+      "value": 4.5,
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "burn": [
+     "trunk",
+     "head"
+    ]
+   },
+   "expect": "front of trunk and head. Score 27",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] nothing picked writes no total",
+   "field": {
+    "key": "burn",
+    "kind": "pictureChoice",
+    "label": "Burnt areas",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true,
+     "total": {
+      "label": "Total burn area",
+      "unit": "%"
+     }
+    },
+    "options": [
+     {
+      "key": "head",
+      "label": "Head",
+      "says": "head",
+      "value": 9,
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "arm",
+      "label": "Left arm",
+      "says": "left arm",
+      "value": 9,
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "trunk",
+      "label": "Front of trunk",
+      "says": "front of trunk",
+      "value": 18,
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ear",
+      "label": "Ear",
+      "says": "ear",
+      "value": 4.5,
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "burn": []
+   },
+   "expect": "",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] the total comes before negative history",
+   "field": {
+    "key": "burn",
+    "kind": "pictureChoice",
+    "label": "Burnt areas",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true,
+     "total": {
+      "label": "Total burn area",
+      "unit": "%"
+     }
+    },
+    "options": [
+     {
+      "key": "head",
+      "label": "Head",
+      "says": "head",
+      "value": 9,
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "arm",
+      "label": "Left arm",
+      "says": "left arm",
+      "value": 9,
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "trunk",
+      "label": "Front of trunk",
+      "says": "front of trunk",
+      "value": 18,
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ear",
+      "label": "Ear",
+      "says": "ear",
+      "value": 4.5,
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ],
+    "says": {
+     "negativeHistory": {
+      "enabled": true,
+      "prefix": "Spared"
+     }
+    }
+   },
+   "answers": {
+    "burn": [
+     "head"
+    ]
+   },
+   "expect": "head. Total burn area 9%. Spared left arm, front of trunk and ear.",
+   "fires": null
+  },
+  {
+   "name": "[pictureChoice] the total adds up the picks the combination covers too",
+   "field": {
+    "key": "burn",
+    "kind": "pictureChoice",
+    "label": "Burnt areas",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true,
+     "total": {
+      "label": "Total burn area",
+      "unit": "%"
+     }
+    },
+    "options": [
+     {
+      "key": "head",
+      "label": "Head",
+      "says": "head",
+      "value": 9,
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "arm",
+      "label": "Left arm",
+      "says": "left arm",
+      "value": 9,
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "trunk",
+      "label": "Front of trunk",
+      "says": "front of trunk",
+      "value": 18,
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ear",
+      "label": "Ear",
+      "says": "ear",
+      "value": 4.5,
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ],
+    "says": {
+     "combinations": [
+      {
+       "id": "c1",
+       "options": [
+        "head",
+        "arm"
+       ],
+       "match": "exact",
+       "text": "Head and left arm are burnt"
+      }
+     ]
+    }
+   },
+   "answers": {
+    "burn": [
+     "head",
+     "arm"
+    ]
+   },
+   "expect": "Head and left arm are burnt. Total burn area 18%",
+   "fires": "c1"
+  },
+  {
+   "name": "[pictureChoice] a picture with no number adds nothing",
+   "field": {
+    "key": "burn",
+    "kind": "pictureChoice",
+    "label": "Burnt areas",
+    "config": {
+     "multiple": true,
+     "aspect": 1,
+     "showLabels": true,
+     "total": {
+      "label": "Total burn area",
+      "unit": "%"
+     }
+    },
+    "options": [
+     {
+      "key": "head",
+      "label": "Head",
+      "says": "head",
+      "value": 9,
+      "place": {
+       "x": 0.05,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "arm",
+      "label": "Left arm",
+      "says": "left arm",
+      "place": {
+       "x": 0.55,
+       "y": 0.05,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "trunk",
+      "label": "Front of trunk",
+      "says": "front of trunk",
+      "value": 18,
+      "place": {
+       "x": 0.05,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     },
+     {
+      "key": "ear",
+      "label": "Ear",
+      "says": "ear",
+      "value": 4.5,
+      "place": {
+       "x": 0.55,
+       "y": 0.55,
+       "w": 0.4,
+       "h": 0.4
+      },
+      "drawn": "M30,5 L70,5 L70,95 L30,95 Z"
+     }
+    ]
+   },
+   "answers": {
+    "burn": [
+     "head",
+     "arm"
+    ]
+   },
+   "expect": "head and left arm. Total burn area 9%",
+   "fires": null
+  }
+ ]
+}

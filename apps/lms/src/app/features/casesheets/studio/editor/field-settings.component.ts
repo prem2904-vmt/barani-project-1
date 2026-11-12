@@ -14,6 +14,7 @@ import {
   ifNoneOf,
   kindBuild,
   removeOption,
+  supportsCombinations,
   sectionKeyOf,
   setLabel,
   updateField,
@@ -22,6 +23,7 @@ import {
 } from '@prefrontal/forms-engine';
 import { IconName, PfIconComponent } from '@prefrontal/forms-engine';
 import { PfSelectOption, SelectComponent } from '@prefrontal/shared';
+import { CombinationsComponent } from './combinations.component';
 import { EditorStore } from './editor-store';
 import { FieldActions } from './field-actions';
 
@@ -44,7 +46,7 @@ interface ConfigRow {
 @Component({
   selector: 'st-field-settings',
   standalone: true,
-  imports: [PfIconComponent, SelectComponent, NgComponentOutlet],
+  imports: [PfIconComponent, SelectComponent, NgComponentOutlet, CombinationsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './field-settings.component.html',
   styleUrl: './field-settings.component.scss',
@@ -58,6 +60,8 @@ export class FieldSettingsComponent {
   protected readonly build = computed(() => kindBuild(this.f()?.kind ?? 'text'));
   protected readonly icon = computed(() => this.build().icon as IconName);
   protected readonly hasOptions = computed(() => !!this.build().starterOptions || (this.f()?.options ?? []).length > 0);
+  /** Every multi-select question carries sentences for combinations of picks. */
+  protected readonly combos = computed(() => supportsCombinations(this.f()));
   protected readonly isYesNo = computed(() => {
     const f = this.f();
     return !!f && ifNoneOf(f) !== null && ifNoneOf(f) !== 'negativeHistory';

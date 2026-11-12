@@ -91,6 +91,10 @@
       </section>
     }
 
+    @if (combos()) {
+      <st-combinations [field]="fld" [apply]="applier" />
+    }
+
     @if (config().length) {
       <section class="fs-sec" data-sec="looks">
         <h3 class="fs-h">How it looks</h3>

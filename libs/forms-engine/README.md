@@ -14,3 +14,11 @@ the "case sheets into Prefrontal" project (plan `pf-work/plans/prepare-into-pref
 - Specs run inside `nx test lms` (`apps/lms/tsconfig.spec.json` includes `libs/forms-engine/src`).
 
 Port rule: keep the files diff-able against Prepare — adapt imports only; don't rewrite logic.
+
+Picture choice + combination sentences (2026-11-12): `kinds/pictureChoice` (fill: tap-to-highlight pictures in a box, optional live total;
+Studio panel: layout editor, upload / draw per part) and `narrative/combinations.ts` (the shared multi-select sentence engine, parity-tested
+against `docs/vectors/casesheet-combinations.json`). "Sentences for combinations" (the Studio editor) lives in the LMS app
+(`studio/editor/combinations.component.ts`) because it reuses the app's `DragReorder`. A host that reuses this lib for master case sheets
+(prefrontal-admin-ui) needs: `FE_ASSETS` (asset store: `asset`, `uploadTemplate`), `FE_KINDS` (`KIND_SPECS`), `FeDialog`, `<cs-styles />`-equivalent
+global CSS (`fill/_fill.scss` now `@use`s `kinds/pictureChoice/_picture-choice.scss`), and its own copy of the combinations editor
+(or the drag helper moved into this lib).

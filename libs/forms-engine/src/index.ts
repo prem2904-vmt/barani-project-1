@@ -34,3 +34,7 @@ export * from './lib/canvas/canvas.component';
 // Phase 5: tables in the narrative (grids).
 export * from './lib/narrative/narrative-table';
 export * from './lib/narrative/narrative-table.component';
+// Picture choice + sentences for combinations of picks (every multi-select kind).
+export * from './lib/narrative/combinations';
+export * from './lib/kinds/pictureChoice/pictureChoice-model';
+export * from './lib/kinds/pictureChoice/pictureChoice-mini.component';

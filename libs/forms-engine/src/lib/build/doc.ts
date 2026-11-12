@@ -279,7 +279,7 @@ export function newField(def: FormDefinition, kind: PlainKind | string, defaults
     children: [],
     says: { include: true, sections: [], sentence: b.sentence(name) || undefined },
   };
-  if (kind === 'multi') field.says!.negativeHistory = { enabled: false, prefix: 'Denies' };
+  if (kind === 'multi' || kind === 'pictureChoice') field.says!.negativeHistory = { enabled: false, prefix: 'Denies' };
   if (!field.says!.sentence) delete field.says!.sentence;
   return field;
 }

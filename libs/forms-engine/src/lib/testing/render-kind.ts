@@ -161,6 +161,8 @@ export const TOUCH_CLASSES = [
   'fe-gridk__cell',
   'fe-gridk__head',
   'fe-gridk__rowlab',
+  // picture choice (kinds/pictureChoice/_picture-choice.scss)
+  'fe-pc__part',
 ];
 
 export function untouchable(el: HTMLElement): string[] {
