@@ -10,8 +10,8 @@ import {
   untracked,
 } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
-import { FeDialog, PfIconComponent } from '../../kit';
-import { FE_ASSETS, KindFill } from '../../fill/contract';
+import { FeDialog, PfIconComponent, PfSelectOption, SelectComponent } from '../../kit';
+import { FE_ASSETS, KindFill, injectLegacy } from '../../fill/contract';
 import { CellPanelAction, CellPanelChip, GridCellPanelComponent } from './grid-cell-panel.component';
 import {
   GridAnswer,
@@ -72,7 +72,7 @@ interface CellRef {
 @Component({
   selector: 'fe-grid-fill',
   standalone: true,
-  imports: [NgTemplateOutlet, PfIconComponent, GridCellPanelComponent],
+  imports: [NgTemplateOutlet, PfIconComponent, GridCellPanelComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { '[class.fe-gridk-host]': 'true' },
   template: `
@@ -81,7 +81,7 @@ interface CellRef {
         <div class="fe-gridk__bar">
           @if (allChips().length) {
             <div class="fe-gridk__qf" role="group" aria-label="Quick fill">
-              <span class="fe-gridk__qf-lbl" aria-hidden="true">Quick fill</span>
+              <span class="fe-gridk__qf-lbl" aria-hidden="true">Quick fill:</span>
               @for (c of allChips(); track c.preset.label) {
                 <button
                   type="button"
@@ -108,7 +108,7 @@ interface CellRef {
               [disabled]="disabled()"
               (click)="togglePrint()"
             >
-              <span class="fe-switchrow__txt">Include in narrative</span>
+              <span class="fe-switchrow__txt">Include in Narrative</span>
               <span class="pf-toggle__track fe-switch" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
             </button>
           }
@@ -236,6 +236,40 @@ interface CellRef {
     <ng-template #cellTpl let-c let-ri="row" let-ci="cellIdx" let-showHead="showHead">
       @if (!c.slots.length) {
         <div class="fe-gridk__cell fe-gridk__cell--none" aria-hidden="true"></div>
+      } @else if (legacy() && inline(c)) {
+        <!-- legacy multi-textbox cell: the box itself (a text box, a number box, a dropdown); a default shows grey and clears on focus -->
+        <div class="fe-gridk__cell fe-gridk__cell--in" [attr.data-cell]="cellId(ri, c)">
+          @for (s of c.slots; track s.slot) {
+            @if (c.slots.length > 1 && s.field.label) {
+              <span class="fe-gridk__lk">{{ s.field.label }}</span>
+            }
+            @if ((s.field.type ?? 'text') === 'choice') {
+              <pf-select
+                class="fe-gridk__sel"
+                [class.fe-gridk__dflt]="isDefault(ri, s)"
+                [options]="optionsOf(s)"
+                [value]="rawOf(ri, s) || null"
+                placeholder="Select..."
+                [disabled]="disabled()"
+                (valueChange)="setSlot(ri, s, $event)"
+              />
+            } @else {
+              <input
+                class="fe-gridk__in"
+                [class.fe-gridk__dflt]="isDefault(ri, s)"
+                [attr.type]="s.field.type === 'number' ? 'number' : 'text'"
+                autocomplete="off"
+                [attr.data-slot]="s.slot"
+                [attr.aria-label]="cellWords(ri, c)"
+                [placeholder]="s.field.placeholder || ''"
+                [value]="rawOf(ri, s)"
+                [disabled]="disabled()"
+                (focus)="focusSlot(ri, s)"
+                (input)="setSlot(ri, s, $any($event.target).value)"
+              />
+            }
+          }
+        </div>
       } @else if (disabled()) {
         <div class="fe-gridk__cell fe-gridk__cell--ro" [attr.data-cell]="cellId(ri, c)">
           <ng-container *ngTemplateOutlet="cellBody; context: { $implicit: c, ri: ri, showHead: showHead }" />
@@ -339,7 +373,9 @@ export class GridFill extends KindFill {
   protected readonly cfg = computed(() => gridConfig(this.field()));
   protected readonly layout = computed(() => gridLayout(this.cfg()));
   protected readonly answer = computed(() => asAnswer(this.value()));
-  protected readonly printOn = computed(() => this.answer()?.print !== false);
+  /** Legacy: "Include in Narrative" starts OFF and switches itself on at the first edit; a new case sheet starts on. */
+  protected readonly legacy = injectLegacy();
+  protected readonly printOn = computed(() => (this.legacy() ? this.answer()?.print === true : this.answer()?.print !== false));
   protected readonly band = computed(() => headerBand(this.cfg()));
 
   protected readonly open = signal<Open>(null);
@@ -454,11 +490,41 @@ export class GridFill extends KindFill {
 
   protected togglePrint(): void {
     const a = this.answer();
-    this.write({ ...(a ?? {}), cells: a?.cells ?? {}, print: !this.printOn() });
+    this.emit({ ...(a ?? {}), cells: a?.cells ?? {}, print: !this.printOn() });
   }
 
   private write(a: GridAnswer | undefined): void {
-    this.emit(a);
+    // legacy: any edit switches "Include in Narrative" on (multi-textbox-input: "Auto-enable includeInPdf on any user edit")
+    this.emit(this.legacy() && a ? { ...a, print: true } : a);
+  }
+
+  // ── legacy inline cells ──
+  /** Cells made only of plain boxes and choices are drawn as the boxes themselves; anything else keeps the tap-to-open sheet. */
+  protected inline(c: GridLaidCell): boolean {
+    return c.slots.every((s: GridSlot) => ['text', 'number', 'choice', undefined].includes(s.field.type));
+  }
+  private readonly edited = new Set<string>();
+  protected rawOf(ri: number, s: GridSlot): string {
+    const v = cellValue(this.answer(), this.layout().rows[ri].def.key, s.slot);
+    return v === null || v === undefined ? '' : String(v);
+  }
+  protected isDefault(ri: number, s: GridSlot): boolean {
+    const d = s.field.default;
+    return d !== undefined && !this.edited.has(s.slot + '@' + ri) && this.rawOf(ri, s) === String(d);
+  }
+  protected optionsOf(s: GridSlot): PfSelectOption<string>[] {
+    return (s.field.options ?? []).map((o) => ({ value: o.key, label: o.label }));
+  }
+  protected focusSlot(ri: number, s: GridSlot): void {
+    if (!this.isDefault(ri, s)) return;
+    this.edited.add(s.slot + '@' + ri);
+    this.write(withCell(this.answer(), s.rowKey, s.slot, null));
+  }
+  protected setSlot(ri: number, s: GridSlot, raw: string | null): void {
+    this.edited.add(s.slot + '@' + ri);
+    const text = raw ?? '';
+    const value = s.field.type === 'number' && text !== '' ? (Number.isFinite(Number(text)) ? Number(text) : null) : text;
+    this.write(withCell(this.answer(), s.rowKey, s.slot, value === '' ? null : value));
   }
 
   // ── the open cell ──

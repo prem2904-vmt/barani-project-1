@@ -227,6 +227,11 @@ export interface FormDefinition {
   triggers?: TriggerDef[];
 }
 
+/** An imported old (MyPrefrontal) case sheet: the fill screens behave like the old app, not like the new ones. */
+export function isLegacySheet(def: { narrative?: { mode?: string } } | null | undefined): boolean {
+  return def?.narrative?.mode === 'legacy';
+}
+
 /** Answers by field key. Option sub-fields live under their own keys; repeat rows are objects keyed by child key. */
 export type Answers = Record<string, unknown>;
 

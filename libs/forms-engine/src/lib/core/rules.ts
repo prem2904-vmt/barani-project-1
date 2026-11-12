@@ -142,7 +142,14 @@ export function linkDisabledKeys(def: FormDefinition): Set<string> {
 /** Fit a value copied into a repeat / repeatPages target (legacy adaptLinkedValue): a number becomes a count. */
 function adapt(value: unknown, target: FieldDef | undefined, current: unknown): unknown {
   if (!target) return value;
-  const n = typeof value === 'number' ? value : typeof value === 'string' && value !== '' ? Number(value) : NaN;
+  let n = typeof value === 'number' ? value : typeof value === 'string' && value !== '' ? Number(value) : NaN;
+  // a repeating-pages value (the "How many Ulcer?" box) copied into a repeating group: its count is the most repetitions of any page
+  const inst = (value as { instances?: { page: string }[] } | null)?.instances;
+  if (!Number.isFinite(n) && Array.isArray(inst)) {
+    const per = new Map<string, number>();
+    for (const i of inst) per.set(i.page, (per.get(i.page) ?? 0) + 1);
+    n = Math.max(0, ...per.values());
+  }
   if (target.kind === 'repeat') {
     if (Array.isArray(value)) return value;
     if (!Number.isFinite(n)) return value;

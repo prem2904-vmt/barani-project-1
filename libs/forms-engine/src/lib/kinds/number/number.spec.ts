@@ -86,3 +86,14 @@ describe('number fill', () => {
     expect(r.calls).toEqual([]);
   });
 });
+
+describe('number fill: legacy box (G13)', () => {
+  const nav = { goTo: () => undefined, pageTitle: (k: string) => k, isLegacy: () => true };
+  const rate = f('rate', 'number', { label: 'Pulse Rate', config: {} });
+  it('is a number box in a legacy sheet (letters never land in it) and a plain box otherwise', async () => {
+    const legacy = await renderKind(NumberFill, rate, null, { wizard: nav });
+    expect(legacy.el.querySelector('input.fe-numline__input')?.getAttribute('type')).toBe('number');
+    const fresh = await renderKind(NumberFill, rate, null);
+    expect(fresh.el.querySelector('input.fe-numline__input')?.getAttribute('type')).toBe('text');
+  });
+});

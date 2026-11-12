@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { PfIconComponent, PfSelectOption, SelectComponent } from '../../kit';
-import { KindFill } from '../../fill/contract';
+import { KindFill, injectLegacy } from '../../fill/contract';
 import { NumpadComponent, parseNumber } from '../../fill/numpad.component';
 import {
   MONTHS,
@@ -155,6 +155,28 @@ interface Chip {
       </div>
     } @else {
       <div class="fe-date" role="group" [attr.aria-labelledby]="labelId()">
+        @if (legacy()) {
+          <!-- legacy datepicker box: a text box with a calendar icon; the month calendar opens under it -->
+          <div class="fe-datebox">
+            <pf-icon class="fe-datebox__icon" name="calendar" [size]="18" />
+            <input
+              class="fe-text__input fe-datebox__in"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              data-pick
+              [attr.aria-label]="field().label"
+              [attr.aria-expanded]="open()"
+              [placeholder]="field().placeholder || 'Select date'"
+              [value]="boxText()"
+              [disabled]="disabled()"
+              (focus)="openCalendar()"
+              (click)="openCalendar()"
+              (input)="typeDate($any($event.target).value)"
+              (blur)="boxTyping.set(null)"
+            />
+          </div>
+        } @else {
         <div class="fe-chips">
           @if (quickChips()) {
             @for (c of chips(); track c.label) {
@@ -187,6 +209,7 @@ interface Chip {
         </div>
         @if (chosen()) {
           <p class="fe-date__value" aria-live="polite">{{ shown() }}</p>
+        }
         }
         @if (open() && !disabled()) {
           <div class="fe-cal" role="group" aria-label="Calendar">
@@ -250,6 +273,10 @@ interface Chip {
   `,
 })
 export class DateFill extends KindFill {
+  protected readonly legacy = injectLegacy();
+  /** What the legacy box shows while it is being typed (an unfinished "12/0" is not a date yet). */
+  protected readonly boxTyping = signal<string | null>(null);
+  protected readonly boxText = computed(() => this.boxTyping() ?? this.shown());
   /** Today, read once per control (a spec may replace it before the first render). */
   today: Ymd = fromDate(new Date());
 
@@ -343,6 +370,26 @@ export class DateFill extends KindFill {
     if (this.isSel(d)) return this.emit(undefined);
     this.emit(toIso(d));
     this.open.set(false);
+  }
+
+  protected openCalendar(): void {
+    if (this.open()) return;
+    this.view.set(null);
+    this.open.set(true);
+  }
+
+  /** Legacy box: "dd/mm/yyyy" typed by hand; only a real, past-or-today date is kept (an unfinished one waits). */
+  protected typeDate(text: string): void {
+    this.boxTyping.set(text);
+    const m = text.trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+    if (!m) {
+      if (text.trim() === '') this.emit(undefined);
+      return;
+    }
+    const v: Ymd = { y: Number(m[3]), m: Number(m[2]), d: Number(m[1]) };
+    if (v.m < 1 || v.m > 12 || v.d < 1 || v.d > daysIn(v.y, v.m) || this.isFuture(v)) return;
+    this.emit(toIso(v));
+    this.view.set({ y: v.y, m: v.m });
   }
 
   protected toggleCalendar(): void {

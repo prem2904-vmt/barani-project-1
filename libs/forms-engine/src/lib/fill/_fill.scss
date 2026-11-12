@@ -67,6 +67,7 @@
 
 .fe-field__req {
   flex: none;
+  margin-left: -5px; // the star sits right after the label (legacy: label + star in one line)
   color: var(--red-text, #dc2626);
   font-size: 16px;
   line-height: 1;
@@ -93,6 +94,23 @@
 
 .fe-field--missing > .fe-field__head .fe-field__lbl {
   color: var(--red-text, #dc2626);
+}
+
+// legacy select: the dropdown is as wide as the panel it sits in
+fe-choice-fill > pf-select,
+fe-multi-fill > pf-select {
+  display: block;
+  width: 100%;
+}
+
+// read by screen readers only
+.fe-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 // ── follow-up questions of a chosen option, inline under the control (legacy button-select / select panel:
@@ -123,6 +141,8 @@
 .fe-follow .fe-grid {
   display: flex;
   flex-direction: column;
+  // the page grid says align-items:start; in this column it made every control content-width (legacy: buttons and cards fill the panel)
+  align-items: stretch;
   gap: 12px;
 }
 
@@ -567,6 +587,41 @@ textarea.fe-text__input {
   background: var(--pf-card-bg);
 }
 
+// legacy checkbox: a 44x24 switch + the label, no card around it
+.fe-chip.fe-checkrow[aria-checked],
+.fe-chip.fe-checkrow[aria-checked='true'] {
+  box-shadow: none;
+  color: var(--text-primary);
+  font-weight: 500;
+  min-height: 0;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  max-width: none;
+  width: auto;
+  justify-self: start;
+  align-self: flex-start;
+  border-radius: 8px;
+}
+.fe-switch--sm {
+  width: 44px;
+  height: 24px;
+}
+.fe-switch--sm .pf-toggle__knob {
+  top: 1px;
+  left: 1px;
+  width: 20px;
+  height: 20px;
+}
+.fe-checkrow[aria-checked='true'] .fe-switch {
+  background: var(--pf-switch-on);
+  border-color: var(--pf-switch-on);
+}
+.fe-checkrow[aria-checked='true'] .fe-switch--sm .pf-toggle__knob {
+  transform: translateX(20px);
+}
+
 .fe-checkrow[aria-checked='true'] .fe-checkrow__box {
   border-color: var(--color-primary, #7c3aed);
   background: var(--pf-done-tint);
@@ -809,8 +864,14 @@ textarea.fe-text__input {
 }
 .fe-chips--row > .fe-chip {
   flex: 1 1 0;
-  min-width: max-content;
-  padding: 12px 20px;
+  // legacy flex-1: a row breaks between buttons only when the longest WORDS no longer fit, a long label wraps inside its button
+  // (min-content with word breaks; `anywhere` would shrink min-content to one letter and never wrap the row)
+  min-width: min-content;
+  overflow-wrap: break-word;
+  padding: 12px 24px;
+}
+.fe-chips--row > .fe-chip .fe-chip__txt {
+  overflow-wrap: break-word;
 }
 
 // legacy radio (checkbox-group): equal-width grid, 2 per row (3 when the count divides by 3)
@@ -1055,6 +1116,18 @@ textarea.fe-text__input {
   border-color: transparent;
   background: transparent;
   color: var(--text-tertiary);
+}
+.fe-mic--inline:has(.fe-mic__word) {
+  width: auto;
+  padding: 0 12px;
+  gap: 6px;
+}
+.fe-mic__word {
+  font-size: 13px;
+  font-weight: 600;
+}
+.fe-text--mic:has(.fe-mic__word) .fe-text__input {
+  padding-right: 112px;
 }
 .fe-mic--inline:hover:not(:disabled) {
   color: var(--color-primary, #7c3aed);

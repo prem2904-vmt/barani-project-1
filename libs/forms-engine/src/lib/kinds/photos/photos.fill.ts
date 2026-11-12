@@ -7,7 +7,7 @@ import { strokePath } from '../../canvas/ink';
 import { MAX_CAPTION, MAX_GALLERY, PhotoItem, parsePhotos, shrinkPhoto } from '../../canvas/photo';
 import { PinPanelComponent } from '../../canvas/pin-panel.component';
 import { CanvasReader } from '../../canvas/picture';
-import { AssetLink, FE_ASSETS, KindFill, feId } from '../../fill/contract';
+import { AssetLink, FE_ASSETS, KindFill, feId, injectLegacy } from '../../fill/contract';
 
 /**
  * photos (legacy imageGallery, redone): a few photos from the camera or the
@@ -25,6 +25,29 @@ import { AssetLink, FE_ASSETS, KindFill, feId } from '../../fill/contract';
     <div class="fe-img" role="group" [attr.aria-labelledby]="labelId()">
       <input #cameraIn class="fe-file" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true" data-camera-input (change)="add($any($event.target))" />
       <input #libraryIn class="fe-file" type="file" accept="image/jpeg,image/png,image/heic,image/heif" multiple tabindex="-1" aria-hidden="true" data-photo-input (change)="add($any($event.target))" />
+      @if (legacy()) {
+        <!-- legacy image-gallery: the question with its count (0 / 6), then Camera / Upload, then the pictures or the empty box -->
+        <div class="fe-img__head">
+          <span class="fe-img__title">{{ field().label }}</span>
+          <span class="fe-img__count" aria-live="polite">{{ photos().length }} / {{ max() }}</span>
+        </div>
+        @if (!disabled() && canAdd() && photos().length < max()) {
+          <div class="fe-img__acts fe-img__acts--legacy">
+            @if (source() !== 'upload') {
+              <button type="button" class="fe-img__act" data-act="camera" [disabled]="busy()" (click)="cameraIn.click()">
+                <pf-icon name="camera" [size]="18" />
+                Camera
+              </button>
+            }
+            @if (source() !== 'camera') {
+              <button type="button" class="fe-img__act" data-act="library" [disabled]="busy()" (click)="libraryIn.click()">
+                <pf-icon name="upload" [size]="18" />
+                Upload
+              </button>
+            }
+          </div>
+        }
+      }
       @if (photos().length) {
         <div class="fe-photos" [attr.data-layout]="layout()">
           @for (p of photos(); track p.id; let i = $index) {
@@ -57,9 +80,17 @@ import { AssetLink, FE_ASSETS, KindFill, feId } from '../../fill/contract';
           }
         </div>
       } @else {
-        <p class="fe-img__empty">{{ canAdd() ? 'No photos yet.' : 'Photos can be added on an open case sheet.' }}</p>
+        @if (legacy()) {
+          <div class="fe-img__none">
+            <pf-icon name="image" [size]="40" />
+            <p class="fe-img__none-t">No images added yet</p>
+            <p class="fe-img__none-s">Use camera or upload to add up to {{ max() }} images</p>
+          </div>
+        } @else {
+          <p class="fe-img__empty">{{ canAdd() ? 'No photos yet.' : 'Photos can be added on an open case sheet.' }}</p>
+        }
       }
-      @if (!disabled() && canAdd() && photos().length < max()) {
+      @if (!disabled() && canAdd() && photos().length < max() && !legacy()) {
         <div class="fe-img__acts">
           @if (source() !== 'upload') {
             <button type="button" class="pf-btn pf-btn--secondary" data-act="camera" [disabled]="busy()" (click)="cameraIn.click()">
@@ -135,6 +166,7 @@ import { AssetLink, FE_ASSETS, KindFill, feId } from '../../fill/contract';
   `,
 })
 export class PhotosFill extends KindFill {
+  protected readonly legacy = injectLegacy();
   protected readonly assets = inject(FE_ASSETS);
   private readonly dialog = inject(FeDialog);
   private readonly readers = new Map<string, CanvasReader>();

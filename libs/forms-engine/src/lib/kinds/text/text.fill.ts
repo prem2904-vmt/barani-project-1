@@ -11,7 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { FeDialog, PfIconComponent } from '../../kit';
-import { FE_SUGGESTIONS, FE_VOICE, FieldSuggestion, KindFill, VoiceSession, feId } from '../../fill/contract';
+import { FE_SUGGESTIONS, FE_VOICE, FieldSuggestion, KindFill, VoiceSession, feId, injectLegacy } from '../../fill/contract';
 import { HoldDirective } from '../../fill/hold.directive';
 
 /** How many chips sit above the box (legacy: top 5). */
@@ -114,6 +114,9 @@ export const SUGGESTION_HOLD_MS = 450;
           (click)="toggleMic()"
         >
           <pf-icon [name]="listening() ? 'stop' : 'mic'" [size]="22" />
+          @if (legacy()) {
+            <span class="fe-mic__word">{{ listening() ? 'Stop' : 'Listen' }}</span>
+          }
         </button>
       }
     </div>
@@ -148,6 +151,8 @@ export const SUGGESTION_HOLD_MS = 450;
 })
 export class TextFill extends KindFill {
   private readonly voice = inject(FE_VOICE);
+  /** The old app's voice note showed a labelled Listen button. */
+  protected readonly legacy = injectLegacy();
   private readonly source = inject(FE_SUGGESTIONS);
   private readonly dialog = inject(FeDialog);
   private readonly box = viewChild<ElementRef<HTMLInputElement | HTMLTextAreaElement>>('box');

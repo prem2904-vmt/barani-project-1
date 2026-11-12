@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { PfIconComponent } from '../../kit';
-import { KindFill } from '../../fill/contract';
+import { KindFill, injectLegacy } from '../../fill/contract';
 import { NumpadComponent, numberText, parseNumber, stepValue } from '../../fill/numpad.component';
 
 /**
@@ -19,7 +19,8 @@ import { NumpadComponent, numberText, parseNumber, stepValue } from '../../fill/
       <div class="fe-numline">
         <input
           class="fe-text__input fe-numline__input"
-          type="text"
+          [attr.type]="legacy() ? 'number' : 'text'"
+          [attr.step]="legacy() ? 'any' : null"
           [attr.inputmode]="decimals() ? 'decimal' : 'numeric'"
           autocomplete="off"
           [attr.aria-labelledby]="labelId()"
@@ -87,6 +88,8 @@ import { NumpadComponent, numberText, parseNumber, stepValue } from '../../fill/
   `,
 })
 export class NumberFill extends KindFill {
+  /** The old number box was `<input type=number>` (letters never land in it). */
+  protected readonly legacy = injectLegacy();
   protected readonly open = signal(false);
   protected readonly unit = computed(() => (this.config()['unit'] as string) ?? '');
   private readonly min = computed(() => this.config()['min'] as number | undefined);

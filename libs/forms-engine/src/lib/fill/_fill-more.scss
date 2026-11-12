@@ -258,6 +258,270 @@
   color: var(--text-secondary);
 }
 
+// legacy measure-input: one card row, question left, slider + number + unit right
+.fe-measure.fe-measure--legacy {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--pf-line);
+  border-radius: 16px;
+  background: var(--pf-card-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.fe-measure__q {
+  flex: 1 1 140px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.fe-measure__ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.fe-measure__range {
+  width: 120px;
+  min-width: 60px;
+  accent-color: var(--color-primary, #7c3aed);
+}
+.fe-measure__num {
+  width: 64px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid var(--input-border, var(--pf-line));
+  border-radius: 8px;
+  background: var(--input-bg, var(--pf-card-bg));
+  color: var(--input-text, var(--text-primary));
+  font: inherit;
+  text-align: center;
+}
+.fe-measure__unit {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.fe-size--legacy .fe-size__in {
+  width: 72px;
+}
+.fe-size__unitsel {
+  min-width: 96px;
+}
+
+// legacy recursive / recursive-pages count rows: "How many Ulcer?" [ 5 ]
+.fe-countrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.fe-countrow__lbl,
+.fe-countgrid__lbl {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.fe-countrow__in {
+  width: 72px;
+  min-height: var(--pf-touch);
+  padding: 4px 10px;
+  border: 1px solid var(--color-primary, #7c3aed);
+  border-radius: 10px;
+  background: var(--input-bg, var(--pf-card-bg));
+  color: var(--input-text, var(--text-primary));
+  font: inherit;
+  text-align: center;
+}
+.fe-countgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px 16px;
+}
+.fe-countgrid__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fe-row__remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 2px 10px;
+  border: 1px solid var(--red-text, #dc2626);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--red-text, #dc2626);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.fe-rows--legacy > .fe-row {
+  border-radius: 16px;
+}
+
+// legacy image-gallery: label + count, dashed Camera / Upload, a dashed empty box
+.fe-img__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fe-img__title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.fe-img__count {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.fe-img__acts--legacy {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.fe-img__act {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 16px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.fe-img__none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 32px 16px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 16px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+.fe-img__none-t {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+.fe-img__none-s {
+  margin: 0;
+  font-size: 13px;
+}
+
+// legacy grid cell: the small dashed Draw box
+.fe-drawcell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fe-drawcell__lbl {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.fe-drawcell__btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  align-self: flex-start;
+  min-width: 160px;
+  min-height: 48px;
+  padding: 6px 16px;
+  border: 1px dashed var(--pf-line);
+  border-radius: 10px;
+  background: var(--pf-chip-bg);
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+// legacy bmi-input: Height, Weight, BMI on one row (a phone keeps the three side by side too)
+.fe-bmi--legacy {
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 12px;
+}
+.fe-bmi--legacy > .fe-sub {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.fe-bmi__box {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--input-border, var(--pf-line));
+  border-radius: 12px;
+  background: var(--input-bg, var(--pf-card-bg));
+  overflow: hidden;
+}
+.fe-bmi__box:focus-within {
+  border-color: var(--input-border-focus, #8b5cf6);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+.fe-bmi__in {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--pf-touch);
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--input-text, var(--text-primary));
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+.fe-bmi__unit {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border-left: 1px solid var(--input-border, var(--pf-line));
+  background: var(--pf-chip-bg);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.fe-bmi__result-box {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  min-height: var(--pf-touch);
+  padding: 8px 12px;
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: var(--pf-chip-bg);
+}
+.fe-bmi__result-box--on {
+  border-color: var(--color-primary, #7c3aed);
+  background: var(--pf-done-tint, var(--pf-chip-bg));
+}
+.fe-bmi__ru {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.fe-bmi__result-box .fe-bmi__cat {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-weight: 600;
+  color: var(--color-primary, #7c3aed);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .fe-cal,
   .fe-slider__thumb {

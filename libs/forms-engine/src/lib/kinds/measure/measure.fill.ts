@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, computed, signal, viewChild } from '@angular/core';
 import { PfIconComponent } from '../../kit';
-import { KindFill } from '../../fill/contract';
+import { KindFill, injectLegacy } from '../../fill/contract';
 import { NumpadComponent, numberText, parseNumber, stepValue } from '../../fill/numpad.component';
 
 /** Snap a raw slider position to the step, within min / max. */
@@ -24,6 +24,40 @@ export function snap(raw: number, min: number, max: number, step: number): numbe
   imports: [NumpadComponent, PfIconComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (legacy()) {
+      <!-- legacy measure-input: ONE card row, the question on the left; slider, number box and unit on the right -->
+      <div class="fe-measure fe-measure--legacy" role="group" [attr.aria-labelledby]="labelId()">
+        <span class="fe-measure__q">{{ field().label }}@if (field().required) {<span class="fe-field__req" aria-hidden="true"></span>}</span>
+        <span class="fe-measure__ctl">
+          <input
+            type="range"
+            class="fe-measure__range"
+            data-no-swipe
+            [attr.min]="min()"
+            [attr.max]="max()"
+            [attr.step]="stepBy()"
+            [attr.aria-label]="field().label"
+            [value]="num() ?? min()"
+            [disabled]="disabled()"
+            (input)="typeBox($any($event.target).value, false)"
+          />
+          <input
+            type="number"
+            class="fe-measure__num"
+            [attr.min]="min()"
+            [attr.max]="max()"
+            [attr.step]="stepBy()"
+            [attr.aria-label]="field().label + ' value'"
+            [value]="num() ?? min()"
+            [disabled]="disabled()"
+            (input)="typeBox($any($event.target).value, true)"
+          />
+          @if (unit()) {
+            <span class="fe-measure__unit">{{ unit() }}</span>
+          }
+        </span>
+      </div>
+    } @else {
     <div class="fe-measure" role="group" [attr.aria-labelledby]="labelId()">
       <div class="fe-stepper">
         <button
@@ -102,9 +136,11 @@ export function snap(raw: number, min: number, max: number, step: number): numbe
         />
       }
     </div>
+    }
   `,
 })
 export class MeasureFill extends KindFill {
+  protected readonly legacy = injectLegacy();
   private readonly track = viewChild<ElementRef<HTMLElement>>('track');
   protected readonly open = signal(false);
   protected readonly dragging = signal(false);
@@ -112,7 +148,7 @@ export class MeasureFill extends KindFill {
 
   protected readonly min = computed(() => num(this.config()['min'], 0));
   protected readonly max = computed(() => Math.max(this.min() + 1, num(this.config()['max'], 200)));
-  private readonly stepBy = computed(() => num(this.config()['step'], 1) || 1);
+  protected readonly stepBy = computed(() => num(this.config()['step'], 1) || 1);
   protected readonly decimals = computed(() => !Number.isInteger(this.stepBy()));
   protected readonly unit = computed(
     () => (this.config()['unit'] as string) ?? (this.value() as { unit?: string } | null)?.unit ?? '',
@@ -143,6 +179,12 @@ export class MeasureFill extends KindFill {
   protected step(dir: 1 | -1): void {
     this.typing.set(null);
     this.write(stepValue(this.num(), dir * this.stepBy(), this.min(), this.max()));
+  }
+
+  /** Legacy slider / number box: the raw text of either one (an empty number box clears the answer). */
+  protected typeBox(raw: string, clearable: boolean): void {
+    const n = parseNumber(raw);
+    this.write(n === null ? (clearable ? null : this.num()) : Math.min(this.max(), Math.max(this.min(), n)));
   }
 
   protected type(t: string): void {

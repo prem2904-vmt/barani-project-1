@@ -5,6 +5,7 @@ import {
   WizardNav,
   WizardPage,
   isAnswered,
+  isLegacySheet,
   pageLookup,
   pageProgress,
   visibleFields,
@@ -84,6 +85,10 @@ export class WizardController implements WizardNav {
     return true;
   }
 
+  isLegacy(): boolean {
+    return isLegacySheet(this.definition());
+  }
+
   pageTitle(pageKey: string): string {
     return this.definition()?.pages.find((p) => p.key === pageKey)?.title ?? pageKey;
   }
@@ -95,7 +100,8 @@ export class WizardController implements WizardNav {
    */
   completesPage(key: string): boolean {
     const wp = this.page();
-    if (!wp || this.isLast()) return false;
+    // an imported old case sheet never moves on by itself (resident-fe switched auto-advance off)
+    if (!wp || this.isLast() || isLegacySheet(this.definition())) return false;
     const get = pageLookup(wp, this.answers());
     const fields = visibleFields(wp.page, get);
     if (!fields.length || fields[fields.length - 1].key !== key) return false;

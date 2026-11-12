@@ -77,3 +77,55 @@ describe('repeatPages fill', () => {
     expect(r.el.textContent).toContain('Right eye');
   });
 });
+
+describe('repeatPages fill: legacy "How many" box (G1)', () => {
+  const nav = (legacy: boolean) => ({ goTo: () => undefined, pageTitle: (k: string) => titles[k] ?? k, isLegacy: () => legacy });
+  const ulcer = f('ulcer', 'repeatPages', {
+    label: 'Ulcer',
+    config: { pages: ['pregnancy'], maxCount: 10, minCount: 0, defaultCount: 1, labelPrefix: 'Ulcer' },
+  });
+
+  it('a number box "How many Ulcer?" instead of the stepper; no jump chips', async () => {
+    const r = await renderKind(RepeatPagesFill, ulcer, null, { wizard: nav(true) });
+    expect(r.el.querySelector('.fe-countrow__lbl')?.textContent?.trim()).toBe('How many Ulcer?');
+    expect(r.el.querySelector('.fe-stepper')).toBeNull();
+    expect(r.el.querySelector('[data-instance]')).toBeNull();
+  });
+
+  it('the pages are there from the start: the form default count is written when the sheet opens', async () => {
+    const r = await renderKind(RepeatPagesFill, ulcer, null, { wizard: nav(true) });
+    await r.stable();
+    expect(r.last()).toEqual({ instances: [{ page: 'pregnancy', index: 0, values: {} }] });
+  });
+
+  it('typing 5 makes five of each page; typing 0 keeps zero (it does not fall back to the default)', async () => {
+    const r = await renderKind(RepeatPagesFill, ulcer, null, { wizard: nav(true) });
+    const box = r.el.querySelector<HTMLInputElement>('input[data-count="*"]')!;
+    box.value = '5';
+    box.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect((r.last() as { instances: unknown[] }).instances.length).toBe(5);
+    box.value = '0';
+    box.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(r.last()).toEqual({ instances: [] });
+  });
+
+  it('a new case sheet keeps the stepper and writes nothing on its own', async () => {
+    const r = await renderKind(RepeatPagesFill, ulcer, null, { wizard: nav(false) });
+    await r.stable();
+    expect(r.el.querySelector('.fe-stepper')).not.toBeNull();
+    expect(r.calls.length).toBe(0);
+  });
+
+  it('individual mode: one box per page with its own default', async () => {
+    const eyes = f('eyes', 'repeatPages', {
+      label: 'Eyes',
+      config: { pages: ['rightEye', 'leftEye'], mode: 'individual', pageEntries: [{ page: 'rightEye', defaultCount: 1 }, { page: 'leftEye', defaultCount: 0 }] },
+    });
+    const r = await renderKind(RepeatPagesFill, eyes, null, { wizard: nav(true) });
+    await r.stable();
+    expect([...r.el.querySelectorAll('.fe-countgrid__lbl')].map((x) => x.textContent?.trim())).toEqual(['Right eye', 'Left eye']);
+    expect(r.last()).toEqual({ instances: [{ page: 'rightEye', index: 0, values: {} }] });
+  });
+});
