@@ -215,7 +215,7 @@ describe('grid: include in narrative, locked, shapes', () => {
     const r = await renderKind(GridFill, grid({ ...DENTAL, includeSwitch: true }), { cells: { t18: { status: 'sound' } } });
     const sw = r.el.querySelector<HTMLButtonElement>('[data-act="print"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('true');
-    expect(sw.textContent).toContain('Include in narrative');
+    expect(sw.textContent).toContain('Include in Narrative');
     await r.click(sw);
     expect(r.last()).toEqual({ print: false, cells: { t18: { status: 'sound' } } });
     await r.click(sw);

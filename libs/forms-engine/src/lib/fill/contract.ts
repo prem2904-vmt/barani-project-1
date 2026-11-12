@@ -1,4 +1,4 @@
-import { Directive, InjectionToken, Signal, Type, computed, input } from '@angular/core';
+import { Directive, InjectionToken, Signal, Type, computed, inject, input } from '@angular/core';
 import { Lookup } from '../core/rules';
 import { Answers, FieldDef } from '../core/types';
 
@@ -135,8 +135,20 @@ export interface WizardNav {
   goTo(pageId: string): void;
   /** A page's title by key ("Pregnancy"). */
   pageTitle(pageKey: string): string;
+  /** True while an imported old (MyPrefrontal) case sheet is open: controls then fill exactly like the old app. */
+  isLegacy?(): boolean;
 }
 export const FE_WIZARD = new InjectionToken<WizardNav | null>('FE_WIZARD', { factory: () => null });
+
+/**
+ * Call in a component's field initialiser: `() => boolean`, true while an imported legacy case sheet is open.
+ * Some controls differ between the old app and the new design (a required duration shows no star, a duration takes digits only ...);
+ * a new case sheet keeps the new behaviour, only a legacy one follows the old app.
+ */
+export function injectLegacy(): () => boolean {
+  const nav = inject(FE_WIZARD, { optional: true });
+  return () => nav?.isLegacy?.() === true;
+}
 
 /** Unique ids for labels / inputs. */
 let seq = 0;

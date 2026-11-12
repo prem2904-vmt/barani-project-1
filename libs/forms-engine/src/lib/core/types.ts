@@ -221,9 +221,15 @@ export interface FormDefinition {
   description?: string;
   groups?: GroupDef[];
   pages: PageDef[];
-  narrative?: { sections: NarrativeSectionDef[] };
+  /** `mode: 'legacy'` = an imported MyPrefrontal case sheet: it fills, words and prints like the old app. */
+  narrative?: { sections: NarrativeSectionDef[]; mode?: string };
   links?: LinkDef[];
   triggers?: TriggerDef[];
+}
+
+/** An imported old (MyPrefrontal) case sheet: the fill screens behave like the old app, not like the new ones. */
+export function isLegacySheet(def: { narrative?: { mode?: string } } | null | undefined): boolean {
+  return def?.narrative?.mode === 'legacy';
 }
 
 /** Answers by field key. Option sub-fields live under their own keys; repeat rows are objects keyed by child key. */

@@ -47,11 +47,8 @@ interface YnChoice {
           [disabled]="disabled()"
           (click)="flip()"
         >
-          <span class="fe-checkrow__box" aria-hidden="true">
-            @if (isTrue()) {
-              <pf-icon name="check" [size]="18" [stroke]="2.6" />
-            }
-          </span>
+          <!-- legacy checkbox: ONE small switch with the question beside it (never option cards) -->
+          <span class="pf-toggle__track fe-switch fe-switch--sm" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           <span>{{ field().label }}</span>
         </button>
       }

@@ -4,7 +4,7 @@ import { IconName, PfIconComponent } from '../kit';
 import { optionChosen } from '../core/pages';
 import { Lookup, isShown } from '../core/rules';
 import { Answers, FieldDef, OptionDef } from '../core/types';
-import { FE_KINDS, KindFill, feId, kindControl } from './contract';
+import { FE_KINDS, KindFill, feId, injectLegacy, kindControl } from './contract';
 import { followUpsInside } from './option-layout';
 
 /**
@@ -29,8 +29,9 @@ import { followUpsInside } from './option-layout';
     <!-- the question and its control; a Yes / No question is ONE card row (legacy yesno-na: question left, pills right) -->
     <div class="fe-field__row">
     <div class="fe-field__head">
-      <span class="fe-field__lbl" [id]="labelId">{{ field().label }}</span>
-      @if (field().required) {
+      <!-- the old duration-time box (Recovery time, Duration of episode) printed no question above it -->
+      <span class="fe-field__lbl" [id]="labelId" [class.fe-sr-only]="bareClock()">{{ field().label }}</span>
+      @if (field().required && !(legacy() && field().kind === 'duration')) {
         <span class="fe-field__req" aria-label="required" title="Required"></span>
       }
       @if (linked()) {
@@ -106,6 +107,9 @@ import { followUpsInside } from './option-layout';
 export class FieldHostComponent {
   private readonly kinds = inject(FE_KINDS);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** Old app: a required duration showed no star. */
+  protected readonly legacy = injectLegacy();
+  protected readonly bareClock = computed(() => this.legacy() && this.field().kind === 'duration' && this.field().config?.['scale'] === 'clock');
 
   readonly field = input.required<FieldDef>();
   /** The answers this field reads and writes (the sheet, a repeated page, or a repeat row). */

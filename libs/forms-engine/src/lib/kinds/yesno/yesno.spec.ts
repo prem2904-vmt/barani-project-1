@@ -41,6 +41,14 @@ describe('yesno fill', () => {
     expect(r.byText('Yes, alternates')).toBeTruthy();
   });
 
+  it('G6: a tick box is ONE small switch with the question beside it, no box or card (legacy checkbox)', async () => {
+    const r = await renderKind(YesnoFill, f('pulses', 'yesno', { label: 'All peripheral pulses felt', config: { display: 'check' } }), null);
+    expect(r.el.querySelector('.fe-switch--sm')).not.toBeNull();
+    expect(r.el.querySelector('.fe-checkrow__box')).toBeNull();
+    expect(r.el.textContent).toContain('All peripheral pulses felt');
+    expect(r.el.textContent).not.toContain('Option 1');
+  });
+
   it('tick box and switch store true / false', async () => {
     const chk = await renderKind(
       YesnoFill,

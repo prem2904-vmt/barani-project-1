@@ -127,3 +127,32 @@ describe('duration fill', () => {
     expect(r.calls).toEqual([]);
   });
 });
+
+describe('duration fill: legacy parity (G13, G16)', () => {
+  const legacyNav = { goTo: () => undefined, pageTitle: (k: string) => k, isLegacy: () => true };
+  const f2 = { key: 'dur', kind: 'duration', label: 'Duration' } as const;
+
+  it('G13: letters never land in the number box (legacy input type=number)', async () => {
+    const r = await renderKind(DurationFill, { ...f2, config: {} }, null);
+    const box = r.el.querySelector('input.fe-durbox__num') as HTMLInputElement;
+    box.value = 'Sample text';
+    box.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(box.value).toBe('');
+    expect(r.last()).toBeUndefined();
+    box.value = '5x';
+    box.dispatchEvent(new Event('input'));
+    await r.stable();
+    expect(box.value).toBe('5');
+    expect(r.last()).toMatchObject({ amount: 5 });
+  });
+
+  it('G16: the legacy duration-time unit list is Seconds / Minutes / Hours / Days; a new sheet keeps Minutes / Hours', async () => {
+    const field = { ...f2, config: { scale: 'clock', defaultUnit: 'minutes' } };
+    const legacy = await renderKind(DurationFill, field, { amount: 5, unit: 'minutes' }, { wizard: legacyNav });
+    const units = (r: typeof legacy) => (r.instance(DurationFill) as unknown as { unitOptions(): { value: string }[] }).unitOptions().map((o) => o.value);
+    expect(units(legacy)).toEqual(['seconds', 'minutes', 'hours', 'days']);
+    const fresh = await renderKind(DurationFill, field, { amount: 5, unit: 'minutes' });
+    expect(units(fresh)).toEqual(['minutes', 'hours']);
+  });
+});

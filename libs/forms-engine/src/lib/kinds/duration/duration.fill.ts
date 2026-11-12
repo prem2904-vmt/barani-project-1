@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 import { PfIconComponent, PfSelectOption, SelectComponent } from '../../kit';
-import { KindFill } from '../../fill/contract';
+import { KindFill, injectLegacy } from '../../fill/contract';
 import { NumpadComponent, numberText, parseNumber } from '../../fill/numpad.component';
 
 export const DURATION_NUMBERS = [1, 2, 3, 5, 7, 10, 14, 30];
@@ -84,7 +84,7 @@ type Which = 'from' | 'to';
             [placeholder]="range() ? (row === 'from' ? 'From' : 'To') : (field().placeholder || 'Duration')"
             [value]="numberText(numOf(row))"
             [disabled]="disabled()"
-            (input)="typed(row, $any($event.target).value)"
+            (input)="typeInBox(row, $any($event.target))"
           />
         }
         <pf-select
@@ -169,6 +169,7 @@ type Which = 'from' | 'to';
   `,
 })
 export class DurationFill extends KindFill {
+  private readonly legacy = injectLegacy();
   protected readonly numbers = DURATION_NUMBERS;
   protected readonly periods = PERIODS;
 
@@ -183,6 +184,8 @@ export class DurationFill extends KindFill {
   protected readonly rows = computed<Which[]>(() => (this.range() ? ['from', 'to'] : ['from']));
   protected readonly units = computed(() => {
     if (this.scale() === 'clock') {
+      // legacy duration-time: Seconds / Minutes / Hours / Days
+      if (this.legacy()) return ['seconds', 'minutes', 'hours', 'days'];
       return this.config()['defaultUnit'] === 'seconds' ? ['seconds', 'minutes', 'hours'] : ['minutes', 'hours'];
     }
     return ['days', 'weeks', 'months', 'years'];
@@ -238,6 +241,13 @@ export class DurationFill extends KindFill {
   protected togglePad(row: Which): void {
     this.padTyping.set(null);
     this.padFor.set(this.padFor() === row ? null : row);
+  }
+
+  /** Legacy `<input type=number>`: letters never land in the box (only digits and one point stay). */
+  protected typeInBox(row: Which, input: HTMLInputElement): void {
+    const clean = input.value.replace(/[^0-9.]/g, '').replace(/^(\d*\.\d*)\..*$/, '$1');
+    if (clean !== input.value) input.value = clean;
+    this.typed(row, clean);
   }
 
   protected typed(row: Which, text: string): void {

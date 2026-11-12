@@ -65,6 +65,20 @@ describe('WizardController (the page wizard)', () => {
     expect(w.completesPage('z')).toBe(false); // last page never advances
   });
 
+  it('an imported legacy case sheet never auto-advances (G10)', () => {
+    const def: FormDefinition = {
+      narrative: { sections: [], mode: 'legacy' },
+      pages: [
+        { key: 'a', title: 'A', fields: [{ key: 'x', kind: 'yesno', label: 'X' }] },
+        { key: 'b', title: 'B', fields: [{ key: 'z', kind: 'text', label: 'Z' }] },
+      ],
+    };
+    const w = new WizardController();
+    w.start(def, {});
+    w.answers.set({ x: 'yes' });
+    expect(w.completesPage('x')).toBe(false);
+  });
+
   it('progress counts visible fields across pages', () => {
     const w = new WizardController();
     w.start(ENT_SAMPLE, { patientName: 'A', complaints: ['obstruction'] });

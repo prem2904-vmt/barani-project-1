@@ -81,7 +81,7 @@ interface CellRef {
         <div class="fe-gridk__bar">
           @if (allChips().length) {
             <div class="fe-gridk__qf" role="group" aria-label="Quick fill">
-              <span class="fe-gridk__qf-lbl" aria-hidden="true">Quick fill</span>
+              <span class="fe-gridk__qf-lbl" aria-hidden="true">Quick fill:</span>
               @for (c of allChips(); track c.preset.label) {
                 <button
                   type="button"
@@ -108,7 +108,7 @@ interface CellRef {
               [disabled]="disabled()"
               (click)="togglePrint()"
             >
-              <span class="fe-switchrow__txt">Include in narrative</span>
+              <span class="fe-switchrow__txt">Include in Narrative</span>
               <span class="pf-toggle__track fe-switch" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
             </button>
           }
