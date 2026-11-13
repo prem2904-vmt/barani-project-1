@@ -1,7 +1,7 @@
 import {
   OutsourcedTube, absoluteFileUrl, actionLines, countByStatus, filterOutsourced, partnerFileProblem,
   partnerOptions, partnerReportShareLine, rowReport, attachState, firstAttachProblem, ATTACH_DEFAULT,
-  partnerWhere, PartnerReport, PdfParts, outsourcedPageUrl, syntheticOrderFromOutsourcedTubes, buildFrontdeskMergedWork,
+  partnerWhere, PartnerReport, PdfParts, outsourcedPageUrl, syntheticOrderFromOutsourcedTubes, buildFrontdeskMergedWork, isOutsourcedOnlyAwaitingPartner,
 } from './outsourced-view';
 import { Order } from '../../../shared/models/order.model';
 
@@ -343,5 +343,24 @@ describe('buildFrontdeskMergedWork — a part-paid order that is ALSO in progres
     const rows = buildFrontdeskMergedWork([order], [], [], []);
     expect(rows[0].statuses).toEqual(['ip']);
     expect(rows[0].primary).toBe('ip');
+  });
+});
+
+describe('OPS-114 - an order with only partner-lab work left is not "In progress"', () => {
+  const tube = (status: string, vendor: string | null) => ({ status, outsourcedVendorId: vendor });
+  it('every live tube outsourced and drawn: outsourced-only', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('dispatched', 'v1'), tube('collected', 'v2')] })).toBe(true);
+  });
+  it('a mixed order (one in-house tube) stays In progress', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('collected', 'v1'), tube('received', null)] })).toBe(false);
+  });
+  it('an outsourced tube still to draw keeps the Collect action under In progress', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('pending', 'v1')] })).toBe(false);
+  });
+  it('cancelled / merged / rejected tubes are ignored; no live tube = not outsourced-only', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('cancelled', null), tube('dispatched', 'v1')] })).toBe(true);
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('cancelled', 'v1')] })).toBe(false);
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [] })).toBe(false);
+    expect(isOutsourcedOnlyAwaitingPartner({})).toBe(false);
   });
 });

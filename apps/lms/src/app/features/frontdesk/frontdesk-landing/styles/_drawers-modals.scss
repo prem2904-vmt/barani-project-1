@@ -1827,3 +1827,26 @@
   display: grid;
   gap: 12px;
 }
+
+/* Order id line under the patient header (OPS-131) */
+.pf-drawer__order-id { margin-top: 2px; }
+
+/* "Change" text button beside the referral doctor (OPS-131) */
+.pf-drawer__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 2px 8px;
+  min-height: 24px;
+  border: 1px solid var(--pf-line);
+  border-radius: var(--pf-radius-chip);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.pf-drawer__edit:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
+@media (max-width: 639px) { .pf-drawer__edit { min-height: 36px; padding: 4px 12px; } }

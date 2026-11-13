@@ -1538,6 +1538,11 @@
           }
           <span class="pf-drawer__mi">{{ so.patient?.mrn || '—' }}</span>
         </p>
+        @if (so.orderNumber) {
+          <p class="pf-drawer__hdr-meta pf-drawer__order-id pf-num" data-test="drawer-order-id">
+            <span class="pf-drawer__mi">Order {{ so.orderNumber }}</span>
+          </p>
+        }
       </div>
       <div class="pf-drawer__hdr-actions">
         <span class="pf-chip pf-chip--static pf-drawer__status" [attr.data-state]="orderStatusState(so)">
@@ -1568,10 +1573,27 @@
           <dd class="pf-num">{{ so.samples.length }}</dd>
         </div>
         <div>
-          <dt>Doctor</dt>
-          <dd [class.pf-drawer__none]="!so.refDoctorName">{{ so.refDoctorName || '—' }}</dd>
+          <dt>Referral doctor</dt>
+          <dd [class.pf-drawer__none]="!so.refDoctorName">
+            {{ so.refDoctorName || '—' }}
+            @if (canEditReferral(so)) {
+            <button type="button" class="pf-drawer__edit" (click)="referralFor.set(so.id)"
+              aria-label="Change referral doctor" title="Change referral doctor" data-test="drawer-edit-referral">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+              Change
+            </button>
+            }
+          </dd>
         </div>
       </dl>
+
+      @if (referralFor() === so.id) {
+      <pf-edit-referral-dialog [orderId]="so.id" (saved)="onReferralSaved(so, $event)"
+        (closed)="referralFor.set(null)"></pf-edit-referral-dialog>
+      }
 
       @if (drawerPrelim().length > 0) {
       <section class="pf-prelim">
@@ -1605,7 +1627,6 @@
                 <span class="pf-prelim__row-value">
                   {{ v.value }}@if (v.unit) {<span class="pf-prelim__row-unit"> {{ v.unit }}</span>}
                 </span>
-                <span class="pf-prelim__row-range">{{ v.range || '—' }}</span>
                 <span class="pf-prelim__row-flag" [attr.data-flag]="v.flag">
                   @switch (v.flag) {
                   @case ('critical') { {{ v.code || 'C' }} }
@@ -1937,6 +1958,17 @@
           </svg>
           Download
         </button>
+        @if (waChatOn()) {
+        <button type="button" class="pf-inv-preview__btn" (click)="shareInvoiceWhatsapp()"
+          [disabled]="invoiceSharing()" [pfBusy]="invoiceSharing()" pfBusyLabel="Preparing…"
+          title="Open WhatsApp with the invoice for this patient" data-test="invoice-whatsapp">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 12a8 8 0 1 1-15.3-3.2L3 20l6.2-1.6A8 8 0 0 0 20 12Z" />
+          </svg>
+          WhatsApp
+        </button>
+        }
         <button type="button" class="pf-inv-preview__btn" (click)="printInvoicePreview()">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">

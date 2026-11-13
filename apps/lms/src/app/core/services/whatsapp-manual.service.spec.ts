@@ -14,7 +14,7 @@ const DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/
 
 function setup(o: { confirm?: boolean; optOut?: boolean | 'error'; ua?: string; popup?: 'ok' | 'blocked'; bridge?: ElectronWhatsAppBridge | null; nav?: Record<string, unknown> } = {}) {
   const dialog = { confirm: vi.fn(async () => o.confirm ?? true), alert: vi.fn(async () => undefined) };
-  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
+  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
   const wa = {
     reportStatus: vi.fn(() => o.optOut === 'error' ? throwError(() => new Error('403')) : of({ patientOptOut: !!o.optOut })),
   };
@@ -312,5 +312,49 @@ describe('WhatsAppManualService.sendInvoice (OPS-126) - the invoice PDF goes wit
     expect(await svc.sendInvoice({ ...INV, phone: '', pdf })).toBe('no-phone');
     expect(dialog.alert).toHaveBeenCalled();
     expect(open).not.toHaveBeenCalled();
+  });
+});
+
+describe('WhatsAppManualService.sendInvoice (OPS-122) - the staff are always told what to do with the PDF', () => {
+  const INV = { phone: '98765 43210', patientName: 'Asha Rao', labName: 'Arun Lab', invoiceNumber: 'INV-001031', amount: 400, pdf: async () => new Blob(['%PDF-1.4 x'], { type: 'application/pdf' }) };
+  const flush = () => new Promise<void>(r => setTimeout(r, 0));
+  const stubDownloads = () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const names: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { names.push(this.download); });
+    return names;
+  };
+  beforeEach(() => { localStorage.setItem(WA_PDF_HINT_KEY, '1'); });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('web: the PDF downloads and the attach hint shows EVERY time (not just the first), even after the one-time hint was used', async () => {
+    const names = stubDownloads();
+    const { svc, toasts } = setup();
+    await svc.sendInvoice(INV);
+    await flush();
+    await svc.sendInvoice(INV);
+    await flush();
+    expect(names).toEqual(['INV-001031.pdf', 'INV-001031.pdf']);
+    expect(toasts.info).toHaveBeenCalledTimes(2);
+    expect(toasts.info).toHaveBeenCalledWith(WA_PDF_HINT);
+  });
+
+  it('desktop: the clipboard copy failing downloads the PDF and says so', async () => {
+    const names = stubDownloads();
+    const b = { open: vi.fn(async () => ({ ok: true })), setPdf: vi.fn(async () => ({ ok: false })) } as unknown as ElectronWhatsAppBridge;
+    const { svc, toasts } = setup({ bridge: b });
+    await svc.sendInvoice(INV);
+    await vi.waitFor(() => expect(toasts.warning).toHaveBeenCalledWith(expect.stringContaining('Download it and attach it')));
+    await vi.waitFor(() => expect(names).toEqual(['INV-001031.pdf']));
+  });
+
+  it('phone where the share sheet cannot carry files: the text chat opens AND the PDF is saved with the hint', async () => {
+    const names = stubDownloads();
+    const { svc, toasts, open } = setup({ ua: 'Mozilla/5.0 (Linux; Android 14) Mobile', nav: {} });
+    await svc.sendInvoice(INV);
+    await vi.waitFor(() => expect(names).toEqual(['INV-001031.pdf']));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(toasts.info).toHaveBeenCalledWith(WA_PDF_HINT);
   });
 });

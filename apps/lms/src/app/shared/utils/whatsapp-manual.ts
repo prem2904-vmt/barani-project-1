@@ -92,11 +92,12 @@ export function waReportMessage(p: { patient?: string | null; lab?: string | nul
 
 /** The invoice message (OPS-126): same words the invoice share always used, now sent WITH the invoice
  *  PDF. "Hi Asha, your invoice from Micro World:\nINV-001 — Paid ₹400\n<extra lines>\nThank you…". */
-export function waInvoiceMessage(p: { patient?: string | null; lab?: string | null; invoiceNumber?: string | null; amount?: number | string | null; extra?: (string | null | undefined)[] }): string {
+export function waInvoiceMessage(p: { patient?: string | null; lab?: string | null; invoiceNumber?: string | null; amount?: number | string | null; balance?: number | null; extra?: (string | null | undefined)[] }): string {
   const lab = (p.lab ?? '').trim() || 'our lab';
   const hi = `Hi ${(p.patient ?? '').trim()}, your invoice from ${lab}:`.replace(/\s+/g, ' ').replace('Hi , ', 'Hi, ').trim();
   const num = (p.invoiceNumber ?? '').toString().trim();
-  const amt = p.amount == null || p.amount === '' ? '' : `Paid ₹${p.amount}`;
+  // An unpaid / part-paid bill (the front-desk viewer) says what is DUE, never "Paid".
+  const amt = p.amount == null || p.amount === '' ? '' : (p.balance ?? 0) > 0 ? `Amount ₹${p.amount} (Due ₹${p.balance})` : `Paid ₹${p.amount}`;
   const bill = [num, amt].filter(Boolean).join(' — ');
   const extra = (p.extra ?? []).map(s => (s ?? '').trim()).filter(Boolean);
   return [hi, bill, ...extra, 'Thank you for choosing us.'].filter(Boolean).join('\n');

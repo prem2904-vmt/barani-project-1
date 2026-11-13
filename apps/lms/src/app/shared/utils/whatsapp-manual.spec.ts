@@ -116,3 +116,13 @@ describe('waInvoiceMessage (OPS-126) — the invoice words that travel with the 
     expect(waInvoiceMessage({ patient: 'Asha', invoiceNumber: 'INV-1' })).toBe('Hi Asha, your invoice from our lab:\nINV-1\nThank you for choosing us.');
   });
 });
+
+describe('waInvoiceMessage - an unpaid bill says what is due (OPS-122, front-desk viewer)', () => {
+  it('part-paid / unpaid: amount + due, never "Paid"', () => {
+    expect(waInvoiceMessage({ patient: 'Asha', lab: 'Arun Lab', invoiceNumber: 'INV-1', amount: 400, balance: 150 }))
+      .toBe('Hi Asha, your invoice from Arun Lab:\nINV-1 — Amount ₹400 (Due ₹150)\nThank you for choosing us.');
+  });
+  it('settled (balance 0) keeps the Paid wording', () => {
+    expect(waInvoiceMessage({ patient: 'Asha', lab: 'Arun Lab', invoiceNumber: 'INV-1', amount: 400, balance: 0 })).toContain('INV-1 — Paid ₹400');
+  });
+});

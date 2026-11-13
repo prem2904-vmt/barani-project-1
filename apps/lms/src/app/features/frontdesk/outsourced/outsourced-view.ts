@@ -346,3 +346,16 @@ export function buildFrontdeskMergedWork(
   ];
   return buildMergedWork(buckets, annotate);
 }
+
+/**
+ * An order whose ONLY remaining work is at a partner lab (OPS-114): it has live tubes, every one is
+ * routed to a referral lab (`outsourcedVendorId`, frozen at order time) and every one has already been
+ * drawn. The lab's status machine ignores outsourced lines, so such an order's status never advances to
+ * Completed on its own and it sat under "In progress" forever, while its real home is the Outsourced
+ * tab (Completed once the partner report is uploaded). An order with ANY in-house live tube, or a tube
+ * still to draw (the desk may still need Collect), is NOT outsourced-only and stays under In progress.
+ */
+export function isOutsourcedOnlyAwaitingPartner(o: { samples?: readonly { status?: string | null; outsourcedVendorId?: string | null }[] | null }): boolean {
+  const live = (o.samples ?? []).filter(s => !['cancelled', 'merged', 'rejected', 'missed'].includes(s.status ?? ''));
+  return live.length > 0 && live.every(s => !!s.outsourcedVendorId && (s.status ?? 'pending') !== 'pending');
+}

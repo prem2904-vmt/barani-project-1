@@ -1,4 +1,8 @@
 import { DatePipe } from '@angular/common';
+import { EditReferralDialogComponent } from '../../../shared/components/edit-referral-dialog/edit-referral-dialog.component';
+import { EDIT_REFERRAL_PERM, ReferralSaveResult } from '../../../shared/components/edit-referral-dialog/referral-edit';
+import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
+import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -124,7 +128,7 @@ import { savedValueRows } from '../../../shared/utils/result-flag';
 import { OutsourcingService } from '../../../core/services/outsourcing.service';
 import { OutsourcedListComponent } from '../outsourced/outsourced-list.component';
 import { OutsourcedActionsComponent } from '../outsourced/outsourced-actions.component';
-import { OutsourcedTube, buildFrontdeskMergedWork, filterOutsourced } from '../outsourced/outsourced-view';
+import { OutsourcedTube, buildFrontdeskMergedWork, filterOutsourced, isOutsourcedOnlyAwaitingPartner } from '../outsourced/outsourced-view';
 import { filterOrdersByWorkQuery, patientMatchesWorkQuery } from './work-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { drawerAgeSex, drawerName, drawerPipeline, drawerSampleProgress, drawerStepCaption, orderStatusState, PipelineStep } from './order-drawer';
@@ -172,7 +176,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -864,6 +868,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         && o.status !== 'delivered'
         && o.status !== 'cancelled';
       if (!active) return false;
+      // Everything left is at a partner lab: it lives under Outsourced, not here (OPS-114).
+      if (isOutsourcedOnlyAwaitingPartner(o)) return false;
 
       // A partially-validated order genuinely touched TODAY (a line just
       // validated) belongs in Today's queue even if it was created earlier —
@@ -939,12 +945,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       if (!o) {
         o = map[b.orderId];
       }
-      // The date range applies to every status (work-status-filter.ts). The
-      // Today bonus is real activity (hadTodayActivity), never bare presence
-      // in the today feed — that feed also carries in up to 30 days of
-      // still-undelivered stragglers regardless of when they last moved
-      // (owner 2026-10-09; same fix as completedOrders above).
-      if (o && inWorkWindow(o.createdAt, bounds, hadTodayActivity(o.updatedAt, bounds))) {
+      // The date range applies to every status (work-status-filter.ts). Payments
+      // due follows the order's CREATION day only — no "touched today" bonus
+      // (that bonus is for hand-over of a finished report): an old order whose
+      // row was merely updated today (a bill re-read, a note) leaked into
+      // Today's list, both under the chip and in the no-chip list (OPS-132).
+      // Older dues show under Yesterday / a custom range.
+      if (o && inWorkWindow(o.createdAt, bounds, false)) {
         list.push(o);
       }
     }
@@ -2200,6 +2207,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       let tpl: any = null;
       try { tpl = await firstValueFrom(this.api.get<any>('/api/config/invoice-template')); }
       catch { /* letterhead is optional */ }
+      this.invoiceCtx = { order: o, bill };
       await this.emitInvoicePdf(o, bill, tpl);
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
@@ -2295,6 +2303,61 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this.invoiceBlobUrl = null;
     }
     this.invoicePreviewUrl.set(null);
+    this.invoiceCtx = null;
+  }
+
+  // ── WhatsApp from the invoice viewer (OPS-122) ──────────────
+  private readonly waManual = inject(WhatsAppManualService);
+  private readonly waEntitlements = inject(TenantEntitlementsService);
+  /** The order + bill the open preview was rendered from (the share's message + recipient). */
+  private invoiceCtx: { order: Order; bill: Bill } | null = null;
+  protected readonly invoiceSharing = signal(false);
+  /** WhatsApp Chat (staff press Send): the lab's per-tenant switch. The invoice never goes through
+   *  WhatsApp Auto (that sends a REPORT link from the server), so Chat is the only invoice mode. */
+  readonly waChatOn = computed(() => this.waEntitlements.moduleEnabled('whatsappChat'));
+
+  /** Open WhatsApp for this patient with the invoice message drafted and the SAME PDF the viewer shows:
+   *  desktop copies it to the clipboard (paste + Send), web downloads it (attach with the paperclip),
+   *  phone opens the share sheet with the file. The person presses Send. */
+  async shareInvoiceWhatsapp(): Promise<void> {
+    const ctx = this.invoiceCtx;
+    const blobUrl = this.invoiceBlobUrl;
+    if (!ctx || !blobUrl || this.invoiceSharing()) return;
+    this.invoiceSharing.set(true);
+    try {
+      const { order, bill } = ctx;
+      await this.waManual.sendInvoice({
+        phone: order.patient?.phone,
+        patientName: order.patient?.displayName,
+        labName: this.auth.user()?.tenantName,
+        invoiceNumber: bill.invoiceNumber,
+        amount: bill.balance > 0 ? bill.totalPayable : bill.totalPaid || bill.totalPayable,
+        balance: bill.balance,
+        pdf: async () => {
+          try { return await (await fetch(blobUrl)).blob(); } catch { return null; }
+        },
+      });
+    } finally {
+      this.invoiceSharing.set(false);
+    }
+  }
+
+  // ── Referral doctor in the order drawer (OPS-131) ───────────
+  /** The order whose referral dialog is open (shared/components/edit-referral-dialog). */
+  readonly referralFor = signal<string | null>(null);
+  canEditReferral(o: Order): boolean {
+    return this.auth.hasPermission(EDIT_REFERRAL_PERM) && o.status !== 'cancelled' && o.status !== 'draft';
+  }
+  onReferralSaved(o: Order, res: ReferralSaveResult): void {
+    this.referralFor.set(null);
+    if (!res.changed) return;
+    const doctor = res.order?.refDoctorName ?? undefined;
+    const hospital = res.order?.refHospitalName ?? undefined;
+    const doctorId = res.order?.refDoctorId ?? undefined;
+    const patch = (x: Order): Order => x.id === o.id ? { ...x, refDoctorName: doctor, refHospitalName: hospital, refDoctorId: doctorId } : x;
+    this._orders.update(list => list.map(patch));
+    this._selectedOrder.update(x => (x ? patch(x) : x));
+    this.toasts.success(res.reportAmended ? 'Referral updated. The report was re-issued as amended.' : 'Referral doctor updated');
   }
   goToBilling(o: Order) {
     // Already billed with a due → settle it in the in-place drawer (tests +

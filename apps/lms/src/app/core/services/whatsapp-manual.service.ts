@@ -69,6 +69,8 @@ export interface WaManualRequest {
   /** Desktop only: the report PDF for the "drag it into the chat" helper. */
   pdf?: () => Promise<Blob | null>;
   pdfName?: string;
+  /** Say "attach the PDF" on EVERY web send (invoices: the staff must attach it; the first-time-only hint was missed). */
+  hintAlways?: boolean;
 }
 
 export type WaManualOutcome = 'opened' | 'cancelled' | 'no-phone' | 'blocked';
@@ -147,7 +149,7 @@ export class WhatsAppManualService {
    *  the share sheet with the file). The person presses Send. */
   sendInvoice(p: {
     phone: string | null | undefined; patientName?: string | null; labName?: string | null;
-    invoiceNumber?: string | null; amount?: number | string | null; extra?: (string | null | undefined)[];
+    invoiceNumber?: string | null; amount?: number | string | null; balance?: number | null; extra?: (string | null | undefined)[];
     pdf: () => Promise<Blob | null>;
   }): Promise<WaManualOutcome> {
     const num = (p.invoiceNumber ?? '').toString().replace(/[^A-Za-z0-9._-]+/g, '-');
@@ -155,9 +157,10 @@ export class WhatsAppManualService {
       phone: p.phone,
       patientName: p.patientName,
       labName: p.labName,
-      message: waInvoiceMessage({ patient: p.patientName, lab: p.labName, invoiceNumber: p.invoiceNumber, amount: p.amount, extra: p.extra }),
+      message: waInvoiceMessage({ patient: p.patientName, lab: p.labName, invoiceNumber: p.invoiceNumber, amount: p.amount, balance: p.balance, extra: p.extra }),
       pdf: p.pdf,
       pdfName: `${num || 'invoice'}.pdf`,
+      hintAlways: true,
     });
   }
 
@@ -202,6 +205,8 @@ export class WhatsAppManualService {
         }
       }
       this.w().open(me, '_blank', 'noopener');
+      // The share sheet could not carry the file: it would reach the patient as text only, so save the PDF too.
+      if (req.pdf && !(this.w() as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) void this.downloadPdf(req);
       return 'opened';
     }
 
@@ -241,7 +246,8 @@ export class WhatsAppManualService {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
       try {
-        if (!localStorage.getItem(WA_PDF_HINT_KEY)) { localStorage.setItem(WA_PDF_HINT_KEY, '1'); this.toasts.info(WA_PDF_HINT); }
+        if (req.hintAlways) this.toasts.info(WA_PDF_HINT);
+        else if (!localStorage.getItem(WA_PDF_HINT_KEY)) { localStorage.setItem(WA_PDF_HINT_KEY, '1'); this.toasts.info(WA_PDF_HINT); }
       } catch { /* storage blocked: no hint */ }
     } catch { /* the link in the message is enough */ }
   }
@@ -252,8 +258,12 @@ export class WhatsAppManualService {
       const blob = await req.pdf!();
       if (!blob) return;
       const bytes = new Uint8Array(await blobBytes(blob));
-      await dock.setPdf({ name: req.pdfName || 'report.pdf', bytes, copyToClipboard: true });
-    } catch { /* the link in the message is enough */ }
+      const res = await dock.setPdf({ name: req.pdfName || 'report.pdf', bytes, copyToClipboard: true });
+      if (req.hintAlways && !res?.ok) { this.toasts.warning('The PDF could not be copied. Download it and attach it in the chat.'); void this.downloadPdf(req); }
+    } catch {
+      if (req.hintAlways) { this.toasts.warning('The PDF could not be copied. Download it and attach it in the chat.'); void this.downloadPdf(req); }
+      /* a report: the link in the message is enough */
+    }
   }
 
   /** The patient's WhatsApp opt-out, when the server knows it (0.8 s max — keeps the click's pop-up permission). */
