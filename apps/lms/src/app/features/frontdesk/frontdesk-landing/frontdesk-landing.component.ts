@@ -2422,6 +2422,19 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     return allCollected;
   }
 
+  /** OPS-130: tubes drawn but not yet sent while others are still to come
+   *  (a timed series, or any partly drawn order). The row keeps Collect AND
+   *  offers Dispatch, so a drawn tube after "Done for now" is never stranded
+   *  (the lab Intake only ever sees dispatched tubes). The server dispatches
+   *  exactly the order's 'collected' tubes. */
+  showDispatchDrawn(o: Order): boolean {
+    if (!this.auth.hasPermission('dispatch_sample')) return false;
+    if (o.paymentHold) return false;
+    const samples = (o.samples ?? []).filter(s => !isNotCollected(s));
+    if (!samples.some(s => s.status === 'collected')) return false;
+    return !samples.every(s => s.status === 'collected');
+  }
+
   /** Same all-collected moment as showDispatchOn, but the order is under a
    *  payment hold — offer "Bill" (→ billing screen) in the Dispatch slot. */
   showBillInsteadOfDispatch(o: Order): boolean {

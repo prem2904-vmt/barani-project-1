@@ -891,6 +891,9 @@
             <p class="pf-sc-labelinfo pf-span">
               {{ scan.manualEntry() ? 'Manual mode: write each sample ID on its container (Label by hand).' : 'Print a barcode + QR label for each tube (Print labels).' }}
             </p>
+            @if (canPartialDispatch(g) && dispatchSelect() === null) {
+              <p class="pf-sc-labelinfo pf-span">Dispatch sends every drawn tube to the lab. Select tubes lets you send only some of them.</p>
+            }
             @if (dispatchSelect(); as sel) {
               <!-- Partial-dispatch selection mode: pick collected tubes, then
                    send just those to the lab. Everything else in the footer is
@@ -979,11 +982,11 @@
                    ALL drawn tubes to the lab (OPS-66 — no select-then-confirm).
                    "Choose" opens tube-by-tube selection for the rare subset. -->
               <button type="button" class="pf-btn pf-btn-ghost pf-btn--keep-text pf-btn pf-btn--secondary" (click)="startPartialDispatch(g)"
-                      aria-label="Choose tubes" data-label="Choose">
+                      aria-label="Select tubes to dispatch" data-label="Select tubes" title="Pick which drawn tubes to send to the lab">
                 <svg class="pf-btn__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
                 </svg>
-                <span class="pf-btn__text">Choose</span>
+                <span class="pf-btn__text">Select tubes</span>
               </button>
               <button type="button" class="pf-btn pf-btn-primary pf-btn--partial pf-btn pf-btn--primary" (click)="dispatchCollected(g)"
                       [disabled]="dispatching()" [pfBusy]="dispatching()" pfBusyLabel="Dispatching…"

@@ -1068,6 +1068,17 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return this.canPartialDispatch(g);
   }
 
+  /** Dispatch / bill is the very next step of a FULLY drawn order — the one
+   *  case the drawer must stay open for. A partial dispatch of a series with
+   *  later draws pending is NOT next: it stays reachable from the front desk
+   *  row and the Collect list, so the screen can leave by itself (OPS-124). */
+  dispatchNextStep(g: OrderGroup): boolean {
+    if (this.isDispatched(g)) return false;
+    if (g.collected !== g.totalVials) return false;
+    if (g.paymentHold && this.dispatchStep()) return this.canBill();
+    return this.canDispatch();
+  }
+
   /** Colour discipline: ONLY the main call to action is primary. The
    *  finish button is it when enabled and no dispatch / bill action is on
    *  offer (and after dispatch, as before). */
@@ -1182,6 +1193,13 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     }
     if (firstError) this.toasts.error(firstError);
     this._dispatching.set(false);
+    // OPS-130: once the drawn tubes are dispatched there is nothing left to
+    // do here for now - leave instead of showing a "Done" step.
+    const cur = this.activeGroup();
+    if (ok > 0 && !firstError && cur && cur.orderId === g.orderId
+        && this.collectedCount(cur) === 0 && !this.doneDisabled(cur)) {
+      this.close();
+    }
   }
 
   async ngOnInit() {
@@ -1717,8 +1735,15 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const g = this.activeGroup();
     if (!g || g.orderId !== orderId) return;
     if (this.collectedCount(g) === 0) return;
-    if (this.doneDisabled(g) || this.dispatchCtaShown(g)) return;
-    this.toasts.success("Collected");
+    if (this.doneDisabled(g) || this.dispatchNextStep(g)) return;
+    // A timed series with later draws still to come ends here too (OPS-124):
+    // the drawn tubes stay dispatchable from the front desk row / this list.
+    const awaiting = this.collectedCount(g) > 0 && this.canDispatch() && !this.isDispatched(g);
+    this.toasts.success(
+      awaiting && g.collected < g.totalVials
+        ? "Collected. Dispatch the drawn tubes from the front desk or the Collect list."
+        : "Collected",
+    );
     this.close();
   }
 
