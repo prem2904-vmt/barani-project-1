@@ -3266,13 +3266,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   /** Invoice viewer → Email (patient only, never the doctor): email on + the patient has an address. */
   invoiceEmailOn(): boolean {
-    return this.comms.emailOn() && !!this.invoiceCtx?.bill?.id && looksLikeEmail(this.invoiceCtx?.order?.patient?.email);
+    return this.comms.invoiceEmailOn() && !!this.invoiceCtx?.bill?.id && looksLikeEmail(this.invoiceCtx?.order?.patient?.email);
   }
 
   async emailInvoice(): Promise<void> {
     const bill = this.invoiceCtx?.bill;
     if (!bill?.id || !this.invoiceEmailOn()) return;
-    await this.comms.emailInvoice(bill.id);
+    // The SAME PDF the viewer shows goes along (the server attaches it).
+    let pdf: Blob | null = null;
+    try { pdf = this.invoiceBlobUrl ? await (await fetch(this.invoiceBlobUrl)).blob() : null; } catch { pdf = null; }
+    await this.comms.emailInvoice(bill.id, pdf, bill.invoiceNumber);
   }
 
   /** Order id whose report is currently being fetched + rendered — null when

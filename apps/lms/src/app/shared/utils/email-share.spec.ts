@@ -29,6 +29,13 @@ describe('Email share — toasts tell the server\'s truth', () => {
       .toEqual([{ tone: 'error', text: 'Not emailed to the referral doctor: no email address on file' }]);
   });
 
+  it('the server\'s message wins; "both" stays quiet about no_doctor / same_as_patient', () => {
+    expect(emailOutcomeToasts({ sent: [], skipped: [{ kind: 'patient', reason: 'opted_out', message: 'The patient asked not to get email.' }] }, 'patient'))
+      .toEqual([{ tone: 'error', text: 'Not emailed to the patient: The patient asked not to get email.' }]);
+    for (const reason of ['no_doctor', 'same_as_patient'])
+      expect(emailOutcomeToasts({ sent: [{ kind: 'patient', address: 'a@x.in' }], skipped: [{ kind: 'doctor', reason }] }, 'both')).toHaveLength(1);
+  });
+
   it('invoice wording', () => {
     expect(emailOutcomeToasts({ sent: [{ kind: 'patient', address: 'a@x.in' }], skipped: [] }, 'patient', 'invoice'))
       .toEqual([{ tone: 'success', text: 'Invoice emailed to a@x.in' }]);

@@ -11,6 +11,9 @@ import { DeviceClassService } from './device-class.service';
 import { TenantEntitlementsService } from './tenant-entitlements.service';
 import { ToastService } from './toast.service';
 
+/** POST /api/billing/{id}/email — its guard. */
+export const INVOICE_EMAIL_PERMS = ['view_bill', 'create_bill', 'collect_payment'];
+
 /** A plausible email address (the server is the judge; this only hides an impossible row). */
 export function looksLikeEmail(v: string | null | undefined): boolean {
   return !!v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
@@ -92,13 +95,29 @@ export class CommsShareService {
     return this.send(orderId, `/api/reports/by-order/${orderId}/email`, { to }, to, 'report');
   }
 
-  /** Server-side invoice email (patient only): POST /api/billing/{billId}/email. */
-  async emailInvoice(billId: string): Promise<EmailSendResult | null> {
-    return this.send(billId, `/api/billing/${billId}/email`, {}, 'patient', 'invoice');
+  /** Invoice email may be sent by whoever may see / make the bill (the server's guard). */
+  private canInvoice(): boolean { return INVOICE_EMAIL_PERMS.some(p => this.auth.hasPermission?.(p) === true); }
+
+  /** Invoice email: platform switch + lab setting + a billing permission (not the delivery desk's). */
+  invoiceEmailOn(): boolean {
+    return this.canInvoice() && this.switchOn('emailShare') && this._settings()?.email?.enabled !== false;
   }
 
-  private async send(key: string, url: string, body: object, asked: EmailRecipient, what: 'report' | 'invoice'): Promise<EmailSendResult | null> {
-    if (!key || this.emailing() || !this.can()) return null;
+  /** Server-side invoice email (patient only): POST /api/billing/{billId}/email as multipart — field `pdf`
+   *  = the invoice PDF the screen already rendered (INV-<number>.pdf). */
+  async emailInvoice(billId: string, pdf?: Blob | null, invoiceNumber?: string | null): Promise<EmailSendResult | null> {
+    let body: object | FormData = {};
+    if (pdf) {
+      const fd = new FormData();
+      const num = (invoiceNumber || billId.slice(0, 8)).trim();
+      fd.append('pdf', pdf, `${num.startsWith('INV-') ? num : `INV-${num}`}.pdf`);
+      body = fd;
+    }
+    return this.send(billId, `/api/billing/${billId}/email`, body, 'patient', 'invoice', true);
+  }
+
+  private async send(key: string, url: string, body: object, asked: EmailRecipient, what: 'report' | 'invoice', invoice = false): Promise<EmailSendResult | null> {
+    if (!key || this.emailing() || !(invoice ? this.canInvoice() : this.can())) return null;
     this.emailing.set(key);
     try {
       const res = await firstValueFrom(this.api.post<EmailSendResult>(url, body));

@@ -9,7 +9,8 @@ export type EmailKind = 'patient' | 'doctor';
 
 export interface EmailSendResult {
   sent: { kind: EmailKind; address: string }[];
-  skipped: { kind: EmailKind; reason: string }[];
+  /** reason: no_email | opted_out | no_doctor | same_as_patient | failed | …; `message` = the server's plain words. */
+  skipped: { kind: EmailKind; reason: string; message?: string | null }[];
 }
 
 export interface EmailToast { tone: 'success' | 'warning' | 'error'; text: string }
@@ -20,6 +21,9 @@ export function emailSkipReason(reason: string | null | undefined): string {
   switch (r.toLowerCase()) {
     case '': return 'it could not be sent';
     case 'no_email': case 'no_address': case 'missing_email': case 'no-email': return 'no email address on file';
+    case 'no_doctor': return 'the order has no referral doctor';
+    case 'same_as_patient': return "the doctor's email is the patient's own";
+    case 'failed': return 'the mail server did not accept it';
     case 'invalid_email': case 'invalid_address': return 'the email address on file is not valid';
     case 'opted_out': case 'opt_out': case 'optout': return 'they asked not to get messages';
     case 'not_ready': case 'no_report': return 'the report is not ready yet';
@@ -50,9 +54,12 @@ export function emailOutcomeToasts(res: EmailSendResult | null | undefined, aske
     out.push({ tone: 'success', text: `${noun} emailed to ${parts.join(' and ')}` });
   }
   for (const s of skipped) {
-    const quietDoctor = asked === 'both' && s.kind === 'doctor' && sent.length > 0 && /^(no_email|no_address|missing_email|no-email)$/i.test(s.reason ?? '');
+    // "both" = the doctor only "when they have one": a doctor without a usable email is not news.
+    const quietDoctor = asked === 'both' && s.kind === 'doctor' && sent.length > 0
+      && /^(no_email|no_address|missing_email|no-email|no_doctor|same_as_patient)$/i.test(s.reason ?? '');
     if (quietDoctor) continue;
-    out.push({ tone: sent.length ? 'warning' : 'error', text: `Not emailed to ${who(s.kind)}: ${emailSkipReason(s.reason)}` });
+    const why = s.message?.trim() || emailSkipReason(s.reason);
+    out.push({ tone: sent.length ? 'warning' : 'error', text: `Not emailed to ${who(s.kind)}: ${why}` });
   }
   if (!out.length) out.push({ tone: 'error', text: `The ${noun.toLowerCase()} was not emailed` });
   return out;

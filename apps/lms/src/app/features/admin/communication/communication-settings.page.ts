@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { CommsShareService, looksLikeEmail } from '../../../core/services/comms-share.service';
@@ -371,6 +372,7 @@ export class CommunicationSettingsPage implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute, { optional: true });
   private readonly entitlements = inject(TenantEntitlementsService);
   private readonly destroyRef = inject(DestroyRef);
   protected readonly looksLikeEmail = looksLikeEmail;
@@ -428,6 +430,11 @@ export class CommunicationSettingsPage implements OnInit {
     this.destroyRef.onDestroy(() => this.loadHold.cancel());
     const t = this.router.parseUrl(this.router.url).queryParams['tab'];
     if ((COMMS_TABS as readonly string[]).includes(t)) this.tab.set(t as CommsTab);
+    // A later ?tab= on the same screen (settings search, a deep link, the desktop app's hash routes) follows too.
+    this.route?.queryParamMap?.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(q => {
+      const next = q.get('tab');
+      if (next && (COMMS_TABS as readonly string[]).includes(next) && next !== this.tab()) this.tab.set(next as CommsTab);
+    });
     void this.entitlements.ensureLoaded?.();
     this.testTo.set(this.auth.user()?.email ?? '');
     this.api.settings().subscribe({

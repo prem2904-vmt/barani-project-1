@@ -16,7 +16,7 @@ const REPORT = { id: 'r1', orderId: 'o1', type: 'final', qrToken: 'tok', patient
 function harness(o: { wa?: 'auto' | 'chat' | null; email?: boolean; sms?: boolean } = {}) {
   const h = Object.create(proto);
   const comms = {
-    emailOn: () => o.email ?? true, smsOn: () => o.sms ?? false,
+    emailOn: () => o.email ?? true, invoiceEmailOn: () => o.email ?? true, smsOn: () => o.sms ?? false,
     emailReport: vi.fn(async () => null), emailInvoice: vi.fn(async () => null), emailing: signal<string | null>(null),
   };
   const sendSms = vi.fn(async () => true);
@@ -86,7 +86,7 @@ describe('Front desk Share — Email / SMS rows', () => {
     h.invoiceCtx = { order: order({ refDoctorEmail: 'ravi@y.in' }), bill: { id: 'b1' } };
     expect(h.invoiceEmailOn()).toBe(true);
     await h.emailInvoice();
-    expect(comms.emailInvoice).toHaveBeenCalledWith('b1');
+    expect(comms.emailInvoice).toHaveBeenCalledWith('b1', null, undefined);   // no rendered PDF in this harness
     h.invoiceCtx = { order: order({ patient: { email: null }, refDoctorEmail: 'ravi@y.in' }), bill: { id: 'b1' } };
     expect(h.invoiceEmailOn()).toBe(false);
   });

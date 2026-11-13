@@ -88,11 +88,26 @@ describe('CommsShareService — email sends', () => {
     expect(s.svc.emailing()).toBeNull();
   });
 
-  it('invoice → POST /api/billing/{id}/email {} (patient only)', async () => {
-    const s = setup({ post: () => of({ sent: [{ kind: 'patient', address: 'a@x.in' }], skipped: [] }) });
-    await s.svc.emailInvoice('b1');
-    expect(s.api.post).toHaveBeenCalledWith('/api/billing/b1/email', {});
+  it('invoice → POST /api/billing/{id}/email as multipart with the rendered PDF (field pdf, INV-<number>.pdf); billing perms, not deliver_report', async () => {
+    const s = setup({ perms: ['create_bill'], post: () => of({ sent: [{ kind: 'patient', address: 'a@x.in' }], skipped: [] }) });
+    expect(s.svc.invoiceEmailOn()).toBe(true);
+    expect(s.svc.emailOn()).toBe(false);   // the report email is the delivery desk's
+    await s.svc.emailInvoice('b1', new Blob(['%PDF'], { type: 'application/pdf' }), 'INV-001033');
+    const [url, body] = (s.api.post.mock.calls as any)[0];
+    expect(url).toBe('/api/billing/b1/email');
+    expect(body).toBeInstanceOf(FormData);
+    expect(((body as FormData).get('pdf') as File).name).toBe('INV-001033.pdf');
     expect(s.toasts.success).toHaveBeenCalledWith('Invoice emailed to a@x.in', 5000);
+    TestBed.resetTestingModule();
+    const n = setup({ perms: ['deliver_report'] });
+    expect(n.svc.invoiceEmailOn()).toBe(false);
+    expect(await n.svc.emailInvoice('b1')).toBeNull();
+  });
+
+  it('a skipped recipient shows the server\'s own words', async () => {
+    const s = setup({ post: () => of({ sent: [], skipped: [{ kind: 'patient', reason: 'failed', message: 'Mailbox unavailable (550)' }] }) });
+    await s.svc.emailReport('o1', 'patient');
+    expect(s.toasts.error).toHaveBeenCalledWith('Not emailed to the patient: Mailbox unavailable (550)', 7000);
   });
 
   it('a server refusal is an error toast with its words — never a success', async () => {
