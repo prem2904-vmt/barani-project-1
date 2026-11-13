@@ -145,6 +145,7 @@ async function backend(page: Page) {
       sessionStorage.setItem('pf.e2e.seeded', '1'); localStorage.clear();
       localStorage.setItem('pf.session', session as string); localStorage.setItem('pf-design', 'new');
       localStorage.setItem('pf.wa.manual.reminded', '1');
+      localStorage.setItem('pf.startHintSeen', '1');   // a returning user: the one-time Start-menu hint (bb806320) would cover the phone collection actions
     }
   }, [JSON.stringify({ access_token: jwt(ME.authId), refresh_token: `rt-${ME.authId}` })] as const);
   return missing;
@@ -259,7 +260,8 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
       await page.waitForTimeout(1500);
       await page.keyboard.press('Control+k');
       const name = page.locator('input[placeholder="First or last name"]').locator('visible=true').first();
-      if (await name.count()) { await name.fill('an'); await name.press('Enter'); }
+      await name.waitFor({ timeout: 15_000 });   // the dialog opens after the shortcut; filling before it races
+      await name.fill('an'); await name.press('Enter');
       if (vp === 'phone') { await page.waitForTimeout(500); await page.getByRole('button', { name: 'Search', exact: true }).locator('visible=true').first().click().catch(() => undefined); }
       await see(page, 'Lakshmi Narayanan', `d-adv-${vp}`, 15_000);
       await page.getByText('Lakshmi Narayanan').locator('visible=true').first().scrollIntoViewIfNeeded();

@@ -130,12 +130,15 @@ const waitDesk = (page: Page) => page.getByPlaceholder(/Search patient/).locator
 async function seen(page: Page, text: string, tag: string, timeout = 30_000) {
   try { await expect(vis(page, text).first()).toBeVisible({ timeout }); } catch (e) { await page.screenshot({ path: `${OUT}/DEBUG-${tag}.png` }); throw e; }
 }
-async function absent(page: Page, text: string) { expect(await vis(page, text).count(), `"${text}" must not be listed`).toBe(0); }
+/** Not listed once the view has settled: a tab switch swaps the list a beat after the click, so a one-shot count could read the previous tab. */
+async function absent(page: Page, text: string) { await expect(vis(page, text), `"${text}" must not be listed`).toHaveCount(0, { timeout: 5_000 }); }
 /** The front desk work tabs; phone tabs are icon-only (aria-label / title). */
 async function deskTab(page: Page, label: string) {
   const byLabel = page.locator(`[aria-label*="${label}"], [title*="${label}"]`).locator('visible=true').first();
-  if (await byLabel.count()) { await byLabel.click(); return; }
-  await page.getByText(label, { exact: false }).locator('visible=true').first().click();
+  if (await byLabel.count()) await byLabel.click();
+  else await page.getByText(label, { exact: false }).locator('visible=true').first().click();
+  const radio = page.getByRole('radio', { name: label }).locator('visible=true').first();
+  if (await radio.count()) await expect(radio).toBeChecked();
 }
 /** The number on a work-tab chip ("In progress 2"): read from the segmented control's button. */
 async function chipCount(page: Page, label: string): Promise<number> {
