@@ -10,7 +10,11 @@ export type WaStatus = 'held' | 'queued' | 'sending' | 'sent' | 'delivered' | 'r
 export interface WaMessage {
   id: string;
   reportId: string;
-  trigger: 'auto' | 'resend';
+  trigger: 'auto' | 'resend' | 'auto_doctor' | 'resend_doctor';
+  /** Who it went to: the patient, or the order's referral doctor (its own copy). */
+  recipient?: 'patient' | 'doctor';
+  /** The staff send's answer: the referral doctor's copy, when one went. */
+  doctor?: WaMessage | null;
   kind: 'report_ready' | 'report_updated';
   status: WaStatus;
   errorCode?: number | null;
@@ -46,6 +50,8 @@ export interface WaReportStatus {
   autoEntitled?: boolean;
   latest: WaMessage | null;
   history: WaMessage[];
+  /** The order's referral doctor when the doctor record has a phone (WhatsApp Chat → "Send to doctor"). */
+  referralDoctor?: { name?: string | null; phone?: string | null } | null;
 }
 
 /** One of our templates on the lab's own WABA (Meta review status). */

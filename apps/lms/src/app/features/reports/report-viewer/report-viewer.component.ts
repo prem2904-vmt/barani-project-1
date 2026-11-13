@@ -1106,7 +1106,7 @@ export class ReportViewerComponent implements OnInit {
   }
 
   /** WhatsApp Chat — the manual flow on THIS computer (every lab): the
-   *  docked panel (desktop app) / a phone-shaped window (browser) / the
+   *  docked panel (desktop app) / a new tab (browser) / the
    *  WhatsApp app (phone) opens the patient's chat with the message ready;
    *  the person presses Send. The fallback when the lab has no server
    *  sender (and never when Prefrontal turned WhatsApp Chat off for the lab). */
@@ -1128,7 +1128,8 @@ export class ReportViewerComponent implements OnInit {
     });
     if (out !== 'opened') return;
     this.flash('whatsapp');
-    this.recordWhatsAppHandOver(r.id);
+    // The referral doctor's copy is not the patient's hand-over: no delivery record.
+    if (this.waManual.lastRecipient !== 'doctor') this.recordWhatsAppHandOver(r.id);
   }
 
   private recordWhatsAppHandOver(reportId: string) {

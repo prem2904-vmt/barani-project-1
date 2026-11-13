@@ -3,6 +3,7 @@ import { signal } from '@angular/core';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { FrontdeskLandingComponent } from './frontdesk-landing.component';
+import { ApiError } from '../../../shared/models/api-response.model';
 
 /**
  * Row Share → WhatsApp shares the REPORT for real (OPS-1113): WhatsApp Auto sends from the server,
@@ -18,18 +19,25 @@ const proto = FrontdeskLandingComponent.prototype as any;
 const ORDER = { id: 'o1', patient: { displayName: 'Asha Rao', phone: '+919876543210' } };
 const REPORT = { id: 'r1', orderId: 'o1', type: 'final', status: 'generated', qrToken: 'tok', patient: { displayName: 'Asha Rao', phone: '+919811122233' } };
 
-function harness(o: { mode?: 'auto' | 'chat' | null; report?: unknown; getErr?: boolean } = {}) {
+function harness(o: { mode?: 'auto' | 'chat' | null; report?: unknown; getErr?: boolean | 'not_found' } = {}) {
   const h = Object.create(proto);
   const toasts = { success: vi.fn(), warning: vi.fn(), error: vi.fn(), info: vi.fn() };
-  const sendWhatsApp = vi.fn();
-  const get = vi.fn(() => (o.getErr ? throwError(() => new Error('boom')) : of('report' in o ? o.report : REPORT)));
+  const calls: string[] = [];
+  const sendWhatsApp = vi.fn(async (..._a: any[]) => { calls.push('send'); });
+  const get = vi.fn(() => {
+    calls.push('get');
+    if (o.getErr === 'not_found') return throwError(() => new ApiError('No report for this order', 'not_found'));
+    return o.getErr ? throwError(() => new Error('boom')) : of('report' in o ? o.report : REPORT);
+  });
+  const waManual = { prime: vi.fn(() => calls.push('prime')), release: vi.fn(() => calls.push('release')) };
   Object.assign(h, {
     api: { get }, toasts,
     waSend: { mode: vi.fn(() => ('mode' in o ? o.mode : 'chat')) },
     reportActions: { sendWhatsApp },
+    waManual,
     _waSharing: signal<string | null>(null),
   });
-  return { h, toasts, sendWhatsApp, get };
+  return { h, toasts, sendWhatsApp, get, waManual, calls };
 }
 
 describe('Front desk - Share report on WhatsApp', () => {
@@ -104,9 +112,80 @@ describe('Front desk - Share report on WhatsApp', () => {
   });
 
   it('the template offers WhatsApp only when a mode exists (row menus + Auto-only bulk) and the fake toast is gone', () => {
-    expect((html.match(/@if \(waShareMode\(\)\) \{[\s\S]{0,400}shareReportWhatsapp/g) ?? []).length).toBe(2);
+    expect((html.match(/@else if \(waShareMode\(\)\) \{[\s\S]{0,600}shareReportWhatsapp/g) ?? []).length).toBe(2);
     expect(html).toMatch(/@if \(waShareMode\(\) === 'auto'\) \{\s*<button[^>]*bulkWhatsapp/);
     expect(ts).not.toMatch(/Report link sent via WhatsApp/);
     expect(ts).not.toMatch(/WhatsApp queued to/);
+  });
+
+  // ── Web: the tab opens IN the click (2026-11-13: "blocked the WhatsApp window") ──
+
+  it('WhatsApp Chat: the tab is primed BEFORE the report is fetched, and released after (unused tab never lingers)', async () => {
+    const { h, calls } = harness({ mode: 'chat' });
+    await h.shareReportWhatsapp(ORDER);
+    expect(calls).toEqual(['prime', 'get', 'send', 'release']);
+  });
+
+  it('WhatsApp Auto never opens a tab', async () => {
+    const { h, waManual } = harness({ mode: 'auto' });
+    await h.shareReportWhatsapp(ORDER);
+    expect(waManual.prime).not.toHaveBeenCalled();
+  });
+
+  it('no report yet: the primed tab is closed again', async () => {
+    const { h, waManual, sendWhatsApp } = harness({ report: null });
+    await h.shareReportWhatsapp(ORDER);
+    expect(waManual.prime).toHaveBeenCalled();
+    expect(waManual.release).toHaveBeenCalled();
+    expect(sendWhatsApp).not.toHaveBeenCalled();
+  });
+
+  it('the server\'s "no report" (not_found) is the same friendly warning, not an error', async () => {
+    const { h, toasts, waManual } = harness({ getErr: 'not_found' });
+    await h.shareReportWhatsapp(ORDER);
+    expect(toasts.warning).toHaveBeenCalledWith(expect.stringMatching(/no report yet/i));
+    expect(toasts.error).not.toHaveBeenCalled();
+    expect(waManual.release).toHaveBeenCalled();
+  });
+
+  // ── Referral doctor ──
+
+  const WITH_DOC = { ...ORDER, refDoctorName: 'Dr. Ravi', refDoctorPhone: '+91 98450 12345' };
+
+  it('the single WhatsApp row means the patient (no second question once the tab is open)', async () => {
+    const { h, sendWhatsApp } = harness();
+    await h.shareReportWhatsapp(ORDER);
+    expect(sendWhatsApp.mock.calls[0][2]).toEqual({ to: 'patient', doctor: null });
+  });
+
+  it('"Send to doctor" passes the doctor + the pick; works even when the patient has no phone', async () => {
+    const { h, sendWhatsApp, toasts } = harness();
+    await h.shareReportWhatsapp({ ...WITH_DOC, patient: { displayName: 'Asha Rao', phone: '' } }, 'doctor');
+    expect(toasts.warning).not.toHaveBeenCalled();
+    expect(sendWhatsApp.mock.calls[0][2]).toEqual({ to: 'doctor', doctor: { name: 'Dr. Ravi', phone: '+91 98450 12345' } });
+  });
+
+  it('"Send to patient" with a doctor on the order goes to the patient', async () => {
+    const { h, sendWhatsApp } = harness();
+    await h.shareReportWhatsapp(WITH_DOC, 'patient');
+    expect(sendWhatsApp.mock.calls[0][2].to).toBe('patient');
+  });
+
+  it('waDoctorPhone: only a named doctor with a valid number that is not the patient\'s own', () => {
+    expect(proto.waDoctorPhone(WITH_DOC)).toBe('+919845012345');
+    expect(proto.waDoctorPhone(ORDER)).toBeNull();
+    expect(proto.waDoctorPhone({ ...WITH_DOC, refDoctorPhone: '123' })).toBeNull();
+    expect(proto.waDoctorPhone({ ...WITH_DOC, refDoctorPhone: '9876543210' })).toBeNull();   // = patient's
+    expect(proto.waDoctorPhone({ ...WITH_DOC, refDoctorName: '' })).toBeNull();
+  });
+
+  it('the template: Chat + doctor number → "Send to patient" / "Send to doctor" rows in both menus; the drawer shows the doctor\'s phone', () => {
+    expect((html.match(/waShareMode\(\) === 'chat' && waDoctorPhone\(/g) ?? []).length).toBe(2);
+    expect((html.match(/data-test="share-whatsapp-patient"/g) ?? []).length).toBe(2);
+    expect((html.match(/data-test="share-whatsapp-doctor"/g) ?? []).length).toBe(2);
+    expect(html).toMatch(/shareReportWhatsapp\(o, 'doctor'\)/);
+    expect(html).toMatch(/shareReportWhatsapp\(row\.order, 'doctor'\)/);
+    expect(html).toMatch(/so\.refDoctorPhone[\s\S]{0,200}data-test="drawer-doctor-phone"/);
+    expect(html).not.toMatch(/<select|<datalist/);
   });
 });

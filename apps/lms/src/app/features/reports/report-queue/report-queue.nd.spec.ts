@@ -751,7 +751,7 @@ describe('Reports list — ONE WhatsApp action: Auto, else Chat', () => {
     const r = c.items()[0];
     c.runRowAction(r, 'whatsapp-mine');
     for (let i = 0; i < 4; i++) await new Promise(res => setTimeout(res, 0));
-    expect(open).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp', expect.stringContaining('width=420'));
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp');
     expect(api.post).not.toHaveBeenCalledWith(expect.stringMatching(/\/resend$/), {});
     expect(api.post).toHaveBeenCalledWith(`/api/reports/${r.id}/deliver`, { via: 'whatsapp', note: 'WhatsApp opened (manual)' });
   });

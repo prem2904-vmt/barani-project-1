@@ -8,15 +8,21 @@ import { ElectronWhatsAppBridge, WA_CONSENT_REMINDER, WA_PDF_HINT, WA_PDF_HINT_K
 
 /** "WhatsApp Chat" (manual): one click → WhatsApp opens with the chat and
  *  message ready; the person presses Send. Desktop app = the docked panel,
- *  browser = ONE phone-shaped window on the right, phone = wa.me. */
+ *  browser = a NEW TAB (owner 2026-11-13; was a popup window), phone = wa.me. */
 const SCREEN = { availWidth: 1440, availHeight: 875, availLeft: 0, availTop: 25 } as unknown as Screen;
 const DESKTOP_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/130 Safari/537.36';
 
-function setup(o: { confirm?: boolean; optOut?: boolean | 'error'; ua?: string; popup?: 'ok' | 'blocked'; bridge?: ElectronWhatsAppBridge | null; nav?: Record<string, unknown> } = {}) {
-  const dialog = { confirm: vi.fn(async () => o.confirm ?? true), alert: vi.fn(async () => undefined) };
+function setup(o: {
+  confirm?: boolean; optOut?: boolean | 'error'; ua?: string; popup?: 'ok' | 'blocked'; bridge?: ElectronWhatsAppBridge | null; nav?: Record<string, unknown>;
+  doctor?: { name?: string | null; phone?: string | null } | null; pick?: string | null;
+} = {}) {
+  const dialog = {
+    confirm: vi.fn(async () => o.confirm ?? true), alert: vi.fn(async () => undefined),
+    actions: vi.fn(async () => ({ action: o.pick === undefined ? 'patient' : o.pick, checked: false })),
+  };
   const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
   const wa = {
-    reportStatus: vi.fn(() => o.optOut === 'error' ? throwError(() => new Error('403')) : of({ patientOptOut: !!o.optOut })),
+    reportStatus: vi.fn(() => o.optOut === 'error' ? throwError(() => new Error('403')) : of({ patientOptOut: !!o.optOut, referralDoctor: o.doctor ?? null })),
   };
   TestBed.configureTestingModule({
     providers: [
@@ -26,7 +32,7 @@ function setup(o: { confirm?: boolean; optOut?: boolean | 'error'; ua?: string; 
     ],
   });
   const svc = TestBed.inject(WhatsAppManualService);
-  const pop = { opener: {} as unknown, focus: vi.fn() };
+  const pop = { opener: {} as unknown, focus: vi.fn(), closed: false, close: vi.fn(), location: { replace: vi.fn() }, document: { title: '', body: { textContent: '', style: { cssText: '' } } } };
   const open = vi.fn(() => (o.popup === 'blocked' ? null : pop));
   svc.win = { open, screen: SCREEN, navigator: { userAgent: o.ua ?? DESKTOP_UA, ...(o.nav ?? {}) } } as never;
   svc.bridge = () => o.bridge ?? null;
@@ -93,15 +99,16 @@ describe('WhatsAppManualService — one click', () => {
   });
 });
 
-describe('WhatsAppManualService — web browser popup', () => {
-  it('ONE named phone-shaped window flush right, full height; focused', async () => {
+describe('WhatsAppManualService — web browser: a new tab', () => {
+  it('opens the chat in a NEW TAB (no popup/window features); focused', async () => {
     const { svc, open, pop } = setup();
     expect(await svc.send(REQ)).toBe('opened');
-    expect(open).toHaveBeenCalledWith(URL_, 'pf-whatsapp', 'popup=yes,width=420,height=875,left=1020,top=25');
+    expect(open).toHaveBeenCalledWith(URL_, 'pf-whatsapp');
+    expect((open.mock.calls[0] as unknown[]).length).toBe(2);   // no "popup=yes,width=…" → the browser makes a tab
     expect(pop.focus).toHaveBeenCalled();
   });
 
-  it('a repeat click reuses the same named window', async () => {
+  it('a repeat click reuses the same named tab', async () => {
     const { svc, open } = setup();
     await svc.send(REQ);
     await svc.send({ ...REQ, phone: '9812345678' });
@@ -119,9 +126,10 @@ describe('WhatsAppManualService — web browser popup', () => {
     expect(crossOrigin.focus).toHaveBeenCalled();
   });
 
-  it('blocked pop-up: says so plainly', async () => {
+  it('blocked: says so plainly (the WhatsApp tab)', async () => {
     const { svc, toasts } = setup({ popup: 'blocked' });
     expect(await svc.send(REQ)).toBe('blocked');
+    expect(toasts.error).toHaveBeenCalledWith(expect.stringContaining('blocked the WhatsApp tab'));
     expect(toasts.error).toHaveBeenCalledWith(expect.stringContaining('Allow pop-ups'));
   });
 
@@ -356,5 +364,175 @@ describe('WhatsAppManualService.sendInvoice (OPS-122) - the staff are always tol
     await vi.waitFor(() => expect(names).toEqual(['INV-001031.pdf']));
     expect(open).toHaveBeenCalledTimes(1);
     expect(toasts.info).toHaveBeenCalledWith(WA_PDF_HINT);
+  });
+});
+
+describe('WhatsAppManualService — the tab survives async work (prime in the click)', () => {
+  it('prime() opens a blank tab at once; send() after a network wait points THAT tab at the chat', async () => {
+    const { svc, open, pop } = setup();
+    svc.prime();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith('about:blank', '_blank');
+    expect(pop.document.body.textContent).toBe('Opening WhatsApp…');
+    await new Promise(r => setTimeout(r, 20));   // the screen fetching the report
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(open).toHaveBeenCalledTimes(1);           // no second window.open after the wait
+    expect(pop.location.replace).toHaveBeenCalledWith(URL_);
+    expect(pop.opener).toBeNull();                  // severed before WhatsApp loads
+    expect(pop.close).not.toHaveBeenCalled();
+  });
+
+  it('release() closes a primed tab nobody used', () => {
+    const { svc, pop } = setup();
+    svc.prime();
+    svc.release();
+    expect(pop.close).toHaveBeenCalled();
+  });
+
+  it('a send that opens nothing (no phone) closes the primed tab too', async () => {
+    const { svc, pop } = setup();
+    svc.prime();
+    expect(await svc.send({ ...REQ, phone: '' })).toBe('no-phone');
+    expect(pop.close).toHaveBeenCalled();
+  });
+
+  it('the opt-out warning closes the blank tab first (so the warning is seen), then opens on "Send anyway"', async () => {
+    const { svc, open, pop } = setup({ optOut: true });
+    svc.prime();
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(pop.close).toHaveBeenCalled();
+    expect(open).toHaveBeenLastCalledWith(URL_, 'pf-whatsapp');
+  });
+
+  it('prime blocked → send() tries again and reports "blocked" plainly', async () => {
+    const { svc, open, toasts } = setup({ popup: 'blocked' });
+    svc.prime();
+    expect(await svc.send(REQ)).toBe('blocked');
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(toasts.error).toHaveBeenCalledWith(expect.stringContaining('blocked the WhatsApp tab'));
+  });
+
+  it('desktop app: prime() is a no-op, the docked panel opens exactly as before', async () => {
+    const b = { open: vi.fn(async () => ({ ok: true })), setPdf: vi.fn(async () => ({ ok: true })) } as unknown as ElectronWhatsAppBridge & { open: ReturnType<typeof vi.fn> };
+    const { svc, open } = setup({ bridge: b });
+    svc.prime();
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(open).not.toHaveBeenCalled();
+    expect(b.open).toHaveBeenCalledWith(URL_);
+  });
+
+  it('phone: prime() is a no-op, wa.me as before', async () => {
+    const { svc, open } = setup({ ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' });
+    svc.prime();
+    expect(open).not.toHaveBeenCalled();
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(open).toHaveBeenCalledWith(`https://wa.me/919876543210?text=${encodeURIComponent(TEXT)}`, '_blank', 'noopener');
+  });
+});
+
+describe('WhatsAppManualService — referral doctor (WhatsApp Chat: Send to patient / Send to doctor)', () => {
+  const DOC = { name: 'Dr. Ravi Kumar', phone: '98450 12345' };
+  const DOC_TEXT = 'Dear Dr. Ravi Kumar, the report of Asha Rao from Micro World is ready. View it here: https://med.prefrontal.health/reports/public/t1';
+  const DOC_URL = `https://web.whatsapp.com/send?phone=919845012345&text=${encodeURIComponent(DOC_TEXT)}`;
+
+  it('no doctor number: no question, straight to the patient (as before)', async () => {
+    const { svc, dialog, open } = setup();
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(dialog.actions).not.toHaveBeenCalled();
+    expect(open).toHaveBeenCalledWith(URL_, 'pf-whatsapp');
+  });
+
+  it('a doctor WITHOUT a valid number, or the patient\'s own number: no question', async () => {
+    for (const doctor of [{ name: 'Dr. X', phone: '123' }, { name: 'Dr. X', phone: '+91 98765 43210' }]) {
+      const { svc, dialog } = setup({ doctor });
+      expect(await svc.send(REQ)).toBe('opened');
+      expect(dialog.actions).not.toHaveBeenCalled();
+      TestBed.resetTestingModule();
+    }
+  });
+
+  it('the server names a doctor with a number: ONE in-app choice (DialogService), never a native control', async () => {
+    const native = vi.spyOn(window, 'confirm');
+    const { svc, dialog } = setup({ doctor: DOC });
+    await svc.send(REQ);
+    expect(dialog.actions).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Send the report on WhatsApp',
+      actions: [
+        expect.objectContaining({ value: 'patient', label: 'Send to patient', variant: 'primary' }),
+        expect.objectContaining({ value: 'doctor', label: 'Send to doctor' }),
+      ],
+    }));
+    expect(native).not.toHaveBeenCalled();
+    native.mockRestore();
+  });
+
+  it('"Send to patient" opens the patient\'s chat with the patient message', async () => {
+    const { svc, open } = setup({ doctor: DOC, pick: 'patient' });
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(open).toHaveBeenCalledWith(URL_, 'pf-whatsapp');
+    expect(svc.lastRecipient).toBe('patient');
+  });
+
+  it('"Send to doctor" opens the DOCTOR\'s chat with the doctor message', async () => {
+    const { svc, open } = setup({ doctor: DOC, pick: 'doctor' });
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(open).toHaveBeenCalledWith(DOC_URL, 'pf-whatsapp');
+    expect(svc.lastRecipient).toBe('doctor');
+  });
+
+  it('Cancel on the choice opens nothing', async () => {
+    const { svc, open } = setup({ doctor: DOC, pick: null });
+    expect(await svc.send(REQ)).toBe('cancelled');
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('a recipient already picked (front desk menu) asks nothing and goes to that number', async () => {
+    const { svc, dialog, open } = setup();
+    expect(await svc.send({ ...REQ, doctor: DOC, to: 'doctor' })).toBe('opened');
+    expect(dialog.actions).not.toHaveBeenCalled();
+    expect(open).toHaveBeenCalledWith(DOC_URL, 'pf-whatsapp');
+    TestBed.resetTestingModule();
+    const b = setup({ doctor: DOC });
+    expect(await b.svc.send({ ...REQ, to: 'patient' })).toBe('opened');
+    expect(b.dialog.actions).not.toHaveBeenCalled();
+    expect(b.open).toHaveBeenCalledWith(URL_, 'pf-whatsapp');
+  });
+
+  it('the choice closes a primed blank tab first (so the question is seen); the pick then opens the tab', async () => {
+    const { svc, open, pop } = setup({ doctor: DOC, pick: 'doctor' });
+    svc.prime();
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(pop.close).toHaveBeenCalled();
+    expect(open).toHaveBeenLastCalledWith(DOC_URL, 'pf-whatsapp');
+  });
+
+  it('the patient has no valid number: only "Send to doctor" is offered', async () => {
+    const { svc, dialog, open } = setup({ doctor: DOC, pick: 'doctor' });
+    expect(await svc.send({ ...REQ, phone: '' })).toBe('opened');
+    const acts = (dialog.actions.mock.calls[0] as unknown as [{ actions: { value: string; variant: string }[] }])[0].actions;
+    expect(acts.map(a => a.value)).toEqual(['doctor']);
+    expect(acts[0].variant).toBe('primary');
+    expect(open).toHaveBeenCalledWith(DOC_URL, 'pf-whatsapp');
+  });
+
+  it('the patient opted out: "Send to doctor" is not blocked by the patient\'s opt-out', async () => {
+    const { svc, dialog, open } = setup({ doctor: DOC, pick: 'doctor', optOut: true });
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(dialog.confirm).not.toHaveBeenCalled();
+    expect(open).toHaveBeenCalledWith(DOC_URL, 'pf-whatsapp');
+  });
+
+  it('desktop app: "Send to doctor" docks the doctor\'s chat (bridge path unchanged)', async () => {
+    const b = { open: vi.fn(async () => ({ ok: true })), setPdf: vi.fn(async () => ({ ok: true })) } as unknown as ElectronWhatsAppBridge & { open: ReturnType<typeof vi.fn> };
+    const { svc } = setup({ bridge: b, doctor: DOC, pick: 'doctor' });
+    expect(await svc.send(REQ)).toBe('opened');
+    expect(b.open).toHaveBeenCalledWith(DOC_URL);
+  });
+
+  it('an invoice never offers the doctor (reports only)', async () => {
+    const { svc, dialog, wa } = setup({ doctor: DOC });
+    expect(await svc.sendInvoice({ phone: '98765 43210', patientName: 'Asha Rao', labName: 'Arun Lab', invoiceNumber: 'INV-1', amount: 100, pdf: async () => null })).toBe('opened');
+    expect(dialog.actions).not.toHaveBeenCalled();
+    expect(wa.reportStatus).not.toHaveBeenCalled();
   });
 });

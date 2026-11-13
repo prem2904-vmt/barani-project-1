@@ -130,7 +130,7 @@ describe('Patient profile order detail — ⋮ report actions', () => {
     const { c } = await render({ waCloud: true });
     expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'download', 'print', 'open-report', 'repeat']);
     const svc = TestBed.inject(ReportActionsService);
-    const send = vi.spyOn(svc, 'sendWhatsApp').mockImplementation(() => {});
+    const send = vi.spyOn(svc, 'sendWhatsApp').mockImplementation(async () => {});
     const mine = vi.spyOn(svc, 'whatsApp').mockResolvedValue(true);
     const o = c.openOrder();
     await c.runDetailAction(o, 'whatsapp');
@@ -142,7 +142,7 @@ describe('Patient profile order detail — ⋮ report actions', () => {
   it('WhatsApp goes to the CURRENT patient on file (profile correction), not the issued snapshot', async () => {
     const { c } = await render({ waCloud: true, rep: { ...REP, patient: { displayName: 'Priya Menon', phone: '9000000001' } } });
     const svc = TestBed.inject(ReportActionsService);
-    const send = vi.spyOn(svc, 'sendWhatsApp').mockImplementation(() => {});
+    const send = vi.spyOn(svc, 'sendWhatsApp').mockImplementation(async () => {});
     await c.runDetailAction(c.openOrder(), 'whatsapp');
     expect(send).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep-1' }), { name: 'Priya Menon', phone: '9000000001' });
   });

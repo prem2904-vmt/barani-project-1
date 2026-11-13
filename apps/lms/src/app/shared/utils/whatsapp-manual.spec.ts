@@ -1,6 +1,6 @@
 import {
   WA_POPUP_NAME, WA_POPUP_WIDTH, WA_REPORT_TEMPLATE, WA_WEB_SEND, isClickToChatUrl, reportPublicLink, waClickToChatUrl,
-  waDisplayPhone, waE164, waInvoiceMessage, waMeUrl, waPopupFeatures, waPopupRect, waReportMessage,
+  waDisplayPhone, waDoctorReportMessage, waE164, waInvoiceMessage, WA_TAB_NAME, waMeUrl, waPopupFeatures, waPopupRect, waReportMessage,
 } from './whatsapp-manual';
 import { whatsAppPhone } from './indian-phone';
 
@@ -125,4 +125,14 @@ describe('waInvoiceMessage - an unpaid bill says what is due (OPS-122, front-des
   it('settled (balance 0) keeps the Paid wording', () => {
     expect(waInvoiceMessage({ patient: 'Asha', lab: 'Arun Lab', invoiceNumber: 'INV-1', amount: 400, balance: 0 })).toContain('INV-1 — Paid ₹400');
   });
+});
+
+describe('waDoctorReportMessage (WhatsApp Chat → Send to doctor)', () => {
+  it('names the doctor and the patient; no link ends at "ready."', () => {
+    expect(waDoctorReportMessage({ doctor: 'Dr. Ravi', patient: 'Asha Rao', lab: 'Micro World', link: 'https://x/r/1' }))
+      .toBe('Dear Dr. Ravi, the report of Asha Rao from Micro World is ready. View it here: https://x/r/1');
+    expect(waDoctorReportMessage({ doctor: '', patient: '', lab: '' }))
+      .toBe('Dear Doctor, the report of your patient from our lab is ready.');
+  });
+  it('the web tab keeps the one name', () => expect(WA_TAB_NAME).toBe('pf-whatsapp'));
 });

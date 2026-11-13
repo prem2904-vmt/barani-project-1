@@ -129,6 +129,25 @@ describe('ReportActionsService — WhatsApp Chat (manual, every lab)', () => {
     expect(api.post).toHaveBeenCalledWith('/api/reports/r1/deliver', { via: 'whatsapp', note: 'WhatsApp opened (manual)' });
   });
 
+  it('referral doctor picked: opens the DOCTOR\'s chat with the doctor message; no patient delivery record', async () => {
+    const { svc, api, open } = setup();
+    expect(await svc.whatsApp({ id: 'r1', orderId: 'o1', qrToken: 'q1' }, { name: 'Priya', phone: '9876543210' },
+      { to: 'doctor', doctor: { name: 'Dr. Ravi', phone: '9845012345' } })).toBe(true);
+    const [url, name] = open.mock.calls[0] as unknown as [string, string];
+    expect(name).toBe('pf-whatsapp');
+    expect(url.startsWith('https://web.whatsapp.com/send?phone=919845012345&text=')).toBe(true);
+    expect(new URL(url).searchParams.get('text')).toBe(`Dear Dr. Ravi, the report of Priya from Micro World is ready. View it here: ${BASE}/reports/public/q1`);
+    expect(api.post).not.toHaveBeenCalledWith('/api/reports/r1/deliver', expect.anything());
+  });
+
+  it('"Send to patient" with a doctor on the order: the patient\'s chat + the delivery record', async () => {
+    const { svc, api, open } = setup();
+    await svc.whatsApp({ id: 'r1', orderId: 'o1', qrToken: 'q1' }, { name: 'Priya', phone: '9876543210' },
+      { to: 'patient', doctor: { name: 'Dr. Ravi', phone: '9845012345' } });
+    expect(String((open.mock.calls[0] as unknown as [string])[0])).toContain('phone=919876543210');
+    expect(api.post).toHaveBeenCalledWith('/api/reports/r1/deliver', { via: 'whatsapp', note: 'WhatsApp opened (manual)' });
+  });
+
   it('opted-out patient, cancelled at the opt-out dialog: nothing opens, nothing recorded', async () => {
     const { svc, api, open, dialog } = setup();
     api.get.mockImplementation((url: string) => of(url.includes('/api/whatsapp/reports/r1') ? { patientOptOut: true } : null) as never);
@@ -217,7 +236,7 @@ describe('ReportActionsService — WhatsApp Cloud API (lab sends from its number
     svc.sendWhatsApp({ id: 'r1', orderId: 'o1', type: 'final' }, { name: 'Priya', phone: '9876543210' });
     await new Promise(r => setTimeout(r, 0));
     await new Promise(r => setTimeout(r, 0));
-    expect(open).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?phone=919876543210'), 'pf-whatsapp', expect.stringContaining('width=420'));
+    expect(open).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?phone=919876543210'), 'pf-whatsapp');
     expect(api.post).not.toHaveBeenCalledWith('/api/whatsapp/reports/r1/resend', {});
   });
 });

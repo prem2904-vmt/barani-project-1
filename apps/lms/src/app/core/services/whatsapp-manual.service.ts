@@ -4,7 +4,7 @@ import { DialogService } from './dialog.service';
 import { ToastService } from './toast.service';
 import { WhatsAppService } from './whatsapp.service';
 import {
-  WA_POPUP_NAME, isClickToChatUrl, waClickToChatUrl, waDisplayPhone, waE164, waInvoiceMessage, waMeUrl, waPopupFeatures, waReportMessage,
+  WA_TAB_NAME, isClickToChatUrl, waClickToChatUrl, waDisplayPhone, waDoctorReportMessage, waE164, waInvoiceMessage, waMeUrl, waReportMessage,
 } from '../../shared/utils/whatsapp-manual';
 
 /** window.electronAPI.whatsapp — electron/preload.js (the docked panel). */
@@ -71,9 +71,26 @@ export interface WaManualRequest {
   pdfName?: string;
   /** Say "attach the PDF" on EVERY web send (invoices: the staff must attach it; the first-time-only hint was missed). */
   hintAlways?: boolean;
+  /** The order's REFERRAL DOCTOR (reports only). With a valid mobile that is not the patient's own,
+   *  the person picks "Send to patient" / "Send to doctor" (DialogService) unless `to` already says. */
+  doctor?: WaDoctorContact | null;
+  /** The recipient already picked (the front desk's Share menu shows both rows). */
+  to?: WaRecipient;
+}
+
+export interface WaDoctorContact { name?: string | null; phone?: string | null }
+export type WaRecipient = 'patient' | 'doctor';
+
+/** The doctor's mobile when a "Send to doctor" choice makes sense: valid AND not the patient's own number. */
+export function waDoctorPhone(patientPhone: string | null | undefined, doctor: WaDoctorContact | null | undefined): string | null {
+  const d = waE164(doctor?.phone);
+  return d && d !== waE164(patientPhone) ? d : null;
 }
 
 export type WaManualOutcome = 'opened' | 'cancelled' | 'no-phone' | 'blocked';
+
+/** What the blank tab says while the report / PDF is fetched (web, the tab opened on the click). */
+export const WA_TAB_WAITING = 'Opening WhatsApp…';
 
 /** The consent reminder (no consent field on the patient yet — owner decision); shown once per device. */
 export const WA_CONSENT_REMINDER = 'Only send if the patient agreed to get reports on WhatsApp.';
@@ -91,8 +108,11 @@ export const WA_PDF_HINT_KEY = 'pf.wa.manual.pdfhint';
  *   by WhatsApp's own click-to-chat link; main copies the PDF to OUR OS clipboard and our panel header
  *   says "press Ctrl+V" — the person pastes and presses Send. WhatsApp's page is never touched. No toast.
  * - Phone → ONE tap opens the share sheet with the PDF + the message (Web Share with files), else wa.me.
- * - Desktop browser → ONE named phone-shaped window with the text drafted, and the PDF downloaded at
- *   the same moment (a cross-origin page can't be attached to). Silent; one hint, first time only.
+ * - Desktop browser → a NEW TAB with the text drafted, and the PDF downloaded at the same moment (a
+ *   cross-origin page can't be attached to). Silent; one hint, first time only. A screen that fetches
+ *   something first (the report, the PDF) calls `prime()` IN the click: the tab opens at once (blank,
+ *   "Opening WhatsApp…") and is pointed at the chat when ready — opening it only after the network
+ *   wait is what browsers block ("Your browser blocked the WhatsApp window", 2026-11-13).
  */
 @Injectable({ providedIn: 'root' })
 export class WhatsAppManualService {
@@ -106,6 +126,43 @@ export class WhatsAppManualService {
 
   private w(): Pick<Window, 'open' | 'screen' | 'navigator'> { return this.win ?? window; }
 
+  /** Who the last send opened WhatsApp for. Callers record the report's DELIVERY only for the patient:
+   *  the referral doctor's copy is not the patient's hand-over (same rule as WhatsApp Auto). */
+  lastRecipient: WaRecipient | null = null;
+
+  /** The tab opened on the click (`prime()`), waiting for the chat URL. */
+  private primed: Window | null = null;
+
+  /** Web only: open the WhatsApp tab NOW, inside the click, so it survives the async work that follows
+   *  (fetching the report / PDF). The next `send()` points it at the chat; `release()` closes it when
+   *  nothing is sent. No-op on the desktop app (docked panel) and on phones (share sheet). */
+  prime(): void {
+    if (this.bridge() || this.isPhone()) return;
+    if (this.primed && !this.primed.closed) return;
+    let tab: Window | null = null;
+    try { tab = this.w().open('about:blank', '_blank'); } catch { tab = null; }
+    if (!tab) return;   // blocked even in the click: send() tries again and says so
+    try {
+      tab.document.title = 'WhatsApp';
+      tab.document.body.textContent = WA_TAB_WAITING;
+      tab.document.body.style.cssText = 'font:15px system-ui,sans-serif;color:#555;display:grid;place-items:center;height:100vh;margin:0';
+    } catch { /* a stub / cross-origin: the blank tab is enough */ }
+    this.primed = tab;
+  }
+
+  /** Close the primed tab when nothing will be sent (no report, an error, Auto took it). */
+  release(): void {
+    const tab = this.primed;
+    this.primed = null;
+    try { if (tab && !tab.closed) tab.close(); } catch { /* */ }
+  }
+
+  private takePrimed(): Window | null {
+    const tab = this.primed;
+    this.primed = null;
+    return tab && !tab.closed ? tab : null;
+  }
+
   private isPhone(): boolean {
     const w = this.w() as unknown as { Capacitor?: { isNativePlatform?: () => boolean }; navigator?: Navigator };
     if (w.Capacitor?.isNativePlatform?.()) return true;
@@ -113,8 +170,58 @@ export class WhatsAppManualService {
   }
 
   async send(req: WaManualRequest): Promise<WaManualOutcome> {
+    try {
+      return await this.sendInner(req);
+    } finally {
+      this.release();   // a primed tab nobody used (no phone, cancelled, error) never lingers
+    }
+  }
+
+  private async sendInner(input: WaManualRequest): Promise<WaManualOutcome> {
+    this.lastRecipient = null;
+    // Reports only: the referral doctor. The choice is a DialogService pick (never a native control);
+    // its button press is a fresh click, so the tab still opens after it.
+    // ONE short read (0.8 s max): the patient's opt-out + the order's referral doctor (when the caller
+    // didn't bring it). Short so the click still counts for the tab when nothing is asked.
+    const st = input.message ? { optOut: false, doctor: null } : await this.readStatus(input.reportId);
+    const doctor = input.message ? null : (input.doctor ?? st.doctor);
+    const req: WaManualRequest = { ...input, doctor };
+    const doctorPhone = waDoctorPhone(req.phone, doctor);
+    let to: WaRecipient = req.to === 'doctor' ? 'doctor' : 'patient';
+    if (doctorPhone && !req.to) {
+      this.release();   // a blank tab in front would hide the question
+      const patientOk = !!waE164(req.phone);
+      const pick = await this.dialog.actions({
+        title: 'Send the report on WhatsApp',
+        message: `Who should get it? ${req.doctor?.name?.trim() || 'The referral doctor'}: ${waDisplayPhone(doctorPhone)}.`,
+        actions: [
+          ...(patientOk ? [{ value: 'patient', label: 'Send to patient', variant: 'primary' as const }] : []),
+          { value: 'doctor', label: 'Send to doctor', variant: patientOk ? 'secondary' as const : 'primary' as const },
+        ],
+      });
+      if (pick.action !== 'patient' && pick.action !== 'doctor') return 'cancelled';
+      to = pick.action;
+    }
+    if (to === 'doctor') {
+      const phone = waE164(req.doctor?.phone);
+      if (!phone) {
+        this.release();
+        await this.dialog.alert({ title: 'No mobile number', message: "The referral doctor has no valid mobile number on file.", confirmLabel: 'OK' });
+        return 'no-phone';
+      }
+      const text = waDoctorReportMessage({ doctor: req.doctor?.name, patient: req.patientName, lab: req.labName, link: req.link, extra: req.extra });
+      // The patient's opt-out is about the patient's own WhatsApp; the doctor referred the test.
+      const out = await this.open({ ...req, phone }, text);
+      if (out === 'opened') this.lastRecipient = 'doctor';
+      return out;
+    }
+    return this.sendPatient(req, st.optOut);
+  }
+
+  private async sendPatient(req: WaManualRequest, optedOut: boolean): Promise<WaManualOutcome> {
     const e164 = waE164(req.phone);
     if (!e164) {
+      this.release();
       await this.dialog.alert({
         title: 'No mobile number',
         message: "This patient has no valid mobile number on file. Add one on the patient's page, then try again.",
@@ -126,7 +233,8 @@ export class WhatsAppManualService {
     // One click: no confirm. The only stop is a patient who OPTED OUT of
     // WhatsApp (a recorded "no"). The read is kept short so the browser
     // still treats the window as opened by the click.
-    if (await this.optedOut(req.reportId)) {
+    if (optedOut) {
+      this.release();   // the warning must be seen (the confirm's button is a fresh click)
       const who = (req.patientName ?? '').trim() || 'This patient';
       const ok = await this.dialog.confirm({
         title: 'This patient opted out of WhatsApp',
@@ -139,6 +247,7 @@ export class WhatsAppManualService {
       if (!ok) return 'cancelled';
     }
     const out = await this.open(req, text);
+    if (out === 'opened') this.lastRecipient = 'patient';
     // The consent reminder is a toast: never on the desktop app's one-click path, nor when the PDF hint shows.
     if (out === 'opened' && !this.bridge() && !(req.pdf && !this.isPhone())) this.remindOnce();
     return out;
@@ -210,15 +319,22 @@ export class WhatsAppManualService {
       return 'opened';
     }
 
-    const pop = this.w().open(url, WA_POPUP_NAME, waPopupFeatures(this.w().screen));
-    if (!pop) {
-      this.toasts.error('Your browser blocked the WhatsApp window. Allow pop-ups for this site, then try again.');
+    // Web: a NEW TAB (owner 2026-11-13). The tab primed in the click is pointed at the chat (it was
+    // opened while the click still counted); otherwise open one now.
+    const primed = this.takePrimed();
+    let tab: Window | null = null;
+    if (primed) {
+      try { primed.opener = null; } catch { /* */ }
+      try { primed.location.replace(url); tab = primed; } catch { try { primed.close(); } catch { /* */ } }
+    }
+    // The opener is NOT cut on a fresh tab: disowning it would also stop the next click from finding
+    // it by name. WhatsApp's own page sets Cross-Origin-Opener-Policy, which severs it anyway.
+    if (!tab) tab = this.w().open(url, WA_TAB_NAME);
+    if (!tab) {
+      this.toasts.error('Your browser blocked the WhatsApp tab. Allow pop-ups for this site, then try again.');
       return 'blocked';
     }
-    // The opener is NOT cut here: disowning the window would also stop the
-    // next click from finding it by name. WhatsApp's own page sets
-    // Cross-Origin-Opener-Policy, which severs it from the app anyway.
-    try { pop.focus(); } catch { /* */ }
+    try { tab.focus(); } catch { /* */ }
     // A cross-origin chat can't be attached to: download the PDF at the same moment (no card).
     if (req.pdf) void this.downloadPdf(req);
     return 'opened';
@@ -266,14 +382,16 @@ export class WhatsAppManualService {
     }
   }
 
-  /** The patient's WhatsApp opt-out, when the server knows it (0.8 s max — keeps the click's pop-up permission). */
-  private async optedOut(reportId: string | null | undefined): Promise<boolean> {
-    if (!reportId) return false;
+  /** The patient's WhatsApp opt-out + the order's referral doctor, when the server knows them
+   *  (0.8 s max — keeps the click's tab permission). A failed read = no opt-out, no doctor. */
+  private async readStatus(reportId: string | null | undefined): Promise<{ optOut: boolean; doctor: WaDoctorContact | null }> {
+    if (!reportId) return { optOut: false, doctor: null };
     try {
       const st = await firstValueFrom(this.wa.reportStatus(reportId).pipe(timeout(800)));
-      return st?.patientOptOut === true;
+      const d = st?.referralDoctor;
+      return { optOut: st?.patientOptOut === true, doctor: d?.phone ? { name: d.name ?? null, phone: d.phone } : null };
     } catch {
-      return false;
+      return { optOut: false, doctor: null };
     }
   }
 }

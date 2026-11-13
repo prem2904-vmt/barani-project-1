@@ -909,7 +909,8 @@ export class ReportQueueComponent implements OnInit {
       pdf: () => this.storedPdf(r),
       pdfName: `report-${r.id.replace(/-/g, "").slice(-8).toUpperCase()}.pdf`,
     });
-    if (out === "opened") this.recordDelivery(r, "whatsapp");
+    // The referral doctor's copy is not the patient's hand-over: no delivery record.
+    if (out === "opened" && this.waManual.lastRecipient !== "doctor") this.recordDelivery(r, "whatsapp");
   }
 
   /** Print a report from the queue. A delivery for deliver_report users; a

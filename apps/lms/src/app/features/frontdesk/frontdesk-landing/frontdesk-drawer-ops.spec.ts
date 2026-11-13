@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { signal } from '@angular/core';
+import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { FrontdeskLandingComponent } from './frontdesk-landing.component';
 
@@ -71,6 +72,27 @@ describe('OPS-122 - WhatsApp from the invoice viewer', () => {
     expect(blobFetch).toHaveBeenCalledWith('blob:inv');
     expect(h.invoiceSharing()).toBe(false);
     blobFetch.mockRestore();
+  });
+  it('opening the viewer KEEPS the share context (the re-test bug: the preview reset wiped it, so WhatsApp did nothing)', async () => {
+    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:inv-1');
+    const revoked = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const order = { id: 'o', orderNumber: 'LAB-1', status: 'validated', createdAt: new Date().toISOString(), samples: [], patient: { phone: '9876543210', displayName: 'Asha', age: 30, gender: 'F' } };
+    const bill = { id: 'b', orderId: 'o', invoiceNumber: 'INV-9', subTotal: 400, totalDiscount: 0, totalTaxable: 400, totalTax: 0, totalCgst: 0, totalSgst: 0, totalIgst: 0, totalPayable: 400, totalPaid: 400, balance: 0, items: [{ name: 'CBC', quantity: 1, unitPrice: 400, taxable: 400, total: 400, gstRate: 0 }], payments: [] };
+    const h = Object.create(proto);
+    Object.assign(h, {
+      api: { post: vi.fn(() => of(bill)), get: vi.fn((u: string) => of(u.includes('track-token') ? { token: 't' } : { showLogo: false })) },
+      toasts: { error: vi.fn(), warning: vi.fn(), success: vi.fn(), info: vi.fn() },
+      auth: { user: () => ({ tenantName: 'Arun Lab', displayName: 'Desk' }) },
+      sanitizer: { bypassSecurityTrustResourceUrl: (u: string) => u },
+      invoiceLoading: signal(false), invoicePreviewUrl: signal(null), invoicePreviewNumber: signal(''),
+      invoiceBlobUrl: null, invoiceCtx: null,
+    });
+    await h.viewInvoice(order);
+    expect(h.toasts.error).not.toHaveBeenCalled();
+    expect(h.invoicePreviewUrl()).toBeTruthy();
+    expect(h.invoiceCtx).toEqual({ order, bill });
+    expect(h.invoiceBlobUrl).toBeTruthy();
+    created.mockRestore(); revoked.mockRestore();
   });
   it('does nothing without an open invoice', async () => {
     const sendInvoice = vi.fn();

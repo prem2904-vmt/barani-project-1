@@ -30,7 +30,7 @@ describe('WhatsAppSendService (staff Send WhatsApp via the Cloud API)', () => {
       reportStatus: vi.fn(() => of(STATUS(queue.length > 1 ? queue.shift()! : queue[0] ?? MSG()))),
     };
     const api = { post: vi.fn(() => of({})) };
-    const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn() };
+    const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
     TestBed.configureTestingModule({
       providers: [
         { provide: WhatsAppService, useValue: wa },
@@ -71,6 +71,24 @@ describe('WhatsAppSendService (staff Send WhatsApp via the Cloud API)', () => {
     expect(wa.settings).not.toHaveBeenCalled();
     expect(await svc.send('rep-1')).toBeNull();
     expect(wa.resend).not.toHaveBeenCalled();
+  });
+
+  it('send with a referral doctor copy: the toast names both numbers', async () => {
+    const doctor = MSG({ id: 'm2', trigger: 'resend_doctor', recipient: 'doctor', toDisplay: '+91 ••••• 12345' });
+    const { svc, toasts } = make({ resend: of(MSG({ recipient: 'patient', doctor })) });
+    await svc.send('rep-1');
+    expect(toasts.success).toHaveBeenCalledWith('Sent by WhatsApp Auto to +91 ••••• 79229 and the referral doctor (+91 ••••• 12345)', 5000);
+    expect(toasts.warning).not.toHaveBeenCalled();
+  });
+
+  it('send: the doctor copy failing is its own warning; the patient send still counts as sent', async () => {
+    const doctor = MSG({ id: 'm2', trigger: 'resend_doctor', recipient: 'doctor', status: 'failed', errorReason: 'Message undeliverable.' });
+    const { svc, toasts, api } = make({ resend: of(MSG({ doctor })) });
+    const m = await svc.send('rep-1');
+    expect(m?.status).toBe('sent');
+    expect(toasts.success).toHaveBeenCalledWith('Sent by WhatsApp Auto to +91 ••••• 79229', 5000);
+    expect(toasts.warning).toHaveBeenCalledWith('Not sent to the referral doctor: Message undeliverable.', 8000);
+    expect(api.post).toHaveBeenCalledWith('/api/reports/rep-1/deliver', expect.objectContaining({ via: 'whatsapp' }));
   });
 
   it('send: Sending… → Sent with the masked number, records the delivery', async () => {

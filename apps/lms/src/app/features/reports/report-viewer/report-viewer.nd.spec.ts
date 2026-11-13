@@ -201,7 +201,7 @@ describe('Report view (nd) — actions', () => {
 
     (el.querySelector('.pf-rv-act--send') as HTMLButtonElement).click();
     await settle();
-    expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?phone='), 'pf-whatsapp', expect.stringContaining('width=420'));
+    expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?phone='), 'pf-whatsapp');
     expect(api.post).toHaveBeenCalledWith('/api/reports/rep-1/deliver', expect.objectContaining({ via: 'whatsapp' }));
 
     f.detectChanges();
@@ -549,7 +549,7 @@ describe('Report view (nd) — WhatsApp Auto through the lab\'s WhatsApp Cloud A
     expect(rows).toEqual(['WhatsApp Auto']);
     c.runAction('whatsapp-mine');
     await settle();
-    expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp', expect.any(String));
+    expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp');
   });
 
   it('WhatsApp Chat goes to the patient AS ON FILE (a corrected name / mobile), not the issued snapshot', async () => {
@@ -568,7 +568,7 @@ describe('Report view (nd) — WhatsApp Auto through the lab\'s WhatsApp Cloud A
     expect(c.menuActions().filter((a: { id: string }) => a.id.startsWith('whatsapp')).map((a: { label: string }) => a.label)).toEqual(['WhatsApp Chat']);
     sendBtn(el).click();
     await settle();
-    expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp', expect.any(String));
+    expect(waOpen).toHaveBeenCalledWith(expect.stringContaining('https://web.whatsapp.com/send?'), 'pf-whatsapp');
     expect(api.post).not.toHaveBeenCalledWith('/api/whatsapp/reports/rep-1/resend', {});
   });
 

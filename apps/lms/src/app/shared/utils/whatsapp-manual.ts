@@ -12,23 +12,27 @@
  *     checks the message and presses Send in WhatsApp themselves.
  *
  * The desktop app shows WhatsApp Web docked on the right (electron/
- * whatsapp-dock.js); a browser opens it as a narrow phone-shaped window at
- * the right edge of the screen (WhatsApp refuses to be framed, and we never
- * work around that).
+ * whatsapp-dock.js); a browser opens it in a NEW TAB (owner 2026-11-13 —
+ * was a phone-shaped popup window; WhatsApp refuses to be framed, and we
+ * never work around that).
  */
 
 import { indianNational } from './indian-phone';
 
 /** The only page the manual flow opens on the web / desktop. */
 export const WA_WEB_SEND = 'https://web.whatsapp.com/send';
-/** The ONE named browser window repeat clicks reuse. */
+/** The ONE named browser tab repeat clicks reuse (when the browser still knows it by name). */
 export const WA_POPUP_NAME = 'pf-whatsapp';
+/** The web tab's name (same value: older code and specs say WA_POPUP_NAME). */
+export const WA_TAB_NAME = WA_POPUP_NAME;
 /** Phone-shaped: about as wide as a phone, the full height of the screen. */
 export const WA_POPUP_WIDTH = 420;
 
 /** The message, editable per lab later — keep it here and only here.
  *  `{patient}`, `{lab}` and `{link}` are filled by `waReportMessage`. */
 export const WA_REPORT_TEMPLATE = 'Dear {patient}, your report from {lab} is ready. View it here: {link}';
+/** The same report, to the order's REFERRAL DOCTOR (WhatsApp Chat → "Send to doctor"). */
+export const WA_DOCTOR_REPORT_TEMPLATE = 'Dear {doctor}, the report of {patient} from {lab} is ready. View it here: {link}';
 
 /** E.164 for a patient's mobile: `+91` + the 10 digits (the one phone rule,
  *  indian-phone.ts — a bare 10-digit number is Indian). null when invalid. */
@@ -90,6 +94,19 @@ export function waReportMessage(p: { patient?: string | null; lab?: string | nul
   return [text, ...extra].join('\n\n');
 }
 
+/** "Dear Dr. Ravi, the report of Asha Rao from Micro World is ready. View it here: <link>".
+ *  No doctor name → "Dear Doctor"; no link → ends at "ready.". */
+export function waDoctorReportMessage(p: { doctor?: string | null; patient?: string | null; lab?: string | null; link?: string | null; extra?: (string | null | undefined)[] }): string {
+  const doctor = (p.doctor ?? '').trim() || 'Doctor';
+  const patient = (p.patient ?? '').trim() || 'your patient';
+  const lab = (p.lab ?? '').trim() || 'our lab';
+  const link = (p.link ?? '').trim();
+  let text = WA_DOCTOR_REPORT_TEMPLATE.replace('{doctor}', doctor).replace('{patient}', patient).replace('{lab}', lab);
+  text = link ? text.replace('{link}', link) : text.replace(/ View it here: \{link\}$/, '');
+  const extra = (p.extra ?? []).map(s => (s ?? '').trim()).filter(Boolean);
+  return [text, ...extra].join('\n\n');
+}
+
 /** The invoice message (OPS-126): same words the invoice share always used, now sent WITH the invoice
  *  PDF. "Hi Asha, your invoice from Micro World:\nINV-001 — Paid ₹400\n<extra lines>\nThank you…". */
 export function waInvoiceMessage(p: { patient?: string | null; lab?: string | null; invoiceNumber?: string | null; amount?: number | string | null; balance?: number | null; extra?: (string | null | undefined)[] }): string {
@@ -111,7 +128,7 @@ export interface WaScreen {
   availTop?: number;
 }
 
-/** Where the phone-shaped window goes: the right edge of the screen this
+/** (Unused since 2026-11-13: the web opens a tab.) Where the phone-shaped window went: the right edge of the screen this
  *  window is on, full available height. */
 export function waPopupRect(s: WaScreen): { width: number; height: number; left: number; top: number } {
   const width = Math.min(WA_POPUP_WIDTH, Math.max(320, Math.floor(s.availWidth || WA_POPUP_WIDTH)));

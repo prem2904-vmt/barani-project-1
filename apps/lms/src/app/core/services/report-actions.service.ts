@@ -11,7 +11,7 @@ import { reportPublicLink } from '../../shared/utils/whatsapp-manual';
 import { printPdfBlobUrl } from '../../shared/utils/print-pdf';
 import type { PfAction } from '../../shared/components/actions-menu/actions-menu.component';
 import { WhatsAppSendService } from './whatsapp-send.service';
-import { WhatsAppManualService } from './whatsapp-manual.service';
+import { WhatsAppManualService, type WaDoctorContact, type WaRecipient } from './whatsapp-manual.service';
 
 /** What a report row needs for the link / share / delivery actions. */
 export interface ReportRef {
@@ -224,16 +224,21 @@ export class ReportActionsService {
   warmWhatsApp(): void { this.waSend.ensure(); }
 
   /** The ONE WhatsApp button: WhatsApp Auto when the lab has it, else WhatsApp Chat
-   *  (when that is on), else nothing. */
-  sendWhatsApp(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null }): void {
+   *  (when that is on), else nothing.
+   *  WhatsApp Auto sends to the patient AND the order's referral doctor (server side, when the doctor
+   *  record has a number). WhatsApp Chat: `opts.to` = the recipient already picked (front desk menu),
+   *  else the person is asked "Send to patient / Send to doctor" when a doctor number exists. */
+  async sendWhatsApp(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null },
+    opts: { to?: WaRecipient; doctor?: WaDoctorContact | null } = {}): Promise<void> {
     if (!this.auth.hasPermission('deliver_report')) return;
     if (this.waSend.canSend(rep)) {
+      this.waManual.release();   // Auto needs no WhatsApp tab
       // The public link serves the archived PDF — archive it alongside (best-effort).
       void this.archive(rep);
       void this.waSend.send(rep.id);
       return;
     }
-    if (this.waSend.chatAllowed()) void this.whatsApp(rep, patient);
+    if (this.waSend.chatAllowed()) await this.whatsApp(rep, patient, opts);
   }
 
   private readonly waManual = inject(WhatsAppManualService);
@@ -241,7 +246,8 @@ export class ReportActionsService {
   /** WhatsApp Chat — the manual flow (deliver_report): click-to-chat with
    *  the patient's chat and the report link ready; the person presses Send.
    *  Recorded as delivered once WhatsApp opened. */
-  async whatsApp(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null }): Promise<boolean> {
+  async whatsApp(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null },
+    opts: { to?: WaRecipient; doctor?: WaDoctorContact | null } = {}): Promise<boolean> {
     if (!this.auth.hasPermission('deliver_report') || !this.waSend.chatAllowed()) return false;
     // Archive the PDF first (background) so the public link serves the real file.
     if (rep.qrToken) void this.archive(rep);
@@ -253,9 +259,12 @@ export class ReportActionsService {
       reportId: rep.id,
       pdf: () => this.pdfBlob(rep),
       pdfName: this.fileName(rep),
+      to: opts.to,
+      doctor: opts.doctor,
     });
     if (out !== 'opened') return false;
-    this.recordDelivery(rep, 'whatsapp');
+    // The referral doctor's copy is not the patient's hand-over: no delivery record.
+    if (this.waManual.lastRecipient !== 'doctor') this.recordDelivery(rep, 'whatsapp');
     return true;
   }
 

@@ -3,7 +3,7 @@ import { EditReferralDialogComponent } from '../../../shared/components/edit-ref
 import { EDIT_REFERRAL_PERM, ReferralSaveResult } from '../../../shared/components/edit-referral-dialog/referral-edit';
 import { ReportActionsService } from '../../../core/services/report-actions.service';
 import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
-import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
+import { WhatsAppManualService, waDoctorPhone, type WaRecipient } from '../../../core/services/whatsapp-manual.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
@@ -2207,7 +2207,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       let tpl: any = null;
       try { tpl = await firstValueFrom(this.api.get<any>('/api/config/invoice-template')); }
       catch { /* letterhead is optional */ }
-      this.invoiceCtx = { order: o, bill };
       await this.emitInvoicePdf(o, bill, tpl);
     } catch (e) {
       this.toasts.error(ApiError.from(e).message);
@@ -2270,7 +2269,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
         action: 'blob',
       });
       if (!blobUrl) { this.toasts.error('Could not generate the invoice PDF'); return; }
-      this.closeInvoicePreview(); // revoke any prior blob first
+      this.closeInvoicePreview(); // revoke any prior blob first (it also clears the share context)
+      // The WhatsApp share's order + bill: set AFTER the close above. Set before it (as it was), the close
+      // wiped it and the viewer's WhatsApp button silently did nothing (OPS-122 re-test, 2026-11-13).
+      this.invoiceCtx = { order: o, bill };
       this.invoiceBlobUrl = blobUrl;
       this.invoicePreviewNumber.set(bill.invoiceNumber ?? 'Invoice');
       this.invoicePreviewUrl.set(this.sanitizer.bypassSecurityTrustResourceUrl(blobUrl));
@@ -3138,9 +3140,21 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** The ONE WhatsApp entry: shown when WhatsApp Auto (entitled + set up) or WhatsApp Chat is available. */
   waShareMode(): 'auto' | 'chat' | null { return this.waSend.mode({ type: 'final' }); }
 
+  /** The referral doctor's mobile when "Send to doctor" makes sense (valid, not the patient's own number). */
+  waDoctorPhone(o: Order): string | null {
+    return o.refDoctorName ? waDoctorPhone(o.patient?.phone, { phone: o.refDoctorPhone }) : null;
+  }
+
   /** The order's current report, or null (with a warning) when none exists yet. */
   private async reportToShare(o: Order): Promise<Report | null> {
-    const report = await firstValueFrom(this.api.get<Report | null>(`/api/reports/by-order/${o.id}`));
+    let report: Report | null;
+    try {
+      report = await firstValueFrom(this.api.get<Report | null>(`/api/reports/by-order/${o.id}`));
+    } catch (err) {
+      // The server answers "no report" as a not_found failure: that is the same "not ready yet", not an error.
+      if (ApiError.from(err).code === 'not_found') report = null;
+      else throw err;
+    }
     if (!report || report.supersededByReportId) {
       this.toasts.warning('No report yet for this order. Share it once the report is ready.');
       return null;
@@ -3151,26 +3165,36 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** Really share the report on WhatsApp through the app's one WhatsApp path (ReportActionsService):
    *  WhatsApp Auto sends from the server (the "sent" toast comes from the server's answer only);
    *  WhatsApp Chat opens WhatsApp with the PDF + message ready and the person presses Send. */
-  async shareReportWhatsapp(o: Order): Promise<void> {
+  async shareReportWhatsapp(o: Order, to?: WaRecipient): Promise<void> {
     if (this._waSharing()) return;
-    if (!this.waShareMode()) return;
+    const mode = this.waShareMode();
+    if (!mode) return;
     const phone = o.patient?.phone?.trim();
-    if (!phone) {
+    if (to !== 'doctor' && !phone) {
       this.toasts.warning("This patient has no mobile number on file. Add one on the patient's page, then try again.");
       return;
     }
+    // WhatsApp Chat on the web: open the tab NOW, in the click — fetching the report first would make
+    // the browser block it ("Your browser blocked the WhatsApp window"). Desktop app / phone: no-op.
+    if (mode === 'chat') this.waManual.prime();
     this._waSharing.set(o.id);
     try {
       const report = await this.reportToShare(o);
       if (!report) return;
-      this.reportActions.sendWhatsApp(report as never, {
+      await this.reportActions.sendWhatsApp(report as never, {
         name: report.patient?.displayName ?? o.patient?.displayName,
         phone: report.patient?.phone || phone,
+      }, {
+        // The menu already showed "Send to patient / Send to doctor" when the doctor has a number;
+        // the single WhatsApp row means the patient (no second question after the tab opened).
+        to: to ?? 'patient',
+        doctor: this.waDoctorPhone(o) ? { name: o.refDoctorName, phone: o.refDoctorPhone } : null,
       });
     } catch (err) {
       console.error('[fd] share report on WhatsApp failed', err);
       this.toasts.error('Could not prepare the report for WhatsApp. Try again.');
     } finally {
+      this.waManual.release();   // no report / an error / Auto: the blank tab closes
       this._waSharing.set(null);
     }
   }

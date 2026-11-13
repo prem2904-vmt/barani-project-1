@@ -534,7 +534,7 @@ export class LabOrdersComponent implements OnDestroy {
     switch (id) {
       case 'share': await this.reportActions.share(ref, this.snapshotPatient(rep).name); break;
       case 'copy-link': await this.reportActions.copyLink(ref); break;
-      case 'whatsapp': this.reportActions.sendWhatsApp(ref, this.snapshotPatient(rep)); break;
+      case 'whatsapp': void this.reportActions.sendWhatsApp(ref, this.snapshotPatient(rep)); break;
       case 'whatsapp-mine': this.reportActions.whatsApp(ref, this.snapshotPatient(rep)); break;
       case 'download': await this.reportActions.download(ref); break;
       case 'print': await this.reportActions.print(ref); break;

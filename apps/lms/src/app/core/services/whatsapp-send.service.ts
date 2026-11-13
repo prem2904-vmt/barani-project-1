@@ -140,7 +140,13 @@ export class WhatsAppSendService {
     if (phase === 'queued') {
       this.toasts.info(m.errorReason ? `${m.errorReason}` : 'Queued for WhatsApp — it will be retried automatically', 6000);
     } else {
-      this.toasts.success(to ? `Sent by WhatsApp Auto to ${to}` : 'Report sent by WhatsApp Auto', 5000);
+      // The order's referral doctor gets their own copy from the server (own row, own outcome).
+      const doc = m.doctor ?? null;
+      const docPhase = doc ? this.phaseOf(doc) : null;
+      const docTo = doc ? (doc.toDisplay || doc.to || null) : null;
+      const andDoctor = docPhase && docPhase !== 'failed' ? ` and the referral doctor${docTo ? ` (${docTo})` : ''}` : '';
+      this.toasts.success(to ? `Sent by WhatsApp Auto to ${to}${andDoctor}` : `Report sent by WhatsApp Auto${andDoctor ? ` to the patient${andDoctor}` : ''}`, 5000);
+      if (doc && docPhase === 'failed') this.toasts.warning(`Not sent to the referral doctor: ${doc.errorReason || 'WhatsApp could not send it'}`, 8000);
       // Handing the link to the patient is the delivery — same record the
       // wa.me flow writes (the webhook's "delivered" never overwrites it).
       this.watch(reportId, m.id, Date.now() + WA_WATCH_MS);

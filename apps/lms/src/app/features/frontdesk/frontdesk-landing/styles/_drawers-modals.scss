@@ -1850,3 +1850,16 @@
 }
 .pf-drawer__edit:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
 @media (max-width: 639px) { .pf-drawer__edit { min-height: 36px; padding: 4px 12px; } }
+
+/* The referral doctor's phone under the name (doctor record; tap to call). */
+.pf-drawer__phone {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+}
+.pf-drawer__phone:hover { color: var(--text-primary); text-decoration: underline; }
+.pf-drawer__phone + .pf-drawer__edit { margin-left: 0; margin-top: 4px; }
