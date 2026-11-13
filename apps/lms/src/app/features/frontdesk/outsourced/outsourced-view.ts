@@ -347,6 +347,20 @@ export function buildFrontdeskMergedWork(
   return buildMergedWork(buckets, annotate);
 }
 
+type OutLine = { status?: string | null; outsourcingOverride?: string | null; test?: { outsourcedVendorId?: string | null } | null };
+type OutSample = { status?: string | null; outsourcedVendorId?: string | null; tests?: readonly OutLine[] | null };
+
+const DEAD_TUBE = ['cancelled', 'merged', 'rejected', 'missed'];
+const DEAD_LINE = ['cancelled', 'rejected', 'missed'];
+
+/** Mirror of the server's OutsourcingRules.IsOutsourced: the tube itself goes to a partner, or the line's test is
+ *  outsourced in Test Master and the desk did not keep it in-house. The second half covers older tubes whose
+ *  destination was never frozen onto the tube (the server's Outsourced tab lists them, so the desk must agree). */
+function lineIsOutsourced(s: OutSample, l: OutLine): boolean {
+  if (s.outsourcedVendorId) return true;
+  return l.outsourcingOverride !== 'inhouse' && !!l.test?.outsourcedVendorId;
+}
+
 /**
  * An order whose ONLY remaining work is at a partner lab (OPS-114): it has live tubes, every one is
  * routed to a referral lab (`outsourcedVendorId`, frozen at order time) and every one has already been
@@ -355,7 +369,13 @@ export function buildFrontdeskMergedWork(
  * tab (Completed once the partner report is uploaded). An order with ANY in-house live tube, or a tube
  * still to draw (the desk may still need Collect), is NOT outsourced-only and stays under In progress.
  */
-export function isOutsourcedOnlyAwaitingPartner(o: { samples?: readonly { status?: string | null; outsourcedVendorId?: string | null }[] | null }): boolean {
-  const live = (o.samples ?? []).filter(s => !['cancelled', 'merged', 'rejected', 'missed'].includes(s.status ?? ''));
-  return live.length > 0 && live.every(s => !!s.outsourcedVendorId && (s.status ?? 'pending') !== 'pending');
+export function isOutsourcedOnlyAwaitingPartner(o: { samples?: readonly OutSample[] | null }): boolean {
+  const live = (o.samples ?? []).filter(s => !DEAD_TUBE.includes(s.status ?? ''));
+  if (live.length === 0) return false;
+  return live.every(s => {
+    if ((s.status ?? 'pending') === 'pending') return false;
+    if (s.outsourcedVendorId) return true;
+    const lines = (s.tests ?? []).filter(l => !DEAD_LINE.includes(l.status ?? ''));
+    return lines.length > 0 && lines.every(l => lineIsOutsourced(s, l));
+  });
 }

@@ -71,3 +71,33 @@ export function hadTodayActivity(updatedAt: string | Date | null | undefined, b:
   const t = new Date(updatedAt).getTime();
   return t >= b.start && t < b.end;
 }
+
+/**
+ * Every order that still carries an outstanding balance (OPS-132): what the Payments due TAB lists and counts,
+ * whatever the date range. `feed` is the loaded day/range feed, `fetched` the orders read by id for dues that
+ * are not in it (an old due). A fully paid / refund-owed bill (balance <= 0) and a cancelled order never count;
+ * an order with two open bills is listed once; a due whose order is not loaded yet is simply not here (yet).
+ */
+export function dueOrders<O extends { id: string; status?: string | null }>(
+  bills: readonly { orderId: string; balance: number }[],
+  feed: readonly O[],
+  fetched: Readonly<Record<string, O>>,
+): O[] {
+  const out: O[] = [];
+  const seen = new Set<string>();
+  for (const b of bills) {
+    if (!(b.balance > 0) || seen.has(b.orderId)) continue;
+    const o = feed.find(x => x.id === b.orderId) ?? fetched[b.orderId];
+    if (!o || o.status === 'cancelled') continue;
+    seen.add(b.orderId);
+    out.push(o);
+  }
+  return out;
+}
+
+/** The dues inside the chosen date range — feeds the merged "no chip" list only. Follows the order's CREATION day
+ *  (no "touched today" bonus: that is for hand-over of a finished report), so an old order merely updated today
+ *  never shows under Today (OPS-132). */
+export function dueInWindow<O extends { createdAt?: string | Date | null }>(orders: readonly O[], b: WorkBounds): O[] {
+  return orders.filter(o => inWorkWindow(o.createdAt, b, false));
+}

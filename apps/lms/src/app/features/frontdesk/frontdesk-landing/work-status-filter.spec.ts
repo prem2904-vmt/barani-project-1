@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { vi } from 'vitest';
 import { FrontdeskLandingComponent } from './frontdesk-landing.component';
 import {
-  WorkStatusFilter, hadTodayActivity, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue,
+  WorkStatusFilter, dueInWindow, dueOrders, hadTodayActivity, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue,
 } from './work-status-filter';
 
 /**
@@ -160,5 +160,49 @@ describe('Front desk — status chips + date filter markup', () => {
     expect(html).toContain('@if (rightTab() === null) {');
     expect(html).toContain('data-list="merged"');
     expect(doc.querySelector('[data-empty="all"]')).not.toBeNull();
+  });
+});
+
+describe('OPS-132 - dueOrders / dueInWindow', () => {
+  const today = { start: Date.parse('2026-11-12T18:30:00Z'), end: Date.parse('2026-11-13T18:30:00Z'), isToday: true };
+  const ord = (id: string, createdAt: string, status = 'billed') => ({ id, createdAt, status });
+  const OLD = ord('old', '2026-11-07T05:00:00Z');          // 6 days ago, partly paid
+  const NEW = ord('new', '2026-11-13T05:00:00Z');          // today
+  const PAID = ord('paid', '2026-11-07T06:00:00Z');        // old, fully paid
+  const bill = (orderId: string, balance: number) => ({ orderId, balance });
+
+  it('old due with a partial payment: in the Payments due tab, NOT in Today', () => {
+    const tab = dueOrders([bill('old', 150)], [NEW], { old: OLD });
+    expect(tab.map(o => o.id)).toEqual(['old']);
+    expect(dueInWindow(tab, today)).toEqual([]);
+  });
+  it('a fully paid old order is absent from both', () => {
+    const tab = dueOrders([bill('paid', 0), bill('old', 150)], [], { old: OLD, paid: PAID });
+    expect(tab.map(o => o.id)).toEqual(['old']);
+    expect(dueInWindow(tab, today)).toEqual([]);
+  });
+  it("today's due is in both", () => {
+    const tab = dueOrders([bill('new', 50), bill('old', 150)], [NEW], { old: OLD });
+    expect(tab.map(o => o.id).sort()).toEqual(['new', 'old']);
+    expect(dueInWindow(tab, today).map(o => o.id)).toEqual(['new']);
+  });
+  it('an old order merely updated today is still not "today" (creation day only)', () => {
+    const touched = { ...OLD, updatedAt: '2026-11-13T06:00:00Z' };
+    expect(dueInWindow([touched], today)).toEqual([]);
+  });
+  it('a refund owed (negative balance), a cancelled order and a repeated bill never add rows; the count equals the list', () => {
+    const tab = dueOrders([bill('old', -20), bill('new', 50), bill('new', 10), bill('x', 99)], [NEW, ord('x', '2026-11-13T05:00:00Z', 'cancelled')], { old: OLD });
+    expect(tab.map(o => o.id)).toEqual(['new']);
+  });
+  it('a due whose order is not loaded yet is just not there yet (never a crash)', () => {
+    expect(dueOrders([bill('late', 80)], [NEW], {})).toEqual([]);
+    expect(dueOrders([bill('late', 80)], [NEW], { late: ord('late', '2026-11-01T05:00:00Z') }).map(o => o.id)).toEqual(['late']);
+  });
+  it('Yesterday shows yesterday\'s due; a custom range reaches an older one', () => {
+    const yesterday = { start: Date.parse('2026-11-11T18:30:00Z'), end: Date.parse('2026-11-12T18:30:00Z'), isToday: false };
+    const y = ord('y', '2026-11-12T05:00:00Z');
+    expect(dueInWindow([y, NEW, OLD], yesterday).map(o => o.id)).toEqual(['y']);
+    const range = { start: Date.parse('2026-11-05T18:30:00Z'), end: Date.parse('2026-11-08T18:30:00Z'), isToday: false };
+    expect(dueInWindow([y, NEW, OLD], range).map(o => o.id)).toEqual(['old']);
   });
 });

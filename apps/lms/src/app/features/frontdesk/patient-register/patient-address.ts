@@ -3,11 +3,17 @@ import type { WorkflowConfig } from '../../../shared/models/workflow.model';
 /** Field names that live in the registration form's "Contact & IDs" section. */
 export const REGISTER_CONTACT_FIELDS = new Set(['phone', 'email', 'abha_id', 'aadhaar_last4']);
 
-export const isAddressField = (f: { name?: string; storageKey?: string }) =>
-  f.name === 'address' || f.storageKey === 'metadata.address';
+/** A postal address / place word: contains "address" (an e-mail address or an ABHA address does not count). Mirror of
+ *  the server's RegistrationFormDefaults.IsAddress, so a lab whose own form already has an address field under
+ *  another name ("patient_address", "Place") keeps it AND gets it in the same Contact & IDs spot. */
+const postal = (s: string | undefined) => !!s && /address/i.test(s) && !/mail|abha/i.test(s);
+
+export const isAddressField = (f: { name?: string; storageKey?: string; title?: string }) =>
+  f.name === 'address' || f.storageKey === 'metadata.address'
+  || postal(f.name) || postal(f.storageKey) || postal(f.title) || (f.title ?? '').trim().toLowerCase() === 'place';
 
 /** A field shown in the "Contact & IDs" section: the phone / email / ID fields and the address. */
-export const isContactField = (f: { name?: string; storageKey?: string }) =>
+export const isContactField = (f: { name?: string; storageKey?: string; title?: string }) =>
   REGISTER_CONTACT_FIELDS.has(f.name ?? '') || isAddressField(f);
 
 /**
@@ -40,6 +46,10 @@ export function patientAddressLine(attributes: string | null | undefined): strin
   if (!attributes) return '';
   let a: Record<string, unknown>;
   try { a = JSON.parse(attributes); } catch { return ''; }
-  const pick = (k: string) => (typeof a?.[k] === 'string' ? (a[k] as string).trim() : '');
-  return [pick('address'), pick('district'), pick('state')].filter(Boolean).join(', ');
+  const pick = (k: string | undefined) => (k && typeof a?.[k] === 'string' ? (a[k] as string).trim() : '');
+  // `address` first; a lab's own field may have been saved under another key (patient_address, place).
+  const own = pick('address')
+    || pick(Object.keys(a ?? {}).find(k => postal(k) && pick(k) !== ''))
+    || pick('place');
+  return [own, pick('district'), pick('state')].filter(Boolean).join(', ');
 }

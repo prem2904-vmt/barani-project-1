@@ -29,7 +29,7 @@ import { WorkEventsService } from '../../../core/services/work-events.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
-import { WorkStatus, WorkStatusFilter, hadTodayActivity, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
+import { WorkStatus, WorkStatusFilter, dueInWindow, dueOrders, hadTodayActivity, inWorkWindow, parseWorkStatus, toggleWorkStatus, workStatusShown, workStatusStoreValue } from './work-status-filter';
 import { MergedWorkRow, WORK_STATUS_LABEL, sortByDailySerial } from './work-merge';
 import { wireMergedOutsourcedLoader } from './merged-outsourced-loader';
 import { WorkAreaPanelsComponent } from '../../../shared/workflow/work-area-panels.component';
@@ -935,30 +935,27 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   private readonly _billingOrdersMap = signal<Record<string, Order>>({});
   private readonly _fetchingOrderIds = new Set<string>();
+  /** A due whose order is not in the loaded feed is read by id. Re-checked whenever the bills OR the feed
+   *  change: switching the date range replaces the feed AFTER the bills may already have loaded, which used
+   *  to drop a due that had been in the old feed (the Payments due tab lost it until the next refresh). */
+  private readonly _loadMissingDueOrders = effect(() => {
+    const bills = this._bills();
+    this._orders();
+    untracked(() => this.fetchOrdersForBills(bills));
+  });
 
   /** EVERY order with an outstanding balance, whatever the timeline filter — what the
    *  "Payments due" tab lists and counts (OPS-132: an old due must not hide there). */
   readonly paymentsDueAll = computed(() => {
-    const map = this._billingOrdersMap();
-    const ordersToday = this._orders();
-    const pendingBills = this._bills().filter(b => b.balance > 0);
-    const list: Order[] = [];
-    for (const b of pendingBills) {
-      const o = ordersToday.find(ord => ord.id === b.orderId) ?? map[b.orderId];
-      if (o) list.push(o);
-    }
     // Same business-day → #N ledger order as every other tab (owner,
     // 2026-10-02 — sortByDailySerial, work-merge.ts).
-    return sortByDailySerial(list);
+    return sortByDailySerial(dueOrders(this._bills(), this._orders(), this._billingOrdersMap()));
   });
   /** The dues inside the chosen date range — feeds the merged "no chip" list only.
    *  Follows the order's CREATION day, no "touched today" bonus (that is for hand-over of
    *  a finished report): an old order merely updated today must not leak into Today (OPS-132).
    *  Older dues show under Yesterday / a custom range here, and always under the tab. */
-  readonly paymentsDueOrders = computed(() => {
-    const bounds = this.workBounds();
-    return this.paymentsDueAll().filter(o => inWorkWindow(o.createdAt, bounds, false));
-  });
+  readonly paymentsDueOrders = computed(() => dueInWindow(this.paymentsDueAll(), this.workBounds()));
   /** Ids of the orders in the current work feed (today's feed / the range). */
   private readonly _feedIds = computed(() => new Set(this._orders().map(o => o.id)));
   /** The Outsourced list follows the same date range (its own tube rows);

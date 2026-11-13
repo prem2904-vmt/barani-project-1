@@ -363,4 +363,34 @@ describe('OPS-114 - an order with only partner-lab work left is not "In progress
     expect(isOutsourcedOnlyAwaitingPartner({ samples: [] })).toBe(false);
     expect(isOutsourcedOnlyAwaitingPartner({})).toBe(false);
   });
+
+  // OPS-114 re-test: the same rule as the server's Outsourced tab (OutsourcingRules.IsOutsourced).
+  const line = (status: string, vendor: string | null, ov: string | null = null) =>
+    ({ status, outsourcingOverride: ov, test: { outsourcedVendorId: vendor } });
+  const tubeL = (status: string, vendor: string | null, tests: ReturnType<typeof line>[]) => ({ status, outsourcedVendorId: vendor, tests });
+
+  it('an older tube with no frozen destination whose every live line is an outsourced test is outsourced-only', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tubeL('dispatched', null, [line('pending', 'v1'), line('pending', 'v2')])] })).toBe(true);
+  });
+  it('a desk override of "inhouse" keeps the line (and the order) in the lab', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tubeL('collected', null, [line('pending', 'v1', 'inhouse')])] })).toBe(false);
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tubeL('collected', null, [line('pending', 'v1', 'inhouse'), line('pending', 'v1')])] })).toBe(false);
+  });
+  it('a tube with an in-house line next to an outsourced one stays In progress', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tubeL('dispatched', null, [line('pending', 'v1'), line('pending', null)])] })).toBe(false);
+  });
+  it('cancelled / rejected / missed LINES are ignored; a tube whose only live lines are dead is not outsourced-only', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tubeL('dispatched', null, [line('pending', 'v1'), line('cancelled', null), line('rejected', null)])] })).toBe(true);
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tubeL('dispatched', null, [line('cancelled', 'v1')])] })).toBe(false);
+  });
+  it('rejected and missed TUBES are ignored; a pending outsourced tube next to a drawn one stays In progress', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('rejected', null), tube('missed', null), tube('dispatched', 'v1')] })).toBe(true);
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('pending', 'v1'), tube('dispatched', 'v1')] })).toBe(false);
+  });
+  it('once the partner report is uploaded the lines are validated: still outsourced-only (the order status takes it to Completed)', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tubeL('dispatched', 'v1', [line('validated', 'v1')])] })).toBe(true);
+  });
+  it('no vendor id and no tests loaded: in-house, stays In progress', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [{ status: 'collected' }] })).toBe(false);
+  });
 });

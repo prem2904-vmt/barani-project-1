@@ -85,6 +85,7 @@ describe('OPS-132 - Today / no-chip list is date-bound; the Payments due TAB lis
   it('the tab and its chip counts read paymentsDueAll (no date window); the merged list keeps the window', () => {
     const all = ts.slice(ts.indexOf('readonly paymentsDueAll = computed'), ts.indexOf('readonly paymentsDueOrders = computed'));
     expect(all).not.toContain('inWorkWindow');
+    expect(all).not.toContain('dueInWindow');
     expect(ts).toMatch(/label: 'Payments due', count: this\.paymentsDueAll\(\)\.length/);
     expect(html).not.toMatch(/data-tone="warning">\{\{ paymentsDueOrders\(\)\.length/);
     expect(html.match(/\{\{ paymentsDueAll\(\)\.length \}\}/g)?.length).toBe(2);
@@ -93,16 +94,16 @@ describe('OPS-132 - Today / no-chip list is date-bound; the Payments due TAB lis
   });
 });
 
-describe('OPS-132 - Payments due follows the creation day only', () => {
-  it('paymentsDueOrders no longer takes the "touched today" bonus', () => {
-    const body = ts.slice(ts.indexOf('readonly paymentsDueOrders = computed'), ts.indexOf('readonly paymentsDueOrders = computed') + 1800);
-    expect(body).toContain('inWorkWindow(o.createdAt, bounds, false)');
+describe('OPS-132 - Payments due follows the creation day only (behaviour: work-status-filter.spec.ts)', () => {
+  it('paymentsDueOrders is the windowed view of paymentsDueAll, with no "touched today" bonus', () => {
+    const body = ts.slice(ts.indexOf('readonly paymentsDueOrders = computed'), ts.indexOf('readonly paymentsDueOrders = computed') + 200);
+    expect(body).toContain('dueInWindow(this.paymentsDueAll(), this.workBounds())');
     expect(body).not.toContain('hadTodayActivity');
   });
-  it('an old due (created 7 Nov, updated today) is outside Today but inside its own day', async () => {
-    const { inWorkWindow } = await import('./work-status-filter');
-    const today = { start: Date.parse('2026-11-12T18:30:00Z'), end: Date.parse('2026-11-13T18:30:00Z'), isToday: true };
-    expect(inWorkWindow('2026-11-07T05:00:00Z', today, false)).toBe(false);
-    expect(inWorkWindow('2026-11-13T05:00:00Z', today, false)).toBe(true);
+  it('dues whose order is not in the loaded feed are read by id whenever the bills or the feed change', () => {
+    const eff = ts.slice(ts.indexOf('_loadMissingDueOrders = effect'), ts.indexOf('_loadMissingDueOrders = effect') + 260);
+    expect(eff).toContain('this._bills()');
+    expect(eff).toContain('this._orders()');
+    expect(eff).toContain('this.fetchOrdersForBills(bills)');
   });
 });
