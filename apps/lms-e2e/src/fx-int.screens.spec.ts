@@ -145,7 +145,6 @@ async function backend(page: Page) {
       sessionStorage.setItem('pf.e2e.seeded', '1'); localStorage.clear();
       localStorage.setItem('pf.session', session as string); localStorage.setItem('pf-design', 'new');
       localStorage.setItem('pf.wa.manual.reminded', '1');
-      localStorage.setItem('pf.startHintSeen', '1');   // a returning user: the one-time Start-menu hint (bb806320) would cover the phone collection actions
     }
   }, [JSON.stringify({ access_token: jwt(ME.authId), refresh_token: `rt-${ME.authId}` })] as const);
   return missing;

@@ -42,6 +42,9 @@ describe('top strip (desktop)', () => {
     expect(stripHtml).toMatch(/@if \(startHint\(\)\)/);
     expect(stripTs).toMatch(/START_HINT_KEY = 'pf\.startHintSeen'/);
     expect(stripTs).toMatch(/if \(next\) this\.dismissStartHint\(\);/);
+    const scss = read('top-strip/top-strip.component.scss');
+    expect(scss).toMatch(/\.pf-start-hint \{[^}]*pointer-events: none;/);
+    expect(scss).toMatch(/\.pf-start-hint__ok \{\s*pointer-events: auto;/);
     expect(stripTs).toMatch(/startHint = computed\(\(\) => !this\.startHintSeen\(\) && !this\.startOpen\(\) && !this\.sheetHome\(\)\)/);
   });
   it('while a case sheet owns the bar the logo goes home and the chevron goes (FormBarService.home)', () => {
