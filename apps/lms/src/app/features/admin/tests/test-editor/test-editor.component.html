@@ -475,14 +475,16 @@
                  a dropdown-result test has no use for them, and on a
                  multi-value test the unit is each value's own (in its batch)
                  while a panel always prints as a results table. -->
-            @if (isSingleValue() && numericFields().length > 0) {
+            @if (isSingleValue() && (numericFields().length > 0 || entryKind() === 'text')) {
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Unit</label>
                 <pf-select [options]="unitOptions(d.unit)" [searchable]="true"
                            [value]="d.unit || ''" placeholder="— pick a unit —"
-                           (valueChange)="patch({ unit: $any($event) })"></pf-select>
+                           (valueChange)="setTestUnit($any($event))"></pf-select>
                 <p class="pf-uf__hint">Prints after the value — “118 mg/dL”. Type to search the unit list.</p>
               </div>
+            }
+            @if (isSingleValue() && numericFields().length > 0) {
               <div class="pf-uf">
                 <label class="pf-uf__lbl">Report format</label>
                 <pf-select [options]="reportFormatOptions" [value]="d.reportFormat || 'tabular'"
@@ -579,7 +581,7 @@
                        [ngModel]="fields()[i]?.normalValue ?? ''"
                        (ngModelChange)="setReferenceText(i, $event)" />
               </label>
-              <p class="pf-rr2__sub">Prints in the Reference range column. A written result that differs from it is flagged abnormal; leave blank to print nothing.</p>
+              <p class="pf-rr2__sub">Prints in the Reference range column. A written result that differs from it is flagged abnormal. A number rule (“&lt; 5”, “0.5 - 1.2”, “Up to 40”) also flags a typed number High or Low. Leave blank to print nothing.</p>
             </div>
           </ng-template>
 
@@ -739,7 +741,7 @@
                            (ngModelChange)="patchField(i, { label: $event, name: deriveName($event, p.name) })" />
                     <pf-field-type-picker size="sm" [value]="p.type"
                                           (valueChange)="patchField(i, { type: $event })"></pf-field-type-picker>
-                    @if (isNumericType(p.type)) {
+                    @if (isNumericType(p.type) || isTextRefType(p.type)) {
                       <div class="pf-vbatch__unit">
                         <pf-select size="sm" [searchable]="true" [options]="unitOptions(p.unit)"
                                    [value]="p.unit || ''" placeholder="— unit —"

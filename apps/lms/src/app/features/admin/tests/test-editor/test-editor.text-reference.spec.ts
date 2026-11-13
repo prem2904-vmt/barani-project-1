@@ -96,4 +96,18 @@ describe('TestEditor - textual reference for a written result (OPS-117)', () => 
       { id: 'p1', name: 'finding', title: 'Finding', type: 'textarea', normalValue: 'Non-reactive' } ] }) }) });
     expect(c.fields()[0].normalValue).toBe('Non-reactive');
   });
+
+  it('a unit can be set on a free-text test: saved on the test and on the value (OPS-117)', () => {
+    const { c, api } = make();
+    expect(c.entryKind()).toBe('text');
+    c.setTestUnit(' U/L ');
+    expect(c._draft().unit).toBe('U/L');
+    expect(saved(c)[0].unit).toBe('U/L');
+    c.saveTest();
+    const body = (api.patch.mock.calls as any[]).at(-1)![1];
+    expect(body.unit).toBe('U/L');
+    expect(JSON.parse(body.parametersJson).parameters[0].unit).toBe('U/L');
+    c.setTestUnit('');
+    expect(saved(c)[0].unit ?? null).toBeNull();
+  });
 });

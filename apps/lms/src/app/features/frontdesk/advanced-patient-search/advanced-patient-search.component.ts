@@ -14,6 +14,7 @@ import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { testListUrl } from '../../../shared/utils/test-list-url';
 import { formatAge } from '../../../shared/utils/patient-age';
+import { patientAddressLine } from '../patient-register/patient-address';
 import { phoneLast10 } from '../../../shared/utils/indian-phone';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
@@ -313,7 +314,7 @@ const PAGE_SIZE = 20;
                       <tr>
                         <th>Patient</th>
                         <th>MRN</th>
-                        <th>Mobile</th>
+                        <th>Contact</th>
                         <th>Age / Sex</th>
                         <th>Last visit</th>
                         <th>Branch</th>
@@ -347,6 +348,9 @@ const PAGE_SIZE = 20;
                               <span class="pf-aps-mono" [innerHTML]="highlightedPhone(h.patient)"></span>
                             } @else {
                               <span class="pf-aps-muted">—</span>
+                            }
+                            @if (addressOf(h.patient); as addr) {
+                              <span class="pf-aps-addr" [title]="addr">{{ addr }}</span>
                             }
                           </td>
                           <td>
@@ -1057,6 +1061,7 @@ const PAGE_SIZE = 20;
       color: var(--text-secondary);
     }
     .pf-aps-muted { color: var(--text-muted); font-style: italic; }
+    .pf-aps-addr { display: block; font-size: 12.5px; color: var(--text-secondary); overflow-wrap: anywhere; }
     .pf-aps-branch {
       font-size: 12.5px;
       color: var(--text-secondary);
@@ -1513,6 +1518,9 @@ export class AdvancedPatientSearchComponent implements OnChanges, OnDestroy {
   }
 
   // ── Result-row helpers ─────────────────────────────────────
+  /** The patient's address / place for the Contact column (OPS-119). */
+  protected addressOf(p: Patient): string { return patientAddressLine(p.attributes); }
+
   /** Same mobile = same last 10 digits (indian-phone.ts), so 9876543210,
    *  09876543210 and +91 98765-43210 all mark +919876543210 as exact. */
   isExactMobile(h: SearchHit): boolean {

@@ -31,6 +31,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ageParts } from '../../../shared/utils/patient-age';
 import { dobFromAge } from '../../../shared/forms/patient-fields';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
+import { addressIntoContact, REGISTER_CONTACT_FIELDS } from './patient-address';
 
 @Component({
   selector: 'pf-patient-register',
@@ -393,7 +394,7 @@ export class PatientRegisterComponent implements OnInit {
   });
 
   /** Field names that belong in the "Contact & IDs" section. */
-  private static readonly CONTACT_FIELDS = new Set(['phone', 'email', 'abha_id', 'aadhaar_last4']);
+  private static readonly CONTACT_FIELDS = REGISTER_CONTACT_FIELDS;
 
   /** The loaded config with display-only restructuring:
    *  - the basic step splits into "Patient identity" and "Contact & IDs"
@@ -617,7 +618,7 @@ export class PatientRegisterComponent implements OnInit {
         this._record.set(r);
         console.log('Parsing workflow config Patient', r.configJson);
         try {
-          const cfg = JSON.parse(r.configJson) as WorkflowConfig;
+          const cfg = addressIntoContact(JSON.parse(r.configJson) as WorkflowConfig);
           this._config.set(cfg);
 
           if (pid) {

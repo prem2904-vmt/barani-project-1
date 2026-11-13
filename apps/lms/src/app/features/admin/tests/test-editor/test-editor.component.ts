@@ -727,6 +727,14 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
     if (i < 0) return;
     this.patchField(i, { normalValue: (text ?? '').trim() || null });
   }
+  /** The single-value test's unit. A written (text) result keeps its own copy on
+   *  the value too, so it prints beside the result (OPS-117); the server also
+   *  syncs the flat unit into a one-value test's parameter on save. */
+  setTestUnit(unit: string | null) {
+    const u = (unit ?? '').trim();
+    this.patch({ unit: u });
+    if (this.entryKind() === 'text' && this.fields().length === 1) this.patchField(0, { unit: u || undefined });
+  }
   /** The table's edit — the group list, written back unchanged. */
   setBands(i: number, bands: unknown[]) {
     if (i < 0) return;
