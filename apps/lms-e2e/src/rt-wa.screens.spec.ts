@@ -1,5 +1,7 @@
-import { test, expect, type Page, type BrowserContext } from '@playwright/test';
-import * as fs from 'node:fs';
+import type { Page, BrowserContext } from '@playwright/test';
+import { test, expect, shotsDir, expectLayout, expectFitsWidth, isDesktopApp, isDesktopWeb, bridgeCalls } from './support/form-factor';
+import { deskTab } from './support/frontdesk';
+import { openChat, expectedVia } from './support/whatsapp';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -13,10 +15,13 @@ import * as path from 'node:path';
  *  3. The order drawer's Referral doctor line shows the doctor's phone.
  *  4. The front-desk invoice viewer's WhatsApp button (OPS-122): a new tab to the patient with the invoice message,
  *     the invoice PDF downloads and the "attach it" hint shows (OPS-126: the PDF goes with it).
- * WhatsApp itself is never contacted: web.whatsapp.com is answered by a stub page.
- * Own config: playwright.screens.config.ts (testMatch includes rt-wa).
+ * Every form factor (playwright.screens.config.ts projects): the web opens a NEW TAB; the desktop app calls the dock
+ * bridge (electronAPI.whatsapp.open) and copies the invoice PDF (whatsapp.setPdf, copyToClipboard) — no tab, no
+ * download; a phone / tablet opens wa.me (this browser can't share files) and saves the PDF.
+ * WhatsApp itself is never contacted: web.whatsapp.com / wa.me are answered by a stub page.
  */
-const OUT = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/retest-1113/rt-wa');
+const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/retest-1113/rt-wa');
+let OUT = OUT_BASE;
 
 const TENANT = { id: 't-demo', name: 'Demo Lab' };
 const ME = { id: 'app-1', authId: 'sub-1', first: 'Kavya', last: 'Desk' };
@@ -108,7 +113,7 @@ async function backend(page: Page, context: BrowserContext) {
     return route.fulfill({ status: 200, headers: { ...cors(origin), 'content-type': 'application/json' }, body: JSON.stringify({ access_token: jwt(ME.authId), refresh_token: `rt-${ME.authId}`, token_type: 'bearer', expires_in: 86400, user: { id: ME.authId, aud: 'authenticated', email: 'desk@demo.test' } }) });
   });
   // WhatsApp is never contacted: the new tab lands on a stub.
-  await context.route(/whatsapp\.com\//, route => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>WhatsApp (stub)</title><p>stub</p>' }));
+  await context.route(/(whatsapp\.com|wa\.me)\//, route => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>WhatsApp (stub)</title><p>stub</p>' }));
   await page.routeWebSocket(/\/hubs\//, ws => { ws.onMessage(() => ws.send('{}\x1e')); });
   await page.addInitScript(([session]) => {
     if (!sessionStorage.getItem('pf.e2e.seeded')) {
@@ -128,12 +133,6 @@ async function light(page: Page) {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.evaluate(() => { const r = document.documentElement; r.classList.remove('dark'); r.classList.add('light'); r.setAttribute('data-theme', 'light'); });
   await page.waitForTimeout(300);
-}
-
-async function deskTab(page: Page, label: string) {
-  const byLabel = page.locator(`[aria-label*="${label}"], [title*="${label}"]`).locator('visible=true').first();
-  if (await byLabel.count()) { await byLabel.click(); return; }
-  await page.getByText(label, { exact: false }).locator('visible=true').first().click();
 }
 
 async function openDesk(page: Page) {
@@ -158,37 +157,46 @@ const noErrorToast = async (page: Page) => {
 };
 const chat = (url: string) => { const u = new URL(url); return { origin: u.origin, path: u.pathname, phone: u.searchParams.get('phone'), text: u.searchParams.get('text') ?? '' }; };
 
-test.describe('rt-wa: WhatsApp sharing on the web (desktop)', () => {
+const noWindowOpen = async (page: Page) => expect(await opens(page), 'the desktop app opens no browser tab').toEqual([]);
+
+test.describe('rt-wa: WhatsApp sharing at every form factor', () => {
   test.beforeEach(async ({ page, context }) => {
     test.setTimeout(150_000);
-    fs.mkdirSync(OUT, { recursive: true });
-    await page.setViewportSize({ width: 1440, height: 900 });
+    OUT = shotsDir(OUT_BASE);
     reportDelayMs = 0; reportAnswered = false;
     await backend(page, context);
   });
 
-  test('1. Share → WhatsApp opens a NEW TAB in the click (before the report answers) at the patient\'s chat; no error toast', async ({ page }) => {
+  test('1. Share → WhatsApp opens the patient\'s chat in ONE click (web: a new tab opened in the click; desktop app: the dock; touch: wa.me); no error toast', async ({ page }) => {
     await openDesk(page);
+    await expectLayout(page, 'front desk Completed');
     reportDelayMs = 1500;
     await shareButton(page, 'Priya Nair').click();
     // No doctor number on this order: the ONE WhatsApp row.
     await expect(page.locator('[data-test="share-whatsapp-doctor"]')).toHaveCount(0);
-    const popupP = page.waitForEvent('popup');
-    await page.locator('[data-test="share-whatsapp"]').locator('visible=true').first().click();
-    const tab = await popupP;
-    // The tab exists while the report is still being fetched: it was opened by the click itself.
-    expect(reportAnswered).toBe(false);
-    await tab.waitForURL(/web\.whatsapp\.com\/send/, { timeout: 20_000 });
-    const calls = await opens(page);
-    expect(calls[0]).toEqual(['about:blank', '_blank']);          // the click opened the tab at once
-    expect(calls.every(c => c.length <= 2)).toBe(true);            // never "popup=yes,width=…" → a tab, not a window
-    const c = chat(tab.url());
-    expect(c.origin).toBe('https://web.whatsapp.com');
+    await expectFitsWidth(page, '[data-test="share-whatsapp"]', 'share menu row');
+    let answeredAtOpen: boolean | null = null;
+    if (isDesktopWeb()) page.once('popup', () => { answeredAtOpen = reportAnswered; });
+    const c = await openChat(page, () => page.locator('[data-test="share-whatsapp"]').locator('visible=true').first().click());
+    expect(c.via).toBe(expectedVia(false));
     expect(c.phone).toBe('919876543210');
     expect(c.text).toContain('Dear Priya Nair, your report from Demo Lab is ready.');
     expect(c.text).toContain('/reports/public/tok-op');
+    const calls = await opens(page);
+    if (isDesktopWeb()) {
+      // The tab exists while the report is still being fetched: it was opened by the click itself.
+      expect(answeredAtOpen).toBe(false);
+      expect(calls[0]).toEqual(['about:blank', '_blank']);          // the click opened the tab at once
+      expect(calls.every(x => x.length <= 2)).toBe(true);            // never "popup=yes,width=…" → a tab, not a window
+    } else if (isDesktopApp()) {
+      await noWindowOpen(page);
+      await expect(page.locator('[data-testid=wa-dock]')).toBeVisible();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: `${OUT}/rt-wa-desktop-app-dock-open.png` });
+    } else {
+      expect(calls.some(x => x[0] === 'about:blank'), 'touch: no blank tab primed').toBe(false);
+    }
     await noErrorToast(page);
-    await tab.close();
   });
 
   test('2. a referral doctor with a number: "Send to patient" / "Send to doctor", each to the right number', async ({ page }) => {
@@ -199,29 +207,22 @@ test.describe('rt-wa: WhatsApp sharing on the web (desktop)', () => {
     await expect(toPatient).toHaveText(/Send to patient/);
     await expect(toDoctor).toHaveText(/Send to doctor/);
     await expect(page.locator('[data-test="share-whatsapp"]').locator('visible=true')).toHaveCount(0);
+    await expectFitsWidth(page, '[data-test="share-whatsapp-doctor"]', 'share menu doctor row');
     await page.waitForTimeout(300);
-    await page.screenshot({ path: `${OUT}/rt-wa-share-menu-doctor-choice--desktop.png` });
+    await page.screenshot({ path: `${OUT}/rt-wa-share-menu-doctor-choice.png` });
 
-    let popupP = page.waitForEvent('popup');
-    await toDoctor.click();
-    let tab = await popupP;
-    await tab.waitForURL(/web\.whatsapp\.com\/send/, { timeout: 20_000 });
-    let c = chat(tab.url());
+    let c = await openChat(page, () => toDoctor.click());
+    expect(c.via).toBe(expectedVia(false));
     expect(c.phone).toBe('919845012345');
     expect(c.text).toContain('Dear Dr. Ravi Kumar, the report of Anitha Raj from Demo Lab is ready.');
-    await tab.close();
     await noErrorToast(page);
 
     await shareButton(page, 'Anitha Raj').click();
-    popupP = page.waitForEvent('popup');
-    await page.locator('[data-test="share-whatsapp-patient"]').locator('visible=true').first().click();
-    tab = await popupP;
-    await tab.waitForURL(/web\.whatsapp\.com\/send/, { timeout: 20_000 });
-    c = chat(tab.url());
+    c = await openChat(page, () => page.locator('[data-test="share-whatsapp-patient"]').locator('visible=true').first().click());
     expect(c.phone).toBe('919876543210');
     expect(c.text).toContain('Dear Anitha Raj, your report from Demo Lab is ready.');
-    await tab.close();
     await noErrorToast(page);
+    if (isDesktopApp()) { await noWindowOpen(page); expect((await bridgeCalls(page, 'whatsapp.open')).length).toBe(2); }
   });
 
   test('3. the order drawer shows the referral doctor\'s phone', async ({ page }) => {
@@ -231,8 +232,9 @@ test.describe('rt-wa: WhatsApp sharing on the web (desktop)', () => {
     await expect(phone).toBeVisible({ timeout: 15_000 });
     await expect(phone).toHaveText(DOCTOR_PHONE);
     await expect(phone).toHaveAttribute('href', `tel:${DOCTOR_PHONE}`);
+    await expectFitsWidth(page, '[data-test="drawer-doctor-phone"]', 'doctor phone');
     await page.waitForTimeout(400);
-    await page.screenshot({ path: `${OUT}/rt-wa-drawer-doctor-phone--desktop.png` });
+    await page.screenshot({ path: `${OUT}/rt-wa-drawer-doctor-phone.png` });
     // An order without a referral doctor shows no phone.
     await page.keyboard.press('Escape');
     await page.locator('button[aria-label="Close"]').locator('visible=true').first().click().catch(() => {});
@@ -240,30 +242,40 @@ test.describe('rt-wa: WhatsApp sharing on the web (desktop)', () => {
     await expect(page.locator('[data-test="drawer-doctor-phone"]')).toHaveCount(0);
   });
 
-  test('4. invoice viewer → WhatsApp: a new tab to the patient with the invoice message; the PDF downloads + the attach hint (OPS-122/126)', async ({ page }) => {
+  test('4. invoice viewer → WhatsApp: the patient\'s chat with the invoice message, and the PDF goes with it (web/touch: downloaded + hint; desktop app: copied to the clipboard) (OPS-122/126)', async ({ page }) => {
     await openDesk(page);
     await page.getByText('Priya Nair').locator('visible=true').first().click();
     await page.locator('button[aria-label="View invoice"]').locator('visible=true').first().click();
     const wa = page.locator('[data-test="invoice-whatsapp"]');
     await expect(wa).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(600);
-    await page.screenshot({ path: `${OUT}/rt-wa-invoice-viewer-whatsapp--desktop.png` });
-    const popupP = page.waitForEvent('popup');
-    const downloadP = page.waitForEvent('download');
-    await wa.click();
-
-    const tab = await popupP;
-    await tab.waitForURL(/web\.whatsapp\.com\/send/, { timeout: 20_000 });
-    const c = chat(tab.url());
+    await page.screenshot({ path: `${OUT}/rt-wa-invoice-viewer-whatsapp.png` });
+    const downloads: string[] = [];
+    page.on('download', d => downloads.push(d.suggestedFilename()));
+    const c = await openChat(page, () => wa.click());
+    expect(c.via).toBe(expectedVia(false));
     expect(c.phone).toBe('919876543210');
     expect(c.text).toContain('your invoice from Demo Lab');
     expect(c.text).toContain('INV-001033');
-    const calls = await opens(page);
-    expect(calls.every(x => x.length <= 2)).toBe(true);
-    const dl = await downloadP;
-    expect(dl.suggestedFilename()).toBe('INV-001033.pdf');
-    await expect(page.getByText('The PDF was downloaded — attach it with the paperclip.')).toBeVisible({ timeout: 10_000 });
+    if (isDesktopApp()) {
+      await expect.poll(async () => (await bridgeCalls(page, 'whatsapp.setPdf')).length, { message: 'the PDF is handed to main' }).toBe(1);
+      const pdf = (await bridgeCalls(page, 'whatsapp.setPdf'))[0].args[0] as { name: string; copyToClipboard: boolean; bytes: { bytes: number } };
+      expect(pdf.name).toBe('INV-001033.pdf');
+      expect(pdf.copyToClipboard).toBe(true);
+      expect(pdf.bytes.bytes).toBeGreaterThan(100);
+      await page.waitForTimeout(800);
+      expect(downloads, 'the desktop app downloads nothing').toEqual([]);
+      await noWindowOpen(page);
+      await expect(page.locator('[data-testid=wa-dock]')).toBeVisible();
+      // Our dock header: the PDF is on the clipboard — paste it (and it is not called a "report").
+      const line = page.locator('[data-testid=wa-dock-line]');
+      await expect(line).toHaveText(/^PDF copied — press (Ctrl|Cmd)\+V in the chat to attach it, then Send\.$/);
+      await expect(page.locator('[data-testid=wa-dock-pdf]')).toBeVisible();
+    } else {
+      await expect.poll(() => downloads, { message: 'the invoice PDF downloads' }).toEqual(['INV-001033.pdf']);
+      await expect(page.getByText('The PDF was downloaded — attach it with the paperclip.')).toBeVisible({ timeout: 10_000 });
+      if (isDesktopWeb()) expect((await opens(page)).every(x => x.length <= 2)).toBe(true);
+    }
     await noErrorToast(page);
-    await tab.close();
   });
 });

@@ -37,7 +37,12 @@ jobs:
         run: npx nx test lms --skip-nx-cache
       - name: Build
         run: npx nx build lms --configuration=development --skip-nx-cache
-      - name: Screen tests (Playwright, API mocked)
+      # Every screens spec on every form factor: phone, tablet (portrait + landscape), desktop browser, desktop app
+      # (Electron preload stubbed in-page). Screenshots land in SHOTS_DIR/<project>/. PW_WEBKIT=1 adds iPhone/iPad
+      # Safari once WebKit is installed on the runner (npx playwright install webkit).
+      - name: Screen tests (Playwright, API mocked, every form factor)
+        env:
+          PW_WORKERS: '6'
         run: |
           CH=$(ls -d ~/.cache/ms-playwright/chromium-*/chrome-linux*/chrome | sort -V | tail -1)
           PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')

@@ -1,14 +1,15 @@
-import { test, expect, type Page } from '@playwright/test';
-import * as fs from 'node:fs';
+import type { Page } from '@playwright/test';
+import { test, expect, shotsDir, expectLayout, expectFitsWidth, isDesktopApp } from './support/form-factor';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 /**
- * Review screenshots of the wizard's "Find the analyzer" step with the fixed-port
- * editor. Electron is NOT launched: a fake window.electronAPI bridge. Offline.
- * Not part of the suite (own config: playwright.screens.config.ts).
+ * "Connect an analyzer" at every form factor. The desktop app (Electron NOT launched: the form-factor bridge stub +
+ * the netdiag `instruments.diag` merged in) runs the wizard's "Find the analyzer" step with the fixed-port editor;
+ * the web, a phone and a tablet can't reach the lab PC's network, so they say "Open this on the lab PC" and offer
+ * "Add an instrument by hand". Offline. Screenshots: SHOTS_DIR/<project>/.
  */
-const OUT = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/wizard-port');
+const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/wizard-port');
 
 const TENANT = { id: 't-demo', name: 'Demo Lab' };
 const ME = { id: 'app-1', authId: 'sub-1', first: 'Kavya', last: 'Desk' };
@@ -79,8 +80,8 @@ const SNAP = {
   problems: [],
 };
 
-async function seedWizard(page: Page) {
-  await page.addInitScript(([session, snap]) => {
+async function seedWizard(page: Page, withDiag: boolean) {
+  await page.addInitScript(([session, snap, diagOn]) => {
     if (!sessionStorage.getItem('pf.e2e.seeded')) {
       sessionStorage.setItem('pf.e2e.seeded', '1');
       localStorage.clear();
@@ -88,6 +89,7 @@ async function seedWizard(page: Page) {
       localStorage.setItem('pf-design', 'new');
     }
     const w = window as any;
+    if (!diagOn) return;
     const scanSubs: ((e: unknown) => void)[] = [];
     w.__ports = [5604, 5599, 5600, 5601, 5602, 5603, 5605, 5606, 5607, 5608, 5609, 5610];
     const diag = {
@@ -104,12 +106,9 @@ async function seedWizard(page: Page) {
       onScan: (cb: (e: unknown) => void) => { scanSubs.push(cb); return () => {}; },
     };
     w.__emitScan = (e: unknown) => scanSubs.forEach((f) => f(e));
-    w.electronAPI = { isElectron: true, instruments: {
-      list: async () => [], pair: async () => ({ ok: true }), unpair: async () => ({ ok: true }), status: async () => [], onStatus: () => () => {},
-      rawLog: async () => [], listSerialPorts: async () => [], listenStart: async () => ({ sessionId: 'l1' }), listenStop: async () => ({}),
-      onListen: () => () => {}, preview: async () => ({}), diag,
-    } };
-  }, [JSON.stringify({ access_token: jwt(ME.authId), refresh_token: `rt-${ME.authId}` }), SNAP] as const);
+    // MERGE into the desktop-app bridge (support/form-factor.ts): only the netdiag part is this screen's.
+    w.electronAPI = { ...(w.electronAPI || { isElectron: true }), instruments: { ...((w.electronAPI || {}).instruments || {}), diag } };
+  }, [JSON.stringify({ access_token: jwt(ME.authId), refresh_token: `rt-${ME.authId}` }), SNAP, withDiag] as const);
 }
 
 async function setTheme(page: Page, d: boolean) {
@@ -122,13 +121,24 @@ for (const d of [false, true]) {
   const mode = d ? 'dark' : 'light';
   test(`wizard port ${mode}`, async ({ page }) => {
     test.setTimeout(120_000);
-    fs.mkdirSync(OUT, { recursive: true });
-    await page.setViewportSize({ width: 1280, height: 800 });
+    const OUT = shotsDir(OUT_BASE);
     await offlineBackend(page, null);
-    await seedWizard(page);
-    await page.goto('/#/admin/instruments/connect');
+    await seedWizard(page, isDesktopApp());
+    await page.goto('/admin/instruments/connect');
+    if (!isDesktopApp()) {
+      // Not the lab PC: no network checks here; the way forward is the desktop app, or adding by hand.
+      await expect(page.getByText('Open this on the lab PC')).toBeVisible({ timeout: 30_000 });
+      await setTheme(page, d);
+      await expect(page.getByRole('button', { name: 'Add an instrument by hand' })).toBeVisible();
+      await expectFitsWidth(page, '.pf-empty', 'desktop-only notice');
+      await expect(page.getByRole('button', { name: /Next: find the analyzer/ })).toHaveCount(0);
+      await expectLayout(page, 'connect wizard (not the lab PC)');
+      await page.screenshot({ path: `${OUT}/0-open-on-lab-pc-${mode}.png` });
+      return;
+    }
     await expect(page.getByRole('button', { name: /Next: find the analyzer/ })).toBeEnabled({ timeout: 30_000 });
     await setTheme(page, d);
+    await expectLayout(page, 'connect wizard');
     await page.getByRole('button', { name: /Next: find the analyzer/ }).click();
     await expect(page.locator('.pf-cw-instr__v').nth(1)).toHaveText('5604');
     await page.screenshot({ path: `${OUT}/1-suggested-${mode}.png` });

@@ -1,5 +1,6 @@
-import { test, expect, type Page, type Locator } from '@playwright/test';
-import * as fs from 'node:fs';
+import type { Page, Locator } from '@playwright/test';
+import { test, expect, shotsDir, expectLayout, expectFitsWidth, formFactor, isDesktop } from './support/form-factor';
+import { deskTab, deskAllStatuses, iconTabs, tabCount } from './support/frontdesk';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -10,9 +11,10 @@ import * as path from 'node:path';
  *   OPS-127 per-order serial on front desk + lab Intake (one patient, two orders; cancelled order keeps its number)
  *   OPS-131 order drawer: Order ID, Referral doctor + Change (permission), no reference range
  *   OPS-132 Today list is date-bound; Payments due tab + chip count list every due (also after a date change)
- * API mocked, demo data only. Own config: playwright.screens.config.ts.
+ * API mocked, demo data only. Runs on every form factor (playwright.screens.config.ts projects); shots in SHOTS_DIR/<project>/.
  */
-const OUT = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/retest-1113/rt-fd');
+const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/retest-1113/rt-fd');
+let OUT = OUT_BASE;
 
 const TENANT = { id: 't-demo', name: 'Demo Lab' };
 const ME = { id: 'app-1', authId: 'sub-1', first: 'Kavya', last: 'Desk' };
@@ -125,6 +127,7 @@ async function light(page: Page) {
   await page.evaluate(() => { const r = document.documentElement; r.classList.remove('dark'); r.classList.add('light'); r.setAttribute('data-theme', 'light'); });
   await page.waitForTimeout(400);
 }
+const expectNoSideways = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 const vis = (page: Page, text: string): Locator => page.getByText(text, { exact: false }).locator('visible=true');
 const waitDesk = (page: Page) => page.getByPlaceholder(/Search patient/).locator('visible=true').first().waitFor({ timeout: 60_000 });
 async function seen(page: Page, text: string, tag: string, timeout = 30_000) {
@@ -132,23 +135,9 @@ async function seen(page: Page, text: string, tag: string, timeout = 30_000) {
 }
 /** Not listed once the view has settled: a tab switch swaps the list a beat after the click, so a one-shot count could read the previous tab. */
 async function absent(page: Page, text: string) { await expect(vis(page, text), `"${text}" must not be listed`).toHaveCount(0, { timeout: 5_000 }); }
-/** The front desk work tabs; phone tabs are icon-only (aria-label / title). */
-async function deskTab(page: Page, label: string) {
-  const byLabel = page.locator(`[aria-label*="${label}"], [title*="${label}"]`).locator('visible=true').first();
-  if (await byLabel.count()) await byLabel.click();
-  else await page.getByText(label, { exact: false }).locator('visible=true').first().click();
-  const radio = page.getByRole('radio', { name: label }).locator('visible=true').first();
-  if (await radio.count()) await expect(radio).toBeChecked();
-}
-/** The number on a work-tab chip ("In progress 2"): read from the segmented control's button. */
-async function chipCount(page: Page, label: string): Promise<number> {
-  const btn = page.locator('button', { hasText: label }).locator('visible=true').first();
-  const t = ((await btn.textContent()) ?? '') + ' ' + ((await btn.getAttribute('aria-label')) ?? '') + ' ' + ((await btn.getAttribute('title')) ?? '');
-  const m = /(\d+)\s*$/.exec(t.replace(label, '').trim()) ?? /(\d+)/.exec(t.replace(label, ''));
-  return m ? Number(m[1]) : 0;
-}
 
-const VIEWPORTS = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } } as const;
+let vp = 'desktop';
+const setup = async (page: Page) => { test.setTimeout(150_000); OUT = shotsDir(OUT_BASE); vp = formFactor(); S = fresh(); await backend(page); };
 
 // ───────────────────────── OPS-114 ─────────────────────────
 function outsourcedScenario() {
@@ -163,22 +152,23 @@ function outsourcedScenario() {
   return { A, B, C, D, E, F, orders, tubes };
 }
 
-for (const [vp, size] of Object.entries(VIEWPORTS)) {
-  test.describe(`rt-fd OPS-114 ${vp}`, () => {
-    test.beforeEach(async ({ page }) => { test.setTimeout(150_000); fs.mkdirSync(OUT, { recursive: true }); S = fresh(); await page.setViewportSize(size); await backend(page); });
+{
+  test.describe('rt-fd OPS-114', () => {
+    test.beforeEach(async ({ page }) => { await setup(page); });
 
     test('outsourced-only orders are under Outsourced, not In progress; mixed and pending ones stay In progress', async ({ page }) => {
       const sc = outsourcedScenario(); S.orders = sc.orders; S.tubes = sc.tubes;
       await page.goto('/frontdesk'); await waitDesk(page); await light(page);
-      if (vp === 'phone') await deskTab(page, 'In progress');
+      await deskTab(page, 'In progress');
       await seen(page, 'Chitra Mixed', `114-ip-${vp}`);
+      await expectLayout(page, 'front desk In progress');
       await seen(page, 'Dev Pending', `114-ip2-${vp}`, 5_000);
       for (const gone of ['Anita Outonly', 'Bala Legacy', 'Esha Cancelled', 'Farid Rejected']) await absent(page, gone);
-      await page.screenshot({ path: `${OUT}/114-in-progress--${vp}.png` });
+      await page.screenshot({ path: `${OUT}/114-in-progress.png` });
       await deskTab(page, 'Outsourced');
       for (const here of ['Anita Outonly', 'Bala Legacy', 'Chitra Mixed', 'Esha Cancelled', 'Farid Rejected']) await seen(page, here, `114-out-${here}-${vp}`, 15_000);
       await absent(page, 'Dev Pending');           // nothing drawn yet: no tube at the partner
-      await page.screenshot({ path: `${OUT}/114-outsourced--${vp}.png` });
+      await page.screenshot({ path: `${OUT}/114-outsourced.png` });
     });
 
     test('after the partner report is uploaded and completed the order is under Completed, not In progress', async ({ page }) => {
@@ -190,7 +180,7 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
         S.tubes = [{ ...S.tubes[0], status: 'completed', hasReport: true, tests: [{ ...S.tubes[0].tests[0], status: 'completed', completed: true }] }];
       };
       await page.goto('/frontdesk'); await waitDesk(page); await light(page);
-      if (vp === 'phone') await deskTab(page, 'In progress');
+      await deskTab(page, 'In progress');
       await absent(page, 'Anita Outonly');
       await deskTab(page, 'Outsourced');
       await seen(page, 'Anita Outonly', `114b-${vp}`, 15_000);
@@ -201,7 +191,7 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
       await absent(page, 'Anita Outonly');
       await deskTab(page, 'Completed');
       await seen(page, 'Anita Outonly', `114c-${vp}`, 15_000);
-      await page.screenshot({ path: `${OUT}/114-completed-after-upload--${vp}.png` });
+      await page.screenshot({ path: `${OUT}/114-completed-after-upload.png` });
     });
   });
 }
@@ -217,41 +207,48 @@ function duesScenario() {
   return { T, O1, O2, P, feed, bills, byId: { t: T, o1: O1, o2: O2, p: P } as Record<string, any> };
 }
 
-for (const [vp, size] of Object.entries(VIEWPORTS)) {
-  test.describe(`rt-fd OPS-132 ${vp}`, () => {
-    test.beforeEach(async ({ page }) => { test.setTimeout(150_000); fs.mkdirSync(OUT, { recursive: true }); S = fresh(); await page.setViewportSize(size); await backend(page); });
+{
+  test.describe('rt-fd OPS-132', () => {
+    test.beforeEach(async ({ page }) => { await setup(page); });
 
     test('Today (no tab) shows only today; Payments due tab + chip count list every due; counts agree with the list', async ({ page }) => {
       const sc = duesScenario(); S.orders = sc.feed; S.bills = sc.bills; S.byId = sc.byId;
       await page.goto('/frontdesk'); await waitDesk(page); await light(page);
-      if (vp === 'phone') await deskTab(page, 'In progress');
-      // No tab on (tap the active chip) = every status for the chosen day.
-      if (vp === 'desktop') await page.locator('button', { hasText: 'In progress' }).locator('visible=true').first().click();
+      await deskTab(page, 'In progress');
+      // No tab on (tap the active chip) = every status for the chosen day; icon tabs: In progress.
+      await deskAllStatuses(page);
       await seen(page, 'Tara Today', `132-today-${vp}`);
       await absent(page, 'Olga PartialOld'); await absent(page, 'Omar ValidatedOld'); await absent(page, 'Paul PaidOld');
-      await page.screenshot({ path: `${OUT}/132-today-no-tab--${vp}.png` });
+      await page.screenshot({ path: `${OUT}/132-today-no-tab.png` });
       // The Payments due tab: all three dues, no matter their date; the chip count equals the rows.
       await deskTab(page, 'Payments due');
       for (const n of ['Tara Today', 'Olga PartialOld', 'Omar ValidatedOld']) await seen(page, n, `132-due-${n}-${vp}`, 20_000);
       await absent(page, 'Paul PaidOld');
-      if (vp === 'desktop') expect(await chipCount(page, 'Payments due')).toBe(3);
-      await page.screenshot({ path: `${OUT}/132-payments-due-tab--${vp}.png` });
+      expect(await tabCount(page, 'Payments due')).toBe(3);
+      await page.screenshot({ path: `${OUT}/132-payments-due-tab.png` });
     });
 
     test('changing the date range keeps every due in the Payments due tab (the feed is replaced after the bills load)', async ({ page }) => {
-      test.skip(vp !== 'desktop', 'desktop only');
       const sc = duesScenario(); S.orders = sc.feed; S.bills = sc.bills; S.byId = sc.byId; S.rangeDelayMs = 900; S.billsDelayMs = 400;   // today's feed lands BEFORE the bills; the range feed lands after them
       await page.goto('/frontdesk'); await waitDesk(page); await light(page);
       await deskTab(page, 'Payments due');
       await seen(page, 'Tara Today', '132r-0', 20_000);
-      await expect.poll(() => chipCount(page, 'Payments due')).toBe(3);
-      await page.locator('.pf-work-hdr__date .pf-hdr-filter__btn').locator('visible=true').first().click();
+      await expect.poll(() => tabCount(page, 'Payments due')).toBe(3);
+      const dateBtn = page.locator('.pf-work-hdr__date .pf-hdr-filter__btn').locator('visible=true');
+      if (await iconTabs(page)) {
+        // The touch work list (icon tabs: phone, tablet portrait) has no date-range control — the list is today's and
+        // Payments due shows every due already (asserted above). Nothing to change here.
+        await expect(dateBtn).toHaveCount(0);
+        test.info().annotations.push({ type: 'form-factor', description: 'icon-tab layout: no work-list date filter' });
+        return;
+      }
+      await dateBtn.first().click();
       await page.locator('.pf-hdr-filter__pop button', { hasText: 'Yesterday' }).click();
       await page.waitForTimeout(2500);
       await seen(page, 'Olga PartialOld', '132r-1', 20_000);
       for (const n of ['Tara Today', 'Olga PartialOld', 'Omar ValidatedOld']) await seen(page, n, `132r-${n}`, 20_000);
-      await expect.poll(() => chipCount(page, 'Payments due')).toBe(3);
-      await page.screenshot({ path: `${OUT}/132-after-date-change--${vp}.png` });
+      await expect.poll(() => tabCount(page, 'Payments due')).toBe(3);
+      await page.screenshot({ path: `${OUT}/132-after-date-change.png` });
     });
   });
 }
@@ -262,19 +259,24 @@ function drawerOrder() {
   return ord('ov', 5, 'Priya Nair', 'validated', [smp('v1', 'ov', 'received', { lines: [ln('v1t', 'Blood sugar', { status: 'validated', result: true })] })], { extra: { refDoctorName: 'Dr. Rao' } });
 }
 test.describe('rt-fd OPS-131 order drawer', () => {
-  test.beforeEach(async ({ page }) => { test.setTimeout(150_000); fs.mkdirSync(OUT, { recursive: true }); S = fresh(); await page.setViewportSize(VIEWPORTS.desktop); await backend(page); });
+  test.beforeEach(async ({ page }) => { await setup(page); });
 
   test('shows Order ID under the patient, "Referral doctor" + Change, no reference range; saving updates the drawer', async ({ page }) => {
     const o = drawerOrder(); S.orders = [o]; S.byId = { ov: o };
     await page.goto('/frontdesk'); await waitDesk(page); await light(page);
-    await page.locator('button', { hasText: 'In progress' }).locator('visible=true').first().click();   // all statuses
+    await deskAllStatuses(page);   // all statuses (icon tabs: the validated order is under Completed)
+    if (await iconTabs(page)) await deskTab(page, 'Completed');
     await vis(page, 'Priya Nair').first().click();
     const orderId = page.locator('[data-test=drawer-order-id]');
     await expect(orderId).toBeVisible();
     await expect(orderId).toContainText('LAB-2611-00005');
     // It sits under the patient name block (same header column, after the name).
-    const nameBox = await page.locator('#pf-od-name').boundingBox(); const idBox = await orderId.boundingBox();
-    expect(idBox!.y).toBeGreaterThan(nameBox!.y);
+    // Both read in ONE frame: the phone sheet slides up, so two separate reads can straddle the animation.
+    await expect.poll(() => page.evaluate(() => {
+      const vis = (sel: string) => Array.from(document.querySelectorAll(sel)).map(e => e.getBoundingClientRect()).find(r => r.width > 0 && r.height > 0);
+      const n = vis('#pf-od-name'); const o = vis('[data-test=drawer-order-id]');
+      return !!n && !!o && o.top > n.top;
+    }), { message: 'Order ID sits under the patient name' }).toBe(true);
     await expect(page.locator('.pf-drawer__meta dt', { hasText: 'Referral doctor' })).toBeVisible();
     await expect(page.locator('.pf-drawer__meta dt', { hasText: /^Doctor$/ })).toHaveCount(0);
     await expect(page.locator('.pf-drawer__meta')).toContainText('Dr. Rao');
@@ -285,18 +287,21 @@ test.describe('rt-fd OPS-131 order drawer', () => {
     await expect(prelim).not.toContainText('70-99');
     await expect(prelim).not.toContainText('12-15');
     expect(await prelim.locator('.pf-prelim__row-range').count()).toBe(0);
-    await page.screenshot({ path: `${OUT}/131-drawer-desktop.png` });
+    await expectFitsWidth(page, '.pf-drawer[role="dialog"]', 'order drawer');
+    await expectLayout(page, 'order drawer', { nav: false });
+    await page.screenshot({ path: `${OUT}/131-drawer.png` });
     // Change opens the shared dialog.
     await page.locator('[data-test=drawer-edit-referral]').click();
     await expect(page.getByRole('dialog', { name: /Edit referral/ })).toBeVisible();
     await expect(page.getByText('Booked as')).toBeVisible();
-    await page.screenshot({ path: `${OUT}/131-referral-dialog-desktop.png` });
+    await page.screenshot({ path: `${OUT}/131-referral-dialog.png` });
   });
 
   test('without the modify-order permission there is no Change button, but the label and Order ID still show', async ({ page }) => {
     const o = drawerOrder(); S.orders = [o]; S.byId = { ov: o }; S.perms = RECEPTION_NO_MODIFY;
     await page.goto('/frontdesk'); await waitDesk(page); await light(page);
-    await page.locator('button', { hasText: 'In progress' }).locator('visible=true').first().click();
+    await deskAllStatuses(page);
+    if (await iconTabs(page)) await deskTab(page, 'Completed');
     await vis(page, 'Priya Nair').first().click();
     await expect(page.locator('[data-test=drawer-order-id]')).toBeVisible();
     await expect(page.locator('.pf-drawer__meta dt', { hasText: 'Referral doctor' })).toBeVisible();
@@ -306,15 +311,15 @@ test.describe('rt-fd OPS-131 order drawer', () => {
   test('a cancelled order cannot have its referral changed', async ({ page }) => {
     const o = { ...drawerOrder(), status: 'cancelled' }; S.orders = [o]; S.byId = { ov: o };
     await page.goto('/frontdesk'); await waitDesk(page);
-    await page.locator('button', { hasText: 'In progress' }).locator('visible=true').first().click();
+    await deskAllStatuses(page);
     const row = vis(page, 'Priya Nair');
     if (await row.count()) { await row.first().click(); await expect(page.locator('.pf-drawer__meta')).toBeVisible(); await expect(page.locator('[data-test=drawer-edit-referral]')).toHaveCount(0); }
   });
 });
 
-test.describe('rt-fd OPS-131 order drawer on a phone', () => {
+test.describe('rt-fd OPS-131 order drawer from the Completed tab', () => {
   test('Order ID and Referral doctor fit the sheet without sideways scrolling', async ({ page }) => {
-    test.setTimeout(150_000); fs.mkdirSync(OUT, { recursive: true }); S = fresh(); await page.setViewportSize(VIEWPORTS.phone); await backend(page);
+    await setup(page);
     const o = drawerOrder(); S.orders = [o]; S.byId = { ov: o };
     await page.goto('/frontdesk'); await waitDesk(page); await light(page);
     await deskTab(page, 'Completed');
@@ -323,13 +328,14 @@ test.describe('rt-fd OPS-131 order drawer on a phone', () => {
     await expect(page.locator('[data-test=drawer-edit-referral]')).toBeVisible();
     const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(over).toBeLessThanOrEqual(1);
-    await page.screenshot({ path: `${OUT}/131-drawer-phone.png` });
+    await expectFitsWidth(page, '[data-test=drawer-edit-referral]', 'Change button');
+    await page.screenshot({ path: `${OUT}/131-drawer-from-completed.png` });
   });
 });
 
 // ───────────────────────── OPS-127 ─────────────────────────
 test.describe('rt-fd OPS-127 serials are per order', () => {
-  test.beforeEach(async ({ page }) => { test.setTimeout(150_000); fs.mkdirSync(OUT, { recursive: true }); S = fresh(); await page.setViewportSize(VIEWPORTS.desktop); await backend(page); });
+  test.beforeEach(async ({ page }) => { await setup(page); });
   const SAME = pat('31', 'Divya Menon');
   const two = () => {
     const mk = (id: string, n: number, name: string, patient: unknown, status = 'in_progress') =>
@@ -342,7 +348,7 @@ test.describe('rt-fd OPS-127 serials are per order', () => {
     const cancelled = ord('x3', 3, 'Zed Cancelled', 'cancelled', [smp('x3s', 'x3', 'pending')]);
     S.orders = [...os_, cancelled];
     await page.goto('/frontdesk'); await waitDesk(page); await light(page);
-    await page.locator('button', { hasText: 'In progress' }).locator('visible=true').first().click();
+    await deskAllStatuses(page);
     await seen(page, 'Kiran Patel', '127-fd');
     const rows = page.locator('.pf-wr, .pf-work-row, [data-order-id], li, tr').filter({ has: page.locator('.pf-dayno') }).locator('visible=true');
     const pairs = await page.locator('.pf-dayno').locator('visible=true').evaluateAll(els => els.map(e => {
@@ -353,7 +359,7 @@ test.describe('rt-fd OPS-127 serials are per order', () => {
     const noOf = (name: string) => pairs.filter(p => p.text.includes(name)).map(p => p.no).sort();
     expect(noOf('Divya Menon')).toEqual(['1', '2']);
     expect(noOf('Kiran Patel')).toEqual(['4']);
-    await page.screenshot({ path: `${OUT}/127-frontdesk-desktop.png` });
+    await page.screenshot({ path: `${OUT}/127-frontdesk.png` });
   });
 
   test('lab Intake: same numbers on the same orders (1, 2 for one patient; 4 for the next)', async ({ page }) => {
@@ -365,7 +371,7 @@ test.describe('rt-fd OPS-127 serials are per order', () => {
     await page.waitForTimeout(600);
     const chips = (await page.locator('.pf-dayno').locator('visible=true').allTextContents()).map(t => t.trim().split(' ')[0]).sort();
     expect(chips).toEqual(['1', '2', '4']);
-    await page.screenshot({ path: `${OUT}/127-lab-intake-desktop.png` });
+    await page.screenshot({ path: `${OUT}/127-lab-intake.png` });
   });
 });
 
@@ -389,9 +395,9 @@ const regConfig = (extraFields: any[], basicExtra: any[] = []) => ({
 const ADDR = fld('address', 'Address / place', 'text', { isStandard: false, storageKey: 'metadata.address', width: 'full' });
 const card = (page: Page, label: string) => page.locator('.pf-wr-cards > .pf-wr-card.pf-card').filter({ has: page.locator('.pf-card__label', { hasText: new RegExp(`^\\s*${label}\\s*$`) }) });
 
-for (const [vp, size] of Object.entries(VIEWPORTS)) {
-  test.describe(`rt-fd OPS-119 ${vp}`, () => {
-    test.beforeEach(async ({ page }) => { test.setTimeout(150_000); fs.mkdirSync(OUT, { recursive: true }); S = fresh(); await page.setViewportSize(size); await backend(page); });
+{
+  test.describe('rt-fd OPS-119', () => {
+    test.beforeEach(async ({ page }) => { await setup(page); });
 
     test('new patient: Address / place is in Contact & IDs, not under Additional details', async ({ page }) => {
       S.regConfig = regConfig([ADDR]);
@@ -400,7 +406,8 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
       await expect(card(page, 'Contact & IDs').locator('[data-field="address"]')).toHaveCount(1);
       await expect(card(page, 'Additional details').locator('[data-field="address"]')).toHaveCount(0);
       await expect(card(page, 'Patient identity').locator('[data-field="address"]')).toHaveCount(0);
-      await page.screenshot({ path: `${OUT}/119-register-${vp}.png` });
+      await expectLayout(page, 'registration');
+      await page.screenshot({ path: `${OUT}/119-register.png` });
     });
 
     test('a lab\'s own differently named address field ("Place") is shown in Contact & IDs too, and an existing patient\'s saved address is filled in', async ({ page }) => {
@@ -434,13 +441,16 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
       const name = page.locator('input[placeholder="First or last name"]').locator('visible=true').first();
       await name.waitFor({ timeout: 15_000 });
       await name.fill('an'); await name.press('Enter');
-      if (vp === 'phone') { await page.waitForTimeout(500); await page.getByRole('button', { name: 'Search', exact: true }).locator('visible=true').first().click().catch(() => undefined); }
+      await page.waitForTimeout(500);
+      const go = page.getByRole('button', { name: 'Search', exact: true }).locator('visible=true').first();
+      if (await go.count()) await go.click().catch(() => undefined);
       await seen(page, 'Lakshmi Narayanan', `119-d-${vp}`, 20_000); await light(page);
-      if (vp === 'desktop') await expect(page.getByRole('columnheader', { name: 'Contact' })).toBeVisible();
+      if (isDesktop()) await expect(page.getByRole('columnheader', { name: 'Contact' })).toBeVisible();
+      await expectNoSideways(page);
       await expect(page.locator('.pf-aps-addr', { hasText: '14, Gandhi Street, Peelamedu, Coimbatore' }).first()).toBeVisible();
       await expect(page.locator('.pf-aps-addr', { hasText: 'Flat 3B, Lake View' }).first()).toBeVisible();
       expect(await page.locator('.pf-aps-addr').locator('visible=true').count()).toBe(2);   // Sana has none
-      await page.screenshot({ path: `${OUT}/119-advanced-search-${vp}.png` });
+      await page.screenshot({ path: `${OUT}/119-advanced-search.png` });
     });
   });
 }
