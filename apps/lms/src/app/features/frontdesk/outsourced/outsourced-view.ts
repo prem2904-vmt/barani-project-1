@@ -364,16 +364,19 @@ function lineIsOutsourced(s: OutSample, l: OutLine): boolean {
 /**
  * An order whose ONLY remaining work is at a partner lab (OPS-114): it has live tubes, every one is
  * routed to a referral lab (`outsourcedVendorId`, frozen at order time) and every one has already been
- * drawn. The lab's status machine ignores outsourced lines, so such an order's status never advances to
+ * dispatched (owner 2026-11-13: drawn-but-not-sent stays In progress, where its Dispatch button is). The lab's status machine ignores outsourced lines, so such an order's status never advances to
  * Completed on its own and it sat under "In progress" forever, while its real home is the Outsourced
  * tab (Completed once the partner report is uploaded). An order with ANY in-house live tube, or a tube
  * still to draw (the desk may still need Collect), is NOT outsourced-only and stays under In progress.
  */
+const STILL_AT_DESK = ['pending', 'collected'];
+
 export function isOutsourcedOnlyAwaitingPartner(o: { samples?: readonly OutSample[] | null }): boolean {
   const live = (o.samples ?? []).filter(s => !DEAD_TUBE.includes(s.status ?? ''));
   if (live.length === 0) return false;
   return live.every(s => {
-    if ((s.status ?? 'pending') === 'pending') return false;
+    // Still to draw (Collect) or drawn but not sent yet (Dispatch): the desk has work, so it stays In progress.
+    if (STILL_AT_DESK.includes(s.status ?? 'pending')) return false;
     if (s.outsourcedVendorId) return true;
     const lines = (s.tests ?? []).filter(l => !DEAD_LINE.includes(l.status ?? ''));
     return lines.length > 0 && lines.every(l => lineIsOutsourced(s, l));

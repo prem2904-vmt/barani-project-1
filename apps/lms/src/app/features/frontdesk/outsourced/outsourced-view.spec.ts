@@ -348,8 +348,12 @@ describe('buildFrontdeskMergedWork — a part-paid order that is ALSO in progres
 
 describe('OPS-114 - an order with only partner-lab work left is not "In progress"', () => {
   const tube = (status: string, vendor: string | null) => ({ status, outsourcedVendorId: vendor });
-  it('every live tube outsourced and drawn: outsourced-only', () => {
-    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('dispatched', 'v1'), tube('collected', 'v2')] })).toBe(true);
+  it('every live tube outsourced and dispatched: outsourced-only', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('dispatched', 'v1'), tube('dispatched', 'v2')] })).toBe(true);
+  });
+  it('an outsourced tube drawn but not dispatched stays In progress (its Dispatch button lives there)', () => {
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('dispatched', 'v1'), tube('collected', 'v2')] })).toBe(false);
+    expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('collected', 'v1')] })).toBe(false);
   });
   it('a mixed order (one in-house tube) stays In progress', () => {
     expect(isOutsourcedOnlyAwaitingPartner({ samples: [tube('collected', 'v1'), tube('received', null)] })).toBe(false);
