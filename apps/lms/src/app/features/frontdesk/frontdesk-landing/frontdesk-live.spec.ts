@@ -19,6 +19,7 @@ function landing() {
     labCfg: { ensureLoaded: vi.fn() },
     process: { refreshActive: vi.fn() },
     reportActions: { warmWhatsApp: vi.fn() },
+    comms: { ensure: vi.fn() },
     auth: { user: signal({ permissions: [] }) },
     route: { queryParamMap: EMPTY },
     destroyRef: { onDestroy: (fn: () => void) => { destroyers.push(fn); return () => undefined; }, destroyed: false },

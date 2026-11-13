@@ -4,6 +4,9 @@ import { EDIT_REFERRAL_PERM, ReferralSaveResult } from '../../../shared/componen
 import { ReportActionsService } from '../../../core/services/report-actions.service';
 import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
 import { WhatsAppManualService, waDoctorPhone, type WaRecipient } from '../../../core/services/whatsapp-manual.service';
+import { CommsShareService, looksLikeEmail } from '../../../core/services/comms-share.service';
+import { waE164 } from '../../../shared/utils/whatsapp-manual';
+import type { EmailRecipient } from '../../../shared/utils/email-share';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
@@ -1434,6 +1437,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     ngOnInit() {
     this.labCfg.ensureLoaded();
     this.reportActions.warmWhatsApp();
+    this.comms.ensure();
     // Re-fetch the active workflow each visit so toggles made in /admin/process
     // (e.g. disabling Appointments / Home visits) reflect here immediately.
     this.process.refreshActive();
@@ -3193,6 +3197,82 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this.waManual.release();   // no report / an error / Auto: the blank tab closes
       this._waSharing.set(null);
     }
+  }
+
+  // ── Share the REPORT by Email / SMS (2026-11-13) ─────────────
+  private readonly comms = inject(CommsShareService);
+  /** An email is on its way (row menu or invoice viewer): one at a time. */
+  readonly emailBusy = computed(() => this.comms.emailing() !== null);
+  /** Order id whose SMS is being prepared (report fetch). */
+  protected readonly _smsSharing = signal<string | null>(null);
+
+  /** Open / close a row's Share menu; an opened menu is scrolled into view (it can be taller than the
+   *  space left above the bottom nav on a phone). */
+  toggleShareMenu(id: string, ev?: Event): void {
+    const open = this.activeShareMenuOrderId() === id ? null : id;
+    this.activeShareMenuOrderId.set(open);
+    const host = (ev?.currentTarget as HTMLElement | null)?.closest?.('.pf-share-wrapper');
+    if (open && host) setTimeout(() => host.querySelector('.pf-share-menu')?.scrollIntoView?.({ block: 'nearest' }), 0);
+  }
+
+  /** The Share button shows when ANY channel can share this order (WhatsApp, Email or SMS). */
+  shareAvailable(o: Order): boolean {
+    return !!this.waShareMode() || !!this.emailFor(o) || !!this.smsFor(o);
+  }
+
+  /** Who can get the report by email: email sharing on + an address on the patient / referral doctor. */
+  emailFor(o: Order): { patient: boolean; doctor: boolean } | null {
+    if (!this.comms.emailOn()) return null;
+    const patient = looksLikeEmail(o.patient?.email);
+    const doctor = !!o.refDoctorName && looksLikeEmail(o.refDoctorEmail);
+    return patient || doctor ? { patient, doctor } : null;
+  }
+
+  /** Who can get an SMS: SMS Chat on (phones / tablets only) + a valid mobile; the doctor only with their own number. */
+  smsFor(o: Order): { patient: boolean; doctor: boolean } | null {
+    if (!this.comms.smsOn()) return null;
+    const patient = !!waE164(o.patient?.phone);
+    const doctor = !!this.waDoctorPhone(o);
+    return patient || doctor ? { patient, doctor } : null;
+  }
+
+  /** The lab's server emails the report; the toast says who got it / who was skipped (server answer only). */
+  async emailReport(o: Order, to: EmailRecipient): Promise<void> {
+    if (!this.emailFor(o)) return;
+    await this.comms.emailReport(o.id, to);
+  }
+
+  /** SMS Chat: fetch the report, then open Messages with the report link ready (the person presses Send). */
+  async smsReport(o: Order, to: WaRecipient): Promise<void> {
+    if (this._smsSharing() || !this.smsFor(o)) return;
+    this._smsSharing.set(o.id);
+    try {
+      const report = await this.reportToShare(o);
+      if (!report) return;
+      await this.reportActions.sendSms(report as never, {
+        name: report.patient?.displayName ?? o.patient?.displayName,
+        phone: report.patient?.phone || o.patient?.phone,
+      }, {
+        to,
+        doctor: this.waDoctorPhone(o) ? { name: o.refDoctorName, phone: o.refDoctorPhone } : null,
+      });
+    } catch (err) {
+      console.error('[fd] share report by SMS failed', err);
+      this.toasts.error('Could not prepare the report for SMS. Try again.');
+    } finally {
+      this._smsSharing.set(null);
+    }
+  }
+
+  /** Invoice viewer → Email (patient only, never the doctor): email on + the patient has an address. */
+  invoiceEmailOn(): boolean {
+    return this.comms.emailOn() && !!this.invoiceCtx?.bill?.id && looksLikeEmail(this.invoiceCtx?.order?.patient?.email);
+  }
+
+  async emailInvoice(): Promise<void> {
+    const bill = this.invoiceCtx?.bill;
+    if (!bill?.id || !this.invoiceEmailOn()) return;
+    await this.comms.emailInvoice(bill.id);
   }
 
   /** Order id whose report is currently being fetched + rendered — null when

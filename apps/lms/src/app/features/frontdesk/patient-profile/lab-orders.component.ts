@@ -15,7 +15,7 @@ import { ZoomTransitionService } from '../../../core/navigation/zoom-transition'
 import { AuthService } from '../../../core/auth/auth.service';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
 import { currentRecipient } from '../../../shared/utils/report-recipient';
-import { REPORT_BY_ORDER_PERMS, ReportActionsService } from '../../../core/services/report-actions.service';
+import { REPORT_BY_ORDER_PERMS, ReportActionsService, type ChannelContext } from '../../../core/services/report-actions.service';
 import {
   filterOrders, orderStatusLabel, orderTests, orderTitle, orderTone, testStatusLabel, testTone,
 } from './patient-profile.nd';
@@ -443,6 +443,7 @@ export class LabOrdersComponent implements OnDestroy {
   private readonly reportActions = inject(ReportActionsService);
   // The delivery desk's "Send WhatsApp" row depends on the lab's sender.
   private readonly _waWarm = this.reportActions.warmWhatsApp();
+  private readonly _channelsWarm = this.reportActions.warmChannels();
   /** orderId → the stored report (by-order), fetched once. */
   private readonly repByOrder = new Map<string, Promise<StoredReport | null>>();
   private has(perms: string[]): boolean { return perms.some(p => this.auth.hasPermission(p)); }
@@ -500,6 +501,8 @@ export class LabOrdersComponent implements OnDestroy {
     }
     // WhatsApp (automatic) when the lab sends from its number + Send on WhatsApp (manual, every lab).
     a.push(...this.reportActions.whatsAppActions({ id: rep.id, orderId: o.id, type: this.reportType(rep) }));
+    // Email (the lab sends it) + SMS Chat (phones / tablets only).
+    a.push(...this.reportActions.channelActions({ id: rep.id, orderId: o.id, type: this.reportType(rep) }, this.channelCtx(o)));
     a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
     a.push({ id: 'print', label: 'Print', icon: 'print', group: 'Report', hint: this.auth.hasPermission('deliver_report') ? 'Recorded as delivered' : undefined });
     // The full viewer reads GET /api/reports/{id} (view_report | deliver_report).
@@ -507,6 +510,17 @@ export class LabOrdersComponent implements OnDestroy {
     a.push({ id: 'repeat', label: 'Repeat order', icon: 'repeat', group: 'Go to' });
     return [...referral, ...a];
   });
+
+  /** What the order row knows about the recipients (undefined = unknown here; the server decides). */
+  private channelCtx(o: Order): ChannelContext {
+    const p = o.patient as { phone?: string | null; email?: string | null } | undefined;
+    return {
+      patientPhone: p ? p.phone ?? null : undefined,
+      patientEmail: p && 'email' in p ? p.email ?? null : undefined,
+      doctorEmail: 'refDoctorEmail' in o ? o.refDoctorEmail ?? null : undefined,
+      doctorName: o.refDoctorName ?? null,
+    };
+  }
 
   private ensureReport(o: Order): Promise<StoredReport | null> {
     let p = this.repByOrder.get(o.id);
@@ -531,6 +545,7 @@ export class LabOrdersComponent implements OnDestroy {
     const rep = await this.ensureReport(o);
     if (!rep) return;
     const ref = { ...rep, orderId: rep.orderId ?? o.id };
+    if (this.reportActions.runChannel(id, ref as never, this.snapshotPatient(rep), this.channelCtx(o))) return;
     switch (id) {
       case 'share': await this.reportActions.share(ref, this.snapshotPatient(rep).name); break;
       case 'copy-link': await this.reportActions.copyLink(ref); break;

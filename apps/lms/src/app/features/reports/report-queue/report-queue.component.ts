@@ -59,7 +59,7 @@ import { savedValueRows } from "../../../shared/utils/result-flag";
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
-import { PATIENT_PROFILE_PERMS, ReportActionsService, WA_MANUAL_NOTE } from '../../../core/services/report-actions.service';
+import { PATIENT_PROFILE_PERMS, ReportActionsService, WA_MANUAL_NOTE, type ChannelContext } from '../../../core/services/report-actions.service';
 import { formatAge } from "../../../shared/utils/patient-age";
 import { BusyDirective } from "../../../shared/directives/busy.directive";
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
@@ -284,6 +284,8 @@ export class ReportQueueComponent implements OnInit {
     }
     // ONE WhatsApp row: WhatsApp Auto (entitled + a sender), else WhatsApp Chat (entitled), else none.
     a.push(...this.reportActions.whatsAppActions(r));
+    // Email (the lab sends it) + SMS Chat (phones / tablets only).
+    a.push(...this.reportActions.channelActions(r, this.channelCtx(r)));
     a.push({ id: 'view', label: 'View report', icon: 'view', group: 'Report' });
     a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
     if (this.canPrint()) {
@@ -303,7 +305,14 @@ export class ReportQueueComponent implements OnInit {
   /** A row's menu opened: warm its patient link (Share… keeps the gesture). */
   onRowMenuOpened(r: Report): void { this.reportActions.prefetch(r); }
 
+  /** What this row knows about the recipients (email unknown on the queue unless the server sends it). */
+  private channelCtx(r: Report): ChannelContext {
+    const p = r.order?.patient as { phone?: string | null; email?: string | null } | null | undefined;
+    return { patientPhone: p?.phone ?? r.patient?.phone ?? undefined, patientEmail: p && 'email' in p ? p.email ?? null : undefined };
+  }
+
   runRowAction(r: Report, id: string): void {
+    if (this.reportActions.runChannel(id, r as never, { name: this.reportPatientName(r), phone: r.order?.patient?.phone ?? r.patient?.phone }, this.channelCtx(r))) return;
     switch (id) {
       case 'share': void this.reportActions.share(r, this.reportPatientName(r)); break;
       case 'copy-link': void this.reportActions.copyLink(r); break;
@@ -712,6 +721,7 @@ export class ReportQueueComponent implements OnInit {
 
   ngOnInit() {
     this.waSend.ensure();
+    this.reportActions.warmChannels();
     // Live: a validation elsewhere can complete an order → its report appears.
     this.liveQ.on('reports', 'validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
     this.destroyRef.onDestroy(() => clearTimeout(this._searchTimer));

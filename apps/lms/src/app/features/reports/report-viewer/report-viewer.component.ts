@@ -31,7 +31,7 @@ import { PartnerReport, PdfParts, firstAttachProblem, partnerReportShareLine, pa
 import { UploadsService } from '../../../core/services/uploads.service';
 import { ReportWhatsAppStatusComponent } from './report-whatsapp-status.component';
 import { ActionsMenuComponent, ActionsMenuTriggerDirective, type PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
-import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS, ReportActionsService, WA_MANUAL_NOTE } from '../../../core/services/report-actions.service';
+import { LAB_RESULTS_PERMS, PATIENT_PROFILE_PERMS, ReportActionsService, WA_MANUAL_NOTE, type ChannelContext } from '../../../core/services/report-actions.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { WhatsAppSendService, waSendLabel } from '../../../core/services/whatsapp-send.service';
 import { currentRecipient } from '../../../shared/utils/report-recipient';
@@ -316,6 +316,8 @@ export class ReportViewerComponent implements OnInit {
     if (this.canDeliver()) {
       // ONE WhatsApp row: WhatsApp Auto (entitled + a sender), else WhatsApp Chat (entitled), else none.
       a.push(...this.reportActions.whatsAppActions({ ...r, type: this.isPartial() ? 'partial' : r.type }));
+      // Email (the lab sends it, final report) + SMS Chat (phones / tablets only).
+      a.push(...this.reportActions.channelActions({ ...r, type: this.isPartial() ? 'partial' : r.type }, this.channelCtx()));
       if (this.entitlements.moduleEnabled('messages')) a.push({ id: 'colleague', label: 'Share with a colleague', icon: 'chat', group: 'Share' });
     }
     a.push({ id: 'download', label: 'Download PDF', icon: 'download', group: 'Report' });
@@ -338,9 +340,23 @@ export class ReportViewerComponent implements OnInit {
   /** The menu opened: warm the patient link so Share… keeps the tap's gesture. */
   onMenuOpened(): void { this.reportActions.prefetch(this._report()); }
 
+  /** What the viewer knows about the recipients: the current patient record (phone, and email when
+   *  the server sends it); the referral doctor's email only when the report data carries it. */
+  private channelCtx(): ChannelContext {
+    const p = this._report()?.patient as { phone?: string | null; email?: string | null } | null | undefined;
+    const o = this.data()?.order as { refDoctorName?: string; refDoctorEmail?: string | null } | undefined;
+    return {
+      patientPhone: this.recipient().phone ?? null,
+      patientEmail: p && 'email' in p ? p.email ?? null : undefined,
+      doctorEmail: o && 'refDoctorEmail' in o ? o.refDoctorEmail ?? null : undefined,
+      doctorName: o?.refDoctorName ?? null,
+    };
+  }
+
   runAction(id: string): void {
     const r = this._report();
     if (!r) return;
+    if (this.reportActions.runChannel(id, r as never, { name: this.recipient().name ?? this.patientName(), phone: this.recipient().phone }, this.channelCtx())) return;
     switch (id) {
       case 'share': void this.reportActions.share(r, this.recipient().name ?? this.patientName()); break;
       case 'copy-link': void this.reportActions.copyLink(r); break;
@@ -885,6 +901,7 @@ export class ReportViewerComponent implements OnInit {
 
   ngOnInit() {
     this.waSend.ensure();
+    this.reportActions.warmChannels();
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) { this.back(); return; }
     this.load();

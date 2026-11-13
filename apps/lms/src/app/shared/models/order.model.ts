@@ -19,6 +19,8 @@ export interface Order {
   refDoctorName?: string;
   /** The referral doctor's phone from the doctor record (server-stamped on desk reads; read-only). */
   refDoctorPhone?: string | null;
+  /** The referral doctor's email from the doctor record (server-stamped on desk reads; read-only). */
+  refDoctorEmail?: string | null;
   refHospitalName?: string;
   priority: string;
   source: string;
