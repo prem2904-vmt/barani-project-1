@@ -1098,7 +1098,7 @@
                       <span class="pf-wrow__dot" aria-hidden="true"></span>{{ effectiveStatusLabel(o) }}
                     </span>
                     <div class="pf-wrow__acts" (click)="$event.stopPropagation()">
-                      @if (o.status !== 'delivered') {
+                      @if (o.status !== 'delivered' && waShareMode()) {
                       <div class="pf-share-wrapper relative inline-block text-left">
                         <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!webPointer()"
                           aria-label="Share report"
@@ -1115,14 +1115,6 @@
 
                         @if (activeShareMenuOrderId() === o.id) {
                         <div class="pf-share-menu" [class.pf-share-menu--down]="idx < 2">
-                          <button type="button" class="pf-share-menu__item"
-                            (click)="shareReportSMS(o); activeShareMenuOrderId.set(null)">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                              stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                            </svg>
-                            <span>SMS</span>
-                          </button>
 @if (waShareMode() === 'chat' && waDoctorPhone(o)) {
                           <!-- WhatsApp Chat + a referral doctor with a number: the person picks who gets it. -->
                           <span class="pf-share-menu__label" aria-hidden="true">WhatsApp</span>
@@ -1158,15 +1150,6 @@
                             <span>WhatsApp</span>
                           </button>
                           }
-                          <button type="button" class="pf-share-menu__item"
-                            (click)="shareReportEmail(o); activeShareMenuOrderId.set(null)">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                              stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                              <polyline points="22,6 12,13 2,6" />
-                            </svg>
-                            <span>Email</span>
-                          </button>
                         </div>
                         }
                       </div>
@@ -1432,7 +1415,7 @@
                       </button>
                       }
                       @if (row.order.status === 'validated' || row.order.status === 'delivered' || row.order.status === 'completed') {
-                      @if (row.order.status !== 'delivered') {
+                      @if (row.order.status !== 'delivered' && waShareMode()) {
                       <div class="pf-share-wrapper relative inline-block text-left">
                         <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!webPointer()"
                           aria-label="Share report"
@@ -1449,14 +1432,6 @@
 
                         @if (activeShareMenuOrderId() === row.order.id) {
                         <div class="pf-share-menu" [class.pf-share-menu--down]="idx < 2">
-                          <button type="button" class="pf-share-menu__item"
-                            (click)="shareReportSMS(row.order); activeShareMenuOrderId.set(null)">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                              stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                            </svg>
-                            <span>SMS</span>
-                          </button>
 @if (waShareMode() === 'chat' && waDoctorPhone(row.order)) {
                           <!-- WhatsApp Chat + a referral doctor with a number: the person picks who gets it. -->
                           <span class="pf-share-menu__label" aria-hidden="true">WhatsApp</span>
@@ -1492,15 +1467,6 @@
                             <span>WhatsApp</span>
                           </button>
                           }
-                          <button type="button" class="pf-share-menu__item"
-                            (click)="shareReportEmail(row.order); activeShareMenuOrderId.set(null)">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                              stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                              <polyline points="22,6 12,13 2,6" />
-                            </svg>
-                            <span>Email</span>
-                          </button>
                         </div>
                         }
                       </div>
@@ -1552,13 +1518,6 @@
     <div class="pf-bulkbar">
       <span class="pf-bulkbar__count">{{ selectedIds().size }} selected</span>
       <div class="flex-1"></div>
-      <button type="button" class="pf-bulkbar__btn press" (click)="bulkSms()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-          stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-        SMS
-      </button>
       @if (waShareMode() === 'auto') {
       <button type="button" class="pf-bulkbar__btn press" (click)="bulkWhatsapp()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"

@@ -3128,10 +3128,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
    *  the full Results queue with deliver / print actions. */
   goToResults() { this.router.navigateByUrl('/reports'); }
 
-  shareReportSMS(o: Order) {
-    const contact = o.patient?.phone || 'No phone number';
-    this.toasts.success(`Report link sent via SMS to ${contact}`);
-  }
   // ── Share the REPORT on WhatsApp (OPS-1113) ──────────────────
   private readonly reportActions = inject(ReportActionsService);
   private readonly waSend = inject(WhatsAppSendService);
@@ -3198,10 +3194,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       this._waSharing.set(null);
     }
   }
-  shareReportEmail(o: Order) {
-    const contact = o.patient?.email || 'No email address';
-    this.toasts.success(`Report link sent via Email to ${contact}`);
-  }
 
   /** Order id whose report is currently being fetched + rendered — null when
    *  idle. Holds the ID (not a boolean) so the template can mark ONLY the
@@ -3253,7 +3245,6 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     });
   }
   clearSelection() { this._selectedIds.set(new Set()); }
-  bulkSms() { this.toasts.success(`SMS queued to ${this._selectedIds().size} recipients`); this.clearSelection(); }
   /** Bulk WhatsApp exists only for WhatsApp Auto (the server sends each report); Chat is one chat at a time. */
   async bulkWhatsapp(): Promise<void> {
     if (this.waShareMode() !== 'auto' || this._waSharing()) return;

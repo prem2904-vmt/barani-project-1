@@ -56,12 +56,9 @@ const NOTARY_PROFILE = 'prefrontal-notary';
 const CHANNELS = ['dev', 'stage', 'prod'];
 
 // Every Angular build configuration this script knows how to produce an
-// electron bundle from, per channel. `prod` has no backend of its own yet
-// (no live production API — see apps/lms/src/environments/environment*.ts);
-// it reuses the stage backend's build until the owner wires up a real one,
-// at which point add an `electron-prod` Nx configuration + environment file
-// and change ONLY this line.
-const NX_CONFIG_BY_CHANNEL = { dev: 'electron-dev', stage: 'electron-stage', prod: 'electron-stage' };
+// electron bundle from, per channel. Each channel talks to its OWN backend
+// (owner 2026-11-13: prod desktop must talk to prod, never stage).
+const NX_CONFIG_BY_CHANNEL = { dev: 'electron-dev', stage: 'electron-stage', prod: 'electron-prod' };
 // The real shipped app keeps its base identity (in.prefrontal.app /
 // "Prefrontal") — only dev/stage test builds get a side-by-side identity so
 // they can be installed next to it.
