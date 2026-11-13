@@ -43,7 +43,7 @@ export const WA_DOCKED_CLASS = 'pf-wa-docked';
               <!-- Our own header (not WhatsApp's page): where the PDF is. -->
               <span class="pf-wad__note" data-testid="wa-dock-line">{{ line(s) }}</span>
               <span class="pf-wad__pdf" draggable="true" (dragstart)="drag($event)" role="button" tabindex="0"
-                    title="Or drag the PDF into the chat" aria-label="Drag the report PDF into the chat" data-testid="wa-dock-pdf">
+                    title="Or drag the PDF into the chat" aria-label="Drag the PDF into the chat" data-testid="wa-dock-pdf">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/></svg>
               </span>
             } @else {
@@ -131,10 +131,11 @@ export class WhatsAppDockComponent implements OnInit {
     if (ok) await this.bridge?.signOut();
   }
 
-  /** The one quiet line (our header). Copied → paste it; the copy failed → drag it. */
+  /** The one quiet line (our header). Copied → paste it; the copy failed → drag it. Says "PDF", not "report PDF":
+   *  the same dock carries the invoice PDF (front desk invoice viewer → WhatsApp). */
   line(s: WaDockState): string {
-    if (s.clipboard === 'copied') return `Report PDF copied — press ${this.isMac() ? 'Cmd+V' : 'Ctrl+V'} in the chat to attach it, then Send.`;
-    return 'Drag the report PDF into the chat to attach it, then Send.';
+    if (s.clipboard === 'copied') return `PDF copied — press ${this.isMac() ? 'Cmd+V' : 'Ctrl+V'} in the chat to attach it, then Send.`;
+    return 'Drag the PDF into the chat to attach it, then Send.';
   }
 
   private isMac(): boolean {

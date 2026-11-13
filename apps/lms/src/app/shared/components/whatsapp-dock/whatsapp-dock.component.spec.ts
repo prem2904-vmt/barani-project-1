@@ -89,7 +89,7 @@ describe('WhatsAppDockComponent', () => {
     const { el, emit, b } = setup({});
     emit({ ...OPEN, pdfName: 'report-AB.pdf', clipboard: 'copied' });
     const line = (el.querySelector('[data-testid="wa-dock-line"]') as HTMLElement).textContent!.trim();
-    expect(line).toMatch(/^Report PDF copied — press (Ctrl|Cmd)\+V in the chat to attach it, then Send\.$/);
+    expect(line).toMatch(/^PDF copied — press (Ctrl|Cmd)\+V in the chat to attach it, then Send\.$/);
     expect(el.querySelector('[data-testid="wa-dock-copy"]')).toBeNull();
     const chip = el.querySelector('[data-testid="wa-dock-pdf"]') as HTMLElement;
     expect(chip.getAttribute('draggable')).toBe('true');
@@ -103,10 +103,20 @@ describe('WhatsAppDockComponent', () => {
   it('the copy failed: the line says to drag it instead; nothing yet: the usual note', () => {
     const { el, emit } = setup({});
     emit({ ...OPEN, pdfName: 'r.pdf', clipboard: 'failed' });
-    expect((el.querySelector('[data-testid="wa-dock-line"]') as HTMLElement).textContent!.trim()).toBe('Drag the report PDF into the chat to attach it, then Send.');
+    expect((el.querySelector('[data-testid="wa-dock-line"]') as HTMLElement).textContent!.trim()).toBe('Drag the PDF into the chat to attach it, then Send.');
     emit({ ...OPEN, pdfName: null, clipboard: 'idle' });
     expect(el.querySelector('[data-testid="wa-dock-line"]')).toBeNull();
     expect(el.textContent).toContain('Check the message, then press Send in WhatsApp.');
+  });
+
+  it('an invoice PDF is never called a "report" (the invoice viewer uses the same dock)', () => {
+    const { el, emit } = setup({});
+    emit({ ...OPEN, pdfName: 'INV-001033.pdf', clipboard: 'copied' });
+    const line = (el.querySelector('[data-testid="wa-dock-line"]') as HTMLElement).textContent!.trim();
+    expect(line).not.toMatch(/report/i);
+    expect((el.querySelector('[data-testid="wa-dock-pdf"]') as HTMLElement).getAttribute('aria-label')).not.toMatch(/report/i);
+    emit({ ...OPEN, pdfName: 'INV-001033.pdf', clipboard: 'failed' });
+    expect((el.querySelector('[data-testid="wa-dock-line"]') as HTMLElement).textContent!.trim()).not.toMatch(/report/i);
   });
 
   it('destroy undoes the reflow', () => {
