@@ -81,6 +81,18 @@ describe('OPS-122 - WhatsApp from the invoice viewer', () => {
   });
 });
 
+describe('OPS-132 - Today / no-chip list is date-bound; the Payments due TAB lists every due', () => {
+  it('the tab and its chip counts read paymentsDueAll (no date window); the merged list keeps the window', () => {
+    const all = ts.slice(ts.indexOf('readonly paymentsDueAll = computed'), ts.indexOf('readonly paymentsDueOrders = computed'));
+    expect(all).not.toContain('inWorkWindow');
+    expect(ts).toMatch(/label: 'Payments due', count: this\.paymentsDueAll\(\)\.length/);
+    expect(html).not.toMatch(/data-tone="warning">\{\{ paymentsDueOrders\(\)\.length/);
+    expect(html.match(/\{\{ paymentsDueAll\(\)\.length \}\}/g)?.length).toBe(2);
+    expect(ts).toMatch(/_rightTab\(\) !== null\) return this\.shownPaymentsDueTab\(\)/);
+    expect(ts).toContain('buildFrontdeskMergedWork(this.shownInProgress(), this.shownCompleted(), this.shownPaymentsDue(), tubes)');
+  });
+});
+
 describe('OPS-132 - Payments due follows the creation day only', () => {
   it('paymentsDueOrders no longer takes the "touched today" bonus', () => {
     const body = ts.slice(ts.indexOf('readonly paymentsDueOrders = computed'), ts.indexOf('readonly paymentsDueOrders = computed') + 1800);

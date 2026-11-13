@@ -3,8 +3,12 @@ import type { WorkflowConfig } from '../../../shared/models/workflow.model';
 /** Field names that live in the registration form's "Contact & IDs" section. */
 export const REGISTER_CONTACT_FIELDS = new Set(['phone', 'email', 'abha_id', 'aadhaar_last4']);
 
-const isAddressField = (f: { name?: string; storageKey?: string }) =>
+export const isAddressField = (f: { name?: string; storageKey?: string }) =>
   f.name === 'address' || f.storageKey === 'metadata.address';
+
+/** A field shown in the "Contact & IDs" section: the phone / email / ID fields and the address. */
+export const isContactField = (f: { name?: string; storageKey?: string }) =>
+  REGISTER_CONTACT_FIELDS.has(f.name ?? '') || isAddressField(f);
 
 /**
  * OPS-119 follow-up: the address / place sits with the other contact fields

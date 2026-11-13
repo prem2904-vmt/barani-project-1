@@ -31,7 +31,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ageParts } from '../../../shared/utils/patient-age';
 import { dobFromAge } from '../../../shared/forms/patient-fields';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
-import { addressIntoContact, REGISTER_CONTACT_FIELDS } from './patient-address';
+import { addressIntoContact, isContactField } from './patient-address';
 
 @Component({
   selector: 'pf-patient-register',
@@ -393,8 +393,6 @@ export class PatientRegisterComponent implements OnInit {
     return k ? isBabyOfTitle(String(v[k] ?? '')) : false;
   });
 
-  /** Field names that belong in the "Contact & IDs" section. */
-  private static readonly CONTACT_FIELDS = REGISTER_CONTACT_FIELDS;
 
   /** The loaded config with display-only restructuring:
    *  - the basic step splits into "Patient identity" and "Contact & IDs"
@@ -438,9 +436,9 @@ export class PatientRegisterComponent implements OnInit {
       const fields = s.fields
         .filter(f => !(baby && (f.name === 'guardian_name' || f.name === 'guardian_phone')))
         .map(relabel);
-      const contact = fields.filter(f => PatientRegisterComponent.CONTACT_FIELDS.has(f.name));
+      const contact = fields.filter(isContactField);
       const identity = fields
-        .filter(f => !PatientRegisterComponent.CONTACT_FIELDS.has(f.name))
+        .filter(f => !isContactField(f))
         .sort((a, b) => rank(a.name) - rank(b.name));
       // Split only the classic basic step, and only when both halves exist.
       if (s.name !== 'basic_info' || contact.length === 0 || identity.length === 0) {

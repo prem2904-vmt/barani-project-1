@@ -172,6 +172,17 @@ describe('Patient registration — new design: ONE form', () => {
     }
   });
 
+  it('the address / place field is shown in the Contact & IDs card, not under Patient identity (OPS-119)', () => {
+    const cfg = JSON.parse(JSON.stringify(CONFIG));
+    cfg.steps[1].fields.push({ id: 'f11', name: 'address', title: 'Address / place', type: 'text', isStandard: false, isRequired: false, isEditable: true, storageKey: 'metadata.address', width: 'full' });
+    const { el } = render({ config: cfg });
+    const cards = Array.from(el.querySelectorAll('.pf-wr-cards > .pf-wr-card.pf-card'));
+    const inCard = (label: string) => cards.find(c => (c.querySelector('.pf-card__label')?.textContent ?? '').trim() === label)!;
+    expect(inCard('Contact & IDs').querySelector('[data-field="address"]')).not.toBeNull();
+    expect(inCard('Patient identity').querySelector('[data-field="address"]')).toBeNull();
+    expect(inCard('Additional details').querySelector('[data-field="address"]')).toBeNull();
+  });
+
   it('columns: 3 side by side from 1200px, 2 on tablets, 1 on phones; desktop fills without page scroll', () => {
     const css = ((WorkflowRendererComponent as any).ɵcmp.styles as string[]).join('\n').replace(/\s+/g, ' ');
     expect(css).toMatch(/\.pf-wr-cards\[[^\]]*\] ?\{ ?display: ?grid; ?grid-template-columns: ?minmax\(0, ?1fr\)/);

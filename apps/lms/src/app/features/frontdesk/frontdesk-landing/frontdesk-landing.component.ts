@@ -268,7 +268,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       { value: 'done', label: 'Completed', count: this.completedOrders().length, tone: 'ok' },
     ];
     if (this.showPaymentsDue()) {
-      opts.push({ value: 'billing', label: 'Payments due', count: this.paymentsDueOrders().length, tone: 'warning' });
+      opts.push({ value: 'billing', label: 'Payments due', count: this.paymentsDueAll().length, tone: 'warning' });
     }
     opts.push({ value: 'out', label: 'Outsourced', count: this.outsourcing.counts().outsourced });
     return opts;
@@ -934,30 +934,28 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   private readonly _billingOrdersMap = signal<Record<string, Order>>({});
   private readonly _fetchingOrderIds = new Set<string>();
 
-  readonly paymentsDueOrders = computed(() => {
+  /** EVERY order with an outstanding balance, whatever the timeline filter — what the
+   *  "Payments due" tab lists and counts (OPS-132: an old due must not hide there). */
+  readonly paymentsDueAll = computed(() => {
     const map = this._billingOrdersMap();
     const ordersToday = this._orders();
     const pendingBills = this._bills().filter(b => b.balance > 0);
-    const bounds = this.workBounds();
     const list: Order[] = [];
     for (const b of pendingBills) {
-      let o = ordersToday.find(ord => ord.id === b.orderId);
-      if (!o) {
-        o = map[b.orderId];
-      }
-      // The date range applies to every status (work-status-filter.ts). Payments
-      // due follows the order's CREATION day only — no "touched today" bonus
-      // (that bonus is for hand-over of a finished report): an old order whose
-      // row was merely updated today (a bill re-read, a note) leaked into
-      // Today's list, both under the chip and in the no-chip list (OPS-132).
-      // Older dues show under Yesterday / a custom range.
-      if (o && inWorkWindow(o.createdAt, bounds, false)) {
-        list.push(o);
-      }
+      const o = ordersToday.find(ord => ord.id === b.orderId) ?? map[b.orderId];
+      if (o) list.push(o);
     }
     // Same business-day → #N ledger order as every other tab (owner,
     // 2026-10-02 — sortByDailySerial, work-merge.ts).
     return sortByDailySerial(list);
+  });
+  /** The dues inside the chosen date range — feeds the merged "no chip" list only.
+   *  Follows the order's CREATION day, no "touched today" bonus (that is for hand-over of
+   *  a finished report): an old order merely updated today must not leak into Today (OPS-132).
+   *  Older dues show under Yesterday / a custom range here, and always under the tab. */
+  readonly paymentsDueOrders = computed(() => {
+    const bounds = this.workBounds();
+    return this.paymentsDueAll().filter(o => inWorkWindow(o.createdAt, bounds, false));
   });
   /** Ids of the orders in the current work feed (today's feed / the range). */
   private readonly _feedIds = computed(() => new Set(this._orders().map(o => o.id)));
@@ -973,7 +971,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** "All statuses" (no chip on): the same combined list, deduped — an
    *  in-progress order with a balance is listed once, under In progress. */
   readonly shownPaymentsDueOnly = computed(() => {
-    if (this._rightTab() !== null) return this.shownPaymentsDue();
+    if (this._rightTab() !== null) return this.shownPaymentsDueTab();
     const ip = new Set(this.shownInProgress().map(o => o.id));
     return this.shownPaymentsDue().filter(o => !ip.has(o.id));
   });
@@ -996,6 +994,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     sortByDailySerial(filterOrdersByWorkQuery(this.visibleOrders(), this.workQuery())));
   readonly shownCompleted = computed(() => filterOrdersByWorkQuery(this.completedOrders(), this.workQuery()));
   readonly shownPaymentsDue = computed(() => filterOrdersByWorkQuery(this.paymentsDueOrders(), this.workQuery()));
+  /** The Payments due TAB's rows: all outstanding dues, narrowed by the header search only. */
+  readonly shownPaymentsDueTab = computed(() => filterOrdersByWorkQuery(this.paymentsDueAll(), this.workQuery()));
 
   // ── Merged "no chip" work list (owner, 2026-10-01) ─────────────────
   // With every status chip off, the four feeds used to render as four
@@ -2886,7 +2886,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // Settle the due in the same in-place drawer the payments-due card uses
     // (loads the tests + Cash/UPI for the balance) rather than bouncing to the
     // full order-create page. openPaymentDrawer fetches the full order + bill.
-    const o = this.paymentsDueOrders().find(x => x.id === b.orderId);
+    const o = this.paymentsDueAll().find(x => x.id === b.orderId);
     this.openPaymentDrawer(o ?? ({ id: b.orderId } as Order));
   }
   /** Appointment whose Check-in request is in flight. */

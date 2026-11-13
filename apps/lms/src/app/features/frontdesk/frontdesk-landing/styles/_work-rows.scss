@@ -183,6 +183,19 @@
   }
   .pf-wrow__acts { align-self: center; }
   .pf-wrow__acts .pf-rowact { min-height: 44px; }
+  /* Three or more actions (Collect + Dispatch + Status) don't fit beside the status
+     word: the status takes its own line and the actions sit under it, so nothing overlaps. */
+  .pf-wrow:has(.pf-wrow__acts > :nth-child(3)),
+  .pf-wlist--sel .pf-wrow:has(.pf-wrow__acts > :nth-child(3)) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'body' 'status' 'acts';
+    row-gap: 6px;
+  }
+  .pf-wlist--sel .pf-wrow:has(.pf-wrow__acts > :nth-child(3)) {
+    grid-template-columns: 20px minmax(0, 1fr);
+    grid-template-areas: 'check body' '. status' '. acts';
+  }
+  .pf-wrow:has(.pf-wrow__acts > :nth-child(3)) .pf-wrow__acts { justify-self: end; flex-wrap: wrap; }
   /* Rows that can't be selected don't reserve the checkbox column. */
   .pf-wlist--sel .pf-wrow:has(.pf-wrow__check--none) {
     grid-template-columns: minmax(0, 1fr) auto;
