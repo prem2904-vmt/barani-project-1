@@ -1,6 +1,8 @@
 import { DatePipe } from '@angular/common';
 import { EditReferralDialogComponent } from '../../../shared/components/edit-referral-dialog/edit-referral-dialog.component';
 import { EDIT_REFERRAL_PERM, ReferralSaveResult } from '../../../shared/components/edit-referral-dialog/referral-edit';
+import { ReportActionsService } from '../../../core/services/report-actions.service';
+import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
 import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
@@ -1434,6 +1436,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
     ngOnInit() {
     this.labCfg.ensureLoaded();
+    this.reportActions.warmWhatsApp();
     // Re-fetch the active workflow each visit so toggles made in /admin/process
     // (e.g. disabling Appointments / Home visits) reflect here immediately.
     this.process.refreshActive();
@@ -3130,9 +3133,49 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const contact = o.patient?.phone || 'No phone number';
     this.toasts.success(`Report link sent via SMS to ${contact}`);
   }
-  shareReportWhatsapp(o: Order) {
-    const contact = o.patient?.phone || 'No phone number';
-    this.toasts.success(`Report link sent via WhatsApp to ${contact}`);
+  // ── Share the REPORT on WhatsApp (OPS-1113) ──────────────────
+  private readonly reportActions = inject(ReportActionsService);
+  private readonly waSend = inject(WhatsAppSendService);
+  /** Order id whose WhatsApp share is in flight (one at a time). */
+  protected readonly _waSharing = signal<string | null>(null);
+  /** The ONE WhatsApp entry: shown when WhatsApp Auto (entitled + set up) or WhatsApp Chat is available. */
+  waShareMode(): 'auto' | 'chat' | null { return this.waSend.mode({ type: 'final' }); }
+
+  /** The order's current report, or null (with a warning) when none exists yet. */
+  private async reportToShare(o: Order): Promise<Report | null> {
+    const report = await firstValueFrom(this.api.get<Report | null>(`/api/reports/by-order/${o.id}`));
+    if (!report || report.supersededByReportId) {
+      this.toasts.warning('No report yet for this order. Share it once the report is ready.');
+      return null;
+    }
+    return report;
+  }
+
+  /** Really share the report on WhatsApp through the app's one WhatsApp path (ReportActionsService):
+   *  WhatsApp Auto sends from the server (the "sent" toast comes from the server's answer only);
+   *  WhatsApp Chat opens WhatsApp with the PDF + message ready and the person presses Send. */
+  async shareReportWhatsapp(o: Order): Promise<void> {
+    if (this._waSharing()) return;
+    if (!this.waShareMode()) return;
+    const phone = o.patient?.phone?.trim();
+    if (!phone) {
+      this.toasts.warning("This patient has no mobile number on file. Add one on the patient's page, then try again.");
+      return;
+    }
+    this._waSharing.set(o.id);
+    try {
+      const report = await this.reportToShare(o);
+      if (!report) return;
+      this.reportActions.sendWhatsApp(report as never, {
+        name: report.patient?.displayName ?? o.patient?.displayName,
+        phone: report.patient?.phone || phone,
+      });
+    } catch (err) {
+      console.error('[fd] share report on WhatsApp failed', err);
+      this.toasts.error('Could not prepare the report for WhatsApp. Try again.');
+    } finally {
+      this._waSharing.set(null);
+    }
   }
   shareReportEmail(o: Order) {
     const contact = o.patient?.email || 'No email address';
@@ -3190,7 +3233,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   clearSelection() { this._selectedIds.set(new Set()); }
   bulkSms() { this.toasts.success(`SMS queued to ${this._selectedIds().size} recipients`); this.clearSelection(); }
-  bulkWhatsapp() { this.toasts.success(`WhatsApp queued to ${this._selectedIds().size} recipients`); this.clearSelection(); }
+  /** Bulk WhatsApp exists only for WhatsApp Auto (the server sends each report); Chat is one chat at a time. */
+  async bulkWhatsapp(): Promise<void> {
+    if (this.waShareMode() !== 'auto' || this._waSharing()) return;
+    const picked = this._orders().filter(o => this._selectedIds().has(o.id));
+    this.clearSelection();
+    for (const o of picked) await this.shareReportWhatsapp(o);
+  }
 
   // ── Work-list multi-select (In progress) ─────────────────
   /** ONE model drives the checkbox, the row tint AND the bar count — they

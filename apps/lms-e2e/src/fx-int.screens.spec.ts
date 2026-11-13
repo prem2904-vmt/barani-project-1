@@ -10,6 +10,8 @@ import * as path from 'node:path';
  *  c. test editor: free-text test shows Unit picker + Reference box
  *  d. patient registration Contact & IDs shows Address / place; advanced search Contact column with address
  *  e. front desk: an all-outsourced dispatched order sits under Outsourced, not In progress
+ *  g. front desk Completed row: Share menu offers WhatsApp (one entry; Chat here because no Cloud sender)
+ *  h. lab Intake (receive): one patient with two orders today shows serials 1 and 2
  * Not part of the suite (own config: playwright.screens.config.ts).
  */
 const OUT = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/fix-1113/fx-int');
@@ -56,6 +58,18 @@ const OUT_TUBES = OUT_ORDER.samples.map((s: any, i: number) => ({
   createdAt: iso(minsAgo(90)), collectedAt: iso(minsAgo(60)), dispatchedAt: iso(minsAgo(20)), status: 'outsourced', hasReport: false,
   tests: [{ orderTestId: `ot${i}`, testId: `t${i}`, testName: i === 0 ? 'Vitamin D 25-OH' : 'Serum Ferritin', status: 'outsourced', completed: false, report: null }],
 }));
+
+// g: a validated (completed) order for the Share menu; extra feeds are set per test.
+const DONE_ORDER = order('ov', 5, 'Priya Nair', 'validated', [sample('v1', 'ov', 'received', { tests: [tline('v1-t', 'Haemoglobin')] })]);
+// h: ONE patient (same patient id) with TWO orders today, dispatched to the lab: serials 1 and 2.
+const TWIN_PATIENT = pat('31', 'Divya Menon');
+const twin = (id: string, n: number, test: string) => ({
+  ...order(id, n, 'Divya Menon', 'in_progress', [sample(`${id}-s`, id, 'dispatched', { dispatchedAt: iso(minsAgo(15 - n)), tests: [tline(`${id}-t`, test)] })]),
+  patientId: 'p31', patient: TWIN_PATIENT,
+});
+const TWIN_ORDERS = [twin('ot1', 1, 'Glucose (fasting)'), twin('ot2', 2, 'Thyroid profile')];
+let extraToday: unknown[] = [];
+let dispatchedFeed: unknown[] = [];
 
 // d: registration config (the seeded Micro World shape) and two search hits.
 const fld = (name: string, title: string, type: string, extra: Record<string, unknown> = {}) => ({ id: name, name, title, type, isStandard: true, isRequired: false, isEditable: true, storageKey: name, width: 'half', ...extra });
@@ -105,7 +119,9 @@ async function backend(page: Page) {
     if (p === '/api/tenants/branches') return route.fulfill(ok(origin, [{ id: 'b1', name: 'Main' }]));
     if (p === '/api/process-workflows/active') return route.fulfill(ok(origin, null));
     if (p === '/api/whatsapp/settings') return route.fulfill(ok(origin, { canSend: false }));
-    if (p === '/api/orders/today' || p === '/api/orders/range') return route.fulfill(ok(origin, ORDERS));
+    if (p === '/api/orders/today' || p === '/api/orders/range') return route.fulfill(ok(origin, [...ORDERS, ...extraToday]));
+    if (p === '/api/orders/dispatched') return route.fulfill(ok(origin, dispatchedFeed));
+    if (p === '/api/samples/in-transit') return route.fulfill(ok(origin, []));
     if (p === '/api/billing/outstanding') return route.fulfill(ok(origin, { due: [OLD_BILL], refundsOwed: [] }));
     if (p === '/api/samples/pending-collection') return route.fulfill(ok(origin, SERIES_ORDER.samples.filter(s => s.status === 'pending').map(s => ({ ...s, order: SERIES_ORDER }))));
     if (p === '/api/samples/outsourced') return route.fulfill(ok(origin, OUT_TUBES));
@@ -205,6 +221,36 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
       await see(page, 'Hemanth Kumar', `f-${vp}`, 20_000);
       await page.waitForTimeout(600);
       await page.screenshot({ path: `${OUT}/f-payments-due-tab-older-due--${vp}.png` });
+    });
+
+    test('g. Completed row Share menu offers WhatsApp', async ({ page }) => {
+      extraToday = [DONE_ORDER];
+      try {
+        await page.goto('/frontdesk');
+        await page.getByPlaceholder(/Search patient/).locator('visible=true').first().waitFor({ timeout: 60_000 });
+        await light(page);
+        await deskTab(page, 'Completed');
+        await see(page, 'Priya Nair', `g-${vp}`, 20_000);
+        await page.locator('button[aria-label="Share report"]').locator('visible=true').first().click();
+        await see(page, 'WhatsApp', `g2-${vp}`, 10_000);
+        await page.waitForTimeout(600);
+        await page.screenshot({ path: `${OUT}/g-share-menu-whatsapp--${vp}.png` });
+      } finally { extraToday = []; }
+    });
+
+    test('h. lab Intake: one patient, two orders, serials 1 and 2', async ({ page }) => {
+      test.skip(vp !== 'desktop', 'desktop only');
+      dispatchedFeed = TWIN_ORDERS;
+      try {
+        await page.goto('/lab/my-work');
+        await page.getByText('Lab Intake', { exact: false }).locator('visible=true').first().click();   // the collapsed Intake rail
+        await see(page, 'Divya Menon', `h-${vp}`, 60_000);
+        await light(page);
+        await page.waitForTimeout(800);
+        const chips = (await page.locator('.pf-dayno').locator('visible=true').allTextContents()).map(t => t.trim().split(' ')[0]);
+        expect(chips).toEqual(expect.arrayContaining(['1', '2']));
+        await page.screenshot({ path: `${OUT}/h-lab-intake-serials--${vp}.png` });
+      } finally { dispatchedFeed = []; }
     });
 
     test('d. registration Contact & IDs has the address; advanced search Contact column', async ({ page }) => {

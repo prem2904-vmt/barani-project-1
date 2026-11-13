@@ -1123,7 +1123,9 @@
                             </svg>
                             <span>SMS</span>
                           </button>
-                          <button type="button" class="pf-share-menu__item"
+@if (waShareMode()) {
+                          <button type="button" class="pf-share-menu__item" data-test="share-whatsapp"
+                            [title]="waShareMode() === 'auto' ? 'WhatsApp Auto: the lab number sends the report' : 'WhatsApp Chat: opens WhatsApp with the report ready; you press Send'"
                             (click)="shareReportWhatsapp(o); activeShareMenuOrderId.set(null)">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                               stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
@@ -1132,6 +1134,7 @@
                             </svg>
                             <span>WhatsApp</span>
                           </button>
+                          }
                           <button type="button" class="pf-share-menu__item"
                             (click)="shareReportEmail(o); activeShareMenuOrderId.set(null)">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1431,7 +1434,9 @@
                             </svg>
                             <span>SMS</span>
                           </button>
-                          <button type="button" class="pf-share-menu__item"
+@if (waShareMode()) {
+                          <button type="button" class="pf-share-menu__item" data-test="share-whatsapp"
+                            [title]="waShareMode() === 'auto' ? 'WhatsApp Auto: the lab number sends the report' : 'WhatsApp Chat: opens WhatsApp with the report ready; you press Send'"
                             (click)="shareReportWhatsapp(row.order); activeShareMenuOrderId.set(null)">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                               stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
@@ -1440,6 +1445,7 @@
                             </svg>
                             <span>WhatsApp</span>
                           </button>
+                          }
                           <button type="button" class="pf-share-menu__item"
                             (click)="shareReportEmail(row.order); activeShareMenuOrderId.set(null)">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1507,6 +1513,7 @@
         </svg>
         SMS
       </button>
+      @if (waShareMode() === 'auto') {
       <button type="button" class="pf-bulkbar__btn press" (click)="bulkWhatsapp()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
           stroke-linecap="round" stroke-linejoin="round">
@@ -1514,6 +1521,7 @@
         </svg>
         WhatsApp
       </button>
+      }
       <button type="button" class="pf-bulkbar__btn pf-bulkbar__btn--ghost press"
         (click)="clearSelection()">Clear</button>
     </div>
