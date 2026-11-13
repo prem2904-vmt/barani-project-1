@@ -12,9 +12,10 @@ import { FormFieldType, FormFieldCategory } from './form-field.model';
 
 describe('field-registry', () => {
   describe('allFieldTypes', () => {
-    it('returns all 34 field type entries', () => {
+    it('returns all 35 field type entries (34 on by default + the opt-in Family tree)', () => {
       const all = allFieldTypes();
-      expect(all.length).toBe(34);
+      expect(all.length).toBe(35);
+      expect(all.filter(e => !e.enabled).map(e => e.type)).toEqual(['family']);
     });
 
     it('includes entries from each category', () => {
@@ -221,7 +222,7 @@ describe('field-registry', () => {
       expect(grouped).toHaveProperty('advanced');
 
       const total = Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
-      expect(total).toBe(34);
+      expect(total).toBe(34); // onlyEnabled by default: the opt-in 'family' is not listed
     });
 
     it('respects onlyEnabled=true (default)', () => {

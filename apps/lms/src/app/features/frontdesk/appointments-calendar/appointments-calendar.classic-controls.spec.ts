@@ -59,14 +59,21 @@ function render() {
 }
 
 describe('Appointments calendar — classic (no native controls)', () => {
-  it('"Jump to date" is a button + a hidden native input (never a visible date field)', () => {
-    const { el } = render();
-    const jump = el.querySelector('.pf-cal-nav__jump')!;
+  it('"Jump to date" is a button that opens the kit calendar popover (never a native date field)', () => {
+    const { el, c, f } = render();
+    const jump = el.querySelector<HTMLButtonElement>('.pf-cal-nav__jump')!;
     expect(jump.tagName).toBe('BUTTON');
-    const native = el.querySelector<HTMLInputElement>('.pf-cal-nav__jump-input')!;
-    expect(native.type).toBe('date');
-    expect(native.getAttribute('aria-hidden')).toBe('true');
-    expect(native.tabIndex).toBe(-1);
+    // f5969db1: the hidden native <input type=date> was replaced by pf-calendar in a popover — no native date input at all.
+    expect(el.querySelector('input[type="date"]')).toBeNull();
+    expect(el.querySelector('pf-calendar')).toBeNull();
+    jump.click(); f.detectChanges();
+    const pop = el.querySelector('.pf-apc-jump-pop')!;
+    expect(pop.getAttribute('role')).toBe('dialog');
+    expect(pop.querySelector('pf-calendar')).not.toBeNull();
+    expect(el.querySelector('input[type="date"]')).toBeNull();
+    c.onJumpDatePicked('2026-11-20'); f.detectChanges();
+    expect(el.querySelector('.pf-apc-jump-pop')).toBeNull();     // picking closes it and jumps
+    expect(c.view()).toBe('day');
   });
 
   it('reschedule panel: pf-date + pf-select, never native date/time inputs', () => {

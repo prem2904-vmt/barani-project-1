@@ -115,8 +115,9 @@ const words = (e: Element) => [...e.children].map(c => c.textContent!.trim()).jo
 /** Component CSS with Angular's scoping attributes stripped. */
 const css = () => ((PendingValidationComponent as any).ɵcmp.styles as string[]).join('\n')
   .replace(/\[_ng(content|host)-%COMP%\]/g, '');
-/** Just the new-design rules. */
-const ndCss = () => css().slice(css().indexOf('.pv-nd'));
+/** Just the new-design rules. The queue is ND-only now (no `.pv-nd` scoping prefix any more), so it is ALL of the
+ *  component CSS; indexOf = -1 used to slice just the last character and make every ndCss() check vacuous. */
+const ndCss = () => { const all = css(); const i = all.indexOf('.pv-nd'); return i < 0 ? all : all.slice(i); };
 /** Primaries on the page proper — the phone bottom bar mirrors the side
  *  card's primary (display:none above 640px), so it's counted separately. */
 const primaries = (root: Element) =>

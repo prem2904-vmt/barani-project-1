@@ -11,10 +11,11 @@ import { resolve } from 'node:path';
  */
 const read = (p: string) => readFileSync(resolve(process.cwd(), 'apps/lms/src/app', p), 'utf8');
 
-const SURFACES: { file: string; html?: string }[] = [
+const SURFACES: { file: string; html?: string; inject?: boolean }[] = [
   { file: 'layout/top-strip/top-strip.component.ts', html: 'layout/top-strip/top-strip.component.html' },
   { file: 'layout/bottom-nav/bottom-nav.component.ts', html: 'layout/bottom-nav/bottom-nav.component.html' },
-  { file: 'shared/components/hero-band/hero-band.component.ts' },
+  // The band (and the case-sheet band brand) resolve the logo in ONE place: injectTenantBrand.
+  { file: 'shared/components/hero-band/tenant-brand.ts', inject: true },
   { file: 'features/admin/setup-wizard/setup-wizard.component.ts' },
 ];
 
@@ -22,9 +23,10 @@ describe('tenant logo surfaces — private uploads', () => {
   for (const s of SURFACES) {
     it(`${s.file}: the logo goes through brandingSrc`, () => {
       const ts = read(s.file);
-      expect(ts).toMatch(/brandingSrc\(this\.injector,/);
+      expect(ts).toMatch(/brandingSrc\((this\.)?injector,/);
       // No raw `logoUrl || null` fed to a template any more.
       expect(ts).not.toMatch(/tenant\(\)\?\.logoUrl \|\| null/);
+      if (s.inject) expect(read('shared/components/hero-band/hero-band.component.ts')).toMatch(/injectTenantBrand\(\)/);
       const tpl = ts + (s.html ? read(s.html) : '');
       // No <img [src]="…logoUrl…"> binding of the stored value.
       expect(tpl).not.toMatch(/\[src\]="[^"]*logoUrl[^"]*"/);

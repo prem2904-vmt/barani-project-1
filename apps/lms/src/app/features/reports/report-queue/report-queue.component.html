@@ -10,7 +10,7 @@
       [value]="query()"
       (valueChange)="setQuery($event)">
       <ng-container band-tools>
-        <pf-segmented class="pf-rq-seg" [options]="filterOptions()" [value]="filter()" mode="text"
+        <pf-segmented class="pf-rq-seg" [options]="ndFilters()" [value]="filter()" mode="text"
                       (valueChange)="setFilter($any($event))" />
       </ng-container>
       <ng-container band-actions>

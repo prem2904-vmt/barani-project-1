@@ -18,7 +18,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output, signal } f
   template: `
     <span class="relative block min-w-0">
       <input #txt type="text" inputmode="numeric" autocomplete="off" maxlength="5"
-             placeholder="hh:mm" class="pf-input pf-num w-full pr-10"
+             placeholder="hh:mm" class="pf-time__in pf-input pf-num w-full pr-10"
              [class.pf-input--error]="!!error()"
              [attr.id]="inputId() || null"
              [attr.aria-label]="label()"

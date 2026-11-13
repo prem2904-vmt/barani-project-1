@@ -15,7 +15,7 @@ import { guardTransition } from '../../core/navigation/zoom-transition';
 const read = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf8');
 const global = read('apps/lms/src/styles.scss');
 const shell = read('apps/lms/src/app/layout/shell/shell.component.ts');
-const ambient = read('apps/lms/src/app/shared/components/ambient-bg/ambient-bg.component.ts');
+const ambient = read('libs/shared/src/lib/components/layout/ambient-bg.component.ts') /* moved into @prefrontal/shared */;
 
 const touchBlock = global.slice(global.indexOf('Touch devices: GPU budget'));
 

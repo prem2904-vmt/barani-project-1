@@ -127,15 +127,15 @@ describe('Frontdesk work rows — selection', () => {
     expect(cb.getAttribute('type')).toBe('button'); // Space / Enter toggle natively
     expect(cb.getAttribute('[attr.aria-checked]')).toBe('workSel.isSelected(o.id)');
     expect(cb.getAttribute('[attr.aria-label]')).toBe("'Select ' + formatPatient(o.patient)");
-    expect(kit).toMatch(/\.pf-check\[aria-checked='true'\] \.pf-check__box \{ background: var\(--color-violet-600/);
-    expect(kit).toMatch(/\.pf-check:focus-visible \.pf-check__box \{ outline: 2px solid/);
+    expect(kit).toMatch(/\.pf-check\[aria-checked='true'\] \.pf-check__box \{\s*background: var\(--color-violet-600/);
+    expect(kit).toMatch(/\.pf-check:focus-visible \.pf-check__box \{\s*outline: 2px solid/);
   });
 
   it('the checkbox is ROUND: a 20px circle (border-radius 50%), 44px hit area on touch', () => {
     const box = kit.match(/\.pf-check__box \{([^}]*)\}/)![1];
-    expect(box).toMatch(/width: 20px; height: 20px; border-radius: 50%;/);
+    expect(box).toMatch(/width: 20px;\s*height: 20px;\s*border-radius: 50%;/);
     expect(kit.match(/\.pf-check \{([^}]*)\}/)![1]).toMatch(/border-radius: 50%/);
-    expect(kit).toMatch(/pointer: coarse\) \{ \.pf-check \{ width: 44px; height: 44px;/);
+    expect(kit).toMatch(/pointer: coarse\) \{\s*\.pf-check \{\s*width: 44px;\s*height: 44px;/);
   });
 
   it('highlight, checkbox and bar count all read the SAME model (the count bug)', () => {

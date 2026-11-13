@@ -74,10 +74,10 @@ describe('skeleton kit', () => {
   });
 
   it('shimmer is theme-aware and switches off under reduced motion', () => {
-    const src = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/shared/primitives/skeleton.component.ts'), 'utf8');
+    const src = readFileSync(resolve(process.cwd(), 'libs/shared/src/lib/primitives/skeleton.component.ts'), 'utf8');
     expect(src).toMatch(/:host-context\(\.light\)/);
     expect(src).toMatch(/prefers-reduced-motion: reduce\)\s*\{\s*:host \{ animation: none; background-image: none; \}/);
-    const kit = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/shared/primitives/skeleton-kit.component.ts'), 'utf8');
+    const kit = readFileSync(resolve(process.cwd(), 'libs/shared/src/lib/primitives/skeleton-kit.component.ts'), 'utf8');
     expect(kit).toMatch(/prefers-reduced-motion: reduce\) \{ \.pf-skel-rise \{ animation: none; \} \}/);
     expect(kit).toMatch(/prefers-reduced-motion: reduce\) \{ \.dots i \{ animation: none;/);
   });
@@ -92,6 +92,10 @@ describe('no PF-logo loaders outside sign-in', () => {
   const ALLOWED = new Set([
     'features/login/login.component.ts',
     'features/login/login.component.html',
+    // Set-password is the sign-in flow's last step (reached from the invite / forced-change gate before the
+    // person has a session): its submit button's inline spinner is the same branding mark.
+    'features/set-password/set-password.component.ts',
+    'features/set-password/set-password.component.html',
     'shared/components/loading-logo/loading-logo.component.ts',
     'shared/components/loading-logo/loading-logo.component.html',
     // PENDING (2026-09-27): /pathologist is being reworked in parallel by

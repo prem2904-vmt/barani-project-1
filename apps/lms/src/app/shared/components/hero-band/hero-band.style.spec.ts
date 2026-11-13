@@ -40,7 +40,8 @@ describe('Hero band — dark surface', () => {
   it('the shared shade is the brand fuchsia (#c026d3 family) and the base is the page dark base (#0a0a15)', () => {
     expect(dark).toMatch(/--pf-dark-shade:\s*rgba\(168, 42, 184,/);
     expect(dark).toMatch(/--pf-dark-shade-base:\s*rgba\(10, 10, 21,/);
-    expect(global).toMatch(/--bg-primary:\s*#0a0a15/);
+    // The dark theme tokens moved into the shared theme (@prefrontal/shared); the band's base still matches --bg-primary.
+    expect(readFileSync(resolve(process.cwd(), 'libs/shared/src/lib/styles/_pf-theme.scss'), 'utf8')).toMatch(/--bg-primary:\s*#0a0a15/);
   });
 
   it('keeps the subtle bottom hairline in dark', () => {

@@ -1,3 +1,5 @@
+@use '../../../../shared/styles/device-tier' as dt;
+
 // Pending changes (PF-PATTERN): band, then the list card; one item = the before / after (main) + the review (side, the one decision).
 
 .pd-ctx-title {
@@ -94,7 +96,7 @@
   grid-template-columns: minmax(0, 1fr);
   max-width: 760px;
 }
-@media (max-width: 1279px) {
+@include dt.tablet-tier {
   .pd-cols {
     grid-template-columns: minmax(0, 1fr);
   }

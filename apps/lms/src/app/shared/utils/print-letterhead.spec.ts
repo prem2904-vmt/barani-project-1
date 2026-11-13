@@ -273,6 +273,10 @@ describe('digital outputs always carry the header & footer (setting ON)', () => 
     c.injector = injectorFor(); c.api = api; c.dialog = dialogPicking(PRINT_CHOICE_LETTERHEAD);
     c.auth = { user: () => ({ tenantName: LAB }) };
     c.canDeliver = () => true; c.toasts = { success: vi.fn(), error: vi.fn() }; c.refresh = vi.fn();
+    // No cloud sender → WhatsApp Chat: the shared manual flow (waManual) drives the chat window; the PDF is archived
+    // in the background from the row (qrToken) exactly as before.
+    c.waSend = { canSend: () => false, chatAllowed: () => true };
+    c.waManual = { send: vi.fn(async () => 'cancelled') };
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     c.deliver(report, 'whatsapp');
     await vi.waitFor(() => expect(posted.length).toBe(1));

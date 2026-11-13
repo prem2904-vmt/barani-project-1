@@ -44,8 +44,17 @@ const cta = (el: HTMLElement) => el.querySelector('[data-cta]') as HTMLButtonEle
 /** Doctor tiles, each once (a doctor in two departments shows in both groups). */
 const docTiles = (el: HTMLElement) => [...el.querySelectorAll('.pf-ov-grid .pf-ov-doc:not(.pf-ov-anydept)')] as HTMLElement[];
 
-beforeEach(() => Object.defineProperty(globalThis, 'localStorage', { value: memoryStorage(), configurable: true, writable: true }));
-afterEach(() => TestBed.resetTestingModule());
+// The page reads window.matchMedia for its layout (billing column at >=1024px, phone <=640px). Other specs in the same
+// worker overwrite window.matchMedia and don't restore it, so pin a desktop viewport here (deterministic in a full run).
+const realMatchMedia = (window as any).matchMedia;
+const desktopMatchMedia = (q: string) => ({
+  matches: q.includes('min-width: 1024px'), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+});
+beforeEach(() => {
+  Object.defineProperty(globalThis, 'localStorage', { value: memoryStorage(), configurable: true, writable: true });
+  (window as any).matchMedia = desktopMatchMedia;
+});
+afterEach(() => { TestBed.resetTestingModule(); (window as any).matchMedia = realMatchMedia; });
 
 describe('New visit — the order-create band (product · Patient · Doctor · one search)', () => {
   it('the first tile is the product switcher (OPD); Patient and Doctor follow', () => {

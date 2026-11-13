@@ -88,7 +88,7 @@ describe('Frontdesk landing — phone list tabs', () => {
 
 describe('PF kit — empty state', () => {
   it('defines pf-empty in the kit, violet-only', () => {
-    const block = kit.slice(kit.indexOf('/* ── Empty state'), kit.indexOf('/* ── Neutral selected states'));
+    const block = kit.slice(kit.indexOf('/* ── Empty state'), kit.indexOf('/* ── Checkbox (multi-select rows)'));
     expect(block).toMatch(/\.pf-empty \{/);
     expect(block).toMatch(/\.pf-empty__icon \{[^}]*--color-primary/);
     expect(block).not.toMatch(AMBER);

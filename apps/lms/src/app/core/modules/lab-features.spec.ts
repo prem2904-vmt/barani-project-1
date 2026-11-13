@@ -113,10 +113,10 @@ describe('lab-features — every surface follows the rule', () => {
     // The Home collection list isn't fetched while off (its API 403s).
     expect(fd).toMatch(/if \(this\.showHome\(\)\) \{\s*this\.api\.get<Appointment\[\]>\('\/api\/home-collection\/all'\)/);
     const fdHtml = src('features/frontdesk/frontdesk-landing/frontdesk-landing.component.html');
-    // Both Home collection tabs (phone + desktop) sit behind showHome().
+    // Every Home collection tab (phone, classic desktop, and the ND segmented switch) sits behind showHome().
     const homeTabs = fdHtml.split('setLeftTab(\'home\')').length - 1 + (fdHtml.split('setMobileList(\'home\')').length - 1);
     expect(homeTabs).toBe(2);
-    expect(fdHtml.match(/@if \(showHome\(\)\) \{/g)?.length).toBe(2);
+    expect(fdHtml.match(/@if \(showHome\(\)\) \{/g)?.length).toBe(3);
     expect(src('features/lab/lab-settings-hub/lab-settings-hub.component.ts')).toMatch(/feature !== 'homeCollection' \|\| this\.features\.homeCollectionEnabled\(\)/);
     expect(src('features/frontdesk/book-appointment/book-appointment.component.ts').match(/@if \(features\.homeCollectionEnabled\(\)\) \{/g)?.length).toBe(2);
     expect(src('features/admin/appointments-config/appointments-config.component.ts')).toMatch(/this\.features\.homeCollectionEnabled\(\)/);

@@ -105,7 +105,26 @@ function render(opts: { nd?: boolean; patientId?: string; post?: any; returnTo?:
     input.dispatchEvent(new Event('input'));
     f.detectChanges();
   };
+  /** Title is a pf-select dropdown (c2d92a1b "title pf-select"): open the trigger, click the option in the listbox panel. */
+  const openTitle = () => {
+    document.body.querySelectorAll('.pf-dd__panel').forEach(n => n.remove());
+    el.querySelector<HTMLButtonElement>('[data-field="title"] button.pf-dd__trigger')!.click();
+    f.detectChanges();
+    return Array.from(document.body.querySelectorAll<HTMLButtonElement>('.pf-dd__panel [role="option"]'));
+  };
+  const titleOptions = () => {
+    const opts = openTitle().map(o => o.textContent!.trim());
+    el.querySelector<HTMLButtonElement>('[data-field="title"] button.pf-dd__trigger')!.click();   // toggle closed
+    f.detectChanges();
+    return opts;
+  };
+  const titleValue = () => el.querySelector('[data-field="title"] .pf-dd__value')?.textContent?.trim();
   const seg = (field: string, label: string) => {
+    if (field === 'title') {
+      openTitle().find(o => o.textContent!.trim() === label)!.click();
+      f.detectChanges();
+      return;
+    }
     (Array.from(el.querySelectorAll<HTMLButtonElement>(`[data-field="${field}"] .pf-seg__item`)).find(b => b.textContent!.trim() === label))!.click();
     f.detectChanges();
   };
@@ -119,7 +138,7 @@ function render(opts: { nd?: boolean; patientId?: string; post?: any; returnTo?:
     target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...extra }));
     f.detectChanges();
   };
-  return { f, el, c: f.componentInstance as any, api, router, orderEntry, dialog, toasts, txt, flush, type, seg, fillAll, enter };
+  return { f, el, c: f.componentInstance as any, api, router, orderEntry, dialog, toasts, txt, flush, type, seg, fillAll, enter, titleOptions, titleValue };
 }
 
 describe('Patient registration — new design: ONE form', () => {
@@ -247,7 +266,7 @@ describe('Patient registration — new design: ONE form', () => {
     expect(first.querySelector('.pf-field__lbl .pf-dot-unpriced[aria-label="required"]')).not.toBeNull();
     expect(el.querySelector('[data-field="phone"] input[type="tel"].pf-num')).not.toBeNull();
     expect(el.querySelector('[data-field="abha_id"] input.pf-input.pf-num')).not.toBeNull();
-    expect(el.querySelector('.pf-input')).toBeNull();
+    expect(el.querySelector('.nd-input')).toBeNull();   // the pre-kit input class is gone (pf-input IS the kit class now)
     expect(el.querySelector('.pf-wr-card .pf-card__head button')).toBeNull();
   });
 
@@ -515,27 +534,27 @@ const BABY_CONFIG = (() => {
 describe('Patient registration — Baby vs Baby of (2026-09-28)', () => {
   const label = (el: HTMLElement, f: string) =>
     (el.querySelector(`[data-field="${f}"] .pf-field__lbl`)?.textContent ?? '').replace(/\s+/g, ' ').replace('required', '').trim();
-  const pills = (el: HTMLElement) =>
-    Array.from(el.querySelectorAll('[data-field="title"] .pf-seg__item')).map(b => b.textContent!.trim());
+  /** The Title choices, read from the dropdown (Title is a pf-select; the other fields are still segmented). */
+  const pills = (r: ReturnType<typeof render>) => r.titleOptions();
   const checked = (el: HTMLElement, f: string) =>
-    el.querySelector(`[data-field="${f}"] [role="radio"][aria-checked="true"]`)?.textContent?.trim();
+    f === 'title' ? el.querySelector('[data-field="title"] .pf-dd__value')?.textContent?.trim()
+      : el.querySelector(`[data-field="${f}"] [role="radio"][aria-checked="true"]`)?.textContent?.trim();
   const post = (r: ReturnType<typeof render>) => (r.api.post.mock.calls[0] as unknown as [string, Record<string, unknown>])[1];
 
-  it('title pills in order: Mr. / Mrs. / Ms. / Dr. / Master / Baby / Baby of', () => {
-    const { el } = render({ config: BABY_CONFIG });
-    expect(pills(el)).toEqual(['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby', 'Baby of']);
+  it('title options in order: Mr. / Mrs. / Ms. / Dr. / Master / Baby / Baby of', () => {
+    expect(pills(render({ config: BABY_CONFIG }))).toEqual(['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby', 'Baby of']);
   });
 
   it('a form still offering only "Baby" gets "Baby of" right after it (no duplicate when present)', () => {
-    expect(pills(render().el)).toEqual(['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby', 'Baby of']);
+    expect(pills(render())).toEqual(['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Master', 'Baby', 'Baby of']);
     TestBed.resetTestingModule();
-    expect(pills(render({ config: BABY_CONFIG }).el).filter(p => p === 'Baby of').length).toBe(1);
+    expect(pills(render({ config: BABY_CONFIG })).filter(p => p === 'Baby of').length).toBe(1);
   });
 
   it('a customised list without "Baby" is left exactly as the admin set it', () => {
     const c = JSON.parse(JSON.stringify(CONFIG));
     c.steps[0].fields[0].options = ['Mr.', 'Ms.', 'Kid'].map(v => ({ value: v, label: v }));
-    expect(pills(render({ config: c }).el)).toEqual(['Mr.', 'Ms.', 'Kid']);
+    expect(pills(render({ config: c }))).toEqual(['Mr.', 'Ms.', 'Kid']);
   });
 
   it('"Baby of": mother\'s name labels, subject "Baby of Priya Kumar", guardian asked once (mirrored), no auto-sex', async () => {

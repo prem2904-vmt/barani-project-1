@@ -84,13 +84,15 @@ describe('ExpenseTrackerComponent', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   it('opens on the last 7 IST days: filters LEFT, book MAIN, one primary, kit controls only', () => {
-    const { el } = render();
+    const { el, c } = render();
     // The cashier opens on MY expenses (own entries), with all three tabs.
     expect(svc['book']).toHaveBeenCalledWith({ from: labDaysAgo(6), to: labToday(), categoryId: null, kind: null, mode: null, mine: true });
-    // The section switch rides the band pill (band-tools), not an orphan row above the cards.
+    // The section switch rides the band pill (band-tools), not an orphan row above the cards. It is the shared
+    // <pf-segmented> (stubbed as an unknown element in this spec, so its options/value are asserted on the component).
     const band = el.querySelector('pf-hero-band')!;
-    expect([...band.querySelectorAll('.pf-xt__tabs [role="tab"]')].map(t => t.textContent?.trim())).toEqual(['My expenses', 'All expenses', 'Day closing']);
-    expect(band.querySelector('.pf-xt__tabs [aria-selected="true"]')?.textContent?.trim()).toBe('My expenses');
+    expect(band.querySelector('pf-segmented.pf-xt__tabs')).not.toBeNull();
+    expect(c.expenseTabOptions().map((o: any) => o.label)).toEqual(['My expenses', 'All expenses', 'Day closing']);
+    expect(c.expenseTabOptions().find((o: any) => o.value === c.tab()).label).toBe('My expenses');
     expect(el.querySelector('.pf-xt__tabrow')).toBeNull();
     const panels = el.querySelector('.pf-xt__panels')!;
     expect(panels.children[0].classList.contains('pf-xt__side')).toBe(true);
@@ -140,7 +142,8 @@ describe('ExpenseTrackerComponent', () => {
   it('classic design (no band) keeps the section switch on its own row', () => {
     const { el } = render({ classic: true });
     expect(el.querySelector('pf-hero-band')).toBeNull();
-    expect(el.querySelectorAll('.pf-xt__tabrow [role="tab"]').length).toBe(3);
+    expect(el.querySelectorAll('.pf-xt__tabrow pf-segmented.pf-xt__tabs').length).toBe(1);   // one shared switch, own row
+    expect(el.querySelector('pf-hero-band pf-segmented.pf-xt__tabs')).toBeNull();
   });
 
   it('a viewer gets no Add button and no row edit; a modifier (own scope) sees no balances or day book', () => {

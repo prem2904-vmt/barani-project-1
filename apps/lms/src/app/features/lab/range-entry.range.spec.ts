@@ -81,7 +81,7 @@ async function renderResultEntry(view: 'grid' | 'cards') {
       { provide: ApiService, useValue: api },
       { provide: ToastService, useValue: toasts },
       { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ id: 'ot1' }), queryParamMap: convertToParamMap({}) }, paramMap: of(convertToParamMap({ id: 'ot1' })), queryParamMap: of(convertToParamMap({})) } },
-      { provide: Router, useValue: { url: '/lab/result/ot1', navigate: vi.fn(() => Promise.resolve(true)), getCurrentNavigation: () => null } },
+      { provide: Router, useValue: { url: '/lab/result/ot1', navigate: vi.fn(() => Promise.resolve(true)), navigateByUrl: vi.fn(() => Promise.resolve(true)), getCurrentNavigation: () => null } },
     ],
   });
   TestBed.inject(NumpadService).touch.set(false);
@@ -123,7 +123,7 @@ async function renderSampleEntry() {
       { provide: PlatformService, useValue: { getApiUrl: () => '', isCapacitor: () => false } },
       { provide: DraftShelfService, useValue: { drop: vi.fn() } },
       { provide: ActivatedRoute, useValue: { paramMap: new BehaviorSubject(convertToParamMap({ sampleId: 'smp-1' })), queryParamMap: new BehaviorSubject(convertToParamMap({})), snapshot: { paramMap: new Map([['sampleId', 'smp-1']]), queryParamMap: new Map() } } },
-      { provide: Router, useValue: { url: '/lab/sample/smp-1', navigate: vi.fn(() => Promise.resolve(true)) } },
+      { provide: Router, useValue: { url: '/lab/sample/smp-1', navigate: vi.fn(() => Promise.resolve(true)), navigateByUrl: vi.fn(() => Promise.resolve(true)) } },
     ],
   });
   TestBed.inject(NumpadService).touch.set(false);

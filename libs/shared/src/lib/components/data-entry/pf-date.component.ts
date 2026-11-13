@@ -36,7 +36,7 @@ import { PfCalendarComponent } from './pf-calendar.component.js';
   template: `
     <span class="relative block min-w-0" #container>
       <input #txt type="text" inputmode="numeric" autocomplete="off" maxlength="10"
-             placeholder="dd/mm/yyyy" class="pf-input pf-num w-full pr-10"
+             placeholder="dd/mm/yyyy" class="pf-date__in pf-input pf-num w-full pr-10"
              [class.pf-input--error]="!!error() || !!externalError()"
              [attr.id]="inputId() || null"
              [attr.aria-label]="label()"

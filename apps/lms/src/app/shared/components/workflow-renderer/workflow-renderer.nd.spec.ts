@@ -48,9 +48,12 @@ describe('WorkflowRendererComponent — new design', () => {
     expect(el.querySelector('h3, button.pf-btn, .pf-btn--primary, [role="tablist"]')).toBeNull();
   });
 
-  it('Title is its own segmented field in nd (not the first-name prefix); wide fields span the card', () => {
+  it('Title is its own pf-select dropdown field in nd (not the first-name prefix, no pills); wide fields span the card', () => {
     const { el } = create();
-    expect(el.querySelector('[data-field="title"] [role="radiogroup"].pf-seg')).not.toBeNull();
+    // c2d92a1b ("title pf-select"): Title is a dropdown, whatever its configured type; Sex etc. stay segmented.
+    expect(el.querySelector('[data-field="title"] pf-select button.pf-dd__trigger')).not.toBeNull();
+    expect(el.querySelector('[data-field="title"] [role="radiogroup"].pf-seg')).toBeNull();
+    expect(el.querySelector('[data-field="title"]')!.closest('.pf-wr-span')).not.toBeNull();
     expect(el.querySelector('pf-select.w-\\[104px\\]')).toBeNull();
     expect(el.querySelector('[data-field="phone"]')!.closest('.pf-wr-span')).not.toBeNull();
     expect(el.querySelector('[data-field="first_name"]')!.closest('.pf-wr-span')).toBeNull();

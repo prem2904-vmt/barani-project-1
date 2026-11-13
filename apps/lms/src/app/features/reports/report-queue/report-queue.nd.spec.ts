@@ -225,8 +225,10 @@ describe('Reports list (nd) — band', () => {
 
   it('arrow keys move the filter (radiogroup)', async () => {
     const { el, c, f } = await render();
-    const seg = el.querySelector('.pf-rq-seg') as HTMLElement;
-    seg.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    // pf-segmented owns the keys on its radiogroup: the event comes from the checked radio and bubbles up to it.
+    const checked = el.querySelector('.pf-rq-seg [role="radio"][aria-checked="true"]') as HTMLElement;
+    expect(checked.getAttribute('data-filter')).toBe('pending');
+    checked.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     f.detectChanges();
     expect(c.filter()).toBe('partial');
   });

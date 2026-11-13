@@ -137,13 +137,16 @@ describe('Appointments calendar (nd) — band + pill', () => {
     (seg.querySelector('[aria-checked="true"]') as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     f.detectChanges();
     expect(c.view()).toBe('month');
-    // ‹ Today › + jump; the native date input is hidden, never the control.
-    expect(pill.querySelectorAll('.pf-apc-nav__btn').length).toBe(3);
+    // ‹ Today › + jump: the jump is a button that opens the kit calendar popover (f5969db1) — no native date input.
+    expect(pill.querySelectorAll('.pf-apc-nav__btn').length).toBe(3);   // ‹ › and the jump button
     expect(pill.querySelector('.pf-apc-nav__today')?.textContent?.trim()).toBe('Today');
-    const native = pill.querySelectorAll('input[type="date"]');
-    expect(native.length).toBe(1);
-    expect(native[0].classList).toContain('pf-apc-jump__native');
-    expect(native[0].getAttribute('aria-hidden')).toBe('true');
+    expect(pill.querySelectorAll('input[type="date"]').length).toBe(0);
+    const jump = pill.querySelector<HTMLButtonElement>('.pf-apc-nav__btn.pf-apc-jump')!;
+    expect(jump.getAttribute('aria-label')).toBe('Jump to a date');
+    click(jump); f.detectChanges();
+    expect(el.querySelector('.pf-apc-jump-pop[role="dialog"] pf-calendar')).not.toBeNull();
+    click(jump); f.detectChanges();                                       // toggles closed again
+    expect(el.querySelector('.pf-apc-jump-pop')).toBeNull();
     const before = c.cursor().getTime();
     click(pill.querySelectorAll('.pf-apc-nav__btn')[1]);
     expect(c.cursor().getTime()).toBeGreaterThan(before);

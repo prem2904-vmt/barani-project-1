@@ -94,8 +94,11 @@ const enter = (el: Element, extra: KeyboardEventInit = {}) =>
   el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...extra }));
 const chip = (el: HTMLElement, t: string) => el.querySelector(`.pf-bka-chip[data-time="${t}"]`) as HTMLElement;
 
+/** The patient search is the shared <pf-patient-search> (its text input; results are .row buttons picked on mousedown). */
+const PQ = 'pf-patient-search input[type="text"]';
 async function pickPatient(f: any, el: HTMLElement) {
-  const input = el.querySelector('.pf-bka-pq') as HTMLInputElement;
+  const input = el.querySelector(PQ) as HTMLInputElement;
+  input.dispatchEvent(new Event('focus'));
   input.value = 'para';
   input.dispatchEvent(new Event('input'));
   await sleep(260);
@@ -130,7 +133,7 @@ describe('New appointment (nd) — band + pill', () => {
     click(chip(el, '10:00')); f.detectChanges();
     expect(pill.querySelector('.pf-bka-ctx__slot')?.textContent).toContain('10:00');
     await pickPatient(f, el);
-    click(el.querySelector('.pf-bka-result')); f.detectChanges();
+    el.querySelector('pf-patient-search .row')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true })); f.detectChanges();
     const p = pill.querySelector('.pf-bka-ctx__patient')!;
     expect(p.textContent).toContain('Ms. Paravai Munusamy');
     expect(p.textContent).toContain('44/F · AA0007');
@@ -283,11 +286,11 @@ describe('New appointment (nd) — the form', () => {
     click(el.querySelector('.pf-hb__actions .pf-hb-btn--primary')); f.detectChanges();
     expect(api.post).not.toHaveBeenCalled();
     expect(el.querySelector('#pf-bka-e-patient')?.textContent).toContain('Pick the patient to book for.');
-    expect(el.querySelector('.pf-bka-pq')?.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector(PQ)?.getAttribute('aria-invalid')).toBe('true');
     expect(el.querySelector('#pf-bka-e-slot')?.textContent).toContain('Pick a time slot.');
     expect(el.querySelector('.pf-bka-chips')?.getAttribute('aria-invalid')).toBe('true');
     await sleep(0);
-    expect(document.activeElement).toBe(el.querySelector('.pf-bka-pq'));
+    expect(document.activeElement).toBe(el.querySelector(PQ));
   });
 
   it('keyboard-first: Enter walks patient → date → slot → tests → collection → notes', async () => {
@@ -372,7 +375,7 @@ describe('New appointment (nd) — the form', () => {
     enter(el.querySelector('.pf-bka-notes')!, { ctrlKey: true });
     expect(api.post).toHaveBeenCalledTimes(1);
     click(el.querySelector('.pf-bka-change')); f.detectChanges();
-    expect(el.querySelector('.pf-bka-pq')).not.toBeNull();
+    expect(el.querySelector(PQ)).not.toBeNull();
   });
 });
 
@@ -387,7 +390,7 @@ describe('New appointment (nd) — phones + rules', () => {
     expect(phone).toMatch(/\.pf-bka-chips \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}/);
     expect(phone).toMatch(/font-size: 16px/);
     // The month grid: stretching rows on wide screens, 44px square cells on phones.
-    expect(s).toMatch(/\.pf-bka-cal__weeks \{[^}]*grid-template-rows: repeat\(6, minmax\(40px, 1fr\)\)/);
+    expect(s).toMatch(/\.pf-bka-cal__weeks \{[^}]*grid-template-rows: repeat\(6, minmax\(32px, 1fr\)\)/);
     expect(phone).toMatch(/\.pf-bka-cal__weeks \{[^}]*grid-auto-rows: 44px/);
     expect(phone).toMatch(/\.pf-bka-cal__day \{ min-height: 44px; \}/);
   });
