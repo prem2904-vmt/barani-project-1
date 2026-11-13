@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { injectTenantBrand } from './tenant-brand';
 import { PfKeysDirective } from '../numpad/pf-keys.directive';
@@ -38,7 +38,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
 @Component({
   selector: 'pf-hero-band',
   standalone: true,
-  imports: [PfKeysDirective, SamplePresetDirective, RouterLink],
+  imports: [PfKeysDirective, SamplePresetDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-hb">
@@ -64,7 +64,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
               <span class="pf-hb__name">{{ brandingName() || tenantName() }}</span>
             }
           } @else {
-            <a class="pf-hb__home press" routerLink="/" [attr.aria-label]="'Home, ' + (brandingName() || tenantName())" title="Home">
+            <a class="pf-hb__home press" href="/" (click)="goHome($event)" [attr.aria-label]="'Home, ' + (brandingName() || tenantName())" title="Home">
               @if (showLogo() && tenantLogo()) {
                 <img class="pf-hb__logo" [src]="tenantLogo()!" [alt]="tenantName()" />
               } @else {
@@ -388,6 +388,15 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
 })
 export class HeroBandComponent {
   protected readonly navBack = inject(NavBackService);
+  private readonly router = inject(Router);
+
+  /** Plain href="/" (middle-click / new tab work natively); a normal click navigates in-app. Deliberately not
+   *  RouterLink: that forces every host screen (and its spec) to provide ActivatedRoute + a full Router. */
+  protected goHome(e: MouseEvent): void {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    void this.router.navigateByUrl('/');
+  }
 
   /** Show the back chevron at the band's top-left (admin sub-pages). It only
    *  renders on secondary routes (NavBackService.showBack). */
