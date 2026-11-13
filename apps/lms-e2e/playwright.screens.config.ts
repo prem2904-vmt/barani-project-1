@@ -18,7 +18,7 @@ export default defineConfig({
   retries: 0,
   workers: Number(process.env['PW_WORKERS'] || 4),
   fullyParallel: false,
-  use: { baseURL: process.env['BASE_URL'] || 'http://127.0.0.1:4317' },
+  use: { baseURL: process.env['BASE_URL'] || 'http://127.0.0.1:4317', screenshot: 'only-on-failure' },
   projects: formFactorProjects({
     launch: process.env['PW_CHROME_PATH'] ? { launchOptions: { executablePath: process.env['PW_CHROME_PATH'] } } : { channel: 'chrome' },
     webkit: process.env['PW_WEBKIT'] === '1',

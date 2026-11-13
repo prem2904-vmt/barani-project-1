@@ -5,8 +5,8 @@ import * as path from 'node:path';
 /**
  * FORM FACTORS for the on-screen (Playwright) suites: every screens spec runs once per project.
  *
- *   phone             390×844, iPhone UA, touch, isMobile     → html.device-touch.device-phone, floating bottom pill
- *   tablet            820×1180 iPad portrait, iPad UA, touch  → html.device-touch.device-tablet (tablet tier, nav rail)
+ *   phone             390×844, iPhone UA, touch, isMobile     → html.device-touch.device-phone, bottom bar floating inset
+ *   tablet            820×1180 iPad portrait, iPad UA, touch  → html.device-touch.device-tablet (tablet tier, icon work tabs)
  *   tablet-landscape  1180×820 iPad landscape                → same tier (a touch device never flips to desktop)
  *   desktop           1440×900 desktop Chrome, mouse          → html.device-desktop, the web app in a browser
  *   desktop-app       1440×900 + a stub of electron/preload.js → html.device-desktop + html.electron, HASH routing,
@@ -119,7 +119,8 @@ export interface BridgeCall { api: string; args: unknown[]; at: number }
  *  - `isElectron: true` → PlatformService.isElectron, html.electron, hash routing (app.config.ts), device-desktop;
  *  - every method answers like main would when idle (null / [] / { ok: true }) and is RECORDED in
  *    `window.__pfBridgeCalls` ({ api: 'whatsapp.open', args }) — byte arrays are recorded as their length;
- *  - `whatsapp.open` / `close` / `setPdf` drive the dock state like electron/whatsapp-dock.js (open, width, top, pdfName);
+ *  - `whatsapp.open` / `close` / `setPdf` drive the dock state like electron/whatsapp-dock.js (open, width, top, pdfName,
+ *    clipboard: 'copied' when the PDF was put on the clipboard);
  *  - a deep path (`/frontdesk`) is turned into the hash route Electron uses (`/#/frontdesk`) before the app boots, so
  *    specs keep `page.goto('/frontdesk')`. Only on the local app origin (never on a WhatsApp stub page).
  * Specs that need more (the analyzer wizard's `instruments.diag`) MERGE into `window.electronAPI`.
@@ -152,7 +153,7 @@ export async function installDesktopBridge(target: Page | BrowserContext): Promi
     const off = () => () => undefined;
 
     const wa = subs();
-    const st = { open: false, width: 0, top: 112, loading: false, failed: false, pdfName: null as string | null, url: '' };
+    const st = { open: false, width: 0, top: 112, loading: false, failed: false, pdfName: null as string | null, clipboard: 'idle' as 'idle' | 'copied' | 'failed', url: '' };
     const dockWidth = () => Math.max(0, Math.min(Math.round(Math.min(480, Math.max(380, innerWidth * 0.24))), innerWidth - 560));
     const emit = () => wa.list.forEach(f => f({ ...st }));
 
@@ -183,13 +184,14 @@ export async function installDesktopBridge(target: Page | BrowserContext): Promi
       bridges: { discoverStart: async_('bridges.discoverStart', () => ({ ok: true })), discoverStop: async_('bridges.discoverStop', () => ({ ok: true })), onFound: fn('bridges.onFound', off), onLost: fn('bridges.onLost', off), localRequest: async_('bridges.localRequest', () => ({ ok: false })) },
       doc: { listPrinters: async_('doc.listPrinters', () => []), print: async_('doc.print', () => ({ ok: true })), printPdf: async_('doc.printPdf', () => ({ ok: true })) },
       whatsapp: {
-        open: async_('whatsapp.open', (url: string) => { st.open = true; st.url = String(url); st.width = dockWidth(); st.loading = false; st.failed = false; st.pdfName = null; emit(); return { ok: true }; }),
+        open: async_('whatsapp.open', (url: string) => { st.open = true; st.url = String(url); st.width = dockWidth(); st.loading = false; st.failed = false; st.pdfName = null; st.clipboard = 'idle'; emit(); return { ok: true }; }),
         close: async_('whatsapp.close', () => { st.open = false; st.pdfName = null; emit(); return { ok: true }; }),
         signOut: async_('whatsapp.signOut', () => ({ ok: true })),
         state: async_('whatsapp.state', () => ({ ...st })),
         onState: fn('whatsapp.onState', (cb: (x: unknown) => void) => wa.on(cb)),
         openElsewhere: async_('whatsapp.openElsewhere', () => ({ ok: true })),
-        setPdf: async_('whatsapp.setPdf', (p: { name?: string }) => { st.pdfName = String(p?.name || 'report.pdf').replace(/\.pdf$/i, '') + '.pdf'; emit(); return { ok: true }; }),
+        // like main: the PDF kept for the drag chip, and put on OUR clipboard when asked (whatsapp-clipboard.js)
+        setPdf: async_('whatsapp.setPdf', (p: { name?: string; copyToClipboard?: boolean }) => { st.pdfName = String(p?.name || 'report.pdf').replace(/\.pdf$/i, '') + '.pdf'; if (p?.copyToClipboard) st.clipboard = 'copied'; emit(); return { ok: true }; }),
         startDrag: fn('whatsapp.startDrag', noop),
       },
       updater: { getState: async_('updater.getState', () => null), restartNow: async_('updater.restartNow', () => ({ ok: true })), check: async_('updater.check', () => null), onState: fn('updater.onState', off) },
@@ -233,29 +235,31 @@ export async function expectDeviceTier(page: Page): Promise<void> {
   else expect(html.cls.split(/\s+/)).not.toContain('electron');
 }
 
-/** The nav for this form factor:
- *  - phone: the floating bottom pill (.pf-bottom-nav, not the rail), along the bottom edge, inside the screen;
- *  - tablet (both orientations): the tablet tier keeps the touch nav (.pf-bottom-nav--rail) at every width;
- *  - desktop / desktop app: the touch nav is hidden and the docked desktop bar (.pf-topstrip-bar) is visible. */
+/** The nav for this form factor — the docked BOTTOM bar (`html.nav-bottom`, `.pf-topstrip-bar`) on every size, never a
+ *  side rail and never the old floating pill:
+ *  - phone: floating inside the screen edges (inset), along the bottom;
+ *  - tablet (both orientations), desktop, desktop app: docked full width along the bottom;
+ *  - touch (phone / tablet): the bar's buttons are finger-sized (≥ 40 px tall). */
 export async function expectNav(page: Page): Promise<void> {
   const vw = page.viewportSize()!;
   const ff = formFactor();
-  if (ff === 'phone') {
-    const nav = page.locator('nav.pf-bottom-nav').first();
-    await expect(nav, 'phone bottom nav').toBeVisible();
-    await expect(nav).not.toHaveClass(/pf-bottom-nav--rail/);
-    const pill = (await page.locator('nav.pf-bottom-nav .pf-pill').first().boundingBox())!;
-    expect(pill.y + pill.height, 'pill sits at the bottom').toBeGreaterThan(vw.height * 0.8);
-    expect(pill.x).toBeGreaterThanOrEqual(-0.5);
-    expect(pill.x + pill.width).toBeLessThanOrEqual(vw.width + 0.5);
-  } else if (ff === 'tablet') {
-    const nav = page.locator('nav.pf-bottom-nav').first();
-    await expect(nav, 'tablet touch nav').toBeVisible();
-    await expect(nav).toHaveClass(/pf-bottom-nav--rail/);
-    await expect(page.locator('.pf-topstrip-bar').locator('visible=true')).toHaveCount(0);
-  } else {
-    await expect(page.locator('nav.pf-bottom-nav').locator('visible=true'), 'no touch nav on desktop').toHaveCount(0);
-    await expect(page.locator('.pf-topstrip-bar').locator('visible=true').first(), 'desktop bar').toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.classList.contains('nav-bottom')), 'html.nav-bottom').toBe(true);
+  const bar = page.locator('.pf-topstrip-bar').locator('visible=true').first();
+  await expect(bar, 'bottom bar').toBeVisible();
+  const b = (await bar.boundingBox())!;
+  expect(b.y + b.height, 'bar sits on the bottom edge').toBeGreaterThanOrEqual(vw.height - 24);
+  expect(b.y + b.height).toBeLessThanOrEqual(vw.height + 1);
+  expect(b.x, 'bar inside the screen (left)').toBeGreaterThanOrEqual(-0.5);
+  expect(b.x + b.width, 'bar inside the screen (right)').toBeLessThanOrEqual(vw.width + 0.5);
+  if (ff === 'phone') expect(b.width, 'phone bar floats inside the edges').toBeLessThan(vw.width);
+  else expect(b.width, 'docked full width').toBeGreaterThanOrEqual(vw.width - 1);
+  // never a side rail / floating pill
+  const rail = await page.locator('nav.pf-bottom-nav .pf-pill').evaluateAll(els => els.map(e => e.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0).length);
+  expect(rail, 'no side rail / pill').toBe(0);
+  if (ff === 'phone' || ff === 'tablet') {
+    const hs = await bar.locator('button, a').evaluateAll(els => els.map(e => e.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0).map(r => Math.round(r.height)));
+    expect(hs.length, 'bar has buttons').toBeGreaterThan(0);
+    expect(Math.max(...hs), 'touch-sized bar buttons').toBeGreaterThanOrEqual(40);
   }
 }
 
@@ -269,10 +273,30 @@ export async function expectLayout(page: Page, tag = '', o: { nav?: boolean } = 
 /** An element (a drawer, a sheet, a dialog) fits inside the viewport horizontally. */
 export async function expectFitsWidth(page: Page, selector: string, tag = ''): Promise<void> {
   const vw = page.viewportSize()!;
-  const box = await page.locator(selector).locator('visible=true').first().boundingBox();
-  expect(box, `${tag} ${selector} is laid out`).not.toBeNull();
-  expect(box!.x, `${tag} ${selector} left edge`).toBeGreaterThanOrEqual(-0.5);
-  expect(box!.x + box!.width, `${tag} ${selector} right edge`).toBeLessThanOrEqual(vw.width + 0.5);
+  const loc = page.locator(selector).locator('visible=true').first();
+  await expect(loc, `${tag} ${selector} is shown`).toBeVisible();
+  // Drawers / sheets slide in: judge the settled position.
+  const edges = async () => { const b = await loc.boundingBox(); return b ? [Math.round(b.x), Math.round(b.x + b.width)] : [NaN, NaN]; };
+  await expect.poll(async () => { const [l, r] = await edges(); return l >= -1 && r <= vw.width + 1; },
+    { message: `${tag} ${selector} fits the ${vw.width}px width at ${projectName()} (edges ${JSON.stringify(await edges())})`, timeout: 4_000 }).toBe(true);
+}
+
+/** EVERY visible match of `selector` (a row of actions) fits the width and no two overlap (a row that can't fit wraps). */
+export async function expectRowFits(page: Page, selector: string, tag = ''): Promise<void> {
+  const vw = page.viewportSize()!;
+  const read = () => page.locator(selector).evaluateAll(els => els.map(e => e.getBoundingClientRect()).filter(r => r.width > 0 && r.height > 0)
+    .map(r => ({ l: Math.round(r.left), r: Math.round(r.right), t: Math.round(r.top), b: Math.round(r.bottom) })));
+  await expect.poll(async () => {
+    const bs = await read();
+    const outside = bs.filter(x => x.l < -1 || x.r > vw.width + 1).length;
+    let overlap = 0;
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) {
+      const a = bs[i], c = bs[j];
+      if (Math.min(a.r, c.r) - Math.max(a.l, c.l) > 1 && Math.min(a.b, c.b) - Math.max(a.t, c.t) > 1) overlap++;
+    }
+    return { count: bs.length > 0, outside, overlap };
+  }, { message: `${tag} ${selector}: every item inside ${vw.width}px, none overlapping, at ${projectName()}`, timeout: 4_000 })
+    .toEqual({ count: true, outside: 0, overlap: 0 });
 }
 
 /** `test` with the desktop-app bridge on every context of the desktop-app project. */

@@ -41,3 +41,12 @@ export async function deskAllStatuses(page: Page): Promise<void> {
   await t.click();                                             // …then tap it off
   await expect.poll(() => isOn(page, 'In progress')).toBe(false);
 }
+
+/** The count on a work tab (chip "Payments due 3", or the icon tab's badge), in either layout. */
+export async function tabCount(page: Page, label: string): Promise<number> {
+  const t = tabLoc(page, label);
+  if (!(await t.count())) return 0;
+  const txt = ((await t.textContent()) ?? '').replace(label, ' ');
+  const m = /(\d+)\s*$/.exec(txt.trim()) ?? /(\d+)/.exec(txt);
+  return m ? Number(m[1]) : 0;
+}
