@@ -1,6 +1,7 @@
 import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { contextOptions, installDesktopBridge, isDesktopApp, projectName } from '../support/form-factor';
 
 /**
  * The case-sheet local stack (playwright.casesheets.config.ts): prefrontal-mw `CaseSheetsE2EHost` + one production
@@ -48,15 +49,22 @@ export type ViewportName = keyof typeof VIEWPORTS;
 
 export interface OpenOpts { theme?: Theme; viewport?: ViewportName; signedIn?: boolean; tokenExtra?: Record<string, unknown> }
 
-/** Guard + (optionally) a signed-in session on a fresh context. */
+/** Guard + (optionally) a signed-in session on a fresh context. An explicit `viewport` keeps the old fixed sizes; without
+ *  one the context is shaped like the running form-factor project (phone / tablet / desktop / desktop app — the last one
+ *  with the Electron preload stub, see ../support/form-factor.ts). */
 export async function newContext(browser: Browser, person: Person | null, opts: OpenOpts = {}): Promise<BrowserContext> {
-  const name = opts.viewport ?? 'desktop';
-  const vp = VIEWPORTS[name];
-  const mobile = name === 'phone';
-  const ctx = await browser.newContext({
-    viewport: vp, colorScheme: opts.theme ?? 'light', acceptDownloads: true,
-    deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: name !== 'desktop',
-  });
+  let ctx: BrowserContext;
+  if (opts.viewport) {
+    const name = opts.viewport;
+    const mobile = name === 'phone';
+    ctx = await browser.newContext({
+      viewport: VIEWPORTS[name], colorScheme: opts.theme ?? 'light', acceptDownloads: true,
+      deviceScaleFactor: mobile ? 2 : 1, isMobile: mobile, hasTouch: name !== 'desktop',
+    });
+  } else {
+    ctx = await browser.newContext({ ...contextOptions(), colorScheme: opts.theme ?? 'light', acceptDownloads: true });
+    if (isDesktopApp()) await installDesktopBridge(ctx);
+  }
   await ctx.route(/prefrontal\.health|supabase\.co/, r => {
     blocked.push(r.request().url());
     return r.abort();
@@ -124,10 +132,10 @@ export async function settle(page: Page, ms = 500): Promise<void> {
 }
 
 /** Screenshot `<name>--<viewport>--<theme>.png` (full page optional). */
-export async function shot(page: Page, name: string, o: { viewport?: ViewportName; theme?: Theme; fullPage?: boolean } = {}): Promise<string> {
+export async function shot(page: Page, name: string, o: { viewport?: ViewportName | string; theme?: Theme; fullPage?: boolean } = {}): Promise<string> {
   if (!SHOTS) return '';
   await settle(page, 450);
-  const file = join(SHOTS, `${name}--${o.viewport ?? 'desktop'}--${o.theme ?? 'light'}.png`);
+  const file = join(SHOTS, `${name}--${o.viewport ?? projectName().replace(/^default$/, 'desktop')}--${o.theme ?? 'light'}.png`);
   await page.screenshot({ path: file, fullPage: o.fullPage ?? false });
   return file;
 }

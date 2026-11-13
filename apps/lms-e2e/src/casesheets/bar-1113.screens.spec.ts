@@ -1,4 +1,5 @@
-import { test, expect, type Browser, type Page } from '@playwright/test';
+import type { Browser, Page } from '@playwright/test';
+import { test, expect, isPhone, isDesktopApp, routeOf, expectNoHorizontalScroll, expectDeviceTier } from '../support/form-factor';
 import { STACK, LAB_URL, api, newContext, settle, shot, type Theme, type ViewportName } from './cs-stack';
 
 /**
@@ -6,13 +7,14 @@ import { STACK, LAB_URL, api, newContext, settle, shot, type Theme, type Viewpor
  *  - a lab case sheet open on page 2: the bottom bar is only the PF logo + Back · Pages · Next (desktop light/dark, phone),
  *    and the Pages menu opened from the bar;
  *  - a normal LMS screen (front desk): the Start-menu chevron after the wordmark + the one-time hint, then after "Got it".
- * Files: `bar-<screen>--<viewport>--<theme>.png` under CS_SHOTS.
+ * Every form-factor project of playwright.casesheets.pc.config.ts (desktop, phone, tablet, desktop app).
+ * Files: `bar-<screen>--<project>--<theme>.png` under CS_SHOTS.
  */
 test.describe.configure({ mode: 'serial' });
 
 let sheetUrl = '';
 
-async function open(browser: Browser, url: string, vp: ViewportName, theme: Theme): Promise<Page> {
+async function open(browser: Browser, url: string, vp: ViewportName | undefined, theme: Theme): Promise<Page> {
   const ctx = await newContext(browser, STACK.admin, { viewport: vp, theme });
   const page = await ctx.newPage();
   await page.goto(url);
@@ -49,61 +51,61 @@ test('create a draft lab case sheet (ENT · Nose History) for an invented patien
   if (await ent.isVisible().catch(() => false)) { await ent.click(); await settle(page); }
   await page.locator('.dp__tile', { hasText: 'Nose History' }).first().click();
   await expect(page).toHaveURL(/\/casesheets\/[0-9a-f-]{36}/);
-  sheetUrl = page.url().split(/[?#]/)[0];
+  sheetUrl = LAB_URL + routeOf(page.url()).split('?')[0];
   await page.context().close();
 });
 
+/** Logo + Back + Pages + Next sit side by side inside the screen, none overlapping. */
+async function expectBarFits(page: Page) {
+  const w = page.viewportSize()!.width;
+  const boxes = await Promise.all(['.pf-brand-lockup[data-start-trigger]', '[data-sheetbar] .lf-back', '[data-sheetbar] .lf-pages', '[data-sheetbar] .lf-next']
+    .map(async sel => (await page.locator(sel).first().boundingBox())!));
+  for (let i = 1; i < boxes.length; i++) expect(boxes[i].x, `bar item ${i} starts after item ${i - 1}`).toBeGreaterThanOrEqual(boxes[i - 1].x + boxes[i - 1].width - 0.5);
+  expect(boxes[3].x + boxes[3].width).toBeLessThanOrEqual(w);
+}
+
 for (const theme of ['light', 'dark'] as Theme[]) {
-  test(`case sheet page 2 — desktop ${theme}`, async ({ browser }) => {
-    const page = await open(browser, sheetUrl, 'desktop', theme);
+  test(`case sheet page 2 — ${theme}`, async ({ browser }) => {
+    test.skip(theme === 'dark' && isPhone(), 'phone: light only (as before)');
+    const page = await open(browser, sheetUrl, undefined, theme);
+    await expectDeviceTier(page);
     await toPage2(page);
     await expectSheetBar(page);
-    await shot(page, 'bar-a-sheet-page2', { viewport: 'desktop', theme });
+    await expectBarFits(page);
+    await expectNoHorizontalScroll(page, 'case sheet');
+    if (isPhone()) await expect(page.getByRole('button', { name: 'Back to Departments', exact: true })).toBeVisible();
+    if (isDesktopApp()) expect(page.url(), 'desktop app: hash route').toContain('/#/casesheets/');
+    await shot(page, 'bar-a-sheet-page2', { theme });
     if (theme === 'light') {
       await page.locator('[data-sheetbar] .lf-pages').first().click();
       await expect(page.locator('#lf-menu')).toBeVisible();
-      await shot(page, 'bar-c-sheet-pages-menu', { viewport: 'desktop', theme });
+      const m = (await page.locator('#lf-menu').boundingBox())!;
+      expect(m.x).toBeGreaterThanOrEqual(-0.5);
+      expect(m.x + m.width, 'Pages menu inside the screen').toBeLessThanOrEqual(page.viewportSize()!.width + 0.5);
+      await shot(page, 'bar-c-sheet-pages-menu', { theme });
     }
     await page.context().close();
   });
 }
 
-test('case sheet page 2 — phone light', async ({ browser }) => {
-  const page = await open(browser, sheetUrl, 'phone', 'light');
-  await toPage2(page);
-  await expectSheetBar(page);
-  await expect(page.getByRole('button', { name: 'Back to Departments', exact: true })).toBeVisible();
-  // logo + Back + Pages + Next fit side by side at 390px, no overlap
-  const boxes = await Promise.all(['.pf-brand-lockup[data-start-trigger]', '[data-sheetbar] .lf-back', '[data-sheetbar] .lf-pages', '[data-sheetbar] .lf-next']
-    .map(async sel => (await page.locator(sel).first().boundingBox())!));
-  for (let i = 1; i < boxes.length; i++) expect(boxes[i].x, `bar item ${i} starts after item ${i - 1}`).toBeGreaterThanOrEqual(boxes[i - 1].x + boxes[i - 1].width - 0.5);
-  expect(boxes[3].x + boxes[3].width).toBeLessThanOrEqual(390);
-  await shot(page, 'bar-b-sheet-page2', { viewport: 'phone', theme: 'light' });
-  await page.context().close();
-});
-
 for (const theme of ['light', 'dark'] as Theme[]) {
-  test(`front desk — Start hint + chevron, desktop ${theme}`, async ({ browser }) => {
-    const page = await open(browser, `${LAB_URL}/frontdesk`, 'desktop', theme);
+  test(`front desk — Start hint + chevron, ${theme}`, async ({ browser }) => {
+    test.skip(theme === 'dark' && isPhone(), 'phone: light only (as before)');
+    const page = await open(browser, `${LAB_URL}/frontdesk`, undefined, theme);
     await expect(page.locator('[data-start-hint]')).toBeVisible();
-    await expect(page.locator('[data-start-chev]')).toBeVisible();
-    await shot(page, 'bar-d-frontdesk-hint', { viewport: 'desktop', theme });
+    if (isPhone()) await expect(page.locator('.pf-avatar-btn[data-start-trigger] [data-start-chev]')).toBeVisible();
+    else await expect(page.locator('[data-start-chev]').locator('visible=true').first()).toBeVisible();
+    const hint = (await page.locator('[data-start-hint]').boundingBox())!;
+    expect(hint.x + hint.width, 'hint inside the screen').toBeLessThanOrEqual(page.viewportSize()!.width + 0.5);
+    await expectNoHorizontalScroll(page, 'front desk');
+    await shot(page, 'bar-d-frontdesk-hint', { theme });
     if (theme === 'light') {
       await page.locator('[data-start-hint] button', { hasText: 'Got it' }).click();
       await expect(page.locator('[data-start-hint]')).toHaveCount(0);
       expect(await page.evaluate(() => localStorage.getItem('pf.startHintSeen'))).toBe('1');
-      await shot(page, 'bar-e-frontdesk-after-got-it', { viewport: 'desktop', theme });
+      await shot(page, 'bar-e-frontdesk-after-got-it', { theme });
     }
     await page.context().close();
   });
 }
 
-test('front desk — phone light (logo badge chevron + hint)', async ({ browser }) => {
-  const page = await open(browser, `${LAB_URL}/frontdesk`, 'phone', 'light');
-  await expect(page.locator('[data-start-hint]')).toBeVisible();
-  await expect(page.locator('.pf-avatar-btn[data-start-trigger] [data-start-chev]')).toBeVisible();
-  await shot(page, 'bar-f-frontdesk-hint', { viewport: 'phone', theme: 'light' });
-  await page.locator('[data-start-hint] button', { hasText: 'Got it' }).click();
-  await shot(page, 'bar-f-frontdesk-after-got-it', { viewport: 'phone', theme: 'light' });
-  await page.context().close();
-});
