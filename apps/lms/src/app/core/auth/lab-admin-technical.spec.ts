@@ -111,7 +111,7 @@ describe('Lab Admin (Technical) — finance / users / org stay CLOSED', () => {
 
   it('More menu: Tests + Lab settings show; Daily statement, Billing cfg, Users, Admin overview do not', () => {
     const visible = MORE_NAV.filter(i => navItemVisible(i, navCtx(LAB_ADMIN_TECH))).map(i => i.id);
-    expect(visible).toEqual(expect.arrayContaining(['tests', 'lab-settings', 'lab-cfg', 'reports-t']));
+    expect(visible).toEqual(expect.arrayContaining(['tests', 'lab-settings', 'reports-t']));
     for (const id of ['daily-statement', 'billing', 'users', 'admin-overview', 'admin-manage', 'notifs', 'process', 'workflows']) {
       expect(visible).not.toContain(id);
     }

@@ -175,6 +175,20 @@ describe('PRIMARY_NAV', () => {
   });
 });
 
+describe('menu entries are unique', () => {
+  const all = [ADMIN_NAV, ...PRIMARY_NAV, ...MORE_NAV];
+  const dupes = (keys: string[]) => keys.filter((k, i) => keys.indexOf(k) !== i);
+  it('no two entries share an id', () => {
+    expect(dupes(all.map(i => i.id))).toEqual([]);
+  });
+  it('no two entries share a label (the Start menu would list it twice)', () => {
+    expect(dupes([...PRIMARY_NAV, ...MORE_NAV].map(i => i.label.trim().toLowerCase()))).toEqual([]);
+  });
+  it('no two entries share a route', () => {
+    expect(dupes([...PRIMARY_NAV, ...MORE_NAV].map(i => i.href))).toEqual([]);
+  });
+});
+
 describe('MORE_NAV', () => {
   it('is a non-empty array of NavItem objects', () => {
     expect(Array.isArray(MORE_NAV)).toBe(true);

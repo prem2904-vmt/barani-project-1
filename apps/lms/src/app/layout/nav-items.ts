@@ -520,9 +520,6 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     id: 'branches', label: 'Branches', href: '/admin/branches', iconPath: ['M4 21V7l8-4 8 4v14M9 21v-5h6v5'],
   },
   {
-    id: 'lab-cfg', label: 'Lab settings', href: '/admin/lab-settings', iconPath: ['M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3Zm-2 9h8'],
-  },
-  {
     id: 'billing', label: 'Billing cfg', href: '/admin/billing', iconPath: ['M3 5h18v14H3zM3 10h18M7 15h3'],
   },
   {
@@ -531,7 +528,7 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     iconPath: ['M4 4h16v16H4z', 'M8 9h8M8 13h8M8 17h5'],
   },
   {
-    id: 'inventory', label: 'Inventory', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
+    id: 'inventory', label: 'Inventory settings', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
     module: 'inventory'
   },
   {

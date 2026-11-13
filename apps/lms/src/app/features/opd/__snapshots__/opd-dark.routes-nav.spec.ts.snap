@@ -21,7 +21,6 @@ exports[`nav with the gate closed > shows no OPD entry and equals the gate-open 
   "users",
   "tests",
   "branches",
-  "lab-cfg",
   "billing",
   "daily-statement",
   "inventory",
