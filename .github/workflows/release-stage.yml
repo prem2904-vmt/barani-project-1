@@ -41,13 +41,20 @@ jobs:
           [ -n "$sha" ] || { echo "::error::no successful dev release found — type a build number"; exit 1; }
           echo "Releasing what dev runs: $sha" >> "$GITHUB_STEP_SUMMARY"
           echo "build=$sha" >> "$GITHUB_OUTPUT"
-  release:
+  # Mandatory: nothing reaches stage unless the full test suites pass on the dev PC for this exact build.
+  tests:
     needs: pick
+    uses: ./.github/workflows/_tests.yml
+    with:
+      ref: ${{ needs.pick.outputs.build }}
+  release:
+    needs: [pick, tests]
     uses: ./.github/workflows/_release.yml
     with:
       environment: stage
       build: ${{ needs.pick.outputs.build }}
   desktop:
+    needs: tests
     if: ${{ inputs.desktop }}
     uses: ./.github/workflows/release-desktop.yml
     with:

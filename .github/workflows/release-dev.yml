@@ -14,9 +14,57 @@ on:
         description: Build number or full commit SHA
         required: true
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
-  release:
+  tests:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    uses: ./.github/workflows/_tests.yml
+    with:
+      ref: ${{ github.event.workflow_run.head_sha || inputs.build }}
+  # Dev only: the tests run on the dev PC (job "tests"). If the PC is off, that job just waits in the queue —
+  # after 3 minutes the gate lets dev release without it (the queued tests still run when the PC is back).
+  # If the PC picked them up, dev waits for the result and a failure stops the release.
+  gate:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: [self-hosted, oci]
+    timeout-minutes: 120
+    permissions:
+      actions: read
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN: ${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, time, urllib.request
+          url = f"https://api.github.com/repos/{os.environ['REPO']}/actions/runs/{os.environ['RUN']}/jobs?per_page=100"
+          hdr = {"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json"}
+          def job():
+              js = json.load(urllib.request.urlopen(urllib.request.Request(url, headers=hdr)))["jobs"]
+              t = [j for j in js if j["name"].startswith("tests")]
+              return t[0] if t else None
+          start = time.time()
+          summary = open(os.environ["GITHUB_STEP_SUMMARY"], "a")
+          while True:
+              j = job()
+              state = j["status"] if j else "queued"
+              if state == "queued" and time.time() - start > 180:
+                  print("::warning::Dev PC is offline - tests skipped for this dev release (they run when the PC is back)")
+                  summary.write("**Tests skipped:** the dev PC did not pick them up in 3 minutes (offline). Dev released anyway.\n")
+                  break
+              if state == "completed":
+                  if j["conclusion"] == "success":
+                      summary.write("**Tests passed** on the dev PC.\n"); break
+                  print(f"::error::Tests {j['conclusion']} on the dev PC - dev release stopped. See the tests job.")
+                  raise SystemExit(1)
+              time.sleep(15)
+          PY
+  release:
+    needs: gate
     uses: ./.github/workflows/_release.yml
     with:
       environment: dev
