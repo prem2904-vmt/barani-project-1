@@ -41,29 +41,35 @@ describe('the fill screen header is the standard band', () => {
   });
 });
 
-/** Owner 2026-11-12: "the Next can come in the nav bar" — Back · Pages · Next are the bottom nav's page-actions slot. */
-describe('the lab page actions (bottom nav slot)', () => {
+/** Owner 2026-11-13: while a sheet is open the bar is ONLY Back · Pages · Next, and the PF logo goes home. */
+describe('the lab bar while a sheet is open', () => {
   it('there is no footer strip in the page any more', () => {
     expect(html).not.toMatch(/lf-foot|data-step-foot/);
     expect(scss).not.toMatch(/\.lf-foot/);
   });
-  it('the lab lends the controls to NavActionsService, the public site to its own pill (FormBarService)', () => {
-    expect(ts).toMatch(/const slot = lab \? this\.navActions : this\.formBar;/);
-    expect(ts).toMatch(/this\.navActions\.clear\(this\)/);
+  it('lab and public both lend the controls to FormBarService, with the way home for the logo', () => {
+    expect(ts).toMatch(/this\.formBar\.show\(this, tpl, this\.backFn\)/);
+    expect(ts).not.toMatch(/NavActionsService/);
   });
   it('the buttons are the kit\'s at their normal size (owner: only the form body is touch-sized)', () => {
     expect(html).toMatch(/class="lf-back pf-touch" \[class\.lf-bar__item\]="!nav\.isLab" \[class\.pf-btn\]="nav\.isLab" \[class\.pf-btn--secondary\]="nav\.isLab"/);
     expect(html).toMatch(/class="lf-next pf-touch"\s+\[class\.lf-bar__item\]="!nav\.isLab"\s+\[class\.pf-btn\]="nav\.isLab"\s+\[class\.pf-btn--primary\]="nav\.isLab"/);
     expect(html).toMatch(/\[class\.pf-btn--tertiary\]="nav\.isLab"/);
-    // nothing in the slot re-sizes the kit buttons
-    const rules = scss.match(/\.pf-navact \.lf-(back|next|pages|finish)[^{]*\{[^}]*\}/g) ?? [];
+    const rules = scss.match(/\[data-sheetbar\] \.lf-(back|next|pages|finish)[^{]*\{[^}]*\}/g) ?? [];
     expect(rules.length).toBeGreaterThan(0);
     for (const rule of rules.filter((r) => !r.includes('.lf-bar__lbl'))) expect(rule, rule).not.toMatch(/(^|[^-])(height|font-size):/);
   });
-  it('the lent-bar desktop rules only reach a lent bar ([data-formbar]), never the slot', () => {
+  it('Pages stays in the middle on every size (the sheet bar never hides it)', () => {
+    const mid = scss.match(/\[data-sheetbar\] \.lf-bar__mid\s*\{[^}]*\}/g) ?? [];
+    expect(mid.length).toBe(1);
+    expect(mid[0]).toMatch(/justify-content:\s*center/);
+    expect(mid[0]).not.toMatch(/display:\s*none/);
+  });
+  it('the lent-bar desktop rules only reach the public pill ([data-formbar]), never the lab bar', () => {
     const lent = scss.match(/::ng-deep html:not\(\.device-touch\) [^{]+/g) ?? [];
     expect(lent.length).toBeGreaterThan(0);
     for (const sel of lent) expect(sel).toContain('[data-formbar]');
+    expect(scss).not.toMatch(/\.pf-navact/);
   });
 });
 

@@ -4,10 +4,10 @@
                 hold fills whatever logo the lab uploaded, or its initial disc) + name; actions: saved state · Narrative.
                 The pill is the context bar: the case sheet's title, the page, the patient, how much is answered.
        page   : the form column (max 896px, 16px / 24px ≥768 padding), the form's 12-column field grid, 24px gaps
-       nav    : Back · Pages (tap = the page list, hold = leave) · Next (hold = finish) sit in the BOTTOM NAV, on the right before
-                Messages / bell / avatar (NavActionsService, owner 2026-11-12). The public site lends the same controls to
-                its own bottom pill instead (FormBarService).
-       desktop: the page list is a rail on the left, the form sits next to it; the nav drops Pages (the rail holds the list) -->
+       nav    : Back · Pages (tap = the page list, hold = leave) · Next (hold = finish) ARE the bottom nav while the sheet is
+                open (owner 2026-11-13): nothing else in the bar, the PF logo goes home to Departments (FormBarService).
+                The public site lends the same controls to its own bottom pill.
+       desktop: the page list is also a rail on the left, the form sits next to it -->
 <cs-styles />
 <div class="lf pf-page pg" [class.lf--final]="isFinal()" [class.lf--lab]="nav.isLab">
   <pf-hero-band [back]="true" [backAction]="backFn" [customBrand]="true" [contextBar]="true" [customSearch]="true">
@@ -350,8 +350,9 @@
 </section>
 }
 
-<!-- Back · Pages · Next (legacy tab-nav form mode), lent to the LMS bottom bar while the sheet is open (the lab: the
-     bar's page-actions slot, NavActionsService; the public site: its pill, FormBarService). The bindings and styles stay here. -->
+<!-- Back · Pages · Next (legacy tab-nav form mode), lent to the bottom bar while the sheet is open (FormBarService). In the
+     lab they ARE the bar (work areas and right cluster hidden, the PF logo goes home); the public site: its pill. The
+     bindings and styles stay here. -->
 <ng-template #formBarTpl>
   <div class="lf-bar" role="group" aria-label="Pages of this case sheet">
     <span class="lf-bar__hold" aria-hidden="true"></span>

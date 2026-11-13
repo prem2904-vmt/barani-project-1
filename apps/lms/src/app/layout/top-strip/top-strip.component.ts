@@ -104,6 +104,11 @@ import { StartMenuComponent } from "../start-menu/start-menu.component";
 import { NavPrefsService } from "../start-menu/nav-prefs.service";
 import { computeNavLayout } from "../start-menu/nav-pins";
 
+const START_HINT_KEY = 'pf.startHintSeen';
+function readFlag(key: string): boolean {
+  try { return localStorage.getItem(key) === '1'; } catch { return false; }
+}
+
 @Component({
   selector: "pf-top-strip",
   standalone: true,
@@ -561,6 +566,24 @@ export class TopStripComponent implements OnInit, OnDestroy {
     const next = !this.startOpen();
     this.closeAll();
     this.startOpen.set(next);
+    if (next) this.dismissStartHint();
+  }
+
+  /** An open case sheet owns the bar: the logo takes you home to Departments (FormBarService.home). */
+  protected readonly sheetHome = computed(() => (this.formBar.template() ? this.formBar.home() : null));
+  protected onBrand(): void {
+    const home = this.sheetHome();
+    if (home) { this.closeAll(); home(); return; }
+    this.toggleStart();
+  }
+
+  /** One-time hint that the logo is the Start menu (owner 2026-11-13: people did not know it was there). */
+  private readonly startHintSeen = signal(readFlag(START_HINT_KEY));
+  protected readonly startHint = computed(() => !this.startHintSeen() && !this.startOpen() && !this.sheetHome());
+  protected dismissStartHint(): void {
+    if (this.startHintSeen()) return;
+    this.startHintSeen.set(true);
+    try { localStorage.setItem(START_HINT_KEY, '1'); } catch { /* private window: the hint just comes back */ }
   }
 
   /** Show the Admin icon-button (in the right cluster) only when the

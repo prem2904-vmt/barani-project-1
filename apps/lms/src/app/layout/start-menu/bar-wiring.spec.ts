@@ -32,9 +32,28 @@ describe('top strip (desktop)', () => {
   it('the PF brand lockup opens the Start menu (a button, not the landing link)', () => {
     const lockup = stripHtml.slice(stripHtml.lastIndexOf('<', stripHtml.indexOf('pf-brand-lockup')), stripHtml.indexOf('pf-brand-glyph'));
     expect(lockup).toContain('data-start-trigger');
-    expect(lockup).toContain('toggleStart()');
+    expect(lockup).toContain('onBrand()');
+    expect(stripTs).toMatch(/onBrand\(\): void \{[\s\S]*?if \(home\) \{[\s\S]*?this\.toggleStart\(\);/);
     expect(lockup).not.toContain('routerLink');
     expect(stripHtml).toMatch(/<pf-start-menu[^>]*\[homeHref\]="pickLanding\(\)"/);
+  });
+  it('people can see the logo is a menu: a quiet chevron + a one-time hint that never returns once dismissed or opened', () => {
+    expect(stripHtml).toMatch(/class="pf-brand-start" data-start-chev/);
+    expect(stripHtml).toMatch(/@if \(startHint\(\)\)/);
+    expect(stripTs).toMatch(/START_HINT_KEY = 'pf\.startHintSeen'/);
+    expect(stripTs).toMatch(/if \(next\) this\.dismissStartHint\(\);/);
+    expect(stripTs).toMatch(/startHint = computed\(\(\) => !this\.startHintSeen\(\) && !this\.startOpen\(\) && !this\.sheetHome\(\)\)/);
+  });
+  it('while a case sheet owns the bar the logo goes home and the chevron goes (FormBarService.home)', () => {
+    expect(stripTs).toMatch(/sheetHome = computed\(\(\) => \(this\.formBar\.template\(\) \? this\.formBar\.home\(\) : null\)\)/);
+    expect(stripHtml).toMatch(/\[attr\.aria-label\]="sheetHome\(\) \? 'Back to Departments' : 'Start menu'"/);
+    expect(stripHtml).toMatch(/@if \(!sheetHome\(\)\) \{\s*<svg class="pf-brand-start"/);
+  });
+  it('phones: the pf badge carries the chevron, and a sheet brings the logo back as the way home', () => {
+    expect(stripHtml).toMatch(/@if \(compactBar\(\)\) \{[\s\S]{0,200}pf-brand-start--badge/);
+    expect(stripHtml).toMatch(/\[class\.pf-topstrip-bar--sheet\]="!!sheetHome\(\)"/);
+    const scss = read('top-strip/top-strip.component.scss');
+    expect(scss).toMatch(/\.pf-topstrip-bar--sheet \.pf-brand-lockup \{\s*display: inline-flex !important;/);
   });
   it('the bar comes from computeNavLayout over primary() + Settings, nothing else', () => {
     expect(stripTs).toMatch(/readonly bar = computed\(\(\) => this\.navLayout\(\)\.bar\)/);

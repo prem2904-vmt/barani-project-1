@@ -8,12 +8,14 @@ import { Injectable, TemplateRef, signal } from '@angular/core';
  */
 @Injectable({ providedIn: 'root' })
 export class FormBarService {
-  private readonly current = signal<{ owner: object; tpl: TemplateRef<unknown> } | null>(null);
+  private readonly current = signal<{ owner: object; tpl: TemplateRef<unknown>; home?: () => void } | null>(null);
   readonly template = () => this.current()?.tpl ?? null;
+  /** Where the PF logo goes while the sheet owns the bar (owner 2026-11-13: logo = back home, like legacy). */
+  readonly home = () => this.current()?.home ?? null;
 
   /** Show these controls in the bar (the owner is whoever may later take them back). */
-  show(owner: object, tpl: TemplateRef<unknown>): void {
-    this.current.set({ owner, tpl });
+  show(owner: object, tpl: TemplateRef<unknown>, home?: () => void): void {
+    this.current.set({ owner, tpl, home });
   }
 
   /** Take them back — only the owner that showed them can (a newer page may already own the bar). */

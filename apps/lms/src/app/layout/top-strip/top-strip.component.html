@@ -1,13 +1,18 @@
 <!-- Offline banner moved to the shell root: the top strip lives inside
      .pf-chrome, which is display:none on phones/tablets/native — exactly
      where connectivity drops matter — so a banner here never rendered. -->
-<div class="pf-topstrip-bar relative flex items-center gap-2">
+<div class="pf-topstrip-bar relative flex items-center gap-2" [class.pf-topstrip-bar--sheet]="!!sheetHome()">
 
   <!-- Brand lockup — PF glyph · pulse · PREFRONTAL · LMS subtitle.
          Opens the Start menu (every screen; pin to the bar). Branch switching lives on the tenant
          brand pill (right side). -->
-  <button type="button" data-start-trigger class="pf-brand-lockup press flex-shrink-0" (click)="toggleStart()"
-    aria-haspopup="dialog" [attr.aria-expanded]="startOpen()" aria-label="Start menu">
+  <!-- While a case sheet owns the bar the logo is the way home (owner 2026-11-13, legacy PF logo); otherwise it opens
+       the Start menu, with a quiet chevron and a one-time hint so people know it is there. -->
+  <button type="button" data-start-trigger class="pf-brand-lockup press flex-shrink-0" (click)="onBrand()"
+    [class.pf-brand-lockup--open]="startOpen()"
+    [attr.aria-haspopup]="sheetHome() ? null : 'dialog'" [attr.aria-expanded]="sheetHome() ? null : startOpen()"
+    [attr.aria-label]="sheetHome() ? 'Back to Departments' : 'Start menu'"
+    [attr.title]="sheetHome() ? 'Back to Departments' : 'Start menu'">
     <svg class="pf-brand-glyph" viewBox="0 0 228 292" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <defs>
         <linearGradient id="pfBrandGradient" x1="0%" y1="100%" x2="100%" y2="0%">
@@ -39,7 +44,18 @@
       <span class="pf-brand-sub">Lab Management System</span>
       }
     </span>
+    @if (!sheetHome()) {
+    <svg class="pf-brand-start" data-start-chev viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 15l6-6 6 6" />
+    </svg>
+    }
   </button>
+  @if (startHint()) {
+  <div class="pf-start-hint" role="status" data-start-hint>
+    <span>Tap the logo for the Start menu: every screen, search and your pins.</span>
+    <button type="button" class="pf-start-hint__ok press" (click)="dismissStartHint()">Got it</button>
+  </div>
+  }
   <pf-start-menu [layout]="navLayout()" [open]="startOpen()" [homeHref]="pickLanding()"
     [placement]="compactBar() ? 'sheet' : 'bar'" [showAccount]="compactBar()" [autofocusSearch]="!compactBar()"
     (closed)="startOpen.set(false)" (account)="openAccount()" />
@@ -77,9 +93,9 @@
   }
 
   @if (formBar.template(); as formTpl) {
-  <!-- Case sheets: an open case sheet lends its Back · Pages · Next here in place of the work areas and the draft
-       tray (one bar, owner 2026-11-02; FormBarService). Leaving the sheet gives them back. -->
-  <div class="pf-formbar" data-formbar>
+  <!-- Case sheets: an open case sheet's Back · Pages · Next ARE the bar (owner 2026-11-13): they replace the work
+       areas, the draft tray and the right cluster; the logo goes home. Leaving the sheet gives the bar back. -->
+  <div class="pf-formbar" data-formbar-lab data-sheetbar>
     <ng-container [ngTemplateOutlet]="formTpl" />
   </div>
   } @else {
@@ -189,7 +205,7 @@
 
   <!-- Right cluster — flex-shrink-0 so bell + avatar never overflow the pill.
          Tenant pill is sm:hidden so only bell + avatar show on mobile. -->
-  <div class="pf-ts-right flex items-center gap-2 flex-shrink-0">
+  <div class="pf-ts-right flex items-center gap-2 flex-shrink-0" [class.pf-ts-right--sheet]="!!sheetHome()">
 
     @if (navActions.template(); as actionsTpl) {
     <!-- A page's own actions (case sheet: Back · Pages · Next), lent through NavActionsService; the work areas stay. -->
@@ -383,6 +399,12 @@
                the avatar (solid / white-dash for DPF-grade / hollow for Away). -->
         <span class="pf-status-dot pf-avatar-status" [attr.data-presence]="presence.myStatus()"
           aria-hidden="true"></span>
+        @if (compactBar()) {
+        <!-- Phone: the pf badge is the Start trigger, so it carries the same quiet chevron. -->
+        <svg class="pf-brand-start pf-brand-start--badge" data-start-chev viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 15l6-6 6 6" />
+        </svg>
+        }
         @if (profileOpen()) { <span class="pf-avatar-ring" aria-hidden="true"></span> }
       </button>
 

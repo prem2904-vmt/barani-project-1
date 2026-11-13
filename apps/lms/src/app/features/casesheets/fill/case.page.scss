@@ -822,7 +822,7 @@
 // :host-context (dt.desktop-only); a mouse device ≥1280px is matched on <html> directly.
 @media (min-width: dt.$desktop-min) { // device-aware below: html:not(.device-touch)
   // legacy step-footer, inside a LENT bar (the public site's pill): Back on the left, Next on the right (the rail holds the
-  // page list). The lab's Back / Next are the bottom nav's page-actions slot (.pf-navact below).
+  // page list). The lab's bar is [data-sheetbar] (below), so these never reach it.
   ::ng-deep html:not(.device-touch) [data-formbar] .lf-bar {
     justify-content: space-between;
     max-width: 896px;
@@ -898,139 +898,6 @@
   ::ng-deep html:not(.device-touch) [data-formbar] .lf-next > * {
     position: relative;
     z-index: 1;
-  }
-}
-
-// ───────── the lab's Back · Pages · Next: the bottom nav's page-actions slot (NavActionsService) ─────────
-// Rendered inside the LMS bar (.pf-navact > .lf-bar), on the right before Messages / bell / avatar. The buttons ARE the
-// kit's (pf-btn secondary / tertiary / primary at their normal size — owner 2026-11-11: only the form body is touch-sized);
-// here only the layout, the icon size, the labels and the hold fills. The hold line along the bar's top is not used.
-.pf-navact .lf-bar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.pf-navact .lf-bar__hold {
-  display: none;
-}
-
-.pf-navact .lf-bar__icon {
-  width: 16px;
-  height: 16px;
-}
-
-.pf-navact .lf-bar__lbl {
-  font: inherit;
-}
-
-.pf-navact .lf-bar__lbl--wide {
-  display: inline;
-}
-
-.pf-navact .lf-bar__lbl--narrow {
-  display: none;
-}
-
-.pf-navact .lf-bar__mid {
-  flex: none;
-}
-
-.pf-navact .lf-next,
-.pf-navact .lf-pages {
-  position: relative;
-  overflow: hidden;
-}
-
-.pf-navact .lf-next {
-  min-width: 104px;
-}
-
-// Next / Pages fill themselves while held (legacy step-footer)
-.pf-navact .lf-next::after,
-.pf-navact .lf-pages::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  transform: scaleX(0);
-  transform-origin: left center;
-  background: rgba(255, 255, 255, 0.3);
-  pointer-events: none;
-}
-
-.pf-navact .lf-pages::after {
-  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
-}
-
-.pf-navact .lf-next[data-holding]::after,
-.pf-navact .lf-pages[data-holding]::after {
-  transform: scaleX(1);
-  transition: transform var(--fe-hold-ms, 1500ms) linear;
-}
-
-.pf-navact .lf-next > *,
-.pf-navact .lf-pages > * {
-  position: relative;
-  z-index: 1;
-}
-
-// the Pages menu opens upward from the bar's right edge (not centred on the button: it would run off the screen)
-.pf-navact .lf-menu {
-  left: auto;
-  right: 0;
-  transform: none;
-  animation-name: lf-pop-end;
-}
-
-@keyframes lf-pop-end {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-// mouse desktop: the rail holds the page list, so the bar only has Back · Next
-@include dt.desktop-only {
-  .pf-navact .lf-bar__mid {
-    display: none;
-  }
-}
-
-// phones: Back and Pages are icon-only so Next keeps its word beside Messages / bell / avatar
-@media (max-width: 639px) {
-  .pf-navact .lf-back,
-  .pf-navact .lf-pages {
-    width: 44px;
-    padding: 0;
-  }
-  .pf-navact .lf-back .lf-bar__lbl,
-  .pf-navact .lf-pages .lf-bar__lbl {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-  .pf-navact .lf-next {
-    min-width: 0;
-    padding: 0 12px;
-  }
-  .pf-navact .lf-bar__lbl--wide {
-    display: none;
-  }
-  .pf-navact .lf-bar__lbl--narrow {
-    display: inline;
-  }
-  .pf-navact .lf-bar {
-    gap: 6px;
   }
 }
 
@@ -1359,4 +1226,76 @@
   text-align: center;
   font-size: 12px;
   color: var(--text-tertiary);
+}
+
+// ───────── the lab bar while a sheet is open (owner 2026-11-13): Back · Pages · Next ARE the bar ─────────
+// top-strip renders the lent template in [data-sheetbar] in place of the work areas and the right cluster; the PF logo
+// goes home. Kit buttons at their normal size (only the form body is touch-sized). Outside this host, so ::ng-deep.
+::ng-deep [data-sheetbar] .lf-bar {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  min-width: 0;
+}
+::ng-deep [data-sheetbar] .lf-bar__hold { display: none; }
+::ng-deep [data-sheetbar] .lf-bar__icon { width: 16px; height: 16px; }
+::ng-deep [data-sheetbar] .lf-bar__lbl { font: inherit; }
+::ng-deep [data-sheetbar] .lf-bar__lbl--wide { display: inline; }
+::ng-deep [data-sheetbar] .lf-bar__lbl--narrow { display: none; }
+::ng-deep [data-sheetbar] .lf-bar__mid {
+  position: relative;
+  flex: 1 1 0;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+::ng-deep [data-sheetbar] .lf-back { min-width: 96px; }
+::ng-deep [data-sheetbar] .lf-next { min-width: 120px; }
+::ng-deep [data-sheetbar] .lf-next,
+::ng-deep [data-sheetbar] .lf-pages {
+  position: relative;
+  overflow: hidden;
+}
+// Next / Pages fill themselves while held (legacy step-footer)
+::ng-deep [data-sheetbar] .lf-next::after,
+::ng-deep [data-sheetbar] .lf-pages::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}
+::ng-deep [data-sheetbar] .lf-pages::after { background: color-mix(in srgb, var(--color-primary) 22%, transparent); }
+::ng-deep [data-sheetbar] .lf-next[data-holding]::after,
+::ng-deep [data-sheetbar] .lf-pages[data-holding]::after {
+  transform: scaleX(1);
+  transition: transform var(--fe-hold-ms, 1500ms) linear;
+}
+::ng-deep [data-sheetbar] .lf-next > *,
+::ng-deep [data-sheetbar] .lf-pages > * {
+  position: relative;
+  z-index: 1;
+}
+// phones: Back is icon-only, Pages and Next keep their words
+@media (max-width: 639px) {
+  ::ng-deep [data-sheetbar] .lf-back { width: 44px; min-width: 44px; padding: 0; }
+  ::ng-deep [data-sheetbar] .lf-back .lf-bar__lbl {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  ::ng-deep [data-sheetbar] .lf-next { min-width: 0; padding: 0 14px; }
+  ::ng-deep [data-sheetbar] .lf-bar__lbl--wide { display: none; }
+  ::ng-deep [data-sheetbar] .lf-bar__lbl--narrow { display: inline; }
 }

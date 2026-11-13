@@ -46,7 +46,6 @@ import { FinishRefused, MissingAnswer } from '../data/cases/case-models';
 import { CaseSession } from '../data/cases/case-session';
 import { HttpAssetStore } from '../data/assets/http-asset-store';
 import { FormBarService } from '../data/form-bar/form-bar.service';
-import { NavActionsService } from '../../../layout/nav-actions/nav-actions.service';
 import { ReadAloud, listenScript } from '../data/voice/read-aloud';
 import { CaseSuggestions } from '../data/suggestions/case-suggestions';
 import { NarrativeSection } from '../data/cases/case-models';
@@ -160,7 +159,6 @@ export class CasePage {
   private readonly body = viewChild<ElementRef<HTMLElement>>('body');
   private readonly formBarTpl = viewChild<TemplateRef<unknown>>('formBarTpl');
   private readonly formBar = inject(FormBarService);
-  private readonly navActions = inject(NavActionsService);
   private advanceTimer: ReturnType<typeof setTimeout> | null = null;
 
   protected readonly page = this.wiz.page;
@@ -280,18 +278,15 @@ export class CasePage {
         this.body()?.nativeElement.scrollTo?.({ top: 0 });
       });
     });
-    // Back · Pages · Next live in the bottom bar. The lab lends them to the bar's page-actions slot (NavActionsService:
-    // right side, before Messages / bell / avatar; the work areas stay); the public site has one bottom pill, so there
-    // they replace the pill's three areas (FormBarService). Not while loading, finished or failed; leaving the sheet
-    // (or finishing it) gives the bar back.
+    // Back · Pages · Next ARE the bar while a sheet is open (owner 2026-11-13, lab and public alike): they replace the
+    // work areas and the right cluster, and the PF logo goes home to Departments (FormBarService). Not while loading,
+    // finished or failed; leaving the sheet (or finishing it) gives the bar back.
     effect(() => {
       const tpl = this.formBarTpl();
       const open = !!this.sheet() && !!this.def() && !this.isFinal() && !this.loadMessage();
-      const lab = this.nav.isLab;
       untracked(() => {
-        const slot = lab ? this.navActions : this.formBar;
-        if (open && tpl) slot.show(this, tpl);
-        else slot.clear(this);
+        if (open && tpl) this.formBar.show(this, tpl, this.backFn);
+        else this.formBar.clear(this);
       });
     });
     // case photos go to the draft that is open, and only while it is open
@@ -302,7 +297,6 @@ export class CasePage {
     inject(DestroyRef).onDestroy(() => {
       this.cancelAdvance();
       this.formBar.clear(this);
-      this.navActions.clear(this);
       this.listen.stop();
       this.pictures?.forSheet(null);
     });
