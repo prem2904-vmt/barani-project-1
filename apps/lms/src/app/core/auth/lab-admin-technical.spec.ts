@@ -165,7 +165,8 @@ describe('Lab settings hub — tiles filtered by what the user can open', () => 
     const hrefs = hubFor(LAB_ADMIN_TECH).visibleTiles().map(t => t.href);
     // Referral Labs now lives ONLY in the Referral & Vendors hub; the Lab hub
     // links to that hub (test-master perms open it), so the role still reaches it.
-    expect(hrefs).toEqual(['/admin/tests', '/admin/reports', '/admin/lab-settings', '/admin/microbiology', '/admin/instruments', '/admin/partners']);
+    // Communication (WhatsApp / Email / SMS) opens with manage_lab_settings, like the WhatsApp cards it took over.
+    expect(hrefs).toEqual(['/admin/tests', '/admin/reports', '/admin/lab-settings', '/admin/communication', '/admin/microbiology', '/admin/instruments', '/admin/partners']);
   });
 
   it('super-admin sees every tile (a BETA tile only with its switch — off here)', () => {

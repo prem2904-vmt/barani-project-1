@@ -1,9 +1,9 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { MonoTypeOperatorFunction, defer, finalize } from 'rxjs';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
-import { PAYMENT_RULE_PERMS, WA_BILLING_VIEW_PERMS } from '../../../core/auth/route-access';
+import { PAYMENT_RULE_PERMS } from '../../../core/auth/route-access';
 import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
@@ -19,13 +19,9 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { LAB_SETTINGS_TABS } from '../../../shared/utils/settings-catalog';
-import { WaSettings, WhatsAppService, waSenderLine } from '../../../core/services/whatsapp.service';
-import { WaConnectCardComponent } from './wa-connect-card.component';
 import { BusyComponent, SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { spinDelay } from '../../../shared/utils/busy';
 import { createLoadHold } from '../../../shared/utils/min-duration';
-import { WaBillingCardComponent } from './wa-billing-card.component';
-import { WaMessagePickerComponent } from './wa-message-picker.component';
 import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
 import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
 
@@ -48,7 +44,7 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, WaConnectCardComponent, BusyComponent, SkeletonCardComponent, WaBillingCardComponent, WaMessagePickerComponent],
+  imports: [FormsModule, RouterLink, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, BusyComponent, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -497,63 +493,17 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('report') && waSettings()) {
-      <!-- WhatsApp auto-send (Meta Cloud API): tenant switch; the sender
-           number + token are platform config on the server. -->
-      <section class="pf-card pf-ls__card" data-testid="ls-whatsapp">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="pf-card__label pf-ls__title">WhatsApp Auto: send the report automatically when it is ready</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span><span class="pf-card__spacer"></span>
-          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.autoSendEnabled"
-                  aria-label="WhatsApp Auto: send the report automatically when it is ready" [disabled]="waSaving() || !canManageWa() || waAutoOff()"
-                  (click)="saveWa({ autoSendEnabled: !waSettings()!.autoSendEnabled })">
-            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-          </button>
-        </div>
+      @if (showSec('report')) {
+      <!-- WhatsApp, Email and SMS moved to Settings → Communication (2026-11-13): ONE place for them. -->
+      <section class="pf-card pf-ls__card" data-testid="ls-comms-link">
+        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg></span><h3 class="pf-card__label pf-ls__title">WhatsApp, email and SMS</h3><span class="pf-card__spacer"></span></div>
         <div class="pf-ls__cardbody">
-          @if (waAutoOff()) {
-            <p class="pf-ls__warn" role="status" data-testid="ls-wa-off">WhatsApp Auto is turned off for your lab by Prefrontal. Ask Prefrontal to turn it on. Staff can still use WhatsApp Chat from the report when it is on.</p>
-          }
-          <p class="pf-ls__hint">
-            When every test on an order is validated and its <strong>final</strong> report is ready, the patient gets
-            one WhatsApp message on their registered mobile — the report PDF plus the secure report link (they confirm
-            their date of birth or phone to open it). It goes only when <strong>the bill is fully paid</strong>: while
-            anything is owed it waits as <strong>On hold</strong> and sends by itself once the balance is cleared.
-            Partial reports are never sent. Reports made before you turn this on aren't sent.
-          </p>
-          <!-- Sender: the shared Prefrontal number until the lab's own number is
-               connected AND its template approved (the card below manages it). -->
-          <div class="pf-ls__wa-sender">
-            <span class="pf-chip pf-chip--static pf-ls__chipm" data-testid="ls-wa-sender">
-              Sender — <strong style="color: var(--text-primary);">{{ waSender() }}</strong>
-            </span>
+          <p class="pf-ls__hint">Sending reports and invoices by WhatsApp, email and SMS is set up in <strong>Communication</strong>.</p>
+          <div class="pf-ls__links">
+            <a class="pf-btn pf-btn--secondary pf-ls__linkbtn press" routerLink="/admin/communication" data-testid="ls-comms-open">Open Communication</a>
           </div>
-          @if (waSettings()!.sender?.source !== 'tenant' && !waSettings()!.platform?.configured) {
-            <p class="pf-ls__warn">WhatsApp sending isn't set up on the server yet — messages wait in the queue until it is.</p>
-          }
-          <div class="pf-ls__wa-row">
-            <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="waSettings()!.sendUpdatedReports"
-                    data-testid="ls-wa-resend-regen"
-                    [disabled]="waSaving() || !canManageWa() || waAutoOff()"
-                    (click)="saveWa({ sendUpdatedReports: !waSettings()!.sendUpdatedReports })">
-              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-              Send again when a report is regenerated or corrected
-            </button>
-            <p class="pf-ls__hint" style="margin-top: 6px;">Off by default — the link the patient already has always opens the latest report.</p>
-          </div>
-          <!-- The message: a pick from the templates Meta approved on this lab's
-               sender (labels, never codes) + a live WhatsApp-style preview. -->
-          <pf-wa-message-picker [settings]="waSettings()!" [canEdit]="canManageWa() && !waSaving() && !waAutoOff()" (changed)="applyWa($event)"></pf-wa-message-picker>
-          <p class="pf-ls__hint" style="margin-top: 8px;">
-            The manual "Send WhatsApp" button on each report keeps working as a fallback.
-          </p>
         </div>
       </section>
-      <!-- The lab's OWN WhatsApp number (Meta Embedded Signup). -->
-      <pf-wa-connect-card [settings]="waSettings()!" (changed)="applyWa($event)"></pf-wa-connect-card>
-      <!-- Usage, spend, Meta payment health, the prepaid balance (estimated)
-           and the shared-number credits. -->
-      @if (canSeeWaBilling()) {
-      <pf-wa-billing-card [settings]="waSettings()!"></pf-wa-billing-card>
-      }
       }
 
       @if (showSec('queues')) {
@@ -696,12 +646,6 @@ interface AutoAssignConfig {
     .pf-ls__cardbody { padding: 14px 18px 18px; }
     .pf-ls__cardbody > .pf-ls__hint:first-child { margin-top: 0; }
     .pf-ls__switch { flex: none; }
-    .pf-ls__wa-row { margin-top: 12px; }
-    .pf-ls__wa-sender { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
-    .pf-ls__wa-soon { flex-basis: 100%; font-size: 12px; color: var(--text-tertiary); }
-    .pf-ls__wa-row .pf-ls__switch { white-space: normal; text-align: left; }
-    .pf-ls__wa-field { flex: 1 1 220px; max-width: 320px; }
-    .pf-ls__wa-lang { flex: 0 1 120px; max-width: 140px; }
     .pf-ls__chipm { height: auto; min-height: 30px; white-space: normal; }
     .pf-ls__wfbtn { height: 32px; min-height: 32px; }
     @media (max-width: 640px) {
@@ -1039,48 +983,10 @@ export class LabSettingsComponent implements OnInit {
   goSampleIdFormat() { this.router.navigate(['/admin/organization'], { queryParams: { tab: 'sample' } }); }
   goBranches() { this.router.navigate(['/admin/branches']); }
 
-  // ── WhatsApp auto-send (Meta Cloud API) ──
-  private readonly wa = inject(WhatsAppService);
   private readonly destroyRef = inject(DestroyRef);
-  protected readonly waSettings = signal<WaSettings | null>(null);
-  protected readonly waSaving = signal(false);
-  /** Prefrontal switched WhatsApp Auto off for this lab (the platform console). */
-  protected readonly waAutoOff = computed(() => this.waSettings()?.autoEntitled === false);
-  readonly waSender = computed(() => waSenderLine(this.waSettings()?.sender));
-  readonly canManageWa = computed(() =>
-    this.auth.hasPermission('manage_lab_settings') || this.auth.hasPermission('manage_notifications'));
-  /** WhatsApp spend / credits — money: organisation / notification admins only
-   *  (GET api/whatsapp/billing refuses manage_lab_settings alone). */
-  readonly canSeeWaBilling = computed(() => this.auth.hasAnyPermission(WA_BILLING_VIEW_PERMS));
   /** Payment gate + Payments-due tab — revenue policy (PATCH branch-lab-config
    *  refuses those fields without manage_tenant / manage_billing_config). */
   readonly canManagePayments = computed(() => this.auth.hasAnyPermission(PAYMENT_RULE_PERMS));
-
-  protected applyWa(s: WaSettings) {
-    this.waSettings.set(s);
-  }
-
-  saveWa(patch: Partial<{ autoSendEnabled: boolean; sendUpdatedReports: boolean }>) {
-    const cur = this.waSettings();
-    if (!cur || this.waSaving()) return;
-    // Only the switches: the message pick lives in the picker (the server keeps it).
-    const next = {
-      autoSendEnabled: patch.autoSendEnabled ?? cur.autoSendEnabled,
-      sendUpdatedReports: patch.sendUpdatedReports ?? cur.sendUpdatedReports,
-    };
-    this.waSettings.set({ ...cur, ...next });
-    this.waSaving.set(true);
-    this.wa.saveSettings(next).pipe(this.tracked()).subscribe({
-      next: s => {
-        this.waSaving.set(false);
-        if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s);
-        if (patch.autoSendEnabled !== undefined)
-          this.toasts.success(s.autoSendEnabled ? 'WhatsApp Auto is on: reports are sent once paid' : 'WhatsApp Auto is off');
-        else this.toasts.success('WhatsApp settings saved');
-      },
-      error: e => { this.waSaving.set(false); this.applyWa(cur); this.toasts.error(ApiError.from(e).message); },
-    });
-  }
 
   ngOnInit() {
     this.destroyRef.onDestroy(() => this.loadHold.cancel());
@@ -1088,10 +994,10 @@ export class LabSettingsComponent implements OnInit {
     // tab (the settings search and other pages link straight to a card).
     const t = this.router.parseUrl(this.router.url).queryParams['tab'];
     if ((LAB_SETTINGS_TABS as readonly string[]).includes(t)) this.tab.set(t as LabSettingsTab);
-    this.wa.settings().subscribe({
-      next: s => { if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.applyWa(s); },
-      error: () => this.waSettings.set(null),   // no permission / older server → card hidden
-    });
+    // The old WhatsApp deep link (…/lab-settings?tab=whatsapp) lands on Communication.
+    if (t === 'whatsapp' || t === 'email' || t === 'sms') {
+      void this.router.navigate(['/admin/communication'], { queryParams: { tab: t }, replaceUrl: true });
+    }
     this.tenantState.ensureLoaded();
     this.samplePresets.reload();
     this.labCfg.ensureLoaded();

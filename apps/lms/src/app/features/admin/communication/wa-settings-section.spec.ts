@@ -6,11 +6,11 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
-import { LabSettingsComponent } from './lab-settings.component';
+import { WaSettingsSectionComponent } from './wa-settings-section.component';
 
 /**
- * Lab settings → Report → "Send WhatsApp automatically when the report is
- * ready" (Meta Cloud API). Tenant switch (server default OFF; paid orders only)
+ * Settings → Communication → WhatsApp (moved from Lab settings → Report, 2026-11-13) →
+ * "Send WhatsApp automatically when the report is ready" (Meta Cloud API). Tenant switch (server default OFF; paid orders only)
  * + "send again when a report is regenerated" (default OFF) +
  * template override; the sender line says whose number the patient sees. The
  * lab's OWN number (Embedded Signup) lives in the "Your WhatsApp number" card
@@ -38,21 +38,20 @@ const SETTINGS = (over: Record<string, unknown> = {}) => ({
 });
 
 function make(settings: unknown) {
-  const p = renderBandPage(LabSettingsComponent, {
+  const p = renderBandPage(WaSettingsSectionComponent, {
     getFor: (url) => url === '/api/whatsapp/settings' ? settings
       : url === '/api/tenants/branch-lab-config' ? { labStructure: 'auto' } : [],
     providers,
   });
   p.api.put.mockImplementation(((_url: string, body: Record<string, unknown>) => of({ ...(settings as object), ...body })) as never);
-  p.cmp.tab.set('report');
   p.f.detectChanges();
   const card = () => p.el.querySelector<HTMLElement>('[data-testid="ls-whatsapp"]');
   const main = () => card()!.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="WhatsApp Auto: send the report automatically when it is ready"]')!;
   return { ...p, card, main };
 }
 
-describe('Lab settings — WhatsApp auto-send', () => {
-  it('is an ND switch card under the Report tab, OFF by default, shared sender; the number card follows it', () => {
+describe('Communication → WhatsApp auto-send', () => {
+  it('is an ND switch card, OFF by default, shared sender; the number card follows it', () => {
     const p = make(SETTINGS());
     expect(p.card()).not.toBeNull();
     expect(p.main().classList.contains('pf-toggle')).toBe(true);
@@ -95,9 +94,20 @@ describe('Lab settings — WhatsApp auto-send', () => {
     expect(p.card()!.textContent).toContain("isn't set up on the server yet");
   });
 
-  it('no permission / older server → no card', () => {
+  it('no permission / older server → no card, a plain line instead', () => {
     const p = make([]);
     expect(p.card()).toBeNull();
+    expect(p.el.querySelector('[data-testid="ls-wa-none"]')).not.toBeNull();
+  });
+
+  it('shows WhatsApp Chat (a platform switch) read-only, on or off', () => {
+    const p = make(SETTINGS());
+    expect(p.el.querySelector('[data-testid="ls-wa-chat-state"]')!.textContent!.trim()).toBe('On');
+    p.f.componentRef.setInput('chatOn', false);
+    p.f.detectChanges();
+    expect(p.el.querySelector('[data-testid="ls-wa-chat-state"]')!.textContent!.trim()).toBe('Off');
+    expect(p.el.querySelector('[data-testid="ls-wa-chat"]')!.textContent).toContain('ask Prefrontal');
+    expect(p.el.querySelector('[data-testid="ls-wa-chat"] button[role="switch"]')).toBeNull();
   });
 
   it('says the message waits for payment, carries the PDF, and the regenerate re-send is a switch (off by default)', () => {

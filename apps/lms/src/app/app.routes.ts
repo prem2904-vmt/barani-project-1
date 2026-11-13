@@ -307,6 +307,16 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/admin/partner-test-prices/partner-test-prices.component').then(m => m.PartnerTestPricesComponent)
       },
       {
+        // Settings → Communication: WhatsApp, Email, SMS in ONE place (2026-11-13). The WhatsApp cards
+        // moved here from Lab settings → Report; the old WhatsApp links below redirect.
+        path: 'admin/communication',
+        canActivate: [...routeGuards('/admin/communication')],
+        loadComponent: () => import('./features/admin/communication/communication-settings.page').then(m => m.CommunicationSettingsPage)
+      },
+      { path: 'admin/whatsapp', redirectTo: '/admin/communication?tab=whatsapp', pathMatch: 'full' },
+      { path: 'admin/lab-settings/whatsapp', redirectTo: '/admin/communication?tab=whatsapp', pathMatch: 'full' },
+      { path: 'admin/email', redirectTo: '/admin/communication?tab=email', pathMatch: 'full' },
+      {
         path: 'admin/lab-settings',
         canActivate: [...routeGuards('/admin/lab-settings')],
         loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
