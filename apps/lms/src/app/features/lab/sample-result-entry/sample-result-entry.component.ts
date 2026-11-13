@@ -560,7 +560,8 @@ export class SampleResultEntryComponent {
       return familyIsAbnormal(this.familyFor(p), this.getValue(t.id, p.name))
         ? { tone: "high", label: "Abnormal" } : null;
     }
-    if (kind !== "select" && kind !== "number") return null;
+    const isText = kind === "textarea" || kind === "text";
+    if (kind !== "select" && kind !== "number" && !isText) return null;
     const raw = this.getValue(t.id, p.name);
     if (raw === undefined || raw === null || String(raw).trim() === "") return null;
     const saved = savedFlagOf(parseResultSnapshot(t.currentResult), p.name);
@@ -575,6 +576,16 @@ export class SampleResultEntryComponent {
       return null;
     }
     if (kind === "select") return this.qualitativeFlagFor(t, p);
+    // OPS-117: a written result is judged against its written reference. The
+    // saved verdict (above) is the server's, numeric rules ("< 5") included;
+    // while typing, only a plain-words reference ("Negative") is previewed here.
+    if (isText) {
+      const nv = (p.normalValue ?? "").trim();
+      if (!nv || /\d/.test(nv) || (p.optionRows ?? []).length) return null;
+      const typed = String(raw).trim().toLowerCase();
+      const normals = nv.split("/").map((x) => x.trim().toLowerCase()).filter(Boolean);
+      return normals.includes(typed) ? null : { tone: "high", label: "Abnormal" };
+    }
     // A range value ("0-4") of a range-enabled value; null for every other.
     const rv = rangeValueFor(p, raw);
     const v = rv ? NaN : Number(String(raw).trim());

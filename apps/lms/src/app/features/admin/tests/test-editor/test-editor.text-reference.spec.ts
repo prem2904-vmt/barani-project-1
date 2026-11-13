@@ -110,4 +110,54 @@ describe('TestEditor - textual reference for a written result (OPS-117)', () => 
     c.setTestUnit('');
     expect(saved(c)[0].unit ?? null).toBeNull();
   });
+
+  // ── re-test 2026-11-13 (rt-lab): edges of the unit + number-rule reference ──
+  it('number-rule references and their unit are saved verbatim (not normalised)', () => {
+    const { c } = make();
+    for (const rule of ['< 5', '0.5 - 1.2', 'Up to 40', 'Negative']) {
+      c.setReferenceText(0, rule);
+      expect(saved(c)[0].normalValue).toBe(rule);
+    }
+    c.setTestUnit('IU/mL');
+    expect(saved(c)[0].normalValue).toBe('Negative');
+    expect(saved(c)[0].unit).toBe('IU/mL');
+  });
+
+  it('the unit chosen BEFORE the first value exists carries onto the value created by the entry kind', () => {
+    const { c } = make({ id: null, test: undefined });
+    c.setTestUnit('mg/L');
+    c.setEntryKind('text');
+    expect(saved(c)[0].unit).toBe('mg/L');
+    expect(saved(c)[0].type).toBe('textarea');
+  });
+
+  it('a unit on a text test survives switching the answer kind to number and back', () => {
+    const { c } = make();
+    c.setTestUnit('U/L');
+    c.setEntryKind('number');
+    expect(saved(c)[0].unit).toBe('U/L');
+    c.setEntryKind('text');
+    expect(saved(c)[0].unit).toBe('U/L');
+    expect(c._draft().unit).toBe('U/L');
+  });
+
+  it('a multi-value test: a written value takes its own unit and the test-level unit setter leaves values alone', () => {
+    const { c } = make({ test: baseTest({ parameters: JSON.stringify({ parameters: [
+      { id: 'p1', name: 'a', title: 'A', type: 'textarea' }, { id: 'p2', name: 'b', title: 'B', type: 'textarea' } ] }) }) });
+    expect(c.isSingleValue()).toBe(false);
+    c.patchField(1, { unit: 'mg/dL' });
+    expect(saved(c)[1].unit).toBe('mg/dL');
+    expect(saved(c)[0].unit ?? null).toBeNull();
+    c.setTestUnit('x');
+    expect(saved(c)[0].unit ?? null).toBeNull();
+    expect(saved(c)[1].unit).toBe('mg/dL');
+  });
+
+  it('a unit typed with stray spaces or null is cleaned', () => {
+    const { c } = make();
+    c.setTestUnit(null);
+    expect(c._draft().unit).toBe('');
+    c.setTestUnit('   g/dL  ');
+    expect(c._draft().unit).toBe('g/dL');
+  });
 });
