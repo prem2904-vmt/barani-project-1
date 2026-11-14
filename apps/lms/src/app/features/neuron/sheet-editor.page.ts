@@ -37,6 +37,10 @@ interface Session { key: number; file: StoredRef; fromResults: boolean }
  * (neuron-save.ts: POST when new, PUT + If-Match when stored, a 409 never overwrites). PDFs are only downloaded.
  * Phones show the list and a view-only sheet; editing is for tablets and computers.
  */
+/** The saved-sheets list sits in a card: in dark its grid takes the card's own surface (the shared Test Master grey read as a second,
+ *  lighter panel inside the card, most visibly on a phone). */
+export const NR_GRID_DARK = gridThemeDark.withParams({ backgroundColor: 'transparent', headerBackgroundColor: 'rgba(255, 255, 255, 0.05)', oddRowBackgroundColor: 'transparent' });
+
 @Component({
   selector: 'pf-sheet-editor',
   standalone: true,
@@ -324,7 +328,7 @@ export class SheetEditorPage {
 
   // ── grid ──
   private gridApi: GridApi<OfficeFile> | null = null;
-  protected readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  protected readonly gridTheme = computed(() => (this.theme.isDark() ? NR_GRID_DARK : gridThemeLight));
   protected readonly defaultColDef: ColDef = { sortable: true, resizable: true, suppressMovable: true };
   protected readonly rowId = (p: { data: OfficeFile }): string => p.data.id;
   protected readonly colDefs = computed<ColDef<OfficeFile>[]>(() => {

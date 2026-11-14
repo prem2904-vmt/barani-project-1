@@ -25,7 +25,9 @@ const saveState = (page: Page) => tid(page, 'neuron-savestate');
 const backChevron = (page: Page) => page.locator('button[aria-label="Go back"]').locator('visible=true').first();
 const dlg = (page: Page) => page.locator('[role="dialog"]').locator('visible=true').first();
 
-async function boot(page: Page, theme: 'light' | 'dark' = 'light') {
+let currentTheme: 'light' | 'dark' = 'light';
+async function boot(page: Page, theme: 'light' | 'dark' = currentTheme) {
+  await page.emulateMedia({ colorScheme: theme });
   await page.addInitScript(([tok, t]) => {
     try {
       localStorage.setItem('pf.session', JSON.stringify({ access_token: tok, refresh_token: 'rt-neuron-real' }));
@@ -38,18 +40,21 @@ async function boot(page: Page, theme: 'light' | 'dark' = 'light') {
   page.on('pageerror', e => errors.push(e.message));
   return errors;
 }
-async function mode(page: Page, dark: boolean) {
-  await page.emulateMedia({ colorScheme: dark ? 'dark' : 'light' });
-  await page.evaluate(d => { const r = document.documentElement; r.classList.toggle('dark', d); r.classList.toggle('light', !d); r.setAttribute('data-theme', d ? 'dark' : 'light'); }, dark);
-  await page.waitForTimeout(450);
+/** The engine's own theme (what the sheet is drawn in) as the engine reports it, or null when no sheet is open. */
+async function engineDark(page: Page): Promise<boolean | null> {
+  return page.evaluate(async () => {
+    const f = document.querySelector('iframe[data-testid="neuron-frame"]') as HTMLIFrameElement | null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    try { return f ? ((await (f.contentWindow as any).neuron.uiInspect({})) as { ui: { dark: boolean } }).ui.dark : null; } catch { return null; }
+  });
 }
-/** Light + dark of the current screen. */
+/** One screenshot in the theme this run booted with (the real stored theme, as the app reads it at start-up). Whenever a sheet is on
+ *  screen the ENGINE must be in that theme too: band dark + sheet light is a failure. */
 async function shot(page: Page, name: string) {
-  for (const dark of [false, true]) {
-    await mode(page, dark);
-    await page.screenshot({ path: `${out()}/${name}--${dark ? 'dark' : 'light'}.png` });
-  }
-  await mode(page, false);
+  await page.waitForTimeout(450);
+  const dark = await engineDark(page);
+  if (dark !== null) expect(dark, `the sheet (engine) follows the ${currentTheme} theme in "${name}"`).toBe(currentTheme === 'dark');
+  await page.screenshot({ path: `${out()}/${name}--${currentTheme}.png` });
 }
 async function apiCtx(): Promise<APIRequestContext> {
   return pwRequest.newContext({ baseURL: STACK.apiUrl, extraHTTPHeaders: { Authorization: `Bearer ${TOKEN}`, 'X-PF-BETA': 'neuron' } });
@@ -127,7 +132,9 @@ async function openSheetsFromMenu(page: Page, shotName: string) {
 
 test.beforeEach(() => { test.setTimeout(300_000); });
 
-test.describe('neuron (real backend)', () => {
+for (const theme of ['light', 'dark'] as const) test.describe(`neuron (real backend, ${theme})`, () => {
+  test.beforeEach(() => { currentTheme = theme; });
+
   test('Reports -> Open in sheet -> results workbook -> edit -> File tab Save + band Save -> stored -> reopen -> back', async ({ page }) => {
     test.skip(isPhone(), 'phone is view-only: no Insert results / Save (its own test below)');
     const errors = await boot(page);
@@ -265,7 +272,7 @@ test.describe('neuron (real backend)', () => {
     const api = await apiCtx();
     // a file of our own, made through the API
     const up = await api.post('/api/office/files', {
-      multipart: { name: 'Two tabs.xlsx', kind: 'sheet', file: { name: 'Two tabs.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from(await (await api.get('/api/office/results-workbook?testIds=' + STACK.tests[0].id + '&from=' + new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10) + '&to=' + new Date().toISOString().slice(0, 10))).body()) } },
+      multipart: { name: `Two tabs ${theme}.xlsx`, kind: 'sheet', file: { name: `Two tabs ${theme}.xlsx`, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from(await (await api.get('/api/office/results-workbook?testIds=' + STACK.tests[0].id + '&from=' + new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10) + '&to=' + new Date().toISOString().slice(0, 10))).body()) } },
     });
     expect(up.status()).toBe(201);
     const id = (await up.json()).data.id as string;
@@ -273,7 +280,7 @@ test.describe('neuron (real backend)', () => {
     const open = async (p: Page) => {
       await p.goto('/sheet');
       await expect(tid(p, 'neuron-files')).toBeVisible({ timeout: 90_000 });
-      await p.getByText('Two tabs.xlsx', { exact: true }).locator('visible=true').first().click();
+      await p.getByText(`Two tabs ${theme}.xlsx`, { exact: true }).locator('visible=true').first().click();
       await needGrid(p);
     };
     await open(page);
@@ -306,7 +313,7 @@ test.describe('neuron (real backend)', () => {
     await d.getByRole('button', { name: 'Save mine as a copy' }).click();
     await expect(saveState(tab2)).toHaveAttribute('data-state', 'Saved', { timeout: 30_000 });
     const names = (await listFiles(api)).map(f => f.name);
-    expect(names).toContain('Two tabs (copy).xlsx');
+    expect(names).toContain(`Two tabs ${theme} (copy).xlsx`);
     expect((await content(api, id)).etag).toBe('"2"');
   });
 
@@ -326,10 +333,15 @@ test.describe('neuron (real backend)', () => {
     const band = page.locator('pf-hero-band').locator('visible=true').first();
     await expect(band).toContainText('Micro World');
     await expect(tid(page, 'neuron-new'), 'phone: no New sheet').toHaveCount(0);
+    if (theme === 'dark') {
+      const bg = await page.locator('.ag-root-wrapper').first().evaluate(e => getComputedStyle(e).backgroundColor);
+      expect(bg, 'the dark Sheets grid takes the card surface (not a grey panel)').toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+    }
     await shot(page, '3-saved-sheets-list-phone');
     await page.getByText(files[0].name, { exact: true }).locator('visible=true').first().click();
     await needGrid(page);
     await expect(tid(page, 'neuron-save'), 'phone: view only').toHaveCount(0);
+    expect(await engineDark(page), 'the view-only sheet is drawn in the LMS theme').toBe(theme === 'dark');
     await page.waitForTimeout(1500);
     await shot(page, '4-sheet-view-only-phone');
     await backChevron(page).click();
