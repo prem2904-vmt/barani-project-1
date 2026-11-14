@@ -367,7 +367,7 @@
    The search shrinks first; the date range folds into its icon menu
    when the card is too narrow to hold all three. */
 .pf-work-hdr {
-  gap: 10px;
+  gap: 16px;
   width: 100%;
 }
 .pf-work-find {
@@ -394,14 +394,18 @@
 }
 .pf-work-hdr__filter {
   display: flex;
-  flex: 0 1 auto;
+  /* Own the space between search and date filter; let the tabs scroll here
+     instead of shrinking their intrinsic width into the date button. */
+  flex: 1 1 0;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
+.pf-work-hdr__filter > pf-segmented {
+  flex: 0 0 max-content;
+}
 .pf-work-hdr__filter::-webkit-scrollbar { display: none; }
 .pf-work-hdr__date {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;

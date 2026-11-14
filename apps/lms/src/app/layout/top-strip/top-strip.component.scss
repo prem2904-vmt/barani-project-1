@@ -1822,11 +1822,15 @@ a.pf-ts-tenant:hover {
   display: flex;
   align-items: center;
   gap: 12px;
-  max-width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  min-width: 0;
   padding: 10px 10px 10px 14px;
   border-radius: 12px;
   border: 1px solid var(--border-primary);
-  background: var(--bg-elevated, var(--surface-1));
+  /* Surface tokens are translucent in the classic palette; the hint must read as an opaque callout. */
+  background: var(--bg-card-solid, #fff);
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 18px;
@@ -1858,7 +1862,11 @@ a.pf-ts-tenant:hover {
 /* Phone (<768): the brand lockup is hidden and the Start trigger is the pf badge at the RIGHT end of the bar, so the
    bubble spans the bar and its arrow points at the right end (it pointed at the first work area). */
 @media (max-width: 767px) {
-  :host-context(.design-new.nav-bottom) .pf-start-hint { right: 8px; max-width: none; }
+  :host-context(.design-new.nav-bottom) .pf-start-hint {
+    right: 8px;
+    width: auto;
+    max-width: none;
+  }
   :host-context(.design-new.nav-bottom) .pf-start-hint::before { left: auto; right: 17px; }
 }
 .pf-start-hint__ok {
