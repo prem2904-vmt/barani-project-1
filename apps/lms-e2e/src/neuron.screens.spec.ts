@@ -247,6 +247,54 @@ test.describe('neuron: open, edit, save', () => {
     await expect(saveState(page)).toHaveAttribute('data-state', 'Saved', { timeout: 20_000 });
   });
 
+  test('File tab: opens the File screen INSIDE our frame; Save, Save As, Export PDF and Export CSV all land on our page', async ({ page, context }) => {
+    test.skip(isTouch(), 'the File screen is driven by mouse here; phone is view-only and the tablet layout differs');
+    await boot(page, context);
+    await filesReady(page);
+    await openRow(page, 'Glucose results.xlsx');
+    if (!(await needGrid(page))) return;
+    const box = (await page.locator(FRAME).boundingBox())!;
+    const click = async (x: number, y: number) => { await page.mouse.move(box.x + x, box.y + y); await page.waitForTimeout(250); await page.mouse.click(box.x + x, box.y + y, { delay: 80 }); };
+    const backstage = () => page.evaluate(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const i = await ((document.querySelector('iframe[data-testid="neuron-frame"]') as HTMLIFrameElement).contentWindow as any).neuron.uiInspect({});
+      return (i as { backstage: string | null }).backstage;
+    });
+    const openFile = async () => { if (!(await backstage())) { await click(30, 15); } await expect.poll(backstage, { timeout: 10_000 }).not.toBeNull(); await page.waitForTimeout(500); };
+    await edit(page);
+    await openFile();
+    await shot(page, 'file-tab');
+    // The File screen is the app's own, inside our frame (our band and the bottom nav stay around it).
+    await expect(tid(page, 'neuron-save')).toBeVisible();
+    // File → Save: a workbook with no file of its own goes to the Save As screen; its Download button hands the xlsx to our page
+    await click(64, 246);
+    await page.waitForTimeout(500);
+    await click(288, 195);
+    await expect.poll(() => calls('PUT').length, { timeout: 30_000 }).toBe(1);
+    // Save As → Download (.xlsx) → neuron:save (xlsx) → stored as this file
+    await openFile();
+    await click(64, 284);
+    await page.waitForTimeout(500);
+    await click(288, 195);
+    await expect.poll(() => calls('PUT').length, { timeout: 30_000 }).toBe(2);
+    await shot(page, 'file-saveas');
+    // Export → Create PDF → neuron:save (pdf) → a download, nothing stored
+    await openFile();
+    await click(64, 360);
+    await page.waitForTimeout(500);
+    await shot(page, 'file-export');
+    const [pdf] = await Promise.all([page.waitForEvent('download', { timeout: 30_000 }), click(326, 99)]);
+    expect(fs.readFileSync((await pdf.path())!).subarray(0, 4).toString('latin1')).toBe('%PDF');
+    // Export → CSV → a plain copy download
+    await openFile();
+    await click(64, 360);
+    await page.waitForTimeout(500);
+    const [csv] = await Promise.all([page.waitForEvent('download', { timeout: 30_000 }), click(362, 208)]);
+    expect(csv.suggestedFilename()).toMatch(/\.csv$/i);
+    expect(calls('PUT')).toHaveLength(2);
+    expect(calls('POST')).toHaveLength(0);
+  });
+
   test('the sheet fills the space between the band and the bottom nav: full-width stage, one slim band, no card', async ({ page, context }) => {
     await boot(page, context);
     await filesReady(page);

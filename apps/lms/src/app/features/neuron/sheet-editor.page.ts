@@ -17,7 +17,7 @@ import { PfSelectOption, SelectComponent } from '../../shared/primitives/select.
 import { labDaysAgo, labToday } from '../../shared/utils/lab-clock';
 import { gridThemeDark, gridThemeLight } from '../admin/tests/tests/grid-theme';
 import { NeuronAccess, PATIENT_HIDDEN_NOTE, neuronAccess } from './neuron-access';
-import { NeuronBridge, SavedFile, XLSX_MIME, downloadBytes, isXlsxBytes, neuronFrameUrl, withExtension, NOT_A_SPREADSHEET_MESSAGE } from './neuron-bridge';
+import { NeuronBridge, SavedFile, XLSX_MIME, mimeForName, downloadBytes, isXlsxBytes, neuronFrameUrl, withExtension, NOT_A_SPREADSHEET_MESSAGE } from './neuron-bridge';
 import { NeuronSaver, StoredRef } from './neuron-save';
 import { SheetEditorService, SheetOpenRequest } from './sheet-editor.service';
 import { OfficeFile, OfficeService, toApiError } from './office.service';
@@ -526,6 +526,11 @@ export class SheetEditorPage {
     if (f.kind === 'pdf') {
       downloadBytes(withExtension(this.session()?.file.name ?? f.name, 'pdf'), f.bytes, 'application/pdf');
       this.toast.success('PDF downloaded');
+      return;
+    }
+    if (f.kind === 'copy') {
+      downloadBytes(f.name, f.bytes, mimeForName(f.name));
+      this.toast.success(`${f.name} downloaded`);
       return;
     }
     const s = this.session();

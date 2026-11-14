@@ -212,6 +212,23 @@ describe('Neuron page', () => {
     vi.restoreAllMocks();
   });
 
+  it('a CSV / web-page export from the File tab is a plain download, never stored', async () => {
+    const { page, settle, fromFrame, saver, toast } = make();
+    const click = vi.fn();
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:csv');
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => { const e = realCreate(tag); if (tag === 'a') (e as HTMLAnchorElement).click = click; return e; });
+    await page.newSheet();
+    await settle();
+    fromFrame({ type: 'neuron:ready' });
+    fromFrame({ type: 'neuron:save', name: 'Sheet1.csv', bytes: new Uint8Array(Array.from(new TextEncoder().encode('a,b\n1,2\n'))).buffer });
+    await settle();
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(saver.store).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith('Sheet1.csv downloaded');
+    vi.restoreAllMocks();
+  });
+
   it('leaving with unsaved changes asks through DialogService; clean leaves freely', async () => {
     const { page, dialog, settle, fromFrame } = make();
     expect(await page.canLeave()).toBe(true);

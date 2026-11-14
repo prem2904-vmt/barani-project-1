@@ -47,14 +47,15 @@ export function sniffBytes(bytes: ArrayBuffer | ArrayBufferView | null | undefin
 export const isXlsxBytes = (b: ArrayBuffer | ArrayBufferView | null | undefined): boolean => sniffBytes(b) === 'xlsx';
 
 /** A saved file coming out of the app, routed by its HEADER first and its extension second (a mislabelled name never wins). */
-export function routeSaved(bytes: ArrayBuffer | ArrayBufferView): 'xlsx' | 'pdf' | 'unknown' {
+export function routeSaved(bytes: ArrayBuffer | ArrayBufferView): 'xlsx' | 'pdf' | 'copy' {
   const sniff = sniffBytes(bytes);
   if (sniff === 'pdf') return 'pdf';
   if (sniff === 'xlsx') return 'xlsx';
-  return 'unknown';
+  return 'copy';
 }
 
-export interface SavedFile { name: string; bytes: ArrayBuffer; kind: 'xlsx' | 'pdf'; }
+/** `copy` = anything else the File tab exports (CSV, a web page): a plain download, never stored. */
+export interface SavedFile { name: string; bytes: ArrayBuffer; kind: 'xlsx' | 'pdf' | 'copy'; }
 
 /** The message data of an event we accept — or null. Source must be the frame's window, origin must be ours. */
 export function acceptedMessage(
@@ -227,7 +228,6 @@ export class NeuronBridge {
         const src = isArrayBuffer(bytes) ? new Uint8Array(bytes) : new Uint8Array((bytes as ArrayBufferView).buffer, (bytes as ArrayBufferView).byteOffset, (bytes as ArrayBufferView).byteLength);
         const buf = src.slice().buffer as ArrayBuffer;
         const kind = routeSaved(buf);
-        if (kind === 'unknown') return;
         this.onSave({ name, bytes: buf, kind });
         break;
       }
@@ -248,4 +248,10 @@ export function downloadBytes(name: string, bytes: ArrayBuffer, mime: string, do
 export function withExtension(name: string, ext: 'xlsx' | 'pdf'): string {
   const base = (name || 'Sheet').trim().replace(/\.(xlsx|pdf|xls|csv)$/i, '') || 'Sheet';
   return `${base}.${ext}`;
+}
+
+/** MIME type of a downloaded copy by its extension. */
+export function mimeForName(name: string): string {
+  const ext = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase();
+  return ({ csv: 'text/csv', html: 'text/html', htm: 'text/html', txt: 'text/plain', pdf: 'application/pdf', xlsx: XLSX_MIME } as Record<string, string>)[ext ?? ''] ?? 'application/octet-stream';
 }

@@ -50,7 +50,7 @@ describe('Neuron bridge: byte sniffing', () => {
   it('a saved file is routed by its header, not its name', () => {
     expect(routeSaved(PDF)).toBe('pdf');
     expect(routeSaved(PK)).toBe('xlsx');
-    expect(routeSaved(CSV)).toBe('unknown');
+    expect(routeSaved(CSV)).toBe('copy');
   });
   it('the frame URL is same-origin relative with host=parent, chrome=notitlebar and the encoded author', () => {
     const u = new URL(neuronFrameUrl('http://localhost:4200/', 'Kavya D & Co'));
@@ -195,16 +195,16 @@ describe('Neuron bridge: opening a file', () => {
 });
 
 describe('Neuron bridge: saves, dirty and failure', () => {
-  it('an xlsx save and a PDF save are told apart by their header', () => {
+  it('an xlsx save, a PDF and a copy (CSV) are told apart by their header', () => {
     const { bridge, win } = make();
     const saved = vi.fn();
     bridge.onSave = saved;
     bridge.handle(from(win, { type: 'neuron:save', name: 'Budget.xlsx', bytes: buf(PK) }));
     bridge.handle(from(win, { type: 'neuron:save', name: 'Budget.pdf', bytes: buf(PDF) }));
-    // a name that says .xlsx but carries PDF bytes is a PDF; CSV bytes are dropped
+    // a name that says .xlsx but carries PDF bytes is a PDF; CSV / HTML exports are plain copies (downloaded, never stored)
     bridge.handle(from(win, { type: 'neuron:save', name: 'Liar.xlsx', bytes: buf(PDF) }));
     bridge.handle(from(win, { type: 'neuron:save', name: 'x.csv', bytes: buf(CSV) }));
-    expect(saved.mock.calls.map(c => [c[0].name, c[0].kind])).toEqual([['Budget.xlsx', 'xlsx'], ['Budget.pdf', 'pdf'], ['Liar.xlsx', 'pdf']]);
+    expect(saved.mock.calls.map(c => [c[0].name, c[0].kind])).toEqual([['Budget.xlsx', 'xlsx'], ['Budget.pdf', 'pdf'], ['Liar.xlsx', 'pdf'], ['x.csv', 'copy']]);
   });
 
   it('accepts a typed-array view as the bytes', () => {
