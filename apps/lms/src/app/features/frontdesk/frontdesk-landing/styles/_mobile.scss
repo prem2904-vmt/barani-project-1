@@ -223,7 +223,7 @@
     /* Fill the space under the navbar (base rule pins the top below it). */
     height: calc(100dvh - var(--navbar-height, 4rem) - 24px);
   }
-  /* Header actions WRAP on a phone (Download · WhatsApp · Print · Close don't fit one 358px row: Close was pushed
+  /* Header actions WRAP on a phone (Download · WhatsApp · Email · Print · Close don't fit one 358px row: Close was pushed
      off-screen and Download sat on the "Invoice" label). Title on its own line, the actions below, right-aligned. */
   .pf-inv-preview__hdr {
     flex-wrap: wrap;

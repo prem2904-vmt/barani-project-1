@@ -64,3 +64,17 @@ export function emailOutcomeToasts(res: EmailSendResult | null | undefined, aske
   if (!out.length) out.push({ tone: 'error', text: `The ${noun.toLowerCase()} was not emailed` });
   return out;
 }
+
+/**
+ * Plain words for a server REFUSAL (the request itself was turned down, e.g. 400 from
+ * POST /api/billing/{id}/email): `invalid_pdf` (empty / not a PDF) and `pdf_too_large`
+ * (over Email:MaxAttachmentBytes) get a sentence with a next step; anything else → null
+ * (the caller shows the server's own message).
+ */
+export function emailRefusalText(code: string | null | undefined, what: 'report' | 'invoice' = 'report'): string | null {
+  switch ((code ?? '').trim().toLowerCase()) {
+    case 'invalid_pdf': return `The ${what} PDF could not be attached. Close it, open it again and try once more.`;
+    case 'pdf_too_large': return `The ${what} PDF is too large to email. Download it and send it another way.`;
+    default: return null;
+  }
+}

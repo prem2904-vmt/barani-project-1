@@ -3,7 +3,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { ApiError } from '../../shared/models/api-response.model';
-import { EmailRecipient, EmailSendResult, emailOutcomeToasts } from '../../shared/utils/email-share';
+import { EmailRecipient, EmailSendResult, emailOutcomeToasts, emailRefusalText } from '../../shared/utils/email-share';
 import { SmsPlatform, readSmsEnv, smsPlatform, smsUri } from '../../shared/utils/sms-link';
 import { ApiService } from './api.service';
 import { CommunicationService, CommunicationSettings } from './communication.service';
@@ -128,7 +128,8 @@ export class CommsShareService {
       }
       return res ?? null;
     } catch (e) {
-      this.toasts.error(ApiError.from(e).message || `Could not email the ${what}`, 7000);
+      const err = ApiError.from(e);
+      this.toasts.error(emailRefusalText(err.code, what) ?? (err.message || `Could not email the ${what}`), 7000);
       return null;
     } finally {
       this.emailing.set(null);

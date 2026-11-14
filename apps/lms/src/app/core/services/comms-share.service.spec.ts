@@ -117,6 +117,20 @@ describe('CommsShareService — email sends', () => {
     expect(s.toasts.success).not.toHaveBeenCalled();
   });
 
+  it('invoice PDF refused by the server (400 invalid_pdf / pdf_too_large) = one plain toast with a next step', async () => {
+    for (const [code, text] of [
+      ['invalid_pdf', 'The invoice PDF could not be attached. Close it, open it again and try once more.'],
+      ['pdf_too_large', 'The invoice PDF is too large to email. Download it and send it another way.'],
+    ] as const) {
+      TestBed.resetTestingModule();
+      const s = setup({ perms: ['view_bill'], post: () => throwError(() => new ApiError('The invoice PDF is too large to e-mail.', code, 'pdf')) });
+      expect(await s.svc.emailInvoice('b1', new Blob(['%PDF-1.4'], { type: 'application/pdf' }), 'INV-1')).toBeNull();
+      expect(s.toasts.error).toHaveBeenCalledTimes(1);
+      expect(s.toasts.error).toHaveBeenCalledWith(text, 7000);
+      expect(s.toasts.success).not.toHaveBeenCalled();
+    }
+  });
+
   it('one send at a time; nothing without deliver_report', async () => {
     const s = setup({ perms: [] });
     expect(await s.svc.emailReport('o1', 'patient')).toBeNull();
