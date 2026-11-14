@@ -1,14 +1,17 @@
-import { test, expect, type Page } from '@playwright/test';
-import * as fs from 'node:fs';
+import type { Page } from '@playwright/test';
+import { test, expect, shotsDir, expectLayout, expectFitsWidth, isDesktopApp, isTouch, bridgeCalls } from './support/form-factor';
+import { installWhatsAppRecorder, openChat, expectedVia } from './support/whatsapp';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 /**
  * Review screenshots of WhatsApp Auto / WhatsApp Chat: the report band button in both modes
- * (light + dark) and the web / phone "Report PDF" card. Offline; fake patient only.
- * Not part of the suite (own config: playwright.screens.config.ts).
+ * (light + dark) and what ONE click does at each form factor: web = a new tab + the PDF downloaded; desktop app =
+ * the dock + the PDF copied (whatsapp.setPdf); phone / tablet = the share sheet with the PDF + the message.
+ * Offline; fake patient only. Every form factor (playwright.screens.config.ts projects); shots in SHOTS_DIR/<project>/.
  */
-const OUT = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/whatsapp-auto-chat');
+const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/whatsapp-auto-chat');
+const out = () => shotsDir(OUT_BASE);
 
 const TENANT = { id: 't-demo', name: 'Demo Lab' };
 const ME = { id: 'app-1', authId: 'sub-1', first: 'Kavya', last: 'Desk' };
@@ -69,34 +72,17 @@ async function offlineBackend(page: Page, phone: string | null, o: { canSend?: b
   await page.routeWebSocket(/\/hubs\//, ws => { ws.onMessage(() => ws.send('{}\x1e')); });
 }
 
-async function seed(page: Page, opts: { stubOpen: boolean }) {
-  await page.addInitScript(([session, stub]) => {
+async function seed(page: Page) {
+  await page.addInitScript(([session]) => {
     if (!sessionStorage.getItem('pf.e2e.seeded')) {
       sessionStorage.setItem('pf.e2e.seeded', '1');
       localStorage.clear();
       localStorage.setItem('pf.session', session as string);
       localStorage.setItem('pf-design', 'new');
+      localStorage.setItem('pf.wa.manual.reminded', '1');
     }
-    if (stub) {
-      // A 1440-wide screen at the origin (the popup's placement reads it).
-      Object.defineProperty(window.screen, 'availWidth', { get: () => 1440 });
-      Object.defineProperty(window.screen, 'availHeight', { get: () => 875 });
-      Object.defineProperty(window.screen, 'availLeft', { get: () => 0 });
-      Object.defineProperty(window.screen, 'availTop', { get: () => 25 });
-      const calls: unknown[][] = [];
-      (window as unknown as { __waOpens: unknown[][] }).__waOpens = calls;
-      window.open = ((...a: unknown[]) => { calls.push(a); return { opener: {}, focus() {}, closed: false } as unknown as Window; }) as typeof window.open;
-    } else {
-      // Record, then really open (the mock WhatsApp page).
-      const calls: unknown[][] = [];
-      (window as unknown as { __waOpens: unknown[][] }).__waOpens = calls;
-      const real = window.open.bind(window);
-      window.open = ((...a: Parameters<typeof window.open>) => { calls.push(a); return real(...a); }) as typeof window.open;
-    }
-  }, [JSON.stringify({ access_token: jwt(ME.authId), refresh_token: `rt-${ME.authId}` }), opts.stubOpen] as const);
+  }, [JSON.stringify({ access_token: jwt(ME.authId), refresh_token: `rt-${ME.authId}` })] as const);
 }
-
-
 
 async function setTheme(page: Page, d: boolean) {
   await page.emulateMedia({ colorScheme: d ? 'dark' : 'light' });
@@ -104,14 +90,14 @@ async function setTheme(page: Page, d: boolean) {
   await page.waitForTimeout(500);
 }
 
-async function openReport(page: Page, d: boolean, o: { canSend?: boolean; platform?: Record<string, boolean>; w?: number; h?: number } = {}) {
-  await page.setViewportSize({ width: o.w ?? 1440, height: o.h ?? 900 });
+async function openReport(page: Page, d: boolean, o: { canSend?: boolean; platform?: Record<string, boolean> } = {}) {
   await offlineBackend(page, '+919876543210', o);
-  await seed(page, { stubOpen: true });
+  await seed(page);
   await page.goto('/reports/view/rep-1');
   await expect(page.locator('.pf-rv-act--send')).toBeVisible({ timeout: 30_000 });
   await setTheme(page, d);
-  await page.evaluate(() => localStorage.setItem('pf.wa.manual.reminded', '1'));
+  await expectLayout(page, 'report view');
+  await expectFitsWidth(page, '.pf-rv-act--send', 'WhatsApp button');
 }
 
 for (const d of [false, true]) {
@@ -121,16 +107,14 @@ for (const d of [false, true]) {
     test.setTimeout(120_000);
     await openReport(page, d, { canSend: false });
     await expect(page.locator('.pf-rv-act--send')).toContainText('WhatsApp Chat');
-    fs.mkdirSync(OUT, { recursive: true });
-    await page.screenshot({ path: `${OUT}/report-button-chat-${mode}.png` });
+    await page.screenshot({ path: `${out()}/report-button-chat-${mode}.png` });
   });
 
   test(`report button: WhatsApp Auto ${mode}`, async ({ page }) => {
     test.setTimeout(120_000);
     await openReport(page, d, { canSend: true });
     await expect(page.locator('.pf-rv-act--send')).toContainText('WhatsApp Auto');
-    fs.mkdirSync(OUT, { recursive: true });
-    await page.screenshot({ path: `${OUT}/report-button-auto-${mode}.png` });
+    await page.screenshot({ path: `${out()}/report-button-auto-${mode}.png` });
   });
 
   test(`report button: Auto switched off by Prefrontal falls back to WhatsApp Chat ${mode}`, async ({ page }) => {
@@ -141,55 +125,56 @@ for (const d of [false, true]) {
 
   test(`report button: both off, no WhatsApp button ${mode}`, async ({ page }) => {
     test.setTimeout(120_000);
-    await page.setViewportSize({ width: 1440, height: 900 });
     await offlineBackend(page, '+919876543210', { canSend: true, platform: { whatsappAuto: false, whatsappChat: false } });
-    await seed(page, { stubOpen: true });
+    await seed(page);
     await page.goto('/reports/view/rep-1');
-    await expect(page.locator('.pf-rv-in').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.pf-rv-in').locator('visible=true').first()).toBeVisible({ timeout: 30_000 });
     await page.waitForTimeout(800);
     await expect(page.locator('.pf-rv-act--send')).toHaveCount(0);
     await setTheme(page, d);
-    await page.screenshot({ path: `${OUT}/report-button-none-${mode}.png` });
+    await expectLayout(page, 'report view, no WhatsApp');
+    await page.screenshot({ path: `${out()}/report-button-none-${mode}.png` });
   });
 
-  test(`web: one click, chat popup + PDF download, no card, no toast ${mode}`, async ({ page }) => {
+  test(`WhatsApp Chat: one click/tap opens the chat and the PDF goes with it, no card, no toast ${mode}`, async ({ page, context }) => {
     test.setTimeout(120_000);
-    await page.addInitScript(() => { (navigator as any).canShare = undefined; (navigator as any).share = undefined; localStorage.setItem('pf.wa.manual.pdfhint', '1'); });
+    const touch = isTouch();
+    await installWhatsAppRecorder(page, context, { share: touch });
+    await page.addInitScript((t: boolean) => {
+      localStorage.setItem('pf.wa.manual.pdfhint', '1');
+      if (!t) { (navigator as any).canShare = undefined; (navigator as any).share = undefined; }
+    }, touch);
     await openReport(page, d, { canSend: false });
-    const download = page.waitForEvent('download', { timeout: 15_000 });
-    await page.locator('.pf-rv-act--send').click();
-    expect((await download).suggestedFilename()).toMatch(/^report-.*\.pdf$/);
-    await expect.poll(() => page.evaluate(() => (window as any).__waOpens.length)).toBe(1);
-    await page.waitForTimeout(800);
+    const downloads: string[] = [];
+    page.on('download', dl => downloads.push(dl.suggestedFilename()));
+    const c = await openChat(page, () => page.locator('.pf-rv-act--send').click());
+    expect(c.via).toBe(expectedVia(touch));
+    if (touch) {
+      // ONE tap: the share sheet carries the PDF + the message.
+      expect(c.files[0]?.[1]).toBe('application/pdf');
+      expect(c.text).toContain('your report from');
+    } else {
+      expect(c.phone).toBe('919876543210');
+      expect(c.text).toContain('your report from');
+    }
+    if (isDesktopApp()) {
+      await expect.poll(async () => (await bridgeCalls(page, 'whatsapp.setPdf')).length, { message: 'the PDF is handed to main (clipboard)' }).toBe(1);
+      const pdf = (await bridgeCalls(page, 'whatsapp.setPdf'))[0].args[0] as { name: string; copyToClipboard: boolean };
+      expect(pdf.name).toMatch(/^report-.*\.pdf$/);
+      expect(pdf.copyToClipboard).toBe(true);
+      await page.waitForTimeout(800);
+      expect(downloads, 'the desktop app downloads nothing').toEqual([]);
+      await expect(page.locator('[data-testid=wa-dock]')).toBeVisible();
+    } else if (!touch) {
+      await expect.poll(() => downloads, { message: 'the PDF downloads at the same moment' }).toHaveLength(1);
+      expect(downloads[0]).toMatch(/^report-.*\.pdf$/);
+    } else {
+      await page.waitForTimeout(800);
+      expect(downloads, 'the share sheet carried the file: nothing saved').toEqual([]);
+    }
+    await page.waitForTimeout(500);
     await expect(page.locator('[data-testid=wa-pdf-card]')).toHaveCount(0);
     await expect(page.locator('.toast-item')).toHaveCount(0);
-    await page.screenshot({ path: `${OUT}/web-after-click-${mode}.png` });
-  });
-
-  test(`phone: one tap → share sheet with the PDF + message, no card ${mode}`, async ({ browser }) => {
-    test.setTimeout(120_000);
-    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148' });
-    const page = await ctx.newPage();
-    await page.addInitScript(() => {
-      (window as any).__shares = [];
-      (navigator as any).canShare = () => true;
-      (navigator as any).share = async (d: any) => { (window as any).__shares.push({ files: (d.files || []).map((f: File) => [f.name, f.type]), text: d.text }); };
-    });
-    await offlineBackend(page, '+919876543210', { canSend: false });
-    await seed(page, { stubOpen: true });
-    await page.goto('/reports/view/rep-1');
-    await expect(page.locator('.pf-rv-act--send')).toBeVisible({ timeout: 30_000 });
-    await setTheme(page, d);
-    await page.evaluate(() => localStorage.setItem('pf.wa.manual.reminded', '1'));
-    await page.locator('.pf-rv-act--send').click();
-    await expect.poll(() => page.evaluate(() => (window as any).__shares.length)).toBe(1);
-    const sh = await page.evaluate(() => (window as any).__shares[0]);
-    expect(sh.files[0][1]).toBe('application/pdf');
-    expect(sh.text).toContain('your report from');
-    await expect(page.locator('[data-testid=wa-pdf-card]')).toHaveCount(0);
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: `${OUT}/phone-after-tap-${mode}.png` });
-    await ctx.close();
+    await page.screenshot({ path: `${out()}/after-click-${mode}.png` });
   });
 }

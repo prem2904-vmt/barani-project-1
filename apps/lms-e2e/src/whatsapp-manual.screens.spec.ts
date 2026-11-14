@@ -1,16 +1,19 @@
-import { test, expect, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import * as fs from 'node:fs';
+import { test, expect, shotsDir, expectLayout, isDesktopApp, isDesktopWeb, bridgeCalls } from './support/form-factor';
+import { installWhatsAppRecorder, openChat, expectedVia } from './support/whatsapp';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 /**
- * Review screenshots of the manual "Send on WhatsApp": (1) the DESKTOP-app
- * dock (Electron not launched: a fake bridge + an overlay at the rect
- * electron/whatsapp-dock.js gives the WebContentsView) and (2) the WEB
- * popup as two side-by-side windows. Offline; MOCK WhatsApp page only.
- * Not part of the suite (own config: playwright.screens.config.ts).
+ * The manual "Send on WhatsApp" from the report view, at every form factor (light + dark):
+ *  - desktop app: the dock (Electron not launched: the form-factor bridge stub + an overlay at the rect
+ *    electron/whatsapp-dock.js gives the WebContentsView), no browser tab;
+ *  - desktop web: a new tab at web.whatsapp.com (shown as two side-by-side windows);
+ *  - phone / tablet: wa.me (this browser can't share files).
+ * Offline; MOCK WhatsApp page only. Screenshots: SHOTS_DIR/<project>/.
  */
-const OUT = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/whatsapp-manual');
+const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/whatsapp-manual');
 
 const TENANT = { id: 't-demo', name: 'Demo Lab' };
 const ME = { id: 'app-1', authId: 'sub-1', first: 'Kavya', last: 'Desk' };
@@ -69,33 +72,17 @@ async function offlineBackend(page: Page, phone: string | null, optOut = false) 
   await page.routeWebSocket(/\/hubs\//, ws => { ws.onMessage(() => ws.send('{}\x1e')); });
 }
 
-async function seed(page: Page, opts: { stubOpen: boolean }) {
-  await page.addInitScript(([session, stub]) => {
+async function seed(page: Page) {
+  await page.addInitScript(([session]) => {
     if (!sessionStorage.getItem('pf.e2e.seeded')) {
       sessionStorage.setItem('pf.e2e.seeded', '1');
       localStorage.clear();
       localStorage.setItem('pf.session', session as string);
       localStorage.setItem('pf-design', 'new');
+      localStorage.setItem('pf.wa.manual.reminded', '1');   // first-send reminder off: clean shots
     }
-    if (stub) {
-      // A 1440-wide screen at the origin (the popup's placement reads it).
-      Object.defineProperty(window.screen, 'availWidth', { get: () => 1440 });
-      Object.defineProperty(window.screen, 'availHeight', { get: () => 875 });
-      Object.defineProperty(window.screen, 'availLeft', { get: () => 0 });
-      Object.defineProperty(window.screen, 'availTop', { get: () => 25 });
-      const calls: unknown[][] = [];
-      (window as unknown as { __waOpens: unknown[][] }).__waOpens = calls;
-      window.open = ((...a: unknown[]) => { calls.push(a); return { opener: {}, focus() {}, closed: false } as unknown as Window; }) as typeof window.open;
-    } else {
-      // Record, then really open (the mock WhatsApp page).
-      const calls: unknown[][] = [];
-      (window as unknown as { __waOpens: unknown[][] }).__waOpens = calls;
-      const real = window.open.bind(window);
-      window.open = ((...a: Parameters<typeof window.open>) => { calls.push(a); return real(...a); }) as typeof window.open;
-    }
-  }, [JSON.stringify({ access_token: jwt(ME.authId), refresh_token: `rt-${ME.authId}` }), opts.stubOpen] as const);
+  }, [JSON.stringify({ access_token: jwt(ME.authId), refresh_token: `rt-${ME.authId}` })] as const);
 }
-
 
 // Same maths as electron/whatsapp-dock.js (dockWidth / dockLayout) at 1440x900.
 const HEADER_CSS = 112;
@@ -126,26 +113,6 @@ function mockChat(dark: boolean): string {
   <div class=comp><div class=inp>${MSG}</div><div class=send><svg width=20 height=20 viewBox="0 0 24 24" fill="#fff"><path d="M3 20.5v-6.7l9-1.8-9-1.8V3.5L22 12 3 20.5Z"/></svg></div></div>`;
 }
 
-async function bridge(page: Page, widthCss: number) {
-  await page.addInitScript(([w, top]) => {
-    const subs: ((s: unknown) => void)[] = [];
-    const st = { open: false, width: 0, top, loading: false, failed: false, pdfName: null as string | null };
-    const emit = () => subs.forEach(f => f({ ...st }));
-    (window as any).__waSetPdfCalled = false;
-    (window as any).electronAPI = { whatsapp: {
-      open: async () => { st.open = true; st.width = w; st.loading = false; st.failed = false; st.pdfName = null; emit();
-        // Fallback: if the viewer never hands a PDF (offline), main would still have one from the service; show the chip anyway.
-        setTimeout(() => { if (!(window as any).__waSetPdfCalled && st.open) { st.pdfName = 'report-LAB-2611-000042.pdf'; emit(); } }, 1200);
-        return { ok: true }; },
-      close: async () => { st.open = false; st.pdfName = null; emit(); },
-      state: async () => ({ ...st }),
-      onState: (cb: (s: unknown) => void) => { subs.push(cb); return () => { const i = subs.indexOf(cb); if (i >= 0) subs.splice(i, 1); }; },
-      setPdf: async (p: { name: string }) => { (window as any).__waSetPdfCalled = true; st.pdfName = p.name.replace(/\.pdf$/i, '') + '.pdf'; emit(); return { ok: true }; },
-      startDrag: () => {}, signOut: async () => {}, openElsewhere: async () => {},
-    } };
-  }, [widthCss, HEADER_CSS] as const);
-}
-
 async function setTheme(page: Page, d: boolean) {
   await page.emulateMedia({ colorScheme: d ? 'dark' : 'light' });
   await page.evaluate(x => { const r = document.documentElement; r.classList.toggle('dark', x); r.classList.toggle('light', !x); r.setAttribute('data-theme', x ? 'dark' : 'light'); }, d);
@@ -155,65 +122,62 @@ async function setTheme(page: Page, d: boolean) {
 for (const d of [false, true]) {
   const mode = d ? 'dark' : 'light';
 
-  test(`desktop dock ${mode}`, async ({ page }) => {
+  test(`Send on WhatsApp from the report ${mode}`, async ({ page, context, browser }) => {
     test.setTimeout(120_000);
-    await page.setViewportSize({ width: 1440, height: 900 });
-    const w = dockWidth(1440);
-    await bridge(page, w);
+    const OUT = shotsDir(OUT_BASE);
     await offlineBackend(page, '+919876543210');
-    await seed(page, { stubOpen: true });
+    await installWhatsAppRecorder(page, context);
+    await seed(page);
     await page.goto('/reports/view/rep-1');
     await expect(page.locator('.pf-rv-act--send')).toBeVisible({ timeout: 30_000 });
     await setTheme(page, d);
-    // First-send reminder off: clean shot (only the real "WhatsApp is open"-type toast, if any).
-    await page.evaluate(() => localStorage.setItem('pf.wa.manual.reminded', '1'));
-    await page.locator('.pf-rv-act--send').click();
-    await expect(page.locator('[data-testid=wa-dock]')).toBeVisible();
-    // Overlay = the native WebContentsView rect: x = W - width, y = header, to the bottom.
-    await page.evaluate(([html, w, top]) => {
-      const f = document.createElement('iframe');
-      f.id = 'mock-native-view'; f.srcdoc = html as string;
-      f.style.cssText = `position:fixed;z-index:2147483647;left:${window.innerWidth - (w as number)}px;top:${top}px;width:${w}px;height:${window.innerHeight - (top as number)}px;border:0;border-left:1px solid rgba(127,127,127,.35)`;
-      document.body.appendChild(f);
-    }, [mockChat(d), w, HEADER_CSS] as const);
-    await page.waitForTimeout(1200);
-    fs.mkdirSync(OUT, { recursive: true });
-    await page.screenshot({ path: `${OUT}/desktop-panel-${mode}.png` });
-    const lay = await page.evaluate(() => {
-      const r = (s: string) => { const b = document.querySelector(s)?.getBoundingClientRect(); return b && { x: b.x, y: b.y, w: b.width, h: b.height }; };
-      return { app: r('app-root'), strip: r('.pf-wad'), bar: r('.pf-wad__bar'), row: r('.pf-wad__row'), pdf: r('.pf-wad__pdf') };
-    });
-    console.log('LAYOUT', mode, JSON.stringify(lay));
-  });
+    await expectLayout(page, 'report view');
+    const c = await openChat(page, () => page.locator('.pf-rv-act--send').click());
+    expect(c.via).toBe(expectedVia(false));
+    expect(c.phone).toBe('919876543210');
+    expect(c.text).toContain('Dear Meena Iyer');
 
-  test(`web side window ${mode}`, async ({ page, browser }) => {
-    test.setTimeout(120_000);
-    await page.setViewportSize({ width: 1020, height: 900 });
-    await offlineBackend(page, '+919876543210');
-    await seed(page, { stubOpen: true });
-    await page.goto('/reports/view/rep-1');
-    await expect(page.locator('.pf-rv-act--send')).toBeVisible({ timeout: 30_000 });
-    await setTheme(page, d);
-    await page.evaluate(() => localStorage.setItem('pf.wa.manual.reminded', '1'));
-    await page.locator('.pf-rv-act--send').click();
-    await expect.poll(() => page.evaluate(() => (window as any).__waOpens.length)).toBe(1);
-    await page.waitForTimeout(800);
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wa-shots-'));
-    await page.screenshot({ path: `${tmp}/app.png` });
-    const ctx = await browser.newContext({ viewport: { width: 420, height: 900 }, colorScheme: d ? 'dark' : 'light' });
-    const p2 = await ctx.newPage();
-    await p2.setContent(mockChat(d));
-    await p2.screenshot({ path: `${tmp}/wa.png` });
-    await ctx.close();
-    // Two OS-style windows side by side on a 1440x900 screen, thin divider.
-    const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    const p3 = await ctx2.newPage();
-    await p3.setContent(`<style>*{margin:0;box-sizing:border-box}body{width:1440px;height:900px;display:flex;background:#1b1d22;overflow:hidden}
-      .w{display:flex;flex-direction:column;background:#000}.tb{height:0}.tb *{display:none}img{display:block}
-      .div{width:1px;background:#6b7280;flex:none}</style>
-      <div class=w><img src="data:image/png;base64,${fs.readFileSync(`${tmp}/app.png`).toString('base64')}"></div><div class=div></div><div class=w><img src="data:image/png;base64,${fs.readFileSync(`${tmp}/wa.png`).toString('base64')}"></div>`);
-    await p3.waitForTimeout(500);
-    await p3.screenshot({ path: `${OUT}/web-side-window-${mode}.png` });
-    await ctx2.close();
+    if (isDesktopApp()) {
+      const w = dockWidth(page.viewportSize()!.width);
+      await expect(page.locator('[data-testid=wa-dock]')).toBeVisible();
+      expect(await page.evaluate(() => (window as unknown as { __opens: unknown[] }).__opens.length), 'no browser tab').toBe(0);
+      expect((await bridgeCalls(page, 'whatsapp.open')).length).toBe(1);
+      // Overlay = the native WebContentsView rect: x = W - width, y = header, to the bottom.
+      await page.evaluate(([html, w, top]) => {
+        const f = document.createElement('iframe');
+        f.id = 'mock-native-view'; f.srcdoc = html as string;
+        f.style.cssText = `position:fixed;z-index:2147483647;left:${window.innerWidth - (w as number)}px;top:${top}px;width:${w}px;height:${window.innerHeight - (top as number)}px;border:0;border-left:1px solid rgba(127,127,127,.35)`;
+        document.body.appendChild(f);
+      }, [mockChat(d), w, HEADER_CSS] as const);
+      await page.waitForTimeout(1200);
+      await page.screenshot({ path: `${OUT}/desktop-panel-${mode}.png` });
+      // The dock's strip sits at the right edge, as wide as main's WebContentsView.
+      const strip = await page.locator('.pf-wad').first().boundingBox();
+      expect(strip, 'dock strip laid out').not.toBeNull();
+      expect(Math.round(strip!.x + strip!.width)).toBeGreaterThanOrEqual(page.viewportSize()!.width - 1);
+    } else if (isDesktopWeb()) {
+      await page.waitForTimeout(800);
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wa-shots-'));
+      await page.screenshot({ path: `${tmp}/app.png` });
+      const ctx = await browser.newContext({ viewport: { width: 420, height: 900 }, colorScheme: d ? 'dark' : 'light' });
+      const p2 = await ctx.newPage();
+      await p2.setContent(mockChat(d));
+      await p2.screenshot({ path: `${tmp}/wa.png` });
+      await ctx.close();
+      // Two OS-style windows side by side on a 1440x900 screen, thin divider.
+      const ctx2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+      const p3 = await ctx2.newPage();
+      await p3.setContent(`<style>*{margin:0;box-sizing:border-box}body{width:1440px;height:900px;display:flex;background:#1b1d22;overflow:hidden}
+        .w{display:flex;flex-direction:column;background:#000}img{display:block;max-height:900px}
+        .div{width:1px;background:#6b7280;flex:none}</style>
+        <div class=w><img src="data:image/png;base64,${fs.readFileSync(`${tmp}/app.png`).toString('base64')}"></div><div class=div></div><div class=w><img src="data:image/png;base64,${fs.readFileSync(`${tmp}/wa.png`).toString('base64')}"></div>`);
+      await p3.waitForTimeout(500);
+      await p3.screenshot({ path: `${OUT}/web-side-window-${mode}.png` });
+      await ctx2.close();
+    } else {
+      await expect(page.locator('[data-testid=wa-dock]')).toHaveCount(0);
+      await page.waitForTimeout(500);
+      await page.screenshot({ path: `${OUT}/touch-after-tap-${mode}.png` });
+    }
   });
 }

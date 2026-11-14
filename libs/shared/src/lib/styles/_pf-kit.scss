@@ -84,6 +84,16 @@
   }
 }
 
+/* A band placed DIRECTLY in .pf-page (work pages: report view, result entry) has no padded
+   .pf-page__header around it, and the page itself has no side padding on a phone — so its bleed
+   pushed the band 16px past BOTH screen edges (back chevron and the primary action clipped;
+   found by the phone form-factor screens run, 2026-11-13). Such a band is already edge to edge. */
+@media (max-width: 640px) {
+  .pf-page > pf-hero-band {
+    --pf-hb-bleed: 0px;
+  }
+}
+
 .pf-page__header {
   flex: 0 0 auto;
   position: relative;

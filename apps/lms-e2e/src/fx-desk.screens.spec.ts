@@ -1,14 +1,16 @@
-import { test, expect, type Page } from '@playwright/test';
-import * as fs from 'node:fs';
+import type { Page } from '@playwright/test';
+import { test, expect, shotsDir, expectLayout, expectFitsWidth, expectRowFits, isTouch } from './support/form-factor';
+import { deskTab, deskAllStatuses, iconTabs } from './support/frontdesk';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 /**
  * OPS-122/131/132 review screenshots: the front desk Today list (no past dues), the order drawer
  * (Order ID, Referral doctor + Change, no reference range) and the invoice viewer WhatsApp button. Offline; demo data only.
- * Not part of the suite (own config: playwright.screens.config.ts).
+ * Runs on every form factor (playwright.screens.config.ts projects): phone, tablet, desktop, desktop app.
  */
-const OUT = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/fix-1113/fx-desk');
+const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/fix-1113/fx-desk');
+const out = () => shotsDir(OUT_BASE);
 
 const TENANT = { id: 't-demo', name: 'Demo Lab' };
 const ME = { id: 'app-1', authId: 'sub-1', first: 'Kavya', last: 'Desk' };
@@ -83,35 +85,53 @@ async function light(page: Page) {
   await page.waitForTimeout(400);
 }
 
+const vis = (page: Page, t: string) => page.getByText(t).locator('visible=true');
+
 test('fx-desk screens', async ({ page }) => {
   test.setTimeout(180_000);
-  fs.mkdirSync(OUT, { recursive: true });
-  await page.setViewportSize({ width: 1440, height: 900 });
+  const OUT = out();
   await backend(page);
   await page.goto('/frontdesk');
-  await expect(page.getByText('Savitha Rajan').first()).toBeVisible({ timeout: 60_000 });
+  await page.getByPlaceholder(/Search patient/).locator('visible=true').first().waitFor({ timeout: 60_000 });
   await light(page);
-  // Today + no status chip (tap the active "In progress" chip off): only today's orders; the 5-day-old due is NOT listed.
-  await page.getByText('In progress', { exact: false }).first().click();
-  await expect(page.getByText('Meena Iyer').first()).toBeVisible();
+  await expectLayout(page, 'front desk');
+  // Today + every status (chip layout: tap the active "In progress" chip off; icon tabs: In progress, then Completed):
+  // only today's orders; the 5-day-old due is NOT listed.
+  await deskAllStatuses(page);
+  await expect(vis(page, 'Savitha Rajan').first()).toBeVisible({ timeout: 60_000 });
+  if (await iconTabs(page)) { await expect(vis(page, 'Hemanth Kumar')).toHaveCount(0); await deskTab(page, 'Completed'); }
+  await expect(vis(page, 'Meena Iyer').first()).toBeVisible();
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${OUT}/01-today-no-filter.png` });
-  expect(await page.getByText('Hemanth Kumar').count()).toBe(0);
+  await expect(vis(page, 'Hemanth Kumar')).toHaveCount(0);
+  await expectLayout(page, 'front desk list');
   // Order drawer.
-  await page.getByText('Meena Iyer').first().click();
+  await vis(page, 'Meena Iyer').first().click();
   await expect(page.locator('[data-test=drawer-order-id]')).toBeVisible();
   await expect(page.locator('.pf-prelim__row').first()).toBeVisible({ timeout: 15_000 });
+  await expectFitsWidth(page, '[data-test=drawer-order-id]', 'drawer');
+  await expectFitsWidth(page, '.pf-drawer[role="dialog"]', 'drawer');
+  await expectLayout(page, 'drawer', { nav: false });
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${OUT}/02-order-drawer.png` });
   // Referral dialog.
   await page.locator('[data-test=drawer-edit-referral]').click();
   await expect(page.locator('.pf-erd__card')).toBeVisible();
+  await expectFitsWidth(page, '.pf-erd__card', 'referral dialog');
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${OUT}/03-referral-dialog.png` });
   await page.locator('.pf-erd__close').click();
   // Invoice viewer.
-  await page.getByRole('button', { name: 'View invoice' }).click();
+  await page.getByRole('button', { name: 'View invoice' }).locator('visible=true').first().click();
   await expect(page.locator('[data-test=invoice-whatsapp]')).toBeVisible({ timeout: 30_000 });
+  await expectFitsWidth(page, '[data-test=invoice-whatsapp]', 'invoice WhatsApp');
+  // The whole header row (label, Download, WhatsApp, Print, Close) fits — on a phone it wraps.
+  await expectRowFits(page, '.pf-inv-preview__hdr :is(.pf-inv-preview__eyebrow, .pf-inv-preview__btn, .pf-inv-preview__close)', 'invoice header');
+  await expectLayout(page, 'invoice viewer', { nav: false });
+  if (isTouch()) {
+    const h = (await page.locator('[data-test=invoice-whatsapp]').boundingBox())!.height;
+    expect(h, 'finger-sized WhatsApp button').toBeGreaterThanOrEqual(36);
+  }
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `${OUT}/04-invoice-viewer-whatsapp.png` });
 });

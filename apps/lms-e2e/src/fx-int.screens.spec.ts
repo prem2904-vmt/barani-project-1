@@ -1,5 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
-import * as fs from 'node:fs';
+import type { Page } from '@playwright/test';
+import { test, expect, shotsDir, expectLayout, formFactor } from './support/form-factor';
+import { deskTab } from './support/frontdesk';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -12,9 +13,10 @@ import * as path from 'node:path';
  *  e. front desk: an all-outsourced dispatched order sits under Outsourced, not In progress
  *  g. front desk Completed row: Share menu offers WhatsApp (one entry; Chat here because no Cloud sender)
  *  h. lab Intake (receive): one patient with two orders today shows serials 1 and 2
- * Not part of the suite (own config: playwright.screens.config.ts).
+ * Runs on every form factor (playwright.screens.config.ts projects); screenshots under SHOTS_DIR/<project>/.
  */
-const OUT = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/fix-1113/fx-int');
+const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/fix-1113/fx-int');
+let OUT = OUT_BASE;
 
 const TENANT = { id: 't-demo', name: 'Demo Lab' };
 const ME = { id: 'app-1', authId: 'sub-1', first: 'Kavya', last: 'Desk' };
@@ -163,38 +165,38 @@ async function see(page: Page, text: string, tag: string, timeout = 60_000) {
   return loc;
 }
 
-/** Switch the front desk work list to a tab ("In progress", "Outsourced"); phone tabs are icon-only (aria-label / title). */
-async function deskTab(page: Page, label: string) {
-  const byLabel = page.locator(`[aria-label*="${label}"], [title*="${label}"]`).locator('visible=true').first();
-  if (await byLabel.count()) { await byLabel.click(); return; }
-  await page.getByText(label, { exact: false }).locator('visible=true').first().click();
+/** A layout's overflow menu, when this form factor folds the actions into one. */
+async function openMoreIfFolded(page: Page, label: string) {
+  const more = page.locator(`button[aria-label="${label}"]`).locator('visible=true').first();
+  if (await more.count()) { await more.click(); await page.waitForTimeout(600); }
 }
 
-const VIEWPORTS = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } } as const;
-
-for (const [vp, size] of Object.entries(VIEWPORTS)) {
-  test.describe(`fx-int ${vp}`, () => {
-    test.beforeEach(async ({ page }) => { test.setTimeout(150_000); fs.mkdirSync(OUT, { recursive: true }); await page.setViewportSize(size); await backend(page); });
+{
+  test.describe('fx-int', () => {
+    let vp = 'desktop';
+    test.beforeEach(async ({ page }) => { test.setTimeout(150_000); OUT = shotsDir(OUT_BASE); vp = formFactor(); await backend(page); });
 
     test('a. collection drawer: Select tubes + helper', async ({ page }) => {
       await page.goto('/lab/collect?orderId=os&from=/frontdesk');
       await page.waitForSelector('text=Nandini Rao', { timeout: 60_000 });
-      if (vp === 'phone') { await page.locator('button[aria-label="More collection actions"]').click(); await page.waitForTimeout(600); }
+      await openMoreIfFolded(page, 'More collection actions');
       await see(page, 'Select tubes', `a-${vp}`);
       await see(page, 'Dispatch sends every drawn tube to the lab.', `a2-${vp}`, 10_000);
       await light(page);
-      await page.screenshot({ path: `${OUT}/a-collect-drawer-select-tubes--${vp}.png` });
+      await expectLayout(page, 'collect drawer', { nav: false });
+      await page.screenshot({ path: `${OUT}/a-collect-drawer-select-tubes.png` });
     });
 
     test('b. front desk In progress: Collect and Dispatch side by side', async ({ page }) => {
       await page.goto('/frontdesk');
       await page.getByPlaceholder(/Search patient/).locator('visible=true').first().waitFor({ timeout: 60_000 });
-      if (vp === 'phone') await deskTab(page, 'In progress'); // desktop opens on In progress already
+      await deskTab(page, 'In progress');
       await see(page, 'Nandini Rao', `fd-${vp}`);
       await light(page);
+      await expectLayout(page, 'front desk');
       await expect(page.locator('button[aria-label="Dispatch drawn tubes"]').locator('visible=true').first()).toBeVisible();
       await page.waitForTimeout(500);
-      await page.screenshot({ path: `${OUT}/b-frontdesk-collect-dispatch--${vp}.png` });
+      await page.screenshot({ path: `${OUT}/b-frontdesk-collect-dispatch.png` });
       // The all-outsourced order is NOT listed under In progress.
       expect(await page.getByText('Imran Sheikh').locator('visible=true').count()).toBe(0);
     });
@@ -206,7 +208,7 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
       await deskTab(page, 'Outsourced');
       await see(page, 'Imran Sheikh', `e-${vp}`, 15_000);
       await page.waitForTimeout(600);
-      await page.screenshot({ path: `${OUT}/e-frontdesk-outsourced-tab--${vp}.png` });
+      await page.screenshot({ path: `${OUT}/e-frontdesk-outsourced-tab.png` });
     });
 
     test('f. Payments due tab lists an older due while Today is selected', async ({ page }) => {
@@ -214,13 +216,13 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
       await page.getByPlaceholder(/Search patient/).locator('visible=true').first().waitFor({ timeout: 60_000 });
       await light(page);
       // Today (no chip): the 6-day-old due is NOT in the list.
-      if (vp === 'phone') await deskTab(page, 'In progress'); // desktop opens on In progress already
+      await deskTab(page, 'In progress');
       await see(page, 'Nandini Rao', `f0-${vp}`);
       expect(await page.getByText('Hemanth Kumar').locator('visible=true').count()).toBe(0);
       await deskTab(page, 'Payments due');
       await see(page, 'Hemanth Kumar', `f-${vp}`, 20_000);
       await page.waitForTimeout(600);
-      await page.screenshot({ path: `${OUT}/f-payments-due-tab-older-due--${vp}.png` });
+      await page.screenshot({ path: `${OUT}/f-payments-due-tab-older-due.png` });
     });
 
     test('g. Completed row Share menu offers WhatsApp', async ({ page }) => {
@@ -233,13 +235,13 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
         await see(page, 'Priya Nair', `g-${vp}`, 20_000);
         await page.locator('button[aria-label="Share report"]').locator('visible=true').first().click();
         await see(page, 'WhatsApp', `g2-${vp}`, 10_000);
+        await expectLayout(page, 'share menu', { nav: false });
         await page.waitForTimeout(600);
-        await page.screenshot({ path: `${OUT}/g-share-menu-whatsapp--${vp}.png` });
+        await page.screenshot({ path: `${OUT}/g-share-menu-whatsapp.png` });
       } finally { extraToday = []; }
     });
 
     test('h. lab Intake: one patient, two orders, serials 1 and 2', async ({ page }) => {
-      test.skip(vp !== 'desktop', 'desktop only');
       dispatchedFeed = TWIN_ORDERS;
       try {
         await page.goto('/lab/my-work');
@@ -249,7 +251,7 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
         await page.waitForTimeout(800);
         const chips = (await page.locator('.pf-dayno').locator('visible=true').allTextContents()).map(t => t.trim().split(' ')[0]);
         expect(chips).toEqual(expect.arrayContaining(['1', '2']));
-        await page.screenshot({ path: `${OUT}/h-lab-intake-serials--${vp}.png` });
+        await page.screenshot({ path: `${OUT}/h-lab-intake-serials.png` });
       } finally { dispatchedFeed = []; }
     });
 
@@ -261,37 +263,40 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
       const name = page.locator('input[placeholder="First or last name"]').locator('visible=true').first();
       await name.waitFor({ timeout: 15_000 });   // the dialog opens after the shortcut; filling before it races
       await name.fill('an'); await name.press('Enter');
-      if (vp === 'phone') { await page.waitForTimeout(500); await page.getByRole('button', { name: 'Search', exact: true }).locator('visible=true').first().click().catch(() => undefined); }
+      await page.waitForTimeout(500);
+      const go = page.getByRole('button', { name: 'Search', exact: true }).locator('visible=true').first();
+      if (await go.count()) await go.click().catch(() => undefined);
       await see(page, 'Lakshmi Narayanan', `d-adv-${vp}`, 15_000);
       await page.getByText('Lakshmi Narayanan').locator('visible=true').first().scrollIntoViewIfNeeded();
       await light(page);
-      await page.screenshot({ path: `${OUT}/d2-advanced-search-contact-address--${vp}.png` });
+      await page.screenshot({ path: `${OUT}/d2-advanced-search-contact-address.png` });
       await page.goto('/frontdesk/patients/new');
       await see(page, 'Contact & IDs', `d-reg-${vp}`);
       await see(page, 'Address / place', `d-reg2-${vp}`, 10_000);
       await light(page);
+      await expectLayout(page, 'registration');
       await page.getByText('Address / place').locator('visible=true').first().scrollIntoViewIfNeeded();
       await page.waitForTimeout(400);
-      await page.screenshot({ path: `${OUT}/d1-register-contact-address--${vp}.png` });
+      await page.screenshot({ path: `${OUT}/d1-register-contact-address.png` });
     });
   });
 }
 
 test('c. test editor: free-text test shows Unit + Reference', async ({ page }) => {
   test.setTimeout(150_000);
-  fs.mkdirSync(OUT, { recursive: true });
-  await page.setViewportSize(VIEWPORTS.desktop);
+  OUT = shotsDir(OUT_BASE);
   await backend(page);
   await page.goto('/admin/tests/t1/edit?type=individual');
   await expect(page.getByText('Urine Culture Remarks').first()).toBeVisible({ timeout: 60_000 });
   await light(page);
+  await expectLayout(page, 'test editor');
   await page.waitForTimeout(800);
-  await page.screenshot({ path: `${OUT}/c1-test-editor-first-view--desktop.png` });
+  await page.screenshot({ path: `${OUT}/c1-test-editor-first-view.png` });
   await page.getByRole('tab', { name: /Result entry/ }).or(page.getByText('Result entry', { exact: true })).first().click();
   await page.waitForTimeout(600);
   const unit = page.locator('.pf-uf__lbl', { hasText: 'Unit' }).first();
   try { await expect(unit).toBeVisible({ timeout: 15_000 }); } catch (e) { await page.screenshot({ path: `${OUT}/DEBUG-c.png` }); throw e; }
   await unit.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: `${OUT}/c2-test-editor-unit-reference--desktop.png` });
+  await page.screenshot({ path: `${OUT}/c2-test-editor-unit-reference.png` });
   await expect(page.getByText('Prints in the Reference range column').first()).toBeVisible();
 });
