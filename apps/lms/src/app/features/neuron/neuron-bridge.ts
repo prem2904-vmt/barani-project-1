@@ -85,6 +85,15 @@ export function neuronFrameUrl(baseUri: string, author: string, theme: NeuronThe
   return u.toString();
 }
 
+const OPEN_POLL_MS = 150;
+const OPEN_POLL_MAX = 80;   // about 12 seconds
+
+/** One engine command (`window.neuron.execute(cmd, params)`). */
+export interface EngineCommand { cmd: string; params: Record<string, unknown> }
+
+/** Fit every used column to its text, with the engine's own font measure (so nothing shows as "P-0001 (r…"). */
+export const FIT_COLUMNS: EngineCommand = { cmd: 'home.autofitColumnWidth', params: { cols: 'A:Z' } };
+
 export type FrameState = 'idle' | 'loading' | 'ready' | 'failed';
 
 /** The engine's own scripting handle (`iframe.contentWindow.neuron`). */
@@ -113,7 +122,7 @@ export class NeuronBridge {
   onSave: (f: SavedFile) => void = () => undefined;
 
   private frame: HTMLIFrameElement | null = null;
-  private pending: { name: string; bytes: ArrayBuffer } | null = null;
+  private pending: { name: string; bytes: ArrayBuffer; then: EngineCommand[] } | null = null;
   private listening = false;
   private ownOrigin = '';
   private readonly handler = (ev: MessageEvent) => this.handle(ev);
@@ -136,11 +145,12 @@ export class NeuronBridge {
   }
   destroy(): void { this.frame = null; this.stop(); }
 
-  /** Open a workbook. Non-xlsx bytes are refused here (never sent). Held until the app says `ready`. */
-  open(name: string, bytes: ArrayBuffer): boolean {
+  /** Open a workbook. Non-xlsx bytes are refused here (never sent). Held until the app says `ready`. `then` = engine commands
+   *  to run once it is open (the results workbook asks for its columns to be fitted). */
+  open(name: string, bytes: ArrayBuffer, then: EngineCommand[] = []): boolean {
     if (!isXlsxBytes(bytes)) { this.openProblem.set(NOT_A_SPREADSHEET_MESSAGE); return false; }
     this.openProblem.set(null);
-    this.pending = { name, bytes };
+    this.pending = { name, bytes, then };
     if (this.state() === 'ready') this.flush();
     return true;
   }
@@ -179,13 +189,13 @@ export class NeuronBridge {
   /** Ask the app to save (it answers with a save message). False if it isn't ready. */
   save(): boolean { return this.run('file.save'); }
   exportPdf(): boolean { return this.run('file.exportPdf'); }
-  private run(cmd: string): boolean {
+  private run(cmd: string, params: Record<string, unknown> = {}): boolean {
     const api = this.api();
     if (this.state() !== 'ready' || !api) return false;
     // Right after `ready` the workbook may still be opening ("no workbook open"): try again briefly instead of losing the click.
     const attempt = (n: number): void => {
       let r: unknown;
-      try { r = api.execute(cmd, {}); } catch { return; }
+      try { r = api.execute(cmd, params); } catch { return; }
       if (r && typeof (r as Promise<unknown>).catch === 'function') {
         (r as Promise<unknown>).catch((e: unknown) => { if (n < 20 && /no workbook open/i.test(String((e as Error)?.message ?? e))) setTimeout(() => attempt(n + 1), 300); });
       }
@@ -194,12 +204,34 @@ export class NeuronBridge {
     return true;
   }
 
+  /** Run commands on the workbook that was just sent. The app starts with an empty workbook of its own, so a command sent too early
+   *  would land on THAT one (and mark it changed, which keeps the sheet looking unsaved): wait until the app reports the opened
+   *  file's title, and give up quietly after a few seconds (the sheet is still usable, just not fitted). */
+  private afterOpened(name: string, commands: EngineCommand[]): void {
+    const api = this.api();
+    const inspect = api?.docInspect;
+    if (!api || typeof inspect !== 'function') { for (const c of commands) this.run(c.cmd, c.params); return; }
+    const attempt = (n: number): void => {
+      if (this.state() !== 'ready' || n > OPEN_POLL_MAX) return;
+      let r: unknown;
+      try { r = inspect.call(api, {}); } catch { r = null; }
+      Promise.resolve(r).then(
+        (i: unknown) => {
+          if ((i as { title?: string } | null)?.title === name) for (const c of commands) this.run(c.cmd, c.params);
+          else setTimeout(() => attempt(n + 1), OPEN_POLL_MS);
+        },
+        () => setTimeout(() => attempt(n + 1), OPEN_POLL_MS));
+    };
+    attempt(0);
+  }
+
   private flush(): void {
     const w = this.frame?.contentWindow;
     if (!w || !this.pending) return;
-    const { name, bytes } = this.pending;
+    const { name, bytes, then } = this.pending;
     this.pending = null;
     w.postMessage({ type: msg.open, name, bytes }, this.ownOrigin, [bytes]);
+    if (then.length) this.afterOpened(name, then);
   }
 
   /** Public for specs: one window message. */

@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import {
-  NEURON_FAILED_MESSAGE, NEURON_MSG_PREFIX, NOT_A_SPREADSHEET_MESSAGE, NeuronBridge, msg, acceptedMessage, downloadBytes, isXlsxBytes, neuronFrameUrl,
+  FIT_COLUMNS, NEURON_FAILED_MESSAGE, NEURON_MSG_PREFIX, NOT_A_SPREADSHEET_MESSAGE, NeuronBridge, msg, acceptedMessage, downloadBytes, isXlsxBytes, neuronFrameUrl,
   routeSaved, sniffBytes, withExtension,
 } from './neuron-bridge';
 
@@ -160,6 +160,62 @@ describe('Neuron bridge: opening a file', () => {
     bridge.handle(from(win, { type: 'neuron:ready' }));
     bridge.open('A.xlsx', buf(PK));
     expect(postMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('commands handed to open() wait for the OPENED workbook (not the app\'s empty starter one), then run once', async () => {
+    vi.useFakeTimers();
+    const { bridge, win, postMessage } = make();
+    const execute = vi.fn();
+    let title = 'Book1';
+    const docInspect = vi.fn(async () => ({ title }));
+    (win as unknown as { neuron: unknown }).neuron = { execute, docInspect };
+    bridge.open('Results.xlsx', buf(PK), [FIT_COLUMNS]);
+    expect(execute).not.toHaveBeenCalled();
+    bridge.handle(from(win, { type: 'neuron:ready' }));
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(600);
+    expect(execute, 'the starter workbook must not be touched').not.toHaveBeenCalled();
+    title = 'Results.xlsx';
+    await vi.advanceTimersByTimeAsync(400);
+    expect(execute.mock.calls).toEqual([['home.autofitColumnWidth', { cols: 'A:Z' }]]);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(execute).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('without docInspect (an older engine) the commands run right after the file is sent', () => {
+    const { bridge, win } = make();
+    const execute = vi.fn();
+    (win as unknown as { neuron: unknown }).neuron = { execute };
+    bridge.open('Results.xlsx', buf(PK), [FIT_COLUMNS]);
+    bridge.handle(from(win, { type: 'neuron:ready' }));
+    expect(execute.mock.calls).toEqual([['home.autofitColumnWidth', { cols: 'A:Z' }]]);
+  });
+
+  it('a plain open() asks the engine for nothing else', async () => {
+    vi.useFakeTimers();
+    const { bridge, win } = make();
+    const execute = vi.fn();
+    const docInspect = vi.fn(async () => ({ title: 'A.xlsx' }));
+    (win as unknown as { neuron: unknown }).neuron = { execute, docInspect };
+    bridge.open('A.xlsx', buf(PK));
+    bridge.handle(from(win, { type: 'neuron:ready' }));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(execute).not.toHaveBeenCalled();
+    expect(docInspect).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('gives up quietly when the opened workbook never shows up', async () => {
+    vi.useFakeTimers();
+    const { bridge, win } = make();
+    const execute = vi.fn();
+    (win as unknown as { neuron: unknown }).neuron = { execute, docInspect: vi.fn(async () => ({ title: 'Book1' })) };
+    bridge.open('Results.xlsx', buf(PK), [FIT_COLUMNS]);
+    bridge.handle(from(win, { type: 'neuron:ready' }));
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(execute).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it('NEVER sends non-xlsx bytes (the app would open them as CSV text): refused with a plain message', () => {

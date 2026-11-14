@@ -17,7 +17,7 @@ import { PfSelectOption, SelectComponent } from '../../shared/primitives/select.
 import { labDaysAgo, labToday } from '../../shared/utils/lab-clock';
 import { gridThemeDark, gridThemeLight } from '../admin/tests/tests/grid-theme';
 import { NeuronAccess, PATIENT_HIDDEN_NOTE, neuronAccess } from './neuron-access';
-import { NeuronBridge, SavedFile, XLSX_MIME, mimeForName, downloadBytes, isXlsxBytes, neuronFrameUrl, withExtension, NOT_A_SPREADSHEET_MESSAGE } from './neuron-bridge';
+import { NeuronBridge, FIT_COLUMNS, SavedFile, XLSX_MIME, mimeForName, downloadBytes, isXlsxBytes, neuronFrameUrl, withExtension, NOT_A_SPREADSHEET_MESSAGE } from './neuron-bridge';
 import { NeuronSaver, StoredRef } from './neuron-save';
 import { SheetEditorService, SheetOpenRequest } from './sheet-editor.service';
 import { OfficeFile, OfficeService, toApiError } from './office.service';
@@ -438,13 +438,13 @@ export class SheetEditorPage {
   }
 
   // ───────────────────────── the open sheet ─────────────────────────
-  private start(file: StoredRef, bytes: ArrayBuffer | null, fromResults: boolean): void {
+  private start(file: StoredRef, bytes: ArrayBuffer | null, fromResults: boolean, fitColumns = false): void {
     this.pendingStore.set(false);
     this.renaming.set(false);
     this.bridge.prepareNewFrame();
     this.bridge.readonly = !this.canWrite();
     this.session.set({ key: ++this.seq, file, fromResults });
-    if (bytes) this.bridge.open(file.name, bytes);
+    if (bytes) this.bridge.open(file.name, bytes, fitColumns ? [FIT_COLUMNS] : []);
   }
 
   protected async newSheet(): Promise<void> {
@@ -593,7 +593,7 @@ export class SheetEditorPage {
       const r = await this.office.resultsWorkbook(range);
       if (!isXlsxBytes(r.bytes)) { this.insertProblem.set(BROKEN_RESULTS_MESSAGE); return; }
       const name = resultsFileName(r.fileName, range);
-      this.start({ id: null, name, version: null }, r.bytes, true);
+      this.start({ id: null, name, version: null }, r.bytes, true, true);   // the server's workbook: columns fitted to their text
       this.insertOpen.set(false);
       const rows = r.rowCount !== null ? `${r.rowCount.toLocaleString('en-IN')} ${r.rowCount === 1 ? 'row' : 'rows'} inserted. ` : '';
       this.notice.set(r.truncated ? { tone: 'warn', text: TRUNCATED_NOTICE }

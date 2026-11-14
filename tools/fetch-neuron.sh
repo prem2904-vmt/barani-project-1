@@ -4,13 +4,19 @@
 #
 #   NEURON_DIST=<dir>                      copy a build folder (index.html + .js + _bg.wasm), or
 #   NEURON_URL=<https://…/neuron-web.zip>  download a .zip / .tar.gz, and
-#   NEURON_SHA256=<hex>                    REQUIRED with NEURON_URL (the pinned checksum of the ARCHIVE). With NEURON_DIST it is
+#   NEURON_SHA256=<hex>                    with NEURON_URL: the checksum of the ARCHIVE (default: NEURON_PINNED_SHA256 below). With NEURON_DIST it is
 #                                          optional and, when set, must match the build's *_bg.wasm file.
 #
 #   NEURON_DIST=~/neuron-web tools/fetch-neuron.sh
 #   NEURON_URL=https://example.test/neuron-web-1.0.zip NEURON_SHA256=ab12… tools/fetch-neuron.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+# The engine build this app is tested against: the sha256 of the ARCHIVE (neuron-web-<version>.tar.gz) that the Neuron fork's
+# build-web.sh produces. NEURON_URL downloads are checked against it unless NEURON_SHA256 says otherwise. Bump it with every
+# engine rebuild (and re-run the Neuron screens suite against the new build).
+NEURON_PINNED_SHA256="843db958ed94ac8337e5fee6f23f8ab031fed77e2433ace611de402dc00ba3d4"
+
 dest="apps/lms/public/neuron-engine"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -22,7 +28,7 @@ if [ -n "${NEURON_DIST:-}" ]; then
   src="${NEURON_DIST/#\~/$HOME}"
   [ -d "$src" ] || { echo "NEURON_DIST is not a folder: $src" >&2; exit 1; }
 elif [ -n "${NEURON_URL:-}" ]; then
-  : "${NEURON_SHA256:?NEURON_SHA256 is required with NEURON_URL (pin the archive checksum)}"
+  NEURON_SHA256="${NEURON_SHA256:-$NEURON_PINNED_SHA256}"
   arc="$work/archive"
   curl -fsSL --retry 3 -o "$arc" "$NEURON_URL"
   got="$(sha_of "$arc")"

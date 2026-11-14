@@ -12,7 +12,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { ThemeService } from '../../core/services/theme.service';
 
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
-import { NEURON_FAILED_MESSAGE, NeuronBridge } from './neuron-bridge';
+import { FIT_COLUMNS, NEURON_FAILED_MESSAGE, NeuronBridge } from './neuron-bridge';
 import { NeuronSaver } from './neuron-save';
 import { SheetEditorPage } from './sheet-editor.page';
 import { SheetEditorService, SheetOpenRequest } from './sheet-editor.service';
@@ -104,6 +104,19 @@ describe('Neuron page', () => {
     expect(el.querySelector('iframe')).toBeTruthy();
     expect(page.notice().text).toContain('12 rows inserted');
     expect(page.notice().text).toContain('Press Save');
+  });
+
+  it('Insert results: the columns are fitted to their text (the engine command goes with the open); other opens do not', async () => {
+    const { page, bridge, settle } = make();
+    const open = vi.spyOn(bridge, 'open');
+    page.pickedTests.set(['t1']);
+    await page.insertResults();
+    await settle();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls[0][2]).toEqual([FIT_COLUMNS]);
+    open.mockClear();
+    page.start({ id: 'f1', name: 'Budget.xlsx', version: 2 }, PK.slice(0), false);
+    expect(open.mock.calls[0][2]).toEqual([]);
   });
 
   it('Insert results: the server cut the rows at 5,000 → the notice says so', async () => {

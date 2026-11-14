@@ -52,7 +52,10 @@
     <ng-container band-actions>
       @if (sheets.available()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="open-in-sheet" (click)="openInSheet()"
-                title="Open these results in a sheet">Open in sheet</button>
+                aria-label="Open in sheet" title="Open these results in a sheet">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M3 10h18M3 14.5h18M9 5v14"/></svg>
+          <span class="pf-ins-hbt">Open in sheet</span>
+        </button>
       }
       @if (dimsActive()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="clearFilters()" aria-label="Clear filters" title="Clear filters">

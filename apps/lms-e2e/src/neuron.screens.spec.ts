@@ -295,6 +295,22 @@ test.describe('neuron: open, edit, save', () => {
     expect(calls('POST')).toHaveLength(0);
   });
 
+  test('File > New: the engine builds the lab templates (Daily results log, QC log, Reagent stock), headers only', async ({ page, context }) => {
+    test.skip(isPhone(), 'phone is view-only: no File > New');
+    await boot(page, context);
+    await filesReady(page);
+    await openRow(page, 'Glucose results.xlsx');
+    if (!(await needGrid(page))) return;
+    for (const [sample, title, header] of [['results', 'Daily results log', 'Date'], ['qc', 'QC log', 'Date'], ['stock', 'Reagent stock', 'Reagent']] as const) {
+      const r = await gcExec(page, 'file.new', { sample }) as { title: string };
+      expect(r.title).toBe(title);
+      const a1 = await gcExec(page, 'cell.get', { cell: 'A1' }) as { value: string };
+      expect(a1.value).toBe(header);
+      const a2 = await gcExec(page, 'cell.get', { cell: 'A2' }) as { value: unknown };
+      expect(a2.value ?? '', 'headers only: no rows of data').toBe('');
+    }
+  });
+
   test('the sheet fills the space between the band and the bottom nav: full-width stage, one slim band, no card', async ({ page, context }) => {
     await boot(page, context);
     await filesReady(page);
