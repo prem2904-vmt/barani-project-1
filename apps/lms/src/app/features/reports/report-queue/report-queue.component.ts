@@ -1,3 +1,5 @@
+import { SheetEditorService } from '../../neuron/sheet-editor.service';
+import { labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { CommonModule, DatePipe } from "@angular/common";
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
@@ -93,6 +95,12 @@ type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
   styleUrl: "./report-queue.component.scss"
 })
 export class ReportQueueComponent implements OnInit {
+  /** "Open in sheet": the sheet editor with Insert results ready for the last 7 days; Back returns to this list. */
+  protected readonly sheets = inject(SheetEditorService);
+  protected openInSheet(): void {
+    void this.sheets.open({ source: 'Reports', insert: { from: labDaysAgo(6), to: labToday() } });
+  }
+
   formatReportPatient(p: any): string {
     return formatPatientInfo(p);
   }

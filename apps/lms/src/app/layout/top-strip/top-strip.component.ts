@@ -1,3 +1,4 @@
+import { SheetEditorService } from "../../features/neuron/sheet-editor.service";
 import { SetPinDialogService } from '../../core/services/set-pin-dialog.service';
 import { OverlayBackService } from '../../core/services/overlay-back.service';
 import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
@@ -788,6 +789,10 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Passkeys (beta `passkeys`: console switch + dev only). */
   private readonly beta = inject(BetaFeaturesService);
   protected passkeysOn(): boolean { return this.beta.enabled('passkeys'); }
+  /** Sheets (beta `neuron`): the saved spreadsheets, from the account menu (never a bar tab). */
+  private readonly sheetEditor = inject(SheetEditorService);
+  protected sheetsOn(): boolean { return this.sheetEditor.available(); }
+  goSheets() { this.closeProfile(); this.router.navigate(["/sheet"]); }
   goPasskeys() {
     this.closeProfile();
     this.router.navigate(["/security"]);

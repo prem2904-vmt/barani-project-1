@@ -342,6 +342,15 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/account-security/passkeys.component').then(m => m.PasskeysComponent)
       },
       {
+        // The sheet editor (beta `neuron`, dev only). A screen opens it (SheetEditorService.open) and the back chevron returns there;
+        // with nothing to open it shows the saved Sheets (More menu). Beta off => betaGuard sends a direct visit to '/'.
+        // Leaving with unsaved changes asks first (DialogService).
+        path: 'sheet',
+        canActivate: [betaGuard('neuron')],
+        canDeactivate: [(c: { canLeave?: () => Promise<boolean> }) => c?.canLeave ? c.canLeave() : true],
+        loadComponent: () => import('./features/neuron/sheet-editor.page').then(m => m.SheetEditorPage)
+      },
+      {
         path: 'admin/organization',
         canActivate: [...routeGuards('/admin/organization')],
         loadComponent: () => import('./features/admin/organization/organization-settings.component').then(m => m.OrganizationSettingsComponent)

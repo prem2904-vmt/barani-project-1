@@ -1,3 +1,4 @@
+import { SheetEditorService } from '../../features/neuron/sheet-editor.service';
 import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
 import { DesktopWindowService } from '../../core/services/desktop-window.service';
 import { OverlayBackService } from '../../core/services/overlay-back.service';
@@ -53,6 +54,7 @@ const DRAG_THRESHOLD_PX = 4;
 export class BottomNavComponent implements AfterViewInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly beta = inject(BetaFeaturesService);
+  private readonly sheetEditor = inject(SheetEditorService);
   /** OPD dark build: the ONE OPD visibility rule. */
   private readonly opdGate = inject(OpdGateService);
   private readonly casesheetGate = inject(CasesheetGateService);
@@ -237,6 +239,9 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected goSignature(): void { this.closeMore(); this.router.navigate(['/signature']); }
   /** Passkeys (beta `passkeys`: console switch + dev only). */
   protected passkeysOn(): boolean { return this.beta.enabled('passkeys'); }
+  /** Sheets (beta `neuron`): the saved spreadsheets, from the More menu (never a bottom-nav tab). */
+  protected sheetsOn(): boolean { return this.sheetEditor.available(); }
+  protected goSheets(): void { this.closeMore(); this.router.navigate(['/sheet']); }
   protected goPasskeys(): void { this.closeMore(); this.router.navigate(['/security']); }
   protected goSetup(): void { this.closeMore(); this.router.navigate(['/setup']); }
 

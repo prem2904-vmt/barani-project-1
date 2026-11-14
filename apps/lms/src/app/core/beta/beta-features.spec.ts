@@ -46,7 +46,7 @@ describe('beta gate rules', () => {
     expect(log).toHaveBeenCalledWith('Beta on in this browser: mcp, passkeys');
     (win.pf!['mcp'] as (on: boolean) => void)(false);
     expect(st.data[betaFlagKey('mcp')]).toBeUndefined();
-    expect(readBetaSwitches(st)).toEqual({ mcp: false, passkeys: true, assistant: false, support: false });
+    expect(readBetaSwitches(st)).toEqual({ mcp: false, passkeys: true, assistant: false, support: false, neuron: false });
     expect(reload).toHaveBeenCalledTimes(3);
   });
 
@@ -65,10 +65,10 @@ describe('beta gate rules', () => {
   });
 
   it('server answer: only literal true; envelope or bare; aiConnector aliases mcp; junk ⇒ all off', () => {
-    expect(parseBetaFlags({ success: true, data: { mcp: true, passkeys: 'true' } })).toEqual({ mcp: true, passkeys: false, assistant: false, support: false });
-    expect(parseBetaFlags({ aiConnector: true, assistant: true })).toEqual({ mcp: true, passkeys: false, assistant: true, support: false });
-    expect(parseBetaFlags(null)).toEqual({ mcp: false, passkeys: false, assistant: false, support: false });
-    expect(parseBetaFlags([true])).toEqual({ mcp: false, passkeys: false, assistant: false, support: false });
+    expect(parseBetaFlags({ success: true, data: { mcp: true, passkeys: 'true' } })).toEqual({ mcp: true, passkeys: false, assistant: false, support: false, neuron: false });
+    expect(parseBetaFlags({ aiConnector: true, assistant: true })).toEqual({ mcp: true, passkeys: false, assistant: true, support: false, neuron: false });
+    expect(parseBetaFlags(null)).toEqual({ mcp: false, passkeys: false, assistant: false, support: false, neuron: false });
+    expect(parseBetaFlags([true])).toEqual({ mcp: false, passkeys: false, assistant: false, support: false, neuron: false });
     expect(parseBetaFlags({ data: { support: true } }).support).toBe(true);
     expect(parseBetaFlags({ support: 'true' }).support).toBe(false);
   });
@@ -234,5 +234,26 @@ describe('betaHeaderInterceptor', () => {
 
   it('the app wires it next to the OPD preview interceptor', () => {
     expect(typeof betaHeaderInterceptor).toBe('function');
+  });
+});
+
+describe('neuron beta key', () => {
+  it('pf.neuron() switches it on/off like every beta; the server flag + dev are still required', () => {
+    const st = memStorage();
+    const win: { pf?: Record<string, unknown> } & Record<string, unknown> = {};
+    const reload = vi.fn();
+    installPfBeta(win, st, reload, vi.fn());
+    (win.pf!['neuron'] as () => void)();
+    expect(st.data[betaFlagKey('neuron')]).toBe('1');
+    expect(betaFlagKey('neuron')).toBe('pf.beta.neuron');
+    expect(betaHeaderValue(st)).toBe('neuron');
+    expect(readBetaSwitches(st).neuron).toBe(true);
+    expect(parseBetaFlags({ data: { neuron: true } }).neuron).toBe(true);
+    expect(parseBetaFlags({ data: { neuron: 'true' } }).neuron).toBe(false);
+    expect(parseBetaFlags({ data: { mcp: true } }).neuron).toBe(false);
+    expect(betaVisible({ switchOn: true, serverAllowed: true, isDev: false })).toBe(false);
+    expect(betaVisible({ switchOn: true, serverAllowed: false, isDev: true })).toBe(false);
+    (win.pf!['neuron'] as (on: boolean) => void)(false);
+    expect(st.data[betaFlagKey('neuron')]).toBeUndefined();
   });
 });

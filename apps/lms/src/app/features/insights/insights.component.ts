@@ -1,3 +1,4 @@
+import { SheetEditorService } from '../neuron/sheet-editor.service';
 import { ShareService } from '../../core/services/share.service';
 import { NgTemplateOutlet, formatDate } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
@@ -98,6 +99,12 @@ export class InsightsComponent {
   private readonly location = inject(Location, { optional: true });
   protected readonly theme = inject(ThemeService);
   private readonly beta = inject(BetaFeaturesService);
+  /** "Open in sheet": results for this period / branch / test open in the sheet editor; Back returns here with the same URL filters. */
+  protected readonly sheets = inject(SheetEditorService);
+  protected openInSheet(): void {
+    const r = this.resolved();
+    void this.sheets.open({ source: 'Insights', insert: { testIds: this.testId() ? [this.testId()] : undefined, from: r.fromYmd, to: r.toYmd, branchId: this.branchId() || null, auto: !!this.testId() } });
+  }
   private readonly builderApi = inject(InsightsBuilderApiService);
 
   readonly icons = ICONS;

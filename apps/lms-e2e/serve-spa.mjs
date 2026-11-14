@@ -31,6 +31,8 @@ const TYPES = {
   '.woff2': 'font/woff2',
   '.woff': 'font/woff',
   '.map': 'application/json; charset=utf-8',
+  // The Neuron spreadsheet engine (apps/lms/public/neuron-engine): a browser refuses to stream-compile wasm under any other type.
+  '.wasm': 'application/wasm',
 };
 
 const server = createServer((req, res) => {

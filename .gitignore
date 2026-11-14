@@ -85,3 +85,6 @@ apps/lms-e2e/playwright-report/
 
 # Playwright output
 apps/lms-e2e/test-results/
+
+# Neuron spreadsheet engine (26 MB wasm, fetched by tools/fetch-neuron.sh, never committed)
+apps/lms/public/neuron-engine/

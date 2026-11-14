@@ -50,6 +50,10 @@
       }
     </ng-container>
     <ng-container band-actions>
+      @if (sheets.available()) {
+        <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="open-in-sheet" (click)="openInSheet()"
+                title="Open these results in a sheet">Open in sheet</button>
+      }
       @if (dimsActive()) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="clearFilters()" aria-label="Clear filters" title="Clear filters">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" [innerHTML]="svg(icons.close)"></svg>
