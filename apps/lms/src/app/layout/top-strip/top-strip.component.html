@@ -108,9 +108,9 @@
   <nav class="pf-topnav-center hidden xl:flex" aria-label="Work areas">
     @for (n of bar(); track n.id) {
     <a [routerLink]="n.href"
-      [routerLinkActive]="(n.id === 'opd' || n.id === 'doctor') ? [] : 'pf-topnav-link--on'"
+      [routerLinkActive]="manualNav(n) ? [] : 'pf-topnav-link--on'"
       [routerLinkActiveOptions]="{ exact: !!n.exact }"
-      [class.pf-topnav-link--on]="(n.id === 'opd' || n.id === 'doctor') && opdActive(n)"
+      [class.pf-topnav-link--on]="manualNav(n) && manualActive(n)"
       [attr.title]="n.label" [attr.aria-label]="iconsOnly() ? n.label : null"
       class="pf-topnav-link press">
       @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
@@ -220,9 +220,9 @@
     <nav class="pf-topnav-classic hidden xl:flex" aria-label="Work areas">
       @for (n of bar(); track n.id) {
       <a [routerLink]="n.href"
-        [routerLinkActive]="(n.id === 'opd' || n.id === 'doctor') ? [] : 'pf-topnav-active'"
+        [routerLinkActive]="manualNav(n) ? [] : 'pf-topnav-active'"
         [routerLinkActiveOptions]="{ exact: !!n.exact }"
-        [class.pf-topnav-active]="(n.id === 'opd' || n.id === 'doctor') && opdActive(n)"
+        [class.pf-topnav-active]="manualNav(n) && manualActive(n)"
         class="pf-topnav-btn press" [title]="n.label" [attr.aria-label]="n.label">
         @if (n.id === 'sample-collection' || n.action === 'sample_collection' || n.href === '/sample-collection') {
         <span class="pf-collect-nav-icon w-4 h-4" aria-hidden="true"></span>

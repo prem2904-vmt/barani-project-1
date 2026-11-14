@@ -41,7 +41,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
   imports: [PfKeysDirective, SamplePresetDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-hb">
+    <div class="pf-hb" [class.pf-hb--slim]="slim()">
       <div class="pf-hb__band">
         <div class="pf-hb__tenant">
           @if (back() && (navBack.showBack() || !!backAction())) {
@@ -76,9 +76,11 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
             </a>
           }
         </div>
+        @if (slim()) { <div class="pf-hb__center"><ng-content select="[band-center]"></ng-content></div> }
         <div class="pf-hb__actions"><ng-content select="[band-actions]"></ng-content></div>
       </div>
 
+      @if (!slim()) {
       <div class="pf-hb__searchrow">
         <div class="pf-hb__search" [class.pf-hb__search--tabs]="tabsOnly()" [class.pf-hb__search--ctx]="contextBar()"
              [class.pf-hb__search--std]="standardPill()">
@@ -118,6 +120,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
           </div>
         </div>
       </div>
+      }
     </div>
   `,
   styles: [`
@@ -213,6 +216,11 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
 
     /* ── Search pill overlapping the band's bottom edge (53px, r20) ── */
     .pf-hb__searchrow { padding: 0 20px; margin-top: -33px; }
+    /* Slim (editors that own the whole screen, e.g. the sheet): ONE row — back, brand, a centred title slot, actions — no
+       search pill below it and no bottom room for the pill's overlap. */
+    .pf-hb--slim { margin-bottom: 0; }
+    .pf-hb--slim .pf-hb__band { min-height: 56px; padding: 6px 16px; }
+    .pf-hb__center { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 10px; }
     .pf-hb__search {
       display: flex; align-items: center; gap: 10px;
       --pf-hb-pill-max: 1123px;
@@ -457,4 +465,6 @@ export class HeroBandComponent {
   readonly tenantInitial = this.brand.initial;
   /** The screen projects its own brand button ([band-brand]) in place of the plain logo / initial disc. */
   readonly customBrand = input<boolean>(false);
+  /** One slim row (back · brand · [band-center] · actions), no search pill. For editors that fill the screen. */
+  readonly slim = input<boolean>(false);
 }

@@ -172,7 +172,7 @@ test.describe('neuron: open, edit, save', () => {
     await expect(tid(page, 'neuron-loading')).toBeVisible({ timeout: 20_000 }).catch(() => undefined); // may be quick when cached
     const grid = await needGrid(page);
     await expect(tid(page, 'neuron-name')).toContainText('Glucose results.xlsx');
-    expect(await page.evaluate(() => (document.querySelector('iframe') as HTMLIFrameElement).src)).toMatch(/\/neuron-engine\/index\.html\?host=parent&chrome=minimal&author=[^&]*&theme=(light|dark|system)/);
+    expect(await page.evaluate(() => (document.querySelector('iframe') as HTMLIFrameElement).src)).toMatch(/\/neuron-engine\/index\.html\?host=parent&chrome=notitlebar&author=[^&]*&theme=(light|dark|system)/);
     if (!grid) return;
     // the stored workbook is what the engine shows
     await expect.poll(async () => JSON.stringify(await gc(page, 'sheet.read', { range: 'A1:D3' })), { timeout: 60_000 }).toContain('Glucose');
@@ -229,31 +229,38 @@ test.describe('neuron: open, edit, save', () => {
     await expect(page.getByText('Weekly tally.xlsx', { exact: true }).locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
   });
 
-  test('Export: PDF is a download only (nothing stored); .xlsx saves then downloads', async ({ page, context }) => {
-    test.skip(isPhone(), 'phone is view-only: export lives on tablet and desktop');
+  test('File tab: Export as PDF is a download only (nothing stored); Save as .xlsx from the app is stored', async ({ page, context }) => {
+    test.skip(isPhone(), 'phone is view and copy only');
     await boot(page, context);
     await filesReady(page);
     await openRow(page, 'Glucose results.xlsx');
     if (!(await needGrid(page))) return;
-    await tid(page, 'neuron-more').click();
-    const [pdf] = await Promise.all([
-      page.waitForEvent('download', { timeout: 60_000 }),
-      page.locator('[data-action="pdf"]').locator('visible=true').first().click(),
-    ]);
+    // The app's own File tab runs these commands; the page routes what comes back by its header.
+    const [pdf] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), gcExec(page, 'file.exportPdf', {})]);
     expect(pdf.suggestedFilename()).toMatch(/\.pdf$/i);
     expect(fs.readFileSync((await pdf.path())!).subarray(0, 4).toString('latin1')).toBe('%PDF');
     expect(calls('PUT')).toHaveLength(0);
     expect(calls('POST')).toHaveLength(0);
-
     await edit(page);
-    await tid(page, 'neuron-more').click();
-    const [xlsx] = await Promise.all([
-      page.waitForEvent('download', { timeout: 60_000 }),
-      page.locator('[data-action="xlsx"]').locator('visible=true').first().click(),
-    ]);
-    expect(xlsx.suggestedFilename()).toMatch(/\.xlsx$/i);
-    expect(fs.readFileSync((await xlsx.path())!).subarray(0, 2).toString('latin1')).toBe('PK');
+    await gcExec(page, 'file.save', {});
     await expect.poll(() => calls('PUT').length, { timeout: 30_000 }).toBe(1);
+    await expect(saveState(page)).toHaveAttribute('data-state', 'Saved', { timeout: 20_000 });
+  });
+
+  test('the sheet fills the space between the band and the bottom nav: full-width stage, one slim band, no card', async ({ page, context }) => {
+    await boot(page, context);
+    await filesReady(page);
+    await openRow(page, 'Glucose results.xlsx');
+    await expect(page.locator(FRAME)).toHaveCount(1);
+    const vw = page.viewportSize()!.width;
+    const stage = (await tid(page, 'neuron-stage').boundingBox())!;
+    expect(Math.round(stage.x), 'stage starts at the left edge').toBeLessThanOrEqual(1);
+    expect(Math.round(stage.width), 'stage spans the full width').toBeGreaterThanOrEqual(vw - 1);
+    await expect(page.locator('.pf-card.nr-main')).toHaveCount(0);
+    await expect(page.locator('.pf-hb__searchrow')).toHaveCount(0);
+    await expect(page.locator('[data-testid="neuron-more"]')).toHaveCount(0);
+    await expectLayout(page, 'sheet fills');
+    await expect(page.locator('pf-hero-band').locator('visible=true').first()).not.toContainText(/neuron/i);
   });
 });
 
@@ -359,6 +366,7 @@ test.describe('neuron: opened from a screen and back', () => {
   test('Reports → Open in sheet → pick results → edit → Save → Back lands on the same screen (URL + filters kept)', async ({ page, context }) => {
     test.skip(isPhone(), 'phone is view-only: no Insert results / Save');
     await boot(page, context);
+    await filesReady(page);
     await go(page, '/reports?q=nair');
     await expect(tid(page, 'open-in-sheet')).toBeVisible({ timeout: 60_000 });
     const before = routeOf(page.url());
@@ -366,6 +374,8 @@ test.describe('neuron: opened from a screen and back', () => {
     await tid(page, 'open-in-sheet').click();
     await expect(tid(page, 'neuron-insert-card')).toBeVisible({ timeout: 30_000 });
     expect(routeOf(page.url())).toMatch(/^\/sheet/);
+    // the section it came from stays lit in the bottom nav
+    await expect(page.locator('.pf-topnav-link--on, .pf-topnav-active, .pf-nav-item--on, [aria-current="page"]').locator('visible=true').first()).toBeVisible();
     await expect(page.locator('pf-hero-band').first()).not.toContainText(/neuron/i);
     await tid(page, 'neuron-insert-card').locator('pf-select').first().click();
     await page.getByRole('option', { name: /Glucose/ }).locator('visible=true').first().click();
@@ -389,6 +399,7 @@ test.describe('neuron: opened from a screen and back', () => {
   test('back with unsaved changes asks first; Stay keeps the sheet, Leave goes back to the screen', async ({ page, context }) => {
     test.skip(isPhone(), 'phone is view-only');
     await boot(page, context);
+    await filesReady(page); // let the first navigation settle before the next one (WebKit interrupts it otherwise)
     await go(page, '/reports');
     await tid(page, 'open-in-sheet').click();
     await tid(page, 'neuron-insert-card').locator('pf-select').first().click();
@@ -494,7 +505,7 @@ test.describe('neuron: negative scenarios', () => {
     await expect(tid(page, 'neuron-failed')).not.toContainText(/webgl|webgpu|wasm/i);
     await expect(tid(page, 'neuron-loading')).toHaveCount(0);
     await shot(page, 'engine-failed');
-    await tid(page, 'neuron-failed').getByRole('button', { name: 'Back to files' }).click();
+    await tid(page, 'neuron-failed').getByRole('button', { name: 'Back' }).click();
     await filesReady(page);
     expect(errors).toEqual([]);
   });
@@ -537,6 +548,7 @@ test.describe('neuron: negative scenarios', () => {
 
   test('beta on: the Reports screen offers "Open in sheet" (and nothing in the bottom nav)', async ({ page, context }) => {
     await boot(page, context);
+    await filesReady(page); // let the first navigation settle before the next one (WebKit interrupts it otherwise)
     await go(page, '/reports');
     await expect(tid(page, 'open-in-sheet')).toBeVisible({ timeout: 60_000 });
     await expectLayout(page, 'reports with open-in-sheet');

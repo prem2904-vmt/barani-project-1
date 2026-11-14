@@ -53,6 +53,12 @@ export class SheetEditorService {
   }
   /** True when a screen opened the editor (back goes to it), false for the Sheets list. */
   get openedFromScreen(): boolean { return this._cameFrom !== null; }
+  /** The screen the editor was opened from (its section stays lit in the nav). */
+  get originUrl(): string | null { return this._cameFrom; }
+  /** The URL the nav should treat as current: while the editor is open, the screen it came from. */
+  navUrl(url: string): string {
+    return url.split('?')[0] === '/sheet' && this._cameFrom ? this._cameFrom.split('?')[0] : url;
+  }
 
   /** Back to the exact screen it came from (router history keeps its URL, so its filters come back with it). */
   back(): void {

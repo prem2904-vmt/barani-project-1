@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, signal, untracked, viewChild, ElementRef } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ColDef, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
@@ -10,7 +11,6 @@ import { ThemeService } from '../../core/services/theme.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
-import { ActionsMenuComponent, ActionsMenuTriggerDirective, PfAction } from '../../shared/components/actions-menu/actions-menu.component';
 import { PfDateComponent } from '../../shared/components/pf-date/pf-date.component';
 import { LoadingLogoComponent } from '../../shared/components/loading-logo/loading-logo.component';
 import { PfSelectOption, SelectComponent } from '../../shared/primitives/select.component';
@@ -40,14 +40,14 @@ interface Session { key: number; file: StoredRef; fromResults: boolean }
 @Component({
   selector: 'pf-sheet-editor',
   standalone: true,
-  imports: [HeroBandComponent, AgGridAngular, ActionsMenuComponent, ActionsMenuTriggerDirective, SelectComponent, PfDateComponent, LoadingLogoComponent],
+  imports: [HeroBandComponent, AgGridAngular, NgTemplateOutlet, SelectComponent, PfDateComponent, LoadingLogoComponent],
   providers: [NeuronBridge],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-band-page nr" data-testid="neuron-page">
-      <pf-hero-band [back]="true" [backAction]="session() ? closeFn : null" [customSearch]="true" [contextBar]="true">
-        <div band-search class="pf-ctx nr-ctx">
-          @if (session(); as s) {
+    <section class="pf-band-page nr" [class.nr--sheet]="!!session()" [style.--pf-hb-bleed]="session() ? '0px' : null" data-testid="neuron-page">
+      <pf-hero-band [back]="true" [backAction]="session() ? closeFn : null" [slim]="!!session()" [customSearch]="!session()" [contextBar]="!session()">
+        @if (session(); as s) {
+          <div band-center class="nr-center">
             @if (renaming()) {
               <input class="nr-name-input" type="text" [value]="s.file.name" maxlength="120" aria-label="File name" data-testid="neuron-name-input"
                      (keydown.enter)="commitRename($any($event.target).value)" (keydown.escape)="renaming.set(false)" (blur)="commitRename($any($event.target).value)" />
@@ -60,27 +60,25 @@ interface Session { key: number; file: StoredRef; fromResults: boolean }
               </button>
             }
             @if (canWrite()) {
-            <span class="pf-savestate" role="status" data-testid="neuron-savestate" [attr.data-state]="saveState()">
-              @if (saveState() === 'Saved') {
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-              } @else if (saveState() !== 'Not saved yet') {
-                <span class="pf-savestate__dot" aria-hidden="true"></span>
-              }
-              {{ saveState() }}
-            </span>
+              <span class="pf-savestate" role="status" data-testid="neuron-savestate" [attr.data-state]="saveState()">
+                @if (saveState() === 'Saved') {
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                } @else if (saveState() !== 'Not saved yet') {
+                  <span class="pf-savestate__dot" aria-hidden="true"></span>
+                }
+                {{ saveState() }}
+              </span>
             }
-          } @else {
-            <span class="pf-ctx__primary">Sheets</span>
-          }
-        </div>
+          </div>
+        }
         <ng-container band-actions>
           @if (session()) {
+            @if (canInsert()) {
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="neuron-insert" [attr.aria-pressed]="insertOpen()" (click)="toggleInsert()">Insert results</button>
+            }
             @if (canWrite()) {
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="neuron-save" [disabled]="!ready() || saving()" (click)="saveNow()">{{ saving() ? 'Saving…' : 'Save' }}</button>
             }
-            <pf-actions-menu [actions]="moreActions()" label="More" (action)="runMore($event)">
-              <button pfActionsTrigger type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="neuron-more">More</button>
-            </pf-actions-menu>
           } @else {
             @if (canInsert()) {
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="neuron-insert" [attr.aria-pressed]="insertOpen()" (click)="toggleInsert()">Insert results</button>
@@ -90,58 +88,67 @@ interface Session { key: number; file: StoredRef; fromResults: boolean }
             }
           }
         </ng-container>
+        @if (!session()) {
+          <div band-search class="pf-ctx nr-ctx"><span class="pf-ctx__primary">Sheets</span></div>
+        }
       </pf-hero-band>
 
-      <div class="pf-body" [class.pf-body--split]="insertOpen() && canInsert()">
-        <section class="pf-card nr-main" [attr.aria-label]="session() ? 'Sheet' : 'Saved sheets'">
-          <header class="pf-card__head">
-            <span class="pf-card__icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M3 10h18M3 14.5h18M9 5v14"/></svg>
-            </span>
-            <span class="pf-card__label">{{ session() ? 'Sheet' : 'Saved sheets' }}</span>
-            <span class="pf-card__spacer"></span>
-            @if (session() && !canEdit()) {
-              <span class="pf-card__note" data-testid="neuron-viewonly">Best viewed here. To edit, use a tablet or a computer.</span>
-            } @else if (session() && !canWrite()) {
-              <span class="pf-card__note" data-testid="neuron-readonly">You can view and export sheets. Saving needs a different role.</span>
-            }
-          </header>
-
-          @if (notice(); as n) {
-            <div class="nr-notice" [class.nr-notice--warn]="n.tone === 'warn'" [attr.role]="n.tone === 'warn' ? 'alert' : 'status'" data-testid="neuron-notice">
-              <span>{{ n.text }}</span>
-              <button type="button" class="pf-btn pf-btn--tertiary" (click)="notice.set(null)">Dismiss</button>
+      @if (session()) {
+        @if (!canEdit()) {
+          <p class="nr-strip" data-testid="neuron-viewonly">View and copy only on this device. To edit, use a tablet or a computer.</p>
+        } @else if (!canWrite()) {
+          <p class="nr-strip" data-testid="neuron-readonly">You can view and copy this sheet. Saving needs a different role.</p>
+        }
+        @if (notice(); as n) {
+          <div class="nr-notice" [class.nr-notice--warn]="n.tone === 'warn'" [attr.role]="n.tone === 'warn' ? 'alert' : 'status'" data-testid="neuron-notice">
+            <span>{{ n.text }}</span>
+            <button type="button" class="pf-btn pf-btn--tertiary" (click)="notice.set(null)">Dismiss</button>
+          </div>
+        }
+        <div class="nr-stage" data-testid="neuron-stage">
+          @for (k of [session()!.key]; track k) {
+            <iframe #frame class="nr-frame" title="Spreadsheet" data-testid="neuron-frame"
+                    [src]="frameSrc()" allow="fullscreen; clipboard-read; clipboard-write" allowfullscreen
+                    sandbox="allow-scripts allow-same-origin allow-downloads allow-popups"></iframe>
+          }
+          @if (bridge.state() === 'failed') {
+            <div class="pf-empty nr-over" role="alert" data-testid="neuron-failed">
+              <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg></span>
+              <p class="pf-empty__title">The spreadsheet can't open here</p>
+              <p class="pf-empty__body">{{ bridge.failure() }}</p>
+              <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="closeFn()">Back</button>
+            </div>
+          } @else if (bridge.state() !== 'ready') {
+            <div class="nr-over" role="status" aria-live="polite" data-testid="neuron-loading">
+              <pf-loading-logo size="md" [showText]="true" text="Opening the spreadsheet…"></pf-loading-logo>
+              <p class="nr-over__hint">The first time can take a moment while it downloads. After that it opens fast.</p>
             </div>
           }
-
-          @if (session()) {
-            <div class="pf-card__body nr-stage">
-              @for (k of [session()!.key]; track k) {
-                <iframe #frame class="nr-frame" title="Spreadsheet" data-testid="neuron-frame"
-                        [src]="frameSrc()" allow="fullscreen; clipboard-read; clipboard-write" allowfullscreen
-                        sandbox="allow-scripts allow-same-origin allow-downloads allow-popups"></iframe>
-              }
-              @if (bridge.state() === 'failed') {
-                <div class="pf-empty nr-over" role="alert" data-testid="neuron-failed">
-                  <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg></span>
-                  <p class="pf-empty__title">The spreadsheet can't open here</p>
-                  <p class="pf-empty__body">{{ bridge.failure() }}</p>
-                  <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="closeFn()">Back to files</button>
-                </div>
-              } @else if (bridge.state() !== 'ready') {
-                <div class="nr-over" role="status" aria-live="polite" data-testid="neuron-loading">
-                  <pf-loading-logo size="md" [showText]="true" text="Opening the spreadsheet…"></pf-loading-logo>
-                  <p class="nr-over__hint">The first time can take a moment while it downloads. After that it opens fast.</p>
-                </div>
-              }
-            </div>
-          } @else {
+          @if (insertOpen() && canInsert()) {
+            <div class="nr-float"><ng-container *ngTemplateOutlet="insertCard"></ng-container></div>
+          }
+        </div>
+      } @else {
+        <div class="pf-body" [class.pf-body--split]="insertOpen() && canInsert()">
+          <section class="pf-card nr-main" aria-label="Saved sheets">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M3 10h18M3 14.5h18M9 5v14"/></svg>
+              </span>
+              <span class="pf-card__label">Saved sheets</span>
+            </header>
+            @if (notice(); as n) {
+              <div class="nr-notice" [attr.role]="n.tone === 'warn' ? 'alert' : 'status'" data-testid="neuron-notice">
+                <span>{{ n.text }}</span>
+                <button type="button" class="pf-btn pf-btn--tertiary" (click)="notice.set(null)">Dismiss</button>
+              </div>
+            }
             <div class="pf-card__body nr-files" data-testid="neuron-files">
               @if (filesLoading()) {
-                <div class="nr-over nr-over--flow" role="status"><pf-loading-logo size="sm" [showText]="true" text="Loading your files…"></pf-loading-logo></div>
+                <div class="nr-over nr-over--flow" role="status"><pf-loading-logo size="sm" [showText]="true" text="Loading your sheets…"></pf-loading-logo></div>
               } @else if (filesError()) {
                 <div class="pf-empty" role="alert" data-testid="neuron-files-error">
-                  <p class="pf-empty__title">We couldn't load your files</p>
+                  <p class="pf-empty__title">We couldn't load your sheets</p>
                   <p class="pf-empty__body">{{ filesError() }}</p>
                   <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="loadFiles()">Try again</button>
                 </div>
@@ -159,76 +166,83 @@ interface Session { key: number; file: StoredRef; fromResults: boolean }
                                  [domLayout]="'normal'" [suppressCellFocus]="true" [getRowId]="rowId" (gridReady)="onGridReady($event)" (rowClicked)="onRowClicked($event.data)"></ag-grid-angular>
               }
             </div>
+          </section>
+          @if (insertOpen() && canInsert()) {
+            <ng-container *ngTemplateOutlet="insertCard"></ng-container>
           }
-        </section>
-
-        @if (insertOpen() && canInsert()) {
-          <aside class="pf-card nr-side" aria-label="Insert results" data-testid="neuron-insert-card">
-            <header class="pf-card__head">
-              <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>
-              <span class="pf-card__label">Insert results</span>
-              <span class="pf-card__spacer"></span>
-              <button type="button" class="pf-btn pf-btn--icon" aria-label="Close" title="Close" (click)="insertOpen.set(false)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              </button>
-            </header>
-            <div class="pf-card__body nr-form">
-              <p class="nr-form__lead">Opens a new sheet with the results for the tests and dates you pick. Nothing is saved until you press Save.</p>
-              <div class="pf-field">
-                <span class="pf-field__lbl" id="nr-tests-l">Tests</span>
-                <pf-select [options]="testOptions()" [multiple]="true" [searchable]="true" [values]="pickedTests()" placeholder="Pick one or more tests"
-                           aria-label="Tests" (valuesChange)="pickedTests.set($event)"></pf-select>
-              </div>
-              <div class="nr-dates">
-                <div class="pf-field"><span class="pf-field__lbl">From</span>
-                  <pf-date label="From date" [value]="from()" [max]="to()" (valueChange)="from.set($event ?? '')"></pf-date></div>
-                <div class="pf-field"><span class="pf-field__lbl">To</span>
-                  <pf-date label="To date" [value]="to()" [min]="from()" [max]="today" (valueChange)="to.set($event ?? '')"></pf-date></div>
-              </div>
-              @if (branchOptions().length > 1) {
-                <div class="pf-field">
-                  <span class="pf-field__lbl">Branch</span>
-                  <pf-select [options]="branchOptions()" [value]="branchId()" aria-label="Branch" (valueChange)="branchId.set($event)"></pf-select>
-                </div>
-              }
-              @if (!access().patientNames) {
-                <p class="nr-form__lead" data-testid="neuron-patient-note">{{ patientNote }}</p>
-              }
-              @if (insertProblem(); as p) {
-                <p class="nr-form__err" role="alert" data-testid="neuron-insert-error">{{ p }}</p>
-              }
-            </div>
-            <footer class="pf-card__foot">
-              <button type="button" class="pf-btn pf-btn--secondary" (click)="insertOpen.set(false)">Cancel</button>
-              <button type="button" class="pf-btn pf-btn--primary" data-testid="neuron-insert-go" [disabled]="inserting()" (click)="insertResults()">{{ inserting() ? 'Getting results…' : 'Insert results' }}</button>
-            </footer>
-          </aside>
-        }
-      </div>
+        </div>
+      }
     </section>
+
+    <ng-template #insertCard>
+      <aside class="pf-card nr-side" aria-label="Insert results" data-testid="neuron-insert-card">
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></span>
+          <span class="pf-card__label">Insert results</span>
+          <span class="pf-card__spacer"></span>
+          <button type="button" class="pf-btn pf-btn--icon" aria-label="Close" title="Close" (click)="insertOpen.set(false)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </header>
+        <div class="pf-card__body nr-form">
+          <p class="nr-form__lead">Opens a new sheet with the results for the tests and dates you pick. Nothing is saved until you press Save.</p>
+          <div class="pf-field">
+            <span class="pf-field__lbl" id="nr-tests-l">Tests</span>
+            <pf-select [options]="testOptions()" [multiple]="true" [searchable]="true" [values]="pickedTests()" placeholder="Pick one or more tests"
+                       aria-label="Tests" (valuesChange)="pickedTests.set($event)"></pf-select>
+          </div>
+          <div class="nr-dates">
+            <div class="pf-field"><span class="pf-field__lbl">From</span>
+              <pf-date label="From date" [value]="from()" [max]="to()" (valueChange)="from.set($event ?? '')"></pf-date></div>
+            <div class="pf-field"><span class="pf-field__lbl">To</span>
+              <pf-date label="To date" [value]="to()" [min]="from()" [max]="today" (valueChange)="to.set($event ?? '')"></pf-date></div>
+          </div>
+          @if (branchOptions().length > 1) {
+            <div class="pf-field">
+              <span class="pf-field__lbl">Branch</span>
+              <pf-select [options]="branchOptions()" [value]="branchId()" aria-label="Branch" (valueChange)="branchId.set($event)"></pf-select>
+            </div>
+          }
+          @if (!access().patientNames) {
+            <p class="nr-form__lead" data-testid="neuron-patient-note">{{ patientNote }}</p>
+          }
+          @if (insertProblem(); as p) {
+            <p class="nr-form__err" role="alert" data-testid="neuron-insert-error">{{ p }}</p>
+          }
+        </div>
+        <footer class="pf-card__foot">
+          <button type="button" class="pf-btn pf-btn--secondary" (click)="insertOpen.set(false)">Cancel</button>
+          <button type="button" class="pf-btn pf-btn--primary" data-testid="neuron-insert-go" [disabled]="inserting()" (click)="insertResults()">{{ inserting() ? 'Getting results…' : 'Insert results' }}</button>
+        </footer>
+      </aside>
+    </ng-template>
   `,
   styles: [`
-    :host { display: block; }
-    .nr-ctx { align-items: center; }
-    .nr-name { max-width: min(46vw, 420px); }
+    :host { display: block; height: 100%; }
+    .nr-center { display: flex; align-items: center; justify-content: center; gap: 12px; min-width: 0; }
+    .nr-name { max-width: min(44vw, 420px); }
     .nr-name__t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nr-name-input { height: 34px; min-width: 200px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border-primary, rgba(124,58,237,.4)); background: var(--surface-card, #fff); color: var(--text-primary); font: inherit; font-size: 14px; font-weight: 600; }
     .nr-name-input:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 1px; }
     .nr-main { min-height: 0; flex: 1 1 auto; }
-    .nr-stage { position: relative; padding: 0; overflow: hidden; flex: 1 1 auto; min-height: max(320px, 60dvh); }
+    /* The sheet fills the space between the band and the bottom nav: no card, no padding. */
+    .nr-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--surface-card, #fff); border-top: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
     .nr-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface-card, #fff); }
     .nr-over { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--surface-card, #fff) 92%, transparent); }
     .nr-over--flow { position: static; min-height: 200px; background: transparent; }
     .nr-over__hint { margin: 0; max-width: 340px; font-size: 13px; line-height: 1.5; color: var(--text-tertiary); }
+    .nr-float { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(400px, calc(100% - 24px)); display: flex; z-index: 3; }
+    .nr-float .nr-side { flex: 1 1 auto; box-shadow: 0 12px 32px rgba(0,0,0,.18); }
+    .nr-strip { margin: 0; padding: 8px 16px; font-size: 13px; color: var(--text-secondary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, transparent); }
     .nr-files { padding: 0; display: flex; flex-direction: column; min-height: 0; }
     .nr-grid { width: 100%; flex: 1 1 auto; min-height: 280px; }
-    .nr-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, transparent); border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
+    .nr-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, transparent); border-bottom: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
     .nr-notice--warn { color: var(--text-primary); }
     .nr-form { display: flex; flex-direction: column; gap: 16px; }
     .nr-form__lead { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-tertiary); }
     .nr-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .nr-form__err { margin: 0; font-size: 13px; color: var(--text-primary); border-left: 3px solid var(--color-danger, #dc2626); padding: 6px 10px; background: color-mix(in srgb, var(--color-danger, #dc2626) 8%, transparent); border-radius: 6px; }
-    @media (max-width: 1023px) { .nr-side { margin-top: 12px; } }
+    @media (max-width: 1023px) { .nr-side { margin-top: 12px; } .nr-float .nr-side { margin-top: 0; } }
   `],
 })
 export class SheetEditorPage {
@@ -260,7 +274,6 @@ export class SheetEditorPage {
   protected readonly notice = signal<{ tone: 'info' | 'warn'; text: string } | null>(null);
   private seq = 0;
   private chain: Promise<void> = Promise.resolve();
-  private exportAfterSave = false;
 
   /** What this person's role allows (the server enforces the same sets). */
   protected readonly access = computed<NeuronAccess>(() => neuronAccess(codes => this.auth.hasAnyPermission(codes)));
@@ -284,17 +297,6 @@ export class SheetEditorPage {
     if (this.saving()) return 'Saving…';
     if (this.unsaved()) return 'Unsaved changes';
     return s && s.file.id === null ? 'Not saved yet' : 'Saved';
-  });
-  protected readonly ribbon = signal(false);
-  protected readonly moreActions = computed<PfAction[]>(() => {
-    const a: PfAction[] = [
-      { id: 'xlsx', label: 'Export Excel', icon: 'download', hint: this.canWrite() ? 'Saves, then downloads a copy' : 'Downloads a copy' },
-      { id: 'pdf', label: 'Export PDF', icon: 'print', hint: 'A download only, nothing is stored' },
-      { id: 'tools', label: this.ribbon() ? 'Hide tools' : 'More tools', icon: 'edit', hint: this.ribbon() ? 'Back to the simple sheet' : 'Show the full set of tools' },
-    ];
-    if (this.canInsert()) a.push({ id: 'insert', label: 'Insert results', icon: 'lab', hint: 'Lab results into a new sheet' });
-    a.push({ id: 'list', label: 'Sheets', icon: 'view', hint: 'Your saved sheets' });
-    return a;
   });
   /** Only a NEW session (a new file / reload) reads a new URL. Renaming, the theme and role changes must never reload the engine
    *  (it would drop the unsaved sheet): they reach it as messages instead. */
@@ -440,7 +442,6 @@ export class SheetEditorPage {
     this.pendingStore.set(false);
     this.renaming.set(false);
     this.bridge.prepareNewFrame();
-    this.ribbon.set(false);
     this.bridge.readonly = !this.canWrite();
     this.session.set({ key: ++this.seq, file, fromResults });
     if (bytes) this.bridge.open(file.name, bytes);
@@ -506,19 +507,6 @@ export class SheetEditorPage {
     if (!this.bridge.save()) this.toast.info('The spreadsheet is still opening. Try again in a moment.');
   }
 
-  protected runMore(id: string): void {
-    switch (id) {
-      case 'pdf': if (!this.bridge.exportPdf()) this.toast.info('The spreadsheet is still opening. Try again in a moment.'); break;
-      case 'xlsx':
-        this.exportAfterSave = true;
-        if (!this.bridge.save()) { this.exportAfterSave = false; this.toast.info('The spreadsheet is still opening. Try again in a moment.'); }
-        break;
-      case 'tools': this.ribbon.update(v => !v); this.bridge.setRibbon(this.ribbon()); break;
-      case 'insert': this.toggleInsert(); break;
-      case 'list': void this.showList(); break;
-    }
-  }
-
   protected async commitRename(value: string): Promise<void> {
     if (!this.renaming()) return;
     this.renaming.set(false);
@@ -542,11 +530,8 @@ export class SheetEditorPage {
     }
     const s = this.session();
     if (!s) return;
-    if (this.exportAfterSave) {
-      this.exportAfterSave = false;
-      downloadBytes(withExtension(s.file.name, 'xlsx'), f.bytes, XLSX_MIME);
-    }
-    if (!this.canWrite()) return; // a read-only role: the export above is all it gets
+    // A role that cannot save has nothing to store: whatever the app's File tab produced is just downloaded.
+    if (!this.canWrite()) { downloadBytes(withExtension(s.file.name, 'xlsx'), f.bytes, XLSX_MIME); return; }
     this.saving.set(true);
     this.notice.update(n => (n?.tone === 'warn' ? null : n));
     try {

@@ -845,7 +845,8 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
 
   private recomputeActiveFromUrl(): void {
     if (this.dragging()) return; // user is mid-drag — they own the indicator
-    const url = this.router.url.split('?')[0];
+    // While the sheet editor is open, the section it was opened from stays lit.
+    const url = this.sheetEditor.navUrl(this.router.url).split('?')[0];
     const shown = this.displayedItems();
     const idx = shown.findIndex(n => this.matches(url, n));
     if (idx >= 0) {

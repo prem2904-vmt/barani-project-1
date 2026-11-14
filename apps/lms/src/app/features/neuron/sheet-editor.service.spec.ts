@@ -41,6 +41,15 @@ describe('SheetEditorService: the one way into the editor', () => {
     expect(svc.take()).toBeNull();
   });
 
+  it('navUrl: while the editor is open the nav sees the screen it came from; elsewhere the URL as it is', async () => {
+    const { svc } = make();
+    expect(svc.navUrl('/sheet')).toBe('/sheet');
+    await svc.open({ source: 'Insights' });
+    expect(svc.navUrl('/sheet')).toBe('/insights');
+    expect(svc.navUrl('/frontdesk')).toBe('/frontdesk');
+    expect(svc.originUrl).toBe('/insights?section=tests&period=month');
+  });
+
   it('back() returns through the router history (the screen keeps its URL and filters)', async () => {
     const { svc, location } = make();
     Object.defineProperty(history, 'length', { value: 3, configurable: true });

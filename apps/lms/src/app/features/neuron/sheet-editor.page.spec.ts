@@ -12,7 +12,6 @@ import { ToastService } from '../../core/services/toast.service';
 import { ThemeService } from '../../core/services/theme.service';
 
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
-import { ActionsMenuComponent, ActionsMenuTriggerDirective } from '../../shared/components/actions-menu/actions-menu.component';
 import { NEURON_FAILED_MESSAGE, NeuronBridge } from './neuron-bridge';
 import { NeuronSaver } from './neuron-save';
 import { SheetEditorPage } from './sheet-editor.page';
@@ -25,12 +24,10 @@ const PK = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1]).buffer as ArrayBuffer;
 const CSV = new Uint8Array(Array.from(new TextEncoder().encode('a,b\n1,2\n'))).buffer as ArrayBuffer;
 const dto = (over: Record<string, unknown> = {}) => ({ id: 'f1', name: 'Budget.xlsx', kind: 'sheet', sizeBytes: 5, version: 2, updatedAt: '2026-11-14T05:00:00Z', updatedByName: 'Kavya', ...over });
 
-@Component({ selector: 'pf-hero-band', standalone: true, template: '<ng-content></ng-content><ng-content select="[band-search]"></ng-content><ng-content select="[band-actions]"></ng-content>' })
+@Component({ selector: 'pf-hero-band', standalone: true, template: '<ng-content></ng-content><ng-content select="[band-center]"></ng-content><ng-content select="[band-search]"></ng-content><ng-content select="[band-actions]"></ng-content>' })
 class HeroStub { }
 @Component({ selector: 'ag-grid-angular', standalone: true, template: '' })
 class GridStub { }
-@Component({ selector: 'pf-actions-menu', standalone: true, template: '<ng-content></ng-content>' })
-class MenuStub { }
 
 function make(opts: { phone?: boolean; list?: unknown[]; perms?: string[]; request?: SheetOpenRequest | null; fromScreen?: boolean } = {}) {
   const sheetsSvc = { take: vi.fn(() => opts.request ?? null), openedFromScreen: !!opts.fromScreen, back: vi.fn(), clearOrigin: vi.fn() };
@@ -61,8 +58,8 @@ function make(opts: { phone?: boolean; list?: unknown[]; perms?: string[]; reque
     ],
   });
   TestBed.overrideComponent(SheetEditorPage, {
-    remove: { imports: [HeroBandComponent, AgGridAngular, ActionsMenuComponent, ActionsMenuTriggerDirective] },
-    add: { imports: [HeroStub, GridStub, MenuStub], schemas: [NO_ERRORS_SCHEMA] },
+    remove: { imports: [HeroBandComponent, AgGridAngular] },
+    add: { imports: [HeroStub, GridStub], schemas: [NO_ERRORS_SCHEMA] },
   });
   const fixture = TestBed.createComponent(SheetEditorPage);
   fixture.detectChanges();
@@ -267,7 +264,7 @@ describe('Neuron page', () => {
     expect(el.querySelector('[data-testid="neuron-insert"]')).toBeNull();
     await page.openStored(dto());
     await settle();
-    expect(el.querySelector('[data-testid="neuron-viewonly"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="neuron-viewonly"]')?.textContent).toContain('View and copy only');
     expect(el.querySelector('[data-testid="neuron-save"]')).toBeNull();
   });
 
@@ -425,20 +422,16 @@ describe('Sheet editor: opened from a screen', () => {
     expect(page.session()).toBeNull();
   });
 
-  it('the band shows the file name, never an app title; the More menu says Sheet words', async () => {
-    const { page, el, settle } = make({ fromScreen: true, request: { source: 'Insights', name: 'Top tests.xlsx', bytes: PK.slice(0) } });
+  it('the band carries the file name, the save state and Save; no menu, no app title', async () => {
+    const { el, settle } = make({ fromScreen: true, request: { source: 'Insights', name: 'Top tests.xlsx', bytes: PK.slice(0) } });
     await settle(); await settle();
     expect(el.textContent).not.toMatch(/neuron/i);
-    expect(page.moreActions().map((a: { label: string }) => a.label)).toEqual(['Export Excel', 'Export PDF', 'More tools', 'Insert results', 'Sheets']);
-  });
-
-  it('More tools toggles the ribbon in the frame', async () => {
-    const { page, bridge, settle, fromFrame } = make({ fromScreen: true, request: { source: 'Insights', bytes: PK.slice(0) } });
-    await settle(); await settle();
-    fromFrame({ type: 'neuron:ready' });
-    const spy = vi.spyOn(bridge, 'setRibbon');
-    page.runMore('tools');
-    page.runMore('tools');
-    expect(spy.mock.calls).toEqual([[true], [false]]);
+    expect(el.querySelector('[data-testid="neuron-name"]')?.textContent).toContain('Top tests.xlsx');
+    expect(el.querySelector('[data-testid="neuron-savestate"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="neuron-save"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="neuron-insert"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="neuron-more"]')).toBeNull();
+    expect(el.querySelector('.nr-stage')).toBeTruthy();
+    expect(el.querySelector('.pf-card.nr-main')).toBeNull(); // the sheet is not wrapped in a card
   });
 });

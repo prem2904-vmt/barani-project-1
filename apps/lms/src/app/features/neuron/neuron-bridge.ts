@@ -9,7 +9,6 @@ import { Injectable, signal } from '@angular/core';
  *   app → page   neuron:save   {name, bytes}      Save gives an .xlsx, Export as PDF a .pdf (told apart by header)
  *   app → page   neuron:dirty  {dirty}            unsaved changes appeared / went away
  *   page → app   neuron:theme   {theme}              'light' | 'dark' | 'system' (follows the LMS toggle)
- *   page → app   neuron:chrome  {ribbon}             show / hide the full ribbon ("More tools")
  *   page → app   neuron:readonly {readonly}          view-only for roles that cannot save
  *   app → page   neuron:failed {error}            the app could not start (no WebGL2 / WebGPU …)
  *
@@ -21,7 +20,7 @@ export const NEURON_MSG_PREFIX = 'neuron:';
 export const msg = {
   ready: `${NEURON_MSG_PREFIX}ready`, open: `${NEURON_MSG_PREFIX}open`, save: `${NEURON_MSG_PREFIX}save`,
   dirty: `${NEURON_MSG_PREFIX}dirty`, failed: `${NEURON_MSG_PREFIX}failed`, theme: `${NEURON_MSG_PREFIX}theme`,
-  chrome: `${NEURON_MSG_PREFIX}chrome`, readonly: `${NEURON_MSG_PREFIX}readonly`,
+  readonly: `${NEURON_MSG_PREFIX}readonly`,
 } as const;
 export type NeuronTheme = 'light' | 'dark' | 'system';
 
@@ -70,11 +69,11 @@ export function acceptedMessage(
   return d as { type: string };
 }
 
-/** The embedded app's window chrome in the frame. 'minimal' = the sheet with no title bar / ribbon until "More tools";
- *  'none' was the first build. ONE constant. */
-export const FRAME_CHROME: 'none' | 'minimal' = 'minimal';
+/** The embedded app's window chrome in the frame: 'notitlebar' = the full app (File tab, ribbon, status bar) without its own
+ * title bar, which the LMS band replaces. ONE constant. */
+export const FRAME_CHROME: 'none' | 'minimal' | 'notitlebar' = 'notitlebar';
 
-/** The iframe URL: `<base>/neuron-engine/index.html?host=parent&chrome=none&author=<name>&theme=<light|dark|system>`. */
+/** The iframe URL: `<base>/neuron-engine/index.html?host=parent&chrome=<FRAME_CHROME>&author=<name>&theme=<light|dark|system>[&readonly=1]`. */
 export function neuronFrameUrl(baseUri: string, author: string, theme: NeuronTheme = 'system', readonly = false): string {
   const u = new URL('neuron-engine/index.html', baseUri);
   u.searchParams.set('host', 'parent');
@@ -152,8 +151,6 @@ export class NeuronBridge {
     w.postMessage({ type: msg.theme, theme }, this.ownOrigin);
   }
 
-  /** "More tools": show / hide the full ribbon. */
-  setRibbon(ribbon: boolean): void { this.post({ type: msg.chrome, ribbon }); }
   /** View-only for a role that cannot save. */
   setReadonly(readonly: boolean): void { this.post({ type: msg.readonly, readonly }); }
   private post(m: Record<string, unknown>): void {

@@ -52,11 +52,11 @@ describe('Neuron bridge: byte sniffing', () => {
     expect(routeSaved(PK)).toBe('xlsx');
     expect(routeSaved(CSV)).toBe('unknown');
   });
-  it('the frame URL is same-origin relative with host=parent, chrome=minimal and the encoded author', () => {
+  it('the frame URL is same-origin relative with host=parent, chrome=notitlebar and the encoded author', () => {
     const u = new URL(neuronFrameUrl('http://localhost:4200/', 'Kavya D & Co'));
     expect(u.pathname).toBe('/neuron-engine/index.html');
     expect(u.searchParams.get('host')).toBe('parent');
-    expect(u.searchParams.get('chrome')).toBe('minimal');
+    expect(u.searchParams.get('chrome')).toBe('notitlebar');
     expect(u.searchParams.get('theme')).toBe('system');
     expect(new URL(neuronFrameUrl('http://localhost:4200/', 'A', 'dark')).searchParams.get('theme')).toBe('dark');
     expect(u.searchParams.get('author')).toBe('Kavya D & Co');
@@ -118,14 +118,12 @@ describe('Neuron bridge: protocol constants and theme', () => {
     bridge.setTheme('dark');
     expect(postMessage).toHaveBeenCalledWith({ type: 'neuron:theme', theme: 'dark' }, ORIGIN);
   });
-  it('ribbon + readonly go to the frame when ready; the URL carries readonly=1', () => {
+  it('readonly goes to the frame when ready; the URL carries readonly=1', () => {
     const { bridge, win, postMessage } = make();
-    bridge.setRibbon(true);
+    bridge.setReadonly(true);
     expect(postMessage).not.toHaveBeenCalled();
     bridge.handle(from(win, { type: msg.ready }));
-    bridge.setRibbon(true);
     bridge.setReadonly(true);
-    expect(postMessage).toHaveBeenCalledWith({ type: 'neuron:chrome', ribbon: true }, ORIGIN);
     expect(postMessage).toHaveBeenCalledWith({ type: 'neuron:readonly', readonly: true }, ORIGIN);
     expect(new URL(neuronFrameUrl('http://localhost:4200/', 'A', 'light', true)).searchParams.get('readonly')).toBe('1');
     expect(new URL(neuronFrameUrl('http://localhost:4200/', 'A')).searchParams.has('readonly')).toBe(false);

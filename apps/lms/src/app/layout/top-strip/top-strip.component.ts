@@ -498,6 +498,16 @@ export class TopStripComponent implements OnInit, OnDestroy {
   opdActive(n: NavItem): boolean {
     return opdNavActive(n, this.currentUrl());
   }
+  /** The sheet editor (/sheet) lights the section it was opened from: tabs go manual while it is open. */
+  private onSheet(): boolean { return this.currentUrl().split("?")[0] === "/sheet"; }
+  manualNav(n: NavItem): boolean { return n.id === "opd" || n.id === "doctor" || this.onSheet(); }
+  manualActive(n: NavItem): boolean {
+    if (this.onSheet()) {
+      const u = this.sheetEditor.navUrl(this.currentUrl());
+      return u === n.href || u.startsWith(n.href + "/");
+    }
+    return this.opdActive(n);
+  }
 
   /** NO-WORKFLOW FALLBACK ONLY: guarantee a reachable "Collect" for anyone who
    *  can draw samples when the tenant has no process workflow (PRIMARY_NAV).
