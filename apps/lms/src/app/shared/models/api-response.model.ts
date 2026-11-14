@@ -27,6 +27,8 @@ export class ApiError extends Error {
     /** The error's payload (mw `CodedConflictException.Payload`, e.g.
      *  `family_in_use` → `{ tests: [...] }`); absent for most errors. */
     public readonly data?: unknown,
+    /** The HTTP status, when the failure came from one (0 = no connection). */
+    public readonly status?: number,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -45,9 +47,31 @@ export class ApiError extends Error {
     if (e instanceof ApiError) return e;
     const anyE = e as { error?: { error?: string; message?: string; field?: string; data?: unknown }; message?: string };
     const body = anyE?.error;
-    if (body && typeof body === 'object' && (body.message || body.error)) {
-      return new ApiError(body.message ?? body.error ?? 'Request failed', body.error, body.field, body.data);
+    if (body && typeof body === 'object' && !(body instanceof Error) && (body.message || body.error)) {
+      return new ApiError(body.message ?? body.error ?? 'Request failed', body.error, body.field, body.data, httpStatus(e));
     }
-    return new ApiError(anyE?.message ?? 'Request failed');
+    // No server-authored words (an empty or non-JSON body: a gateway error, a dropped connection): say it in
+    // plain language by status, never Angular's "Http failure response for https://…: 500 …" text.
+    const plain = plainStatusMessage((e as { status?: unknown })?.status, e instanceof Error || (e as { name?: string })?.name === 'HttpErrorResponse');
+    if (plain) return new ApiError(plain, undefined, undefined, undefined, httpStatus(e));
+    return new ApiError(anyE?.message ?? 'Request failed', undefined, undefined, undefined, httpStatus(e));
   }
+}
+
+function httpStatus(e: unknown): number | undefined {
+  const s = (e as { status?: unknown })?.status;
+  return typeof s === 'number' ? s : undefined;
+}
+
+/** Plain words for an HTTP failure that carried no message of its own (null: not an HTTP failure). */
+export function plainStatusMessage(status: unknown, isHttp: boolean): string | null {
+  if (!isHttp || typeof status !== 'number') return null;
+  if (status === 0) return "Can't reach the server. Check your internet connection and try again.";
+  if (status === 401) return 'Your session has ended. Sign in again.';
+  if (status === 403) return "You don't have permission to do that.";
+  if (status === 404) return 'That could not be found.';
+  if (status === 408 || status === 504) return 'The server took too long to answer. Try again in a moment.';
+  if (status === 429) return 'Too many requests. Wait a moment, then try again later.';
+  if (status >= 500) return 'Something went wrong on our side. Try again in a moment.';
+  return null;
 }

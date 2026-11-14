@@ -109,7 +109,7 @@ interface ResolveBody {
  *  answer and is never mistaken for it. */
 export function endpointMissing(e: unknown): boolean {
   const err = ApiError.from(e);
-  return !err.code && /\b404\b/.test(err.message ?? '');
+  return !err.code && (err.status === 404 || /\b404\b/.test(err.message ?? ''));
 }
 
 const GUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

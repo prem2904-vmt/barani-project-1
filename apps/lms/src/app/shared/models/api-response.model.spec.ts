@@ -69,3 +69,46 @@ describe('ApiError.from() — storage failure codes never leak raw exception tex
     expect(ApiError.from(original)).toBe(original);
   });
 });
+
+describe('ApiError.from() — a failure with no server words is said in plain language', () => {
+  const plain = (status: number, error: unknown = null) => ApiError.from(new HttpErrorResponse({ status, error, statusText: 'x', url: 'https://x.test/api/a' })).message;
+
+  it('never shows Angular\'s "Http failure response" text', () => {
+    for (const s of [0, 401, 403, 404, 408, 429, 500, 502, 503, 504]) {
+      expect(plain(s)).not.toMatch(/Http failure|Unknown Error|\b\d{3}\b/);
+    }
+  });
+
+  it('a dropped connection (status 0) says to check the connection', () => {
+    expect(plain(0)).toMatch(/connection/i);
+  });
+
+  it('429 says to try again later; 5xx says it is on our side; 403 says no permission', () => {
+    expect(plain(429)).toMatch(/try again later/i);
+    expect(plain(500)).toMatch(/on our side/i);
+    expect(plain(502)).toMatch(/on our side/i);
+    expect(plain(403)).toMatch(/permission/i);
+    expect(plain(504)).toMatch(/too long/i);
+  });
+
+  it('the server\'s own words always win over the plain fallback', () => {
+    expect(plain(429, { success: false, message: 'Wait 30 seconds' })).toBe('Wait 30 seconds');
+    expect(plain(500, { success: false, error: 'smtp_failed' })).toBe('smtp_failed');
+  });
+
+  it('a dropped connection whose body is the browser\'s TypeError ("Failed to fetch") is still said plainly', () => {
+    const e = ApiError.from(new HttpErrorResponse({ status: 0, error: new TypeError('Failed to fetch'), url: 'https://x.test/api/a' }));
+    expect(e.message).toMatch(/connection/i);
+    expect(e.message).not.toMatch(/Failed to fetch/);
+  });
+
+  it('keeps the HTTP status on the error so callers never parse the message for it', () => {
+    expect(ApiError.from(new HttpErrorResponse({ status: 404, error: null })).status).toBe(404);
+    expect(ApiError.from(new HttpErrorResponse({ status: 0, error: new TypeError('Failed to fetch') })).status).toBe(0);
+    expect(ApiError.from(new HttpErrorResponse({ status: 409, error: { success: false, error: 'dup', message: 'Already there' } })).status).toBe(409);
+  });
+
+  it('a plain Error (a timeout) keeps its own message', () => {
+    expect(ApiError.from(new Error('Request timed out — check your connection')).message).toBe('Request timed out — check your connection');
+  });
+});
