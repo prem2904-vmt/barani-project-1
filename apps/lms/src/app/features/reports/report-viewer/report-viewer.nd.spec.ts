@@ -371,7 +371,7 @@ describe('Report view (nd) — phones', () => {
     const menu = document.body.querySelector('[role=menu]') as HTMLElement;
     expect(menu.classList).toContain('pf-am-panel--sheet');
     const rows = Array.from(menu.querySelectorAll('[role=menuitem]')).map(b => b.querySelector('.pf-am-item__t')?.textContent?.trim());
-    expect(rows).toEqual(['Share…', 'Copy patient link', 'WhatsApp Chat', 'Share with a colleague', 'Download PDF', 'Print',
+    expect(rows).toEqual(['Share…', 'Copy patient link', 'WhatsApp Chat', 'Email', 'Share with a colleague', 'Download PDF', 'Print',
       'Edit results', 'Edit referral', 'Regenerate', 'Open patient', 'Open lab results']);
     (menu.querySelector('[data-action=print]') as HTMLButtonElement).click();
     f.detectChanges();
@@ -446,7 +446,7 @@ describe('Report view (nd) — ⋮ report actions: permission + state rules', ()
 
   it('delivery desk without edit_result / lab access: share rows + WhatsApp, no Edit / Lab results', async () => {
     const { c } = await render({ perms: ['deliver_report', 'view_order', 'view_patient'], messages: false });
-    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp-mine', 'download', 'print', 'regenerate', 'patient']);
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp-mine', 'email', 'download', 'print', 'regenerate', 'patient']);
   });
 
   it('a PRELIMINARY report is never regenerated as final from here', async () => {

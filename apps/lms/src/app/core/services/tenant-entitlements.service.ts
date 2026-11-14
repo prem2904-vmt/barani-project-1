@@ -12,19 +12,29 @@ import {
  * module. `moduleEnabled(key)` resolves all of them against the two-level model
  * so existing callers keep working unchanged.
  */
-export type ModuleKey = ModuleId | 'messages' | 'homeCollection' | 'reports' | WhatsAppModeKey;
+export type ModuleKey = ModuleId | 'messages' | 'homeCollection' | 'reports' | PlatformSwitchKey;
 
 const LAB_FEATURE_KEYS = new Set(['messages', 'homeCollection', 'reports']);
 
-/** "WhatsApp Auto" / "WhatsApp Chat": platform switches (admin console, per tenant) that are
- *  ON unless switched off — an ABSENT value is on (the lab had both before they were switchable). */
+/** "WhatsApp Auto" / "WhatsApp Chat" / "Email share" / "SMS Chat": platform switches (admin console,
+ *  per tenant) that are ON unless switched off — an ABSENT value is on (the lab had them before they
+ *  were switchable; email_share / sms_chat are new and default on the same way, 2026-11-13). */
 export type WhatsAppModeKey = 'whatsappAuto' | 'whatsappChat';
-export const DEFAULT_ON_WHEN_ABSENT: readonly WhatsAppModeKey[] = ['whatsappAuto', 'whatsappChat'];
+export type PlatformSwitchKey = WhatsAppModeKey | 'emailShare' | 'smsChat';
+export const DEFAULT_ON_WHEN_ABSENT: readonly PlatformSwitchKey[] = ['whatsappAuto', 'whatsappChat', 'emailShare', 'smsChat'];
+
+/** The server's snake_case spelling of a switch (module-config may answer either). */
+const SNAKE: Record<PlatformSwitchKey, string> = {
+  whatsappAuto: 'whatsapp_auto', whatsappChat: 'whatsapp_chat', emailShare: 'email_share', smsChat: 'sms_chat',
+};
 
 /** Resolve one default-on key from GET /api/tenants/module-config (absent / non-boolean ⇒ on). */
-export function platformSwitchOn(wire: Partial<Record<string, unknown>> | null | undefined, key: WhatsAppModeKey): boolean {
-  return wire?.[key] !== false;
+export function platformSwitchOn(wire: Partial<Record<string, unknown>> | null | undefined, key: PlatformSwitchKey): boolean {
+  return wire?.[key] !== false && wire?.[SNAKE[key]] !== false;
 }
+
+const ALL_ON: Record<PlatformSwitchKey, boolean> = { whatsappAuto: true, whatsappChat: true, emailShare: true, smsChat: true };
+const isPlatformSwitch = (k: string): k is PlatformSwitchKey => (DEFAULT_ON_WHEN_ABSENT as readonly string[]).includes(k);
 
 /** Wire shape of GET /api/tenants/modules. */
 interface ModulesWire {
@@ -52,8 +62,8 @@ export class TenantEntitlementsService {
   private readonly _loaded = signal(false);
   private loadPromise: Promise<void> | null = null;
 
-  /** The platform's WhatsApp switches. Fail-open (on) until loaded or when the server is older. */
-  private readonly _platform = signal<Record<WhatsAppModeKey, boolean>>({ whatsappAuto: true, whatsappChat: true });
+  /** The platform's WhatsApp / email / SMS switches. Fail-open (on) until loaded or when the server is older. */
+  private readonly _platform = signal<Record<PlatformSwitchKey, boolean>>({ ...ALL_ON });
 
   readonly modules = this._modules.asReadonly();
   readonly loaded = this._loaded.asReadonly();
@@ -84,7 +94,7 @@ export class TenantEntitlementsService {
    * `homeCollection` / `reports` → the matching Lab feature. Fail-open preserved.
    */
   moduleEnabled(key: ModuleKey): boolean {
-    if (key === 'whatsappAuto' || key === 'whatsappChat') return this._platform()[key];
+    if (isPlatformSwitch(key)) return this._platform()[key];
     if (LAB_FEATURE_KEYS.has(key)) return this.featureOn('lab', key);
     return this.moduleOn(key as ModuleId);
   }
@@ -112,10 +122,11 @@ export class TenantEntitlementsService {
   }
 
   private fetch(): Promise<void> {
-    // Platform WhatsApp switches (module-config); a failure leaves them on.
+    // Platform WhatsApp / email / SMS switches (module-config); a failure leaves them on.
     this.api.get<Record<string, unknown>>('/api/tenants/module-config').subscribe({
       next: (wire) => this._platform.set({
         whatsappAuto: platformSwitchOn(wire, 'whatsappAuto'), whatsappChat: platformSwitchOn(wire, 'whatsappChat'),
+        emailShare: platformSwitchOn(wire, 'emailShare'), smsChat: platformSwitchOn(wire, 'smsChat'),
       }),
       error: () => { /* stay on */ },
     });
@@ -158,7 +169,7 @@ export class TenantEntitlementsService {
   refresh(): void { this.loadPromise = this.fetch(); }
 
   reset(): void {
-    this._platform.set({ whatsappAuto: true, whatsappChat: true });
+    this._platform.set({ ...ALL_ON });
     this._modules.set(null);
     this._loaded.set(false);
     this.loadPromise = null;

@@ -39,7 +39,7 @@ interface LabTile {
         <!-- Band pill (owner): the hub's search filters its tiles — the ONE
              precise matcher over each tile's title + the settings on its page
              (never the subtitle); Enter opens the top tile. -->
-        <pf-hero-band [back]="true" placeholder="Search lab settings — tests, report, referral, KPIs…"
+        <pf-hero-band [back]="true" placeholder="Search lab settings — tests, report, email, referral, KPIs…"
                       [value]="q()" (valueChange)="q.set($event)" (submitted)="openTop()"></pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
@@ -147,6 +147,9 @@ export class LabSettingsHubComponent {
     { title: 'Lab settings', href: '/admin/lab-settings',
       subtitle: 'Sample finding, queues, payment and validation rules',
       iconPath: 'M10 3h4v5l5 9a2.5 2.5 0 0 1-2.3 3.5H7.3A2.5 2.5 0 0 1 5 17l5-9V3ZM8 12h8' },
+    { title: 'Communication', href: '/admin/communication',
+      subtitle: 'WhatsApp, email and SMS for reports and invoices',
+      iconPath: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5' },
     { title: 'Microbiology / Culture', href: '/admin/microbiology',
       subtitle: 'Culture bench: stage lock timeout, takeover, per-stage TAT',
       iconPath: 'M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M14 17h.01' },

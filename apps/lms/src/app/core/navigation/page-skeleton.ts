@@ -75,6 +75,7 @@ const RULES: readonly Rule[] = [
   [/^\/admin\/(opd|ipd|pharmacy|payroll|insurance|radiology|emergency|blood-bank)$/, 'tiles', 'Module settings'],
   [/^\/admin\/(branches|vendors|referral-labs|inventory|partners|audit|home-collection|referring-network|opd\/doctors)$/, 'grid', 'Settings'],
   [/^\/admin\/lab-settings$/, 'form', 'Lab settings'],
+  [/^\/admin\/communication$/, 'form', 'Communication'],
   [/^\/admin\/ai-connectors$/, 'form', 'AI connectors'],
   [/^\/admin\/bridges$/, 'grid', 'Bridges'],
   [/^\/admin\/bridges\/add$/, 'form', 'Add a Bridge'],

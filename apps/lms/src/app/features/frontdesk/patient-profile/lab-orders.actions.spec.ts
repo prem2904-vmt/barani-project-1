@@ -75,7 +75,7 @@ const ids = (c: any) => c.detailActions().map((a: { id: string }) => a.id);
 describe('Patient profile order detail — ⋮ report actions', () => {
   it('delivery desk: share rows, WhatsApp, download, print, open full report, repeat', async () => {
     const { c, el } = await render();
-    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp-mine', 'download', 'print', 'open-report', 'repeat']);
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp-mine', 'email', 'download', 'print', 'open-report', 'repeat']);
     const kebab = el.querySelector('.pf-lo-detail__acts pf-actions-menu .pf-lo-act--more') as HTMLButtonElement;
     expect(kebab.getAttribute('aria-label')).toBe('Report actions');
     // Repeat + View report stay as buttons; the ⋮ joins them.
@@ -128,7 +128,7 @@ describe('Patient profile order detail — ⋮ report actions', () => {
 
   it('lab sends WhatsApp from its number: ONE row, WhatsApp Auto (WhatsApp Chat still runs through its action id)', async () => {
     const { c } = await render({ waCloud: true });
-    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'download', 'print', 'open-report', 'repeat']);
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'email', 'download', 'print', 'open-report', 'repeat']);
     const svc = TestBed.inject(ReportActionsService);
     const send = vi.spyOn(svc, 'sendWhatsApp').mockImplementation(async () => {});
     const mine = vi.spyOn(svc, 'whatsApp').mockResolvedValue(true);
@@ -170,7 +170,7 @@ describe('Patient profile order detail — ⋮ Edit referral', () => {
 
   it('modify_order: "Edit referral" leads the report rows', async () => {
     const { c } = await render({ perms: ['view_order', 'deliver_report', 'view_report', 'modify_order'] });
-    expect(ids(c)).toEqual(['referral', 'share', 'copy-link', 'whatsapp-mine', 'download', 'print', 'open-report', 'repeat']);
+    expect(ids(c)).toEqual(['referral', 'share', 'copy-link', 'whatsapp-mine', 'email', 'download', 'print', 'open-report', 'repeat']);
   });
 
   it('no report yet: the ⋮ still offers Edit referral, labelled "Order actions"', async () => {

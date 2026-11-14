@@ -629,7 +629,7 @@ describe('Reports list — ⋮ report actions', () => {
 
   it('full delivery desk: share rows, the PDF, workflow steps and go-to — in that order', async () => {
     const { c } = await render({ perms: ['deliver_report', 'view_report', 'view_order', 'edit_result', 'view_patient', 'enter_result'] });
-    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp-mine', 'view', 'download', 'print', 'edit', 'regenerate', 'patient', 'lab']);
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp-mine', 'email', 'view', 'download', 'print', 'edit', 'regenerate', 'patient', 'lab']);
   });
 
   it('pathologist in Results (view_report + validate_result): no share rows, but Regenerate', async () => {
@@ -718,7 +718,7 @@ describe('Reports list — ONE WhatsApp action: Auto, else Chat', () => {
 
   it('the ⋮ offers ONE WhatsApp row — WhatsApp Auto — when the lab has a sender', async () => {
     const { c } = await render({ waCloud: true, perms: ['deliver_report', 'view_report', 'view_order'] });
-    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'view', 'download', 'print', 'regenerate']);
+    expect(ids(c)).toEqual(['share', 'copy-link', 'whatsapp', 'email', 'view', 'download', 'print', 'regenerate']);
     expect(c.rowActions().get(c.items()[0].id).find((a: { id: string }) => a.id === 'whatsapp').label).toBe('WhatsApp Auto');
   });
 

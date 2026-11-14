@@ -1,5 +1,5 @@
 import { Injectable, Injector, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, timeout } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from '../auth/auth.service';
 import { ApiService } from './api.service';
@@ -7,11 +7,15 @@ import { DialogService } from './dialog.service';
 import { ToastService } from './toast.service';
 import { orderReportQrUrl } from '../../shared/utils/patient-strip-qr';
 import { copyText, shareLink, shareRoute, shareHint, type ShareEnv, type ShareOutcome } from '../../shared/utils/report-share';
-import { reportPublicLink } from '../../shared/utils/whatsapp-manual';
+import { reportPublicLink, waDisplayPhone } from '../../shared/utils/whatsapp-manual';
 import { printPdfBlobUrl } from '../../shared/utils/print-pdf';
 import type { PfAction } from '../../shared/components/actions-menu/actions-menu.component';
 import { WhatsAppSendService } from './whatsapp-send.service';
-import { WhatsAppManualService, type WaDoctorContact, type WaRecipient } from './whatsapp-manual.service';
+import { WhatsAppManualService, waDoctorPhone, type WaDoctorContact, type WaRecipient } from './whatsapp-manual.service';
+import { CommsShareService, looksLikeEmail } from './comms-share.service';
+import { WhatsAppService } from './whatsapp.service';
+import type { EmailRecipient } from '../../shared/utils/email-share';
+import { smsDoctorReportMessage, smsReportMessage } from '../../shared/utils/sms-link';
 
 /** What a report row needs for the link / share / delivery actions. */
 export interface ReportRef {
@@ -24,6 +28,21 @@ export interface ReportRef {
 
 /** The delivery note of a manual send (WhatsApp opened on this computer). */
 export const WA_MANUAL_NOTE = 'WhatsApp opened (manual)';
+
+/** ⋮ ids of the Email / SMS rows (see `channelActions`). */
+export const EMAIL_ACTION = 'email';
+export const SMS_ACTION = 'sms';
+/** The delivery note of an SMS Chat hand-over (Messages opened on this phone). */
+export const SMS_MANUAL_NOTE = 'SMS opened (manual)';
+
+/** What a screen knows about the recipients. `undefined` = not known here (the server decides);
+ *  `null` / '' = known to be missing. */
+export interface ChannelContext {
+  patientEmail?: string | null;
+  doctorEmail?: string | null;
+  doctorName?: string | null;
+  patientPhone?: string | null;
+}
 
 /** ⋮ ids of the two WhatsApp rows (see `whatsAppActions`). */
 export const WA_ACTION_SEND = 'whatsapp';
@@ -289,5 +308,117 @@ export class ReportActionsService {
       next: () => { if (via !== 'whatsapp') this.toasts.success(`Delivered via ${via}`); },
       error: () => { /* the handover already happened; the record is best-effort */ },
     });
+  }
+
+  // ── Email + SMS Chat (2026-11-13) ────────────────────────────────────
+
+  private readonly comms = inject(CommsShareService);
+  private readonly wa = inject(WhatsAppService);
+
+  /** Warm the email / SMS switches (screens call it on init, next to warmWhatsApp). */
+  warmChannels(): void { this.comms.ensure(); }
+
+  /** The ⋮ Email and SMS rows for the delivery desk. Email: the lab emails a FINAL report (patient,
+   *  and the referral doctor when they have an email) — hidden when the screen knows nobody has one.
+   *  SMS: phone / tablet only, opens the Messages app with the report link ready. */
+  channelActions(r: ReportRef | null | undefined, ctx: ChannelContext = {}): PfAction[] {
+    if (!r || !this.auth.hasPermission('deliver_report')) return [];
+    const out: PfAction[] = [];
+    const final = (r.type ?? 'final') === 'final';
+    if (final && r.orderId && this.comms.emailOn() && this.emailPossible(ctx)) {
+      out.push({ id: EMAIL_ACTION, label: 'Email', icon: 'mail', group: 'Share', hint: 'The lab emails the report PDF' });
+    }
+    if (this.comms.smsOn() && ctx.patientPhone !== null && ctx.patientPhone !== '') {
+      out.push({ id: SMS_ACTION, label: 'SMS', icon: 'sms', group: 'Share', hint: 'Opens Messages with the report link ready; you press Send' });
+    }
+    return out;
+  }
+
+  /** Someone may have an email: either side known to have one, or nothing known here (the server decides). */
+  private emailPossible(ctx: ChannelContext): boolean {
+    return looksLikeEmail(ctx.patientEmail) || looksLikeEmail(ctx.doctorEmail)
+      || ctx.patientEmail === undefined || ctx.doctorEmail === undefined;
+  }
+
+  /** Run an Email / SMS row; false when the id is not one of them. */
+  runChannel(id: string, rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null }, ctx: ChannelContext = {}): boolean {
+    if (id === EMAIL_ACTION) { void this.sendEmail(rep, ctx); return true; }
+    if (id === SMS_ACTION) { void this.sendSms(rep, patient); return true; }
+    return false;
+  }
+
+  /** Email the report from the server. With both emails known the person picks (both first, the contract's
+   *  default); otherwise the server sends to whoever has one ('both'). */
+  async sendEmail(rep: ReportRef, ctx: ChannelContext = {}, to?: EmailRecipient): Promise<void> {
+    if (!rep.orderId || !this.auth.hasPermission('deliver_report')) return;
+    let pick: EmailRecipient | undefined = to;
+    if (!pick) {
+      const p = looksLikeEmail(ctx.patientEmail), d = looksLikeEmail(ctx.doctorEmail);
+      if (p && d) {
+        const res = await this.dialog.actions({
+          title: 'Email the report',
+          message: `Who should get it? ${ctx.doctorName?.trim() || 'The referral doctor'}: ${ctx.doctorEmail}.`,
+          actions: [
+            { value: 'both', label: 'Send to both', variant: 'primary' },
+            { value: 'patient', label: 'Send to patient', variant: 'secondary' },
+            { value: 'doctor', label: 'Send to doctor', variant: 'secondary' },
+          ],
+        });
+        if (res.action !== 'both' && res.action !== 'patient' && res.action !== 'doctor') return;
+        pick = res.action;
+      } else if (d && ctx.patientEmail !== undefined && !p) pick = 'doctor';
+      else if (p && ctx.doctorEmail !== undefined && !d) pick = 'patient';
+      else pick = 'both';
+    }
+    // The server attaches the stored PDF: make sure there is one (best-effort, like WhatsApp).
+    void this.archive(rep as ReportRef & Record<string, unknown>);
+    await this.comms.emailReport(rep.orderId, pick);
+  }
+
+  /** SMS Chat: open the device's Messages app with the report link ready (the person presses Send).
+   *  A referral doctor with their own mobile → "Send to patient / Send to doctor" (unless `opts.to`). */
+  async sendSms(rep: ReportRef & Record<string, unknown>, patient: { name?: string | null; phone?: string | null },
+    opts: { to?: WaRecipient; doctor?: WaDoctorContact | null } = {}): Promise<boolean> {
+    if (!this.auth.hasPermission('deliver_report') || !this.comms.smsOn()) return false;
+    if (rep.qrToken) void this.archive(rep);
+    const link = reportPublicLink(this.base(), rep.qrToken);
+    const lab = this.auth.user()?.tenantName;
+    const doctor = opts.doctor !== undefined ? opts.doctor : await this.readDoctor(rep.id);
+    const docPhone = doctor ? waDoctorPhone(patient.phone, doctor) : null;
+    let to = opts.to;
+    if (!to && docPhone) {
+      const patientOk = !!patient.phone?.trim();
+      const res = await this.dialog.actions({
+        title: 'Send the report by SMS',
+        message: `Who should get it? ${doctor?.name?.trim() || 'The referral doctor'}: ${waDisplayPhone(docPhone)}.`,
+        actions: [
+          ...(patientOk ? [{ value: 'patient', label: 'Send to patient', variant: 'primary' as const }] : []),
+          { value: 'doctor', label: 'Send to doctor', variant: patientOk ? 'secondary' as const : 'primary' as const },
+        ],
+      });
+      if (res.action !== 'patient' && res.action !== 'doctor') return false;
+      to = res.action;
+    }
+    if (to === 'doctor') {
+      return this.comms.openSms(doctor?.phone, smsDoctorReportMessage({ doctor: doctor?.name, patient: patient.name, lab, link }), 'doctor');
+    }
+    const opened = this.comms.openSms(patient.phone, smsReportMessage({ patient: patient.name, lab, link }));
+    // Handing the link to the patient is the delivery (the doctor's copy is not) — no toast.
+    if (opened) {
+      this.api.post(`/api/reports/${rep.id}/deliver`, { via: 'sms', note: SMS_MANUAL_NOTE }).subscribe({ error: () => { /* best-effort */ } });
+    }
+    return opened;
+  }
+
+  /** The order's referral doctor as the server knows them (0.8 s max). A failed read = no doctor. */
+  private async readDoctor(reportId: string | null | undefined): Promise<WaDoctorContact | null> {
+    if (!reportId) return null;
+    try {
+      const st = await firstValueFrom(this.wa.reportStatus(reportId).pipe(timeout(800)));
+      const d = st?.referralDoctor;
+      return d?.phone ? { name: d.name ?? null, phone: d.phone } : null;
+    } catch {
+      return null;
+    }
   }
 }

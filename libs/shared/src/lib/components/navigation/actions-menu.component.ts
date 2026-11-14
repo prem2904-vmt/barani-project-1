@@ -7,7 +7,7 @@ import { ModalPortalDirective } from '../../directives/modal-portal.directive.js
 /** The stroked icon set a menu row can carry (24×24, currentColor). */
 export type PfActionIcon =
   | 'share' | 'whatsapp' | 'link' | 'download' | 'print' | 'chat' | 'edit' | 'regenerate'
-  | 'patient' | 'lab' | 'reassign' | 'sendback' | 'view' | 'repeat' | 'referral';
+  | 'patient' | 'lab' | 'reassign' | 'sendback' | 'view' | 'repeat' | 'referral' | 'mail' | 'sms';
 
 /** One row of a `pf-actions-menu`. Screens build the list from the user's
  *  permissions and the record's state — the menu renders what it is given
@@ -39,6 +39,8 @@ const ICONS: Record<PfActionIcon, string[]> = {
   download: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M7 10l5 5 5-5', 'M12 15V3'],
   print: ['M6 9V2h12v7', 'M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2', 'M6 14h12v8H6z'],
   chat: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+  mail: ['M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z', 'm22 7-10 6L2 7'],
+  sms: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z', 'M7 8h10', 'M7 12h6'],
   edit: ['M12 20h9', 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z'],
   regenerate: ['M21 12a9 9 0 0 1-15 6.7L3 16', 'M3 21v-5h5', 'M3 12a9 9 0 0 1 15-6.7L21 8', 'M21 3v5h-5'],
   patient: ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'],

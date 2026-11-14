@@ -14,7 +14,7 @@ import { formFactorProjects } from './src/support/form-factor';
  */
 export default defineConfig({
   testDir: './src',
-  testMatch: /(whatsapp-manual|whatsapp-auto-chat|wizard-port|idcard-size|fx-desk|fx-int|rt-lab|rt-fd|rt-wa)\.screens\.spec\.ts/,
+  testMatch: /(whatsapp-manual|whatsapp-auto-chat|wizard-port|idcard-size|fx-desk|fx-int|rt-lab|rt-fd|rt-wa|cm-comms)\.screens\.spec\.ts/,
   retries: 0,
   workers: Number(process.env['PW_WORKERS'] || 4),
   fullyParallel: false,

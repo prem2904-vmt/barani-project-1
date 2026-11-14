@@ -19,7 +19,7 @@ afterEach(() => TestBed.resetTestingModule());
 
 describe('platformSwitchOn / DEFAULT_ON_WHEN_ABSENT', () => {
   it('absent, null, a non-boolean or an older server ⇒ ON; only an explicit false is off', () => {
-    expect(DEFAULT_ON_WHEN_ABSENT).toEqual(['whatsappAuto', 'whatsappChat']);
+    expect(DEFAULT_ON_WHEN_ABSENT).toEqual(['whatsappAuto', 'whatsappChat', 'emailShare', 'smsChat']);
     for (const wire of [null, undefined, {}, { inventory: true }, { whatsappAuto: null }, { whatsappAuto: 'no' }])
       expect(platformSwitchOn(wire as never, 'whatsappAuto')).toBe(true);
     expect(platformSwitchOn({ whatsappAuto: false }, 'whatsappAuto')).toBe(false);
@@ -55,5 +55,21 @@ describe('TenantEntitlementsService — whatsappAuto / whatsappChat', () => {
     await c.ensureLoaded();
     c.reset();
     expect([c.moduleEnabled('whatsappAuto'), c.moduleEnabled('whatsappChat')]).toEqual([true, true]);
+  });
+});
+
+describe('TenantEntitlementsService — emailShare / smsChat (2026-11-13)', () => {
+  it('default ON when absent or loading; an explicit false (camel or snake case) turns each off', async () => {
+    const a = setup({});
+    expect([a.moduleEnabled('emailShare'), a.moduleEnabled('smsChat')]).toEqual([true, true]);
+    await a.ensureLoaded();
+    expect([a.moduleEnabled('emailShare'), a.moduleEnabled('smsChat')]).toEqual([true, true]);
+    TestBed.resetTestingModule();
+    const b = setup({ emailShare: false, sms_chat: false });
+    await b.ensureLoaded();
+    expect([b.moduleEnabled('emailShare'), b.moduleEnabled('smsChat')]).toEqual([false, false]);
+    expect(b.moduleEnabled('whatsappChat')).toBe(true);
+    b.reset();
+    expect([b.moduleEnabled('emailShare'), b.moduleEnabled('smsChat')]).toEqual([true, true]);
   });
 });
