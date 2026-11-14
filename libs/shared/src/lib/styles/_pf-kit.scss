@@ -1248,8 +1248,8 @@ button.pf-ctx__chip:focus-visible {
   min-width: 0;
   max-width: 100%;
   border-radius: var(--pf-radius);
-  background: var(--pf-chip-bg);
-  border: 1px solid var(--pf-line);
+  // background: var(--pf-chip-bg);
+  // border: 1px solid var(--pf-line);
   overflow-x: auto;
   scrollbar-width: none;
 }
