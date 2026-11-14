@@ -32,7 +32,9 @@ test.describe('neg-storage: Start menu hint', () => {
     await expect(deskReady(page)).toBeVisible({ timeout: 60_000 });
     await page.waitForTimeout(1500);
     await expect(hint(page)).toHaveCount(0);
-    expect(errors, 'no uncaught errors').toEqual([]);
+    // Safari (WebKit) reports the requests a reload cancels mid-flight as "Fetch API cannot load … due to access
+    // control checks" (every API call here is answered by the mock — it's the reload, not CORS). Only those are ignored.
+    expect(errors.filter(e => !/due to access control checks\.$/.test(e)), 'no uncaught errors').toEqual([]);
   });
 
   test('storage cannot be written (private window / full disk): the app loads and the hint can still be dismissed for the session', async ({ page, context }) => {
