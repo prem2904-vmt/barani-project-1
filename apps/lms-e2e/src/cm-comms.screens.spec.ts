@@ -2,7 +2,7 @@ import type { BrowserContext, Page } from '@playwright/test';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
-  test, expect, shotsDir, isTouch, isDesktopApp, projectName,
+  test, expect, shotsDir, isTouch, isDesktopApp, projectName, engine,
   expectDeviceTier, expectNoHorizontalScroll, expectRowFits,
 } from './support/form-factor';
 
@@ -356,6 +356,17 @@ test.describe('cm-comms', () => {
   });
 
   test(`Invoice viewer: Email next to WhatsApp, patient only, toast from the server answer`, async ({ page: pg, context }) => {
+    // Record what the app itself puts in the form (name + first bytes of each file): WebKit's request interception
+    // drops file contents from multipart bodies, so the wire body alone can't prove the PDF rode along there.
+    await context.addInitScript(() => {
+      const w = window as unknown as { __pfFormFiles?: { field: string; name: string; type: string; head: Promise<string> }[] };
+      w.__pfFormFiles = [];
+      const orig = FormData.prototype.append;
+      FormData.prototype.append = function (this: FormData, field: string, v: string | Blob, name?: string) {
+        if (v instanceof Blob) w.__pfFormFiles!.push({ field, name: name ?? (v as File).name ?? '', type: v.type, head: v.slice(0, 5).text() });
+        return (orig as (...a: unknown[]) => void).call(this, field, v, name);
+      } as typeof FormData.prototype.append;
+    });
     const page = await setup(pg, context);
     await openDesk(page);
     await page.getByText('Priya Nair').locator('visible=true').first().click();
@@ -377,7 +388,12 @@ test.describe('cm-comms', () => {
     const inv = calls.find(c => c.path === '/api/billing/b-op/email')!.body;
     expect(inv.multipart).toBe(true);
     expect(inv.raw).toContain('name="pdf"; filename="INV-001033.pdf"');
-    expect(inv.raw).toContain('%PDF');
+    if (engine() !== 'webkit') expect(inv.raw).toContain('%PDF');
+    const files = await page.evaluate(async () => {
+      const list = (window as unknown as { __pfFormFiles?: { field: string; name: string; type: string; head: Promise<string> }[] }).__pfFormFiles ?? [];
+      return Promise.all(list.map(async f => ({ field: f.field, name: f.name, type: f.type, head: await f.head })));
+    });
+    expect(files, 'the app put the invoice PDF itself in the form').toContainEqual({ field: 'pdf', name: 'INV-001033.pdf', type: 'application/pdf', head: '%PDF-' });
   });
 
   test(`Invoice viewer: a PDF the server refuses (400 pdf_too_large / invalid_pdf) is one plain toast, never "emailed"`, async ({ page: pg, context }) => {

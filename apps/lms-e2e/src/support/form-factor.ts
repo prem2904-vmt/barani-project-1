@@ -11,8 +11,13 @@ import * as path from 'node:path';
  *   desktop           1440×900 desktop Chrome, mouse          → html.device-desktop, the web app in a browser
  *   desktop-app       1440×900 + a stub of electron/preload.js → html.device-desktop + html.electron, HASH routing,
  *                     the WhatsApp dock / printer / notify bridges answered in-page (Electron is NEVER launched)
- *   phone-webkit / tablet-webkit  the same phone / tablet on WebKit (iPhone / iPad Safari) — only with PW_WEBKIT=1
- *                     and after `npx playwright install webkit` on the box (the configs never download browsers).
+ * BROWSERS (opt-in, PW_BROWSERS=webkit,firefox,chrome,edge — the configs never download browsers):
+ *   phone-webkit / tablet-webkit / desktop-webkit   iPhone / iPad / Mac Safari (WebKit)
+ *   desktop-firefox                                 Firefox on the desktop web app
+ *   desktop-chrome / desktop-edge                   branded Google Chrome / Microsoft Edge (channel) on the desktop web app
+ *   The base projects above stay on the box's Chromium. PW_WEBKIT=1 still means "webkit". The Linux dev PC (Ubuntu 26.04)
+ *   can't run Playwright's WebKit/Edge natively, so CI runs the browser projects in the official Playwright image
+ *   (tools/e2e-browsers.Dockerfile).
  *
  * Specs import `test` / `expect` from here (not '@playwright/test'): the `context` fixture installs the
  * desktop-app bridge, so a spec never has to know it is running in the desktop app unless it asserts on it.
@@ -21,7 +26,9 @@ import * as path from 'node:path';
 
 export type FormFactor = 'phone' | 'tablet' | 'desktop' | 'desktop-app';
 export type Orientation = 'portrait' | 'landscape';
-export interface FormFactorMeta { formFactor: FormFactor; orientation: Orientation; engine: 'chromium' | 'webkit' }
+export type Engine = 'chromium' | 'webkit' | 'firefox';
+export type BrowserKey = 'webkit' | 'firefox' | 'chrome' | 'edge';
+export interface FormFactorMeta { formFactor: FormFactor; orientation: Orientation; engine: Engine; browser?: string }
 
 export const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 export const IPAD_UA = 'Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
@@ -43,9 +50,24 @@ const META: Record<string, FormFactorMeta> = {
   'tablet-landscape': { formFactor: 'tablet', orientation: 'landscape', engine: 'chromium' },
   desktop: { formFactor: 'desktop', orientation: 'landscape', engine: 'chromium' },
   'desktop-app': { formFactor: 'desktop-app', orientation: 'landscape', engine: 'chromium' },
-  'phone-webkit': { formFactor: 'phone', orientation: 'portrait', engine: 'webkit' },
-  'tablet-webkit': { formFactor: 'tablet', orientation: 'portrait', engine: 'webkit' },
+  'phone-webkit': { formFactor: 'phone', orientation: 'portrait', engine: 'webkit', browser: 'safari' },
+  'tablet-webkit': { formFactor: 'tablet', orientation: 'portrait', engine: 'webkit', browser: 'safari' },
+  'desktop-webkit': { formFactor: 'desktop', orientation: 'landscape', engine: 'webkit', browser: 'safari' },
+  'desktop-firefox': { formFactor: 'desktop', orientation: 'landscape', engine: 'firefox', browser: 'firefox' },
+  'desktop-chrome': { formFactor: 'desktop', orientation: 'landscape', engine: 'chromium', browser: 'chrome' },
+  'desktop-edge': { formFactor: 'desktop', orientation: 'landscape', engine: 'chromium', browser: 'edge' },
 };
+
+function stripMobile<T extends object>(d: T): Omit<T, 'isMobile'> { const { isMobile: _m, ...rest } = d as T & { isMobile?: boolean }; return rest; }
+
+/** PW_BROWSERS ("webkit,firefox,chrome,edge" or "all") + the old PW_WEBKIT=1 → the extra browsers to add. */
+export function browsersFromEnv(env: Record<string, string | undefined> = process.env): BrowserKey[] {
+  const all: BrowserKey[] = ['webkit', 'firefox', 'chrome', 'edge'];
+  const raw = (env['PW_BROWSERS'] || '').toLowerCase().split(/[\s,]+/).filter(Boolean);
+  const set = new Set<BrowserKey>(raw.includes('all') ? all : (raw.filter(b => (all as string[]).includes(b)) as BrowserKey[]));
+  if (env['PW_WEBKIT'] === '1') set.add('webkit');
+  return all.filter(b => set.has(b));
+}
 
 export const ALL_PROJECT_NAMES = ['phone', 'tablet', 'tablet-landscape', 'desktop', 'desktop-app'] as const;
 
@@ -57,6 +79,8 @@ export function formFactorProjects(o: {
   names?: readonly string[];
   launch: Pick<NonNullable<PlaywrightTestProject['use']>, 'channel' | 'launchOptions'>;
   webkit?: boolean;
+  /** Extra browsers (see browsersFromEnv). */
+  browsers?: readonly BrowserKey[];
   extraUse?: PlaywrightTestProject['use'];
 }): PlaywrightTestProject[] {
   const names = o.names ?? ALL_PROJECT_NAMES;
@@ -65,13 +89,22 @@ export function formFactorProjects(o: {
     metadata: META[name],
     use: { ...devices['Desktop Chrome'], ...o.extraUse, ...o.launch, ...FORM_FACTOR_OPTIONS[name] },
   }));
-  if (o.webkit) {
-    const ext = o.extraUse?.launchOptions?.args ? { launchOptions: {} } : {};
+  const browsers = new Set<BrowserKey>(o.browsers ?? []);
+  if (o.webkit) browsers.add('webkit');
+  // Other engines must not inherit the Chromium binary path / flags of the box.
+  const plain = { ...o.extraUse, launchOptions: {} };
+  const desktop = FORM_FACTOR_OPTIONS['desktop'];
+  const { isMobile: _noMobileOnFirefox, ...desktopNoMobile } = desktop;
+  if (browsers.has('webkit')) {
     out.push(
-      { name: 'phone-webkit', metadata: META['phone-webkit'], use: { ...devices['iPhone 14'], ...o.extraUse, ...ext, browserName: 'webkit', viewport: { width: 390, height: 844 }, screen: { width: 390, height: 844 } } },
-      { name: 'tablet-webkit', metadata: META['tablet-webkit'], use: { ...devices['iPad Pro 11'], ...o.extraUse, ...ext, browserName: 'webkit', viewport: { width: 820, height: 1180 }, screen: { width: 820, height: 1180 } } },
+      { name: 'phone-webkit', metadata: META['phone-webkit'], use: { ...devices['iPhone 14'], ...plain, browserName: 'webkit', viewport: { width: 390, height: 844 }, screen: { width: 390, height: 844 } } },
+      { name: 'tablet-webkit', metadata: META['tablet-webkit'], use: { ...devices['iPad Pro 11'], ...plain, browserName: 'webkit', viewport: { width: 820, height: 1180 }, screen: { width: 820, height: 1180 } } },
+      { name: 'desktop-webkit', metadata: META['desktop-webkit'], use: { ...devices['Desktop Safari'], ...plain, browserName: 'webkit', ...desktop } },
     );
   }
+  if (browsers.has('firefox')) out.push({ name: 'desktop-firefox', metadata: META['desktop-firefox'], use: { ...stripMobile(devices['Desktop Firefox']), ...plain, browserName: 'firefox', ...desktopNoMobile } });
+  if (browsers.has('chrome')) out.push({ name: 'desktop-chrome', metadata: META['desktop-chrome'], use: { ...devices['Desktop Chrome'], ...plain, channel: 'chrome', ...desktop } });
+  if (browsers.has('edge')) out.push({ name: 'desktop-edge', metadata: META['desktop-edge'], use: { ...devices['Desktop Edge'], ...plain, channel: 'msedge', ...desktop } });
   return out;
 }
 
@@ -84,7 +117,9 @@ function meta(): FormFactorMeta {
 }
 export const formFactor = (): FormFactor => meta().formFactor;
 export const orientation = (): Orientation => meta().orientation;
-export const engine = (): 'chromium' | 'webkit' => meta().engine;
+export const engine = (): Engine => meta().engine;
+/** 'safari' | 'firefox' | 'chrome' | 'edge' on a browser project, else 'chromium'. */
+export function browser(): string { try { return String((base.info().project.metadata as Partial<FormFactorMeta>)?.browser ?? 'chromium'); } catch { return 'chromium'; } }
 export const isPhone = (): boolean => formFactor() === 'phone';
 export const isTablet = (): boolean => formFactor() === 'tablet';
 /** Phone or tablet: a finger, the touch layout (html.device-touch), the share sheet / wa.me for WhatsApp. */

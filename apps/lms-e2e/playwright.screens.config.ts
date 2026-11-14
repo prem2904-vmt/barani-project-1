@@ -1,5 +1,5 @@
 import { defineConfig } from '@playwright/test';
-import { formFactorProjects } from './src/support/form-factor';
+import { browsersFromEnv, formFactorProjects } from './src/support/form-factor';
 
 /**
  * Screens suite (API mocked, production build served locally): every spec runs on EVERY form factor —
@@ -9,7 +9,8 @@ import { formFactorProjects } from './src/support/form-factor';
  *   BASE_URL=http://127.0.0.1:<free port> PW_CHROME_PATH=<chromium> SHOTS_DIR=<dir> \
  *     ./node_modules/.bin/playwright test --config=apps/lms-e2e/playwright.screens.config.ts [--project=tablet]
  *
- * PW_WEBKIT=1 adds phone-webkit / tablet-webkit (iPhone / iPad Safari) — needs `npx playwright install webkit` once.
+ * PW_BROWSERS=webkit,firefox,chrome,edge (or all) adds Safari (phone/tablet/desktop), Firefox, Chrome and Edge projects —
+ * run them in the Playwright image (tools/e2e-browsers.sh); PW_WEBKIT=1 still adds WebKit.
  * PW_WORKERS sets the parallelism (default 4; specs keep their mock state per worker process).
  */
 export default defineConfig({
@@ -21,6 +22,6 @@ export default defineConfig({
   use: { baseURL: process.env['BASE_URL'] || 'http://127.0.0.1:4317', screenshot: 'only-on-failure' },
   projects: formFactorProjects({
     launch: process.env['PW_CHROME_PATH'] ? { launchOptions: { executablePath: process.env['PW_CHROME_PATH'] } } : { channel: 'chrome' },
-    webkit: process.env['PW_WEBKIT'] === '1',
+    browsers: browsersFromEnv(),
   }),
 });

@@ -38,8 +38,7 @@ jobs:
       - name: Build
         run: npx nx build lms --configuration=development --skip-nx-cache
       # Every screens spec on every form factor: phone, tablet (portrait + landscape), desktop browser, desktop app
-      # (Electron preload stubbed in-page). Screenshots land in SHOTS_DIR/<project>/. PW_WEBKIT=1 adds iPhone/iPad
-      # Safari once WebKit is installed on the runner (npx playwright install webkit).
+      # (Electron preload stubbed in-page). Screenshots land in SHOTS_DIR/<project>/.
       - name: Screen tests (Playwright, API mocked, every form factor)
         env:
           PW_WORKERS: '6'
@@ -50,6 +49,17 @@ jobs:
           trap 'kill $SPA' EXIT; sleep 2
           BASE_URL="http://127.0.0.1:$PORT" PW_CHROME_PATH="$CH" SHOTS_DIR="$RUNNER_TEMP/shots" \
             ./node_modules/.bin/playwright test --config=apps/lms-e2e/playwright.screens.config.ts --reporter=line
+      # The same screens on Safari (iPhone / iPad / Mac WebKit), Firefox, Google Chrome and Microsoft Edge. The PC's
+      # Ubuntu can't run Playwright's WebKit/Edge natively, so they run in the official Playwright image
+      # (tools/e2e-browsers.Dockerfile, built once on the runner and cached).
+      - name: Screen tests on Safari, Firefox, Chrome and Edge (Playwright image)
+        env:
+          PW_WORKERS: '6'
+        run: |
+          PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')
+          node apps/lms-e2e/serve-spa.mjs dist/apps/lms/browser "$PORT" > "$RUNNER_TEMP/spa-browsers.log" 2>&1 & SPA=$!
+          trap 'kill $SPA' EXIT; sleep 2
+          BASE_URL="http://127.0.0.1:$PORT" SHOTS_DIR=/work/test-results/shots-browsers tools/e2e-browsers.sh --reporter=line
       - name: Keep the failure report
         if: failure()
         uses: actions/upload-artifact@v4
