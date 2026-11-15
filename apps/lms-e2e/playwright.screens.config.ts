@@ -15,11 +15,11 @@ import { browsersFromEnv, formFactorProjects } from './src/support/form-factor';
  */
 export default defineConfig({
   testDir: './src',
-  testMatch: /(whatsapp-manual|whatsapp-auto-chat|wizard-port|idcard-size|fx-desk|fx-int|rt-lab|rt-fd|rt-wa|cm-comms|neg-comms|neg-email-share|neg-wa|neg-storage|neg-desk-lab|neuron)\.screens\.spec\.ts/,
+  testMatch: /(whatsapp-manual|whatsapp-auto-chat|wizard-port|idcard-size|fx-desk|fx-int|rt-lab|rt-fd|rt-wa|cm-comms|neg-comms|neg-email-share|neg-wa|neg-storage|neg-desk-lab|files)\.screens\.spec\.ts/,
   retries: 0,
   workers: Number(process.env['PW_WORKERS'] || 4),
   fullyParallel: false,
-  use: { baseURL: process.env['BASE_URL'] || 'http://127.0.0.1:4317', screenshot: 'only-on-failure' },
+  use: { baseURL: process.env['BASE_URL'] || 'http://127.0.0.1:4317', screenshot: 'only-on-failure', actionTimeout: 20_000 },
   projects: formFactorProjects({
     launch: process.env['PW_CHROME_PATH'] ? { launchOptions: { executablePath: process.env['PW_CHROME_PATH'] } } : { channel: 'chrome' },
     browsers: browsersFromEnv(),

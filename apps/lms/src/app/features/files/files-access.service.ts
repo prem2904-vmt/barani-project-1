@@ -1,4 +1,4 @@
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { AuthService } from '../../core/auth/auth.service';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
 import { DeviceClassService } from '../../core/services/device-class.service';
@@ -28,6 +28,11 @@ export class FilesAccessService {
   private readonly _settings = signal<OfficeSettings | null>(null);
   private readonly _loaded = signal(false);
   private inflight: Promise<void> | null = null;
+
+  constructor() {
+    // Load as soon as Files is available (beta on + signed in), wherever the person is: the Start menu and the bar need the answer on every screen.
+    effect(() => { if (this.available()) untracked(() => { void this.ensureLoaded(); }); });
+  }
 
   readonly loaded = this._loaded.asReadonly();
   readonly settings = this._settings.asReadonly();
@@ -69,6 +74,8 @@ export class FilesAccessService {
   ensureLoaded(): Promise<void> {
     if (this.inflight) return this.inflight;
     if (!this.available()) return Promise.resolve();
+    // The platform level (View only vs Full) comes from the tenant entitlement; make sure it is loading too (fail-closed until it answers).
+    void this.entitlements.ensureLoaded();
     this.inflight = this.office.settings().then(r => { this._access.set(r.access); this._settings.set(r.settings); this._loaded.set(true); })
       .catch(() => { this._loaded.set(true); });
     return this.inflight;

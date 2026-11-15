@@ -23,7 +23,7 @@ function make(o: { beta?: boolean; user?: boolean; full?: boolean; phone?: boole
     { provide: OfficeService, useValue: office },
     { provide: BetaFeaturesService, useValue: { enabled: (k: string) => k === 'neuron' && o.beta !== false } },
     { provide: AuthService, useValue: { user: signal(o.user === false ? null : { id: 'u' }), hasAnyPermission: (c: string[]) => c.some(x => perms.includes(x)) } },
-    { provide: TenantEntitlementsService, useValue: { filesFull: full } },
+    { provide: TenantEntitlementsService, useValue: { filesFull: full, ensureLoaded: vi.fn(async () => undefined) } },
     { provide: DeviceClassService, useValue: { deviceClass: signal(o.phone ? 'phone' : 'desktop') } },
   ] });
   return { svc: TestBed.inject(FilesAccessService), office, full };
@@ -98,6 +98,7 @@ describe('FilesAccessService', () => {
     const { svc, office } = make();
     await svc.ensureLoaded(); await svc.ensureLoaded();
     expect(office.settings).toHaveBeenCalledTimes(1);
+    expect(TestBed.inject(TenantEntitlementsService).ensureLoaded).toHaveBeenCalled();       // the platform level loads with it (fail-closed until it answers)
     await svc.refresh();
     expect(office.settings).toHaveBeenCalledTimes(2);
     svc.reset();
