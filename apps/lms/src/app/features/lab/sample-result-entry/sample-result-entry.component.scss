@@ -536,10 +536,14 @@
 
 
 /* Outsourced lines (old shared tubes): read-only, neutral chip. */
-.pf-sre__out-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; }
+.pf-sre__outsourced > .pf-card__head { border-radius: var(--pf-radius-card) var(--pf-radius-card) 0 0; }
+.pf-sre__outsourced .pf-sre-card__body { padding: 0 16px 14px !important; }
+.pf-sre__out-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 48px; padding: 8px 0; border-bottom: 1px solid var(--pf-line); }
 .pf-sre__out-name { font-size: 13px; font-weight: 500; color: var(--text-primary); min-width: 0; }
 .pf-sre__out-chip { height: 26px; }
-.pf-sre__out-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
+.pf-sre__out-note { display: flex; align-items: flex-start; gap: 9px; margin-top: 12px; padding: 11px 12px; border-radius: var(--pf-radius-sm, 10px); background: var(--pf-chip-bg); }
+.pf-sre__out-note svg { flex: none; margin-top: 1px; color: var(--text-tertiary); }
+.pf-sre__out-hint { margin: 0; max-width: 780px; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
 
 /* Order priority: an Urgent order is flagged in the context bar (muted red,
    like the desk's Urgent toggle). Normal shows nothing. TAT is not a priority. */
