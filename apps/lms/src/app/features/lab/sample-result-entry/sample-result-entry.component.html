@@ -10,7 +10,8 @@
   <input type="file" #attachInput hidden multiple accept="image/*,video/*"
          (change)="onAttachPicked($event)" />
 
-  <pf-hero-band class="pf-sre-band" [customSearch]="true" [back]="true">
+  <pf-hero-band class="pf-sre-band" [customSearch]="true" [back]="true"
+                [backTo]="validateMode() ? '/pathologist' : null">
     <!-- Actions, top-right like every band page. ONE primary. -->
     <ng-container band-actions>
       @if (sample() && !viewOnly()) {
