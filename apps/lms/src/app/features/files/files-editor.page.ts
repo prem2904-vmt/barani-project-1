@@ -48,6 +48,7 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
       <pf-hero-band [back]="true" [backAction]="closeFn" [slim]="true">
         <div band-center class="nr-center">
           @if (session(); as s) {
+            @if (phone()) { <!-- a phone has no room for the name beside the lab's name: it sits in the row under the band --> } @else {
             @if (!phone()) { <pf-files-logo [app]="app().id" [size]="22" /> }
             @if (renaming()) {
               <input class="nr-name-input" type="text" [value]="s.file.name" maxlength="120" aria-label="File name" data-testid="files-name-input"
@@ -71,6 +72,7 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
               </span>
             }
             @if (!phone()) { <ng-container *ngTemplateOutlet="chipsTpl" /> }
+            }
           }
         </div>
         <ng-container band-actions>
@@ -101,7 +103,7 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
         </ng-container>
       </pf-hero-band>
 
-      @if (phone() && session()) { <div class="nr-meta" data-testid="files-meta"><ng-container *ngTemplateOutlet="chipsTpl" /></div> }
+      @if (phone() && session()) { <div class="nr-meta" data-testid="files-meta"><span class="nr-fname" data-testid="files-name-phone">{{ session()!.file.name }}</span><ng-container *ngTemplateOutlet="chipsTpl" /></div> }
       @if (unavailable(); as u) {
         <div class="pf-empty nr-over nr-over--flow" role="alert" data-testid="files-unavailable">
           <p class="pf-empty__title">{{ u.title }}</p>
@@ -222,6 +224,7 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
     .nr-chip--phi:focus-visible { outline: 2px solid var(--violet-500, #7c3aed); outline-offset: 1px; }
     @media (max-width: 640px) { .nr-chip__t { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; } .nr-name { max-width: 40vw; } }
     @media (max-width: 640px) { .nr-bt { display: none; } }
+    .nr-fname { flex: 1 1 100%; font-size: 15px; font-weight: 700; color: var(--text-primary); overflow-wrap: anywhere; }
     .nr-meta { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 16px 0; }
     .nr-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--card-bg, #fff); border-top: 1px solid var(--card-border, rgba(0,0,0,.08)); }
     .nr-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--card-bg, #fff); }
