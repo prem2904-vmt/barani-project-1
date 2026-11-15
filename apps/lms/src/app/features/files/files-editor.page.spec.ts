@@ -28,7 +28,7 @@ const dto = (over: Record<string, unknown> = {}) => ({ id: 'f1', name: 'Budget.x
 @Component({ selector: 'pf-hero-band', standalone: true, template: '<ng-content></ng-content><ng-content select="[band-center]"></ng-content><ng-content select="[band-search]"></ng-content><ng-content select="[band-actions]"></ng-content>' })
 class HeroStub { }
 
-interface Opts { engine?: boolean; kind?: string; id?: string; phone?: boolean; full?: boolean; canRead?: boolean; canWrite?: boolean; request?: SheetOpenRequest | null; list?: unknown[]; perms?: string[]; fromScreen?: boolean }
+interface Opts { place?: 'lab' | 'device' | null; engine?: boolean; kind?: string; id?: string; phone?: boolean; full?: boolean; canRead?: boolean; canWrite?: boolean; request?: SheetOpenRequest | null; list?: unknown[]; perms?: string[]; fromScreen?: boolean }
 
 function make(o: Opts = {}) {
   const kind = o.kind ?? 'sheet';
@@ -39,9 +39,9 @@ function make(o: Opts = {}) {
     list: vi.fn(async () => o.list ?? [dto({ containsPhi: true, phiSources: [{ source: 'results', at: '2026-11-15T05:00:00Z', byName: 'Lakshmi Admin' }] })]),
     content: vi.fn(async () => ({ bytes: PK.slice(0), version: '2' })),
     resultsWorkbook: vi.fn(async () => ({ bytes: PK.slice(0), truncated: false, fileName: 'Glucose.xlsx' as string | null, rowCount: 12 as number | null })),
-    rename: vi.fn(async () => dto()), deviceExport: vi.fn(async () => undefined),
+    rename: vi.fn(async () => dto()), deviceExport: vi.fn(async () => undefined), markPhi: vi.fn(async (_id: string, _s: string) => dto({ containsPhi: true, phiSources: [{ source: 'patient', at: '2026-11-15T05:00:00Z' }] })),
   };
-  const dialog = { confirm: vi.fn(async (_r?: unknown) => true), alert: vi.fn(async (_r?: unknown) => undefined), prompt: vi.fn(async () => null), actions: vi.fn(async () => ({ action: null, checked: false })) };
+  const dialog = { confirm: vi.fn(async (_r?: unknown) => true), alert: vi.fn(async (_r?: unknown) => undefined), prompt: vi.fn(async () => null), actions: vi.fn(async (_r?: unknown) => ({ action: (o.place ?? null) as string | null, checked: false })) };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const saver = { store: vi.fn(async (..._a: unknown[]): Promise<any> => ({ kind: 'saved', file: dto({ version: 3 }) })) };
   const toast = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
@@ -53,7 +53,7 @@ function make(o: Opts = {}) {
   };
   const device = {
     open: vi.fn(async () => ({ target: { kind: 'device', name: 'Mine.xlsx', token: 't1' }, name: 'Mine.xlsx', bytes: PK.slice(0) })),
-    save: vi.fn(async (_app: unknown, name: string, _b: unknown, target: { kind: string } | null) => ({ target: target?.kind === 'device' ? target : { kind: 'device', name }, name, inPlace: target?.kind === 'device' })),
+    save: vi.fn(async (_app: unknown, name: string, _b: unknown, target: { kind: string } | null, _saveAs?: boolean) => ({ target: target?.kind === 'device' ? target : { kind: 'device', name }, name, inPlace: target?.kind === 'device' })),
     canSaveInPlace: (t: { kind: string; token?: string } | null) => !!t && t.kind === 'device' && !!t.token, client: () => 'web' as const,
   };
   TestBed.configureTestingModule({
@@ -102,12 +102,14 @@ describe('Files editor: access', () => {
     expect(el.querySelector('iframe')).toBeNull();
   });
 
-  it('a blank new file opens for someone who may write: Save, the where-chip with the lab name, no View only chip', async () => {
+  it('a blank new file opens for someone who may write: Save, no "where" chip for a lab file, no View only chip, no device buttons in the band', async () => {
     const { settle, t, el, page } = make();
     await settle();
     expect(el.querySelector('iframe')).toBeTruthy();
     expect(t('files-save')).toBeTruthy();
-    expect(t('files-where')?.textContent).toContain('Micro World');
+    expect(t('files-where')).toBeNull();
+    expect(t('files-device-open')).toBeNull();
+    expect(t('files-device-save')).toBeNull();
     expect(t('files-viewonly-chip')).toBeNull();
     expect(page.app().id).toBe('neuron');
   });
@@ -132,7 +134,7 @@ describe('Files editor: access', () => {
     expect(t('neuron-insert')).toBeNull();
     expect(page.canRename()).toBe(false);
     expect(page.saveState()).toBe('Saved');
-    expect(t('files-device-save')?.textContent?.trim()).toBe('Save a copy');
+    expect(t('files-device-save')).toBeNull();                 // the device is a place in the File screen, not a band button
   });
 
   it('View only with nothing to open leaves for the Files list instead of showing an empty editor', async () => {
@@ -292,13 +294,112 @@ describe('Files editor: this device', () => {
     expect(el.querySelector('iframe')).toBeTruthy();                      // the blank file that was already open stays
   });
 
-  it('the engine asking to Open / Save As through the bridge reaches the same device code', async () => {
-    const { page, settle, bridge, device } = make();
+  it('the engine\'s File → Open asks "Prefrontal · lab or This device": the device choice opens the picker, the lab choice goes to the Files list for this app', async () => {
+    const dev = make({ place: 'device' });
+    await dev.settle();
+    dev.bridge.onRequest('open');
+    await dev.settle();
+    expect(dev.dialog.actions).toHaveBeenCalled();
+    const acts = (dev.dialog.actions.mock.calls[0][0] as { actions: { value: string; label: string }[] }).actions;
+    expect(acts.map(a => a.label)).toEqual(['Prefrontal · Micro World', 'This device']);
+    expect(dev.device.open).toHaveBeenCalled();
+    expect(dev.page.session().target).toMatchObject({ kind: 'device', token: 't1' });
+    TestBed.resetTestingModule();
+    const lab = make({ place: 'lab' });
+    await lab.settle();
+    const nav = vi.spyOn((lab.page as { router: { navigateByUrl: (u: string) => Promise<boolean> } }).router, 'navigateByUrl').mockResolvedValue(true);
+    lab.bridge.onRequest('open');
+    await lab.settle();
+    expect(nav).toHaveBeenCalledWith('/files?type=sheet');
+    expect(lab.device.open).not.toHaveBeenCalled();
+  });
+
+  it('Save As asked by the engine: the person picks the place FIRST, the engine is told to go on (saveAsTo), and its save then goes exactly there', async () => {
+    const { page, settle, bridge, device, saver, office, fromFrame } = make({ id: 'f1', place: 'device' });
     await settle();
-    bridge.onRequest('open');
+    fromFrame({ type: 'neuron:ready' });
+    const to = vi.spyOn(bridge, 'saveAsTo').mockReturnValue(true);
+    bridge.onRequest('saveAs', 'Copy of Budget.xlsx');
     await settle();
-    expect(device.open).toHaveBeenCalled();
-    expect(page.session().target).toMatchObject({ kind: 'device', token: 't1' });
+    expect(to).toHaveBeenCalledWith('Copy of Budget.xlsx');
+    fromFrame({ type: 'neuron:save', name: 'Copy of Budget.xlsx', saveAs: true, bytes: PK.slice(0) });
+    await settle();
+    expect(office.deviceExport).toHaveBeenCalledWith('f1', 'web');          // a lab file leaving for the device asks the server first
+    expect(device.save).toHaveBeenCalledTimes(1);
+    expect(saver.store).not.toHaveBeenCalled();
+    void page;
+  });
+
+  it('Save As to the lab makes a NEW lab file that names its original (so a flagged original flags the copy); a cancelled choice saves nothing', async () => {
+    const lab = make({ id: 'f1', place: 'lab' });
+    await lab.settle();
+    lab.fromFrame({ type: 'neuron:ready' });
+    lab.fromFrame({ type: 'neuron:save', name: 'Budget v2.xlsx', saveAs: true, bytes: PK.slice(0) });      // an engine without saveAsRequest: asked at save time
+    await lab.settle();
+    expect(lab.dialog.actions).toHaveBeenCalled();
+    expect(lab.saver.store.mock.calls[0][0]).toMatchObject({ id: null, name: 'Budget v2.xlsx', copyOf: 'f1' });
+    TestBed.resetTestingModule();
+    const none = make({ id: 'f1', place: null });
+    await none.settle();
+    none.fromFrame({ type: 'neuron:ready' });
+    none.fromFrame({ type: 'neuron:save', name: 'X.xlsx', saveAs: true, bytes: PK.slice(0) });
+    await none.settle();
+    expect(none.saver.store).not.toHaveBeenCalled();
+    expect(none.device.save).not.toHaveBeenCalled();
+  });
+
+  it('a plain Save (same name) goes to the lab in place; an export or copy under another name (Myelin: extract, split, redacted copy) goes to the device as a copy', async () => {
+    const { settle, saver, device, fromFrame, office } = make({ id: 'f1' });
+    await settle();
+    fromFrame({ type: 'neuron:ready' });
+    fromFrame({ type: 'neuron:save', name: 'Budget.xlsx', saveAs: false, bytes: PK.slice(0) });
+    await settle();
+    expect(saver.store).toHaveBeenCalledTimes(1);
+    expect(saver.store.mock.calls[0][0]).toMatchObject({ id: 'f1' });
+    fromFrame({ type: 'neuron:save', name: 'Budget (pages 1-2).xlsx', saveAs: false, bytes: PK.slice(0) });
+    await settle();
+    expect(saver.store).toHaveBeenCalledTimes(1);
+    expect(office.deviceExport).toHaveBeenCalledWith('f1', 'web');
+    expect(device.save).toHaveBeenCalledTimes(1);
+    expect(device.save.mock.calls[0][4]).toBe(true);                         // a copy: Save As, never in place
+  });
+
+  it('Neuron (no saveAs in its messages) keeps saving in place', async () => {
+    const { settle, saver, fromFrame } = make({ id: 'f1' });
+    await settle();
+    fromFrame({ type: 'neuron:ready' });
+    fromFrame({ type: 'neuron:save', name: 'Budget.xlsx', bytes: PK.slice(0) });
+    await settle();
+    expect(saver.store).toHaveBeenCalledTimes(1);
+  });
+
+  it('the engine reporting patient data flags a stored file at once (sticky), an unsaved one with its first save, and a device file never', async () => {
+    const stored = make({ id: 'f1', list: [dto()] });
+    await stored.settle();
+    expect(stored.t('files-phi-chip')).toBeNull();
+    stored.bridge.onPhi('phi');
+    await stored.settle();
+    expect(stored.office.markPhi).toHaveBeenCalledWith('f1', 'patient');
+    stored.bridge.onPhi('paste');
+    await stored.settle();
+    expect(stored.office.markPhi).toHaveBeenLastCalledWith('f1', 'copy');
+    TestBed.resetTestingModule();
+    const fresh = make();
+    await fresh.settle();
+    fresh.bridge.onPhi('paste');
+    await fresh.settle();
+    expect(fresh.office.markPhi).not.toHaveBeenCalled();
+    expect(fresh.page.session().pendingPhi).toBe('copy');
+    expect(fresh.t('files-phi-chip')).toBeTruthy();
+    TestBed.resetTestingModule();
+    const dev = make();
+    await dev.settle();
+    await dev.page.openFromDevice();
+    await dev.settle();
+    dev.bridge.onPhi('phi');
+    await dev.settle();
+    expect(dev.office.markPhi).not.toHaveBeenCalled();
+    expect(dev.t('files-phi-chip')).toBeNull();
   });
 });
 
@@ -348,5 +449,59 @@ describe('Files editor: saving to the lab', () => {
     fromFrame({ type: 'neuron:ready' });
     expect(run).toHaveBeenCalledWith('file.new', { sample: 'qc' });
     expect(page.session().file.id).toBeNull();
+  });
+});
+
+describe('Files editor: comments', () => {
+  const commentList = [dto({ sharedAccess: 'comment', commentCount: 2 })];
+
+  it('a "Can comment" share opens read-only, says so, tells the engine comments are allowed, and has no Save', async () => {
+    const { settle, t, el, bridge, page } = make({ id: 'f1', list: commentList, canWrite: false });
+    await settle();
+    expect(t('files-comment-chip')?.textContent?.trim()).toBe('Can comment');
+    expect(t('files-save')).toBeNull();
+    expect((el.querySelector('iframe') as HTMLIFrameElement).src).toContain('readonly=1');
+    expect(bridge.canComment).toBe(true);
+    expect(page.canWrite()).toBe(false);
+  });
+
+  it('a comment-only save from the engine goes back to the lab file in place (with the open-comment count); a save that is not comment-only is a device copy', async () => {
+    const { settle, saver, device, office, fromFrame } = make({ id: 'f1', list: commentList, canWrite: false });
+    await settle();
+    fromFrame({ type: 'neuron:ready' });
+    fromFrame({ type: 'neuron:comments', count: 4, open: 3 });
+    fromFrame({ type: 'neuron:save', name: 'Budget.xlsx', saveAs: false, commentOnly: true, bytes: PK.slice(0) });
+    await settle();
+    expect(saver.store).toHaveBeenCalledTimes(1);
+    expect(saver.store.mock.calls[0][0]).toMatchObject({ id: 'f1' });
+    expect(saver.store.mock.calls[0][4]).toEqual({ commentOnly: true, commentCount: 3 });
+    expect(device.save).not.toHaveBeenCalled();
+    fromFrame({ type: 'neuron:save', name: 'Budget.xlsx', saveAs: false, bytes: PK.slice(0) });
+    await settle();
+    expect(saver.store).toHaveBeenCalledTimes(1);
+    expect(office.deviceExport).toHaveBeenCalledTimes(1);
+    expect(device.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('a lab that is View only has no comments: even a comment-only save is only a device copy, and the engine is not told to take comments', async () => {
+    const { settle, saver, bridge, device, fromFrame } = make({ id: 'f1', list: commentList, canWrite: false, full: false });
+    await settle();
+    expect(bridge.canComment).toBe(false);
+    fromFrame({ type: 'neuron:ready' });
+    fromFrame({ type: 'neuron:save', name: 'Budget.xlsx', saveAs: false, commentOnly: true, bytes: PK.slice(0) });
+    await settle();
+    expect(saver.store).not.toHaveBeenCalled();
+    expect(device.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('a writer\'s save carries the engine\'s open-comment count; a file nobody shared has no comment chip', async () => {
+    const { settle, saver, t, fromFrame } = make({ id: 'f1', list: [dto()] });
+    await settle();
+    expect(t('files-comment-chip')).toBeNull();
+    fromFrame({ type: 'neuron:ready' });
+    fromFrame({ type: 'neuron:comments', count: 2, open: 1 });
+    fromFrame({ type: 'neuron:save', name: 'Budget.xlsx', saveAs: false, bytes: PK.slice(0) });
+    await settle();
+    expect(saver.store.mock.calls[0][4]).toEqual({ commentOnly: undefined, commentCount: 1 });
   });
 });

@@ -44,7 +44,7 @@ function make(o: Opts = {}) {
   const access = {
     available: () => true, ensureLoaded: async () => undefined, apps: () => apps, full: () => full, viewOnly: () => !full, phone: () => !!o.phone, compact: () => !!o.phone,
     canWrite: (a: { id: string }) => full && !o.phone && writable.includes(a.id), access: () => ({ trashDays: 14 }),
-    settings: () => ({ hiddenTemplates: ['neuron:stock'], ownTemplates: [{ id: 'o1', kind: 'doc', name: 'Our letter', fileId: 'f9' }] }),
+    settings: () => ({ hiddenTemplates: ['neuron:stock'], ownTemplates: [{ id: 'o1', kind: 'doc', name: 'Our letter', fileId: 'f9' }, ...((o as { sameName?: boolean }).sameName ? [{ id: 'o2', kind: 'doc', name: "Letter on the lab's letterhead", fileId: 'f8' }] : [])] }),
   };
   const qp = new BehaviorSubject(convertToParamMap(o.query ? { type: o.query } : {}));
   TestBed.configureTestingModule({ providers: [
@@ -229,5 +229,41 @@ describe('Files home', () => {
     expect(router.navigateByUrl).toHaveBeenCalledWith('/files/pdf/4');
     await page.open(FILES[4]);
     expect(router.navigateByUrl).toHaveBeenLastCalledWith('/files/image/5');
+  });
+
+  it('a file with open comments shows a speech-bubble badge with the number; the patient-data marker is the readable "Patient data" pill, and the name cell carries the app\'s own mini logo', async () => {
+    const { nameCell } = make();
+    const c = nameCell({ ...FILES[0], commentCount: 3 });
+    const badge = c.querySelector('[data-comments]') as HTMLElement;
+    expect(badge.textContent?.trim()).toBe('3');
+    expect(badge.getAttribute('title')).toBe('3 open comments');
+    expect(nameCell({ ...FILES[1], commentCount: 1 }).querySelector('[data-comments]')?.getAttribute('title')).toBe('1 open comment');
+    expect(nameCell(FILES[1]).querySelector('[data-comments]')).toBeNull();
+    const pill = c.querySelector('[data-phi="true"]') as HTMLElement;
+    expect(pill.textContent).toContain('Patient data');
+    expect(pill.querySelector('svg')).toBeTruthy();
+    expect(c.querySelector('[data-files-logo="neuron"]')).toBeTruthy();
+    expect(nameCell(FILES[2]).querySelector('[data-files-logo="axon"]')).toBeTruthy();
+    expect(nameCell(FILES[3]).querySelector('[data-files-logo="myelin"]')).toBeTruthy();
+  });
+
+  it('"Open from this device" is in the band (computers) and opens the app picked by the extension', async () => {
+    const { t, page, sheets, settle } = make();
+    await settle();
+    expect(t('files-open-device')).toBeTruthy();
+    page.deviceFiles.openAny = vi.fn(async () => ({ app: FILES_APPS[1], name: 'Letter.docx', bytes: new ArrayBuffer(4), target: { kind: 'device', name: 'Letter.docx' } }));
+    await page.openFromDevice();
+    expect(sheets.open).toHaveBeenLastCalledWith(expect.objectContaining({ app: 'synapse', name: 'Letter.docx', target: { kind: 'device', name: 'Letter.docx' } }));
+    page.deviceFiles.openAny = vi.fn(async () => null);
+    await page.openFromDevice();
+    expect(sheets.open).toHaveBeenCalledTimes(1);
+  });
+
+  it('the lab\'s own template with the same name as a built-in one replaces it (one row, not two)', async () => {
+    const { page, settle } = make({ sameName: true } as never);
+    await settle();
+    const names = page.templates().map((x: { name: string }) => x.name);
+    expect(names.filter((n: string) => n === "Letter on the lab's letterhead")).toHaveLength(1);
+    expect(page.templates().find((x: { name: string }) => x.name === "Letter on the lab's letterhead").own).toBeTruthy();
   });
 });

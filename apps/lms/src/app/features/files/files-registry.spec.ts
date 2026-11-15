@@ -95,4 +95,26 @@ describe('Files nav items', () => {
     expect(filesNavItems(acc(true, []) as never)).toEqual([]);
     expect(filesNavItems(acc(true, ["synapse", "retina"]) as never).map(i => i.id)).toEqual(['files', 'files-synapse', 'files-retina']);
   });
+
+  it('each template command uses the names the engines really have (probed on the shipped builds)', () => {
+    const cmds = Object.fromEntries(FILES_APPS.flatMap(a => a.templates.map(t => [t.id, t.cmd!.params])));
+    expect(cmds['synapse:letter']).toEqual({ template: 'letterhead' });
+    expect(cmds['synapse:sop']).toEqual({ template: 'sop' });
+    expect(cmds['axon:case']).toEqual({ template: 'Case presentation' });
+    expect(cmds['axon:review']).toEqual({ template: 'Monthly quality review' });
+    expect(cmds['neuron:qc']).toEqual({ sample: 'qc' });
+  });
+
+  it('Myelin needs control=1; Retina keeps its project files (.pcraft / .retina) as they are, judged by the extension', () => {
+    const [, , , myelin, retina] = FILES_APPS;
+    expect(myelin.frameParams).toEqual({ control: '1' });
+    expect(extensionAllowed(retina, 'Case.pcraft')).toBe(true);
+    expect(extensionAllowed(retina, 'Case.retina')).toBe(true);
+    const junk = u8(123, 34, 108, 97);                                 // not a picture
+    expect(bytesFit(retina, junk)).toBe(false);
+    expect(bytesFit(retina, junk, 'Case.pcraft')).toBe(true);
+    expect(bytesFit(retina, junk, 'Case.png')).toBe(false);
+    expect(bytesFit(retina, new ArrayBuffer(0), 'Case.pcraft')).toBe(false);
+    expect(bytesFit(FILES_APPS[0], junk, 'Case.pcraft')).toBe(false);   // only Retina has project files
+  });
 });

@@ -22,7 +22,7 @@ describe('Neuron save: POST when new, PUT with the version when stored', () => {
   it('a new sheet is POSTed under its current name', async () => {
     const { saver, office } = make();
     const out = await saver.store({ id: null, name: 'Untitled sheet.xlsx', version: null }, file, FILES_APPS[0]);
-    expect(office.create).toHaveBeenCalledWith('Untitled sheet.xlsx', bytes, 'sheet', { phiSource: undefined, copyOf: undefined });
+    expect(office.create).toHaveBeenCalledWith('Untitled sheet.xlsx', bytes, 'sheet', { phiSource: undefined, copyOf: undefined, commentCount: undefined });
     expect(office.update).not.toHaveBeenCalled();
     expect(out).toMatchObject({ kind: 'saved', file: { id: 'new' } });
   });
@@ -30,7 +30,7 @@ describe('Neuron save: POST when new, PUT with the version when stored', () => {
   it('a stored sheet is PUT with its version (the If-Match source)', async () => {
     const { saver, office } = make();
     const out = await saver.store({ id: 'f1', name: 'Budget.xlsx', version: 3 }, file, FILES_APPS[0]);
-    expect(office.update).toHaveBeenCalledWith('f1', 'Budget.xlsx', bytes, 3);
+    expect(office.update).toHaveBeenCalledWith('f1', 'Budget.xlsx', bytes, 3, {});
     expect(office.create).not.toHaveBeenCalled();
     expect(out).toMatchObject({ kind: 'saved', file: { version: 4 } });
   });
@@ -101,24 +101,34 @@ describe('Files save: other apps and the patient-data flag', () => {
   it('a new file of another app is created with ITS kind and extension', async () => {
     const { saver, office } = make();
     await saver.store({ id: null, name: 'Letter', version: null }, { ...file, name: 'Letter' }, FILES_APPS[1]);
-    expect(office.create).toHaveBeenCalledWith('Letter.docx', bytes, 'doc', { phiSource: undefined, copyOf: undefined });
+    expect(office.create).toHaveBeenCalledWith('Letter.docx', bytes, 'doc', { phiSource: undefined, copyOf: undefined, commentCount: undefined });
   });
 
   it('the first save of a file Prefrontal filled with results carries the reason, so the server flags it', async () => {
     const { saver, office } = make();
     await saver.store({ id: null, name: 'Results.xlsx', version: null }, file, FILES_APPS[0], 'results');
-    expect(office.create).toHaveBeenCalledWith('Results.xlsx', bytes, 'sheet', { phiSource: 'results', copyOf: undefined });
+    expect(office.create).toHaveBeenCalledWith('Results.xlsx', bytes, 'sheet', { phiSource: 'results', copyOf: undefined, commentCount: undefined });
   });
 
   it('a file made from a stored one (lab template, Save as) names it, so a flagged original flags the copy', async () => {
     const { saver, office } = make();
     await saver.store({ id: null, name: 'Our letter.docx', version: null, copyOf: 'tpl-1' }, file, FILES_APPS[1]);
-    expect(office.create).toHaveBeenCalledWith('Our letter.docx', bytes, 'doc', { phiSource: undefined, copyOf: 'tpl-1' });
+    expect(office.create).toHaveBeenCalledWith('Our letter.docx', bytes, 'doc', { phiSource: undefined, copyOf: 'tpl-1', commentCount: undefined });
   });
 
   it('a saved PUT never sends the flag (it is sticky on the server and set once)', async () => {
     const { saver, office } = make();
     await saver.store({ id: 'f1', name: 'Budget.xlsx', version: 3 }, file, FILES_APPS[0], 'results');
-    expect(office.update).toHaveBeenCalledWith('f1', 'Budget.xlsx', bytes, 3);
+    expect(office.update).toHaveBeenCalledWith('f1', 'Budget.xlsx', bytes, 3, {});
+  });
+});
+
+describe('Files save: comments', () => {
+  it('the open-comment count and the comment-only flag go with the save', async () => {
+    const { saver, office } = make();
+    await saver.store({ id: 'f1', name: 'Budget.xlsx', version: 3 }, file, FILES_APPS[0], null, { commentOnly: true, commentCount: 2 });
+    expect(office.update).toHaveBeenCalledWith('f1', 'Budget.xlsx', bytes, 3, { commentOnly: true, commentCount: 2 });
+    await saver.store({ id: null, name: 'New.xlsx', version: null }, file, FILES_APPS[0], null, { commentCount: 5 });
+    expect(office.create).toHaveBeenCalledWith('New.xlsx', bytes, 'sheet', { phiSource: undefined, copyOf: undefined, commentCount: 5 });
   });
 });

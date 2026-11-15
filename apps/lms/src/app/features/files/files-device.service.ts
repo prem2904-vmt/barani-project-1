@@ -62,6 +62,40 @@ export class FilesDeviceService {
     return !!t && t.kind === 'device' && (!!t.handle || !!t.token);
   }
 
+  /** "Open from this device" on the Files screen: a file of ANY of the given apps; the app is the one whose extensions include the file's. Null = cancelled. */
+  async openAny(apps: readonly FilesApp[]): Promise<(DeviceOpened & { app: FilesApp }) | null> {
+    if (!apps.length) return null;
+    const exts = apps.flatMap(a => a.exts);
+    const appFor = (name: string): FilesApp => {
+      const a = apps.find(x => x.exts.includes(extOf(name)));
+      if (!a) throw new DeviceFileError(`Only ${[...new Set(exts)].map(e => '.' + e).join(', ')} files can be opened here.`);
+      return a;
+    };
+    try {
+      const mode = this.mode();
+      let name: string; let bytes: ArrayBuffer; let target: FileTarget & { kind: 'device' };
+      if (mode === 'electron') {
+        const r = await this.win.electronAPI!.files!.openLocal('any') as { error?: string; token?: string; name?: string; bytes?: Uint8Array } | null;
+        if (!r) return null;
+        if (r.error) throw new DeviceFileError(r.error);
+        name = r.name!; bytes = toBuffer(r.bytes!); target = { kind: 'device', name, token: r.token };
+      } else if (mode === 'fsa') {
+        const [h] = await this.win.showOpenFilePicker!({ types: apps.map(a => pickerTypes(a)[0]), multiple: false });
+        const f = await h.getFile();
+        name = f.name; bytes = await f.arrayBuffer(); target = { kind: 'device', name, handle: h };
+      } else {
+        const f = await this.chooseFileOf(exts);
+        if (!f) return null;
+        name = f.name; bytes = await f.arrayBuffer(); target = { kind: 'device', name };
+      }
+      const app = appFor(name);
+      return { ...this.accept(app, target, name, bytes), app };
+    } catch (e) {
+      if (isAbort(e)) return null;
+      throw e;
+    }
+  }
+
   /** The person's own "Open from this device". Null = cancelled. Throws {@link DeviceFileError} with plain words. */
   async open(app: FilesApp): Promise<DeviceOpened | null> {
     const mode = this.mode();
@@ -95,7 +129,7 @@ export class FilesDeviceService {
     const bad = checkDeviceFile(app, name, bytes.byteLength);
     if (bad) throw new DeviceFileError(bad);
     // The extension can lie: the bytes must look like the app's type too (the engine would show an error screen otherwise).
-    if (!bytesFit(app, bytes)) throw new DeviceFileError(`That file isn't ${/^[aeiou]/i.test(app.noun) ? 'an' : 'a'} ${app.noun} ${app.name} can open.`);
+    if (!bytesFit(app, bytes, name)) throw new DeviceFileError(`That file isn't ${/^[aeiou]/i.test(app.noun) ? 'an' : 'a'} ${app.noun} ${app.name} can open.`);
     return { target, name, bytes };
   }
 
@@ -131,13 +165,14 @@ export class FilesDeviceService {
   }
 
   /** A file chooser opened by our own button (the browsers without a picker API). */
-  private chooseFile(app: FilesApp): Promise<File | null> {
+  private chooseFile(app: FilesApp): Promise<File | null> { return this.chooseFileOf(app.exts); }
+  private chooseFileOf(exts: readonly string[]): Promise<File | null> {
     const d = this.doc;
     if (!d) return Promise.resolve(null);
     return new Promise(resolve => {
       const input = d.createElement('input');
       input.type = 'file';
-      input.accept = app.exts.map(e => `.${e}`).join(',');
+      input.accept = exts.map(e => `.${e}`).join(',');
       input.style.display = 'none';
       let done = false;
       const finish = (f: File | null) => { if (done) return; done = true; input.remove(); resolve(f); };

@@ -34,10 +34,10 @@ export class FilesSaver {
   private readonly dialog = inject(DialogService);
 
   /** `app` decides the kind and extension; `phi` = the reason this file holds patient data (results inserted…), sent with the FIRST save. */
-  async store(cur: StoredRef, f: SavedFile, app: FilesApp, phi?: string | null): Promise<SaveOutcome> {
+  async store(cur: StoredRef, f: SavedFile, app: FilesApp, phi?: string | null, comments?: { commentOnly?: boolean; commentCount?: number }): Promise<SaveOutcome> {
     try {
-      if (cur.id === null || cur.version === null) return { kind: 'saved', file: await this.office.create(withAppExtension(app, cur.name), f.bytes, app.kind, { phiSource: phi ?? undefined, copyOf: cur.copyOf ?? undefined }) };
-      return { kind: 'saved', file: await this.office.update(cur.id, cur.name, f.bytes, cur.version) };
+      if (cur.id === null || cur.version === null) return { kind: 'saved', file: await this.office.create(withAppExtension(app, cur.name), f.bytes, app.kind, { phiSource: phi ?? undefined, copyOf: cur.copyOf ?? undefined, commentCount: comments?.commentCount }) };
+      return { kind: 'saved', file: await this.office.update(cur.id, cur.name, f.bytes, cur.version, comments ?? {}) };
     } catch (e) {
       if (e instanceof OfficeConflictError) return this.resolveConflict(cur, f, app);
       return { kind: 'failed', message: toApiError(e).message };

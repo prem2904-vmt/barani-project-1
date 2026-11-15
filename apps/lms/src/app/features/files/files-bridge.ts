@@ -45,7 +45,8 @@ export function routeSaved(bytes: ArrayBuffer | ArrayBufferView, app: FilesApp =
   if (bytesFit(app, bytes)) return 'file';
   return sniff(bytes) === 'pdf' ? 'pdf' : 'copy';
 }
-export interface SavedFile { name: string; bytes: ArrayBuffer; kind: SavedKind; }
+/** `saveAs` is the engine's own word (Synapse, Axon, Myelin): true = the file becomes the document's file under a new name (File → Save As), false = Save or an export / copy. Neuron does not send it (undefined). */
+export interface SavedFile { name: string; bytes: ArrayBuffer; kind: SavedKind; saveAs?: boolean; /** The engine says this save changed only comments (what a "Can comment" share may save). */ commentOnly?: boolean }
 
 /** The message data of an event we accept — or null. Source must be the frame's window, origin must be ours, name must carry the app's prefix. */
 export function acceptedMessage(
@@ -67,12 +68,14 @@ export const FRAME_CHROME: 'none' | 'minimal' | 'notitlebar' = 'notitlebar';
 
 /** The iframe URL: `<base>/<app.enginePath>index.html?host=parent&chrome=<FRAME_CHROME>&author=<name>&theme=<light|dark|system>[&readonly=1]`. */
 export function filesFrameUrl(app: FilesApp, baseUri: string, author: string, theme: FilesTheme = 'system', readonly = false): string {
+  // `frameParams`: what an engine needs beyond the common ones (Myelin: control=1 installs window.myelin).
   const u = new URL(`${app.enginePath}index.html`, baseUri);
   u.searchParams.set('host', 'parent');
   u.searchParams.set('chrome', FRAME_CHROME);
   u.searchParams.set('author', author);
   u.searchParams.set('theme', theme);
   if (readonly) u.searchParams.set('readonly', '1');
+  for (const [k, v] of Object.entries(app.frameParams ?? {})) u.searchParams.set(k, v);
   return u.toString();
 }
 
@@ -113,11 +116,19 @@ export class FilesBridge {
   readonly openProblem = signal<string | null>(null);
   /** Sent to the app as soon as it is ready (the URL also carries it). */
   readonly: boolean | null = null;
+  /** Sent with `ready` (and whenever it changes): a read-only document that still takes comments. */
+  canComment = false;
 
   /** Called with every file the app hands over (Save → the app's own format, Export as PDF → pdf). */
   onSave: (f: SavedFile) => void = () => undefined;
   /** The engine's File → Open / Save As asks to use the device (`<prefix>openRequest` / `<prefix>saveAsRequest`): the page shows its own choice. */
-  onRequest: (r: 'open' | 'saveAs') => void = () => undefined;
+  onRequest: (r: 'open' | 'saveAs', name?: string) => void = () => undefined;
+  /** The engine reports its comments (`<prefix>comments {count, open}`): the open count is what the Files list shows. */
+  onComments: (c: { count: number; open: number }) => void = () => undefined;
+  /** The engine reports that patient data is in the document (`<prefix>phi {flag}`) or was pasted from a flagged file (`<prefix>phiPaste`). Sticky: only `true` / paste count. */
+  onPhi: (kind: 'phi' | 'paste') => void = () => undefined;
+  /** True once the engine has sent any of its own File → Open / Save As requests: the page then knows it need not offer its own buttons. */
+  readonly engineRoutesFiles = signal(false);
 
   private frame: HTMLIFrameElement | null = null;
   private pending: { name: string; bytes: ArrayBuffer; then: EngineCommand[] } | null = null;
@@ -166,6 +177,9 @@ export class FilesBridge {
     w.postMessage({ type: this.msg.theme, theme }, this.ownOrigin);
   }
 
+  /** Tell the engine whether this person may add comments while the document is read-only (`<prefix>canComment {allow}`: "Can comment" shares). */
+  setCanComment(allow: boolean): void { this.canComment = allow; this.post({ type: `${this.app.prefix}canComment`, allow }); }
+
   /** View-only for a role that cannot save. */
   setReadonly(readonly: boolean): void { this.post({ type: this.msg.readonly, readonly }); }
   private post(m: Record<string, unknown>): void {
@@ -197,6 +211,13 @@ export class FilesBridge {
   whenReady(fn: () => void): void { if (this.state() === 'ready') fn(); else this.readyWaiters.push(fn); }
   /** One engine command by name (a template's `file.new`). False if the app isn't up. */
   runCommand(cmd: string, params: Record<string, unknown> = {}): boolean { return this.run(cmd, params); }
+  /** After the person chose where Save As goes: tell the engine to carry on (`<prefix>saveAsTo {name}`); it then answers with a save message (saveAs: true). */
+  saveAsTo(name: string): boolean {
+    const w = this.frame?.contentWindow;
+    if (!w || this.state() !== 'ready') return false;
+    w.postMessage({ type: `${this.app.prefix}saveAsTo`, name }, this.ownOrigin);
+    return true;
+  }
   /** Ask the app to save (it answers with a save message). False if it isn't ready. */
   save(): boolean { return this.run('file.save'); }
   exportPdf(): boolean { return this.run('file.exportPdf'); }
@@ -254,14 +275,28 @@ export class FilesBridge {
       case msg.ready:
         this.state.set('ready');
         if (this.readonly !== null) this.setReadonly(this.readonly);
+        if (this.canComment) this.setCanComment(true);
         this.flush();
         { const w = this.readyWaiters; this.readyWaiters = []; for (const fn of w) fn(); }
         break;
       case `${this.app.prefix}openRequest`:
+        this.engineRoutesFiles.set(true);
         this.onRequest('open');
         break;
       case `${this.app.prefix}saveAsRequest`:
-        this.onRequest('saveAs');
+        this.engineRoutesFiles.set(true);
+        this.onRequest('saveAs', typeof m['name'] === 'string' ? (m['name'] as string) : undefined);
+        break;
+      case `${this.app.prefix}comments`: {
+        const count = Number(m['count']), open = Number(m['open']);
+        this.onComments({ count: Number.isFinite(count) ? Math.max(0, count) : 0, open: Number.isFinite(open) ? Math.max(0, open) : 0 });
+        break;
+      }
+      case `${this.app.prefix}phi`:
+        if (m['flag'] === true) this.onPhi('phi');
+        break;
+      case `${this.app.prefix}phiPaste`:
+        this.onPhi('paste');
         break;
       case msg.dirty:
         this.dirty.set(m['dirty'] === true);
@@ -279,7 +314,7 @@ export class FilesBridge {
         const src = isArrayBuffer(bytes) ? new Uint8Array(bytes) : new Uint8Array((bytes as ArrayBufferView).buffer, (bytes as ArrayBufferView).byteOffset, (bytes as ArrayBufferView).byteLength);
         const buf = src.slice().buffer as ArrayBuffer;
         const kind = routeSaved(buf, this.app);
-        this.onSave({ name, bytes: buf, kind });
+        this.onSave({ name, bytes: buf, kind, saveAs: typeof m['saveAs'] === 'boolean' ? (m['saveAs'] as boolean) : undefined, commentOnly: m['commentOnly'] === true ? true : undefined });
         break;
       }
     }

@@ -15,6 +15,7 @@ import { FilesAccessService } from './files-access.service';
 import { FilesDeviceService } from './files-device.service';
 import { FILES_APPS, FILES_NAME, FilesApp, filesAppForKind, withAppExtension } from './files-registry';
 import { OfficeFile, OfficeOwnTemplate, OfficeService, toApiError } from './office.service';
+import { logoSvg, phiPillHtml } from './files-logo-svg';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -47,6 +48,12 @@ type Tab = 'all' | 'trash' | string;
         <ng-container band-actions>
           @if (viewOnly()) {
             <span class="fh-chip" data-testid="files-viewonly-chip" title="Your organization can open and copy files here, not change them">View only</span>
+          }
+          @if (!phone()) {
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-open-device" aria-label="Open from this device" title="Open from this device" (click)="openFromDevice()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+              <span class="fh-bt">Open from this device</span>
+            </button>
           }
           @for (a of secondaryNew(); track a.id) {
             <button type="button" class="pf-hb-btn pf-hb-btn--ghost press fh-new-sec" [attr.data-testid]="'files-new-' + a.id" (click)="newFile(a)">{{ a.newLabel }}</button>
@@ -120,6 +127,7 @@ type Tab = 'all' | 'trash' | string;
     .fh-tpl:hover { background: color-mix(in srgb, var(--violet-500, #7c3aed) 7%, transparent); }
     .fh-tpl:focus-visible { outline: 2px solid var(--violet-500, #7c3aed); outline-offset: 1px; }
     .fh-tpl__t { overflow-wrap: anywhere; }
+    @media (max-width: 1100px) { .fh-bt { display: none; } }
     @media (max-width: 640px) { .fh-new-sec { display: none; } .fh-tabs { overflow-x: auto; max-width: 100%; } }
   `],
 })
@@ -145,6 +153,7 @@ export class FilesHomePage {
   protected readonly error = signal<string | null>(null);
 
   protected readonly viewOnly = this.access.viewOnly;
+  protected readonly phone = this.access.phone;
   protected readonly trashDays = computed(() => this.access.access()?.trashDays ?? 30);
   /** Apps this person may open (Settings → Files switches, role, sign-in). */
   private readonly apps = this.access.apps;
@@ -179,7 +188,11 @@ export class FilesHomePage {
     for (const a of this.writable()) for (const t of a.templates) if (!hidden.has(t.id)) out.push({ id: t.id, name: t.name, app: a, cmd: t.cmd });
     for (const o of this.access.settings()?.ownTemplates ?? []) {
       const a = filesAppForKind(o.kind);
-      if (a && this.writable().includes(a)) out.push({ id: 'own:' + o.id, name: o.name, app: a, own: o });
+      if (!a || !this.writable().includes(a)) continue;
+      // The lab's own template of the same name replaces the built-in one (never two rows with one name).
+      const same = out.findIndex(x => x.app.id === a.id && !x.own && x.name.trim().toLowerCase() === o.name.trim().toLowerCase());
+      if (same >= 0) out.splice(same, 1);
+      if (!out.some(x => x.own && x.app.id === a.id && x.name.trim().toLowerCase() === o.name.trim().toLowerCase())) out.push({ id: 'own:' + o.id, name: o.name, app: a, own: o });
     }
     return out;
   });
@@ -196,37 +209,38 @@ export class FilesHomePage {
     const trash = this.tab() === 'trash';
     const canChange = (f: OfficeFile) => { const a = filesAppForKind(f.kind); return !!a && this.access.canWrite(a); };
     void canChange;
-    const actionsW = phone ? 130 : trash ? 120 : this.access.full() ? 320 : 180;
+    const actionsW = phone ? 130 : trash ? 120 : this.access.full() ? 262 : 150;
+    void this.theme.isDark();                       // the name cell's logo and pill follow the theme
     return [
-      { field: 'name', headerName: 'Name', flex: 3, minWidth: 180, wrapText: true, autoHeight: true, cellClass: 'fh-cell-name', cellRenderer: this.nameRenderer },
-      { field: 'updatedAt', headerName: trash ? 'Deleted' : 'Last saved', flex: 1, minWidth: 150, hide: phone, valueGetter: p => (trash ? p.data?.deletedAt ?? p.data?.updatedAt : p.data?.updatedAt), valueFormatter: p => formatWhen(p.value) },
-      { field: 'updatedByName', headerName: 'Saved by', flex: 1, minWidth: 130, hide: compact, valueFormatter: p => p.value || '' },
-      { field: 'sizeBytes', headerName: 'Size', width: 100, hide: compact, type: 'numericColumn', valueFormatter: p => formatSize(p.value) },
+      { field: 'name', headerName: 'Name', flex: 1, minWidth: 200, wrapText: true, autoHeight: true, cellClass: 'fh-cell-name', cellRenderer: this.nameRenderer },
+      { field: 'updatedAt', headerName: trash ? 'Deleted' : 'Last saved', width: 158, hide: phone, valueGetter: p => (trash ? p.data?.deletedAt ?? p.data?.updatedAt : p.data?.updatedAt), valueFormatter: p => formatWhen(p.value) },
+      { field: 'updatedByName', headerName: 'Saved by', width: 124, hide: compact, valueFormatter: p => p.value || '' },
+      { field: 'sizeBytes', headerName: 'Size', width: 82, hide: compact, type: 'numericColumn', valueFormatter: p => formatSize(p.value) },
       { colId: 'actions', headerName: '', sortable: false, resizable: false, width: actionsW, pinned: 'right', cellRenderer: this.actionsRenderer },
     ];
   });
 
   private readonly nameRenderer = (p: ICellRendererParams<OfficeFile>): HTMLElement => {
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:flex-start;gap:8px;line-height:1.35;padding:6px 0;white-space:normal;overflow-wrap:anywhere';
+    wrap.style.cssText = 'display:flex;align-items:flex-start;gap:9px;line-height:1.35;padding:7px 0;white-space:normal;overflow-wrap:anywhere';
     const a = p.data ? filesAppForKind(p.data.kind) : undefined;
-    const dot = document.createElement('span');
-    dot.style.cssText = `flex:none;width:10px;height:10px;margin-top:5px;border-radius:3px;background:${a ? (this.theme.isDark() ? a.colorDark : a.color) : '#888'}`;
-    dot.setAttribute('aria-hidden', 'true');
-    dot.setAttribute('data-app', a?.id ?? '');
-    wrap.appendChild(dot);
+    const dark = this.theme.isDark();
+    if (a) { const l = document.createElement('span'); l.style.cssText = 'flex:none;display:inline-flex;margin-top:1px'; l.innerHTML = logoSvg(a, 20, dark); wrap.appendChild(l); }
     const t = document.createElement('span');
+    t.style.cssText = 'flex:1 1 auto;min-width:0';
     t.textContent = p.data?.name ?? '';
     wrap.appendChild(t);
-    if (p.data?.containsPhi) {
-      const sh = document.createElement('span');
-      sh.setAttribute('data-phi', 'true');
-      sh.setAttribute('title', 'Contains patient data. Kept out of outside assistants.');
-      sh.setAttribute('aria-label', 'Contains patient data');
-      sh.style.cssText = 'flex:none;display:inline-flex;margin-top:2px;color:var(--color-primary,#7c3aed)';
-      sh.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 2.9 8.3 7 10 4.1-1.7 7-5.5 7-10V6l-7-3Z"/></svg>';
-      wrap.appendChild(sh);
+    if ((p.data?.commentCount ?? 0) > 0) {
+      const n = p.data!.commentCount!;
+      const b = document.createElement('span');
+      b.setAttribute('data-comments', String(n));
+      b.setAttribute('title', `${n} open ${n === 1 ? 'comment' : 'comments'}`);
+      b.setAttribute('aria-label', `${n} open ${n === 1 ? 'comment' : 'comments'}`);
+      b.style.cssText = 'flex:none;display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:600;line-height:1;color:var(--text-secondary);background:color-mix(in srgb, var(--text-primary) 8%, transparent)';
+      b.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg>${n}`;
+      wrap.appendChild(b);
     }
+    if (p.data?.containsPhi) { const pill = document.createElement('span'); pill.style.cssText = 'flex:none;display:inline-flex'; pill.innerHTML = phiPillHtml(dark); wrap.appendChild(pill); }
     return wrap;
   };
 
@@ -237,7 +251,7 @@ export class FilesHomePage {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'pf-btn pf-btn--tertiary';
-      b.style.padding = '4px 10px';
+      b.style.padding = '4px 8px';
       b.textContent = label;
       b.setAttribute('data-act', label.toLowerCase());
       b.addEventListener('click', ev => { ev.stopPropagation(); if (p.data) fn(p.data); });
@@ -279,6 +293,15 @@ export class FilesHomePage {
 
   protected onGridReady(e: GridReadyEvent<OfficeFile>): void { this.gridApi = e.api; this.gridApi.sizeColumnsToFit?.(); }
   protected onRowClicked(f: OfficeFile | undefined): void { if (f && this.tab() !== 'trash') void this.open(f); }
+
+  /** "Open from this device": any of the apps' files; the app is picked by the file's extension. */
+  protected async openFromDevice(): Promise<void> {
+    try {
+      const o = await this.deviceFiles.openAny(this.apps());
+      if (!o) return;
+      await this.sheets.open({ app: o.app.id, source: FILES_NAME, name: o.name, bytes: o.bytes, target: o.target });
+    } catch (e) { this.toast.error(e instanceof Error ? e.message : 'That file could not be opened.'); }
+  }
 
   protected async open(f: OfficeFile): Promise<void> {
     const a = filesAppForKind(f.kind);

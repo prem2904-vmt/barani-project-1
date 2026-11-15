@@ -18,7 +18,9 @@ const KINDS = {
   doc: { exts: ['docx'], label: 'Document' },
   slides: { exts: ['pptx'], label: 'Slides' },
   pdf: { exts: ['pdf'], label: 'PDF' },
-  image: { exts: ['png', 'jpg', 'jpeg', 'webp'], label: 'Image' },
+  image: { exts: ['png', 'jpg', 'jpeg', 'webp', 'retina', 'pcraft'], label: 'Image' },
+  // "Open from this device" on the Files screen: any of the above; the page picks the app by the extension. Never used for saving.
+  any: { exts: ['xlsx', 'docx', 'pptx', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'retina', 'pcraft'], label: 'Files' },
 };
 const MAX_BYTES = 25 * 1024 * 1024;
 const MAX_NAME = 120;
@@ -73,7 +75,7 @@ function register(getWindow, deps = {}) {
   ipc.handle('files:saveLocal', async (e, arg) => {
     if (!trusted(e)) throw new Error('forbidden');
     const a = arg || {};
-    if (!KINDS[a.kind]) return { error: 'Unknown file type.' };
+    if (!KINDS[a.kind] || a.kind === 'any') return { error: 'Unknown file type.' };
     const badBytes = checkBytes(a.bytes);
     if (badBytes) return { error: badBytes };
     const badName = checkName(a.kind, a.name);

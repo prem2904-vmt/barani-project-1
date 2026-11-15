@@ -4,12 +4,13 @@ import { ToastService } from '../../core/services/toast.service';
 import { PfSelectOption, SelectComponent } from '../../shared/primitives/select.component';
 import { FilesAccessService } from './files-access.service';
 import { filesAppForKind } from './files-registry';
-import { OfficeFile, OfficeService, OfficeShare, OfficeShareList, OfficeShareTarget, toApiError } from './office.service';
+import { OfficeFile, OfficeService, OfficeShare, OfficeShareList, OfficeShareTarget, ShareLevel, toApiError } from './office.service';
 
 /** The file's own in-app address: needs a Prefrontal sign-in AND access to the file. There are no public links. */
 export const shareLink = (origin: string, f: Pick<OfficeFile, 'id' | 'kind'>): string => `${origin}/files/${filesAppForKind(f.kind)?.route ?? f.kind}/${f.id}`;
 
-const ACCESS: PfSelectOption<string>[] = [{ value: 'view', label: 'Can view' }, { value: 'edit', label: 'Can edit' }];
+const ACCESS: PfSelectOption<string>[] = [{ value: 'view', label: 'Can view' }, { value: 'comment', label: 'Can comment' }, { value: 'edit', label: 'Can edit' }];
+export const SHARE_WORDS: Record<string, string> = { view: 'Can view', comment: 'Can comment', edit: 'Can edit' };
 
 /**
  * Share a file with people or roles of the SAME lab: Can view / Can edit, who has access (owner first), remove, copy link (sign-in required).
@@ -59,7 +60,7 @@ const ACCESS: PfSelectOption<string>[] = [{ value: 'view', label: 'Can view' }, 
                   <pf-select class="fsh-acc" [options]="accessOptions()" [value]="s.access" size="sm" [attr.aria-label]="'Access for ' + s.name" (valueChange)="change(s, $event)"></pf-select>
                   <button type="button" class="pf-btn pf-btn--tertiary" [attr.aria-label]="'Remove ' + s.name" data-testid="files-share-remove" (click)="remove(s)">Remove</button>
                 } @else {
-                  <span class="fsh-fixed">{{ s.access === 'edit' ? 'Can edit' : 'Can view' }}</span>
+                  <span class="fsh-fixed">{{ words[s.access] }}</span>
                 }
               </li>
             }
@@ -116,12 +117,14 @@ export class FilesShareDialogComponent {
   protected readonly busy = signal(false);
   protected readonly lab = computed(() => this.auth.user()?.tenantName || 'your lab');
   protected readonly canManage = computed(() => this.list()?.canManage ?? false);
-  /** "Can edit" is offered only when the sharer can edit this app's files themselves (the server checks again). */
+  protected readonly words = SHARE_WORDS;
+  /** "Can edit" is offered only when the sharer can edit this app's files themselves, "Can comment" only on Full Files (a comment is a saved change); the server checks again. */
   protected readonly accessOptions = computed<PfSelectOption<string>[]>(() => {
     const f = this.file();
     const app = f ? filesAppForKind(f.kind) : undefined;
     const canEdit = !!app && this.files.canWrite(app);
-    return ACCESS.map(a => (a.value === 'edit' && !canEdit ? { ...a, disabled: true } : a));
+    const canComment = !!app && this.files.full() && this.files.canRead(app);
+    return ACCESS.map(a => (a.value === 'edit' && !canEdit) || (a.value === 'comment' && !canComment) ? { ...a, disabled: true } : a);
   });
   protected readonly targetOptions = computed<PfSelectOption<string>[]>(() => {
     const have = new Set((this.list()?.shares ?? []).map(s => `${s.principalType}:${s.principalId}`));
@@ -151,7 +154,7 @@ export class FilesShareDialogComponent {
     if (!f || !id || this.busy()) return;
     this.busy.set(true);
     try {
-      await this.office.addShare(f.id, type as 'user' | 'role', id, this.level() as 'view' | 'edit');
+      await this.office.addShare(f.id, type as 'user' | 'role', id, this.level() as ShareLevel);
       this.pick.set('');
       this.list.set(await this.office.shares(f.id));
       this.toast.success('Shared');
@@ -163,7 +166,7 @@ export class FilesShareDialogComponent {
     const f = this.file();
     if (!f || access === s.access) return;
     try {
-      await this.office.addShare(f.id, s.principalType, s.principalId, access as 'view' | 'edit');
+      await this.office.addShare(f.id, s.principalType, s.principalId, access as ShareLevel);
       this.list.set(await this.office.shares(f.id));
     } catch (e) { this.toast.error(toApiError(e).message); this.list.set(await this.office.shares(f.id).catch(() => this.list())); }
   }

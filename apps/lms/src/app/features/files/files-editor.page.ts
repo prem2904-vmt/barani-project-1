@@ -27,7 +27,7 @@ import { FILES_APPS, FilesApp, bytesFit, filesAppForRoute, withAppExtension } fr
 import { OfficeFile, OfficeService, PhiSource, toApiError } from './office.service';
 import { phiLine, phiSourceWords } from './phi-words';
 
-interface Session { key: number; file: StoredRef; target: FileTarget; fromResults: boolean; phi: PhiSource[]; pendingPhi: string | null }
+interface Session { key: number; file: StoredRef; target: FileTarget; fromResults: boolean; phi: PhiSource[]; pendingPhi: string | null; /** How this file reached me when it was shared ("comment" opens it read-only but takes comments). */ shared: string | null; /** Open comments as the engine last reported them (sent with the next save). */ comments: number | null }
 
 /**
  * The Files editor: ONE page that hosts every app's engine (Neuron, Synapse, Axon, Myelin, Retina) in a same-origin iframe, under one slim band.
@@ -87,15 +87,6 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v14"/></svg>
                 <span class="nr-bt">Share</span></button>
             }
-            @if (!phone()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-device-open" aria-label="Open from this device" title="Open from this device" (click)="openFromDevice()">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
-                <span class="nr-bt">Open from this device</span></button>
-            }
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-device-save" [disabled]="!ready()" [attr.aria-label]="phone() || !canWrite() ? 'Save a copy' : 'Save to this device'" [title]="phone() || !canWrite() ? 'Save a copy' : 'Save to this device'" (click)="saveToDevice()">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-              <span class="nr-bt">{{ phone() || !canWrite() ? 'Save a copy' : 'Save to this device' }}</span>
-            </button>
             @if (canWrite()) {
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="files-save" [disabled]="!ready() || saving()" (click)="saveNow()">{{ saving() ? 'Saving…' : 'Save' }}</button>
             }
@@ -151,8 +142,10 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
 
     <ng-template #chipsTpl>
       @if (session(); as s) {
-        <span class="nr-chip" data-testid="files-where" [attr.data-where]="s.target.kind">{{ where() }}</span>
-            @if (viewOnlyLevel()) {
+        @if (s.target.kind === 'device') { <span class="nr-chip" data-testid="files-where" data-where="device">{{ where() }}</span> }
+            @if (s.shared === 'comment' && !canWrite()) {
+              <span class="nr-chip nr-chip--quiet" data-testid="files-comment-chip" title="You can read this file and add comments">Can comment</span>
+            } @else if (viewOnlyLevel()) {
               <span class="nr-chip nr-chip--quiet" data-testid="files-viewonly-chip" title="Your organization can open and copy files here, not change them">View only</span>
             }
             @if (hasPhi()) {
@@ -274,7 +267,8 @@ export class FilesEditorPage {
   private seq = 0;
   private chain: Promise<void> = Promise.resolve();
   /** Where the NEXT save from the engine goes when a band button asked for it ('device'); otherwise where the file lives. */
-  private saveDest: 'file' | 'device' = 'file';
+  /** Where the NEXT save from the engine goes when the person already chose (File → Save As asked through the bridge). */
+  private pendingPlace: 'lab' | 'device' | null = null;
 
   protected readonly phone = this.files.phone;
   protected readonly phoneCanEdit = this.files.phoneCanEdit;
@@ -340,7 +334,9 @@ export class FilesEditorPage {
     inject(DestroyRef).onDestroy(() => this.bridge.destroy());
     this.bridge.configure(this.app());
     this.bridge.onSave = f => { this.chain = this.chain.then(() => this.handleSaved(f)); };
-    this.bridge.onRequest = r => { void (r === 'open' ? this.openFromDevice() : this.saveToDevice(true)); };
+    this.bridge.onRequest = (r, name) => { void (r === 'open' ? this.onOpenRequest() : this.onSaveAsRequest(name)); };
+    this.bridge.onPhi = k => { void this.engineSaysPhi(k); };
+    this.bridge.onComments = c => this.session.update(cur => (cur ? { ...cur, comments: c.open } : cur));
     effect(() => { this.bridge.attach(this.frameRef()?.nativeElement ?? null); });
     effect(() => { const mode = this.theme.mode(); if (this.bridge.state() === 'ready') untracked(() => this.bridge.setTheme(mode)); });
     void this.init();
@@ -376,8 +372,8 @@ export class FilesEditorPage {
       const f = (await this.office.list(this.app().kind)).find(x => x.id === id);
       if (!f) { this.unavailable.set({ title: "That file isn't there any more", body: 'It may have been deleted or moved to Trash.' }); return; }
       const c = await this.office.content(f.id);
-      if (!bytesFit(this.app(), c.bytes)) { this.unavailable.set({ title: "This file can't be opened", body: notThisKindMessage(this.app()) }); return; }
-      this.start({ id: f.id, name: f.name, version: c.version || f.version }, c.bytes, false, false, { kind: 'lab', id: f.id }, f.phiSources ?? []);
+      if (!bytesFit(this.app(), c.bytes, f.name)) { this.unavailable.set({ title: "This file can't be opened", body: notThisKindMessage(this.app()) }); return; }
+      this.start({ id: f.id, name: f.name, version: c.version || f.version }, c.bytes, false, false, { kind: 'lab', id: f.id }, f.phiSources ?? [], null, f.sharedAccess ?? null, f.commentCount ?? null);
     } catch (e) { this.unavailable.set({ title: "We couldn't open this file", body: toApiError(e).message }); }
   }
 
@@ -385,7 +381,7 @@ export class FilesEditorPage {
     const app = this.app();
     this.forceReadonly.set(!!r.readonly);
     if (r.bytes) {
-      if (!bytesFit(app, r.bytes)) { this.unavailable.set({ title: "This file can't be opened", body: notThisKindMessage(app) }); return; }
+      if (!bytesFit(app, r.bytes, r.name)) { this.unavailable.set({ title: "This file can't be opened", body: notThisKindMessage(app) }); return; }
       this.start({ id: null, name: r.name ?? withAppExtension(app, app.newName), version: null, copyOf: r.copyOf ?? null }, r.bytes, !r.target && !r.copyOf, false, r.target, [], r.phi ?? null);
     } else if (r.insert) {
       const i = r.insert;
@@ -414,13 +410,15 @@ export class FilesEditorPage {
   }
 
   // ───────────────────────── the open file ─────────────────────────
-  private start(file: StoredRef, bytes: ArrayBuffer | null, fromResults: boolean, fitColumns = false, target?: FileTarget, phi: PhiSource[] = [], pendingPhi: string | null = null): void {
+  private start(file: StoredRef, bytes: ArrayBuffer | null, fromResults: boolean, fitColumns = false, target?: FileTarget, phi: PhiSource[] = [], pendingPhi: string | null = null, shared: string | null = null, comments: number | null = null): void {
     this.pendingStore.set(false);
     this.renaming.set(false);
     this.bridge.prepareNewFrame();
     this.bridge.readonly = !this.canWrite();
     const t: FileTarget = target && !(target.kind === 'lab' && !target.id) ? target : { kind: 'lab', id: file.id ?? '' };
-    this.session.set({ key: ++this.seq, file, target: t, fromResults, phi, pendingPhi });
+    // "Can comment": the document stays read-only for edits but the engine is told comments are allowed (Full Files only).
+    this.bridge.canComment = shared === 'comment' && this.files.full();
+    this.session.set({ key: ++this.seq, file, target: t, fromResults, phi, pendingPhi, shared, comments });
     if (bytes) this.bridge.open(file.name, bytes, fitColumns ? [FIT_COLUMNS] : []);
     // An app whose engine is not shipped yet (Synapse, Axon, Myelin, Retina arrive one by one) shows the plain "can't open here" state.
     const key = this.seq;
@@ -468,17 +466,55 @@ export class FilesEditorPage {
   }
 
   protected saveNow(): void {
-    this.saveDest = 'file';
+    this.pendingPlace = null;
     if (!this.bridge.save()) this.toast.info(`${this.app().name} is still opening. Try again in a moment.`);
   }
 
-  /** "Save to this device" / "Save a copy": ask the engine for its bytes, then route them to the device (after the server's patient-data check). */
-  protected async saveToDevice(saveAs = false): Promise<void> {
-    this.saveDest = 'device';
-    this.deviceSaveAs = saveAs || !this.deviceFiles.canSaveInPlace(this.session()?.target);
-    if (!this.bridge.save()) { this.saveDest = 'file'; this.toast.info(`${this.app().name} is still opening. Try again in a moment.`); }
+  /** Ask the engine for its bytes and send them to THIS device (after the server's patient-data check). Used by the engine's own File → Save As → This device. */
+  protected async saveToDevice(): Promise<void> {
+    this.pendingPlace = 'device';
+    if (!this.bridge.save()) { this.pendingPlace = null; this.toast.info(`${this.app().name} is still opening. Try again in a moment.`); }
   }
-  private deviceSaveAs = true;
+
+  /** The two places a file can live: the lab's storage or this device (Save As and Open show exactly these two). */
+  private async askPlace(title: string, message: string): Promise<'lab' | 'device' | null> {
+    const lab = this.auth.user()?.tenantName || 'Prefrontal';
+    const actions = [
+      ...(this.canWrite() ? [{ value: 'lab', label: `Prefrontal · ${lab}`, variant: 'primary' as const }] : []),
+      { value: 'device', label: 'This device', variant: 'secondary' as const },
+    ];
+    const r = await this.dialog.actions({ title, message, actions });
+    return r.action === 'lab' || r.action === 'device' ? r.action : null;
+  }
+
+  /** The engine's File → Save As (`<prefix>saveAsRequest {name}`): choose the place, then tell the engine to carry on (`saveAsTo`). */
+  private async onSaveAsRequest(name?: string): Promise<void> {
+    const s = this.session();
+    if (!s) return;
+    const place = await this.askPlace('Save as', 'Where should this go?');
+    if (!place) return;
+    this.pendingPlace = place;
+    if (!this.bridge.saveAsTo(name || s.file.name)) { this.pendingPlace = null; this.toast.info(`${this.app().name} is still opening. Try again in a moment.`); }
+  }
+
+  /** The engine's File → Open (`<prefix>openRequest`): the lab's files (Files screen filtered to this app) or a file on this device. */
+  private async onOpenRequest(): Promise<void> {
+    if (!(await this.confirmDiscard())) return;
+    const place = await this.askPlace('Open', 'Where is the file?');
+    if (place === 'device') await this.openFromDevice();
+    else if (place === 'lab') { this.pendingStore.set(false); this.bridge.dirty.set(false); await this.router.navigateByUrl(`/files?type=${this.app().kind}`); }
+  }
+
+  /** The engine reports patient data in the document (`phi`) or pasted from a flagged file (`phiPaste`): flagged at once when stored, else with its first save. Sticky. */
+  private async engineSaysPhi(kind: 'phi' | 'paste'): Promise<void> {
+    const s = this.session();
+    if (!s || s.target.kind !== 'lab') return;                           // a device file is not flagged (it is the person's own)
+    const source = kind === 'paste' ? 'copy' : 'patient';
+    if (s.file.id) {
+      try { const f = await this.office.markPhi(s.file.id, source); this.session.update(cur => (cur ? { ...cur, phi: f.phiSources ?? cur.phi } : cur)); }
+      catch (e) { this.toast.error(toApiError(e).message); }
+    } else if (!s.pendingPhi) this.session.update(cur => (cur ? { ...cur, pendingPhi: source } : cur));
+  }
 
   protected async commitRename(value: string): Promise<void> {
     if (!this.renaming()) return;
@@ -520,14 +556,29 @@ export class FilesEditorPage {
       return;
     }
     if (!s) return;
-    const dest = this.saveDest;
-    this.saveDest = 'file';
-    // Device: a band button asked for it, the file lives there, or this person cannot store in the lab (a copy goes to the device).
-    if (dest === 'device' || s.target.kind === 'device' || !this.canWrite()) { await this.saveOnDevice(s, f, dest === 'device' ? this.deviceSaveAs : false); return; }
+    const place = this.pendingPlace;
+    this.pendingPlace = null;
+    const sameName = f.name.trim().toLowerCase() === (s.file.name ?? '').trim().toLowerCase();
+    // An export or copy that is not the document's file (Myelin: print to PDF, extract, split, a redacted copy) is a copy: it goes to this device.
+    if (!place && f.saveAs === false && s.file.name && !sameName) { await this.saveOnDevice(s, f, true); return; }
+    let where: 'lab' | 'device' | null = place;
+    // "Can comment": a save the engine says holds only comments goes back to the lab file in place (the server keeps every version).
+    const commenting = !place && !this.canWrite() && s.target.kind === 'lab' && !!s.file.id && s.shared === 'comment' && f.commentOnly === true && this.files.full();
+    if (commenting) where = 'lab';
+    if (!where) {
+      if (!this.canWrite()) where = 'device';                              // a role / lab that cannot store keeps a copy on the device
+      else if (s.target.kind === 'device' && f.saveAs !== true) where = 'device';
+      else if (f.saveAs === true) where = await this.askPlace('Save as', 'Where should this go?');   // an engine without the saveAsRequest message
+      else where = 'lab';
+    }
+    if (where === null) return;
+    if (where === 'device') { await this.saveOnDevice(s, f, f.saveAs === true || !this.deviceFiles.canSaveInPlace(s.target)); return; }
+    // Save As to the lab makes a NEW lab file (its patient-data flag follows through copyOf).
+    const cur: StoredRef = f.saveAs === true && s.file.id ? { id: null, name: f.name, version: null, copyOf: s.file.id } : s.file;
     this.saving.set(true);
     this.notice.update(n => (n?.tone === 'warn' ? null : n));
     try {
-      const out = await this.saver.store(s.file, f, app, s.pendingPhi);
+      const out = await this.saver.store(cur, f, app, s.pendingPhi, { commentOnly: f.commentOnly, commentCount: s.comments ?? undefined });
       switch (out.kind) {
         case 'saved':
         case 'copy':

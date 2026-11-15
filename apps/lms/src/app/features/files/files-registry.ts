@@ -54,6 +54,10 @@ export interface FilesApp {
   magic: 'zip' | 'pdf' | 'image';
   /** The role may use the app at all (UI hint; the server decides). */
   needsResultsAccess: boolean;
+  /** Extra URL parameters its engine needs (Myelin: `control=1` installs window.myelin). */
+  frameParams?: Readonly<Record<string, string>>;
+  /** The app's own project format, kept as it is (no magic check): Retina's `.pcraft` (to become `.retina`). */
+  opaqueExts?: readonly string[];
 }
 
 const P = (d: string, o: Partial<Extract<LogoPart, { t: 'path' }>> = {}): LogoPart => ({ t: 'path', d, ...o });
@@ -81,7 +85,7 @@ export const FILES_APPS: readonly FilesApp[] = [
     logoSmall: [C(18, 25, 6), C(31, 25, 6)],
     newLabel: 'New document', newName: 'Untitled document', route: 'doc', navId: 'files-synapse', tab: 'Documents', magic: 'zip', needsResultsAccess: false,
     templates: [
-      { id: 'synapse:letter', name: "Letter on the lab's letterhead", cmd: { cmd: 'file.new', params: { template: 'letter' } } },
+      { id: 'synapse:letter', name: "Letter on the lab's letterhead", cmd: { cmd: 'file.new', params: { template: 'letterhead' } } },
       { id: 'synapse:sop', name: 'Standard operating procedure', cmd: { cmd: 'file.new', params: { template: 'sop' } } },
     ],
   },
@@ -93,8 +97,8 @@ export const FILES_APPS: readonly FilesApp[] = [
     logoSmall: [C(16, 22, 6), P('M22 22h12', { stroke: 4 })],
     newLabel: 'New slides', newName: 'Untitled slides', route: 'slides', navId: 'files-axon', tab: 'Slides', magic: 'zip', needsResultsAccess: false,
     templates: [
-      { id: 'axon:case', name: 'Case presentation', cmd: { cmd: 'file.new', params: { template: 'case' } } },
-      { id: 'axon:review', name: 'Monthly quality review', cmd: { cmd: 'file.new', params: { template: 'review' } } },
+      { id: 'axon:case', name: 'Case presentation', cmd: { cmd: 'file.new', params: { template: 'Case presentation' } } },
+      { id: 'axon:review', name: 'Monthly quality review', cmd: { cmd: 'file.new', params: { template: 'Monthly quality review' } } },
     ],
   },
   {
@@ -103,12 +107,12 @@ export const FILES_APPS: readonly FilesApp[] = [
     prefix: 'myelin:', global: 'myelin', enginePath: 'myelin-engine/', color: '#b4235a', colorDark: '#d6336c',
     logo: [P('M14 13h14l6 6v16H14z', { opacity: 0.5, stroke: 2, join: true }), P('M17 28h3M22 28h3M27 28h3', { stroke: 3 }), C(32, 28, 2)],
     logoSmall: [P('M12 24h6M21 24h6M30 24h5', { stroke: 5 }), C(39, 24, 3)],
-    newLabel: 'Open a PDF', newName: 'Untitled', route: 'pdf', navId: 'files-myelin', tab: 'PDFs', magic: 'pdf', needsResultsAccess: false,
+    newLabel: 'Open a PDF', newName: 'Untitled', route: 'pdf', navId: 'files-myelin', tab: 'PDFs', magic: 'pdf', needsResultsAccess: false, frameParams: { control: '1' },
     templates: [],
   },
   {
     id: 'retina', kind: 'image', name: 'Retina', noun: 'image', nounPlural: 'images', blurb: 'Clinical images: crop, enhance, annotate, blur faces',
-    exts: ['png', 'jpg', 'jpeg', 'webp'], mime: 'image/png',
+    exts: ['png', 'jpg', 'jpeg', 'webp', 'retina', 'pcraft'], opaqueExts: ['retina', 'pcraft'], mime: 'image/png',
     prefix: 'retina:', global: 'retina', enginePath: 'retina-engine/', color: '#0f766e', colorDark: '#14b8a6',
     logo: [{ t: 'rect', x: 11, y: 13, w: 26, h: 22, rx: 3, stroke: 2, opacity: 0.5 }, C(32, 20, 2.5), P('M13 33l8-9 6 6 4-4 6 7', { stroke: 2.2, join: true })],
     logoSmall: [C(24, 24, 9), P('M24 24h.01', { stroke: 6 })],
@@ -158,8 +162,10 @@ export function sniff(bytes: ArrayBuffer | ArrayBufferView | null | undefined): 
   return 'other';
 }
 /** Do these bytes look like a file of this app? */
-export function bytesFit(app: FilesApp, bytes: ArrayBuffer | ArrayBufferView | null | undefined): boolean {
+export function bytesFit(app: FilesApp, bytes: ArrayBuffer | ArrayBufferView | null | undefined, name?: string): boolean {
   const s = sniff(bytes);
+  // The app's own project format (Retina .pcraft / .retina) has no picture magic: it is judged by its extension (the engine reads it).
+  if (name && app.opaqueExts?.includes(extOf(name)) && s === 'other' && bytes && (ArrayBuffer.isView(bytes) ? bytes.byteLength : bytes.byteLength) > 0) return true;
   return app.magic === 'zip' ? s === 'zip' : app.magic === 'pdf' ? s === 'pdf' : s === 'png' || s === 'jpg' || s === 'webp';
 }
 export const MAX_DEVICE_BYTES = 25 * 1024 * 1024;

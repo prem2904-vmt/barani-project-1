@@ -1,6 +1,6 @@
 #!/bin/bash
-# Retina engine into apps/lms/public/retina-engine/ (see fetch-engine.sh). The pinned sha256 is the archive the app is tested against;
-# it stays "pending" until the engine exists: until then pass RETINA_SHA256 with RETINA_URL / RETINA_DIST.
+# Retina engine into apps/lms/public/retina-engine/ (see fetch-engine.sh). ONE line to bump with every engine rebuild: the sha256 of the
+# archive retina-web-<version>.tar.gz (now 0.23.1). Override for a one-off with RETINA_SHA256.
 export ENGINE_APP=retina
-export ENGINE_PINNED_SHA256="pending"
+export ENGINE_PINNED_SHA256="d394d45f8a962b79ffb9f942dbae3b17323cab63eac5eb6397944ebde02c0304"
 exec "$(dirname "$0")/fetch-engine.sh" "$@"

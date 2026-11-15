@@ -352,7 +352,7 @@ describe('Files bridge: any app, its own prefix, global and file type', () => {
   });
 
   it('the frame URL points at the app\'s own engine folder', () => {
-    for (const a of FILES_APPS) expect(filesFrameUrl(a, `${ORIGIN}/`, 'Asha', 'dark', true)).toMatch(new RegExp(`/${a.enginePath}index\\.html\\?host=parent&chrome=notitlebar&author=Asha&theme=dark&readonly=1$`));
+    for (const a of FILES_APPS) expect(filesFrameUrl(a, `${ORIGIN}/`, 'Asha', 'dark', true)).toMatch(new RegExp(`/${a.enginePath}index\\.html\\?host=parent&chrome=notitlebar&author=Asha&theme=dark&readonly=1(&control=1)?$`));
   });
 
   it('a bridge speaks only its own app: the page gets Synapse messages, Neuron ones are dropped, bytes of the wrong type are not sent', () => {
@@ -395,5 +395,81 @@ describe('Files bridge: any app, its own prefix, global and file type', () => {
     expect(ran).not.toHaveBeenCalled();
     b.handle(from(f.win, { type: 'axon:ready' }));
     expect(ran).toHaveBeenCalledTimes(1);
+  });
+
+  it('Myelin\'s frame asks for control=1 (window.myelin); the others do not', () => {
+    expect(filesFrameUrl(MYELIN, `${ORIGIN}/`, 'A')).toContain('control=1');
+    for (const a of FILES_APPS.filter(x => x.id !== 'myelin')) expect(filesFrameUrl(a, `${ORIGIN}/`, 'A')).not.toContain('control');
+  });
+
+  it('a save message carries the engine\'s saveAs flag (true / false / absent)', () => {
+    TestBed.configureTestingModule({ providers: [FilesBridge] });
+    const b = TestBed.inject(FilesBridge);
+    b.configure(SYNAPSE);
+    const got: (boolean | undefined)[] = [];
+    b.onSave = f => got.push(f.saveAs);
+    const host = fakeHost(); const f = fakeFrame();
+    b.attach(f.frame, host);
+    b.handle(from(f.win, { type: 'synapse:ready' }));
+    for (const saveAs of [true, false, undefined]) b.handle(from(f.win, { type: 'synapse:save', name: 'L.docx', bytes: buf(docx), ...(saveAs === undefined ? {} : { saveAs }) }));
+    expect(got).toEqual([true, false, undefined]);
+  });
+
+  it('the engine\'s own File → Open / Save As requests are noticed (the page then needs no buttons of its own), Save As carries the name, and saveAsTo goes back', () => {
+    TestBed.configureTestingModule({ providers: [FilesBridge] });
+    const b = TestBed.inject(FilesBridge);
+    b.configure(MYELIN);
+    const reqs: [string, string | undefined][] = [];
+    b.onRequest = (r, n) => reqs.push([r, n]);
+    const host = fakeHost(); const f = fakeFrame();
+    b.attach(f.frame, host);
+    expect(b.engineRoutesFiles()).toBe(false);
+    b.handle(from(f.win, { type: 'myelin:ready' }));
+    b.handle(from(f.win, { type: 'myelin:saveAsRequest', name: 'Report.pdf' }));
+    b.handle(from(f.win, { type: 'myelin:openRequest' }));
+    expect(reqs).toEqual([['saveAs', 'Report.pdf'], ['open', undefined]]);
+    expect(b.engineRoutesFiles()).toBe(true);
+    expect(b.saveAsTo('Report.pdf')).toBe(true);
+    expect(f.postMessage).toHaveBeenCalledWith({ type: 'myelin:saveAsTo', name: 'Report.pdf' }, ORIGIN);
+  });
+
+  it('phi and phiPaste reach the page; only a true phi flag counts (sticky: false never clears)', () => {
+    TestBed.configureTestingModule({ providers: [FilesBridge] });
+    const b = TestBed.inject(FilesBridge);
+    b.configure(FILES_APPS[2]);
+    const seen: string[] = [];
+    b.onPhi = k => seen.push(k);
+    const host = fakeHost(); const f = fakeFrame();
+    b.attach(f.frame, host);
+    b.handle(from(f.win, { type: 'axon:phi', flag: false }));
+    b.handle(from(f.win, { type: 'axon:phi', flag: true }));
+    b.handle(from(f.win, { type: 'axon:phiPaste' }));
+    b.handle(from(f.win, { type: 'synapse:phi', flag: true }));                       // another app's prefix is ignored
+    expect(seen).toEqual(['phi', 'paste']);
+  });
+
+  it('comments: the engine\'s count reaches the page (clean numbers only); canComment is sent with ready and live; a comment-only save says so', () => {
+    TestBed.configureTestingModule({ providers: [FilesBridge] });
+    const b = TestBed.inject(FilesBridge);
+    b.configure(SYNAPSE);
+    const seen: { count: number; open: number }[] = [];
+    b.onComments = c => seen.push(c);
+    const saves: (boolean | undefined)[] = [];
+    b.onSave = f => saves.push(f.commentOnly);
+    b.canComment = true;
+    const host = fakeHost(); const f = fakeFrame();
+    b.attach(f.frame, host);
+    b.handle(from(f.win, { type: 'synapse:ready' }));
+    expect(f.postMessage).toHaveBeenCalledWith({ type: 'synapse:canComment', allow: true }, ORIGIN);
+    b.handle(from(f.win, { type: 'synapse:comments', count: 5, open: 3 }));
+    b.handle(from(f.win, { type: 'synapse:comments', count: 'x', open: -4 }));
+    b.handle(from(f.win, { type: 'neuron:comments', count: 9, open: 9 }));                  // another app's prefix: ignored
+    expect(seen).toEqual([{ count: 5, open: 3 }, { count: 0, open: 0 }]);
+    b.handle(from(f.win, { type: 'synapse:save', name: 'L.docx', bytes: buf(docx), saveAs: false, commentOnly: true }));
+    b.handle(from(f.win, { type: 'synapse:save', name: 'L.docx', bytes: buf(docx), saveAs: false }));
+    b.handle(from(f.win, { type: 'synapse:save', name: 'L.docx', bytes: buf(docx), saveAs: false, commentOnly: 'yes' }));
+    expect(saves).toEqual([true, undefined, undefined]);
+    b.setCanComment(false);
+    expect(f.postMessage).toHaveBeenLastCalledWith({ type: 'synapse:canComment', allow: false }, ORIGIN);
   });
 });

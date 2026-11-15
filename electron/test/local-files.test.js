@@ -80,3 +80,14 @@ test('save negatives: wrong extension, unknown kind, empty, oversize, cancelled 
   const c = setup({ save: { canceled: true } });
   assert.equal(await c.h.get('files:saveLocal')(c.ev, { kind: 'doc', name: 'a.docx', bytes: ok }), null);
 });
+
+test('"any" opens every Files type but can never save; Retina project files are allowed', async () => {
+  assert.equal(lf.checkName('any', 'a.docx'), null);
+  assert.equal(lf.checkName('any', 'a.pcraft'), null);
+  assert.equal(lf.checkName('image', 'p.retina'), null);
+  assert.ok(lf.checkName('any', 'a.exe'));
+  const s = setup({ open: { canceled: false, filePaths: ['/x/Deck.pptx'] }, files: { '/x/Deck.pptx': 'PK' }, save: { canceled: false, filePath: '/x/o.pptx' } });
+  const r = await s.h.get('files:openLocal')(s.ev, { kind: 'any' });
+  assert.equal(r.name, 'Deck.pptx');
+  assert.equal((await s.h.get('files:saveLocal')(s.ev, { kind: 'any', name: 'a.pptx', bytes: new Uint8Array([1]) })).error, 'Unknown file type.');
+});

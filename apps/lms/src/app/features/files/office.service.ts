@@ -16,10 +16,13 @@ export interface OfficeFile {
   containsPhi?: boolean;
   phiSources?: PhiSource[] | null;
   /** "view" | "edit" when the file is shared WITH me (not mine, not lab-wide). */
-  sharedAccess?: 'view' | 'edit' | null;
+  sharedAccess?: 'view' | 'comment' | 'edit' | null;
+  /** Open comments as the editor last reported them when it saved. */
+  commentCount?: number;
   ownerId?: string | null;
 }
-export interface OfficeShare { id: string; principalType: 'user' | 'role'; principalId: string; name: string; detail?: string | null; access: 'view' | 'edit' }
+export type ShareLevel = 'view' | 'comment' | 'edit';
+export interface OfficeShare { id: string; principalType: 'user' | 'role'; principalId: string; name: string; detail?: string | null; access: ShareLevel }
 export interface OfficeShareList { ownerId?: string | null; ownerName?: string | null; isOwner: boolean; canManage: boolean; shares: OfficeShare[] }
 export interface OfficeShareTarget { type: 'user' | 'role'; id: string; name: string; detail?: string | null }
 /** Per-app access of the signed-in person (GET /api/office/settings → access). */
@@ -76,7 +79,8 @@ export const OFFICE_MESSAGES: Record<string, string> = {
   app_off: 'This app is turned off for your lab.',
   forbidden: "Your role can't do that here.",
   share_exceeds_rights: "You can only share for viewing: you can't edit this file yourself.",
-  bad_access: 'Choose Can view or Can edit.',
+  bad_access: 'Choose Can view, Can comment or Can edit.',
+  comment_only: 'You can comment on this file but not change its content.',
   bad_principal: "That person or role isn't in your lab.",
   owner: 'That person already owns this file.',
   phi_export_denied: "This file contains patient data, and your role can't save it to this device.",
@@ -142,10 +146,11 @@ export class OfficeService {
   }
 
   /** `phiSource` = Prefrontal filled this file with patient data (results, patient, report, partner_report, image); `copyOf` = a copy of a stored file (inherits its patient-data flag on the server). */
-  create(name: string, bytes: ArrayBuffer, kind = 'sheet', opts: { phiSource?: string; copyOf?: string } = {}): Promise<OfficeFile> {
+  create(name: string, bytes: ArrayBuffer, kind = 'sheet', opts: { phiSource?: string; copyOf?: string; commentCount?: number } = {}): Promise<OfficeFile> {
     const extra: Record<string, string> = {};
     if (opts.phiSource) extra['phiSource'] = opts.phiSource;
     if (opts.copyOf) extra['copyOf'] = opts.copyOf;
+    if (opts.commentCount !== undefined) extra['commentCount'] = String(opts.commentCount);
     return this.call(firstValueFrom(this.http.post<unknown>(`${this.base}/api/office/files`, this.form(name, bytes, kind, extra))).then(b => unwrap<OfficeFile>(b)));
   }
 
@@ -155,9 +160,12 @@ export class OfficeService {
   }
 
   /** Save over a stored file. 409 ⇒ {@link OfficeConflictError} (never retried, never forced). */
-  async update(id: string, name: string, bytes: ArrayBuffer, version: number | string): Promise<OfficeFile> {
+  async update(id: string, name: string, bytes: ArrayBuffer, version: number | string, opts: { commentOnly?: boolean; commentCount?: number } = {}): Promise<OfficeFile> {
     try {
-      const b = await firstValueFrom(this.http.put<unknown>(`${this.base}/api/office/files/${encodeURIComponent(id)}/content`, this.form(name, bytes),
+      const extra: Record<string, string> = {};
+      if (opts.commentOnly) extra['commentOnly'] = 'true';
+      if (opts.commentCount !== undefined) extra['commentCount'] = String(opts.commentCount);
+      const b = await firstValueFrom(this.http.put<unknown>(`${this.base}/api/office/files/${encodeURIComponent(id)}/content`, this.form(name, bytes, undefined, extra),
         { headers: new HttpHeaders({ 'If-Match': ifMatch(version) }) }));
       return unwrap<OfficeFile>(b);
     } catch (e) {
@@ -199,7 +207,7 @@ export class OfficeService {
   shareTargets(q = ''): Promise<OfficeShareTarget[]> {
     return this.call(firstValueFrom(this.http.get<unknown>(`${this.base}/api/office/share-targets?q=${encodeURIComponent(q)}`)).then(b => unwrap<OfficeShareTarget[]>(b) ?? []));
   }
-  addShare(id: string, type: 'user' | 'role', principalId: string, access: 'view' | 'edit'): Promise<OfficeShare> {
+  addShare(id: string, type: 'user' | 'role', principalId: string, access: ShareLevel): Promise<OfficeShare> {
     return this.call(firstValueFrom(this.http.put<unknown>(`${this.base}/api/office/files/${encodeURIComponent(id)}/shares`, { type, principalId, access })).then(b => unwrap<OfficeShare>(b)));
   }
   removeShare(id: string, shareId: string): Promise<void> {

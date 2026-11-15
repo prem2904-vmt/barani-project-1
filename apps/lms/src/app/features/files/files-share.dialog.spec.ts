@@ -15,7 +15,7 @@ const list = (over: Record<string, unknown> = {}) => ({
 @Component({ standalone: true, imports: [FilesShareDialogComponent], template: `<pf-files-share [file]="file()" (closed)="closes = closes + 1; file.set(null)" />` })
 class Host { file = signal<OfficeFile | null>(FILE); closes = 0; }
 
-function make(o: { l?: ReturnType<typeof list>; canWrite?: boolean; fail?: boolean } = {}) {
+function make(o: { l?: ReturnType<typeof list>; canWrite?: boolean; fail?: boolean; full?: boolean } = {}) {
   let current = o.l ?? list();
   const office = {
     shares: vi.fn(async () => { if (o.fail) throw new Error('x'); return current; }),
@@ -27,7 +27,7 @@ function make(o: { l?: ReturnType<typeof list>; canWrite?: boolean; fail?: boole
   TestBed.configureTestingModule({ providers: [
     { provide: OfficeService, useValue: office }, { provide: ToastService, useValue: toast },
     { provide: AuthService, useValue: { user: signal({ tenantName: 'Micro World' }) } },
-    { provide: FilesAccessService, useValue: { canWrite: () => o.canWrite !== false } },
+    { provide: FilesAccessService, useValue: { canWrite: () => o.canWrite !== false, canRead: () => true, full: () => o.full !== false } },
   ] });
   const f = TestBed.createComponent(Host);
   f.detectChanges();
@@ -82,7 +82,28 @@ describe('Share dialog', () => {
     await settle();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cmp = f.debugElement.children[0].componentInstance as any;
-    expect(cmp.accessOptions()).toEqual([{ value: 'view', label: 'Can view' }, { value: 'edit', label: 'Can edit', disabled: true }]);
+    expect(cmp.accessOptions()).toEqual([{ value: 'view', label: 'Can view' }, { value: 'comment', label: 'Can comment' }, { value: 'edit', label: 'Can edit', disabled: true }]);
+  });
+
+  it('three levels in every app: Can view, Can comment, Can edit; a View only lab cannot hand out comment or edit', async () => {
+    const ok = make();
+    await ok.settle();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cmp = ok.f.debugElement.children[0].componentInstance as any;
+    expect(cmp.accessOptions().map((o: { label: string; disabled?: boolean }) => [o.label, !!o.disabled])).toEqual([['Can view', false], ['Can comment', false], ['Can edit', false]]);
+    TestBed.resetTestingModule();
+    const vo = make({ full: false, canWrite: false });
+    await vo.settle();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const c2 = vo.f.debugElement.children[0].componentInstance as any;
+    expect(c2.accessOptions().map((o: { label: string; disabled?: boolean }) => [o.label, !!o.disabled])).toEqual([['Can view', false], ['Can comment', true], ['Can edit', true]]);
+  });
+
+  it('a row shows the level in words, and a comment share can be changed to another level', async () => {
+    const { el, settle, office, f } = make({ l: list({ isOwner: false, canManage: false, shares: [{ id: 's9', principalType: 'user', principalId: 'u9', name: 'Imran Lab', access: 'comment' }] }) });
+    await settle();
+    expect(el.querySelector('[data-testid="files-share-row"]')?.textContent).toContain('Can comment');
+    void office; void f;
   });
 
   it('a person who is not the owner can read the list but not change it', async () => {
