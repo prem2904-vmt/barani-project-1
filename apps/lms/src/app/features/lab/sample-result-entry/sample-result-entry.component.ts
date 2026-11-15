@@ -10,7 +10,6 @@ import {
   HostListener,
   Injector,
   afterNextRender,
-  afterRenderEffect,
   computed,
   effect,
   inject,
@@ -265,26 +264,6 @@ export class SampleResultEntryComponent {
     const all = [self, ...rest].sort((a, b) =>
       (a.off - b.off) || a.barcode.localeCompare(b.barcode, undefined, { numeric: true }) || a.id.localeCompare(b.id));
     this._tubeTabs.set(all.map(({ off: _off, ...t }) => t));
-  }
-
-  /** The sliding selected-tab indicator: measured after render and written
-   *  straight to the DOM (no signal → no extra change detection). */
-  private readonly tabsEl = viewChild<ElementRef<HTMLElement>>("tabsEl");
-  private placeTabIndicator() {
-    const host = this.tabsEl()?.nativeElement;
-    if (!host) return;
-    const ind = host.querySelector<HTMLElement>(".pf-sre-tabs__ind");
-    const act = host.querySelector<HTMLElement>('.pf-sre-tab[aria-selected="true"]');
-    if (!ind || !act || !act.offsetWidth) {
-      host.classList.remove("pf-sre-tabs--ind", "pf-sre-tabs--anim");
-      return;
-    }
-    // Slide only once the indicator has a position to slide FROM.
-    if (host.classList.contains("pf-sre-tabs--ind")) host.classList.add("pf-sre-tabs--anim");
-    ind.style.width = `${act.offsetWidth}px`;
-    ind.style.height = `${act.offsetHeight}px`;
-    ind.style.transform = `translate(${act.offsetLeft}px, ${act.offsetTop}px)`;
-    host.classList.add("pf-sre-tabs--ind");
   }
 
   /** PHONES: the sample-ID chip doubles as the tube switcher. */
@@ -984,11 +963,6 @@ export class SampleResultEntryComponent {
       if (!s) return;
       const any = (s.tests ?? []).some((t) => this.parametersFor(t).some((p) => this.inputKindFor(p) === "family"));
       if (any) untracked(() => this.familySvc.ensureLoaded());
-    });
-    afterRenderEffect(() => {
-      this.tubeTabs();
-      this.activeTubeId();
-      this.placeTabIndicator();
     });
     effect(() => {
       const pid = this.sample()?.order?.patient?.id ?? null;

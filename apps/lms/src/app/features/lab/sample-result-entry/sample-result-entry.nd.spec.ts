@@ -268,11 +268,10 @@ describe('Result entry (nd) — band + CONTEXT BAR', () => {
     await f.whenStable();
     f.detectChanges();
     expect(order()).toEqual(['smp-1', 'smp-2']);          // same positions
-    expect(selected()).toBe('smp-2');                     // only the indicator moved
+    expect(selected()).toBe('smp-2');                     // selected surface stays attached to its tab
     expect(el.querySelector('.pf-sre-tabs [data-tube="smp-1"]')).toBe(firstBtn);   // same DOM node
-    // The indicator slides on the nd spring; off under reduced motion.
-    expect(css()).toMatch(/\.pf-sre-tabs--anim\s+\.pf-sre-tabs__ind\s*\{[^}]*transition:\s*transform[^;]*var\(--pf-spring\)/);
-    expect(css()).toMatch(/prefers-reduced-motion[\s\S]*\.pf-sre-tabs__ind[^{]*\{[^}]*transition:\s*none/);
+    // The selected surface belongs to the tab itself; no separately measured overlay.
+    expect(el.querySelector('.pf-sre-tabs__ind')).toBeNull();
   });
 
   it('phones: no tabs control; the current sample chip is the tube switcher (2+ tubes)', async () => {

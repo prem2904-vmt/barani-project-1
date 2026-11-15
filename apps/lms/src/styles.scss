@@ -92,6 +92,9 @@
   :root.design-new .pv-page { --pf-hb-bleed: 2rem; }
 }
 @media (min-width: 1024px) {
+  :root.design-new .pv-page { --pf-hb-bleed: 2.5rem; }
+}
+@media (min-width: 1024px) {
   :root.design-new .pf-mw-page,
   :root.design-new .pf-sc-page { --pf-hb-bleed: 2.5rem; }
 }
