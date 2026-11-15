@@ -296,6 +296,7 @@ export class StartMenuComponent {
   protected readonly fileRows = computed<{ id: string; name: string; appId: string; route: string }[]>(() => {
     const q = this.query().trim().toLowerCase();
     if (q.length < 2 || !this.filesAccess.available()) return [];
+    untracked(() => this.loadFilesOnce());                  // a first load that failed (no session yet) is tried again on the next letters
     return this.officeFiles().filter(f => f.name.toLowerCase().includes(q)).slice(0, 8).flatMap(f => {
       const a = filesAppForKind(f.kind);
       return a && this.filesAccess.canRead(a) ? [{ id: f.id, name: f.name, appId: a.id, route: a.route }] : [];
