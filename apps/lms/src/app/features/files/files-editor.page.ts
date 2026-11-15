@@ -48,7 +48,7 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
       <pf-hero-band [back]="true" [backAction]="closeFn" [slim]="true">
         <div band-center class="nr-center">
           @if (session(); as s) {
-            <pf-files-logo [app]="app().id" [size]="22" />
+            @if (!phone()) { <pf-files-logo [app]="app().id" [size]="22" /> }
             @if (renaming()) {
               <input class="nr-name-input" type="text" [value]="s.file.name" maxlength="120" aria-label="File name" data-testid="files-name-input"
                      (keydown.enter)="commitRename($any($event.target).value)" (keydown.escape)="renaming.set(false)" (blur)="commitRename($any($event.target).value)" />
@@ -70,32 +70,29 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
                 {{ saveState() }}
               </span>
             }
-            <span class="nr-chip" data-testid="files-where" [attr.data-where]="s.target.kind">{{ where() }}</span>
-            @if (viewOnlyLevel()) {
-              <span class="nr-chip nr-chip--quiet" data-testid="files-viewonly-chip" title="Your organization can open and copy files here, not change them">View only</span>
-            }
-            @if (hasPhi()) {
-              <button type="button" class="nr-chip nr-chip--phi" data-testid="files-phi-chip" (click)="showPhi()"
-                      title="Prefrontal put patient data in this file. It stays out of outside assistants.">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 2.9 8.3 7 10 4.1-1.7 7-5.5 7-10V6l-7-3Z"/></svg>
-                <span class="nr-chip__t">Contains patient data · kept out of outside AI</span>
-              </button>
-            }
+            @if (!phone()) { <ng-container *ngTemplateOutlet="chipsTpl" /> }
           }
         </div>
         <ng-container band-actions>
           @if (session()) {
             @if (canInsert()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="neuron-insert" [attr.aria-pressed]="insertOpen()" (click)="toggleInsert()">Insert results</button>
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="neuron-insert" [attr.aria-pressed]="insertOpen()" aria-label="Insert results" title="Insert results" (click)="toggleInsert()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                <span class="nr-bt">Insert results</span></button>
             }
             @if (shareable()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-share-open" (click)="openShare()">Share</button>
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-share-open" aria-label="Share" title="Share" (click)="openShare()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v14"/></svg>
+                <span class="nr-bt">Share</span></button>
             }
             @if (!phone()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-device-open" (click)="openFromDevice()">Open from this device</button>
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-device-open" aria-label="Open from this device" title="Open from this device" (click)="openFromDevice()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+                <span class="nr-bt">Open from this device</span></button>
             }
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-device-save" [disabled]="!ready()" (click)="saveToDevice()">
-              {{ phone() || !canWrite() ? 'Save a copy' : 'Save to this device' }}
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-device-save" [disabled]="!ready()" [attr.aria-label]="phone() || !canWrite() ? 'Save a copy' : 'Save to this device'" [title]="phone() || !canWrite() ? 'Save a copy' : 'Save to this device'" (click)="saveToDevice()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              <span class="nr-bt">{{ phone() || !canWrite() ? 'Save a copy' : 'Save to this device' }}</span>
             </button>
             @if (canWrite()) {
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="files-save" [disabled]="!ready() || saving()" (click)="saveNow()">{{ saving() ? 'Saving…' : 'Save' }}</button>
@@ -104,6 +101,7 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
         </ng-container>
       </pf-hero-band>
 
+      @if (phone() && session()) { <div class="nr-meta" data-testid="files-meta"><ng-container *ngTemplateOutlet="chipsTpl" /></div> }
       @if (unavailable(); as u) {
         <div class="pf-empty nr-over nr-over--flow" role="alert" data-testid="files-unavailable">
           <p class="pf-empty__title">{{ u.title }}</p>
@@ -148,6 +146,22 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
         <div class="nr-over nr-over--flow" role="status"><pf-skeleton-rows [rows]="4" [avatar]="false" label="Opening…"></pf-skeleton-rows></div>
       }
     </section>
+
+    <ng-template #chipsTpl>
+      @if (session(); as s) {
+        <span class="nr-chip" data-testid="files-where" [attr.data-where]="s.target.kind">{{ where() }}</span>
+            @if (viewOnlyLevel()) {
+              <span class="nr-chip nr-chip--quiet" data-testid="files-viewonly-chip" title="Your organization can open and copy files here, not change them">View only</span>
+            }
+            @if (hasPhi()) {
+              <button type="button" class="nr-chip nr-chip--phi" data-testid="files-phi-chip" (click)="showPhi()"
+                      title="Prefrontal put patient data in this file. It stays out of outside assistants.">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 2.9 8.3 7 10 4.1-1.7 7-5.5 7-10V6l-7-3Z"/></svg>
+                <span class="nr-chip__t">Contains patient data · kept out of outside AI</span>
+              </button>
+            }
+      }
+    </ng-template>
 
     <pf-files-share [file]="shareTarget()" (closed)="shareTarget.set(null)" />
 
@@ -198,24 +212,26 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
     .nr-center { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
     .nr-name { max-width: min(36vw, 360px); }
     .nr-name__t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .nr-name-input { height: 34px; min-width: 200px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border-primary, rgba(124,58,237,.4)); background: var(--surface-card, #fff); color: var(--text-primary); font: inherit; font-size: 14px; font-weight: 600; }
-    .nr-name-input:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 1px; }
+    .nr-name-input { height: 34px; min-width: 200px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border-primary, rgba(124,58,237,.4)); background: var(--card-bg, #fff); color: var(--text-primary); font: inherit; font-size: 14px; font-weight: 600; }
+    .nr-name-input:focus-visible { outline: 2px solid var(--violet-500, #7c3aed); outline-offset: 1px; }
     .nr-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font: inherit; font-size: 12px; font-weight: 600; line-height: 1; white-space: nowrap;
       color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary) 7%, transparent); border: 0; }
     .nr-chip--quiet { color: var(--text-tertiary); background: color-mix(in srgb, var(--text-primary) 5%, transparent); }
-    .nr-chip--phi { cursor: pointer; color: var(--text-primary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); }
-    .nr-chip--phi:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 22%, transparent); }
-    .nr-chip--phi:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 1px; }
+    .nr-chip--phi { cursor: pointer; color: var(--text-primary); background: color-mix(in srgb, var(--violet-500, #7c3aed) 14%, transparent); }
+    .nr-chip--phi:hover { background: color-mix(in srgb, var(--violet-500, #7c3aed) 22%, transparent); }
+    .nr-chip--phi:focus-visible { outline: 2px solid var(--violet-500, #7c3aed); outline-offset: 1px; }
     @media (max-width: 640px) { .nr-chip__t { max-width: 16ch; overflow: hidden; text-overflow: ellipsis; } .nr-name { max-width: 40vw; } }
-    .nr-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--surface-card, #fff); border-top: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
-    .nr-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface-card, #fff); }
-    .nr-over { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--surface-card, #fff) 92%, transparent); }
+    @media (max-width: 640px) { .nr-bt { display: none; } }
+    .nr-meta { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 16px 0; }
+    .nr-stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; background: var(--card-bg, #fff); border-top: 1px solid var(--card-border, rgba(0,0,0,.08)); }
+    .nr-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--card-bg, #fff); }
+    .nr-over { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--card-bg, #fff) 92%, transparent); }
     .nr-over--flow { position: static; min-height: 200px; background: transparent; }
     .nr-over__hint { margin: 0; max-width: 340px; font-size: 13px; line-height: 1.5; color: var(--text-tertiary); }
     .nr-float { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(400px, calc(100% - 24px)); display: flex; z-index: 3; }
     .nr-float .nr-side { flex: 1 1 auto; box-shadow: 0 12px 32px rgba(0,0,0,.18); }
-    .nr-strip { margin: 0; padding: 8px 16px; font-size: 13px; color: var(--text-secondary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, transparent); }
-    .nr-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, transparent); }
+    .nr-strip { margin: 0; padding: 8px 16px; font-size: 13px; color: var(--text-secondary); background: color-mix(in srgb, var(--violet-500, #7c3aed) 7%, transparent); }
+    .nr-notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px; font-size: 13px; line-height: 1.45; color: var(--text-secondary); background: color-mix(in srgb, var(--violet-500, #7c3aed) 9%, transparent); }
     .nr-notice--warn { color: var(--text-primary); }
     .nr-form { display: flex; flex-direction: column; gap: 16px; }
     .nr-form__lead { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-tertiary); }

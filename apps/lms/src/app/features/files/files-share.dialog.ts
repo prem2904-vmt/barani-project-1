@@ -82,16 +82,16 @@ const ACCESS: PfSelectOption<string>[] = [{ value: 'view', label: 'Can view' }, 
     .fsh-add { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; gap: 8px; align-items: center; }
     .fsh-lbl { margin: 4px 0 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
     .fsh-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-    .fsh-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
+    .fsh-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--card-border, rgba(0,0,0,.08)); }
     .fsh-row:first-child { border-top: 0; }
-    .fsh-av { flex: none; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; background: var(--color-primary, #7c3aed); }
+    .fsh-av { flex: none; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; background: var(--violet-500, #7c3aed); }
     .fsh-av--role { border-radius: 9px; background: color-mix(in srgb, var(--text-primary) 55%, transparent); }
     .fsh-who-t { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
     .fsh-name { font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
     .fsh-sub { font-size: 12px; color: var(--text-tertiary); }
     .fsh-fixed { font-size: 13px; color: var(--text-tertiary); white-space: nowrap; }
     .fsh .fsh-acc { min-width: 120px; }
-    .fsh-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, transparent); }
+    .fsh-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--violet-500, #7c3aed) 7%, transparent); }
     .fsh-note { margin: 0; font-size: 13px; color: var(--text-secondary); }
     .fsh-err { margin: 0; font-size: 13px; color: var(--text-primary); border-left: 3px solid var(--color-danger, #dc2626); padding: 6px 10px; }
     .fsh-foot { margin: 0; font-size: 12px; color: var(--text-tertiary); }

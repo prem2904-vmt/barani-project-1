@@ -112,13 +112,13 @@ type Tab = 'all' | 'trash' | string;
     .fh-files { padding: 0; display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
     .fh-grid { width: 100%; flex: 1 1 auto; min-height: 320px; }
     .fh-over { min-height: 200px; display: flex; align-items: center; justify-content: center; }
-    .fh-note { margin: 0; padding: 8px 16px; font-size: 13px; color: var(--text-secondary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, transparent); }
+    .fh-note { margin: 0; padding: 8px 16px; font-size: 13px; color: var(--text-secondary); background: color-mix(in srgb, var(--violet-500, #7c3aed) 7%, transparent); }
     .fh-count { opacity: .65; font-weight: 500; }
     .fh-chip { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-tertiary); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
     .fh-tpls { display: flex; flex-direction: column; gap: 6px; }
-    .fh-tpl { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--border-subtle, rgba(0,0,0,.08)); background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
-    .fh-tpl:hover { background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, transparent); }
-    .fh-tpl:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 1px; }
+    .fh-tpl { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--card-border, rgba(0,0,0,.08)); background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+    .fh-tpl:hover { background: color-mix(in srgb, var(--violet-500, #7c3aed) 7%, transparent); }
+    .fh-tpl:focus-visible { outline: 2px solid var(--violet-500, #7c3aed); outline-offset: 1px; }
     .fh-tpl__t { overflow-wrap: anywhere; }
     @media (max-width: 640px) { .fh-new-sec { display: none; } .fh-tabs { overflow-x: auto; max-width: 100%; } }
   `],
@@ -192,6 +192,7 @@ export class FilesHomePage {
   protected readonly rowId = (p: { data: OfficeFile }): string => p.data.id;
   protected readonly colDefs = computed<ColDef<OfficeFile>[]>(() => {
     const phone = this.access.phone();
+    const compact = this.access.compact();
     const trash = this.tab() === 'trash';
     const canChange = (f: OfficeFile) => { const a = filesAppForKind(f.kind); return !!a && this.access.canWrite(a); };
     void canChange;
@@ -199,8 +200,8 @@ export class FilesHomePage {
     return [
       { field: 'name', headerName: 'Name', flex: 3, minWidth: 180, wrapText: true, autoHeight: true, cellClass: 'fh-cell-name', cellRenderer: this.nameRenderer },
       { field: 'updatedAt', headerName: trash ? 'Deleted' : 'Last saved', flex: 1, minWidth: 150, hide: phone, valueGetter: p => (trash ? p.data?.deletedAt ?? p.data?.updatedAt : p.data?.updatedAt), valueFormatter: p => formatWhen(p.value) },
-      { field: 'updatedByName', headerName: 'Saved by', flex: 1, minWidth: 130, hide: phone, valueFormatter: p => p.value || '' },
-      { field: 'sizeBytes', headerName: 'Size', width: 100, hide: phone, type: 'numericColumn', valueFormatter: p => formatSize(p.value) },
+      { field: 'updatedByName', headerName: 'Saved by', flex: 1, minWidth: 130, hide: compact, valueFormatter: p => p.value || '' },
+      { field: 'sizeBytes', headerName: 'Size', width: 100, hide: compact, type: 'numericColumn', valueFormatter: p => formatSize(p.value) },
       { colId: 'actions', headerName: '', sortable: false, resizable: false, width: actionsW, pinned: 'right', cellRenderer: this.actionsRenderer },
     ];
   });

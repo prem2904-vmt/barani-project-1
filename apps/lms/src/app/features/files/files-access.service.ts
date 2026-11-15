@@ -44,6 +44,8 @@ export class FilesAccessService {
   readonly full = computed(() => this.entitlements.filesFull());
   readonly viewOnly = computed(() => !this.full());
   readonly phone = computed(() => this.device.deviceClass() === 'phone');
+  /** Phones and tablets: the lists keep their columns to the ones that fit (name, last saved, actions). */
+  readonly compact = computed(() => this.device.deviceClass() !== 'desktop');
   /** Phones view and copy only, unless the lab allowed editing on phones. */
   readonly phoneCanEdit = computed(() => !this.phone() || this._access()?.editOnPhones === true);
 

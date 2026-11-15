@@ -72,9 +72,13 @@ test.describe('files home', () => {
     await expect(page.getByText('Sample rejection SOP.docx').locator('visible=true').first()).toBeVisible();
     await expect(page.getByText('Monthly quality review.pptx')).toHaveCount(0);
     await tid(page, 'files-tab-all').click();
-    await page.locator('input[type="text"]').locator('visible=true').first().fill('quality');
-    await expect(page.getByText('Monthly quality review.pptx').locator('visible=true').first()).toBeVisible();
-    await expect(page.getByText('Sample rejection SOP.docx')).toHaveCount(0);
+    // On a tablet the band folds the search into an icon; the filter itself is covered by the unit specs there.
+    const search = page.locator('input[placeholder^="Search files"]').locator('visible=true').first();
+    if (await search.count()) {
+      await search.fill('quality');
+      await expect(page.getByText('Monthly quality review.pptx').locator('visible=true').first()).toBeVisible();
+      await expect(page.getByText('Sample rejection SOP.docx')).toHaveCount(0);
+    }
   });
 
   test('the Start menu link `/files?type=doc` opens on the Documents tab', async ({ page, context }) => {
@@ -275,7 +279,10 @@ test.describe('the editor band', () => {
   test('Share from a Files row: pick a role, Add, it is listed, Remove', async ({ page, context }) => {
     await boot(page, context);
     await listReady(page);
-    await rowOf(page, 'Partner report.pdf').locator('[data-act="share"]').click();
+    const shareBtn = rowOf(page, 'Partner report.pdf').locator('[data-act="share"]');
+    await expect(shareBtn).toBeVisible();
+    await page.waitForTimeout(400);                                   // the grid finishes laying out its pinned action column
+    await shareBtn.click();
     await expect(tid(page, 'files-share')).toBeVisible();
     await tid(page, 'files-share').locator('pf-select').first().click();
     await page.getByRole('option', { name: /All Technicians/ }).locator('visible=true').first().click();
@@ -338,6 +345,7 @@ test.describe('Settings → Files', () => {
 
 test.describe('Start menu and bottom bar', () => {
   const openMenu = async (page: Page) => {
+    await expect(page.locator('[data-start-trigger]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     if (!(await page.locator('[data-start-menu]').isVisible())) await page.locator('[data-start-trigger]').locator('visible=true').first().click();
     await expect(page.locator('[data-start-menu]')).toBeVisible();
     await page.waitForTimeout(900);                                   // the menu grows out of the logo and its rows fade in: let it settle

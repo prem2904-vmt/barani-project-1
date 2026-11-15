@@ -42,7 +42,7 @@ function make(o: Opts = {}) {
   const device = { open: vi.fn(async () => ({ target: { kind: 'device', name: 'a.pdf' }, name: 'a.pdf', bytes: new ArrayBuffer(8) })) };
   const router = { navigateByUrl: vi.fn(async () => true) };
   const access = {
-    available: () => true, ensureLoaded: async () => undefined, apps: () => apps, full: () => full, viewOnly: () => !full, phone: () => !!o.phone,
+    available: () => true, ensureLoaded: async () => undefined, apps: () => apps, full: () => full, viewOnly: () => !full, phone: () => !!o.phone, compact: () => !!o.phone,
     canWrite: (a: { id: string }) => full && !o.phone && writable.includes(a.id), access: () => ({ trashDays: 14 }),
     settings: () => ({ hiddenTemplates: ['neuron:stock'], ownTemplates: [{ id: 'o1', kind: 'doc', name: 'Our letter', fileId: 'f9' }] }),
   };

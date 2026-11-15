@@ -145,10 +145,10 @@ export function bytesWords(n: number): string {
     .fs-body { display: flex; flex-direction: column; gap: 16px; }
     .fs-center { display: flex; align-items: center; justify-content: center; min-width: 0; }
     .fs-chip { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-tertiary); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
-    .fs-note { margin: 0; padding: 10px 14px; font-size: 13px; border-radius: 10px; color: var(--text-secondary); background: color-mix(in srgb, var(--color-primary, #7c3aed) 8%, transparent); }
+    .fs-note { margin: 0; padding: 10px 14px; font-size: 13px; border-radius: 10px; color: var(--text-secondary); background: color-mix(in srgb, var(--violet-500, #7c3aed) 8%, transparent); }
     .fs-over { min-height: 200px; display: flex; align-items: center; justify-content: center; }
     .fs-apps { display: flex; flex-direction: column; gap: 4px; padding: 4px 16px 12px; }
-    .fs-app { display: grid; grid-template-columns: auto minmax(160px, 1fr) minmax(220px, 320px) auto; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
+    .fs-app { display: grid; grid-template-columns: auto minmax(160px, 1fr) minmax(220px, 320px) auto; align-items: center; gap: 14px; padding: 12px 0; border-top: 1px solid var(--card-border, rgba(0,0,0,.08)); }
     .fs-app:first-child { border-top: 0; }
     .fs-app__txt { display: flex; flex-direction: column; min-width: 0; }
     .fs-app__name { font-weight: 700; font-size: 15px; color: var(--text-primary); }
@@ -156,12 +156,12 @@ export function bytesWords(n: number): string {
     .fs-app__who { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .fs-lbl { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
     .fs-tpls, .fs-list { padding: 4px 16px 12px; display: flex; flex-direction: column; gap: 4px; }
-    .fs-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
+    .fs-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--card-border, rgba(0,0,0,.08)); }
     .fs-row:first-child { border-top: 0; }
     .fs-row__t { flex: 1 1 auto; font-size: 14px; color: var(--text-primary); overflow-wrap: anywhere; }
     .fs-row__s { font-size: 12px; color: var(--text-tertiary); margin-left: 6px; }
     .fs-add { align-self: flex-start; margin-top: 8px; }
-    .fs-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--border-subtle, rgba(0,0,0,.08)); }
+    .fs-line { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--card-border, rgba(0,0,0,.08)); }
     .fs-line:first-child { border-top: 0; }
     .fs-line--stack { flex-direction: column; align-items: stretch; }
     .fs-line__txt { display: flex; flex-direction: column; min-width: 0; }
