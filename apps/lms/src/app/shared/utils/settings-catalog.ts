@@ -1,5 +1,5 @@
 import type { BetaFeatureKey } from '../../core/services/beta-features.service';
-import { PAYMENT_RULE_PERMS } from '../../core/auth/route-access';
+import { COMMS_SETTINGS_PERMS, FILES_SETTINGS_PERMS, PAYMENT_RULE_PERMS } from '../../core/auth/route-access';
 
 /**
  * The ONE index of every settings page and every setting on those pages.
@@ -71,6 +71,7 @@ const I = {
   kpi: 'M3 12h4l3-9 4 18 3-9h4',
   inventory: 'M21 8 12 3 3 8l9 5 9-5ZM3 8v8l9 5 9-5V8M12 13v8',
   casesheet: 'M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1ZM8 5H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M8 12h8M8 16h5',
+  files: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z',
   printer: 'M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2M8 14h8v6H8z',
 } as const;
 
@@ -84,6 +85,7 @@ export const SETTINGS_SECTION = {
   partners: 'Referral & Vendors',
   modules: 'Modules',
   personal: 'Your settings',
+  allDepartments: 'All departments',
 } as const;
 
 const LS = 'Lab settings';
@@ -102,6 +104,9 @@ const org = (tab: OrgSettingsTabId, tabLabel: string, title: string, keywords: s
   ({ title, href: '/admin/organization', queryParams: { tab }, section: `${ORG} · ${tabLabel}`, keywords, icon: I.org, kind: 'setting' });
 const on = (href: string, page: string, icon: string, title: string, keywords: string[] = [], queryParams?: Record<string, string>): SettingsEntry =>
   ({ title, href, queryParams, section: page, keywords, icon, kind: 'setting' });
+
+/** A setting card on Settings → Files: same beta + admin gate as the page. */
+const fl = (title: string, keywords: string[]): SettingsEntry => ({ ...on('/admin/files', 'Files', I.files, title, keywords), beta: 'neuron', perms: FILES_SETTINGS_PERMS });
 
 export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   // ── People & Access ──
@@ -191,13 +196,23 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   ls('rules', 'Rules & gates', 'Show "Payments due" tab', ['payments due', 'outstanding balance'], { perms: PAYMENT_RULE_PERMS }),
   ls('report', 'Report', 'Technician notes on report', ['tech notes', 'report notes']),
   // Communication (WhatsApp, Email, SMS) — moved out of Lab settings → Report (2026-11-13).
-  { title: 'Communication', href: '/admin/communication', section: SETTINGS_SECTION.lab, icon: I.comms, kind: 'page',
+  { title: 'Communication', href: '/admin/communication', section: SETTINGS_SECTION.allDepartments, icon: I.comms, kind: 'page', perms: COMMS_SETTINGS_PERMS,
     keywords: ['whatsapp', 'email', 'sms', 'messages', 'share report', 'send report'] },
   on('/admin/communication', 'Communication · WhatsApp', I.comms, 'WhatsApp Auto: send the report automatically when it is ready', ['whatsapp', 'auto send', 'whatsapp auto'], { tab: 'whatsapp' }),
   on('/admin/communication', 'Communication · WhatsApp', I.comms, 'Your WhatsApp number', ['whatsapp number', 'embedded signup', 'whatsapp billing'], { tab: 'whatsapp' }),
   on('/admin/communication', 'Communication · Email', I.comms, 'Email sender', ['email', 'smtp', 'mailbox', 'reply to', 'from name', 'own mailbox'], { tab: 'email' }),
   on('/admin/communication', 'Communication · Email', I.comms, 'Send a test email', ['test email'], { tab: 'email' }),
   on('/admin/communication', 'Communication · SMS', I.comms, 'SMS Chat', ['sms', 'text message', 'messages app'], { tab: 'sms' }),
+  // Files (Neuron, Synapse, Axon, Myelin, Retina): Settings → All departments, with Communication (beta neuron, dev only).
+  { title: 'Files', href: '/admin/files', section: SETTINGS_SECTION.allDepartments, icon: I.files, kind: 'page', beta: 'neuron', perms: FILES_SETTINGS_PERMS,
+    keywords: ['office', 'neuron', 'synapse', 'axon', 'myelin', 'retina', 'sheets', 'spreadsheet', 'documents', 'slides', 'pdf', 'images', 'templates', 'storage', 'trash'] },
+  fl('Apps on or off, who can edit', ['neuron', 'synapse', 'axon', 'myelin', 'retina', 'turn off', 'roles']),
+  fl('Templates on File → New', ['template', 'letterhead', 'qc log', 'sop']),
+  fl('Storage used', ['space', 'gigabytes', 'how much']),
+  fl('Edit on phones', ['phone', 'mobile', 'view only']),
+  fl('Deleted files kept in Trash', ['trash', 'recycle', 'days', 'restore']),
+  fl('Patient names in files', ['patient names', 'export patient data', 'privacy']),
+  fl('On the bottom bar by default', ['bottom bar', 'pin', 'role defaults']),
   { title: 'Microbiology / Culture', href: '/admin/microbiology', section: SETTINGS_SECTION.lab, icon: I.micro, kind: 'page',
     keywords: ['culture', 'microbiology', 'culture bench'] },
   on('/admin/microbiology', 'Microbiology / Culture', I.micro, 'Stage lock', ['lock timeout', 'takeover']),
@@ -284,7 +299,8 @@ export const SETTINGS_PARENT: Readonly<Record<string, string>> = {
   '/admin/tests': '/lab/settings',
   '/admin/reports': '/lab/settings',
   '/admin/lab-settings': '/lab/settings',
-  '/admin/communication': '/lab/settings',
+  '/admin/communication': '/admin',
+  '/admin/files': '/admin',
   '/admin/microbiology': '/lab/settings',
   '/admin/instruments': '/lab/settings',
   '/admin/bridges': '/lab/settings',

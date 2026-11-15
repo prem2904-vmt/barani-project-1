@@ -1,9 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 import {
-  FIT_COLUMNS, NEURON_FAILED_MESSAGE, NEURON_MSG_PREFIX, NOT_A_SPREADSHEET_MESSAGE, NeuronBridge, msg, acceptedMessage, downloadBytes, isXlsxBytes, neuronFrameUrl,
-  routeSaved, sniffBytes, withExtension,
-} from './neuron-bridge';
+  FIT_COLUMNS, ENGINE_FAILED_MESSAGE, NOT_A_SPREADSHEET_MESSAGE, FilesBridge, messagesFor, acceptedMessage, downloadBytes, isXlsxBytes, filesFrameUrl,
+  routeSaved, withExtension, notThisKindMessage,
+} from './files-bridge';
+import { FILES_APPS, sniff as sniffBytes } from './files-registry';
+
+const NEURON = FILES_APPS[0];
+const NEURON_MSG_PREFIX = NEURON.prefix;
+const msg = messagesFor(NEURON_MSG_PREFIX);
+const neuronFrameUrl = (base: string, author: string, theme?: 'light' | 'dark' | 'system', ro?: boolean) => filesFrameUrl(NEURON, base, author, theme, ro);
+const NeuronBridge = FilesBridge;
+const NEURON_FAILED_MESSAGE = ENGINE_FAILED_MESSAGE;
 
 const PK = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3]);
 // built from plain arrays so they belong to THIS realm (jsdom): the bridge must not rely on instanceof
@@ -39,8 +47,8 @@ const from = (win: unknown, data: Record<string, unknown>, origin = ORIGIN) => (
 
 describe('Neuron bridge: byte sniffing', () => {
   it('PK header = xlsx, %PDF = pdf, anything else (CSV text) = other', () => {
-    expect(sniffBytes(PK)).toBe('xlsx');
-    expect(sniffBytes(buf(PK))).toBe('xlsx');
+    expect(sniffBytes(PK)).toBe('zip');
+    expect(sniffBytes(buf(PK))).toBe('zip');
     expect(sniffBytes(PDF)).toBe('pdf');
     expect(sniffBytes(CSV)).toBe('other');
     expect(sniffBytes(new Uint8Array([0x50, 0x4b]))).toBe('other');
@@ -49,7 +57,7 @@ describe('Neuron bridge: byte sniffing', () => {
   });
   it('a saved file is routed by its header, not its name', () => {
     expect(routeSaved(PDF)).toBe('pdf');
-    expect(routeSaved(PK)).toBe('xlsx');
+    expect(routeSaved(PK)).toBe('file');
     expect(routeSaved(CSV)).toBe('copy');
   });
   it('the frame URL is same-origin relative with host=parent, chrome=notitlebar and the encoded author', () => {
@@ -66,7 +74,7 @@ describe('Neuron bridge: byte sniffing', () => {
   it('extensions: Glucose → Glucose.pdf, Glucose.xlsx → Glucose.pdf, blank → Sheet.pdf', () => {
     expect(withExtension('Glucose', 'pdf')).toBe('Glucose.pdf');
     expect(withExtension('Glucose.xlsx', 'pdf')).toBe('Glucose.pdf');
-    expect(withExtension('', 'xlsx')).toBe('Sheet.xlsx');
+    expect(withExtension('', 'xlsx')).toBe('File.xlsx');
   });
 });
 
@@ -260,7 +268,7 @@ describe('Neuron bridge: saves, dirty and failure', () => {
     // a name that says .xlsx but carries PDF bytes is a PDF; CSV / HTML exports are plain copies (downloaded, never stored)
     bridge.handle(from(win, { type: 'neuron:save', name: 'Liar.xlsx', bytes: buf(PDF) }));
     bridge.handle(from(win, { type: 'neuron:save', name: 'x.csv', bytes: buf(CSV) }));
-    expect(saved.mock.calls.map(c => [c[0].name, c[0].kind])).toEqual([['Budget.xlsx', 'xlsx'], ['Budget.pdf', 'pdf'], ['Liar.xlsx', 'pdf'], ['x.csv', 'copy']]);
+    expect(saved.mock.calls.map(c => [c[0].name, c[0].kind])).toEqual([['Budget.xlsx', 'file'], ['Budget.pdf', 'pdf'], ['Liar.xlsx', 'pdf'], ['x.csv', 'copy']]);
   });
 
   it('accepts a typed-array view as the bytes', () => {
@@ -289,7 +297,7 @@ describe('Neuron bridge: saves, dirty and failure', () => {
     bridge.handle(from(win, { type: 'neuron:failed', error: 'no webgl2' }));
     expect(bridge.state()).toBe('failed');
     expect(bridge.failure()).toBe(NEURON_FAILED_MESSAGE);
-    expect(NEURON_FAILED_MESSAGE).toBe("This computer can't show the spreadsheet because graphics acceleration is turned off. Try Chrome or Edge, or ask your IT person to turn on hardware acceleration.");
+    expect(NEURON_FAILED_MESSAGE).toBe("This computer can't show the editor because graphics acceleration is turned off. Try Chrome or Edge, or ask your IT person to turn on hardware acceleration.");
     expect(NEURON_FAILED_MESSAGE).not.toMatch(/webgl|wasm|error/i);
   });
 
@@ -326,5 +334,66 @@ describe('Neuron bridge: saves, dirty and failure', () => {
     expect(a['download']).toBe('Out.pdf');
     expect(click).toHaveBeenCalledTimes(1);
     create.mockRestore();
+  });
+});
+
+describe('Files bridge: any app, its own prefix, global and file type', () => {
+  const [, SYNAPSE, , MYELIN, RETINA] = FILES_APPS;
+  const docx = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 9]);
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1]);
+
+  it('messages are built from the registry prefix, and an app ignores another app\'s prefix', () => {
+    expect(messagesFor('synapse:').open).toBe('synapse:open');
+    const w = {};
+    const ok = (type: string, prefix: string) => acceptedMessage({ origin: ORIGIN, source: w, data: { type } }, w, ORIGIN, prefix);
+    expect(ok('synapse:ready', 'synapse:')).not.toBeNull();
+    expect(ok('neuron:ready', 'synapse:')).toBeNull();
+    expect(ok('myelin:save', 'axon:')).toBeNull();
+  });
+
+  it('the frame URL points at the app\'s own engine folder', () => {
+    for (const a of FILES_APPS) expect(filesFrameUrl(a, `${ORIGIN}/`, 'Asha', 'dark', true)).toMatch(new RegExp(`/${a.enginePath}index\\.html\\?host=parent&chrome=notitlebar&author=Asha&theme=dark&readonly=1$`));
+  });
+
+  it('a bridge speaks only its own app: the page gets Synapse messages, Neuron ones are dropped, bytes of the wrong type are not sent', () => {
+    TestBed.configureTestingModule({ providers: [FilesBridge] });
+    const b = TestBed.inject(FilesBridge);
+    b.configure(SYNAPSE);
+    const host = fakeHost(); const f = fakeFrame();
+    b.attach(f.frame, host);
+    b.handle(from(f.win, { type: 'neuron:ready' }));
+    expect(b.state()).toBe('loading');
+    b.handle(from(f.win, { type: 'synapse:ready' }));
+    expect(b.state()).toBe('ready');
+    expect(b.open('Letter.docx', buf(png))).toBe(false);                                   // an image is not a document
+    expect(b.openProblem()).toBe(notThisKindMessage(SYNAPSE));
+    expect(b.open('Letter.docx', buf(docx))).toBe(true);
+    expect(f.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'synapse:open', name: 'Letter.docx' }), ORIGIN, expect.anything());
+  });
+
+  it('Myelin accepts a PDF and routes it as its own file; Retina accepts pictures; an engine\'s PDF export from another app is a download', () => {
+    expect(routeSaved(PDF, MYELIN)).toBe('file');
+    expect(routeSaved(PDF, SYNAPSE)).toBe('pdf');
+    expect(routeSaved(png, RETINA)).toBe('file');
+    expect(routeSaved(CSV, RETINA)).toBe('copy');
+  });
+
+  it('the engine\'s File → Open / Save As asks reach the page (own prefix only) and a template runs once the app is ready', () => {
+    TestBed.configureTestingModule({ providers: [FilesBridge] });
+    const b = TestBed.inject(FilesBridge);
+    b.configure(FILES_APPS[2]);
+    const reqs: string[] = [];
+    b.onRequest = r => reqs.push(r);
+    const host = fakeHost(); const f = fakeFrame();
+    b.attach(f.frame, host);
+    b.handle(from(f.win, { type: 'axon:openRequest' }));
+    b.handle(from(f.win, { type: 'axon:saveAsRequest' }));
+    b.handle(from(f.win, { type: 'neuron:openRequest' }));
+    expect(reqs).toEqual(['open', 'saveAs']);
+    const ran = vi.fn();
+    b.whenReady(ran);
+    expect(ran).not.toHaveBeenCalled();
+    b.handle(from(f.win, { type: 'axon:ready' }));
+    expect(ran).toHaveBeenCalledTimes(1);
   });
 });

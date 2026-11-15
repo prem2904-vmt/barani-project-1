@@ -1,3 +1,6 @@
+import { FilesAccessService } from '../../features/files/files-access.service';
+import { filesNavItems } from '../../features/files/files-nav';
+import { FilesLogoComponent } from '../../shared/components/files-logo/files-logo.component';
 import { SheetEditorService } from "../../features/neuron/sheet-editor.service";
 import { SetPinDialogService } from '../../core/services/set-pin-dialog.service';
 import { OverlayBackService } from '../../core/services/overlay-back.service';
@@ -114,6 +117,7 @@ function readFlag(key: string): boolean {
   selector: "pf-top-strip",
   standalone: true,
   imports: [
+    FilesLogoComponent,
     RouterLink,
     RouterLinkActive,
     FormsModule,
@@ -498,8 +502,8 @@ export class TopStripComponent implements OnInit, OnDestroy {
   opdActive(n: NavItem): boolean {
     return opdNavActive(n, this.currentUrl());
   }
-  /** The sheet editor (/sheet) lights the section it was opened from: tabs go manual while it is open. */
-  private onSheet(): boolean { return this.currentUrl().split("?")[0] === "/sheet"; }
+  /** A Files editor (/files/<kind>/<id>) lights the section it was opened from: tabs go manual while it is open. */
+  private onSheet(): boolean { return /^\/files\/[a-z]+\/[^/]+$/.test(this.currentUrl().split("?")[0]); }
   manualNav(n: NavItem): boolean { return n.id === "opd" || n.id === "doctor" || this.onSheet(); }
   manualActive(n: NavItem): boolean {
     if (this.onSheet()) {
@@ -561,10 +565,13 @@ export class TopStripComponent implements OnInit, OnDestroy {
   });
   /** Every screen this person can open from the bar: the work areas, then Settings (a normal pinnable item, id `admin`). */
   private readonly navAllItems = computed<NavItem[]>(() => [...this.primary(), ...(this.showAdmin() ? [ADMIN_NAV] : [])]);
+  /** Files (beta neuron): the Files screen + the apps this person may open, as pinnable items (never granting access). */
+  private readonly filesAccess = inject(FilesAccessService);
+  private readonly filesNav = computed(() => { void this.filesAccess.ensureLoaded(); return filesNavItems(this.filesAccess); });
   readonly navLayout = computed(() =>
     computeNavLayout({
       all: this.navAllItems(),
-      more: this.more(),
+      more: [...this.more(), ...this.filesNav()],
       roleDefaults: this.navPrefs.roleDefaults(),
       userPins: this.navPrefs.pinned(),
       capacity: this.navPrefs.capacity(),
@@ -802,7 +809,7 @@ export class TopStripComponent implements OnInit, OnDestroy {
   /** Sheets (beta `neuron`): the saved spreadsheets, from the account menu (never a bar tab). */
   private readonly sheetEditor = inject(SheetEditorService);
   protected sheetsOn(): boolean { return this.sheetEditor.available(); }
-  goSheets() { this.closeProfile(); this.router.navigate(["/sheet"]); }
+  goSheets() { this.closeProfile(); this.router.navigate(["/files"]); }
   goPasskeys() {
     this.closeProfile();
     this.router.navigate(["/security"]);

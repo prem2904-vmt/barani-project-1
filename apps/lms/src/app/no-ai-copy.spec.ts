@@ -24,6 +24,8 @@ const ALLOWED_DIRS: string[] = [];
 /** The ONE allowed wording, anywhere: the feature's name. */
 const ALLOWED_PHRASES: RegExp[] = [
   /\bAI[- ]connectors?\b/g,
+  // Files (owner 2026-11-15): the patient-data chip reads exactly "Contains patient data · kept out of outside AI".
+  /kept out of outside AI/g,
 ];
 
 function walk(dir: string, out: string[] = []): string[] {

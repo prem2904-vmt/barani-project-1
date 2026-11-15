@@ -157,3 +157,57 @@ describe('OfficeService: stored files', () => {
     expect(((await p.catch(x => x)) as ApiError).message).toBe('Something went wrong on our side. Try again in a moment.');
   });
 });
+
+describe('OfficeService: Files shell calls', () => {
+  it('lists every kind, or one, or the Trash', async () => {
+    const { svc, http } = make();
+    const a = svc.list(); http.expectOne(r => r.url.endsWith('/api/office/files')).flush([dto]); await a;
+    const b = svc.list('doc'); http.expectOne(r => r.url.endsWith('/api/office/files?kind=doc')).flush([]); await b;
+    const c = svc.list(undefined, true); http.expectOne(r => r.url.endsWith('/api/office/files?trash=true')).flush([]); await c;
+    http.verify();
+  });
+
+  it('create sends the kind, the reason the file holds patient data and what it is a copy of', async () => {
+    const { svc, http } = make();
+    const p = svc.create('Results.xlsx', PK, 'sheet', { phiSource: 'results', copyOf: 'f9' });
+    const req = http.expectOne(r => r.url.endsWith('/api/office/files'));
+    const fd = req.request.body as FormData;
+    expect(fd.get('phiSource')).toBe('results');
+    expect(fd.get('copyOf')).toBe('f9');
+    req.flush(dto);
+    await p;
+  });
+
+  it('restore, phi, copy and device-export hit their endpoints', async () => {
+    const { svc, http } = make();
+    const r = svc.restore('f1'); const q = http.expectOne(x => x.url.endsWith('/api/office/files/f1/restore')); expect(q.request.method).toBe('POST'); q.flush(dto); await r;
+    const m = svc.markPhi('f1', 'patient', 'Patient picked'); const q2 = http.expectOne(x => x.url.endsWith('/api/office/files/f1/phi'));
+    expect(q2.request.body).toEqual({ source: 'patient', detail: 'Patient picked' }); q2.flush(dto); await m;
+    const c = svc.copy('f1', 'Copy'); const q3 = http.expectOne(x => x.url.endsWith('/api/office/files/f1/copy')); expect(q3.request.body).toEqual({ name: 'Copy' }); q3.flush(dto); await c;
+    const d = svc.deviceExport('f1', 'electron'); const q4 = http.expectOne(x => x.url.endsWith('/api/office/files/f1/device-export')); expect(q4.request.body).toEqual({ client: 'electron' }); q4.flush({ success: true, data: { allowed: true } }); await d;
+    http.verify();
+  });
+
+  it('a refused device export keeps the server\'s plain words', async () => {
+    const { svc, http } = make();
+    const p = svc.deviceExport('f1', 'web');
+    http.expectOne(x => x.url.endsWith('/device-export')).flush({ success: false, error: 'phi_export_denied', message: 'x' }, { status: 403, statusText: 'Forbidden' });
+    await expect(p).rejects.toMatchObject({ code: 'phi_export_denied', message: "This file contains patient data, and your role can't save it to this device." });
+  });
+
+  it('a view-only lab\'s change is worded plainly', async () => {
+    const { svc, http } = make();
+    const p = svc.remove('f1');
+    http.expectOne(x => x.method === 'DELETE').flush({ success: false, error: 'module_readonly', message: 'x' }, { status: 403, statusText: 'Forbidden' });
+    await expect(p).rejects.toMatchObject({ message: 'Files are view only for your organization.' });
+  });
+
+  it('settings and storage unwrap the envelope', async () => {
+    const { svc, http } = make();
+    const a = svc.settings(); http.expectOne(x => x.url.endsWith('/api/office/settings')).flush({ success: true, data: { settings: { trashDays: 30 }, access: { full: true } } });
+    expect((await a).access.full).toBe(true);
+    const b = svc.saveSettings({ trashDays: 7 }); const q = http.expectOne(x => x.url.endsWith('/api/office/settings')); expect(q.request.method).toBe('PUT'); q.flush({ success: true, data: { settings: { trashDays: 7 }, access: {} } }); await b;
+    const c = svc.storage(); http.expectOne(x => x.url.endsWith('/api/office/storage')).flush({ success: true, data: { totalBytes: 5, byKind: [], trashCount: 0, trashBytes: 0 } });
+    expect((await c).totalBytes).toBe(5);
+  });
+});

@@ -48,6 +48,7 @@ describe('Settings hubs — each screen has ONE hub', () => {
     const lab = renderBandPage(LabSettingsHubComponent);
     for (const t of lab.cmp.tiles as Array<{ href: string }>) {
       if (t.href === '/admin/partners') continue; // the one cross-LINK to the Referral & Vendors hub (its home: Branches & Organization)
+      if (t.href === '/admin/communication') { expect(SETTINGS_PARENT[t.href]).toBe('/admin'); continue; } // shared by every department: its home is Settings → All departments, Lab settings keeps a tile to it
       expect(SETTINGS_PARENT[t.href], t.href).toBe('/lab/settings');
     }
     TestBed.resetTestingModule();

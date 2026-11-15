@@ -11,6 +11,7 @@ import { ThemeService } from "../../core/services/theme.service";
 import { HeroBandComponent } from "../../shared/components/hero-band/hero-band.component";
 import { Router, RouterLink } from "@angular/router";
 import { AuthService } from "../../core/auth/auth.service";
+import { BetaFeaturesService } from "../../core/services/beta-features.service";
 import { OpdGateService } from "../opd/shared/opd-gate.service";
 import { canOpenRoute } from "../../core/auth/route-access";
 import { ApiService } from "../../core/services/api.service";
@@ -417,13 +418,15 @@ interface KpiCard {
           </div>
 
           <!-- Shortcuts into the settings hub, grouped by relevance. -->
-          <p class="pf-ov__section">Manage</p>
-          <div class="pf-ov__cards">
-            @for (g of groups; track g.cat) {
+          @for (sec of sections(); track sec.label) {
+          <p class="pf-ov__section" [attr.data-testid]="'ov-section-' + sec.key">{{ sec.label }}</p>
+          <div class="pf-ov__cards" [attr.data-testid]="'ov-cards-' + sec.key">
+            @for (g of sec.items; track g.cat) {
               <a
                 [routerLink]="g.href ? [g.href] : ['/admin/manage']"
                 [queryParams]="g.href ? null : { cat: g.cat }"
                 class="pf-ov__card pf-card press"
+                [attr.data-testid]="'ov-tile-' + g.cat"
               >
                 <span class="pf-card__icon pf-ov__card-ic">
                   <svg
@@ -443,6 +446,7 @@ interface KpiCard {
               </a>
             }
           </div>
+          }
         }
       </div>
     </section>
@@ -1152,12 +1156,15 @@ export class AdminOverviewComponent implements OnInit {
     blurb: string;
     icon: string;
     href?: string;
+    /** dept = a department / product module; org = organization-wide; all = shared by every department (listed last). */
+    section: 'dept' | 'org' | 'all';
   }> = this.openable([
     // Module-first admin: one card per MODULE (Lab here; OPD/IPD/Pharmacy slot in
     // as each ships), then the shared/platform cards. Module ENABLEMENT lives in
     // the platform console (admin.prefrontal.health) — not here.
     {
       cat: "lab",
+      section: "dept",
       label: "Lab",
       blurb:
         "Tests & catalog, report layout, lab settings, referrals, alerts, KPIs",
@@ -1166,6 +1173,7 @@ export class AdminOverviewComponent implements OnInit {
     },
     {
       cat: "radiology",
+      section: "dept",
       label: "Radiology / Imaging",
       blurb: "X-ray, CT, MRI, ultrasound, PACS — coming soon",
       icon: "M4 7V5a2 2 0 0 1 2-2h2M16 3h2a2 2 0 0 1 2 2v2M20 17v2a2 2 0 0 1-2 2h-2M8 21H6a2 2 0 0 1-2-2v-2M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z",
@@ -1173,6 +1181,7 @@ export class AdminOverviewComponent implements OnInit {
     },
     {
       cat: "opd",
+      section: "dept",
       label: "OPD",
       blurb: "Appointments, consultation, vitals, prescriptions — coming soon",
       icon: "M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2",
@@ -1180,6 +1189,7 @@ export class AdminOverviewComponent implements OnInit {
     },
     {
       cat: "ipd",
+      section: "dept",
       label: "IPD",
       blurb: "Admissions, beds & wards, nursing, discharge — coming soon",
       icon: "M3 7v12M3 13h18v6M21 19v-4a3 3 0 0 0-3-3h-7v4M7 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z",
@@ -1187,6 +1197,7 @@ export class AdminOverviewComponent implements OnInit {
     },
     {
       cat: "pharmacy",
+      section: "dept",
       label: "Pharmacy",
       blurb: "Dispensing, stock, formulary, purchase — coming soon",
       icon: "M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM7 7l7 7",
@@ -1194,6 +1205,7 @@ export class AdminOverviewComponent implements OnInit {
     },
     {
       cat: "inventory",
+      section: "dept",
       label: "Inventory",
       blurb: "Stock, batches, expiry alerts, per-item usage",
       icon: "M21 8 12 3 3 8l9 5 9-5ZM3 8v8l9 5 9-5V8M12 13v8",
@@ -1201,6 +1213,7 @@ export class AdminOverviewComponent implements OnInit {
     },
     {
       cat: "payroll",
+      section: "dept",
       label: "Payroll",
       blurb: "Employees, attendance, payslips — coming soon",
       icon: "M3 7h18v12H3zM3 11h18M7 15h4M12 3v4",
@@ -1208,6 +1221,7 @@ export class AdminOverviewComponent implements OnInit {
     },
     {
       cat: "emergency",
+      section: "dept",
       label: "Emergency (ER)",
       blurb: "Triage, ER registration, observation — coming soon",
       icon: "M9 3h6v6h6v6h-6v6H9v-6H3V9h6z",
@@ -1215,6 +1229,7 @@ export class AdminOverviewComponent implements OnInit {
     },
     {
       cat: "bloodbank",
+      section: "dept",
       label: "Blood Bank",
       blurb: "Donors, cross-match, unit inventory — coming soon",
       icon: "M12 3s6 6 6 10a6 6 0 0 1-12 0c0-4 6-10 6-10Z",
@@ -1222,6 +1237,7 @@ export class AdminOverviewComponent implements OnInit {
     },
     {
       cat: "insurance",
+      section: "dept",
       label: "Insurance",
       blurb: "Policies, claims, pre-auth, TPA, reimbursement — coming soon",
       icon: "M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3ZM9 12l2 2 4-4",
@@ -1229,29 +1245,60 @@ export class AdminOverviewComponent implements OnInit {
     },
     {
       cat: "people",
+      section: "org",
       label: "People & Access",
       blurb: "Users, roles and the audit trail",
       icon: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
     },
     {
       cat: "org",
+      section: "org",
       label: "Branches & Organization",
       blurb: "Branches, departments, IDs, appointments, referral & vendors",
       icon: "M4 21V7l8-4 8 4v14",
     },
     {
       cat: "finance",
+      section: "org",
       label: "Billing & Finance",
       blurb: "GST, discounts, invoices, daily statement",
       icon: "M3 5h18v14H3z",
     },
     {
       cat: "automation",
+      section: "org",
       label: "Platform & Automation",
       blurb: "Process builder & form flows",
       icon: "M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z",
     },
+    {
+      cat: "communication",
+      section: "all",
+      label: "Communication",
+      blurb: "WhatsApp, email and SMS for every department",
+      icon: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5",
+      href: "/admin/communication",
+    },
   ]);
+
+  /** Files (beta `neuron`, dev only): an ordinary tile next to Communication, same style, no badge. */
+  private readonly beta = inject(BetaFeaturesService);
+  private readonly filesTile = computed(() => this.beta.enabled('neuron') && this.canOpen('/admin/files')
+    ? [{
+        cat: 'files', section: 'all' as const, label: 'Files', blurb: 'Neuron, Synapse, Axon, Myelin, Retina: access, templates, storage',
+        icon: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z', href: '/admin/files',
+      }]
+    : []);
+
+  /** Departments first, then the organization, then what every department shares (Communication, Files) LAST. */
+  readonly sections = computed(() => {
+    const all = [...this.groups, ...this.filesTile()];
+    return ([
+      { key: 'dept', label: 'Departments' },
+      { key: 'org', label: 'Organization' },
+      { key: 'all', label: 'All departments' },
+    ] as const).map(s => ({ ...s, items: all.filter(g => g.section === s.key) })).filter(s => s.items.length > 0);
+  });
 
   // ── Admin search (item 140) ────────────────────────────────────
   // A flat index of every config screen / admin page so any setting is one

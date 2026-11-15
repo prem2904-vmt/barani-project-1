@@ -210,6 +210,9 @@ fullscreen.register(() => mainWindow);
 // Send on WhatsApp: the docked WhatsApp Web panel (open / close / sign out).
 const waDock = whatsappDock.register(() => mainWindow);
 
+// Files on this computer: native Open / Save dialogs, save in place for a file the person picked (electron/local-files.js).
+require('./local-files').register(() => mainWindow);
+
 ipcMain.handle('printer:status', async () => labelPrinter.status());
 ipcMain.handle('printer:print', async (_e, payload) => labelPrinter.print(payload));
 

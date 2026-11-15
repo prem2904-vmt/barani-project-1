@@ -391,3 +391,12 @@
 @media (pointer: coarse) {
   .sm-ico { width: 44px; height: 44px; }
 }
+
+/* Files: right-click / long-press menu, the pinned tick, the logo rows */
+.sm-ctx { position: absolute; z-index: 5; min-width: 200px; max-width: min(280px, calc(100vw - 24px)); padding: 6px; border-radius: 12px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface-card, #fff); border: 1px solid var(--border-subtle, rgba(0,0,0,.1)); box-shadow: 0 14px 36px rgba(0,0,0,.22); transform: translate(-6px, 6px); }
+.sm-ctx__item { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.sm-ctx__item:hover:not(:disabled), .sm-ctx__item:focus-visible { background: color-mix(in srgb, var(--color-primary, #7c3aed) 10%, transparent); outline: none; }
+.sm-ctx__item:disabled { color: var(--text-tertiary); cursor: default; }
+.sm-ctx__hint { font-size: 11px; color: var(--text-tertiary); }
+.sm-row__pin { margin-left: auto; display: inline-flex; color: var(--color-primary, #7c3aed); }

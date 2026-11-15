@@ -342,14 +342,29 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/account-security/passkeys.component').then(m => m.PasskeysComponent)
       },
       {
-        // The sheet editor (beta `neuron`, dev only). A screen opens it (SheetEditorService.open) and the back chevron returns there;
-        // with nothing to open it shows the saved Sheets (More menu). Beta off => betaGuard sends a direct visit to '/'.
-        // Leaving with unsaved changes asks first (DialogService).
-        path: 'sheet',
+        // Files (beta `neuron`, dev only): one screen for every app's files, one editor for all of them. A screen opens an editor
+        // (SheetEditorService.open) and the back chevron returns there; Files home lists everything. Beta off => betaGuard sends a visit to '/'.
+        // Leaving an editor with unsaved changes asks first (DialogService). A lab without Full Files gets the same screens, read-only.
+        path: 'files',
+        canActivate: [betaGuard('neuron')],
+        loadComponent: () => import('./features/files/files-home.page').then(m => m.FilesHomePage)
+      },
+      {
+        path: 'files/:kind/:id',
         canActivate: [betaGuard('neuron')],
         canDeactivate: [(c: { canLeave?: () => Promise<boolean> }) => c?.canLeave ? c.canLeave() : true],
-        loadComponent: () => import('./features/neuron/sheet-editor.page').then(m => m.SheetEditorPage)
+        data: { recreateOn: ['kind', 'id'] },
+        loadComponent: () => import('./features/files/files-editor.page').then(m => m.FilesEditorPage)
       },
+      // The names the earlier builds used keep working.
+      { path: 'sheet', redirectTo: () => inject(Router).parseUrl('/files?type=sheet') },
+      { path: 'office', redirectTo: () => inject(Router).parseUrl('/files') },
+      {
+        path: 'admin/files',
+        canActivate: [...routeGuards('/admin/files'), betaGuard('neuron')],
+        loadComponent: () => import('./features/files/files-settings.page').then(m => m.FilesSettingsPage)
+      },
+      { path: 'admin/office', redirectTo: '/admin/files', pathMatch: 'full' },
       {
         path: 'admin/organization',
         canActivate: [...routeGuards('/admin/organization')],

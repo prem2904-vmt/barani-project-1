@@ -124,7 +124,7 @@ describe('StartMenuComponent', () => {
       const panel = q(el, '.sm-panel');
       expect(panel.lastElementChild!.classList).toContain('sm-search');
       expect(panel.querySelector('.sm-scroll')!.nextElementSibling).toBe(panel.lastElementChild);
-      expect(q(el, '.sm-search__input').getAttribute('aria-label')).toBe('Find a screen');
+      expect(q(el, '.sm-search__input').getAttribute('aria-label')).toBe('Search screens and files');
     });
 
     it('highlights the current screen', async () => {

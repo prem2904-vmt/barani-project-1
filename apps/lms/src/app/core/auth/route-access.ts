@@ -71,7 +71,10 @@ export const FINANCE_PERMS = ['collect_payment', 'create_bill', 'manage_tenant']
  *  cashier (everyone's + Day closing). The server enforces each action. */
 export const EXPENSE_ROUTE_PERMS = ['expense_viewer', 'expense_modifier', 'expense_admin'];
 /** Settings → Communication (WhatsApp / Email / SMS) — who may open and change it (the server enforces each PUT). */
-export const COMMS_SETTINGS_PERMS = ['manage_lab_settings', 'manage_notifications'];
+/** Communication is shared by every department (Settings → All departments): the OPD / IPD / Pharmacy admins open it too (the server accepts the same codes). */
+export const COMMS_SETTINGS_PERMS = ['manage_lab_settings', 'manage_notifications', 'manage_opd', 'manage_ipd', 'manage_pharmacy'];
+/** Settings → Files: the tenant admin (the server's `manage_tenant`). */
+export const FILES_SETTINGS_PERMS = ['manage_tenant'];
 /** WhatsApp spend / credits (the billing card) — never manage_lab_settings alone. */
 export const WA_BILLING_VIEW_PERMS = ['manage_tenant', 'manage_notifications'];
 /** Payment rules on the branch lab config (payment gate, payments-due tab). */
@@ -169,6 +172,7 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/lab-settings':      { perms: ['manage_lab_settings'] },
   // Settings → Communication (WhatsApp, Email, SMS): the perms the WhatsApp lab settings use.
   '/admin/communication':     { perms: COMMS_SETTINGS_PERMS },
+  '/admin/files':             { perms: FILES_SETTINGS_PERMS },
   '/admin/organization':      { perms: ['manage_tenant'] },
   // Billing config APIs accept manage_billing_config as well as manage_tenant.
   '/admin/billing':           { perms: ['manage_tenant', 'manage_billing_config'] },

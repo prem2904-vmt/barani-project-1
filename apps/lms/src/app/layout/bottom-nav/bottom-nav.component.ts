@@ -1,3 +1,6 @@
+import { FilesAccessService } from '../../features/files/files-access.service';
+import { filesNavItems } from '../../features/files/files-nav';
+import { FilesLogoComponent } from '../../shared/components/files-logo/files-logo.component';
 import { SheetEditorService } from '../../features/neuron/sheet-editor.service';
 import { DESKTOP_NOTIFY_ITEMS, DesktopNotifyService } from '../../core/services/desktop-notify.service';
 import { DesktopWindowService } from '../../core/services/desktop-window.service';
@@ -46,7 +49,7 @@ const DRAG_THRESHOLD_PX = 4;
 @Component({
   selector: 'pf-bottom-nav',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, FormsModule, StartMenuComponent],
+  imports: [RouterLink, RouterLinkActive, FormsModule, StartMenuComponent, FilesLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './bottom-nav.component.html',
   styleUrl: './bottom-nav.component.scss'
@@ -241,7 +244,7 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected passkeysOn(): boolean { return this.beta.enabled('passkeys'); }
   /** Sheets (beta `neuron`): the saved spreadsheets, from the More menu (never a bottom-nav tab). */
   protected sheetsOn(): boolean { return this.sheetEditor.available(); }
-  protected goSheets(): void { this.closeMore(); this.router.navigate(['/sheet']); }
+  protected goSheets(): void { this.closeMore(); this.router.navigate(['/files']); }
   protected goPasskeys(): void { this.closeMore(); this.router.navigate(['/security']); }
   protected goSetup(): void { this.closeMore(); this.router.navigate(['/setup']); }
 
@@ -603,10 +606,13 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected readonly iconsOnly = this.navPrefs.iconsOnly;
   /** Everything this person can open from the bar: the work areas, then Settings (a normal pinnable item, id `admin`). */
   private readonly navAllItems = computed<NavItem[]>(() => [...this.primary(), ...(this.showAdminTab() ? [ADMIN_NAV] : [])]);
+  /** Files (beta neuron): the Files screen + the apps this person may open, as pinnable items (never granting access). */
+  private readonly filesAccess = inject(FilesAccessService);
+  private readonly filesNav = computed(() => { void this.filesAccess.ensureLoaded(); return filesNavItems(this.filesAccess); });
   protected readonly navLayout = computed(() =>
     computeNavLayout({
       all: this.navAllItems(),
-      more: this.visible(MORE_NAV),
+      more: [...this.visible(MORE_NAV), ...this.filesNav()],
       roleDefaults: this.navPrefs.roleDefaults(),
       userPins: this.navPrefs.pinned(),
       capacity: this.navPrefs.capacity(),

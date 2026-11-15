@@ -11,6 +11,10 @@ export interface NavItem {
   href: string;
   exact?: boolean;
   iconPath: string[];
+  /** A Files app's logo (its registry id): the bar and the Start menu draw it instead of the stroked icon. */
+  logo?: string;
+  /** The Start menu's row label when it is longer than the bar's ("Neuron · sheets" on the menu, "Neuron" on the bar). */
+  menuLabel?: string;
   /**
    * OR-semantics: user needs at least one of these permission codes to see
    * the item. Undefined / empty means always visible to any authenticated

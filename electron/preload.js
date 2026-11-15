@@ -31,6 +31,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('window:fullscreen', h);
     }
   },
+  // Files on this computer (local-files.js): native Open / Save dialogs; the page only ever holds an opaque token for a file it picked.
+  files: {
+    openLocal: (kind) => ipcRenderer.invoke('files:openLocal', { kind }),
+    saveLocal: (payload) => ipcRenderer.invoke('files:saveLocal', payload)
+  },
   // USB label printer (Detonger/Dothantech). The renderer builds a packed
   // 1-bpp bitmap and hands it here; main encodes + streams it over USB.
   printer: {

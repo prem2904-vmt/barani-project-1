@@ -30,9 +30,11 @@
     <div class="sm-tiles" role="list" aria-label="On your bar">
       @for (r of tiles(); track r.item?.id ?? 'home'; let i = $index) {
       <button type="button" role="listitem" class="sm-tile press" data-sm-row [style.--i]="i" [attr.data-sm-item]="r.item?.id ?? 'home'"
-        [class.sm-tile--on]="r.active" [attr.aria-current]="r.active ? 'page' : null" (click)="openRow(r)">
+        [class.sm-tile--on]="r.active" [attr.aria-current]="r.active ? 'page' : null" (click)="openRow(r)"
+        (contextmenu)="r.item && openCtx($event, r.item)" (pointerdown)="r.item && pressStart($event, r.item)" (pointerup)="pressEnd()" (pointerleave)="pressEnd()" (pointercancel)="pressEnd()">
+        @if (r.item?.logo) { <pf-files-logo [app]="r.item!.logo!" [size]="24" /> } @else {
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
-          stroke-linejoin="round" aria-hidden="true">@for (p of r.iconPath; track p) { <path [attr.d]="p" /> }</svg>
+          stroke-linejoin="round" aria-hidden="true">@for (p of r.iconPath; track p) { <path [attr.d]="p" /> }</svg> }
         <span class="sm-tile__lbl">{{ r.label }}</span>
       </button>
       }
@@ -45,9 +47,11 @@
     <div class="sm-rows" role="list" aria-label="More screens">
       @for (r of others(); track r.item!.id; let i = $index) {
       <button type="button" role="listitem" class="sm-row press" data-sm-row [style.--i]="i + 3" [attr.data-sm-item]="r.item!.id"
-        [class.sm-row--on]="r.active" [attr.aria-current]="r.active ? 'page' : null" (click)="openRow(r)">
+        [class.sm-row--on]="r.active" [attr.aria-current]="r.active ? 'page' : null" (click)="openRow(r)"
+        (contextmenu)="openCtx($event, r.item!)" (pointerdown)="pressStart($event, r.item!)" (pointerup)="pressEnd()" (pointerleave)="pressEnd()" (pointercancel)="pressEnd()">
+        @if (r.item?.logo) { <pf-files-logo [app]="r.item!.logo!" [size]="22" /> } @else {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
-          stroke-linejoin="round" aria-hidden="true">@for (p of r.iconPath; track p) { <path [attr.d]="p" /> }</svg>
+          stroke-linejoin="round" aria-hidden="true">@for (p of r.iconPath; track p) { <path [attr.d]="p" /> }</svg> }
         <span class="sm-row__lbl">{{ r.label }}</span>
       </button>
       }
@@ -57,15 +61,22 @@
     <div class="sm-rows" role="list" aria-label="Screens">
       @for (r of results(); track r.item?.id ?? 'home') {
       <button type="button" role="listitem" class="sm-row press" data-sm-row [attr.data-sm-item]="r.item?.id ?? 'home'"
-        [class.sm-row--on]="r.active" (click)="openRow(r)">
+        [class.sm-row--on]="r.active" (click)="openRow(r)" (contextmenu)="r.item && openCtx($event, r.item)">
+        @if (r.item?.logo) { <pf-files-logo [app]="r.item!.logo!" [size]="22" /> } @else {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
-          stroke-linejoin="round" aria-hidden="true">@for (p of r.iconPath; track p) { <path [attr.d]="p" /> }</svg>
+          stroke-linejoin="round" aria-hidden="true">@for (p of r.iconPath; track p) { <path [attr.d]="p" /> }</svg> }
         <span class="sm-row__lbl">{{ r.label }}</span>
       </button>
       }
+      @for (f of fileRows(); track f.id) {
+      <button type="button" role="listitem" class="sm-row press" data-sm-row data-sm-file [attr.data-sm-item]="'file-' + f.id" (click)="openFile(f)">
+        <pf-files-logo [app]="f.appId" [size]="22" />
+        <span class="sm-row__lbl">{{ f.name }}</span>
+      </button>
+      }
     </div>
-    @if (!results().length) {
-    <p class="sm-empty">No screen matches "{{ query() }}".</p>
+    @if (!results().length && !fileRows().length) {
+    <p class="sm-empty">Nothing matches "{{ query() }}".</p>
     }
     }
   </div>
@@ -73,7 +84,7 @@
   <div class="sm-search" data-sm-searchbar>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
       stroke-linejoin="round" aria-hidden="true">@for (p of icons.search; track p) { <path [attr.d]="p" /> }</svg>
-    <input #search type="text" class="sm-search__input" placeholder="Find a screen" aria-label="Find a screen" autocomplete="off"
+    <input #search type="text" class="sm-search__input" placeholder="Search screens and files" aria-label="Search screens and files" autocomplete="off"
       enterkeyhint="go" [value]="query()" (input)="query.set($any($event.target).value)" (keydown)="onSearchKey($event)" />
     @if (searching()) {
     <button type="button" class="sm-hbtn sm-hbtn--bare sm-search__clear press" aria-label="Clear search" title="Clear (Esc)" (click)="clearSearch()">
@@ -217,6 +228,16 @@
         {{ saving() ? 'Saving' : 'Save role defaults' }}
       </button>
     </div>
+  </div>
+  }
+  @if (ctx(); as c) {
+  <div class="sm-ctx" data-sm-ctx role="menu" [attr.aria-label]="c.item.label + ' actions'" [style.left.px]="c.x" [style.top.px]="c.y" (keydown)="onCtxKey($event)">
+    @for (a of ctxActions(); track a.id) {
+    <button type="button" role="menuitem" class="sm-ctx__item press" data-sm-ctx-item [attr.data-sm-ctx-act]="a.id" [disabled]="a.disabled" (click)="runCtx(a.id)">
+      <span>{{ a.label }}</span>
+      @if (a.hint) { <span class="sm-ctx__hint">{{ a.hint }}</span> }
+    </button>
+    }
   </div>
   }
 </div>

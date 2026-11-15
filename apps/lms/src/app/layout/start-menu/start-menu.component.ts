@@ -1,3 +1,4 @@
+import { FilesLogoComponent } from '../../shared/components/files-logo/files-logo.component';
 import {
   ChangeDetectionStrategy, Component, ElementRef, HostListener, computed, effect, inject, input, output, signal, untracked, viewChild,
 } from '@angular/core';
@@ -11,6 +12,11 @@ import { ToastService } from '../../core/services/toast.service';
 import { NavItem } from '../nav-items';
 import { OverlayBackService } from '../../core/services/overlay-back.service';
 import { NavPrefsService } from './nav-prefs.service';
+import { FilesAccessService } from '../../features/files/files-access.service';
+import { SheetEditorService } from '../../features/neuron/sheet-editor.service';
+import { FILES_SEARCH_WORDS } from '../../features/files/files-nav';
+import { FILES_NAME, filesAppForKind, filesAppForNavId, isFilesNavId } from '../../features/files/files-registry';
+import { OfficeFile, OfficeService } from '../../features/files/office.service';
 import { NavLayout, RoleNav, movePinned, normalizeRoleNav, togglePinned } from './nav-pins';
 
 /** Stroked SVG paths (never emoji). */
@@ -46,7 +52,7 @@ interface EditRow { item: NavItem; locked: boolean; canUp: boolean; canDown: boo
 @Component({
   selector: 'pf-start-menu',
   standalone: true,
-  imports: [ToggleComponent, SelectComponent, CdkDropList, CdkDrag],
+  imports: [ToggleComponent, SelectComponent, CdkDropList, CdkDrag, FilesLogoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './start-menu.component.html',
   styleUrl: './start-menu.component.scss',
@@ -60,6 +66,9 @@ export class StartMenuComponent {
   private readonly toast = inject(ToastService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly overlays = inject(OverlayBackService);
+  private readonly filesAccess = inject(FilesAccessService);
+  private readonly sheets = inject(SheetEditorService);
+  private readonly officeSvc = inject(OfficeService);
 
   /** The layout the shell computed (computeNavLayout). */
   readonly layout = input.required<NavLayout>();
@@ -131,6 +140,7 @@ export class StartMenuComponent {
     this.prefs.ensureDefaults();
     this.query.set('');
     this.mode.set('list');
+    this.ctx.set(null);
     this.asking.set(false);
     this.currentUrl.set(((this.router as Partial<Router>).url ?? '').split(/[?#]/)[0]);
     this.shown.set(true);
@@ -202,22 +212,110 @@ export class StartMenuComponent {
     const href = Array.isArray(h) ? h.join('/').replace(/\/+/g, '/') : h;
     return { kind: 'home', label: 'Home', iconPath: SM_ICONS.home, active: !!href && href !== '/' && this.currentUrl() === href };
   });
-  private toRow(i: NavItem): MenuRow {
-    return { kind: 'item', item: i, label: i.label, iconPath: i.iconPath, active: this.isActive(i) };
+  private toRow(i: NavItem, plain = false): MenuRow {
+    return { kind: 'item', item: i, label: plain ? i.label : (i.menuLabel ?? i.label), iconPath: i.iconPath, active: this.isActive(i) };
   }
   /** Home, then the pinned screens in bar order. */
-  protected readonly tiles = computed<MenuRow[]>(() => [this.homeRow(), ...this.layout().pinned.map(i => this.toRow(i))]);
+  protected readonly tiles = computed<MenuRow[]>(() => [this.homeRow(), ...this.layout().pinned.map(i => this.toRow(i, true))]);
   /** Every other screen the person may open (each once). */
   protected readonly others = computed<MenuRow[]>(() => {
     const m = this.layout().menu;
     return [...m.work, ...m.more, ...m.settings].map(i => this.toRow(i));
   });
+  protected isPinnedId(id: string): boolean { return this.layout().pinned.some(p => p.id === id); }
+  protected isLockedId(id: string): boolean { return this.layout().lockedIds.has(id); }
+
+  // ── Right-click (desktop) / long-press (touch) menu on a Files item: Open, New …, Pin to bar / Unpin from bar ──
+  protected readonly ctx = signal<{ item: NavItem; x: number; y: number } | null>(null);
+  private pressTimer: ReturnType<typeof setTimeout> | null = null;
+  private suppressClick = false;
+  protected readonly ctxActions = computed(() => {
+    const c = this.ctx();
+    if (!c) return [];
+    const app = filesAppForNavId(c.item.id);
+    const out: { id: string; label: string; disabled?: boolean; hint?: string }[] = [{ id: 'open', label: app ? `Open ${app.name}` : 'Open All files' }];
+    if (app && this.filesAccess.canWrite(app)) out.push({ id: 'new', label: app.kind === 'pdf' || app.kind === 'image' ? app.newLabel : `New ${app.noun}` });
+    const pinned = this.isPinnedId(c.item.id);
+    const locked = this.isLockedId(c.item.id);
+    out.push(pinned ? { id: 'unpin', label: 'Unpin from bar', disabled: locked, hint: locked ? 'Kept by admin' : undefined } : { id: 'pin', label: 'Pin to bar' });
+    return out;
+  });
+  /** The menu sits inside the (transformed) panel, so its coordinates are the panel's own, kept inside it. */
+  private ctxAt(item: NavItem, cx: number, cy: number): { item: NavItem; x: number; y: number } {
+    const p = this.panel()?.nativeElement.getBoundingClientRect();
+    if (!p) return { item, x: cx, y: cy };
+    const x = Math.max(8, Math.min(cx - p.left, p.width - 220));
+    const y = Math.max(8, Math.min(cy - p.top, p.height - 150));
+    return { item, x, y };
+  }
+  protected openCtx(ev: MouseEvent, item: NavItem): void {
+    if (!isFilesNavId(item.id)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    this.ctx.set(this.ctxAt(item, ev.clientX, ev.clientY));
+    setTimeout(() => this.panel()?.nativeElement.querySelector<HTMLElement>('[data-sm-ctx-item]')?.focus(), 0);
+  }
+  protected pressStart(ev: PointerEvent, item: NavItem): void {
+    if (ev.pointerType === 'mouse' || !isFilesNavId(item.id)) return;
+    this.pressEnd();
+    const el = ev.currentTarget as HTMLElement | null;
+    this.pressTimer = setTimeout(() => {
+      this.pressTimer = null;
+      this.suppressClick = true;
+      const r = el?.getBoundingClientRect();
+      this.ctx.set(this.ctxAt(item, r ? r.left + r.width / 2 : ev.clientX, r ? r.bottom : ev.clientY));
+      setTimeout(() => { this.suppressClick = false; }, 600);
+    }, 480);
+  }
+  protected pressEnd(): void { if (this.pressTimer) { clearTimeout(this.pressTimer); this.pressTimer = null; } }
+  protected runCtx(action: string): void {
+    const c = this.ctx();
+    this.ctx.set(null);
+    if (!c) return;
+    const app = filesAppForNavId(c.item.id);
+    if (action === 'open') { void this.router.navigateByUrl(c.item.href); this.close(); }
+    else if (action === 'new' && app) {
+      this.close();
+      void this.sheets.open({ app: app.id, source: FILES_NAME });
+    } else if (action === 'pin') this.pin(c.item);
+    else if (action === 'unpin') this.unpin(c.item);
+  }
+  /** The menu's own keys: arrows move, Esc closes it (and only it). */
+  protected onCtxKey(ev: KeyboardEvent): void {
+    const items = Array.from((ev.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('[data-sm-ctx-item]:not([disabled])'));
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); items[(at + 1) % items.length]?.focus(); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); items[(at - 1 + items.length) % items.length]?.focus(); }
+    else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); this.ctx.set(null); }
+  }
   /** Search results: one flat list, Home only when asked for. */
-  protected readonly searching = computed(() => this.query().trim().length > 0);
+  protected readonly searching = computed(() => { const on = this.query().trim().length > 0; if (on) untracked(() => this.loadFilesOnce()); return on; });
+  // ── Files by name: while someone searches, the stored files they may open (the server filters by role) join the results ──
+  private readonly officeFiles = signal<OfficeFile[]>([]);
+  private filesLoaded = false;
+  protected readonly fileRows = computed<{ id: string; name: string; appId: string; route: string }[]>(() => {
+    const q = this.query().trim().toLowerCase();
+    if (q.length < 2 || !this.filesAccess.available()) return [];
+    return this.officeFiles().filter(f => f.name.toLowerCase().includes(q)).slice(0, 8).flatMap(f => {
+      const a = filesAppForKind(f.kind);
+      return a && this.filesAccess.canRead(a) ? [{ id: f.id, name: f.name, appId: a.id, route: a.route }] : [];
+    });
+  });
+  private loadFilesOnce(): void {
+    if (this.filesLoaded || !this.filesAccess.available()) return;
+    this.filesLoaded = true;
+    void this.officeSvc.list().then(l => this.officeFiles.set(l)).catch(() => { this.filesLoaded = false; });
+  }
+  protected openFile(f: { id: string; route: string }): void {
+    void this.router.navigateByUrl(`/files/${f.route}/${f.id}`);
+    this.close();
+  }
   protected readonly results = computed<MenuRow[]>(() => {
     const q = this.query().trim().toLowerCase();
     const all = [...this.layout().pinned.map(i => this.toRow(i)), ...this.others()];
-    const hits = q ? all.filter(r => r.label.toLowerCase().includes(q)) : all;
+    // A Files item is also found by what it opens ("sheets", "office", "pdf" …), not only by its name.
+    const hit = (r: MenuRow) => r.label.toLowerCase().includes(q) || (r.item ? (FILES_SEARCH_WORDS[r.item.id] ?? []).some(w => w.includes(q) || q.includes(w) && q.length >= 3 && w === q) : false);
+    const hits = q ? all.filter(hit) : all;
     return !q || 'home'.includes(q) ? [this.homeRow(), ...hits] : hits;
   });
   /** Pinned screens past the bar's capacity are still pinned, just not visible at this width. */
@@ -225,6 +323,7 @@ export class StartMenuComponent {
 
   // ── Opening ─────────────────────────────────────────────────────────────
   protected openRow(r: MenuRow): void {
+    if (this.suppressClick) return;                      // the long-press that opened the context menu must not also open the screen
     if (r.kind === 'home') {
       const h = this.homeHref();
       void this.router.navigate(Array.isArray(h) ? h : [h]);
@@ -349,6 +448,7 @@ export class StartMenuComponent {
     if (!this.open() || this.asking()) return;
     if (ev.key === 'Escape') {
       ev.preventDefault();
+      if (this.ctx()) { this.ctx.set(null); return; }
       if (this.mode() === 'list' && this.query()) { this.query.set(''); this.focusSearch(); }
       else this.close();
       return;
@@ -390,6 +490,7 @@ export class StartMenuComponent {
     if (trig) this.lastTrigger = trig;
     if (!this.open() || this.asking()) return;
     if (!t) return;
+    if (this.ctx() && !t.closest?.('[data-sm-ctx]')) this.ctx.set(null);
     if (this.host.nativeElement.contains(t) || t.closest?.('[data-start-trigger]') || t.closest?.('.pf-dd__panel')
       || t.closest?.('.cdk-drag-preview')) return;
     this.close();

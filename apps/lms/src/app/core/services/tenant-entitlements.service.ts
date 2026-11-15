@@ -12,7 +12,13 @@ import {
  * module. `moduleEnabled(key)` resolves all of them against the two-level model
  * so existing callers keep working unchanged.
  */
-export type ModuleKey = ModuleId | 'messages' | 'homeCollection' | 'reports' | PlatformSwitchKey;
+export type ModuleKey = ModuleId | 'messages' | 'homeCollection' | 'reports' | PlatformSwitchKey | 'files';
+
+/** Files (Neuron, Synapse, Axon, Myelin, Retina) is OPT-IN per tenant, the opposite of the switches above: Full only when the
+ *  server says `files: true` (module-config). No row, no key, a failed call or a call still loading all mean VIEW ONLY. */
+export function filesFullOn(wire: Partial<Record<string, unknown>> | null | undefined): boolean {
+  return wire?.['files'] === true;
+}
 
 const LAB_FEATURE_KEYS = new Set(['messages', 'homeCollection', 'reports']);
 
@@ -64,6 +70,9 @@ export class TenantEntitlementsService {
 
   /** The platform's WhatsApp / email / SMS switches. Fail-open (on) until loaded or when the server is older. */
   private readonly _platform = signal<Record<PlatformSwitchKey, boolean>>({ ...ALL_ON });
+  /** Fail-closed: false (View only) until the server has said otherwise, so Save never flashes in. */
+  private readonly _filesFull = signal(false);
+  readonly filesFull = this._filesFull.asReadonly();
 
   readonly modules = this._modules.asReadonly();
   readonly loaded = this._loaded.asReadonly();
@@ -94,6 +103,7 @@ export class TenantEntitlementsService {
    * `homeCollection` / `reports` → the matching Lab feature. Fail-open preserved.
    */
   moduleEnabled(key: ModuleKey): boolean {
+    if (key === 'files') return this._filesFull();
     if (isPlatformSwitch(key)) return this._platform()[key];
     if (LAB_FEATURE_KEYS.has(key)) return this.featureOn('lab', key);
     return this.moduleOn(key as ModuleId);
@@ -124,11 +134,11 @@ export class TenantEntitlementsService {
   private fetch(): Promise<void> {
     // Platform WhatsApp / email / SMS switches (module-config); a failure leaves them on.
     this.api.get<Record<string, unknown>>('/api/tenants/module-config').subscribe({
-      next: (wire) => this._platform.set({
+      next: (wire) => { this._filesFull.set(filesFullOn(wire)); this._platform.set({
         whatsappAuto: platformSwitchOn(wire, 'whatsappAuto'), whatsappChat: platformSwitchOn(wire, 'whatsappChat'),
         emailShare: platformSwitchOn(wire, 'emailShare'), smsChat: platformSwitchOn(wire, 'smsChat'),
-      }),
-      error: () => { /* stay on */ },
+      }); },
+      error: () => { /* the switches stay on; Files stays View only */ },
     });
     return new Promise<void>((resolve) => {
       this.api.get<ModulesWire>('/api/tenants/modules').subscribe({
@@ -170,6 +180,7 @@ export class TenantEntitlementsService {
 
   reset(): void {
     this._platform.set({ ...ALL_ON });
+    this._filesFull.set(false);
     this._modules.set(null);
     this._loaded.set(false);
     this.loadPromise = null;
