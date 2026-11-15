@@ -98,8 +98,7 @@
          indicator moves (it slides). Phones: its own scrollable row. -->
     <ng-container band-tools>
       @if (tubeTabs().length) {
-        <span #tabsEl class="pf-seg pf-sre-tabs" role="tablist" aria-label="Tubes in this order">
-          <span class="pf-sre-tabs__ind" aria-hidden="true"></span>
+        <span class="pf-seg pf-sre-tabs" role="tablist" aria-label="Tubes in this order">
           @for (tab of tubeTabs(); track tab.id) {
             <button type="button" class="pf-seg__item pf-sre-tab" role="tab"
                     [attr.data-tube]="tab.id"
