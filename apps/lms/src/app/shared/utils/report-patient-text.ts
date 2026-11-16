@@ -57,14 +57,22 @@ export const LABEL_JOINER_CHOICES: readonly { value: string; label: string }[] =
   { value: ' - ', label: 'Name - value' },
 ];
 
-/** Age styles the editor offers, with a sample of how 45 prints. */
+/** Age styles the editor offers, with a sample of how 45 prints. 'long' ("45
+ *  years") is NOT offered: it only differs from 'Years' by a capital (OPS-141
+ *  duplicate). A template that already saved it still prints it, and the editor
+ *  shows it as 'Years' (`ageStyleChoice`). Months / days always print in full
+ *  (`ageText` → spellInfant), so these samples are about years only. */
 export const AGE_STYLE_CHOICES: readonly { value: ReportPatientStyle['ageStyle']; label: string }[] = [
   { value: 'short', label: '45 Y' },
   { value: 'Years', label: '45 Years' },
   { value: 'yrs', label: '45 yrs' },
-  { value: 'long', label: '45 years' },
   { value: 'Y', label: '45Y' },
 ];
+
+/** The choice the editor's age dropdown shows for a saved style. */
+export function ageStyleChoice(style: ReportPatientStyle['ageStyle']): ReportPatientStyle['ageStyle'] {
+  return style === 'long' ? 'Years' : style;
+}
 
 /** The label to print for `key`. `literal` is what the renderer printed before
  *  this feature ("Age : ", "Ref. By: ") and is returned untouched when the lab
@@ -96,7 +104,7 @@ export function ageText(patient: StripPatient | null | undefined, p: ReportPatie
   if (!patient) return '';
   const age = typeof patient.age === 'string' ? (patient.age.trim() === '' ? null : Number(patient.age)) : patient.age;
   const style: AgeStyle = p.ageStyle === 'auto' ? fallback : p.ageStyle;
-  return formatAge({ age: age ?? null, ageDisplay: patient.ageDisplay ?? null, ageYears: patient.ageYears ?? null }, style);
+  return formatAge({ age: age ?? null, ageDisplay: patient.ageDisplay ?? null, ageYears: patient.ageYears ?? null }, style, '', undefined, true);
 }
 
 /** "45 Y / Male" — age and sex as ONE field. */
