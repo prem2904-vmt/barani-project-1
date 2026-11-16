@@ -77,12 +77,15 @@ describe('Sample collection - series auto-return and dispatch (OPS-124 / 130 / 1
     return r;
   }
 
-  it('series: drawing the anchor with later draws still pending leaves by itself', async () => {
+  it('OPS-142 series: drawing the anchor with later draws pending stays until Done for now / Dispatch', async () => {
     const { c, router, toasts } = await open([S('a', 'pending', 0), S('b', 'pending', 120)]);
     c.markCollected(c._pending().find((x: any) => x.id === 'a'));
     await tick();
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(c._openOrderId()).toBe('o1');
+    expect(toasts.success).not.toHaveBeenCalledWith('Collected');
+    c.close();                                   // the user's Done for now
     expect(router.navigateByUrl).toHaveBeenCalledWith('/frontdesk');
-    expect(toasts.success).toHaveBeenCalled();
   });
 
   it('series: stays while a tube that can be drawn NOW is still pending', async () => {

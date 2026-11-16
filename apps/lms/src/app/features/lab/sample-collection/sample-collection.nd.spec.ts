@@ -441,22 +441,26 @@ describe('Collect sample — leaves by itself once everything drawable is drawn 
     expect(c._openOrderId()).toBe('o1');
   });
 
-  it('the last drawable tube collected: toast + the same exit as "Done" (drawer closed)', async () => {
+  it('OPS-142: the last drawable tube collected keeps the drawer open - Done is the exit', async () => {
     const { c, drawer } = await renderDrawer([S('a'), S('b', 'collected')]);
-    const toast = vi.spyOn(c.toasts, 'success');
     (drawer.querySelector('.pf-sc-tile:not(.pf-tube--done)') as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await new Promise(r => setTimeout(r, 50));
     expect(c.api.patch).toHaveBeenCalledWith('/api/samples/a/collect');
-    expect(toast).toHaveBeenCalledWith('Collected');
-    expect(c._openOrderId()).toBeNull();
+    expect(c._openOrderId()).toBe('o1');
+    expect(c.router.navigateByUrl).not.toHaveBeenCalled();
+    expect(c.doneDisabled(c.activeGroup())).toBe(false);
   });
 
-  it('deep-linked from the front desk: auto-finish navigates back to where it came from', () => {
-    const c = make([], false, [S('a', 'collected')]);
+  it('OPS-142: deep-linked from the front desk, collecting does not navigate; Done does', async () => {
+    const c = make([], false, [S('a')]);
     c._returnTo = '/frontdesk';
     c._openOrderId.set('o1');
-    c._pending.set([S('a', 'collected')]);
-    c.autoFinishIfDone('o1');
+    c._pending.set([S('a')]);
+    c.markCollected(c._pending()[0]);
+    await new Promise(r => setTimeout(r, 0));
+    expect(c.router.navigateByUrl).not.toHaveBeenCalled();
+    expect(c._openOrderId()).toBe('o1');
+    c.close();
     expect(c.router.navigateByUrl).toHaveBeenCalledWith('/frontdesk');
   });
 
@@ -464,7 +468,7 @@ describe('Collect sample — leaves by itself once everything drawable is drawn 
     const c = make(['dispatch_sample'], true, []);
     c._openOrderId.set('o1');
     c._pending.set([S('a', 'collected')]);
-    c.autoFinishIfDone('o1');
+    c.markCollected(c._pending()[0]);
     expect(c._openOrderId()).toBe('o1');
   });
 
@@ -472,8 +476,7 @@ describe('Collect sample — leaves by itself once everything drawable is drawn 
     const c = make([], false, []);
     c._openOrderId.set('o1');
     c._pending.set([S('a')]);
-    c.autoFinishIfDone('o1');
-    c.autoFinishIfDone('other');
+    c.markCollected({ ...S('zz'), orderId: 'other' });
     expect(c._openOrderId()).toBe('o1');
   });
 });

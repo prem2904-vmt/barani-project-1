@@ -1725,27 +1725,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // dispatched / picked_up / processing / rejected / validated → locked.
   }
 
-  /** OPS-124: once every tube that can be drawn NOW is collected, leave the
-   *  drawer by itself (the same exit as "Done" / "Done for now": back to where
-   *  the user came from) - no extra click. Stays when tubes are still to draw,
-   *  when a dispatch / bill action is the next step, or when the user has
-   *  already moved on to another order. */
-  private autoFinishIfDone(orderId: string): void {
-    if (this._openOrderId() !== orderId) return;
-    const g = this.activeGroup();
-    if (!g || g.orderId !== orderId) return;
-    if (this.collectedCount(g) === 0) return;
-    if (this.doneDisabled(g) || this.dispatchNextStep(g)) return;
-    // A timed series with later draws still to come ends here too (OPS-124):
-    // the drawn tubes stay dispatchable from the front desk row / this list.
-    const awaiting = this.collectedCount(g) > 0 && this.canDispatch() && !this.isDispatched(g);
-    this.toasts.success(
-      awaiting && g.collected < g.totalVials
-        ? "Collected. Dispatch the drawn tubes from the front desk or the Collect list."
-        : "Collected",
-    );
-    this.close();
-  }
+  // OPS-142: collecting the last tube NEVER leaves the drawer by itself. The
+  // user ends the visit with Dispatch or Done (both call close()), which is the
+  // only exit back to the front desk. (OPS-124's auto-return was removed.)
 
   private markCollected(s: OrderSample) {
     const now = new Date().toISOString();
@@ -1758,7 +1740,6 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.api.patch<OrderSample>(`/api/samples/${s.id}/collect`).subscribe({
       next: () => {
         this.sampleCollected.emit();
-        this.autoFinishIfDone(s.orderId);
       },
       error: (e) => {
         // Only roll back if the local state still says 'collected'. If the

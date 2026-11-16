@@ -85,18 +85,21 @@ describe('Sample collection - three-draw series edges (OPS-124 / 130 / 129)', ()
   }
   const byId = (c: any, id: string) => c._pending().find((x: any) => x.id === id);
 
-  it('second draw (due) with the third still locked: leaves by itself, tells where to dispatch', async () => {
+  it('OPS-142 second draw (due) with the third still locked: stays open until Done for now / Dispatch', async () => {
     const { c, router, toasts } = await open([
       S('a', 'collected', 0, { collectedAt: ago(70) }), S('b', 'pending', 60), S('c', 'pending', 120)]);
     expect(c.tubeState(byId(c, 'b')).kind).toBe('due');
     expect(c.tubeState(byId(c, 'c')).kind).toBe('locked');
     c.markCollected(byId(c, 'b'));
     await tick();
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(c._openOrderId()).toBe('o1');
+    expect(toasts.success).not.toHaveBeenCalledWith('Collected');
+    c.close();                                        // Done for now
     expect(router.navigateByUrl).toHaveBeenCalledWith('/frontdesk');
-    expect(toasts.success.mock.calls[0][0]).toContain('Dispatch the drawn tubes');
   });
 
-  it('a missed middle draw does not hold the drawer: drawing the last one leaves', async () => {
+  it('OPS-142 a missed middle draw does not hold Done: drawing the last one stays, Done then leaves', async () => {
     const { c, router } = await open([
       S('a', 'collected', 0, { collectedAt: ago(200) }), S('b', 'pending', 60), S('c', 'pending', 120)]);
     expect(c.tubeState(byId(c, 'b')).kind).toBe('missed');
@@ -104,6 +107,9 @@ describe('Sample collection - three-draw series edges (OPS-124 / 130 / 129)', ()
     expect(c.doneDisabled(c.activeGroup())).toBe(true); // c is still collectable now
     c.markCollected(byId(c, 'c'));
     await tick();
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    expect(c.doneDisabled(c.activeGroup())).toBe(false);
+    c.close();
     expect(router.navigateByUrl).toHaveBeenCalledWith('/frontdesk');
   });
 
