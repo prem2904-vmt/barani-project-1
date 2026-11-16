@@ -154,18 +154,21 @@ async function openCollect(page: Page) {
 }
 
 test.describe('OPS-124 / 129 / 130 collection', () => {
-  test('timed series: drawing the due tube returns to the front desk by itself (no Done click)', async ({ page }) => {
+  test('timed series: drawing the due tube stays on Collect; Done for now goes back (OPS-142)', async ({ page }) => {
     // 70 min after the first draw: the 1 h tube is due, the 2 h tube is still locked.
+    // OPS-142: collecting never leaves the screen by itself; Dispatch or Done is the exit.
     await openCollect(page);
     await light(page);
     await expect(await action(page, /^(Done for now|Collect all to finish)$/)).toBeVisible();
     await closeSheet(page);
     await shot(page, '124-series-before-draw');
     await page.locator('[data-pour-id="s1"]').click();
+    await expect.poll(() => requests.includes('PATCH /api/samples/s1/collect')).toBe(true);
+    await page.waitForTimeout(600);
+    expect(page.url()).toContain('/lab/collect');
+    await shot(page, '124-series-after-draw-stays');
+    await (await action(page, /^(Done for now|Done)$/)).click();
     await page.waitForURL(/\/frontdesk/, { timeout: 15_000 });
-    expect(requests).toContain('PATCH /api/samples/s1/collect');
-    await expect(page.getByText('Collected. Dispatch the drawn tubes from the front desk or the Collect list.').first()).toBeVisible();
-    await shot(page, '124-series-after-draw-front-desk');
   });
 
   test('tapping the locked later draw does not collect it and does not leave', async ({ page }) => {
@@ -206,8 +209,9 @@ test.describe('OPS-124 / 129 / 130 collection', () => {
     expect(page.url()).toContain('/lab/collect');
     await closeSheet(page);
     await page.locator('[data-pour-id="s1"]').click();
-    await page.waitForURL(/\/frontdesk/, { timeout: 15_000 });
-    expect(requests).toContain('PATCH /api/samples/s1/collect');
+    await expect.poll(() => requests.includes('PATCH /api/samples/s1/collect')).toBe(true);
+    await page.waitForTimeout(600);
+    expect(page.url()).toContain('/lab/collect');   // OPS-142: stays until Dispatch or Done
   });
 
   test('Dispatch, then browser Back: no stranded collection screen and the tube stays dispatched', async ({ page }) => {
