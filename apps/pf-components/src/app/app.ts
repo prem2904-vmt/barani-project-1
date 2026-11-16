@@ -52,6 +52,8 @@ import {
   ToggleComponent,
   TileComponent,
   TouchButtonComponent,
+  PasskeyIconComponent,
+  PriceFlagComponent,
   AlphaDirective,
   BusyDirective,
   NumericDirective,
@@ -116,6 +118,8 @@ import {
     SkeletonTableComponent,
     ToggleComponent,
     TouchButtonComponent,
+    PasskeyIconComponent,
+    PriceFlagComponent,
     AlphaDirective,
     BusyDirective,
     NumericDirective,
@@ -191,6 +195,10 @@ export class App implements OnInit {
 
   protected readonly barcodeMode = signal<'barcode' | 'qr' | 'both'>('both');
   protected readonly barcodeCode = signal('PF-2026-9901');
+  protected readonly passkeySize = signal(24);
+  protected readonly dynamicInputVal = signal('14.2');
+  protected showPinDialog = false;
+  protected showShareSheet = false;
 
 
   // ── New Clinical Components State ───────────────────────────────────────
