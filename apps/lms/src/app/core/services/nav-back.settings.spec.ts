@@ -60,14 +60,14 @@ describe('Settings back — the one parent map', () => {
     ['/admin/partner-prices', '/admin/partners'],
     ['/admin/vendors', '/admin/partners'],
     ['/admin/referring-network', '/admin/partners'],
-    ['/admin/partners', '/admin/manage?cat=org'],
-    ['/admin/branches', '/admin/manage?cat=org'],
-    ['/admin/organization', '/admin/manage?cat=org'],
-    ['/admin/billing', '/admin/manage?cat=finance'],
-    ['/admin/process', '/admin/manage?cat=automation'],
-    ['/admin/inventory', '/admin'],
+    ['/admin/partners', '/admin?section=org'],
+    ['/admin/branches', '/admin?section=org'],
+    ['/admin/organization', '/admin?section=org'],
+    ['/admin/billing', '/admin?section=finance'],
+    ['/admin/process', '/admin?section=automation'],
+    ['/admin/inventory', '/admin?section=inventory'],
     ['/admin/modules', '/admin'],
-    ['/admin/radiology', '/admin'],
+    ['/admin/radiology', '/admin?section=radiology'],
   ];
   for (const [page, parent] of cases) {
     it(`${page} → ${parent}`, () => {
@@ -79,7 +79,7 @@ describe('Settings back — the one parent map', () => {
   it('query strings (a tab / category) do not change the parent', () => {
     const { svc } = setup();
     expect(svc.getParentRoute('/admin/lab-settings?tab=queues')).toBe('/lab/settings');
-    expect(svc.getParentRoute('/admin/organization?tab=sample')).toBe('/admin/manage?cat=org');
+    expect(svc.getParentRoute('/admin/organization?tab=sample')).toBe('/admin?section=org');
   });
 
   it('every mapped page parents to a hub that is itself mapped or the /admin root (no loops)', () => {
@@ -157,11 +157,11 @@ describe('Settings back — honours where you came from', () => {
 
   it('a parent further behind is reached with history.go(-n), not a pushed copy', () => {
     const { svc, go, historyGo, router } = setup();
-    go('/admin/manage');
+    go('/admin');
     go('/admin/partners');
     go('/admin/vendors');
     go('/admin/vendors/x'); // a deeper screen; then jump straight up to the hub
-    svc.backTo('/admin/manage?cat=org');
+    svc.backTo('/admin?section=org');
     expect(historyGo).toHaveBeenCalledWith(-3);
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });

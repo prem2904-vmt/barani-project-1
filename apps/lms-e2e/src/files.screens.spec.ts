@@ -349,24 +349,24 @@ test.describe('Settings → Files', () => {
     await shot(page, 'files-settings-viewonly');
   });
 
-  test('the Settings overview lists Departments, then Organization, then All departments LAST with Communication and Files as ordinary tiles', async ({ page, context }) => {
+  test('the Settings overview lists Departments, then Organization, then All departments LAST with Communication and Files as sections', async ({ page, context }) => {
     await boot(page, context, { route: '/admin' });
-    await expect(page.locator('[data-testid="ov-tile-files"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
-    const order = await page.locator('[data-testid^="ov-section-"]').evaluateAll(els => els.map(e => (e.textContent ?? '').trim()));
-    expect(order).toEqual(['Departments', 'Organization', 'All departments']);
-    const last = page.locator('[data-testid="ov-cards-all"]').locator('visible=true').first();
-    await expect(last.locator('[data-testid="ov-tile-communication"]')).toBeVisible();
-    await expect(last.locator('[data-testid="ov-tile-files"]')).toBeVisible();
+    await expect(page.locator('[data-testid="tp-item-files"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
+    const order = await page.locator('[data-testid^="tp-group-"]').evaluateAll(els => els.map(e => (e.textContent ?? '').trim().toUpperCase()));
+    expect(order).toEqual(['DEPARTMENTS', 'ORGANIZATION', 'ALL DEPARTMENTS']);
+    await expect(page.locator('[data-testid="tp-item-communication"]').locator('visible=true').first()).toBeVisible();
     await expectLayout(page, 'settings overview');
     await shot(page, 'settings-overview');
-    await last.locator('[data-testid="ov-tile-files"]').click();
+    await page.locator('[data-testid="tp-item-files"]').locator('visible=true').first().click();
+    await expect(page).toHaveURL(/section=files/);
+    await page.locator('[data-testid="ov-tile-admin-files"]').locator('visible=true').first().click();
     await expect(page).toHaveURL(/\/admin\/files/);
   });
 
   test('without the beta the Files tile and the Files screen do not exist', async ({ page, context }) => {
     await boot(page, context, { route: '/admin', beta: false });
-    await expect(page.locator('[data-testid="ov-tile-communication"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
-    await expect(page.locator('[data-testid="ov-tile-files"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="tp-item-communication"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('[data-testid="tp-item-files"]')).toHaveCount(0);
     await page.goto('/files');
     await expect(page).not.toHaveURL(/\/files$/, { timeout: 30_000 });
   });
