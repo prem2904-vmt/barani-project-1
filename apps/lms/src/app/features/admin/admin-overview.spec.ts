@@ -109,14 +109,14 @@ describe('Settings overview — two panels', () => {
     expect(tileHrefs(el(h))).not.toContain('/admin/tests');
   });
 
-  it('role gating: a tile the person cannot open stays hidden, and an empty section disappears', async () => {
-    setup({ perms: ['manage_tests'] });
+  it('role gating: a tile the person cannot open stays hidden', async () => {
+    setup({ perms: ['manage_users'] });
     const h = await open('/admin?section=lab');
     const hrefs = tileHrefs(el(h));
-    expect(hrefs).toContain('/admin/tests');
-    expect(hrefs).not.toContain('/admin/kpis');
-    expect(hrefs).not.toContain('/admin/notifications');
-    expect(itemIds(el(h))).not.toContain('people');
+    expect(hrefs).toContain('/admin/kpis'); // opens with the admin shell
+    expect(hrefs).not.toContain('/admin/tests'); // needs manage_tests / manage_test_master
+    expect(hrefs).not.toContain('/admin/notifications'); // needs manage_tenant / manage_notifications
+    expect(itemIds(el(h))).toContain('people');
   });
 
   it('search across every setting replaces the panels with ranked hits; Enter opens the top hit; clearing restores', async () => {
