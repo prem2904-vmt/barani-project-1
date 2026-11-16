@@ -109,14 +109,24 @@ describe('Settings overview — two panels', () => {
     expect(tileHrefs(el(h))).not.toContain('/admin/tests');
   });
 
-  it('role gating: a tile the person cannot open stays hidden', async () => {
+  it('role gating: a section / tile the person cannot open stays hidden (same rule as the old cards)', async () => {
     setup({ perms: ['manage_users'] });
+    const h = await open('/admin?section=people');
+    const ids = itemIds(el(h));
+    expect(ids).toContain('people');
+    expect(ids).not.toContain('lab'); // the Lab hub needs lab-settings perms
+    expect(ids).not.toContain('finance'); // Billing Config / Finance need billing perms
+    expect(tileHrefs(el(h))).toContain('/admin/users');
+    expect(tileHrefs(el(h))).not.toContain('/finance');
+  });
+
+  it('role gating inside a section: Lab shows only the tiles its perms open', async () => {
+    setup({ perms: ['manage_tests', 'manage_lab_settings'] });
     const h = await open('/admin?section=lab');
     const hrefs = tileHrefs(el(h));
-    expect(hrefs).toContain('/admin/kpis'); // opens with the admin shell
-    expect(hrefs).not.toContain('/admin/tests'); // needs manage_tests / manage_test_master
+    expect(hrefs).toContain('/admin/tests');
+    expect(hrefs).toContain('/admin/lab-settings');
     expect(hrefs).not.toContain('/admin/notifications'); // needs manage_tenant / manage_notifications
-    expect(itemIds(el(h))).toContain('people');
   });
 
   it('search across every setting replaces the panels with ranked hits; Enter opens the top hit; clearing restores', async () => {

@@ -46,6 +46,12 @@ const labSettingsToOverviewGuard: CanActivateFn = async () => {
   return router.createUrlTree(['/admin'], { queryParams: { section: 'lab' } });
 };
 
+// /admin/manage?cat=<id> → the Settings overview on that section.
+const manageToOverviewGuard: CanActivateFn = (route) => {
+  const cat = route.queryParamMap.get('cat');
+  return inject(Router).createUrlTree(['/admin'], { queryParams: cat ? { section: cat } : {} });
+};
+
 // withAppModes (features/casesheets/casesheets.routes.ts, plan §4.4): the public case-sheet site's routes match
 // ONLY in casesheets mode (core/app-mode.ts) and every route below ONLY in LMS mode.
 export const appRoutes: Route[] = withAppModes([
@@ -144,12 +150,12 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/admin/admin-overview.component').then(m => m.AdminOverviewComponent)
       },
       {
-        // Old deep links to the settings hub (/admin/manage?cat=org …): the hub
-        // is now the two-panel Settings overview, so open it on that section.
+        // Old deep links to the settings hub (/admin/manage?cat=org …): the hub is
+        // now the two-panel Settings overview, so open it on that section. Same
+        // admin guard as before, then the redirect.
         path: 'admin/manage',
-        redirectTo: (route) => inject(Router).createUrlTree(['/admin'], {
-          queryParams: route.queryParams['cat'] ? { section: route.queryParams['cat'] } : {},
-        }),
+        canActivate: [...routeGuards('/admin/manage'), manageToOverviewGuard],
+        children: []
       },
       {
         // Modules (Extensions) — enable/disable product modules + their features.
