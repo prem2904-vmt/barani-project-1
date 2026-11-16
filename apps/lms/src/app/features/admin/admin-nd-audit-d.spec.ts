@@ -9,7 +9,6 @@ import { CultureSettingsComponent } from '../lab/culture-settings/culture-settin
 import { OpdSettingsComponent } from '../opd/admin/opd-settings.component';
 import { ModulePlaceholderComponent } from '../modules/module-placeholder.component';
 import { AdminOverviewComponent } from './admin-overview.component';
-import { AdminDashboardComponent } from './admin-dashboard.component';
 import { BranchesComponent } from './branches/branches.component';
 import { VendorsComponent } from './vendors/vendors.component';
 import { ReferralLabsComponent } from './referral-labs/referral-labs.component';
@@ -142,30 +141,16 @@ describe('ND audit D — module placeholders (/admin/ipd …)', () => {
   });
 });
 
-describe('ND audit D — Overview (/admin) and settings hub (/admin/manage)', () => {
-  it('Overview: range is a neutral pf-seg in the pill, content scrolls inside .pf-band-body, violet kit icon chips only', () => {
+describe('ND audit D — Settings overview (/admin, two panels)', () => {
+  it('Overview: the pill is the settings search only (no date range / KPI cards), two kit cards, no rainbow chips', () => {
     const p = renderBandPage(AdminOverviewComponent);
-    const seg = p.tools()!.querySelector('.pf-seg[role="radiogroup"]')!;
-    expect(seg.querySelectorAll('[role="radio"]').length).toBe(4);
-    expect(seg.querySelector('[aria-checked="true"]')!.textContent!.trim()).toBe('Today');
-    expect(p.el.querySelector('pf-hero-band .pf-ov__range--on')).toBeNull();
+    expect(p.tools()?.querySelector('.pf-seg')).toBeNull();
+    expect(p.el.querySelector('.pf-ov__kpi, .pf-ov__stat, .pf-ov__range')).toBeNull();
     expect(p.body()).not.toBeNull();
-    expect(p.body()!.querySelector('.pf-ov__kpi.pf-card .pf-card__icon')).not.toBeNull();
+    expect(p.body()!.querySelector('pf-two-panel .pf-tp__nav.pf-card')).not.toBeNull();
+    expect(p.body()!.querySelector('pf-two-panel .pf-tp__panel.pf-card')).not.toBeNull();
+    expect(p.body()!.querySelector('.pf-ov__tile .pf-card__icon')).not.toBeNull();
     expect(p.el.querySelector('[data-color], [data-g]')).toBeNull();
-    expect(primaries(p.el)).toBe(0);
-    hygiene(p.el);
-  });
-
-  it('Manage: the category pane is ONE kit card with the BILLING header and a plain muted count; no rainbow chips', () => {
-    const p = renderBandPage(AdminDashboardComponent);
-    const pane = p.el.querySelector('.pf-admin-pane.pf-card')!;
-    expect(pane).not.toBeNull();
-    const head = pane.querySelector('.pf-card__head')!;
-    expect(head.querySelector('.pf-card__icon svg')).not.toBeNull();
-    expect(head.querySelector('.pf-card__label')).not.toBeNull();
-    expect(head.querySelector('.pf-admin-pane__count')!.textContent).toMatch(/\d+ settings?/);
-    expect(pane.querySelector('.pf-admin-tile .pf-card__icon')).not.toBeNull();
-    expect(p.el.querySelector('[data-g]')).toBeNull();
     expect(primaries(p.el)).toBe(0);
     hygiene(p.el);
   });

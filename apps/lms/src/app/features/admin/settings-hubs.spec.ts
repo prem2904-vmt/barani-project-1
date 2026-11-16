@@ -2,12 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { vi } from 'vitest';
 import { renderBandPage } from './admin-band.spec-helpers';
-import { AdminDashboardComponent } from './admin-dashboard.component';
 import { AdminOverviewComponent } from './admin-overview.component';
 import { PartnersComponent } from './partners/partners.component';
 import { LabSettingsHubComponent } from '../lab/lab-settings-hub/lab-settings-hub.component';
 import { AuthService } from '../../core/auth/auth.service';
 import { SETTINGS_PARENT } from '../../shared/utils/settings-catalog';
+import { ADMIN_CATEGORIES } from '../../shared/utils/settings-tiles';
 
 /**
  * Settings hubs — one home per screen (owner 2026-11-01: "overall lot of
@@ -36,11 +36,9 @@ describe('Settings hubs — each screen has ONE hub', () => {
     expect(hrefs.filter((h) => h === '/admin/partners').length).toBe(1);
   });
 
-  it('Settings hub (/admin/manage): Vendor Wallets is not a second tile under Finance', () => {
-    const p = renderBandPage(AdminDashboardComponent);
-    const all = (p.cmp.categories as Array<{ tiles: Array<{ href: string }> }>).flatMap((c) => c.tiles.map((t) => t.href));
+  it('Settings overview: Vendor Wallets is not a second tile under Finance, and no screen is listed twice', () => {
+    const all = ADMIN_CATEGORIES.flatMap((c) => c.tiles.map((t) => t.href));
     expect(all).not.toContain('/admin/vendors');
-    // no screen is listed twice inside the hub
     expect(new Set(all).size).toBe(all.length);
   });
 
@@ -48,23 +46,22 @@ describe('Settings hubs — each screen has ONE hub', () => {
     const lab = renderBandPage(LabSettingsHubComponent);
     for (const t of lab.cmp.tiles as Array<{ href: string }>) {
       if (t.href === '/admin/partners') continue; // the one cross-LINK to the Referral & Vendors hub (its home: Branches & Organization)
-      if (t.href === '/admin/communication') { expect(SETTINGS_PARENT[t.href]).toBe('/admin'); continue; } // shared by every department: its home is Settings → All departments, Lab settings keeps a tile to it
+      if (t.href === '/admin/communication') { expect(SETTINGS_PARENT[t.href]).toBe('/admin?section=communication'); continue; } // shared by every department: its home is Settings → All departments, Lab settings keeps a tile to it
       expect(SETTINGS_PARENT[t.href], t.href).toBe('/lab/settings');
     }
     TestBed.resetTestingModule();
     const partners = renderBandPage(PartnersComponent);
     for (const t of partners.cmp.tiles as Array<{ href: string }>) expect(SETTINGS_PARENT[t.href], t.href).toBe('/admin/partners');
     TestBed.resetTestingModule();
-    const manage = renderBandPage(AdminDashboardComponent);
-    for (const c of manage.cmp.categories as Array<{ id: string; tiles: Array<{ href: string }> }>) {
+    for (const c of ADMIN_CATEGORIES) {
       for (const t of c.tiles) {
         if (t.href === '/expenses') continue; // a primary-nav root (no back)
-        expect(SETTINGS_PARENT[t.href], t.href).toBe(`/admin/manage?cat=${c.id}`);
+        expect(SETTINGS_PARENT[t.href], t.href).toBe(`/admin?section=${c.id}`);
       }
     }
   });
 
-  it('Overview: no separate Referral & Vendors card (it lives under Branches & Organization)', () => {
+  it('Overview: no separate Referral & Vendors section (it lives under Branches & Organization)', () => {
     const p = renderBandPage(AdminOverviewComponent);
     const cats = (p.cmp.groups as Array<{ cat: string }>).map((g) => g.cat);
     expect(cats).not.toContain('partners');
@@ -78,8 +75,8 @@ describe('Settings hubs — each screen has ONE hub', () => {
 });
 
 describe('Settings search on the hubs — precise, with where it lives, Enter opens the top hit', () => {
-  it('/admin/manage: "sample id" lists Sample ID format first with its section; no grid, one row per hit', () => {
-    const p = renderBandPage(AdminDashboardComponent);
+  it('/admin overview: "sample id" lists Sample ID format first with its section; no grid, one row per hit', () => {
+    const p = renderBandPage(AdminOverviewComponent);
     p.type('sample id');
     const rows = Array.from(p.el.querySelectorAll<HTMLElement>('[data-testid="settings-hit"]'));
     expect(rows.length).toBeGreaterThan(0);
@@ -88,8 +85,8 @@ describe('Settings search on the hubs — precise, with where it lives, Enter op
     expect(p.el.querySelector('pf-settings-results ul.pf-sr')).not.toBeNull();
   });
 
-  it('/admin/manage: Enter opens the top hit (with its tab)', () => {
-    const p = renderBandPage(AdminDashboardComponent);
+  it('/admin overview: Enter opens the top hit (with its tab)', () => {
+    const p = renderBandPage(AdminOverviewComponent);
     const nav = vi.spyOn(p.f.debugElement.injector.get(Router), 'navigate').mockResolvedValue(true);
     p.type('queue focus');
     p.bandInput()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
@@ -97,14 +94,14 @@ describe('Settings search on the hubs — precise, with where it lives, Enter op
     expect(nav).toHaveBeenCalledWith(['/admin/lab-settings'], { queryParams: { tab: 'queues' } });
   });
 
-  it('/admin/manage: nothing matches → "No settings match"', () => {
-    const p = renderBandPage(AdminDashboardComponent);
+  it('/admin overview: nothing matches → "No settings match"', () => {
+    const p = renderBandPage(AdminOverviewComponent);
     p.type('zzqx');
     expect(p.el.querySelector('[data-testid="settings-empty"]')?.textContent).toContain('No settings match');
   });
 
-  it('/admin/manage: a mid-word fragment finds nothing (no fuzzy noise)', () => {
-    const p = renderBandPage(AdminDashboardComponent);
+  it('/admin overview: a mid-word fragment finds nothing (no fuzzy noise)', () => {
+    const p = renderBandPage(AdminOverviewComponent);
     p.type('ample');
     expect(p.el.querySelectorAll('[data-testid="settings-hit"]').length).toBe(0);
   });
@@ -115,13 +112,5 @@ describe('Settings search on the hubs — precise, with where it lives, Enter op
     const rows = Array.from(p.el.querySelectorAll<HTMLElement>('[data-testid="settings-hit"]'));
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => (r.textContent ?? '').includes('Printing') || (r.textContent ?? '').includes('Your settings'))).toBe(true);
-  });
-
-  it('category picks stay in the URL (?cat=, replaceUrl) so back returns to the same category', () => {
-    const p = renderBandPage(AdminDashboardComponent);
-    const nav = vi.spyOn(p.f.debugElement.injector.get(Router), 'navigate').mockResolvedValue(true);
-    p.cmp.pickCategory('finance');
-    expect(p.cmp.active()).toBe('finance');
-    expect(nav).toHaveBeenCalledWith([], expect.objectContaining({ queryParams: { cat: 'finance' }, replaceUrl: true }));
   });
 });

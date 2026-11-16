@@ -36,6 +36,22 @@ const setPasswordGuard: CanActivateFn = async () => {
   return true;
 };
 
+
+// /lab/settings → Settings overview (Lab section) for anyone allowed into /admin.
+const labSettingsToOverviewGuard: CanActivateFn = async () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  await auth.waitForAuth();
+  if (!auth.isAuthenticated() || !auth.hasAnyPermission(ADMIN_PERMS)) return true;
+  return router.createUrlTree(['/admin'], { queryParams: { section: 'lab' } });
+};
+
+// /admin/manage?cat=<id> → the Settings overview on that section.
+const manageToOverviewGuard: CanActivateFn = (route) => {
+  const cat = route.queryParamMap.get('cat');
+  return inject(Router).createUrlTree(['/admin'], { queryParams: cat ? { section: cat } : {} });
+};
+
 // withAppModes (features/casesheets/casesheets.routes.ts, plan §4.4): the public case-sheet site's routes match
 // ONLY in casesheets mode (core/app-mode.ts) and every route below ONLY in LMS mode.
 export const appRoutes: Route[] = withAppModes([
@@ -134,11 +150,13 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/admin/admin-overview.component').then(m => m.AdminOverviewComponent)
       },
       {
-        // The settings hub (relevance-grouped tiles) — reached from the
-        // overview's "Manage settings" + the sidebar "Manage" link.
+        // Old deep links to the settings hub (/admin/manage?cat=org …): the hub is
+        // now the two-panel Settings overview, so open it on that section. Same
+        // admin guard as before, then the redirect.
         path: 'admin/manage',
-        canActivate: [...routeGuards('/admin/manage')],
-        loadComponent: () => import('./features/admin/admin-dashboard.component').then(m => m.AdminDashboardComponent)
+        canActivate: [...routeGuards('/admin/manage'), manageToOverviewGuard],
+        // Never rendered: the guard always redirects.
+        loadComponent: () => import('./features/admin/admin-overview.component').then(m => m.AdminOverviewComponent)
       },
       {
         // Modules (Extensions) — enable/disable product modules + their features.
@@ -151,7 +169,9 @@ export const appRoutes: Route[] = withAppModes([
         // world (not the global admin): catalog, report template, lab settings,
         // referrals, notifications, KPIs. Gated on any lab-admin permission.
         path: 'lab/settings',
-        canActivate: [...routeGuards('/lab/settings')],
+        // Anyone who can open the Settings overview lands on its Lab section; the
+        // hub below stays for lab-settings roles that cannot open /admin.
+        canActivate: [labSettingsToOverviewGuard, ...routeGuards('/lab/settings')],
         loadComponent: () => import('./features/lab/lab-settings-hub/lab-settings-hub.component').then(m => m.LabSettingsHubComponent)
       },
       {

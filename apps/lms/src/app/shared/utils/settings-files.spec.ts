@@ -9,7 +9,7 @@ describe('Settings → All departments: Communication and Files', () => {
     expect(page.section).toBe(SETTINGS_SECTION.allDepartments);
     expect(SETTINGS_SECTION.allDepartments).toBe('All departments');
     expect(page.keywords).toEqual(expect.arrayContaining(['whatsapp', 'email', 'sms']));
-    expect(SETTINGS_PARENT['/admin/communication']).toBe('/admin');
+    expect(SETTINGS_PARENT['/admin/communication']).toBe('/admin?section=communication');
     expect(SETTINGS_CATALOG.some(e => e.href === '/admin/communication' && e.title === 'Send a test email')).toBe(true);
   });
 
@@ -30,7 +30,7 @@ describe('Settings → All departments: Communication and Files', () => {
     const cards = SETTINGS_CATALOG.filter(e => e.href === '/admin/files' && e.kind === 'setting');
     expect(cards.map(c => c.title)).toEqual(expect.arrayContaining(['Apps on or off, who can edit', 'Templates on File → New', 'Storage used', 'Edit on phones', 'Deleted files kept in Trash', 'Patient names in files', 'On the bottom bar by default']));
     for (const c of cards) { expect(c.beta).toBe('neuron'); expect(c.perms).toEqual(FILES_SETTINGS_PERMS); }
-    expect(SETTINGS_PARENT['/admin/files']).toBe('/admin');
+    expect(SETTINGS_PARENT['/admin/files']).toBe('/admin?section=files');
     expect(settingsKeywordsFor('/admin/files')).toEqual(expect.arrayContaining(['Storage used', 'office']));
   });
 

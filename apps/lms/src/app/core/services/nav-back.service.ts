@@ -197,7 +197,7 @@ export class NavBackService {
       return '/admin/opd';
     }
     if (normUrl.startsWith('/admin/')) {
-      return '/admin/manage';
+      return '/admin';
     }
 
     // Generic: the LONGEST strict prefix that is a primary root — so
