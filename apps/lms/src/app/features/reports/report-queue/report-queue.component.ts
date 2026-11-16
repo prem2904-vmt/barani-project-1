@@ -171,7 +171,7 @@ export class ReportQueueComponent implements OnInit {
   /** ONE status filter, in the band pill: a neutral segmented control
    *  (raised neutral selected tab), plain tabular counts, no colour dots. */
   readonly ndFilters = computed<{ value: Filter; label: string; count: number }[]>(() => [
-    { value: "all", label: "All", count: this.counts().all },
+    { value: "all", label: "All", count: this.allCount() },
     { value: "pending", label: "Completed", count: this.counts().pending },
     { value: "partial", label: "Partial", count: this.partialOrders().length },
     { value: "delivered", label: "Delivered", count: this.counts().delivered },
@@ -219,7 +219,7 @@ export class ReportQueueComponent implements OnInit {
     // Icons mirror the ones the old phone-only filter row used, so the
     // vocabulary is unchanged — they just moved into the search bar and
     // only replace the words on phones.
-    { value: "all", label: "All", dot: "#a78bfa", count: this.counts().all,
+    { value: "all", label: "All", dot: "#a78bfa", count: this.allCount(),
       iconPath: ["M4 6h16", "M4 12h16", "M4 18h16"] },
     { value: "pending", label: "Completed", dot: "#f59e0b", count: this.counts().pending,
       iconPath: ["M22 11.08V12a10 10 0 1 1-5.93-9.14", "M22 4 12 14.01l-3-3"] },
@@ -704,6 +704,24 @@ export class ReportQueueComponent implements OnInit {
    *  the old per-tube count read "MIC" as both ready and pending). */
   readonly partialOrders = computed<PrelimOrder[]>(() =>
     buildPartialOrders(this._todayOrders(), (t) => this.extractValues(t)));
+
+  /** Partly-reported orders that have NO report row loaded yet. Reports already
+   *  carry their own row (a generated partial is a report); these orders have
+   *  tubes validated but nothing generated, so the list never showed them. */
+  private readonly partialsWithoutRow = computed<PrelimOrder[]>(() => {
+    const have = new Set(this._items().map((r) => (r.orderId ?? "").toLowerCase()));
+    return this.partialOrders().filter((po) => !have.has(po.id.toLowerCase()));
+  });
+
+  /** OPS-136: the All tab shows these Preliminary orders too (search applies). */
+  readonly allTabPartials = computed<PrelimOrder[]>(() => {
+    const q = this._query().trim().toLowerCase();
+    const l = this.partialsWithoutRow();
+    return q ? l.filter((po) => matchesDailyNo(q, po) || po.searchText.includes(q)) : l;
+  });
+
+  /** The All pill: every report plus the partly-reported orders without a row. */
+  readonly allCount = computed(() => this.counts().all + this.partialsWithoutRow().length);
 
   /** The Partial tab honours the band search too. */
   readonly visiblePartials = computed<PrelimOrder[]>(() => {
