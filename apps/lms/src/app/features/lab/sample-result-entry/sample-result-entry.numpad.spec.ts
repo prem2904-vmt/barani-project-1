@@ -117,8 +117,12 @@ beforeAll(() => {
   if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 });
 
+// The screen autosaves typed values as a draft in localStorage keyed by the sample (debounced, flushed on destroy) and restores it on
+// open. Every test here uses sample smp-1, so a draft left by one test used to prefill the next ("6-4240" instead of "240").
+beforeEach(() => { localStorage.clear(); });
 afterEach(() => {
   document.body.querySelectorAll('pf-numpad-panel, pf-sample-result-entry').forEach(n => n.remove());
+  localStorage.clear();
 });
 
 describe('Sample result entry — touch numpad', () => {
