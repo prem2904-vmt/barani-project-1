@@ -114,13 +114,15 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
           </div>
         }
         <div class="nr-stage" data-testid="files-stage">
-          @for (k of [session()!.key]; track k) {
+          <!-- A missing engine folder is answered with the LMS's own index.html (SPA fallback): drop the frame once the bridge failed so a
+               second copy of the app never renders behind the message. -->
+          @for (k of [session()!.key]; track k) { @if (bridge.state() !== 'failed') {
             <iframe #frame class="nr-frame" [title]="app().name" data-testid="files-frame"
                     [src]="frameSrc()" allow="fullscreen; clipboard-read; clipboard-write" allowfullscreen
                     sandbox="allow-scripts allow-same-origin allow-downloads allow-popups"></iframe>
-          }
+          } }
           @if (bridge.state() === 'failed') {
-            <div class="pf-empty nr-over" role="alert" data-testid="files-failed">
+            <div class="pf-empty nr-over nr-over--solid" role="alert" data-testid="files-failed">
               <p class="pf-empty__title">{{ app().name }} can't open here</p>
               <p class="pf-empty__body">{{ bridge.failure() }}</p>
               <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="closeFn()">Back</button>
@@ -224,6 +226,7 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
     .nr-over { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--card-bg, #fff) 92%, transparent); }
     .nr-over--flow { position: static; min-height: 200px; background: transparent; }
     .nr-over__hint { margin: 0; max-width: 340px; font-size: 13px; line-height: 1.5; color: var(--text-tertiary); }
+    .nr-over--solid { background: var(--card-bg, #fff); }
     .nr-float { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(400px, calc(100% - 24px)); display: flex; z-index: 3; }
     .nr-float .nr-side { flex: 1 1 auto; box-shadow: 0 12px 32px rgba(0,0,0,.18); }
     .nr-strip { margin: 0; padding: 8px 16px; font-size: 13px; color: var(--text-secondary); background: color-mix(in srgb, var(--violet-500, #7c3aed) 7%, transparent); }

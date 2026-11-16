@@ -185,7 +185,7 @@ describe('Files editor: an engine that is not shipped yet', () => {
     expect(t('files-failed')?.textContent).toContain("Synapse can't open here");
     expect(t('files-failed')?.textContent).toContain("isn't available in this build yet");
     expect(t('files-loading')).toBeNull();
-    expect(el.querySelector('iframe')).toBeTruthy();
+    expect(el.querySelector('iframe')).toBeNull(); // no second copy of the app behind the message (SPA fallback)
   });
   it('an engine that is there loads normally', async () => {
     const { settle, t } = make({ kind: 'doc' });

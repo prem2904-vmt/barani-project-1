@@ -7,8 +7,8 @@ import { callsOf, fb, installFilesBackend, resetFiles } from './support/files-ba
 
 /**
  * FILES (beta `neuron`, dev only) on EVERY form factor and browser. API mocked (support/files-backend.ts, fake masked data); the editors'
- * pages, bands, chips, dialogs and menus are the real app. Only Neuron's engine is shipped here (tools/fetch-neuron.sh), so the other apps
- * show the plain "isn't available in this build yet" state. Firefox in the Docker image has no WebGL: engine-dependent steps skip there.
+ * pages, bands, chips, dialogs and menus are the real app. The engines come from tools/fetch-<app>.sh (build.yml fetches all five); the
+ * "opens for real" tests skip any engine this build lacks, and the missing-engine state is simulated. Firefox in the Docker image has no WebGL: engine-dependent steps skip there.
  * Screenshots (light + dark): SHOTS_DIR/<form factor>/.
  */
 const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/office-shell');
@@ -260,19 +260,38 @@ test.describe('the editor band', () => {
 
   test('a file without the flag has no chip', async ({ page, context }) => {
     await boot(page, context, { route: '/files/doc/file-2' });
-    await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
-    await expect(tid(page, 'files-failed').or(tid(page, 'files-loading'))).toBeVisible({ timeout: 60_000 });
+    await expect(tid(page, 'files-name').or(tid(page, 'files-name-phone'))).toBeVisible({ timeout: 60_000 });
     await expect(tid(page, 'files-phi-chip')).toHaveCount(0);
     await expect(tid(page, 'files-where')).toHaveCount(0);
   });
 
   test('an app whose engine is not shipped yet shows the plain "can\'t open here" state, never an endless loader', async ({ page, context }) => {
+    // Whether or not this build carries the editors, the missing folder is simulated: the server answers with the app's own page.
+    await page.route('**/synapse-engine/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><html><body><app-root></app-root></body></html>' }));
     await boot(page, context, { route: '/files/doc/file-2' });
     await expect(tid(page, 'files-failed')).toContainText("Synapse can't open here", { timeout: 60_000 });
+    await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(0); // never a second copy of the app behind the message
     await expect(tid(page, 'files-failed')).toContainText("isn't available in this build yet");
     await expect(tid(page, 'files-loading')).toHaveCount(0);
     await shot(page, 'editor-engine-missing');
   });
+
+  // The five editors themselves (fetched into the build by tools/fetch-<app>.sh, as build.yml does). Skips for an editor this build lacks.
+  for (const [kind, name, route] of [['sheet', 'Neuron', '/files/sheet/new'], ['doc', 'Synapse', '/files/doc/new'], ['slides', 'Axon', '/files/slides/new'],
+                                     ['pdf', 'Myelin', '/files/pdf/file-6'], ['image', 'Retina', '/files/image/new']] as const) {
+    test(`${name} opens for real (${kind}): no loader left, no "can't open here"`, async ({ page, context }) => {
+      test.skip(browser() === 'firefox', 'no WebGL in the Firefox image');
+      test.skip(isPhone() && route.endsWith('/new'), 'phones are view-only by default: no blank new file there');
+      const r = await page.request.get(`/${name.toLowerCase()}-engine/index.html`).catch(() => null);
+      test.skip(!r || !r.ok() || !(await r.text()).includes('_bg.wasm'), `${name} is not in this build`);
+      await boot(page, context, { route });
+      await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+      await expect(tid(page, 'files-loading')).toHaveCount(0, { timeout: 120_000 });
+      await expect(tid(page, 'files-failed')).toHaveCount(0);
+      await page.waitForTimeout(1500);
+      await shot(page, `editor-open-${kind}`);
+    });
+  }
 
   test('Share opens from the band and from a row: add a person, a role, copy the link, remove', async ({ page, context }) => {
     await boot(page, context, { route: '/files/sheet/file-4' });
