@@ -281,6 +281,7 @@ test.describe('the editor band', () => {
                                      ['pdf', 'Myelin', '/files/pdf/file-6'], ['image', 'Retina', '/files/image/new']] as const) {
     test(`${name} opens for real (${kind}): no loader left, no "can't open here"`, async ({ page, context }) => {
       test.skip(browser() === 'firefox', 'no WebGL in the Firefox image');
+      test.skip(isPhone() && route.endsWith('/new'), 'phones are view-only by default: no blank new file there');
       const r = await page.request.get(`/${name.toLowerCase()}-engine/index.html`).catch(() => null);
       test.skip(!r || !r.ok() || !(await r.text()).includes('_bg.wasm'), `${name} is not in this build`);
       await boot(page, context, { route });
