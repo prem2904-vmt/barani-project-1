@@ -155,7 +155,8 @@ export const appRoutes: Route[] = withAppModes([
         // admin guard as before, then the redirect.
         path: 'admin/manage',
         canActivate: [...routeGuards('/admin/manage'), manageToOverviewGuard],
-        children: []
+        // Never rendered: the guard always redirects.
+        loadComponent: () => import('./features/admin/admin-overview.component').then(m => m.AdminOverviewComponent)
       },
       {
         // Modules (Extensions) — enable/disable product modules + their features.
