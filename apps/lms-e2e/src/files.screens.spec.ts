@@ -38,7 +38,12 @@ async function shot(page: Page, name: string) {
 const listReady = (page: Page) => expect(tid(page, 'files-list')).toBeVisible({ timeout: 60_000 });
 const rowOf = (page: Page, name: string) => page.locator('.ag-row', { hasText: name }).locator('visible=true').first();
 const dlg = (page: Page) => page.locator('[role="dialog"]').locator('visible=true').first();
-const engineNeeded = () => browser() !== 'firefox';
+/** What the engine's own File menu does, sent from inside the editor frame (the only window the bridge listens to). Works without an engine build. */
+const engineSays = async (page: Page, msg: Record<string, unknown>, bytes?: number[]) => {
+  const handle = await page.locator('iframe[data-testid="files-frame"]').elementHandle();
+  const fr = await handle!.contentFrame();
+  await fr!.evaluate(([m, b]) => { const d = { ...(m as object) } as Record<string, unknown>; if (b) d['bytes'] = new Uint8Array(b as number[]).buffer; parent.postMessage(d, location.origin); }, [msg, bytes ?? null] as const);
+};
 /** Open a stored file through its row. */
 const openRow = async (page: Page, name: string) => { await page.getByText(name, { exact: false }).locator('visible=true').first().click(); };
 
@@ -102,7 +107,7 @@ test.describe('files home', () => {
     await tid(page, 'files-new-neuron').click();
     await expect(page).toHaveURL(/\/files\/sheet\/new/);
     await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 30_000 });
-    await expect(tid(page, 'files-where')).toContainText('Demo Lab');
+    await expect(tid(page, 'files-where')).toHaveCount(0);                  // a lab file has no "where" chip: only a device file does
     await expect(tid(page, 'files-save')).toBeVisible();
   });
 
@@ -110,7 +115,9 @@ test.describe('files home', () => {
     test.skip(isPhone(), 'phone has no templates card');
     await boot(page, context);
     await listReady(page);
-    for (const id of ['neuron:results', 'neuron:qc', 'synapse:letter', 'axon:case', 'own:o1']) await expect(tid(page, `files-template-${id}`)).toBeVisible();
+    // The lab's own "Letter on the lab's letterhead" (own:o1) REPLACES the built-in of the same name: never two rows with one name.
+    for (const id of ['neuron:results', 'neuron:qc', 'synapse:sop', 'axon:case', 'own:o1']) await expect(tid(page, `files-template-${id}`)).toBeVisible();
+    await expect(tid(page, 'files-template-synapse:letter')).toHaveCount(0);
     await shot(page, 'files-templates');
     await tid(page, 'files-template-synapse:sop').click();
     await expect(page).toHaveURL(/\/files\/doc\/new/);
@@ -164,15 +171,16 @@ test.describe('view only (the lab is not entitled to Full Files)', () => {
     await shot(page, 'files-viewonly');
   });
 
-  test('an editor opens the file read-only: View only chip, no Save, no rename, no insert; a copy can still go to the device', async ({ page, context }) => {
+  test('an editor opens the file read-only: View only chip, no Save, no rename, no insert; the device is a place in the File screen, not a band button', async ({ page, context }) => {
     await boot(page, context, { full: false, route: '/files/sheet/file-4' });
     await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
     expect(await page.evaluate(() => (document.querySelector('iframe') as HTMLIFrameElement).src)).toContain('readonly=1');
     await expect(tid(page, 'files-viewonly-chip')).toHaveText('View only');
     await expect(tid(page, 'files-save')).toHaveCount(0);
     await expect(tid(page, 'neuron-insert')).toHaveCount(0);
-    await expect(tid(page, 'files-name')).toBeDisabled();
-    await expect(tid(page, 'files-device-save')).toContainText('Save a copy');
+    if (isPhone()) await expect(tid(page, 'files-name-phone')).toBeVisible();          // a phone shows the name in the row under the band, not as a button
+    else await expect(tid(page, 'files-name')).toBeDisabled();
+    await expect(tid(page, 'files-device-save')).toHaveCount(0);                          // the device is a place in the File screen, not a band button
     await expectLayout(page, 'editor view only');
     await shot(page, 'editor-viewonly');
   });
@@ -241,7 +249,7 @@ test.describe('the editor band', () => {
   test('a file with patient data shows the chip; clicking it lists who and when in plain words', async ({ page, context }) => {
     await boot(page, context, { route: '/files/sheet/file-1' });
     await expect(tid(page, 'files-phi-chip')).toContainText('Contains patient data · kept out of outside AI', { timeout: 60_000 });
-    await expect(tid(page, 'files-where')).toContainText('Demo Lab');
+    await expect(tid(page, 'files-where')).toHaveCount(0);
     await expectLayout(page, 'editor patient data');
     await shot(page, 'editor-patient-data');
     await tid(page, 'files-phi-chip').click();
@@ -252,8 +260,10 @@ test.describe('the editor band', () => {
 
   test('a file without the flag has no chip', async ({ page, context }) => {
     await boot(page, context, { route: '/files/doc/file-2' });
-    await expect(tid(page, 'files-where')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+    await expect(tid(page, 'files-failed').or(tid(page, 'files-loading'))).toBeVisible({ timeout: 60_000 });
     await expect(tid(page, 'files-phi-chip')).toHaveCount(0);
+    await expect(tid(page, 'files-where')).toHaveCount(0);
   });
 
   test('an app whose engine is not shipped yet shows the plain "can\'t open here" state, never an endless loader', async ({ page, context }) => {
@@ -437,61 +447,79 @@ test.describe('Start menu and bottom bar', () => {
 });
 
 test.describe('this device', () => {
+  // The device is a place inside the File screen (Save As / Open ask "Prefrontal · lab or This device"), not a band button.
+  // The engine's File menu is played from inside the editor frame, so these steps run without an engine build.
+  const askPlace = async (page: Page, request: 'openRequest' | 'saveAsRequest') => {
+    await engineSays(page, { type: `neuron:${request}`, name: 'QC log, November.xlsx' });
+    await expect(dlg(page)).toContainText(request === 'openRequest' ? 'Where is the file?' : 'Where should this go?', { timeout: 30_000 });
+    await expect(dlg(page).getByRole('button', { name: /Prefrontal · Demo Lab/ })).toBeVisible();
+    await expect(dlg(page).getByRole('button', { name: 'This device' })).toBeVisible();
+  };
+
   test('a wrong file type from the device is refused with the plain reason and nothing opens', async ({ page, context }) => {
     test.skip(isPhone(), 'phone has no Open from this device');
-    test.skip(!engineNeeded(), 'needs the engine page');
     await boot(page, context, { route: '/files/sheet/file-4' });
-    await expect(tid(page, 'files-device-open')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+    await expect(tid(page, 'files-name')).toContainText('QC log, November.xlsx', { timeout: 60_000 });
     if (browser() === 'chrome' || engine() === 'chromium') {
       await page.evaluate(() => {
         const w = window as unknown as Record<string, unknown>;
         w['showOpenFilePicker'] = async () => [{ name: 'notes.txt', getFile: async () => new File(['hello'], 'notes.txt', { type: 'text/plain' }) }];
         w['showSaveFilePicker'] = async () => { throw new Error('no save expected'); };
       });
-      await tid(page, 'files-device-open').click();
+      await askPlace(page, 'openRequest');
+      await dlg(page).getByRole('button', { name: 'This device' }).click();
     } else {
-      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), tid(page, 'files-device-open').click()]);
+      await askPlace(page, 'openRequest');
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser'), dlg(page).getByRole('button', { name: 'This device' }).click()]);
       await chooser.setFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
     }
     await expect(page.getByText(/Only \.xlsx files can be used with Neuron/).locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
-    await expect(tid(page, 'files-where')).toContainText('Demo Lab');          // the lab file stays open
+    await expect(tid(page, 'files-name')).toContainText('QC log, November.xlsx');          // the lab file stays open
+    await expect(tid(page, 'files-where')).toHaveCount(0);
   });
 
-  test('Chromium / Edge: open a file from the device (picker), the band says "On this device", it is not flagged', async ({ page, context }) => {
+  test('Chromium / Edge: Open → This device (picker), the band says "On this device", it is not flagged', async ({ page, context }) => {
     test.skip(isPhone() || engine() !== 'chromium', 'File System Access: Chromium and Edge on a computer');
     await boot(page, context, { route: '/files/sheet/file-4' });
-    await expect(tid(page, 'files-device-open')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+    await expect(tid(page, 'files-name')).toBeVisible({ timeout: 60_000 });
     await page.evaluate(() => {
       const zip = new Uint8Array([0x50, 0x4b, 3, 4, 1, 2, 3]);
       (window as unknown as Record<string, unknown>)['showOpenFilePicker'] = async () => [{ name: 'Mine.xlsx', getFile: async () => new File([zip], 'Mine.xlsx') }];
       (window as unknown as Record<string, unknown>)['showSaveFilePicker'] = async () => { throw new Error('unexpected'); };
     });
-    await tid(page, 'files-device-open').click();
+    await askPlace(page, 'openRequest');
+    await dlg(page).getByRole('button', { name: 'This device' }).click();
     await expect(tid(page, 'files-where')).toHaveText('On this device', { timeout: 20_000 });
     await expect(tid(page, 'files-phi-chip')).toHaveCount(0);
     await shot(page, 'editor-on-device');
   });
 
-  test('Safari / Firefox fallback: the file chooser opens from our own button', async ({ page, context }) => {
+  test('Safari / Firefox fallback: Open → This device opens the file chooser', async ({ page, context }) => {
     test.skip(isPhone() || engine() === 'chromium', 'the fallback is for Safari and Firefox');
     await boot(page, context, { route: '/files/sheet/file-4' });
-    await expect(tid(page, 'files-device-open')).toBeVisible({ timeout: 60_000 });
-    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), tid(page, 'files-device-open').click()]);
+    await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+    await expect(tid(page, 'files-name')).toBeVisible({ timeout: 60_000 });
+    await askPlace(page, 'openRequest');
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), dlg(page).getByRole('button', { name: 'This device' }).click()]);
     expect(chooser.isMultiple()).toBe(false);
   });
 
   test('a flagged file refused by the server\'s device-export check writes NOTHING to the device', async ({ page, context }) => {
-    test.skip(!engineNeeded() || isPhone(), 'needs the engine to hand the bytes over');
+    test.skip(isPhone(), 'phone is view-only');
     await boot(page, context, { route: '/files/sheet/file-1', prep: () => { fb.flaggedExportDenied = true; } });
-    await expect(tid(page, 'files-device-save')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+    await expect(tid(page, 'files-name')).toBeVisible({ timeout: 60_000 });
     await page.evaluate(() => {
       (window as unknown as Record<string, unknown>)['__saves'] = 0;
       (window as unknown as Record<string, unknown>)['showSaveFilePicker'] = async () => { (window as unknown as Record<string, number>)['__saves']++; throw new Error('must not be asked'); };
       (window as unknown as Record<string, unknown>)['showOpenFilePicker'] = async () => [];
     });
-    await expect(tid(page, 'files-loading')).toHaveCount(0, { timeout: 180_000 });
-    await expect.poll(() => page.evaluate(async () => { try { await ((document.querySelector('iframe') as HTMLIFrameElement).contentWindow as unknown as { neuron: { docInspect(p: unknown): Promise<unknown> } }).neuron.docInspect({}); return true; } catch { return false; } }), { timeout: 90_000, intervals: [500] }).toBe(true);
-    await tid(page, 'files-device-save').click();
+    await engineSays(page, { type: 'neuron:ready' });                          // the frame page stands in for the engine: it says it is ready, then plays File → Save As
+    await askPlace(page, 'saveAsRequest');
+    await dlg(page).getByRole('button', { name: 'This device' }).click();
+    await engineSays(page, { type: 'neuron:save', name: 'Results.xlsx', saveAs: true }, [0x50, 0x4b, 3, 4, 1, 2, 3]);
     await expect(page.getByText(/can't save it to this device/).locator('visible=true').first()).toBeVisible({ timeout: 30_000 });
     expect(await page.evaluate(() => (window as unknown as Record<string, number>)['__saves'])).toBe(0);
     expect(callsOf('POST', /device-export$/).length).toBeGreaterThan(0);
