@@ -142,12 +142,19 @@ export function validateAge(n: number | null | undefined, unit: AgeUnit): string
   return null;
 }
 
-/** DOB (yyyy-MM-dd, local midnight) for an age typed in `unit`, anchored to `now`. */
+/** DOB (yyyy-MM-dd, local midnight) for an age typed in `unit`, anchored to `now`.
+ *  Years / months step by CALENDAR month and clamp to the target month's last
+ *  day (29 Feb − 1 year = 28 Feb; 31 Mar − 1 month = 28/29 Feb) — never
+ *  spill into the next month, which made a 1-year-old a day short of a year. */
 export function dobFromAge(n: number, unit: AgeUnit, now: Date = new Date()): string {
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (unit === 'years') d.setFullYear(d.getFullYear() - n);
-  else if (unit === 'months') d.setMonth(d.getMonth() - n);
-  else d.setDate(d.getDate() - n);
+  let d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (unit === 'days') d.setDate(d.getDate() - n);
+  else {
+    const back = unit === 'years' ? n * 12 : n;
+    const total = d.getFullYear() * 12 + d.getMonth() - back;
+    const y = Math.floor(total / 12), m = total - y * 12;
+    d = new Date(y, m, Math.min(d.getDate(), new Date(y, m + 1, 0).getDate()));
+  }
   const p = (x: number) => String(x).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }

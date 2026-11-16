@@ -1,3 +1,5 @@
+import { formatAge } from '../../../shared/utils/patient-age';
+
 /**
  * Pure helpers for the public patient report page (/reports/public/:token).
  * No Angular, no DOM: the page's view-model is derived here so the specs can
@@ -42,7 +44,7 @@ export interface ReportSummary {
 }
 
 type Snap = {
-  patient?: { displayName?: string | null; firstName?: string | null; fathersName?: string | null; age?: number | string | null; sex?: string | null };
+  patient?: { ageDisplay?: string | null; ageYears?: number | null; displayName?: string | null; firstName?: string | null; fathersName?: string | null; age?: number | string | null; sex?: string | null };
   order?: { orderNumber?: string | null };
   type?: string;
   isPartial?: boolean;
@@ -63,7 +65,14 @@ export function sexLabel(sex: string | null | undefined): string | null {
   return sex!.trim();
 }
 
-export function ageLabel(age: number | string | null | undefined): string | null {
+/** The age on the card. A baby is months / days in full ("6 months"): the
+ *  snapshot's `ageDisplay` ("8 M" / "12 D", the age at collection) goes through
+ *  the ONE age formatter. Grown-ups keep "29 y"; no display → the stored years. */
+export function ageLabel(age: number | string | null | undefined, ageDisplay?: string | null, ageYears?: number | null): string | null {
+  if (/^\s*\d+\s*[MD]\s*$/i.test(ageDisplay ?? '')) {
+    const s = formatAge({ ageDisplay, ageYears }, 'long', '', undefined, true);
+    if (s) return s;
+  }
   if (age == null || age === '') return null;
   const s = String(age).trim();
   if (!s) return null;
@@ -75,7 +84,7 @@ export function summarise(v: VerifiedReport): ReportSummary {
   const snap = parseSnap(v.report?.data);
   const p = snap.patient ?? {};
   const printed = (p.displayName ?? '').trim() || [p.firstName, p.fathersName].filter(x => !!x && `${x}`.trim()).join(' ').trim();
-  const age = ageLabel(p.age);
+  const age = ageLabel(p.age, p.ageDisplay, p.ageYears);
   const sex = sexLabel(p.sex);
   const created = v.report?.createdAt ? new Date(v.report.createdAt) : null;
   return {

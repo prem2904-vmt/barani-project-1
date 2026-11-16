@@ -26,7 +26,7 @@ import { SAMPLE_SIGNERS } from '../../../shared/utils/report-signature-space';
 import { sampleTrendograms } from '../../../shared/utils/report-trend-sample';
 import { squeezeMessage, type SqueezeReport } from '../../../shared/utils/report-density';
 import {
-  AGE_STYLE_CHOICES, LABEL_JOINER_CHOICES, PATIENT_LABELS, RENAMEABLE_LABEL_KEYS, ageSexText, ageText, miniStripText, patientLabel, sexText, swapAgeSexColumns,
+  AGE_STYLE_CHOICES, LABEL_JOINER_CHOICES, PATIENT_LABELS, RENAMEABLE_LABEL_KEYS, ageSexText, ageStyleChoice, ageText, miniStripText, patientLabel, sexText, swapAgeSexColumns,
 } from '../../../shared/utils/report-patient-text';
 import { reportIssues, type ReportIssues } from '../../../shared/utils/report-issues';
 import { ReportTidyCardComponent } from './report-tidy-card.component';
@@ -322,7 +322,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                     <div class="pf-ps-grid">
                       <div>
                         <label class="pf-label">Age</label>
-                        <pf-select [options]="$any(ageStyleOptions)" [value]="reportStyle().patient.ageStyle"
+                        <pf-select [options]="$any(ageStyleOptions)" [value]="ageStyleChoice(reportStyle().patient.ageStyle)"
                                    (valueChange)="setPatientStyle({ ageStyle: $any($event) })"></pf-select>
                       </div>
                       <div>
@@ -1501,6 +1501,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'tint', label: 'Tint' },
     { value: 'none', label: 'None' },
   ];
+  readonly ageStyleChoice = ageStyleChoice;
   readonly ageStyleOptions = [{ value: 'auto', label: 'As the layout prints it' }, ...AGE_STYLE_CHOICES];
   readonly joinerOptions = [{ value: ' / ', label: '45 Y / Male' }, { value: ', ', label: '45 Y, Male' }, { value: ' ', label: '45 Y Male' }, { value: '/', label: '45 Y/Male' }];
   readonly labelJoinerOptions = LABEL_JOINER_CHOICES;

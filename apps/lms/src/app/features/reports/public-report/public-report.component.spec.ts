@@ -323,6 +323,20 @@ describe('Public report page — helpers', () => {
     expect(summarise(verified({ report: { id: 'x', type: 'final', data: 'not json' } })).name).toBe('R••• K••••');
   });
 
+  it('OPS-137: a baby shows months / days in full, never "0 y"', () => {
+    const snap = (patient: object) => verified({ report: { id: 'b', type: 'final', createdAt: '2026-11-15T08:00:00Z', data: JSON.stringify({ patient: { displayName: 'Baby S', sex: 'F', ...patient }, order: { orderNumber: 'O-1' } }) } });
+    expect(summarise(snap({ age: 0, ageDisplay: '6 M', ageYears: 0.5 })).ageSex).toBe('6 months · Female');
+    expect(summarise(snap({ age: 0, ageDisplay: '1 M' })).ageSex).toBe('1 month · Female');
+    expect(summarise(snap({ age: 0, ageDisplay: '12 D' })).ageSex).toBe('12 days · Female');
+    expect(summarise(snap({ age: 0, ageDisplay: '1 D' })).ageSex).toBe('1 day · Female');
+    // grown-ups, a year-old, and older snapshots with no display are unchanged
+    expect(summarise(snap({ age: 1, ageDisplay: '1 Y' })).ageSex).toBe('1 y · Female');
+    expect(summarise(snap({ age: 29, ageDisplay: '29 Y' })).ageSex).toBe('29 y · Female');
+    expect(summarise(snap({ age: 29 })).ageSex).toBe('29 y · Female');
+    expect(summarise(snap({ ageDisplay: '6 M' })).ageSex).toBe('6 months · Female');
+    expect(summarise(snap({ age: 0, ageDisplay: 'garbage' })).ageSex).toBe('0 y · Female');
+  });
+
   it('copy + links', () => {
     expect(mismatchMessage(3)).toBe("That doesn't match — 3 attempts left.");
     expect(mismatchMessage(1)).toBe("That doesn't match — 1 attempt left.");

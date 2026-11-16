@@ -1,5 +1,5 @@
 import { DEFAULT_REPORT_STYLE, readReportStyle, validateReportStyle, writeReportStyle, type ReportStyle } from './report-style';
-import { ageSexText, ageText, gridLabel, miniStripText, pageOfText, patientLabel, reportStatusText, sexText, swapAgeSexColumns } from './report-patient-text';
+import { AGE_STYLE_CHOICES, ageSexText, ageStyleChoice, ageText, gridLabel, miniStripText, pageOfText, patientLabel, reportStatusText, sexText, swapAgeSexColumns } from './report-patient-text';
 
 const P = DEFAULT_REPORT_STYLE.patient;
 const style = (patch: Partial<ReportStyle['patient']>): ReportStyle['patient'] => ({ ...P, ...patch });
@@ -27,7 +27,7 @@ describe('report patient wording (phase 2)', () => {
 
   it('auto uses the layout wording; an infant is months / days, never "0 Y"', () => {
     expect(ageSexText(pat, P, 'short')).toBe('45 Y / Male');
-    expect(ageSexText({ age: 0, ageDisplay: '8 M', sex: 'Female' }, style({ ageStyle: 'short' }), 'short')).toBe('8 M / Female');
+    expect(ageSexText({ age: 0, ageDisplay: '8 M', sex: 'Female' }, style({ ageStyle: 'short' }), 'short')).toBe('8 months / Female');
   });
 
   it('only one half present: no stray joiner', () => {
@@ -86,5 +86,37 @@ describe('report patient wording (phase 2)', () => {
       expect(s.pageNumbers).toBe('n-of-m');
       expect(validateReportStyle({ patient: { ageStyle: 'nonsense', frame: 'zigzag' } }).rejected).toEqual(['patient.ageStyle', 'patient.frame']);
     });
+  });
+});
+
+describe('OPS-141: age format choices and infant wording', () => {
+  it('no two choices print the same text (case-insensitively); the "45 years" duplicate is gone', () => {
+    const samples = AGE_STYLE_CHOICES.map(c => c.label.toLowerCase());
+    expect(new Set(samples).size).toBe(samples.length);
+    expect(AGE_STYLE_CHOICES.map(c => c.value)).toEqual(['short', 'Years', 'yrs', 'Y']);
+  });
+
+  it('a template that saved the dropped "long" style still prints, and the editor shows "Years"', () => {
+    expect(ageStyleChoice('long')).toBe('Years');
+    expect(ageStyleChoice('yrs')).toBe('yrs');
+    expect(ageText(pat, style({ ageStyle: 'long' }), 'Years')).toBe('45 years');
+  });
+
+  it.each(['short', 'Years', 'yrs', 'Y'] as const)('%s: months and days are ALWAYS in full, years follow the format', (st) => {
+    const mo = ageText({ age: 0, ageDisplay: '8 M' }, style({ ageStyle: st }), 'short');
+    const dy = ageText({ age: 0, ageDisplay: '12 D' }, style({ ageStyle: st }), 'short');
+    expect(mo).toBe(st === 'Years' ? '8 Months' : '8 months');
+    expect(dy).toBe(st === 'Years' ? '12 Days' : '12 days');
+    expect(mo).not.toMatch(/\b(mos|mo|M)\b|\dM/);
+  });
+
+  it('auto (layout wording) is spelled for babies too; years keep the layout wording', () => {
+    expect(ageText({ age: 0, ageDisplay: '6 M' }, P, 'yrs')).toBe('6 months');
+    expect(ageText({ age: 0, ageDisplay: '1 M' }, P, 'Years')).toBe('1 Month');
+    expect(ageText({ age: 1, ageDisplay: '1 Y' }, P, 'yrs')).toBe('1 yrs');
+  });
+
+  it('the mini strip and the combined field agree', () => {
+    expect(miniStripText({ age: 0, ageDisplay: '12 D', displayName: 'Baby A' }, 'LAB-1', style({ ageStyle: 'Y' }))).toContain('12 days');
   });
 });

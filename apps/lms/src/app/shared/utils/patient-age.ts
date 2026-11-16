@@ -136,10 +136,18 @@ export function bandAgeYears(p: AgeSource | null | undefined, now: Date = new Da
  */
 export type AgeStyle = 'short' | 'Y' | 'y' | 'num' | 'yrs' | 'Years' | 'long';
 
-export function formatAgeParts(a: AgeParts, style: AgeStyle = 'short'): string {
+/** Months / days are never abbreviated on anything a PATIENT reads (the report
+ *  strip, the public report page — OPS-141): `spellInfant` prints them in full
+ *  whatever the style ("8 months", "12 days", "1 month"; the 'Years' style
+ *  keeps its capitals: "8 Months"). Years still follow the style. */
+export function formatAgeParts(a: AgeParts, style: AgeStyle = 'short', spellInfant = false): string {
   const unit: 'y' | 'm' | 'd' = a.years >= 1 ? 'y' : a.totalMonths >= 1 ? 'm' : 'd';
   const n = unit === 'y' ? a.years : unit === 'm' ? a.totalMonths : a.totalDays;
   const one = n === 1;
+  if (spellInfant && unit !== 'y') {
+    const word = unit === 'm' ? (one ? 'month' : 'months') : (one ? 'day' : 'days');
+    return `${n} ${style === 'Years' ? word.charAt(0).toUpperCase() + word.slice(1) : word}`;
+  }
   switch (style) {
     case 'Y': return `${n}${unit.toUpperCase()}`;
     case 'y': return `${n}${unit}`;
@@ -152,9 +160,9 @@ export function formatAgeParts(a: AgeParts, style: AgeStyle = 'short'): string {
 }
 
 /** The patient's age in `style`, or `fallback` ('' by default) when unknown. */
-export function formatAge(p: AgeSource | null | undefined, style: AgeStyle = 'short', fallback = '', now: Date = new Date()): string {
+export function formatAge(p: AgeSource | null | undefined, style: AgeStyle = 'short', fallback = '', now: Date = new Date(), spellInfant = false): string {
   const a = patientAge(p, now);
-  return a ? formatAgeParts(a, style) : fallback;
+  return a ? formatAgeParts(a, style, spellInfant) : fallback;
 }
 
 /** "yyyy-MM-dd" of a local date. */

@@ -125,3 +125,36 @@ describe('registration round-trip: age box → estimated DOB → same age back',
     expect(formatAge({ dateOfBirth: dob }, 'short', '', NOW)).toBe(shown);
   });
 });
+
+describe('patient-age: months / days spelled in full (OPS-141)', () => {
+  const baby = (dob: string) => ageParts(dob, NOW)!;
+  const styles = ['short', 'Y', 'y', 'num', 'yrs', 'Years', 'long'] as const;
+
+  it.each(styles)('%s: an 8-month-old never gets an abbreviation', (st) => {
+    const out = formatAgeParts(baby('2026-01-20'), st, true);
+    expect(out).toMatch(st === 'Years' ? /^8 Months$/ : /^8 months$/);
+  });
+  it.each(styles)('%s: 12 days / 1 day / 0 days', (st) => {
+    const cap = (w: string) => (st === 'Years' ? w[0].toUpperCase() + w.slice(1) : w);
+    expect(formatAgeParts(baby('2026-09-17'), st, true)).toBe(`12 ${cap('days')}`);
+    expect(formatAgeParts(baby('2026-09-28'), st, true)).toBe(`1 ${cap('day')}`);
+    expect(formatAgeParts(baby('2026-09-29'), st, true)).toBe(`0 ${cap('days')}`);
+  });
+  it('1 month is singular; the day before 1 year is still months', () => {
+    expect(formatAgeParts(baby('2026-08-29'), 'short', true)).toBe('1 month');
+    expect(formatAgeParts(baby('2025-09-30'), 'yrs', true)).toBe('11 months');
+  });
+  it('years follow the chosen style, spelled or not (boundary 1 year)', () => {
+    expect(formatAgeParts(baby('2025-09-29'), 'yrs', true)).toBe('1 yrs');
+    expect(formatAgeParts(baby('1992-03-15'), 'short', true)).toBe('34 Y');
+    expect(formatAgeParts(baby('1992-03-15'), 'Y', true)).toBe('34Y');
+  });
+  it('off by default: the compact styles used by tube labels are untouched', () => {
+    expect(formatAgeParts(baby('2026-01-20'), 'Y')).toBe('8M');
+    expect(formatAgeParts(baby('2026-01-20'), 'yrs')).toBe('8 mos');
+  });
+  it('a server ageDisplay-only patient (report snapshot) is spelled too', () => {
+    expect(formatAge({ ageDisplay: '6 M', ageYears: 0.5 }, 'short', '', NOW, true)).toBe('6 months');
+    expect(formatAge({ ageDisplay: '12 D' }, 'Years', '', NOW, true)).toBe('12 Days');
+  });
+});
