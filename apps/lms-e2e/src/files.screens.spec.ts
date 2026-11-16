@@ -468,6 +468,11 @@ test.describe('Start menu and bottom bar', () => {
 test.describe('this device', () => {
   // The device is a place inside the File screen (Save As / Open ask "Prefrontal · lab or This device"), not a band button.
   // The engine's File menu is played from inside the editor frame, so these steps run without an engine build.
+  // The frame needs a page: a stub stands in for the engine (looks like a build, never says ready), with or without engines in this build.
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/neuron-engine/**', r => r.fulfill({ status: 200, contentType: 'text/html',
+      body: '<!doctype html><html><body><script type="module">/* stub: ./neuron-web-stub_bg.wasm */</script></body></html>' }));
+  });
   const askPlace = async (page: Page, request: 'openRequest' | 'saveAsRequest') => {
     await engineSays(page, { type: `neuron:${request}`, name: 'QC log, November.xlsx' });
     await expect(dlg(page)).toContainText(request === 'openRequest' ? 'Where is the file?' : 'Where should this go?', { timeout: 30_000 });
