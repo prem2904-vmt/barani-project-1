@@ -7,8 +7,9 @@ import { DynamicInputComponent } from './dynamic-input.component';
  *  mirroring onHybridAge's arithmetic. */
 function isoMonthsAgo(months: number): string {
   const d = new Date(); d.setHours(0, 0, 0, 0);
-  d.setMonth(d.getMonth() - months);
-  return localIso(d);
+  const t = d.getFullYear() * 12 + d.getMonth() - months;
+  const y = Math.floor(t / 12), m = t - y * 12;
+  return localIso(new Date(y, m, Math.min(d.getDate(), new Date(y, m + 1, 0).getDate())));
 }
 /** yyyy-MM-dd of a LOCAL date (the DOB is a calendar date: toISOString()
  *  would shift it a day back east of UTC — the old bug in IST). */
@@ -82,9 +83,7 @@ describe('DynamicInputComponent hybrid DOB age units', () => {
     cmp.setAgeUnit('years');
     cmp.onHybridAge(40);
 
-    const d = new Date(); d.setHours(0, 0, 0, 0);
-    d.setFullYear(d.getFullYear() - 40);
-    expect(emitted).toBe(localIso(d));
+    expect(emitted).toBe(isoMonthsAgo(40 * 12));
     expect(cmp.ageFromValue()).toBe(40);
   });
 
@@ -156,6 +155,99 @@ describe('DynamicInputComponent hybrid DOB age units', () => {
     cmp.setAgeUnit('months');
     expect(cmp.dobError()).toBeNull();
     expect(emitted).toBe(isoMonthsAgo(300));
+  });
+
+  // OPS-135: the typed NUMBER survives a unit switch; only the unit changes.
+  function typeAge(cmp: DynamicInputComponent, text: string) {
+    const box = document.createElement('input');
+    box.value = text; cmp.onAgeText(box);
+    cmp.onAgeBlur();                                   // the click on the unit button blurs the box first
+  }
+  const daysAgo = (n: number) => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - n); return localIso(d); };
+
+  it('OPS-135: 6 typed in Years, then Months → 6 months (not 72), DOB follows', () => {
+    const cmp = create().componentInstance;
+    let emitted: unknown;
+    cmp.valueChange.subscribe(v => (emitted = v));
+    typeAge(cmp, '6');                                  // default unit is Years
+    expect(emitted).toBe(isoMonthsAgo(72));
+    cmp.setAgeUnit('months');
+    expect(cmp.hybridAgeDisplay()).toBe(6);
+    expect(cmp.ageUnit()).toBe('months');
+    expect(emitted).toBe(isoMonthsAgo(6));
+  });
+
+  it('OPS-135: Years → Days keeps the number; switching twice and back keeps it', () => {
+    const cmp = create().componentInstance;
+    let emitted: unknown;
+    cmp.valueChange.subscribe(v => (emitted = v));
+    typeAge(cmp, '10');
+    cmp.setAgeUnit('days');
+    expect(cmp.hybridAgeDisplay()).toBe(10);
+    expect(emitted).toBe(daysAgo(10));
+    cmp.setAgeUnit('months');
+    expect(cmp.hybridAgeDisplay()).toBe(10);
+    expect(emitted).toBe(isoMonthsAgo(10));
+    cmp.setAgeUnit('years');
+    expect(cmp.hybridAgeDisplay()).toBe(10);
+    expect(emitted).toBe(isoMonthsAgo(120));
+  });
+
+  it('OPS-135: a small number typed in Years does not flip itself to months (1 stays 1 Yrs)', () => {
+    const cmp = create().componentInstance;
+    typeAge(cmp, '1');
+    expect(cmp.ageUnit()).toBe('years');
+    expect(cmp.hybridAgeDisplay()).toBe(1);
+  });
+
+  it('OPS-135: 0 months and a unit-limit overflow are handled (0 stays 0; 400 Days is an error, not a conversion)', () => {
+    const cmp = create().componentInstance;
+    let emitted: unknown;
+    cmp.valueChange.subscribe(v => (emitted = v));
+    cmp.setAgeUnit('months');
+    typeAge(cmp, '0');
+    expect(emitted).toBe(isoMonthsAgo(0));
+    expect(cmp.hybridAgeDisplay()).toBe(0);
+    cmp.setAgeUnit('years');
+    expect(cmp.hybridAgeDisplay()).toBe(0);
+    expect(emitted).toBe(isoMonthsAgo(0));
+    cmp.setAgeUnit('days');
+    typeAge(cmp, '365');
+    cmp.setAgeUnit('years');                            // 365 years is out of range: error, number kept on screen
+    expect(cmp.dobError()).toContain('0–150');
+    expect(emitted).toBeNull();
+    cmp.setAgeUnit('months');                           // 365 months is fine again
+    expect(cmp.dobError()).toBeNull();
+    expect(emitted).toBe(isoMonthsAgo(365));
+  });
+
+  it('OPS-135: a DOB picked as a real date still just re-shows in the new unit (no typed number to keep)', () => {
+    const cmp = create().componentInstance;
+    let emitted: unknown;
+    cmp.valueChange.subscribe(v => (emitted = v));
+    typeAge(cmp, '6');
+    cmp.onDobPicked(isoMonthsAgo(30));
+    cmp.setAgeUnit('months');
+    expect(emitted).toBe(isoMonthsAgo(30));
+    expect(cmp.hybridAgeDisplay()).toBe(30);
+  });
+
+  it('OPS-135: a DOB set from outside (prefill) drops the typed number', () => {
+    const cmp = create().componentInstance;
+    typeAge(cmp, '6');
+    cmp.value = isoMonthsAgo(30);
+    cmp.setAgeUnit('months');
+    expect(cmp.hybridAgeDisplay()).toBe(30);
+  });
+
+  it('OPS-135: clearing the box forgets the number', () => {
+    const cmp = create().componentInstance;
+    let emitted: unknown = 'x';
+    cmp.valueChange.subscribe(v => (emitted = v));
+    typeAge(cmp, '6');
+    typeAge(cmp, '');
+    cmp.setAgeUnit('months');
+    expect(emitted).toBeNull();
   });
 
   it('the age box caps its digits at the unit width (Yrs 3, Mo 4, Days 3)', () => {

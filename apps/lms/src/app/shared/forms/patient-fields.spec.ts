@@ -125,6 +125,16 @@ describe('patient-fields — age', () => {
     expect(dobFromAge(3, 'months', now)).toBe('2026-06-27');
     expect(dobFromAge(10, 'days', now)).toBe('2026-09-17');
   });
+
+  it('dobFromAge clamps to the month end instead of spilling over (leap / 31st)', () => {
+    expect(dobFromAge(1, 'years', new Date(2028, 1, 29))).toBe('2027-02-28');   // 29 Feb − 1 y
+    expect(dobFromAge(4, 'years', new Date(2028, 1, 29))).toBe('2024-02-29');   // leap to leap
+    expect(dobFromAge(1, 'months', new Date(2026, 2, 31))).toBe('2026-02-28');  // 31 Mar − 1 mo
+    expect(dobFromAge(1, 'months', new Date(2026, 0, 15))).toBe('2025-12-15');  // year wrap
+    expect(dobFromAge(0, 'years', new Date(2026, 8, 29))).toBe('2026-09-29');
+    expect(dobFromAge(0, 'months', new Date(2026, 8, 29))).toBe('2026-09-29');
+    expect(dobFromAge(365, 'days', new Date(2026, 8, 29))).toBe('2025-09-29');
+  });
 });
 
 describe('OPS-30 person-name fields', () => {

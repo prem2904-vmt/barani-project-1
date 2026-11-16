@@ -1254,6 +1254,7 @@ export class DynamicInputComponent implements OnDestroy {
     if (el.value !== t) el.value = t;
     this._dobTyping.set(t);
     this._ageText.set(null);
+    this.ageTyped = null;
     if (d.length < 8) {
       // Still typing: hide any old message; a partial date blocks submit and
       // is shown on blur. Cleared box = no error.
@@ -1279,6 +1280,7 @@ export class DynamicInputComponent implements OnDestroy {
     if (!this._dobError()) this._dobTyping.set(null);
   }
   onDobPicked(v: string): void {
+    this.ageTyped = null;
     this._dobTyping.set(null);
     this._ageText.set(null);
     this.setLocalError(null);
@@ -1503,6 +1505,7 @@ export class DynamicInputComponent implements OnDestroy {
   get field(): DynamicFieldConfig { return this._field()!; }
 
   @Input() set value(v: unknown) {
+    if (v !== this._value()) this.ageTyped = null; // a DOB from outside is not the typed age
     // A DIFFERENT value from outside (ABHA prefill, edit load) replaces
     // whatever was being corrected in the DOB / age boxes.
     if (v != null && v !== '' && v !== this._value() && (this._blocking || this._dobError())) {
@@ -1677,13 +1680,21 @@ export class DynamicInputComponent implements OnDestroy {
     return m !== null && m < 24 ? 'months' : 'years';
   });
 
-  /** Switching the unit re-reads an age still being corrected (typed 300 in
-   *  Yrs → error; switch to Mo → 300 months); otherwise the box just shows
-   *  the same DOB in the new unit. */
+  /** The number the user typed into the age box, while the field's DOB is
+   *  still the one that number made (null once a real date replaces it). */
+  private ageTyped: number | null = null;
+
+  /** Switching the unit KEEPS the number the user typed and only changes what
+   *  it counts (6 Yrs → 6 Mo, never 72). A DOB typed / picked as a real date
+   *  has no typed number, so the box just shows the same DOB in the new
+   *  unit. An age still in error is re-read the same way (300 Yrs → 300 Mo). */
   setAgeUnit(u: AgeUnit) {
     this._ageUnit.set(u);
     const typed = this._ageText();
-    if (typed != null && this._dobError()) this.onHybridAge(Number(typed));
+    const keep = typed != null ? Number(typed) : this.ageTyped;
+    if (keep == null || !Number.isFinite(keep)) return;
+    this.onHybridAge(keep);
+    this._ageText.set(this._dobError() ? String(keep) : null);
   }
 
   /** The number shown in the age box, in the active unit. */
@@ -1700,9 +1711,13 @@ export class DynamicInputComponent implements OnDestroy {
    *  range (Yrs > 150, Mo > 1199, Days > 365) → an inline error and NO value
    *  (never a silently kept stale DOB). */
   onHybridAge(raw: unknown) {
-    if (raw == null || `${raw}` === '') { this.setLocalError(null); this.emit(null); return; }
+    if (raw == null || `${raw}` === '') { this.ageTyped = null; this.setLocalError(null); this.emit(null); return; }
     const age = Number(raw);
     const unit = this.ageUnit();
+    // Pin the unit the number was typed in: the auto unit follows the DOB, so
+    // "1" typed in Yrs must not flip itself to "12 Mo" under the user.
+    this._ageUnit.set(unit);
+    this.ageTyped = age;
     const err = validateAge(age, unit);
     if (err) { this.setLocalError(err); this.emit(null); return; }
     this.setLocalError(null);
@@ -1713,6 +1728,7 @@ export class DynamicInputComponent implements OnDestroy {
    *  sends `dobEstimated` so the server can tell a real birth date from an
    *  age-derived one). */
   emitDob(v: string | null, estimated: boolean): void {
+    if (!estimated) this.ageTyped = null;
     this.emit(v);
     if (v) this.dobEstimatedChange.emit(estimated);
   }
