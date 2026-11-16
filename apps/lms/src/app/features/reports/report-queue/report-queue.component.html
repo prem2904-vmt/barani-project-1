@@ -84,7 +84,7 @@
       <span class="pf-rq-stat" data-color="violet">
         <span class="pf-rq-stat__dot" aria-hidden="true"></span>
         <span class="pf-rq-stat__label">Total</span>
-        <span class="pf-rq-stat__value">{{ counts().all }}</span>
+        <span class="pf-rq-stat__value">{{ allCount() }}</span>
       </span>
       <span class="pf-rq-stat" data-color="amber">
         <span class="pf-rq-stat__dot" aria-hidden="true"></span>
@@ -191,65 +191,8 @@
   }
 
   <div class="pf-rq-body">
-    @if (loading() && items().length === 0) {
-    @if (theme.isNewDesign()) {
-    <ul class="pf-rq-list" role="list" aria-busy="true">
-      @for (i of [0, 1, 2, 3]; track i) {
-      <li class="pf-rq-card pf-rq-card--skel">
-        <div class="pf-rq-card__head">
-          <div class="pf-rq-card__who">
-            <pf-skeleton variant="line" width="40%"></pf-skeleton>
-            <pf-skeleton variant="line" width="65%" height="10px"></pf-skeleton>
-          </div>
-          <pf-skeleton variant="line" width="160px" height="30px"></pf-skeleton>
-        </div>
-      </li>
-      }
-    </ul>
-    } @else {
-    <div class="space-y-2.5">
-      @for (i of [0, 1, 2, 3]; track i) {
-      <pf-tile tone="default" padding="md">
-        <div class="flex items-center gap-3">
-          <pf-skeleton variant="block" width="40px" height="40px"></pf-skeleton>
-          <div class="flex-1 space-y-2">
-            <pf-skeleton variant="line" width="45%"></pf-skeleton>
-            <pf-skeleton variant="line" width="70%" height="10px"></pf-skeleton>
-          </div>
-          <pf-skeleton variant="line" width="180px" height="28px"></pf-skeleton>
-        </div>
-      </pf-tile>
-      }
-    </div>
-    }
-    } @else if (filter() === "partial") {
-    <!-- Partial tab — orders with at least one tube fully validated, grouped
-         by DEPARTMENT (report-queue.partial.ts): ready departments with their
-         results (culture = stage summary), partly-ready ones say so per test,
-         pending ones are named. "Generate partial PDF" releases a preliminary
-         report of the ready tubes (latest supersedes previous). -->
-    @if (visiblePartials().length === 0) {
-    @if (theme.isNewDesign()) {
-    <div class="pf-empty pf-rq-empty">
-      <span class="pf-empty__icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9h9"/></svg>
-      </span>
-      <p class="pf-empty__title">No partial reports</p>
-      <p class="pf-empty__body">{{ query() ? 'Nothing matches this search.' : 'An order shows up here as soon as one of its tubes is fully validated.' }}</p>
-    </div>
-    } @else {
-    <pf-tile tone="default" padding="xl">
-      <div class="text-center py-6">
-        <p class="text-[14px]" style="color: var(--text-secondary);">
-          No partial reports right now. They show up here as soon as one
-          department finishes validation.
-        </p>
-      </div>
-    </pf-tile>
-    }
-    } @else {
-    <ul class="pf-rq-list" role="list">
-      @for (po of visiblePartials(); track po.id) {
+    <!-- One partial order card: the Partial tab and (for orders with no report row yet) the All tab. -->
+    <ng-template #partialCard let-po>
       @let open = expanded() === po.id;
       <li class="pf-rq-card pf-rq-card--partial" [class.is-open]="open">
         <button type="button" class="pf-rq-card__head pf-rq-card__toggle" (click)="toggle(po.id)"
@@ -351,10 +294,80 @@
           </div>
         </div>
       </li>
+    </ng-template>
+    @if (filter() === "all" && !(loading() && items().length === 0) && allTabPartials().length > 0) {
+    <!-- All = every report PLUS the orders that are only partly reported (no report row yet):
+         the same Preliminary cards as the Partial tab (OPS-136). -->
+    <ul class="pf-rq-list pf-rq-list--partials" role="list" data-testid="all-partials">
+      @for (po of allTabPartials(); track po.id) {
+      <ng-container *ngTemplateOutlet="partialCard; context: { $implicit: po }" />
       }
     </ul>
     }
-    } @else if (visible().length === 0) {
+    @if (loading() && items().length === 0) {
+    @if (theme.isNewDesign()) {
+    <ul class="pf-rq-list" role="list" aria-busy="true">
+      @for (i of [0, 1, 2, 3]; track i) {
+      <li class="pf-rq-card pf-rq-card--skel">
+        <div class="pf-rq-card__head">
+          <div class="pf-rq-card__who">
+            <pf-skeleton variant="line" width="40%"></pf-skeleton>
+            <pf-skeleton variant="line" width="65%" height="10px"></pf-skeleton>
+          </div>
+          <pf-skeleton variant="line" width="160px" height="30px"></pf-skeleton>
+        </div>
+      </li>
+      }
+    </ul>
+    } @else {
+    <div class="space-y-2.5">
+      @for (i of [0, 1, 2, 3]; track i) {
+      <pf-tile tone="default" padding="md">
+        <div class="flex items-center gap-3">
+          <pf-skeleton variant="block" width="40px" height="40px"></pf-skeleton>
+          <div class="flex-1 space-y-2">
+            <pf-skeleton variant="line" width="45%"></pf-skeleton>
+            <pf-skeleton variant="line" width="70%" height="10px"></pf-skeleton>
+          </div>
+          <pf-skeleton variant="line" width="180px" height="28px"></pf-skeleton>
+        </div>
+      </pf-tile>
+      }
+    </div>
+    }
+    } @else if (filter() === "partial") {
+    <!-- Partial tab — orders with at least one tube fully validated, grouped
+         by DEPARTMENT (report-queue.partial.ts): ready departments with their
+         results (culture = stage summary), partly-ready ones say so per test,
+         pending ones are named. "Generate partial PDF" releases a preliminary
+         report of the ready tubes (latest supersedes previous). -->
+    @if (visiblePartials().length === 0) {
+    @if (theme.isNewDesign()) {
+    <div class="pf-empty pf-rq-empty">
+      <span class="pf-empty__icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9h9"/></svg>
+      </span>
+      <p class="pf-empty__title">No partial reports</p>
+      <p class="pf-empty__body">{{ query() ? 'Nothing matches this search.' : 'An order shows up here as soon as one of its tubes is fully validated.' }}</p>
+    </div>
+    } @else {
+    <pf-tile tone="default" padding="xl">
+      <div class="text-center py-6">
+        <p class="text-[14px]" style="color: var(--text-secondary);">
+          No partial reports right now. They show up here as soon as one
+          department finishes validation.
+        </p>
+      </div>
+    </pf-tile>
+    }
+    } @else {
+    <ul class="pf-rq-list" role="list">
+      @for (po of visiblePartials(); track po.id) {
+      <ng-container *ngTemplateOutlet="partialCard; context: { $implicit: po }" />
+      }
+    </ul>
+    }
+    } @else if (visible().length === 0 && allTabPartials().length === 0) {
     @if (theme.isNewDesign()) {
     <div class="pf-empty pf-rq-empty">
       <span class="pf-empty__icon" aria-hidden="true">

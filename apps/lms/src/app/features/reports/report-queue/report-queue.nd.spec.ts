@@ -205,7 +205,7 @@ describe('Reports list (nd) — band', () => {
     const items = [...seg.querySelectorAll<HTMLElement>('[role=radio]')];
     expect(items.map(i => (i.querySelector('.seg-lbl') || i.querySelector('.pf-rq-seg__lbl'))!.textContent!.trim()))
       .toEqual(['All', 'Completed', 'Partial', 'Delivered', 'Failed']);
-    expect(items.map(i => (i.querySelector('.seg-count') || i.querySelector('.pf-rq-seg__count'))!.textContent!.trim())).toEqual(['4', '2', '2', '1', '1']);
+    expect(items.map(i => (i.querySelector('.seg-count') || i.querySelector('.pf-rq-seg__count'))!.textContent!.trim())).toEqual(['6', '2', '2', '1', '1']);
     items.forEach(i => expect((i.querySelector('.seg-count') || i.querySelector('.pf-rq-seg__count'))!.classList).toContain('pf-num'));
     // Default = Completed, raised neutral (aria-checked), never a gradient.
     expect(seg.querySelector('[aria-checked="true"]')?.getAttribute('data-filter')).toBe('pending');
@@ -796,7 +796,8 @@ describe('Reports list — server paging (DB optimisation phase 3)', () => {
     expect(c.items().length).toBe(50);
     expect(c.counts()).toEqual({ all: 122, pending: 120, delivered: 1, failed: 1 });
     const byTab = Object.fromEntries(c.ndFilters().map((x: any) => [x.value, x.count]));
-    expect(byTab).toMatchObject({ all: 122, pending: 120, delivered: 1, failed: 1 });
+    // The All pill = the server's 122 reports + the 2 partly-reported orders that have no report row (OPS-136).
+    expect(byTab).toMatchObject({ all: 124, pending: 120, delivered: 1, failed: 1 });
   });
 
   it('Load more appends the next page until everything is shown, then hides', async () => {
@@ -862,5 +863,59 @@ describe('Reports list — server paging (DB optimisation phase 3)', () => {
     expect(c.items().length).toBe(60);
     expect(c.counts().all).toBe(60);
     expect(moreBtn(el)).toBeNull();
+  });
+});
+
+describe('Reports list — partly reported orders show under All (OPS-136)', () => {
+  const names = (el: HTMLElement) => [...el.querySelectorAll('.pf-rq-card--partial .pf-rq-card__name')].map(n => n.textContent!.trim());
+
+  it('All lists the partly-reported orders (no report row yet) above the reports, and Partial still lists them', async () => {
+    const { el, c, tab } = await render();
+    tab('all');
+    expect(el.querySelectorAll('[data-testid="all-partials"] .pf-rq-card--partial').length).toBe(2);
+    expect(names(el).join(' ')).toContain('Ms. Paravai Munusamy');
+    expect(el.querySelectorAll('.pf-rq-card--report').length).toBe(4);
+    expect(c.allCount()).toBe(6);
+    tab('partial');
+    expect(el.querySelectorAll('.pf-rq-card--partial').length).toBe(2);
+    expect(el.querySelector('[data-testid="all-partials"]')).toBeNull();
+  });
+
+  it('the other tabs never show them', async () => {
+    const { el, tab } = await render();
+    for (const v of ['pending', 'delivered', 'failed']) {
+      tab(v);
+      expect(el.querySelector('[data-testid="all-partials"]')).toBeNull();
+      expect(el.querySelector('.pf-rq-card--partial')).toBeNull();
+    }
+  });
+
+  it('an order that already has a report row (a generated partial) is not listed twice', async () => {
+    // r2 below is the partial report of VALUES_ORDER: one card on All, not two.
+    const q = [rep('r2', 'pending', 'partial', { orderId: VALUES_ORDER.id })];
+    const { el, c, tab } = await render({ queue: q });
+    tab('all');
+    expect(c.allCount()).toBe(2);   // 1 report + PARTIAL_ORDER only
+    expect(el.querySelectorAll('[data-testid="all-partials"] .pf-rq-card--partial').length).toBe(1);
+    expect(el.querySelectorAll('.pf-rq-card--report').length).toBe(1);
+  });
+
+  it('the band search narrows them; a search with no match hides them and shows the empty state', async () => {
+    const { el, c, f, tab } = await render({ queue: [] });
+    tab('all');
+    expect(el.querySelectorAll('.pf-rq-card--partial').length).toBe(2);
+    c.setQuery('paravai'); f.detectChanges();
+    expect(el.querySelectorAll('.pf-rq-card--partial').length).toBe(1);
+    c.setQuery('zzz-nobody'); f.detectChanges();
+    expect(el.querySelectorAll('.pf-rq-card--partial').length).toBe(0);
+    expect(el.querySelector('.pf-empty .pf-empty__title')).not.toBeNull();
+  });
+
+  it('with no partly-reported orders All is exactly the reports (count and rows unchanged)', async () => {
+    const { el, c, tab } = await render({ orders: [] });
+    tab('all');
+    expect(c.allCount()).toBe(4);
+    expect(el.querySelector('[data-testid="all-partials"]')).toBeNull();
+    expect(el.querySelectorAll('.pf-rq-card--report').length).toBe(4);
   });
 });
