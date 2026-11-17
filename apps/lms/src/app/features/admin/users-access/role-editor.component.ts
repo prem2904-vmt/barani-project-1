@@ -10,7 +10,7 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { NgTemplateOutlet } from '@angular/common';
 import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { SG_NARROW_MQ, SG_PHONE_MQ, sgCell, sgGridTheme, sgMedia, sgSwitch } from '../../../shared/settings-grid/settings-grid';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PERMISSION_GROUPS, PERMISSION_INFO, ROLE_INFO } from './permission-catalog';
@@ -61,7 +61,7 @@ interface PermGroupView {
   imports: [
     FormsModule,
     NgTemplateOutlet,
-    AgGridAngular,
+    DataGridComponent,
     SelectComponent,
     ScreenHeaderComponent,
     TouchButtonComponent,
@@ -204,9 +204,7 @@ interface PermGroupView {
                 }
               </header>
               <div class="pf-sg-main__body">
-                <ag-grid-angular class="pf-sg-grid re-grid" [theme]="gridTheme()" [rowData]="gridRows()" [columnDefs]="colDefs()"
-                                 [defaultColDef]="defaultColDef" [getRowId]="getRowId" [animateRows]="true"
-                                 [suppressNoRowsOverlay]="true" [suppressCellFocus]="true"></ag-grid-angular>
+                <pf-data-grid [rowData]="gridRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [suppressCellFocus]="true"></pf-data-grid>
                 @if (gridRows().length === 0) {
                   <div class="pf-sg-empty"><p class="pf-sg-empty__title re-empty">Nothing matches “{{ search() }}”.</p></div>
                 }

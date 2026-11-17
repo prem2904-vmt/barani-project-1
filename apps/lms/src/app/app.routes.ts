@@ -12,7 +12,7 @@ import { permissionGuard } from './core/auth/permission.guard';
 import { routeGuards } from './core/auth/route-guards';
 import { TEST_MASTER_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
-import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
+import { loadRoleEditor, loadUserInvite } from './features/admin/users-access/user-editors.loader';
 import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
 import { OPD_FULL_SCREEN_ADMIN, SETTINGS_FULL_PAGE_ROUTES, SETTINGS_REDIRECTS, SETTINGS_SHELL_ROUTE, SHELL_HOSTED_SHEET_PATHS } from './features/admin/settings/settings.routes';
 import { CASESHEET_SHELL_ROUTES, withAppModes } from './features/casesheets/casesheets.routes';
@@ -182,9 +182,9 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: loadUserInvite
       },
       {
+        // The user opens beside the People grid (owner 2026-11-17): the old editor URL deep-links that panel.
         path: 'admin/users/:id/edit',
-        canActivate: [permissionGuard('manage_users')],
-        loadComponent: loadUserEdit
+        redirectTo: ({ params }) => `/admin?section=people&edit=${encodeURIComponent(params['id'] ?? '')}`,
       },
       {
         path: 'admin/roles/new',

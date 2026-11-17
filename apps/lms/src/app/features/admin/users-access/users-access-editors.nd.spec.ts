@@ -328,7 +328,7 @@ describe('Users & Access list — current rules', () => {
     c.status.set('inactive'); f.detectChanges();
     expect(c.gridUsers().length).toBe(0);
     // The grid sizes by flex (never a % height that a host without a definite height collapses to 0).
-    expect(el.querySelector('ag-grid-angular')!.classList.contains('pf-sg-grid')).toBe(true);
+    expect(el.querySelector('pf-data-grid ag-grid-angular')).not.toBeNull();
   });
 
   it('touch: row actions become 44px icon buttons (label kept for AT)', () => {
@@ -339,5 +339,36 @@ describe('Users & Access list — current rules', () => {
     expect(edit.classList.contains('pf-rowact--icon')).toBe(true);
     expect(edit.querySelector('svg')).not.toBeNull();
     expect(edit.getAttribute('aria-label')).toContain('Edit');
+  });
+});
+
+describe('User editor — panel mode (beside the People grid)', () => {
+  it('ONE scrolling form: Profile · Branches · Roles · Validates for, account actions in the head, Save at the foot; save closes', () => {
+    const { el, f, c, api } = render(UserEditComponent);
+    f.componentRef.setInput('panelId', 'u1');
+    c.ngOnInit(); f.detectChanges();
+    const panel = el.querySelector('[data-testid="ue-panel"]')!;
+    expect(panel).not.toBeNull();
+    expect(el.querySelector('pf-hero-band')).toBeNull();
+    expect(Array.from(panel.querySelectorAll('.ue-panel__sec')).map(h => h.textContent!.trim().split(' ')[0])).toEqual(['Profile', 'Branches', 'Roles', 'Validates']);
+    expect(panel.querySelector('.pf-ue-reset')).not.toBeNull();
+    expect(panel.querySelectorAll('.pf-btn--primary').length).toBe(1);
+    let closed = 0; c.closed.subscribe(() => closed++);
+    c.save();
+    expect(api.patch).toHaveBeenCalledWith('/api/users/u1', expect.anything());
+    expect(closed).toBe(1);
+  });
+});
+
+describe('People grid — Create user opens the form beside the grid', () => {
+  it('Create user → the invite panel (one form, Create at the foot); the band button steps down to ghost', () => {
+    const { el, f, c } = render(UsersAccessComponent);
+    c.openInvite(); f.detectChanges();
+    expect(el.querySelector('.pf-ua-panel [data-testid="ui-panel"]')).not.toBeNull();
+    expect(el.querySelector('.pf-sg-panels')!.firstElementChild!.classList.contains('pf-ua-panel')).toBe(true);
+    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')).toBeNull();
+    expect(el.querySelectorAll('.pf-ua-panel .pf-btn--primary').length).toBe(1);
+    c.openInvite(); f.detectChanges();
+    expect(el.querySelector('.pf-ua-panel')).toBeNull();
   });
 });

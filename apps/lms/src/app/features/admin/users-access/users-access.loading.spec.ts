@@ -147,12 +147,14 @@ describe('Users & access — loading feedback', () => {
     expect(el.querySelector('.pf-ua-grid pf-skeleton-table')).toBeNull();
   });
 
-  it('Users list: a row\'s Edit marks the pressed button busy (held until the editor opens)', () => {
-    const { c, pageOpen } = render(UsersAccessComponent);
+  it('Users list: a row\'s Edit opens the user BESIDE the grid (no page change; ?edit=<id> keeps it linkable)', () => {
+    const { c } = render(UsersAccessComponent);
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     const btn = document.createElement('button');
     c.gridContext.editUser(users[0], btn);
-    expect(pageOpen.markSource).toHaveBeenCalledWith(btn);
-    expect(navigate).toHaveBeenCalledWith(['/admin/users', 'u1', 'edit']);
+    expect(c.panelUserId()).toBe('u1');
+    expect(navigate).toHaveBeenCalledWith([], expect.objectContaining({ queryParams: { edit: 'u1' } }));
+    c.closePanel();
+    expect(c.panelUserId()).toBeNull();
   });
 });

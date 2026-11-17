@@ -1,0 +1,10 @@
+/* PANEL mode of Create user: the page's cards flatten into ONE scrolling form (sections, not cards). */
+.ui-panel .pf-uf-body { gap: 0; padding-top: 0; }
+.ui-panel .pf-uf-grid2 { grid-template-columns: minmax(0, 1fr) !important; gap: 0; }
+.ui-panel .pf-uf-card { border: 0; box-shadow: none; background: transparent; border-radius: 0; }
+.ui-panel .pf-uf-card > .pf-card__head { background: transparent; border: 0; padding: 16px 0 4px; }
+.ui-panel .pf-uf-card > .pf-card__head .pf-card__icon { display: none; }
+.ui-panel .pf-uf-card > .pf-card__head .pf-card__label { font-size: 11px; letter-spacing: 0.06em; color: var(--text-tertiary); }
+.ui-panel .pf-uf-card .pf-card__body { padding: 4px 0 8px; }
+.ui-panel .pf-uf-name-row, .ui-panel .pf-uf-account-row { grid-template-columns: minmax(0, 1fr); }
+.ui-panel .pf-uf-roles { grid-template-columns: minmax(0, 1fr); }
