@@ -3,7 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { Location } from '@angular/common';
 import { of } from 'rxjs';
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 import { AdminOverviewComponent } from './admin-overview.component';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/auth/auth.service';
@@ -48,6 +48,15 @@ function setup(opts: { perms?: string[]; compact?: boolean; opd?: boolean; pharm
   });
   return { api };
 }
+
+/* The overview loads the selected section's inline page lazily (dynamic import). Let those loads finish before the
+   test environment is torn down, or vitest reports "Cannot load chunk … after the environment was torn down"
+   (every test passes, but the run exits 1 — it blocked two dev releases). */
+afterEach(async () => {
+  await vi.dynamicImportSettled();
+  await new Promise((r) => setTimeout(r, 50));
+  await vi.dynamicImportSettled();
+});
 
 async function open(url: string) {
   const h = await RouterTestingHarness.create();
