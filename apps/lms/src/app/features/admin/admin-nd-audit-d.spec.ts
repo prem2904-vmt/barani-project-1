@@ -198,19 +198,24 @@ describe('ND audit D — Referral labs', () => {
       : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Microbiology', code: 'MIC', isActive: true }] : [],
   });
 
-  it('ONE primary; Edit / Deactivate are .pf-rowact; codes are neutral tabular chips', () => {
+  it('ONE primary; Edit / Deactivate are quiet same-size icon .pf-rowact; code column tabular; departments as neutral chips', () => {
     const p = render();
     expect(primaries(p.el)).toBe(1);
-    const card = p.el.querySelector('.pf-rl-card.pf-card')!;
-    expect(Array.from(card.querySelectorAll('.pf-rowact .pf-rowact__t')).map(t => t.textContent!.trim())).toEqual(['Edit', 'Deactivate']);
-    expect(card.querySelector('.pf-rl__code.pf-chip.pf-num')!.textContent).toContain('APOLLO');
+    const cols = p.cmp.colDefs();
+    const acts = cols.find((c: any) => c.colId === 'actions').cellRenderer({ data: labs[0] }) as HTMLElement;
+    const btns = Array.from(acts.querySelectorAll('.pf-rowact'));
+    expect(btns.map(t => t.querySelector('.pf-rowact__t')!.textContent!.trim())).toEqual(['Edit', 'Deactivate']);
+    expect(btns.every(b => b.classList.contains('pf-rowact--icon'))).toBe(true);
+    expect(cols.find((c: any) => c.colId === 'code').cellClass).toBe('pf-num');
+    const depts = cols.find((c: any) => c.colId === 'departments').cellRenderer({ data: labs[0] }) as HTMLElement;
+    expect(depts.textContent).toContain('Microbiology');
     hygiene(p.el);
   });
 
   it('edit opens the kit-card editor; dept chips use the NEUTRAL aria-pressed state (no --on gradient)', () => {
     const p = render();
     p.cmp.edit(labs[0]); p.f.detectChanges();
-    const form = p.el.querySelector('.pf-rl-form.pf-card')!;
+    const form = p.el.querySelector('.pf-rl-form.pf-card.pf-sg-side')!;
     expect(form.querySelector('.pf-card__label')!.textContent).toContain('Edit referral lab');
     const chip = form.querySelector('.pf-dept-chip')!;
     expect(chip.classList.contains('pf-chip')).toBe(true);
@@ -380,24 +385,35 @@ describe('ND audit D — Home-collection agents', () => {
   const agents = [{ id: 'a1', userId: 'u1', areaMode: 'pincode', pincodesJson: '["600001","600028"]', weightage: 2, isActive: true,
     user: { name: 'Karthikeyan Subramaniam Ramasamy', email: 'k@x.in' } }];
   const render = () => renderBandPage(HomeCollectionAgentsComponent, {
-    providers: [{ provide: AppointmentQueueService, useValue: { listAgents: vi.fn(() => of(agents)), upsertAgent: vi.fn(() => of({})), removeAgent: vi.fn(() => of({})) } }],
+    providers: [{ provide: AppointmentQueueService, useValue: { listAgents: vi.fn(() => of(agents)), upsertAgent: vi.fn(() => of({})), removeAgent: vi.fn(() => of({})),
+      getConfig: vi.fn(() => of({ queueMode: 'token_queue' })), saveConfig: vi.fn(() => of({ queueMode: 'home_collection' })) } }],
   });
 
-  it('agent cards: kit card, full name (no truncate), neutral weight chip, Edit / Remove .pf-rowact; ONE primary', () => {
+  it('agents grid: full name (wraps, no truncate), weight column, Edit / Remove kit .pf-rowact; ONE primary', () => {
     const p = render();
     expect(primaries(p.el)).toBe(1);
-    const card = p.el.querySelector('.pf-hc-card.pf-card')!;
-    expect(card.querySelector('.pf-hc-name')!.textContent).toContain('Karthikeyan Subramaniam Ramasamy');
-    expect(card.querySelector('.truncate')).toBeNull();
-    expect(card.querySelector('.pf-hc-chip.pf-chip')!.textContent).toContain('Weight');
-    expect(Array.from(card.querySelectorAll('.pf-rowact .pf-rowact__t')).map(t => t.textContent!.trim())).toEqual(['Edit', 'Remove']);
+    const cols = p.cmp.colDefs();
+    const name = cols.find((c: any) => c.colId === 'agent').cellRenderer({ data: agents[0] }) as HTMLElement;
+    expect(name.textContent).toContain('Karthikeyan Subramaniam Ramasamy');
+    expect(name.querySelector('.truncate')).toBeNull();
+    expect(cols.find((c: any) => c.colId === 'weight').headerName).toBe('Share of work');
+    const acts = cols.find((c: any) => c.colId === 'actions').cellRenderer({ data: agents[0] }) as HTMLElement;
+    expect(Array.from(acts.querySelectorAll('.pf-rowact .pf-rowact__t')).map(t => t.textContent!.trim())).toEqual(['Edit', 'Remove']);
     hygiene(p.el);
+  });
+
+  it('the branch switch is ONE compact strip above the grid (switch | Available · This branch)', () => {
+    const p = render();
+    const strip = p.el.querySelector('[data-testid="hc-switch-card"]')!;
+    expect(strip.classList.contains('pf-hs-strip')).toBe(true);
+    expect(strip.querySelector('[role="switch"]')).not.toBeNull();
+    expect(strip.textContent).toContain('This branch: Not running');
   });
 
   it('agent editor = kit card; coverage is a neutral pf-seg; the band turns a quiet Cancel', () => {
     const p = render();
     p.cmp.toggleForm(); p.f.detectChanges();
-    const form = p.el.querySelector('.pf-hc-form.pf-card')!;
+    const form = p.el.querySelector('.pf-hc-form.pf-card.pf-sg-side')!;
     expect(form.querySelectorAll('.pf-seg [role="radio"]').length).toBe(2);
     expect(form.querySelector('input.pf-input')).not.toBeNull();
     expect(primaries(p.el)).toBe(1);

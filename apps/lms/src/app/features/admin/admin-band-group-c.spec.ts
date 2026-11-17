@@ -117,13 +117,25 @@ describe('Admin band — Referral labs', () => {
       : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Microbiology', code: 'MIC', isActive: true }]
         : [],
   });
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-rl__name')).map(n => text(n));
+  let cur: any;
+  const names = (_el: HTMLElement) => cur.cmp.visibleLabs().map((l: any) => l.name);
 
-  it('band present, header classic-only, labs in the band body', () => {
-    const p = render();
+  it('band present, header classic-only, labs in a Test Master grid card', () => {
+    const p = cur = render();
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
+    expect(p.el.querySelector('.pf-band-body .pf-sg-main ag-grid-angular')).not.toBeNull();
     expect(names(p.el).length).toBe(2);
+    expect(p.cmp.colDefs().map((c: any) => c.colId)).toEqual(['name', 'code', 'contact', 'departments', 'status', 'actions']);
+  });
+
+  it('status filter (card head, like Test Master) + Deactivate sends the same PUT with isActive flipped', () => {
+    const p = cur = render();
+    p.cmp.actionsFor(labs[0]).find((a: any) => a.label === 'Deactivate').run();
+    expect(p.api.put).toHaveBeenCalledWith('/api/referral-labs/r1', expect.objectContaining({ name: 'Apollo Diagnostics', isActive: false }));
+    p.cmp.status.set('inactive');
+    expect(names(p.el)).toEqual([]);
+    expect(p.el.querySelector('.pf-sg-main__head pf-segmented')).not.toBeNull();
   });
 
   it('"Add referral lab" in the band opens the form and flips to Cancel', () => {
@@ -135,7 +147,7 @@ describe('Admin band — Referral labs', () => {
   });
 
   it('pill search matches name, contact and handled department names; empty state', () => {
-    const p = render();
+    const p = cur = render();
     p.type('priya');
     expect(names(p.el)).toEqual(['Neuberg']);
     p.type('microbio');
@@ -272,13 +284,18 @@ describe('Admin band — Home-collection agents', () => {
   const render = () => renderBandPage(HomeCollectionAgentsComponent, {
     getFor: (url) => url.startsWith('/api/home-collection/agents') ? agents : [],
   });
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body .pf-hc-name')).map(n => text(n));
+  const names = (el: HTMLElement) => (el as any).__cmp.visibleAgents().map((a: any) => a.user.name);
 
-  it('band present, header classic-only, agents in the band body', () => {
+  it('band present, header classic-only, agents in a Test Master grid card; branch switch strip above it', () => {
     const p = render();
+    (p.el as any).__cmp = p.cmp;
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
+    expect(p.el.querySelector('.pf-band-body .pf-sg-main ag-grid-angular')).not.toBeNull();
+    expect(p.el.querySelector('.pf-band-body [data-testid="hc-switch-card"]')).not.toBeNull();
     expect(names(p.el)).toEqual(['Karthik', 'Lakshmi']);
+    expect(p.cmp.colDefs().map((c: any) => c.colId)).toEqual(['agent', 'coverage', 'weight', 'actions']);
+    expect(p.cmp.coverageText(agents[1])).toBe('Radius 5 km around 13.080, 80.270');
   });
 
   it('"Add agent" in the band opens the form and flips to Cancel', () => {
@@ -291,6 +308,7 @@ describe('Admin band — Home-collection agents', () => {
 
   it('pill search matches name and covered pincodes; empty state', () => {
     const p = render();
+    (p.el as any).__cmp = p.cmp;
     p.type('600041');
     expect(names(p.el)).toEqual(['Karthik']);
     p.type('lakshmi');
