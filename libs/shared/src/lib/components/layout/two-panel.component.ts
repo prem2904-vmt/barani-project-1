@@ -116,10 +116,10 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
       </div>
     </aside>
 
-    <section class="pf-card pf-tp__panel" [attr.aria-label]="current()?.label ?? null" data-testid="tp-panel"
+    <section class="pf-tp__panel" [class.pf-card]="!bareMain()" [class.pf-tp__panel--bare]="bareMain()" [attr.aria-label]="current()?.label ?? null" data-testid="tp-panel"
              [class.pf-tp__panel--a]="phase() === 0" [class.pf-tp__panel--b]="phase() === 1">
       @if (current(); as cur) {
-        <header class="pf-card__head pf-tp__head">
+        <header class="pf-card__head pf-tp__head" [hidden]="bareMain()">
           @if (cur.icon ?? panelIcon(); as ic) {
             <span class="pf-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -180,6 +180,9 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
     /* Main card body: the ONE scroll container. */
     .pf-tp__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 14px; overscroll-behavior: contain; }
     .pf-tp__body--flush { padding: 0; }
+    /* The hosted page brings its OWN card (never card-in-card): the panel is a bare column, the page's card is the main card. */
+    .pf-tp__panel--bare { display: flex; flex-direction: column; background: none; border: 0; box-shadow: none; }
+    .pf-tp__panel--bare .pf-tp__body { padding: 0; }
 
     @keyframes pf-tp-in-a { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
     @keyframes pf-tp-in-b { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
@@ -231,6 +234,8 @@ export class TwoPanelComponent {
   readonly backLabel = input('Back to sections');
   /** Main-card body without its own padding (the content brings its own rows). */
   readonly flush = input(false);
+  /** The content brings its own card: no main-card chrome or head around it. */
+  readonly bareMain = input(false);
 
   readonly navBack = output<void>();
 

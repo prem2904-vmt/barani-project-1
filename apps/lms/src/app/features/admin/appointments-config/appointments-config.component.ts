@@ -258,7 +258,7 @@ export class AppointmentsConfigComponent implements OnInit {
   }
 
   opt(key: keyof AppointmentConfig['queueOptions']): number {
-    return this._cfg()?.queueOptions[key] ?? 0;
+    return this._cfg()?.queueOptions?.[key] ?? 0;
   }
   patchOpt(key: keyof AppointmentConfig['queueOptions'], value: number) {
     const cur = this._cfg();

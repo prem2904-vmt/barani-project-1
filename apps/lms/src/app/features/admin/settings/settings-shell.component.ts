@@ -47,8 +47,8 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
       <div class="pf-band-body pf-band-body--fill pf-ss__body">
         @if (single()) {
           <!-- One category: ONE main card (TM head), its groups one under the other. -->
-          <section class="pf-card pf-ss__card" [attr.aria-label]="itemLabel()">
-            <header class="pf-card__head">
+          <section class="pf-ss__card" [class.pf-card]="!ownsCard()" [class.pf-ss__card--bare]="ownsCard()" [attr.aria-label]="itemLabel()">
+            <header class="pf-card__head" [hidden]="ownsCard()">
               <span class="pf-card__icon" aria-hidden="true">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="itemIcon()"/></svg>
@@ -77,6 +77,7 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
             [navKey]="loc() ? itemId() : null"
             [animateNav]="true"
             [flush]="true"
+            [bareMain]="ownsCard()"
             (pick)="pickCategory($event)"
             (back)="closeDetail()"
             (navBack)="toSections()"
@@ -92,7 +93,8 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
     .pf-ss__body { min-height: 0; }
     :root:not(.design-new) .pf-ss { display: flex; flex-direction: column; height: calc(100dvh - var(--top-strip-h, 64px)); padding: 0 16px; }
     :root:not(.design-new) .pf-ss__body { flex: 1; display: flex; flex-direction: column; padding-bottom: 12px; }
-    .pf-ss__card { flex: 1 1 auto; min-height: 0; }
+    .pf-ss__card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .pf-ss__card--bare .pf-ss__main { padding: 0 !important; }
     .pf-ss__scroll { flex: 1 1 auto; min-height: 0; }
     .pf-ss__title { margin: 0; flex: none; }
     .pf-ss__note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -164,6 +166,8 @@ export class SettingsShellComponent implements OnDestroy {
   protected readonly host = inject(SETTINGS_HOST);
   readonly q = signal('');
   readonly noMatch = signal(false);
+  /** The shown page renders its OWN card (a grid page, a board): the frame drops its wrapper card — never card-in-card. */
+  readonly ownsCard = signal(false);
   private readonly hostEl = inject(ElementRef<HTMLElement>);
   /** The band pill filters the rows on this page (label + hint text); a group card with no match hides. */
   private filterState: { words: string; sel: string | null } = { words: '', sel: null };
@@ -214,6 +218,9 @@ export class SettingsShellComponent implements OnDestroy {
       show(g, !(words && rows.length > 0 && rows.every((r) => r.style.display === 'none')));
     });
     if (this.noMatch() !== (!!words && shown === 0)) this.noMatch.set(!!words && shown === 0);
+    // A visible card inside the page (root holds only the page — the frame's own cards are outside it).
+    const own = Array.from(root.querySelectorAll<HTMLElement>('.pf-card')).some((c) => c.getClientRects().length > 0);
+    if (this.ownsCard() !== own) this.ownsCard.set(own);
   }
   /** The band's back chevron: where the person came from (an in-app link), else up to this setting's section. */
   readonly backToSection = (): void => this.navBack.back();
@@ -280,7 +287,8 @@ export class SettingsShellComponent implements OnDestroy {
     const queryParams: Record<string, string | null> = { ...t.query };
     for (const sib of l.item.categories) for (const k of Object.keys(sib.query ?? {})) if (!(k in queryParams)) queryParams[k] = null;
     this.phoneDetail.set(true);
-    void this.router.navigate([t.path], { queryParams, queryParamsHandling: 'merge' });
+    // A category is a view of the same setting: replace the entry, so back leaves the setting (not the last category).
+    void this.router.navigate([t.path], { queryParams, queryParamsHandling: 'merge', replaceUrl: t.path === this.parsed().path });
   }
 
   /** Phone: leave the screen and show the category list again. */
