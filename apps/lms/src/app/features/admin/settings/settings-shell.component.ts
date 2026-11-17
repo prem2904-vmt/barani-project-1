@@ -54,7 +54,7 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
               <h2 class="pf-card__label pf-ss__title" data-testid="tp-nav-title">{{ itemLabel() }}</h2>
               @if (itemBlurb()) { <span class="pf-card__note pf-ss__note">{{ itemBlurb() }}</span> }
             </header>
-            <div class="pf-ss__main pf-ss__scroll" data-testid="settings-main"><router-outlet></router-outlet></div>
+            <div class="pf-ss__scroll"><div class="pf-ss__main" data-testid="settings-main"><router-outlet></router-outlet></div></div>
           </section>
         } @else {
           <pf-two-panel

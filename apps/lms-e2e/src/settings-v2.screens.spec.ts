@@ -130,4 +130,29 @@ test.describe('settings v2 (Test Master frame)', () => {
     await vis(page, '.pf-hb__back').click();
     await expect(page).toHaveURL(/\/admin\?section=lab/);
   });
+
+  test('wide 3440 screen: rows stay in one centred column (Sample numbers, Collection)', async ({ page }) => {
+    test.skip(ONLY_TM || !isDesktop());
+    await page.setViewportSize({ width: 3440, height: 1440 });
+    for (const [name, url, wait] of [['sample-numbers', '/admin/lab/sample-numbers', '[data-testid="sid-format-row"]'], ['collection', '/admin/lab/collection', '[aria-label="Auto-assign technicians"]']] as const) {
+      await go(page, url);
+      await expect(vis(page, wait)).toBeVisible({ timeout: 60_000 });
+      const box = await vis(page, '[data-testid="settings-main"]').boundingBox();
+      expect(box!.width, `${name}: the rows column is capped`).toBeLessThanOrEqual(1001);
+      await page.waitForTimeout(400);
+      await shot(page, `wide-${name}`);
+    }
+  });
+
+  test('a cross-link comes back where it came from: Collection → Edit in Work steps → back', async ({ page }) => {
+    test.skip(ONLY_TM);
+    await go(page, '/admin?section=lab');
+    await expect(vis(page, '[data-testid="ov-tile-admin-lab-collection"]')).toBeVisible({ timeout: 60_000 });
+    await vis(page, '[data-testid="ov-tile-admin-lab-collection"]').click();
+    await expect(page).toHaveURL(/\/admin\/lab\/collection/);
+    await vis(page, 'button:has-text("Edit in Work steps")').click();
+    await expect(page).toHaveURL(/\/admin\/process/);
+    await vis(page, '.pf-hb__back').click();
+    await expect(page).toHaveURL(/\/admin\/lab\/collection/);
+  });
 });
