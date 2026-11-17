@@ -66,12 +66,13 @@ describe('Instruments — routes + hub tile', () => {
 describe('Instruments list', () => {
   afterEach(() => TestBed.resetTestingModule());
 
-  it('band search + grid card + side card whose ONE primary is "Add instrument"', async () => {
+  it('band search + grid card + side card; "Add instrument" in the card head (no band buttons)', async () => {
     const p = renderBandPage(InstrumentsListComponent, { getFor: (u) => (u === '/api/instruments' ? [instrument()] : []) });
     await flush(); p.f.detectChanges();
     expect(p.bandInput()).not.toBeNull();
-    expect(primaries(p.el)).toBe(1);
-    expect(p.el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Add instrument');
+    expect(primaries(p.el)).toBe(0);
+    expect(p.el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
+    expect(Array.from(p.el.querySelectorAll('.pf-inl__main .pf-sg-act')).map((b) => b.textContent!.trim())).toEqual(['Refresh', 'Add instrument']);
     expect(p.el.querySelector('pf-hero-band pf-settings-siblings')).not.toBeNull();
     // Side card LEFT (first), grid card second — like Test Master.
     expect(p.el.querySelector('.pf-sg-panels')!.firstElementChild!.querySelector('.pf-inl__side')).not.toBeNull();
@@ -101,7 +102,7 @@ describe('Instruments list', () => {
     expect(p.el.querySelectorAll('.pf-inl__main .pf-inl-status[data-tone="green"]').length).toBe(1);
   });
 
-  it('"Connect an analyzer" shows on the desktop app with the setup helper (a secondary — Add stays the ONE primary)', async () => {
+  it('"Connect an analyzer" shows on the desktop app with the setup helper (a secondary — no violet primary in Settings)', async () => {
     const b = fakeBridge();
     const withDiag = { ...b.api, diag: { snapshot: vi.fn(async () => ({})) } };
     const p = renderBandPage(InstrumentsListComponent, {
@@ -111,7 +112,7 @@ describe('Instruments list', () => {
     await flush(); p.f.detectChanges();
     const c = Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-inl__side button')).find((x) => x.textContent!.includes('Connect an analyzer'))!;
     expect(c.classList.contains('pf-btn--secondary')).toBe(true);
-    expect(primaries(p.el)).toBe(1);
+    expect(primaries(p.el)).toBe(0);
     const nav = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     c.click();
     expect(nav).toHaveBeenCalledWith(['/admin/instruments', 'connect']);

@@ -64,17 +64,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
             }
             <pf-settings-siblings></pf-settings-siblings>
           </ng-container>
-          <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…"
-                    (click)="load()" aria-label="Refresh" title="Refresh">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
-              <span class="pf-brl__hide-phone">Refresh</span>
-            </button>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="add()" aria-label="Add Bridge" title="Add Bridge">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              Add Bridge
-            </button>
-          </ng-container>
+          
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only" eyebrow="Lab settings" title="Bridges" subtitle="Prefrontal Bridges that connect analyzers to the lab" parentRoute="/lab/settings">
@@ -179,6 +169,16 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
     <!-- The grid card's head tools (count + status filter): exposed so a host can project them into its own head. -->
     <ng-template #headTools>
               <span class="pf-sg-count pf-num" aria-live="polite">{{ countLabel() }}</span>
+          <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+            <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…"
+                    (click)="load()" aria-label="Refresh" title="Refresh">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+              <span class="pf-brl__hide-phone">Refresh</span>
+            </button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="add()" aria-label="Add Bridge" title="Add Bridge">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              Add Bridge
+            </button>
     </ng-template>
   `,
   styles: [`

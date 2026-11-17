@@ -134,12 +134,13 @@ describe('Bridges — routes, permission, hub tile', () => {
 
 // ── List ────────────────────────────────────────────────────────────────────
 describe('Bridges list', () => {
-  it('Test Master frame: band search + Analyzers|Bridges switch, ONE primary "Add Bridge" in the band, overview side card LEFT; nearby offers listed', async () => {
+  it('Test Master frame: band search + Analyzers|Bridges switch, "Add Bridge" in the card head (no band buttons), overview side card LEFT; nearby offers listed', async () => {
     const p = render(BridgesListComponent);
     await flush(); p.f.detectChanges();
     expect(p.el.querySelector('pf-hero-band .pf-hb__input')).not.toBeNull();
-    expect(primaries(p.el)).toBe(1);
-    expect(p.el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Add Bridge');
+    expect(primaries(p.el)).toBe(0);
+    expect(p.el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
+    expect(Array.from(p.el.querySelectorAll('.pf-sg-act')).map(b => b.textContent!.trim())).toEqual(['Refresh', 'Add Bridge']);
     expect(p.el.querySelector('pf-hero-band pf-settings-siblings')).not.toBeNull();
     // Side card comes FIRST (left), the grid card second — like Test Master.
     const panels = p.el.querySelector('.pf-sg-panels')!;
