@@ -78,6 +78,7 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
     class: 'pf-tp',
     '[class.pf-tp--compact]': 'compact()',
     '[class.pf-tp--detail]': 'compact() && detailOpen()',
+    '[class.pf-tp--nonav]': 'hideNav()',
   },
   template: `
     <aside class="pf-card pf-tp__nav" [attr.aria-label]="navLabel()" data-testid="tp-nav">
@@ -194,6 +195,9 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
       .pf-tp__item { transition: none; }
     }
 
+    :host(.pf-tp--nonav) { display: flex; flex-direction: column; }
+    :host(.pf-tp--nonav) .pf-tp__nav { display: none !important; }
+    :host(.pf-tp--nonav) .pf-tp__panel { display: flex !important; flex: 1 1 auto; }
     /* Tablet portrait: a narrower side card. */
     @media (max-width: 1100px) { :host(:not(.pf-tp--compact)) { grid-template-columns: 280px minmax(0, 1fr); } }
 
@@ -237,6 +241,8 @@ export class TwoPanelComponent {
   readonly flush = input(false);
   /** The content brings its own card: no main-card chrome or head around it. */
   readonly bareMain = input(false);
+  /** No side card (the host lists the categories elsewhere, e.g. as a pill in its own card head). */
+  readonly hideNav = input(false);
 
   readonly navBack = output<void>();
 

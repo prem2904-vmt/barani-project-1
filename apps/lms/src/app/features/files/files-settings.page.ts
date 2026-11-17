@@ -56,7 +56,14 @@ export function bytesWords(n: number): string {
             <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="load()">Try again</button>
           </div>
         } @else if (draft(); as d) {
-          <ng-template #filesRows>
+          <pf-two-panel [groups]="catGroups()" [selected]="selectedCat()" [compact]="compact()" [detailOpen]="detailOpen()"
+                        navLabel="Files settings" [navTitle]="name + ' settings'" [navIcon]="filesIcon" [panelNote]="null"
+                        [flush]="true" [hideNav]="hosted" [bareMain]="hosted" backLabel="Back to Files settings" (pick)="pickCat($event)" (back)="phoneDetail.set(false)">
+            <ng-container panel-tools>
+              @if (selectedCat() === 'templates') {
+                <button type="button" class="pf-hb-btn pf-hb-btn--ghost fs-add" data-testid="files-add-template" [disabled]="!full()" (click)="addOwn()">Add lab template</button>
+              }
+            </ng-container>
             <div class="fs-rows">
               @if (hosted && selectedCat() === 'templates') {
                 <div class="fs-hostbar"><button type="button" class="pf-hb-btn pf-hb-btn--ghost fs-add" data-testid="files-add-template" [disabled]="!full()" (click)="addOwn()">Add lab template</button></div>
@@ -135,22 +142,7 @@ export function bytesWords(n: number): string {
                 }
               }
             </div>
-          </ng-template>
-          @if (hosted) {
-            <!-- Inside Settings (inline in the overview): the categories are the card head's pill — no nested side card. -->
-            <ng-container *ngTemplateOutlet="filesRows"></ng-container>
-          } @else {
-          <pf-two-panel [groups]="catGroups()" [selected]="selectedCat()" [compact]="compact()" [detailOpen]="detailOpen()"
-                        navLabel="Files settings" [navTitle]="name + ' settings'" [navIcon]="filesIcon" [panelNote]="null"
-                        [flush]="true" backLabel="Back to Files settings" (pick)="pickCat($event)" (back)="phoneDetail.set(false)">
-            <ng-container panel-tools>
-              @if (selectedCat() === 'templates') {
-                <button type="button" class="pf-hb-btn pf-hb-btn--ghost fs-add" data-testid="files-add-template" [disabled]="!full()" (click)="addOwn()">Add lab template</button>
-              }
-            </ng-container>
-            <ng-container *ngTemplateOutlet="filesRows"></ng-container>
           </pf-two-panel>
-          }
         }
       </div>
     </section>
