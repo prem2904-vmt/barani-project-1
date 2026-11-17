@@ -150,12 +150,15 @@ describe('Lab departments — Departments tab', () => {
 
   it('rename a lab-made department inline in the grid: PATCH name; a clash is explained and the name stays', () => {
     const { c, api, toasts } = render();
-    c.onCellValueChanged({ colDef: { colId: 'name' }, data: { ...OWN }, newValue: 'Cytology' });
+    // AG-Grid writes the edit into the row object before the event (same object as the list's).
+    const rowObj = c.departments().find((d: any) => d.id === 'd2');
+    rowObj.name = 'Cytology';
+    c.onCellValueChanged({ colDef: { colId: 'name' }, data: rowObj, newValue: 'Cytology', oldValue: 'Cytogenetics' });
     expect(api.patch).toHaveBeenCalledWith('/api/tenants/departments/d2', { name: 'Cytology' });
     expect(c.departments().find((d: any) => d.id === 'd2').name).toBe('Cytology');
 
     api.patch.mockImplementation(() => throwError(() => new ApiError('dup', 'dept_name_taken', 'name', undefined, 409)));
-    c.onCellValueChanged({ colDef: { colId: 'name' }, data: { id: 'd2' }, newValue: 'Haematology' });
+    c.onCellValueChanged({ colDef: { colId: 'name' }, data: { id: 'd2' }, newValue: 'Haematology', oldValue: 'Cytology' });
     expect(toasts.error).toHaveBeenCalledWith(expect.stringMatching(/already exists/));
     expect(c.departments().find((d: any) => d.id === 'd2').name).toBe('Cytology');
   });

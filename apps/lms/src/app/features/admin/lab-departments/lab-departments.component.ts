@@ -532,8 +532,9 @@ export class LabDepartmentsComponent implements OnInit {
     if (e.colDef.colId !== 'name' || !e.data) return;
     const d = this._departments().find(x => x.id === e.data!.id);
     if (!d) return;
+    // AG-Grid has already written the new value into the row object: compare with the value it replaced.
     this.renameDraft.set(String(e.newValue ?? ''));
-    this.saveRename(d);
+    this.saveRename({ ...d, name: String(e.oldValue ?? '') });
   }
 
   readonly q = signal('');
