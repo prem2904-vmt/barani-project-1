@@ -14,6 +14,8 @@ import {
 } from "@angular/core";
 import { Location, NgComponentOutlet, NgTemplateOutlet } from "@angular/common";
 import { SETTINGS_HOST, createSettingsHost } from "../../shared/utils/settings-host";
+import { confirmLeaveUnsaved, hasUnsavedChangesContract } from "../../shared/utils/unsaved-changes";
+import { DialogService } from "../../core/services/dialog.service";
 import { SegmentedComponent } from "../../shared/primitives/segmented.component";
 import { SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from "./settings/settings.routes";
 import { OPD_ADMIN_ROUTES } from "../opd/opd.routes";
@@ -304,6 +306,16 @@ export class AdminOverviewComponent implements OnDestroy {
   /** True when the phone's detail was pushed by a tap here, so back can POP it. */
   private pushedDetail = false;
   pickSection(id: string): void {
+    // An inline page with unsaved changes asks first (Save / Leave without saving / Stay).
+    const inst = (this.outlet() as unknown as { componentInstance?: unknown } | undefined)?.componentInstance;
+    if (id !== this.selectedId() && hasUnsavedChangesContract(inst) && inst.hasUnsavedChanges()) {
+      void confirmLeaveUnsaved(this.dialog, inst).then((ok) => { if (ok) this.doPickSection(id); });
+      return;
+    }
+    this.doPickSection(id);
+  }
+  private readonly dialog = inject(DialogService);
+  private doPickSection(id: string): void {
     const phone = this.compact();
     this.pushedDetail = phone && this.urlSection() === null;
     void this.router.navigate([], {

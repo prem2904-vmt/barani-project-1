@@ -1,3 +1,4 @@
+import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../shared/utils/unsaved-changes';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { ToggleComponent, TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from '@prefrontal/shared';
 import { SettingRowComponent } from '../../shared/components/setting-row/setting-row.component';
@@ -42,6 +43,7 @@ export function bytesWords(n: number): string {
       <pf-hero-band [back]="true" [placeholder]="'Search ' + name + ' settings'" [value]="q()" (valueChange)="q.set($event)">
         <ng-container band-actions>
           @if (!full()) { <span class="fs-chip" data-testid="files-viewonly-chip">View only</span> }
+          @if (hasUnsavedChanges()) { <span class="pf-savestate" role="status" data-testid="unsaved-state"><span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved</span> }
           <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="files-settings-save" [disabled]="!full() || !dirty() || saving()" (click)="save()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
         </ng-container>
       </pf-hero-band>
@@ -172,7 +174,7 @@ export function bytesWords(n: number): string {
     @media (max-width: 760px) { .fs-app { grid-template-columns: auto 1fr auto; } .fs-app__who { grid-column: 1 / -1; } .fs-app__blurb { white-space: normal; } }
   `],
 })
-export class FilesSettingsPage {
+export class FilesSettingsPage implements HasUnsavedChanges {
   private readonly office = inject(OfficeService);
   private readonly access = inject(FilesAccessService);
   private readonly api = inject(ApiService);
@@ -291,6 +293,12 @@ export class FilesSettingsPage {
     if (!clean) return;
     this.draft.update(d => d ? { ...d, ownTemplates: [...d.ownTemplates, { id: '', kind: f.kind, name: clean, fileId: f.id }] } : d);
   }
+
+  // ── Unsaved changes (ask before leaving; the browser asks on tab close) ──
+  readonly unsavedLabel = 'Files settings';
+  hasUnsavedChanges(): boolean { return this.full() && this.dirty(); }
+  async saveChanges(): Promise<boolean> { await this.save(); return !this.dirty(); }
+  private readonly _unload = guardUnsavedOnUnload(this);
 
   async save(): Promise<void> {
     const d = this.draft();

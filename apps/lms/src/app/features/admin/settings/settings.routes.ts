@@ -4,6 +4,7 @@ import { betaGuard } from '../../../core/services/beta-features.service';
 import { routeGuards } from '../../../core/auth/route-guards';
 import { OPD_ADMIN_ROUTES } from '../../opd/opd.routes';
 import { casesheetGuard } from '../../casesheets/shared/casesheet.guard';
+import { unsavedChangesGuard } from '../../../shared/utils/unsaved-changes';
 import { LEGACY_SECTION, SETTINGS_FULL_SCREEN_PATHS, SETTINGS_PATHS as P, rehome } from './settings-map';
 
 /**
@@ -39,7 +40,11 @@ function page(path: string, load: Route['loadComponent'], o: PageOpts = {}): Rou
     canActivate: [...(o.before ?? []), ...routeGuards(o.access ?? path), ...(o.after ?? [])],
     loadComponent: load,
   };
-  if (o.leave) route.canDeactivate = [(c: { canLeave?: () => Promise<boolean> }) => (c?.canLeave ? c.canLeave() : true)];
+  // Every settings page: a page with an explicit Save (HasUnsavedChanges) asks before it is left; the rest pass.
+  route.canDeactivate = [
+    ...(o.leave ? [(c: { canLeave?: () => Promise<boolean> }) => (c?.canLeave ? c.canLeave() : true)] : []),
+    unsavedChangesGuard,
+  ];
   if (o.data) route.data = o.data;
   return route;
 }

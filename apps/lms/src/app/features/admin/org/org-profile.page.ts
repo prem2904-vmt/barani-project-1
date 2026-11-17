@@ -1,3 +1,4 @@
+import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, Injector, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -35,6 +36,7 @@ const SHORT_NAME_MAX = 30;
       @if (theme.isNewDesign()) {
         <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-actions>
+            @if (hasUnsavedChanges()) { <span class="pf-savestate" role="status" data-testid="unsaved-state"><span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved</span> }
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="op-save"
                     [disabled]="saving() || !canSave()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
                     aria-label="Save" title="Save">
@@ -109,7 +111,7 @@ const SHORT_NAME_MAX = 30;
     @media (max-width: 767px) { .pf-op__in, .pf-op__in--short { width: 100%; } :host input.pf-input { font-size: 16px; } }
   `],
 })
-export class OrgProfilePage {
+export class OrgProfilePage implements HasUnsavedChanges {
   private readonly api = inject(ApiService);
   private readonly profile = inject(OrgProfileService);
   private readonly tenantState = inject(TenantStateService);
@@ -191,6 +193,12 @@ export class OrgProfilePage {
   }
   /** The handle is lowercase letters, numbers and hyphens. */
   protected onSlug(v: string) { this.slug.set((v ?? '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40)); }
+
+  // ── Unsaved changes (ask before leaving; the browser asks on tab close) ──
+  readonly unsavedLabel = 'the organization profile';
+  hasUnsavedChanges(): boolean { return this.profileDirty() || this.slugDirty(); }
+  async saveChanges(): Promise<boolean> { await this.save(); return !this.hasUnsavedChanges(); }
+  private readonly _unload = guardUnsavedOnUnload(this);
 
   async save(): Promise<void> {
     if (this.saving() || !this.canSave()) return;
