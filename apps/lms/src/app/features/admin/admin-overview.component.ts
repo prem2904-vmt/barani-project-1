@@ -109,7 +109,7 @@ interface SectionTile {
             </ng-container>
             @if (inlineCmp(); as cmp) {
               <!-- A section with ONE setting shows that setting right here (owner): no tile, no extra click. -->
-              <div class="pf-ss__main pf-ss__main--one pf-ov__inline" data-testid="ov-inline">
+              <div class="pf-ss__main pf-ov__inline" [class.pf-ss__main--one]="inlineCats().length > 1" data-testid="ov-inline">
                 <ng-container *ngComponentOutlet="cmp; injector: inlineInjector()"></ng-container>
               </div>
             } @else {

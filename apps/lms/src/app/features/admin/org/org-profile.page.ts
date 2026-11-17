@@ -96,8 +96,8 @@ const SHORT_NAME_MAX = 30;
     </section>
   `,
   styles: [`
-    .pf-op__in { width: 260px; max-width: 100%; height: 36px; min-height: 36px; }
-    .pf-op__in--short { width: 160px; }
+    .pf-op__in { width: 320px; max-width: 100%; height: 36px; min-height: 36px; }
+    .pf-op__in--short { width: 320px; }
     .pf-op__hint { font-size: 12.5px; color: var(--text-tertiary); line-height: 1.4; }
     .pf-op__preview { display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; height: 34px;
       border-radius: 8px; background: var(--pf-chip-bg); border: 1px solid var(--pf-line); }

@@ -111,8 +111,8 @@ describe('Settings route table — one row per path, every path gated and hosted
   });
 
   it('locate: a tabbed page picks the category the URL names, else the first', () => {
-    expect(locateSettings('/admin/org/numbers', { tab: 'order' })?.category?.id).toBe('order');
-    expect(locateSettings('/admin/org/numbers')?.category?.id).toBe('patient');
+    expect(locateSettings('/admin/billing', { tab: 'payments' })?.category?.id).toBe('payments');
+    expect(locateSettings('/admin/billing')?.category?.id).toBe('gst');
     expect(locateSettings('/admin/tests', { view: 'pricing' })?.category?.id).toBe('pricing');
     expect(locateSettings('/admin/lab/outsourcing')?.category).toBeNull();
     expect(locateSettings('/admin/lab/outsourcing')?.item.id).toBe('lab-outsourcing');

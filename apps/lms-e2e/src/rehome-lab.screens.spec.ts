@@ -86,7 +86,7 @@ const PAGES: Array<{ name: string; url: string; ready: string; text?: string }> 
   { name: 'numbers', url: '/admin/lab/numbers', ready: 'pf-kpi-config' },
   { name: 'report-letterhead', url: '/admin/reports?tab=letterhead', ready: 'pf-report-header-editor .pf-rhe-side', text: 'Letterhead elements' },
   { name: 'report-patient', url: '/admin/reports?tab=patient', ready: '.pf-rt-work', text: 'Patient block' },
-  { name: 'report-notes', url: '/admin/reports?tab=notes', ready: '[data-testid="ls-tech-notes"]', text: 'Technician notes on report' },
+  { name: 'report-notes', url: '/admin/reports?tab=notes', ready: '[data-testid="ls-tech-notes"]', text: 'Report notes' },
   { name: 'report-sending', url: '/admin/reports?tab=sending', ready: 'pf-report-sending-card', text: 'WhatsApp Auto' },
   { name: 'inventory', url: '/admin/inventory', ready: '[data-testid="inventory-enable"]', text: 'Enable inventory' },
 ];

@@ -127,10 +127,10 @@ describe('Settings shell — one category, page switch, band back', () => {
   it('one category: ONE main card (TM head: icon + setting), no side card', async () => {
     setup();
     const h = await open('/admin/lab/alerts');
-    expect(root(h).querySelector('[data-testid="tp-nav"]')).toBeNull();
     const main = root(h).querySelector('[data-testid="settings-main"]')!;
     expect(main.querySelector('[data-testid="page"]')?.getAttribute('data-hosted')).toBe('true');
-    expect(main.closest('section.pf-card')?.querySelector('.pf-card__head [data-testid="tp-nav-title"]')?.textContent).toContain('Lab alerts');
+    expect(root(h).querySelector('[data-testid="tp-nav"]')?.closest('pf-two-panel')?.classList.contains('pf-tp--nonav')).toBe(true);
+    expect(main.closest('section.pf-card')?.querySelector('.pf-card__head .pf-tp__title')?.textContent).toContain('Lab alerts');
     expect(root(h).querySelector<HTMLInputElement>('.pf-hb__input')?.placeholder).toBe('Search Lab alerts');
   });
 

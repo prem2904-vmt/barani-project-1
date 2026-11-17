@@ -14,6 +14,9 @@ import { SettingsAccessService } from './settings-access.service';
 import { OpdAdminApi } from '../../opd/admin/opd-admin.api';
 import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPath, locateSettings } from './settings-map';
 
+/** The one-category main card's id. */
+const SINGLE = '__setting';
+
 /**
  * The Settings shell, in TEST MASTER's frame (owner 2026-11-17, DESIGN-V2): `pf-band-page` → ONE band (back chevron to
  * the Settings section, the pill = the hosted page's search or "Search all settings", the page's actions top-right)
@@ -45,24 +48,6 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
         <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
       </pf-hero-band>
       <div class="pf-band-body pf-band-body--fill pf-ss__body">
-        @if (single()) {
-          <!-- One category: ONE main card (TM head), its groups one under the other. -->
-          <section class="pf-ss__card" [class.pf-card]="!ownsCard()" [class.pf-ss__card--bare]="ownsCard()" [attr.aria-label]="itemLabel()">
-            <header class="pf-card__head" [hidden]="ownsCard()">
-              <span class="pf-card__icon" aria-hidden="true">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="itemIcon()"/></svg>
-              </span>
-              <h2 class="pf-card__label pf-ss__title" data-testid="tp-nav-title">{{ itemLabel() }}</h2>
-              @if (itemBlurb()) { <span class="pf-card__note pf-ss__note">{{ itemBlurb() }}</span> }
-              @if (headTools(); as ht) { <span class="pf-ss__tools"><ng-container *ngTemplateOutlet="ht"></ng-container></span> }
-            </header>
-            <div class="pf-ss__scroll">
-              <div class="pf-ss__main" data-testid="settings-main"><router-outlet (activate)="onActivate($event)"></router-outlet></div>
-              @if (q().trim() && noMatch()) { <p class="pf-band-empty" data-testid="ss-no-match">No settings match "{{ q() }}".</p> }
-            </div>
-          </section>
-        } @else {
           <pf-two-panel
             [groups]="groups()"
             [selected]="selectedId()"
@@ -72,13 +57,14 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
             [navHead]="loc() ? itemLabel() : null"
             [navIcon]="itemIcon()"
             [panelIcon]="itemIcon()"
-            [panelNote]="panelNote()"
+            [panelNote]="single() ? itemBlurb() : panelNote()"
             [backLabel]="'Back to ' + itemLabel()"
             [navBackLabel]="'Back to ' + sectionLabel()"
             [navKey]="loc() ? itemId() : null"
             [animateNav]="true"
             [flush]="true"
             [bareMain]="ownsCard()"
+            [hideNav]="single()"
             (pick)="pickCategory($event)"
             (back)="closeDetail()"
             (navBack)="toSections()"
@@ -86,7 +72,6 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
             <ng-container panel-tools>@if (headTools(); as ht) { <ng-container *ngTemplateOutlet="ht"></ng-container> }</ng-container>
             <div class="pf-ss__main pf-ss__main--one" data-testid="settings-main"><router-outlet (activate)="onActivate($event)"></router-outlet></div>
           </pf-two-panel>
-        }
       </div>
     </section>
   `,
@@ -153,6 +138,9 @@ export class SettingsShellComponent implements OnDestroy {
   readonly groups = computed<TwoPanelGroup[]>(() => {
     const l = this.loc();
     if (!l) return [{ key: 'x', heading: 'Settings', items: [{ id: 'x', label: 'Settings' }] }];
+    // One category: ONE main card (no side card) headed by the setting itself — the SAME outlet, so the page is never
+    // re-created when a page's run-time sections arrive.
+    if (this.single()) return [{ key: l.item.id, heading: l.item.label, items: [{ id: SINGLE, label: l.item.label }] }];
     return [{ key: l.item.id, heading: l.item.label, items: this.cats().map((c) => ({ id: c.id, label: c.label, note: c.scope })) }];
   });
 
@@ -160,6 +148,7 @@ export class SettingsShellComponent implements OnDestroy {
   readonly selectedId = computed(() => {
     const l = this.loc();
     if (!l) return 'x';
+    if (this.single()) return SINGLE;
     if (this.host.categories()?.length) {
       const t = this.parsed().query['tab'];
       return this.cats().some((c) => c.id === t) ? t : (this.compact() ? null : (this.cats()[0]?.id ?? null));
@@ -171,7 +160,7 @@ export class SettingsShellComponent implements OnDestroy {
   /** The phone shows the screen (true) or the category list (false). */
   readonly phoneDetail = signal(false);
   private lastItem: string | null = null;
-  readonly detailOpen = computed(() => this.phoneDetail() || this.cats().length <= 1);
+  readonly detailOpen = computed(() => this.single() || this.phoneDetail() || this.cats().length <= 1);
 
   readonly q = signal('');
   readonly noMatch = signal(false);

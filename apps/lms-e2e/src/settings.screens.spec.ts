@@ -100,15 +100,15 @@ test.describe('settings two-panel', () => {
     expect(errors, 'no uncaught errors').toEqual([]);
   });
 
-  test('a tabbed page is driven by its categories: Organization numbers → Patient ID / Order ID, no tab strip of its own', async ({ page }) => {
-    await go(page, '/admin/org/numbers?tab=order');
+  test('a tabbed page is driven by its categories: Message channels → WhatsApp / Email / SMS, no tab strip of its own', async ({ page }) => {
+    await go(page, '/admin/org/channels?tab=email');
     await expect(page.locator('[data-testid="settings-shell"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('pf-hero-band .pf-hb-tabs')).toHaveCount(0);
     if (!isPhone()) {
-      await expect(tid(page, 'tp-nav-title')).toHaveText('Patient and order numbers');
-      await expect(tid(page, 'tp-item-order')).toHaveAttribute('aria-current', 'true');
-      await tid(page, 'tp-item-patient').click();
-      await expect(page).toHaveURL(/tab=patient/);
+      await expect(tid(page, 'tp-nav-title')).toHaveText('WhatsApp, email and SMS accounts');
+      await expect(tid(page, 'tp-item-email')).toHaveAttribute('aria-current', 'true');
+      await tid(page, 'tp-item-sms').click();
+      await expect(page).toHaveURL(/tab=sms/);
       await shot(page, 'settings-inside-numbers');
     }
   });

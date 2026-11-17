@@ -334,11 +334,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     items: [
       { id: 'org-profile', label: 'Name and logo', path: P.orgProfile, iconPath: ICON.person,
         blurb: 'Organization name, short name and logo, login handle.',
-        categories: [
-          { id: 'name', label: 'Name', query: { tab: 'name' }, scope: 'everywhere' },
-          { id: 'logo', label: 'Logo', query: { tab: 'logo' }, scope: 'top bar, reports and bills' },
-          { id: 'signin', label: 'Sign-in', query: { tab: 'signin' }, scope: 'all staff' },
-        ] },
+        // One page (owner): Name · Logo · Sign-in are short groups on the same page, not categories.
+        categories: [{ id: 'profile', label: 'Name, logo and sign-in' }] },
     ],
   },
   {
@@ -356,10 +353,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     items: [
       { id: 'org-numbers', label: 'Patient and order numbers', path: P.orgNumbers, iconPath: ICON.id,
         blurb: 'Patient ID and Order ID formats.',
-        categories: [
-          { id: 'patient', label: 'Patient ID', query: { tab: 'patient' }, scope: 'never resets' },
-          { id: 'order', label: 'Order ID', query: { tab: 'order' }, scope: 'restarts monthly per module' },
-        ] },
+        // One page (owner): Patient ID and Order ID together fit one screen of rows.
+        categories: [{ id: 'numbers', label: 'Patient ID and Order ID' }] },
     ],
   },
   {

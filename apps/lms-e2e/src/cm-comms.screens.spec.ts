@@ -292,7 +292,8 @@ test.describe('cm-comms', () => {
   test(`Settings lists Message channels under Organization; the old Communication and WhatsApp links redirect`, async ({ page: pg, context }) => {
     const page = await setup(pg, context);
     await go(page, '/admin?section=channels');
-    await expect(visible(page, '[data-testid="ov-tile-admin-org-channels"]')).toBeVisible({ timeout: 60_000 });
+    // One setting in the section: the overview shows it inline (owner), its channels as the card head's pill.
+    await expect(page.locator('[data-testid="ov-inline"] [data-testid="comms-page"]').first()).toBeAttached({ timeout: 60_000 });
     await go(page, '/admin/communication?tab=email');
     await page.waitForURL(/\/admin\/org\/channels\?tab=email/, { timeout: 20_000 });
     await go(page, '/admin/whatsapp');
