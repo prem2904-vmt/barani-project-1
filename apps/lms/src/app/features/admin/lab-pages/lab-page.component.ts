@@ -1,11 +1,8 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, Signal, computed, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Signal, computed, effect, inject, input, output, signal } from '@angular/core';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { LabPageDef, resolveLabTab } from '../../../shared/utils/lab-settings-pages';
-import { injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 /**
  * The open category of a Lab page, kept in the URL (`?tab=`, replacing the
@@ -30,53 +27,46 @@ export function labPageTab(page: LabPageDef): { tab: Signal<string>; pick: (id: 
 }
 
 /**
- * Shell of a card-based Lab settings page: the new-design band (back chevron +
- * the page's categories as a tabs-only pill) over the open category's cards.
- * Pages made of an existing full screen (appointments, referring network,
- * alerts, numbers, agents) render that screen directly instead — it brings its
- * own band — so a category is either cards here or a whole screen.
+ * A Lab settings page in the Settings shell (Test Master's frame, DESIGN-V2): the shell owns the band and the card;
+ * this renders the page's rows. A ONE-card page (owner 2026-11-17) shows every category as a small uppercase group
+ * (`pf-setting-group [id]` / pf-lab-settings `[groups]`); `?tab=` (a deep link, a search hit) scrolls to that group.
+ * A page with its own Save puts it in `[page-actions]` — the shell's band shows it.
  */
 @Component({
   selector: 'pf-lab-page',
   standalone: true,
-  imports: [HeroBandComponent, ScreenHeaderComponent, SegmentedComponent],
+  imports: [HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10" [attr.data-lab-page]="page().path">
+    <section class="pf-band-page" [attr.data-lab-page]="page().path">
       <pf-hero-band [back]="true" [tabsOnly]="true">
-        @if (options().length > 1) {
-          <ng-container band-tools>
-            <pf-segmented class="pf-hb-tabs" size="sm" [options]="options()" [value]="tab()"
-                          (valueChange)="tabChange.emit($event)"></pf-segmented>
-          </ng-container>
-        }
+        <ng-container band-actions><ng-content select="[page-actions]"></ng-content></ng-container>
       </pf-hero-band>
-      <pf-screen-header class="pf-classic-only" eyebrow="Lab" [title]="page().title" [subtitle]="subtitle()"></pf-screen-header>
       <div class="pf-band-body">
-        @if (options().length > 1 && !hosted) {
-          <div class="pf-classic-only pf-lp__tabs">
-            <pf-segmented size="sm" [options]="options()" [value]="tab()" (valueChange)="tabChange.emit($event)"></pf-segmented>
-          </div>
-        }
         <div class="pf-lp__col" [attr.data-lab-tab]="tab()">
           <ng-content></ng-content>
         </div>
       </div>
     </section>
   `,
-  styles: [`
-    :host { display: block; width: 100%; }
-    .pf-lp__tabs { margin: 0 0 16px; overflow-x: auto; }
-    .pf-lp__col { max-width: 56rem; }
-  `],
+  styles: [`:host { display: block; width: 100%; }`],
 })
 export class LabPageComponent {
   readonly page = input.required<LabPageDef>();
   readonly tab = input.required<string>();
+  /** Kept for callers; the shell's card head names the page now. */
   readonly subtitle = input('');
   readonly tabChange = output<string>();
-  /** Inside the Settings shell the left panel lists the categories: no second tab strip. */
-  protected readonly hosted = injectSettingsHosted();
-  protected readonly options = computed<SegmentedOption<string>[]>(() =>
-    this.page().categories.map(c => ({ value: c.id, label: c.label })));
+  private readonly el = inject(ElementRef<HTMLElement>);
+  constructor() {
+    // A category named in the URL (not the first): bring its group into view once it has rendered.
+    effect(() => {
+      const t = this.tab();
+      if (!t || t === this.page().categories[0]?.id) return;
+      setTimeout(() => {
+        const g = (this.el.nativeElement as HTMLElement).querySelector(`[data-group="${t}"]`);
+        (g as HTMLElement | null)?.scrollIntoView?.({ block: 'start' });
+      }, 250);
+    });
+  }
 }

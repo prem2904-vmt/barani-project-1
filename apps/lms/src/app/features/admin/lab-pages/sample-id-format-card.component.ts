@@ -1,3 +1,4 @@
+import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
@@ -52,75 +53,46 @@ export function sampleIdPreview(prefix: string, date: string, sep: string, pad: 
 @Component({
   selector: 'pf-sample-id-format-card',
   standalone: true,
-  imports: [FormsModule, SelectComponent, BusyDirective],
+  imports: [SettingRowComponent, FormsModule, SelectComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-card pf-sf" data-testid="sample-id-format">
-      <div class="pf-card__head">
-        <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v17a3 3 0 0 0 6 0V2"/><path d="M8 2h8M9 12h6"/></svg></span>
-        <h3 class="pf-card__label pf-sf__title">Sample ID format</h3>
-        <span class="pf-sf__scope" title="Applies to every branch">All branches</span>
-      </div>
-      <div class="pf-sf__body">
-        <p class="pf-sf__hint">
-          Every tube's ID is <strong>SPACE-DATE-NUMBER</strong> (e.g. <span class="pf-num">MIC-2607-00001</span>).
-          The <strong>space code</strong> comes from <em>Prefix per lab space</em>. The number restarts <strong>each month per space</strong>.
-          This is the one place the sample-ID format is set.
-        </p>
-        <div class="pf-sf__grid">
-          <div class="pf-field">
-            <span class="pf-field__lbl">Date</span>
-            <pf-select [options]="dateOptions" [value]="date()" (valueChange)="date.set($any($event))"></pf-select>
-          </div>
-          <label class="pf-field">
-            <span class="pf-field__lbl">Separator <span class="pf-sf__opt">(blank = none)</span></span>
+    <div class="pf-sf" data-testid="sample-id-format">
+      <pf-setting-row data-testid="sid-format-row" label="Sample ID format"
+                      hint="SPACE-DATE-NUMBER; the space code comes from the prefix below; numbers restart each month per space.">
+        <span row-badge class="pf-sf__scope" title="Applies to every branch">All branches</span>
+        <div class="pf-fmt">
+          <span class="pf-fmt__f">Date
+            <pf-select [options]="dateOptions" [value]="date()" (valueChange)="date.set($any($event))" aria-label="Date"></pf-select>
+          </span>
+          <label class="pf-fmt__f">Separator
             <input class="pf-input pf-num" maxlength="3" [ngModel]="sep()" (ngModelChange)="sep.set($event)" placeholder="none" aria-label="Separator" />
           </label>
-          <label class="pf-field">
-            <span class="pf-field__lbl">{{ serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
+          <label class="pf-fmt__f">{{ serial() === 'alpha' ? 'Min digits' : 'Digits' }}
             <input class="pf-input pf-num" type="number" min="1" [attr.max]="serial() === 'alpha' ? 6 : 10" [ngModel]="pad()"
                    (ngModelChange)="pad.set(clamp($event))" (keydown)="preventMinus($event)" aria-label="Number digits" />
           </label>
+          <span class="pf-fmt__f">Letters
+            <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="serial() === 'alpha'" aria-label="Include letters"
+                    (click)="serial.set(serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
+          </span>
+          @if (serial() === 'alpha') {
+            <span class="pf-fmt__f pf-sf__letters">
+              <pf-select [options]="letterOptions" [value]="letters()" (valueChange)="letters.set(+$any($event))" aria-label="Letters"></pf-select>
+            </span>
+          }
+          <span class="pf-fmt__preview" data-testid="sample-id-preview">Preview <strong class="pf-num">{{ preview() }}</strong></span>
+          <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-sf__save pf-fmt__save" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+            {{ saving() ? 'Saving…' : 'Save' }}
+          </button>
         </div>
-        <div class="pf-sf__toggle">
-          <span class="pf-sf__toggle-t"><strong>Include letters</strong> <span class="pf-sf__opt">— alphanumeric (AA001 …). Off = plain numbers.</span></span>
-          <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="serial() === 'alpha'" aria-label="Include letters"
-                  (click)="serial.set(serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
-        </div>
-        @if (serial() === 'alpha') {
-          <div class="pf-field pf-sf__letters">
-            <span class="pf-field__lbl">Letters</span>
-            <pf-select [options]="letterOptions" [value]="letters()" (valueChange)="letters.set(+$any($event))"></pf-select>
-          </div>
-        }
-        <p class="pf-sf__preview" data-testid="sample-id-preview">Preview: <strong class="pf-num">{{ preview() }}</strong></p>
-        <button type="button" class="pf-btn pf-btn--primary press pf-sf__save" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
-          {{ saving() ? 'Saving…' : 'Save format' }}
-        </button>
-      </div>
-    </section>
+      </pf-setting-row>
+    </div>
   `,
   styles: [`
     :host { display: block; }
-    .pf-sf { margin-bottom: 16px; overflow: visible; }
-    .pf-sf__title { margin: 0; font-size: 13px; }
-    .pf-sf__scope { margin-left: 8px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pf-line); background: var(--pf-chip-bg); font-size: 11px; font-weight: 600; color: var(--text-tertiary); white-space: nowrap; }
-    .pf-sf__body { display: flex; flex-direction: column; gap: 14px; padding: 14px 18px 18px; overflow: visible; }
-    .pf-sf__hint { margin: 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
-    .pf-sf__opt { font-weight: 400; color: var(--text-tertiary); }
-    .pf-sf__grid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .pf-sf__toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    .pf-sf__toggle-t { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
-    .pf-sf__toggle-t strong { color: var(--text-primary); font-weight: 600; }
-    .pf-sf__letters { max-width: 220px; }
-    .pf-sf__preview { margin: 0; font-size: 13px; color: var(--text-secondary); }
-    .pf-sf__preview strong { color: var(--text-primary); font-weight: 600; }
-    .pf-sf__save { align-self: flex-start; }
-    @media (max-width: 640px) {
-      .pf-sf__grid { grid-template-columns: 1fr; }
-      .pf-sf__toggle { align-items: flex-start; }
-      :host input.pf-input { font-size: 16px; }
-    }
+    .pf-sf__scope { padding: 1px 7px; border-radius: 999px; border: 1px solid var(--pf-line); background: var(--pf-chip-bg); font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); white-space: nowrap; }
+    .pf-sf pf-setting-row { grid-template-columns: minmax(200px, 1fr) auto; }
+    @media (max-width: 1100px) { .pf-sf pf-setting-row { grid-template-columns: minmax(0, 1fr); } .pf-sf .pf-fmt { justify-content: flex-start; } }
   `],
 })
 export class SampleIdFormatCardComponent implements OnInit {

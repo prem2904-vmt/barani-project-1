@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
 import { LabSettingsComponent } from '../lab-settings/lab-settings.component';
+import { SettingGroupComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { LabPageComponent, labPageTab } from './lab-page.component';
 import { ReportSendingCardComponent } from './report-sending-card.component';
 
@@ -14,15 +15,12 @@ import { ReportSendingCardComponent } from './report-sending-card.component';
 @Component({
   selector: 'pf-lab-report-options-page',
   standalone: true,
-  imports: [RouterLink, LabPageComponent, LabSettingsComponent, ReportSendingCardComponent],
+  imports: [SettingGroupComponent, RouterLink, LabPageComponent, LabSettingsComponent, ReportSendingCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)"
-                 subtitle="What technicians can add to a report, and how finished reports are sent.">
-      @switch (tab()) {
-        @case ('notes') { <pf-lab-settings [cards]="['tech-notes']"></pf-lab-settings> }
-        @case ('sending') { <pf-report-sending-card></pf-report-sending-card> }
-      }
+    <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)">
+      <pf-lab-settings [cards]="['tech-notes']" [groups]="{ 'tech-notes': { id: 'notes', label: 'Technician notes on report' } }"></pf-lab-settings>
+      <pf-setting-group label="Send reports on WhatsApp" id="sending"><pf-report-sending-card></pf-report-sending-card></pf-setting-group>
       <p class="pf-ro__back">
         The layout of the report itself is in
         <a class="pf-ro__link" routerLink="/admin/reports" [queryParams]="{ tab: 'table' }" data-testid="ro-design-link">Report design</a>.

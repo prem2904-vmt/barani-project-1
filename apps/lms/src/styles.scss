@@ -146,6 +146,42 @@
 }
 /* A readable column for form-style settings pages inside the full-width body. */
 :root.design-new .pf-band-body .pf-band-narrow { max-width: 56rem; margin-inline: auto; width: 100%; }
+/* A card-style settings page HOSTED in the Settings shell (Test Master's frame): the shell owns the band and the
+   card; the page's own band-page / band-body become plain blocks inside the main card's body (the ONE scroll). */
+.pf-ss__main .pf-band-page,
+:root.design-new .pf-ss__main .pf-band-page {
+  --pf-hb-bleed: 0px;
+  display: block !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.pf-ss__main .pf-band-page > .pf-band-body,
+:root.design-new .pf-ss__main .pf-band-page > .pf-band-body {
+  display: block !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  max-width: none;
+}
+.pf-ss__main .pf-band-narrow { max-width: none; }
+/* An ID FORMAT in ONE settings row (DESIGN-V2 rule 5): Date · Separator · Digits · Letters → Preview.
+   Shared by Sample numbers and Patient / Order numbers. */
+.pf-fmt { display: flex; align-items: center; justify-content: flex-end; gap: 8px 12px; flex-wrap: wrap; }
+.pf-fmt__f { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+.pf-fmt__f > .pf-input { width: 64px; height: 34px; min-height: 34px; padding: 0 8px; font-size: 13px; }
+.pf-fmt__f > .pf-input.pf-fmt__wide { width: 96px; }
+.pf-fmt__f > pf-select { min-width: 148px; }
+.pf-fmt__preview {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px;
+  background: var(--pf-chip-bg); border: 1px solid var(--pf-line); font-size: 12px; color: var(--text-tertiary); white-space: nowrap;
+}
+.pf-fmt__preview strong { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.pf-fmt__save { height: 34px !important; padding: 0 14px !important; font-size: 13px !important; }
+@media (max-width: 767px) {
+  .pf-fmt { justify-content: flex-start; }
+  .pf-fmt__f > .pf-input { font-size: 16px; }
+}
 /* Empty state for a band search that matches nothing. */
 .pf-band-empty {
   padding: 28px 12px; text-align: center; font-size: 13px;

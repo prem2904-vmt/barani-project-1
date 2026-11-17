@@ -36,7 +36,6 @@ describe('pf-two-panel (shared)', () => {
     expect(el.querySelector('[data-testid="tp-item-one"]')!.getAttribute('aria-current')).toBe('true');
     expect(el.querySelector('[data-testid="tp-item-one"] .pf-tp__note')!.textContent).toBe('3');
     expect(el.querySelector('.pf-tp__title')!.textContent).toBe('One');
-    expect(el.querySelector('.pf-tp__eyebrow')!.textContent).toBe('ALPHA');
     expect(el.querySelector('.pf-tp__desc')!.textContent).toBe('First section.');
     expect(el.querySelector('.inner')!.textContent).toBe('tiles for one');
   });
@@ -46,7 +45,7 @@ describe('pf-two-panel (shared)', () => {
     el.querySelector<HTMLButtonElement>('[data-testid="tp-item-three"]')!.click();
     f.detectChanges();
     expect(host.picked).toEqual(['three']);
-    expect(el.querySelector('.pf-tp__eyebrow')!.textContent).toBe('BETA');
+    expect(el.querySelector('.pf-tp__title')!.textContent).toBe('Three');
   });
 
   it('the slide/fade restarts on every pick (alternating phase class)', () => {
@@ -73,6 +72,13 @@ describe('pf-two-panel (shared)', () => {
     expect(el.querySelector('pf-two-panel')!.classList.contains('pf-tp--detail')).toBe(true);
     el.querySelector<HTMLButtonElement>('[data-testid="tp-back"]')!.click();
     expect(host.backs).toBe(1);
+  });
+
+  it('Test Master frame: side card + main card, each with a pf-card__head; the side head shows navTitle', () => {
+    const { el } = mount();
+    expect(el.querySelector('aside.pf-card.pf-tp__nav > .pf-card__head [data-testid="tp-nav-title"]')!.textContent!.trim()).toBe('Settings');
+    expect(el.querySelector('section.pf-card.pf-tp__panel > .pf-card__head .pf-tp__title')!.textContent).toBe('One');
+    expect(el.querySelector('[data-testid="tp-nav-back"]')).toBeNull();
   });
 
   it('nothing selected renders the list only', () => {

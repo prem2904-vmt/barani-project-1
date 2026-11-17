@@ -1,17 +1,27 @@
-import { DestroyRef, InjectionToken, inject } from '@angular/core';
+import { DestroyRef, InjectionToken, TemplateRef, WritableSignal, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 
 /**
- * Provided by the Settings shell (features/admin/settings/settings-shell.component.ts) for everything routed
- * inside it. A settings page injects it (optional) to know it is HOSTED: the shell's left panel already lists
- * the page's categories, so the page hides its own tab strip, back chevron and band brand and only keeps
- * its actions (Save …). Outside the shell the token is absent and nothing changes.
+ * Provided by the Settings shell (features/admin/settings/settings-shell.component.ts) for the card-style settings
+ * pages routed inside it (Test Master's frame, DESIGN-V2). The shell owns THE band: a hosted page's `pf-hero-band`
+ * renders nothing in place and hands the shell its band actions (Save …) and — when the page has a search — its
+ * search field, which the shell's band shows in its pill. The shell's side card lists the page's categories, so the
+ * page drops its own tab strip. Outside the shell the token is absent and nothing changes.
  */
 export interface SettingsHost {
   readonly hosted: true;
+  /** The hosted page's band actions (its `[band-actions]` content), shown on the shell's band. */
+  readonly actions: WritableSignal<TemplateRef<unknown> | null>;
+  /** The hosted page's band search field (icon + input / its custom search), shown in the shell's band pill. */
+  readonly search: WritableSignal<TemplateRef<unknown> | null>;
 }
 export const SETTINGS_HOST = new InjectionToken<SettingsHost>('pf.settings.host');
+
+/** A fresh host (the shell provides one per instance). */
+export function createSettingsHost(): SettingsHost {
+  return { hosted: true, actions: signal(null), search: signal(null) };
+}
 
 /** True while the page is rendered inside the Settings shell. Call from an injection context. */
 export function injectSettingsHosted(): boolean {

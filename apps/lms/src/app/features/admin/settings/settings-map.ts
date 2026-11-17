@@ -24,6 +24,8 @@ export interface SettingsCategory {
   beta?: BetaFeatureKey;
   /** Extra permission the category itself needs beyond its page's route. */
   perms?: readonly string[];
+  /** Name of the PAGE this category lives on, for the band's page switch (defaults to the label). */
+  pageLabel?: string;
 }
 
 /** Lab / OPD / IPD facts the overview resolves live (never hard-coded here). */
@@ -43,6 +45,12 @@ export interface SettingsItem {
   /** BETA surface — listed only while that beta is on. */
   beta?: BetaFeatureKey;
   requires?: SettingsRequires;
+  /**
+   * ONE full-width main card, no side card (owner 2026-11-17: "two-panel was just an option"): the setting's few short
+   * categories are small uppercase group labels inside the card's rows. Without it a setting with 2+ hosted categories
+   * gets the side card.
+   */
+  single?: boolean;
 }
 
 export interface SettingsSectionDef {
@@ -193,7 +201,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'departments', label: 'Departments', query: { tab: 'departments' } },
           { id: 'spaces', label: 'Lab spaces', query: { tab: 'spaces' } },
         ] },
-      { id: 'lab-sample-numbers', label: 'Sample numbers', path: P.labSampleNumbers, iconPath: ICON.barcode,
+      { id: 'lab-sample-numbers', single: true, label: 'Sample numbers', path: P.labSampleNumbers, iconPath: ICON.barcode,
         blurb: 'Sample ID format, prefix per lab space, barcode type, scan or type.',
         categories: categoriesFromPage(LAB_PAGES.sampleNumbers) },
       { id: 'lab-tests', label: 'Tests and packages', path: P.tests, iconPath: ICON.tests,
@@ -207,7 +215,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'pricing', label: 'Prices', query: { view: 'pricing' }, perms: ['manage_tests', 'manage_test_pricing'] },
           { id: 'pending', label: 'Pending changes', query: { view: 'pending' }, beta: 'assistant' },
         ] },
-      { id: 'lab-report', label: 'Report design', path: P.reports, iconPath: ICON.report,
+      { id: 'lab-report', single: true, label: 'Report design', path: P.reports, iconPath: ICON.report,
         blurb: 'Letterhead, patient strip, columns, results table, order and footer.',
         categories: [
           { id: 'letterhead', label: 'Letterhead', query: { tab: 'letterhead' } },
@@ -218,10 +226,10 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'footer', label: 'Footer', query: { tab: 'footer' } },
           ...categoriesFromPage(LAB_PAGES.reportOptions),
         ] },
-      { id: 'lab-collection', label: 'Collection and queues', path: P.labCollection, iconPath: ICON.queue,
+      { id: 'lab-collection', single: true, label: 'Collection and queues', path: P.labCollection, iconPath: ICON.queue,
         blurb: 'Queue focus, auto-assign per department, supervisor claim.',
         categories: categoriesFromPage(LAB_PAGES.collection) },
-      { id: 'lab-results', label: 'Results and validation', path: P.labResults, iconPath: ICON.check,
+      { id: 'lab-results', single: true, label: 'Results and validation', path: P.labResults, iconPath: ICON.check,
         blurb: 'Validation, calculation constants, microbiology stage lock and turnaround.',
         categories: categoriesFromPage(LAB_PAGES.results) },
       { id: 'lab-outsourcing', label: 'Outsourcing', path: P.labOutsourcing, iconPath: ICON.partners,
@@ -239,10 +247,10 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
       { id: 'lab-front-desk', label: 'Front desk', path: P.labFrontDesk, iconPath: ICON.desk,
         blurb: 'Lab appointments and queue, and the referring doctors and hospitals.',
         categories: categoriesFromPage(LAB_PAGES.frontDesk) },
-      { id: 'lab-alerts', label: 'Lab alerts', path: P.labAlerts, iconPath: ICON.bell,
+      { id: 'lab-alerts', single: true, label: 'Lab alerts', path: P.labAlerts, iconPath: ICON.bell,
         blurb: 'Which alerts the lab gets, and when each one fires.',
         categories: categoriesFromPage(LAB_PAGES.alerts) },
-      { id: 'lab-numbers', label: 'Numbers on lab screens', path: P.labNumbers, iconPath: ICON.kpi,
+      { id: 'lab-numbers', single: true, label: 'Numbers on lab screens', path: P.labNumbers, iconPath: ICON.kpi,
         blurb: 'Which number cards show on each lab screen.',
         categories: categoriesFromPage(LAB_PAGES.numbers) },
       { id: 'lab-work-steps', label: 'Work steps and forms', path: P.labWorkSteps, iconPath: ICON.process,
@@ -251,7 +259,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'work-steps', label: 'Work steps', path: P.process },
           { id: 'forms', label: 'Custom forms', path: P.workflows },
         ] },
-      { id: 'lab-home-collection', label: 'Home collection', path: P.labHomeCollection, iconPath: ICON.home, requires: 'homeCollection',
+      { id: 'lab-home-collection', single: true, label: 'Home collection', path: P.labHomeCollection, iconPath: ICON.home, requires: 'homeCollection',
         blurb: 'Home collection on or off, and the agents: coverage area and share of work.',
         categories: categoriesFromPage(LAB_PAGES.homeCollection) },
     ],
@@ -266,7 +274,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
       { id: 'opd-doctors', label: 'Doctors', path: P.opdDoctors, iconPath: ICON.person, requires: 'opd',
         blurb: 'Fee per service, room, token prefix, days.',
         categories: [{ id: 'doctors', label: 'Doctors' }] },
-      { id: 'opd-consult', label: 'Consultation and queue', path: P.opdForms, iconPath: ICON.sheet, requires: 'opd',
+      { id: 'opd-consult', single: true, label: 'Consultation and queue', path: P.opdForms, iconPath: ICON.sheet, requires: 'opd',
         blurb: 'Consultation forms, the OPD workflow and the follow-up policy.',
         categories: [
           { id: 'forms', label: 'Consultation forms', path: P.opdForms },
@@ -282,7 +290,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     id: 'pharmacy', group: 'departments', label: 'Pharmacy', requires: 'pharmacy', iconPath: ICON.pill,
     blurb: 'Dispensing rules and the drug master.',
     items: [
-      { id: 'pharmacy-settings', label: 'Pharmacy settings', path: P.pharmacy, iconPath: ICON.pill, requires: 'pharmacy',
+      { id: 'pharmacy-settings', single: true, label: 'Pharmacy settings', path: P.pharmacy, iconPath: ICON.pill, requires: 'pharmacy',
         blurb: 'Batch picking, walk-in bills, Schedule H / H1 / X.',
         categories: [{ id: 'settings', label: 'Pharmacy settings' }] },
       { id: 'pharmacy-drugs', label: 'Drug master', path: P.pharmacyDrugs, iconPath: ICON.drug, requires: 'pharmacy',
@@ -303,7 +311,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'forms', label: 'Case sheet forms', path: P.ipdCaseSheets },
           { id: 'pending', label: 'Pending changes', path: P.ipdPending },
         ] },
-      { id: 'ipd-alerts', label: 'IPD alerts', path: P.ipdAlerts, iconPath: ICON.bell, requires: 'ipd',
+      { id: 'ipd-alerts', single: true, label: 'IPD alerts', path: P.ipdAlerts, iconPath: ICON.bell, requires: 'ipd',
         blurb: 'IPD alerts on or off, and when they fire.',
         categories: [{ id: 'alerts', label: 'IPD alerts' }] },
     ],
@@ -323,7 +331,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     id: 'profile', group: 'organization', label: 'Organization profile', iconPath: ICON.person,
     blurb: 'Who you are, set once and used everywhere.',
     items: [
-      { id: 'org-profile', label: 'Name and logo', path: P.orgProfile, iconPath: ICON.person,
+      { id: 'org-profile', single: true, label: 'Name and logo', path: P.orgProfile, iconPath: ICON.person,
         blurb: 'Organization name, short name and logo, login handle.',
         categories: [{ id: 'profile', label: 'Name, logo and login handle' }] },
     ],
@@ -341,7 +349,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     id: 'numbers', group: 'organization', label: 'Patient and order numbers', iconPath: ICON.id,
     blurb: 'Numbers that belong to the whole organization.',
     items: [
-      { id: 'org-numbers', label: 'Patient and order numbers', path: P.orgNumbers, iconPath: ICON.id,
+      { id: 'org-numbers', single: true, label: 'Patient and order numbers', path: P.orgNumbers, iconPath: ICON.id,
         blurb: 'Patient ID and Order ID formats.',
         categories: [
           { id: 'patient', label: 'Patient ID', query: { tab: 'patient' } },
@@ -409,8 +417,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
  * Categories from a page list (`{ path, categories: [{ id, label }] }`, every page reading `?tab=<id>`) — the shape the
  * Lab pages export as LAB_PAGES. A setting can spread `categoriesFromPage(page)` instead of listing them by hand.
  */
-export function categoriesFromPage(page: { path: string; categories: ReadonlyArray<{ id: string; label: string }> }): SettingsCategory[] {
-  return page.categories.map((c) => ({ id: c.id, label: c.label, path: page.path, query: { tab: c.id } }));
+export function categoriesFromPage(page: { path: string; title?: string; categories: ReadonlyArray<{ id: string; label: string }> }): SettingsCategory[] {
+  return page.categories.map((c) => ({ id: c.id, label: c.label, path: page.path, query: { tab: c.id }, ...(page.title ? { pageLabel: page.title } : {}) }));
 }
 
 /** Where a category links: its own path, or the setting's, plus the view query. */
@@ -577,7 +585,7 @@ export function settingsPages(item: SettingsItem, cats: readonly SettingsCategor
     const path = categoryPath(item, c);
     if (out.some((o) => o.path === path)) continue;
     const full = isFullScreenSettingsPath(path);
-    out.push({ path, label: full && path === item.path ? item.label : c.label, query: full ? {} : { ...(c.query ?? {}) }, fullScreen: full });
+    out.push({ path, label: path === item.path ? item.label : (c.pageLabel ?? c.label), query: full ? {} : { ...(c.query ?? {}) }, fullScreen: full });
   }
   return out;
 }

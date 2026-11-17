@@ -17,10 +17,12 @@ import { NavBackService } from "../../core/services/nav-back.service";
 import { SettingsCatalogService } from "../../core/services/settings-catalog.service";
 import { SettingsResultsComponent } from "../../shared/components/settings-results/settings-results.component";
 import { SettingsAccessService } from "./settings/settings-access.service";
-import { LEGACY_SECTION, SETTINGS_GROUPS } from "./settings/settings-map";
+import { LEGACY_SECTION, SETTINGS_GROUPS, settingsPages } from "./settings/settings-map";
 
 /** One section's tile as the right panel shows it. */
 interface SectionTile {
+  /** Opens its own full-screen page (not the Settings frame). */
+  external?: boolean;
   title: string;
   subtitle: string;
   href: string;
@@ -47,32 +49,30 @@ interface SectionTile {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-ov pf-band-page">
-      @if (theme.isNewDesign()) {
-        <pf-hero-band
-          placeholder="Search all settings"
-          [value]="q()"
-          (valueChange)="setQ($event)"
-          (submitted)="openTopHit()"
-        ></pf-hero-band>
-      }
-      <div class="pf-band-body pf-ov__body">
-        <label class="pf-ov__search pf-classic-only">
-          <svg class="pf-ov__search-ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" />
-          </svg>
-          <input class="pf-ov__search-in" type="search" name="search-admin-settings" [value]="q()"
-                 (input)="setQ($any($event.target).value)" (keydown.enter)="openTopHit()"
-                 placeholder="Search all settings" aria-label="Search all settings" />
-        </label>
-
+      <!-- Test Master's frame (DESIGN-V2): the search is the band pill — no second search box. -->
+      <pf-hero-band
+        [back]="true"
+        placeholder="Search all settings"
+        [value]="q()"
+        (valueChange)="setQ($event)"
+        (submitted)="openTopHit()"
+      ></pf-hero-band>
+      <div class="pf-band-body pf-band-body--fill pf-ov__body">
         @if (q().trim()) {
-          <!-- Search mode: ONE ranked row per matching setting / page across
-               every section (the one settings catalog + matcher). Enter opens
-               the top row. -->
-          <div class="pf-ov__results pf-card">
-            <pf-settings-results [hits]="results()" [query]="q()"></pf-settings-results>
-          </div>
+          <!-- Search mode: ONE ranked row per matching setting / page across every section (the one settings
+               catalog + matcher). Enter opens the top row. -->
+          <section class="pf-card pf-ov__results" aria-label="Search results">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              </span>
+              <span class="pf-card__label">Search results</span>
+            </header>
+            <div class="pf-card__body">
+              <pf-settings-results [hits]="results()" [query]="q()"></pf-settings-results>
+            </div>
+          </section>
         } @else {
           <pf-two-panel
             [groups]="panelGroups()"
@@ -80,6 +80,9 @@ interface SectionTile {
             [compact]="compact()"
             [detailOpen]="detailOpen()"
             navLabel="Settings sections"
+            navTitle="Settings"
+            [navIcon]="gearIcon"
+            [panelNote]="panelNote()"
             (pick)="pickSection($event)"
             (back)="closeDetail()"
           >
@@ -88,14 +91,22 @@ interface SectionTile {
                 <a [routerLink]="t.href" [queryParams]="t.queryParams ?? null" class="pf-ov__tile press"
                    [attr.data-testid]="'ov-tile-' + tileKey(t)">
                   <span class="pf-card__icon pf-ov__tile-ic">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9"
                          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path [attr.d]="t.iconPath" />
                       @if (t.iconExtra) { <path [attr.d]="t.iconExtra" /> }
                     </svg>
                   </span>
-                  <span class="pf-ov__tile-t">{{ t.title }}</span>
-                  <span class="pf-ov__tile-s">{{ t.subtitle }}</span>
+                  <span class="pf-ov__tile-text">
+                    <span class="pf-ov__tile-t">
+                      {{ t.title }}
+                      @if (t.external) {
+                        <svg class="pf-ov__tile-ext" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Opens its own page"><path d="M7 17 17 7M8 7h9v9"/></svg>
+                      }
+                    </span>
+                    <span class="pf-ov__tile-s">{{ t.subtitle }}</span>
+                  </span>
                 </a>
               }
             </div>
@@ -107,36 +118,32 @@ interface SectionTile {
   styles: [
     `
       :host { display: block; }
-      .pf-ov { display: flex; flex-direction: column; min-height: calc(100dvh - var(--top-strip-h, 64px)); }
-      .pf-ov__body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 20px 24px; }
-      @media (max-width: 767px) { .pf-ov__body { padding: 12px 16px; } }
-      .pf-ov__results { padding: 16px; overflow-y: auto; }
-      .pf-ov__search {
-        display: flex; align-items: center; gap: 9px; width: 100%; max-width: 520px; margin: 0 0 16px;
-        padding: 10px 14px; border-radius: 12px; border: 1px solid var(--glass-border);
-        background: var(--glass-bg); color: var(--text-primary);
-      }
-      .pf-ov__search-ic { color: var(--text-muted); flex-shrink: 0; }
-      .pf-ov__search-in { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--text-primary); font-size: 13.5px; }
-      .pf-ov__search-in::-webkit-search-cancel-button { display: none; }
-      @media (max-width: 640px) { .pf-ov__search-in { font-size: 16px; } }
+      .pf-ov__body { min-height: 0; }
+      :root:not(.design-new) .pf-ov { display: flex; flex-direction: column; height: calc(100dvh - var(--top-strip-h, 64px)); padding: 0 16px; }
+      :root:not(.design-new) .pf-ov__body { flex: 1; display: flex; flex-direction: column; padding-bottom: 12px; }
+      .pf-ov__results { flex: 1 1 auto; }
 
-      /* Right panel: this section's tiles. */
-      .pf-ov__tiles { display: grid; gap: 14px; align-content: start; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+      /* Main card body: this section's tiles — the existing tile look, tighter. */
+      .pf-ov__tiles { display: grid; gap: 10px; align-content: start; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
       .pf-ov__tile {
-        display: flex; flex-direction: column; gap: 6px; min-height: 96px; padding: 16px; border-radius: var(--pf-radius, 14px);
-        border: 1px solid var(--pf-line, var(--glass-border)); background: var(--card-bg, transparent);
+        display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 12px;
+        border: 1px solid var(--pf-line, var(--glass-border)); background: var(--pf-card-bg, transparent);
         color: var(--text-primary); text-decoration: none;
-        transition: border-color 120ms ease, transform 100ms ease;
+        transition: border-color 120ms ease, background 120ms ease;
       }
-      .pf-ov__tile:hover { border-color: var(--pf-sel-border, #9aa4ae); transform: translateY(-1px); }
+      .pf-ov__tile:hover { border-color: var(--pf-sel-border, #9aa4ae); background: var(--pf-chip-bg); }
       .pf-ov__tile:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-      .pf-ov__tile-ic { width: 36px; height: 36px; border-radius: 10px; margin-bottom: 4px; }
-      .pf-ov__tile-t { font-size: 15px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
-      .pf-ov__tile-s { font-size: 13px; line-height: 1.45; color: var(--text-tertiary, var(--text-muted)); overflow-wrap: anywhere; }
-      @media (hover: none) { .pf-ov__tile:hover { transform: none; border-color: var(--pf-line, var(--glass-border)); } }
-      @media (prefers-reduced-motion: reduce) { .pf-ov__tile, .pf-ov__tile:hover { transition: none; transform: none; } }
-      @media (max-width: 767px) { .pf-ov__tiles { grid-template-columns: 1fr; } .pf-ov__tile { min-height: 80px; } }
+      .pf-ov__tile-ic { width: 32px; height: 32px; border-radius: 9px; }
+      .pf-ov__tile-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+      .pf-ov__tile-t { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+      .pf-ov__tile-ext { flex: none; color: var(--text-tertiary); }
+      .pf-ov__tile-s {
+        font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary, var(--text-muted));
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+      }
+      @media (hover: none) { .pf-ov__tile:hover { background: var(--pf-card-bg, transparent); border-color: var(--pf-line, var(--glass-border)); } }
+      @media (prefers-reduced-motion: reduce) { .pf-ov__tile { transition: none; } }
+      @media (max-width: 767px) { .pf-ov__tiles { grid-template-columns: 1fr; } }
     `,
   ],
 })
@@ -162,6 +169,7 @@ export class AdminOverviewComponent implements OnDestroy {
           id: s.section.id,
           label: s.section.label,
           description: s.section.blurb,
+          icon: s.section.iconPath,
           note: s.items.length > 1 ? String(s.items.length) : undefined,
         })),
       }))
@@ -184,8 +192,15 @@ export class AdminOverviewComponent implements OnDestroy {
   readonly detailOpen = computed(() => this.urlSection() !== null);
   readonly selectedTiles = computed<SectionTile[]>(() =>
     (this.allItems().find(i => i.section.id === this.selectedId())?.items ?? []).map((i) => ({
+      external: settingsPages(i).every((p) => p.fullScreen),
       title: i.label, subtitle: i.blurb, href: i.path, iconPath: i.iconPath, iconExtra: i.iconExtra,
     })));
+  /** Main-card head note: how many settings the section holds. */
+  readonly panelNote = computed(() => {
+    const n = this.selectedTiles().length;
+    return n ? `${n} setting${n === 1 ? '' : 's'}` : null;
+  });
+  readonly gearIcon = 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z';
   tileKey(t: SectionTile): string { return t.href.replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-'); }
 
   /** True when the phone's detail was pushed by a tap here, so back can POP it. */
@@ -223,7 +238,8 @@ export class AdminOverviewComponent implements OnDestroy {
   // The search reads the ONE settings catalog (shared/utils/settings-catalog)
   // with the ONE precise matcher — titles + keywords, whole words / prefixes,
   // ranked; filtered to what this person can open.
-  private readonly _q = signal("");
+  /** `?q=` seeds the search (the Settings frame's band pill on a setting page sends its words here). */
+  private readonly _q = signal(this.route?.snapshot.queryParamMap.get('q') ?? "");
   readonly q = this._q.asReadonly();
   setQ(v: string): void {
     this._q.set(v ?? "");

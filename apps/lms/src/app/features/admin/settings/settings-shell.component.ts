@@ -7,65 +7,90 @@ import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from '@prefrontal/shared';
 import { NavBackService } from '../../../core/services/nav-back.service';
-import { SETTINGS_HOST } from '../../../shared/utils/settings-host';
+import { SETTINGS_HOST, createSettingsHost } from '../../../shared/utils/settings-host';
+import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
+import { SettingsSiblingsComponent } from './settings-siblings.component';
 import { SettingsAccessService } from './settings-access.service';
 import { OpdAdminApi } from '../../opd/admin/opd-admin.api';
-import { SettingsCategory, categoryTarget, locateSettings } from './settings-map';
-
-const RAIL_KEY = 'pf.settings.rail';
-
-function readRail(): boolean {
-  try { return localStorage.getItem(RAIL_KEY) === '1'; } catch { return false; }
-}
+import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPath, locateSettings } from './settings-map';
 
 /**
- * The Settings shell (owner 2026-11-17): the SAME two-panel as the overview, one level in. Opening a setting slides
- * the left panel (260 ms, off under reduced motion) from the sections to THAT setting's categories under a back
- * arrow; the right side is the existing screen for the selected category (a route, or a `?tab=` / `?type=` of one).
+ * The Settings shell, in TEST MASTER's frame (owner 2026-11-17, DESIGN-V2): `pf-band-page` → ONE band (back chevron to
+ * the Settings section, the pill = the hosted page's search or "Search all settings", the page's actions top-right)
+ * → `pf-band-body--fill`. Below it either
+ *  - ONE full-width main card (`single` settings and settings with one category): head = the setting's icon + name,
+ *    body = the page's rows (its few categories are group labels inside), or
+ *  - Test Master's two cards: the side card lists the setting's categories under a back chevron (it slides in,
+ *    260 ms, off under reduced motion), the main card (head = icon + category) holds the selected category.
+ * Only the card bodies scroll — never the page. Full-screen sibling pages of the setting (Report design, Consultation
+ * forms …) are a small switch in the band (pf-settings-siblings). Phone: categories list → screen; back climbs one
+ * level through NavBackService.
  *
- *  - Wide: categories are always listed; the left panel can shrink to a thin rail. A setting's own path that only
- *    forwards (Outsourcing …) hops to its first category.
- *  - Phone: the categories list first, a tap drills in, back (chevron, edge swipe, hardware back) climbs one level
- *    at a time through NavBackService — detail → categories → the section on the overview.
- *  - Pages hosted here read SETTINGS_HOST and hide their own tab strip / back / brand (their actions stay).
- *
- * Which setting + category a URL is comes from settings-map.ts; which pages answer which path from settings.routes.ts.
+ * Hosted pages read SETTINGS_HOST: their pf-hero-band renders nothing in place and hands this band its actions and
+ * search. Which setting + category a URL is comes from settings-map.ts; which pages answer which path from
+ * settings.routes.ts.
  */
 @Component({
   selector: 'pf-settings-shell',
   standalone: true,
-  imports: [RouterOutlet, TwoPanelComponent],
+  imports: [RouterOutlet, TwoPanelComponent, HeroBandComponent, SettingsSiblingsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [{ provide: SETTINGS_HOST, useValue: { hosted: true as const } }],
+  providers: [{ provide: SETTINGS_HOST, useFactory: createSettingsHost }],
   template: `
-    <section class="pf-ss" data-testid="settings-shell">
-      <pf-two-panel
-        [groups]="groups()"
-        [selected]="selectedId()"
-        [compact]="compact()"
-        [detailOpen]="detailOpen()"
-        [navLabel]="itemLabel() + ' categories'"
-        [navHead]="loc() ? itemLabel() : null"
-        [navBackLabel]="'Back to ' + sectionLabel()"
-        [navKey]="loc() ? itemId() : null"
-        [animateNav]="true"
-        [collapsible]="true"
-        [rail]="rail()"
-        [flush]="true"
-        [stickyNav]="true"
-        (pick)="pickCategory($event)"
-        (back)="closeDetail()"
-        (navBack)="toSections()"
-        (railChange)="setRail($event)"
-      >
-        <router-outlet></router-outlet>
-      </pf-two-panel>
+    <section class="pf-ss pf-band-page" data-testid="settings-shell">
+      <pf-hero-band [shellBand]="true" [back]="true" [backAction]="backToSection"
+                    placeholder="Search all settings" [value]="q()" (valueChange)="q.set($event)" (submitted)="searchAll($event)">
+        <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
+      </pf-hero-band>
+      <div class="pf-band-body pf-band-body--fill pf-ss__body">
+        @if (single()) {
+          <section class="pf-card pf-ss__card" [attr.aria-label]="itemLabel()">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="itemIcon()"/></svg>
+              </span>
+              <h2 class="pf-card__label pf-ss__title" data-testid="tp-nav-title">{{ itemLabel() }}</h2>
+              @if (itemBlurb()) { <span class="pf-card__note pf-ss__note">{{ itemBlurb() }}</span> }
+            </header>
+            <div class="pf-ss__main pf-ss__scroll" data-testid="settings-main"><router-outlet></router-outlet></div>
+          </section>
+        } @else {
+          <pf-two-panel
+            [groups]="groups()"
+            [selected]="selectedId()"
+            [compact]="compact()"
+            [detailOpen]="detailOpen()"
+            [navLabel]="itemLabel() + ' categories'"
+            [navHead]="loc() ? itemLabel() : null"
+            [navIcon]="itemIcon()"
+            [panelIcon]="itemIcon()"
+            [backLabel]="'Back to ' + itemLabel()"
+            [navBackLabel]="'Back to ' + sectionLabel()"
+            [navKey]="loc() ? itemId() : null"
+            [animateNav]="true"
+            [flush]="true"
+            (pick)="pickCategory($event)"
+            (back)="closeDetail()"
+            (navBack)="toSections()"
+          >
+            <div class="pf-ss__main" data-testid="settings-main"><router-outlet></router-outlet></div>
+          </pf-two-panel>
+        }
+      </div>
     </section>
   `,
   styles: [`
     :host { display: block; }
-    .pf-ss { display: flex; flex-direction: column; min-height: calc(100dvh - var(--top-strip-h, 64px)); padding: 20px 24px; }
-    @media (max-width: 767px) { .pf-ss { padding: 12px 16px; } }
+    .pf-ss__body { min-height: 0; }
+    :root:not(.design-new) .pf-ss { display: flex; flex-direction: column; height: calc(100dvh - var(--top-strip-h, 64px)); padding: 0 16px; }
+    :root:not(.design-new) .pf-ss__body { flex: 1; display: flex; flex-direction: column; padding-bottom: 12px; }
+    .pf-ss__card { flex: 1 1 auto; min-height: 0; }
+    .pf-ss__title { margin: 0; flex: none; }
+    .pf-ss__note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-ss__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+    .pf-ss__main { padding: 4px 20px 20px; }
+    @media (max-width: 767px) { .pf-ss__main { padding: 2px 14px 16px; } .pf-ss__note { display: none; } }
   `],
 })
 export class SettingsShellComponent implements OnDestroy {
@@ -93,12 +118,18 @@ export class SettingsShellComponent implements OnDestroy {
   });
   readonly itemLabel = computed(() => this.loc()?.item.label ?? 'Settings');
   readonly itemId = computed(() => this.loc()?.item.id ?? '');
+  readonly itemIcon = computed(() => this.loc()?.item.iconPath ?? null);
+  readonly itemBlurb = computed(() => this.loc()?.item.blurb ?? null);
   readonly sectionLabel = computed(() => this.loc()?.section.label ?? 'Settings');
   /** Categories this person can open (a hidden one never lists; a hosted URL that names one is still served by its guard). */
   readonly cats = computed<SettingsCategory[]>(() => {
     const l = this.loc();
-    return l ? this.access.visibleCategories(l.item) : [];
+    if (!l) return [];
+    // Full-screen pages are not hosted: they are the band's page switch, never a category row here.
+    return this.access.visibleCategories(l.item).filter((c) => !isFullScreenSettingsPath(categoryPath(l.item, c)));
   });
+  /** ONE main card (no side card): a `single` setting, or one with a single hosted category. */
+  readonly single = computed(() => !!this.loc()?.item.single || this.cats().length <= 1);
 
   readonly groups = computed<TwoPanelGroup[]>(() => {
     const l = this.loc();
@@ -119,11 +150,14 @@ export class SettingsShellComponent implements OnDestroy {
   private lastItem: string | null = null;
   readonly detailOpen = computed(() => this.phoneDetail() || this.cats().length <= 1);
 
-  readonly rail = signal(readRail());
-  setRail(on: boolean): void {
-    this.rail.set(on);
-    try { localStorage.setItem(RAIL_KEY, on ? '1' : '0'); } catch { /* private mode */ }
+  /** The band pill's own words ("Search all settings"); Enter opens the overview's search with them. */
+  readonly q = signal('');
+  searchAll(words: string): void {
+    const w = (words ?? '').trim();
+    void this.router.navigate(['/admin'], { queryParams: w ? { q: w } : {} });
   }
+  /** The band's back chevron: up to the overview, on this setting's section. */
+  readonly backToSection = (): void => this.toSections();
 
   constructor() {
     // A setting just opened: a category-specific URL (deep link, search hit) shows the screen; the setting's own
@@ -171,7 +205,7 @@ export class SettingsShellComponent implements OnDestroy {
   }
 
   private readonly backHandler = (): boolean => {
-    if (!this.compact()) return false;
+    if (!this.compact() || this.single()) return false;
     if (this.phoneDetail() && this.cats().length > 1) { this.phoneDetail.set(false); return true; }
     return false;
   };

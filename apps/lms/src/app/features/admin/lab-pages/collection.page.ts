@@ -14,13 +14,8 @@ import { LabPageComponent, labPageTab } from './lab-page.component';
   imports: [LabPageComponent, LabSettingsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)"
-                 subtitle="How work reaches the bench: queue focus, who gets which tests, and claiming without a scan.">
-      @switch (tab()) {
-        @case ('queue') { <pf-lab-settings [cards]="['queue-focus', 'counters']"></pf-lab-settings> }
-        @case ('assign') { <pf-lab-settings [cards]="['auto-assign']"></pf-lab-settings> }
-        @case ('noscan') { <pf-lab-settings [cards]="['no-scan']"></pf-lab-settings> }
-      }
+    <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)">
+      <pf-lab-settings [cards]="['counters', 'queue-focus', 'no-scan', 'auto-assign']" [groups]="groups"></pf-lab-settings>
     </pf-lab-page>
   `,
 })
@@ -29,4 +24,9 @@ export class LabCollectionPage {
   private readonly t = labPageTab(LAB_PAGES.collection);
   protected readonly tab = this.t.tab;
   protected pick(id: string) { this.t.pick(id); }
+  protected readonly groups = {
+    counters: { id: 'queue', label: 'Queue focus' },
+    'no-scan': { id: 'noscan', label: 'Claim without scanning' },
+    'auto-assign': { id: 'assign', label: 'Auto-assign technicians and validators' },
+  } as const;
 }
