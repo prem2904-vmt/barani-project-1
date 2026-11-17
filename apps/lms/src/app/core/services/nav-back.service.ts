@@ -140,7 +140,7 @@ export class NavBackService {
     }
     if (normUrl.startsWith('/admin/instruments/')) return '/admin/instruments';
     if (normUrl.startsWith('/admin/bridges/')) return '/admin/bridges';
-    if (normUrl.startsWith('/admin/lab-settings/')) return '/lab/settings';
+    if (normUrl.startsWith('/admin/lab-settings/')) return '/admin/lab/collection';
 
     // Personal settings (avatar menu, any signed-in user, reached from any
     // screen): back is where you came from — never /admin (a 403 for most).
@@ -182,7 +182,7 @@ export class NavBackService {
 
     // The Lab settings hub's own children (culture settings…) parent back to it.
     if (normUrl.startsWith('/lab/settings/')) {
-      return '/lab/settings';
+      return '/admin?section=lab';
     }
     if (normUrl.startsWith('/lab/')) {
       return '/lab/my-work';
@@ -193,8 +193,11 @@ export class NavBackService {
     if (normUrl.startsWith('/reports/')) {
       return '/reports';
     }
+    // OPD editors climb to the OPD setting that lists them (the OPD hub is the overview's OPD section).
+    if (normUrl.startsWith('/admin/opd/services/')) return '/admin/opd/departments';
+    if (normUrl.startsWith('/admin/opd/forms/')) return '/admin/opd/forms';
     if (normUrl.startsWith('/admin/opd/')) {
-      return '/admin/opd';
+      return '/admin?section=opd';
     }
     if (normUrl.startsWith('/admin/')) {
       return '/admin';

@@ -1,6 +1,6 @@
 import { ProcessWorkflowConfig, catalogFor, normalizeWorkflow, workAreaIconPath, workAreaRoute } from '../shared/models/process-workflow.model';
 import { ModuleKey } from '../core/services/tenant-entitlements.service';
-import { ADMIN_PERMS, ROUTE_ACCESS, RouteAccessCtx, canOpenRoute, routeAccess, routePerms } from '../core/auth/route-access';
+import { ROUTE_ACCESS, RouteAccessCtx, SETTINGS_ENTRY_PERMS, canOpenRoute, routeAccess, routePerms } from '../core/auth/route-access';
 import { actionAvailable, workflowActionOn } from '../core/modules/lab-features';
 
 export { FRONTDESK_PERMS } from '../core/auth/route-access';
@@ -157,7 +157,8 @@ export const ADMIN_NAV: NavItem = {
   href: '/admin',
   iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
              'M19.4 15a1.6 1.6 0 0 0 .3 1.7l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.7-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.7.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.7 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.7.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.7-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.7V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z'],
-  permissions: ADMIN_PERMS
+  // Settings is the ONE entry to every setting: anyone who can open at least one of them gets it.
+  permissions: SETTINGS_ENTRY_PERMS
 };
 
 /** Route → the permissions its own guard checks, derived from ROUTE_ACCESS
@@ -485,16 +486,6 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     module: 'payroll'
   },
   {
-    id: 'admin-overview', label: 'Admin overview', href: '/admin', exact: true,
-    iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
-  },
-  {
-    // Lab module's own settings hub — lab-specific config lives in the Lab world.
-    id: 'lab-settings', label: 'Lab settings', href: '/lab/settings',
-    iconPath: ['M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6'],
-    module: 'lab'
-  },
-  {
     // NABL critical-result acknowledgement register (Lab world).
     id: 'critical-results', label: 'Critical results', href: '/lab/critical-results',
     iconPath: ['M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z', 'M3.22 12H9.5l.5-1 2 4 1-2 1.5 1h5.27'],
@@ -507,58 +498,17 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     module: 'lab'
   },
   {
-    id: 'admin-manage', label: 'Manage settings', href: '/admin/manage',
-    iconPath: ['M4 6h16M4 12h16M4 18h16'],
-  },
-  {
     id: 'tat', label: 'TAT Board', href: '/dashboard', iconPath: ['M3 20V10l9-7 9 7v10M9 20v-6h6v6'],
     module: 'reports'
   },
   {
-    id: 'users', label: 'Users', href: '/admin/users', iconPath: ['M9 8a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20a6.5 6.5 0 0 1 13 0'],
-  },
-  {
-    id: 'tests', label: 'Tests', href: '/admin/tests', iconPath: ['M11 4h3v9m-3-9v9h3m-3 0c-4-1-4-7 0-9M6 21h14M9 17h8'],
-  },
-  {
+    // Branch Managers hold manage_branches only (they cannot open Settings): their way to Branches.
     id: 'branches', label: 'Branches', href: '/admin/branches', iconPath: ['M4 21V7l8-4 8 4v14M9 21v-5h6v5'],
-  },
-  {
-    id: 'billing', label: 'Billing cfg', href: '/admin/billing', iconPath: ['M3 5h18v14H3zM3 10h18M7 15h3'],
   },
   {
     // Finance — day-end cash reconciliation + closure.
     id: 'daily-statement', label: 'Daily statement', href: '/finance/daily',
     iconPath: ['M4 4h16v16H4z', 'M8 9h8M8 13h8M8 17h5'],
-  },
-  {
-    id: 'inventory', label: 'Inventory settings', href: '/admin/inventory', iconPath: ['M3 7l9-4 9 4v10l-9 4-9-4V7Zm9-4v18M3 7l9 4 9-4'],
-    module: 'inventory'
-  },
-  {
-    id: 'reports-t', label: 'Report Template', href: '/admin/reports', iconPath: ['M4 5h16v14H4zM8 10h8M8 14h5'],
-  },
-  {
-    id: 'notifs', label: 'Notifications', href: '/admin/notifications', iconPath: ['M6 16V11a6 6 0 0 1 12 0v5l2 2H4l2-2Zm5 4a1 1 0 0 0 2 0'],
-  },
-  {
-    id: 'process', label: 'Process builder', href: '/admin/process', iconPath: ['M4 5h5v5H4zM15 5h5v5h-5zM9.5 7.5h5.5M7 10v4a2 2 0 0 0 2 2h6M9 16h5v4H9z'],
-  },
-  {
-    id: 'workflows', label: 'Form Flows', href: '/admin/workflows', iconPath: ['M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9zM9 7h6M12 14V10'],
-  },
-  {
-    id: 'kpis', label: 'KPI cards', href: '/admin/kpis', iconPath: ['M3 12h4l3-9 4 18 3-9h4'],
-  },
-  {
-    id: 'vendors', label: 'Vendor Credit Wallets', href: '/admin/vendors', iconPath: ['M21 7H5a2 2 0 0 0 0 4h16v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14M17 14h.01'],
-  },
-  {
-    id: 'referral-labs', label: 'Referral labs', href: '/admin/referral-labs', iconPath: ['M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9'],
-  },
-  {
-    id: 'appts', label: 'Appointments', href: '/admin/appointments',
-    iconPath: ['M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'],
   },
   {
     // Front-desk home-collection assignment — tied to the home_visits action:
@@ -574,7 +524,4 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
                'M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2Z',
                'M9 12h6M9 16h6'],
   },
-  {
-    id: 'setup', label: 'Branding', href: '/setup', iconPath: ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z'],
-  }
 ]);

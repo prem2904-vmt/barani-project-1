@@ -12,7 +12,7 @@ import { ThemeService } from '../../core/services/theme.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
-import { LabSettingsHubComponent } from '../lab/lab-settings-hub/lab-settings-hub.component';
+import { SETTINGS_SECTIONS } from '../admin/settings/settings-map';
 import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_NEVER_ITEMS, AI_CONNECTOR_SUGGEST_OFF_EFFECT, AI_CONNECTOR_SUGGEST_REQUESTED, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorGrant, AiConnectorState } from './ai-connector.api';
 import { AiConnectorsSettingsPage } from './ai-connectors-settings.page';
 
@@ -367,32 +367,16 @@ describe('AiConnectorsSettingsPage: let connected assistants suggest Test Master
   });
 });
 
-describe('Lab settings hub → AI connectors tile', () => {
-  function hub(betaOn: boolean) {
-    TestBed.resetTestingModule();
-    TestBed.configureTestingModule({
-      imports: [LabSettingsHubComponent],
-      providers: [
-        provideRouter([]),
-        { provide: AuthService, useValue: { hasAnyPermission: (p: string[]) => p.includes('manage_tests'), user: () => null } },
-        { provide: ThemeService, useValue: { isDark: () => false, isNewDesign: () => true } },
-        { provide: TenantStateService, useValue: { tenant: signal(null) } },
-        { provide: NavBackService, useValue: { showBack: () => true } },
-        { provide: BetaFeaturesService, useValue: { enabled: (k: string) => betaOn && k === 'mcp' } },
-      ],
-    });
-    const f = TestBed.createComponent(LabSettingsHubComponent);
-    f.detectChanges();
-    return f.componentInstance.visibleTiles().find(t => t.href === '/admin/ai-connectors');
-  }
+describe('Settings → Organization › Connected apps → Cortex connectors tile', () => {
+  const item = SETTINGS_SECTIONS.find((x) => x.id === 'connected')!.items[0];
 
-  it('BETA off (stage / prod / flag off) → no tile at all', () => {
-    expect(hub(false)).toBeUndefined();
+  it('the tile is a BETA surface (mcp) on /admin/ai-connectors — off means no tile at all', () => {
+    expect(item.path).toBe('/admin/ai-connectors');
+    expect(item.beta).toBe('mcp');
+    expect(item.label).toBe('Cortex connectors');
   });
 
-  it('BETA on → the hub lists the tile for anyone who can open the hub; the route admits the same people', () => {
-    const tile = hub(true);
-    expect(tile?.title).toBe('AI connectors');
+  it('the route admits anyone who can open Settings\' lab hub perms; the switch inside stays admin-only', () => {
     expect(canOpenRoute('/admin/ai-connectors', { hasAny: p => p.includes('manage_tests') })).toBe(true);
     expect(canOpenRoute('/admin/ai-connectors', { hasAny: p => p.includes('register_patient') })).toBe(false);
   });

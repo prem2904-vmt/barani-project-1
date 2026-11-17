@@ -93,6 +93,7 @@ interface DeptRecord {
 export { gridThemeDark, gridThemeLight } from './grid-theme';
 import { gridThemeDark, gridThemeLight } from './grid-theme';
 import { testListUrl } from '../../../../shared/utils/test-list-url';
+import { injectSettingsHosted } from '../../../../shared/utils/settings-host';
 
 /** Extended row model supporting manual tree hierarchy for profiles/packages. */
 export type TestRow = Test & {
@@ -182,6 +183,9 @@ export class TestsComponent implements OnInit {
   protected readonly theme = inject(ThemeService);
   private readonly dialog = inject(DialogService);
   private readonly pricing = inject(TestPricingService);
+
+  /** Rendered inside the Settings shell: its left panel lists Tests / Profiles / Packages / Option groups … (URL-driven). */
+  protected readonly hosted = injectSettingsHosted();
 
   readonly views: { value: TestType; label: string }[] = [
     { value: 'individual', label: 'Individual' },
@@ -1037,6 +1041,8 @@ export class TestsComponent implements OnInit {
       if (t === 'individual' || t === 'profile' || t === 'package') {
         this._type.set(t);
       }
+      // Hosted categories switch the view through the URL: no `view` ⇒ the plain grid again.
+      { this.ogView.set(false); this.microView.set(false); this.pricingView.set(false); this.pendingView.set(false); }
       // Deep link from the test editor's "Edit group…" prompt.
       if (params['view'] === 'option-groups') this.ogView.set(true);
       if (params['view'] === 'microbiology') this.microView.set(true);

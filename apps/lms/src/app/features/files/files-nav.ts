@@ -1,5 +1,6 @@
 import type { NavItem } from '../../layout/nav-items';
 import { FILES_APPS, FILES_NAME, FILES_NAV_ID, FilesApp } from './files-registry';
+import { filesStartPath } from './files-start';
 import type { FilesAccessService } from './files-access.service';
 
 /** A plain stroked folder: the bar icon of the Files screen itself (never a branded mark). */
@@ -9,8 +10,8 @@ export const FILES_NAV: NavItem = { id: FILES_NAV_ID, label: FILES_NAME, href: '
 /** The apps read "Neuron · sheets" on the Start menu's plain list (same row style as every other screen). */
 const PLAIN: Record<string, string> = { sheet: 'sheets', doc: 'documents', slides: 'slides', pdf: 'PDFs', image: 'images' };
 
-/** An app's Start-menu / bar item: its logo, its name, and Files filtered to its type. */
-export const filesAppNav = (a: FilesApp): NavItem => ({ id: a.navId, label: a.name, menuLabel: `${a.name} · ${PLAIN[a.kind] ?? a.nounPlural}`, href: `/files?type=${a.kind}`, iconPath: FILES_ICON, logo: a.id });
+/** An app's Start-menu / bar item: its logo, its name, and ITS OWN start screen (`/files/<kind>/start`: New, templates, Recent, Open). */
+export const filesAppNav = (a: FilesApp): NavItem => ({ id: a.navId, label: a.name, menuLabel: `${a.name} · ${PLAIN[a.kind] ?? a.nounPlural}`, href: filesStartPath(a), iconPath: FILES_ICON, logo: a.id });
 
 /**
  * Everything Files adds to the Start menu as pinnable items: the Files screen and one item per app this person may open. Pins never grant

@@ -66,7 +66,7 @@
            screen's hero band instead. -->
   <span class="pf-ts-sep hidden sm:inline-block" aria-hidden="true"></span>
   @if (showAdmin()) {
-  <a [routerLink]="'/setup'" class="pf-ts-tenant press hidden sm:inline-flex" [class.pf-ts-tenant--empty]="!hasBrand()"
+  <a [routerLink]="'/admin/org/profile'" class="pf-ts-tenant press hidden sm:inline-flex" [class.pf-ts-tenant--empty]="!hasBrand()"
     [attr.aria-label]="brandAriaLabel()" [title]="tenantName()">
     @if (showLogo() && tenantLogo()) {
     <img [src]="tenantLogo()!" [alt]="tenantName()" class="pf-ts-tenant__logo" />
@@ -473,16 +473,6 @@
         }
 
         <div class="pf-profile-divider"></div>
-
-        @if (showAdmin()) {
-        <a routerLink="/setup" class="pf-profile-item press" (click)="closeProfile()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z" />
-          </svg>
-          <span>Tenant branding</span>
-        </a>
-        }
 
         @if (themeService.isNewDesign() && tenantLoaded() && canSwitchBranch()) {
         <!-- Branch switching, moved off the bar (owner): infrequent, so it

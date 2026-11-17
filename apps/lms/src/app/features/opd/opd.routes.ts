@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { permissionGuard } from '../../core/auth/permission.guard';
 import { ADMIN_PERMS } from '../../core/auth/route-access';
 import { opdGuard } from './shared/opd.guard';
+import { PHARMACY_VIEW } from './pharmacy/pharmacy-view';
 
 /**
  * EVERY OPD route (OPD dark build), wired ONCE by the foundation. Each carries
@@ -51,10 +52,12 @@ export const OPD_SHELL_ROUTES: Routes = [
   { path: 'doctor/consult/:id', canActivate: [opdGuard], loadComponent: () => import('./doctor/consult-room.component').then(m => m.ConsultRoomComponent) },
 ];
 
-/** OPD admin (adminGuard + opdGuard). Agent A, except pharmacy settings (D). */
+/**
+ * OPD admin (adminGuard + opdGuard). Agent A, except pharmacy settings (D). The Settings shell hosts every one of
+ * these except the full-screen editors (service editor, form builder): see features/admin/settings/settings.routes.ts.
+ * `/admin/opd` itself (the old OPD hub) redirects to the overview's OPD section.
+ */
 export const OPD_ADMIN_ROUTES: Routes = [
-  { path: 'admin/opd', canActivate: [adminGuard, opdGuard], data: { moduleId: 'opd' },
-    loadComponent: () => import('./admin/opd-admin.component').then(m => m.OpdAdminComponent) },
   { path: 'admin/opd/departments', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/departments.page').then(m => m.OpdDepartmentsPage) },
   { path: 'admin/opd/services/:id', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/service-editor.page').then(m => m.OpdServiceEditorPage) },
   // OPD → Doctors: per-doctor consultation-fee grid (existing).
@@ -64,8 +67,16 @@ export const OPD_ADMIN_ROUTES: Routes = [
   { path: 'admin/opd/workflow', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/workflow.page').then(m => m.OpdWorkflowPage) },
   // OPD → Settings: the follow-up policy (existing).
   { path: 'admin/opd/settings', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/opd-settings.component').then(m => m.OpdSettingsComponent) },
-  { path: 'admin/opd/drugs', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/drug-master.page').then(m => m.OpdDrugMasterPage) },
-  { path: 'admin/opd/pharmacy', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./pharmacy/pharmacy-settings.page').then(m => m.PharmacySettingsPage) },
+  // Pharmacy is its own department in Settings (Settings re-home 2026-11-17): its real settings and the drug master,
+  // ONE page pinned to a view by PHARMACY_VIEW (the Settings left panel is the switch). Old /admin/opd/pharmacy and
+  // /admin/opd/drugs redirect here through settings-map's rehome().
+  { path: 'admin/pharmacy/drugs', canActivate: [adminGuard, opdGuard], data: { moduleId: 'pharmacy', [PHARMACY_VIEW]: 'drugs' },
+    loadComponent: () => import('./pharmacy/pharmacy-settings.page').then(m => m.PharmacySettingsPage) },
+  { path: 'admin/pharmacy', canActivate: [adminGuard, opdGuard], data: { moduleId: 'pharmacy', [PHARMACY_VIEW]: 'settings' },
+    loadComponent: () => import('./pharmacy/pharmacy-settings.page').then(m => m.PharmacySettingsPage) },
+  // OPD front desk, alerts and numbers (`?tab=` = OPD_FRONT_DESK_SECTIONS): appointments and booking, the shared
+  // referring list, OPD alerts. Numbers on OPD screens waits for OPD screens in the KPI-card list.
+  { path: 'admin/opd/front-desk', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/front-desk.page').then(m => m.OpdFrontDeskPage) },
 ];
 
 /** The legacy desk consult page under /frontdesk (child of the frontdesk area). */

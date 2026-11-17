@@ -98,4 +98,8 @@ export interface Department {
   containerLabel?: string | null;
   isActive: boolean;
   createdAt: string;
+  /** Lineage key of a catalogue (master) department; null for a lab-made one. */
+  catalogKey?: string | null;
+  /** JSON; a lab-made department carries `{"labMade":true}`. */
+  metadata?: string | null;
 }

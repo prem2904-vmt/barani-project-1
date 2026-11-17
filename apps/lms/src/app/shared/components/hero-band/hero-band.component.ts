@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, input, output } from '@angu
 import { Router } from '@angular/router';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { injectTenantBrand } from './tenant-brand';
+import { injectSettingsHosted } from '../../utils/settings-host';
 import { PfKeysDirective } from '../numpad/pf-keys.directive';
 import { SamplePresetDirective } from '../../directives/sample-preset.directive';
 import { PfKeysKind } from '../numpad/pf-keys-layouts';
@@ -41,10 +42,10 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
   imports: [PfKeysDirective, SamplePresetDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-hb" [class.pf-hb--slim]="slim()">
+    <div class="pf-hb" [class.pf-hb--slim]="slim()" [class.pf-hb--hosted]="hosted">
       <div class="pf-hb__band">
         <div class="pf-hb__tenant">
-          @if (back() && (navBack.showBack() || !!backAction())) {
+          @if (back() && !hosted && (navBack.showBack() || !!backAction())) {
             <button type="button" class="pf-hb__back press" (click)="goBack()" aria-label="Go back" title="Back">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -80,7 +81,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
         <div class="pf-hb__actions"><ng-content select="[band-actions]"></ng-content></div>
       </div>
 
-      @if (!slim()) {
+      @if (!slim() && !(hosted && tabsOnly())) {
       <div class="pf-hb__searchrow">
         <div class="pf-hb__search" [class.pf-hb__search--tabs]="tabsOnly()" [class.pf-hb__search--ctx]="contextBar()"
              [class.pf-hb__search--std]="standardPill()">
@@ -193,6 +194,21 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
     :host-context([data-theme='dark']) .pf-hb__back { color: var(--text-primary, #e5e7eb); }
     :host-context(.dark) .pf-hb__back:hover,
     :host-context([data-theme='dark']) .pf-hb__back:hover { background: rgba(255, 255, 255, 0.08); }
+
+    /* HOSTED in the Settings shell (SETTINGS_HOST): the shell's left panel already names the screen and lists its
+       categories, so the band drops its brand, back chevron, gradient and tab pill and keeps only the page's
+       actions (Save …) and, when the page has one, its search. */
+    .pf-hb--hosted { margin: 12px 0; }
+    .pf-hb--hosted .pf-hb__band,
+    :host-context(.dark) .pf-hb--hosted .pf-hb__band,
+    :host-context([data-theme='dark']) .pf-hb--hosted .pf-hb__band {
+      background: none; min-height: 0; padding: 0 0 4px; border: 0; box-shadow: none;
+      justify-content: flex-end;
+    }
+    .pf-hb--hosted .pf-hb__tenant { display: none; }
+    .pf-hb--hosted .pf-hb__band:has(.pf-hb__actions:empty) { display: none; }
+    .pf-hb--hosted .pf-hb__searchrow { padding: 0; margin-top: 0; }
+    .pf-hb--hosted .pf-hb__search { margin-inline: 0; max-width: none; }
 
     /* Tabs-only pill: no search field, the tools own the whole pill and the
        section switch is spread evenly across it (owner). */
@@ -397,6 +413,8 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
 export class HeroBandComponent {
   protected readonly navBack = inject(NavBackService);
   private readonly router = inject(Router);
+  /** Rendered inside the Settings shell (see shared/utils/settings-host.ts). */
+  protected readonly hosted = injectSettingsHosted();
 
   /** Plain href="/" (middle-click / new tab work natively); a normal click navigates in-app. Deliberately not
    *  RouterLink: that forces every host screen (and its spec) to provide ActivatedRoute + a full Router. */

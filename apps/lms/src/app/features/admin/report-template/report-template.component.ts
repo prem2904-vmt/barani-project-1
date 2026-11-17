@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
 import { ApiService } from '../../../core/services/api.service';
+import { OrgProfileService } from '../org/org-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { normalizeHeaderPreset, ReportTemplate } from '../../../shared/models/report.model';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -43,6 +45,7 @@ import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-stri
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
+import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 /** More sample tests so the live preview runs to three pages. */
 const previewTest = (testId: string, name: string, rows: Array<[string, string, string, string]>) => ({
@@ -80,7 +83,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
+  imports: [RouterLink, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
@@ -103,6 +106,11 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                           [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
+            <a class="pf-hb-btn pf-hb-btn--ghost press pf-rt-options" [routerLink]="reportOptionsPath" data-testid="rt-report-options"
+               aria-label="Report options: technician notes and WhatsApp sending" title="Report options: technician notes and WhatsApp sending">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+              Report options
+            </a>
             @if (tidyShown()) {
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
                       aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">
@@ -141,6 +149,12 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           <h1 class="pf-rt-title">Report designer</h1>
           <p class="pf-rt-sub">How every printed report looks — edit on the left, watch the page on the right.</p>
         </div>
+        <a class="pf-hb-btn pf-hb-btn--ghost press pf-rt-options" [routerLink]="reportOptionsPath" data-testid="rt-report-options-classic"
+               aria-label="Report options: technician notes and WhatsApp sending" title="Report options: technician notes and WhatsApp sending">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+              Report options
+            </a>
+            
         @if (tidyShown()) {
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
                   aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">
@@ -1193,6 +1207,8 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
   `],
 })
 export class ReportTemplateComponent implements OnInit, OnDestroy {
+  /** Technician notes + WhatsApp sending sit next to the report design. */
+  protected readonly reportOptionsPath = LAB_PAGES.reportOptions.path;
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
@@ -1217,6 +1233,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
   private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
+  protected readonly hosted = injectSettingsHosted();
+  private readonly followTab = bindTabQuery(['letterhead', 'patient', 'table', 'columns', 'sequence', 'footer'] as const, (t) => { if (t !== this._tab()) this.setTab(t); });
   /** Left section list hide/unhide — Test Master departments pattern. */
   readonly railHidden = signal<boolean>(
     typeof localStorage !== 'undefined' && localStorage.getItem('pf-rt-rail') === 'hidden');
@@ -1360,6 +1378,25 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   /** JSON of the template as last loaded / saved — "dirty" compares to it. */
   private readonly savedJson = signal<string>(JSON.stringify(this.defaultTemplate()));
   readonly dirty = computed(() => JSON.stringify(this._tpl()) !== this.savedJson());
+
+  // The lab name + logo are set ONCE in Organization profile (Settings re-home): the letterhead shows them read-only,
+  // and a save here posts them back unchanged beside the letterhead's own fields (tagline, NABL, colours …).
+  // A profile value wins when set; an empty one never blanks what the template already has.
+  private readonly orgProfile = inject(OrgProfileService);
+  private readonly tplLoaded = signal(false);
+  private readonly applyProfile = effect(() => {
+    if (!this.tplLoaded()) return;
+    const name = this.orgProfile.name(), logo = this.orgProfile.logoUrl();
+    if (!name && !logo) return;
+    untracked(() => {
+      const cur = this._tpl();
+      const merged = { ...cur, labName: name || cur.labName, logoUrl: logo || cur.logoUrl };
+      if (merged.labName === cur.labName && merged.logoUrl === cur.logoUrl) return;
+      const wasClean = !this.dirty();
+      this._tpl.set(merged);
+      if (wasClean) this.savedJson.set(JSON.stringify(merged));
+    });
+  });
 
   /** "Show specimen line" lives in the template metadata (no column). */
   specimenLineOn(): boolean { return readReportOption(this.tpl(), 'specimenLine'); }
@@ -1896,6 +1933,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
 
   ngOnInit() {
+    this.orgProfile.ensureLoaded();
     const initial = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
     if (initial && this.sections.some(o => o.value === initial)) {
       this._tab.set(initial);
@@ -1908,6 +1946,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
         this.savedJson.set(JSON.stringify(this._tpl()));
         this.past.set([]); this.future.set([]);
         this.initPatientCols();
+        this.tplLoaded.set(true);
         this.tplHold.done();
       },
       error: () => this.tplHold.done(),

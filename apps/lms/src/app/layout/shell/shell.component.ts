@@ -717,6 +717,17 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
         padding-bottom: var(--pf-botbar-h, 58px) !important;
         padding-left: 0 !important;
       }
+      /* Phone: toasts sit just above the bottom bar, centred, so they never cover a form at the top of the screen
+         (e.g. Lab › Departments: two quick on/off switches stacked their toasts over "Add department"). */
+      @media (max-width: 767.98px) {
+        .pf-toasts {
+          top: auto !important;
+          right: 16px !important;
+          left: 16px !important;
+          bottom: calc(var(--pf-botbar-h, 58px) + env(safe-area-inset-bottom, 0px) + 12px) !important;
+          align-items: center;
+        }
+      }
       /* Toasts clear the docked bar (md+ anchors them bottom-center). */
       @media (min-width: 768px) {
         :host-context(.design-new.nav-bottom) .pf-toasts {

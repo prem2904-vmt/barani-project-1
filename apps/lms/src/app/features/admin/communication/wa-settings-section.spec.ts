@@ -46,57 +46,36 @@ function make(settings: unknown) {
   p.api.put.mockImplementation(((_url: string, body: Record<string, unknown>) => of({ ...(settings as object), ...body })) as never);
   p.f.detectChanges();
   const card = () => p.el.querySelector<HTMLElement>('[data-testid="ls-whatsapp"]');
-  const main = () => card()!.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="WhatsApp Auto: send the report automatically when it is ready"]')!;
-  return { ...p, card, main };
+  return { ...p, card };
 }
 
-describe('Communication → WhatsApp auto-send', () => {
-  it('is an ND switch card, OFF by default, shared sender; the number card follows it', () => {
+/** Message channels → WhatsApp: the ACCOUNT (the lab's number, usage, WhatsApp Chat). What the lab SENDS
+ *  (WhatsApp Auto, send again, the report message) lives in Lab › Report, never here. */
+describe('Message channels → WhatsApp account', () => {
+  it('has the number card and WhatsApp Chat, and no WhatsApp Auto / send-again card', () => {
     const p = make(SETTINGS());
-    expect(p.card()).not.toBeNull();
-    expect(p.main().classList.contains('pf-toggle')).toBe(true);
-    expect(p.main().getAttribute('aria-checked')).toBe('false');
-    expect(p.card()!.querySelector('[data-testid="ls-wa-sender"]')!.textContent).toContain('Prefrontal (shared)');
-    // Embedded Signup off → the number card shows the shared number and NO Connect button.
+    expect(p.card()).toBeNull();
+    expect(p.el.textContent).not.toContain('send the report automatically');
+    expect(p.el.querySelector('[data-testid="ls-wa-resend-regen"]')).toBeNull();
     const numberCard = p.el.querySelector<HTMLElement>('[data-testid="ls-wa-connect-card"]')!;
-    expect(numberCard).not.toBeNull();
     expect(numberCard.getAttribute('data-state')).toBe('not_connected');
     expect(numberCard.querySelector('[data-testid="wac-connect"]')).toBeNull();
-    expect(document.getElementById('pf-facebook-jssdk')).toBeNull();   // SDK not loaded
-    // No native controls.
-    expect(p.card()!.querySelector('select, datalist, input[type="checkbox"]')).toBeNull();
+    expect(document.getElementById('pf-facebook-jssdk')).toBeNull();
+    expect(p.el.querySelector('select, datalist, input[type="checkbox"]')).toBeNull();
   });
 
-  it('turning it on PUTs the settings and confirms', () => {
-    const p = make(SETTINGS());
-    p.main().click();
-    p.f.detectChanges();
-    expect(p.api.put).toHaveBeenCalledWith('/api/whatsapp/settings', { autoSendEnabled: true, sendUpdatedReports: true });
-    expect(p.main().getAttribute('aria-checked')).toBe('true');
-    expect(p.toasts.success).toHaveBeenCalledWith('WhatsApp Auto is on: reports are sent once paid');
-  });
-
-  it('a connected lab number shows the lab\'s own name; the number card says Connected', () => {
+  it('a connected lab number says Connected; the token never reaches the page', () => {
     const p = make(SETTINGS({
       autoSendEnabled: true,
       sender: { source: 'tenant', state: 'connected', displayName: 'Micro World Labs', status: 'connected', tokenStored: true, phoneNumberId: 'pn-1', canConnect: false },
     }));
-    expect(p.card()!.querySelector('[data-testid="ls-wa-sender"]')!.textContent).toContain('Micro World Labs (connected)');
-    const numberCard = p.el.querySelector<HTMLElement>('[data-testid="ls-wa-connect-card"]')!;
-    expect(numberCard.getAttribute('data-state')).toBe('connected');
+    expect(p.el.querySelector<HTMLElement>('[data-testid="ls-wa-connect-card"]')!.getAttribute('data-state')).toBe('connected');
     expect([...p.el.querySelectorAll('button')].some(b => b.textContent!.includes('Connect WhatsApp'))).toBe(false);
-    // The token never reaches the page.
     expect(p.el.textContent).not.toMatch(/token/i);
   });
 
-  it('warns when the shared sender is not configured on the server', () => {
-    const p = make(SETTINGS({ platform: { enabled: true, configured: false, webhookConfigured: false, defaultTemplateName: 'report_ready', defaultTemplateLanguage: 'en' } }));
-    expect(p.card()!.textContent).toContain("isn't set up on the server yet");
-  });
-
-  it('no permission / older server → no card, a plain line instead', () => {
+  it('no permission / older server: a plain line instead', () => {
     const p = make([]);
-    expect(p.card()).toBeNull();
     expect(p.el.querySelector('[data-testid="ls-wa-none"]')).not.toBeNull();
   });
 
@@ -108,24 +87,5 @@ describe('Communication → WhatsApp auto-send', () => {
     expect(p.el.querySelector('[data-testid="ls-wa-chat-state"]')!.textContent!.trim()).toBe('Off');
     expect(p.el.querySelector('[data-testid="ls-wa-chat"]')!.textContent).toContain('ask Prefrontal');
     expect(p.el.querySelector('[data-testid="ls-wa-chat"] button[role="switch"]')).toBeNull();
-  });
-
-  it('says the message waits for payment, carries the PDF, and the regenerate re-send is a switch (off by default)', () => {
-    const p = make(SETTINGS({ autoSendEnabled: true, sendUpdatedReports: false }));
-    const text = p.card()!.textContent!;
-    expect(text).toContain('fully paid');
-    expect(text).toContain('On hold');
-    expect(text).toContain('report PDF');
-    expect(text).toContain('Partial reports are never sent');
-    const regen = p.card()!.querySelector<HTMLButtonElement>('[data-testid="ls-wa-resend-regen"]')!;
-    expect(regen.classList.contains('pf-toggle')).toBe(true);
-    expect(regen.getAttribute('role')).toBe('switch');
-    expect(regen.getAttribute('aria-checked')).toBe('false');
-    expect(regen.textContent).toContain('regenerated');
-    regen.click();
-    p.f.detectChanges();
-    expect(p.api.put).toHaveBeenCalledWith('/api/whatsapp/settings', { autoSendEnabled: true, sendUpdatedReports: true });
-    // No raw template name / code inputs anywhere on the card (the picker lists labels).
-    expect(p.card()!.querySelector('input[type="text"]')).toBeNull();
   });
 });

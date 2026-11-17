@@ -19,8 +19,10 @@
             <span class="pf-tm-deptchip__t">Departments</span>
           </button>
         }
-        <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions()" [value]="view()"
-                      (valueChange)="setView($event)"></pf-segmented>
+        @if (!hosted) {
+          <pf-segmented class="pf-tm-bandseg" size="sm" [options]="viewOptions()" [value]="view()"
+                        (valueChange)="setView($event)"></pf-segmented>
+        }
       </ng-container>
       <ng-container band-actions>
         @if (pendingOn()) {
@@ -124,6 +126,7 @@
   </pf-screen-header>
 
   <!-- View switch -->
+  @if (!hosted) {
   <div class="pf-tm-tabs mb-4 pf-classic-only">
     @for (v of views; track v.value) {
       <button type="button"
@@ -160,6 +163,7 @@
       </button>
     }
   </div>
+  }
 
   <!-- Everything under the band: the grid view FILLS the body (the grid
        scrolls itself); the side views scroll the body. -->

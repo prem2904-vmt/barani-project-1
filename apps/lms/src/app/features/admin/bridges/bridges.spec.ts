@@ -22,7 +22,7 @@ import { BridgesListComponent, searchBridges } from './bridges-list.component';
 import { BridgeDetailComponent, analyzerRows } from './bridge-detail.component';
 import { BridgeAddComponent } from './bridge-add.component';
 import { BridgeNearbyBannerComponent } from '../../../shared/components/bridge-nearby-banner/bridge-nearby-banner.component';
-import { LabSettingsHubComponent } from '../../lab/lab-settings-hub/lab-settings-hub.component';
+import { SETTINGS_SECTIONS } from '../settings/settings-map';
 import { BridgeLinkPage, handleBridgeLinkHref } from '../../bridges/bridge-link.page';
 
 const flush = async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0)); };
@@ -121,18 +121,14 @@ describe('Bridges — routes, permission, hub tile', () => {
     expect(can(['manage_bridges'])).toBe(true);
     expect(can(['manage_lab_settings'])).toBe(false);
     expect(canOpenRoute('/admin/bridges', { hasAny: () => false, isSuper: true })).toBe(true);
-    // A manage_bridges-only admin still reaches the Lab settings hub to find the tile.
-    expect(canOpenRoute('/lab/settings', { hasAny: (c) => c.includes('manage_bridges') })).toBe(true);
+    // A manage_bridges-only admin still reaches Settings to find it.
+    expect(canOpenRoute('/admin', { hasAny: (c) => c.includes('manage_bridges') })).toBe(true);
   });
 
-  it('Lab settings hub shows a Bridges tile (SVG icon) only for manage_bridges', () => {
-    const p = render(LabSettingsHubComponent, { perms: ['manage_bridges'] });
-    const tile = Array.from(p.el.querySelectorAll<HTMLAnchorElement>('.pf-lsh__tile')).find((a) => a.textContent!.includes('Bridges'))!;
-    expect(tile.getAttribute('href')).toBe('/admin/bridges');
-    expect(tile.querySelector('svg path')).not.toBeNull();
-    TestBed.resetTestingModule();
-    const q = render(LabSettingsHubComponent, { perms: ['manage_lab_settings'] });
-    expect(Array.from(q.el.querySelectorAll('.pf-lsh__tile')).some((a) => a.textContent!.includes('Bridges'))).toBe(false);
+  it('Settings › Lab › Analyzers and bridges has a Bridges category → /admin/bridges, gated by manage_bridges', () => {
+    const item = SETTINGS_SECTIONS.find((x) => x.id === 'lab')!.items.find((i) => i.id === 'lab-analyzers')!;
+    expect(item.categories.find((c) => c.id === 'bridges')?.path).toBe('/admin/bridges');
+    expect(canOpenRoute('/admin/lab/analyzers', { hasAny: (c) => c.includes('manage_bridges') })).toBe(true);
   });
 });
 

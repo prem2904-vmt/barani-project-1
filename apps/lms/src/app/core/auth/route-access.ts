@@ -100,6 +100,21 @@ export const CASESHEET_FORMS_PERMS = ['casesheet_forms_manage'];
 export const CASESHEET_READ_PERMS = ['casesheet_view', 'casesheet_fill'];
 export const CASESHEET_FILL_PERMS = ['casesheet_fill'];
 
+/**
+ * Perms that open the Settings overview (`/admin`). Settings is the ONE entry point to every setting (the Lab hub,
+ * Manage settings and the per-setting shortcuts are gone), so it admits anyone who can open at least one setting:
+ * the admin perms plus the narrower grants (Lab Admin (Technical), billing, notifications, inventory, comms,
+ * case-sheet authors …). The overview then lists only the settings that person can open. Still EXCLUDES
+ * manage_branch(es): Branch Managers keep their own Branches entry and must not reach tenant config.
+ */
+export const SETTINGS_ENTRY_PERMS = [...new Set([
+  ...ADMIN_PERMS,
+  ...LAB_SETTINGS_HUB_PERMS,
+  'manage_tenant', 'manage_admin', 'manage_billing_config', 'manage_inventory', 'manage_report_template',
+  'manage_home_collection', 'manage_lab_settings', 'manage_notifications', 'manage_bridges',
+  'manage_opd', 'manage_ipd', 'manage_pharmacy', ...CASESHEET_FORMS_PERMS,
+])];
+
 export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // ── Front desk (parent guard + per-child perms) ────────────────────────
   '/frontdesk':                  { perms: FRONTDESK_PERMS },
@@ -142,17 +157,13 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/insights':           { perms: ANALYTICS_PERMS, module: 'reports' },
   '/finance':            { perms: FINANCE_PERMS },
   '/finance/daily':      { perms: FINANCE_PERMS },
+  // Credit accounts: money actions (top up, payment, statement); the setup is in Settings › Billing and taxes.
+  '/finance/credit-accounts': { perms: ['manage_tenant'] },
   // (/finance/expenses is a plain redirect to /expenses — no entry of its own.)
   '/expenses':           { perms: EXPENSE_ROUTE_PERMS },
 
   // ── Admin / settings ───────────────────────────────────────────────────
-  '/admin':                   { perms: ADMIN_PERMS },
-  '/admin/manage':            { perms: ADMIN_PERMS },
-  '/admin/modules':           { perms: ADMIN_PERMS },
-  '/admin/kpis':              { perms: ADMIN_PERMS },
-  '/setup':                   { perms: ADMIN_PERMS },
-  '/lab/settings':            { perms: LAB_SETTINGS_HUB_PERMS, module: 'lab' },
-  '/admin/microbiology':      { perms: ['manage_lab_settings'], module: 'lab' },
+  '/admin':                   { perms: SETTINGS_ENTRY_PERMS },
   // AI connectors (MCP): anyone who opens the Lab settings hub sees the status;
   // the switch inside is admin-only (the server enforces the PUT).
   '/admin/ai-connectors':     { perms: LAB_SETTINGS_HUB_PERMS },
@@ -166,34 +177,45 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/tests':             { perms: [...TEST_MASTER_PERMS, 'manage_test_pricing'] },
   '/admin/tests/new':         { perms: TEST_MASTER_PERMS },
   '/admin/branches':          { perms: ['manage_branches'] },
-  '/admin/vendors':           { perms: ['manage_tenant'] },
+  // Lab › Departments and lab spaces: the perms the department endpoints accept (manage_departments | manage_branches).
+  '/admin/lab/departments':   { perms: ['manage_departments', 'manage_branches'], module: 'lab' },
   '/admin/referral-labs':     { perms: TEST_MASTER_PERMS },
   '/admin/partner-prices':    { perms: TEST_MASTER_PERMS },
-  '/admin/lab-settings':      { perms: ['manage_lab_settings'] },
-  // Settings → Communication (WhatsApp, Email, SMS): the perms the WhatsApp lab settings use.
-  '/admin/communication':     { perms: COMMS_SETTINGS_PERMS },
   '/admin/files':             { perms: FILES_SETTINGS_PERMS },
-  '/admin/organization':      { perms: ['manage_tenant'] },
   // Billing config APIs accept manage_billing_config as well as manage_tenant.
   '/admin/billing':           { perms: ['manage_tenant', 'manage_billing_config'] },
   '/admin/inventory':         { perms: ['manage_inventory'], module: 'inventory' },
   // Report design saves on manage_report_template (ConfigController / ReportLayoutController).
   '/admin/reports':           { perms: ['manage_tenant', 'manage_tests', 'manage_report_template'] },
-  '/admin/referring-network': { perms: ['manage_tenant', 'manage_admin'] },
-  // The Referral & Vendors hub is the ONE home of Referral Labs / Partner
-  // Prices / Vendor Wallets / Referring Network (links only — each tile keeps
-  // its own guard and the hub hides tiles a person can't open). Test-master
-  // perms open it so a Lab Admin (Technical) still reaches Referral Labs +
-  // Partner Prices, which the Lab hub used to list directly.
-  '/admin/partners':          { perms: ['manage_tenant', 'manage_admin', ...TEST_MASTER_PERMS] },
-  '/admin/notifications':     { perms: ['manage_tenant', 'manage_notifications'] },
   '/admin/workflows':         { perms: ['manage_workflows'] },
   '/admin/process':           { perms: ['manage_workflows'] },
   '/admin/audit':             { perms: ['view_audit_log'] },
-  '/admin/appointments':      { perms: ['manage_tenant'] },
-  // Home collection = entitlement AND the workflow's Home Visits action (the
-  // ONE rule, core/modules/lab-features) — same pair as its work screens.
-  '/admin/home-collection':   { perms: ['manage_home_collection'], workflow: ['home_visits'], module: 'homeCollection' },
+
+
+  // ── Settings re-home (2026-11-17): the new homes carry EXACTLY the gate of the screen behind them today ──
+  '/admin/lab/sample-numbers':    { perms: ['manage_lab_settings', 'manage_tenant'] },
+  '/admin/lab/report-options':         { perms: ['manage_lab_settings'] },
+  '/admin/lab/collection':        { perms: ['manage_lab_settings'] },
+  '/admin/lab/results':           { perms: ['manage_lab_settings'] },
+  '/admin/lab/outsourcing':       { perms: TEST_MASTER_PERMS },
+  '/admin/lab/analyzers':         { perms: ['manage_lab_settings', ...BRIDGE_PERMS], module: 'lab' },
+  '/admin/lab/front-desk':        { perms: ['manage_tenant', 'manage_admin'] },
+  '/admin/lab/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
+  '/admin/lab/numbers':           { perms: ADMIN_PERMS },
+  '/admin/lab/work-steps':        { perms: ['manage_workflows'] },
+  '/admin/lab/home-collection':   { perms: ['manage_home_collection'], workflow: ['home_visits'], module: 'homeCollection' },
+  '/admin/opd/departments':       { perms: ADMIN_PERMS },
+  '/admin/opd/doctors':           { perms: ADMIN_PERMS },
+  '/admin/opd/forms':             { perms: ADMIN_PERMS },
+  '/admin/opd/workflow':          { perms: ADMIN_PERMS },
+  '/admin/opd/settings':          { perms: ADMIN_PERMS },
+  '/admin/opd/front-desk':        { perms: ADMIN_PERMS },
+  '/admin/pharmacy':              { perms: ADMIN_PERMS },
+  '/admin/pharmacy/drugs':        { perms: ADMIN_PERMS },
+  '/admin/ipd/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
+  '/admin/org/profile':           { perms: ['manage_tenant'] },
+  '/admin/org/numbers':           { perms: ['manage_tenant'] },
+  '/admin/org/channels':          { perms: COMMS_SETTINGS_PERMS },
 
   // ── Case sheets (part of IPD; every route also behind casesheetGuard) ─
   // Admin → IPD → MyPrefrontal: author the lab's case-sheet forms.
@@ -210,6 +232,17 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/casesheets/new':                           { perms: CASESHEET_FILL_PERMS },
   '/casesheets/:id':                           { perms: CASESHEET_READ_PERMS },
 };
+
+/** Does one access level admit this person? (perms, workflow action, module) — the rule canOpenRoute applies per level. */
+export function canPassAccess(lvl: RouteAccess, ctx: RouteAccessCtx): boolean {
+  if (lvl.perms?.length && !ctx.isSuper) {
+    const check = lvl.effective ? (ctx.hasAnyEffective ?? ctx.hasAny) : ctx.hasAny;
+    if (!check(lvl.perms)) return false;
+  }
+  if (lvl.workflow?.length && ctx.isEnabled && !lvl.workflow.some(a => ctx.isEnabled!(a))) return false;
+  if (lvl.module && ctx.moduleEnabled && !ctx.moduleEnabled(lvl.module)) return false;
+  return true;
+}
 
 /** Strip query/fragment and a trailing slash: '/admin/manage?cat=x' → '/admin/manage'. */
 export function normRoute(href: string): string {
@@ -259,13 +292,5 @@ export interface RouteAccessCtx {
  * page reached from inside an already-gated screen).
  */
 export function canOpenRoute(href: string, ctx: RouteAccessCtx): boolean {
-  for (const lvl of routeAccessChain(href)) {
-    if (lvl.perms?.length && !ctx.isSuper) {
-      const check = lvl.effective ? (ctx.hasAnyEffective ?? ctx.hasAny) : ctx.hasAny;
-      if (!check(lvl.perms)) return false;
-    }
-    if (lvl.workflow?.length && ctx.isEnabled && !lvl.workflow.some(a => ctx.isEnabled!(a))) return false;
-    if (lvl.module && ctx.moduleEnabled && !ctx.moduleEnabled(lvl.module)) return false;
-  }
-  return true;
+  return routeAccessChain(href).every(lvl => canPassAccess(lvl, ctx));
 }

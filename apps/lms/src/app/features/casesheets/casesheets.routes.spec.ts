@@ -2,6 +2,7 @@ import { Route, Router } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { appRoutes } from '../../app.routes';
+import { SETTINGS_SHELL_CHILDREN } from '../admin/settings/settings.routes';
 import { resolveAppMode } from '../../core/app-mode';
 import { ROUTE_ACCESS } from '../../core/auth/route-access';
 import { DOCTOR_NAV, MORE_NAV, PRIMARY_NAV } from '../../layout/nav-items';
@@ -51,7 +52,8 @@ describe('case-sheet routes: defined once, all gated', () => {
 
   it('every in-shell case-sheet route is mounted in the shell and has casesheetGuard FIRST, then its perms', () => {
     for (const r of CASESHEET_SHELL_ROUTES) {
-      expect(shell.children!.includes(r)).toBe(true);
+      // Mounted in the signed-in shell, or — the Settings pages (case sheets, pending, IPD departments) — inside the Settings shell.
+      expect(shell.children!.includes(r) || SETTINGS_SHELL_CHILDREN.includes(r)).toBe(true);
       const guards = r.canActivate ?? [];
       expect(isCasesheetGuard(guards[0])).toBe(true);
       const perms = guards.map(g => (g as { requiredPerms?: string[] }).requiredPerms).find(Boolean);
@@ -73,11 +75,12 @@ describe('case-sheet routes: defined once, all gated', () => {
     expect(csish.length).toBe(CASESHEET_SHELL_ROUTES.length);
   });
 
-  it('/admin/ipd itself is still the existing placeholder (adminGuard, no case-sheet gate)', () => {
+  it('/admin/ipd itself redirects to the overview\'s IPD section (the placeholder hub is gone)', () => {
     const ipd = shell.children!.find(r => r.path === 'admin/ipd')!;
-    expect(ipd.data?.['moduleId']).toBe('ipd');
-    expect((ipd.canActivate ?? []).some(isCasesheetGuard)).toBe(false);
+    expect(ipd.redirectTo).toBeTruthy();
+    expect(ipd.canActivate ?? []).toEqual([]);
   });
+
 
   it('links match the paths', () => {
     expect(casesheetLinks.adminForm('f 1')).toBe('/admin/ipd/myprefrontal/forms/f%201');

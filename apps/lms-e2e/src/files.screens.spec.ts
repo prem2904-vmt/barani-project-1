@@ -356,12 +356,12 @@ test.describe('Settings → Files', () => {
     await shot(page, 'files-settings-viewonly');
   });
 
-  test('the Settings overview lists Departments, then Organization, then All departments LAST with Communication and Files as sections', async ({ page, context }) => {
+  test('the Settings overview lists Departments, then Organization; Message channels and Files are Organization sections', async ({ page, context }) => {
     await boot(page, context, { route: '/admin' });
     await expect(page.locator('[data-testid="tp-item-files"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     const order = await page.locator('[data-testid^="tp-group-"]').evaluateAll(els => els.map(e => (e.textContent ?? '').trim().toUpperCase()));
-    expect(order).toEqual(['DEPARTMENTS', 'ORGANIZATION', 'ALL DEPARTMENTS']);
-    await expect(page.locator('[data-testid="tp-item-communication"]').locator('visible=true').first()).toBeVisible();
+    expect(order).toEqual(['DEPARTMENTS', 'ORGANIZATION']);
+    await expect(page.locator('[data-testid="tp-item-channels"]').locator('visible=true').first()).toBeVisible();
     await expectLayout(page, 'settings overview');
     await shot(page, 'settings-overview');
     await page.locator('[data-testid="tp-item-files"]').locator('visible=true').first().click();
@@ -372,7 +372,7 @@ test.describe('Settings → Files', () => {
 
   test('without the beta the Files tile and the Files screen do not exist', async ({ page, context }) => {
     await boot(page, context, { route: '/admin', beta: false });
-    await expect(page.locator('[data-testid="tp-item-communication"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('[data-testid="tp-item-channels"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('[data-testid="tp-item-files"]')).toHaveCount(0);
     await page.goto('/files');
     await expect(page).not.toHaveURL(/\/files$/, { timeout: 30_000 });
@@ -553,5 +553,110 @@ test.describe('this device', () => {
     expect(callsOf('POST', /device-export$/).length).toBeGreaterThan(0);
   });
 });
+
+/** A stand-in engine that obeys the start-screen contract (never the real app: those screens come from the engine builds). It says ready, renders
+ *  whatever `<prefix>home` carries (Recent rows with a shield for flagged files, template buttons, Blank only when canCreate) and answers clicks
+ *  with the contract's messages. */
+const startStub = (page: Page, app: string, prefix: string) => page.route(`**/${app}-engine/**`, r => r.fulfill({ status: 200, contentType: 'text/html',
+  body: `<!doctype html><html><head><style>body{font:14px system-ui;margin:24px;background:Canvas;color:CanvasText}button{font:inherit;margin:4px;padding:6px 12px}li{list-style:none;padding:4px 0}</style></head><body>
+<h1 id="hello">Start</h1><div id="tpl"></div><ul id="rec"></ul><div id="msg"></div>
+<script>/* stub: ./${app}-web-stub_bg.wasm */
+const P=${JSON.stringify(prefix)}; const send=m=>parent.postMessage(m,location.origin);
+addEventListener('message',e=>{ const d=e.data; if(!d||d.type!==P+'home')return; window.__home=d;
+  const t=document.getElementById('tpl'); t.innerHTML='';
+  if(d.canCreate){ const b=document.createElement('button'); b.textContent='Blank'; b.dataset.blank='1'; b.onclick=()=>send({type:P+'started'}); t.append(b);
+    for(const x of d.templates){ const c=document.createElement('button'); c.textContent=x.name; c.dataset.tpl=x.id; c.dataset.src=x.source; c.onclick=()=>send({type:P+'newFromTemplate',id:x.id}); t.append(c); } }
+  const o=document.createElement('button'); o.textContent='Open from '+d.placeName; o.dataset.open='1'; o.onclick=()=>send({type:P+'openRequest'}); t.append(o);
+  const r=document.getElementById('rec'); r.innerHTML='';
+  for(const x of d.recent){ const li=document.createElement('li'); const b=document.createElement('button'); b.textContent=x.name; b.dataset.recent=x.id; b.onclick=()=>send({type:P+'openRecent',id:x.id}); li.append(b);
+    if(x.containsPhi){ const s=document.createElement('span'); s.dataset.phi='1'; s.title='Contains patient data'; s.textContent=' [shield]'; li.append(s); } r.append(li); }
+  document.getElementById('msg').textContent=d.recent.length?'':'Nothing here yet.'; });
+send({type:P+'ready'});
+</script></body></html>` }));
+const startFrame = (page: Page) => page.frameLocator('iframe[data-testid="files-frame"]');
+
+test.describe('each app opens its own start screen', () => {
+  const APPS = [
+    { id: 'neuron', route: 'sheet', prefix: 'neuron:', name: 'Neuron', recent: ['Results 9 to 15 Nov 2026.xlsx', 'QC log, November.xlsx'], notRecent: ['Sample rejection SOP.docx', 'Partner report.pdf'], tpl: 'neuron:qc' },
+    { id: 'synapse', route: 'doc', prefix: 'synapse:', name: 'Synapse', recent: ['Sample rejection SOP.docx'], notRecent: ['Results 9 to 15 Nov 2026.xlsx', 'Wound photo.png'], tpl: 'synapse:sop' },
+    { id: 'axon', route: 'slides', prefix: 'axon:', name: 'Axon', recent: ['Monthly quality review.pptx'], notRecent: ['Sample rejection SOP.docx'], tpl: 'axon:case' },
+    { id: 'myelin', route: 'pdf', prefix: 'myelin:', name: 'Myelin', recent: ['Partner report.pdf'], notRecent: ['Wound photo.png'], tpl: '' },
+    { id: 'retina', route: 'image', prefix: 'retina:', name: 'Retina', recent: ['Wound photo.png'], notRecent: ['Partner report.pdf'], tpl: '' },
+  ];
+  for (const a of APPS) {
+    test(`${a.name}: /files/${a.route}/start shows the app's name in the band, no Save, and only ${a.route} files under Recent`, async ({ page, context }) => {
+      await startStub(page, a.id, a.prefix);
+      await boot(page, context, { route: `/files/${a.route}/start` });
+      await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+      await expect(tid(page, 'files-start-name')).toHaveText(a.name, { timeout: 60_000 });
+      await expect(tid(page, 'files-save')).toHaveCount(0);
+      await expect(tid(page, 'files-name')).toHaveCount(0);
+      const fr = startFrame(page);
+      for (const n of a.recent) await expect(fr.locator('[data-recent]', { hasText: n })).toHaveCount(1, { timeout: 30_000 });
+      for (const n of a.notRecent) await expect(fr.locator('[data-recent]', { hasText: n })).toHaveCount(0);
+      if (a.id === 'neuron') await expect(fr.locator('[data-phi]')).toHaveCount(1);                           // the flagged results sheet carries the shield
+      await expectLayout(page, `${a.name} start`);
+      await shot(page, `files-start-${a.id}`);
+    });
+  }
+
+  // The five REAL start screens (engines fetched by tools/fetch-<app>.sh); skips for an engine this build lacks.
+  for (const x of APPS) {
+    test(`${x.name} real engine: its own start screen shows this lab's Recent files of its kind`, async ({ page, context }) => {
+      test.skip(browser() === 'firefox', 'no WebGL in the Firefox image');
+      const r = await page.request.get(`/${x.id}-engine/index.html`).catch(() => null);
+      test.skip(!r || !r.ok() || !(await r.text()).includes('_bg.wasm'), `${x.name} is not in this build`);
+      await boot(page, context, { route: `/files/${x.route}/start` });
+      await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+      await expect(tid(page, 'files-loading')).toHaveCount(0, { timeout: 120_000 });
+      await expect(tid(page, 'files-failed')).toHaveCount(0);
+      await expect(tid(page, 'files-save')).toHaveCount(0);
+      await page.waitForTimeout(3000);
+      await shot(page, `files-start-real-${x.id}`);
+    });
+  }
+
+  test('a Recent row opens that file; Back returns to the start screen', async ({ page, context }) => {
+    await startStub(page, 'neuron', 'neuron:');
+    await boot(page, context, { route: '/files/sheet/start' });
+    await startFrame(page).locator('[data-recent]', { hasText: 'QC log, November.xlsx' }).click({ timeout: 60_000 });
+    await expect(page).toHaveURL(/\/files\/sheet\/file-4/, { timeout: 30_000 });
+    await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+    await expect(tid(page, 'files-start-name')).toHaveCount(0);
+    await page.goBack();
+    await expect(page).toHaveURL(/\/files\/sheet\/start/, { timeout: 30_000 });
+  });
+
+  test('a template starts an ordinary new file: Save appears, the name is the template\'s', async ({ page, context }) => {
+    test.skip(isPhone(), 'phone is view-only: no New');
+    await startStub(page, 'synapse', 'synapse:');
+    await boot(page, context, { route: '/files/doc/start' });
+    const fr = startFrame(page);
+    await expect(fr.locator('[data-tpl="synapse:sop"]')).toBeVisible({ timeout: 60_000 });
+    await expect(fr.locator('[data-tpl="own:o1"][data-src="lab"]')).toBeVisible();                       // the lab's own template is offered too
+    await fr.locator('[data-tpl="synapse:sop"]').click();
+    await expect(tid(page, 'files-save')).toBeVisible({ timeout: 30_000 });
+    await expect(tid(page, 'files-start-name')).toHaveCount(0);
+  });
+
+  test('View only lab and phone: Recent and Open, no Blank, no templates', async ({ page, context }) => {
+    await startStub(page, 'neuron', 'neuron:');
+    await boot(page, context, { route: '/files/sheet/start', full: false });
+    const fr = startFrame(page);
+    await expect(fr.locator('[data-recent]').first()).toBeVisible({ timeout: 60_000 });
+    await expect(fr.locator('[data-open]')).toBeVisible();
+    await expect(fr.locator('[data-blank]')).toHaveCount(0);
+    await expect(fr.locator('[data-tpl]')).toHaveCount(0);
+    await expect(tid(page, 'files-save')).toHaveCount(0);
+  });
+
+  test('a lab with no files yet: an empty Recent, never an error', async ({ page, context }) => {
+    await startStub(page, 'neuron', 'neuron:');
+    const errors = await boot(page, context, { route: '/files/sheet/start', empty: true });
+    await expect(startFrame(page).locator('#msg')).toHaveText('Nothing here yet.', { timeout: 60_000 });
+    expect(errors).toEqual([]);
+  });
+});
+
 void neg; void isDesktopApp;
 

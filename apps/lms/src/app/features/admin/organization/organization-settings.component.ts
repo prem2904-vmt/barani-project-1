@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ORG_SETTINGS_TABS } from '../../../shared/utils/settings-catalog';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -13,15 +13,16 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { ThemeService } from '../../../core/services/theme.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 /** Band pill tabs — one per independently-saved identity setting. */
-export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
+export type OrgSettingsTab = 'identity' | 'patient' | 'order';
 
 
 @Component({
   selector: 'pf-organization-settings',
   standalone: true,
-  imports: [BusyDirective, FormsModule, RouterLink, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
+  imports: [BusyDirective, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -175,53 +176,6 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
       </section>
       }
 
-      @if (showSec('sample')) {
-      <!-- Sample ID format (prefix = space code) -->
-      <section class="pf-card pf-ls__card">
-        <div class="pf-card__head">
-          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v17a3 3 0 0 0 6 0V2"/><path d="M8 2h8M9 12h6"/></svg></span>
-          <h3 class="pf-card__label pf-ls__title">Sample ID format</h3>
-        </div>
-        <div class="pf-card__body pf-ls__body">
-          <p class="pf-ls__hint">
-            Every tube's ID is <strong>SPACE-DATE-NUMBER</strong> (e.g. <span class="pf-num">MIC-2607-00001</span>).
-            The <strong>space code</strong> comes from Branches → “Departments &amp; lab spaces”. The number restarts <strong>each month per space</strong>.
-            This is the one place the sample-ID format is set.
-          </p>
-          <a class="pf-ls__link" routerLink="/admin/branches">Set space codes in Branches</a>
-          <div class="pf-ls__grid pf-ls__grid--3">
-            <div class="pf-field">
-              <span class="pf-field__lbl">Date</span>
-              <pf-select [options]="dateOptions" [value]="sampleFmt.date()" (valueChange)="sampleFmt.date.set($any($event))"></pf-select>
-            </div>
-            <label class="pf-field">
-              <span class="pf-field__lbl">Separator <span class="pf-ls__opt">(blank = none)</span></span>
-              <input class="pf-input pf-num" maxlength="3" [ngModel]="sampleFmt.sep()" (ngModelChange)="sampleFmt.sep.set($event)" placeholder="none" />
-            </label>
-            <label class="pf-field">
-              <span class="pf-field__lbl">{{ sampleFmt.serial() === 'alpha' ? 'Min number digits' : 'Number digits' }}</span>
-              <input class="pf-input pf-num" type="number" min="1" [attr.max]="sampleFmt.serial() === 'alpha' ? 6 : 10" [ngModel]="sampleFmt.pad()" (ngModelChange)="onFormatPadChange(sampleFmt, $event)" (keydown)="preventMinus($event)" />
-            </label>
-          </div>
-          <div class="pf-ls__inline-toggle">
-            <span class="pf-ls__inline-toggle-text"><strong>Include letters</strong> <span class="pf-ls__opt">— alphanumeric (AA001 …). Off = plain numbers.</span></span>
-            <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="sampleFmt.serial() === 'alpha'" aria-label="Include letters"
-                    (click)="sampleFmt.serial.set(sampleFmt.serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
-          </div>
-          @if (sampleFmt.serial() === 'alpha') {
-            <div class="pf-field pf-ls__letters">
-              <span class="pf-field__lbl">Letters</span>
-              <pf-select [options]="letterShortOptions" [value]="sampleFmt.letters()" (valueChange)="sampleFmt.letters.set(+$any($event))"></pf-select>
-            </div>
-          }
-          <p class="pf-ls__preview">Preview: <strong class="pf-num">{{ sampleFmt.preview() }}</strong></p>
-          <button type="button" class="pf-btn pf-btn--primary pf-ls__save pf-classic-only press" [disabled]="sampleFmt.saving()" [pfBusy]="sampleFmt.saving()" (click)="saveIdFormat(sampleFmt)">
-            {{ sampleFmt.saving() ? 'Saving…' : 'Save format' }}
-          </button>
-        </div>
-      </section>
-      }
-
       @if (showSec('order')) {
       <!-- Order ID format (prefix = module code) -->
       <section class="pf-card pf-ls__card">
@@ -311,13 +265,19 @@ export class OrganizationSettingsComponent implements OnInit {
   protected readonly theme = inject(ThemeService);
 
   /** Band pill tabs (new design). Classic shows every card, as before. */
-  readonly tabOptions: SegmentedOption<OrgSettingsTab>[] = [
+  private readonly route = inject(ActivatedRoute);
+  /** Settings re-home: `/admin/org/numbers` shows only these tabs (route `data.orgTabs`); the old
+   *  `/admin/organization` has no data and shows all of them, as before. */
+  private readonly onlyTabs = (this.route.snapshot.data?.['orgTabs'] as OrgSettingsTab[] | undefined) ?? null;
+  readonly tabOptions: SegmentedOption<OrgSettingsTab>[] = ([
     { value: 'identity', label: 'Identity' },
     { value: 'patient', label: 'Patient ID' },
-    { value: 'sample', label: 'Sample ID' },
     { value: 'order', label: 'Order ID' },
-  ];
-  readonly tab = signal<OrgSettingsTab>('identity');
+  ] as SegmentedOption<OrgSettingsTab>[]).filter(o => !this.onlyTabs || this.onlyTabs.includes(o.value));
+  readonly tab = signal<OrgSettingsTab>(this.onlyTabs?.[0] ?? 'identity');
+  /** Inside the Settings shell the left panel lists the tabs: the URL's `?tab=` drives this page. */
+  protected readonly hosted = injectSettingsHosted();
+  private readonly followTab = bindTabQuery(ORG_SETTINGS_TABS, (t) => { if (!this.onlyTabs || this.onlyTabs.includes(t)) this.tab.set(t); });
   private readonly router = inject(Router);
   /** Switch tab and keep it in the URL (`?tab=`, replacing this history
    *  entry) so a reload, a shared link and back all return to it. */
@@ -352,7 +312,6 @@ export class OrganizationSettingsComponent implements OnInit {
     switch (this.tab()) {
       case 'identity': return this.orgNameSaving() || this.slugSaving();
       case 'patient': return this.pidSaving();
-      case 'sample': return this.sampleFmt.saving();
       default: return this.orderFmt.saving();
     }
   });
@@ -366,7 +325,6 @@ export class OrganizationSettingsComponent implements OnInit {
         if (this.slugDirty()) this.saveSlug();
         break;
       case 'patient': this.savePatientId(); break;
-      case 'sample': this.saveIdFormat(this.sampleFmt); break;
       case 'order': this.saveIdFormat(this.orderFmt); break;
     }
   }
@@ -486,7 +444,6 @@ export class OrganizationSettingsComponent implements OnInit {
   // Same engine as Patient ID but with a DYNAMIC prefix: the space code for
   // samples (e.g. MIC-2607-00001), the module code for orders (LAB-2607-000042).
   // The preview uses a stand-in prefix. Counter restarts monthly per space/module.
-  protected readonly sampleFmt = this.makeIdFormat('sample', 'MIC', 'yymm', 5);
   protected readonly orderFmt = this.makeIdFormat('order', 'LAB', 'yymm', 6);
 
   private makeIdFormat(scope: 'sample' | 'order', samplePrefix: string, defaultDate: string, defaultPad: number) {
@@ -517,7 +474,7 @@ export class OrganizationSettingsComponent implements OnInit {
     });
     return { scope, samplePrefix, date, sep, pad, serial, letters, saving, preview };
   }
-  private idFmts() { return [this.sampleFmt, this.orderFmt]; }
+  private idFmts() { return [this.orderFmt]; }
   /** Identity passthrough so the template can bind a format object via `@if (…; as f)`. */
   protected idSection<T>(f: T): T { return f; }
 
@@ -525,7 +482,7 @@ export class OrganizationSettingsComponent implements OnInit {
     // Deep link: …/organization?tab=<identity|patient|sample|order> (the
     // settings search and Lab settings link straight to a card).
     const t = this.router.parseUrl(this.router.url).queryParams['tab'];
-    if ((ORG_SETTINGS_TABS as readonly string[]).includes(t)) this.tab.set(t as OrgSettingsTab);
+    if ((ORG_SETTINGS_TABS as readonly string[]).includes(t) && (!this.onlyTabs || this.onlyTabs.includes(t))) this.tab.set(t as OrgSettingsTab);
     // Current tenant login handle (OPS-13).
     this.api.get<any>('/api/tenants/current').subscribe({
       next: t => {

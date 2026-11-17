@@ -42,11 +42,12 @@ describe('Start menu: what each user sees lists every entry once', () => {
     });
   }
 
-  it('Lab settings appears once for the lab admin and Inventory settings is named so', () => {
+  it('Settings is the only settings entry: no "Lab settings", "Inventory settings", Branding or hub labels', () => {
     const ctx = ctxFor(PERMS, true, 'front_desk', 'front_desk');
-    const labels = ALL.filter(i => navItemVisible(i, ctx)).map(i => i.label);
-    expect(labels.filter(l => /^lab settings$/i.test(l)).length).toBe(1);
-    expect(labels).toContain('Inventory settings');
-    expect(labels.filter(l => /^inventory config/i.test(l)).length).toBe(0);
+    const labels = ALL.filter(i => navItemVisible(i, ctx)).map(i => i.label.toLowerCase());
+    expect(labels.filter(l => l === 'settings').length).toBe(1);
+    for (const gone of ['lab settings', 'inventory settings', 'branding', 'admin overview', 'manage settings', 'report template', 'process builder', 'form flows', 'kpi cards']) {
+      expect(labels, gone).not.toContain(gone);
+    }
   });
 });

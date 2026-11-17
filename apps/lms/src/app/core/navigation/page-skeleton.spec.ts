@@ -29,6 +29,8 @@ describe('pageSkeletonFor (the destination frame per screen)', () => {
       '/admin/tests/CBC/edit': 'form',
       '/admin/tests/new': 'form',
       '/admin/lab-settings': 'form',
+      '/admin/lab/collection': 'form',
+      '/admin/org/numbers': 'form',
       '/lab/settings': 'tiles',
       '/admin/users': 'grid',
       '/admin/users/u1/edit': 'form',

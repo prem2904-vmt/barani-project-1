@@ -1,10 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import { renderBandPage } from './admin-band.spec-helpers';
-import { AdminModulesComponent } from './modules/modules.component';
-import { PartnersComponent } from './partners/partners.component';
-import { LabSettingsHubComponent } from '../lab/lab-settings-hub/lab-settings-hub.component';
-import { OpdAdminComponent } from '../opd/admin/opd-admin.component';
 import { CultureSettingsComponent } from '../lab/culture-settings/culture-settings.component';
 import { OpdSettingsComponent } from '../opd/admin/opd-settings.component';
 import { ModulePlaceholderComponent } from '../modules/module-placeholder.component';
@@ -44,55 +40,6 @@ export function hygiene(el: HTMLElement) {
 export const primaries = (el: HTMLElement) =>
   Array.from(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn .v-primary'))
     .filter(b => !b.closest('.pf-classic-only')).length;
-
-/** A real /api/tenants/modules payload: the entitlements service parses the
- *  response, so the generic [] stub would throw an unhandled error. */
-const modulesWire = { modulesJson: null, legacy: { messages: true, homeCollection: true, reports: true, inventory: true } };
-const renderModules = () => renderBandPage(AdminModulesComponent, {
-  getFor: (url) => (url.startsWith('/api/tenants/modules') ? modulesWire : []),
-});
-
-describe('ND audit D — Modules', () => {
-  it('module + feature toggles are slate switches (role=switch); the On/Off filter is a neutral kit segment', () => {
-    const p = renderModules();
-    p.cmp.state.set({ ipd: { enabled: true, features: {} } }); // (OPD is dark → not listed)
-    p.f.detectChanges();
-    const sw = p.el.querySelectorAll('.pf-mod .pf-toggle[role="switch"]');
-    expect(sw.length).toBeGreaterThan(3);
-    expect(p.el.querySelector('.pf-mod .pf-toggle[aria-checked="true"]')).not.toBeNull();
-    expect(p.el.querySelector('.pf-mod.pf-card .pf-card__icon')).not.toBeNull();
-    const seg = p.tools()!.querySelector('.pf-seg[role="radiogroup"]')!;
-    expect(seg.querySelectorAll('[role="radio"]').length).toBe(3);
-    expect(p.tools()!.querySelector('pf-segmented')).toBeNull();
-    expect(primaries(p.el)).toBe(0);   // toggles save live — no band actions
-    hygiene(p.el);
-  });
-
-  it('a switch click flips the module (persist is called)', () => {
-    const p = renderModules();
-    const spy = vi.spyOn(p.cmp as any, 'persist').mockImplementation(() => {});
-    (p.el.querySelector('.pf-mod .pf-mod__head .pf-toggle') as HTMLButtonElement).click();
-    expect(spy).toHaveBeenCalled();
-  });
-});
-
-describe('ND audit D — tile hubs (Lab settings, Partners, OPD)', () => {
-  for (const [name, cmp, sel] of [
-    ['Lab settings hub', LabSettingsHubComponent, '.pf-lsh__tile'],
-    ['Partners', PartnersComponent, '.pf-ph__tile'],
-    ['OPD', OpdAdminComponent, '.pf-lsh__tile'],
-  ] as const) {
-    it(`${name}: band search, tiles are kit cards with the violet icon chip, no primary`, () => {
-      const p = renderBandPage(cmp as any);
-      expect(p.bandInput()).not.toBeNull();
-      const tile = p.el.querySelector(sel)!;
-      expect(tile.classList.contains('pf-card')).toBe(true);
-      expect(tile.querySelector('.pf-card__icon svg[aria-hidden="true"]')).not.toBeNull();
-      expect(primaries(p.el)).toBe(0);
-      hygiene(p.el);
-    });
-  }
-});
 
 describe('ND audit D — settings pages (Microbiology, OPD settings)', () => {
   it('Microbiology: pf-card sections, slate supervisor switch, kit number fields, ONE primary (band Save)', () => {
@@ -183,14 +130,11 @@ describe('ND audit D — Branches', () => {
     expect(card).not.toBeNull();
     expect(p.el.querySelector('.pf-trunc')).toBeNull();
     expect(card.querySelector('.pf-br-name')!.textContent).toContain('Anna Nagar Collection Centre');
-    p.cmp.toggle('b1'); p.f.detectChanges();
     expect(card.textContent).not.toMatch(/[×→]/);
-    // Sub-branches were removed (owner, 2026-09-27): the open card is the
-    // departments board only, every department on it.
+    // Sub-branches were removed (owner, 2026-09-27); the departments board moved to Lab
+    // (owner 2026-11-17) — the branch card is just the branch.
     expect(card.textContent).not.toMatch(/sub-branch/i);
-    expect(card.querySelector('.pf-br-count')!.textContent).not.toContain('sub');
-    expect(card.querySelector('.pf-board')).not.toBeNull();
-    expect(card.querySelector('.pf-dcard-name')!.textContent).toContain('Haematology');
+    expect(card.querySelector('.pf-board')).toBeNull();
     hygiene(p.el);
   });
 });
@@ -466,13 +410,13 @@ describe('ND audit D — Lab settings', () => {
     ],
   });
 
-  it('autosave is stated in the band (neutral + violet check); no primary; cards have the BILLING header', () => {
+  it('autosave is stated (neutral + violet check); no primary; cards have the BILLING header', () => {
     const p = render();
-    const st = p.el.querySelector('pf-hero-band .pf-hb__actions .pf-savestate')!;
+    const st = p.el.querySelector('.pf-savestate')!;
     expect(st.textContent).toContain('Changes save automatically');
     expect(st.querySelector('svg')).not.toBeNull();
     expect(primaries(p.el)).toBe(0);
-    const cards = p.body()!.querySelectorAll('.pf-ls__card.pf-card');
+    const cards = p.el.querySelectorAll('.pf-ls__card.pf-card');
     expect(cards.length).toBeGreaterThan(2);
     expect(Array.from(cards).every(c => !!c.querySelector('.pf-card__head .pf-card__icon'))).toBe(true);
     hygiene(p.el);
@@ -482,9 +426,9 @@ describe('ND audit D — Lab settings', () => {
     const p = render();
     expect(p.el.querySelector('.pf-ls__gate[role="radiogroup"] .pf-ls__gate-opt[role="radio"]')).not.toBeNull();
     expect(p.el.querySelector('[class*="gate-opt--on"]')).toBeNull();
-    p.cmp.tab.set('rules'); p.f.detectChanges();
+    p.f.componentRef.setInput('cards', ['require-validation', 'no-scan', 'calc-constants']); p.f.detectChanges();
     const sw = p.el.querySelectorAll('.pf-ls__card .pf-toggle[role="switch"]');
-    expect(sw.length).toBeGreaterThanOrEqual(3);
+    expect(sw.length).toBe(2);
     expect(p.el.querySelectorAll('input.pf-input.pf-num').length).toBe(3);
     hygiene(p.el);
   });

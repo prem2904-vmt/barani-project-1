@@ -11,6 +11,7 @@ import { FilesLogoComponent } from '../../shared/components/files-logo/files-log
 import { FilesShareDialogComponent } from './files-share.dialog';
 import { gridThemeDark, gridThemeLight } from '../admin/tests/tests/grid-theme';
 import { SheetEditorService } from '../neuron/sheet-editor.service';
+import { startTemplates } from './files-start';
 import { FilesAccessService } from './files-access.service';
 import { FilesDeviceService } from './files-device.service';
 import { FILES_APPS, FILES_NAME, FilesApp, filesAppForKind, withAppExtension } from './files-registry';
@@ -182,20 +183,7 @@ export class FilesHomePage {
     : this.q().trim() ? 'Try a different name.' : this.primaryNew() ? 'Start a new file, or pick a template.' : 'Files made by your team will show up here.');
 
   /** Templates: the engines' built-in ones for apps this person can write in, then the lab's own; the lab can hide built-ins. */
-  protected readonly templates = computed(() => {
-    const hidden = new Set(this.access.settings()?.hiddenTemplates ?? []);
-    const out: { id: string; name: string; app: FilesApp; cmd?: { cmd: string; params: Record<string, unknown> }; own?: OfficeOwnTemplate }[] = [];
-    for (const a of this.writable()) for (const t of a.templates) if (!hidden.has(t.id)) out.push({ id: t.id, name: t.name, app: a, cmd: t.cmd });
-    for (const o of this.access.settings()?.ownTemplates ?? []) {
-      const a = filesAppForKind(o.kind);
-      if (!a || !this.writable().includes(a)) continue;
-      // The lab's own template of the same name replaces the built-in one (never two rows with one name).
-      const same = out.findIndex(x => x.app.id === a.id && !x.own && x.name.trim().toLowerCase() === o.name.trim().toLowerCase());
-      if (same >= 0) out.splice(same, 1);
-      if (!out.some(x => x.own && x.app.id === a.id && x.name.trim().toLowerCase() === o.name.trim().toLowerCase())) out.push({ id: 'own:' + o.id, name: o.name, app: a, own: o });
-    }
-    return out;
-  });
+  protected readonly templates = computed(() => startTemplates(this.writable(), this.access.settings()));
   protected readonly showTemplates = computed(() => this.templates().length > 0 && this.tab() !== 'trash' && !this.access.phone());
 
   // ── grid ──

@@ -47,9 +47,9 @@ export function notificationRoute(
     case 'dispatch_package': return { commands: ['/lab/receive'] };
     case 'appointment':      return { commands: ['/frontdesk/appointments'] };
     case 'user':             return { commands: id ? ['/admin/users', id, 'edit'] : ['/admin/users'] };
-    case 'vendor':           return { commands: ['/admin/vendors'] };
+    case 'vendor':           return { commands: ['/finance/credit-accounts'] };
     // WhatsApp billing / credits alerts → Settings → Communication → WhatsApp (the WhatsApp cards).
-    case 'whatsapp_billing': return { commands: ['/admin/communication'], queryParams: { tab: 'whatsapp' } };
+    case 'whatsapp_billing': return { commands: ['/admin/org/channels'], queryParams: { tab: 'whatsapp' } };
     case 'process_workflow': return { commands: ['/admin/process'] };
     // Generic order → open its collection drawer (the common actionable case);
     // a bare bill has no per-order screen, so land on the frontdesk queue.

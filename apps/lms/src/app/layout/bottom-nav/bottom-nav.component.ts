@@ -246,7 +246,6 @@ export class BottomNavComponent implements AfterViewInit, OnDestroy {
   protected sheetsOn(): boolean { return this.sheetEditor.available(); }
   protected goSheets(): void { this.closeMore(); this.router.navigate(['/files']); }
   protected goPasskeys(): void { this.closeMore(); this.router.navigate(['/security']); }
-  protected goSetup(): void { this.closeMore(); this.router.navigate(['/setup']); }
 
   protected onMoreNotifications(): void {
     this.closeMore();
