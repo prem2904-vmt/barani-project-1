@@ -1,3 +1,4 @@
+import { injectSettingsHosted } from '../../../shared/utils/settings-host';
 import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
@@ -76,7 +77,7 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
         subtitle="Every in-app alert the platform can raise — switch them all off at once, switch each one on or off, and set how long to wait before 'didn't happen in time' alerts fire.">
       </pf-screen-header>
 
-      <div class="pf-band-body">
+      <div class="pf-band-body" [class.pf-sgrid]="hosted">
       <!-- Master switch (owner): one lab-wide "All notifications" control above
            the list. Off = nothing sends (bells, phone / browser pushes, overdue
            watches) except critical result alerts; the per-alert choices below
@@ -84,7 +85,8 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
       @if (!loading()) {
         <!-- Master switch: ONE row above the list. Off = nothing sends except critical result alerts; the per-alert
              choices below are kept and come back when it is switched on. -->
-        <pf-setting-row class="pf-nc-master" [class.pf-nc-master--off]="!masterOn()" label="All notifications"
+        <pf-setting-group class="pf-nc-mastergroup" label="All notifications" scope="lab-wide" icon="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0">
+        <pf-setting-row class="pf-nc-master" [class.pf-nc-master--off]="!masterOn()" label="Every alert"
                         [hint]="masterOn() ? 'On for the whole lab — ' + enabledTotal() + ' of ' + rows().length + ' alerts are on. Critical result alerts always send.' : 'Off for the whole lab — your choices below are kept. Critical result alerts always send.'">
           <button type="button" class="pf-toggle pf-nc-switch pf-nc-master__switch" role="switch"
                   [attr.aria-checked]="masterOn()" [disabled]="masterSaving()"
@@ -93,6 +95,7 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </pf-setting-row>
+        </pf-setting-group>
       }
 
       <!-- Module filter chips (classic; the new design has them in the pill) -->
@@ -116,7 +119,7 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
       }
 
       @for (m of visibleModules(); track m) {
-        <pf-setting-group class="pf-nc-group" [class.pf-nc-paused]="!masterOn()" [label]="moduleLabel(m)">
+        <pf-setting-group class="pf-nc-group" [class.pf-nc-paused]="!masterOn()" [label]="moduleLabel(m)" icon="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0">
           <span group-tools class="pf-nc-section__meta pf-num">{{ enabledCount(m) }}/{{ countFor(m) }} on</span>
           @for (r of rowsFor(m); track r.key) {
             <div class="pf-nc-card" data-testid="alert-row" [class.pf-nc-card--live]="r.critical" [class.pf-nc-card--off]="!r.enabled">
@@ -287,6 +290,8 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
   `]
 })
 export class NotificationsConfigComponent implements OnInit {
+  /** In the Settings shell: the alert groups are cards in the page grid. */
+  protected readonly hosted = injectSettingsHosted();
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);

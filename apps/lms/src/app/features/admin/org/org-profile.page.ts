@@ -1,4 +1,4 @@
-import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
+import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, Injector, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -28,7 +28,7 @@ const SHORT_NAME_MAX = 30;
 @Component({
   selector: 'pf-org-profile',
   standalone: true,
-  imports: [SettingRowComponent, BusyDirective, FormsModule, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, ImageUploadComponent],
+  imports: [SettingRowComponent, SettingGroupComponent, BusyDirective, FormsModule, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, ImageUploadComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10" data-testid="org-profile">
@@ -49,7 +49,8 @@ const SHORT_NAME_MAX = 30;
       </pf-screen-header>
 
       <div class="pf-band-body">
-        <div class="pf-op__rows">
+        <div class="pf-op__rows pf-sgrid">
+          <pf-setting-group label="Name" scope="everywhere" icon="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01">
           <pf-setting-row data-testid="op-name" label="Organization name" hint="Shown across the app and printed on reports and bills.">
             <input class="pf-input pf-op__in" data-testid="op-name-input" maxlength="80" aria-label="Organization name"
                    [ngModel]="name()" (ngModelChange)="name.set($event)" placeholder="e.g. Arun Labs" />
@@ -58,6 +59,8 @@ const SHORT_NAME_MAX = 30;
             <input class="pf-input pf-op__in pf-op__in--short" data-testid="op-short-input" [attr.maxlength]="shortMax" aria-label="Short name for the top bar"
                    [ngModel]="shortName()" (ngModelChange)="onShortName($event)" placeholder="e.g. ARUN" />
           </pf-setting-row>
+          </pf-setting-group>
+          <pf-setting-group label="Logo" scope="top bar, reports and bills" icon="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM9 7a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM21 15l-5-5L5 21">
           <pf-setting-row data-testid="op-logo" label="Logo" hint="One logo for the top bar, reports and bills.">
             <pf-image-upload [url]="logoUrl()" (urlChange)="logoUrl.set($event)"></pf-image-upload>
           </pf-setting-row>
@@ -78,10 +81,13 @@ const SHORT_NAME_MAX = 30;
               }
             </span>
           </pf-setting-row>
+          </pf-setting-group>
+          <pf-setting-group label="Sign-in" scope="all staff" icon="M7.5 11a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9ZM21 2l-9.6 9.6M15.5 7.5l3 3L22 7l-3-3">
           <pf-setting-row data-testid="op-handle" label="Login handle" hint="What staff type on the sign-in screen. Changing it changes how everyone logs in.">
             <input class="pf-input pf-op__in" data-testid="op-slug-input" maxlength="40" aria-label="Login handle" [ngModel]="slug()" (ngModelChange)="onSlug($event)"
                    placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
           </pf-setting-row>
+          </pf-setting-group>
         </div>
         <div class="pf-classic-only pf-op__save">
           <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving() || !canSave()" [pfBusy]="saving()" (click)="save()">{{ saving() ? 'Saving…' : 'Save' }}</button>
@@ -90,7 +96,7 @@ const SHORT_NAME_MAX = 30;
     </section>
   `,
   styles: [`
-    .pf-op__in { width: 300px; max-width: 100%; height: 36px; min-height: 36px; }
+    .pf-op__in { width: 260px; max-width: 100%; height: 36px; min-height: 36px; }
     .pf-op__in--short { width: 160px; }
     .pf-op__hint { font-size: 12.5px; color: var(--text-tertiary); line-height: 1.4; }
     .pf-op__preview { display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; height: 34px;

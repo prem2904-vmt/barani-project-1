@@ -25,7 +25,7 @@ import { SpacePrefixesCardComponent } from './space-prefixes-card.component';
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
         {{ fmt.saving() ? 'Saving…' : 'Save' }}
       </button>
-      <pf-setting-group label="Format" scope="all branches" id="format"><pf-sample-id-format-card #fmt></pf-sample-id-format-card></pf-setting-group>
+      <pf-setting-group label="Format" scope="all branches" id="format" [wide]="true"><pf-sample-id-format-card #fmt></pf-sample-id-format-card></pf-setting-group>
       <pf-space-prefixes-card></pf-space-prefixes-card>
       <pf-lab-settings [cards]="['scan-mode', 'lab-structure', 'label-code']" [groups]="groups" [embedded]="true"></pf-lab-settings>
     </pf-lab-page>

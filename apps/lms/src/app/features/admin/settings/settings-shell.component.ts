@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, Injector, OnDestroy, PLATFORM_ID, computed, effect, inject, signal, untracked,
+  ChangeDetectionStrategy, Component, ElementRef, Injector, OnDestroy, PLATFORM_ID, computed, effect, inject, signal, untracked,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -38,24 +38,19 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
   providers: [{ provide: SETTINGS_HOST, useFactory: createSettingsHost }],
   template: `
     <section class="pf-ss pf-band-page" data-testid="settings-shell">
-      <!-- ONE slim band row (back · lab · page switch · the page's actions); a search pill only when the page has a search. -->
-      <pf-hero-band [shellBand]="true" [back]="true" [backAction]="backToSection" [slim]="!host.search()"
-                    placeholder="Search" [value]="q()" (valueChange)="q.set($event)">
-        <ng-container band-center><pf-settings-siblings></pf-settings-siblings></ng-container>
+      <!-- Test Master's band: back · lab · the search pill (the page's own search, else "Search <setting>" filtering
+           the rows) with the page switch · the page's save state and actions. -->
+      <pf-hero-band [shellBand]="true" [back]="true" [backAction]="backToSection"
+                    [placeholder]="'Search ' + itemLabel()" [value]="q()" (valueChange)="q.set($event)">
+        <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
       </pf-hero-band>
       <div class="pf-band-body pf-band-body--fill pf-ss__body">
         @if (single()) {
-          <section class="pf-card pf-ss__card" [attr.aria-label]="itemLabel()">
-            <header class="pf-card__head">
-              <span class="pf-card__icon" aria-hidden="true">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="itemIcon()"/></svg>
-              </span>
-              <h2 class="pf-card__label pf-ss__title" data-testid="tp-nav-title">{{ itemLabel() }}</h2>
-              @if (itemBlurb()) { <span class="pf-card__note pf-ss__note">{{ itemBlurb() }}</span> }
-            </header>
-            <div class="pf-ss__scroll"><div class="pf-ss__main" data-testid="settings-main"><router-outlet></router-outlet></div></div>
-          </section>
+          <!-- ONE page of group cards in a grid that fills the width — no wrapper card, no side card. -->
+          <div class="pf-ss__scroll" [attr.aria-label]="itemLabel()">
+            <div class="pf-ss__main pf-ss__main--grid" data-testid="settings-main"><router-outlet></router-outlet></div>
+            @if (q().trim() && noMatch()) { <p class="pf-band-empty" data-testid="ss-no-match">No settings match "{{ q() }}".</p> }
+          </div>
         } @else {
           <pf-two-panel
             [groups]="groups()"
@@ -86,10 +81,10 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
     .pf-ss__body { min-height: 0; }
     :root:not(.design-new) .pf-ss { display: flex; flex-direction: column; height: calc(100dvh - var(--top-strip-h, 64px)); padding: 0 16px; }
     :root:not(.design-new) .pf-ss__body { flex: 1; display: flex; flex-direction: column; padding-bottom: 12px; }
-    .pf-ss__card { flex: 1 1 auto; min-height: 0; }
+    .pf-ss__main--grid { padding: 2px 2px 24px !important; }
     .pf-ss__title { margin: 0; flex: none; }
     .pf-ss__note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pf-ss__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+    .pf-ss__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; margin: 0 -4px; padding: 0 4px; }
     .pf-ss__main { padding: 14px 24px 24px; }
     @media (max-width: 767px) { .pf-ss__main { padding: 8px 14px 16px; } .pf-ss__note { display: none; } }
   `],
@@ -154,6 +149,30 @@ export class SettingsShellComponent implements OnDestroy {
   /** The hosted page's band parts (its actions, its search) — this shell's own SETTINGS_HOST. */
   protected readonly host = inject(SETTINGS_HOST);
   readonly q = signal('');
+  readonly noMatch = signal(false);
+  private readonly hostEl = inject(ElementRef<HTMLElement>);
+  /** The band pill filters the rows on this page (label + hint text); a group card with no match hides. */
+  private readonly filterRows = effect(() => {
+    const words = this.q().trim().toLowerCase();
+    this.url();
+    if (!this.browser) return;
+    setTimeout(() => {
+      const root = (this.hostEl.nativeElement as HTMLElement).querySelector('[data-testid="settings-main"]');
+      if (!root) return;
+      let shown = 0;
+      root.querySelectorAll<HTMLElement>('pf-setting-row, .pf-nc-card').forEach((r) => {
+        const hit = !words || (r.textContent ?? '').toLowerCase().includes(words);
+        r.hidden = !hit;
+        if (hit) shown++;
+      });
+      root.querySelectorAll<HTMLElement>('pf-setting-group:not(.pf-sgroup--plain)').forEach((g) => {
+        const rows = g.querySelectorAll('pf-setting-row, .pf-nc-card');
+        g.hidden = !!words && rows.length > 0 && Array.from(rows).every((r) => (r as HTMLElement).hidden)
+          && !(g.textContent ?? '').toLowerCase().includes(words);
+      });
+      this.noMatch.set(!!words && shown === 0);
+    }, 0);
+  });
   /** The band's back chevron: where the person came from (an in-app link), else up to this setting's section. */
   readonly backToSection = (): void => this.navBack.back();
 

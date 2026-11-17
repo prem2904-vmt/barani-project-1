@@ -15,12 +15,14 @@ export interface SettingsHost {
   readonly actions: WritableSignal<TemplateRef<unknown> | null>;
   /** The hosted page's band search field (icon + input / its custom search), shown in the shell's band pill. */
   readonly search: WritableSignal<TemplateRef<unknown> | null>;
+  /** A hosted page's save state ("Saves automatically" / "Saving…"), shown small and muted in the shell's band. */
+  readonly status: WritableSignal<TemplateRef<unknown> | null>;
 }
 export const SETTINGS_HOST = new InjectionToken<SettingsHost>('pf.settings.host');
 
 /** A fresh host (the shell provides one per instance). */
 export function createSettingsHost(): SettingsHost {
-  return { hosted: true, actions: signal(null), search: signal(null) };
+  return { hosted: true, actions: signal(null), search: signal(null), status: signal(null) };
 }
 
 /** True while the page is rendered inside the Settings shell. Call from an injection context. */

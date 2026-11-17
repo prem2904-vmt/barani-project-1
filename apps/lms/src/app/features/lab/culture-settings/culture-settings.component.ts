@@ -1,3 +1,4 @@
+import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
@@ -31,9 +32,36 @@ const STAGE_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-culture-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
+  imports: [SettingRowComponent, SettingGroupComponent, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (embedded()) {
+      <!-- Inside Results and validation: two group cards in the page grid; Save is the page band's primary. -->
+      @if (formSkeleton()) {
+        <pf-setting-group label="Microbiology"><pf-skeleton-form [fields]="3" [cols]="1" label="Loading culture settings…"></pf-skeleton-form></pf-setting-group>
+      } @else {
+        <pf-setting-group label="Stage lock" scope="microbiology" id="micro" icon="M6 11h12a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2ZM8 11V7a4 4 0 0 1 8 0v4">
+          <pf-setting-row label="Auto-release after" hint="An idle locked stage goes back to the pool. 0 = never.">
+            <span class="pf-cs__inline"><input id="pf-cs-lock" type="number" min="0" max="1440" inputmode="numeric" class="pf-input pf-num pf-cs__num" aria-label="Auto-release after (minutes idle)" [(ngModel)]="lockTimeoutMinutes" /> minutes idle</span>
+          </pf-setting-row>
+          <pf-setting-row label="Supervisor force-release" hint="A supervisor can release a stage another tech holds.">
+            <button type="button" class="pf-toggle pf-cs__check" role="switch" [attr.aria-checked]="allowSupervisorTakeover"
+                    aria-label="Allow a supervisor to force-release a stage another tech holds"
+                    (click)="allowSupervisorTakeover = !allowSupervisorTakeover">
+              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+            </button>
+          </pf-setting-row>
+        </pf-setting-group>
+        <pf-setting-group label="Turnaround targets" scope="microbiology" hint="Each stage raises an overdue alert past its target." icon="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v5l3 2">
+          @for (t of stageTats(); track t.stageKey) {
+            <pf-setting-row [label]="label(t.stageKey)">
+              <span class="pf-cs__inline"><input [id]="'pf-cs-tat-' + t.stageKey" type="number" min="1" max="336" inputmode="numeric" class="pf-input pf-num pf-cs__num"
+                     [attr.aria-label]="label(t.stageKey) + ' (hours)'" [ngModel]="t.tatHours" (ngModelChange)="setTat(t.stageKey, $event)" /> hours</span>
+            </pf-setting-row>
+          }
+        </pf-setting-group>
+      }
+    } @else {
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full" [class.pf-cs--embedded]="embedded()">
       @if (theme.isNewDesign() && !embedded()) {
         <!-- Band (owner): no search — the two cards become tabs in a
@@ -72,14 +100,6 @@ const STAGE_LABELS: Record<string, string> = {
 
       <div class="pf-band-body">
       <div class="pf-band-narrow">
-      @if (embedded()) {
-        <!-- Inside the Results and validation page there is no band: Save sits here. -->
-        <div class="pf-cs__embedsave">
-          <button type="button" class="pf-cs__save press" data-testid="culture-save" [disabled]="saving() || formSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
-            {{ saving() ? 'Saving…' : 'Save changes' }}
-          </button>
-        </div>
-      }
       @if (formSkeleton()) {
         <!-- Settings on their way: the card's fields as a skeleton (held
              600ms) — never the defaults dressed up as the saved values. -->
@@ -132,8 +152,12 @@ const STAGE_LABELS: Record<string, string> = {
       </div>
       </div>
     </section>
+    }
   `,
   styles: [`
+    :host-context(.pf-sgrid) { display: contents; }
+    .pf-cs__inline { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
+    .pf-cs__inline .pf-cs__num { width: 76px; height: 32px; min-height: 32px; }
     .pf-cs__save { padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 700; color: #fff;
       background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-cs__save:disabled { opacity: .5; cursor: default; }

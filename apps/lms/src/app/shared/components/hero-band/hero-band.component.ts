@@ -107,7 +107,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
           }
         </div>
         @if (slim()) { <div class="pf-hb__center"><ng-content select="[band-center]"></ng-content></div> }
-        <div class="pf-hb__actions">@if (shellBand() && host?.actions(); as pageActions) {<ng-container *ngTemplateOutlet="pageActions"></ng-container>}<ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
+        <div class="pf-hb__actions">@if (shellBand() && host?.status(); as pageStatus) {<ng-container *ngTemplateOutlet="pageStatus"></ng-container>}@if (shellBand() && host?.actions(); as pageActions) {<ng-container *ngTemplateOutlet="pageActions"></ng-container>}<ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
       </div>
 
       @if (!slim()) {

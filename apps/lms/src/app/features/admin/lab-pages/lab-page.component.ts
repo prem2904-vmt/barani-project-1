@@ -43,7 +43,7 @@ export function labPageTab(page: LabPageDef): { tab: Signal<string>; pick: (id: 
         <ng-container band-actions><ng-content select="[page-actions]"></ng-content></ng-container>
       </pf-hero-band>
       <div class="pf-band-body">
-        <div class="pf-lp__col" [attr.data-lab-tab]="tab()">
+        <div class="pf-lp__col pf-sgrid" [attr.data-lab-tab]="tab()">
           <ng-content></ng-content>
         </div>
       </div>

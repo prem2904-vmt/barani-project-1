@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { MonoTypeOperatorFunction, defer, finalize } from 'rxjs';
+import { NgTemplateOutlet } from '@angular/common';
+import { SETTINGS_HOST } from '../../../shared/utils/settings-host';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -13,7 +15,7 @@ import { Role, User } from '../../../shared/models/user.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
+import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { BusyComponent, SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { spinDelay } from '../../../shared/utils/busy';
 import { LAB_SPACES_PATH, LAB_SPACES_QUERY } from '../../../shared/utils/lab-settings-pages';
@@ -33,6 +35,20 @@ export type LabSettingsCard =
   | 'counters' | 'scan-mode' | 'queue-focus' | 'lab-structure' | 'calc-constants' | 'no-scan'
   | 'label-code' | 'require-validation' | 'tech-notes' | 'auto-assign';
 
+/** Each card's group card: label, scope (once per group) and head icon. */
+const LS_GROUP: Record<LabSettingsCard, { label: string; scope: string; icon: string }> = {
+  counters: { label: 'Counters', scope: 'this branch', icon: 'M3 3h18v4H3zM5 7v14h14V7M9 11h6' },
+  'scan-mode': { label: 'Finding a sample', scope: 'all branches', icon: 'M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14' },
+  'label-code': { label: 'Labels', scope: 'this branch', icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3' },
+  'queue-focus': { label: 'Queue', scope: 'this branch', icon: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01' },
+  'lab-structure': { label: 'Structure', scope: 'this branch', icon: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z' },
+  'calc-constants': { label: 'Calculations', scope: 'all branches', icon: 'M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2ZM8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01' },
+  'no-scan': { label: 'Claiming', scope: 'all branches', icon: 'M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z' },
+  'require-validation': { label: 'Validation', scope: 'this branch', icon: 'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11' },
+  'tech-notes': { label: 'Report notes', scope: 'this branch', icon: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M9 13h6M9 17h4' },
+  'auto-assign': { label: 'Auto-assign', scope: 'this branch', icon: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' },
+};
+
 interface AutoAssignConfig {
   id?: string;
   tenantId?: string;
@@ -49,22 +65,14 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, SelectComponent, BusyComponent, SkeletonCardComponent, SegmentedComponent, SettingRowComponent],
+  imports: [NgTemplateOutlet, FormsModule, SelectComponent, BusyComponent, SkeletonCardComponent, SegmentedComponent, SettingRowComponent, SettingGroupComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- A card host: the Lab settings pages (Sample numbers, Collection and queues, Results and validation, Report
          options) list the settings they own through [cards]; each is ONE minimal row (DESIGN-V2 rule 5) — label +
          one hint line left, the control right. Every change autosaves. -->
-    <div class="pf-ls__host">
-      @if (firstLoad()) {
-        <div class="pf-ls__skel">
-          <pf-skeleton-card [lines]="3" label="Loading lab settings…"></pf-skeleton-card>
-        </div>
-      } @else {
-
-      @if (!embedded()) {
-        <!-- Where these apply: "This branch" rows are for the signed-in branch; "All branches" rows everywhere. -->
-        <div class="pf-ls__meta">
+    <!-- The save state: in the Settings shell it rides the band (small, muted); elsewhere it heads the rows. -->
+    <ng-template #statusTpl>
           <span class="pf-savestate pf-ls__savestate" role="status" title="Every change saves as you make it"
                 [attr.aria-busy]="savingShown() ? 'true' : null">
             @if (savingShown()) {
@@ -75,18 +83,30 @@ interface AutoAssignConfig {
               <span class="pf-ls__savestate-t">Saves automatically</span>
             }
           </span>
+    </ng-template>
+    <div class="pf-ls__host">
+      @if (firstLoad()) {
+        <div class="pf-ls__skel">
+          <pf-skeleton-card [lines]="3" label="Loading lab settings…"></pf-skeleton-card>
+        </div>
+      } @else {
+
+      @if (!embedded() && !host) {
+        <div class="pf-ls__meta">
+          <ng-container *ngTemplateOutlet="statusTpl"></ng-container>
         </div>
       }
 
-      @if (show('counters')) {
-        @if (groupId('counters'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('counters') }}@if (groupScope('counters'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+      @if (show('counters') && !show('queue-focus')) {
+        <pf-setting-group [label]="gLabel('counters')" [scope]="groupScope('counters')" [id]="groupId('counters')" [icon]="gIcon('counters')">
         <pf-setting-row class="pf-ls__card" label="Counters and collection" [hint]="'Billing: ' + (billingMode() === 'separate_counter' ? 'separate counter' : 'front desk') + ' · Collection: ' + (collectionMode() === 'dedicated_counter' ? 'dedicated counter' : 'front desk') + ' — set in Work steps.'">
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ls__wfbtn" (click)="goWorkflow()">Edit in Work steps</button>
         </pf-setting-row>
+        </pf-setting-group>
       }
 
       @if (show('scan-mode')) {
-        @if (groupId('scan-mode'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('scan-mode') }}@if (groupScope('scan-mode'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+        <pf-setting-group [label]="gLabel('scan-mode')" [scope]="groupScope('scan-mode')" [id]="groupId('scan-mode')" [icon]="gIcon('scan-mode')">
         <pf-setting-row class="pf-ls__card" label="Find a sample" [hint]="optDesc(scanModeOptions, scanMode())">
           <pf-segmented class="pf-ls__gate" size="sm" aria-label="Find a sample" [options]="seg(scanModeOptions)" [value]="scanMode()"
                         (valueChange)="setScanMode($any($event))"></pf-segmented>
@@ -107,18 +127,20 @@ interface AutoAssignConfig {
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </pf-setting-row>
+        </pf-setting-group>
       }
 
       @if (show('label-code')) {
-        @if (groupId('label-code'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('label-code') }}@if (groupScope('label-code'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+        <pf-setting-group [label]="gLabel('label-code')" [scope]="groupScope('label-code')" [id]="groupId('label-code')" [icon]="gIcon('label-code')">
         <pf-setting-row class="pf-ls__card" label="Barcode on tube labels" [hint]="optDesc(labelCodeOptions, labelCodeMode())">
           <pf-segmented class="pf-ls__gate" size="sm" aria-label="Barcode on tube labels" [options]="seg(labelCodeOptions)" [value]="labelCodeMode()"
                         (valueChange)="setLabelCodeMode($any($event))"></pf-segmented>
         </pf-setting-row>
+        </pf-setting-group>
       }
 
       @if (show('queue-focus')) {
-        @if (groupId('queue-focus'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('queue-focus') }}@if (groupScope('queue-focus'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+        <pf-setting-group [label]="gLabel('queue-focus')" [scope]="groupScope('queue-focus')" [id]="groupId('queue-focus')" [icon]="gIcon('queue-focus')">
         <pf-setting-row class="pf-ls__card" label="Queue focus"
                         [hint]="queueFocusMode() === 'auto' ? 'Follows the lab structure — now ' + (effectiveQueueFocus() === 'sample' ? 'by sample.' : 'by patient.') : optDesc(queueFocusOptions, queueFocusSelected())">
           @if (queueFocusMode() !== 'auto') {
@@ -127,18 +149,25 @@ interface AutoAssignConfig {
           <pf-segmented class="pf-ls__gate" size="sm" aria-label="Queue focus" [options]="seg(queueFocusOptions)" [value]="queueFocusSelected()"
                         (valueChange)="setQueueFocusMode($any($event))"></pf-segmented>
         </pf-setting-row>
+        @if (show('counters')) {
+        <pf-setting-row class="pf-ls__card" label="Counters and collection" [hint]="'Billing: ' + (billingMode() === 'separate_counter' ? 'separate counter' : 'front desk') + ' · Collection: ' + (collectionMode() === 'dedicated_counter' ? 'dedicated counter' : 'front desk') + ' — set in Work steps.'">
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ls__wfbtn" (click)="goWorkflow()">Edit in Work steps</button>
+          </pf-setting-row>
+        }
+        </pf-setting-group>
       }
 
       @if (show('lab-structure')) {
-        @if (groupId('lab-structure'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('lab-structure') }}@if (groupScope('lab-structure'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+        <pf-setting-group [label]="gLabel('lab-structure')" [scope]="groupScope('lab-structure')" [id]="groupId('lab-structure')" [icon]="gIcon('lab-structure')">
         <pf-setting-row class="pf-ls__card" label="Lab structure" [hint]="optDesc(labStructureOptions, labStructure())">
           <pf-segmented class="pf-ls__gate" size="sm" aria-label="Lab structure" [options]="seg(labStructureOptions)" [value]="labStructure()"
                         (valueChange)="setLabStructure($any($event))"></pf-segmented>
         </pf-setting-row>
+        </pf-setting-group>
       }
 
       @if (show('calc-constants')) {
-        @if (groupId('calc-constants'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('calc-constants') }}@if (groupScope('calc-constants'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+        <pf-setting-group [label]="gLabel('calc-constants')" [scope]="groupScope('calc-constants')" [id]="groupId('calc-constants')" [icon]="gIcon('calc-constants')">
         <pf-setting-row class="pf-ls__card" label="Calculation constants" hint="ISI and MNPT drive INR; Normal HCT the reticulocyte index. Blank = the default shown.">
           <label class="pf-ls__mini"><span>ISI</span>
             <input class="pf-input pf-num" type="number" step="0.01" min="0" placeholder="1.0" aria-label="ISI"
@@ -150,30 +179,33 @@ interface AutoAssignConfig {
             <input class="pf-input pf-num" type="number" step="1" min="1" max="99" placeholder="45" aria-label="Normal HCT (%)"
                    [ngModel]="calcNormalHct()" (ngModelChange)="calcNormalHct.set($event)" (blur)="saveCalcConstants()" /></label>
         </pf-setting-row>
+        </pf-setting-group>
       }
 
       @if (show('no-scan')) {
-        @if (groupId('no-scan'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('no-scan') }}@if (groupScope('no-scan'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+        <pf-setting-group [label]="gLabel('no-scan')" [scope]="groupScope('no-scan')" [id]="groupId('no-scan')" [icon]="gIcon('no-scan')">
         <pf-setting-row class="pf-ls__card" label="Allow no-scan claim" hint="A supervisor can claim a test without scanning (broken barcodes). Every override is logged.">
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="allowNoScan()" aria-label="Allow no-scan claim (supervisor override)"
                   (click)="setAllowNoScan(!allowNoScan())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </pf-setting-row>
+        </pf-setting-group>
       }
 
       @if (show('require-validation')) {
-        @if (groupId('require-validation'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('require-validation') }}@if (groupScope('require-validation'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+        <pf-setting-group [label]="gLabel('require-validation')" [scope]="groupScope('require-validation')" [id]="groupId('require-validation')" [icon]="gIcon('require-validation')">
         <pf-setting-row class="pf-ls__card" label="Require validation for all results" hint="Every result needs a pathologist — even direct-flow tests that would auto-validate.">
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="requireValidation()" aria-label="Require validation for all results"
                   (click)="setRequireValidation(!requireValidation())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </pf-setting-row>
+        </pf-setting-group>
       }
 
       @if (show('tech-notes')) {
-        @if (groupId('tech-notes'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('tech-notes') }}@if (groupScope('tech-notes'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+        <pf-setting-group [label]="gLabel('tech-notes')" [scope]="groupScope('tech-notes')" [id]="groupId('tech-notes')" [icon]="gIcon('tech-notes')">
         <pf-setting-row class="pf-ls__card" data-testid="ls-tech-notes" label="Technician notes on report"
                         hint="Notes written at result entry print on the final report (never on a preliminary). Off hides them at entry; written notes still print.">
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="techReportNotes()"
@@ -181,10 +213,11 @@ interface AutoAssignConfig {
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </pf-setting-row>
+        </pf-setting-group>
       }
 
       @if (show('auto-assign')) {
-        @if (groupId('auto-assign'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('auto-assign') }}@if (groupScope('auto-assign'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+        <pf-setting-group [label]="gLabel('auto-assign')" [scope]="groupScope('auto-assign')" [id]="groupId('auto-assign')" [icon]="gIcon('auto-assign')" [wide]="true">
         <pf-setting-row class="pf-ls__card" label="Auto-assign technicians" hint="On receive, each test goes to its department's people or least-loaded role member. Off: the shared bench queue.">
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignEnabled()" aria-label="Auto-assign technicians"
                   (click)="setAutoAssignEnabled(!autoAssignEnabled())">
@@ -232,12 +265,15 @@ interface AutoAssignConfig {
             }
           </div>
         }
+        </pf-setting-group>
       }
       }
     </div>
   `,
   styles: [`
-    :host { display: block; }
+    /* The group cards are items of the page's .pf-sgrid. */
+    :host { display: contents; }
+    .pf-ls__host { display: contents; }
     .pf-ls__group { display: flex; align-items: center; min-height: 36px; padding-top: 14px; margin-top: 6px; border-top: 1px solid var(--pf-line); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); scroll-margin-top: 8px; }
     .pf-ls__host > .pf-ls__group:first-child, .pf-ls__meta + .pf-ls__group { border-top: 0; margin-top: 0; }
     .pf-ls__gscope { font-weight: 500; letter-spacing: .04em; text-transform: none; color: var(--text-tertiary); opacity: .85; }
@@ -291,10 +327,22 @@ export class LabSettingsComponent implements OnInit {
   private readonly router = inject(Router);
   /** Which cards to show; null = all (the legacy single page). */
   readonly cards = input<readonly LabSettingsCard[] | null>(null);
+  /** The Settings shell (when hosted): the save state goes to its band. */
+  protected readonly host = inject(SETTINGS_HOST, { optional: true });
+  private readonly statusTpl = viewChild<TemplateRef<unknown>>('statusTpl');
+  private readonly bandStatus = (() => {
+    const host = this.host;
+    if (!host) return null;
+    inject(DestroyRef).onDestroy(() => { if (host.status() === this.statusTpl()) host.status.set(null); });
+    return effect(() => { const t = this.statusTpl(); if (t && !this.embedded()) host.status.set(t); });
+  })();
   /** Group label (small uppercase) shown before a card's rows — the page's categories when it is ONE card. */
   readonly groups = input<Partial<Record<LabSettingsCard, { id: string; label: string; scope?: string }>>>({});
-  groupScope(key: LabSettingsCard): string | null { return this.groups()[key]?.scope ?? null; }
+  groupScope(key: LabSettingsCard): string | null { return this.groups()[key]?.scope ?? LS_GROUP[key].scope; }
   groupLabel(key: LabSettingsCard): string | null { return this.groups()[key]?.label ?? null; }
+  /** The group card's label: the page's, else this card's own name. */
+  gLabel(key: LabSettingsCard): string { return this.groups()[key]?.label || LS_GROUP[key].label; }
+  gIcon(key: LabSettingsCard): string { return LS_GROUP[key].icon; }
   groupId(key: LabSettingsCard): string | null { return this.groups()[key]?.id ?? null; }
   /** Inside a page that already says where rows apply and how they save (several hosts on one card): no meta line. */
   readonly embedded = input(false);

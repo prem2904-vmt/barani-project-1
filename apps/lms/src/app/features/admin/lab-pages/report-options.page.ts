@@ -21,10 +21,6 @@ import { ReportSendingCardComponent } from './report-sending-card.component';
     <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)">
       <pf-lab-settings [cards]="['tech-notes']" [groups]="{ 'tech-notes': { id: 'notes', label: 'Report notes', scope: 'this branch' } }"></pf-lab-settings>
       <pf-setting-group label="Sending" id="sending"><pf-report-sending-card></pf-report-sending-card></pf-setting-group>
-      <p class="pf-ro__back">
-        The layout of the report itself is in
-        <a class="pf-ro__link" routerLink="/admin/reports" [queryParams]="{ tab: 'table' }" data-testid="ro-design-link">Report design</a>.
-      </p>
     </pf-lab-page>
   `,
   styles: [`

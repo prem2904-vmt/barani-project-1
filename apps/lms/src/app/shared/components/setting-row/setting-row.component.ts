@@ -28,10 +28,10 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
     /* Two columns (owner 2026-11-17): a fixed label column, the control column starts right after it and is
        LEFT-aligned, so every control on the card lines up on one vertical edge. Equal row rhythm. */
     :host {
-      display: grid; grid-template-columns: 300px minmax(0, 1fr); align-items: center; gap: 6px 24px;
+      display: grid; grid-template-columns: minmax(150px, 2fr) minmax(0, 3fr); align-items: center; gap: 6px 20px;
       min-height: 56px; padding: 10px 0; border-bottom: 1px solid var(--pf-line, var(--glass-border));
     }
-    :host(:last-child), :host(:has(+ pf-setting-group)) { border-bottom: 0; }
+    :host(:last-child) { border-bottom: 0; }
     :host(.pf-srow--stack) { grid-template-columns: minmax(0, 1fr); }
     .pf-srow__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .pf-srow__label { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; font-weight: 500; color: var(--text-primary); line-height: 1.35; }
@@ -39,7 +39,6 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
     :host(.pf-srow--off) .pf-srow__label, :host(.pf-srow--off) .pf-srow__hint { opacity: .6; }
     .pf-srow__ctl { display: flex; align-items: center; justify-content: flex-start; gap: 8px 10px; flex-wrap: wrap; min-width: 0; }
     :host(.pf-srow--stack) .pf-srow__ctl { justify-content: flex-start; }
-    @media (max-width: 900px) { :host { grid-template-columns: 220px minmax(0, 1fr); } }
     @media (max-width: 767px) { :host { grid-template-columns: minmax(0, 1fr); } }
   `],
 })
@@ -50,42 +49,72 @@ export class SettingRowComponent {
   readonly muted = input(false);
 }
 
-/** A small uppercase group label over a run of rows (a card's category when the setting is one card). */
+/** Default icon of a group card (sliders). */
+export const SETTING_GROUP_ICON = 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4';
+
+/**
+ * ONE group of rows = ONE compact Test Master card (owner 2026-11-17): `pf-card__head` (icon + uppercase label +
+ * the scope note once, e.g. "all branches") and the rows. A card-style setting lays its group cards out in the
+ * `.pf-sgrid` grid that fills the width (1 → 2 → 3 → 4 columns). `wide` spans the whole grid row (a format line,
+ * a per-department table). Without a label it is a plain anchor (`?tab=` target) around rows.
+ */
 @Component({
   selector: 'pf-setting-group',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'pf-sgroup', '[class.pf-sgroup--plain]': '!label()', '[attr.data-group]': 'id()' },
+  host: {
+    class: 'pf-sgroup',
+    '[class.pf-sgroup--plain]': '!label()',
+    '[class.pf-sgroup--wide]': 'wide()',
+    '[attr.data-group]': 'id()',
+  },
   template: `
     @if (label()) {
-      <div class="pf-sgroup__head">
-        <span class="pf-sgroup__label">{{ label() }}@if (scope()) {<span class="pf-sgroup__scope"> · {{ scope() }}</span>}</span>
-        <span class="pf-sgroup__tools"><ng-content select="[group-tools]"></ng-content></span>
-      </div>
+      <section class="pf-card pf-sgroup__card" [attr.aria-label]="label()">
+        <header class="pf-card__head pf-sgroup__head">
+          <span class="pf-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="icon() || defaultIcon"/></svg>
+          </span>
+          <h3 class="pf-card__label pf-sgroup__label">{{ label() }}</h3>
+          @if (scope()) { <span class="pf-card__note pf-sgroup__scope">{{ scope() }}</span> }
+          <span class="pf-sgroup__tools"><ng-content select="[group-tools]"></ng-content></span>
+        </header>
+        <div class="pf-sgroup__rows">
+          @if (hint()) { <p class="pf-sgroup__hint">{{ hint() }}</p> }
+          <ng-content></ng-content>
+        </div>
+      </section>
+    } @else {
+      <ng-content></ng-content>
     }
-    @if (hint()) { <p class="pf-sgroup__hint">{{ hint() }}</p> }
-    <div class="pf-sgroup__rows"><ng-content></ng-content></div>
   `,
   styles: [`
-    :host { display: block; scroll-margin-top: 8px; }
-    :host + :host:not(.pf-sgroup--plain) { margin-top: 10px; border-top: 1px solid var(--pf-line, var(--glass-border)); }
-    :host(.pf-sgroup--plain) { border-bottom: 1px solid var(--pf-line, var(--glass-border)); }
-    .pf-sgroup__head { display: flex; align-items: center; gap: 10px; min-height: 36px; padding-top: 14px; }
-    .pf-sgroup__scope { font-weight: 500; letter-spacing: .04em; text-transform: none; color: var(--text-tertiary); opacity: .85; }
-    .pf-sgroup__hint { margin: 0 0 2px; font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
-    .pf-sgroup__label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
-    .pf-sgroup__tools { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; }
+    :host { display: block; min-width: 0; scroll-margin-top: 8px; }
+    :host(.pf-sgroup--wide) { grid-column: 1 / -1; }
+    :host(.pf-sgroup--plain) { display: contents; }
+    .pf-sgroup__card { overflow: visible; }
+    .pf-sgroup__head { flex-wrap: nowrap; }
+    .pf-sgroup__label { margin: 0; flex: none; }
+    .pf-sgroup__scope { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-sgroup__tools { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; flex: none; }
     .pf-sgroup__tools:empty { display: none; }
+    .pf-sgroup__rows { padding: 2px 16px 4px; }
+    .pf-sgroup__hint { margin: 10px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
   `],
 })
 export class SettingGroupComponent {
-  /** Empty = no heading (an anchor for `?tab=` only — the row label already names it). */
   readonly label = input<string>('');
   readonly id = input<string | null>(null);
   /** Where the group applies, once (e.g. "per branch", "all branches") — never a pill on every row. */
   readonly scope = input<string | null>(null);
-  /** One line under the group label. */
+  /** One line under the head. */
   readonly hint = input<string | null>(null);
+  /** Head icon (stroked path, 24-unit box). */
+  readonly icon = input<string | null>(null);
+  /** Span the whole grid row. */
+  readonly wide = input(false);
+  protected readonly defaultIcon = SETTING_GROUP_ICON;
 }
 
 /** The on / off switch for a row (the kit's `.pf-toggle`, a real `role="switch"` button). */

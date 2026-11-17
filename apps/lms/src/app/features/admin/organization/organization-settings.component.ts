@@ -36,14 +36,12 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
                           (valueChange)="pickTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
-            @if (!hosted) {
             <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ls__bandsave press"
                     [disabled]="bandSaveDisabled()" [pfBusy]="bandSaving()" pfBusyLabel="Saving…" (click)="saveTab()"
                     [attr.aria-label]="bandSaveLabel()" [title]="bandSaveLabel()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
               {{ bandSaving() ? 'Saving…' : bandSaveLabel() }}
             </button>
-            }
           </ng-container>
         </pf-hero-band>
       }
@@ -54,7 +52,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
       </pf-screen-header>
 
       <div class="pf-band-body">
-      <div class="pf-ls__col">
+      <div class="pf-ls__col" [class.pf-sgrid]="hosted">
       @if (showSec('identity')) {
       <!-- Organization display NAME — distinct from the login handle below.
            The page used to show only the handle, so "arun-labs" read as if
@@ -114,8 +112,8 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
 
       @if (showSec('patient')) {
       <!-- Patient ID format: ONE row (DESIGN-V2) — Custom switch, then the fields → preview → Save. -->
-      <pf-setting-group [id]="hosted ? 'patient' : null">
-        <pf-setting-row class="pf-ls__card" data-testid="fmt-row" label="Patient ID format"
+      <pf-setting-group [id]="hosted ? 'patient' : null" label="Patient ID" scope="never resets" [wide]="true" icon="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM9 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM15 8h2M15 12h2M7 16h10">
+        <pf-setting-row class="pf-ls__card" data-testid="fmt-row" label="Format"
                         [hint]="pidEnabled() ? 'The running number never resets; the date is just a prefix. Existing IDs never change.' : 'Built-in format (e.g. DEL-2606-000042-7). Turn on to choose your own.'">
           <div class="pf-fmt">
             <span class="pf-fmt__f">Custom
@@ -144,9 +142,6 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
               }
               <span class="pf-fmt__preview pf-ls__preview">Preview <strong class="pf-num">{{ pidPreview() }}</strong></span>
             }
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-fmt__save pf-ls__save press" [disabled]="pidSaving()" [pfBusy]="pidSaving()" (click)="savePatientId()">
-              {{ pidSaving() ? 'Saving…' : 'Save' }}
-            </button>
           </div>
         </pf-setting-row>
       </pf-setting-group>
@@ -154,8 +149,8 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
 
       @if (showSec('order')) {
       <!-- Order ID format (prefix = module code): ONE row. -->
-      <pf-setting-group [id]="hosted ? 'order' : null">
-        <pf-setting-row class="pf-ls__card" data-testid="fmt-row" label="Order ID format"
+      <pf-setting-group [id]="hosted ? 'order' : null" label="Order ID" scope="restarts monthly per module" [wide]="true" icon="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 3h6v4H9zM9 12h6M9 16h4">
+        <pf-setting-row class="pf-ls__card" data-testid="fmt-row" label="Format"
                         hint="MODULE-DATE-NUMBER; the module is automatic (lab → LAB); numbers restart each month per module.">
           <div class="pf-fmt">
             <span class="pf-fmt__f">Date
@@ -175,9 +170,6 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
               <span class="pf-fmt__f pf-ls__letters"><pf-select [options]="letterShortOptions" [value]="orderFmt.letters()" (valueChange)="orderFmt.letters.set(+$any($event))" aria-label="Letters"></pf-select></span>
             }
             <span class="pf-fmt__preview pf-ls__preview">Preview <strong class="pf-num">{{ orderFmt.preview() }}</strong></span>
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-fmt__save pf-ls__save press" [disabled]="orderFmt.saving()" [pfBusy]="orderFmt.saving()" (click)="saveIdFormat(orderFmt)">
-              {{ orderFmt.saving() ? 'Saving…' : 'Save' }}
-            </button>
           </div>
         </pf-setting-row>
       </pf-setting-group>
@@ -271,8 +263,9 @@ export class OrganizationSettingsComponent implements OnInit {
   // ── Band Save (new design): the open tab's save is the ONE primary ──
   private readonly nameDirty = computed(() => !!this.orgName().trim() && this.orgName().trim() !== this.orgNameOriginal());
   private readonly slugDirty = computed(() => !!this.slug() && this.slug() !== this.slugOriginal());
-  readonly bandSaveLabel = computed(() => this.tab() === 'identity' ? 'Save' : 'Save format');
+  readonly bandSaveLabel = computed(() => this.hosted || this.tab() === 'identity' ? 'Save' : 'Save format');
   readonly bandSaving = computed(() => {
+    if (this.hosted) return this.pidSaving() || this.orderFmt.saving();
     switch (this.tab()) {
       case 'identity': return this.orgNameSaving() || this.slugSaving();
       case 'patient': return this.pidSaving();
@@ -280,9 +273,15 @@ export class OrganizationSettingsComponent implements OnInit {
     }
   });
   readonly bandSaveDisabled = computed(() =>
-    this.bandSaving() || (this.tab() === 'identity' && !this.nameDirty() && !this.slugDirty()));
+    this.bandSaving() || (!this.hosted && this.tab() === 'identity' && !this.nameDirty() && !this.slugDirty()));
   /** Identity saves whichever of name / handle changed (independent PATCHes). */
   saveTab(): void {
+    // In the Settings shell both formats are on the one page: the band's ONE Save saves the ones it shows.
+    if (this.hosted) {
+      if (this.showSec('patient')) this.savePatientId();
+      if (this.showSec('order')) this.saveIdFormat(this.orderFmt);
+      return;
+    }
     switch (this.tab()) {
       case 'identity':
         if (this.nameDirty()) this.saveOrgName();
