@@ -508,9 +508,6 @@ interface AutoAssignConfig {
     .pf-ls__switch { flex: none; }
     .pf-ls__chipm { height: auto; min-height: 30px; white-space: normal; }
     .pf-ls__wfbtn { height: 32px; min-height: 32px; }
-    @media (max-width: 640px) {
-      .pf-ls__savestate-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-    }
     .pf-ls__preset { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--glass-border, rgba(148,163,184,0.25)); }
     .pf-ls__preset-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .pf-ls__preset-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }

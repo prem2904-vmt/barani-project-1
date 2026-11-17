@@ -138,6 +138,7 @@ const STAGE_LABELS: Record<string, string> = {
       background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-cs__save:disabled { opacity: .5; cursor: default; }
     .pf-cs__card { margin-bottom: 16px; }
+    .pf-cs--embedded .pf-band-body, .pf-cs--embedded .pf-band-narrow { padding: 0 !important; margin: 0 !important; max-width: none !important; }
     .pf-cs--embedded { padding: 0 !important; margin: 0 !important; max-width: none !important; }
     .pf-cs__embedsave { display: flex; justify-content: flex-end; margin-bottom: 12px; }
     .pf-cs__title { margin: 0; }

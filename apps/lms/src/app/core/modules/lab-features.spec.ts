@@ -119,7 +119,9 @@ describe('lab-features — every surface follows the rule', () => {
     expect(fdHtml.match(/@if \(showHome\(\)\) \{/g)?.length).toBe(3);
     expect(src('features/lab/lab-settings-hub/lab-settings-hub.component.ts')).toMatch(/feature !== 'homeCollection' \|\| this\.features\.homeCollectionEnabled\(\)/);
     expect(src('features/frontdesk/book-appointment/book-appointment.component.ts').match(/@if \(features\.homeCollectionEnabled\(\)\) \{/g)?.length).toBe(2);
-    expect(src('features/admin/appointments-config/appointments-config.component.ts')).toMatch(/this\.features\.homeCollectionEnabled\(\)/);
+    // Home collection on/off moved from the Appointments queue-mode tile to Lab › Home collection.
+    expect(src('features/admin/lab-pages/home-collection-switch-card.component.ts')).toMatch(/this\.features\.homeCollectionEnabled/);
+    expect(src('features/admin/appointments-config/appointments-config.component.ts')).not.toMatch(/home_collection', label/);
     for (const f of ['features/menu-hub/menu-hub.component.ts', 'features/work-area-host/work-area-host.component.ts'])
       expect(src(f)).toMatch(/this\.features\.actionAvailable\(a\.type\)/);
     expect(src('features/admin/admin-overview.component.ts')).toMatch(/moduleEnabled: \(m\) => this\.entitlements\.moduleEnabled\(m\)/);
