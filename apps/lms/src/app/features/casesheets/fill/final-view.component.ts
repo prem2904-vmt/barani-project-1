@@ -60,7 +60,7 @@ export function pdfFileName(
         <div class="pf-card__body fv-body">
           @if (frame()) {
             @if (pdfUrl(); as url) {
-              <iframe class="fv-frame" [src]="url" title="Case sheet PDF"></iframe>
+              @for (u of [url]; track u) { <iframe class="fv-frame" [src]="u" title="Case sheet PDF"></iframe> }
             } @else if (pdfError()) {
               <p class="fe-field__hint">{{ pdfError() }}</p>
             } @else {

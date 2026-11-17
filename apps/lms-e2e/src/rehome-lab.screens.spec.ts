@@ -130,6 +130,27 @@ test.describe('lab settings pages', () => {
     await expect(page).toHaveURL(/\/admin\/reports\?tab=sending/, { timeout: 20_000 });
   });
 
+  test('Report design: ONE Back press returns to Settings after the live preview re-renders', async ({ page }) => {
+    // Owner 2026-11-17: Back needed several presses — every preview re-render re-pointed the iframe's src,
+    // and each iframe navigation is a session-history entry. Preview frames are now keyed per URL.
+    await go(page, '/admin?section=lab');
+    const tile = page.getByText('Report design', { exact: true }).locator('visible=true').first();
+    await expect(tile).toBeVisible({ timeout: 60_000 });
+    const settingsUrl = page.url();
+    await tile.click();
+    await expect(page).toHaveURL(/\/admin\/reports/, { timeout: 60_000 });
+    await expect(vis(page, 'iframe.pf-pdf-iframe')).toBeAttached({ timeout: 60_000 });
+    // Change a few options: each one re-renders the preview.
+    const sw = page.locator('.pf-rt-work [role="switch"]').locator('visible=true');
+    const n = Math.min(3, await sw.count());
+    expect(n, 'some report options to change').toBeGreaterThan(0);
+    for (let i = 0; i < n; i++) { await sw.nth(i).click(); await page.waitForTimeout(900); }
+    await expect(page.locator('iframe.pf-pdf-iframe')).toHaveCount(1);
+    await page.goBack();
+    await expect(page, 'one Back press leaves Report design').not.toHaveURL(/\/admin\/reports/, { timeout: 10_000 });
+    expect(new URL(page.url()).pathname).toBe(new URL(settingsUrl).pathname);
+  });
+
   test('sample ID format saves through the same API', async ({ page }) => {
     await go(page, '/admin/lab/sample-numbers?tab=format');
     await expect(vis(page, '[data-testid="sample-id-format"]')).toBeVisible({ timeout: 60_000 });

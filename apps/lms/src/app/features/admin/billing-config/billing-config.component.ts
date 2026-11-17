@@ -836,12 +836,15 @@ interface GstRow {
                   [style.--pf-inv-scale]="invoicePreviewScale()"
                 >
                   <div class="pf-invoice-stage">
+                    <!-- One iframe per preview URL (keyed): a NEW frame's first load replaces its blank page, so no session-history entry; re-pointing a live frame's src adds one per render and Back needs several presses. -->
+                    @for (u of [src]; track u) {
                     <iframe
-                      [src]="src"
+                      [src]="u"
                       title="Invoice preview"
                       class="pf-invoice-iframe"
                       style="width:100%;height:62dvh;border:1px solid var(--glass-border);border-radius:12px;background:#525659"
                     ></iframe>
+                    }
                   </div>
                 </div>
               } @else {

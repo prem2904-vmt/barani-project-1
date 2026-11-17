@@ -888,9 +888,12 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
             <span class="pf-rt-bw__t">Black &amp; white preview <span class="pf-rt-bw__d">— see how it photocopies</span></span>
           </div>
           <div class="pf-pdf-frame" [class.pf-bw]="bwPreview()">
-            @if (previewSafe()) {
-              <iframe [src]="previewSafe()" title="Report PDF preview"
-                      class="w-full pf-pdf-iframe"></iframe>
+            @if (previewSafe(); as src) {
+              <!-- One iframe per preview URL (keyed): a NEW frame's first load replaces its blank page, so no session-history entry; re-pointing a live frame's src adds one per render and Back needs several presses. -->
+              @for (u of [src]; track u) {
+                <iframe [src]="u" title="Report PDF preview"
+                        class="w-full pf-pdf-iframe"></iframe>
+              }
             } @else {
               <div class="flex items-center justify-center h-[600px]" style="color: var(--text-tertiary);">
                 Loading preview…
