@@ -113,64 +113,59 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
       @if (showSec('patient')) {
       <!-- Patient ID format: ONE row (DESIGN-V2) — Custom switch, then the fields → preview → Save. -->
       <pf-setting-group [id]="hosted ? 'patient' : null" label="Patient ID" scope="never resets" [wide]="true" icon="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2ZM9 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM15 8h2M15 12h2M7 16h10">
-        <pf-setting-row class="pf-ls__card" data-testid="fmt-row" label="Format"
-                        [hint]="pidEnabled() ? 'The running number never resets; the date is just a prefix. Existing IDs never change.' : 'Built-in format (e.g. DEL-2606-000042-7). Turn on to choose your own.'">
-          <div class="pf-fmt">
-            <span class="pf-fmt__f">Custom
-              <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="pidEnabled()" aria-label="Custom patient ID format"
-                      (click)="pidEnabled.set(!pidEnabled())"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
-            </span>
-            @if (pidEnabled()) {
-              <label class="pf-fmt__f">Prefix
-                <input class="pf-input pf-num pf-fmt__wide" maxlength="16" [ngModel]="pidPrefix()" (ngModelChange)="pidPrefix.set($event)" placeholder="e.g. LAB" aria-label="Prefix" />
-              </label>
-              <span class="pf-fmt__f">Date
-                <pf-select [options]="dateOptions" [value]="pidDate()" (valueChange)="pidDate.set($any($event))" aria-label="Date prefix"></pf-select>
-              </span>
-              <label class="pf-fmt__f">Separator
-                <input class="pf-input pf-num" maxlength="3" [ngModel]="pidSep()" (ngModelChange)="pidSep.set($event)" placeholder="none" aria-label="Separator" />
-              </label>
-              <label class="pf-fmt__f">{{ pidSerial() === 'alpha' ? 'Min digits' : 'Digits' }}
-                <input class="pf-input pf-num" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="onPidPadChange($event)" (keydown)="preventMinus($event)" aria-label="Number digits" />
-              </label>
-              <span class="pf-fmt__f">Letters
-                <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="pidSerial() === 'alpha'" aria-label="Include letters"
-                        (click)="pidSerial.set(pidSerial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
-              </span>
-              @if (pidSerial() === 'alpha') {
-                <span class="pf-fmt__f pf-ls__letters"><pf-select [options]="letterOptions" [value]="pidLetters()" (valueChange)="pidLetters.set(+$any($event))" aria-label="Letters"></pf-select></span>
-              }
-              <span class="pf-fmt__preview pf-ls__preview">Preview <strong class="pf-num">{{ pidPreview() }}</strong></span>
-            }
-          </div>
+        <pf-setting-row class="pf-ls__card" data-testid="fmt-row" label="Custom format"
+                        [hint]="pidEnabled() ? 'The running number never resets; existing IDs never change.' : 'Built-in format (e.g. DEL-2606-000042-7).'">
+          <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="pidEnabled()" aria-label="Custom patient ID format"
+                  (click)="pidEnabled.set(!pidEnabled())"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
         </pf-setting-row>
+        @if (pidEnabled()) {
+          <pf-setting-row label="Prefix" hint="Optional.">
+            <input class="pf-input pf-num pf-org__in" maxlength="16" [ngModel]="pidPrefix()" (ngModelChange)="pidPrefix.set($event)" placeholder="e.g. LAB" aria-label="Prefix" />
+          </pf-setting-row>
+          <pf-setting-row label="Date">
+            <pf-select class="pf-org__sel" [options]="dateOptions" [value]="pidDate()" (valueChange)="pidDate.set($any($event))" aria-label="Date prefix"></pf-select>
+          </pf-setting-row>
+          <pf-setting-row label="Separator" hint="Blank = none.">
+            <input class="pf-input pf-num pf-org__in" maxlength="3" [ngModel]="pidSep()" (ngModelChange)="pidSep.set($event)" placeholder="none" aria-label="Separator" />
+          </pf-setting-row>
+          <pf-setting-row [label]="pidSerial() === 'alpha' ? 'Minimum digits' : 'Digits'">
+            <input class="pf-input pf-num pf-org__in" type="number" min="1" [attr.max]="pidSerial() === 'alpha' ? 6 : 10" [ngModel]="pidPad()" (ngModelChange)="onPidPadChange($event)" (keydown)="preventMinus($event)" aria-label="Number digits" />
+          </pf-setting-row>
+          <pf-setting-row label="Letters" hint="Alphanumeric odometer: up to 6 digits, then the letters advance.">
+            @if (pidSerial() === 'alpha') {
+              <pf-select class="pf-org__sel pf-ls__letters" [options]="letterOptions" [value]="pidLetters()" (valueChange)="pidLetters.set(+$any($event))" aria-label="Letters"></pf-select>
+            }
+            <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="pidSerial() === 'alpha'" aria-label="Include letters"
+                    (click)="pidSerial.set(pidSerial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
+          </pf-setting-row>
+          <pf-setting-row label="Preview">
+            <strong class="pf-fmt__value pf-num pf-ls__preview">{{ pidPreview() }}</strong>
+          </pf-setting-row>
+        }
       </pf-setting-group>
       }
 
       @if (showSec('order')) {
       <!-- Order ID format (prefix = module code): ONE row. -->
       <pf-setting-group [id]="hosted ? 'order' : null" label="Order ID" scope="restarts monthly per module" [wide]="true" icon="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 3h6v4H9zM9 12h6M9 16h4">
-        <pf-setting-row class="pf-ls__card" data-testid="fmt-row" label="Format"
-                        hint="MODULE-DATE-NUMBER; the module is automatic (lab → LAB); numbers restart each month per module.">
-          <div class="pf-fmt">
-            <span class="pf-fmt__f">Date
-              <pf-select [options]="dateOptions" [value]="orderFmt.date()" (valueChange)="orderFmt.date.set($any($event))" aria-label="Date"></pf-select>
-            </span>
-            <label class="pf-fmt__f">Separator
-              <input class="pf-input pf-num" maxlength="3" [ngModel]="orderFmt.sep()" (ngModelChange)="orderFmt.sep.set($event)" placeholder="none" aria-label="Separator" />
-            </label>
-            <label class="pf-fmt__f">{{ orderFmt.serial() === 'alpha' ? 'Min digits' : 'Digits' }}
-              <input class="pf-input pf-num" type="number" min="1" [attr.max]="orderFmt.serial() === 'alpha' ? 6 : 10" [ngModel]="orderFmt.pad()" (ngModelChange)="onFormatPadChange(orderFmt, $event)" (keydown)="preventMinus($event)" aria-label="Number digits" />
-            </label>
-            <span class="pf-fmt__f">Letters
-              <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="orderFmt.serial() === 'alpha'" aria-label="Include letters"
-                      (click)="orderFmt.serial.set(orderFmt.serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
-            </span>
-            @if (orderFmt.serial() === 'alpha') {
-              <span class="pf-fmt__f pf-ls__letters"><pf-select [options]="letterShortOptions" [value]="orderFmt.letters()" (valueChange)="orderFmt.letters.set(+$any($event))" aria-label="Letters"></pf-select></span>
-            }
-            <span class="pf-fmt__preview pf-ls__preview">Preview <strong class="pf-num">{{ orderFmt.preview() }}</strong></span>
-          </div>
+        <pf-setting-row class="pf-ls__card" data-testid="fmt-row" label="Date" hint="MODULE-DATE-NUMBER; the module is automatic (lab → LAB).">
+          <pf-select class="pf-org__sel" [options]="dateOptions" [value]="orderFmt.date()" (valueChange)="orderFmt.date.set($any($event))" aria-label="Date"></pf-select>
+        </pf-setting-row>
+        <pf-setting-row label="Separator" hint="Blank = none.">
+          <input class="pf-input pf-num pf-org__in" maxlength="3" [ngModel]="orderFmt.sep()" (ngModelChange)="orderFmt.sep.set($event)" placeholder="none" aria-label="Separator" />
+        </pf-setting-row>
+        <pf-setting-row [label]="orderFmt.serial() === 'alpha' ? 'Minimum digits' : 'Digits'">
+          <input class="pf-input pf-num pf-org__in" type="number" min="1" [attr.max]="orderFmt.serial() === 'alpha' ? 6 : 10" [ngModel]="orderFmt.pad()" (ngModelChange)="onFormatPadChange(orderFmt, $event)" (keydown)="preventMinus($event)" aria-label="Number digits" />
+        </pf-setting-row>
+        <pf-setting-row label="Letters" hint="Alphanumeric (AA001 …). Off = plain numbers.">
+          @if (orderFmt.serial() === 'alpha') {
+            <pf-select class="pf-org__sel pf-ls__letters" [options]="letterShortOptions" [value]="orderFmt.letters()" (valueChange)="orderFmt.letters.set(+$any($event))" aria-label="Letters"></pf-select>
+          }
+          <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="orderFmt.serial() === 'alpha'" aria-label="Include letters"
+                  (click)="orderFmt.serial.set(orderFmt.serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
+        </pf-setting-row>
+        <pf-setting-row label="Preview">
+          <strong class="pf-fmt__value pf-num pf-ls__preview">{{ orderFmt.preview() }}</strong>
         </pf-setting-row>
       </pf-setting-group>
       }
@@ -181,6 +176,8 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
   styles: [`
     /* pf-kit cards in a readable column; the band body scrolls, never the page. */
     .pf-ls__col { display: flex; flex-direction: column; gap: 16px; max-width: 56rem; margin-inline: auto; width: 100%; }
+    .pf-org__sel { width: 160px; }
+    .pf-org__in { width: 110px; height: 34px; min-height: 34px; }
     .pf-ls__card { overflow: visible; }
     .pf-ls__body { overflow: visible; gap: 14px; padding: 14px 16px 18px; }
     .pf-ls__title { margin: 0; }

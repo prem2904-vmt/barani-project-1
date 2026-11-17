@@ -26,21 +26,21 @@ import { NgTemplateOutlet } from '@angular/common';
     <div class="pf-srow__ctl"><ng-content></ng-content></div>
   `,
   styles: [`
-    /* Owner 2026-11-17 (final): the label on the LEFT, the value / control flush RIGHT at the card's edge. */
+    /* Owner 2026-11-17 (final): the label on the LEFT (never narrower than ~300px), the value / control flush RIGHT; when
+       the controls do not fit beside the label they wrap onto a second line, still right-aligned. */
     :host {
-      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 24px;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 24px;
       min-height: 56px; padding: 10px 0; border-bottom: 1px solid var(--pf-line, var(--glass-border));
     }
     :host(:last-child) { border-bottom: 0; }
-    :host(.pf-srow--stack) { grid-template-columns: minmax(0, 1fr); }
-    .pf-srow__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    :host(.pf-srow--stack) { flex-direction: column; align-items: stretch; }
+    .pf-srow__text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 300px; min-width: min(300px, 100%); }
     .pf-srow__label { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; font-weight: 500; color: var(--text-primary); line-height: 1.35; }
     .pf-srow__hint { font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
     :host(.pf-srow--off) .pf-srow__label, :host(.pf-srow--off) .pf-srow__hint { opacity: .6; }
-    .pf-srow__ctl { display: flex; align-items: center; justify-content: flex-end; gap: 8px 10px; flex-wrap: wrap; min-width: 0; max-width: 100%; }
-    :host(.pf-srow--stack) .pf-srow__ctl { justify-content: flex-start; }
-    :host(.pf-srow--stack) .pf-srow__ctl { justify-content: flex-start; }
-    @media (max-width: 767px) { :host { grid-template-columns: minmax(0, 1fr); } .pf-srow__ctl { justify-content: flex-start; } }
+    .pf-srow__ctl { display: flex; align-items: center; justify-content: flex-end; gap: 8px 10px; flex-wrap: wrap; flex: 0 1 auto; margin-left: auto; min-width: 0; max-width: 100%; }
+    :host(.pf-srow--stack) .pf-srow__ctl { justify-content: flex-start; margin-left: 0; }
+    @media (max-width: 767px) { .pf-srow__ctl { margin-left: 0; justify-content: flex-start; } }
   `],
 })
 export class SettingRowComponent {

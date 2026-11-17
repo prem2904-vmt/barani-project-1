@@ -2871,3 +2871,26 @@ input::-ms-clear {
 .pf-ss__main--one .pf-sgroup__head { min-height: 0 !important; padding-top: 0 !important; }
 .pf-ss__main--one .pf-sgroup__head:has(.pf-sgroup__tools:not(:empty)) { padding-top: 10px !important; }
 .pf-ss__main--one .pf-sgroup__sec { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }
+
+/* Settings frame: a hosted screen's old cards read as ROWS of the main card (owner 2026-11-17: no nested cards, full
+   width) — the card chrome goes, its head becomes the row (title left, its controls / chips flush right), the body is
+   the row's hint and details. Message channels (WhatsApp / email / SMS), the switch cards. */
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card) {
+  background: none !important; border: 0 !important; border-bottom: 1px solid var(--pf-line) !important;
+  border-radius: 0 !important; box-shadow: none !important; backdrop-filter: none !important; margin: 0 !important;
+  max-width: none !important; overflow: visible;
+}
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card):last-child { border-bottom: 0 !important; }
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card) > .pf-card__head {
+  background: none !important; border: 0 !important; padding: 14px 0 2px !important; border-radius: 0 !important;
+}
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card) > .pf-card__head > .pf-card__icon { display: none; }
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card) > .pf-card__head > .pf-card__label {
+  font-size: 13.5px !important; font-weight: 500 !important; letter-spacing: 0 !important; text-transform: none !important; color: var(--text-primary) !important;
+}
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card) > :not(.pf-card__head) { padding-left: 0 !important; padding-right: 0 !important; padding-top: 2px !important; }
+.pf-ss__main .pf-band-narrow { max-width: none !important; margin: 0 !important; }
+
+/* No centred narrow columns inside the frame's main card: rows span its full width. */
+.pf-ss__main :is(.pf-ls__col, .pf-lp__col, .pf-op__rows, .pf-bs__col) { max-width: none !important; margin-inline: 0 !important; }
+.pf-fmt__value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text-primary); }

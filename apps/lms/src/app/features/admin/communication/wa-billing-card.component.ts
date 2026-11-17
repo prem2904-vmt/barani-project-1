@@ -129,7 +129,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 
           <!-- ── Pay at Meta ── -->
           <div class="pf-wab__actions">
-            <a class="pf-btn pf-btn--primary pf-wab__btn" data-testid="wab-add-payment" [href]="v.billing.links.paymentMethods" target="_blank" rel="noopener noreferrer">
+            <a class="pf-btn pf-btn--secondary pf-wab__btn" data-testid="wab-add-payment" [href]="v.billing.links.paymentMethods" target="_blank" rel="noopener noreferrer">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9"/><path d="M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/></svg>
               {{ v.billing.payment.status === 'set' ? 'Add funds or update payment method' : 'Add or update payment method' }}
             </a>

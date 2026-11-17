@@ -57,35 +57,33 @@ export function sampleIdPreview(prefix: string, date: string, sep: string, pad: 
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-sf" data-testid="sample-id-format">
-      <pf-setting-row data-testid="sid-format-row" label="Sample ID format"
-                      hint="SPACE-DATE-NUMBER. Numbers restart each month per space.">
-        <div class="pf-fmt">
-          <span class="pf-fmt__f">Date
-            <pf-select [options]="dateOptions" [value]="date()" (valueChange)="date.set($any($event))" aria-label="Date"></pf-select>
-          </span>
-          <label class="pf-fmt__f">Separator
-            <input class="pf-input pf-num pf-fmt__sep" maxlength="3" [ngModel]="sep()" (ngModelChange)="sep.set($event)" placeholder="none" aria-label="Separator" />
-          </label>
-          <label class="pf-fmt__f">{{ serial() === 'alpha' ? 'Min digits' : 'Digits' }}
-            <input class="pf-input pf-num" type="number" min="1" [attr.max]="serial() === 'alpha' ? 6 : 10" [ngModel]="pad()"
-                   (ngModelChange)="pad.set(clamp($event))" (keydown)="preventMinus($event)" aria-label="Number digits" />
-          </label>
-          <span class="pf-fmt__f">Letters
-            <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="serial() === 'alpha'" aria-label="Include letters"
-                    (click)="serial.set(serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
-          </span>
-          @if (serial() === 'alpha') {
-            <span class="pf-fmt__f pf-sf__letters">
-              <pf-select [options]="letterOptions" [value]="letters()" (valueChange)="letters.set(+$any($event))" aria-label="Letters"></pf-select>
-            </span>
-          }
-          <span class="pf-fmt__preview" data-testid="sample-id-preview">Preview <strong class="pf-num">{{ preview() }}</strong></span>
-        </div>
+      <!-- One setting per row (owner): title left, control right. SPACE-DATE-NUMBER, restarting each month per space. -->
+      <pf-setting-row data-testid="sid-format-row" label="Date" hint="SPACE-DATE-NUMBER. Numbers restart each month per space.">
+        <pf-select class="pf-sf__sel" [options]="dateOptions" [value]="date()" (valueChange)="date.set($any($event))" aria-label="Date"></pf-select>
+      </pf-setting-row>
+      <pf-setting-row label="Separator" hint="Blank = none.">
+        <input class="pf-input pf-num pf-sf__in" maxlength="3" [ngModel]="sep()" (ngModelChange)="sep.set($event)" placeholder="none" aria-label="Separator" />
+      </pf-setting-row>
+      <pf-setting-row [label]="serial() === 'alpha' ? 'Minimum digits' : 'Digits'">
+        <input class="pf-input pf-num pf-sf__in" type="number" min="1" [attr.max]="serial() === 'alpha' ? 6 : 10" [ngModel]="pad()"
+               (ngModelChange)="pad.set(clamp($event))" (keydown)="preventMinus($event)" aria-label="Number digits" />
+      </pf-setting-row>
+      <pf-setting-row label="Letters" hint="Alphanumeric (AA001 …). Off = plain numbers.">
+        @if (serial() === 'alpha') {
+          <pf-select class="pf-sf__sel pf-sf__letters" [options]="letterOptions" [value]="letters()" (valueChange)="letters.set(+$any($event))" aria-label="Letters"></pf-select>
+        }
+        <button type="button" class="pf-toggle" role="switch" [attr.aria-checked]="serial() === 'alpha'" aria-label="Include letters"
+                (click)="serial.set(serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
+      </pf-setting-row>
+      <pf-setting-row label="Preview">
+        <strong class="pf-fmt__value pf-num" data-testid="sample-id-preview">{{ preview() }}</strong>
       </pf-setting-row>
     </div>
   `,
   styles: [`
     :host { display: block; }
+    .pf-sf__sel { width: 160px; }
+    .pf-sf__in { width: 96px; height: 34px; min-height: 34px; }
     .pf-sf__scope { padding: 1px 7px; border-radius: 999px; border: 1px solid var(--pf-line); background: var(--pf-chip-bg); font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); white-space: nowrap; }
   `],
 })
