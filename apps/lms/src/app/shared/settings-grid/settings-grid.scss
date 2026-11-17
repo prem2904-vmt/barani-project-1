@@ -33,6 +33,10 @@
 .pf-sg-main {
   min-width: 0;
   min-height: 0;
+  /* inline-size containment drops the content width, so the card must take its width from the
+     host — inside a shrink-to-fit host (the overview's inline page) it collapsed to 0 px wide. */
+  width: 100%;
+  align-self: stretch;
   container-type: inline-size;
 }
 
