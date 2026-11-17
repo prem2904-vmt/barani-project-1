@@ -5,6 +5,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { LabPageDef, resolveLabTab } from '../../../shared/utils/lab-settings-pages';
+import { injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 /**
  * The open category of a Lab page, kept in the URL (`?tab=`, replacing the
@@ -52,7 +53,7 @@ export function labPageTab(page: LabPageDef): { tab: Signal<string>; pick: (id: 
       </pf-hero-band>
       <pf-screen-header class="pf-classic-only" eyebrow="Lab" [title]="page().title" [subtitle]="subtitle()"></pf-screen-header>
       <div class="pf-band-body">
-        @if (options().length > 1) {
+        @if (options().length > 1 && !hosted) {
           <div class="pf-classic-only pf-lp__tabs">
             <pf-segmented size="sm" [options]="options()" [value]="tab()" (valueChange)="tabChange.emit($event)"></pf-segmented>
           </div>
@@ -74,6 +75,8 @@ export class LabPageComponent {
   readonly tab = input.required<string>();
   readonly subtitle = input('');
   readonly tabChange = output<string>();
+  /** Inside the Settings shell the left panel lists the categories: no second tab strip. */
+  protected readonly hosted = injectSettingsHosted();
   protected readonly options = computed<SegmentedOption<string>[]>(() =>
     this.page().categories.map(c => ({ value: c.id, label: c.label })));
 }
