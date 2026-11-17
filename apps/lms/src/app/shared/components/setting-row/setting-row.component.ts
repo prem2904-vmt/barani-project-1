@@ -29,7 +29,7 @@ import { NgTemplateOutlet } from '@angular/common';
     /* Two columns (owner 2026-11-17): a fixed label column, the control column starts right after it and is
        LEFT-aligned, so every control on the card lines up on one vertical edge. Equal row rhythm. */
     :host {
-      display: grid; grid-template-columns: minmax(150px, 2fr) minmax(0, 3fr); align-items: center; gap: 6px 20px;
+      display: grid; grid-template-columns: minmax(150px, 340px) minmax(0, 1fr); align-items: center; gap: 6px 20px;
       min-height: 56px; padding: 10px 0; border-bottom: 1px solid var(--pf-line, var(--glass-border));
     }
     :host(:last-child) { border-bottom: 0; }

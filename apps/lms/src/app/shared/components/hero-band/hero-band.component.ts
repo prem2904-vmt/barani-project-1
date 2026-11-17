@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, TemplateRef, computed, effect, inject, input, output, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, TemplateRef, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 import { NavBackService } from '../../../core/services/nav-back.service';
@@ -107,7 +107,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
           }
         </div>
         @if (slim()) { <div class="pf-hb__center"><ng-content select="[band-center]"></ng-content></div> }
-        <div class="pf-hb__actions">@if (shellBand() && host?.status(); as pageStatus) {<ng-container *ngTemplateOutlet="pageStatus"></ng-container>}@if (shellBand() && host?.actions(); as pageActions) {<ng-container *ngTemplateOutlet="pageActions"></ng-container>}<ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
+        <div class="pf-hb__actions">@if (shellBand() && host?.status(); as pageStatus) {<ng-container *ngTemplateOutlet="pageStatus"></ng-container>}@if (shellBand()) {@for (pa of host?.actions() ?? []; track $index) {<ng-container *ngTemplateOutlet="pa"></ng-container>}}<ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
       </div>
 
       @if (!slim()) {
@@ -423,16 +423,19 @@ export class HeroBandComponent {
     if (!host) return null;
     const mine: TemplateRef<unknown>[] = [];
     inject(DestroyRef).onDestroy(() => {
-      if (host.actions() && mine.includes(host.actions()!)) host.actions.set(null);
+      host.actions.update((l) => l.filter((t) => !mine.includes(t)));
       if (host.search() && mine.includes(host.search()!)) host.search.set(null);
     });
     return effect(() => {
       if (!this.hosted()) return;
       const a = this.actionsTpl();
       const f = this.tabsOnly() || this.slim() ? null : this.fieldTpl();
+      const before = [...mine];
       mine.splice(0, mine.length, a, ...(f ? [f] : []));
-      host.actions.set(a);
-      host.search.set(f);
+      untracked(() => {
+        host.actions.update((l) => [...l.filter((t) => !before.includes(t)), a]);
+        if (f) host.search.set(f);
+      });
     });
   })();
 

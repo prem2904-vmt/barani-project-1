@@ -174,7 +174,7 @@
 .pf-fmt__f > .pf-input.pf-fmt__sep { width: 72px; }
 .pf-fmt__f > .pf-input.pf-fmt__wide { width: 96px; }
 .pf-fmt__f > pf-select { width: 120px; }
-.pf-fmt__f > pf-select .pf-dd__trigger { min-height: 32px !important; height: 32px; padding-top: 0; padding-bottom: 0; }
+.pf-fmt__f > pf-select .pf-dd__trigger { min-height: 32px !important; height: 32px !important; padding-top: 0 !important; padding-bottom: 0 !important; }
 .pf-fmt__preview { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
 .pf-fmt__preview strong { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text-primary); }
 @media (max-width: 767px) { .pf-fmt__f > .pf-input { font-size: 16px; } }
@@ -2861,3 +2861,10 @@ input::-ms-reveal,
 input::-ms-clear {
   display: none;
 }
+
+/* Settings pages composed of other settings screens (Front desk = appointments + referring …): inside a .pf-sgrid the
+   embedded screen's own wrappers melt away so its group cards are items of the ONE grid. */
+.pf-sgrid :is(pf-appointments-config, pf-notifications-config, pf-lab-settings, pf-culture-settings) { display: contents; }
+.pf-sgrid :is(pf-appointments-config, pf-notifications-config) > .pf-band-page,
+.pf-sgrid :is(pf-appointments-config, pf-notifications-config) > .pf-band-page > .pf-band-body { display: contents !important; }
+.pf-sgrid :is(pf-appointments-config, pf-notifications-config) > .pf-band-page > :is(pf-hero-band, pf-screen-header) { display: none; }

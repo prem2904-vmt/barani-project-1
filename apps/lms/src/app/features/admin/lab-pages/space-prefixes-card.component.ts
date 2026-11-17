@@ -44,7 +44,7 @@ export function buildBranchPrefixes(branches: readonly Branch[], spaces: readonl
   imports: [SettingRowComponent, SettingGroupComponent, RouterLink, SkeletonRowsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <pf-setting-group class="pf-sp" data-testid="space-prefixes" id="prefixes" label="Prefixes" scope="per branch"
+    <pf-setting-group class="pf-sp" data-testid="space-prefixes" id="prefixes" label="Prefixes" scope="per branch" icon="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"
                       [hint]="'A sample ID starts with its lab space code; departments without a space share the default Lab code (blank = ' + defaultPrefix + ').'">
       <a group-tools class="pf-sp__link" [routerLink]="spacesPath" [queryParams]="spacesQuery" data-testid="space-prefixes-link">Edit lab spaces</a>
       @if (loading()) {
