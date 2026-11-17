@@ -23,7 +23,15 @@ export interface SettingsHost {
    */
   readonly categories: WritableSignal<readonly SettingsHostCategory[] | null>;
 }
-export interface SettingsHostCategory { readonly id: string; readonly label: string; readonly note?: string }
+export interface SettingsHostCategory {
+  readonly id: string;
+  readonly label: string;
+  readonly note?: string;
+  /** A tree's parent row (e.g. "Lab spaces"): a heading that groups the rows naming it as `parent`. */
+  readonly heading?: boolean;
+  /** The heading this row sits under (rendered indented beneath it). */
+  readonly parent?: string;
+}
 export const SETTINGS_HOST = new InjectionToken<SettingsHost>('pf.settings.host');
 
 /** A fresh host (the shell provides one per instance). */

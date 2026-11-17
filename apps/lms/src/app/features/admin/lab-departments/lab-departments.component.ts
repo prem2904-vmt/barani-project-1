@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, co
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NgTemplateOutlet } from '@angular/common';
 import { AllCommunityModule, CellValueChangedEvent, ColDef, GetRowIdParams, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import {
   SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, SgStatus, sgActions, sgActionsCol, sgByStatus, sgCell, sgGridTheme, sgMedia, sgRowOff, sgStatusCol,
@@ -53,7 +53,7 @@ export const LAB_DEPARTMENTS_TABS: readonly LabDepartmentsTab[] = ['departments'
   selector: 'pf-lab-departments',
   standalone: true,
   imports: [SkeletonRowsComponent, SkeletonTableComponent, BusyDirective, RouterLink, FormsModule, CdkDropList, CdkDrag, CdkDragHandle,
-    ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, NgTemplateOutlet, AgGridAngular],
+    ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, NgTemplateOutlet, DataGridComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
@@ -140,18 +140,11 @@ export const LAB_DEPARTMENTS_TABS: readonly LabDepartmentsTab[] = ['departments'
                 </div>
               }
               <div class="pf-sg-main__body">
-                @if (listSkeleton()) {
-                  <pf-skeleton-table class="pf-sg-skel" [rows]="8" [cols]="4" label="Loading departments…"></pf-skeleton-table>
-                }
-                <ag-grid-angular class="pf-sg-grid ld-grid" [theme]="gridTheme()" [rowData]="visibleDepartments()" [columnDefs]="colDefs()"
-                                 [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [animateRows]="true"
-                                 [singleClickEdit]="isCoarse" [stopEditingWhenCellsLoseFocus]="true" [suppressNoRowsOverlay]="true"
-                                 (gridReady)="onGridReady($event)" (cellValueChanged)="onCellValueChanged($event)"></ag-grid-angular>
-                @if (!listSkeleton() && visibleDepartments().length === 0) {
-                  <div class="pf-sg-empty pf-band-empty">
-                    <p class="pf-sg-empty__title">{{ departments().length === 0 ? 'No departments yet.' : 'No departments match "' + q() + '".' }}</p>
-                  </div>
-                }
+                <pf-data-grid [rowData]="visibleDepartments()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
+                              [getRowClass]="rowClass" [singleClickEdit]="isCoarse" [suppressCellFocus]="false"
+                              [loading]="listSkeleton()" loadingLabel="Loading departments…"
+                              [emptyTitle]="departments().length === 0 ? 'No departments yet.' : 'No departments match your search.'"
+                              (gridReady)="onGridReady($event)" (cellValueChanged)="onCellValueChanged($event)"></pf-data-grid>
               </div>
             </section>
           } @else {
@@ -443,10 +436,14 @@ export class LabDepartmentsComponent implements OnInit {
       const spaces = this._spaces();
       host.categories.set([
         { id: 'departments', label: 'Departments', note: String(n) },
-        ...(branches.length ? branches.map((b) => {
-          const k = spaces.filter((x) => x.branchId === b.id).length;
-          return { id: SPACE_TAB_PREFIX + b.id, label: b.name, note: `Lab spaces · ${k} ${k === 1 ? 'space' : 'spaces'}` };
-        }) : [{ id: 'spaces', label: 'Lab spaces', note: 'No branches yet' }]),
+        // A tree (owner): "Lab spaces" is a heading row, its branches are indented children.
+        ...(branches.length ? [
+          { id: 'spaces', label: 'Lab spaces', note: `${branches.length} ${branches.length === 1 ? 'branch' : 'branches'}`, heading: true },
+          ...branches.map((b) => {
+            const k = spaces.filter((x) => x.branchId === b.id).length;
+            return { id: SPACE_TAB_PREFIX + b.id, label: b.name, note: `${k} ${k === 1 ? 'space' : 'spaces'}`, parent: 'spaces' };
+          }),
+        ] : [{ id: 'spaces', label: 'Lab spaces', note: 'No branches yet' }]),
       ]);
       // A deep link to a branch (?tab=spaces-<id>) arrived before these rows existed, so the shell fell back to its
       // first row: take the person to the branch they asked for, once.
@@ -521,8 +518,11 @@ export class LabDepartmentsComponent implements OnInit {
           return el;
         } },
       sgStatusCol<Department>(d => d.isActive, d => d.name, d => this.toggleActive(d)),
-      sgActionsCol<Department>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span'))),
     ];
+    // Rename / Delete only exist for the lab's own departments: no blank, divided actions column for a catalogue-only list.
+    if (this._departments().some(d => this.isLabMade(d))) {
+      cols.push(sgActionsCol<Department>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), false));
+    }
     if (this.phone()) return cols.filter(c => c.colId !== 'origin');
     return cols;
   });

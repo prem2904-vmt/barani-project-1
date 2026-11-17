@@ -77,9 +77,10 @@ describe('Lab departments — Departments tab', () => {
 
   it('Test Master grid: every department, its origin, and only lab-made ones get rename / delete', () => {
     const { c, el } = render();
-    expect(el.querySelector('.pf-sg-main ag-grid-angular')).not.toBeNull();
+    expect(el.querySelector('.pf-sg-main pf-data-grid ag-grid-angular')).not.toBeNull();
     expect(c.visibleDepartments().map((d: any) => d.name)).toEqual(['Haematology', 'Cytogenetics']);
     expect(c.colDefs().map((x: any) => x.colId)).toEqual(['name', 'code', 'origin', 'status', 'actions']);
+    expect(c.colDefs().find((x: any) => x.colId === 'actions').pinned).toBeUndefined();
     expect(cell(c, 'origin', MASTER).textContent).toContain(DEPARTMENT_ORIGIN_LABEL.catalogue);
     expect(cell(c, 'origin', OWN).textContent).toContain(DEPARTMENT_ORIGIN_LABEL.lab);
     expect(c.actionsFor(MASTER)).toEqual([]);
@@ -244,7 +245,8 @@ describe('Lab departments — inside the Settings shell', () => {
     const el = f.nativeElement as HTMLElement;
     expect(host.categories()).toEqual([
       { id: 'departments', label: 'Departments', note: '2' },
-      { id: 'spaces-b1', label: 'Main', note: 'Lab spaces · 1 space' },
+      { id: 'spaces', label: 'Lab spaces', note: '1 branch', heading: true },
+      { id: 'spaces-b1', label: 'Main', note: '1 space', parent: 'spaces' },
     ]);
     expect(el.querySelector('.ld-side')).toBeNull();
     expect(el.querySelector('.ld-main.pf-sg-main--bare')).not.toBeNull();
