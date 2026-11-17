@@ -119,7 +119,7 @@ export type AicTab = 'settings' | 'can' | 'apps' | 'claude';
                   <!-- Who can use it + masking: ONE muted note (not cards). -->
                   <p class="pf-aic__note" data-testid="aic-note">
                     @if (s.proposals) {
-                      An app can read, and suggest Test Master changes for your approval — it can’t apply, approve or delete anything itself.
+                      An app can read, and suggest Test Master changes for your approval. It can’t apply, approve, or delete anything itself.
                     } @else {
                       Read only — an app can’t add, change or delete anything.
                     }
