@@ -220,7 +220,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'pending', label: 'Pending changes', query: { view: 'pending' }, beta: 'assistant' },
         ] },
       { id: 'lab-report', label: 'Report design', path: P.reports, iconPath: ICON.report,
-        blurb: 'Letterhead, patient strip, columns, results table, order and footer.',
+        blurb: 'Letterhead, patient strip, columns, results table and report notes, order, footer and sending.',
         categories: [
           { id: 'letterhead', label: 'Letterhead', query: { tab: 'letterhead' } },
           { id: 'patient', label: 'Patient strip', query: { tab: 'patient' } },
@@ -547,7 +547,8 @@ export function rehome(path: string, query: Readonly<Record<string, string | nul
         default: return { path: P.orgProfile, query: keep() };
       }
     // Report options became tabs of Report design (one page, owner 2026-11-17).
-    case '/admin/lab/report-options': return { path: P.reports, query: keep({ tab: tab === 'sending' ? 'sending' : 'notes' }) };
+    // Report notes is a row of the Results table tab (owner 2026-11-17).
+    case '/admin/lab/report-options': return { path: P.reports, query: keep({ tab: tab === 'sending' ? 'sending' : 'table' }) };
     case '/admin/communication': return { path: P.orgChannels, query: keep(tab ? { tab } : {}) };
     case '/admin/appointments': return { path: P.labFrontDesk, query: keep(tab ? { tab } : {}) };
     case '/admin/referring-network': return { path: P.labFrontDesk, query: keep({ tab: 'referring' }) };

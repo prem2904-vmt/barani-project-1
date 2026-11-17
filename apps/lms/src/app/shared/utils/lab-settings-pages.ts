@@ -77,14 +77,14 @@ export const LAB_PAGES = {
     title: 'Numbers on lab screens',
     categories: [{ id: 'numbers', label: 'Number cards' }],
   },
-  // Not a page of its own any more (owner 2026-11-17, "all in one"): the two
-  // report switches are tabs of Report design. The old /admin/lab/report-options
+  // Not a page of its own any more (owner 2026-11-17, "all in one"): Sending is
+  // a tab of Report design, and the Report notes switch is a row inside its
+  // Results table tab (no tab of its own). The old /admin/lab/report-options
   // link redirects there (settings-map `rehome`).
   reportOptions: {
     path: '/admin/reports',
     title: 'Report design',
     categories: [
-      { id: 'notes', label: 'Report notes', scope: 'this branch' },
       { id: 'sending', label: 'Sending' },
     ],
   },
@@ -107,7 +107,7 @@ export const LEGACY_LAB_SETTINGS_TARGET: Readonly<Record<string, { path: string;
   collection: { path: LAB_PAGES.sampleNumbers.path, tab: 'find' },
   queues: { path: LAB_PAGES.collection.path, tab: 'queue' },
   rules: { path: LAB_PAGES.results.path, tab: 'validation' },
-  report: { path: LAB_PAGES.reportOptions.path, tab: 'notes' },
+  report: { path: LAB_PAGES.reportOptions.path, tab: 'table' },
 };
 
 /** Old `?tab=` + card → exact new target (finer than the tab-level map). */
@@ -121,7 +121,7 @@ export const LEGACY_LAB_SETTINGS_CARD_TARGET: Readonly<Record<string, { path: st
   'no-scan': { path: LAB_PAGES.collection.path, tab: 'noscan' },
   'require-validation': { path: LAB_PAGES.results.path, tab: 'validation' },
   'calc-constants': { path: LAB_PAGES.results.path, tab: 'constants' },
-  'tech-notes': { path: LAB_PAGES.reportOptions.path, tab: 'notes' },
+  'tech-notes': { path: LAB_PAGES.reportOptions.path, tab: 'table' },
 };
 
 /**

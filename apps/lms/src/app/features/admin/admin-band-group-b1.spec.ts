@@ -25,14 +25,14 @@ describe('Admin band — Report designer (/admin/reports)', () => {
       : null,
   });
 
-  it('ONE page: search pill + one tab strip (design tabs, Technician notes, Sending); rail and page title are gone', () => {
+  it('ONE page: search pill + one tab strip (design tabs, Sending); rail and page title are gone', () => {
     const p = make();
     expect(p.band()).not.toBeNull();
     expect(p.bandInput()).not.toBeNull();
     expect(p.bandInput()!.placeholder).toBe('Find a report setting');
     expect(p.el.querySelector('.pf-hb__search--tabs')).toBeNull();
     expect(pillTabs(p.el).map((b) => b.getAttribute('aria-label')))
-      .toEqual(['Letterhead', 'Patient strip', 'Table columns', 'Results table', 'Sequencing', 'Footer', 'Report notes', 'Sending']);
+      .toEqual(['Letterhead', 'Patient strip', 'Table columns', 'Results table', 'Sequencing', 'Footer', 'Sending']);
     expect(p.el.querySelector('[data-testid="rt-report-options"]')).toBeNull();
     expect(p.el.querySelector('.pf-rt-rail')).toBeNull();
     expect(p.el.querySelector('.pf-rt-work__title')).toBeNull();
@@ -56,11 +56,12 @@ describe('Admin band — Report designer (/admin/reports)', () => {
     expect(tabByLabel(p.el, 'Footer').classList.contains('is-selected')).toBe(true);
   });
 
-  it('Technician notes and Sending render in the same body frame; one Save, notes PATCH only techReportNotes', () => {
+  it('Report notes is a row of Results table and Sending renders in the same body frame; one Save, notes PATCH only techReportNotes', () => {
     const p = make();
-    tabByLabel(p.el, 'Report notes').click();
+    expect(tabByLabel(p.el, 'Report notes')).toBeUndefined();
+    tabByLabel(p.el, 'Results table').click();
     p.f.detectChanges();
-    expect(p.cmp.tab()).toBe('notes');
+    expect(p.cmp.tab()).toBe('table');
     const work = p.body()!.querySelector('.pf-rt-work')!;
     expect(work.querySelector('[data-testid="ls-tech-notes"]')).not.toBeNull();
     expect(p.body()!.querySelector('.pf-rt-aside')).not.toBeNull();

@@ -77,11 +77,11 @@ const PREVIEW_EXTRA_TESTS = [
   previewTest('x6', 'HbA1c', [['HbA1c', '5.6', '%', '4.0 – 5.6'], ['Estimated Average Glucose', '114', 'mg/dL', '< 117']]),
 ];
 
-type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer' | 'notes' | 'sending';
+type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer' | 'sending';
 /** Every tab of the ONE report page, in band order (the URL's ?tab= names one). */
-export const REPORT_TABS: readonly Tab[] = ['letterhead', 'patient', 'columns', 'table', 'sequence', 'footer', 'notes', 'sending'];
+export const REPORT_TABS: readonly Tab[] = ['letterhead', 'patient', 'columns', 'table', 'sequence', 'footer', 'sending'];
 /** Tabs that are not part of the template: they save on their own as you switch (no Save needed). */
-const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
+const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
 
 /** Admin editor for the per-tenant ReportTemplateEntity. Seven tabs:
  *  Identity / Header & Logo / Theme / Patient / Date & Time / Columns /
@@ -131,7 +131,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
               </button>
             }
             <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite" data-testid="rt-savestate"
-                  [attr.title]="selfSavingTab() ? 'Report notes and sending save as you switch them' : null">
+                  [attr.title]="selfSavingTab() ? 'Sending saves as you switch it' : null">
               @if (optionsSaving()) {
                 <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Saving…</span>
               } @else if (dirty()) {
@@ -206,7 +206,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
         </div>
       } @else {
       <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden() || theme.isNewDesign()"
-           [class.pf-rt-grid--designer]="designerTab()">
+           [class.pf-rt-grid--designer]="designerTab()" [class.pf-rt-grid--solo]="notesOnly()">
         <!-- ── Section rail (CLASSIC only): the new design puts the
              sections in the band pill, so the rail is gone and the editor +
              preview get the full width. ── -->
@@ -554,6 +554,8 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
             <!-- ══ RESULTS TABLE — style ══ -->
             @case ('table') {
               <div class="pf-rt-flat">
+                <!-- Lab-settings-only people (notesOnly) see ONLY the Report notes row below. -->
+                @if (!notesOnly()) {
                 <pf-report-style-cards [tpl]="tpl()" [applied]="appliedBanner()"
                   (preset)="applyPreset($event)" (palette)="applyPalette($event)" (custom)="applyCustomColors($event)"
                   (printSafeChange)="setPrintSafe($event)" (undo)="undo()"></pf-report-style-cards>
@@ -821,23 +823,15 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
                   </div>
                 </div>
                 </div>
-              </div>
-            }
+                }
 
-            <!-- ══ TABLE COLUMNS — per department ══ -->
-            @case ('columns') {
-              <pf-report-columns-editor (stateChange)="onColumnsState($event)">
-              </pf-report-columns-editor>
-            }
-
-            <!-- ══ TECHNICIAN NOTES — per branch, saves on the switch ══ -->
-            @case ('notes') {
-              <div class="pf-rt-flat">
-                <div class="pf-rtb" data-testid="ls-tech-notes">
+                <!-- Report notes: one switch, grouped with what prints under the
+                     results. Per branch (branch-lab-config.techReportNotes) and
+                     saves as you switch it — not with the template's Save. -->
+                <div class="pf-rtb" id="pf-rt-notes" data-testid="ls-tech-notes">
                   <h4 class="pf-rtb-h">Report notes</h4>
-                  <p class="pf-rtb-s">This branch only. Saves as you switch it.</p>
                   <pf-setting-row label="Technicians can add notes"
-                                  hint="A note prints on the final report under a test, a profile, a department or the whole report. Off hides notes on result entry; notes already written still print.">
+                                  hint="Prints under a test, profile, department or the whole report. This branch only; saves as you switch it.">
                     <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="techNotes() === true"
                             aria-label="Report notes" [disabled]="techNotes() === null || notesSaving() > 0"
                             (click)="setTechNotes(!techNotes())">
@@ -846,6 +840,12 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
                   </pf-setting-row>
                 </div>
               </div>
+            }
+
+            <!-- ══ TABLE COLUMNS — per department ══ -->
+            @case ('columns') {
+              <pf-report-columns-editor (stateChange)="onColumnsState($event)">
+              </pf-report-columns-editor>
             }
 
             <!-- ══ SENDING — WhatsApp Auto (same settings API), saves on each switch ══ -->
@@ -869,7 +869,9 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
           }
         </div>
 
-        <!-- ── Right: live PDF preview, shared by every section. ─────── -->
+        <!-- ── Right: live PDF preview, shared by every section (not for
+             Lab-settings-only people: they see the Report notes row only). ── -->
+        @if (!notesOnly()) {
         <aside class="pf-rt-aside" [class.pf-card]="theme.isNewDesign()" aria-label="Live preview">
           @if (theme.isNewDesign()) {
             <div class="pf-card__head pf-rt-aside__head">
@@ -902,6 +904,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
           </div>
           <p class="pf-rt-aside__hint">Preview uses a sample order. Save to apply this template to real reports.</p>
         </aside>
+        }
         }
       </div>
       }
@@ -1222,6 +1225,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
     /* ── Letterhead / Footer designer: the page card + its side card take
        the whole body (after the classic rail, when it shows). ── */
     .pf-rt-grid.pf-rt-grid--designer { grid-template-columns: 188px minmax(0, 1fr); }
+    .pf-rt-grid.pf-rt-grid--solo { grid-template-columns: minmax(0, 1fr); }
     .pf-rt-grid.pf-rt-grid--designer.pf-rt-grid--norail { grid-template-columns: minmax(0, 1fr); }
     @media (max-width: 1180px) { .pf-rt-grid.pf-rt-grid--designer { grid-template-columns: minmax(0, 1fr); } }
     .pf-rt-designer { min-width: 0; min-height: 0; }
@@ -1286,10 +1290,9 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'letterhead', label: 'Letterhead',    desc: 'Name, tagline, logo, brand colours, NABL — everything at the top of the page' },
     { value: 'patient',    label: 'Patient strip', desc: 'Which patient fields print, arranged how, with the date format' },
     { value: 'columns',    label: 'Table columns', desc: 'Per-department table columns & widths' },
-    { value: 'table',      label: 'Results table', desc: 'Report theme, font, table colours, zebra rows, abnormal marking, departments' },
+    { value: 'table',      label: 'Results table', desc: 'Report theme, font, table colours, zebra rows, abnormal marking, departments, report notes' },
     { value: 'sequence',   label: 'Sequencing',    desc: 'The order departments and tests print in' },
     { value: 'footer',     label: 'Footer',        desc: 'Disclaimer, end-of-report, watermark, page extras' },
-    { value: 'notes',      label: 'Report notes', desc: 'Whether technicians can add notes that print on the report' },
     { value: 'sending',    label: 'Sending',       desc: 'WhatsApp Auto, sending a corrected report again, and the message' },
   ];
   /** The same sections as the band pill's tabs (new design). The
@@ -1298,7 +1301,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   private readonly authSvc = inject(AuthService);
   readonly notesOnly = computed(() => !this.authSvc.hasAnyPermission(['manage_tenant', 'manage_tests', 'manage_report_template']));
   readonly sectionOptions = computed<SegmentedOption<Tab>[]>(() => this.sections
-    .filter(s => !this.notesOnly() || s.value === 'notes')
+    .filter(s => !this.notesOnly() || s.value === 'table')
     .map(s => ({ value: s.value, label: s.label, hint: s.desc })));
   readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
   private readonly _tab = signal<Tab>('letterhead');
@@ -1355,6 +1358,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       el?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
     }, 60);
   }
+  /** Bring the Report notes row (Results table) into view — the old ?tab=notes link lands here. */
+  private scrollToNotes() {
+    const el = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>('#pf-rt-notes');
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+  }
   @HostListener('document:keydown.escape')
   closeFind() { if (this.findQuery()) this.findQuery.set(''); }
   /** Left section list hide/unhide — Test Master departments pattern. */
@@ -1366,10 +1375,10 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   }
 
   setTab(t: Tab) {
-    if (this.notesOnly() && t !== 'notes') t = 'notes';
+    if (this.notesOnly() && t !== 'table') t = 'table';
     const changed = t !== this._tab();
     this._tab.set(t);
-    if (t === 'notes') this.loadTechNotes();
+    if (t === 'table') this.loadTechNotes();
     // Keep ?tab= in step (replacing history) so a reload, a shared link and the Settings panel land here.
     if (changed && this.route.snapshot.queryParamMap.get('tab') !== t) {
       void this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true });
@@ -2063,13 +2072,18 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.orgProfile.ensureLoaded();
-    const initial = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
+    // Report notes moved into Results table (owner 2026-11-17): an old ?tab=notes link lands there.
+    const rawTab = this.route.snapshot.queryParamMap.get('tab');
+    const initial = (rawTab === 'notes' ? 'table' : rawTab) as Tab | null;
     if (initial && this.sections.some(o => o.value === initial)) {
       this._tab.set(initial);
+      if (rawTab === 'notes') {
+        void this.router.navigate([], { relativeTo: this.route, queryParams: { tab: 'table' }, queryParamsHandling: 'merge', replaceUrl: true });
+        setTimeout(() => this.scrollToNotes(), 120);
+      }
     }
-    if (this.notesOnly()) { this._tab.set('notes'); this.loadTechNotes(); this.tplHold.done(); return; }
-    if (this._tab() === 'table') this.loadSourceSansFace();
-    if (this._tab() === 'notes') this.loadTechNotes();
+    if (this.notesOnly()) { this._tab.set('table'); this.loadTechNotes(); this.tplHold.done(); return; }
+    if (this._tab() === 'table') { this.loadSourceSansFace(); this.loadTechNotes(); }
     this.destroyRef.onDestroy(() => this.tplHold.cancel());
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => {

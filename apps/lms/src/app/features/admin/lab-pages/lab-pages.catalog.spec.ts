@@ -17,7 +17,7 @@ describe('Lab settings pages — catalog', () => {
       '/admin/lab/sample-numbers', '/admin/lab/collection', '/admin/lab/results', '/admin/lab/home-collection',
       '/admin/lab/front-desk', '/admin/lab/alerts', '/admin/lab/numbers', '/admin/reports',
     ]);
-    expect(LAB_PAGES.reportOptions.categories.map(c => c.id)).toEqual(['notes', 'sending']);
+    expect(LAB_PAGES.reportOptions.categories.map(c => c.id)).toEqual(['sending']);
   });
 
   it('every page is guarded (route access) and routed, and category ids are unique', () => {
@@ -43,7 +43,9 @@ describe('Lab settings pages — catalog', () => {
     for (const t of [...Object.values(LEGACY_LAB_SETTINGS_TARGET), ...Object.values(LEGACY_LAB_SETTINGS_CARD_TARGET)]) {
       const page = pages.find(p => p.path === t.path);
       expect(page, t.path).toBeDefined();
-      expect(page!.categories.map(c => c.id), `${t.path} ${t.tab}`).toContain(t.tab);
+      // Report design's own tabs count too: Report notes is a row of its Results table tab (owner 2026-11-17).
+      const ids = page!.path === LAB_PAGES.reportOptions.path ? [...page!.categories.map(c => c.id), 'table'] : page!.categories.map(c => c.id);
+      expect(ids, `${t.path} ${t.tab}`).toContain(t.tab);
     }
   });
 

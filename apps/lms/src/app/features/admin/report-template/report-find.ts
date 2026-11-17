@@ -6,7 +6,7 @@
  */
 export interface ReportFindHit {
   readonly label: string;
-  readonly tab: 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer' | 'notes' | 'sending';
+  readonly tab: 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer' | 'sending';
   /** The `.pf-rtb-h` heading text of the group to bring into view. */
   readonly heading?: string;
   readonly words?: string;
@@ -37,7 +37,7 @@ export const REPORT_FIND: readonly ReportFindHit[] = [
   { label: 'Disclaimer and end of report', tab: 'footer', words: 'footer disclaimer end of report' },
   { label: 'Signatures', tab: 'footer', words: 'sign off pathologist signature consultant' },
   { label: 'Watermark and page numbers', tab: 'footer', words: 'watermark page number' },
-  { label: 'Report notes', tab: 'notes', heading: 'Report notes', words: 'tech notes report notes' },
+  { label: 'Report notes', tab: 'table', heading: 'Report notes', words: 'tech notes report notes technician' },
   { label: 'WhatsApp Auto', tab: 'sending', heading: 'Send reports on WhatsApp', words: 'send report whatsapp auto auto send report sending' },
   { label: 'Send again when a report is corrected', tab: 'sending', heading: 'Send reports on WhatsApp', words: 'resend regenerated amended' },
   { label: 'WhatsApp message', tab: 'sending', heading: 'Send reports on WhatsApp', words: 'template message language' },

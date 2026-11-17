@@ -86,7 +86,7 @@ const PAGES: Array<{ name: string; url: string; ready: string; text?: string }> 
   { name: 'numbers', url: '/admin/lab/numbers', ready: 'pf-kpi-config' },
   { name: 'report-letterhead', url: '/admin/reports?tab=letterhead', ready: 'pf-report-header-editor .pf-rhe-side', text: 'Letterhead elements' },
   { name: 'report-patient', url: '/admin/reports?tab=patient', ready: '.pf-rt-work', text: 'Patient block' },
-  { name: 'report-notes', url: '/admin/reports?tab=notes', ready: '[data-testid="ls-tech-notes"]', text: 'Report notes' },
+  { name: 'report-notes', url: '/admin/reports?tab=table', ready: '[data-testid="ls-tech-notes"]', text: 'Report notes' },
   { name: 'report-sending', url: '/admin/reports?tab=sending', ready: 'pf-report-sending-card', text: 'WhatsApp Auto' },
   { name: 'inventory', url: '/admin/inventory', ready: '[data-testid="inventory-enable"]', text: 'Enable inventory' },
 ];
@@ -118,9 +118,14 @@ test.describe('lab settings pages', () => {
     await expect(page).toHaveURL(/\/admin\/reports\?tab=sending/, { timeout: 60_000 });
     await expect(vis(page, 'pf-report-sending-card')).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('[data-testid="rt-report-options"]')).toHaveCount(0);
+    // Report notes is a row of Results table (owner 2026-11-17): old links land there, row in view.
     await go(page, '/admin/lab/report-options');
-    await expect(page).toHaveURL(/\/admin\/reports\?tab=notes/, { timeout: 60_000 });
+    await expect(page).toHaveURL(/\/admin\/reports\?tab=table/, { timeout: 60_000 });
     await expect(vis(page, '[data-testid="ls-tech-notes"]')).toBeVisible({ timeout: 60_000 });
+    await go(page, '/admin/reports?tab=notes');
+    await expect(page).toHaveURL(/\/admin\/reports\?tab=table/, { timeout: 60_000 });
+    await expect(vis(page, '[data-testid="ls-tech-notes"]')).toBeInViewport({ timeout: 20_000 });
+    await expect(page.locator('pf-hero-band').getByText('Report notes', { exact: true })).toHaveCount(0);
     // The band search finds a setting on another tab and opens it.
     const input = vis(page, 'pf-hero-band .pf-hb__input');
     await input.fill('whatsapp');
