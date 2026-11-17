@@ -1,6 +1,7 @@
 import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { injectSettingsHosted } from '../../../shared/utils/settings-host';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -372,7 +373,7 @@ const SAME = (a: EmailForm, b: EmailForm) => JSON.stringify(a) === JSON.stringif
     }
   `],
 })
-export class CommunicationSettingsPage implements OnInit {
+export class CommunicationSettingsPage implements OnInit, HasUnsavedChanges {
   protected readonly theme = inject(ThemeService);
   private readonly api = inject(CommunicationService);
   private readonly share = inject(CommsShareService);
@@ -417,6 +418,16 @@ export class CommunicationSettingsPage implements OnInit {
   /** In the Settings frame Save sits in the card's Save bar (owner: no button in the band's corner). */
   protected readonly hosted = injectSettingsHosted();
   discardEmail(): void { this.form.set({ ...this.saved() }); this.changingPassword.set(false); }
+
+  // ── Leaving with unsaved email / SMTP edits asks first (WhatsApp and SMS switches save as they flip). ──
+  readonly unsavedLabel = 'the email settings';
+  hasUnsavedChanges(): boolean { return this.emailDirty(); }
+  /** Save from the prompt: the email form's own Save (it warns on a problem and stays); true once nothing is left unsaved. */
+  async saveChanges(): Promise<boolean> {
+    await this.saveEmail();
+    return !this.emailDirty();
+  }
+  private readonly _unloadGuard = guardUnsavedOnUnload(this);
 
   readonly testTo = signal('');
   readonly testing = signal(false);

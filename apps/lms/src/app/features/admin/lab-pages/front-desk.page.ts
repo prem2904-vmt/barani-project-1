@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, viewChild } from '@angular/core';
+import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
 import { AppointmentsConfigComponent } from '../appointments-config/appointments-config.component';
 import { ReferringNetworkComponent } from '../referring-network/referring-network.component';
@@ -31,10 +32,12 @@ import { SegmentedComponent } from '../../../shared/primitives/segmented.compone
     </div>
   `,
 })
-export class LabFrontDeskPage {
-  /** Ask before leaving with unsaved front desk changes (the appointments config owns them). */
-  private readonly appts = viewChild(AppointmentsConfigComponent);
+export class LabFrontDeskPage implements HasUnsavedChanges {
+  /** Booking slots / queue mode / priority have an explicit Save: leaving with edits asks first. */
+  private readonly appointments = viewChild(AppointmentsConfigComponent);
   readonly unsavedLabel = 'the front desk settings';
-  hasUnsavedChanges(): boolean { return !!this.appts()?.hasUnsavedChanges(); }
+  hasUnsavedChanges(): boolean { return this.appointments()?.hasUnsavedChanges() ?? false; }
+  saveChanges(): Promise<boolean> { return this.appointments()?.saveChanges() ?? Promise.resolve(true); }
+  private readonly _unloadGuard = guardUnsavedOnUnload(this);
   protected readonly tab = labPageTab(LAB_PAGES.frontDesk).tab;
 }

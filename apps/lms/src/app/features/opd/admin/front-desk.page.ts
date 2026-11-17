@@ -1,6 +1,7 @@
 import { SettingGroupComponent } from '../../../shared/components/setting-row/setting-row.component';
+import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
@@ -45,7 +46,13 @@ export type OpdFrontDeskSection = typeof OPD_FRONT_DESK_SECTIONS[number]['id'];
     .pf-ofd__note a:hover { text-decoration: underline; }
   `],
 })
-export class OpdFrontDeskPage {
+export class OpdFrontDeskPage implements HasUnsavedChanges {
+  /** Booking slots / queue mode / priority have an explicit Save: leaving with edits asks first. */
+  private readonly appointments = viewChild(AppointmentsConfigComponent);
+  readonly unsavedLabel = 'the OPD front desk settings';
+  hasUnsavedChanges(): boolean { return this.appointments()?.hasUnsavedChanges() ?? false; }
+  saveChanges(): Promise<boolean> { return this.appointments()?.saveChanges() ?? Promise.resolve(true); }
+  private readonly _unloadGuard = guardUnsavedOnUnload(this);
   private readonly route = inject(ActivatedRoute);
   private readonly tab = toSignal(this.route.queryParamMap.pipe(map(q => q.get('tab'))), { initialValue: this.route.snapshot.queryParamMap.get('tab') });
   readonly section = computed<OpdFrontDeskSection>(() => {

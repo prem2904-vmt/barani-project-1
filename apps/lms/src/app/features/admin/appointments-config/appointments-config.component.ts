@@ -277,6 +277,8 @@ export class AppointmentsConfigComponent implements OnInit {
   readonly dirty = computed(() => !!this._cfg() && this.snapshot() !== this.baseline());
   readonly unsavedLabel = 'the front desk settings';
   hasUnsavedChanges(): boolean { return this.dirty(); }
+  /** Save from the "Save your changes?" prompt; true once the server took it. */
+  saveChanges(): Promise<boolean> { return this.post(); }
   discard(): void {
     const b = this.baseline();
     if (!b) return;
@@ -284,9 +286,10 @@ export class AppointmentsConfigComponent implements OnInit {
     this._cfg.set(c); this.hydrateHours(c);
   }
 
-  save() {
+  save() { void this.post(); }
+  private post(): Promise<boolean> {
     const cur = this._cfg();
-    if (!cur) return;
+    if (!cur) return Promise.resolve(true);
 
     // Fold the start/end pickers into weeklyScheduleJson (same window every
     // day) when the branch isn't open 24×7. When it is, clear the schedule —
@@ -297,7 +300,7 @@ export class AppointmentsConfigComponent implements OnInit {
     } else {
       const from = this._startTime();
       const to = this._endTime();
-      if (from >= to) { this.toast.error('End time must be after start time.'); return; }
+      if (from >= to) { this.toast.error('End time must be after start time.'); return Promise.resolve(false); }
       const window = [{ from, to }];
       const schedule: Record<string, { from: string; to: string }[]> = {};
       for (const d of DOW_KEYS) schedule[d] = window;
@@ -305,10 +308,10 @@ export class AppointmentsConfigComponent implements OnInit {
     }
 
     this._saving.set(true);
-    this.svc.saveConfig(payload).subscribe({
-      next: c => { this._cfg.set(c); this.hydrateHours(c); this.baseline.set(this.snapshot()); this._saving.set(false); this.toast.success('Saved.'); },
-      error: e => { this._saving.set(false); this.toast.error(ApiError.from(e).message); }
-    });
+    return new Promise<boolean>(resolve => this.svc.saveConfig(payload).subscribe({
+      next: c => { this._cfg.set(c); this.hydrateHours(c); this.baseline.set(this.snapshot()); this._saving.set(false); this.toast.success('Saved.'); resolve(true); },
+      error: e => { this._saving.set(false); this.toast.error(ApiError.from(e).message); resolve(false); }
+    }));
   }
 }
 
