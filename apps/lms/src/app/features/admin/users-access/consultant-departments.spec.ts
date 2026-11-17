@@ -98,32 +98,33 @@ describe('consultant-departments helpers', () => {
   });
 });
 
-describe('User edit — DEPARTMENTS card', () => {
-  it('a kit card with a searchable multiple pf-select (never a native select) and the unassigned hint', async () => {
+describe('User edit — DEPARTMENTS card (Validates for is read-only)', () => {
+  it('a kit card that LISTS the departments (no select) and links to Lab › Collection and queues', async () => {
     const { el, f } = render(UserEditComponent, 'u1');
     await f.whenStable(); f.detectChanges();
     const card = el.querySelector('.pf-ue-depts') as HTMLElement;
     expect(card.classList).toContain('pf-card');
     expect(card.querySelector('.pf-card__label')!.textContent!.trim()).toBe('Departments');
-    expect(card.querySelector('pf-select.pf-ue-deptsel')).not.toBeNull();
+    expect(card.querySelector('pf-select')).toBeNull();
     expect(el.querySelector('select, datalist')).toBeNull();
+    const chips = Array.from(card.querySelectorAll('[data-testid="ue-validates-for"] .pf-chip')).map(c => c.textContent!.trim());
+    expect(chips).toEqual(['Haematology']);
     expect(card.textContent).toContain(DEPARTMENTS_HINT);
     // Role-derived department: read-only line naming the role.
     expect(card.querySelector('.pf-ue-via')!.textContent).toContain('Microbiology (Microbiologist)');
+    const link = card.querySelector<HTMLAnchorElement>('[data-testid="ue-validates-link"]')!;
+    expect(link.getAttribute('href')).toBe('/admin/lab/collection?tab=assign');
   });
 
-  it('loads the direct departments and saves them only when changed', async () => {
+  it('shows the direct departments by name and NEVER writes them from here (the validator pools have one home)', async () => {
     const { f, c, api } = render(UserEditComponent, 'u1');
     await f.whenStable(); f.detectChanges();
     expect(c.deptIds()).toEqual(['d-hae']);
-    expect(c.departmentOptions().map((o: { label: string }) => o.label)).toEqual(['Biochemistry', 'Haematology', 'Microbiology']);
+    expect(c.deptNames()).toEqual(['Haematology']);
+    expect(typeof c.setDepts).toBe('undefined');
 
-    c.save();   // unchanged → no departments PUT
-    expect(api.put.mock.calls.filter((x: unknown[]) => String(x[0]).endsWith('/departments')).length).toBe(0);
-
-    c.setDepts(['d-hae', 'd-bio']);
     c.save();
-    expect(api.put).toHaveBeenCalledWith('/api/users/u1/departments', { departmentIds: ['d-hae', 'd-bio'] });
+    expect(api.put.mock.calls.filter((x: unknown[]) => String(x[0]).endsWith('/departments')).length).toBe(0);
   });
 });
 

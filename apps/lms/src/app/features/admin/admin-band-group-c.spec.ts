@@ -222,11 +222,11 @@ describe('Admin band — Inventory', () => {
   // The item grid is AG-Grid (rows virtualised): read what it is fed.
   const rows = (p: { cmp: any }) => (p.cmp.visibleItems() as { name: string }[]).map(i => i.name);
 
-  it('band present, custom header classic-only, tabs + category filter in the pill', async () => {
+  it('band present, custom header classic-only, category filter in the pill (no tabs)', async () => {
     const p = await render();
     expect(p.band()).not.toBeNull();
     expect(p.el.querySelector('h1')!.closest('.pf-classic-only')).not.toBeNull();
-    expect(p.tools()!.querySelector('pf-segmented')).not.toBeNull();
+    expect(p.tools()!.querySelector('pf-segmented')).toBeNull();
     expect(p.tools()!.querySelector('pf-select')).not.toBeNull();
     expect(rows(p).length).toBe(2);
     expect(p.el.querySelector('ag-grid-angular.pf-inv-grid')).not.toBeNull();
@@ -252,41 +252,15 @@ describe('Admin band — Inventory', () => {
     expect(text(p.body())).toContain('No items match');
   });
 
-  it('Test consumables tab: the band search finds tests (left list); the picked test\'s consumables are the main card', async () => {
+  it('Test consumables are gone from Inventory (Test editor › Consumables is the one home)', async () => {
     const p = await render();
-    p.cmp.setTab('bom'); p.f.detectChanges();
-    expect(p.bandInput()).not.toBeNull();
-    expect(p.bandInput()!.placeholder).toContain('Search tests');
-    expect(p.tools()!.querySelector('.pf-inv-bandsel')).toBeNull();   // no category filter here
-    expect(p.body()!.querySelector('ag-grid-angular')).toBeNull();
-    const tests = () => Array.from(p.el.querySelectorAll('.pf-band-body .inv-row .inv-row__name')).map(n => text(n).trim());
-    expect(tests()).toEqual(['CBC', 'Glucose']);
-    p.type('glu');
-    expect(tests()).toEqual(['Glucose']);
-    expect(text(p.body())).toContain('Per-test consumables');
-    expect(text(p.body())).toContain('Pick a test');
-  });
-
-  it('Test consumables: picking a test loads its lines; the card shows how many tests the stock covers; Save is the ONE primary', async () => {
-    const p = renderBandPage(InventoryComponent, {
-      getFor: (url) => url === '/api/inventory/items' ? items
-        : url === '/api/inventory/alerts' ? { lowStock: [], expiring: [] }
-          : url === '/api/tests/?view=summary' ? [{ id: 't1', name: 'CBC' }]
-            : url === '/api/inventory/tests/t1/consumables' ? [{ itemId: 'i1', qtyPerTest: 2 }]
-              : [],
-    });
-    await p.f.whenStable(); p.f.detectChanges();
-    p.cmp.setTab('bom'); p.f.detectChanges();
-    p.el.querySelector<HTMLButtonElement>('.pf-band-body .inv-row')!.click();
-    await p.f.whenStable(); p.f.detectChanges();
-    expect(p.api.get).toHaveBeenCalledWith('/api/inventory/tests/t1/consumables');
-    expect(p.el.querySelectorAll('.bom-line').length).toBe(1);
-    expect(text(p.el.querySelector('.bom-line__cover'))).toContain('250 tests');   // 500 on hand / 2 per test
-    const prim = Array.from(p.el.querySelectorAll('.pf-btn--primary, .pf-hb-btn--primary')).filter(b => !b.closest('.pf-classic-only'));
-    expect(prim.map(b => text(b).trim())).toEqual(['Save consumables']);
-    prim[0].dispatchEvent(new Event('click'));
-    await p.f.whenStable();
-    expect(p.api.put).toHaveBeenCalledWith('/api/inventory/tests/t1/consumables', { lines: [{ itemId: 'i1', qtyPerTest: 2 }] });
+    expect(p.cmp.setTab).toBeUndefined();
+    expect(p.cmp.saveBom).toBeUndefined();
+    expect(p.tools()!.querySelector('pf-segmented')).toBeNull();
+    expect(p.bandInput()!.placeholder).toContain('Search items');
+    expect(text(p.el)).not.toContain('Per-test consumables');
+    expect(p.api.get.mock.calls.map((c: unknown[]) => c[0])).not.toContain('/api/tests/?view=summary');
+    expect(p.api.put).not.toHaveBeenCalled();
   });
 });
 

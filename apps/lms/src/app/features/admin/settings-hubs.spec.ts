@@ -81,7 +81,7 @@ describe('Settings search on the hubs — precise, with where it lives, Enter op
     const rows = Array.from(p.el.querySelectorAll<HTMLElement>('[data-testid="settings-hit"]'));
     expect(rows.length).toBeGreaterThan(0);
     expect(rows[0].textContent).toContain('Sample ID format');
-    expect(rows[0].textContent).toContain('Organization & Identity · Sample ID');
+    expect(rows[0].textContent).toContain('Lab · Sample numbers');
     expect(p.el.querySelector('pf-settings-results ul.pf-sr')).not.toBeNull();
   });
 

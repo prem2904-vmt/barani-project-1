@@ -56,7 +56,7 @@ function render(opts: { cfg$?: Subject<unknown>; patch$?: Subject<unknown> } = {
   const f = TestBed.createComponent(LabSettingsComponent);
   f.detectChanges();
   const el = f.nativeElement as HTMLElement;
-  const state = () => el.querySelector<HTMLElement>('pf-hero-band .pf-ls__savestate')!;
+  const state = () => el.querySelector<HTMLElement>('.pf-ls__savestate')!;
   return { f, el, c: f.componentInstance as any, api, state };
 }
 
@@ -85,7 +85,7 @@ describe('Lab settings — loading feedback', () => {
     expect(el.querySelector('.pf-ls__card')).not.toBeNull();
   });
 
-  it('an autosave in flight: the band reads "Saving…" after 150ms (not before), back to "saved" once it answers', () => {
+  it('an autosave in flight: the page reads "Saving…" after 150ms (not before), back to "saved" once it answers', () => {
     const patch$ = new Subject<unknown>();
     const { f, c, state } = render({ patch$ });
     expect(state().textContent).toContain('Changes save automatically');

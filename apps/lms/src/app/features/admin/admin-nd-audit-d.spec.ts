@@ -466,9 +466,9 @@ describe('ND audit D — Lab settings', () => {
     ],
   });
 
-  it('autosave is stated in the band (neutral + violet check); no primary; cards have the BILLING header', () => {
+  it('autosave is stated (neutral + violet check); no primary; cards have the BILLING header', () => {
     const p = render();
-    const st = p.el.querySelector('pf-hero-band .pf-hb__actions .pf-savestate')!;
+    const st = p.el.querySelector('.pf-savestate')!;
     expect(st.textContent).toContain('Changes save automatically');
     expect(st.querySelector('svg')).not.toBeNull();
     expect(primaries(p.el)).toBe(0);
@@ -482,9 +482,9 @@ describe('ND audit D — Lab settings', () => {
     const p = render();
     expect(p.el.querySelector('.pf-ls__gate[role="radiogroup"] .pf-ls__gate-opt[role="radio"]')).not.toBeNull();
     expect(p.el.querySelector('[class*="gate-opt--on"]')).toBeNull();
-    p.cmp.tab.set('rules'); p.f.detectChanges();
+    p.f.componentRef.setInput('cards', ['require-validation', 'no-scan', 'calc-constants']); p.f.detectChanges();
     const sw = p.el.querySelectorAll('.pf-ls__card .pf-toggle[role="switch"]');
-    expect(sw.length).toBeGreaterThanOrEqual(3);
+    expect(sw.length).toBe(2);
     expect(p.el.querySelectorAll('input.pf-input.pf-num').length).toBe(3);
     hygiene(p.el);
   });

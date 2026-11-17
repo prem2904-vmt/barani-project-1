@@ -14,6 +14,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { BusyComponent, SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { spinDelay } from '../../../shared/utils/busy';
+import { LAB_SPACES_PATH } from '../../../shared/utils/lab-settings-pages';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
 import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
@@ -200,7 +201,7 @@ interface AutoAssignConfig {
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How this branch's tubes group into spaces.
-          <strong>Auto</strong> (default) = arrange freely on the Branches board —
+          <strong>Auto</strong> (default) = arrange freely on the lab spaces board —
           placed departments follow their space, the rest share the default "Lab".
           <strong>Integrated</strong> = one lab, ONE space — everything shares the
           default "Lab" space.
@@ -223,10 +224,10 @@ interface AutoAssignConfig {
         </div>
         <p class="pf-ls__hint" style="margin-top: 12px;">
           Tip: set the default "Lab" code (the sample-ID prefix for departments with no
-          dedicated space) on the default "Lab" lane in <strong>Branches</strong> —
+          dedicated space) on the default "Lab" lane in <strong>Departments and lab spaces</strong> —
           leave it blank for no prefix.
         </p>
-        <button type="button" class="pf-ls__link" style="margin-top: 6px;" (click)="goBranches()">Open Branches</button>
+        <button type="button" class="pf-ls__link" style="margin-top: 6px;" (click)="goBranches()">Open lab spaces</button>
       </div>
       </section>
       }
@@ -401,7 +402,7 @@ interface AutoAssignConfig {
         </div>
 
         @if (departments().length === 0) {
-          <p class="pf-ls__empty">No departments yet — add them from Branches first.</p>
+          <p class="pf-ls__empty">No departments yet — add them in Departments and lab spaces first.</p>
         } @else {
           <div class="pf-ls__dept-grid" [class.pf-ls__dept-grid--off]="!autoAssignEnabled() && !autoAssignValidatorsEnabled()">
             @for (d of departments(); track d.id) {
@@ -718,8 +719,8 @@ export class LabSettingsComponent implements OnInit {
   // arranged it behaves exactly like Integrated — everything in the one Lab).
   protected readonly labStructure = signal<'auto' | 'integrated' | 'standalone'>('auto');
   protected readonly labStructureOptions: Array<{ value: 'auto' | 'integrated' | 'standalone'; label: string; desc: string }> = [
-    { value: 'auto', label: 'Auto (default)', desc: 'You arrange it: drag departments between spaces on the Branches board. A placed department follows its space (code + shared vials); unplaced departments share the default "Lab" space.' },
-    { value: 'integrated', label: 'Integrated', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared tube with the Lab-code prefix. Space arrangement on the Branches board is ignored.' },
+    { value: 'auto', label: 'Auto (default)', desc: 'You arrange it: drag departments between spaces on the lab spaces board. A placed department follows its space (code + shared vials); unplaced departments share the default "Lab" space.' },
+    { value: 'integrated', label: 'Integrated', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared tube with the Lab-code prefix. Space arrangement on the lab spaces board is ignored.' },
     { value: 'standalone', label: 'Standalone', desc: 'Every department keeps its own sample-ID prefix (the department code). Tubes are still shared: one tube per tube type per visit, whatever the department.' },
   ];
   readonly collectionMode = this.labCfg.collectionMode;
@@ -784,7 +785,7 @@ export class LabSettingsComponent implements OnInit {
     });
   }
   /** Lab spaces (names + codes) are edited on the Departments and lab spaces page. */
-  goBranches() { this.router.navigate(['/admin/branches']); }
+  goBranches() { this.router.navigate([LAB_SPACES_PATH]); }
 
   private readonly destroyRef = inject(DestroyRef);
   ngOnInit() {

@@ -35,14 +35,14 @@ function make(cfg: Record<string, unknown>) {
       : url === '/api/config/report-template' ? null : [],
     providers,
   });
-  p.cmp.tab.set('report');
+  p.f.componentRef.setInput('cards', ['tech-notes']);
   p.f.detectChanges();
   const sw = () => p.el.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Technician notes on report"]');
   return { ...p, sw };
 }
 
 describe('Lab settings — technician notes on report', () => {
-  it('is an ND switch card under the Report tab, off by default', () => {
+  it('is an ND switch card (Lab › Report options), off by default', () => {
     const p = make({});
     expect(p.sw()).not.toBeNull();
     expect(p.sw()!.classList.contains('pf-toggle')).toBe(true);

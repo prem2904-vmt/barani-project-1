@@ -72,30 +72,44 @@ describe('Admin band B2 — Lab settings', () => {
     });
   }
 
-  it('band with a tabs-only pill (no search), header classic-only, one scrolling body', () => {
+  const show = (p: ReturnType<typeof make>, cards: string[] | null) => {
+    p.f.componentRef.setInput('cards', cards);
+    p.f.detectChanges();
+  };
+  const t = (p: ReturnType<typeof make>) => titles(p, '.pf-ls__title');
+
+  it('is a card host: no band or header of its own (the Lab page supplies them)', () => {
     const p = make();
-    expect(p.band()).not.toBeNull();
-    expect(p.bandInput()).toBeNull();
-    expect(p.el.querySelector('.pf-hb__search--tabs')).not.toBeNull();
-    expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.body()).not.toBeNull();
-    expect(pillTabs(p).labels()).toEqual(['Collection & IDs', 'Queues & assignment', 'Rules & gates', 'Report']);
+    expect(p.band()).toBeNull();
+    expect(p.el.querySelector('pf-screen-header')).toBeNull();
   });
 
-  it('pill tabs swap the visible section cards', () => {
+  it('shows only the cards a page gives it', () => {
     const p = make();
-    const t = () => titles(p, '.pf-ls__title');
-    expect(t()).toContain('Sample identification');
-    expect(t()).toContain('Specimen label code');
-    expect(t()).not.toContain('Queue focus');
+    show(p, ['queue-focus']);
+    expect(t(p)).toEqual(['Queue focus']);
+    show(p, ['scan-mode']);
+    expect(t(p)).toEqual(['Sample identification']);
+    show(p, ['lab-structure']);
+    expect(t(p)).toEqual(['Lab structure']);
+    show(p, ['label-code']);
+    expect(t(p)).toEqual(['Specimen label code']);
+    show(p, ['auto-assign']);
+    expect(t(p)).toEqual(['Auto-assign by department']);
+    show(p, ['require-validation']);
+    expect(t(p)).toEqual(['Require validation for all results']);
+  });
 
-    pillTabs(p).click('Queues & assignment');
-    expect(t()).toEqual(expect.arrayContaining(['Queue focus', 'Lab structure', 'Auto-assign by department']));
-    expect(t()).not.toContain('Sample identification');
-
-    pillTabs(p).click('Rules & gates');
-    expect(t()).toEqual(expect.arrayContaining(['Calculation constants', 'Require full payment to progress', 'Enable inventory']));
-    expect(t()).not.toContain('Lab structure');
+  it('the moved cards are gone: payment rules (Billing), Enable inventory (Inventory), the pointer cards', () => {
+    const p = make();
+    show(p, null);
+    const all = t(p);
+    expect(all).not.toContain('Require full payment to progress');
+    expect(all).not.toContain('Show "Payments due" tab');
+    expect(all).not.toContain('Enable inventory');
+    expect(all).not.toContain('Sample IDs');
+    expect(all).not.toContain('Report layout');
+    expect(all).not.toContain('WhatsApp, email and SMS');
   });
 
   it('autosaves — no page-level band action', () => {
@@ -117,7 +131,7 @@ describe('Admin band B2 — Organization & Identity', () => {
     expect(p.band()).not.toBeNull();
     expect(p.bandInput()).toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(pillTabs(p).labels()).toEqual(['Identity', 'Patient ID', 'Sample ID', 'Order ID']);
+    expect(pillTabs(p).labels()).toEqual(['Identity', 'Patient ID', 'Order ID']);
   });
 
   it('pill tabs swap the cards; the open tab Save is the band ONE primary', () => {
@@ -130,8 +144,6 @@ describe('Admin band B2 — Organization & Identity', () => {
     pillTabs(p).click('Patient ID');
     expect(t()).toEqual(['Patient ID format']);
     expect(primary()[0].textContent).toContain('Save format');
-    pillTabs(p).click('Sample ID');
-    expect(t()).toEqual(['Sample ID format']);
     pillTabs(p).click('Order ID');
     expect(t()).toEqual(['Order ID format']);
     expect(p.actions().length).toBe(1);
