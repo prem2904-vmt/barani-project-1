@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, input, signal, viewChild } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
@@ -17,7 +18,13 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
-import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
+import { AgGridAngular } from 'ag-grid-angular';
+import { HomeCollectionSwitchCardComponent } from '../lab-pages/home-collection-switch-card.component';
+import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, sgActions, sgActionsCol, sgCell, sgGridTheme, sgMedia, sgPillCol, sgRowOff, sgBare } from '../../../shared/settings-grid/settings-grid';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 type AreaMode = 'pincode' | 'radius';
 interface Draft {
@@ -34,39 +41,28 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
 @Component({
   selector: 'pf-home-collection-agents',
   standalone: true,
-  imports: [SkeletonTilesComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent],
+  imports: [NgTemplateOutlet, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent,
+    AgGridAngular, HomeCollectionSwitchCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   styles: [`
-    /* ── ND audit: kit cards ── */
-    .pf-hc-form { margin-bottom: 16px; max-width: 48rem; }
-    .pf-hc-form .pf-section-title { margin: 0; }
-    .pf-hc-form__body { padding: 16px 18px; }
     .pf-hc-lbl { display: block; margin-bottom: 6px; }
     .pf-hc-hint { margin-top: 6px; }
-    .pf-hc-card { height: 100%; padding: 14px 16px; overflow: visible; }
-    .pf-hc-name { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
-    .pf-hc-chip { height: 24px; font-size: 11.5px; gap: 4px; }
-    .pf-hc-area { margin: 6px 0 0; font-size: 12px; line-height: 1.45; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-    .pf-hc-acts { border-top: 1px solid var(--pf-line); }
-    /* Phone-only (<=640px): keep this page's OWN text input at >=16px so iOS
-       Safari does not auto-zoom on focus. Scoped to this component's instances
-       only — does not restyle the global .pf-input primitive elsewhere.
-       Desktop-web (>=1280px) and iPad are byte-for-byte unchanged. */
+    .pf-hc-body { gap: 12px; }
+    .pf-hc-panels { grid-template-columns: 380px minmax(0, 1fr); }
+    .pf-hc-panels.pf-sg-panels--single, .pf-hc-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
+    .pf-hc-strip { flex: none; display: block; }
+    .pf-hc-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    /* Phone: page inputs >=16px so iOS Safari does not zoom on focus (scoped to this page). */
     @media (max-width: 640px) {
       :host input.pf-input { font-size: 16px; }
-      /* Same iOS auto-zoom guard for this page's numeric fields (lat/lng/radius/
-         weight). pf-number-input's inner .field is 14px; bump to 16px on phone.
-         Scoped under :host so only THIS page's number inputs are affected — the
-         shared pf-number-input primitive is unchanged everywhere else, and
-         iPad/desktop are byte-for-byte untouched. */
       :host ::ng-deep pf-number-input .field { font-size: 16px; }
     }
   `],
   template: `
-    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10 max-w-6xl mx-auto w-full">
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <!-- Band pill (owner): agent search (name, pincodes, area); "Add
-             agent" rides the band's actions. -->
+        <!-- Band pill: agent search (name, pincodes, area); "Add agent" is the ONE primary. -->
         <pf-hero-band [back]="true" placeholder="Search agents — name, pincode, area…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-actions>
@@ -94,105 +90,121 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
         </pf-touch-btn>
       </pf-screen-header>
 
-      <div class="pf-band-body">
-      @if (formOpen()) {
-        <section class="pf-card pf-anim-in pf-hc-form" [attr.aria-label]="editing() ? 'Edit area' : 'New agent'">
-          <div class="pf-card__head">
-            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10M9 21v-6h6v6"/></svg></span>
-            <h3 class="pf-card__label pf-section-title">{{ editing() ? 'Edit area' : 'New agent' }}</h3>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pf-hc-form__body">
-            <div class="sm:col-span-2">
-              <label class="pf-field__lbl pf-hc-lbl">Agent (staff member)</label>
-              <pf-select [options]="userOptions()" [value]="draft().userId" [disabled]="editing()"
-                placeholder="Pick a user" (valueChange)="patch({ userId: $any($event) })"></pf-select>
-            </div>
-            <div class="sm:col-span-2">
-              <label class="pf-field__lbl pf-hc-lbl">Coverage</label>
-              <span class="pf-seg" role="radiogroup" aria-label="Coverage">
-                @for (o of modeOptions; track o.value) {
-                  <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="draft().areaMode === o.value"
-                          (click)="patch({ areaMode: o.value })">{{ o.label }}</button>
-                }
-              </span>
-            </div>
-
-            @if (draft().areaMode === 'pincode') {
-              <div class="sm:col-span-2">
-                <label class="pf-field__lbl pf-hc-lbl">Pincodes — list and/or ranges</label>
-                <input type="text" class="pf-input pf-num" [ngModel]="draft().pincodes"
-                  (ngModelChange)="patch({ pincodes: $event })" placeholder="600001, 600028, 600001-600050" />
-                <p class="pf-field__hint pf-hc-hint">
-                  Comma-separated. Use a range with a dash or "to": <span class="pf-num">600001-600050</span> or <span class="pf-num">600001 to 600050</span>.
-                </p>
+      <div class="pf-band-body pf-band-body--fill pf-hc-body">
+        <!-- The branch switch + status: ONE compact row spanning the grid's width. -->
+        @if (showSwitch()) {
+          <pf-home-collection-switch-card class="pf-hc-strip" variant="strip"></pf-home-collection-switch-card>
+        }
+        <div class="pf-sg-panels pf-hc-panels" [class.pf-sg-panels--single]="!formOpen()" [class.pf-sg-panels--narrow]="narrow()">
+          @if (formOpen()) {
+            @if (narrow()) { <div class="pf-sheet-backdrop" (click)="toggleForm()"></div> }
+            <aside class="pf-card pf-sg-side pf-hc-form" [class.pf-sg-side--sheet]="narrow()" [attr.role]="narrow() ? 'dialog' : null"
+                   [attr.aria-modal]="narrow() ? 'true' : null" [attr.aria-label]="editing() ? 'Edit area' : 'New agent'"
+                   (keydown.escape)="toggleForm()">
+              @if (narrow()) { <span class="pf-sg-sheet-handle" aria-hidden="true"></span> }
+              <div class="pf-card__head">
+                <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10M9 21v-6h6v6"/></svg></span>
+                <h3 class="pf-card__label">{{ editing() ? 'Edit area' : 'New agent' }}</h3>
+                <span class="pf-card__spacer"></span>
+                <button type="button" class="pf-btn pf-btn--icon" (click)="toggleForm()" aria-label="Close">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
               </div>
-            } @else {
-              <div>
-                <label class="pf-field__lbl pf-hc-lbl">Centre latitude</label>
-                <pf-number-input [value]="draft().centerLat" [step]="0.001" [allowEmpty]="true"
-                  (valueChange)="patch({ centerLat: $event })"></pf-number-input>
-              </div>
-              <div>
-                <label class="pf-field__lbl pf-hc-lbl">Centre longitude</label>
-                <pf-number-input [value]="draft().centerLng" [step]="0.001" [allowEmpty]="true"
-                  (valueChange)="patch({ centerLng: $event })"></pf-number-input>
-              </div>
-              <div>
-                <label class="pf-field__lbl pf-hc-lbl">Radius (km)</label>
-                <pf-number-input [value]="draft().radiusKm" [step]="1" [min]="1" [allowEmpty]="true"
-                  (valueChange)="patch({ radiusKm: $event })"></pf-number-input>
-              </div>
-            }
-
-            <div>
-              <label class="pf-field__lbl pf-hc-lbl">Weight (share of work)</label>
-              <pf-number-input [value]="draft().weightage" [step]="1" [min]="1"
-                (valueChange)="patch({ weightage: $event ?? 1 })"></pf-number-input>
-            </div>
-          </div>
-          <div class="pf-card__foot">
-            <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleForm()">Cancel</button>
-            <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!draft().userId || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
-              {{ saving() ? 'Saving…' : 'Save agent' }}
-            </button>
-          </div>
-        </section>
-      }
-
-      @if (listSkeleton()) {
-        <!-- First load: the agent cards' shape, not "No agents yet". -->
-        <pf-skeleton-tiles [count]="3" label="Loading agents…"></pf-skeleton-tiles>
-      } @else if (agents().length === 0) {
-        <p class="pf-band-empty">No home-collection agents yet.</p>
-      } @else if (visibleAgents().length === 0) {
-        <p class="pf-band-empty">No agents match "{{ q() }}".</p>
-      } @else {
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          @for (a of visibleAgents(); track a.id) {
-            <div class="pf-card pf-hc-card">
-              <div class="flex flex-col justify-between h-full gap-3">
-                <div class="min-w-0">
-                  <div class="flex items-center gap-2 flex-wrap min-w-0">
-                    <p class="pf-hc-name">{{ agentName(a) }}</p>
-                    <span class="pf-chip pf-chip--static pf-hc-chip">Weight <span class="pf-num">{{ a.weightage }}</span></span>
-                    @if (!a.isActive) { <span class="pf-chip pf-chip--static pf-hc-chip">Inactive</span> }
+              <div class="pf-card__body">
+                <div>
+                  <label class="pf-field__lbl pf-hc-lbl">Agent (staff member)</label>
+                  <pf-select [options]="userOptions()" [value]="draft().userId" [disabled]="editing()" [searchable]="userOptions().length > 8"
+                    placeholder="Pick a user" (valueChange)="patch({ userId: $any($event) })"></pf-select>
+                </div>
+                <div>
+                  <label class="pf-field__lbl pf-hc-lbl">Coverage</label>
+                  <span class="pf-seg" role="radiogroup" aria-label="Coverage">
+                    @for (o of modeOptions; track o.value) {
+                      <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="draft().areaMode === o.value"
+                              (click)="patch({ areaMode: o.value })">{{ o.label }}</button>
+                    }
+                  </span>
+                </div>
+                @if (draft().areaMode === 'pincode') {
+                  <div>
+                    <label class="pf-field__lbl pf-hc-lbl">Pincodes — list and/or ranges</label>
+                    <input type="text" class="pf-input pf-num" [ngModel]="draft().pincodes"
+                      (ngModelChange)="patch({ pincodes: $event })" placeholder="600001, 600028, 600001-600050" />
+                    <p class="pf-field__hint pf-hc-hint">
+                      Comma-separated. Use a range with a dash or "to": <span class="pf-num">600001-600050</span> or <span class="pf-num">600001 to 600050</span>.
+                    </p>
                   </div>
-                  <p class="pf-hc-area">{{ areaSummary(a) }}</p>
-                </div>
-                <div class="flex items-center justify-end gap-2 pt-2 pf-hc-acts">
-                  <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="edit(a)" aria-label="Edit area" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="pf-rowact__t">Edit</span></button>
-                  <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="remove(a)" [disabled]="removingId() === a.id" [pfBusy]="removingId() === a.id" pfBusyLabel="Removing…" aria-label="Remove agent" title="Remove"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg><span class="pf-rowact__t">Remove</span></button>
+                } @else {
+                  <div class="pf-hc-row2">
+                    <div>
+                      <label class="pf-field__lbl pf-hc-lbl">Centre latitude</label>
+                      <pf-number-input [value]="draft().centerLat" [step]="0.001" [allowEmpty]="true"
+                        (valueChange)="patch({ centerLat: $event })"></pf-number-input>
+                    </div>
+                    <div>
+                      <label class="pf-field__lbl pf-hc-lbl">Centre longitude</label>
+                      <pf-number-input [value]="draft().centerLng" [step]="0.001" [allowEmpty]="true"
+                        (valueChange)="patch({ centerLng: $event })"></pf-number-input>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="pf-field__lbl pf-hc-lbl">Radius (km)</label>
+                    <pf-number-input [value]="draft().radiusKm" [step]="1" [min]="1" [allowEmpty]="true"
+                      (valueChange)="patch({ radiusKm: $event })"></pf-number-input>
+                  </div>
+                }
+                <div>
+                  <label class="pf-field__lbl pf-hc-lbl">Weight (share of work)</label>
+                  <pf-number-input [value]="draft().weightage" [step]="1" [min]="1"
+                    (valueChange)="patch({ weightage: $event ?? 1 })"></pf-number-input>
                 </div>
               </div>
-            </div>
+              <div class="pf-card__foot">
+                <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleForm()">Cancel</button>
+                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!draft().userId || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+                  {{ saving() ? 'Saving…' : 'Save agent' }}
+                </button>
+              </div>
+            </aside>
           }
+
+          <section class="pf-card pf-sg-main pf-hc-main" [class.pf-sg-main--bare]="bare" aria-label="Home-collection agents">
+            <header class="pf-card__head pf-sg-main__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span>
+              <span class="pf-card__label">Agents</span>
+              <span class="pf-card__note pf-sg-hint">Requests are routed by area and shared by weight</span>
+              <ng-container *ngTemplateOutlet="headTools"></ng-container>
+            </header>
+            <div class="pf-sg-main__body">
+              @if (listSkeleton()) {
+                <pf-skeleton-table class="pf-sg-skel" [rows]="5" [cols]="4" label="Loading agents…"></pf-skeleton-table>
+              }
+              <ag-grid-angular class="pf-sg-grid pf-hc-grid" [theme]="gridTheme()" [rowData]="visibleAgents()" [columnDefs]="colDefs()"
+                               [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [animateRows]="true"
+                               [suppressNoRowsOverlay]="true" [suppressCellFocus]="true"></ag-grid-angular>
+              @if (!listSkeleton() && visibleAgents().length === 0) {
+                <div class="pf-sg-empty pf-band-empty">
+                  <p class="pf-sg-empty__title">{{ agents().length === 0 ? 'No home-collection agents yet.' : 'No agents match "' + q() + '".' }}</p>
+                  @if (agents().length === 0) { <p class="pf-sg-empty__body">Add agent to assign a staff member and the area they cover.</p> }
+                </div>
+              }
+            </div>
+          </section>
         </div>
-      }
       </div>
     </section>
+
+    <!-- The grid card's head tools (count): exposed so a host can project them into its own head. -->
+    <ng-template #headTools>
+      <span class="pf-sg-count pf-num">{{ visibleAgents().length }} {{ visibleAgents().length === 1 ? 'agent' : 'agents' }}</span>
+    </ng-template>
   `
 })
 export class HomeCollectionAgentsComponent implements OnInit {
+  /** Hosted in the Settings shell: the grid card renders BARE (ONE card, ONE head). */
+  protected readonly bare = sgBare();
+  /** Count, for a host that projects head tools into its own head. */
+  readonly headTools = viewChild<TemplateRef<unknown>>('headTools');
   private readonly api = inject(ApiService);
   private readonly svc = inject(AppointmentQueueService);
   private readonly toast = inject(ToastService);
@@ -232,6 +244,59 @@ export class HomeCollectionAgentsComponent implements OnInit {
   /** The agent whose Remove is running. */
   readonly removingId = signal<string | null>(null);
   private readonly destroyRef = inject(DestroyRef);
+
+  /** The branch switch strip above the grid (Lab › Home collection › Agents); off where a host shows its own. */
+  readonly showSwitch = input(true);
+
+  // ── Test Master grid ──
+  readonly narrow = sgMedia(SG_NARROW_MQ);
+  readonly phone = sgMedia(SG_PHONE_MQ);
+  readonly gridTheme = sgGridTheme();
+  readonly getRowId = (p: GetRowIdParams<HomeCollectionAgent>) => p.data.id;
+  readonly rowClass = sgRowOff<HomeCollectionAgent>(a => a.isActive !== false);
+  readonly defaultColDef: ColDef<HomeCollectionAgent> = { sortable: true, resizable: true, filter: false, minWidth: 90, wrapText: true, autoHeight: true };
+  actionsFor(a: HomeCollectionAgent): SgAction[] {
+    const name = this.agentName(a);
+    return [
+      { label: 'Edit', aria: `Edit area of ${name}`, icon: true, path: SG_ICON.edit, run: () => this.edit(a) },
+      { label: this.removingId() === a.id ? 'Removing…' : 'Remove', aria: `Remove agent ${name}`, path: SG_ICON.trash, icon: true, danger: true, run: () => this.remove(a) },
+    ];
+  }
+  readonly colDefs = computed<ColDef<HomeCollectionAgent>[]>(() => {
+    const web = this.web() && !this.phone();
+    this.removingId(); this._users();
+    const cols: ColDef<HomeCollectionAgent>[] = [
+      { colId: 'agent', headerName: 'Agent', flex: 1.1, minWidth: 180, sort: 'asc', valueGetter: p => (p.data ? this.agentName(p.data) : ''),
+        cellRenderer: (p: ICellRendererParams<HomeCollectionAgent>) => sgCell(p.data ? this.agentName(p.data) : '', p.data?.user?.email ?? null, true) },
+      { colId: 'coverage', headerName: 'Coverage', flex: 2, minWidth: 220, valueGetter: p => (p.data ? this.coverageText(p.data) : ''),
+        cellRenderer: (p: ICellRendererParams<HomeCollectionAgent>) => {
+          const t = p.data ? this.coverageText(p.data) : '';
+          const unset = !!p.data && this.coverageUnset(p.data);
+          const el = sgCell(unset ? null : t, unset ? t : null);
+          if (unset) el.firstElementChild?.remove();
+          return el;
+        } },
+      { colId: 'weight', headerName: 'Share of work', width: 140, minWidth: 120, flex: 0, type: 'rightAligned', cellClass: 'pf-num',
+        valueGetter: p => p.data?.weightage ?? 1 },
+      sgPillCol<HomeCollectionAgent>(a => a.isActive !== false),
+      sgActionsCol<HomeCollectionAgent>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span'))),
+    ];
+    if (!this._agents().some(a => a.isActive === false)) cols.splice(3, 1);
+    if (this.phone()) return cols.filter(c => ['agent', 'coverage', 'actions'].includes(c.colId ?? ''));
+    return cols;
+  });
+  /** Coverage in the grid: pincodes / ranges, or "radius 5 km around …"; muted "none set". */
+  coverageText(a: HomeCollectionAgent): string {
+    if (a.areaMode === 'radius') {
+      if (a.centerLat == null || a.centerLng == null) return 'Radius — centre not set';
+      return `Radius ${a.radiusKm ?? '?'} km around ${a.centerLat.toFixed(3)}, ${a.centerLng.toFixed(3)}`;
+    }
+    const pins = this.parsePincodes(a.pincodesJson);
+    return pins.length ? pins.join(', ') : 'None set';
+  }
+  coverageUnset(a: HomeCollectionAgent): boolean {
+    return a.areaMode === 'radius' ? (a.centerLat == null || a.centerLng == null) : this.parsePincodes(a.pincodesJson).length === 0;
+  }
 
   ngOnInit() {
     this.destroyRef.onDestroy(() => this.listHold.cancel());

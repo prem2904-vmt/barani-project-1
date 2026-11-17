@@ -88,10 +88,11 @@ describe('Lab › Home collection', () => {
     expect(p.el.querySelector<HTMLButtonElement>('[data-testid="hc-switch"]')!.disabled).toBe(false);
   });
 
-  it('one page: the switch card and the existing agents screen (coverage area and share of work) as group cards', async () => {
+  it('one page: the switch card and the agents grid as group cards; the agents group carries the switch as ONE compact strip (owner 2026-11-17)', async () => {
     const p = await renderLabPage(LabHomeCollectionPage, '/page?tab=agents', { providers: [features(true)] });
     expect(p.el.querySelector('[data-group="agents"] pf-home-collection-agents')).not.toBeNull();
     expect(p.el.querySelector('[data-testid="hc-switch"]')).not.toBeNull();
+    expect(p.el.querySelector('[data-group="agents"] pf-home-collection-agents .pf-hs-strip [data-testid="hc-switch"]')).not.toBeNull();
   });
 });
 

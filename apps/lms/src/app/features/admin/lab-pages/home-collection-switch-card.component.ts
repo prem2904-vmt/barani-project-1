@@ -1,5 +1,5 @@
 import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
@@ -28,7 +28,28 @@ export const DEFAULT_QUEUE_MODE: QueueMode = 'token_queue';
   imports: [SettingRowComponent, RouterLink, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (!cfg()) {
+    @if (variant() === 'strip') {
+      <!-- ONE compact row above the agents grid (owner 2026-11-17): switch | Available · This branch. -->
+      <section class="pf-card pf-hs-strip" data-testid="hc-switch-card">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10M9 21v-6h6v6"/></svg></span>
+        <button type="button" class="pf-toggle pf-hs__switch" role="switch" data-testid="hc-switch"
+                [attr.aria-checked]="running()" aria-label="Run this branch's queue as home collection"
+                [disabled]="!cfg() || saving() || !canSwitch()" (click)="toggle()">
+          <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+          <span class="pf-hs-strip__lbl">Run this branch's queue as home collection</span>
+        </button>
+        <span class="pf-hs-strip__facts">
+          <span class="pf-hs__fact" data-testid="hc-available">Available: <strong>{{ cfg() ? (available() ? 'Yes' : 'No') : '…' }}</strong></span>
+          <span aria-hidden="true">·</span>
+          <span class="pf-hs__fact" data-testid="hc-running">This branch: <strong>{{ !cfg() ? '…' : running() ? 'Running as home collection' : 'Not running' }}</strong></span>
+        </span>
+        @if (cfg() && !available()) {
+          <span class="pf-hs-strip__warn" role="status" data-testid="hc-unavailable">
+            Not available: it needs the Home collection module and the <a class="pf-hs__link" routerLink="/admin/process">Home visits step</a>.
+          </span>
+        }
+      </section>
+    } @else if (!cfg()) {
       <pf-skeleton-card [lines]="2" label="Loading home collection…"></pf-skeleton-card>
     } @else {
       <div class="pf-hs" data-testid="hc-switch-card">
@@ -61,10 +82,16 @@ export const DEFAULT_QUEUE_MODE: QueueMode = 'token_queue';
     .pf-hs__warn { margin: 4px 0 10px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
     .pf-hs__link { color: var(--violet-text, #7c3aed); text-decoration: underline; text-underline-offset: 3px; }
     .pf-hs__switch { flex: none; }
+    .pf-hs-strip { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 10px 14px; padding: 10px 14px; }
+    .pf-hs-strip__lbl { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: normal; }
+    .pf-hs-strip__facts { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; font-size: 12.5px; color: var(--text-tertiary); }
+    .pf-hs-strip__warn { flex: 1 1 100%; font-size: 12px; color: var(--text-secondary); }
     @media (pointer: coarse) { :host .pf-hs__switch { min-width: 44px; min-height: 44px; justify-content: flex-end; } }
   `],
 })
 export class HomeCollectionSwitchCardComponent implements OnInit {
+  /** 'card' (Lab › Home collection › on/off: setting rows) or 'strip' (one row above the agents grid). */
+  readonly variant = input<'card' | 'strip'>('card');
   private readonly svc = inject(AppointmentQueueService);
   private readonly features = inject(LabFeaturesService);
   private readonly toasts = inject(ToastService);
