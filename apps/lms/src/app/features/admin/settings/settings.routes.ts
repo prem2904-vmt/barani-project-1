@@ -47,6 +47,7 @@ const blank = () => import('./settings-blank.component').then((m) => m.SettingsB
 const alias = (path: string): Route => page(path, blank);
 
 // ── The pages behind the paths ──
+const labDepartments = () => import('../lab-departments/lab-departments.component').then((m) => m.LabDepartmentsComponent);
 const branches = () => import('../branches/branches.component').then((m) => m.BranchesComponent);
 const organization = () => import('../organization/organization-settings.component').then((m) => m.OrganizationSettingsComponent);
 const labSettings = () => import('../lab-settings/lab-settings.component').then((m) => m.LabSettingsComponent);
@@ -87,7 +88,7 @@ export const OPD_FULL_SCREEN_ADMIN: ReadonlySet<string> = new Set(['admin/opd/se
 /** Children of the Settings shell. ORDER does not matter (every path is exact). */
 export const SETTINGS_SHELL_CHILDREN: Routes = [
   // ── Lab ──
-  page(P.labDepartments, branches),                                   // placeholder: Branches › departments board
+  page(P.labDepartments, labDepartments),
   page(P.labSampleNumbers, organization),                             // placeholder: Organization › Sample ID tab
   page(P.tests, tests),
   page(P.reports, reportTemplate, { leave: true }),

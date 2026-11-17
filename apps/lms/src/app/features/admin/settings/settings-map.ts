@@ -163,7 +163,10 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     items: [
       { id: 'lab-departments', label: 'Departments and lab spaces', path: P.labDepartments, iconPath: ICON.space,
         blurb: 'Departments on or off, and the lab space each works in, per branch.',
-        categories: [{ id: 'departments', label: 'Departments and lab spaces' }] },
+        categories: [
+          { id: 'departments', label: 'Departments', query: { tab: 'departments' } },
+          { id: 'spaces', label: 'Lab spaces', query: { tab: 'spaces' } },
+        ] },
       { id: 'lab-sample-numbers', label: 'Sample numbers', path: P.labSampleNumbers, iconPath: ICON.barcode,
         blurb: 'Sample ID format, prefix per lab space, barcode type, scan or type.',
         categories: [{ id: 'sample', label: 'Sample numbers', query: { tab: 'sample' } }] },

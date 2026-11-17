@@ -253,10 +253,10 @@ interface AutoAssignConfig {
         </div>
         <p class="pf-ls__hint" style="margin-top: 12px;">
           Tip: set the default "Lab" code (the sample-ID prefix for departments with no
-          dedicated space) on the default "Lab" lane in <strong>Branches</strong> —
+          dedicated space) on the default "Lab" lane in <strong>Departments and lab spaces</strong> —
           leave it blank for no prefix.
         </p>
-        <button type="button" class="pf-ls__link" style="margin-top: 6px;" (click)="goBranches()">Open Branches</button>
+        <button type="button" class="pf-ls__link" style="margin-top: 6px;" (click)="goBranches()">Open Departments and lab spaces</button>
       </div>
       </section>
       }
@@ -276,7 +276,7 @@ interface AutoAssignConfig {
           </p>
           <div class="pf-ls__links">
             <button type="button" class="pf-btn pf-btn--secondary pf-ls__linkbtn" (click)="goSampleIdFormat()">Sample ID format</button>
-            <button type="button" class="pf-btn pf-btn--secondary pf-ls__linkbtn" (click)="goBranches()">Prefixes in Branches</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-ls__linkbtn" (click)="goBranches()">Prefixes in lab spaces</button>
           </div>
         </div>
       </section>
@@ -984,7 +984,7 @@ export class LabSettingsComponent implements OnInit {
 
   goReportTemplate() { this.router.navigate(['/admin/reports'], { queryParams: { tab: 'table' } }); }
   goSampleIdFormat() { this.router.navigate(['/admin/organization'], { queryParams: { tab: 'sample' } }); }
-  goBranches() { this.router.navigate(['/admin/branches']); }
+  goBranches() { this.router.navigate(['/admin/lab/departments'], { queryParams: { tab: 'spaces' } }); }
 
   private readonly destroyRef = inject(DestroyRef);
   /** Payment gate + Payments-due tab — revenue policy (PATCH branch-lab-config

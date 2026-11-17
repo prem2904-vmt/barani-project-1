@@ -10,7 +10,7 @@
  *   1  the title starts with the query + a word   "sample id"     → Sample ID format
  *   2  the title starts with the query            "sample id"     → Sample identification
  *   3  every query word is a whole title word     "label code"    → Specimen label code
- *   4  every query word starts a title word       "bran"          → Branches & Departments
+ *   4  every query word starts a title word       "bran"          → Branches
  *   5  a keyword IS the query                     "barcode"       → Specimen label code
  *   6  a keyword starts with the query            "invoice num"   → Billing Config
  *   7  every query word starts a title/keyword word

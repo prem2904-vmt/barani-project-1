@@ -109,7 +109,10 @@ const fl = (title: string, keywords: string[]): SettingsEntry => ({ ...st(title,
 export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   // ── Lab ──
   pg('Departments and lab spaces', P.labDepartments, I.space, ['departments on or off', 'lab spaces', 'space code', 'drag department', 'tube sharing', 'tube colour', 'container', 'department']),
-  st('Default Lab code', P.labDepartments, I.space, ['sample id prefix', 'space code', 'lab code']),
+  st('Add a department', P.labDepartments, I.space, ['new department', 'own department', 'made here', 'rename department', 'delete department'], { tab: 'departments' }),
+  st('Departments on or off', P.labDepartments, I.space, ['switch department', 'deactivate department', 'catalogue'], { tab: 'departments' }),
+  st('Lab spaces', P.labDepartments, I.space, ['drag department', 'space', 'tube sharing', 'space name', 'space code'], { tab: 'spaces' }),
+  st('Default Lab code', P.labDepartments, I.space, ['sample id prefix', 'space code', 'lab code'], { tab: 'spaces' }),
   pg('Sample numbers', P.labSampleNumbers, I.barcode, ['sample number', 'tube id', 'barcode number', 'sample id digits', 'prefix per lab space'], {}, { tab: 'sample' }),
   st('Sample ID format', P.labSampleNumbers, I.barcode, ['sample number', 'tube id', 'barcode number', 'sample id digits'], { tab: 'sample' }),
   pg('Tests and packages', P.tests, I.tests, ['test master', 'tests', 'packages', 'profiles', 'parameters', 'reference range', 'catalogue', 'test price', 'tests & packages']),

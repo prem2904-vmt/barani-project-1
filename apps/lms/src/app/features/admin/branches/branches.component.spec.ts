@@ -7,13 +7,10 @@ import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
-import { DEPARTMENTS_FROM_MASTER } from '../../../shared/utils/test-origin';
 
 /**
- * Test Master single source, owner rule 4: departments come ONLY from the
- * Admin Test Master. The branch board places / enables / disables them and
- * never offers to create one (the server refuses with 403
- * `departments_master_only`).
+ * Departments and lab spaces moved to Lab (owner 2026-11-17): Branches keeps
+ * new branch, deactivate / reactivate and the GSTIN (shown, not edited).
  */
 function render() {
   // Always install the stub (never 'only if missing'): another spec in the same
@@ -23,7 +20,7 @@ function render() {
   const api = {
     get: vi.fn((url: string) => of(
       url.startsWith('/api/tenants/branches') ? [branch]
-        : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Haematology', code: 'HEM', isActive: true }]
+        : url.startsWith('/api/config/gst') ? [{ branchId: 'b1', gstin: '33AAAAA0000A1Z5' }]
           : [])),
     post: vi.fn(() => of({})),
     patch: vi.fn(() => of({})),
@@ -42,31 +39,33 @@ function render() {
   });
   const f = TestBed.createComponent(BranchesComponent);
   f.detectChanges();
-  const c = f.componentInstance as any;
-  c.toggle('b1');
-  f.detectChanges();
-  return { f, c, api, el: f.nativeElement as HTMLElement };
+  return { f, c: f.componentInstance as any, api, el: f.nativeElement as HTMLElement };
 }
 
-describe('Branches — departments are master-provided', () => {
-  it('the branch board has no "add department" affordance and explains where departments come from', () => {
-    const { el } = render();
-    expect(el.textContent).toContain('Departments & lab spaces');
-    expect(el.textContent).not.toMatch(/add department/i);
-    expect(el.textContent).toContain(DEPARTMENTS_FROM_MASTER);
-    expect(el.querySelector('.pf-dept-source svg')).not.toBeNull();
+describe('Branches — departments and lab spaces moved to Lab', () => {
+  afterEach(() => TestBed.resetTestingModule());
+  it('no departments / lab spaces board, no department or space calls', () => {
+    const { el, api } = render();
+    expect(el.textContent).not.toContain('Departments & lab spaces');
+    expect(el.querySelector('.pf-board')).toBeNull();
+    const urls = api.get.mock.calls.map((c: any[]) => c[0] as string);
+    expect(urls.some((u: string) => u.startsWith('/api/tenants/departments'))).toBe(false);
+    expect(urls).not.toContain('/api/tenants/lab-spaces');
+    expect(urls).not.toContain('/api/tenants/department-space-links');
   });
 
-  it('the component carries no department-create path at all', () => {
-    const { c, api } = render();
+  it('the dead department helpers are gone', () => {
+    const { c } = render();
+    expect(c.saveSampleCode).toBeUndefined();
+    expect(c.saveContainer).toBeUndefined();
+    expect(c.toggleDeptActive).toBeUndefined();
     expect(c.createDepartment).toBeUndefined();
-    expect(c.beginAddDept).toBeUndefined();
-    expect(api.post).not.toHaveBeenCalledWith('/api/tenants/departments', expect.anything());
   });
 
-  it('enable / disable stays (Deactivate toggle on a department card)', () => {
+  it('shows each branch GSTIN (read-only)', () => {
     const { el } = render();
-    expect(el.textContent).toMatch(/Deactivate|Reactivate/);
+    expect(el.querySelector('[data-testid="br-gstin"]')?.textContent).toContain('33AAAAA0000A1Z5');
+    expect(el.querySelector('[data-testid="br-gstin"] input')).toBeNull();
   });
 });
 
@@ -92,8 +91,6 @@ describe('Branches — OPS-11 deactivate a branch', () => {
       ],
     });
     const f = TestBed.createComponent(BranchesComponent);
-    f.detectChanges();
-    (f.componentInstance as any).toggle('b2');
     f.detectChanges();
     return { f, api, toasts, dialog, el: f.nativeElement as HTMLElement };
   }

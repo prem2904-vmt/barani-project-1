@@ -176,6 +176,8 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/tests':             { perms: [...TEST_MASTER_PERMS, 'manage_test_pricing'] },
   '/admin/tests/new':         { perms: TEST_MASTER_PERMS },
   '/admin/branches':          { perms: ['manage_branches'] },
+  // Lab › Departments and lab spaces: the perms the department endpoints accept (manage_departments | manage_branches).
+  '/admin/lab/departments':   { perms: ['manage_departments', 'manage_branches'], module: 'lab' },
   '/admin/vendors':           { perms: ['manage_tenant'] },
   '/admin/referral-labs':     { perms: TEST_MASTER_PERMS },
   '/admin/partner-prices':    { perms: TEST_MASTER_PERMS },

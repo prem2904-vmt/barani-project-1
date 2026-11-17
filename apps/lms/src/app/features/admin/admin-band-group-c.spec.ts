@@ -53,10 +53,10 @@ describe('Admin band — Branches', () => {
     expect(names(p.el)[0]).toContain('Anna Nagar');
   });
 
-  it('a department hit keeps every branch (departments are tenant-global)', () => {
+  it('departments moved to Lab: a department word no longer matches a branch', () => {
     const p = render();
     p.type('haem');
-    expect(names(p.el).length).toBe(3);
+    expect(names(p.el).length).toBe(0);
   });
 
   it('no match → empty state', () => {
