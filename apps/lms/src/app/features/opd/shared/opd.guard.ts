@@ -34,3 +34,17 @@ export function opdRedirect(target: string): CanActivateFn {
   (fn as unknown as { opdGate: true }).opdGate = true;
   return fn;
 }
+
+/**
+ * `/admin/opd/pharmacy[?tab=drugs]` → Settings → Pharmacy (`/admin/pharmacy`, `/admin/pharmacy/drugs`), only when OPD
+ * is visible (else the unknown-URL bounce). The Settings re-home moved the pharmacy settings + drug master out of OPD.
+ */
+export const opdPharmacyRedirect: CanActivateFn = async (route: ActivatedRouteSnapshot) => {
+  const auth = inject(AuthService);
+  const gate = inject(OpdGateService);
+  const router = inject(Router);
+  await auth.waitForAuth();
+  if (!gate.visible()) return router.createUrlTree(['/']);
+  return router.createUrlTree([route.queryParamMap.get('tab') === 'drugs' ? '/admin/pharmacy/drugs' : '/admin/pharmacy']);
+};
+(opdPharmacyRedirect as unknown as { opdGate: true }).opdGate = true;

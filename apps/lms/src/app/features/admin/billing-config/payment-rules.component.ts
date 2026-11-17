@@ -17,7 +17,7 @@ export type PaymentGateStage = 'none' | 'dispatch' | 'report';
  * refuses the same way). Embeddable: it carries no band of its own.
  */
 @Component({
-  selector: 'pf-payment-rules',
+  selector: 'pf-payment-rules-card',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -82,7 +82,7 @@ export type PaymentGateStage = 'none' | 'dispatch' | 'report';
     @media (pointer: coarse) { .pf-pr__switch { min-width: 44px; min-height: 44px; justify-content: flex-end; } .pf-pr__opt { min-height: 44px; } }
   `],
 })
-export class PaymentRulesComponent implements OnInit {
+export class PaymentRulesCardComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly labCfg = inject(BranchLabConfigService);

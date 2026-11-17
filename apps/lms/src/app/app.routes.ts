@@ -53,6 +53,9 @@ const manageToOverviewGuard: CanActivateFn = (route) => {
   return inject(Router).createUrlTree(['/admin'], { queryParams: cat ? { section: cat } : {} });
 };
 
+// /setup (the old branding page) → Organization profile, where the top-bar name + logo are set with everything else.
+const setupToProfileGuard: CanActivateFn = () => inject(Router).createUrlTree(['/admin/org/profile']);
+
 // withAppModes (features/casesheets/casesheets.routes.ts, plan §4.4): the public case-sheet site's routes match
 // ONLY in casesheets mode (core/app-mode.ts) and every route below ONLY in LMS mode.
 export const appRoutes: Route[] = withAppModes([
@@ -459,7 +462,12 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/admin/workflow-builder/field-editor.component').then(m => m.FieldEditorComponent)
       },
       // Top-bar branding (name, logo, mode) is part of the ONE Organization profile now; the old URL keeps working.
-      { path: 'setup', redirectTo: '/admin/org/profile', pathMatch: 'full' },
+      {
+        path: 'setup',
+        canActivate: [...routeGuards('/setup'), setupToProfileGuard],
+        // Never rendered: the guard always redirects.
+        loadComponent: () => import('./features/admin/org/org-profile.page').then(m => m.OrgProfilePage)
+      },
       {
         path: 'admin/kpis',
         canActivate: [...routeGuards('/admin/kpis')],

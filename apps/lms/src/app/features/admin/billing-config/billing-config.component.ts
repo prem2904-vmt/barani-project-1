@@ -1541,11 +1541,10 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
 
   /** The bank-account card is the one source; the bill reads one printed line, so a changed card re-posts the bill
    *  template with the line derived from it (same API, same payload shape — only bankDetails differs). */
-  private syncBankDetails() {
-    const line = bankDetailsLine(this._config());
+  private syncBankDetails(line: string) {
     if (!line || line === (this._tpl().bankDetails ?? "")) return;
     this.patchTpl({ bankDetails: line });
-    this.api.post("/api/config/invoice-template", this.effectiveTpl()).subscribe({
+    this.api.post("/api/config/invoice-template", { ...this.effectiveTpl(), bankDetails: line }).subscribe({
       error: (e) => this.toasts.error(ApiError.from(e).message),
     });
   }
@@ -1577,7 +1576,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
         next: () => {
           this.toasts.success("Billing config saved");
           this.loadConfig();
-          this.syncBankDetails();
+          this.syncBankDetails(bankDetailsLine(c));
         },
         error: (e) => this.toasts.error(ApiError.from(e).message),
       });

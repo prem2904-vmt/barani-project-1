@@ -124,7 +124,7 @@ const SAME = (a: EmailForm, b: EmailForm) => JSON.stringify(a) === JSON.stringif
       <div class="pf-band-narrow">
       @if (showSec('whatsapp')) {
         <h2 class="pf-cm__sec pf-classic-only">WhatsApp</h2>
-        <pf-wa-settings-section [chatOn]="waChatOn()" [channelsOnly]="channelsOnly"></pf-wa-settings-section>
+        <pf-wa-settings-section [chatOn]="waChatOn()"></pf-wa-settings-section>
       }
 
       @if (showSec('email')) {
@@ -392,9 +392,6 @@ export class CommunicationSettingsPage implements OnInit {
     { value: 'none', label: 'None (not recommended)' },
   ];
   readonly tab = signal<CommsTab>('whatsapp');
-  /** `/admin/org/channels` (Settings → Organization → Message channels): accounts only; what each department sends is in
-   *  that department's own settings. The old `/admin/communication` has no route data and keeps everything. */
-  readonly channelsOnly = this.route?.snapshot?.data?.['channelsOnly'] === true;
 
   private readonly loadHold = createLoadHold(true);
   readonly loading = this.loadHold.active;

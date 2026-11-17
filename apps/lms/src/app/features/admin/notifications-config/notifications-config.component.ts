@@ -48,12 +48,12 @@ const MODULE_LABELS: Record<string, string> = {
 
 /** Which department's alerts a screen shows (Settings re-home): the catalog's `module` keys each department owns.
  *  `null` = every alert (the old one-page view). Lab = everything that is not OPD / pharmacy / IPD. */
-export type AlertDepartment = 'lab' | 'opd' | 'ipd';
-const DEPARTMENT_MODULES: Record<'opd' | 'ipd', readonly string[]> = { opd: ['opd', 'pharmacy'], ipd: ['ipd'] };
-const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OPD', ipd: 'IPD' };
+export type AlertDepartment = 'lab' | 'opd' | 'ipd' | 'pharmacy';
+const DEPARTMENT_MODULES: Record<'opd' | 'ipd' | 'pharmacy', readonly string[]> = { opd: ['opd'], ipd: ['ipd'], pharmacy: ['pharmacy'] };
+const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OPD', ipd: 'IPD', pharmacy: 'Pharmacy' };
 export function alertInDepartment(module: string, dept: AlertDepartment | null): boolean {
   if (!dept) return true;
-  if (dept === 'lab') return !DEPARTMENT_MODULES.opd.includes(module) && !DEPARTMENT_MODULES.ipd.includes(module);
+  if (dept === 'lab') return !Object.values(DEPARTMENT_MODULES).some(m => m.includes(module));
   return DEPARTMENT_MODULES[dept].includes(module);
 }
 

@@ -1,7 +1,7 @@
 import { Routes } from '@angular/router';
 import { permissionGuard } from '../../core/auth/permission.guard';
 import { ADMIN_PERMS } from '../../core/auth/route-access';
-import { opdGuard } from './shared/opd.guard';
+import { opdGuard, opdPharmacyRedirect } from './shared/opd.guard';
 
 /**
  * EVERY OPD route (OPD dark build), wired ONCE by the foundation. Each carries
@@ -66,10 +66,12 @@ export const OPD_ADMIN_ROUTES: Routes = [
   { path: 'admin/opd/settings', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/opd-settings.component').then(m => m.OpdSettingsComponent) },
   { path: 'admin/opd/drugs', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/drug-master.page').then(m => m.OpdDrugMasterPage) },
   // Pharmacy settings + drug master moved to Settings → Pharmacy (/admin/pharmacy, /admin/pharmacy/drugs — see
-  // features/admin/org/settings-rehome.routes.ts). The old path keeps working and lands on the new one.
-  // (A redirect cannot carry guards; the destination has the admin + OPD ones.)
-  { path: 'admin/opd/pharmacy', pathMatch: 'full',
-    redirectTo: ({ queryParams }) => queryParams['tab'] === 'drugs' ? '/admin/pharmacy/drugs' : '/admin/pharmacy' },
+  // features/admin/org/settings-rehome.routes.ts). The old path keeps working: the guard sends it to the new one.
+  { path: 'admin/opd/pharmacy', canActivate: [adminGuard, opdPharmacyRedirect],
+    // Never rendered: the guard always redirects.
+    loadComponent: () => import('./admin/drug-master.page').then(m => m.OpdDrugMasterPage) },
+  // Settings → OPD → Front desk, alerts and numbers (appointments and booking, referring doctors, OPD alerts).
+  { path: 'admin/opd/front-desk', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/front-desk.page').then(m => m.OpdFrontDeskPage) },
 ];
 
 /** The legacy desk consult page under /frontdesk (child of the frontdesk area). */

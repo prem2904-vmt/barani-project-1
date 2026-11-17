@@ -18,7 +18,7 @@ import { PHARMACY_VIEW } from '../../opd/pharmacy/pharmacy-view';
  *   /admin/org/channels           Message channels (`?tab=whatsapp|email|sms`)
  *   /admin/billing                Billing and taxes (`?tab=gst|invoice|payments|credit`)
  *   /finance/credit-accounts      Credit accounts: top up, record a payment, email a statement, history
- *   /admin/opd/front-desk         OPD front desk, alerts and numbers (`?tab=appointments|referring|alerts`)
+ *   /admin/opd/front-desk         OPD front desk, alerts and numbers (`?tab=appointments|referring|alerts`) — in OPD_ADMIN_ROUTES (opd.routes.ts)
  *   /admin/ipd/alerts             IPD alerts
  *   /admin/pharmacy               Pharmacy settings (was /admin/opd/pharmacy, which redirects here)
  *   /admin/pharmacy/drugs         Drug master (was /admin/opd/drugs, which forwards here)
@@ -40,7 +40,6 @@ export const SETTINGS_REHOME_ROUTES: Routes = [
   {
     path: 'admin/org/channels',
     canActivate: [...routeGuards('/admin/org/channels')],
-    data: { channelsOnly: true },
     loadComponent: () => import('../communication/communication-settings.page').then(m => m.CommunicationSettingsPage),
   },
   {
@@ -48,11 +47,6 @@ export const SETTINGS_REHOME_ROUTES: Routes = [
     canActivate: [...routeGuards('/finance/credit-accounts')],
     data: { creditView: 'money' },
     loadComponent: () => import('../vendors/vendors.component').then(m => m.VendorsComponent),
-  },
-  {
-    path: 'admin/opd/front-desk',
-    canActivate: [adminGuard, opdGuard],
-    loadComponent: () => import('../../opd/admin/front-desk.page').then(m => m.OpdFrontDeskPage),
   },
   {
     path: 'admin/ipd/alerts',

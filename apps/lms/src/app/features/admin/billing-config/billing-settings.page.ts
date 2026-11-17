@@ -6,7 +6,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { VendorsComponent } from '../vendors/vendors.component';
 import { BillingConfigComponent } from './billing-config.component';
-import { PaymentRulesComponent } from './payment-rules.component';
+import { PaymentRulesCardComponent } from './payment-rules.component';
 
 /** The categories the Settings left panel lists for Organization › Billing and taxes (`?tab=`). */
 export const BILLING_SECTIONS = [
@@ -27,14 +27,14 @@ export function billingSectionOf(tab: string | null | undefined): BillingSection
  * Settings → Organization → Billing and taxes (`/admin/billing?tab=gst|invoice|payments|credit`). One host; each category
  * reuses the existing screen:
  *  - GST and discounts, Invoices and bill design: Billing Config (pinned to that section).
- *  - Payment rules: the two rules moved here from Lab settings (`PaymentRulesComponent`).
+ *  - Payment rules: the two rules moved here from Lab settings (`PaymentRulesCardComponent`).
  *  - Credit accounts: vendor wallets, SETUP only (name, code, contact, GSTIN, address, opening settlement, alert
  *    threshold). Top-ups, payments and statements are on the Finance screen (`/finance/credit-accounts`).
  */
 @Component({
   selector: 'pf-billing-settings',
   standalone: true,
-  imports: [BillingConfigComponent, PaymentRulesComponent, VendorsComponent, HeroBandComponent, ScreenHeaderComponent],
+  imports: [BillingConfigComponent, PaymentRulesCardComponent, VendorsComponent, HeroBandComponent, ScreenHeaderComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @switch (section()) {
@@ -42,7 +42,7 @@ export function billingSectionOf(tab: string | null | undefined): BillingSection
         <section class="pf-band-page px-4 md:px-8 pt-6 pb-10" data-testid="billing-payments">
           <pf-hero-band [back]="true" [tabsOnly]="true"></pf-hero-band>
           <pf-screen-header class="pf-classic-only" eyebrow="Billing and taxes" title="Payment rules" subtitle="When an unpaid balance holds the work, and who sees what is due."></pf-screen-header>
-          <div class="pf-band-body"><div class="pf-bs__col"><pf-payment-rules></pf-payment-rules></div></div>
+          <div class="pf-band-body"><div class="pf-bs__col"><pf-payment-rules-card></pf-payment-rules-card></div></div>
         </section>
       }
       @case ('credit') { <pf-vendors [view]="'setup'"></pf-vendors> }
