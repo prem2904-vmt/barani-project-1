@@ -12,6 +12,8 @@ import { neg, resetNeg, installNegBackend, go } from './support/neg-backend';
 const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/settings-grids');
 const out = () => shotsDir(OUT_BASE);
 const vis = (page: Page, sel: string) => page.locator(sel).locator('visible=true').first();
+/** Distinct grid rows under a card (pinned columns repeat a row in their own container). */
+const rowCount = (page: Page, card: string) => page.locator(`${card} .ag-row[row-index]`).evaluateAll(els => new Set(els.map(e => e.getAttribute('row-index'))).size);
 
 async function theme(page: Page, dark: boolean) {
   await page.emulateMedia({ colorScheme: dark ? 'dark' : 'light' });
@@ -76,6 +78,11 @@ const REF_LABS = [
   { id: 'rl2', name: 'Neuberg Ehrlich', code: 'NEU', contactName: 'Priya', contactPhone: '9840099999', isActive: true, departmentCodesJson: '["BIO"]' },
   { id: 'rl3', name: 'Metropolis', code: 'METRO', isActive: false, departmentCodesJson: null },
 ];
+const USERS = Array.from({ length: 23 }, (_, i) => ({
+  id: `u${i + 1}`, tenantId: 'tn', firstName: ['Asha', 'Ravi', 'Meena', 'Karthik', 'Priya'][i % 5], fathersName: `Kumar ${i + 1}`,
+  displayName: `${['Asha', 'Ravi', 'Meena', 'Karthik', 'Priya'][i % 5]} Kumar ${i + 1}`, email: '', username: `user${i + 1}`,
+  phone: '+91 98400' + String(10000 + i), isActive: i % 7 !== 3, createdAt: '2026-01-01', authId: `a${i + 1}`,
+}));
 const ROLES = [
   { id: 'r1', name: 'Receptionist', isPreSeeded: true, scope: 'tenant' },
   { id: 'r2', name: 'Night Shift Desk', isPreSeeded: false, scope: 'tenant' },
@@ -105,6 +112,7 @@ test.beforeEach(async ({ page, context }) => {
       case '/api/referral-labs': return ok(REF_LABS);
       case '/api/vendors/v3/transactions': return ok([{ id: 'x1', vendorId: 'v3', type: 'charge', amount: -2300, reason: 'Bill B-1042', createdAt: ago(60) }, { id: 'x2', vendorId: 'v3', type: 'payment', amount: 20000, reason: 'NEFT', createdAt: ago(3000) }]);
       case '/api/roles/': case '/api/roles': return ok(ROLES);
+      case '/api/users/': case '/api/users': return ok(USERS);
       default: return undefined;
     }
   };
@@ -193,7 +201,7 @@ test.describe('settings list grids', () => {
     }
     // Band search finds a permission across all groups.
     await vis(page, 'pf-hero-band input').fill('refund');
-    await expect(page.locator('.re-main .ag-row')).toHaveCount(1);
+    await expect.poll(() => rowCount(page, '.re-main')).toBe(1);
     await vis(page, '.re-main .ag-row .pf-sg-switch').click();
     await vis(page, 'pf-hero-band .pf-hb-btn--primary').click();
     await expect.poll(() => neg.calls.find(c => c.path === '/api/roles/r2/permissions')?.body)
@@ -218,7 +226,7 @@ test.describe('settings list grids', () => {
     page.on('pageerror', e => errors.push(e.message));
     await go(page, '/admin/billing?tab=credit');
     await expect(vis(page, '.pf-vn-main .ag-row')).toBeVisible({ timeout: 60_000 });
-    await expect(page.locator('.pf-vn-main .ag-row')).toHaveCount(4);
+    await expect.poll(() => rowCount(page, '.pf-vn-main')).toBe(4);
     await expect(vis(page, '.pf-vn-main .pf-sg-tone--credit')).toContainText('in credit');
     await expect(vis(page, 'pf-hero-band .pf-hb-btn--primary')).toContainText('Add vendor');
     await expectLayout(page, 'credit accounts');
@@ -269,7 +277,7 @@ test.describe('settings list grids', () => {
     page.on('pageerror', e => errors.push(e.message));
     await go(page, '/admin/referral-labs');
     await expect(vis(page, '.pf-rl-main .ag-row')).toBeVisible({ timeout: 60_000 });
-    await expect(page.locator('.pf-rl-main .ag-row')).toHaveCount(3);
+    await expect.poll(() => rowCount(page, '.pf-rl-main')).toBe(3);
     await expectLayout(page, 'referral labs');
     await shot(page, 'sg-referral-labs');
     await vis(page, '.pf-rl-main .pf-rowact[aria-label="Edit Neuberg Ehrlich"]').dispatchEvent('click');
@@ -281,16 +289,39 @@ test.describe('settings list grids', () => {
     expect(errors, 'no uncaught errors').toEqual([]);
   });
 
+  test('People and access INLINE in the Settings overview: the users grid has rows (never a 0-height grid)', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await go(page, '/admin?section=people');
+    const grid = vis(page, '.pf-ua-main ag-grid-angular');
+    await expect(grid).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('.pf-ua-main .ag-row').first()).toBeVisible({ timeout: 30_000 });
+    const box = await grid.boundingBox();
+    expect(box!.height, 'grid has height').toBeGreaterThan(150);
+    expect(box!.width, 'grid has width').toBeGreaterThan(isPhone() ? 200 : 400);
+    expect(await rowCount(page, '.pf-ua-main')).toBeGreaterThan(0);
+    await page.screenshot({ path: `${out()}/sg-people-inline-raw.png` });
+    await page.waitForTimeout(1500);
+    const box2 = await grid.boundingBox();
+    expect(box2!.height, 'grid keeps its height').toBeGreaterThan(150);
+    await shot(page, 'sg-people-inline');
+    expect(errors, 'no uncaught errors').toEqual([]);
+  });
+
   test('Departments and lab spaces: tree LEFT, departments grid; a branch shows only its board', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', e => errors.push(e.message));
     await go(page, '/admin/lab/departments?tab=departments');
+    // In the Settings shell: never stuck on the skeleton (the shell's frame must not re-create the page).
     await expect(vis(page, '.ld-main .ag-row')).toBeVisible({ timeout: 60_000 });
-    await expect(page.locator('.ld-main .ag-row')).toHaveCount(5);
+    await expect.poll(() => rowCount(page, '.ld-main')).toBe(5);
+    await page.waitForTimeout(1500);
+    expect(await rowCount(page, '.ld-main')).toBe(5);
     await expectLayout(page, 'lab departments');
     await shot(page, 'sg-lab-departments');
-    await go(page, '/admin/lab/departments?tab=spaces&branch=b2');
-    await expect(vis(page, '[data-testid="ld-spaces-title"]')).toContainText('Anna Nagar', { timeout: 60_000 });
+    await go(page, '/admin/lab/departments?tab=spaces-b2');
+    // In the shell the frame's head names the branch (the page's own head is bare); the board is that branch's only.
+    await expect(vis(page, '.ld-spaces .pf-lane-name-input')).toHaveValue('Pathology', { timeout: 60_000 });
     await expect(page.locator('.ld-spaces .pf-lane:visible')).toHaveCount(2);
     await shot(page, 'sg-lab-spaces-branch');
     expect(errors, 'no uncaught errors').toEqual([]);
