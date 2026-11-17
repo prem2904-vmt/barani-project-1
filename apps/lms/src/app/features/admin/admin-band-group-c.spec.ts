@@ -171,18 +171,25 @@ describe('Admin band — Referring network', () => {
     p.f.detectChanges();
     return p;
   };
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-rn-row__name')).map(n => text(n));
+  let cur: any;
+  const names = (_el: HTMLElement) => cur.cmp.gridHospitals().map((h: any) => h.name);
+  const hospitalsView = async () => { const p = cur = await render(); p.cmp.setView('hospitals'); p.f.detectChanges(); return p; };
 
-  it('band present, header classic-only, the pane search box is classic-only', async () => {
-    const p = await render();
+  it('band present, header classic-only; ONE Test Master grid card (Doctors first) with the view switch in its head', async () => {
+    const p = cur = await render();
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.el.querySelector('.pf-rn-search')!.classList.contains('pf-classic-only')).toBe(true);
+    expect(p.cmp.view()).toBe('doctors');
+    expect(p.el.querySelectorAll('.pf-band-body .pf-card').length).toBe(1);
+    expect(p.el.querySelector('.pf-sg-main__head pf-segmented.pf-rn-viewseg')).not.toBeNull();
+    expect(p.el.querySelector('.pf-sg-main__head pf-select.pf-rn-hfilter')).not.toBeNull();
+    p.cmp.setView('hospitals'); p.f.detectChanges();
     expect(names(p.el).length).toBe(2);
+    expect(p.cmp.hospitalColDefs().map((c: any) => c.colId)).toEqual(['name', 'code', 'doctors', 'phone', 'gstin', 'status', 'actions']);
   });
 
   it('an open editor modal owns the ONE primary: the band "Add hospital" steps down + disables', async () => {
-    const p = await render();
+    const p = await hospitalsView();
     const add = () => p.el.querySelector<HTMLButtonElement>('pf-hero-band .pf-rn-add')!;
     expect(add().classList.contains('pf-hb-btn--primary')).toBe(true);
     add().click();
@@ -199,14 +206,14 @@ describe('Admin band — Referring network', () => {
   });
 
   it('"Add hospital" in the band opens the hospital editor', async () => {
-    const p = await render();
+    const p = await hospitalsView();
     p.actions().find(b => /Add hospital/.test(b.textContent ?? ''))!.click();
     p.f.detectChanges();
     expect(p.el.querySelector('.pf-rn-modal')).not.toBeNull();
   });
 
   it('the pill search filters hospitals (name, code, address); empty state', async () => {
-    const p = await render();
+    const p = await hospitalsView();
     p.type('manapakkam');
     expect(names(p.el)).toEqual(['MIOT International']);
     p.type('zzz');

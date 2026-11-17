@@ -239,18 +239,16 @@ describe('ND audit D — Referring network', () => {
     return p;
   };
 
-  it('panes are kit cards with BILLING headers; the selected hospital is the NEUTRAL aria-selected row; ONE primary', async () => {
+  it('ONE grid card (no nested panes); quiet same-size icon actions; Remove from a hospital only when filtered to it; ONE primary', async () => {
     const p = await render();
-    const panes = p.el.querySelectorAll('.pf-rn-pane.pf-card');
-    expect(panes.length).toBe(2);
-    expect(panes[0].querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
-    expect(panes[0].querySelector('.pf-rn-pane__count')!.classList.contains('pf-num')).toBe(true);
-    p.cmp.selectHospital('h1'); await p.f.whenStable(); p.f.detectChanges();
-    expect(p.el.querySelector('.pf-rn-row[aria-selected="true"]')).not.toBeNull();
-    expect(p.el.querySelector('.pf-rn-row--on')).toBeNull();
+    expect(p.el.querySelectorAll('.pf-rn-pane').length).toBe(0);
+    expect(p.el.querySelector('.pf-sg-main .pf-card__head .pf-card__icon')).not.toBeNull();
+    const acts = (d: any) => p.cmp.doctorActions(d).map((a: any) => a.label);
+    expect(acts(doctors[0])).toEqual(['Edit', 'Deactivate']);
+    p.cmp.setHospitalFilter('h1'); p.f.detectChanges();
+    expect(acts(doctors[0])).toEqual(['Edit', 'Remove', 'Deactivate']);
+    expect(p.cmp.doctorActions(doctors[0]).every((a: any) => a.icon)).toBe(true);
     expect(primaries(p.el)).toBe(1);
-    const add = Array.from(p.el.querySelectorAll('.pf-rn-hdrbtn')).find(b => /Add doctor/.test(b.textContent ?? ''))!;
-    expect(add.classList.contains('pf-btn--secondary')).toBe(true);
     hygiene(p.el);
   });
 
