@@ -95,6 +95,7 @@ describe('Settings overview — two panels', () => {
   it('Finance, Daily statement, Expenses, Audit trail and Modules are not in Settings; no number cards', async () => {
     setup();
     for (const section of ['lab', 'profile', 'billing', 'people', 'channels']) {
+      TestBed.resetTestingModule(); setup();
       const h = await open(`/admin?section=${section}`);
       const t = el(h).textContent ?? '';
       for (const gone of ['Daily Statement', 'Daily statement', 'Audit trail', 'Expenses', 'Modules']) expect(t, `${section}: ${gone}`).not.toContain(gone);
@@ -103,6 +104,7 @@ describe('Settings overview — two panels', () => {
       expect(tileHrefs(el(h))).not.toContain('/admin/audit');
       expect(tileHrefs(el(h))).not.toContain('/admin/modules');
     }
+    TestBed.resetTestingModule(); setup();
     const h = await open('/admin');
     expect(el(h).querySelector('.pf-ov__kpi, .pf-ov__stat, .pf-ov__range, [aria-label="Date range"]')).toBeNull();
     expect(el(h).textContent).not.toContain('Cash in');
@@ -118,6 +120,7 @@ describe('Settings overview — two panels', () => {
   it('old section ids from old links (?section=finance, ?section=org, ?section=communication) open the section that holds them now', async () => {
     setup();
     for (const [old, now] of [['finance', 'billing'], ['org', 'profile'], ['communication', 'channels'], ['automation', 'lab']] as const) {
+      TestBed.resetTestingModule(); setup();
       const h = await open(`/admin?section=${old}`);
       expect(el(h).querySelector(`[data-testid="tp-item-${now}"]`)?.getAttribute('aria-current'), `${old} → ${now}`).toBe('true');
     }

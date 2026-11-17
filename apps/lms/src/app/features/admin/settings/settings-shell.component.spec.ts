@@ -100,6 +100,7 @@ describe('Settings shell — inside a setting (wide)', () => {
     root(h).querySelector<HTMLButtonElement>('[data-testid="tp-item-footer"]')!.click();
     await settle(h);
     expect(TestBed.inject(Router).url).toBe('/admin/reports?tab=footer');
+    TestBed.resetTestingModule(); setup();
     const h2 = await open('/admin/referral-labs');
     root(h2).querySelector<HTMLButtonElement>('[data-testid="tp-item-partner-prices"]')!.click();
     await settle(h2);
