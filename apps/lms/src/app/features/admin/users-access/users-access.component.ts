@@ -24,6 +24,7 @@ import { SG_NARROW_MQ, SgStatus, sgBare, sgByStatus, sgGridTheme, sgMedia, sgRow
 import { UserEditComponent } from './user-edit.component';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { UserInviteComponent } from './user-invite.component';
+import { confirmLeaveUnsaved } from '../../../shared/utils/unsaved-changes';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { WebrtcService } from '../../../core/services/webrtc.service';
@@ -183,9 +184,9 @@ function rowAction(web: boolean, label: string, icon: string, title: string): HT
         <div class="pf-sg-panels pf-ua-panels" [class.pf-sg-panels--single]="!panelOpen()" [class.pf-sg-panels--narrow]="narrow()">
         <!-- The user beside the grid (owner 2026-11-17: "too many clicks"): ONE form in a LEFT panel, sheet on narrow. -->
         @if (panelOpen()) {
-          @if (narrow()) { <div class="pf-sheet-backdrop" (click)="closePanel()"></div> }
+          @if (narrow()) { <div class="pf-sheet-backdrop" (click)="requestClosePanel()"></div> }
           <aside class="pf-card pf-sg-side pf-ua-panel" [class.pf-sg-side--sheet]="narrow()" role="dialog" [attr.aria-modal]="narrow() ? 'true' : null"
-                 [attr.aria-label]="creating() ? 'Create user' : 'Edit user'" (keydown.escape)="closePanel()">
+                 [attr.aria-label]="creating() ? 'Create user' : 'Edit user'" (keydown.escape)="requestClosePanel()">
             @if (narrow()) { <span class="pf-sg-sheet-handle" aria-hidden="true"></span> }
             @if (creating()) {
               <pf-user-invite [panel]="true" (closed)="closePanel()" (saved)="reload()"></pf-user-invite>
@@ -759,8 +760,9 @@ export class UsersAccessComponent implements OnInit {
   onSearch(v: string) { this._search.set(v); }
 
   /** Create user: the form opens beside the grid (owner: fewer clicks); pressing it again closes it. */
-  openInvite() {
-    if (this.creating()) { this.closePanel(); return; }
+  async openInvite() {
+    if (this.creating()) { void this.requestClosePanel(); return; }
+    if (this.panelOpen() && !(await this.requestClosePanel())) return;
     this.panelUserId.set(null);
     this.creating.set(true);
   }
@@ -775,7 +777,8 @@ export class UsersAccessComponent implements OnInit {
     this.router.navigate(['/admin/roles', r.id, 'edit']);
   }
   /** Edit opens the user beside the grid (no page change); `?edit=<id>` deep-links it. */
-  editUser(u: User, _el?: HTMLElement) {
+  async editUser(u: User, _el?: HTMLElement) {
+    if (this.panelOpen() && this.panelUserId() !== u.id && !(await this.requestClosePanel())) return;
     this.creating.set(false);
     this.panelUserId.set(u.id);
     void this.router.navigate([], { relativeTo: this.route, queryParams: { edit: u.id }, queryParamsHandling: 'merge', replaceUrl: true });
@@ -785,6 +788,19 @@ export class UsersAccessComponent implements OnInit {
   readonly creating = signal(false);
   readonly panelOpen = computed(() => this.creating() || !!this.panelUserId());
   readonly narrow = sgMedia(SG_NARROW_MQ);
+  /** The open panel's form (edit or create) — its unsaved changes are asked about before it closes. */
+  private readonly editPanel = viewChild(UserEditComponent);
+  private readonly invitePanel = viewChild(UserInviteComponent);
+  hasUnsavedChanges(): boolean { return !!(this.editPanel()?.hasUnsavedChanges() || this.invitePanel()?.hasUnsavedChanges()); }
+  saveChanges(): Promise<boolean> { return this.editPanel()?.hasUnsavedChanges() ? this.editPanel()!.saveChanges() : Promise.resolve(false); }
+  readonly unsavedLabel = 'this user';
+  /** Backdrop / Escape / switching rows: ask first when the open form has unsaved changes. */
+  async requestClosePanel(): Promise<boolean> {
+    const open = this.editPanel() ?? this.invitePanel();
+    if (open && !(await confirmLeaveUnsaved(this.dialog, open))) return false;
+    this.closePanel();
+    return true;
+  }
   closePanel() {
     this.panelUserId.set(null);
     this.creating.set(false);

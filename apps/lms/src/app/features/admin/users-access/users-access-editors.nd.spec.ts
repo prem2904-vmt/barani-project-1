@@ -361,14 +361,43 @@ describe('User editor — panel mode (beside the People grid)', () => {
 });
 
 describe('People grid — Create user opens the form beside the grid', () => {
-  it('Create user → the invite panel (one form, Create at the foot); the band button steps down to ghost', () => {
+  it('Create user → the invite panel (one form, Create at the foot); the band button steps down to ghost', async () => {
     const { el, f, c } = render(UsersAccessComponent);
     c.openInvite(); f.detectChanges();
     expect(el.querySelector('.pf-ua-panel [data-testid="ui-panel"]')).not.toBeNull();
     expect(el.querySelector('.pf-sg-panels')!.firstElementChild!.classList.contains('pf-ua-panel')).toBe(true);
     expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')).toBeNull();
     expect(el.querySelectorAll('.pf-ua-panel .pf-btn--primary').length).toBe(1);
-    c.openInvite(); f.detectChanges();
+    await c.openInvite(); await Promise.resolve(); f.detectChanges();
     expect(el.querySelector('.pf-ua-panel')).toBeNull();
+  });
+
+  it('closing a panel with unsaved edits asks first (DialogService "Save your changes?"); Stay keeps it open', async () => {
+    const { el, f, c } = render(UsersAccessComponent);
+    const dialog = TestBed.inject(DialogService) as any;
+    dialog.actions = vi.fn(async () => ({ action: null, checked: false }));
+    await c.openInvite(); f.detectChanges();
+    const inv = (c as any).invitePanel();
+    inv.patch({ firstName: 'Priya' });
+    expect(c.hasUnsavedChanges()).toBe(true);
+    await c.requestClosePanel(); f.detectChanges();
+    expect(dialog.actions).toHaveBeenCalled();
+    expect(el.querySelector('.pf-ua-panel')).not.toBeNull();
+    dialog.actions = vi.fn(async () => ({ action: 'leave', checked: false }));
+    await c.requestClosePanel(); f.detectChanges();
+    expect(el.querySelector('.pf-ua-panel')).toBeNull();
+  });
+});
+
+describe('Role editor — unsaved changes', () => {
+  it('a changed grant is an unsaved change; the prompt\'s Save sends the same PATCH and clears it', async () => {
+    const { f, c, api } = render(RoleEditorComponent, { id: 'r1' });
+    f.detectChanges();
+    expect(c.hasUnsavedChanges()).toBe(false);
+    c.setGranted('p2', true);
+    expect(c.hasUnsavedChanges()).toBe(true);
+    expect(await c.saveChanges()).toBe(true);
+    expect(api.patch).toHaveBeenCalledWith('/api/roles/r1/permissions', { permissionIds: ['p1', 'p2'] });
+    expect(c.hasUnsavedChanges()).toBe(false);
   });
 });

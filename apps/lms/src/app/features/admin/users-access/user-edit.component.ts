@@ -28,6 +28,8 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
+import { HasUnsavedChanges, confirmLeaveUnsaved, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
+import { DialogService } from '../../../core/services/dialog.service';
 import { SG_NARROW_MQ, sgMedia } from '../../../shared/settings-grid/settings-grid';
 import { Permission } from '../../../shared/models/user.model';
 import { SCOPE_HINT, applyScopePick, scopeOptions as buildScopeOptions, scopePayload, scopeValuesFromRoles, soleScope } from './branch-scope';
@@ -94,7 +96,7 @@ interface EditForm {
               <span class="pf-rowact__t">{{ isActive() ? 'Deactivate' : 'Reactivate' }}</span>
             </button>
           }
-          <button type="button" class="pf-btn pf-btn--icon ue-panel__close" (click)="closed.emit()" aria-label="Close" title="Close">
+          <button type="button" class="pf-btn pf-btn--icon ue-panel__close" (click)="requestClose()" aria-label="Close" title="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </header>
@@ -113,7 +115,7 @@ interface EditForm {
           }
         </div>
         <div class="pf-card__foot ue-panel__foot">
-          <button type="button" class="pf-btn pf-btn--tertiary press" (click)="closed.emit()">Cancel</button>
+          <button type="button" class="pf-btn pf-btn--tertiary press" (click)="requestClose()">Cancel</button>
           <button type="button" class="pf-btn pf-btn--primary pf-uf-primary press" [disabled]="!canSave() || saving() || recordSkeleton()"
                   [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
         </div>
@@ -343,7 +345,7 @@ interface EditForm {
   `,
   styleUrls: ['./user-form.styles.scss', '../../../shared/settings-grid/settings-grid.scss', './user-edit.component.scss']
 })
-export class UserEditComponent implements OnInit {
+export class UserEditComponent implements OnInit, HasUnsavedChanges {
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   /** The pill's pencil: put the caret in the name field. */
   editName(): void {
@@ -571,6 +573,7 @@ export class UserEditComponent implements OnInit {
         const held = [...new Set(rs.map(r => r.roleId))];
         this._heldIds.set(held);
         this._form.update(v => ({ ...v, roleIds: held, scope }));
+        this._savedForm.set(this.formKey());
         this.recordHold.done();
       },
       error: () => this.recordHold.done(),
@@ -611,6 +614,11 @@ export class UserEditComponent implements OnInit {
   back() { this.navBack.backTo('/admin?section=people'); }
   /** Saved: the panel tells its grid (and closes); the page goes back where the person came from. */
   private finish() { if (this.panel()) { this.saved.emit(); this.closed.emit(); } else this.back(); }
+  private readonly dialog = inject(DialogService);
+  /** Panel close / Cancel: "Save your changes?" first when something changed. */
+  async requestClose(): Promise<void> {
+    if (await confirmLeaveUnsaved(this.dialog, this)) this.closed.emit();
+  }
   hasRole(id: string) { return this._form().roleIds.includes(id); }
   toggleRole(id: string) {
     if (this.roleOptions().find(r => r.value === id)?.locked) return;
@@ -620,29 +628,50 @@ export class UserEditComponent implements OnInit {
     this.patch({ scope: applyScopePick(this._form().scope, next ?? [], this._branches()) });
   }
 
-  save() {
-    if (!this.canSave()) return;
-    const i = this._form();
-    this._saving.set(true);
-    this._fieldError.set({});
-    // Details first, then roles (full-replace). Both must land for a clean save.
-    this.api.patch<User>(`/api/users/${this.id}`, {
-      title: i.title, firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
-      // Only when changed (blank clears); the server audit-logs the change.
-      ...(regIdChanged(i.registrationId, this._loadedUser()?.registrationId) ? { registrationId: i.registrationId.trim() } : {}),
-    }).subscribe({
-      next: () => {
-        // Roles apply at every selected branch (one assignment per role × branch).
-        this.api.put(`/api/users/${this.id}/roles`, {
-          roleIds: i.roleIds, ...scopePayload(i.scope, this._branches()),
-        }).subscribe({
-          next: () => { this._saving.set(false); this.toasts.success('User updated'); this.finish(); },
-          error: e => { this._saving.set(false); this.showError(e); },
-        });
-      },
-      error: e => { this._saving.set(false); this.showError(e); },
+  // ── Unsaved changes (owner 2026-11-17: ask before leaving / closing the panel) ──
+  readonly unsavedLabel = 'this user';
+  private readonly _savedForm = signal('');
+  private formKey(): string { const f = this._form(); return JSON.stringify({ ...f, roleIds: [...f.roleIds].sort(), scope: [...f.scope].sort() }); }
+  hasUnsavedChanges(): boolean { return !this._saving() && this._savedForm() !== '' && this.formKey() !== this._savedForm(); }
+  saveChanges(): Promise<boolean> { return this.persist(false); }
+  private readonly unloadGuard = guardUnsavedOnUnload(this);
+
+  save() { void this.persist(true); }
+
+  private persist(leave: boolean): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      if (!this.canSave()) { resolve(false); return; }
+      const i = this._form();
+      this._saving.set(true);
+      this._fieldError.set({});
+      const fail = (e: unknown) => { this._saving.set(false); this.showError(e); resolve(false); };
+      // Details first, then roles (full-replace). Both must land for a clean save.
+      this.api.patch<User>(`/api/users/${this.id}`, {
+        title: i.title, firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
+        // Only when changed (blank clears); the server audit-logs the change.
+        ...(regIdChanged(i.registrationId, this._loadedUser()?.registrationId) ? { registrationId: i.registrationId.trim() } : {}),
+      }).subscribe({
+        next: () => {
+          // Roles apply at every selected branch (one assignment per role × branch).
+          this.api.put(`/api/users/${this.id}/roles`, {
+            roleIds: i.roleIds, ...scopePayload(i.scope, this._branches()),
+          }).subscribe({
+            next: () => {
+              this._saving.set(false);
+              this._savedForm.set(this.formKey());
+              this.toasts.success('User updated');
+              resolve(true);
+              if (leave) this.finish();
+              else if (this.panel()) this.saved.emit();
+            },
+            error: fail,
+          });
+        },
+        error: fail,
+      });
     });
   }
+
 
   /** Route field-named backend failures to the offending input; toast the rest. */
   private showError(e: unknown) {

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal, ElementRef, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal, untracked, ElementRef, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -14,6 +14,7 @@ import { DataGridComponent } from '../../../shared/components/data-grid/data-gri
 import { SG_NARROW_MQ, SG_PHONE_MQ, sgCell, sgGridTheme, sgMedia, sgSwitch } from '../../../shared/settings-grid/settings-grid';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PERMISSION_GROUPS, PERMISSION_INFO, ROLE_INFO } from './permission-catalog';
+import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 
@@ -246,7 +247,7 @@ interface PermGroupView {
   `,
   styleUrls: ['./user-form.styles.scss', '../../../shared/settings-grid/settings-grid.scss', './role-editor.component.scss']
 })
-export class RoleEditorComponent implements OnInit {
+export class RoleEditorComponent implements OnInit, HasUnsavedChanges {
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   /** The pill's pencil: put the caret in the name field. */
   editName(): void {
@@ -525,37 +526,62 @@ export class RoleEditorComponent implements OnInit {
 
   back() { this.navBack.backTo('/admin/users?tab=roles'); }
 
-  save() {
-    const editing = this._editing();
-    const ids = Array.from(this._grantedIds());
-    this._saving.set(true);
-    if (editing?.id) {
-      this.api.patch(`/api/roles/${editing.id}/permissions`, { permissionIds: ids }).subscribe({
-        next: () => { this._saving.set(false); this.toasts.success('Permissions updated'); this.back(); },
-        error: e => {
-          this._saving.set(false);
-          const err = ApiError.from(e);
-          if (err.field === 'name' || err.code === 'name_exists') this._nameError.set(err.message);
-          else this.toasts.error(err.message);
+  // ── Unsaved changes (owner 2026-11-17: ask before leaving) ──
+  readonly unsavedLabel = 'this role';
+  private readonly unloadGuard = guardUnsavedOnUnload(this);
+  /** The grants as loaded (or as last saved): anything else is an unsaved change. */
+  private readonly _savedIds = signal<string>('');
+  private readonly loadedSnapshot = effect(() => {
+    if (this.recordSkeleton()) return;
+    untracked(() => { if (this._savedIds() === '') this._savedIds.set(this.idsKey()); });
+  });
+  private idsKey(): string { return Array.from(this._grantedIds()).sort().join(','); }
+  hasUnsavedChanges(): boolean {
+    if (this.recordSkeleton() || this._saving()) return false;
+    if (!this._editing()?.id && this.newRoleName().trim()) return true;
+    return this._savedIds() !== '' && this.idsKey() !== this._savedIds();
+  }
+  /** The prompt's Save: same request as the band's, resolves whether it went through. */
+  saveChanges(): Promise<boolean> { return this.persist(false); }
+
+  save() { void this.persist(true); }
+
+  private persist(leave: boolean): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const editing = this._editing();
+      const ids = Array.from(this._grantedIds());
+      const done = (msg: string) => {
+        this._saving.set(false);
+        this.toasts.success(msg);
+        this._savedIds.set(this.idsKey());
+        if (!editing?.id) this.newRoleName.set('');
+        resolve(true);
+        if (leave) this.back();
+      };
+      const fail = (e: unknown) => {
+        this._saving.set(false);
+        const err = ApiError.from(e);
+        if (err.field === 'name' || err.code === 'name_exists') this._nameError.set(err.message);
+        else this.toasts.error(err.message);
+        resolve(false);
+      };
+      this._saving.set(true);
+      if (editing?.id) {
+        this.api.patch(`/api/roles/${editing.id}/permissions`, { permissionIds: ids }).subscribe({
+          next: () => done('Permissions updated'), error: fail,
+        });
+      } else {
+        const name = this.newRoleName().trim();
+        if (!name) { this._saving.set(false); this._nameError.set('Role name is required.'); resolve(false); return; }
+        // Reject a duplicate name up front (case-insensitive) against tenant + shared
+        // roles — the backend enforces it too, but this is immediate feedback.
+        if (this._allRoles().some(r => r.name.trim().toLowerCase() === name.toLowerCase())) {
+          this._saving.set(false); this._nameError.set(`A role named "${name}" already exists.`); resolve(false); return;
         }
-      });
-    } else {
-      const name = this.newRoleName().trim();
-      if (!name) { this._saving.set(false); this._nameError.set('Role name is required.'); return; }
-      // Reject a duplicate name up front (case-insensitive) against tenant + shared
-      // roles — the backend enforces it too, but this is immediate feedback.
-      if (this._allRoles().some(r => r.name.trim().toLowerCase() === name.toLowerCase())) {
-        this._saving.set(false); this._nameError.set(`A role named "${name}" already exists.`); return;
+        this.api.post<Role>('/api/roles/', { name, scope: 'tenant', permissionIds: ids, kind: this.roleType() === 'doctor' ? 'doctor' : null }).subscribe({
+          next: r => done(`Role ${r.name} created`), error: fail,
+        });
       }
-      this.api.post<Role>('/api/roles/', { name, scope: 'tenant', permissionIds: ids, kind: this.roleType() === 'doctor' ? 'doctor' : null }).subscribe({
-        next: r => { this._saving.set(false); this.toasts.success(`Role ${r.name} created`); this.back(); },
-        error: e => {
-          this._saving.set(false);
-          const err = ApiError.from(e);
-          if (err.field === 'name' || err.code === 'name_exists') this._nameError.set(err.message);
-          else this.toasts.error(err.message);
-        }
-      });
-    }
+    });
   }
 }

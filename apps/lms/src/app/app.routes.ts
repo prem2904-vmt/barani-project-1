@@ -13,6 +13,7 @@ import { routeGuards } from './core/auth/route-guards';
 import { TEST_MASTER_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
 import { loadRoleEditor, loadUserInvite } from './features/admin/users-access/user-editors.loader';
+import { unsavedChangesGuard } from './shared/utils/unsaved-changes';
 import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
 import { OPD_FULL_SCREEN_ADMIN, SETTINGS_FULL_PAGE_ROUTES, SETTINGS_REDIRECTS, SETTINGS_SHELL_ROUTE, SHELL_HOSTED_SHEET_PATHS } from './features/admin/settings/settings.routes';
 import { CASESHEET_SHELL_ROUTES, withAppModes } from './features/casesheets/casesheets.routes';
@@ -189,11 +190,13 @@ export const appRoutes: Route[] = withAppModes([
       {
         path: 'admin/roles/new',
         canActivate: [...routeGuards('/admin/roles/new')],
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: loadRoleEditor
       },
       {
         path: 'admin/roles/:id/edit',
         canActivate: [permissionGuard('manage_users')],
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: loadRoleEditor
       },
       {
