@@ -11,8 +11,10 @@ import { RouteAccessCtx, canOpenRoute } from './route-access';
 // generic; the FIRST route the user can open (same ROUTE_ACCESS table the guards
 // and nav use — perms, parents, mode-aware collect_sample, workflow actions,
 // module entitlements) wins. `perm` is kept as the historical "primary" permission for readers.
-export const LANDINGS: Array<{ perm: string; path: string }> = [
-  { perm: 'manage_tests', path: '/admin' },
+export const LANDINGS: Array<{ perm: string; path: string; /** ROUTE_ACCESS key that decides this row (defaults to `path`). */ gateRoute?: string }> = [
+  // Settings now admits every settings role (SETTINGS_ENTRY_PERMS), but landing there stays what it was: the admin
+  // perms first, a Test-Master / lab-settings-only role last — each row keeps its own old gate.
+  { perm: 'manage_tests', path: '/admin', gateRoute: '/admin/manage' },
   // /frontdesk admits FRONTDESK_PERMS, so this also lands the Billing Counter
   // (create_bill / collect_payment) — which used to match no landing and hit /403.
   { perm: 'register_patient', path: '/frontdesk' },
@@ -25,9 +27,9 @@ export const LANDINGS: Array<{ perm: string; path: string }> = [
   { perm: 'deliver_report', path: '/reports' },
   { perm: 'view_audit_log', path: '/admin/audit' },
   { perm: 'manage_branches', path: '/admin/branches' },
-  // A Test-Master / lab-settings-only role (no bench work) lands on the Lab
-  // settings hub rather than /403.
-  { perm: 'manage_test_master', path: '/lab/settings' },
+  // A Test-Master / lab-settings-only role (no bench work) lands on Settings
+  // rather than /403.
+  { perm: 'manage_test_master', path: '/admin', gateRoute: '/lab/settings' },
   // Last resort: someone whose only job here is entering expenses (or the
   // cashier / accountant) lands on Expenses rather than /403.
   { perm: 'expense_modifier', path: '/expenses' },
@@ -57,7 +59,7 @@ export interface LandingCtx extends RouteAccessCtx {
 export function pickLanding(ctx: LandingCtx): string {
   if (ctx.opdDoctor && ctx.opdOnlyDoctor) return '/opd/consult';
   for (const l of LANDINGS) {
-    if (canOpenRoute(l.path, ctx)) return l.path;
+    if (canOpenRoute(l.gateRoute ?? l.path, ctx)) return l.path;
   }
   return ctx.opdDoctor ? '/opd/consult' : '/403';
 }

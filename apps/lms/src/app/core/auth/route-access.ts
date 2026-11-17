@@ -100,6 +100,21 @@ export const CASESHEET_FORMS_PERMS = ['casesheet_forms_manage'];
 export const CASESHEET_READ_PERMS = ['casesheet_view', 'casesheet_fill'];
 export const CASESHEET_FILL_PERMS = ['casesheet_fill'];
 
+/**
+ * Perms that open the Settings overview (`/admin`). Settings is the ONE entry point to every setting (the Lab hub,
+ * Manage settings and the per-setting shortcuts are gone), so it admits anyone who can open at least one setting:
+ * the admin perms plus the narrower grants (Lab Admin (Technical), billing, notifications, inventory, comms,
+ * case-sheet authors …). The overview then lists only the settings that person can open. Still EXCLUDES
+ * manage_branch(es): Branch Managers keep their own Branches entry and must not reach tenant config.
+ */
+export const SETTINGS_ENTRY_PERMS = [...new Set([
+  ...ADMIN_PERMS,
+  ...LAB_SETTINGS_HUB_PERMS,
+  'manage_tenant', 'manage_admin', 'manage_billing_config', 'manage_inventory', 'manage_report_template',
+  'manage_home_collection', 'manage_lab_settings', 'manage_notifications', 'manage_bridges',
+  'manage_opd', 'manage_ipd', 'manage_pharmacy', ...CASESHEET_FORMS_PERMS,
+])];
+
 export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // ── Front desk (parent guard + per-child perms) ────────────────────────
   '/frontdesk':                  { perms: FRONTDESK_PERMS },
@@ -146,7 +161,7 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/expenses':           { perms: EXPENSE_ROUTE_PERMS },
 
   // ── Admin / settings ───────────────────────────────────────────────────
-  '/admin':                   { perms: ADMIN_PERMS },
+  '/admin':                   { perms: SETTINGS_ENTRY_PERMS },
   '/admin/manage':            { perms: ADMIN_PERMS },
   '/admin/modules':           { perms: ADMIN_PERMS },
   '/admin/kpis':              { perms: ADMIN_PERMS },
@@ -194,6 +209,38 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // Home collection = entitlement AND the workflow's Home Visits action (the
   // ONE rule, core/modules/lab-features) — same pair as its work screens.
   '/admin/home-collection':   { perms: ['manage_home_collection'], workflow: ['home_visits'], module: 'homeCollection' },
+
+
+  // ── Settings re-home (2026-11-17): the new homes carry EXACTLY the gate of the screen behind them today ──
+  '/admin/lab/departments':       { perms: ['manage_branches'] },
+  '/admin/lab/sample-numbers':    { perms: ['manage_tenant'] },
+  '/admin/reports/notes':         { perms: ['manage_lab_settings'] },
+  '/admin/lab/collection':        { perms: ['manage_lab_settings'] },
+  '/admin/lab/results':           { perms: ['manage_lab_settings'] },
+  '/admin/lab/outsourcing':       { perms: TEST_MASTER_PERMS },
+  '/admin/lab/analyzers':         { perms: ['manage_lab_settings', ...BRIDGE_PERMS], module: 'lab' },
+  '/admin/lab/front-desk':        { perms: ['manage_tenant'] },
+  '/admin/lab/front-desk/referring': { perms: ['manage_tenant', 'manage_admin'] },
+  '/admin/lab/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
+  '/admin/lab/numbers':           { perms: ADMIN_PERMS },
+  '/admin/lab/work-steps':        { perms: ['manage_workflows'] },
+  '/admin/lab/home-collection':   { perms: ['manage_home_collection'], workflow: ['home_visits'], module: 'homeCollection' },
+  '/admin/opd/departments':       { perms: ADMIN_PERMS },
+  '/admin/opd/doctors':           { perms: ADMIN_PERMS },
+  '/admin/opd/forms':             { perms: ADMIN_PERMS },
+  '/admin/opd/workflow':          { perms: ADMIN_PERMS },
+  '/admin/opd/settings':          { perms: ADMIN_PERMS },
+  '/admin/opd/front-desk':        { perms: ADMIN_PERMS },
+  '/admin/opd/front-desk/referring': { perms: ADMIN_PERMS },
+  '/admin/opd/alerts':            { perms: ADMIN_PERMS },
+  '/admin/opd/numbers':           { perms: ADMIN_PERMS },
+  '/admin/pharmacy':              { perms: ADMIN_PERMS },
+  '/admin/pharmacy/drugs':        { perms: ADMIN_PERMS },
+  '/admin/ipd/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
+  '/admin/org/profile':           { perms: ['manage_tenant'] },
+  '/admin/org/profile/branding':  { perms: ADMIN_PERMS },
+  '/admin/org/numbers':           { perms: ['manage_tenant'] },
+  '/admin/org/channels':          { perms: COMMS_SETTINGS_PERMS },
 
   // ── Case sheets (part of IPD; every route also behind casesheetGuard) ─
   // Admin → IPD → MyPrefrontal: author the lab's case-sheet forms.

@@ -14,6 +14,7 @@ import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.c
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { PfTimeComponent } from '../../../shared/components/pf-time/pf-time.component';
+import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 /** Band pill tabs — one per section card. */
 export type AppointmentsTab = 'mode' | 'slots' | 'priority';
@@ -218,6 +219,8 @@ export class AppointmentsConfigComponent implements OnInit {
     { value: 'priority', label: 'Priority engine' },
   ];
   readonly tab = signal<AppointmentsTab>('mode');
+  protected readonly hosted = injectSettingsHosted();
+  private readonly followTab = bindTabQuery(['mode', 'slots', 'priority'] as const, (t) => this.tab.set(t));
   showSec(key: AppointmentsTab): boolean {
     return !this.theme.isNewDesign() || this.tab() === key;
   }

@@ -42,6 +42,7 @@ import { busyWhile } from '../../../shared/utils/busy';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { finalize } from 'rxjs';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 type Tab = "gst" | "discounts" | "invoice";
 type GstScope = "branch" | "region" | "tenant";
@@ -180,6 +181,7 @@ interface GstRow {
             <pf-skeleton-form [fields]="8" [cols]="2" label="Loading billing config…"></pf-skeleton-form>
           </div></section>
         } @else {
+        @if (!hosted) {
         <div class="mb-5 pf-classic-only">
           <pf-segmented
             [options]="tabOptions"
@@ -189,6 +191,7 @@ interface GstRow {
           >
           </pf-segmented>
         </div>
+        }
 
         @if (tab() === "gst") {
           <div class="pf-bc-card mb-4">
@@ -1100,6 +1103,8 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   ];
   private readonly _tab = signal<Tab>("gst");
   readonly tab = this._tab.asReadonly();
+  protected readonly hosted = injectSettingsHosted();
+  private readonly followTab = bindTabQuery(['gst', 'discounts', 'invoice'] as const, (t) => this._tab.set(t));
   setTab(t: Tab) {
     this._tab.set(t);
     if (t === "invoice" && !this.invoicePreviewUrl())

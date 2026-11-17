@@ -26,6 +26,7 @@ import { gridThemeDark, gridThemeLight } from '../tests/tests/grid-theme';
 import {
   STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, ledgerWord, qty, signedQty, stockLevel, testsCovered,
 } from '../../stores/inventory-view';
+import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -87,7 +88,9 @@ const TEST_LIST_CAP = 300;
                 <span class="pf-num">{{ attentionCount() }}</span>
               </button>
             }
-            <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
+            @if (!hosted) {
+              <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
+            }
             @if (tab() === 'items') {
               <pf-select class="pf-inv-bandsel" size="sm" [options]="categoryFilterOptions" [value]="category()"
                          (valueChange)="category.set($event)" aria-label="Category"></pf-select>
@@ -118,7 +121,9 @@ const TEST_LIST_CAP = 300;
           <p class="text-sm" style="color:var(--text-tertiary)">Stock for the active branch. Usage is auto-deducted per test at sample collection.</p>
         </div>
         <div class="flex items-center gap-2">
-          <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
+          @if (!hosted) {
+            <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
+          }
           <button type="button" class="pf-btn pf-btn--secondary" (click)="startNew()">New item</button>
         </div>
       </div>
@@ -549,6 +554,8 @@ export class InventoryComponent implements OnInit {
   // ── Band pill ────────────────────────────────────────────────
   /** Items vs Test consumables (one at a time). */
   readonly tab = signal<InvTab>('items');
+  protected readonly hosted = injectSettingsHosted();
+  private readonly followTab = bindTabQuery(['items', 'bom'] as const, (t) => this.tab.set(t));
   readonly tabOptions: SegmentedOption<InvTab>[] = [
     { value: 'items', label: 'Items' },
     { value: 'bom', label: 'Test consumables' },

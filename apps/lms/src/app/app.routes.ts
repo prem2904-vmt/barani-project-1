@@ -10,10 +10,11 @@ import { landingGuard } from './core/auth/landing.guard';
 import { moduleGuard } from './core/auth/module.guard';
 import { permissionGuard } from './core/auth/permission.guard';
 import { routeGuards } from './core/auth/route-guards';
-import { ADMIN_PERMS, TEST_MASTER_PERMS } from './core/auth/route-access';
+import { TEST_MASTER_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
 import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
 import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
+import { SETTINGS_REDIRECTS, SETTINGS_SHELL_ROUTE, SHELL_HOSTED_SHEET_PATHS } from './features/admin/settings/settings.routes';
 import { CASESHEET_SHELL_ROUTES, withAppModes } from './features/casesheets/casesheets.routes';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
@@ -22,7 +23,8 @@ import { CASESHEET_SHELL_ROUTES, withAppModes } from './features/casesheets/case
 // config. Their legit destinations — /admin/branches, /admin/audit,
 // home-collection — are separate routes gated on their own perms and surfaced
 // via the "More" nav, so they need no admin-shell access.
-const adminGuard = permissionGuard(ADMIN_PERMS);
+/** OPD admin editors that stay full screen (their list is hosted by the Settings shell). */
+const OPD_FULL_SCREEN_ADMIN: ReadonlySet<string> = new Set(['admin/opd/services/:id', 'admin/opd/forms/:id']);
 
 // Gate for /set-password: must be signed in, and only relevant while a
 // password change is actually owed. Bounces signed-out users to /login and
@@ -36,21 +38,6 @@ const setPasswordGuard: CanActivateFn = async () => {
   return true;
 };
 
-
-// /lab/settings → Settings overview (Lab section) for anyone allowed into /admin.
-const labSettingsToOverviewGuard: CanActivateFn = async () => {
-  const auth = inject(AuthService);
-  const router = inject(Router);
-  await auth.waitForAuth();
-  if (!auth.isAuthenticated() || !auth.hasAnyPermission(ADMIN_PERMS)) return true;
-  return router.createUrlTree(['/admin'], { queryParams: { section: 'lab' } });
-};
-
-// /admin/manage?cat=<id> → the Settings overview on that section.
-const manageToOverviewGuard: CanActivateFn = (route) => {
-  const cat = route.queryParamMap.get('cat');
-  return inject(Router).createUrlTree(['/admin'], { queryParams: cat ? { section: cat } : {} });
-};
 
 // withAppModes (features/casesheets/casesheets.routes.ts, plan §4.4): the public case-sheet site's routes match
 // ONLY in casesheets mode (core/app-mode.ts) and every route below ONLY in LMS mode.
@@ -141,6 +128,11 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/frontdesk/patient-profile/patient-profile.component').then(m => m.PatientProfileComponent)
       },
 
+      // Settings: every setting opens INSIDE the shell (sections → that setting's categories on the left, the screen on
+      // the right); the whole table lives in features/admin/settings/settings.routes.ts. Old links redirect there.
+      SETTINGS_SHELL_ROUTE,
+      ...SETTINGS_REDIRECTS,
+
       // Admin — gated: hidden from nav + blocked at route level if the user
       // doesn't hold any admin-config permission (manage_tests/users/workflows).
       // Branch browsing (manage_branch/es) is NOT an admin-config perm.
@@ -148,45 +140,6 @@ export const appRoutes: Route[] = withAppModes([
         path: 'admin',
         canActivate: [...routeGuards('/admin')],
         loadComponent: () => import('./features/admin/admin-overview.component').then(m => m.AdminOverviewComponent)
-      },
-      {
-        // Old deep links to the settings hub (/admin/manage?cat=org …): the hub is
-        // now the two-panel Settings overview, so open it on that section. Same
-        // admin guard as before, then the redirect.
-        path: 'admin/manage',
-        canActivate: [...routeGuards('/admin/manage'), manageToOverviewGuard],
-        // Never rendered: the guard always redirects.
-        loadComponent: () => import('./features/admin/admin-overview.component').then(m => m.AdminOverviewComponent)
-      },
-      {
-        // Modules (Extensions) — enable/disable product modules + their features.
-        path: 'admin/modules',
-        canActivate: [...routeGuards('/admin/modules')],
-        loadComponent: () => import('./features/admin/modules/modules.component').then(m => m.AdminModulesComponent)
-      },
-      {
-        // Lab module settings hub — lab-SPECIFIC config lives inside the Lab
-        // world (not the global admin): catalog, report template, lab settings,
-        // referrals, notifications, KPIs. Gated on any lab-admin permission.
-        path: 'lab/settings',
-        // Anyone who can open the Settings overview lands on its Lab section; the
-        // hub below stays for lab-settings roles that cannot open /admin.
-        canActivate: [labSettingsToOverviewGuard, ...routeGuards('/lab/settings')],
-        loadComponent: () => import('./features/lab/lab-settings-hub/lab-settings-hub.component').then(m => m.LabSettingsHubComponent)
-      },
-      {
-        // Lab settings → AI connectors (MCP): the lab switch (admin) +
-        // connector address; everyone else in the hub sees the status.
-        path: 'admin/ai-connectors',
-        canActivate: [betaGuard('mcp'), ...routeGuards('/admin/ai-connectors')],
-        loadComponent: () => import('./features/ai-connector/ai-connectors-settings.page').then(m => m.AiConnectorsSettingsPage)
-      },
-      {
-        // Lab analyzers (instrument connector): list + setup wizard / status.
-        // `new` opens the wizard for a new instrument.
-        path: 'admin/instruments',
-        canActivate: [...routeGuards('/admin/instruments')],
-        loadComponent: () => import('./features/lab/instruments/instruments-list.component').then(m => m.InstrumentsListComponent)
       },
       {
         // "Connect an analyzer" setup helper (desktop app; the web explains).
@@ -201,13 +154,6 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/lab/instruments/instrument-editor.component').then(m => m.InstrumentEditorComponent)
       },
       {
-        // Prefrontal Bridges (zero-touch analyzer boxes, bridge-api v1):
-        // list, add (QR / code / nearby / local), one Bridge.
-        path: 'admin/bridges',
-        canActivate: [...routeGuards('/admin/bridges')],
-        loadComponent: () => import('./features/admin/bridges/bridges-list.component').then(m => m.BridgesListComponent)
-      },
-      {
         path: 'admin/bridges/add',
         canActivate: [...routeGuards('/admin/bridges')],
         loadComponent: () => import('./features/admin/bridges/bridge-add.component').then(m => m.BridgeAddComponent)
@@ -218,56 +164,18 @@ export const appRoutes: Route[] = withAppModes([
         canActivate: [...routeGuards('/admin/bridges')],
         loadComponent: () => import('./features/admin/bridges/bridge-detail.component').then(m => m.BridgeDetailComponent)
       },
-      {
-        // Microbiology / Culture bench settings (lock timeout, TAT).
-        path: 'admin/microbiology',
-        canActivate: [...routeGuards('/admin/microbiology')],
-        loadComponent: () => import('./features/lab/culture-settings/culture-settings.component').then(m => m.CultureSettingsComponent)
-      },
       // Admin settings placeholders for not-yet-built modules — each opens a
       // "coming soon" hub listing that module's planned config, so the module-
       // first admin shows the full roadmap. adminGuard (not moduleGuard) so the
       // placeholder is visible regardless of entitlement.
       // OPD admin (OPD dark build) — every route adminGuard + opdGuard; defined
       // ONCE in features/opd/opd.routes.ts (feature agents never edit here).
-      ...OPD_ADMIN_ROUTES,
+      // The ones the Settings shell hosts (departments, doctors, forms, workflow, settings) and the pharmacy pair are
+      // listed ONCE in features/admin/settings/settings.routes.ts; only the full-screen editors stay here.
+      ...OPD_ADMIN_ROUTES.filter(r => OPD_FULL_SCREEN_ADMIN.has(r.path ?? '')),
       // Case sheets (part of IPD): Admin → IPD → MyPrefrontal + the lab's sheets, each behind casesheetGuard;
       // defined ONCE in features/casesheets/casesheets.routes.ts.
-      ...CASESHEET_SHELL_ROUTES,
-      {
-        path: 'admin/ipd', canActivate: [adminGuard], data: { moduleId: 'ipd' },
-        // The module "coming soon" page; with the case-sheet gate open (+ casesheet_forms_manage) a hub with the MyPrefrontal tile.
-        loadComponent: () => import('./features/casesheets/studio/ipd-hub.component').then(m => m.IpdHubComponent)
-      },
-      {
-        path: 'admin/pharmacy', canActivate: [adminGuard], data: { moduleId: 'pharmacy' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
-      {
-        path: 'admin/payroll', canActivate: [adminGuard], data: { moduleId: 'payroll' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
-      {
-        path: 'admin/insurance', canActivate: [adminGuard], data: { moduleId: 'insurance' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
-      {
-        path: 'admin/radiology', canActivate: [adminGuard], data: { moduleId: 'radiology' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
-      {
-        path: 'admin/emergency', canActivate: [adminGuard], data: { moduleId: 'emergency' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
-      {
-        path: 'admin/blood-bank', canActivate: [adminGuard], data: { moduleId: 'bloodbank' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
-      {
-        path: 'admin/users',
-        canActivate: [...routeGuards('/admin/users')],
-        loadComponent: () => import('./features/admin/users-access/users-access.component').then(m => m.UsersAccessComponent)
-      },
+      ...CASESHEET_SHELL_ROUTES.filter(r => !SHELL_HOSTED_SHEET_PATHS.includes(r.path ?? '')),
       {
         path: 'admin/users/invite',
         canActivate: [...routeGuards('/admin/users/invite')],
@@ -289,11 +197,6 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: loadRoleEditor
       },
       {
-        path: 'admin/tests',
-        canActivate: [...routeGuards('/admin/tests')],
-        loadComponent: () => import('./features/admin/tests/tests/tests.component').then(m => m.TestsComponent)
-      },
-      {
         path: 'admin/tests/new',
         canActivate: [...routeGuards('/admin/tests/new')],
         loadComponent: loadTestEditor
@@ -303,44 +206,9 @@ export const appRoutes: Route[] = withAppModes([
         canActivate: [permissionGuard(TEST_MASTER_PERMS)],
         loadComponent: loadTestEditor
       },
-      {
-        path: 'admin/branches',
-        canActivate: [...routeGuards('/admin/branches')],
-        loadComponent: () => import('./features/admin/branches/branches.component').then(m => m.BranchesComponent)
-      },
-      {
-        path: 'admin/vendors',
-        canActivate: [...routeGuards('/admin/vendors')],
-        loadComponent: () => import('./features/admin/vendors/vendors.component').then(m => m.VendorsComponent)
-      },
-      {
-        path: 'admin/referral-labs',
-        canActivate: [...routeGuards('/admin/referral-labs')],
-        loadComponent: () => import('./features/admin/referral-labs/referral-labs.component').then(m => m.ReferralLabsComponent)
-      },
-      {
-        // Outsourcing partner prices — what each referral lab charges per
-        // test, effective-dated; the single cost source Analytics' Phase 3
-        // Outsourcing/Profitability tabs read from.
-        path: 'admin/partner-prices',
-        canActivate: [...routeGuards('/admin/partner-prices')],
-        loadComponent: () => import('./features/admin/partner-test-prices/partner-test-prices.component').then(m => m.PartnerTestPricesComponent)
-      },
-      {
-        // Settings → Communication: WhatsApp, Email, SMS in ONE place (2026-11-13). The WhatsApp cards
-        // moved here from Lab settings → Report; the old WhatsApp links below redirect.
-        path: 'admin/communication',
-        canActivate: [...routeGuards('/admin/communication')],
-        loadComponent: () => import('./features/admin/communication/communication-settings.page').then(m => m.CommunicationSettingsPage)
-      },
       { path: 'admin/whatsapp', redirectTo: '/admin/communication?tab=whatsapp', pathMatch: 'full' },
       { path: 'admin/lab-settings/whatsapp', redirectTo: '/admin/communication?tab=whatsapp', pathMatch: 'full' },
       { path: 'admin/email', redirectTo: '/admin/communication?tab=email', pathMatch: 'full' },
-      {
-        path: 'admin/lab-settings',
-        canActivate: [...routeGuards('/admin/lab-settings')],
-        loadComponent: () => import('./features/admin/lab-settings/lab-settings.component').then(m => m.LabSettingsComponent)
-      },
       {
         // Per-station printing setup — available to any signed-in user (not
         // admin-only): the printer + label roll are physical to the station.
@@ -379,62 +247,7 @@ export const appRoutes: Route[] = withAppModes([
       // The names the earlier builds used keep working.
       { path: 'sheet', redirectTo: () => inject(Router).parseUrl('/files?type=sheet') },
       { path: 'office', redirectTo: () => inject(Router).parseUrl('/files') },
-      {
-        path: 'admin/files',
-        canActivate: [...routeGuards('/admin/files'), betaGuard('neuron')],
-        loadComponent: () => import('./features/files/files-settings.page').then(m => m.FilesSettingsPage)
-      },
       { path: 'admin/office', redirectTo: '/admin/files', pathMatch: 'full' },
-      {
-        path: 'admin/organization',
-        canActivate: [...routeGuards('/admin/organization')],
-        loadComponent: () => import('./features/admin/organization/organization-settings.component').then(m => m.OrganizationSettingsComponent)
-      },
-      {
-        path: 'admin/billing',
-        canActivate: [...routeGuards('/admin/billing')],
-        loadComponent: () => import('./features/admin/billing-config/billing-config.component').then(m => m.BillingConfigComponent)
-      },
-      {
-        path: 'admin/inventory',
-        canActivate: [...routeGuards('/admin/inventory')],
-        loadComponent: () => import('./features/admin/inventory/inventory.component').then(m => m.InventoryComponent)
-      },
-      {
-        path: 'admin/reports',
-        canActivate: [...routeGuards('/admin/reports')],
-        // Unsaved report-design changes ask before leaving (DialogService).
-        canDeactivate: [(c: { canLeave?: () => Promise<boolean> }) => c?.canLeave ? c.canLeave() : true],
-        loadComponent: () => import('./features/admin/report-template/report-template.component').then(m => m.ReportTemplateComponent)
-      },
-      {
-        path: 'admin/referring-network',
-        canActivate: [...routeGuards('/admin/referring-network')],
-        loadComponent: () => import('./features/admin/referring-network/referring-network.component').then(m => m.ReferringNetworkComponent)
-      },
-      {
-        // Partners hub — combined landing that surfaces Referral Labs, Vendor
-        // Wallets and the Referring Network together (item 141). Each tile links
-        // to its existing dedicated page; those routes above are unchanged.
-        path: 'admin/partners',
-        canActivate: [...routeGuards('/admin/partners')],
-        loadComponent: () => import('./features/admin/partners/partners.component').then(m => m.PartnersComponent)
-      },
-      {
-        path: 'admin/notifications',
-        canActivate: [...routeGuards('/admin/notifications')],
-        loadComponent: () => import('./features/admin/notifications-config/notifications-config.component').then(m => m.NotificationsConfigComponent)
-      },
-      {
-        path: 'admin/workflows',
-        canActivate: [...routeGuards('/admin/workflows')],
-        loadComponent: () => import('./features/admin/workflow-builder/workflow-builder.component').then(m => m.WorkflowBuilderComponent)
-      },
-      {
-        path: 'admin/process',
-        canActivate: [...routeGuards('/admin/process')],
-        loadComponent: () => import('./features/admin/process-builder/process-builder.component').then(m => m.ProcessBuilderComponent)
-      },
       {
         // Generic host for a custom work-area — renders its placed actions as
         // panels (or launcher cards). System areas route to bespoke screens; this
@@ -458,29 +271,9 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/admin/workflow-builder/field-editor.component').then(m => m.FieldEditorComponent)
       },
       {
-        path: 'setup',
-        canActivate: [...routeGuards('/setup')],
-        loadComponent: () => import('./features/admin/setup-wizard/setup-wizard.component').then(m => m.SetupWizardComponent)
-      },
-      {
-        path: 'admin/kpis',
-        canActivate: [...routeGuards('/admin/kpis')],
-        loadComponent: () => import('./features/admin/kpis/kpi-config.component').then(m => m.KpiConfigComponent)
-      },
-      {
         path: 'admin/audit',
         canActivate: [...routeGuards('/admin/audit')],
         loadComponent: () => import('./features/admin/audit-log/audit-log.component').then(m => m.AuditLogComponent)
-      },
-      {
-        path: 'admin/appointments',
-        canActivate: [...routeGuards('/admin/appointments')],
-        loadComponent: () => import('./features/admin/appointments-config/appointments-config.component').then(m => m.AppointmentsConfigComponent)
-      },
-      {
-        path: 'admin/home-collection',
-        canActivate: [...routeGuards('/admin/home-collection')],
-        loadComponent: () => import('./features/admin/home-collection/home-collection-agents.component').then(m => m.HomeCollectionAgentsComponent)
       },
       {
         // Agent's own home-collection visit list.

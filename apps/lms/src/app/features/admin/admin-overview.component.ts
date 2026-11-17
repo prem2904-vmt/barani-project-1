@@ -13,17 +13,11 @@ import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from "@prefrontal/shared";
 import { ThemeService } from "../../core/services/theme.service";
 import { HeroBandComponent } from "../../shared/components/hero-band/hero-band.component";
-import { AuthService } from "../../core/auth/auth.service";
-import { BetaFeaturesService } from "../../core/services/beta-features.service";
-import { OpdGateService } from "../opd/shared/opd-gate.service";
-import { canOpenRoute } from "../../core/auth/route-access";
-import { ProcessWorkflowService } from "../../core/services/process-workflow.service";
-import { TenantEntitlementsService } from "../../core/services/tenant-entitlements.service";
-import { LabFeaturesService } from "../../core/services/lab-features.service";
 import { NavBackService } from "../../core/services/nav-back.service";
 import { SettingsCatalogService } from "../../core/services/settings-catalog.service";
 import { SettingsResultsComponent } from "../../shared/components/settings-results/settings-results.component";
-import { ADMIN_CATEGORIES, LAB_SETTINGS_TILES, SettingsTile } from "../../shared/utils/settings-tiles";
+import { SettingsAccessService } from "./settings/settings-access.service";
+import { LEGACY_SECTION, SETTINGS_GROUPS } from "./settings/settings-map";
 
 /** One section's tile as the right panel shows it. */
 interface SectionTile {
@@ -36,17 +30,15 @@ interface SectionTile {
 }
 
 /**
- * Settings overview = the two-panel hub (owner 2026-11-15). LEFT: the grouped
- * section list (Departments, Organization, All departments last). RIGHT: the
- * selected section's tiles — the same tiles and routes the old cards, the
- * settings hub and the Lab hub had; only the way you reach them changed. The
- * business numbers (cash, billed, patients, config counters) moved out: that is
- * Insights' job.
+ * Settings overview = the two-panel hub (owner 2026-11-15, re-homed 2026-11-17). LEFT: the grouped section list
+ * (Departments: Lab, OPD, Pharmacy, IPD, Inventory — each only when the lab has it; Organization: profile, branches,
+ * numbers, people, billing, connected apps, message channels, files). RIGHT: the selected section's settings as
+ * tiles. A tile opens that setting INSIDE the Settings shell (settings-shell.component.ts), where the left panel
+ * slides to the setting's categories. The map is settings/settings-map.ts; who sees what is SettingsAccessService.
  *
- * The selected section lives in the URL (`/admin?section=lab`), so old deep
- * links (`/admin/manage?cat=org`, `/lab/settings`) land on the same section.
- * Phone: the list first, a tap drills into the section, back (chevron, swipe,
- * browser) returns to the list.
+ * The selected section lives in the URL (`/admin?section=lab`), so old deep links (`/admin/manage?cat=org`,
+ * `/lab/settings`, `/admin?section=finance`) land on the section that holds them now. Phone: the list first, a tap
+ * drills into the section, back (chevron, swipe, browser) returns to the list.
  */
 @Component({
   selector: "pf-admin-overview",
@@ -151,230 +143,49 @@ interface SectionTile {
 export class AdminOverviewComponent implements OnDestroy {
   /** Design gate: new design hides the big overview title. */
   readonly theme = inject(ThemeService);
-  private readonly auth = inject(AuthService);
-  private readonly process = inject(ProcessWorkflowService);
-  private readonly entitlements = inject(TenantEntitlementsService);
-  /** OPD dark build: the OPD module card shows only when the OPD gate is open. */
-  private readonly opdGate = inject(OpdGateService);
-  private readonly labFeatures = inject(LabFeaturesService);
+  private readonly access = inject(SettingsAccessService);
   private readonly navBack = inject(NavBackService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute, { optional: true });
   private readonly location = inject(Location);
 
-  /** Route-access context for filtering links (ROUTE_ACCESS — same rule as the
-   *  guards), so a custom admin role never sees a card that lands on /403. */
-  protected canOpen(href: string): boolean {
-    // hasAnyPermission already honours '*' (super-admin). Workflow actions and
-    // module entitlements too (the same ROUTE_ACCESS the guards read), so a
-    // switched-off feature — e.g. Home collection — never surfaces here.
-    return canOpenRoute(href, {
-      hasAny: (p) => this.auth.hasAnyPermission(p),
-      isEnabled: (a) => this.process.isEnabled(a),
-      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
-    });
-  }
-  private openable<T extends { href?: string }>(items: T[]): T[] {
-    return items.filter((i) => (!i.href || this.canOpen(i.href))
-      && (!i.href?.startsWith('/admin/opd') || this.opdGate.visible()));
-  }
+  /** Sections this person can open at least one setting in, grouped Departments → Organization. Read live. */
+  private readonly sections = computed(() => this.access.visibleSections());
 
-  readonly groups: Array<{
-    cat: string;
-    label: string;
-    blurb: string;
-    icon: string;
-    href?: string;
-    /** dept = a department / product module; org = organization-wide; all = shared by every department (listed last). */
-    section: 'dept' | 'org' | 'all';
-  }> = this.openable([
-    // Module-first admin: one card per MODULE (Lab here; OPD/IPD/Pharmacy slot in
-    // as each ships), then the shared/platform cards. Module ENABLEMENT lives in
-    // the platform console (admin.prefrontal.health) — not here.
-    {
-      cat: "lab",
-      section: "dept",
-      label: "Lab",
-      blurb:
-        "Tests & catalog, report layout, lab settings, referrals, alerts, KPIs",
-      icon: "M9 3h6M10 3v5.5L5.5 17A2 2 0 0 0 7.3 20h9.4a2 2 0 0 0 1.8-3L14 8.5V3",
-      href: "/lab/settings",
-    },
-    {
-      cat: "radiology",
-      section: "dept",
-      label: "Radiology / Imaging",
-      blurb: "X-ray, CT, MRI, ultrasound, PACS — coming soon",
-      icon: "M4 7V5a2 2 0 0 1 2-2h2M16 3h2a2 2 0 0 1 2 2v2M20 17v2a2 2 0 0 1-2 2h-2M8 21H6a2 2 0 0 1-2-2v-2M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0Z",
-      href: "/admin/radiology",
-    },
-    {
-      cat: "opd",
-      section: "dept",
-      label: "OPD",
-      blurb: "Appointments, consultation, vitals, prescriptions — coming soon",
-      icon: "M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM4 21v-2a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v2",
-      href: "/admin/opd",
-    },
-    {
-      cat: "ipd",
-      section: "dept",
-      label: "IPD",
-      blurb: "Admissions, beds & wards, nursing, discharge — coming soon",
-      icon: "M3 7v12M3 13h18v6M21 19v-4a3 3 0 0 0-3-3h-7v4M7 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z",
-      href: "/admin/ipd",
-    },
-    {
-      cat: "pharmacy",
-      section: "dept",
-      label: "Pharmacy",
-      blurb: "Dispensing, stock, formulary, purchase — coming soon",
-      icon: "M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM7 7l7 7",
-      href: "/admin/pharmacy",
-    },
-    {
-      cat: "inventory",
-      section: "dept",
-      label: "Inventory",
-      blurb: "Stock, batches, expiry alerts, per-item usage",
-      icon: "M21 8 12 3 3 8l9 5 9-5ZM3 8v8l9 5 9-5V8M12 13v8",
-      href: "/admin/inventory",
-    },
-    {
-      cat: "payroll",
-      section: "dept",
-      label: "Payroll",
-      blurb: "Employees, attendance, payslips — coming soon",
-      icon: "M3 7h18v12H3zM3 11h18M7 15h4M12 3v4",
-      href: "/admin/payroll",
-    },
-    {
-      cat: "emergency",
-      section: "dept",
-      label: "Emergency (ER)",
-      blurb: "Triage, ER registration, observation — coming soon",
-      icon: "M9 3h6v6h6v6h-6v6H9v-6H3V9h6z",
-      href: "/admin/emergency",
-    },
-    {
-      cat: "bloodbank",
-      section: "dept",
-      label: "Blood Bank",
-      blurb: "Donors, cross-match, unit inventory — coming soon",
-      icon: "M12 3s6 6 6 10a6 6 0 0 1-12 0c0-4 6-10 6-10Z",
-      href: "/admin/blood-bank",
-    },
-    {
-      cat: "insurance",
-      section: "dept",
-      label: "Insurance",
-      blurb: "Policies, claims, pre-auth, TPA, reimbursement — coming soon",
-      icon: "M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6l7-3ZM9 12l2 2 4-4",
-      href: "/admin/insurance",
-    },
-    {
-      cat: "people",
-      section: "org",
-      label: "People & Access",
-      blurb: "Users, roles and the audit trail",
-      icon: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
-    },
-    {
-      cat: "org",
-      section: "org",
-      label: "Branches & Organization",
-      blurb: "Branches, departments, IDs, appointments, referral & vendors",
-      icon: "M4 21V7l8-4 8 4v14",
-    },
-    {
-      cat: "finance",
-      section: "org",
-      label: "Billing & Finance",
-      blurb: "GST, discounts, invoices, daily statement",
-      icon: "M3 5h18v14H3z",
-    },
-    {
-      cat: "automation",
-      section: "org",
-      label: "Platform & Automation",
-      blurb: "Process builder & form flows",
-      icon: "M3 4h6v6H3zM15 4h6v6h-6zM9 14h6v6H9z",
-    },
-    {
-      cat: "communication",
-      section: "all",
-      label: "Communication",
-      blurb: "WhatsApp, email and SMS for every department",
-      icon: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM8 9h8M8 13h5",
-      href: "/admin/communication",
-    },
-  ]);
-
-
-  /** Files (beta `neuron`, dev only): an ordinary section next to Communication, same style, no badge. */
-  private readonly beta = inject(BetaFeaturesService);
-  private readonly filesTile = computed(() => this.beta.enabled('neuron') && this.canOpen('/admin/files')
-    ? [{
-        cat: 'files', section: 'all' as const, label: 'Files', blurb: 'Neuron, Synapse, Axon, Myelin, Retina: access, templates, storage',
-        icon: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z', href: '/admin/files',
-      }]
-    : []);
-
-  /** The tiles of one section, each one the SAME tile (title, route, icon) the old
-   *  cards / settings hub / Lab hub listed, filtered by the same access rules. */
-  private tilesFor(g: { cat: string; label: string; blurb: string; icon: string; href?: string }): SectionTile[] {
-    if (g.cat === 'lab') {
-      const featureOn = (t: (typeof LAB_SETTINGS_TILES)[number]) =>
-        (t.feature !== 'homeCollection' || this.labFeatures.homeCollectionEnabled())
-        && (!t.beta || this.beta.enabled(t.beta));
-      return LAB_SETTINGS_TILES.filter((t) => featureOn(t) && this.canOpen(t.href));
-    }
-    const cat = ADMIN_CATEGORIES.find((c) => c.id === g.cat);
-    if (cat) return cat.tiles.filter((t: SettingsTile) => this.canOpen(t.href));
-    // A single-page section (Inventory, Communication, Files, the coming-soon
-    // modules): its one tile is the page itself.
-    return g.href ? [{ title: g.label, subtitle: g.blurb, href: g.href, iconPath: g.icon }] : [];
-  }
-
-  /** Departments first, then the organization, then what every department shares (Communication, Files) LAST. */
-  readonly sections = computed(() => {
-    const all = [...this.groups, ...this.filesTile()];
-    return ([
-      { key: 'dept', label: 'Departments' },
-      { key: 'org', label: 'Organization' },
-      { key: 'all', label: 'All departments' },
-    ] as const).map(s => ({
-      ...s,
-      items: all.filter(g => g.section === s.key)
-        .map(g => ({ ...g, tiles: this.tilesFor(g) }))
-        .filter(g => g.tiles.length > 0),
-    })).filter(s => s.items.length > 0);
+  readonly panelGroups = computed<TwoPanelGroup[]>(() => {
+    const all = this.sections();
+    return SETTINGS_GROUPS
+      .map((g) => ({
+        key: g.key,
+        heading: g.heading,
+        items: all.filter((s) => s.section.group === g.key).map((s) => ({
+          id: s.section.id,
+          label: s.section.label,
+          description: s.section.blurb,
+          note: s.items.length > 1 ? String(s.items.length) : undefined,
+        })),
+      }))
+      .filter((g) => g.items.length > 0);
   });
 
-  readonly panelGroups = computed<TwoPanelGroup[]>(() => this.sections().map(s => ({
-    key: s.key,
-    heading: s.label,
-    items: s.items.map(g => ({
-      id: g.cat,
-      label: g.label,
-      description: g.blurb,
-      note: g.tiles.length > 1 ? String(g.tiles.length) : undefined,
-    })),
-  })));
-
-  private readonly allItems = computed(() => this.sections().flatMap(s => s.items));
+  private readonly allItems = computed(() => this.sections());
 
   // ── Selected section (kept in the URL: /admin?section=lab) ─────────────
   private readonly params = this.route ? toSignal(this.route.queryParamMap, { initialValue: this.route.snapshot.queryParamMap }) : signal(null);
   readonly compact = injectTwoPanelCompact();
   private readonly urlSection = computed(() => {
-    const id = this.params()?.get('section') ?? null;
-    return id && this.allItems().some(i => i.cat === id) ? id : null;
+    const raw = this.params()?.get('section') ?? null;
+    // Old links (`?section=org`, `/admin/manage?cat=finance` …) name the section that holds them now.
+    const id = raw && this.allItems().some(i => i.section.id === raw) ? raw : (raw ? (LEGACY_SECTION[raw] ?? null) : null);
+    return id && this.allItems().some(i => i.section.id === id) ? id : null;
   });
   /** Wide: the URL's section, else the first one. Phone: only what the URL names (none = the list). */
-  readonly selectedId = computed(() => this.urlSection() ?? (this.compact() ? null : (this.allItems()[0]?.cat ?? null)));
+  readonly selectedId = computed(() => this.urlSection() ?? (this.compact() ? null : (this.allItems()[0]?.section.id ?? null)));
   readonly detailOpen = computed(() => this.urlSection() !== null);
-  readonly selectedTiles = computed(() => this.allItems().find(i => i.cat === this.selectedId())?.tiles ?? []);
+  readonly selectedTiles = computed<SectionTile[]>(() =>
+    (this.allItems().find(i => i.section.id === this.selectedId())?.items ?? []).map((i) => ({
+      title: i.label, subtitle: i.blurb, href: i.path, iconPath: i.iconPath, iconExtra: i.iconExtra,
+    })));
   tileKey(t: SectionTile): string { return t.href.replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-'); }
 
   /** True when the phone's detail was pushed by a tap here, so back can POP it. */

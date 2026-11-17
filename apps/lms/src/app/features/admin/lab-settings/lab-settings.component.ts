@@ -24,6 +24,7 @@ import { spinDelay } from '../../../shared/utils/busy';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
 import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
+import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 /** Band pill tabs — the 13 section cards grouped by what they govern. */
 export type LabSettingsTab = 'collection' | 'queues' | 'rules' | 'report';
@@ -797,6 +798,8 @@ export class LabSettingsComponent implements OnInit {
     { value: 'report', label: 'Report' },
   ];
   readonly tab = signal<LabSettingsTab>('collection');
+  protected readonly hosted = injectSettingsHosted();
+  private readonly followTab = bindTabQuery(LAB_SETTINGS_TABS, (t) => this.tab.set(t));
 
   // ── Loading feedback (PF-PATTERN "Loading feedback") ──
   /** First load: skeleton cards until the branch config answers (held, no flash). */

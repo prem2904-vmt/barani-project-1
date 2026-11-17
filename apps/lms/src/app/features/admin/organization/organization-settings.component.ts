@@ -13,6 +13,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { ThemeService } from '../../../core/services/theme.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 /** Band pill tabs — one per independently-saved identity setting. */
 export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
@@ -318,6 +319,9 @@ export class OrganizationSettingsComponent implements OnInit {
     { value: 'order', label: 'Order ID' },
   ];
   readonly tab = signal<OrgSettingsTab>('identity');
+  /** Inside the Settings shell the left panel lists the tabs: the URL's `?tab=` drives this page. */
+  protected readonly hosted = injectSettingsHosted();
+  private readonly followTab = bindTabQuery(ORG_SETTINGS_TABS, (t) => this.tab.set(t));
   private readonly router = inject(Router);
   /** Switch tab and keep it in the URL (`?tab=`, replacing this history
    *  entry) so a reload, a shared link and back all return to it. */

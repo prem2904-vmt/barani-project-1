@@ -77,18 +77,47 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
     class: 'pf-tp',
     '[class.pf-tp--compact]': 'compact()',
     '[class.pf-tp--detail]': 'compact() && detailOpen()',
+    '[class.pf-tp--rail]': '!compact() && rail()',
+    '[class.pf-tp--flush]': 'flush()',
+    '[class.pf-tp--sticky]': 'stickyNav() && !compact()',
   },
   template: `
     <nav class="pf-tp__nav pf-card" [attr.aria-label]="navLabel()" data-testid="tp-nav">
-      <div class="pf-tp__scroll">
+      @if (navHead(); as head) {
+        <!-- Inside a setting: the left panel carries that setting's categories under a back arrow. -->
+        <div class="pf-tp__navhead">
+          <button type="button" class="pf-tp__navback" [attr.aria-label]="navBackLabel()" data-testid="tp-nav-back"
+                  (click)="navBack.emit()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <span class="pf-tp__navtitle" data-testid="tp-nav-title">{{ head }}</span>
+          @if (collapsible() && !compact()) {
+            <button type="button" class="pf-tp__railbtn" data-testid="tp-rail-toggle"
+                    [attr.aria-label]="rail() ? 'Show the category names' : 'Shrink to a thin rail'"
+                    [attr.aria-pressed]="rail()" (click)="railChange.emit(!rail())">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path [attr.d]="rail() ? 'm13 6 6 6-6 6M5 6l6 6-6 6' : 'm11 18-6-6 6-6M19 18l-6-6 6-6'"/>
+              </svg>
+            </button>
+          }
+        </div>
+      }
+      <div class="pf-tp__scroll" [class.pf-tp__scroll--a]="navPhase() === 0" [class.pf-tp__scroll--b]="navPhase() === 1"
+           [class.pf-tp__scroll--back]="navDir() === 'back'">
         @for (g of groups(); track g.key) {
-          <span class="pf-tp__heading" [attr.data-testid]="'tp-group-' + g.key">{{ g.heading }}</span>
+          @if (!navHead()) {
+            <span class="pf-tp__heading" [attr.data-testid]="'tp-group-' + g.key">{{ g.heading }}</span>
+          }
           @for (it of g.items; track it.id) {
             <button type="button" class="pf-tp__item" [class.is-on]="it.id === selected()"
                     [attr.aria-current]="it.id === selected() ? 'true' : null"
                     [attr.data-testid]="'tp-item-' + it.id"
+                    [attr.title]="rail() && !compact() ? it.label : null"
                     (click)="pick.emit(it.id)">
               <span class="pf-tp__dot" aria-hidden="true"></span>
+              <span class="pf-tp__mono" aria-hidden="true">{{ it.label.charAt(0) }}</span>
               <span class="pf-tp__label">{{ it.label }}</span>
               @if (it.note) { <span class="pf-tp__note">{{ it.note }}</span> }
               <svg class="pf-tp__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -138,6 +167,40 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
     .pf-tp__note { font-size: 12px; color: var(--text-muted); font-weight: 400; }
     .pf-tp__chev { display: none; color: var(--text-muted); flex-shrink: 0; }
 
+    /* Inside a setting: back arrow + the setting's name above its categories. */
+    .pf-tp__navhead { display: flex; align-items: center; gap: 4px; padding: 10px 10px 4px; flex-shrink: 0; }
+    .pf-tp__navback, .pf-tp__railbtn {
+      width: 36px; height: 36px; display: inline-grid; place-items: center; flex-shrink: 0; border: 0; border-radius: 10px;
+      background: transparent; color: var(--text-primary); cursor: pointer;
+    }
+    .pf-tp__navback:focus-visible, .pf-tp__railbtn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    @media (hover: hover) { .pf-tp__navback:hover, .pf-tp__railbtn:hover { background: var(--glass-bg, rgba(124,58,237,.06)); } }
+    .pf-tp__navtitle { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-tp__railbtn { color: var(--text-muted); }
+    .pf-tp__mono { display: none; }
+    /* Thin rail: a slim strip with one round initial per category. */
+    :host(.pf-tp--rail) .pf-tp__nav { width: 64px; }
+    :host(.pf-tp--rail) .pf-tp__navtitle, :host(.pf-tp--rail) .pf-tp__label, :host(.pf-tp--rail) .pf-tp__note, :host(.pf-tp--rail) .pf-tp__dot { display: none; }
+    :host(.pf-tp--rail) .pf-tp__navhead { flex-direction: column; padding: 8px 0 4px; }
+    :host(.pf-tp--rail) .pf-tp__scroll { padding: 6px 0; align-items: center; }
+    :host(.pf-tp--rail) .pf-tp__item { width: 40px; min-height: 40px; padding: 0; justify-content: center; border-radius: 50%; }
+    :host(.pf-tp--rail) .pf-tp__mono { display: inline; font-weight: 600; }
+    :host(.pf-tp--flush) .pf-tp__body { padding: 0; }
+    /* The page grows with its content (document scroll); the left panel stays in view. */
+    :host(.pf-tp--sticky) { align-items: flex-start; }
+    :host(.pf-tp--sticky) .pf-tp__nav { position: sticky; top: 12px; max-height: calc(100dvh - var(--top-strip-h, 64px) - 32px); }
+    :host(.pf-tp--sticky) .pf-tp__panel { overflow: visible; min-height: 320px; }
+    :host(.pf-tp--flush) .pf-tp__head { padding-bottom: 14px; }
+    @keyframes pf-tp-nav-a { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+    @keyframes pf-tp-nav-b { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+    @keyframes pf-tp-nav-ra { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+    @keyframes pf-tp-nav-rb { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
+    .pf-tp__scroll--a { animation: pf-tp-nav-a 260ms cubic-bezier(.2,.7,.2,1) both; }
+    .pf-tp__scroll--b { animation: pf-tp-nav-b 260ms cubic-bezier(.2,.7,.2,1) both; }
+    .pf-tp__scroll--back.pf-tp__scroll--a { animation-name: pf-tp-nav-ra; }
+    .pf-tp__scroll--back.pf-tp__scroll--b { animation-name: pf-tp-nav-rb; }
+    @media (prefers-reduced-motion: reduce) { .pf-tp__scroll--a, .pf-tp__scroll--b { animation: none !important; } }
+
     .pf-tp__panel { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; padding: 0; }
     .pf-tp__head { display: flex; align-items: flex-start; gap: 8px; padding: 22px 26px 16px; border-bottom: 1px solid var(--pf-line, var(--glass-border)); }
     .pf-tp__titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -184,6 +247,25 @@ export class TwoPanelComponent {
   /** Compact only: true shows the detail (with its back chevron), false the list. */
   readonly detailOpen = input(false);
   readonly navLabel = input('Sections');
+  /** Inside a setting: the setting's name. Set ⇒ a back arrow row heads the left panel and group headings go. */
+  readonly navHead = input<string | null>(null);
+  readonly navBackLabel = input('Back to sections');
+  /** Changes whenever the left panel's content is swapped (sections → categories): replays the slide. */
+  readonly navKey = input<string | null>(null);
+  /** Slide direction of that swap: `in` = drilling into a setting, `back` = returning. */
+  readonly navDir = input<'in' | 'back'>('in');
+  /** Slide the left panel in once on first render (a freshly opened setting). */
+  readonly animateNav = input(false);
+  /** Offer the thin-rail toggle (wide only) and its state. */
+  readonly collapsible = input(false);
+  readonly rail = input(false);
+  /** Right body without its own padding (the hosted page keeps its own). */
+  readonly flush = input(false);
+  /** Wide: the left panel sticks while the right one scrolls with the page. */
+  readonly stickyNav = input(false);
+
+  readonly navBack = output<void>();
+  readonly railChange = output<boolean>();
 
   readonly pick = output<string>();
   readonly back = output<void>();
@@ -203,9 +285,20 @@ export class TwoPanelComponent {
 
   /** Alternates 0/1 on every selection so the slide/fade restarts. */
   readonly phase = signal<0 | 1>(0);
+  readonly navPhase = signal<0 | 1 | null>(null);
+  private lastNav: string | null | undefined = undefined;
   private last: string | null = null;
   private readonly browser = isPlatformBrowser(inject(PLATFORM_ID));
   constructor() {
+    effect(() => {
+      const key = this.navKey();
+      if (key === this.lastNav) return;
+      const first = this.lastNav === undefined;
+      this.lastNav = key;
+      if (!this.browser) return;
+      if (first && !this.animateNav()) return;
+      this.navPhase.update((p) => (p === 0 ? 1 : 0));
+    });
     effect(() => {
       const id = this.selected();
       if (id === this.last) return;

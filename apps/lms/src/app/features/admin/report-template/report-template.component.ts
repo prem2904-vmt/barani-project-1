@@ -43,6 +43,7 @@ import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-stri
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
+import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 /** More sample tests so the live preview runs to three pages. */
 const previewTest = (testId: string, name: string, rows: Array<[string, string, string, string]>) => ({
@@ -1217,6 +1218,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
   private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
+  protected readonly hosted = injectSettingsHosted();
+  private readonly followTab = bindTabQuery(['letterhead', 'patient', 'table', 'columns', 'sequence', 'footer'] as const, (t) => { if (t !== this._tab()) this.setTab(t); });
   /** Left section list hide/unhide — Test Master departments pattern. */
   readonly railHidden = signal<boolean>(
     typeof localStorage !== 'undefined' && localStorage.getItem('pf-rt-rail') === 'hidden');
