@@ -124,17 +124,16 @@ describe('ND audit D — Branches', () => {
     expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
   });
 
-  it('branch cards are kit cards; names never truncated; no sub-branch section; no × / → glyphs', () => {
+  it('branches grid: full names (wrap, never truncated); no sub-branch section; no × / → glyphs; PF Box under the name', () => {
     const p = render();
-    const card = p.el.querySelector('.pf-br-card.pf-card')!;
-    expect(card).not.toBeNull();
+    expect(p.el.querySelector('.pf-br-main.pf-card pf-data-grid')).not.toBeNull();
     expect(p.el.querySelector('.pf-trunc')).toBeNull();
-    expect(card.querySelector('.pf-br-name')!.textContent).toContain('Anna Nagar Collection Centre');
-    expect(card.textContent).not.toMatch(/[×→]/);
-    // Sub-branches were removed (owner, 2026-09-27); the departments board moved to Lab
-    // (owner 2026-11-17) — the branch card is just the branch.
-    expect(card.textContent).not.toMatch(/sub-branch/i);
-    expect(card.querySelector('.pf-board')).toBeNull();
+    const name = p.cmp.colDefs().find((c: any) => c.colId === 'name').cellRenderer({ data: branches[0] }) as HTMLElement;
+    expect(name.textContent).toContain('Anna Nagar Collection Centre');
+    expect(name.textContent).toContain('PF Box');
+    expect(p.el.textContent).not.toMatch(/[×→]/);
+    expect(p.el.textContent).not.toMatch(/sub-branch/i);
+    expect(p.el.querySelector('.pf-board')).toBeNull();
     hygiene(p.el);
   });
 });

@@ -62,10 +62,13 @@ describe('Branches — departments and lab spaces moved to Lab', () => {
     expect(c.createDepartment).toBeUndefined();
   });
 
-  it('shows each branch GSTIN (read-only)', () => {
-    const { el } = render();
-    expect(el.querySelector('[data-testid="br-gstin"]')?.textContent).toContain('33AAAAA0000A1Z5');
-    expect(el.querySelector('[data-testid="br-gstin"] input')).toBeNull();
+  it('a Test Master grid: each branch GSTIN read-only in its column (muted "Not set" otherwise)', () => {
+    const { el, c } = render();
+    expect(el.querySelector('.pf-br-main pf-data-grid')).not.toBeNull();
+    const col = c.colDefs().find((d: any) => d.colId === 'gstin');
+    const cell = col.cellRenderer({ data: c.branches()[0] }) as HTMLElement;
+    expect(cell.textContent).toContain('33AAAAA0000A1Z5');
+    expect(cell.querySelector('input')).toBeNull();
   });
 });
 
@@ -92,7 +95,15 @@ describe('Branches — OPS-11 deactivate a branch', () => {
     });
     const f = TestBed.createComponent(BranchesComponent);
     f.detectChanges();
-    return { f, api, toasts, dialog, el: f.nativeElement as HTMLElement };
+    const c = f.componentInstance as any;
+    // The grid's actions cell (rendered by AG-Grid): the row's Deactivate / Reactivate icon.
+    const act = () => {
+      const col = c.colDefs().find((d: any) => d.colId === 'actions');
+      if (!col) return null;
+      const cell = col.cellRenderer({ data: c.branches()[0] }) as HTMLElement;
+      return cell.querySelector('button') as HTMLButtonElement | null;
+    };
+    return { f, api, toasts, dialog, c, act, el: f.nativeElement as HTMLElement };
   }
 
   it('the board asks for inactive branches too (to offer Reactivate)', () => {
@@ -101,31 +112,30 @@ describe('Branches — OPS-11 deactivate a branch', () => {
   });
 
   it('non-admins get no deactivate control', () => {
-    const { el } = renderAs(false);
-    expect(el.querySelector('[data-testid="br-toggle-active"]')).toBeNull();
+    const { act } = renderAs(false);
+    expect(act()).toBeNull();
   });
 
   it('admin: confirm, then PATCH isActive=false', async () => {
-    const { f, api, dialog, el } = renderAs(true);
-    (el.querySelector('[data-testid="br-toggle-active"]') as HTMLButtonElement).click();
+    const { api, dialog, c, act } = renderAs(true);
+    act()!.click();
     await Promise.resolve(); await Promise.resolve();
     expect(dialog.confirm).toHaveBeenCalled();
     expect(api.patch).toHaveBeenCalledWith('/api/tenants/branches/b2', { isActive: false });
-    f.detectChanges();
-    expect(el.querySelector('[data-testid="br-inactive-chip"]')).not.toBeNull();
+    expect((c.colDefs().find((d: any) => d.colId === 'status').cellRenderer({ data: c.branches()[0] }) as HTMLElement).textContent).toBe('Inactive');
   });
 
   it('declining the confirm changes nothing', async () => {
-    const { api, el } = renderAs(true, false);
-    (el.querySelector('[data-testid="br-toggle-active"]') as HTMLButtonElement).click();
+    const { api, act } = renderAs(true, false);
+    act()!.click();
     await Promise.resolve(); await Promise.resolve();
     expect(api.patch).not.toHaveBeenCalled();
   });
 
   it('an inactive branch offers Reactivate with no confirm', async () => {
-    const { api, dialog, el } = renderAs(true, true, false);
-    const btn = el.querySelector('[data-testid="br-toggle-active"]') as HTMLButtonElement;
-    expect(btn.textContent).toContain('Reactivate branch');
+    const { api, dialog, act } = renderAs(true, true, false);
+    const btn = act()!;
+    expect(btn.getAttribute('aria-label')).toContain('Reactivate');
     btn.click();
     await Promise.resolve();
     expect(dialog.confirm).not.toHaveBeenCalled();

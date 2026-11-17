@@ -1,6 +1,6 @@
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -15,6 +15,12 @@ import { bandMatch } from '../../../shared/utils/band-search';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { NgTemplateOutlet } from '@angular/common';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
+import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
+import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, SgStatus, sgActions, sgActionsCol, sgBare, sgByStatus, sgCell, sgMedia, sgPillCol, sgRowOff, sgStatusOptions } from '../../../shared/settings-grid/settings-grid';
+import { HasUnsavedChanges, confirmLeaveUnsaved, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
+import type { ColDef, GetRowIdParams, ICellRendererParams } from 'ag-grid-community';
 
 /** A branch's saved GST setup (read-only here; edited in Billing). */
 interface GstRow { branchId: string; gstin: string; }
@@ -23,7 +29,7 @@ interface GstRow { branchId: string; gstin: string; }
 @Component({
   selector: 'pf-branches',
   standalone: true,
-  imports: [SkeletonRowsComponent, BusyDirective, RouterLink, 
+  imports: [SkeletonRowsComponent, BusyDirective, RouterLink, NgTemplateOutlet, DataGridComponent, SegmentedComponent,
     FormsModule,
     ScreenHeaderComponent,
     TouchButtonComponent,
@@ -68,76 +74,67 @@ interface GstRow { branchId: string; gstin: string; }
         </pf-touch-btn>
       </pf-screen-header>
 
-      <div class="pf-band-body">
-      @if (newBranchOpen()) {
-        <section class="pf-card pf-anim-in pf-br-new" aria-label="New branch">
-          <div class="pf-card__head">
-            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span>
-            <h3 class="pf-card__label">New branch</h3>
-          </div>
-          <div class="grid grid-cols-2 gap-3 pf-branch-grid pf-br-new__body">
-            <label class="pf-field"><span class="pf-field__lbl">Name</span>
-              <input type="text" class="pf-input" [ngModel]="newBranch().name" (ngModelChange)="patchNewBranch({ name: $event })" /></label>
-            <label class="pf-field"><span class="pf-field__lbl">Code</span>
-              <input type="text" class="pf-input pf-num uppercase" [ngModel]="newBranch().code" (ngModelChange)="patchNewBranch({ code: $event.toUpperCase() })" /></label>
-            <label class="pf-field"><span class="pf-field__lbl">City</span>
-              <input type="text" class="pf-input" [ngModel]="newBranch().city" (ngModelChange)="patchNewBranch({ city: $event })" /></label>
-            <label class="pf-field"><span class="pf-field__lbl">State</span>
-              <input type="text" class="pf-input" [ngModel]="newBranch().state" (ngModelChange)="patchNewBranch({ state: $event })" /></label>
-          </div>
-          <div class="pf-card__foot">
-            <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleNewBranch()">Cancel</button>
-            <button type="button" class="pf-btn pf-btn--primary press" [disabled]="creatingBranch()" [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
-          </div>
-        </section>
-      }
-
-      @if (listSkeleton()) {
-        <!-- First load: the branch cards' shape, not "No branches yet". -->
-        <pf-skeleton-rows [rows]="3" [avatar]="false" label="Loading branches…"></pf-skeleton-rows>
-      } @else if (branches().length === 0) {
-        <p class="pf-band-empty">No branches yet.</p>
-      } @else if (visibleBranches().length === 0) {
-        <p class="pf-band-empty">No branches match "{{ q() }}".</p>
-      } @else {
-        <div class="space-y-2.5">
-          @for (b of visibleBranches(); track b.id) {
-            <div class="pf-card pf-br-card">
-              <div class="pf-branch-toggle">
-                <div class="flex items-center gap-3 text-left pf-branch-titlewrap">
-                  <span class="pf-branch-badge">{{ codeInitials(b.code) }}</span>
-                  <div class="pf-branch-titlecol">
-                    <p class="pf-br-name">{{ b.name }}@if (b.isActive === false) { <span class="pf-chip pf-chip--static pf-br-chip" data-testid="br-inactive-chip">Inactive</span> }</p>
-                    <p class="pf-br-meta">{{ b.city ?? '—' }} · <span class="pf-num">{{ b.code }}</span></p>
-                    <p class="pf-br-meta" data-testid="br-gstin">
-                      GSTIN: @if (gstinOf(b.id); as g) { <span class="pf-num">{{ g }}</span> } @else { not set }
-                      <a class="pf-br-link" routerLink="/admin/billing">Edit in Billing</a>
-                    </p>
-                  </div>
-                </div>
-                <div class="flex items-center gap-2 pf-br-side">
-                  @if (b.hasPfBox) {
-                    <span class="pf-chip pf-chip--static pf-br-chip">PF Box</span>
-                  }
-                  @if (canRetireBranch()) {
-                    <button type="button" class="pf-dcard-toggle" data-testid="br-toggle-active"
-                            (click)="toggleBranchActive(b)"
-                            [attr.aria-label]="(b.isActive === false ? 'Reactivate ' : 'Deactivate ') + b.name">
-                      {{ b.isActive === false ? 'Reactivate branch' : 'Deactivate branch' }}
-                    </button>
-                  }
-                </div>
+      <div class="pf-band-body pf-band-body--fill">
+        <div class="pf-sg-panels pf-br-panels" [class.pf-sg-panels--single]="!newBranchOpen()" [class.pf-sg-panels--narrow]="narrow()">
+          <!-- Add branch: a LEFT side card (sheet on narrow), like every settings grid's form. -->
+          @if (newBranchOpen()) {
+            @if (narrow()) { <div class="pf-sheet-backdrop" (click)="requestCloseForm()"></div> }
+            <aside class="pf-card pf-sg-side pf-br-new" [class.pf-sg-side--sheet]="narrow()" aria-label="New branch" (keydown.escape)="requestCloseForm()">
+              @if (narrow()) { <span class="pf-sg-sheet-handle" aria-hidden="true"></span> }
+              <div class="pf-card__head">
+                <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span>
+                <h3 class="pf-card__label">New branch</h3>
+                <span class="pf-card__spacer"></span>
+                <button type="button" class="pf-btn pf-btn--icon" (click)="requestCloseForm()" aria-label="Close">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
               </div>
-            </div>
+              <div class="pf-card__body pf-br-new__body">
+                <label class="pf-field"><span class="pf-field__lbl">Name</span>
+                  <input type="text" class="pf-input" [ngModel]="newBranch().name" (ngModelChange)="patchNewBranch({ name: $event })" /></label>
+                <label class="pf-field"><span class="pf-field__lbl">Code</span>
+                  <input type="text" class="pf-input pf-num uppercase" [ngModel]="newBranch().code" (ngModelChange)="patchNewBranch({ code: $event.toUpperCase() })" /></label>
+                <label class="pf-field"><span class="pf-field__lbl">City</span>
+                  <input type="text" class="pf-input" [ngModel]="newBranch().city" (ngModelChange)="patchNewBranch({ city: $event })" /></label>
+                <label class="pf-field"><span class="pf-field__lbl">State</span>
+                  <input type="text" class="pf-input" [ngModel]="newBranch().state" (ngModelChange)="patchNewBranch({ state: $event })" /></label>
+              </div>
+              <div class="pf-card__foot">
+                <button type="button" class="pf-btn pf-btn--tertiary press" (click)="requestCloseForm()">Cancel</button>
+                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="creatingBranch()" [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
+              </div>
+            </aside>
           }
+
+          <section class="pf-card pf-sg-main pf-br-main" [class.pf-sg-main--bare]="bare" aria-label="Branches">
+            <header class="pf-card__head pf-sg-main__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span>
+              <span class="pf-card__label">Branches</span>
+              <span class="pf-card__note pf-sg-hint">GSTIN is set in <a class="pf-br-link" routerLink="/admin/billing">Billing</a></span>
+              <span class="pf-card__spacer"></span>
+              <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
+            </header>
+            <div class="pf-sg-main__body">
+              <pf-data-grid [rowData]="gridBranches()" [columnDefs]="colDefs()" [getRowId]="getRowId" [getRowClass]="rowClass"
+                            [loading]="listSkeleton()" loadingLabel="Loading branches…"
+                            [emptyTitle]="branches().length === 0 ? 'No branches yet.' : 'No branches match your search.'"></pf-data-grid>
+            </div>
+          </section>
         </div>
-      }
       </div>
     </section>
+
+    <!-- Head tools: count · All / Active / Inactive. -->
+    <ng-template #headToolsTpl>
+      <span class="pf-sg-count pf-num">{{ gridBranches().length }} {{ gridBranches().length === 1 ? 'branch' : 'branches' }}</span>
+      <pf-segmented class="pf-sg-status-filter" size="sm" [options]="statusOptions()" [value]="status()" (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+    </ng-template>
   `,
+  styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   styles: [`
-    .pf-br-new { margin-bottom: 16px; }
-    .pf-br-new__body { padding: 16px 18px; }
+    .pf-br-new__body { gap: 12px; }
+    .pf-br-panels { grid-template-columns: 360px minmax(0, 1fr); }
+    .pf-br-panels.pf-sg-panels--single, .pf-br-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-br-card { overflow: visible; }
     .pf-br-name { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-br-meta { margin: 2px 0 0; font-size: 12px; color: var(--text-tertiary); display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
@@ -165,7 +162,55 @@ interface GstRow { branchId: string; gstin: string; }
     }
   `]
 })
-export class BranchesComponent implements OnInit {
+export class BranchesComponent implements OnInit, HasUnsavedChanges {
+  // ── Test Master grid (pf-data-grid) ──
+  protected readonly bare = sgBare();
+  readonly narrow = sgMedia(SG_NARROW_MQ);
+  readonly phone = sgMedia(SG_PHONE_MQ);
+  private readonly headToolsTpl = viewChild<TemplateRef<unknown>>('headToolsTpl');
+  /** Count + status filter, for the Settings card head. */
+  readonly headTools = computed(() => this.headToolsTpl());
+  readonly status = signal<SgStatus>('all');
+  readonly statusOptions = computed(() => sgStatusOptions(this._branches().length, this._branches().filter(b => b.isActive === false).length));
+  readonly gridBranches = computed(() => sgByStatus(this.visibleBranches(), this.status(), b => b.isActive !== false));
+  readonly getRowId = (p: GetRowIdParams<Branch>) => p.data.id;
+  readonly rowClass = sgRowOff<Branch>(b => b.isActive !== false);
+  actionsFor(b: Branch): SgAction[] {
+    if (!this.canRetireBranch()) return [];
+    const on = b.isActive !== false;
+    return [{ label: on ? 'Deactivate branch' : 'Reactivate branch', aria: `${on ? 'Deactivate' : 'Reactivate'} ${b.name}`, icon: true, path: SG_ICON.power, run: () => { void this.toggleBranchActive(b); } }];
+  }
+  readonly colDefs = computed<ColDef<Branch>[]>(() => {
+    this._gst();
+    const web = !this.phone();
+    const cols: ColDef<Branch>[] = [
+      { colId: 'name', headerName: 'Branch', flex: 1.4, minWidth: 180, sort: 'asc', valueGetter: p => p.data?.name ?? '',
+        cellRenderer: (p: ICellRendererParams<Branch>) => sgCell(p.data?.name, p.data?.hasPfBox ? 'PF Box' : null, true) },
+      { colId: 'code', headerName: 'Code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num', valueGetter: p => p.data?.code || '—' },
+      { colId: 'place', headerName: 'City, State', flex: 1, minWidth: 150, valueGetter: p => [p.data?.city, p.data?.state].filter(Boolean).join(', ') || '—' },
+      { colId: 'gstin', headerName: 'GSTIN', flex: 1, minWidth: 160,
+        valueGetter: p => (p.data ? this.gstinOf(p.data.id) : ''),
+        cellRenderer: (p: ICellRendererParams<Branch>) => { const g = p.data ? this.gstinOf(p.data.id) : ''; const el = sgCell(g || null, g ? null : 'Not set'); if (!g) el.firstElementChild?.remove(); else el.classList.add('pf-num'); return el; } },
+      sgPillCol<Branch>(b => b.isActive !== false),
+    ];
+    if (this.canRetireBranch()) cols.push(sgActionsCol<Branch>(web, [], 1, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), false));
+    if (this.phone()) return cols.filter(c => ['name', 'status', 'actions'].includes(c.colId ?? ''));
+    return cols;
+  });
+
+  // ── Unsaved changes (the Add branch form) ──
+  readonly unsavedLabel = 'the new branch';
+  hasUnsavedChanges(): boolean {
+    if (!this.newBranchOpen() || this.creatingBranch()) return false;
+    const b = this._newBranch();
+    return !!(b.name.trim() || b.code.trim() || b.city.trim() || b.state.trim());
+  }
+  private readonly unloadGuard = guardUnsavedOnUnload(this);
+  async requestCloseForm(): Promise<void> {
+    if (await confirmLeaveUnsaved(this.dialog, this)) { this.newBranchOpen.set(false); this.toggleNewBranchReset(); }
+  }
+  private toggleNewBranchReset() { this._newBranch.set({ name: '', code: '', type: 'lab', city: '', state: '', hasPfBox: false }); }
+
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   protected readonly theme = inject(ThemeService);
@@ -219,6 +264,7 @@ export class BranchesComponent implements OnInit {
 
   // ── Branch ─────────────────────────────────────
   toggleNewBranch() {
+    if (this.newBranchOpen() && this.hasUnsavedChanges()) { void this.requestCloseForm(); return; }
     this.newBranchOpen.update(v => !v);
     this._newBranch.set({ name: '', code: '', type: 'lab', city: '', state: '', hasPfBox: false });
   }
@@ -231,7 +277,7 @@ export class BranchesComponent implements OnInit {
     if (this.creatingBranch()) return;
     this.creatingBranch.set(true);
     this.api.post<Branch>('/api/tenants/branches', b).subscribe({
-      next: saved => { this.creatingBranch.set(false); this._branches.update(list => [...list, saved]); this.toasts.success('Branch added'); this.toggleNewBranch(); },
+      next: saved => { this.creatingBranch.set(false); this._branches.update(list => [...list, saved]); this.toasts.success('Branch added'); this.newBranchOpen.set(false); this.toggleNewBranchReset(); },
       error: e => { this.creatingBranch.set(false); this.toasts.error(ApiError.from(e).message); }
     });
   }

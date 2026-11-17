@@ -25,13 +25,16 @@ describe('Admin band — Branches', () => {
       : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Haematology', code: 'HEM', isActive: true }]
           : [],
   });
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-branch-toggle')).map(b => text(b));
+  let curB: any;
+  const names = (_el: HTMLElement) => curB.cmp.gridBranches().map((b: any) => b.name);
 
-  it('band present, header classic-only, list in the band body', () => {
-    const p = render();
+  it('band present, header classic-only, branches in a Test Master grid', () => {
+    const p = curB = render();
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.body()!.querySelectorAll('.pf-branch-toggle').length).toBe(3);
+    expect(p.body()!.querySelector('pf-data-grid')).not.toBeNull();
+    expect(names(p.el).length).toBe(3);
+    expect(p.cmp.colDefs().map((c: any) => c.colId).slice(0, 5)).toEqual(['name', 'code', 'place', 'gstin', 'status']);
   });
 
   it('"Add branch" rides the band actions and toggles the form (Cancel while open)', () => {
@@ -44,7 +47,7 @@ describe('Admin band — Branches', () => {
   });
 
   it('pill search matches branch fields', () => {
-    const p = render();
+    const p = curB = render();
     p.type('madurai');
     expect(names(p.el).length).toBe(1);
     expect(names(p.el)[0]).toContain('Madurai Centre');
@@ -54,16 +57,16 @@ describe('Admin band — Branches', () => {
   });
 
   it('departments moved to Lab: a department word no longer matches a branch', () => {
-    const p = render();
+    const p = curB = render();
     p.type('haem');
     expect(names(p.el).length).toBe(0);
   });
 
   it('no match → empty state', () => {
-    const p = render();
+    const p = curB = render();
     p.type('zzz');
     expect(names(p.el).length).toBe(0);
-    expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
+    expect(p.body()!.querySelector('[data-testid="dg-empty"]')!.textContent).toContain('No branches match');
   });
 });
 
