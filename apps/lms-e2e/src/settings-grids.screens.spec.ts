@@ -326,4 +326,29 @@ test.describe('settings list grids', () => {
     await shot(page, 'sg-lab-spaces-branch');
     expect(errors, 'no uncaught errors').toEqual([]);
   });
+
+  // Grids fill their card (no dead band below) on a wide and an ultra-wide screen.
+  for (const [w, h] of [[1440, 900], [3440, 1440]] as const) {
+    test(`grids fill the card to the bottom at ${w}×${h}`, async ({ page }) => {
+      test.skip(isPhone(), 'desktop widths only');
+      await page.setViewportSize({ width: w, height: h });
+      for (const [url, card] of [
+        ['/admin/lab/departments?tab=departments', '.ld-main'],
+        ['/admin/billing?tab=credit', '.pf-vn-main'],
+        ['/admin?section=people', '.pf-ua-main'],
+        ['/admin/referral-labs', '.pf-rl-main'],
+      ] as const) {
+        await go(page, url);
+        const grid = vis(page, `${card} ag-grid-angular`);
+        await expect(grid).toBeVisible({ timeout: 60_000 });
+        await expect(page.locator(`${card} .ag-row`).first()).toBeVisible({ timeout: 30_000 });
+        await page.waitForTimeout(400);
+        const g = (await grid.boundingBox())!;
+        const body = (await page.locator('.pf-band-body').locator('visible=true').first().boundingBox())!;
+        expect(g.width, `${url} grid width`).toBeGreaterThan(w * 0.4);
+        expect(body.y + body.height - (g.y + g.height), `${url}: grid reaches the bottom`).toBeLessThan(60);
+        await page.screenshot({ path: `${out()}/sg-fill-${w}-${card.replace(/[^a-z]/g, '')}.png` });
+      }
+    });
+  }
 });
