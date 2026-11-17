@@ -93,7 +93,7 @@ test.describe('Users & Roles admin — functional (as admin)', () => {
     expect(body.data?.username).toBe(username);
 
     // Lands back on the users list.
-    await expect(page).toHaveURL(/\/admin\/users(\?tab=users)?$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/admin(\/users)?\?(.*&)?(tab=users|section=people)/, { timeout: 15_000 });
     await expect(page.getByRole('heading', { name: /users\s*&\s*access/i, level: 1 })).toBeVisible({ timeout: 15_000 });
 
     // Real persistence check: search + reload, not just the optimistic toast.
@@ -134,7 +134,7 @@ test.describe('Users & Roles admin — functional (as admin)', () => {
     expect(createBody.data.name).toBe(roleName);
 
     // Lands back on the roles list.
-    await expect(page).toHaveURL(/\/admin\/users(\?tab=roles)?$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/admin(\/users)?\?(.*&)?(tab=roles|section=people)/, { timeout: 15_000 });
 
     // ── Step B: open that SAME (throwaway, non-seeded) role and toggle ──
     await page.goto(`/admin/roles/${roleId}/edit`);
@@ -160,7 +160,7 @@ test.describe('Users & Roles admin — functional (as admin)', () => {
     expect(patchBody.success, `expected success:true, got ${JSON.stringify(patchBody)}`).toBe(true);
 
     // Lands back on the roles list.
-    await expect(page).toHaveURL(/\/admin\/users(\?tab=roles)?$/, { timeout: 15_000 });
+    await expect(page).toHaveURL(/\/admin(\/users)?\?(.*&)?(tab=roles|section=people)/, { timeout: 15_000 });
 
     // ── Step C: reload the SAME edit page — real server-side persistence ─
     await page.goto(`/admin/roles/${roleId}/edit`);

@@ -220,14 +220,37 @@ test.describe('settings list grids', () => {
     await vis(page, 'pf-hero-band input').fill('refund');
     await expect.poll(() => rowCount(page, '.re-main')).toBe(1);
     await vis(page, '.re-main .ag-row .pf-sg-switch').dispatchEvent('click');
-    // Save lives in the card's Save bar (shown once something changed).
-    await expect(vis(page, '.re-main [data-testid="role-save"]')).toBeVisible();
+    // Save lives in the band's top-right corner (owner 2026-11-17), enabled once something changed.
+    await expect(vis(page, 'pf-hero-band [data-testid="role-save"]')).toBeEnabled();
     await shot(page, 'sg-role-editor-dirty');
-    // A normal click: the floating "Bridge nearby" banner keeps above the Save bar (--pf-savebar-clear).
-    await vis(page, '.re-main [data-testid="role-save"]').click();
+    await vis(page, 'pf-hero-band [data-testid="role-save"]').click();
     await expect.poll(() => neg.calls.find(c => c.path === '/api/roles/r2/permissions')?.body)
       .toEqual({ permissionIds: ['p1', 'p4', 'p11'] });
     expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
+  });
+
+  test('People and access: Back from the role editor = ONE press to the overview page, same tab (never the old page)', async ({ page }) => {
+    await go(page, '/admin?section=people&tab=roles');
+    await expect(vis(page, '[data-testid="ov-inline"] .pf-ua-main .ag-row')).toBeVisible({ timeout: 60_000 });
+    const before = await page.evaluate(() => history.length);
+    await vis(page, '[data-testid="ov-inline"] .pf-ua-main .ag-row').click();
+    await expect(page).toHaveURL(/\/admin\/roles\/[^/]+\/edit/, { timeout: 30_000 });
+    await expect(vis(page, '.re-main')).toBeVisible({ timeout: 30_000 });
+    await vis(page, 'pf-hero-band .pf-hb__back').click();
+    await expect(page).toHaveURL(/\/admin\?(.*&)?section=people/, { timeout: 30_000 });
+    expect(page.url()).toContain('tab=roles');
+    await expect(vis(page, '[data-testid="ov-inline"] .pf-ua-main')).toBeVisible({ timeout: 30_000 });
+    expect(await page.evaluate(() => history.length), 'back popped history (no new entry)').toBe(before + 1);
+    // The old standalone path never renders a second copy: it lands on the overview section, query kept.
+    await go(page, '/admin/users?tab=roles');
+    await expect(page).toHaveURL(/\/admin\?(.*&)?section=people/, { timeout: 30_000 });
+    expect(page.url()).toContain('tab=roles');
+    await expect(vis(page, '[data-testid="ov-inline"] .pf-ua-main')).toBeVisible({ timeout: 30_000 });
+    // A deep link to the editor climbs to the overview page too.
+    await go(page, '/admin/roles/r2/edit');
+    await expect(vis(page, '.re-main')).toBeVisible({ timeout: 60_000 });
+    await vis(page, 'pf-hero-band .pf-hb__back').click();
+    await expect(page).toHaveURL(/\/admin\?(.*&)?section=people/, { timeout: 30_000 });
   });
 
   test('Role editor: system role keeps the locked-name wording', async ({ page }) => {
