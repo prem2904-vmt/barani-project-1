@@ -48,11 +48,10 @@
   overflow: visible;
 }
 
+/* Inside the Settings shell the frame's card head renders the page's #headTools (count + filter),
+   so the grid's own slim tools row would be a duplicate (owner 2026-11-17): hide it. */
 .pf-sg-main--bare > .pf-sg-main__head {
-  padding: 0 0 8px;
-  background: transparent;
-  border: 0;
-  justify-content: flex-end;
+  display: none;
 }
 
 .pf-sg-main--bare > .pf-sg-main__head > .pf-card__icon,
