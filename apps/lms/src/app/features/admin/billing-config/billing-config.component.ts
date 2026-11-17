@@ -1209,18 +1209,38 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   patchTpl(p: Record<string, unknown>) {
     this._tpl.set({ ...this._tpl(), ...p });
   }
-  saveTpl() {
+  saveTpl() { void this.postTpl(); }
+  private postTpl(): Promise<boolean> {
     this.savingTpl.set(true);
-    this.api.post("/api/config/invoice-template", this.effectiveTpl()).subscribe({
+    const sent = this._tpl();
+    return new Promise<boolean>((resolve) => this.api.post("/api/config/invoice-template", this.effectiveTpl()).subscribe({
       next: () => {
         this.savingTpl.set(false);
+        this.savedTplJson.set(JSON.stringify(sent));
         this.toasts.success("Letterhead saved");
+        resolve(true);
       },
       error: (e) => {
         this.savingTpl.set(false);
         this.toasts.error(ApiError.from(e).message);
+        resolve(false);
       },
-    });
+    }));
+  }
+
+  // ── Unsaved changes (owner 2026-11-17: ask before leaving). The routed page (BillingSettingsPage) asks through this. ──
+  /** What the server holds, as JSON — null until it answers (nothing to lose before that). */
+  private readonly savedTplJson = signal<string | null>(null);
+  private readonly savedConfigJson = signal<string | null>(null);
+  readonly tplDirty = computed(() => this.savedTplJson() !== null && JSON.stringify(this._tpl()) !== this.savedTplJson());
+  readonly configDirty = computed(() => this.savedConfigJson() !== null && JSON.stringify(this._config()) !== this.savedConfigJson());
+  hasUnsavedChanges(): boolean { return this.tplDirty() || this.configDirty(); }
+  /** Save from the "Save your changes?" prompt: billing config and/or the bill design; true only when all saved. */
+  async saveChanges(): Promise<boolean> {
+    let ok = true;
+    if (this.configDirty()) ok = await this.postConfig();
+    if (ok && this.tplDirty()) ok = await this.postTpl();
+    return ok;
   }
 
   // ── Live invoice preview (right pane) ──────────────────────────
@@ -1447,6 +1467,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     this.api.get<any>("/api/config/invoice-template").subscribe({
       next: (t) => {
         this._tpl.set({ ...this.TPL_DEFAULTS, ...(t ?? {}) });
+        this.savedTplJson.set(JSON.stringify(this._tpl()));
       },
     });
     this.api.get<Branch[]>("/api/tenants/branches").subscribe({
@@ -1518,6 +1539,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     this.api.get<TenantBillingConfig>("/api/config/billing").subscribe({
       next: (c) => {
         if (c) this._config.set({ ...this._config(), ...c });
+        this.savedConfigJson.set(JSON.stringify(this._config()));
         landed?.();
       },
       ...(landed ? { error: () => landed() } : {}),
@@ -1534,14 +1556,16 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     if (!line || line === (this._tpl().bankDetails ?? "")) return;
     this.patchTpl({ bankDetails: line });
     this.api.post("/api/config/invoice-template", { ...this.effectiveTpl(), bankDetails: line }).subscribe({
+      next: () => this.savedTplJson.set(JSON.stringify(this._tpl())),
       error: (e) => this.toasts.error(ApiError.from(e).message),
     });
   }
 
-  saveConfig() {
-    if (this.savingConfig()) return;
+  saveConfig() { void this.postConfig(); }
+  private postConfig(): Promise<boolean> {
+    if (this.savingConfig()) return Promise.resolve(false);
     const c = this._config();
-    this.api
+    return new Promise<boolean>((resolve) => this.api
       .post("/api/config/billing", {
         gstEnabled: c.gstEnabled,
         gstScope: c.gstScope,
@@ -1566,8 +1590,9 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
           this.toasts.success("Billing config saved");
           this.loadConfig();
           this.syncBankDetails(bankDetailsLine(c));
+          resolve(true);
         },
-        error: (e) => this.toasts.error(ApiError.from(e).message),
-      });
+        error: (e) => { this.toasts.error(ApiError.from(e).message); resolve(false); },
+      }));
   }
 }

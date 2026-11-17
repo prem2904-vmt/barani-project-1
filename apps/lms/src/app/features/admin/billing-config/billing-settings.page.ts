@@ -6,6 +6,7 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { VendorsComponent } from '../vendors/vendors.component';
 import { BillingConfigComponent } from './billing-config.component';
 import { PaymentRulesCardComponent } from './payment-rules.component';
+import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 
 /** The categories the Settings left panel lists for Organization › Billing and taxes (`?tab=`). */
 import { BILLING_SECTIONS } from '../settings/settings-map';
@@ -44,12 +45,18 @@ export function billingSectionOf(tab: string | null | undefined): BillingSection
     }
   `,
 })
-export class BillingSettingsPage {
+export class BillingSettingsPage implements HasUnsavedChanges {
   private readonly route = inject(ActivatedRoute);
   private readonly tab = toSignal(this.route.queryParamMap.pipe(map(q => q.get('tab'))), { initialValue: this.route.snapshot.queryParamMap.get('tab') });
   readonly section = computed<BillingSection>(() => billingSectionOf(this.tab()));
   /** The Settings frame shows the hosted grid's head tools (count, filter pill) in ITS card head. */
   private readonly vendors = viewChild(VendorsComponent);
+  /** GST and discounts / Invoices and bill design have an explicit Save: leaving with edits asks first. */
+  private readonly config = viewChild(BillingConfigComponent);
+  readonly unsavedLabel = 'billing and taxes';
+  hasUnsavedChanges(): boolean { return this.config()?.hasUnsavedChanges() ?? false; }
+  saveChanges(): Promise<boolean> { return this.config()?.saveChanges() ?? Promise.resolve(true); }
+  constructor() { guardUnsavedOnUnload(this); }
   readonly headTools = computed<TemplateRef<unknown> | null>(() => {
     const v = this.vendors() as unknown as { headTools?: () => TemplateRef<unknown> | undefined } | undefined;
     return typeof v?.headTools === 'function' ? (v.headTools() ?? null) : null;

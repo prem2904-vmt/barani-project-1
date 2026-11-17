@@ -1,4 +1,5 @@
 import { inject } from '@angular/core';
+import { unsavedChangesGuard } from './shared/utils/unsaved-changes';
 import { cultureResultRedirectGuard, cultureSampleRedirectGuard, cultureValidateRedirectGuard } from './core/navigation/culture-redirect.guard';
 import { ORDER_PAY_RECREATE_ON } from './core/navigation/identity-reuse.strategy';
 import { CanActivateFn, Route, Router } from '@angular/router';
@@ -207,6 +208,7 @@ export const appRoutes: Route[] = withAppModes([
       {
         path: 'admin/tests/:id/edit',
         canActivate: [permissionGuard(TEST_MASTER_PERMS)],
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: loadTestEditor
       },
       { path: 'admin/whatsapp', redirectTo: '/admin/org/channels?tab=whatsapp', pathMatch: 'full' },

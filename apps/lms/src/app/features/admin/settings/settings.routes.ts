@@ -101,7 +101,7 @@ const ALL_SETTINGS_PAGES: Routes = [
   page(P.labDepartments, labDepartments),
   page(P.labSampleNumbers, labSampleNumbers),
   page(P.tests, tests),
-  page(P.reports, reportTemplate, { leave: true }),
+  page(P.reports, reportTemplate),
   page(P.labCollection, labCollection),
   page(P.labResults, labResults),
   page(P.referralLabs, referralLabs),

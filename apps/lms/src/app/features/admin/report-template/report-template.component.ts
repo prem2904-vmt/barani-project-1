@@ -46,6 +46,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { bindTabQuery } from '../../../shared/utils/settings-host';
+import { HasUnsavedChanges } from '../../../shared/utils/unsaved-changes';
 import { ReportSendingCardComponent } from '../lab-pages/report-sending-card.component';
 import type { BranchLabConfig } from '../../../shared/models/branch-lab-config.model';
 import { findReportSettings, type ReportFindHit } from './report-find';
@@ -1275,7 +1276,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
     @media (max-width: 640px) { .pf-rt-savestate__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
   `],
 })
-export class ReportTemplateComponent implements OnInit, OnDestroy {
+export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedChanges {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
@@ -1594,14 +1595,15 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   onBeforeUnload(ev: BeforeUnloadEvent) {
     if (this.dirty() || this.deptPatientDirty()) { ev.preventDefault(); ev.returnValue = ''; }
   }
-  /** Route guard: leaving with unsaved changes asks first. */
-  async canLeave(): Promise<boolean> {
-    if (!this.dirty() && !this.deptPatientDirty()) return true;
-    return this.dialog.confirm({
-      title: 'Leave without saving?',
-      message: 'Your report design changes are not saved yet. Save first to keep them.',
-      confirmLabel: 'Leave without saving', cancelLabel: 'Stay', tone: 'danger',
-    });
+  // ── Leaving with unsaved changes: the shared "Save your changes?" prompt (HasUnsavedChanges + the settings route guard). ──
+  readonly unsavedLabel = 'the report design';
+  hasUnsavedChanges(): boolean { return this.dirty() || this.deptPatientDirty(); }
+  /** Save from the prompt: the template and/or the department's patient strip; true only when everything saved. */
+  async saveChanges(): Promise<boolean> {
+    let ok = true;
+    if (this.dirty()) ok = await this.postTemplate();
+    if (ok && this.deptPatientDirty()) ok = await this.postDeptPatient();
+    return ok;
   }
 
   // ── Report style (report-style.ts) — text fitting, stored in the template metadata ──
@@ -2272,11 +2274,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     });
   }
 
-  saveDeptPatient() {
+  saveDeptPatient() { void this.postDeptPatient(); }
+  private postDeptPatient(): Promise<boolean> {
     const dept = this.patientScope();
-    if (dept === 'default' || this.deptPatientSaving()) return;
+    if (dept === 'default' || this.deptPatientSaving()) return Promise.resolve(dept === 'default');
     this.deptPatientSaving.set(true);
-    this.api.post(`/api/report-layout/department/${dept}/patient`, {
+    return new Promise<boolean>(resolve => this.api.post(`/api/report-layout/department/${dept}/patient`, {
       patient: { layout: this.deptPatientLayout(), columns: this.patientCols() },
     }).subscribe({
       next: () => {
@@ -2284,9 +2287,10 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
         this.deptPatientConfigured.set(true);
         this.deptPatientDirty.set(false);
         this.toasts.success('Department patient strip saved');
+        resolve(true);
       },
-      error: (e: ApiError) => { this.deptPatientSaving.set(false); this.toasts.error(e?.message || 'Save failed'); },
-    });
+      error: (e: ApiError) => { this.deptPatientSaving.set(false); this.toasts.error(e?.message || 'Save failed'); resolve(false); },
+    }));
   }
 
   resetDeptPatient() {
@@ -2438,15 +2442,16 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
 
   // ── Save ────────────────────────────────────────────────────
   readonly saving = signal<boolean>(false);
-  save() {
-    if (this.saving()) return;
+  save() { void this.postTemplate(); }
+  private postTemplate(): Promise<boolean> {
+    if (this.saving()) return Promise.resolve(false);
     this.saving.set(true);
     // Send every field — the server merges with defaults and writes one row.
     const sent = this._tpl();
-    this.api.post('/api/config/report-template', sent).subscribe({
-      next: () => { this.savedJson.set(JSON.stringify(sent)); this.toasts.success('Template saved'); this.saving.set(false); },
-      error: (e) => { this.toasts.error(ApiError.from(e).message); this.saving.set(false); },
-    });
+    return new Promise<boolean>(resolve => this.api.post('/api/config/report-template', sent).subscribe({
+      next: () => { this.savedJson.set(JSON.stringify(sent)); this.toasts.success('Template saved'); this.saving.set(false); resolve(true); },
+      error: (e) => { this.toasts.error(ApiError.from(e).message); this.saving.set(false); resolve(false); },
+    }));
   }
 }
 
