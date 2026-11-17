@@ -32,7 +32,7 @@ describe('Admin band — Report designer (/admin/reports)', () => {
     expect(p.bandInput()!.placeholder).toBe('Find a report setting');
     expect(p.el.querySelector('.pf-hb__search--tabs')).toBeNull();
     expect(pillTabs(p.el).map((b) => b.getAttribute('aria-label')))
-      .toEqual(['Letterhead', 'Patient strip', 'Table columns', 'Results table', 'Sequencing', 'Footer', 'Technician notes', 'Sending']);
+      .toEqual(['Letterhead', 'Patient strip', 'Table columns', 'Results table', 'Sequencing', 'Footer', 'Report notes', 'Sending']);
     expect(p.el.querySelector('[data-testid="rt-report-options"]')).toBeNull();
     expect(p.el.querySelector('.pf-rt-rail')).toBeNull();
     expect(p.el.querySelector('.pf-rt-work__title')).toBeNull();
@@ -58,13 +58,13 @@ describe('Admin band — Report designer (/admin/reports)', () => {
 
   it('Technician notes and Sending render in the same body frame; one Save, notes PATCH only techReportNotes', () => {
     const p = make();
-    tabByLabel(p.el, 'Technician notes').click();
+    tabByLabel(p.el, 'Report notes').click();
     p.f.detectChanges();
     expect(p.cmp.tab()).toBe('notes');
     const work = p.body()!.querySelector('.pf-rt-work')!;
     expect(work.querySelector('[data-testid="ls-tech-notes"]')).not.toBeNull();
     expect(p.body()!.querySelector('.pf-rt-aside')).not.toBeNull();
-    const sw = work.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Technician notes on report"]')!;
+    const sw = work.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Report notes"]')!;
     sw.click();
     expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/branch-lab-config', { techReportNotes: true });
     tabByLabel(p.el, 'Sending').click();

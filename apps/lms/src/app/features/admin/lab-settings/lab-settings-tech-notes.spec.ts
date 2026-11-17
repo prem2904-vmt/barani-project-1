@@ -37,7 +37,7 @@ function make(cfg: Record<string, unknown>) {
   });
   p.f.componentRef.setInput('cards', ['tech-notes']);
   p.f.detectChanges();
-  const sw = () => p.el.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Technician notes on report"]');
+  const sw = () => p.el.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Report notes"]');
   return { ...p, sw };
 }
 
