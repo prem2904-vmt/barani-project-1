@@ -84,10 +84,22 @@ test.describe('Save your changes?', () => {
     await expect(vis(page, '[data-testid="ov-inline"] button[role="switch"][aria-label="Allow discounts"]')).toHaveAttribute('aria-checked', 'true', { timeout: 30_000 });
   });
 
-  test('Billing › GST page: the band back asks; Stay keeps the change; Leave goes', async ({ page }) => {
+  test('Billing › GST page: another category / the band back asks; Stay keeps the change; Leave goes', async ({ page }) => {
     await go(page, '/admin/billing?tab=gst');
+    if (isPhone() && !(await vis(page, 'button[role="switch"][aria-label="Allow discounts"]').count())) await vis(page, '[data-testid="tp-item-gst"]').click();
     const sw = vis(page, 'button[role="switch"][aria-label="Allow discounts"]');
     await expect(sw).toBeVisible({ timeout: 60_000 });
+    if (!isPhone()) {
+      // Another category of the same setting (the side card) asks too — it would swap the page away.
+      await sw.click();
+      await vis(page, '[data-testid="tp-item-invoice"]').click();
+      await expect(dialogBox(page)).toBeVisible({ timeout: 10_000 });
+      await btn(page, 'Stay').click();
+      await expect(page).toHaveURL(/tab=gst/);
+      await expect(sw).toHaveAttribute('aria-checked', 'false');
+      await sw.click();
+      await expect(sw).toHaveAttribute('aria-checked', 'true');
+    }
     await sw.click();
     await expect(sw).toHaveAttribute('aria-checked', 'false');
     await vis(page, '.pf-hb__back').click();
@@ -98,12 +110,14 @@ test.describe('Save your changes?', () => {
     await vis(page, '.pf-hb__back').click();
     await expect(dialogBox(page)).toBeVisible({ timeout: 10_000 });
     await btn(page, 'Leave without saving').click();
-    await expect(page).not.toHaveURL(/\/admin\/billing/, { timeout: 20_000 });
+    if (isPhone()) await expect(sw).toBeHidden({ timeout: 20_000 });   // phone: back to the category list
+    else await expect(page).not.toHaveURL(/\/admin\/billing/, { timeout: 20_000 });
   });
 
   test('Front desk (booking slots) and Message channels (email sender) ask before they are left', async ({ page }) => {
-    // Front desk: the slot length is an explicit-Save field.
+    // Front desk: queue mode is an explicit-Save field.
     await go(page, '/admin/lab/front-desk?tab=mode');
+    if (isPhone() && !(await vis(page, 'pf-appointments-config [aria-label="Queue mode"]').count())) await vis(page, '[data-testid="tp-item-mode"]').click();
     const mode = vis(page, 'pf-appointments-config [aria-label="Queue mode"] [role="radio"][aria-checked="false"]');
     await expect(mode).toBeVisible({ timeout: 60_000 });
     await mode.click();
@@ -112,10 +126,12 @@ test.describe('Save your changes?', () => {
     await expect(page.getByText("You changed the front desk settings but haven't saved.").locator('visible=true').first()).toBeVisible();
     await shot(page, 'unsaved-front-desk-dialog');
     await btn(page, 'Leave without saving').click();
-    await expect(page).not.toHaveURL(/\/admin\/lab\/front-desk/, { timeout: 20_000 });
+    if (isPhone()) await expect(mode).toBeHidden({ timeout: 20_000 });
+    else await expect(page).not.toHaveURL(/\/admin\/lab\/front-desk/, { timeout: 20_000 });
 
     // Message channels › Email: the sender name.
     await go(page, '/admin/org/channels?tab=email');
+    if (isPhone() && !(await vis(page, 'input[placeholder="e.g. Arun Labs"]').count())) await vis(page, '[data-testid="tp-item-email"]').click();
     const from = vis(page, 'input[placeholder="e.g. Arun Labs"]');
     await expect(from).toBeVisible({ timeout: 60_000 });
     await from.fill('Demo Lab Reports');
@@ -126,6 +142,7 @@ test.describe('Save your changes?', () => {
     await expect(from).toHaveValue('Demo Lab Reports');
     await vis(page, '.pf-hb__back').click();
     await btn(page, 'Leave without saving').click();
-    await expect(page).not.toHaveURL(/\/admin\/org\/channels/, { timeout: 20_000 });
+    if (isPhone()) await expect(from).toBeHidden({ timeout: 20_000 });
+    else await expect(page).not.toHaveURL(/\/admin\/org\/channels/, { timeout: 20_000 });
   });
 });

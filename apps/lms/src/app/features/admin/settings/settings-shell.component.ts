@@ -1,6 +1,8 @@
 import {
   ChangeDetectionStrategy, Component, ElementRef, Injector, TemplateRef, OnDestroy, PLATFORM_ID, computed, effect, inject, signal, untracked,
 } from '@angular/core';
+import { confirmLeaveUnsaved, hasUnsavedChangesContract } from '../../../shared/utils/unsaved-changes';
+import { DialogService } from '../../../core/services/dialog.service';
 import { NgTemplateOutlet, isPlatformBrowser } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
@@ -294,13 +296,29 @@ export class SettingsShellComponent implements OnDestroy {
 
   private readonly backHandler = (): boolean => {
     if (!this.compact() || this.single()) return false;
-    if (this.phoneDetail() && this.cats().length > 1) { this.phoneDetail.set(false); return true; }
+    if (this.phoneDetail() && this.cats().length > 1) { this.askThen(() => this.phoneDetail.set(false)); return true; }
     return false;
   };
+
+  /** A routed page with unsaved changes asks "Save your changes?" before the shell swaps the view (another category,
+   *  or the phone's back to the category list) — the route guard only sees leaving the route. */
+  private readonly dialog = inject(DialogService);
+  private askThen(go: () => void): void {
+    const page = this.activePage();
+    if (hasUnsavedChangesContract(page) && page.hasUnsavedChanges()) {
+      void confirmLeaveUnsaved(this.dialog, page).then((ok) => { if (ok) go(); });
+      return;
+    }
+    go();
+  }
   ngOnDestroy(): void { this.navBack.clearBackInterceptor(this.backHandler); this.observer?.disconnect(); }
 
   /** Open a category: its own path (or the setting's), its view query, and clear the sibling categories' queries. */
   pickCategory(id: string): void {
+    if (id !== this.selectedId()) { this.askThen(() => this.doPickCategory(id)); return; }
+    this.doPickCategory(id);
+  }
+  private doPickCategory(id: string): void {
     const l = this.loc();
     if (!l) return;
     const cat = this.cats().find((c) => c.id === id) ?? l.item.categories.find((c) => c.id === id);
@@ -315,7 +333,7 @@ export class SettingsShellComponent implements OnDestroy {
 
   /** Phone: leave the screen and show the category list again. */
   closeDetail(): void {
-    if (this.cats().length > 1) this.phoneDetail.set(false);
+    if (this.cats().length > 1) this.askThen(() => this.phoneDetail.set(false));
     else this.toSections();
   }
 
