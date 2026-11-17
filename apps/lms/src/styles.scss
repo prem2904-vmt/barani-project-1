@@ -164,8 +164,17 @@
   max-width: none;
 }
 .pf-ss__main .pf-band-narrow { max-width: none; }
+/* A hosted grid page (its body fills): the frame's main card body, the page wrappers and the fill body form ONE flex
+   column so the grid gets the card's height (never 0) — in the Settings shell and inline in the overview. */
+.pf-tp__body:has(> .pf-ss__main .pf-band-body--fill), .pf-ss__scroll:has(> .pf-ss__main .pf-band-body--fill) { display: flex; flex-direction: column; }
+.pf-ss__main:has(.pf-band-body--fill) { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.pf-ss__main *:has(.pf-band-body--fill):not(pf-setting-group, .pf-sgrid, pf-appointments-config, pf-notifications-config, pf-lab-settings, .pf-sgroup__sec, .pf-sgroup__rows) {
+  display: flex !important; flex-direction: column; flex: 1 1 auto; min-height: 0;
+}
 .pf-ss__main .pf-band-page > .pf-band-body--fill:not(.pf-sgrid),
-:root.design-new .pf-ss__main .pf-band-page > .pf-band-body--fill:not(.pf-sgrid) { display: block !important; }
+:root.design-new .pf-ss__main .pf-band-page > .pf-band-body--fill:not(.pf-sgrid) {
+  display: flex !important; flex-direction: column; flex: 1 1 auto; min-height: 420px;
+}
 /* An ID FORMAT in ONE settings row (DESIGN-V2 rule 5): Date · Separator · Digits · Letters → Preview.
    Shared by Sample numbers and Patient / Order numbers. Every control is 32px tall. */
 .pf-fmt { display: flex; align-items: center; justify-content: flex-end; gap: 8px 14px; flex-wrap: wrap; }
