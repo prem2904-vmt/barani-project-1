@@ -16,6 +16,20 @@
   min-height: 0;
 }
 
+/* The page itself is a flex column down to the fill body, so the grid gets every pixel the host gives the page
+   (in the Settings shell / overview the host is a flex column; a block band page stopped at the grid's min-height). */
+.pf-band-page:has(> .pf-band-body--fill) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pf-band-page > .pf-band-body--fill {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .pf-sg-panels {
   display: grid;
   grid-template-columns: 340px minmax(0, 1fr);
@@ -33,10 +47,16 @@
 .pf-sg-main {
   min-width: 0;
   min-height: 0;
-  /* inline-size containment drops the content width, so the card must take its width from the
-     host — inside a shrink-to-fit host (the overview's inline page) it collapsed to 0 px wide. */
+  /* The card takes its width from the host (inside a shrink-to-fit host it once collapsed to 0 px). */
   width: 100%;
   align-self: stretch;
+  /* Directly inside a fill body (flex column) the card takes ALL its height, not just its content's. */
+  flex: 1 1 auto;
+}
+
+/* The narrow-card hint rule queries the HEAD (never the card: containment on the card can drop its size in a
+   shrink-to-fit host — the blank inline grid). */
+.pf-sg-main__head {
   container-type: inline-size;
 }
 
