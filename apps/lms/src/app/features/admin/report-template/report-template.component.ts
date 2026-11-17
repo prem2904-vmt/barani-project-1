@@ -1307,7 +1307,11 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
   readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
   private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
-  private readonly followTab = bindTabQuery(REPORT_TABS, (t) => { if (t !== this._tab()) this.setTab(t); });
+  // ?tab=notes (old links): Report notes is a row of Results table now — open it there, even when this page is already open.
+  private readonly followTab = bindTabQuery<Tab | 'notes'>([...REPORT_TABS, 'notes'], (t) => {
+    if (t === 'notes') { this.openNotesRow(); return; }
+    if (t !== this._tab()) this.setTab(t);
+  });
   private readonly router = inject(Router);
   private readonly host = inject(ElementRef<HTMLElement>);
   readonly selfSavingTab = computed(() => SELF_SAVING_TABS.has(this._tab()));
@@ -1359,11 +1363,22 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
       el?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
     }, 60);
   }
-  /** Bring the Report notes row (Results table) into view — the old ?tab=notes link lands here. */
-  private scrollToNotes() {
+  /** An old ?tab=notes link: Results table, the URL says so (history replaced), the Report notes row in view. */
+  private openNotesRow() {
+    setTimeout(() => {
+      this.setTab('table');
+      if (this.route.snapshot.queryParamMap.get('tab') === 'notes') {
+        void this.router.navigate([], { relativeTo: this.route, queryParams: { tab: 'table' }, queryParamsHandling: 'merge', replaceUrl: true });
+      }
+      setTimeout(() => this.scrollToNotes(), 150);
+    });
+  }
+  /** Bring the Report notes row (Results table) into view — once it has rendered (the template may still be loading). */
+  private scrollToNotes(tries = 30) {
     const el = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>('#pf-rt-notes');
+    if (!el) { if (tries > 0) setTimeout(() => this.scrollToNotes(tries - 1), 100); return; }
     const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    el?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+    el.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
   }
   @HostListener('document:keydown.escape')
   closeFind() { if (this.findQuery()) this.findQuery.set(''); }
@@ -2079,10 +2094,6 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
     const initial = (rawTab === 'notes' ? 'table' : rawTab) as Tab | null;
     if (initial && this.sections.some(o => o.value === initial)) {
       this._tab.set(initial);
-      if (rawTab === 'notes') {
-        void this.router.navigate([], { relativeTo: this.route, queryParams: { tab: 'table' }, queryParamsHandling: 'merge', replaceUrl: true });
-        setTimeout(() => this.scrollToNotes(), 120);
-      }
     }
     if (this.notesOnly()) { this._tab.set('table'); this.loadTechNotes(); this.tplHold.done(); return; }
     if (this._tab() === 'table') { this.loadSourceSansFace(); this.loadTechNotes(); }

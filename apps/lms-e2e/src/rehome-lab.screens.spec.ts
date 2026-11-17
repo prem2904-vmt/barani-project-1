@@ -161,7 +161,7 @@ test.describe('lab settings pages', () => {
   test('Report design › Sending: compact rows — Message and Language right-aligned, rows start at the top', async ({ page }) => {
     const body = 'Hello {{1}}, your lab test report from {{2}} is ready. Tap the button below to view your report.';
     const prev = neg.hook;
-    neg.hook = r => (r.method === 'GET' && r.path === '/api/settings/whatsapp') ? { status: 200, body: { success: true, data: {
+    neg.hook = r => (r.method === 'GET' && r.path === '/api/whatsapp/settings') ? { status: 200, body: { success: true, data: {
       autoSendEnabled: true, sendUpdatedReports: false, canSend: true,
       sender: { source: 'platform', displayName: 'Prefrontal', status: 'not_connected', tokenStored: false, canConnect: false },
       platform: { enabled: true, configured: true, webhookConfigured: true, defaultTemplateName: 'report_ready', defaultTemplateLanguage: 'en' },
