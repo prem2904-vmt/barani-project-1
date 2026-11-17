@@ -605,7 +605,8 @@ test.describe('each app opens its own start screen', () => {
     await boot(page, context, { route: '/files/sheet/start' });
     await startFrame(page).locator('[data-recent]', { hasText: 'QC log, November.xlsx' }).click({ timeout: 60_000 });
     await expect(page).toHaveURL(/\/files\/sheet\/file-4/, { timeout: 30_000 });
-    await expect(tid(page, 'files-name')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+    await expect(tid(page, 'files-start-name')).toHaveCount(0);
     await page.goBack();
     await expect(page).toHaveURL(/\/files\/sheet\/start/, { timeout: 30_000 });
   });
