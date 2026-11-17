@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { SettingRowComponent } from '../../shared/components/setting-row/setting-row.component';
+import { SETTINGS_HOST, bindTabQuery, injectSettingsHosted } from '../../shared/utils/settings-host';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { DialogService } from '../../core/services/dialog.service';
@@ -23,7 +26,7 @@ import {
 } from './ai-connector.api';
 
 /** The main card's sections (segmented tabs in its header). */
-export type AicTab = 'settings' | 'can' | 'apps';
+export type AicTab = 'settings' | 'can' | 'apps' | 'claude';
 
 /**
  * Lab settings → AI connector (MCP Phase 0). One lab-wide switch, DEFAULT
@@ -47,337 +50,247 @@ export type AicTab = 'settings' | 'can' | 'apps';
 @Component({
   selector: 'pf-ai-connectors-settings',
   standalone: true,
-  imports: [HeroBandComponent, ScreenHeaderComponent, BusyDirective, SkeletonFormComponent, SelectComponent],
+  imports: [HeroBandComponent, ScreenHeaderComponent, BusyDirective, SkeletonFormComponent, SelectComponent, SettingRowComponent, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <!-- Test Master's frame (owner 2026-11-17): band = back + search pill; ONE main card whose head carries the categories
+         (Settings | What apps see | Your apps | Connect Claude); flush rows, no nested cards. Inline in the Settings
+         overview the overview's card IS the main card: the categories become its head pill (SETTINGS_HOST). -->
     <section class="pf-band-page pf-aic px-4 md:px-8 lg:px-10 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <pf-hero-band [back]="true" [customSearch]="true" [contextBar]="true">
-          <div band-search class="pf-ctx">
-            <span class="pf-ctx__primary">AI connector</span>
-            @if (state(); as s) {
-              <span class="pf-ctx__chip"><span class="pf-aic__dot" [attr.data-on]="s.enabled" aria-hidden="true"></span>{{ s.enabled ? 'On' : 'Off' }}</span>
-            }
-          </div>
-        </pf-hero-band>
+        <pf-hero-band [back]="true" placeholder="Search Connected apps" [value]="q()" (valueChange)="q.set($event)"></pf-hero-band>
       }
-      <pf-screen-header class="pf-classic-only" eyebrow="Lab settings" title="AI connector"
-        subtitle="Let apps like Claude read your lab's numbers and suggest Test Master changes" parentRoute="/lab/settings"></pf-screen-header>
+      <pf-screen-header class="pf-classic-only" eyebrow="Organization" title="AI connector"
+        subtitle="Let apps like Claude read your lab's numbers and suggest Test Master changes"></pf-screen-header>
 
       <div class="pf-band-body">
-        <div class="pf-aic__grid" [class.pf-aic__grid--solo]="!isAdmin()">
+        <ng-template #aicBody>
+          @if (skeleton()) {
+            <pf-skeleton-form [fields]="3" [cols]="1" label="Loading AI connector…"></pf-skeleton-form>
+          } @else if (loadError()) {
+            <div class="pf-aic__err" role="alert">
+              <p>Couldn’t load the AI connector setting. Check your connection and try again.</p>
+              <button type="button" class="pf-btn pf-btn--secondary press" (click)="load()">Try again</button>
+            </div>
+          } @else if (state(); as s) {
+            <div id="pf-aic-panel" role="tabpanel" class="pf-aic__panel" [attr.aria-labelledby]="hosted ? null : 'pf-aic-tab-' + tab()">
+              @switch (tab()) {
+                @case ('settings') {
+                  <pf-setting-row label="Allow apps to connect" id="pf-aic-switch-label"
+                                  [hint]="isAdmin() ? (s.enabled ? 'On — people in your lab can connect an app and read the lab’s numbers. Apps can no longer read anything while this is off. ' + suggestOffEffect : 'Off — no app can connect. Nothing is shared.') : (s.enabled ? 'AI connectors are on for your lab.' : 'AI connectors are off for your lab.')">
+                    @if (isAdmin()) {
+                      <button type="button" class="pf-toggle pf-aic__toggle press" role="switch" [attr.aria-checked]="s.enabled"
+                              aria-label="Allow apps to connect" [disabled]="saving()" [pfBusy]="saving()" (click)="toggle()">
+                        <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                      </button>
+                    } @else {
+                      <span class="pf-aic__state"><span class="pf-aic__dot" [attr.data-on]="s.enabled" aria-hidden="true"></span>{{ s.enabled ? 'On' : 'Off' }}</span>
+                    }
+                  </pf-setting-row>
+                  <pf-setting-row [label]="suggestTitle"
+                                  [hint]="isAdmin() ? (s.proposals ? suggestOn + ' ' + suggestOffEffect : suggestOff) : (s.proposals ? 'Connected assistants can suggest Test Master changes.' : 'Connected assistants can’t suggest Test Master changes.')">
+                    @if (isAdmin()) {
+                      <button type="button" class="pf-toggle pf-aic__toggle press" role="switch" id="pf-aic-suggest" [attr.aria-checked]="!!s.proposals"
+                              [attr.aria-label]="suggestTitle" [disabled]="saving()" (click)="toggleProposals()">
+                        <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                      </button>
+                    } @else {
+                      <span class="pf-aic__state"><span class="pf-aic__dot" [attr.data-on]="!!s.proposals" aria-hidden="true"></span>{{ s.proposals ? 'On' : 'Off' }}</span>
+                    }
+                  </pf-setting-row>
+                  @if (builderSwitchShown()) {
+                    <pf-setting-row data-builder-switch [label]="builderTitle" [hint]="builderOn() ? builderOnWords : builderOffWords">
+                      <button type="button" class="pf-toggle pf-aic__toggle press" role="switch" id="pf-aic-builder" [attr.aria-checked]="builderOn()"
+                              [attr.aria-label]="builderTitle" [disabled]="saving()" (click)="toggleBuilder()">
+                        <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                      </button>
+                    </pf-setting-row>
+                  }
+                  <pf-setting-row label="What apps may see about patients">
+                    <span row-hint class="pf-aic__levelhint">{{ levelInfo().summary }}</span>
+                    <button type="button" class="pf-btn pf-btn--tertiary pf-aic__link press" (click)="compareLevels()">Compare the levels</button>
+                    @if (isAdmin()) {
+                      <pf-select class="pf-aic__level" [options]="levelOptions" [value]="level()" [disabled]="saving()"
+                                 aria-label="What apps may see about patients" (valueChange)="changeLevel($event)"></pf-select>
+                    } @else {
+                      <span class="pf-aic__state pf-aic__levelname" role="status">{{ levelInfo().label }}</span>
+                    }
+                  </pf-setting-row>
+                  <!-- Who can use it + masking: ONE muted note (not cards). -->
+                  <p class="pf-aic__note" data-testid="aic-note">
+                    @if (s.proposals) {
+                      An app can read, and suggest Test Master changes for your approval — it can’t apply, approve or delete anything itself.
+                    } @else {
+                      Read only — an app can’t add, change or delete anything.
+                    }
+                    Each person signs in and presses Allow; an app sees only what their role allows.
+                    Patients are masked: apps see counts and short codes only — never a name, phone or ID number; the codes open inside Prefrontal.
+                    @if (!isAdmin()) { Only a lab admin can change these. }
+                  </p>
+                }
+                @case ('can') {
+                  <div class="pf-aic__cn">
+                    <section class="pf-aic__cancol" aria-labelledby="pf-aic-can-label">
+                      <h3 class="pf-aic__sec" id="pf-aic-can-label">Can read</h3>
+                      <ul class="pf-aic__can">
+                        @for (g of canSee; track g.title) {
+                          <li class="pf-aic__grp">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                            <span class="pf-aic__grptext">
+                              <span class="pf-aic__grptitle">{{ g.title }}@if (g.when) {<span class="pf-aic__grpwhen"> — {{ g.when }}</span>}</span>
+                              <span class="pf-aic__grpbrief">{{ g.brief }}</span>
+                            </span>
+                          </li>
+                        }
+                      </ul>
+                    </section>
+                    <section class="pf-aic__nevercol" aria-labelledby="pf-aic-never-label">
+                      <h3 class="pf-aic__sec" id="pf-aic-never-label">Never</h3>
+                      <ul class="pf-aic__never">
+                        @for (line of neverItems; track line) {
+                          <li>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                            <span>{{ line }}</span>
+                          </li>
+                        }
+                      </ul>
+                    </section>
+                  </div>
+                  <button type="button" class="pf-btn pf-btn--tertiary pf-aic__link press" (click)="showFullList()">See the full list</button>
+                }
+                @case ('apps') {
+                  @if (grantsError()) {
+                    <p class="pf-field__hint" role="alert">Couldn’t load your list. <button type="button" class="pf-btn pf-btn--tertiary press" (click)="loadGrants()">Try again</button></p>
+                  } @else if (grants().length === 0) {
+                    <pf-setting-row label="Apps you’ve allowed to suggest changes" hint="None. No app can suggest Test Master or case sheet changes with your account."></pf-setting-row>
+                  } @else {
+                    <ul class="pf-aic__grants" aria-label="Apps you’ve allowed to suggest changes">
+                      @for (g of grants(); track g.clientId) {
+                        <li class="pf-aic__grant">
+                          <span class="pf-aic__granttext">
+                            <span class="pf-aic__grantname">{{ grantName(g) }}</span>
+                            <span class="pf-aic__grantsub" data-grant-label>{{ grantLabel }}</span>
+                            <span class="pf-aic__grantsub">Allowed {{ grantDate(g) }} · app {{ shortId(g) }}</span>
+                          </span>
+                          <button type="button" class="pf-btn pf-btn--secondary press pf-aic__revoke" [disabled]="revoking() === g.clientId"
+                                  [pfBusy]="revoking() === g.clientId" pfBusyLabel="Revoking…" (click)="revoke(g)"
+                                  [attr.aria-label]="'Revoke ' + grantName(g)">Revoke</button>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  <p class="pf-aic__note">Only your own apps are listed. Revoking stops the app suggesting changes straight away; it can still read.</p>
+                }
+                @case ('claude') {
+                  @if (!s.enabled) {
+                    <p class="pf-aic__note" role="status">Turn on “Allow apps to connect” first — until then Claude can’t connect.</p>
+                  }
+                  <pf-setting-row label="Connector address" hint="The same address for everyone in your lab.">
+                    <!-- Shown whole (wraps, never cut) and selectable in one tap. -->
+                    <div id="pf-aic-url" class="pf-aic__urltext" tabindex="0" role="textbox" aria-readonly="true" aria-label="Connector address">{{ s.connectorUrl }}</div>
+                    <button type="button" class="pf-btn pf-btn--secondary press pf-aic__copy" (click)="copy()" aria-label="Copy connector address">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                      {{ copied() ? 'Copied' : 'Copy' }}
+                    </button>
+                  </pf-setting-row>
+                  <pf-setting-row label="Steps" [stack]="true">
+                    <ol class="pf-aic__steps">
+                      @for (step of steps; track $index) {
+                        <li><span class="pf-aic__n">{{ $index + 1 }}</span><span>{{ step }}</span></li>
+                      }
+                    </ol>
+                  </pf-setting-row>
+                }
+              }
+            </div>
+          }
+        </ng-template>
+
+        @if (hosted) {
+          <ng-container *ngTemplateOutlet="aicBody"></ng-container>
+        } @else {
           <section class="pf-card pf-aic__main" aria-labelledby="pf-aic-title">
             <header class="pf-card__head pf-aic__head">
               <span class="pf-card__icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7H6a4 4 0 0 0 0 8h3M15 7h3a4 4 0 0 1 0 8h-3M8 11h8"/></svg>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7H6a4 4 0 0 0 0 8h3M15 7h3a4 4 0 0 1 0 8h-3M8 11h8"/></svg>
               </span>
               <h2 class="pf-card__label" id="pf-aic-title">AI connector</h2>
               @if (state()) {
                 <div class="pf-seg pf-aic__tabs" role="tablist" aria-label="AI connector sections">
-                  <button type="button" class="pf-seg__item" role="tab" id="pf-aic-tab-settings" aria-controls="pf-aic-panel"
-                          [attr.aria-selected]="tab() === 'settings'" (click)="pick('settings')">Settings</button>
-                  <button type="button" class="pf-seg__item" role="tab" id="pf-aic-tab-can" aria-controls="pf-aic-panel"
-                          [attr.aria-selected]="tab() === 'can'" (click)="pick('can')">What apps see</button>
-                  @if (showApps()) {
-                    <button type="button" class="pf-seg__item" role="tab" id="pf-aic-tab-apps" aria-controls="pf-aic-panel"
-                            [attr.aria-selected]="tab() === 'apps'" (click)="pick('apps')">Your apps<span class="pf-num pf-aic__count">{{ grants().length }}</span></button>
+                  @for (c of cats(); track c.id) {
+                    <button type="button" class="pf-seg__item" role="tab" [id]="'pf-aic-tab-' + c.id" aria-controls="pf-aic-panel"
+                            [attr.aria-selected]="tab() === c.id" (click)="pick(c.id)">{{ c.label }}@if (c.id === 'apps') {<span class="pf-num pf-aic__count">{{ grants().length }}</span>}</button>
                   }
                 </div>
               }
             </header>
-            <div class="pf-card__body pf-aic__body">
-              @if (skeleton()) {
-                <pf-skeleton-form [fields]="3" [cols]="1" label="Loading AI connector…"></pf-skeleton-form>
-              } @else if (loadError()) {
-                <div class="pf-aic__err" role="alert">
-                  <p>Couldn’t load the AI connector setting. Check your connection and try again.</p>
-                  <button type="button" class="pf-btn pf-btn--secondary press" (click)="load()">Try again</button>
-                </div>
-              } @else if (state(); as s) {
-                <div id="pf-aic-panel" role="tabpanel" class="pf-aic__panel" [attr.aria-labelledby]="'pf-aic-tab-' + tab()">
-                  @switch (tab()) {
-                    @case ('settings') {
-                      <ul class="pf-aic__rows">
-                        <li class="pf-aic__row">
-                          <div class="pf-aic__rowtext">
-                            <span class="pf-aic__rowtitle" id="pf-aic-switch-label">Allow apps to connect</span>
-                            @if (isAdmin()) {
-                              <span class="pf-aic__rowsub">{{ s.enabled ? 'On — people in your lab can connect an app and read the lab’s numbers.' : 'Off — no app can connect. Nothing is shared.' }}</span>
-                              @if (s.enabled) { <span class="pf-aic__rowsub pf-aic__rowwarn">Apps can no longer read anything while this is off. {{ suggestOffEffect }}</span> }
-                            } @else {
-                              <span class="pf-aic__rowsub" role="status">{{ s.enabled ? 'AI connectors are on for your lab.' : 'AI connectors are off for your lab.' }}</span>
-                            }
-                          </div>
-                          @if (isAdmin()) {
-                            <button type="button" class="pf-toggle pf-aic__toggle press" role="switch" [attr.aria-checked]="s.enabled"
-                                    aria-labelledby="pf-aic-switch-label" [disabled]="saving()" [pfBusy]="saving()" (click)="toggle()">
-                              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-                            </button>
-                          } @else {
-                            <span class="pf-aic__state"><span class="pf-aic__dot" [attr.data-on]="s.enabled" aria-hidden="true"></span>{{ s.enabled ? 'On' : 'Off' }}</span>
-                          }
-                        </li>
-                        <li class="pf-aic__row">
-                          <div class="pf-aic__rowtext">
-                            <span class="pf-aic__rowtitle" id="pf-aic-suggest-label">{{ suggestTitle }}</span>
-                            @if (isAdmin()) {
-                              <span class="pf-aic__rowsub">{{ s.proposals ? suggestOn : suggestOff }}</span>
-                              @if (s.proposals) { <span class="pf-aic__rowsub pf-aic__rowwarn">{{ suggestOffEffect }}</span> }
-                            } @else {
-                              <span class="pf-aic__rowsub" role="status">{{ s.proposals ? 'Connected assistants can suggest Test Master changes.' : 'Connected assistants can’t suggest Test Master changes.' }}</span>
-                            }
-                          </div>
-                          @if (isAdmin()) {
-                            <button type="button" class="pf-toggle pf-aic__toggle press" role="switch" id="pf-aic-suggest" [attr.aria-checked]="!!s.proposals"
-                                    aria-labelledby="pf-aic-suggest-label" [disabled]="saving()" (click)="toggleProposals()">
-                              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-                            </button>
-                          } @else {
-                            <span class="pf-aic__state"><span class="pf-aic__dot" [attr.data-on]="!!s.proposals" aria-hidden="true"></span>{{ s.proposals ? 'On' : 'Off' }}</span>
-                          }
-                        </li>
-                        @if (builderSwitchShown()) {
-                          <li class="pf-aic__row" data-builder-switch>
-                            <div class="pf-aic__rowtext">
-                              <span class="pf-aic__rowtitle" id="pf-aic-builder-label">{{ builderTitle }}</span>
-                              <span class="pf-aic__rowsub">{{ builderOn() ? builderOnWords : builderOffWords }}</span>
-                            </div>
-                            <button type="button" class="pf-toggle pf-aic__toggle press" role="switch" id="pf-aic-builder" [attr.aria-checked]="builderOn()"
-                                    aria-labelledby="pf-aic-builder-label" [disabled]="saving()" (click)="toggleBuilder()">
-                              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-                            </button>
-                          </li>
-                        }
-                        <li class="pf-aic__row pf-aic__row--level">
-                          <div class="pf-aic__rowtext">
-                            <span class="pf-aic__rowtitle" id="pf-aic-level-label">What apps may see about patients</span>
-                            <span class="pf-aic__rowsub pf-aic__levelhint">{{ levelInfo().summary }}</span>
-                          </div>
-                          <div class="pf-aic__levelctl">
-                            @if (isAdmin()) {
-                              <pf-select class="pf-aic__level" [options]="levelOptions" [value]="level()" [disabled]="saving()"
-                                         aria-label="What apps may see about patients" (valueChange)="changeLevel($event)"></pf-select>
-                            } @else {
-                              <span class="pf-aic__state pf-aic__levelname" role="status">{{ levelInfo().label }}</span>
-                            }
-                            <button type="button" class="pf-aic__link press" (click)="compareLevels()">Compare the levels</button>
-                          </div>
-                        </li>
-                      </ul>
-                      <div class="pf-aic__notes">
-                        <p class="pf-aic__note">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>
-                          <span><strong>Who can use it.</strong>
-                            @if (s.proposals) {
-                              An app can read, and suggest Test Master changes for your approval. It can’t apply, approve, or delete anything itself.
-                            } @else {
-                              Read only — an app can’t add, change or delete anything.
-                            }
-                            Each person signs in and presses Allow. An app sees only what their role allows.
-                            @if (!isAdmin()) { Only a lab admin can change these. }
-                          </span>
-                        </p>
-                        <p class="pf-aic__note">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>
-                          <span><strong>Patients are masked.</strong> Apps see counts and short codes only — never a name, phone or ID number. The codes open inside Prefrontal.</span>
-                        </p>
-                      </div>
-                    }
-                    @case ('can') {
-                      <div class="pf-aic__cn">
-                        <section class="pf-aic__cancol" aria-labelledby="pf-aic-can-label">
-                          <h3 class="pf-aic__sec" id="pf-aic-can-label">Can read</h3>
-                          <ul class="pf-aic__can">
-                            @for (g of canSee; track g.title) {
-                              <li class="pf-aic__grp">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                                <span class="pf-aic__grptext">
-                                  <span class="pf-aic__grptitle">{{ g.title }}@if (g.when) {<span class="pf-aic__grpwhen"> — {{ g.when }}</span>}</span>
-                                  <span class="pf-aic__grpbrief">{{ g.brief }}</span>
-                                </span>
-                              </li>
-                            }
-                          </ul>
-                        </section>
-                        <section class="pf-aic__nevercol" aria-labelledby="pf-aic-never-label">
-                          <h3 class="pf-aic__sec" id="pf-aic-never-label">Never</h3>
-                          <ul class="pf-aic__never">
-                            @for (line of neverItems; track line) {
-                              <li>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                                <span>{{ line }}</span>
-                              </li>
-                            }
-                          </ul>
-                        </section>
-                      </div>
-                      <button type="button" class="pf-aic__link press" (click)="showFullList()">See the full list</button>
-                    }
-                    @case ('apps') {
-                      <h3 class="pf-aic__sec" id="pf-aic-grants-label">Apps you’ve allowed to suggest changes</h3>
-                      @if (grantsError()) {
-                        <p class="pf-field__hint" role="alert">Couldn’t load your list. <button type="button" class="pf-btn pf-btn--tertiary press" (click)="loadGrants()">Try again</button></p>
-                      } @else if (grants().length === 0) {
-                        <p class="pf-aic__empty">None. No app can suggest Test Master or case sheet changes with your account.</p>
-                      } @else {
-                        <ul class="pf-aic__grants" aria-labelledby="pf-aic-grants-label">
-                          @for (g of grants(); track g.clientId) {
-                            <li class="pf-aic__grant">
-                              <span class="pf-aic__granttext">
-                                <span class="pf-aic__grantname">{{ grantName(g) }}</span>
-                                <span class="pf-aic__grantsub" data-grant-label>{{ grantLabel }}</span>
-                                <span class="pf-aic__grantsub">Allowed {{ grantDate(g) }} · app {{ shortId(g) }}</span>
-                              </span>
-                              <button type="button" class="pf-btn pf-btn--secondary press pf-aic__revoke" [disabled]="revoking() === g.clientId"
-                                      [pfBusy]="revoking() === g.clientId" pfBusyLabel="Revoking…" (click)="revoke(g)"
-                                      [attr.aria-label]="'Revoke ' + grantName(g)">Revoke</button>
-                            </li>
-                          }
-                        </ul>
-                      }
-                      <p class="pf-field__hint">Only your own apps are listed. Revoking stops the app suggesting changes straight away; it can still read.</p>
-                    }
-                  }
-                </div>
-              }
-            </div>
+            <div class="pf-card__body pf-aic__body"><ng-container *ngTemplateOutlet="aicBody"></ng-container></div>
           </section>
-
-          @if (isAdmin() && state(); as s) {
-            <aside class="pf-card pf-aic__side" aria-labelledby="pf-aic-claude">
-              <header class="pf-card__head">
-                <span class="pf-card__icon" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-                </span>
-                <h2 class="pf-card__label" id="pf-aic-claude">Connect Claude</h2>
-              </header>
-              <div class="pf-card__body pf-aic__sidebody">
-                @if (!s.enabled) {
-                  <p class="pf-aic__off" role="status">Turn on “Allow apps to connect” first — until then Claude can’t connect.</p>
-                }
-                <span class="pf-field__lbl" id="pf-aic-url-label">Connector address</span>
-                <div class="pf-aic__url">
-                  <!-- Shown whole (wraps, never cut) and selectable in one tap. -->
-                  <div id="pf-aic-url" class="pf-aic__urltext" tabindex="0" role="textbox" aria-readonly="true"
-                       aria-labelledby="pf-aic-url-label" aria-describedby="pf-aic-url-hint">{{ s.connectorUrl }}</div>
-                  <button type="button" class="pf-btn pf-btn--secondary press pf-aic__copy" (click)="copy()" aria-label="Copy connector address">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
-                    {{ copied() ? 'Copied' : 'Copy' }}
-                  </button>
-                </div>
-                <p class="pf-field__hint" id="pf-aic-url-hint">The same address for everyone in your lab.</p>
-                <h3 class="pf-aic__sec">Steps</h3>
-                <ol class="pf-aic__steps">
-                  @for (step of steps; track $index) {
-                    <li><span class="pf-aic__n">{{ $index + 1 }}</span><span>{{ step }}</span></li>
-                  }
-                </ol>
-              </div>
-            </aside>
-          }
-        </div>
+        }
       </div>
     </section>
   `,
   styles: [`
-    /* NO inner scroll (owner rule): the card bodies grow with their content and every section is sized to
-       fit the window at 1280×720 — long content is split into the header tabs, never scrolled in a box. */
+    :host { display: block; }
+    /* NO inner scroll (owner, 2026-11-01): the card body grows with its rows; long content is split into the head's categories. */
     .pf-aic .pf-card__body { overflow: visible; }
-    .pf-aic__grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 360px; align-items: start; max-width: 1180px; margin: 0 auto; width: 100%; }
-    .pf-aic__grid--solo { grid-template-columns: minmax(0, 760px); justify-content: center; }
-    @media (max-width: 1023px) { .pf-aic__grid { grid-template-columns: minmax(0, 1fr); max-width: 760px; } }
     .pf-aic__head { flex-wrap: wrap; row-gap: 8px; }
     .pf-aic__tabs { margin-left: auto; }
-    .pf-aic__count { margin-left: 2px; font-weight: 500; color: var(--text-tertiary); }
-    .pf-aic__body { padding: 6px 18px 16px; }
-    .pf-aic__panel { display: flex; flex-direction: column; gap: 12px; }
-
-    /* Settings: one row per setting, hairline between, control on the right. */
-    .pf-aic__rows { list-style: none; margin: 0; padding: 0; }
-    .pf-aic__row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 13px 0; border-bottom: 1px solid var(--pf-line); }
-    .pf-aic__row--level { align-items: flex-start; }
-    .pf-aic__rowtext { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
-    .pf-aic__rowtitle { font-size: 14.5px; font-weight: 600; line-height: 1.35; color: var(--text-primary); }
-    .pf-aic__rowsub { font-size: 13px; line-height: 1.45; color: var(--text-secondary); text-wrap: pretty; }
-    .pf-aic__rowwarn { font-weight: 500; }
-    .pf-aic__toggle { min-width: 44px; min-height: 44px; justify-content: center; flex: none; }
-    .pf-aic__levelctl { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; width: 250px; }
-    .pf-aic__level { width: 100%; }
-    .pf-aic__levelctl .pf-aic__link { align-self: flex-end; }
+    .pf-aic__count { margin-left: 4px; font-weight: 500; color: var(--text-tertiary); }
+    .pf-aic__body { padding: 4px 24px 20px; display: block; }
+    .pf-aic__panel { display: flex; flex-direction: column; }
+    .pf-aic__toggle { flex: none; }
+    .pf-aic__level { width: 240px; }
+    .pf-aic__link { height: 32px; min-height: 32px; padding: 0 10px; }
     .pf-aic__state { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 4px 10px; border-radius: 999px;
       border: 1px solid var(--pf-line); background: var(--pf-chip-bg, transparent); font-size: 12.5px; font-weight: 500; color: var(--text-primary); }
-    .pf-aic__levelname { white-space: normal; text-align: right; }
-    .pf-aic__link { align-self: flex-start; min-height: 32px; padding: 0; margin-top: 2px; border: 0; background: none; cursor: pointer;
-      font: inherit; font-size: 13px; font-weight: 500; color: var(--violet-text, #7c3aed); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
-    .pf-aic__link:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 4px; }
-    .pf-aic__notes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 4px; }
-    .pf-aic__note { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 12px 14px; border-radius: var(--pf-radius-sm, 10px);
-      background: var(--pf-chip-bg, transparent); border: 1px solid var(--pf-line); font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); text-wrap: pretty; }
-    .pf-aic__note svg { flex: none; margin-top: 1px; color: var(--violet-text, #7c3aed); }
-    .pf-aic__note strong { font-weight: 600; color: var(--text-primary); }
+    .pf-aic__levelhint { font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
+    .pf-aic__note { margin: 12px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary); text-wrap: pretty; }
+    .pf-aic__dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: var(--text-tertiary); flex: none; }
+    .pf-aic__dot[data-on='true'] { background: var(--pf-switch-on, #7c3aed); }
 
-    /* What apps see: compact Can / Never columns. */
-    .pf-aic__cn { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; padding-top: 10px; }
+    /* What apps see: Can / Never, flush (no boxes). */
+    .pf-aic__cn { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 24px; padding-top: 12px; }
     .pf-aic__sec { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-aic__can, .pf-aic__never { list-style: none; margin: 0; padding: 0; display: grid; }
     .pf-aic__can { gap: 12px; }
     .pf-aic__grp { display: flex; align-items: flex-start; gap: 10px; }
     .pf-aic__grp svg { flex: none; margin-top: 3px; color: var(--violet-text, #7c3aed); }
     .pf-aic__grptext { display: grid; gap: 1px; min-width: 0; }
-    .pf-aic__grptitle { font-size: 13.5px; font-weight: 600; line-height: 1.4; color: var(--text-primary); }
+    .pf-aic__grptitle { font-size: 13.5px; font-weight: 500; line-height: 1.4; color: var(--text-primary); }
     .pf-aic__grpwhen { font-weight: 400; color: var(--text-tertiary); }
-    .pf-aic__grpbrief { font-size: 13px; line-height: 1.4; color: var(--text-secondary); }
-    .pf-aic__nevercol { padding: 12px 14px; border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line); background: var(--pf-chip-bg, transparent); align-self: start; }
+    .pf-aic__grpbrief { font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
     .pf-aic__never { gap: 9px; }
     .pf-aic__never li { display: flex; align-items: flex-start; gap: 9px; font-size: 13px; line-height: 1.4; color: var(--text-primary); }
     .pf-aic__never svg { flex: none; margin-top: 3px; color: var(--text-tertiary); }
+    .pf-aic__cn + .pf-aic__link { align-self: flex-start; margin-top: 10px; }
 
-    /* Your apps. */
-    .pf-aic__panel > .pf-aic__sec { margin: 10px 0 0; }
-    .pf-aic__empty { margin: 0; padding: 14px; border-radius: var(--pf-radius-sm, 10px); border: 1px dashed var(--pf-line); font-size: 13px; color: var(--text-secondary); }
-    .pf-aic__grants { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-    .pf-aic__grant { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 14px; border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm, 10px); }
+    /* Your apps: one row per app. */
+    .pf-aic__grants { list-style: none; margin: 0; padding: 0; }
+    .pf-aic__grant { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 10px 0; border-bottom: 1px solid var(--pf-line); }
     .pf-aic__granttext { display: grid; gap: 2px; min-width: 0; }
-    .pf-aic__grantname { font-size: 14px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+    .pf-aic__grantname { font-size: 13.5px; font-weight: 500; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-aic__grantsub { font-size: 12.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-    .pf-aic__revoke { flex: none; min-height: 44px; }
+    .pf-aic__revoke { flex: none; height: 34px; min-height: 34px; }
 
-    .pf-aic__dot { display: inline-block; width: 8px; height: 8px; border-radius: 999px; background: var(--text-tertiary); flex: none; }
-    .pf-aic__dot[data-on='true'] { background: var(--pf-switch-on, #7c3aed); }
-    .pf-ctx__chip .pf-aic__dot { margin-right: 2px; }
-
-    /* Connect Claude side card. */
-    .pf-aic__sidebody { gap: 10px; padding: 16px 18px 18px; }
-    .pf-aic__off { margin: 0; padding: 10px 12px; border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-line); font-size: 13px; line-height: 1.45; color: var(--text-secondary); }
-    .pf-aic__url { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
-    .pf-aic__urltext { flex: 1 1 180px; min-width: 0; padding: 10px 12px; border-radius: var(--pf-radius-sm, 10px);
-      border: 1px solid var(--pf-line); background: var(--pf-chip-bg, transparent); color: var(--text-primary);
-      font-size: 13px; line-height: 1.4; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; user-select: all; }
+    /* Connect Claude. */
+    .pf-aic__urltext { max-width: 420px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--pf-line); background: var(--pf-chip-bg, transparent);
+      color: var(--text-primary); font-size: 13px; line-height: 1.4; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; user-select: all; }
     .pf-aic__urltext:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    .pf-aic__copy { flex: none; min-height: 44px; }
-    .pf-aic__sidebody .pf-aic__sec { margin: 6px 0 0; }
-    .pf-aic__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    .pf-aic__copy { flex: none; height: 34px; min-height: 34px; }
+    .pf-aic__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
     .pf-aic__steps li { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.45; color: var(--text-primary); }
     .pf-aic__n { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 22px; height: 22px; border-radius: 999px;
       border: 1px solid var(--pf-line); font-size: 12px; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
     .pf-aic__err { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding-top: 10px; }
     .pf-aic__err p { margin: 0; font-size: 13px; color: var(--text-secondary); }
 
-    @media (max-width: 760px) {
-      .pf-aic__notes, .pf-aic__cn { grid-template-columns: minmax(0, 1fr); }
-    }
+    @media (max-width: 760px) { .pf-aic__cn { grid-template-columns: minmax(0, 1fr); } }
     @media (max-width: 640px) {
-      /* ND §12: card labels are 12px on phones — beat the global phone heading cap. */
-      .pf-card__label { font-size: 12px !important; line-height: 1.3 !important; }
-      .pf-aic__sec { font-size: 11px !important; line-height: 1.3 !important; }
-      .pf-aic__tabs { margin-left: 0; width: 100%; }
+      .pf-aic__tabs { margin-left: 0; width: 100%; flex-wrap: wrap; }
       .pf-aic__body { padding: 4px 14px 14px; }
-      .pf-aic__row--level { flex-direction: column; align-items: stretch; gap: 10px; }
-      .pf-aic__levelctl { width: 100%; align-items: stretch; }
-      .pf-aic__levelctl .pf-aic__link { align-self: flex-start; }
-      .pf-aic__levelname { align-self: flex-start; text-align: left; }
+      .pf-aic__level { width: 100%; }
       .pf-aic__copy { width: 100%; justify-content: center; }
-      .pf-aic__link { min-height: 44px; }
     }
   `],
 })
@@ -418,7 +331,12 @@ export class AiConnectorsSettingsPage {
   readonly showApps = computed(() => offersAppGrant(this.state()) || this.builderOn() || this.grants().length > 0);
   private readonly picked = signal<AicTab>('settings');
   /** The open section — falls back to Settings when "Your apps" goes away. */
-  readonly tab = computed<AicTab>(() => (this.picked() === 'apps' && !this.showApps() ? 'settings' : this.picked()));
+  readonly tab = computed<AicTab>(() => {
+    const t = this.picked();
+    if (t === 'apps' && !this.showApps()) return 'settings';
+    if (t === 'claude' && !this.isAdmin()) return 'settings';
+    return t;
+  });
 
   // ---- "Let connected apps build case sheets" (case-sheet builder beta: console switch + case-sheet gate + the server) ----
   // The services are only created when the console switch is on, so the rest of this screen never touches them.
@@ -459,6 +377,24 @@ export class AiConnectorsSettingsPage {
   }
 
   pick(t: AicTab): void { this.picked.set(t); }
+
+  // ── Categories: the card head's pill here, the overview's card-head pill when inline (SETTINGS_HOST) ──
+  protected readonly hosted = injectSettingsHosted();
+  readonly q = signal('');
+  readonly cats = computed<{ id: AicTab; label: string }[]>(() => [
+    { id: 'settings', label: 'Settings' },
+    { id: 'can', label: 'What apps see' },
+    ...(this.showApps() ? [{ id: 'apps' as AicTab, label: 'Your apps' }] : []),
+    ...(this.isAdmin() && this.state() ? [{ id: 'claude' as AicTab, label: 'Connect Claude' }] : []),
+  ]);
+  private readonly settingsHost = inject(SETTINGS_HOST, { optional: true });
+  private readonly publishCats = (() => {
+    const host = this.settingsHost;
+    if (!host) return null;
+    inject(DestroyRef).onDestroy(() => host.categories.set(null));
+    return effect(() => host.categories.set(this.state() ? this.cats().map((c) => ({ id: c.id, label: c.label })) : null));
+  })();
+  private readonly followTab = bindTabQuery(['settings', 'can', 'apps', 'claude'] as const, (t) => this.picked.set(t));
 
   async load(): Promise<void> {
     this.loadError.set(false);

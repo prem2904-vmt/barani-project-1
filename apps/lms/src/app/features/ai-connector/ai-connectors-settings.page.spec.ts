@@ -72,9 +72,9 @@ async function settle(f: { detectChanges(): void; whenStable(): Promise<unknown>
 }
 const sw = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('[role="switch"]') as HTMLButtonElement | null;
 const suggestSw = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('#pf-aic-suggest') as HTMLButtonElement | null;
-const tabBtn = (f: { nativeElement: HTMLElement }, id: 'settings' | 'can' | 'apps') => f.nativeElement.querySelector(`#pf-aic-tab-${id}`) as HTMLButtonElement | null;
+const tabBtn = (f: { nativeElement: HTMLElement }, id: 'settings' | 'can' | 'apps' | 'claude') => f.nativeElement.querySelector(`#pf-aic-tab-${id}`) as HTMLButtonElement | null;
 /** Open one of the main card's tabs (Settings is open by default). */
-async function openTab(f: { nativeElement: HTMLElement; detectChanges(): void; whenStable(): Promise<unknown> }, id: 'settings' | 'can' | 'apps') {
+async function openTab(f: { nativeElement: HTMLElement; detectChanges(): void; whenStable(): Promise<unknown> }, id: 'settings' | 'can' | 'apps' | 'claude') {
   tabBtn(f, id)!.click();
   await settle(f);
 }
@@ -88,6 +88,7 @@ describe('AiConnectorsSettingsPage', () => {
     const s = sw(f)!;
     expect(s).toBeTruthy();
     expect(s.getAttribute('aria-checked')).toBe('false');
+    await openTab(f, 'claude');   // Connect Claude is its own category (owner: no side card)
     expect(f.nativeElement.querySelector('#pf-aic-url')!.textContent!.trim()).toBe(OFF.connectorUrl);  // whole, never cut
     expect(f.nativeElement.querySelectorAll('.pf-aic__steps li')).toHaveLength(3);
     expect(f.nativeElement.textContent).toContain('Add custom connector');
@@ -147,6 +148,7 @@ describe('AiConnectorsSettingsPage', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const { f } = setup();
     await loaded(f);
+    await openTab(f, 'claude');
     (f.nativeElement.querySelector('.pf-aic__copy') as HTMLButtonElement).click();
     await settle(f);
     expect(writeText).toHaveBeenCalledWith(OFF.connectorUrl);
@@ -496,7 +498,7 @@ describe('AiConnectorsSettingsPage: tabs instead of one long page', () => {
     const list = f.nativeElement.querySelector('[role="tablist"]')!;
     expect(list.getAttribute('aria-label')).toBe('AI connector sections');
     const tabs = Array.from(list.querySelectorAll('[role="tab"]')) as HTMLElement[];
-    expect(tabs.map(t => t.textContent!.replace(/\s+/g, ' ').trim())).toEqual(['Settings', 'What apps see', 'Your apps1']);
+    expect(tabs.map(t => t.textContent!.replace(/\s+/g, ' ').trim())).toEqual(['Settings', 'What apps see', 'Your apps1', 'Connect Claude']);
     expect(tabs.filter(t => t.getAttribute('aria-selected') === 'true')).toHaveLength(1);
     expect(f.nativeElement.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
     expect(f.nativeElement.querySelector('[role="tabpanel"]')!.getAttribute('aria-labelledby')).toBe('pf-aic-tab-settings');
@@ -515,13 +517,15 @@ describe('AiConnectorsSettingsPage: tabs instead of one long page', () => {
     expect(sw(f)).toBeTruthy();
   });
 
-  it('the side card (address + steps) stays visible on every tab for an admin', async () => {
+  it('Connect Claude is a category (admin): the address + Copy and the steps, no side card; the two notes are ONE muted line', async () => {
     const { f } = setup({ state: ON, grants: [G1] });
     await loaded(f);
-    for (const t of ['can', 'apps', 'settings'] as const) {
-      await openTab(f, t);
-      expect(f.nativeElement.querySelector('#pf-aic-url')).toBeTruthy();
-    }
+    expect(f.nativeElement.querySelector('.pf-aic__side, aside.pf-card')).toBeNull();
+    expect(f.nativeElement.querySelectorAll('[data-testid="aic-note"]')).toHaveLength(1);
+    expect(f.nativeElement.querySelector('.pf-card .pf-card')).toBeNull();   // never card-in-card
+    await openTab(f, 'claude');
+    expect(f.nativeElement.querySelector('#pf-aic-url')).toBeTruthy();
+    expect(f.nativeElement.querySelectorAll('.pf-aic__steps li')).toHaveLength(3);
   });
 
   it('the suggest-off helper and confirm share ONE sentence (owner rule)', () => {

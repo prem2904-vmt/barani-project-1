@@ -163,4 +163,28 @@ test.describe('settings v2 (Test Master frame)', () => {
     await vis(page, '.pf-hb__back').click();
     await expect(page).toHaveURL(/\/admin\/lab\/collection/);
   });
+
+  test('Connected apps (beta mcp): inline in the overview = ONE card, rows, categories as the head pill; no nested cards', async ({ page }) => {
+    test.skip(ONLY_TM);
+    await page.addInitScript(() => { try { localStorage.setItem('pf.beta.mcp', '1'); } catch { /* blocked */ } });
+    const prev = neg.hook;
+    neg.hook = r => {
+      if (r.method === 'GET' && r.path === '/api/beta-features') return { status: 200, body: { success: true, data: { mcp: true } } };
+      if (r.method === 'GET' && r.path === '/api/ai-connector') return { status: 200, body: { success: true, data: { enabled: true, proposals: true, privacyLevel: 'counts', connectorUrl: 'https://mcp.prefrontal.health/demo-lab' } } };
+      if (r.method === 'GET' && r.path === '/api/ai-connector/grants') return { status: 200, body: { success: true, data: [] } };
+      return prev?.(r);
+    };
+    await go(page, '/admin?section=connected');
+    if (isPhone()) await vis(page, '[data-testid="tp-item-connected"]').click().catch(() => undefined);
+    await expect(vis(page, '[data-testid="ov-inline"] pf-ai-connectors-settings')).toBeAttached({ timeout: 60_000 });
+    await expect(page.locator('[data-testid="ov-inline"] .pf-card')).toHaveCount(0);           // never card-in-card
+    await expect(page.locator('pf-hero-band .pf-ctx__primary').locator('visible=true')).toHaveCount(0);   // no "AI connector · On" pill
+    await expect(vis(page, '[aria-label="Allow apps to connect"]')).toBeVisible({ timeout: 20_000 });
+    await page.waitForTimeout(500);
+    await shot(page, 'connected-apps');
+    await go(page, '/admin?section=connected&tab=claude');
+    if (isPhone()) await vis(page, '[data-testid="tp-item-connected"]').click().catch(() => undefined);
+    await expect(vis(page, '#pf-aic-url')).toBeVisible({ timeout: 30_000 });
+    await shot(page, 'connected-apps-claude');
+  });
 });
