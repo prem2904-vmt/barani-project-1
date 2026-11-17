@@ -35,10 +35,9 @@ describe('Report design › Sending (WhatsApp Auto)', () => {
     const p = await renderLabPage(ReportSendingCardComponent, '/page', { providers: [provider] });
     const seen: boolean[] = [];
     p.cmp.savingChange.subscribe((v: boolean) => seen.push(v));
-    const rows = Array.from(p.el.querySelectorAll('.pf-rs__row'));
-    expect(rows.length).toBe(3);
-    for (const r of rows.slice(0, 2)) expect(r.lastElementChild!.getAttribute('role')).toBe('switch');
-    expect(text(rows[0].querySelector('.pf-rs__label'))).toBe('WhatsApp Auto');
+    const rows = Array.from(p.el.querySelectorAll('pf-setting-row'));
+    for (const r of rows.slice(0, 2)) expect(r.querySelector('.pf-srow__ctl [role="switch"]')).not.toBeNull();
+    expect(text(rows[0].querySelector('.pf-srow__label'))).toBe('WhatsApp Auto');
     p.el.querySelector<HTMLButtonElement>('[data-testid="rs-auto-switch"]')!.click();
     expect(seen).toEqual([true, false]);
     expect(p.el.querySelector('pf-hero-band, .pf-hb-btn--primary')).toBeNull();
