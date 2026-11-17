@@ -18,16 +18,17 @@ import { labDaysAgo, labToday } from '../../shared/utils/lab-clock';
 import { PATIENT_HIDDEN_NOTE, neuronAccess } from '../neuron/neuron-access';
 import { SheetEditorService, SheetOpenRequest } from '../neuron/sheet-editor.service';
 import { BROKEN_RESULTS_MESSAGE, TRUNCATED_NOTICE, resultsFileName, resultsProblem } from '../neuron/results-query';
-import { FilesBridge, FIT_COLUMNS, SavedFile, downloadBytes, filesFrameUrl, mimeForName, notThisKindMessage, withExtension } from './files-bridge';
+import { FilesBridge, FIT_COLUMNS, StartHome, SavedFile, downloadBytes, filesFrameUrl, mimeForName, notThisKindMessage, withExtension } from './files-bridge';
 import { FilesSaver, StoredRef } from './files-save';
 import { FileTarget, FilesDeviceService } from './files-device.service';
 import { FilesAccessService } from './files-access.service';
 import { FilesEngineService, engineMissingMessage } from './files-engine.service';
-import { FILES_APPS, FilesApp, bytesFit, filesAppForRoute, withAppExtension } from './files-registry';
+import { FILES_APPS, FILES_NAME, FilesApp, bytesFit, filesAppForRoute, withAppExtension } from './files-registry';
 import { OfficeFile, OfficeService, PhiSource, toApiError } from './office.service';
 import { phiLine, phiSourceWords } from './phi-words';
+import { FilesTemplate, START_ID, buildHome } from './files-start';
 
-interface Session { key: number; file: StoredRef; target: FileTarget; fromResults: boolean; phi: PhiSource[]; pendingPhi: string | null; /** How this file reached me when it was shared ("comment" opens it read-only but takes comments). */ shared: string | null; /** Open comments as the engine last reported them (sent with the next save). */ comments: number | null }
+interface Session { /** True while the app shows its OWN start screen (no file yet): no Save, no name. */ start?: boolean; key: number; file: StoredRef; target: FileTarget; fromResults: boolean; phi: PhiSource[]; pendingPhi: string | null; /** How this file reached me when it was shared ("comment" opens it read-only but takes comments). */ shared: string | null; /** Open comments as the engine last reported them (sent with the next save). */ comments: number | null }
 
 /**
  * The Files editor: ONE page that hosts every app's engine (Neuron, Synapse, Axon, Myelin, Retina) in a same-origin iframe, under one slim band.
@@ -48,6 +49,10 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
       <pf-hero-band [back]="true" [backAction]="closeFn" [slim]="true">
         <div band-center class="nr-center">
           @if (session(); as s) {
+            @if (s.start) {
+              <pf-files-logo [app]="app().id" [size]="22" />
+              <span class="nr-start-name" data-testid="files-start-name">{{ app().name }}</span>
+            } @else {
             @if (phone()) { <!-- a phone has no room for the name beside the lab's name: it sits in the row under the band --> } @else {
             @if (!phone()) { <pf-files-logo [app]="app().id" [size]="22" /> }
             @if (renaming()) {
@@ -73,10 +78,11 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
             }
             @if (!phone()) { <ng-container *ngTemplateOutlet="chipsTpl" /> }
             }
+            }
           }
         </div>
         <ng-container band-actions>
-          @if (session()) {
+          @if (session() && !isStart()) {
             @if (canInsert()) {
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="neuron-insert" [attr.aria-pressed]="insertOpen()" aria-label="Insert results" title="Insert results" (click)="toggleInsert()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
@@ -94,7 +100,7 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
         </ng-container>
       </pf-hero-band>
 
-      @if (phone() && session()) { <div class="nr-meta" data-testid="files-meta"><span class="nr-fname" data-testid="files-name-phone">{{ session()!.file.name }}</span><ng-container *ngTemplateOutlet="chipsTpl" /></div> }
+      @if (phone() && session() && !isStart()) { <div class="nr-meta" data-testid="files-meta"><span class="nr-fname" data-testid="files-name-phone">{{ session()!.file.name }}</span><ng-container *ngTemplateOutlet="chipsTpl" /></div> }
       @if (unavailable(); as u) {
         <div class="pf-empty nr-over nr-over--flow" role="alert" data-testid="files-unavailable">
           <p class="pf-empty__title">{{ u.title }}</p>
@@ -208,6 +214,7 @@ interface Session { key: number; file: StoredRef; target: FileTarget; fromResult
     :host { display: block; height: 100%; }
     .nr-center { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
     .nr-name { max-width: min(36vw, 360px); }
+    .nr-start-name { font-size: 15px; font-weight: 700; color: var(--text-primary); }
     .nr-name__t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .nr-name-input { height: 34px; min-width: 200px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border-primary, rgba(124,58,237,.4)); background: var(--card-bg, #fff); color: var(--text-primary); font: inherit; font-size: 14px; font-weight: 600; }
     .nr-name-input:focus-visible { outline: 2px solid var(--violet-500, #7c3aed); outline-offset: 1px; }
@@ -300,9 +307,11 @@ export class FilesEditorPage {
     if (!s || !s.file.id) return;
     this.shareTarget.set({ id: s.file.id, name: s.file.name, kind: this.app().kind, sizeBytes: 0, version: s.file.version ?? 1, updatedAt: '', updatedByName: null, containsPhi: s.phi.length > 0 });
   }
+  /** The app is showing its own start screen: no file yet, so nothing to save, rename or share. */
+  protected readonly isStart = computed(() => !!this.session()?.start);
   protected readonly unsaved = computed(() => {
     const s = this.session();
-    return !!s && this.canWrite() && (this.bridge.dirty() || this.pendingStore() || (s.file.id === null && s.fromResults));
+    return !!s && !s.start && this.canWrite() && (this.bridge.dirty() || this.pendingStore() || (s.file.id === null && s.fromResults));
   });
   protected readonly saveState = computed<'Saved' | 'Unsaved changes' | 'Saving…' | 'Not saved yet'>(() => {
     const s = this.session();
@@ -339,6 +348,11 @@ export class FilesEditorPage {
     this.bridge.onSave = f => { this.chain = this.chain.then(() => this.handleSaved(f)); };
     this.bridge.onRequest = (r, name) => { void (r === 'open' ? this.onOpenRequest() : this.onSaveAsRequest(name)); };
     this.bridge.onPhi = k => { void this.engineSaysPhi(k); };
+    this.bridge.onOpenRecent = id => { void this.openRecent(id); };
+    this.bridge.onNewFromTemplate = id => { void this.newFromTemplate(id); };
+    this.bridge.onStarted = () => this.leaveStart();
+    // The app's own unsaved-changes flag turning on means the person began a file from its start screen.
+    effect(() => { if (this.bridge.dirty() && untracked(() => this.isStart())) untracked(() => this.leaveStart()); });
     this.bridge.onComments = c => this.session.update(cur => (cur ? { ...cur, comments: c.open } : cur));
     effect(() => { this.bridge.attach(this.frameRef()?.nativeElement ?? null); });
     effect(() => { const mode = this.theme.mode(); if (this.bridge.state() === 'ready') untracked(() => this.bridge.setTheme(mode)); });
@@ -347,6 +361,62 @@ export class FilesEditorPage {
       this.api.get<{ id: string; name: string }[]>('/api/tests?view=summary&activeOnly=true')
         .subscribe({ next: t => this.tests.set((t ?? []).map(x => ({ id: x.id, name: x.name }))), error: () => undefined });
     }
+  }
+
+  // ───────────────────────── the app's own start screen (`/files/<kind>/start`) ─────────────────────────
+  /** Templates last sent to the engine (a tile's id must be one of these). */
+  private startTemplates: FilesTemplate[] = [];
+  private startRecentIds = new Set<string>();
+
+  /** Open the engine with NO file, so it shows its own start screen, and feed it this lab's Recent files of this kind and its templates. */
+  private async startScreen(): Promise<void> {
+    const app = this.app();
+    this.start({ id: null, name: withAppExtension(app, app.newName), version: null }, null, false);
+    this.session.update(cur => (cur ? { ...cur, start: true } : cur));
+    this.bridge.readonly = !this.canWrite();
+    await this.sendHome();
+  }
+
+  private async sendHome(): Promise<void> {
+    const app = this.app();
+    let files: OfficeFile[] = [];
+    try { files = await this.office.list(app.kind); } catch { files = []; }         // a failed list shows an empty Recent, never a broken screen
+    if (!this.session()?.start) return;
+    const { home, templates } = buildHome(app, files, this.files.settings?.() ?? null, { canCreate: this.canWrite(), placeName: this.auth.user()?.tenantName || 'Prefrontal' });
+    this.startTemplates = templates;
+    this.startRecentIds = new Set(home.recent.map(r => r.id));
+    this.bridge.setHome(home satisfies StartHome);
+  }
+
+  /** The person is done with the start screen (a file began): from here it is an ordinary new file. */
+  private leaveStart(): void {
+    if (!this.isStart()) return;
+    this.bridge.setHome(null);
+    this.session.update(cur => (cur ? { ...cur, start: false } : cur));
+  }
+
+  /** A Recent row on the start screen: open that stored file (the back chevron returns to the start screen). */
+  private async openRecent(id: string): Promise<void> {
+    if (!this.isStart() || !this.startRecentIds.has(id)) return;
+    await this.sheets.open({ app: this.app().id, source: FILES_NAME, fileId: id });
+  }
+
+  /** A template tile on the start screen: built-in = the engine builds it here; the lab's own = a copy of that stored file in a fresh editor. */
+  private async newFromTemplate(id: string): Promise<void> {
+    if (!this.isStart() || !this.canWrite()) return;
+    const t = this.startTemplates.find(x => x.id === id);
+    if (!t) return;
+    const app = this.app();
+    if (t.own) {
+      try {
+        const c = await this.office.content(t.own.fileId);
+        await this.applyRequest({ app: app.id, source: FILES_NAME, name: withAppExtension(app, t.name), bytes: c.bytes, copyOf: t.own.fileId });
+      } catch (e) { this.toast.error(toApiError(e).message); }
+      return;
+    }
+    this.leaveStart();
+    this.session.update(cur => (cur ? { ...cur, file: { ...cur.file, name: withAppExtension(app, t.name) } } : cur));
+    if (t.cmd) { const c = t.cmd; this.bridge.whenReady(() => this.bridge.runCommand(c.cmd, c.params)); }
   }
 
   // ───────────────────────── opening ─────────────────────────
@@ -359,6 +429,7 @@ export class FilesEditorPage {
       return;
     }
     const id = this.route.snapshot.paramMap.get('id') ?? 'new';
+    if (id === START_ID) { await this.startScreen(); return; }
     if (id !== 'new') { await this.openStored(id, this.sheets.take()); return; }
     const req = this.sheets.take();
     if (!req) {
@@ -462,7 +533,7 @@ export class FilesEditorPage {
   /** Ctrl/Cmd+S saves instead of the browser's "save page". */
   @HostListener('window:keydown', ['$event'])
   protected onKey(e: KeyboardEvent): void {
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's' && this.session() && this.canWrite()) {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's' && this.session() && !this.isStart() && this.canWrite()) {
       e.preventDefault();
       this.saveNow();
     }

@@ -12,6 +12,10 @@ import { FILES_APPS, FilesApp, bytesFit, filesApp, sniff } from './files-registr
  *   page → app   neuron:theme   {theme}              'light' | 'dark' | 'system' (follows the LMS toggle)
  *   page → app   neuron:readonly {readonly}          view-only for roles that cannot save
  *   app → page   neuron:failed {error}            the app could not start (no WebGL2 / WebGPU …)
+ *   page → app   neuron:home   {recent, templates, canCreate, canOpenDevice, placeName}   the app's START SCREEN data (see StartHome)
+ *   app → page   neuron:openRecent {id}              a Recent row was clicked on the start screen
+ *   app → page   neuron:newFromTemplate {id}         a template tile was clicked (id from home.templates)
+ *   app → page   neuron:started {}                   the app left its start screen into a new blank file on its own
  *
  * Rules: accept a message ONLY from the iframe's own window AND our own origin; never send non-xlsx bytes to the app
  * (it would open them as CSV text instead of failing).
@@ -21,8 +25,16 @@ export const messagesFor = (prefix: string) => ({
   ready: `${prefix}ready`, open: `${prefix}open`, save: `${prefix}save`,
   dirty: `${prefix}dirty`, failed: `${prefix}failed`, theme: `${prefix}theme`,
   readonly: `${prefix}readonly`,
+  home: `${prefix}home`, openRecent: `${prefix}openRecent`, newFromTemplate: `${prefix}newFromTemplate`, started: `${prefix}started`,
 }) as const;
 export type FilesTheme = 'light' | 'dark' | 'system';
+
+/** One row of an app's start screen "Recent": a stored file OF THIS APP'S KIND. `containsPhi` shows the patient-data shield. */
+export interface StartRecent { id: string; name: string; updatedAt: string; updatedByName: string | null; containsPhi: boolean }
+/** One template tile: built-in (the engine builds it) or the lab's own (a stored file copied on use). */
+export interface StartTemplate { id: string; name: string; source: 'builtin' | 'lab' }
+/** What the host tells an engine's start screen (`<prefix>home`); the engine renders Recent and templates from THIS, never from its local list. */
+export interface StartHome { recent: StartRecent[]; templates: StartTemplate[]; canCreate: boolean; canOpenDevice: boolean; placeName: string }
 
 export const ENGINE_FAILED_MESSAGE =
   "This computer can't show the editor because graphics acceleration is turned off. Try Chrome or Edge, or ask your IT person to turn on hardware acceleration.";
@@ -127,6 +139,12 @@ export class FilesBridge {
   onComments: (c: { count: number; open: number }) => void = () => undefined;
   /** The engine reports that patient data is in the document (`<prefix>phi {flag}`) or was pasted from a flagged file (`<prefix>phiPaste`). Sticky: only `true` / paste count. */
   onPhi: (kind: 'phi' | 'paste') => void = () => undefined;
+  /** The start screen's Recent row was clicked (`<prefix>openRecent {id}`). */
+  onOpenRecent: (id: string) => void = () => undefined;
+  /** A start-screen template tile was clicked (`<prefix>newFromTemplate {id}`). */
+  onNewFromTemplate: (id: string) => void = () => undefined;
+  /** The engine left its start screen into a new blank file by itself (`<prefix>started`). */
+  onStarted: () => void = () => undefined;
   /** True once the engine has sent any of its own File → Open / Save As requests: the page then knows it need not offer its own buttons. */
   readonly engineRoutesFiles = signal(false);
 
@@ -180,6 +198,11 @@ export class FilesBridge {
   /** Tell the engine whether this person may add comments while the document is read-only (`<prefix>canComment {allow}`: "Can comment" shares). */
   setCanComment(allow: boolean): void { this.canComment = allow; this.post({ type: `${this.app.prefix}canComment`, allow }); }
 
+  /** The start screen's data. Kept, and (re)sent whenever it changes and once the engine says `ready`. Never carries file contents. */
+  private home: StartHome | null = null;
+  setHome(h: StartHome | null): void { this.home = h; this.sendHome(); }
+  private sendHome(): void { if (this.home) this.post({ type: this.msg.home, ...this.home }); }
+
   /** View-only for a role that cannot save. */
   setReadonly(readonly: boolean): void { this.post({ type: this.msg.readonly, readonly }); }
   private post(m: Record<string, unknown>): void {
@@ -191,6 +214,7 @@ export class FilesBridge {
    *  is about to disappear. The new frame announces its own `ready`. */
   prepareNewFrame(): void {
     this.pending = null;
+    this.home = null;
     this.missing = null;
     this.readyWaiters = [];
     this.openProblem.set(null);
@@ -276,8 +300,18 @@ export class FilesBridge {
         this.state.set('ready');
         if (this.readonly !== null) this.setReadonly(this.readonly);
         if (this.canComment) this.setCanComment(true);
+        this.sendHome();
         this.flush();
         { const w = this.readyWaiters; this.readyWaiters = []; for (const fn of w) fn(); }
+        break;
+      case msg.openRecent:
+        if (typeof m['id'] === 'string' && m['id']) this.onOpenRecent(m['id'] as string);
+        break;
+      case msg.newFromTemplate:
+        if (typeof m['id'] === 'string' && m['id']) this.onNewFromTemplate(m['id'] as string);
+        break;
+      case msg.started:
+        this.onStarted();
         break;
       case `${this.app.prefix}openRequest`:
         this.engineRoutesFiles.set(true);

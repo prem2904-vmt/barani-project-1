@@ -83,7 +83,7 @@ describe('Files nav items', () => {
     expect(FILES_NAV).toMatchObject({ id: 'files', label: 'Files', href: '/files', iconPath: FILES_ICON });
     expect(FILES_NAV.logo).toBeUndefined();
     const n = filesAppNav(FILES_APPS[0]);
-    expect(n).toMatchObject({ id: 'files-neuron', label: 'Neuron', menuLabel: 'Neuron · sheets', logo: 'neuron', href: '/files?type=sheet' });
+    expect(n).toMatchObject({ id: 'files-neuron', label: 'Neuron', menuLabel: 'Neuron · sheets', logo: 'neuron', href: '/files/sheet/start' });
     expect(filesAppNav(FILES_APPS[3]).menuLabel).toBe('Myelin · PDFs');
     expect(filesAppNav(FILES_APPS[4]).menuLabel).toBe('Retina · images');
     expect(ALL_FILES_NAV_IDS).toEqual(['files', 'files-neuron', 'files-synapse', 'files-axon', 'files-myelin', 'files-retina']);
