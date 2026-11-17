@@ -44,7 +44,9 @@ import { listenForBridgeLinks } from '../../bridges/bridge-link';
          included; layout/shell/nav-insets.ts) — the old --pf-nav-h never
          existed, so the banner covered the docked bar's bell / avatar. */
       position: fixed; z-index: 64; right: 16px;
-      bottom: max(calc(var(--pf-nav-h, 0px) + 16px), calc(env(safe-area-inset-bottom, 0px) + 16px));
+      /* Above a Settings Save bar when one shows (--pf-savebar-clear, published by pf-settings-savebar). */
+      bottom: max(calc(var(--pf-nav-h, 0px) + 16px), calc(env(safe-area-inset-bottom, 0px) + 16px), var(--pf-savebar-clear, 0px));
+      transition: bottom 200ms ease;
       display: flex; align-items: center; gap: 12px; max-width: min(520px, calc(100vw - 32px));
       padding: 10px 12px; border-radius: var(--pf-radius, 14px);
       background: var(--pf-card-bg, #fff); border: 1px solid var(--pf-line, #e5e7eb); box-shadow: 0 10px 32px rgba(15, 23, 42, 0.18);

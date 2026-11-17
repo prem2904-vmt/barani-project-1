@@ -1,5 +1,20 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterRenderEffect, inject, input, output } from '@angular/core';
 import { BusyDirective } from '../../directives/busy.directive';
+
+/** Every Save bar on screen; the clearance floating things (the Bridge-nearby banner) keep above them. */
+const SHOWN = new Set<HTMLElement>();
+/** Publishes `--pf-savebar-clear` on <html>: the distance from the viewport's bottom to the top of the highest visible
+ *  Save bar (+8px), 0 when none shows. Floating banners add it to their bottom so they never cover Save / Discard. */
+export function publishSavebarClearance(): void {
+  if (typeof document === 'undefined') return;
+  let clear = 0;
+  for (const el of SHOWN) {
+    const r = el.getBoundingClientRect();
+    if (r.height > 0) clear = Math.max(clear, Math.round(window.innerHeight - r.top + 8));
+  }
+  document.documentElement.style.setProperty('--pf-savebar-clear', `${clear}px`);
+}
+
 
 /**
  * The Save of a settings card, IN the card (owner 2026-11-17: no button in the band's corner): a sticky bar at the
@@ -38,6 +53,23 @@ import { BusyDirective } from '../../directives/busy.directive';
   `],
 })
 export class SettingsSavebarComponent {
+  private readonly el = inject(ElementRef<HTMLElement>);
+  private readonly publish = afterRenderEffect(() => {
+    const on = this.dirty() || this.saving();
+    const bar = (this.el.nativeElement as HTMLElement).querySelector<HTMLElement>('.pf-ssb__bar');
+    if (on && bar) SHOWN.add(bar); else for (const b of [...SHOWN]) if (!b.isConnected || this.el.nativeElement.contains(b)) SHOWN.delete(b);
+    publishSavebarClearance();
+  });
+  private readonly cleanup = (() => {
+    const onResize = () => publishSavebarClearance();
+    if (typeof window !== 'undefined') window.addEventListener('resize', onResize);
+    inject(DestroyRef).onDestroy(() => {
+      for (const b of [...SHOWN]) if (this.el.nativeElement.contains(b) || !b.isConnected) SHOWN.delete(b);
+      publishSavebarClearance();
+      if (typeof window !== 'undefined') window.removeEventListener('resize', onResize);
+    });
+  })();
+
   readonly dirty = input(false);
   readonly saving = input(false);
   readonly canSave = input(true);

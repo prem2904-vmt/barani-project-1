@@ -223,8 +223,8 @@ test.describe('settings list grids', () => {
     // Save lives in the card's Save bar (shown once something changed).
     await expect(vis(page, '.re-main [data-testid="role-save"]')).toBeVisible();
     await shot(page, 'sg-role-editor-dirty');
-    // (dispatched: the floating "Bridge nearby" banner can sit over the card's bottom-right corner)
-    await vis(page, '.re-main [data-testid="role-save"]').dispatchEvent('click');
+    // A normal click: the floating "Bridge nearby" banner keeps above the Save bar (--pf-savebar-clear).
+    await vis(page, '.re-main [data-testid="role-save"]').click();
     await expect.poll(() => neg.calls.find(c => c.path === '/api/roles/r2/permissions')?.body)
       .toEqual({ permissionIds: ['p1', 'p4', 'p11'] });
     expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
