@@ -10,12 +10,12 @@ import { REFUND_CHOICES } from './frontdesk/visit-detail.page';
  * the desk's refund choices (credit notes).
  */
 describe('OPD integration contracts', () => {
-  it('/admin/opd/drugs forwards to the ONE drug master (pharmacy settings → Drug master tab)', () => {
+  it('/admin/opd/drugs forwards to the ONE drug master (Settings → Pharmacy → Drug master)', () => {
     const navigate = vi.fn(async () => true);
     TestBed.configureTestingModule({ imports: [OpdDrugMasterPage], providers: [{ provide: Router, useValue: { navigate } }] });
     TestBed.createComponent(OpdDrugMasterPage);
-    expect(navigate).toHaveBeenCalledWith(['/admin/opd/pharmacy'], { queryParams: { tab: 'drugs' }, replaceUrl: true });
-    expect(DRUG_MASTER_URL.queryParams.tab).toBe('drugs');
+    expect(navigate).toHaveBeenCalledWith(['/admin/pharmacy/drugs'], { queryParams: {}, replaceUrl: true });
+    expect(DRUG_MASTER_URL.path[0]).toBe('/admin/pharmacy/drugs');
   });
 
   it('workflow defaults carry the private-notes visibility the consult reads (doctor only)', () => {

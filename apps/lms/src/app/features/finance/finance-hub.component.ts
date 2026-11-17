@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { ToastService } from '../../core/services/toast.service';
 import { DatePipe } from '@angular/common';
@@ -54,7 +55,7 @@ interface FinanceSummary {
 @Component({
   selector: 'pf-finance-hub',
   standalone: true,
-  imports: [SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent, PfDateComponent],
+  imports: [RouterLink, SkeletonRowsComponent, SkeletonTableComponent, SkeletonTilesComponent, FormsModule, DatePipe, CurrencyInrPipe, WalletOutstandingPipe, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SegmentedComponent, PfDateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-fin pf-band-page">
@@ -208,6 +209,12 @@ interface FinanceSummary {
             <pf-touch-btn size="sm" variant="secondary" (pressed)="exportWallets()">Download CSV</pf-touch-btn>
           }
         </div>
+
+        <!-- Credit accounts: the money actions (top up, record a payment, email a statement, history) live on their own
+             Finance page; setting an account up (name, GSTIN, opening settlement, alert threshold) is in Settings. -->
+        <p class="pf-fin__sub" data-testid="fin-credit-link">
+          <a routerLink="/finance/credit-accounts">Top up, record a payment or email a statement</a>
+        </p>
 
         @if (vendorsLoading()) {
           <pf-skeleton-rows [rows]="3" [avatar]="false" [dense]="true" label="Loading partners…"></pf-skeleton-rows>

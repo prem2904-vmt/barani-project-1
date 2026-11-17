@@ -7,9 +7,13 @@ import {
   computed,
   effect,
   inject,
+  input,
   signal,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { RouterLink } from "@angular/router";
+import { OrgProfileService } from "../org/org-profile.service";
+import { bankDetailsLine } from "../org/bank-details";
 import { DomSanitizer, SafeResourceUrl } from "@angular/platform-browser";
 import { ApiService } from "../../../core/services/api.service";
 import { ToastService } from "../../../core/services/toast.service";
@@ -33,7 +37,6 @@ import {
   PfSelectOption,
 } from "../../../shared/primitives/select.component";
 import { TouchButtonComponent } from "../../../shared/primitives/touch-button.component";
-import { ImageUploadComponent } from "../report-template/image-upload.component";
 import { environment } from "../../../../environments/environment";
 import { ThemeService } from "../../../core/services/theme.service";
 import { HeroBandComponent } from "../../../shared/components/hero-band/hero-band.component";
@@ -77,14 +80,13 @@ interface GstRow {
 @Component({
   selector: "pf-billing-config",
   standalone: true,
-  imports: [SkeletonFormComponent, BusyDirective, 
+  imports: [SkeletonFormComponent, BusyDirective, RouterLink,
     FormsModule,
     NumberInputComponent,
     ScreenHeaderComponent,
     SegmentedComponent,
     SelectComponent,
     TouchButtonComponent,
-    ImageUploadComponent,
     HeroBandComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -95,6 +97,7 @@ interface GstRow {
              (tabs-only pill); Save rides the band. -->
         <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-tools>
+            @if (!section()) {
             <pf-segmented
               class="pf-hb-tabs"
               size="sm"
@@ -102,6 +105,7 @@ interface GstRow {
               [value]="tab()"
               (valueChange)="setTab($event)"
             ></pf-segmented>
+            }
           </ng-container>
           <ng-container band-actions>
             <button
@@ -181,7 +185,7 @@ interface GstRow {
             <pf-skeleton-form [fields]="8" [cols]="2" label="Loading billing config…"></pf-skeleton-form>
           </div></section>
         } @else {
-        @if (!hosted) {
+        @if (!hosted && !section()) {
         <div class="mb-5 pf-classic-only">
           <pf-segmented
             [options]="tabOptions"
@@ -330,7 +334,7 @@ interface GstRow {
           </div>
         }
 
-        @if (tab() === "discounts") {
+        @if (tab() === "discounts" || section() === "gst") {
           <div class="pf-bc-card">
             <div
               class="flex items-center justify-between pb-4 mb-4"
@@ -648,14 +652,11 @@ interface GstRow {
                 }
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label class="pf-label">Lab name</label
-                    ><input
-                      class="pf-input"
-                      [ngModel]="tpl().labName"
-                      (ngModelChange)="patchTpl({ labName: $event })"
-                      placeholder="Prefrontal Lab"
-                    />
+                  <div data-testid="bc-name-ro">
+                    <!-- The lab name is set ONCE in Organization profile (Settings re-home); read-only here. -->
+                    <span class="pf-label">Lab name</span>
+                    <p class="pf-bc-gstin-ro">{{ effectiveTpl().labName || "Prefrontal Lab" }}</p>
+                    <a class="pf-bc-gstin-link" routerLink="/admin/org/profile">Change in Organization profile</a>
                   </div>
                   <div>
                     <!-- GSTIN is not a template field: every invoice prints its
@@ -729,17 +730,9 @@ interface GstRow {
                     />
                   </div>
                   <div class="col-span-1 sm:col-span-2">
-                    <label class="pf-label">Logo — upload or paste a URL</label>
-                    <pf-image-upload
-                      [url]="tpl().logoUrl"
-                      (urlChange)="patchTpl({ logoUrl: $event })"
-                    ></pf-image-upload>
-                    <input
-                      class="pf-input mt-2"
-                      [ngModel]="tpl().logoUrl"
-                      (ngModelChange)="patchTpl({ logoUrl: $event })"
-                      placeholder="https://…/logo.png  (or upload above)"
-                    />
+                    <span class="pf-label">Logo</span>
+                    <p class="pf-bc-gstin-ro" data-testid="bc-logo-ro">{{ effectiveTpl().logoUrl ? "The organization logo prints on the bill." : "No logo set." }}</p>
+                    <a class="pf-bc-gstin-link" routerLink="/admin/org/profile">Change in Organization profile</a>
                   </div>
                   <div>
                     <label class="pf-label">Jurisdiction</label
@@ -751,13 +744,10 @@ interface GstRow {
                     />
                   </div>
                   <div class="col-span-1 sm:col-span-2">
-                    <label class="pf-label">Bank details</label
-                    ><input
-                      class="pf-input"
-                      [ngModel]="tpl().bankDetails"
-                      (ngModelChange)="patchTpl({ bankDetails: $event })"
-                      placeholder="A/c · IFSC · Bank"
-                    />
+                    <!-- ONE bank-details source: the Bank account card above. The bill prints it from there. -->
+                    <span class="pf-label">Bank details</span>
+                    <p class="pf-bc-gstin-ro" data-testid="bc-bank-ro">{{ effectiveTpl().bankDetails || "No bank account set yet" }}</p>
+                    <span class="pf-bc-gstin-note">Printed from the Bank account card above.</span>
                   </div>
                   <div class="col-span-1 sm:col-span-2">
                     <label class="pf-label">Declaration</label
@@ -962,6 +952,7 @@ interface GstRow {
         box-shadow: var(--pf-shadow-sm);
       }
       .pf-bc-hint { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
+      .pf-bc-gstin-note { display: block; margin-top: 4px; font-size: 12px; color: var(--text-tertiary); }
       .pf-bc-gstin-ro { margin: 6px 0 0; font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; }
       .pf-bc-gstin-br { color: var(--text-muted); font-size: 12px; }
       .pf-bc-gstin-link {
@@ -1104,7 +1095,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   private readonly _tab = signal<Tab>("gst");
   readonly tab = this._tab.asReadonly();
   protected readonly hosted = injectSettingsHosted();
-  private readonly followTab = bindTabQuery(['gst', 'discounts', 'invoice'] as const, (t) => this._tab.set(t));
+  private readonly followTab = bindTabQuery(['gst', 'discounts', 'invoice'] as const, (t) => { if (!this.section()) this._tab.set(t); });
   setTab(t: Tab) {
     this._tab.set(t);
     if (t === "invoice" && !this.invoicePreviewUrl())
@@ -1191,6 +1182,28 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   private readonly _tpl = signal<any>({ ...this.TPL_DEFAULTS });
   readonly tpl = this._tpl.asReadonly();
   readonly savingTpl = signal(false);
+
+  /** Settings re-home: the bill's name + logo come from Organization profile (read-only here) and its bank details
+   *  from the structured Bank account card (one source). The legacy free-text bank details stay as a fallback until
+   *  the card is filled, so a lab that only used the old field never loses what its bills print. */
+  private readonly orgProfile = inject(OrgProfileService);
+  readonly effectiveTpl = computed(() => {
+    const t = this._tpl();
+    return {
+      ...t,
+      labName: this.orgProfile.name() || t.labName,
+      logoUrl: this.orgProfile.logoUrl() || t.logoUrl,
+      bankDetails: bankDetailsLine(this._config()) || t.bankDetails || "",
+    };
+  });
+
+  /** `/admin/billing` pins one section (the Settings left panel is the switch): `gst` = GST AND Discounts, `invoice`.
+   *  Unset = the old three-tab page (GST Setup / Discounts / Invoice). */
+  readonly section = input<"gst" | "invoice" | null>(null);
+  private readonly pinSection = effect(() => {
+    const s = this.section();
+    if (s && this._tab() !== s) this.setTab(s);
+  });
   readonly templateStyles: Array<{
     value: InvoiceTemplateStyle;
     label: string;
@@ -1214,7 +1227,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   }
   saveTpl() {
     this.savingTpl.set(true);
-    this.api.post("/api/config/invoice-template", this._tpl()).subscribe({
+    this.api.post("/api/config/invoice-template", this.effectiveTpl()).subscribe({
       next: () => {
         this.savingTpl.set(false);
         this.toasts.success("Letterhead saved");
@@ -1237,7 +1250,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   constructor() {
     // Re-render the preview (debounced) whenever the template or mode changes.
     effect(() => {
-      const t = this._tpl();
+      const t = this.effectiveTpl();
       const mode = this.previewMode();
       if (this._tab() !== "invoice") return;
       void t;
@@ -1282,7 +1295,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   }
 
   private async renderInvoicePreview() {
-    const t = this._tpl();
+    const t = this.effectiveTpl();
     const taxMode = this.previewMode() === "tax_invoice";
     const { bill, order } = this.sampleBill(taxMode);
     const logoDataUrl =
@@ -1444,6 +1457,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
+    this.orgProfile.ensureLoaded();
     this.destroyRef.onDestroy(() => this.configHold.cancel());
     this.loadConfig(() => this.configHold.done());
     this.api.get<any>("/api/config/invoice-template").subscribe({
@@ -1530,6 +1544,16 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   readonly configSkeleton = this.configHold.active;
   private readonly destroyRef = inject(DestroyRef);
 
+  /** The bank-account card is the one source; the bill reads one printed line, so a changed card re-posts the bill
+   *  template with the line derived from it (same API, same payload shape — only bankDetails differs). */
+  private syncBankDetails(line: string) {
+    if (!line || line === (this._tpl().bankDetails ?? "")) return;
+    this.patchTpl({ bankDetails: line });
+    this.api.post("/api/config/invoice-template", { ...this.effectiveTpl(), bankDetails: line }).subscribe({
+      error: (e) => this.toasts.error(ApiError.from(e).message),
+    });
+  }
+
   saveConfig() {
     if (this.savingConfig()) return;
     const c = this._config();
@@ -1554,7 +1578,11 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
       })
       .pipe(busyWhile(this.savingConfig))
       .subscribe({
-        next: () => { this.toasts.success("Billing config saved"); this.loadConfig(); },
+        next: () => {
+          this.toasts.success("Billing config saved");
+          this.loadConfig();
+          this.syncBankDetails(bankDetailsLine(c));
+        },
         error: (e) => this.toasts.error(ApiError.from(e).message),
       });
   }

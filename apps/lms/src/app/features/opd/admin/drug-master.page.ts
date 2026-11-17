@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router } from '@angular/router';
 
 /** Where the ONE drug master lives (Agent D): the pharmacy settings' Drug master tab. */
-export const DRUG_MASTER_URL = { path: ['/admin/opd/pharmacy'], queryParams: { tab: 'drugs' } } as const;
+export const DRUG_MASTER_URL = { path: ['/admin/pharmacy/drugs'], queryParams: {} } as const;
 
 /**
  * `/admin/opd/drugs` (OPD Master hub → "Drug master & stock"). Integrator: the

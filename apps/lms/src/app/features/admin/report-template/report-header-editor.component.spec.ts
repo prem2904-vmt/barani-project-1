@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { vi } from 'vitest';
 import { ReportHeaderEditorComponent } from './report-header-editor.component';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -27,6 +28,7 @@ const BASE: ReportTemplate = {
 function make(t: Partial<ReportTemplate> = {}, region: 'header' | 'footer' = 'header') {
   const dialog = { confirm: vi.fn(async () => true), choose: vi.fn(async () => 'fresh') };
   TestBed.configureTestingModule({ providers: [
+    provideRouter([]),
     { provide: DialogService, useValue: dialog },
     { provide: HttpClient, useValue: {} },
     { provide: PlatformService, useValue: { getApiUrl: () => '' } },
@@ -377,5 +379,38 @@ describe('Report designer — letterhead editor', () => {
     expect(p.dialog.confirm).toHaveBeenCalled();
     expect(p.cfg()!.backgrounds).toBeUndefined();
     expect(p.c.selected()).toBeNull();
+  });
+});
+
+describe('Report designer — name and logo come from Organization profile (read-only)', () => {
+  it('the lab name is shown as text with a link to the profile, never an input', () => {
+    const p = make();
+    p.c.select('name');
+    p.f.detectChanges();
+    const ro = p.el.querySelector('[data-testid="rhe-name-ro"]')!;
+    expect(ro.textContent).toContain('Micro World Diagnostics');
+    expect(ro.querySelector('a')!.getAttribute('href')).toBe('/admin/org/profile');
+    expect(ro.querySelector('input, textarea')).toBeNull();
+    // The tagline stays editable on the letterhead (it is letterhead-only).
+    p.c.select('tagline');
+    p.f.detectChanges();
+    expect(p.el.querySelector('input.pf-input')).not.toBeNull();
+  });
+
+  it('the logo has no uploader; it links to the profile and the logo on/off switch stays', () => {
+    const p = make({ logoUrl: '/uploads/a.png' });
+    p.c.select('logo');
+    p.f.detectChanges();
+    expect(p.el.querySelector('pf-image-upload')).toBeNull();
+    expect(p.el.querySelector('[data-testid="rhe-logo-ro"]')).not.toBeNull();
+    expect(p.el.textContent).toContain('Change in Organization profile');
+    expect(p.el.querySelector('button[role="switch"][aria-label="Print Logo"]')).not.toBeNull();
+  });
+
+  it('NABL badge upload and number are still letterhead-owned', () => {
+    const p = make({ nablAccredited: true });
+    p.c.select('nabl');
+    p.f.detectChanges();
+    expect(p.el.querySelector('pf-image-upload')).not.toBeNull();
   });
 });

@@ -72,6 +72,8 @@ export const PAYMENT_GATE_OPTIONS: ReadonlyArray<{ value: PaymentGateStage; labe
           </div>
         </section>
       }
+    } @else {
+      <p class="pf-pr__hint" data-testid="pr-denied">Payment rules are changed by billing and organization admins.</p>
     }
   `,
   styles: [`

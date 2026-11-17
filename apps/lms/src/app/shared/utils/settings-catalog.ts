@@ -159,8 +159,8 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   pg('OPD workflow', P.opdWorkflow, I.process, ['opd steps', 'stations', 'payment point', 'queue token'], { requires: 'opd' }),
   pg('Follow-up policy', P.opdSettings, I.casesheet, ['follow up', 'opd settings'], { requires: 'opd' }),
   pg('OPD front desk', P.opdFrontDesk, I.desk, ['opd appointments', 'booking slots'], { requires: 'opd' }),
-  pg('OPD alerts', P.opdAlerts, I.bell, ['opd notifications'], { requires: 'opd' }),
-  pg('Numbers on OPD screens', P.opdNumbers, I.kpi, ['opd kpi cards'], { requires: 'opd' }),
+  st('OPD referring doctors and hospitals', P.opdFrontDesk, I.partners, ['opd referring', 'referrer'], { tab: 'referring' }, { requires: 'opd' }),
+  st('OPD alerts', P.opdFrontDesk, I.bell, ['opd notifications'], { tab: 'alerts' }, { requires: 'opd' }),
 
   // ── Pharmacy ──
   pg('Pharmacy settings', P.pharmacy, I.pill, ['batch picking', 'walk-in bills', 'schedule h', 'schedule h1', 'schedule x'], { requires: 'pharmacy' }),
@@ -177,10 +177,10 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   st('Enable inventory', P.inventory, I.inventory, ['stock deduction', 'inventory on or off'], undefined, { module: 'inventory' }),
 
   // ── Organization ──
-  pg('Name and logo', P.orgProfile, I.person, ['organisation', 'company', 'organization profile'], {}, { tab: 'identity' }),
-  st('Organization name', P.orgProfile, I.person, ['lab name', 'company name', 'display name'], { tab: 'identity' }),
-  st('Organization login handle', P.orgProfile, I.person, ['slug', 'sign in name', 'tenant handle'], { tab: 'identity' }),
-  pg('Logo and top bar', P.orgBranding, I.branding, ['branding', 'tenant branding', 'logo', 'top bar', 'short name', 'brand']),
+  pg('Name and logo', P.orgProfile, I.person, ['organisation', 'company', 'organization profile']),
+  st('Organization name', P.orgProfile, I.person, ['lab name', 'company name', 'display name']),
+  st('Organization login handle', P.orgProfile, I.person, ['slug', 'sign in name', 'tenant handle']),
+  st('Logo and top bar', P.orgProfile, I.branding, ['branding', 'tenant branding', 'logo', 'top bar', 'short name', 'brand', 'report letterhead name', 'bill letterhead name']),
   pg('Branches', P.branches, I.branches, ['branch', 'new branch', 'gstin per branch', 'deactivate']),
   pg('Patient and order numbers', P.orgNumbers, I.id, ['id format', 'numbers'], {}, { tab: 'patient' }),
   st('Patient ID format', P.orgNumbers, I.id, ['mrn', 'uhid', 'patient number', 'registration number'], { tab: 'patient' }),
@@ -194,7 +194,7 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   st('Letterhead & document type', P.billing, I.billing, ['invoice letterhead', 'bill format'], { tab: 'invoice' }),
   st('Require full payment to progress', P.billing, I.billing, ['payment gate', 'unpaid balance', 'payment rules'], { tab: 'payments' }, { perms: PAYMENT_RULE_PERMS }),
   st('Show "Payments due" tab', P.billing, I.billing, ['payments due', 'outstanding balance'], { tab: 'payments' }, { perms: PAYMENT_RULE_PERMS }),
-  pg('Credit accounts', P.vendors, I.vendors, ['vendor', 'vendor wallets', 'credit', 'wallet', 'b2b', 'top up', 'vendor credit wallets']),
+  st('Credit accounts', P.billing, I.vendors, ['vendor', 'vendor wallets', 'credit', 'wallet', 'b2b', 'opening balance', 'alert threshold', 'vendor credit wallets'], { tab: 'credit' }),
   pg('Cortex connectors', P.aiConnectors, I.connectors, ['mcp', 'claude', 'connector', 'ai connectors', 'connected apps'], { beta: 'mcp' }),
 
   // Message channels (WhatsApp, Email, SMS): ONE set of accounts for the organization.

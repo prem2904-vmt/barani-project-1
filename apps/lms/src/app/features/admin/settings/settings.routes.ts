@@ -69,10 +69,9 @@ const notifications = () => import('../notifications-config/notifications-config
 const processBuilder = () => import('../process-builder/process-builder.component').then((m) => m.ProcessBuilderComponent);
 const workflowBuilder = () => import('../workflow-builder/workflow-builder.component').then((m) => m.WorkflowBuilderComponent);
 const inventory = () => import('../inventory/inventory.component').then((m) => m.InventoryComponent);
-const setup = () => import('../setup-wizard/setup-wizard.component').then((m) => m.SetupWizardComponent);
+const orgProfile = () => import('../org/org-profile.page').then((m) => m.OrgProfilePage);
 const users = () => import('../users-access/users-access.component').then((m) => m.UsersAccessComponent);
-const billing = () => import('../billing-config/billing-config.component').then((m) => m.BillingConfigComponent);
-const vendors = () => import('../vendors/vendors.component').then((m) => m.VendorsComponent);
+const billing = () => import('../billing-config/billing-settings.page').then((m) => m.BillingSettingsPage);
 const aiConnectors = () => import('../../ai-connector/ai-connectors-settings.page').then((m) => m.AiConnectorsSettingsPage);
 const channels = () => import('../communication/communication-settings.page').then((m) => m.CommunicationSettingsPage);
 const files = () => import('../../files/files-settings.page').then((m) => m.FilesSettingsPage);
@@ -117,21 +116,19 @@ export const SETTINGS_SHELL_CHILDREN: Routes = [
 
   // ── IPD ──
   ...SHELL_HOSTED_SHEET_PATHS.map((p) => sheetRoute(p)),
-  { path: strip(P.ipdAlerts), canActivate: [casesheetGuard, ...routeGuards(P.ipdAlerts)], loadComponent: notifications },
+  { path: strip(P.ipdAlerts), canActivate: [casesheetGuard, ...routeGuards(P.ipdAlerts)], data: { department: 'ipd' }, loadComponent: notifications },
 
   // ── Inventory ──
   page(P.inventory, inventory),
 
   // ── Organization ──
-  page(P.orgProfile, organization),                                   // placeholder: Organization › Identity tab
-  page(P.orgBranding, setup),                                         // Logo + top-bar name (was /setup)
+  page(P.orgProfile, orgProfile),
   page(P.branches, branches),
-  page(P.orgNumbers, organization),                                   // placeholder: Organization › Patient / Order ID tabs
+  page(P.orgNumbers, organization, { data: { orgTabs: ['patient', 'order'] } }),
   page(P.users, users),
   page(P.billing, billing),
-  page(P.vendors, vendors),
   page(P.aiConnectors, aiConnectors, { before: [betaGuard('mcp')] }),
-  page(P.orgChannels, channels),                                      // placeholder: Communication
+  page(P.orgChannels, channels),
   page(P.files, files, { before: [betaGuard('neuron')] }),
 ];
 
@@ -183,6 +180,8 @@ export const SETTINGS_REDIRECTS: Routes = [
   moved('/admin/home-collection'),
   moved('/admin/partners'),
   moved('/setup'),
+  moved('/admin/org/profile/branding'),
+  moved('/admin/vendors'),
   moved('/admin/opd/pharmacy'),
   moved('/admin/opd/drugs'),
   toOverview('/admin/opd', 'opd'),

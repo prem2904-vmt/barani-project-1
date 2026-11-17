@@ -1,5 +1,6 @@
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -98,6 +99,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
             </span>
           </ng-container>
           <ng-container band-actions>
+            @if (showSetup()) {
             <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!newVendorOpen()"
                     [class.pf-hb-btn--ghost]="newVendorOpen()" (click)="toggleNewVendor()"
                     [attr.aria-label]="newVendorOpen() ? 'Cancel new vendor' : 'Add vendor'">
@@ -110,6 +112,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
               }
               {{ newVendorOpen() ? 'Cancel' : 'Add vendor' }}
             </button>
+            }
           </ng-container>
         </pf-hero-band>
       }
@@ -117,7 +120,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
         eyebrow="Admin"
         title="Vendor Credit Wallets"
         subtitle="Pre-loaded credit accounts for partner hospitals & aggregators. Reception charges bills against these wallets from the billing screen.">
-        <pf-touch-btn actions size="sm" variant="primary" (pressed)="toggleNewVendor()">
+        <pf-touch-btn actions size="sm" variant="primary" (pressed)="toggleNewVendor()" [style.display]="showSetup() ? null : 'none'">
           <span icon-left aria-hidden="true">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 5v14M5 12h14"/>
@@ -128,7 +131,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
       </pf-screen-header>
 
       <div class="pf-band-body">
-      @if (newVendorOpen()) {
+      @if (newVendorOpen() && showSetup()) {
         <section class="pf-card pf-anim-in pf-vn-new" aria-label="New vendor">
           <div class="pf-card__head">
             <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7H5a2 2 0 0 1 0-4h13v4M3 5v14a2 2 0 0 0 2 2h16V7H5a2 2 0 0 1-2-2ZM17 14h.01"/></svg></span>
@@ -234,14 +237,18 @@ const EMPTY_DRAFT: NewVendorDraft = {
 
               <div class="pf-vendor__actions">
                 <!-- Row actions: text on web, icons on touch (never a gradient). -->
+                @if (showMoney()) {
                 <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="openTopUp(v)" aria-label="Top up" title="Top up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="pf-rowact__t">Top up</span></button>
                 <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="openPayment(v)" aria-label="Record payment" title="Record payment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span class="pf-rowact__t">Record payment</span></button>
                 <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="emailStatement(v)" [disabled]="emailingId() === v.id"
                         [attr.aria-label]="emailingId() === v.id ? 'Sending statement' : 'Email statement'" title="Email statement"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span class="pf-rowact__t">{{ emailingId() === v.id ? 'Sending…' : 'Email statement' }}</span></button>
                 <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="toggleTransactions(v.id)" [attr.aria-expanded]="openTxnsId() === v.id"
                         [attr.aria-label]="openTxnsId() === v.id ? 'Hide history' : 'View history'" [title]="openTxnsId() === v.id ? 'Hide history' : 'View history'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg><span class="pf-rowact__t">{{ openTxnsId() === v.id ? 'Hide history' : 'View history' }}</span></button>
+                }
+                @if (showSetup()) {
                 <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="toggleActive(v)"
                         [attr.aria-label]="v.isActive ? 'Deactivate' : 'Reactivate'" [title]="v.isActive ? 'Deactivate' : 'Reactivate'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="pf-rowact__t">{{ v.isActive ? 'Deactivate' : 'Reactivate' }}</span></button>
+                }
               </div>
 
               @if (topUpVendorId() === v.id) {
@@ -564,6 +571,16 @@ export class VendorsComponent implements OnInit {
 
   protected readonly vendors = signal<VendorRow[]>([]);
   protected readonly theme = inject(ThemeService);
+  /** Settings re-home splits one screen in two: `/admin/billing?tab=credit` is SETUP (add / deactivate a credit
+   *  account: name, code, contact, GSTIN, address, opening settlement, alert threshold); `/finance/credit-accounts`
+   *  is the MONEY side (top up, record a payment, email a statement, history). The old `/admin/vendors` (no route
+   *  data) shows both, as before. Same APIs either way. */
+  /** Embedded use (Settings → Billing → Credit accounts) pins the view with this input; a route can pin it with data. */
+  readonly view = input<'setup' | 'money' | null>(null);
+  private readonly routeView = (inject(ActivatedRoute, { optional: true })?.snapshot.data?.['creditView'] as 'setup' | 'money' | undefined) ?? 'all';
+  private readonly creditView = computed(() => this.view() ?? this.routeView);
+  readonly showSetup = computed(() => this.creditView() !== 'money');
+  readonly showMoney = computed(() => this.creditView() !== 'setup');
   /** Row actions: text on web, icon on touch (PF-PATTERN). */
   protected readonly web = webPointerSignal();
 

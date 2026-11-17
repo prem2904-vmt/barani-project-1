@@ -268,6 +268,7 @@ export const appRoutes: Route[] = withAppModes([
         canActivate: [permissionGuard('manage_workflows')],
         loadComponent: () => import('./features/admin/workflow-builder/field-editor.component').then(m => m.FieldEditorComponent)
       },
+      // Top-bar branding (name, logo, mode) is part of the ONE Organization profile now; the old URL keeps working.
       {
         path: 'admin/audit',
         canActivate: [...routeGuards('/admin/audit')],
@@ -552,6 +553,14 @@ export const appRoutes: Route[] = withAppModes([
         path: 'finance/daily',
         canActivate: [...routeGuards('/finance/daily')],
         loadComponent: () => import('./features/finance/daily-statement.component').then(m => m.DailyStatementComponent)
+      },
+      {
+        // Credit accounts — the money actions (top up, record a payment, email a statement, history). The account
+        // SETUP is in Settings › Billing and taxes › Credit accounts (`/admin/billing?tab=credit`).
+        path: 'finance/credit-accounts',
+        canActivate: [...routeGuards('/finance/credit-accounts')],
+        data: { creditView: 'money' },
+        loadComponent: () => import('./features/admin/vendors/vendors.component').then(m => m.VendorsComponent)
       },
       {
         // Expenses — a PRIMARY everyday screen (main nav): My expenses,

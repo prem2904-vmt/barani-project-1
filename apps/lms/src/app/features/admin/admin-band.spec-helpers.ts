@@ -49,7 +49,7 @@ export function renderBandPage(cmp: Type<unknown>, opts: {
           waitForAuth: async () => undefined,
         },
       },
-      { provide: TenantStateService, useValue: { tenant: () => null } },
+      { provide: TenantStateService, useValue: { tenant: () => null, ensureLoaded: () => undefined, update: () => undefined } },
       ...((opts.providers ?? []) as any[]),
     ],
   });

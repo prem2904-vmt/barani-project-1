@@ -60,6 +60,22 @@ export interface SettingsSectionDef {
   items: readonly SettingsItem[];
 }
 
+/**
+ * Categories of pages built as one host with `?tab=` views (the pages re-export these; kept here so the map stays
+ * pure data and never pulls a page into the bundle that imports it).
+ */
+export const BILLING_SECTIONS = [
+  { id: 'gst', label: 'GST and discounts' },
+  { id: 'invoice', label: 'Invoices and bill design' },
+  { id: 'payments', label: 'Payment rules' },
+  { id: 'credit', label: 'Credit accounts' },
+] as const;
+export const OPD_FRONT_DESK_SECTIONS = [
+  { id: 'appointments', label: 'Appointments and booking' },
+  { id: 'referring', label: 'Referring doctors and hospitals' },
+  { id: 'alerts', label: 'OPD alerts' },
+] as const;
+
 export const SETTINGS_GROUPS = [
   { key: 'departments', heading: 'Departments' },
   { key: 'organization', heading: 'Organization' },
@@ -127,9 +143,6 @@ export const SETTINGS_PATHS = {
   opdWorkflow: '/admin/opd/workflow',
   opdSettings: '/admin/opd/settings',
   opdFrontDesk: '/admin/opd/front-desk',
-  opdReferring: '/admin/opd/front-desk/referring',
-  opdAlerts: '/admin/opd/alerts',
-  opdNumbers: '/admin/opd/numbers',
   // Pharmacy
   pharmacy: '/admin/pharmacy',
   pharmacyDrugs: '/admin/pharmacy/drugs',
@@ -142,7 +155,6 @@ export const SETTINGS_PATHS = {
   inventory: '/admin/inventory',
   // Organization
   orgProfile: '/admin/org/profile',
-  orgBranding: '/admin/org/profile/branding',
   branches: '/admin/branches',
   orgNumbers: '/admin/org/numbers',
   users: '/admin/users',
@@ -248,14 +260,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
         ] },
       { id: 'opd-front-desk', label: 'OPD front desk, alerts and numbers', path: P.opdFrontDesk, iconPath: ICON.desk, requires: 'opd',
         blurb: 'OPD appointments and booking, referring doctors, alerts and number cards.',
-        categories: [
-          { id: 'mode', label: 'Queue mode', query: { tab: 'mode' } },
-          { id: 'slots', label: 'Booking slots', query: { tab: 'slots' } },
-          { id: 'priority', label: 'Priority engine', query: { tab: 'priority' } },
-          { id: 'referring', label: 'Referring doctors and hospitals', path: P.opdReferring },
-          { id: 'alerts', label: 'OPD alerts', path: P.opdAlerts },
-          { id: 'numbers', label: 'Numbers on OPD screens', path: P.opdNumbers },
-        ] },
+        categories: categoriesFromPage({ path: P.opdFrontDesk, categories: OPD_FRONT_DESK_SECTIONS }) },
     ],
   },
   {
@@ -305,10 +310,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     items: [
       { id: 'org-profile', label: 'Name and logo', path: P.orgProfile, iconPath: ICON.person,
         blurb: 'Organization name, short name and logo, login handle.',
-        categories: [
-          { id: 'identity', label: 'Name and login handle', query: { tab: 'identity' } },
-          { id: 'branding', label: 'Logo and top bar', path: P.orgBranding },
-        ] },
+        categories: [{ id: 'profile', label: 'Name and logo' }] },
     ],
   },
   {
@@ -349,13 +351,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     blurb: 'Money rules for the whole organization.',
     items: [
       { id: 'org-billing', label: 'Billing and taxes', path: P.billing, iconPath: ICON.billing,
-        blurb: 'GST, discounts, invoices and bill design, credit accounts.',
-        categories: [
-          { id: 'gst', label: 'GST setup', query: { tab: 'gst' } },
-          { id: 'discounts', label: 'Discounts', query: { tab: 'discounts' } },
-          { id: 'invoice', label: 'Invoices and bill design', query: { tab: 'invoice' } },
-          { id: 'credit', label: 'Credit accounts', path: P.vendors },
-        ] },
+        blurb: 'GST, discounts, invoices and bill design, payment rules, credit accounts.',
+        categories: categoriesFromPage({ path: P.billing, categories: BILLING_SECTIONS }) },
     ],
   },
   {
@@ -523,7 +520,7 @@ export function rehome(path: string, query: Readonly<Record<string, string | nul
         case 'patient': return { path: P.orgNumbers, query: keep({ tab: 'patient' }) };
         case 'order': return { path: P.orgNumbers, query: keep({ tab: 'order' }) };
         case 'sample': return { path: P.labSampleNumbers, query: keep({ tab: 'format' }) };
-        default: return { path: P.orgProfile, query: keep({ tab: 'identity' }) };
+        default: return { path: P.orgProfile, query: keep() };
       }
     case '/admin/communication': return { path: P.orgChannels, query: keep(tab ? { tab } : {}) };
     case '/admin/appointments': return { path: P.labFrontDesk, query: keep(tab ? { tab } : {}) };
@@ -534,8 +531,10 @@ export function rehome(path: string, query: Readonly<Record<string, string | nul
     case '/admin/kpis': return { path: P.labNumbers, query: keep() };
     case '/admin/home-collection': return { path: P.labHomeCollection, query: keep({ tab: 'agents' }) };
     case '/admin/partners': return { path: P.labOutsourcing, query: keep() };
-    case '/setup': return { path: P.orgBranding, query: keep() };
-    case '/admin/opd/pharmacy': return { path: P.pharmacy, query: keep() };
+    case '/setup':
+    case '/admin/org/profile/branding': return { path: P.orgProfile, query: keep() };
+    case '/admin/vendors': return { path: P.billing, query: keep({ tab: 'credit' }) };
+    case '/admin/opd/pharmacy': return { path: tab === 'drugs' ? P.pharmacyDrugs : P.pharmacy, query: keep() };
     case '/admin/opd/drugs': return { path: P.pharmacyDrugs, query: keep() };
     default: return null;
   }

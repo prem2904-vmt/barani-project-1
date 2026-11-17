@@ -157,6 +157,8 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/insights':           { perms: ANALYTICS_PERMS, module: 'reports' },
   '/finance':            { perms: FINANCE_PERMS },
   '/finance/daily':      { perms: FINANCE_PERMS },
+  // Credit accounts: money actions (top up, payment, statement); the setup is in Settings › Billing and taxes.
+  '/finance/credit-accounts': { perms: ['manage_tenant'] },
   // (/finance/expenses is a plain redirect to /expenses — no entry of its own.)
   '/expenses':           { perms: EXPENSE_ROUTE_PERMS },
 
@@ -200,7 +202,6 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/lab/outsourcing':       { perms: TEST_MASTER_PERMS },
   '/admin/lab/analyzers':         { perms: ['manage_lab_settings', ...BRIDGE_PERMS], module: 'lab' },
   '/admin/lab/front-desk':        { perms: ['manage_tenant', 'manage_admin'] },
-  '/admin/lab/front-desk/referring': { perms: ['manage_tenant', 'manage_admin'] },
   '/admin/lab/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
   '/admin/lab/numbers':           { perms: ADMIN_PERMS },
   '/admin/lab/work-steps':        { perms: ['manage_workflows'] },
@@ -211,14 +212,10 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/opd/workflow':          { perms: ADMIN_PERMS },
   '/admin/opd/settings':          { perms: ADMIN_PERMS },
   '/admin/opd/front-desk':        { perms: ADMIN_PERMS },
-  '/admin/opd/front-desk/referring': { perms: ADMIN_PERMS },
-  '/admin/opd/alerts':            { perms: ADMIN_PERMS },
-  '/admin/opd/numbers':           { perms: ADMIN_PERMS },
   '/admin/pharmacy':              { perms: ADMIN_PERMS },
   '/admin/pharmacy/drugs':        { perms: ADMIN_PERMS },
   '/admin/ipd/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
   '/admin/org/profile':           { perms: ['manage_tenant'] },
-  '/admin/org/profile/branding':  { perms: ADMIN_PERMS },
   '/admin/org/numbers':           { perms: ['manage_tenant'] },
   '/admin/org/channels':          { perms: COMMS_SETTINGS_PERMS },
 
@@ -229,6 +226,8 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/ipd/myprefrontal/forms/:id/history': { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/myprefrontal/pending':           { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/departments':                    { perms: CASESHEET_FORMS_PERMS },
+  // IPD alerts: the notifications list filtered to IPD (same perms as the shared Notifications page).
+  '/admin/ipd/alerts':                         { perms: ['manage_tenant', 'manage_notifications'] },
   // The lab's sheets: read with casesheet_view (tenant-wide, branch-filtered, §11 Q2) or casesheet_fill; start one with fill.
   // The Prepare tab (owner 2026-11-11): Departments to start a sheet (fill), every sheet the user may read (view or fill).
   '/prepare':                                  { perms: CASESHEET_FILL_PERMS },

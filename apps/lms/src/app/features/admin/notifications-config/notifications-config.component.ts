@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -45,6 +46,10 @@ const MODULE_LABELS: Record<string, string> = {
   appointments: 'Appointments & home collection',
   team:         'Team & platform'
 };
+
+/** Which department's alerts a screen shows: the ONE mapping is `ALERT_MODULES` (shared/utils/department-scope.ts). */
+export type AlertDepartment = SettingsDepartment;
+const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OPD', ipd: 'IPD', pharmacy: 'Pharmacy' };
 
 @Component({
   selector: 'pf-notifications-config',
@@ -205,8 +210,8 @@ const MODULE_LABELS: Record<string, string> = {
           </div>
         </div>
       }
-      @if (!loading() && department() && !rows().length) {
-        <p class="pf-band-empty" data-testid="nc-dept-empty">This department has no alerts yet.</p>
+      @if (!loading() && dept() && !scoped().length) {
+        <p class="pf-band-empty" data-testid="nc-dept-empty">There are no {{ deptName() }} alerts yet. They will appear here, each with its own on / off, as {{ deptName() }} raises them.</p>
       }
       @if (!loading() && q().trim() && !visibleModules().length) {
         <p class="pf-band-empty">No alerts match "{{ q() }}".</p>
@@ -355,14 +360,20 @@ export class NotificationsConfigComponent implements OnInit {
    *  notification gate; this only reflects and flips it). */
   readonly masterOn = signal<boolean>(true);
   readonly masterSaving = signal<boolean>(false);
-  readonly enabledTotal = computed(() => this.rows().filter(r => r.enabled).length);
+  readonly enabledTotal = computed(() => this.scoped().filter(r => r.enabled).length);
 
   /** Show only one department's alerts (Lab alerts, OPD alerts, IPD alerts).
    *  No value = every alert (the old single page). The master switch stays
    *  lab-wide either way. */
   readonly department = input<SettingsDepartment | null>(null);
   private readonly _rows = signal<CatalogRow[]>([]);
-  readonly rows = computed(() => this._rows().filter(r => alertModuleInDepartment(r.module, this.department())));
+  /** Which department this screen is for: the `department` input, else the route's `data.department`. */
+  private readonly routeDept = inject(ActivatedRoute, { optional: true })?.snapshot.data?.['department'] as AlertDepartment | undefined;
+  readonly dept = computed<AlertDepartment | null>(() => this.department() ?? this.routeDept ?? null);
+  readonly deptName = computed(() => { const d = this.dept(); return d ? DEPARTMENT_NAMES[d] : ''; });
+  /** The rows this screen shows (all of them without a department). */
+  readonly scoped = computed(() => this._rows().filter(r => alertModuleInDepartment(r.module, this.dept())));
+  readonly rows = this.scoped;
   readonly loading = signal<boolean>(true);
 
   private readonly _moduleFilter = signal<string | null>(null);
@@ -372,7 +383,7 @@ export class NotificationsConfigComponent implements OnInit {
   /** Module keys in backend catalog order (first-seen order of rows). */
   readonly modules = computed(() => {
     const seen: string[] = [];
-    for (const r of this.rows()) if (!seen.includes(r.module)) seen.push(r.module);
+    for (const r of this.scoped()) if (!seen.includes(r.module)) seen.push(r.module);
     return seen;
   });
   protected readonly theme = inject(ThemeService);
@@ -384,18 +395,18 @@ export class NotificationsConfigComponent implements OnInit {
     const f = this._moduleFilter();
     const mods = f === null ? this.modules() : this.modules().filter(m => m === f);
     if (!this.q().trim()) return mods;
-    return mods.filter(m => this.rows().some(r => r.module === m && this.matches(r)));
+    return mods.filter(m => this.scoped().some(r => r.module === m && this.matches(r)));
   });
   /** Module picker in the pill ('' = All), counts in the label. */
   readonly moduleOptions = computed<PfSelectOption<string>[]>(() => [
-    { value: '', label: `All modules · ${this.rows().length}` },
+    { value: '', label: `All modules · ${this.scoped().length}` },
     ...this.modules().map(m => ({ value: m, label: `${this.moduleLabel(m)} · ${this.countFor(m)}` })),
   ]);
 
   moduleLabel(m: string): string { return MODULE_LABELS[m] ?? m; }
   /** Rows of a module that pass the pill search (all rows when no query). */
-  rowsFor(m: string): CatalogRow[] { return this.rows().filter(r => r.module === m && this.matches(r)); }
-  private allRowsFor(m: string): CatalogRow[] { return this.rows().filter(r => r.module === m); }
+  rowsFor(m: string): CatalogRow[] { return this.scoped().filter(r => r.module === m && this.matches(r)); }
+  private allRowsFor(m: string): CatalogRow[] { return this.scoped().filter(r => r.module === m); }
   countFor(m: string): number { return this.allRowsFor(m).length; }
   enabledCount(m: string): number { return this.allRowsFor(m).filter(r => r.enabled).length; }
 

@@ -8,7 +8,6 @@ import { WaSettings, WhatsAppService, waSenderLine } from '../../../core/service
 import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { WaConnectCardComponent } from './wa-connect-card.component';
 import { WaBillingCardComponent } from './wa-billing-card.component';
-import { WaMessagePickerComponent } from './wa-message-picker.component';
 
 /** Who may change the communication settings (the server enforces each PUT the same way). */
 export const COMMS_MANAGE_PERMS = COMMS_SETTINGS_PERMS;
@@ -21,58 +20,12 @@ export const COMMS_MANAGE_PERMS = COMMS_SETTINGS_PERMS;
 @Component({
   selector: 'pf-wa-settings-section',
   standalone: true,
-  imports: [WaConnectCardComponent, WaBillingCardComponent, WaMessagePickerComponent, SkeletonCardComponent],
+  imports: [WaConnectCardComponent, WaBillingCardComponent, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading()) {
       <pf-skeleton-card [lines]="4" label="Loading WhatsApp settings…"></pf-skeleton-card>
     } @else if (waSettings(); as wa) {
-      <!-- WhatsApp auto-send (Meta Cloud API): tenant switch; the sender number + token are platform config. -->
-      <section class="pf-card pf-ls__card" data-testid="ls-whatsapp">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="pf-card__label pf-ls__title">WhatsApp Auto: send the report automatically when it is ready</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span><span class="pf-card__spacer"></span>
-          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="wa.autoSendEnabled"
-                  aria-label="WhatsApp Auto: send the report automatically when it is ready" [disabled]="waSaving() || !canManageWa() || waAutoOff()"
-                  (click)="saveWa({ autoSendEnabled: !wa.autoSendEnabled })">
-            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-          </button>
-        </div>
-        <div class="pf-ls__cardbody">
-          @if (waAutoOff()) {
-            <p class="pf-ls__warn" role="status" data-testid="ls-wa-off">WhatsApp Auto is turned off for your lab by Prefrontal. Ask Prefrontal to turn it on. Staff can still use WhatsApp Chat from the report when it is on.</p>
-          }
-          <p class="pf-ls__hint">
-            When every test on an order is validated and its <strong>final</strong> report is ready, the patient gets
-            one WhatsApp message on their registered mobile — the report PDF plus the secure report link (they confirm
-            their date of birth or phone to open it). It goes only when <strong>the bill is fully paid</strong>: while
-            anything is owed it waits as <strong>On hold</strong> and sends by itself once the balance is cleared.
-            Partial reports are never sent. Reports made before you turn this on aren't sent.
-          </p>
-          <!-- Sender: the shared Prefrontal number until the lab's own number is connected AND its template approved. -->
-          <div class="pf-ls__wa-sender">
-            <span class="pf-chip pf-chip--static pf-ls__chipm" data-testid="ls-wa-sender">
-              Sender — <strong style="color: var(--text-primary);">{{ waSender() }}</strong>
-            </span>
-          </div>
-          @if (wa.sender?.source !== 'tenant' && !wa.platform?.configured) {
-            <p class="pf-ls__warn">WhatsApp sending isn't set up on the server yet — messages wait in the queue until it is.</p>
-          }
-          <div class="pf-ls__wa-row">
-            <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="wa.sendUpdatedReports"
-                    data-testid="ls-wa-resend-regen"
-                    [disabled]="waSaving() || !canManageWa() || waAutoOff()"
-                    (click)="saveWa({ sendUpdatedReports: !wa.sendUpdatedReports })">
-              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-              Send again when a report is regenerated or corrected
-            </button>
-            <p class="pf-ls__hint" style="margin-top: 6px;">Off by default — the link the patient already has always opens the latest report.</p>
-          </div>
-          <!-- The message: a pick from the templates Meta approved on this lab's sender + a live preview. -->
-          <pf-wa-message-picker [settings]="wa" [canEdit]="canManageWa() && !waSaving() && !waAutoOff()" (changed)="applyWa($event)"></pf-wa-message-picker>
-          <p class="pf-ls__hint" style="margin-top: 8px;">
-            The manual "Send WhatsApp" button on each report keeps working as a fallback.
-          </p>
-        </div>
-      </section>
       <!-- WhatsApp Chat: staff open WhatsApp from a report and press Send (a platform switch, read-only here). -->
       <section class="pf-card pf-ls__card" data-testid="ls-wa-chat">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><h3 class="pf-card__label pf-ls__title">WhatsApp Chat</h3><span class="pf-card__spacer"></span>
