@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, viewChild } from '@angular/core';
 import { KpiConfigComponent } from '../kpis/kpi-config.component';
 
 /**
@@ -14,4 +14,11 @@ import { KpiConfigComponent } from '../kpis/kpi-config.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `<pf-kpi-config department="lab"></pf-kpi-config>`,
 })
-export class LabNumbersPage {}
+export class LabNumbersPage {
+  private readonly kpis = viewChild(KpiConfigComponent);
+  /** The Settings card head shows the grid's head tools (scope · count, Add KPI). */
+  readonly headTools = computed(() => this.kpis()?.headTools() ?? null);
+  hasUnsavedChanges(): boolean { return !!this.kpis()?.hasUnsavedChanges(); }
+  saveChanges(): Promise<boolean> { return this.kpis()?.saveChanges() ?? Promise.resolve(true); }
+  readonly unsavedLabel = 'the number cards';
+}
