@@ -31,8 +31,9 @@ describe('Report design — one page, one band', () => {
     expect((TEMPLATE.match(/<pf-segmented class="pf-hb-tabs/g) ?? []).length).toBe(1);
   });
 
-  it('never two Save buttons: notes and sending report into the ONE band save state', () => {
-    expect((TEMPLATE.match(/\(click\)="save\(\)"/g) ?? []).length).toBe(1);
+  it('never two Save buttons: notes and sending report into the ONE save state; Save is the pane\'s Save bar', () => {
+    expect((TEMPLATE.match(/\(click\)="save\(\)"/g) ?? []).length).toBe(0);
+    expect((TEMPLATE.match(/\(save\)="save\(\)"/g) ?? []).length).toBe(1);
     expect(TEMPLATE).toContain('(savingChange)="sendingSaving.set($event)"');
     expect(TEMPLATE).toMatch(/@if \(optionsSaving\(\)\)[\s\S]{0,200}Saving…/);
   });
