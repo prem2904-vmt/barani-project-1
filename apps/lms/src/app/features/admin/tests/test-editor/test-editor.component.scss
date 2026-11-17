@@ -1027,6 +1027,7 @@ select.pf-input--compact {
 
   /* Profiles = a DENSE checklist (check · name · code muted) in one hairline
      box, columns that fill the card's width — not a wall of bordered tiles. */
+  .pf-profpanel { max-width: 1280px; } /* right edge lines up with the field grid */
   .pf-profpanel__head { align-items: center; margin-bottom: 12px; }
   .pf-profpanel__title { min-width: 0; }
   .pf-profpanel__tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

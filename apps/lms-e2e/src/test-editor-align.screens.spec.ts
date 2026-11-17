@@ -19,7 +19,7 @@ const vis = (page: Page, sel: string) => page.locator(sel).locator('visible=true
 async function theme(page: Page, dark: boolean) {
   await page.emulateMedia({ colorScheme: dark ? 'dark' : 'light' });
   await page.evaluate(d => { const r = document.documentElement; r.classList.toggle('dark', d); r.classList.toggle('light', !d); r.setAttribute('data-theme', d ? 'dark' : 'light'); }, dark);
-  await page.waitForTimeout(450);
+  await page.waitForTimeout(900);
 }
 async function shot(page: Page, name: string) {
   for (const dark of [false, true]) { await theme(page, dark); await page.screenshot({ path: `${out()}/${name}--${dark ? 'dark' : 'light'}.png` }); }
@@ -93,7 +93,7 @@ test.describe('test editor alignment', () => {
 
     const widths = isDesktop() ? [1440, 3440] : [0];
     for (const w of widths) {
-      if (w) { await page.setViewportSize({ width: w, height: w > 2000 ? 1440 : 900 }); await page.waitForTimeout(600); }
+      if (w) { await page.setViewportSize({ width: w, height: w > 2000 ? 1440 : 900 }); await page.waitForTimeout(1500); }
       const vw = page.viewportSize()!.width;
       if (vw >= 1024) {
         const aside = (await page.locator('#pf-te2-preview').boundingBox())!;
