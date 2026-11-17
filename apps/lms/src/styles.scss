@@ -2867,7 +2867,7 @@ input::-ms-clear {
 .pf-sgrid :is(pf-appointments-config, pf-notifications-config) > .pf-band-page > :is(pf-hero-band, pf-screen-header) { display: none; }
 
 /* Two cards: the main card's head already names the selected group — the group's own label goes, its tools stay. */
-.pf-ss__main--one .pf-sgroup__label, .pf-ss__main--one .pf-sgroup__scope { display: none; }
-.pf-ss__main--one .pf-sgroup__head { min-height: 0; padding-top: 0; }
-.pf-ss__main--one .pf-sgroup__head:has(.pf-sgroup__tools:not(:empty)) { padding-top: 10px; }
+.pf-ss__main--one .pf-sgroup__label, .pf-ss__main--one .pf-sgroup__scope { display: none !important; }
+.pf-ss__main--one .pf-sgroup__head { min-height: 0 !important; padding-top: 0 !important; }
+.pf-ss__main--one .pf-sgroup__head:has(.pf-sgroup__tools:not(:empty)) { padding-top: 10px !important; }
 .pf-ss__main--one .pf-sgroup__sec { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }

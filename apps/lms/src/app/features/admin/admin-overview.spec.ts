@@ -209,7 +209,8 @@ describe('Settings overview — phone drill-in', () => {
     h.detectChanges();
     expect(nav).toHaveBeenCalledWith([], expect.objectContaining({ queryParams: { section: 'branches' }, replaceUrl: false }));
     expect(el(h).querySelector('.pf-tp--detail')).not.toBeNull();
-    expect(el(h).querySelector('[data-testid="tp-back"]')).not.toBeNull();
+    expect(el(h).querySelector('[data-testid="tp-back"]')).toBeNull();   // ONE back: the band's
+    expect(el(h).querySelector('.pf-hb__back')).not.toBeNull();
     expect(tileHrefs(el(h))).toEqual(['/admin/branches']);
   });
 
@@ -221,7 +222,7 @@ describe('Settings overview — phone drill-in', () => {
     el(h).querySelector<HTMLButtonElement>('[data-testid="tp-item-branches"]')!.click();
     await h.fixture.whenStable();
     h.detectChanges();
-    el(h).querySelector<HTMLButtonElement>('[data-testid="tp-back"]')!.click();
+    el(h).querySelector<HTMLButtonElement>('.pf-hb__back')!.click();
     expect(back).toHaveBeenCalled();
   });
 
@@ -230,7 +231,7 @@ describe('Settings overview — phone drill-in', () => {
     const h = await open('/admin?section=lab');
     expect(el(h).querySelector('.pf-tp--detail')).not.toBeNull();
     const router = TestBed.inject(Router);
-    el(h).querySelector<HTMLButtonElement>('[data-testid="tp-back"]')!.click();
+    el(h).querySelector<HTMLButtonElement>('.pf-hb__back')!.click();
     await h.fixture.whenStable();
     h.detectChanges();
     expect(router.url).not.toContain('section=');

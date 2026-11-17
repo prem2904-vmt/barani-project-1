@@ -166,33 +166,55 @@ export class SettingsShellComponent implements OnDestroy {
   readonly noMatch = signal(false);
   private readonly hostEl = inject(ElementRef<HTMLElement>);
   /** The band pill filters the rows on this page (label + hint text); a group card with no match hides. */
+  private filterState: { words: string; sel: string | null } = { words: '', sel: null };
+  private observer: MutationObserver | null = null;
+  private applyQueued = false;
+  /** The band pill filters the rows; with two cards the main card shows ONLY the selected group. Re-applied whenever
+   *  the page's DOM changes (groups render after their data arrives). */
   private readonly filterRows = effect(() => {
-    const words = this.q().trim().toLowerCase();
+    this.filterState = { words: this.q().trim().toLowerCase(), sel: this.single() ? null : this.selectedId() };
     this.url();
-    const sel = this.single() ? null : this.selectedId();
     if (!this.browser) return;
-    setTimeout(() => {
-      const root = (this.hostEl.nativeElement as HTMLElement).querySelector('[data-testid="settings-main"]');
-      if (!root) return;
-      // Two cards: the main card shows ONLY the selected group (its head names it); the page keeps its other groups.
-      const groups = Array.from(root.querySelectorAll<HTMLElement>('pf-setting-group[data-group]'))
-        .filter((g) => !g.parentElement?.closest('pf-setting-group[data-group]'));
-      const has = !!sel && groups.some((g) => g.dataset['group'] === sel);
-      for (const g of groups) g.style.display = has && g.dataset['group'] !== sel ? 'none' : '';
-      let shown = 0;
-      root.querySelectorAll<HTMLElement>('pf-setting-row, .pf-nc-card').forEach((r) => {
-        const hit = !words || (r.textContent ?? '').toLowerCase().includes(words);
-        r.hidden = !hit;
-        if (hit) shown++;
-      });
-      root.querySelectorAll<HTMLElement>('pf-setting-group:not(.pf-sgroup--plain):not([style*="none"])').forEach((g) => {
-        const rows = g.querySelectorAll('pf-setting-row, .pf-nc-card');
-        g.hidden = !!words && rows.length > 0 && Array.from(rows).every((r) => (r as HTMLElement).hidden)
-          && !(g.textContent ?? '').toLowerCase().includes(words);
-      });
-      this.noMatch.set(!!words && shown === 0);
-    }, 0);
+    setTimeout(() => { this.watchMain(); this.applyFilter(); }, 0);
   });
+
+  private watchMain(): void {
+    const root = (this.hostEl.nativeElement as HTMLElement).querySelector('[data-testid="settings-main"]');
+    if (!root || typeof MutationObserver === 'undefined') return;
+    if ((this.observer as unknown as { root?: Element } | null)?.root === root) return;
+    this.observer?.disconnect();
+    const obs = new MutationObserver(() => {
+      if (this.applyQueued) return;
+      this.applyQueued = true;
+      queueMicrotask(() => { this.applyQueued = false; this.applyFilter(); });
+    });
+    obs.observe(root, { childList: true, subtree: true });
+    (obs as unknown as { root: Element }).root = root;
+    this.observer = obs;
+  }
+
+  private applyFilter(): void {
+    const { words, sel } = this.filterState;
+    const root = (this.hostEl.nativeElement as HTMLElement).querySelector('[data-testid="settings-main"]');
+    if (!root) return;
+    const show = (el: HTMLElement, on: boolean) => { const v = on ? '' : 'none'; if (el.style.display !== v) el.style.display = v; };
+    const groups = Array.from(root.querySelectorAll<HTMLElement>('pf-setting-group[data-group]'))
+      .filter((g) => !g.parentElement?.closest('pf-setting-group[data-group]'));
+    const has = !!sel && groups.some((g) => g.dataset['group'] === sel);
+    for (const g of groups) show(g, !(has && g.dataset['group'] !== sel));
+    let shown = 0;
+    root.querySelectorAll<HTMLElement>('pf-setting-row, .pf-nc-card').forEach((r) => {
+      const hit = !words || (r.textContent ?? '').toLowerCase().includes(words);
+      show(r, hit);
+      if (hit && !r.closest('pf-setting-group[style*="none"]')) shown++;
+    });
+    root.querySelectorAll<HTMLElement>('pf-setting-group:not(.pf-sgroup--plain)').forEach((g) => {
+      if (g.dataset['group'] && has && g.dataset['group'] !== sel) return;
+      const rows = Array.from(g.querySelectorAll<HTMLElement>('pf-setting-row, .pf-nc-card'));
+      show(g, !(words && rows.length > 0 && rows.every((r) => r.style.display === 'none')));
+    });
+    if (this.noMatch() !== (!!words && shown === 0)) this.noMatch.set(!!words && shown === 0);
+  }
   /** The band's back chevron: where the person came from (an in-app link), else up to this setting's section. */
   readonly backToSection = (): void => this.navBack.back();
 
@@ -246,7 +268,7 @@ export class SettingsShellComponent implements OnDestroy {
     if (this.phoneDetail() && this.cats().length > 1) { this.phoneDetail.set(false); return true; }
     return false;
   };
-  ngOnDestroy(): void { this.navBack.clearBackInterceptor(this.backHandler); }
+  ngOnDestroy(): void { this.navBack.clearBackInterceptor(this.backHandler); this.observer?.disconnect(); }
 
   /** Open a category: its own path (or the setting's), its view query, and clear the sibling categories' queries. */
   pickCategory(id: string): void {

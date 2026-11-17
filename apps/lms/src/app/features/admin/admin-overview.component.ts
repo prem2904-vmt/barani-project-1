@@ -52,6 +52,7 @@ interface SectionTile {
       <!-- Test Master's frame (DESIGN-V2): the search is the band pill — no second search box. -->
       <pf-hero-band
         [back]="true"
+        [backAction]="compact() && detailOpen() ? closeFn : null"
         placeholder="Search all settings"
         [value]="q()"
         (valueChange)="setQ($event)"
@@ -213,6 +214,8 @@ export class AdminOverviewComponent implements OnDestroy {
     });
     if (this.q()) this.setQ('');
   }
+  /** The band's back chevron on a phone section (the ONE back — no back inside the cards). */
+  readonly closeFn = (): void => this.closeDetail();
   /** Phone: leave the section and show the list again. */
   closeDetail(): void {
     if (this.pushedDetail) {

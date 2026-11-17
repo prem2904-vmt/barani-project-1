@@ -66,9 +66,9 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
  *
  * Purely presentational: the parent owns the selected id (and keeps it in the URL), decides when the phone shows the
  * detail, and projects the content. Phone (`compact`): the side card fills the screen; picking a row shows only the
- * main card with a back chevron in its head (`back` output; the parent wires history / swipe-back). Inside a setting
- * (`navHead`) the side card's head carries a back chevron (`navBack`) and the rows slide in (~260 ms, off under
- * prefers-reduced-motion).
+ * main card. There is NO back button in either card (owner 2026-11-17: "only the top back"): the band's back chevron
+ * climbs (the parent registers a NavBackService interceptor: group → list → section). Inside a setting (`navHead`) the
+ * side card head shows that setting and the rows slide in (~260 ms, off under prefers-reduced-motion).
  */
 @Component({
   selector: 'pf-two-panel',
@@ -82,13 +82,6 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
   template: `
     <aside class="pf-card pf-tp__nav" [attr.aria-label]="navLabel()" data-testid="tp-nav">
       <header class="pf-card__head pf-tp__navhead">
-        @if (navHead()) {
-          <button type="button" class="pf-tp__iconbtn pf-tp__navback press" [attr.aria-label]="navBackLabel()"
-                  [attr.title]="navBackLabel()" data-testid="tp-nav-back" (click)="navBack.emit()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-        }
         @if (navIcon()) {
           <span class="pf-card__icon" aria-hidden="true">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -127,12 +120,6 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
              [class.pf-tp__panel--a]="phase() === 0" [class.pf-tp__panel--b]="phase() === 1">
       @if (current(); as cur) {
         <header class="pf-card__head pf-tp__head">
-          @if (compact()) {
-            <button type="button" class="pf-tp__iconbtn pf-tp__back press" [attr.aria-label]="backLabel()" data-testid="tp-back" (click)="back.emit()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-            </button>
-          }
           @if (cur.icon ?? panelIcon(); as ic) {
             <span class="pf-card__icon" aria-hidden="true">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"

@@ -64,14 +64,13 @@ describe('pf-two-panel (shared)', () => {
     expect(el.querySelector('.pf-tp--compact')).toBeNull();
   });
 
-  it('compact list: detail is not shown; compact detail: back chevron emits back', () => {
+  it('compact list: detail is not shown; compact detail shows it — and NO back button in either card (the band owns back)', () => {
     const { f, host, el } = mount();
     host.compact.set(true); f.detectChanges();
     expect(el.querySelector('pf-two-panel')!.classList.contains('pf-tp--detail')).toBe(false);
     host.detail.set(true); f.detectChanges();
     expect(el.querySelector('pf-two-panel')!.classList.contains('pf-tp--detail')).toBe(true);
-    el.querySelector<HTMLButtonElement>('[data-testid="tp-back"]')!.click();
-    expect(host.backs).toBe(1);
+    expect(el.querySelector('[data-testid="tp-back"], [data-testid="tp-nav-back"]')).toBeNull();
   });
 
   it('Test Master frame: side card + main card, each with a pf-card__head; the side head shows navTitle', () => {

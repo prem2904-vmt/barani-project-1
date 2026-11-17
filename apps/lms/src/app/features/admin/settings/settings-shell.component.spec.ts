@@ -60,13 +60,14 @@ const settle = async (h: RouterTestingHarness) => { await h.fixture.whenStable()
 describe('Settings shell — Test Master frame, two cards (wide)', () => {
   beforeEach(() => document.documentElement.classList.add('design-new'));
 
-  it('ONE band (TM): back chevron + search pill "Search <setting>"; side card = THAT setting under a back arrow, then its categories', async () => {
+  it('ONE band (TM): back chevron + search pill "Search <setting>"; side card = THAT setting, then its categories (no second back)', async () => {
     setup();
     const h = await open('/admin/billing?tab=payments');
     expect(root(h).querySelectorAll('pf-hero-band').length).toBe(1);
     expect(root(h).querySelector<HTMLInputElement>('.pf-hb__input')?.placeholder).toBe('Search Billing and taxes');
     expect(root(h).querySelector('aside.pf-card [data-testid="tp-nav-title"]')?.textContent).toContain('Billing and taxes');
-    expect(root(h).querySelector('[data-testid="tp-nav-back"]')).not.toBeNull();
+    expect(root(h).querySelector('[data-testid="tp-nav-back"]')).toBeNull();   // ONE back: the band's
+    expect(root(h).querySelector('.pf-hb__back')).not.toBeNull();
     expect(cats(root(h))).toEqual(['gst', 'invoice', 'payments', 'credit']);
     expect(root(h).querySelector('[data-testid="tp-item-payments"]')?.getAttribute('aria-current')).toBe('true');
     expect(root(h).querySelector('section.pf-card .pf-card__head .pf-tp__title')?.textContent).toContain('Payment rules');
@@ -94,10 +95,10 @@ describe('Settings shell — Test Master frame, two cards (wide)', () => {
     expect(TestBed.inject(Router).url).toBe('/admin/billing?tab=credit');
   });
 
-  it('the side card back arrow returns to the overview, on the section this setting belongs to', async () => {
+  it('the band back chevron (deep link) returns to the overview, on the section this setting belongs to', async () => {
     setup();
     const h = await open('/admin/billing?tab=gst');
-    root(h).querySelector<HTMLButtonElement>('[data-testid="tp-nav-back"]')!.click();
+    root(h).querySelector<HTMLButtonElement>('.pf-hb__back')!.click();
     await settle(h);
     expect(TestBed.inject(Router).url).toBe('/admin?section=billing');
   });
@@ -162,15 +163,15 @@ describe('Settings shell — phone: categories list, then drill in', () => {
     expect(TestBed.inject(Router).url).toBe('/admin/billing');
   });
 
-  it('a tap drills into the screen with a back chevron; the chevron returns to the list', async () => {
+  it('a tap drills into the screen; the band back chevron returns to the list', async () => {
     setup({ compact: true });
     const h = await open('/admin/billing');
     root(h).querySelector<HTMLButtonElement>('[data-testid="tp-item-payments"]')!.click();
     await settle(h);
     expect(root(h).querySelector('.pf-tp--detail')).not.toBeNull();
     expect(TestBed.inject(Router).url).toContain('tab=payments');
-    root(h).querySelector<HTMLButtonElement>('[data-testid="tp-back"]')!.click();
-    h.detectChanges();
+    root(h).querySelector<HTMLButtonElement>('.pf-hb__back')!.click();
+    await settle(h);
     expect(root(h).querySelector('.pf-tp--detail')).toBeNull();
   });
 

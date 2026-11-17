@@ -236,7 +236,7 @@ export async function pickCommsTab(page: Page, label: string): Promise<void> {
   const id = COMMS_TAB[label] ?? label.toLowerCase();
   const item = page.locator(`[data-testid="tp-item-${id}"]`).locator('visible=true').first();
   if (!(await item.count())) {
-    const back = page.locator('[data-testid="tp-back"], [data-testid="tp-nav-back"]').locator('visible=true').first();
+    const back = page.locator('.pf-hb__back').locator('visible=true').first();
     if (await back.count()) await back.click();
   }
   await page.locator(`[data-testid="tp-item-${id}"]`).locator('visible=true').first().click();
