@@ -7,6 +7,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { BusyComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { spinDelay } from '../../../shared/utils/busy';
+import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 
 /**
  * Lab settings → WhatsApp → the MESSAGE the patient receives (owner 2026-09-29:
@@ -22,34 +23,31 @@ import { spinDelay } from '../../../shared/utils/busy';
 @Component({
   selector: 'pf-wa-message-picker',
   standalone: true,
-  imports: [SelectComponent, BusyComponent],
+  imports: [SelectComponent, BusyComponent, SettingRowComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (menu(); as m) {
     <div class="pf-wmp" data-testid="wa-message-picker" [attr.data-kind]="kind()">
-      <div class="pf-wmp__fields">
-        <label class="pf-wmp__field">
-          <span class="pf-field__lbl">Message</span>
-          @if (options().length) {
-            <pf-select data-testid="wmp-message" [options]="options()" [value]="code()" [disabled]="!canEdit() || busy()"
-                       placeholder="Choose a message" (valueChange)="pick($event)"></pf-select>
-          } @else {
-            <span class="pf-chip pf-chip--static pf-wmp__chip" data-testid="wmp-none">No approved message yet</span>
-          }
-        </label>
-        <label class="pf-wmp__field pf-wmp__field--lang">
-          <span class="pf-field__lbl">Language</span>
-          @if (languages().length > 1) {
-            <pf-select data-testid="wmp-language" [options]="languageOptions()" [value]="language()" [disabled]="!canEdit() || busy()"
-                       (valueChange)="pickLanguage($event)"></pf-select>
-          } @else {
-            <span class="pf-chip pf-chip--static pf-wmp__chip" data-testid="wmp-language-chip">{{ languages()[0]?.label || 'English' }}</span>
-          }
-        </label>
-      </div>
-      @if (savingShown()) {
-        <p class="pf-wmp__saving" role="status" data-testid="wmp-saving"><pf-busy label="Saving…"></pf-busy> Saving…</p>
-      }
+      <!-- Compact rows (owner 2026-11-17): title + hint left, the control flush right, no gaps. -->
+      <pf-setting-row label="Message" [hint]="hint()">
+        @if (options().length) {
+          <pf-select class="pf-wmp__sel" data-testid="wmp-message" [options]="options()" [value]="code()" [disabled]="!canEdit() || busy()"
+                     placeholder="Choose a message" (valueChange)="pick($event)"></pf-select>
+        } @else {
+          <span class="pf-chip pf-chip--static pf-wmp__chip" data-testid="wmp-none">No approved message yet</span>
+        }
+      </pf-setting-row>
+      <pf-setting-row label="Language">
+        @if (savingShown()) {
+          <span class="pf-wmp__saving" role="status" data-testid="wmp-saving"><pf-busy label="Saving…"></pf-busy> Saving…</span>
+        }
+        @if (languages().length > 1) {
+          <pf-select class="pf-wmp__sel pf-wmp__sel--lang" data-testid="wmp-language" [options]="languageOptions()" [value]="language()" [disabled]="!canEdit() || busy()"
+                     (valueChange)="pickLanguage($event)"></pf-select>
+        } @else {
+          <span class="pf-chip pf-chip--static pf-wmp__chip" data-testid="wmp-language-chip">{{ languages()[0]?.label || 'English' }}</span>
+        }
+      </pf-setting-row>
       @if (m.pending.length) {
         <p class="pf-wmp__hint" data-testid="wmp-pending">
           @for (p of m.pending; track p.kind) {
@@ -61,6 +59,7 @@ import { spinDelay } from '../../../shared/utils/busy';
 
       <!-- WhatsApp-style preview: rendered from the template's components + the sample. -->
       @if (choice(); as t) {
+        <pf-setting-row label="What the patient gets" [stack]="true">
         <div class="pf-wmp__chat" data-testid="wmp-preview" aria-label="Preview of the WhatsApp message">
           <div class="pf-wmp__bubble">
             @if (t.components.header?.format === 'DOCUMENT') {
@@ -84,19 +83,19 @@ import { spinDelay } from '../../../shared/utils/busy';
           }
           <p class="pf-wmp__from" data-testid="wmp-from">Sent from: <strong>{{ m.senderLine }}</strong></p>
         </div>
+        </pf-setting-row>
       }
     </div>
     }
   `,
   styles: [`
-    .pf-wmp__saving { display: inline-flex; align-items: center; gap: 6px; margin: 6px 0 0; font-size: 12px; color: var(--text-tertiary); }
+    .pf-wmp__saving { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-tertiary); }
     :host { display: block; }
-    .pf-wmp { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
-    .pf-wmp__fields { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; }
-    .pf-wmp__field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 260px; max-width: 360px; min-width: 0; }
-    .pf-wmp__field--lang { flex: 0 1 200px; }
-    .pf-wmp__chip { align-self: flex-start; height: auto; min-height: 40px; }
-    .pf-wmp__hint { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary); }
+    .pf-wmp { display: flex; flex-direction: column; }
+    .pf-wmp__sel { width: 280px; max-width: 100%; }
+    .pf-wmp__sel--lang { width: 200px; }
+    .pf-wmp__chip { height: auto; min-height: 32px; }
+    .pf-wmp__hint { margin: 0; padding: 8px 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary); border-bottom: 1px solid var(--pf-line, var(--glass-border)); }
     .pf-wmp__hint strong { color: var(--text-secondary); font-weight: 600; }
 
     /* The chat: a WhatsApp-like canvas with one incoming bubble + the template button. */
@@ -121,7 +120,7 @@ import { spinDelay } from '../../../shared/utils/busy';
     :host-context([data-theme='dark']) .pf-wmp__from { color: #8696a0; }
     :host-context([data-theme='dark']) .pf-wmp__doc { background: rgba(255,255,255,0.06); }
     @media (max-width: 640px) {
-      .pf-wmp__field, .pf-wmp__field--lang { flex-basis: 100%; max-width: none; }
+      .pf-wmp__sel, .pf-wmp__sel--lang { width: 100%; }
       .pf-wmp__chat { max-width: none; }
     }
   `],
@@ -130,6 +129,8 @@ export class WaMessagePickerComponent {
   readonly settings = input.required<WaSettings>();
   /** The caller's permission (manage_lab_settings / manage_notifications; superadmin in the console). */
   readonly canEdit = input<boolean>(true);
+  /** The Message row's one muted hint line (the host's words). */
+  readonly hint = input<string | null>(null);
   /** New settings after a save — the page replaces its copy. */
   readonly changed = output<WaSettings>();
 
