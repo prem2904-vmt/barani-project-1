@@ -126,8 +126,8 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
               <div class="pf-nc-row__text">
                 <div class="pf-nc-row__name">
                   <p class="font-semibold pf-nc-row__label">{{ r.label }}</p>
-                  @if (r.kind === 'overdue') { <span class="pf-nc-badge">Overdue watch</span> }
-                  @if (r.critical && !masterOn()) { <span class="pf-nc-badge pf-nc-badge--always">Always sends</span> }
+                  @if (r.kind === 'overdue') { <span class="pf-chip pf-chip--static pf-nc-badge">Overdue watch</span> }
+                  @if (r.critical && !masterOn()) { <span class="pf-chip pf-chip--static pf-nc-badge pf-nc-badge--always">Always sends</span> }
                 </div>
                 <p class="pf-nc-row__hint" [title]="r.firesWhen + ' — notifies: ' + r.recipients">{{ r.firesWhen }} · {{ r.recipients }}</p>
               </div>

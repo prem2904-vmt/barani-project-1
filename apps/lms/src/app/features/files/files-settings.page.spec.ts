@@ -50,18 +50,25 @@ function make(o: { full?: boolean; roles?: boolean; fail?: boolean; saveFail?: b
 
 describe('Settings → Files', () => {
   it('shows the five apps with on/off and "who can edit", the templates, storage and the device rules', async () => {
-    const { el, settle } = make();
+    const { el, settle, page } = make();
     await settle();
+    // Test Master frame: the side card lists the categories; the main card shows the picked one.
+    expect(Array.from(el.querySelectorAll('[data-testid^="tp-item-"]')).map(b => b.getAttribute('data-testid'))).toEqual(
+      ['tp-item-apps', 'tp-item-templates', 'tp-item-devices', 'tp-item-patient', 'tp-item-bar']);
     for (const id of ['neuron', 'synapse', 'axon', 'myelin', 'retina']) expect(el.querySelector(`[data-testid="files-app-${id}"]`), id).toBeTruthy();
+    page.pickCat('devices'); await settle();
     expect(el.querySelector('[data-testid="files-storage"]')?.textContent).toContain('412 sheets');
     expect(el.querySelector('[data-testid="files-storage"]')?.textContent).toContain('1.2 GB');
     expect(el.querySelector('[data-testid="files-storage"]')?.textContent).toContain('18 slide decks');
     expect(el.querySelector('[data-testid="files-storage"]')?.textContent).toContain('1 document');
+    page.pickCat('templates'); await settle();
     expect(el.querySelector('[data-testid="files-templates-settings"]')?.textContent).toContain('Daily results log');
     expect(el.querySelector('[data-testid="files-templates-settings"]')?.textContent).toContain("Letter on the lab's letterhead");
+    page.pickCat('devices'); await settle();
     expect(el.textContent).toContain('Off: phones can view and copy only');
-    expect(el.textContent).toContain('Only for roles allowed to export patient data');
     expect(el.textContent).toContain('Kept in Trash, then removed');
+    page.pickCat('patient'); await settle();
+    expect(el.textContent).toContain('Only for roles allowed to export patient data');
   });
 
   it('nothing to save until something changes; Save sends the whole change and then reads clean', async () => {
@@ -99,11 +106,12 @@ describe('Settings → Files', () => {
   it('VIEW ONLY: the page reads, the controls are off, Save is off, and the note says why', async () => {
     const { page, el, settle } = make({ full: false });
     await settle();
-    expect(el.querySelector('[data-testid="files-settings-viewonly"]')?.textContent).toContain('view only');
+    expect(el.querySelector('[data-testid="files-settings-viewonly"]')?.textContent).toContain('View only');
     expect(el.querySelector('[data-testid="files-viewonly-chip"]')).toBeTruthy();
     page.patch({ trashDays: 90 });
     await settle();
     expect(el.querySelector<HTMLButtonElement>('[data-testid="files-settings-save"]')!.disabled).toBe(true);
+    page.pickCat('templates'); await settle();
     expect(el.querySelector<HTMLButtonElement>('[data-testid="files-add-template"]')!.disabled).toBe(true);
   });
 
@@ -130,6 +138,7 @@ describe('Settings → Files', () => {
   it('the bottom-bar defaults reuse the role defaults: only Files apps are touched, other pins and locks stay', async () => {
     const { page, nav, roleSave, el, settle } = make();
     await settle();
+    page.pickCat('bar'); await settle();
     expect(el.querySelector('[data-testid="files-bar-defaults"]')).toBeTruthy();
     page.barRole.set('Doctor');
     expect(page.barApps()).toEqual(['files-synapse']);
@@ -145,6 +154,7 @@ describe('Settings → Files', () => {
   it('without manage_roles there is no bar-defaults editor', async () => {
     const { el, settle } = make({ roles: false });
     await settle();
+    expect(el.querySelector('[data-testid="tp-item-bar"]')).toBeNull();
     expect(el.querySelector('[data-testid="files-bar-defaults"]')).toBeNull();
   });
 

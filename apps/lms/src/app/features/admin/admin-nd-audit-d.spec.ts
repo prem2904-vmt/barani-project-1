@@ -344,11 +344,12 @@ describe('ND audit D — Appointments & queue', () => {
   it('queue mode = neutral selected tiles (role=radio), kit card, ONE primary', () => {
     const p = render();
     expect(primaries(p.el)).toBe(1);
-    const card = p.el.querySelector('.pf-ap-card.pf-card')!;
+    const card = p.el.querySelector('pf-setting-group.pf-ap-card .pf-card')!;
     expect(card.querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
-    const radios = card.querySelectorAll('.pf-mode-btn[role="radio"]');
+    // ONE row: the modes are a segmented control (neutral selected state)
+    const radios = card.querySelectorAll('pf-segmented [role="radio"]');
     expect(radios.length).toBeGreaterThanOrEqual(2);
-    expect(card.querySelectorAll('.pf-mode-btn[aria-checked="true"]').length).toBe(1);
+    expect(card.querySelectorAll('pf-segmented [role="radio"][aria-checked="true"]').length).toBe(1);
     expect(p.el.querySelector('pf-tile')).toBeNull();
     hygiene(p.el);
   });
@@ -416,7 +417,7 @@ describe('ND audit D — Lab settings', () => {
     expect(st.textContent).toContain('Changes save automatically');
     expect(st.querySelector('svg')).not.toBeNull();
     expect(primaries(p.el)).toBe(0);
-    const cards = p.el.querySelectorAll('.pf-ls__card.pf-card');
+    const cards = p.el.querySelectorAll('pf-setting-group > .pf-card');
     expect(cards.length).toBeGreaterThan(2);
     expect(Array.from(cards).every(c => !!c.querySelector('.pf-card__head .pf-card__icon'))).toBe(true);
     hygiene(p.el);
@@ -424,7 +425,7 @@ describe('ND audit D — Lab settings', () => {
 
   it('option cards are NEUTRAL radios (aria-checked, no --on class); rule switches are slate role=switch', () => {
     const p = render();
-    expect(p.el.querySelector('.pf-ls__gate[role="radiogroup"] .pf-ls__gate-opt[role="radio"]')).not.toBeNull();
+    expect(p.el.querySelector('pf-segmented.pf-ls__gate [role="radiogroup"] [role="radio"]')).not.toBeNull();
     expect(p.el.querySelector('[class*="gate-opt--on"]')).toBeNull();
     p.f.componentRef.setInput('cards', ['require-validation', 'no-scan', 'calc-constants']); p.f.detectChanges();
     const sw = p.el.querySelectorAll('.pf-ls__card .pf-toggle[role="switch"]');

@@ -80,7 +80,7 @@ interface AutoAssignConfig {
               <span class="pf-ls__savestate-t">Saving…</span>
             } @else {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-              <span class="pf-ls__savestate-t">Saves automatically</span>
+              <span class="pf-ls__savestate-t">Changes save automatically</span>
             }
           </span>
     </ng-template>
@@ -207,7 +207,7 @@ interface AutoAssignConfig {
       @if (show('tech-notes')) {
         <pf-setting-group [label]="gLabel('tech-notes')" [scope]="groupScope('tech-notes')" [id]="groupId('tech-notes')" [icon]="gIcon('tech-notes')">
         <pf-setting-row class="pf-ls__card" data-testid="ls-tech-notes" label="Technician notes on report"
-                        hint="Notes written at result entry print on the final report (never on a preliminary). Off hides them at entry; written notes still print.">
+                        hint="A note written at result entry prints on the final report (never a preliminary). Off hides them at entry; written notes still print.">
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="techReportNotes()"
                   aria-label="Technician notes on report" (click)="setTechReportNotes(!techReportNotes())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>

@@ -48,9 +48,9 @@ export const MESSAGE_CHANNELS_PATH = '/admin/org/channels';
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </pf-setting-row>
-        <pf-setting-row label="Sender">
+        <pf-setting-row label="Sender" data-testid="rs-sender">
           <span row-hint class="pf-rs__hint"><a class="pf-rs__link" [routerLink]="channelsPath" data-testid="rs-channels-link">Number, templates and limits: Message channels</a></span>
-          <span class="pf-rs__sender" data-testid="rs-sender">{{ sender() }}</span>
+          <span class="pf-rs__sender">{{ sender() }}</span>
         </pf-setting-row>
         <pf-setting-row label="Message" hint="The manual Send WhatsApp button on each report keeps working as a fallback." [stack]="true">
           <pf-wa-message-picker [settings]="w" [canEdit]="canManage() && !saving() && !autoOff()" (changed)="wa.set($event)"></pf-wa-message-picker>

@@ -87,46 +87,41 @@ describe('Lab settings — removed settings are gone', () => {
 });
 
 describe('Lab settings — where each card applies', () => {
-  it('names the branch, and marks every setting card This branch / All branches', () => {
+  it('every group card says where it applies ONCE (this branch / all branches); no per-row pill', () => {
     const p = make();
-    expect(text(p.el.querySelector('[data-testid="ls-scope-note"]')!)).toContain('Anna Nagar');
     for (const c of ALL) {
       show(p, [c]);
-      const cards = Array.from(p.el.querySelectorAll('section.pf-card'))
-        .filter((x) => x.querySelector('button[role="switch"], [role="radiogroup"], input'));
-      for (const x of cards) {
-        const chip = x.querySelector('.pf-ls__scope');
-        expect(chip, x.querySelector('.pf-card__label')?.textContent ?? '').not.toBeNull();
-        expect(['This branch', 'All branches']).toContain(chip!.textContent!.trim());
+      for (const g of Array.from(p.el.querySelectorAll('pf-setting-group'))) {
+        expect(['this branch', 'all branches']).toContain(g.querySelector('.pf-sgroup__scope')?.textContent?.trim());
       }
+      expect(p.el.querySelector('pf-setting-row .pf-ls__scope')).toBeNull();
     }
   });
 
-  it('Specimen label code says it is per branch (it is — branch-lab-config), not organisation-wide', () => {
+  it('Specimen label code (Labels) says it is per branch (it is — branch-lab-config), not organisation-wide', () => {
     const p = make();
     show(p, ['label-code']);
-    const card = Array.from(p.el.querySelectorAll('section.pf-card')).find((c) => c.textContent?.includes('Specimen label code'))!;
-    expect(card.querySelector('.pf-ls__scope')!.textContent!.trim()).toBe('This branch');
+    const card = p.el.querySelector('pf-setting-group')!;
+    expect(card.querySelector('.pf-sgroup__scope')!.textContent!.trim()).toBe('this branch');
     expect(text(card as HTMLElement)).not.toContain('across the organisation');
   });
 });
 
 describe('Lab settings — a page shows only the cards it owns', () => {
-  it('[cards] narrows to the named cards; no input shows them all', () => {
+  it('[cards] narrows to the named cards; no input shows them all (counters ride in the Queue card)', () => {
     const p = make();
     show(p, ['queue-focus']);
-    expect(titles(p.el)).toEqual(['Queue focus']);
+    expect(titles(p.el)).toEqual(['Queue']);
     show(p, ['scan-mode', 'label-code']);
-    expect(titles(p.el)).toEqual(['Sample identification', 'Specimen label code']);
+    expect(titles(p.el)).toEqual(['Finding a sample', 'Labels']);
     show(p, null);
-    expect(titles(p.el).length).toBe(ALL.length);
+    expect(titles(p.el).length).toBe(ALL.length - 1);
   });
 
-  it('the Lab structure card opens the Departments and lab spaces page for the space codes', () => {
+  it('the space codes are edited on the Departments and lab spaces page', () => {
     const p = make();
     const nav = vi.spyOn(p.f.debugElement.injector.get(Router), 'navigate').mockResolvedValue(true);
-    show(p, ['lab-structure']);
-    p.el.querySelector<HTMLButtonElement>('section.pf-card button.pf-ls__link')!.click();
+    (p.f.componentInstance as unknown as { goBranches(): void }).goBranches();
     expect(nav).toHaveBeenLastCalledWith([LAB_SPACES_PATH], { queryParams: LAB_SPACES_QUERY });
   });
 });

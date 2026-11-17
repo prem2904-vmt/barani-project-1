@@ -27,10 +27,10 @@ describe('Notifications — master switch', () => {
 
   it('renders above the list with the critical-alerts note; on by default', () => {
     const p = make({ enabled: true, alwaysSends: ['critical_value'] });
-    const card = p.el.querySelector('.pf-band-body .pf-nc-master')!;
+    const card = p.el.querySelector('.pf-band-body .pf-nc-mastergroup')!;
     expect(card).not.toBeNull();
-    // First thing in the body, above every module section.
-    expect(p.el.querySelector('.pf-band-body')!.firstElementChild?.classList.contains('pf-nc-master')).toBe(true);
+    // First card in the body, above every module card.
+    expect(p.el.querySelector('.pf-band-body')!.firstElementChild?.classList.contains('pf-nc-mastergroup')).toBe(true);
     expect(card.textContent).toContain('All notifications');
     expect(card.textContent).toContain('Critical result alerts always send.');
     expect(masterSwitch(p.el).getAttribute('aria-checked')).toBe('true');

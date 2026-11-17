@@ -56,7 +56,7 @@ export function bytesWords(n: number): string {
           </div>
         } @else if (draft(); as d) {
           <pf-two-panel [groups]="catGroups()" [selected]="selectedCat()" [compact]="compact()" [detailOpen]="detailOpen()"
-                        navLabel="Files settings" [navTitle]="name + ' settings'" [navIcon]="filesIcon" [panelNote]="!full() ? 'View only for your organization' : null"
+                        navLabel="Files settings" [navTitle]="name + ' settings'" [navIcon]="filesIcon" [panelNote]="null"
                         [flush]="true" backLabel="Back to Files settings" (pick)="pickCat($event)" (back)="phoneDetail.set(false)">
             <ng-container panel-tools>
               @if (selectedCat() === 'templates') {
@@ -64,6 +64,9 @@ export function bytesWords(n: number): string {
               }
             </ng-container>
             <div class="fs-rows">
+              @if (!full()) {
+                <p class="fs-note" data-testid="files-settings-viewonly">View only: Files are view only for your organization, so these settings can be read but not changed.</p>
+              }
               @switch (selectedCat()) {
                 @case ('apps') {
                   @for (a of apps; track a.id) {
@@ -145,6 +148,7 @@ export function bytesWords(n: number): string {
     .fs-chip { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-tertiary); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
     .fs-over { min-height: 200px; display: flex; align-items: center; justify-content: center; }
     .fs-rows { padding: 4px 18px 16px; }
+    .fs-note { margin: 10px 0 4px; font-size: 12.5px; color: var(--text-tertiary); }
     .fs-app { display: grid; grid-template-columns: auto minmax(160px, 1fr) 260px auto; align-items: center; gap: 14px; min-height: 56px; padding: 10px 0; border-bottom: 1px solid var(--pf-line); }
     .fs-app:last-child { border-bottom: 0; }
     .fs-app__txt { display: flex; flex-direction: column; min-width: 0; }
