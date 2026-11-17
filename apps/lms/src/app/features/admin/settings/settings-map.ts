@@ -130,7 +130,6 @@ export const SETTINGS_PATHS = {
   labSampleNumbers: '/admin/lab/sample-numbers',
   tests: '/admin/tests',
   reports: '/admin/reports',
-  reportOptions: '/admin/lab/report-options',
   labCollection: '/admin/lab/collection',
   labResults: '/admin/lab/results',
   labOutsourcing: '/admin/lab/outsourcing',
@@ -549,6 +548,8 @@ export function rehome(path: string, query: Readonly<Record<string, string | nul
         case 'sample': return { path: P.labSampleNumbers, query: keep({ tab: 'format' }) };
         default: return { path: P.orgProfile, query: keep() };
       }
+    // Report options became tabs of Report design (one page, owner 2026-11-17).
+    case '/admin/lab/report-options': return { path: P.reports, query: keep({ tab: tab === 'sending' ? 'sending' : 'notes' }) };
     case '/admin/communication': return { path: P.orgChannels, query: keep(tab ? { tab } : {}) };
     case '/admin/appointments': return { path: P.labFrontDesk, query: keep(tab ? { tab } : {}) };
     case '/admin/referring-network': return { path: P.labFrontDesk, query: keep({ tab: 'referring' }) };

@@ -133,7 +133,11 @@ describe('Old links keep working — they all land on a new home', () => {
     expect(rehome('/admin/lab-settings', { tab: 'queues' })).toEqual({ path: P.labCollection, query: { tab: 'queue' } });
     expect(rehome('/admin/lab-settings', { tab: 'collection' })).toEqual({ path: P.labSampleNumbers, query: { tab: 'find' } });
     expect(rehome('/admin/lab-settings', { tab: 'rules' })).toEqual({ path: P.labResults, query: { tab: 'validation' } });
-    expect(rehome('/admin/lab-settings', { tab: 'report' })).toEqual({ path: P.reportOptions, query: { tab: 'notes' } });
+    expect(rehome('/admin/lab-settings', { tab: 'report' })).toEqual({ path: P.reports, query: { tab: 'notes' } });
+    // Report options are tabs of Report design now (one page, owner 2026-11-17).
+    expect(rehome('/admin/lab/report-options', { tab: 'sending' })).toEqual({ path: P.reports, query: { tab: 'sending' } });
+    expect(rehome('/admin/lab/report-options', { tab: 'notes' })).toEqual({ path: P.reports, query: { tab: 'notes' } });
+    expect(rehome('/admin/lab/report-options')).toEqual({ path: P.reports, query: { tab: 'notes' } });
     expect(rehome('/admin/lab-settings', { tab: 'rules', card: 'calc-constants' })).toEqual({ path: P.labResults, query: { tab: 'constants' } });
     expect(rehome('/admin/lab-settings')?.path).toBe(P.labSampleNumbers);
   });
@@ -212,9 +216,9 @@ describe('Categories from a page list (the Lab pages\' LAB_PAGES shape)', () => 
     ]);
   });
 
-  it('Report design lists Report design, Technician notes and Report sending (report-options ?tab=notes|sending)', () => {
+  it('Report design lists its tabs, ending with Technician notes and Sending (same page, ?tab=notes|sending)', () => {
     const rd = SETTINGS_SECTIONS.flatMap((s) => s.items).find((i) => i.id === 'lab-report')!;
     const tail = rd.categories.slice(-2).map((c) => [c.path, c.query?.['tab']]);
-    expect(tail).toEqual([['/admin/lab/report-options', 'notes'], ['/admin/lab/report-options', 'sending']]);
+    expect(tail).toEqual([['/admin/reports', 'notes'], ['/admin/reports', 'sending']]);
   });
 });

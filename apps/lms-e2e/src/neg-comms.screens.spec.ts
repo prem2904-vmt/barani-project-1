@@ -137,8 +137,8 @@ test.describe('neg-comms: Save and read', () => {
   }
 });
 
-/** WhatsApp Auto moved from Message channels to Lab › Report options › Report sending (Settings re-home 2026-11-17). */
-test.describe('neg-comms: WhatsApp Auto (Lab › Report sending)', () => {
+/** WhatsApp Auto moved from Message channels to Report design › Sending (Settings re-home 2026-11-17). */
+test.describe('neg-comms: WhatsApp Auto (Report design › Sending)', () => {
   const WA = '/api/whatsapp/settings';
   const waSettings = (extra: Record<string, unknown> = {}) => ({
     autoSendEnabled: false, sendUpdatedReports: false, templateName: null, templateLanguage: null, canSend: false,
@@ -147,7 +147,7 @@ test.describe('neg-comms: WhatsApp Auto (Lab › Report sending)', () => {
     ...extra,
   });
   const open = async (page: import('@playwright/test').Page) => {
-    await go(page, '/admin/lab/report-options?tab=sending');
+    await go(page, '/admin/reports?tab=sending');
     await expect(visible(page, '[data-testid="rs-auto-switch"]')).toBeVisible({ timeout: 60_000 });
   };
 
@@ -175,7 +175,7 @@ test.describe('neg-comms: WhatsApp Auto (Lab › Report sending)', () => {
     const errors: string[] = [];
     page.on('pageerror', e => errors.push(e.message));
     neg.hook = r => r.method === 'GET' && r.path === WA ? { status: 403, body: { success: false, error: 'forbidden', message: 'No permission' } } : undefined;
-    await go(page, '/admin/lab/report-options?tab=sending');
+    await go(page, '/admin/reports?tab=sending');
     await expect(visible(page, '[data-testid="rs-none"]')).toBeVisible({ timeout: 60_000 });
     expect(errors).toEqual([]);
   });

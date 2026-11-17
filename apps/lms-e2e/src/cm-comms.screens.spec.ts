@@ -233,7 +233,7 @@ test.describe('cm-comms', () => {
     // WhatsApp: the cards moved from Lab settings live here.
     await expect(visible(page, '[data-testid="ls-wa-chat"]')).toBeVisible({ timeout: 20_000 });
     await expect(visible(page, '[data-testid="ls-wa-chat-state"]')).toHaveText('On');
-    // WhatsApp Auto (and "send again", the message picker) moved to Lab › Report options › Report sending: not here.
+    // WhatsApp Auto (and "send again", the message picker) moved to Report design › Sending: not here.
     await expect(page.locator('[data-testid="rs-auto"], [data-testid="rs-auto-switch"]')).toHaveCount(0);
     await expect(page.getByText('WhatsApp Auto', { exact: true }).locator('visible=true')).toHaveCount(0);
     await noSideScroll(page);
@@ -300,9 +300,9 @@ test.describe('cm-comms', () => {
     await expect(visible(page, '[data-testid="ls-wa-chat"]')).toBeVisible({ timeout: 20_000 });
   });
 
-  test(`Lab › Report sending: WhatsApp Auto and "send again" save to the same WhatsApp settings API`, async ({ page: pg, context }) => {
+  test(`Report design › Sending: WhatsApp Auto and "send again" save to the same WhatsApp settings API`, async ({ page: pg, context }) => {
     const page = await setup(pg, context);
-    await go(page, '/admin/lab/report-options?tab=sending');
+    await go(page, '/admin/reports?tab=sending');
     const auto = visible(page, '[data-testid="rs-auto-switch"]');
     await expect(auto).toBeVisible({ timeout: 60_000 });
     await expect(auto).toHaveAttribute('aria-checked', 'false');

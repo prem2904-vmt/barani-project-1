@@ -84,8 +84,8 @@ const PAGES: Array<{ name: string; url: string; ready: string; text?: string }> 
   { name: 'front-desk-referring', url: '/admin/lab/front-desk?tab=referring', ready: 'pf-referring-network' },
   { name: 'alerts', url: '/admin/lab/alerts', ready: '.pf-nc-card', text: 'Order cancelled' },
   { name: 'numbers', url: '/admin/lab/numbers', ready: 'pf-kpi-config' },
-  { name: 'report-notes', url: '/admin/lab/report-options', ready: '[data-testid="ls-tech-notes"]', text: 'Technician notes on report' },
-  { name: 'report-sending', url: '/admin/lab/report-options?tab=sending', ready: 'pf-report-sending-card', text: 'WhatsApp Auto' },
+  { name: 'report-notes', url: '/admin/reports?tab=notes', ready: '[data-testid="ls-tech-notes"]', text: 'Technician notes on report' },
+  { name: 'report-sending', url: '/admin/reports?tab=sending', ready: 'pf-report-sending-card', text: 'WhatsApp Auto' },
   { name: 'inventory', url: '/admin/inventory', ready: '[data-testid="inventory-enable"]', text: 'Enable inventory' },
 ];
 
@@ -109,6 +109,16 @@ test.describe('lab settings pages', () => {
     await page.getByRole('radio', { name: 'Barcode type' }).first().click().catch(() => undefined);
     await go(page, '/admin/organization?tab=sample');
     await expect(page).toHaveURL(/\/admin\/lab\/sample-numbers\?tab=format/, { timeout: 60_000 });
+  });
+
+  test('report options are tabs of Report design: the old link redirects, one band, no second page', async ({ page }) => {
+    await go(page, '/admin/lab/report-options?tab=sending');
+    await expect(page).toHaveURL(/\/admin\/reports\?tab=sending/, { timeout: 60_000 });
+    await expect(vis(page, 'pf-report-sending-card')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('[data-testid="rt-report-options"]')).toHaveCount(0);
+    await go(page, '/admin/lab/report-options');
+    await expect(page).toHaveURL(/\/admin\/reports\?tab=notes/, { timeout: 60_000 });
+    await expect(vis(page, '[data-testid="ls-tech-notes"]')).toBeVisible({ timeout: 60_000 });
   });
 
   test('sample ID format saves through the same API', async ({ page }) => {

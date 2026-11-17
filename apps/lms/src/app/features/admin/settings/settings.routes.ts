@@ -55,7 +55,6 @@ const labHomeCollection = () => import('../lab-pages/home-collection.page').then
 const labFrontDesk = () => import('../lab-pages/front-desk.page').then((m) => m.LabFrontDeskPage);
 const labAlerts = () => import('../lab-pages/alerts.page').then((m) => m.LabAlertsPage);
 const labNumbers = () => import('../lab-pages/numbers.page').then((m) => m.LabNumbersPage);
-const labReportOptions = () => import('../lab-pages/report-options.page').then((m) => m.LabReportOptionsPage);
 const labDepartments = () => import('../lab-departments/lab-departments.component').then((m) => m.LabDepartmentsComponent);
 const branches = () => import('../branches/branches.component').then((m) => m.BranchesComponent);
 const organization = () => import('../organization/organization-settings.component').then((m) => m.OrganizationSettingsComponent);
@@ -98,7 +97,6 @@ const ALL_SETTINGS_PAGES: Routes = [
   page(P.labSampleNumbers, labSampleNumbers),
   page(P.tests, tests),
   page(P.reports, reportTemplate, { leave: true }),
-  page(P.reportOptions, labReportOptions),
   page(P.labCollection, labCollection),
   page(P.labResults, labResults),
   page(P.referralLabs, referralLabs),
@@ -188,6 +186,7 @@ const toAdmin = (path: string): Route => ({
 /** Paths that no longer hold a page of their own. */
 export const SETTINGS_REDIRECTS: Routes = [
   moved('/admin/lab-settings'),
+  moved('/admin/lab/report-options'),
   moved('/admin/organization'),
   moved('/admin/communication'),
   moved('/admin/appointments'),

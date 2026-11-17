@@ -717,8 +717,10 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
   `,
   styles: [`
     :host { display: block; min-width: 0; min-height: 0; }
-    .pf-rhe { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; height: 100%; min-height: 0; }
-    @media (max-width: 1100px) { .pf-rhe { grid-template-columns: minmax(0, 1fr) 330px; } }
+    /* Owner rule (2026-11-17): side cards sit on the LEFT, the same height as the main card. */
+    .pf-rhe { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; height: 100%; min-height: 0; }
+    @media (max-width: 1100px) { .pf-rhe { grid-template-columns: 330px minmax(0, 1fr); } }
+    @media (min-width: 901px) { .pf-rhe-side { grid-column: 1; grid-row: 1; } .pf-rhe-main { grid-column: 2; grid-row: 1; } }
     @media (max-width: 900px) { .pf-rhe { grid-template-columns: minmax(0, 1fr); height: auto; } }
 
     .pf-rhe-main, .pf-rhe-side { min-height: 0; }

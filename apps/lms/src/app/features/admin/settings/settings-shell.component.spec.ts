@@ -7,7 +7,7 @@ import { SettingsShellComponent } from './settings-shell.component';
 import { SettingsAccessService } from './settings-access.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { injectSettingsHosted } from '../../../shared/utils/settings-host';
-import { SettingsItem } from './settings-map';
+import { SETTINGS_SECTIONS, SettingsItem, settingsPages } from './settings-map';
 import { AuthService } from '../../../core/auth/auth.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 
@@ -134,13 +134,9 @@ describe('Settings shell — one category, page switch, band back', () => {
     expect(root(h).querySelector<HTMLInputElement>('.pf-hb__input')?.placeholder).toBe('Search Lab alerts');
   });
 
-  it('a setting that also has a full-screen page shows the page switch in the band (Report design · Report options)', async () => {
-    setup();
-    const h = await open('/admin/lab/report-options');
-    await settle(h);
-    const sw = root(h).querySelector('pf-hero-band [data-testid="settings-siblings"]');
-    expect(sw).not.toBeNull();
-    expect(Array.from(sw!.querySelectorAll('[role="radio"]')).map((b) => b.textContent?.trim())).toEqual(['Report design', 'Report options']);
+  it('Report design is ONE page (owner 2026-11-17): its categories, notes and sending included, open /admin/reports — no page switch', () => {
+    const item = SETTINGS_SECTIONS.flatMap((x) => x.items).find((i) => i.id === 'lab-report')!;
+    expect(settingsPages(item).map((p) => p.path)).toEqual(['/admin/reports']);
   });
 
   it('the band back chevron on a deep link climbs to the Settings section', async () => {

@@ -12,11 +12,12 @@ describe('Lab settings pages — catalog', () => {
   const routes = readFileSync('apps/lms/src/app/features/admin/settings/settings.routes.ts', 'utf8');
   const map = readFileSync('apps/lms/src/app/features/admin/settings/settings-map.ts', 'utf8');
 
-  it('has the eight pages of the re-home, each under /admin/lab/', () => {
+  it('has the seven pages of the re-home under /admin/lab/; report options are tabs of Report design (/admin/reports)', () => {
     expect(pages.map(p => p.path)).toEqual([
       '/admin/lab/sample-numbers', '/admin/lab/collection', '/admin/lab/results', '/admin/lab/home-collection',
-      '/admin/lab/front-desk', '/admin/lab/alerts', '/admin/lab/numbers', '/admin/lab/report-options',
+      '/admin/lab/front-desk', '/admin/lab/alerts', '/admin/lab/numbers', '/admin/reports',
     ]);
+    expect(LAB_PAGES.reportOptions.categories.map(c => c.id)).toEqual(['notes', 'sending']);
   });
 
   it('every page is guarded (route access) and routed, and category ids are unique', () => {

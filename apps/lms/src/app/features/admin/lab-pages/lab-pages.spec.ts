@@ -3,7 +3,6 @@ import { Router } from '@angular/router';
 import { LabSampleNumbersPage } from './sample-numbers.page';
 import { LabCollectionPage } from './collection.page';
 import { LabResultsPage } from './results.page';
-import { LabReportOptionsPage } from './report-options.page';
 import { SAMPLE_ID_DATE_OPTIONS, sampleIdPreview, sanitizeSamplePad } from './sample-id-format-card.component';
 import { DEFAULT_LAB_PREFIX, buildBranchPrefixes } from './space-prefixes-card.component';
 import { groupLabels, renderLabPage, rowLabels, segButtons, text } from './lab-pages.spec-helpers';
@@ -190,11 +189,3 @@ describe('Lab › Results and validation', () => {
   });
 });
 
-describe('Lab › Report options', () => {
-  it('technician notes PATCH only techReportNotes; the sending category is the WhatsApp Auto card', async () => {
-    const p = await renderLabPage(LabReportOptionsPage, '/page', { getFor: cfgGet() });
-    expect(groupLabels(p.el)).toEqual(['Report notes', 'Sending']);
-    p.el.querySelector<HTMLButtonElement>('.pf-ls__card button[aria-label="Technician notes on report"]')!.click();
-    expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/branch-lab-config', { techReportNotes: true });
-  });
-});

@@ -1,8 +1,7 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { OrgProfileService } from '../org/org-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -46,7 +45,10 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { bindTabQuery } from '../../../shared/utils/settings-host';
-import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
+import { ReportSendingCardComponent } from '../lab-pages/report-sending-card.component';
+import type { BranchLabConfig } from '../../../shared/models/branch-lab-config.model';
+import { findReportSettings, type ReportFindHit } from './report-find';
+import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 
 /** More sample tests so the live preview runs to three pages. */
 const previewTest = (testId: string, name: string, rows: Array<[string, string, string, string]>) => ({
@@ -74,7 +76,11 @@ const PREVIEW_EXTRA_TESTS = [
   previewTest('x6', 'HbA1c', [['HbA1c', '5.6', '%', '4.0 – 5.6'], ['Estimated Average Glucose', '114', 'mg/dL', '< 117']]),
 ];
 
-type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer';
+type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer' | 'notes' | 'sending';
+/** Every tab of the ONE report page, in band order (the URL's ?tab= names one). */
+export const REPORT_TABS: readonly Tab[] = ['letterhead', 'patient', 'columns', 'table', 'sequence', 'footer', 'notes', 'sending'];
+/** Tabs that are not part of the template: they save on their own as you switch (no Save needed). */
+const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
 
 /** Admin editor for the per-tenant ReportTemplateEntity. Seven tabs:
  *  Identity / Header & Logo / Theme / Patient / Date & Time / Columns /
@@ -84,7 +90,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [SettingsSiblingsComponent, RouterLink, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
+  imports: [SettingRowComponent, ReportSendingCardComponent, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
@@ -99,20 +105,16 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
   template: `
     <section class="pf-band-page px-4 md:px-6 lg:px-8 pt-3 pb-10 pf-rt-page">
       @if (theme.isNewDesign()) {
-        <!-- Band (owner): the report's sections are the pill's tabs (tabs-only
-             pill — the page has nothing to search); Save rides the band. -->
-        <pf-hero-band [back]="true" [tabsOnly]="true">
+        <!-- Band (owner 2026-11-17): ONE page for the report — design, technician
+             notes and sending. Back chevron, a search pill that finds a setting
+             on any tab, and the tabs in the same pill; Save rides the band. -->
+        <pf-hero-band [back]="true" placeholder="Find a report setting" [value]="findQuery()"
+                      (valueChange)="onFind($event)" (submitted)="pickFirstFind()">
           <ng-container band-tools>
-            <pf-settings-siblings></pf-settings-siblings>
-            <pf-segmented class="pf-hb-tabs" size="sm" [options]="sectionOptions"
-                          [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
+            <pf-segmented class="pf-hb-tabs pf-rt-tabs" size="sm" [options]="sectionOptions"
+                          [value]="tab()" (valueChange)="setTab($event)" data-testid="rt-tabs"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
-            <a class="pf-hb-btn pf-hb-btn--ghost press pf-rt-options" [routerLink]="reportOptionsPath" data-testid="rt-report-options"
-               aria-label="Report options: technician notes and WhatsApp sending" title="Report options: technician notes and WhatsApp sending">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
-              Report options
-            </a>
             @if (tidyShown()) {
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
                       aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">
@@ -127,8 +129,11 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                 <span class="pf-rt-issues__t">{{ issuesLabel() }}</span>
               </button>
             }
-            <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite">
-              @if (dirty()) {
+            <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite" data-testid="rt-savestate"
+                  [attr.title]="selfSavingTab() ? 'Technician notes and sending save as you switch them' : null">
+              @if (optionsSaving()) {
+                <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Saving…</span>
+              } @else if (dirty()) {
                 <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Unsaved changes</span>
               } @else {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-rt-savestate__t">All changes saved</span>
@@ -151,12 +156,6 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           <h1 class="pf-rt-title">Report designer</h1>
           <p class="pf-rt-sub">How every printed report looks — edit on the left, watch the page on the right.</p>
         </div>
-        <a class="pf-hb-btn pf-hb-btn--ghost press pf-rt-options" [routerLink]="reportOptionsPath" data-testid="rt-report-options-classic"
-               aria-label="Report options: technician notes and WhatsApp sending" title="Report options: technician notes and WhatsApp sending">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
-              Report options
-            </a>
-            
         @if (tidyShown()) {
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
                   aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">
@@ -172,7 +171,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           </button>
         }
         <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite">
-          @if (dirty()) { <span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
+          @if (optionsSaving()) { <span class="pf-savestate__dot" aria-hidden="true"></span>Saving… } @else if (dirty()) { <span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
         </span>
         <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="saving() || tplSkeleton()" [busy]="saving()" busyLabel="Saving…">
           {{ saving() ? 'Saving…' : 'Save' }}
@@ -183,7 +182,19 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
         <pf-report-tidy-card [tpl]="tpl()" [base]="tb" (applied)="applyTidy($event)" (close)="tidyOpen.set(false)"></pf-report-tidy-card>
       }
 
-      <div class="pf-band-body pf-band-body--fill">
+      <div class="pf-band-body pf-band-body--fill pf-rt-body">
+      @if (findQuery().trim()) {
+        <div class="pf-card pf-rt-find" role="listbox" aria-label="Report settings found" data-testid="rt-find">
+          @for (h of findHits(); track h.label + h.tab) {
+            <button type="button" class="pf-rt-find__hit press" role="option" aria-selected="false" (click)="pickFind(h)">
+              <span class="pf-rt-find__l">{{ h.label }}</span>
+              <span class="pf-rt-find__t">{{ tabLabel(h.tab) }}</span>
+            </button>
+          } @empty {
+            <p class="pf-rt-find__none">Nothing on the report pages matches “{{ findQuery().trim() }}”.</p>
+          }
+        </div>
+      }
       @if (tplSkeleton()) {
         <!-- First load: the designer's shape until the lab's template lands
              (never the defaults flashing before the saved template). -->
@@ -817,6 +828,35 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
               </pf-report-columns-editor>
             }
 
+            <!-- ══ TECHNICIAN NOTES — per branch, saves on the switch ══ -->
+            @case ('notes') {
+              <div class="pf-rt-flat">
+                <div class="pf-rtb" data-testid="ls-tech-notes">
+                  <h4 class="pf-rtb-h">Technician notes on report</h4>
+                  <p class="pf-rtb-s">This branch only. Saves as you switch it.</p>
+                  <pf-setting-row label="Technicians can add notes"
+                                  hint="A note prints on the final report under a test, a profile, a department or the whole report. Off hides notes on result entry; notes already written still print.">
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="techNotes() === true"
+                            aria-label="Technician notes on report" [disabled]="techNotes() === null || notesSaving() > 0"
+                            (click)="setTechNotes(!techNotes())">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    </button>
+                  </pf-setting-row>
+                </div>
+              </div>
+            }
+
+            <!-- ══ SENDING — WhatsApp Auto (same settings API), saves on each switch ══ -->
+            @case ('sending') {
+              <div class="pf-rt-flat">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Send reports on WhatsApp</h4>
+                  <p class="pf-rtb-s">What the lab sends when a report is ready. Saves as you switch.</p>
+                  <pf-report-sending-card (savingChange)="sendingSaving.set($event)"></pf-report-sending-card>
+                </div>
+              </div>
+            }
+
             <!-- ══ SEQUENCING — department + test print order ══ -->
             @case ('sequence') {
               <pf-report-sequencing-editor [template]="tpl()"
@@ -1204,13 +1244,23 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-rt-issues:focus-visible { outline: 2px solid var(--warning-text); outline-offset: 2px; }
     @media (max-width: 640px) { .pf-rt-issues__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .pf-rt-issues { width: 34px; padding: 0; justify-content: center; } }
     .pf-rt-savestate { margin-right: 4px; }
+    /* Band search results: a card under the band, over the body. */
+    .pf-rt-body { position: relative; }
+    .pf-rt-find { position: absolute; z-index: 30; left: 50%; transform: translateX(-50%); top: 0;
+      width: min(560px, calc(100% - 32px)); max-height: min(60dvh, 420px); overflow-y: auto; padding: 6px;
+      display: flex; flex-direction: column; gap: 2px; box-shadow: var(--shadow-lg, 0 12px 32px rgba(15,23,42,.18)); }
+    .pf-rt-find__hit { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px; border-radius: 10px;
+      border: 0; background: transparent; text-align: left; cursor: pointer; font: inherit; color: var(--text-primary); }
+    @media (hover: hover) { .pf-rt-find__hit:hover { background: var(--glass-bg-hover, rgba(148,163,184,.1)); } }
+    .pf-rt-find__hit:focus-visible { outline: 2px solid var(--focus-ring, var(--primary)); outline-offset: -2px; }
+    .pf-rt-find__l { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; }
+    .pf-rt-find__t { flex: none; font-size: 12px; color: var(--text-tertiary); }
+    .pf-rt-find__none { margin: 0; padding: 12px; font-size: 12.5px; color: var(--text-tertiary); }
     .pf-classic-only .pf-rt-savestate, .pf-rt-head .pf-rt-savestate { align-self: center; }
     @media (max-width: 640px) { .pf-rt-savestate__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
   `],
 })
 export class ReportTemplateComponent implements OnInit, OnDestroy {
-  /** Technician notes + WhatsApp sending sit next to the report design. */
-  protected readonly reportOptionsPath = LAB_PAGES.reportOptions.path;
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
@@ -1228,6 +1278,8 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'table',      label: 'Results table', desc: 'Report theme, font, table colours, zebra rows, abnormal marking, departments' },
     { value: 'sequence',   label: 'Sequencing',    desc: 'The order departments and tests print in' },
     { value: 'footer',     label: 'Footer',        desc: 'Disclaimer, end-of-report, watermark, page extras' },
+    { value: 'notes',      label: 'Technician notes', desc: 'Whether technicians can add notes that print on the report' },
+    { value: 'sending',    label: 'Sending',       desc: 'WhatsApp Auto, sending a corrected report again, and the message' },
   ];
   /** The same sections as the band pill's tabs (new design). The
    *  description rides as the tab's tooltip. */
@@ -1235,7 +1287,60 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
   private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
-  private readonly followTab = bindTabQuery(['letterhead', 'patient', 'table', 'columns', 'sequence', 'footer'] as const, (t) => { if (t !== this._tab()) this.setTab(t); });
+  private readonly followTab = bindTabQuery(REPORT_TABS, (t) => { if (t !== this._tab()) this.setTab(t); });
+  private readonly router = inject(Router);
+  private readonly host = inject(ElementRef<HTMLElement>);
+  readonly selfSavingTab = computed(() => SELF_SAVING_TABS.has(this._tab()));
+
+  // ── Technician notes (per branch, branch-lab-config.techReportNotes) ──
+  /** null until the branch config answers. */
+  readonly techNotes = signal<boolean | null>(null);
+  readonly notesSaving = signal(0);
+  private notesLoading = false;
+  private loadTechNotes() {
+    if (this.techNotes() !== null || this.notesLoading) return;
+    this.notesLoading = true;
+    this.api.get<BranchLabConfig>('/api/tenants/branch-lab-config').subscribe({
+      next: c => { this.notesLoading = false; this.techNotes.set(c?.techReportNotes === true); },
+      error: () => { this.notesLoading = false; this.techNotes.set(false); },
+    });
+  }
+  setTechNotes(v: boolean) {
+    this.techNotes.set(v);
+    this.notesSaving.update(n => n + 1);
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { techReportNotes: v }).subscribe({
+      next: () => {
+        this.notesSaving.update(n => Math.max(0, n - 1));
+        this.toasts.success(v ? 'Technicians can now add notes that print on the report' : 'Technician report notes turned off — saved notes still print');
+      },
+      error: e => { this.notesSaving.update(n => Math.max(0, n - 1)); this.techNotes.set(!v); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+  /** WhatsApp sending saves on each switch; the band save state reads it. */
+  readonly sendingSaving = signal(false);
+  /** Notes / sending saves in flight → the ONE band save state says "Saving…". */
+  readonly optionsSaving = computed(() => this.notesSaving() > 0 || this.sendingSaving());
+
+  // ── Band search: find a setting on any tab ──
+  readonly findQuery = signal('');
+  readonly findHits = computed(() => findReportSettings(this.findQuery()));
+  tabLabel(t: Tab): string { return this.sections.find(s => s.value === t)?.label ?? ''; }
+  onFind(q: string) { this.findQuery.set(q); }
+  pickFirstFind() { const h = this.findHits()[0]; if (h) this.pickFind(h); }
+  pickFind(h: ReportFindHit) {
+    this.findQuery.set('');
+    this.setTab(h.tab as Tab);
+    if (!h.heading) return;
+    // After the tab renders: bring the setting's group into view.
+    setTimeout(() => {
+      const heads = Array.from((this.host.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.pf-rtb-h'));
+      const el = heads.find(x => (x.textContent ?? '').trim() === h.heading)?.closest<HTMLElement>('.pf-rtb');
+      const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+    }, 60);
+  }
+  @HostListener('document:keydown.escape')
+  closeFind() { if (this.findQuery()) this.findQuery.set(''); }
   /** Left section list hide/unhide — Test Master departments pattern. */
   readonly railHidden = signal<boolean>(
     typeof localStorage !== 'undefined' && localStorage.getItem('pf-rt-rail') === 'hidden');
@@ -1245,7 +1350,13 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   }
 
   setTab(t: Tab) {
+    const changed = t !== this._tab();
     this._tab.set(t);
+    if (t === 'notes') this.loadTechNotes();
+    // Keep ?tab= in step (replacing history) so a reload, a shared link and the Settings panel land here.
+    if (changed && this.route.snapshot.queryParamMap.get('tab') !== t) {
+      void this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true });
+    }
     if (t === 'table') this.loadSourceSansFace();
     // Re-pull the form-flow fields when entering the Patient tab so the list
     // reflects the latest saved Patient Registration flow (not a stale copy).
@@ -1940,6 +2051,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
       this._tab.set(initial);
     }
     if (this._tab() === 'table') this.loadSourceSansFace();
+    if (this._tab() === 'notes') this.loadTechNotes();
     this.destroyRef.onDestroy(() => this.tplHold.cancel());
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => {

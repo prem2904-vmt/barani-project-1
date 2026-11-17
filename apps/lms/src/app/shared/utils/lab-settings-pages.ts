@@ -77,11 +77,14 @@ export const LAB_PAGES = {
     title: 'Numbers on lab screens',
     categories: [{ id: 'numbers', label: 'Number cards' }],
   },
+  // Not a page of its own any more (owner 2026-11-17, "all in one"): the two
+  // report switches are tabs of Report design. The old /admin/lab/report-options
+  // link redirects there (settings-map `rehome`).
   reportOptions: {
-    path: '/admin/lab/report-options',
-    title: 'Report options',
+    path: '/admin/reports',
+    title: 'Report design',
     categories: [
-      { id: 'notes', label: 'Report notes', scope: 'this branch' },
+      { id: 'notes', label: 'Technician notes', scope: 'this branch' },
       { id: 'sending', label: 'Sending' },
     ],
   },

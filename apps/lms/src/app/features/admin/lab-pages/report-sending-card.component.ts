@@ -1,5 +1,5 @@
 import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
 import { COMMS_SETTINGS_PERMS } from '../../../core/auth/route-access';
@@ -13,7 +13,7 @@ import { WaMessagePickerComponent } from '../communication/wa-message-picker.com
 export const MESSAGE_CHANNELS_PATH = '/admin/org/channels';
 
 /**
- * Lab › Report options › Send reports on WhatsApp. What the LAB sends:
+ * Report design › Sending (one page with the report's design, owner 2026-11-17). What the LAB sends:
  * WhatsApp Auto (the final report goes out once it is ready and paid), send
  * again when a report is corrected, and which approved message goes. The
  * WhatsApp account itself (number, templates, monthly limit) is ONE set for
@@ -80,6 +80,8 @@ export class ReportSendingCardComponent implements OnInit {
   readonly wa = signal<WaSettings | null>(null);
   readonly loading = signal(true);
   readonly saving = signal(false);
+  /** Each switch save in flight / done — the host page's band save state shows it (no second Save button). */
+  readonly savingChange = output<boolean>();
   readonly autoOff = computed(() => this.wa()?.autoEntitled === false);
   readonly sender = computed(() => waSenderLine(this.wa()?.sender));
   readonly canManage = computed(() => COMMS_SETTINGS_PERMS.some(p => this.auth.hasPermission(p)));
@@ -102,15 +104,17 @@ export class ReportSendingCardComponent implements OnInit {
     };
     this.wa.set({ ...cur, ...next });
     this.saving.set(true);
+    this.savingChange.emit(true);
     this.svc.saveSettings(next).subscribe({
       next: s => {
         this.saving.set(false);
+        this.savingChange.emit(false);
         if (s && typeof s === 'object' && 'autoSendEnabled' in s) this.wa.set(s);
         this.toasts.success(patch.autoSendEnabled !== undefined
           ? (s.autoSendEnabled ? 'WhatsApp Auto is on: reports are sent once paid' : 'WhatsApp Auto is off')
           : 'WhatsApp settings saved');
       },
-      error: e => { this.saving.set(false); this.wa.set(cur); this.toasts.error(ApiError.from(e).message); },
+      error: e => { this.saving.set(false); this.savingChange.emit(false); this.wa.set(cur); this.toasts.error(ApiError.from(e).message); },
     });
   }
 }
