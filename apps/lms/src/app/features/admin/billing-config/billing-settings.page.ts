@@ -3,7 +3,6 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { map } from 'rxjs';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { VendorsComponent } from '../vendors/vendors.component';
 import { BillingConfigComponent } from './billing-config.component';
 import { PaymentRulesCardComponent } from './payment-rules.component';
@@ -30,22 +29,20 @@ export function billingSectionOf(tab: string | null | undefined): BillingSection
 @Component({
   selector: 'pf-billing-settings',
   standalone: true,
-  imports: [BillingConfigComponent, PaymentRulesCardComponent, VendorsComponent, HeroBandComponent, ScreenHeaderComponent],
+  imports: [BillingConfigComponent, PaymentRulesCardComponent, VendorsComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @switch (section()) {
       @case ('payments') {
         <section class="pf-band-page px-4 md:px-8 pt-6 pb-10" data-testid="billing-payments">
           <pf-hero-band [back]="true" [tabsOnly]="true"></pf-hero-band>
-          <pf-screen-header class="pf-classic-only" eyebrow="Billing and taxes" title="Payment rules" subtitle="When an unpaid balance holds the work, and who sees what is due."></pf-screen-header>
-          <div class="pf-band-body"><div class="pf-bs__col"><pf-payment-rules-card></pf-payment-rules-card></div></div>
+          <div class="pf-band-body"><pf-payment-rules-card></pf-payment-rules-card></div>
         </section>
       }
       @case ('credit') { <pf-vendors [view]="'setup'"></pf-vendors> }
       @default { <pf-billing-config [section]="section() === 'invoice' ? 'invoice' : 'gst'"></pf-billing-config> }
     }
   `,
-  styles: [`.pf-bs__col { max-width: 56rem; margin-inline: auto; width: 100%; }`],
 })
 export class BillingSettingsPage {
   private readonly route = inject(ActivatedRoute);
