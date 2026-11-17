@@ -560,7 +560,7 @@ test.describe('this device', () => {
 const startStub = (page: Page, app: string, prefix: string) => page.route(`**/${app}-engine/**`, r => r.fulfill({ status: 200, contentType: 'text/html',
   body: `<!doctype html><html><head><style>body{font:14px system-ui;margin:24px;background:Canvas;color:CanvasText}button{font:inherit;margin:4px;padding:6px 12px}li{list-style:none;padding:4px 0}</style></head><body>
 <h1 id="hello">Start</h1><div id="tpl"></div><ul id="rec"></ul><div id="msg"></div>
-<script type="module">/* stub: ./${app}-web-stub_bg.wasm */
+<script>/* stub: ./${app}-web-stub_bg.wasm */
 const P=${JSON.stringify(prefix)}; const send=m=>parent.postMessage(m,location.origin);
 addEventListener('message',e=>{ const d=e.data; if(!d||d.type!==P+'home')return; window.__home=d;
   const t=document.getElementById('tpl'); t.innerHTML='';
