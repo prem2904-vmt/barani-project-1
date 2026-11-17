@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 
 /**
  * ONE minimal settings row (owner 2026-11-17, DESIGN-V2 rule 5): label (+ at most one muted hint line) on the left,
@@ -61,6 +62,7 @@ export const SETTING_GROUP_ICON = 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0
 @Component({
   selector: 'pf-setting-group',
   standalone: true,
+  imports: [NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'pf-sgroup',
@@ -69,6 +71,7 @@ export const SETTING_GROUP_ICON = 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0
     '[attr.data-group]': 'id()',
   },
   template: `
+    <ng-template #rows><ng-content></ng-content></ng-template>
     @if (label()) {
       <section class="pf-card pf-sgroup__card" [attr.aria-label]="label()">
         <header class="pf-card__head pf-sgroup__head">
@@ -82,11 +85,11 @@ export const SETTING_GROUP_ICON = 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0
         </header>
         <div class="pf-sgroup__rows">
           @if (hint()) { <p class="pf-sgroup__hint">{{ hint() }}</p> }
-          <ng-content></ng-content>
+          <ng-container *ngTemplateOutlet="rows"></ng-container>
         </div>
       </section>
     } @else {
-      <ng-content></ng-content>
+      <ng-container *ngTemplateOutlet="rows"></ng-container>
     }
   `,
   styles: [`
