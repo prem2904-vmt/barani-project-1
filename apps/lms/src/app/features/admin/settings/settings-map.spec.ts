@@ -1,9 +1,11 @@
 import {
   LEGACY_SECTION, SETTINGS_GROUPS, SETTINGS_PATHS as P, SETTINGS_SECTIONS, allSettingsPaths, categoryPath, locateSettings,
-  categoriesFromPage, rehome, rehomeHref, settingsParents,
+  categoriesFromPage, rehome, rehomeHref, settingsParents, SETTINGS_FULL_SCREEN_PATHS,
 } from './settings-map';
 import { ROUTE_ACCESS } from '../../../core/auth/route-access';
-import { SETTINGS_SHELL_CHILDREN } from './settings.routes';
+import { SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from './settings.routes';
+import { CASESHEET_SHELL_ROUTES } from '../../casesheets/casesheets.routes';
+import { OPD_ADMIN_ROUTES } from '../../opd/opd.routes';
 import { SETTINGS_CATALOG, SETTINGS_PARENT } from '../../../shared/utils/settings-catalog';
 
 describe('Settings map — the approved structure', () => {
@@ -73,9 +75,18 @@ describe('Settings map — the approved structure', () => {
 
 describe('Settings route table — one row per path, every path gated and hosted', () => {
   const hosted = new Set(SETTINGS_SHELL_CHILDREN.map((r) => '/' + (r.path ?? '')));
+  const full = new Set(SETTINGS_FULL_PAGE_ROUTES.map((r) => '/' + (r.path ?? '')));
+  const sheets = new Set(CASESHEET_SHELL_ROUTES.map((r) => '/' + (r.path ?? '')));
+  const opd = new Set(OPD_ADMIN_ROUTES.map((r) => '/' + (r.path ?? '')));
 
-  it('every path a setting or category answers on is a hosted route (nothing 404s)', () => {
-    for (const p of allSettingsPaths()) expect(hosted.has(p), p).toBe(true);
+  it('every path a setting or category answers on is routed (hosted card page or full-screen page — nothing 404s)', () => {
+    for (const p of allSettingsPaths()) expect(hosted.has(p) || full.has(p) || sheets.has(p) || opd.has(p), p).toBe(true);
+  });
+
+  it('full-screen pages are never hosted; card-style pages always are (DESIGN-V2 rule 2)', () => {
+    for (const p of SETTINGS_FULL_SCREEN_PATHS) expect(hosted.has(p), p).toBe(false);
+    for (const p of ['/admin/lab/sample-numbers', '/admin/lab/collection', '/admin/org/profile', '/admin/billing']) expect(hosted.has(p), p).toBe(true);
+    expect(full.has('/admin/tests')).toBe(true);
   });
 
   it('every hosted path has a ROUTE_ACCESS gate (or its own guards)', () => {

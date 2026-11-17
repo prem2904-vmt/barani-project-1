@@ -8,7 +8,7 @@ import { NavBackService } from '../../../core/services/nav-back.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { injectTenantBrand } from './tenant-brand';
-import { SETTINGS_HOST } from '../../utils/settings-host';
+import { SETTINGS_HOST, createSettingsHost } from '../../utils/settings-host';
 
 /**
  * pf-hero-band — the ONE band every screen renders. Admin sub-pages
@@ -238,13 +238,14 @@ describe('pf-hero-band — customBrand', () => {
 describe('pf-hero-band — hosted in the Settings shell (SETTINGS_HOST)', () => {
   function makeHosted(tabsOnly: boolean) {
     const navBack = { showBack: signal(true), back: vi.fn(), backTo: vi.fn() };
+    const host = createSettingsHost();
     TestBed.configureTestingModule({
       imports: [HostComponent],
       providers: [
         { provide: AuthService, useValue: { user: () => ({ tenantName: 'Micro World' }) } },
         { provide: TenantStateService, useValue: { tenant: () => null } },
         { provide: NavBackService, useValue: navBack },
-        { provide: SETTINGS_HOST, useValue: { hosted: true } },
+        { provide: SETTINGS_HOST, useValue: host },
         provideRouter([]),
       ],
     });
@@ -252,30 +253,30 @@ describe('pf-hero-band — hosted in the Settings shell (SETTINGS_HOST)', () => 
     f.componentInstance.tabsOnly.set(tabsOnly);
     f.componentInstance.back.set(true);
     f.detectChanges();
-    return f.nativeElement as HTMLElement;
+    TestBed.flushEffects?.();
+    f.detectChanges();
+    return { el: f.nativeElement as HTMLElement, host };
   }
 
-  it('marks the band hosted and keeps the page actions', () => {
-    const el = makeHosted(false);
-    expect(el.querySelector('.pf-hb--hosted')).not.toBeNull();
-    expect(el.querySelector('.pf-hb__back')).toBeNull();
-    expect(el.querySelector('.pf-hb__actions .act')?.textContent).toBe('Save');
+  it('renders nothing in place and hands the shell its actions', () => {
+    const { el, host } = makeHosted(false);
+    expect(el.querySelector('.pf-hb')).toBeNull();
+    expect(host.actions().length).toBe(1);
   });
 
-  it('a tabs-only page (its tabs are the shell\'s categories) renders NO tab pill', () => {
-    const el = makeHosted(true);
-    expect(el.querySelector('.pf-hb__searchrow')).toBeNull();
-    expect(el.querySelector('.pf-hb__tools')).toBeNull();
-    expect(el.querySelector('.pf-hb__actions .act')).not.toBeNull();
+  it('a tabs-only page hands no search (its tabs are the shell\'s categories)', () => {
+    const { host } = makeHosted(true);
+    expect(host.search()).toBeNull();
   });
 
-  it('a page with a search keeps its search pill', () => {
-    const el = makeHosted(false);
-    expect(el.querySelector('.pf-hb__input')).not.toBeNull();
+  it('a page with a search hands the shell its search field', () => {
+    const { host } = makeHosted(false);
+    expect(host.search()).not.toBeNull();
   });
 
   it('outside the shell nothing changes', () => {
     const { el } = make();
-    expect(el.querySelector('.pf-hb--hosted')).toBeNull();
+    expect(el.querySelector('.pf-hb')).not.toBeNull();
+    expect(el.querySelector('.pf-hb__actions .act')?.textContent).toBe('Save');
   });
 });

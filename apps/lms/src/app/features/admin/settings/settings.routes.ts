@@ -26,6 +26,8 @@ interface PageOpts {
   access?: string;
   /** Guards that run BEFORE the ROUTE_ACCESS ones (beta, OPD gate, case-sheet gate). */
   before?: CanActivateFn[];
+  /** Guards that run AFTER the ROUTE_ACCESS ones (a forward to the first page). */
+  after?: CanActivateFn[];
   /** Unsaved changes ask first. */
   leave?: boolean;
   data?: Route['data'];
@@ -34,7 +36,7 @@ interface PageOpts {
 function page(path: string, load: Route['loadComponent'], o: PageOpts = {}): Route {
   const route: Route = {
     path: strip(path),
-    canActivate: [...(o.before ?? []), ...routeGuards(o.access ?? path)],
+    canActivate: [...(o.before ?? []), ...routeGuards(o.access ?? path), ...(o.after ?? [])],
     loadComponent: load,
   };
   if (o.leave) route.canDeactivate = [(c: { canLeave?: () => Promise<boolean> }) => (c?.canLeave ? c.canLeave() : true)];
@@ -83,9 +85,10 @@ export const OPD_FULL_SCREEN_ADMIN: ReadonlySet<string> = new Set(
   OPD_ADMIN_ROUTES.map((r) => r.path ?? '').filter((p) => !OPD_HOSTED.has(p)),
 );
 
-/** A setting whose pages are all full-screen: its own path forwards to the first one. */
+/** A setting whose pages are all full-screen: its own path (gated like before) forwards to the first one. */
+const blank = () => import('./settings-blank.component').then((m) => m.SettingsBlankComponent);
 function forward(path: string, to: string): Route {
-  return { path: strip(path), pathMatch: 'full', redirectTo: () => inject(Router).createUrlTree([to]) };
+  return page(path, blank, { after: [() => inject(Router).createUrlTree([to])] });
 }
 
 /** Every settings page, hosted or not. Which ones the shell hosts is SETTINGS_FULL_SCREEN_PATHS (settings-map). */
