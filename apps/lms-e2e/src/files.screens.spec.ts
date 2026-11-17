@@ -44,6 +44,10 @@ const engineSays = async (page: Page, msg: Record<string, unknown>, bytes?: numb
   const fr = await handle!.contentFrame();
   await fr!.evaluate(([m, b]) => { const d = { ...(m as object) } as Record<string, unknown>; if (b) d['bytes'] = new Uint8Array(b as number[]).buffer; parent.postMessage(d, location.origin); }, [msg, bytes ?? null] as const);
 };
+/** A stand-in engine page (looks like a build, never says ready): the editor keeps its frame whether or not this build carries the real
+ *  engine, so frame-dependent steps don't race the missing-engine check (which drops the frame). */
+const stubEngine = (page: Page, app = 'neuron') => page.route(`**/${app}-engine/**`, r => r.fulfill({ status: 200, contentType: 'text/html',
+  body: `<!doctype html><html><body><script type="module">/* stub: ./${app}-web-stub_bg.wasm */</script></body></html>` }));
 /** Open a stored file through its row. */
 const openRow = async (page: Page, name: string) => { await page.getByText(name, { exact: false }).locator('visible=true').first().click(); };
 
@@ -102,6 +106,7 @@ test.describe('files home', () => {
 
   test('a writer starts a new file (editor opens) and Back returns to Files', async ({ page, context }) => {
     test.skip(isPhone(), 'phone is view-only: no New');
+    await stubEngine(page);
     await boot(page, context);
     await listReady(page);
     await tid(page, 'files-new-neuron').click();
@@ -172,6 +177,7 @@ test.describe('view only (the lab is not entitled to Full Files)', () => {
   });
 
   test('an editor opens the file read-only: View only chip, no Save, no rename, no insert; the device is a place in the File screen, not a band button', async ({ page, context }) => {
+    await stubEngine(page);
     await boot(page, context, { full: false, route: '/files/sheet/file-4' });
     await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
     expect(await page.evaluate(() => (document.querySelector('iframe') as HTMLIFrameElement).src)).toContain('readonly=1');
@@ -238,6 +244,7 @@ test.describe('app switched off and read-only roles', () => {
 
   test('turning on "Edit on phones" lets a phone edit', async ({ page, context }) => {
     test.skip(!isPhone(), 'phone only');
+    await stubEngine(page);
     await boot(page, context, { route: '/files/sheet/file-4', prep: () => { fb.editOnPhones = true; } });
     await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
     await expect(tid(page, 'files-save')).toBeVisible();
@@ -469,10 +476,7 @@ test.describe('this device', () => {
   // The device is a place inside the File screen (Save As / Open ask "Prefrontal · lab or This device"), not a band button.
   // The engine's File menu is played from inside the editor frame, so these steps run without an engine build.
   // The frame needs a page: a stub stands in for the engine (looks like a build, never says ready), with or without engines in this build.
-  test.beforeEach(async ({ page }) => {
-    await page.route('**/neuron-engine/**', r => r.fulfill({ status: 200, contentType: 'text/html',
-      body: '<!doctype html><html><body><script type="module">/* stub: ./neuron-web-stub_bg.wasm */</script></body></html>' }));
-  });
+  test.beforeEach(async ({ page }) => { await stubEngine(page); });
   const askPlace = async (page: Page, request: 'openRequest' | 'saveAsRequest') => {
     await engineSays(page, { type: `neuron:${request}`, name: 'QC log, November.xlsx' });
     await expect(dlg(page)).toContainText(request === 'openRequest' ? 'Where is the file?' : 'Where should this go?', { timeout: 30_000 });
