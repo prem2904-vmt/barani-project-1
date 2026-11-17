@@ -165,7 +165,9 @@ test.describe('settings list grids', () => {
     // Kit styles apply: the main card has a real border radius + background (was raw unstyled text).
     const radius = await vis(page, '.pf-brl__main').evaluate(el => getComputedStyle(el).borderTopLeftRadius);
     expect(parseFloat(radius)).toBeGreaterThan(4);
-    await expect(vis(page, 'pf-hero-band .pf-hb-btn--primary')).toContainText('Add Bridge');
+    // No band buttons in Settings: Add Bridge is a secondary in the card head.
+    await expect(page.locator('pf-hero-band .pf-hb__actions button').locator('visible=true')).toHaveCount(0);
+    await expect(vis(page, '.pf-brl__main .pf-sg-act:has-text("Add Bridge")')).toBeVisible();
     await expectSymmetric(page, '.pf-brl__side', '.pf-brl__main');
     await expectLayout(page, 'bridges');
     await shot(page, 'sg-bridges');
@@ -187,7 +189,8 @@ test.describe('settings list grids', () => {
     page.on('pageerror', e => errors.push(e.message));
     await go(page, '/admin/instruments');
     await expect(vis(page, '.pf-inl__main .ag-row')).toBeVisible({ timeout: 60_000 });
-    await expect(vis(page, 'pf-hero-band .pf-hb-btn--primary')).toContainText('Add instrument');
+    await expect(page.locator('pf-hero-band .pf-hb__actions button').locator('visible=true')).toHaveCount(0);
+    await expect(vis(page, '.pf-inl__main .pf-sg-act:has-text("Add instrument")')).toBeVisible();
     await expectSymmetric(page, '.pf-inl__side', '.pf-inl__main');
     await expectLayout(page, 'analyzers');
     await shot(page, 'sg-analyzers');
@@ -217,7 +220,8 @@ test.describe('settings list grids', () => {
     await vis(page, 'pf-hero-band input').fill('refund');
     await expect.poll(() => rowCount(page, '.re-main')).toBe(1);
     await vis(page, '.re-main .ag-row .pf-sg-switch').dispatchEvent('click');
-    await vis(page, 'pf-hero-band .pf-hb-btn--primary').click();
+    // Save lives in the card's Save bar (shown once something changed).
+    await vis(page, '.re-main [data-testid="role-save"]').click();
     await expect.poll(() => neg.calls.find(c => c.path === '/api/roles/r2/permissions')?.body)
       .toEqual({ permissionIds: ['p1', 'p4', 'p11'] });
     expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
@@ -404,7 +408,7 @@ test.describe('settings list grids', () => {
     await expect.poll(() => rowCount(page, '.pf-br-main')).toBe(3);
     await expectLayout(page, 'branches');
     await shot(page, 'sg-branches');
-    await vis(page, 'pf-hero-band .pf-hb-btn--primary').click();
+    await vis(page, '.pf-br-main .pf-sg-act').dispatchEvent('click');
     await expect(vis(page, '.pf-br-new')).toContainText('New branch');
     await shot(page, 'sg-branches-new');
     expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
