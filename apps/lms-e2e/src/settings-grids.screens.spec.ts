@@ -97,11 +97,17 @@ test.beforeEach(async ({ page, context }) => {
     if (r.method !== 'GET') return undefined;
     const ok = (data: unknown) => ({ status: 200, body: { success: true, data } });
     if (r.path === '/api/tests/') return ok(TESTS);
+    if (r.path === '/api/kpis/assignments') return ok([
+      { id: 'a1', branchId: null, kpiId: 'k1', screen: 'frontdesk_landing', enabled: true, sortOrder: 0 },
+      { id: 'a2', branchId: null, kpiId: 'k3', screen: 'frontdesk_landing', enabled: false, sortOrder: 1 },
+      { id: 'a3', branchId: null, kpiId: 'k2', screen: 'frontdesk_landing', enabled: true, sortOrder: 2 },
+    ]);
     if (r.path === '/api/roles/r1/permissions') return ok(['p1', 'p2', 'p3', 'p4', 'p5', 'p7', 'p8', 'p9', 'p17', 'p18']);
     if (r.path === '/api/roles/r2/permissions') return ok(['p1', 'p4']);
     switch (r.path) {
       case '/api/tenants/departments': return ok(DEPTS);
-      case '/api/tenants/branches': return ok([{ id: 'b1', name: 'Main', code: 'MAIN', defaultLabCode: 'LAB', isActive: true }, { id: 'b2', name: 'Anna Nagar', code: 'ANN', defaultLabCode: 'ANN', isActive: true }]);
+      case '/api/tenants/branches': return ok([{ id: 'b1', name: 'Main', code: 'MAIN', city: 'Chennai', state: 'Tamil Nadu', defaultLabCode: 'LAB', isActive: true }, { id: 'b2', name: 'Anna Nagar', code: 'ANN', city: 'Chennai', state: 'Tamil Nadu', defaultLabCode: 'ANN', isActive: true }, { id: 'b3', name: 'Salem', code: 'SLM', city: 'Salem', state: 'Tamil Nadu', isActive: false }]);
+      case '/api/config/gst': return ok([{ branchId: 'b1', gstin: '33AAAAA0000A1Z5' }]);
       case '/api/tenants/lab-spaces': return ok([{ id: 's1', branchId: 'b1', name: 'Microbiology', code: 'MIC', order: 1 }, { id: 's2', branchId: 'b1', name: 'Biochemistry', code: 'BIO', order: 2 }, { id: 's3', branchId: 'b2', name: 'Pathology', code: 'PAT', order: 1 }]);
       case '/api/tenants/department-space-links': return ok([{ branchId: 'b1', departmentId: 'd3', spaceId: 's1' }, { branchId: 'b1', departmentId: 'd2', spaceId: 's2' }]);
       case '/api/bridges': return ok(BRIDGES);
@@ -109,6 +115,12 @@ test.beforeEach(async ({ page, context }) => {
       case '/api/instruments': return ok(INSTRUMENTS);
       case '/api/permissions': return ok(PERMS);
       case '/api/vendors': return ok(VENDORS);
+      case '/api/kpis': return ok([
+        { id: 'k1', code: 'CASH_IN', name: 'Cash in', description: 'Collections today', category: 'financial', valueType: 'money', defaultLabel: 'Cash in' },
+        { id: 'k2', code: 'TAT_BREACH', name: 'TAT breaches', description: 'Tests past their TAT', category: 'tat', valueType: 'count', defaultLabel: 'TAT breaches' },
+        { id: 'k3', code: 'PENDING', name: 'Pending samples', description: 'Collected, not yet received', category: 'operational', valueType: 'count', defaultLabel: 'Pending samples' },
+        { id: 'k4', code: 'DUE', name: 'Balance due', description: 'Unpaid today', category: 'financial', valueType: 'money', defaultLabel: 'Balance due' },
+      ]);
       case '/api/home-collection/agents': return ok(AGENTS);
       case '/api/appointments/config': return ok({ branchId: 'b1', queueMode: 'token_queue', slotMinutes: 30, maxConcurrentSlots: 2, open24h: false });
       case '/api/referral-labs': return ok(REF_LABS);
@@ -339,6 +351,8 @@ test.describe('settings list grids', () => {
         ['/admin/billing?tab=credit', '.pf-vn-main'],
         ['/admin?section=people', '.pf-ua-main'],
         ['/admin/referral-labs', '.pf-rl-main'],
+        ['/admin/branches', '.pf-br-main'],
+        ['/admin/lab/numbers', '.pf-kpi-main'],
       ] as const) {
         await go(page, url);
         const grid = vis(page, `${card} ag-grid-angular`);
@@ -353,4 +367,29 @@ test.describe('settings list grids', () => {
       }
     });
   }
+
+  test('Numbers on lab screens: screens as categories, the screen\'s cards as a grid; Add KPI; same save payload', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await go(page, isPhone() ? '/admin/lab/numbers?tab=frontdesk_landing' : '/admin/lab/numbers');
+    await expect(vis(page, '.pf-kpi-main pf-data-grid .ag-row')).toBeVisible({ timeout: 60_000 });
+    await expect.poll(() => rowCount(page, '.pf-kpi-main')).toBe(3);
+    await expectLayout(page, 'kpi numbers');
+    await shot(page, 'sg-kpi-numbers');
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
+  });
+
+  test('Branches: Test Master grid, GSTIN read-only, status filter; Add branch opens the side card', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await go(page, '/admin/branches');
+    await expect(vis(page, '.pf-br-main pf-data-grid .ag-row')).toBeVisible({ timeout: 60_000 });
+    await expect.poll(() => rowCount(page, '.pf-br-main')).toBe(3);
+    await expectLayout(page, 'branches');
+    await shot(page, 'sg-branches');
+    await vis(page, 'pf-hero-band .pf-hb-btn--primary').click();
+    await expect(vis(page, '.pf-br-new')).toContainText('New branch');
+    await shot(page, 'sg-branches-new');
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
+  });
 });
