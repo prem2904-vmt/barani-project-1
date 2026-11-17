@@ -198,7 +198,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
     /* HOSTED in the Settings shell (SETTINGS_HOST): the shell's left panel already names the screen and lists its
        categories, so the band drops its brand, back chevron, gradient and tab pill and keeps only the page's
        actions (Save …) and, when the page has one, its search. */
-    .pf-hb--hosted { margin: 0 0 12px; }
+    .pf-hb--hosted { margin: 12px 0; }
     .pf-hb--hosted .pf-hb__band,
     :host-context(.dark) .pf-hb--hosted .pf-hb__band,
     :host-context([data-theme='dark']) .pf-hb--hosted .pf-hb__band {
