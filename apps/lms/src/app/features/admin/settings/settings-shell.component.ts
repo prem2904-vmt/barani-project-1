@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, OnDestroy, PLATFORM_ID, computed, effect, inject, signal,
+  ChangeDetectionStrategy, Component, OnDestroy, PLATFORM_ID, computed, effect, inject, signal,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -9,9 +9,7 @@ import { TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from '@prefro
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { SETTINGS_HOST } from '../../../shared/utils/settings-host';
 import { SettingsAccessService } from './settings-access.service';
-import {
-  SettingsCategory, SettingsItem, categoryTarget, locateSettings,
-} from './settings-map';
+import { SettingsCategory, categoryTarget, locateSettings } from './settings-map';
 
 const RAIL_KEY = 'pf.settings.rail';
 
@@ -45,10 +43,10 @@ function readRail(): boolean {
         [selected]="selectedId()"
         [compact]="compact()"
         [detailOpen]="detailOpen()"
-        [navLabel]="(loc()?.item.label ?? 'Settings') + ' categories'"
-        [navHead]="loc()?.item.label ?? null"
-        [navBackLabel]="'Back to ' + (loc()?.section.label ?? 'Settings')"
-        [navKey]="loc()?.item.id ?? null"
+        [navLabel]="itemLabel() + ' categories'"
+        [navHead]="loc() ? itemLabel() : null"
+        [navBackLabel]="'Back to ' + sectionLabel()"
+        [navKey]="loc() ? itemId() : null"
         [animateNav]="true"
         [collapsible]="true"
         [rail]="rail()"
@@ -73,7 +71,6 @@ export class SettingsShellComponent implements OnDestroy {
   private readonly router = inject(Router);
   private readonly access = inject(SettingsAccessService);
   private readonly navBack = inject(NavBackService);
-  private readonly destroyRef = inject(DestroyRef);
   private readonly browser = isPlatformBrowser(inject(PLATFORM_ID));
   readonly compact = injectTwoPanelCompact();
 
@@ -92,6 +89,9 @@ export class SettingsShellComponent implements OnDestroy {
     const p = this.parsed();
     return locateSettings(p.path, p.query);
   });
+  readonly itemLabel = computed(() => this.loc()?.item.label ?? 'Settings');
+  readonly itemId = computed(() => this.loc()?.item.id ?? '');
+  readonly sectionLabel = computed(() => this.loc()?.section.label ?? 'Settings');
   /** Categories this person can open (a hidden one never lists; a hosted URL that names one is still served by its guard). */
   readonly cats = computed<SettingsCategory[]>(() => {
     const l = this.loc();
@@ -195,5 +195,4 @@ export class SettingsShellComponent implements OnDestroy {
     void this.router.navigate(['/admin'], { queryParams: l ? { section: l.section.id } : {} });
   }
 
-  protected itemOf(): SettingsItem | null { return this.loc()?.item ?? null; }
 }
