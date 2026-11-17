@@ -1,3 +1,4 @@
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -23,7 +24,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
 @Component({
   selector: 'pf-organization-settings',
   standalone: true,
-  imports: [SettingRowComponent, SettingGroupComponent, BusyDirective, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
+  imports: [SettingsSavebarComponent, SettingRowComponent, SettingGroupComponent, BusyDirective, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -36,12 +37,14 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
                           (valueChange)="pickTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
+            @if (!hosted) {
             <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ls__bandsave press"
                     [disabled]="bandSaveDisabled()" [pfBusy]="bandSaving()" pfBusyLabel="Saving…" (click)="saveTab()"
                     [attr.aria-label]="bandSaveLabel()" [title]="bandSaveLabel()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
               {{ bandSaving() ? 'Saving…' : bandSaveLabel() }}
             </button>
+            }
           </ng-container>
         </pf-hero-band>
       }
@@ -142,6 +145,9 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
             <strong class="pf-fmt__value pf-num pf-ls__preview">{{ pidPreview() }}</strong>
           </pf-setting-row>
         }
+        @if (hosted) {
+          <pf-settings-savebar label="Patient ID changed" [dirty]="pidDirty()" [saving]="pidSaving()" (save)="savePatientId()" (discard)="discardPid()"></pf-settings-savebar>
+        }
       </pf-setting-group>
       }
 
@@ -167,6 +173,9 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
         <pf-setting-row label="Preview">
           <strong class="pf-fmt__value pf-num pf-ls__preview">{{ orderFmt.preview() }}</strong>
         </pf-setting-row>
+        @if (hosted) {
+          <pf-settings-savebar label="Order ID changed" [dirty]="orderDirty()" [saving]="orderFmt.saving()" (save)="saveIdFormat(orderFmt)" (discard)="discardOrder()"></pf-settings-savebar>
+        }
       </pf-setting-group>
       }
       </div>
@@ -454,7 +463,7 @@ export class OrganizationSettingsComponent implements OnInit {
     });
     this.api.get<any>('/api/config/patient-id').subscribe({
       next: c => {
-        if (!c) return;
+        if (!c) { this.pidBase.set(this.pidSnap()); return; }
         this.pidEnabled.set(!!c.enabled);
         this.pidDate.set(c.datePrefix ?? 'ddmmyy');
         this.pidSep.set(c.separator ?? '-');
@@ -462,20 +471,40 @@ export class OrganizationSettingsComponent implements OnInit {
         this.pidPrefix.set(c.prefix ?? '');
         this.pidSerial.set(c.serialMode === 'alpha' ? 'alpha' : 'numeric');
         this.pidLetters.set(Math.min(Math.max(c.letterCount ?? 2, 1), 4));
+        this.pidBase.set(this.pidSnap());
       }
     });
     for (const f of this.idFmts()) {
       this.api.get<any>(`/api/config/${f.scope}-id`).subscribe({
         next: c => {
-          if (!c) return;
+          if (!c) { if (f.scope === 'order') this.orderBase.set(this.orderSnap()); return; }
           f.date.set(c.datePrefix ?? f.date());
           f.sep.set(c.separator ?? '-');
           f.pad.set(this.sanitizePadValue(c.padding ?? f.pad(), c.serialMode === 'alpha'));
           f.serial.set(c.serialMode === 'alpha' ? 'alpha' : 'numeric');
           f.letters.set(Math.min(Math.max(c.letterCount ?? 2, 1), 4));
+          if (f.scope === 'order') this.orderBase.set(this.orderSnap());
         }
       });
     }
+  }
+
+  // ── Unsaved changes: each format's Save bar in its card (owner: Save sits in the pane, never the band) ──
+  private pidSnap(): string { return JSON.stringify([this.pidEnabled(), this.pidDate(), this.pidSep(), this.pidPad(), this.pidPrefix(), this.pidSerial(), this.pidLetters()]); }
+  private orderSnap(): string { const f = this.orderFmt; return JSON.stringify([f.date(), f.sep(), f.pad(), f.serial(), f.letters()]); }
+  private readonly pidBase = signal('');
+  private readonly orderBase = signal('');
+  readonly pidDirty = computed(() => !!this.pidBase() && this.pidSnap() !== this.pidBase());
+  readonly orderDirty = computed(() => !!this.orderBase() && this.orderSnap() !== this.orderBase());
+  readonly unsavedLabel = 'the patient and order numbers';
+  hasUnsavedChanges(): boolean { return this.hosted && (this.pidDirty() || this.orderDirty()); }
+  discardPid(): void {
+    const [e, d, s, p, pr, se, l] = JSON.parse(this.pidBase());
+    this.pidEnabled.set(e); this.pidDate.set(d); this.pidSep.set(s); this.pidPad.set(p); this.pidPrefix.set(pr); this.pidSerial.set(se); this.pidLetters.set(l);
+  }
+  discardOrder(): void {
+    const [d, s, p, se, l] = JSON.parse(this.orderBase()); const f = this.orderFmt;
+    f.date.set(d); f.sep.set(s); f.pad.set(p); f.serial.set(se); f.letters.set(l);
   }
 
   saveIdFormat(f: { scope: 'sample' | 'order'; date: any; sep: any; pad: any; serial: any; letters: any; saving: any }) {
@@ -490,7 +519,7 @@ export class OrganizationSettingsComponent implements OnInit {
       serialMode: f.serial(),
       letterCount: f.letters(),
     }).subscribe({
-      next: () => { f.saving.set(false); this.toasts.success(`${f.scope === 'sample' ? 'Sample' : 'Order'} ID format saved`); },
+      next: () => { f.saving.set(false); if (f.scope === 'order') this.orderBase.set(this.orderSnap()); this.toasts.success(`${f.scope === 'sample' ? 'Sample' : 'Order'} ID format saved`); },
       error: e => { f.saving.set(false); this.toasts.error(ApiError.from(e).message); },
     });
   }
@@ -508,7 +537,7 @@ export class OrganizationSettingsComponent implements OnInit {
       serialMode: this.pidSerial(),
       letterCount: this.pidLetters(),
     }).subscribe({
-      next: () => { this.pidSaving.set(false); this.toasts.success('Patient ID format saved'); },
+      next: () => { this.pidSaving.set(false); this.pidBase.set(this.pidSnap()); this.toasts.success('Patient ID format saved'); },
       error: e => { this.pidSaving.set(false); this.toasts.error(ApiError.from(e).message); },
     });
   }

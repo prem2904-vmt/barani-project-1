@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, TemplateRef, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, TemplateRef, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 import { NavBackService } from '../../../core/services/nav-back.service';
@@ -107,7 +107,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
           }
         </div>
         @if (slim()) { <div class="pf-hb__center"><ng-content select="[band-center]"></ng-content></div> }
-        <div class="pf-hb__actions">@if (shellBand() && host?.status(); as pageStatus) {<ng-container *ngTemplateOutlet="pageStatus"></ng-container>}@if (shellBand()) {@for (pa of host?.actions() ?? []; track $index) {<ng-container *ngTemplateOutlet="pa"></ng-container>}}<ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
+        <div class="pf-hb__actions">@if (shellBand() && host?.status(); as pageStatus) {<ng-container *ngTemplateOutlet="pageStatus"></ng-container>}<ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
       </div>
 
       @if (!slim()) {
@@ -412,6 +412,7 @@ export class HeroBandComponent {
   private readonly router = inject(Router);
   /** The Settings shell (shared/utils/settings-host.ts) when this band's page is routed inside it. */
   protected readonly host = inject(SETTINGS_HOST, { optional: true });
+  private readonly el = inject(ElementRef);
   /** THE shell's own band: it shows the hosted page's actions and search instead of hiding itself. */
   readonly shellBand = input<boolean>(false);
   /** A hosted page's band: renders nothing in place; hands the shell its actions (and its search, unless tabs-only). */
@@ -423,7 +424,7 @@ export class HeroBandComponent {
     if (!host) return null;
     const mine: TemplateRef<unknown>[] = [];
     inject(DestroyRef).onDestroy(() => {
-      host.actions.update((l) => l.filter((t) => !mine.includes(t)));
+      host.actions.update((l) => l.filter((t) => !mine.includes(t.tpl)));
       if (host.search() && mine.includes(host.search()!)) host.search.set(null);
     });
     return effect(() => {
@@ -433,7 +434,9 @@ export class HeroBandComponent {
       const before = [...mine];
       mine.splice(0, mine.length, a, ...(f ? [f] : []));
       untracked(() => {
-        host.actions.update((l) => [...l.filter((t) => !before.includes(t)), a]);
+        // The group this band sits in (Front desk › Referring doctors …): its actions show only with that group.
+        const group = (this.el.nativeElement as HTMLElement).closest('pf-setting-group[data-group]')?.getAttribute('data-group') ?? null;
+        host.actions.update((l) => [...l.filter((t) => !before.includes(t.tpl)), { tpl: a, group }]);
         if (f) host.search.set(f);
       });
     });

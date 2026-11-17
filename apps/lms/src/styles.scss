@@ -2903,3 +2903,13 @@ input::-ms-clear {
 /* No centred narrow columns inside the frame's main card: rows span its full width. */
 .pf-ss__main :is(.pf-ls__col, .pf-lp__col, .pf-op__rows, .pf-bs__col) { max-width: none !important; margin-inline: 0 !important; }
 .pf-fmt__value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+/* Settings (owner 2026-11-17): no violet primary anywhere in Settings — Save / Add are SECONDARY, Discard / Cancel
+   tertiary, and they sit in the pane they act on. Inside the frame any page primary reads as a secondary button. */
+:is(.pf-ss, .pf-ov) :is(.pf-hb-btn--primary, .pf-btn--primary) {
+  background: var(--pf-card-bg, #fff) !important; color: var(--text-primary) !important;
+  border: 1px solid var(--pf-line) !important; box-shadow: none !important; filter: none !important;
+}
+:is(.pf-ss, .pf-ov) :is(.pf-hb-btn--primary, .pf-btn--primary):hover:not(:disabled) {
+  border-color: var(--pf-sel-border) !important; background: var(--pf-chip-bg) !important;
+}

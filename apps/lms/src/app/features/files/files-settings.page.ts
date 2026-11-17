@@ -1,3 +1,4 @@
+import { SettingsSavebarComponent } from '../../shared/components/setting-row/settings-savebar.component';
 import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../shared/utils/unsaved-changes';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { ToggleComponent, TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from '@prefrontal/shared';
@@ -34,7 +35,7 @@ export function bytesWords(n: number): string {
 @Component({
   selector: 'pf-files-settings',
   standalone: true,
-  imports: [SkeletonRowsComponent, HeroBandComponent, ToggleComponent, SelectComponent, FilesLogoComponent, TwoPanelComponent, SettingRowComponent, NgTemplateOutlet],
+  imports: [SettingsSavebarComponent, SkeletonRowsComponent, HeroBandComponent, ToggleComponent, SelectComponent, FilesLogoComponent, TwoPanelComponent, SettingRowComponent, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page fs" data-testid="files-settings">
@@ -43,8 +44,7 @@ export function bytesWords(n: number): string {
       <pf-hero-band [back]="true" [placeholder]="'Search ' + name + ' settings'" [value]="q()" (valueChange)="q.set($event)">
         <ng-container band-actions>
           @if (!full()) { <span class="fs-chip" data-testid="files-viewonly-chip">View only</span> }
-          @if (hasUnsavedChanges()) { <span class="pf-savestate" role="status" data-testid="unsaved-state"><span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved</span> }
-          <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="files-settings-save" [disabled]="!full() || !dirty() || saving()" (click)="save()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
+
         </ng-container>
       </pf-hero-band>
 
@@ -143,6 +143,7 @@ export function bytesWords(n: number): string {
                   </pf-setting-row>
                 }
               }
+              <pf-settings-savebar saveTestId="files-settings-save" [dirty]="hasUnsavedChanges()" [saving]="saving()" (save)="save()" (discard)="discardDraft()"></pf-settings-savebar>
             </div>
           </pf-two-panel>
         }
@@ -298,6 +299,8 @@ export class FilesSettingsPage implements HasUnsavedChanges {
   readonly unsavedLabel = 'Files settings';
   hasUnsavedChanges(): boolean { return this.full() && this.dirty(); }
   async saveChanges(): Promise<boolean> { await this.save(); return !this.dirty(); }
+  /** The card's Save bar Discard: back to what was saved. */
+  discardDraft(): void { if (this.saved) this.draft.set(JSON.parse(this.saved)); }
   private readonly _unload = guardUnsavedOnUnload(this);
 
   async save(): Promise<void> {

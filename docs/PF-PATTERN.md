@@ -2084,3 +2084,8 @@ code); the screens are `features/admin/bridges/`. Gate: `manage_bridges`.
 - The QR link `/b#1.S.C.P.F` is public: the fragment is handed to the add
   screen through sessionStorage and scrubbed from the address bar — a claim
   secret never rides a URL param.
+
+
+### Settings: actions live in the pane (owner 2026-11-17)
+
+Settings pages (the Settings frame, the overview's inline pages and the full-screen settings pages; Test Master excepted) put NO button in the band: back chevron + search pill only. Card-level actions go in that card's head (right, after the head tools); a card's Save / Discard go in its sticky footer (`pf-settings-savebar`), shown only while something changed. Buttons: Save and Add = secondary (Add with a + icon), Discard / Cancel / Reset = tertiary. No violet gradient primary in Settings.

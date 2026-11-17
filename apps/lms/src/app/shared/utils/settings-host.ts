@@ -11,8 +11,12 @@ import { ActivatedRoute } from '@angular/router';
  */
 export interface SettingsHost {
   readonly hosted: true;
-  /** The hosted page's band actions (each hosted band's `[band-actions]`, in order), shown on the shell's band. */
-  readonly actions: WritableSignal<readonly TemplateRef<unknown>[]>;
+  /**
+   * The hosted page's actions (each hosted band's `[band-actions]`, in order). Owner 2026-11-17: in Settings no button sits
+   * in the band's corner — the frame shows them IN the pane they act on (the main card's head), only for the group they
+   * belong to (`group` = the nearest `pf-setting-group [id]` around the band; null = the whole page).
+   */
+  readonly actions: WritableSignal<readonly SettingsHostAction[]>;
   /** The hosted page's band search field (icon + input / its custom search), shown in the shell's band pill. */
   readonly search: WritableSignal<TemplateRef<unknown> | null>;
   /** A hosted page's save state ("Saves automatically" / "Saving…"), shown small and muted in the shell's band. */
@@ -23,6 +27,7 @@ export interface SettingsHost {
    */
   readonly categories: WritableSignal<readonly SettingsHostCategory[] | null>;
 }
+export interface SettingsHostAction { readonly tpl: TemplateRef<unknown>; readonly group: string | null }
 export interface SettingsHostCategory {
   readonly id: string;
   readonly label: string;

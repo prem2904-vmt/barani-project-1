@@ -1,4 +1,5 @@
 import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
@@ -53,7 +54,7 @@ export function sampleIdPreview(prefix: string, date: string, sep: string, pad: 
 @Component({
   selector: 'pf-sample-id-format-card',
   standalone: true,
-  imports: [SettingRowComponent, FormsModule, SelectComponent, BusyDirective],
+  imports: [SettingRowComponent, SettingsSavebarComponent, FormsModule, SelectComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-sf" data-testid="sample-id-format">
@@ -78,6 +79,7 @@ export function sampleIdPreview(prefix: string, date: string, sep: string, pad: 
       <pf-setting-row label="Preview">
         <strong class="pf-fmt__value pf-num" data-testid="sample-id-preview">{{ preview() }}</strong>
       </pf-setting-row>
+      <pf-settings-savebar [dirty]="dirty()" [saving]="saving()" (save)="save()" (discard)="discard()"></pf-settings-savebar>
     </div>
   `,
   styles: [`
@@ -111,14 +113,26 @@ export class SampleIdFormatCardComponent implements OnInit {
   ngOnInit() {
     this.api.get<any>('/api/config/sample-id').subscribe({
       next: c => {
-        if (!c) return;
+        if (!c) { this.baseline.set(this.snapshot()); return; }
         this.date.set(c.datePrefix ?? this.date());
         this.sep.set(c.separator ?? '-');
         this.pad.set(sanitizeSamplePad(c.padding ?? this.pad(), c.serialMode === 'alpha'));
         this.serial.set(c.serialMode === 'alpha' ? 'alpha' : 'numeric');
         this.letters.set(Math.min(Math.max(c.letterCount ?? 2, 1), 4));
+        this.baseline.set(this.snapshot());
       },
     });
+  }
+
+  // ── Unsaved changes: the card's Save bar shows only while the format differs from what was loaded / saved ──
+  private snapshot(): string { return JSON.stringify([this.date(), this.sep(), this.pad(), this.serial(), this.letters()]); }
+  private readonly baseline = signal('');
+  readonly dirty = computed(() => this.snapshot() !== this.baseline());
+  discard(): void {
+    const b = this.baseline();
+    if (!b) return;
+    const [d, s, p, ser, l] = JSON.parse(b);
+    this.date.set(d); this.sep.set(s); this.pad.set(p); this.serial.set(ser); this.letters.set(l);
   }
 
   save() {
@@ -133,7 +147,7 @@ export class SampleIdFormatCardComponent implements OnInit {
       serialMode: this.serial(),
       letterCount: this.letters(),
     }).subscribe({
-      next: () => { this.saving.set(false); this.toasts.success('Sample ID format saved'); },
+      next: () => { this.saving.set(false); this.baseline.set(this.snapshot()); this.toasts.success('Sample ID format saved'); },
       error: e => { this.saving.set(false); this.toasts.error(ApiError.from(e).message); },
     });
   }

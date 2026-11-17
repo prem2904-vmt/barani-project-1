@@ -354,7 +354,7 @@ test.describe('Settings → Files', () => {
   test('View only: the page reads, the controls and Save are off, with the plain note', async ({ page, context }) => {
     await boot(page, context, { route: '/admin/files?tab=templates', full: false });
     await expect(tid(page, 'files-settings-viewonly')).toContainText('view only', { timeout: 60_000 });
-    await expect(tid(page, 'files-settings-save')).toBeDisabled();
+    await expect(page.locator('[data-testid="files-settings-save"]')).toHaveCount(0);   // view only: no Save bar
     await expect(tid(page, 'files-add-template')).toBeDisabled();
     await shot(page, 'files-settings-viewonly');
   });

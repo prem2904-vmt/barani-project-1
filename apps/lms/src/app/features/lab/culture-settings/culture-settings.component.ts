@@ -1,3 +1,4 @@
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
@@ -32,7 +33,7 @@ const STAGE_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-culture-settings',
   standalone: true,
-  imports: [SettingRowComponent, SettingGroupComponent, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
+  imports: [SettingsSavebarComponent, SettingRowComponent, SettingGroupComponent, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (embedded()) {
@@ -51,6 +52,7 @@ const STAGE_LABELS: Record<string, string> = {
               <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
             </button>
           </pf-setting-row>
+          <pf-settings-savebar [dirty]="isDirty()" [saving]="saving()" (save)="save()" (discard)="discard()"></pf-settings-savebar>
         </pf-setting-group>
         <pf-setting-group label="Turnaround targets" scope="microbiology" id="micro" hint="Each stage raises an overdue alert past its target." icon="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v5l3 2">
           @for (t of stageTats(); track t.stageKey) {
@@ -59,6 +61,7 @@ const STAGE_LABELS: Record<string, string> = {
                      [attr.aria-label]="label(t.stageKey) + ' (hours)'" [ngModel]="t.tatHours" (ngModelChange)="setTat(t.stageKey, $event)" /> hours</span>
             </pf-setting-row>
           }
+          <pf-settings-savebar [dirty]="isDirty()" [saving]="saving()" (save)="save()" (discard)="discard()"></pf-settings-savebar>
         </pf-setting-group>
       }
     } @else {
@@ -205,14 +208,25 @@ export class CultureSettingsComponent {
     this.api.get<MicroSettings>('/api/microbiology/settings').subscribe({
       next: s => {
         this.loadHold.done();
-        if (!s) return;
+        if (!s) { this.baseline = this.snapshot(); return; }
         this.lockTimeoutMinutes = s.lockTimeoutMinutes ?? 60;
         this.allowSupervisorTakeover = s.allowSupervisorTakeover ?? true;
         this.stageTats.set(s.stageTats ?? []);
+        this.baseline = this.snapshot();
       },
-      error: () => { this.loadHold.done(); /* defaults */ },
+      error: () => { this.loadHold.done(); this.baseline = this.snapshot(); /* defaults */ },
       complete: () => this.loadHold.done(),
     });
+  }
+
+  // ── Unsaved changes: the card's Save bar (owner: Save sits in the pane, never the band) ──
+  private baseline = '';
+  private snapshot(): string { return JSON.stringify([Number(this.lockTimeoutMinutes), this.allowSupervisorTakeover, this.stageTats()]); }
+  isDirty(): boolean { return !!this.baseline && this.snapshot() !== this.baseline; }
+  discard(): void {
+    if (!this.baseline) return;
+    const [l, a, t] = JSON.parse(this.baseline);
+    this.lockTimeoutMinutes = l; this.allowSupervisorTakeover = a; this.stageTats.set(t);
   }
 
   label(key: string): string { return STAGE_LABELS[key] ?? key; }
@@ -231,7 +245,7 @@ export class CultureSettingsComponent {
       stageTats: this.stageTats(),
     };
     this.api.put('/api/microbiology/settings', body).subscribe({
-      next: () => { this.saving.set(false); this.toasts.success('Culture settings saved'); },
+      next: () => { this.saving.set(false); this.baseline = this.snapshot(); this.toasts.success('Culture settings saved'); },
       error: () => { this.saving.set(false); this.toasts.error('Could not save settings'); },
     });
   }

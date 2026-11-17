@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, viewChild } from '@angular/core';
 import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
 import { AppointmentsConfigComponent } from '../appointments-config/appointments-config.component';
 import { ReferringNetworkComponent } from '../referring-network/referring-network.component';
@@ -32,5 +32,9 @@ import { SegmentedComponent } from '../../../shared/primitives/segmented.compone
   `,
 })
 export class LabFrontDeskPage {
+  /** Ask before leaving with unsaved front desk changes (the appointments config owns them). */
+  private readonly appts = viewChild(AppointmentsConfigComponent);
+  readonly unsavedLabel = 'the front desk settings';
+  hasUnsavedChanges(): boolean { return !!this.appts()?.hasUnsavedChanges(); }
   protected readonly tab = labPageTab(LAB_PAGES.frontDesk).tab;
 }

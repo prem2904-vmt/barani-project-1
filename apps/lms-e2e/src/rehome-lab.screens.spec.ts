@@ -194,8 +194,10 @@ test.describe('lab settings pages', () => {
   test('sample ID format saves through the same API', async ({ page }) => {
     await go(page, '/admin/lab/sample-numbers?tab=format');
     await expect(vis(page, '[data-testid="sample-id-format"]')).toBeVisible({ timeout: 60_000 });
-    await vis(page, '.pf-sf__save').click();
-    await expect.poll(() => neg.calls.find(c => c.path === '/api/config/sample-id')?.body).toEqual({ enabled: true, datePrefix: 'yymm', separator: '-', padding: 5, serialMode: 'numeric', letterCount: 2 });
+    // Change the separator → the card's Save bar appears (owner: Save in the pane, never the band).
+    await page.locator('[data-testid="sample-id-format"] input[aria-label="Separator"]').locator('visible=true').first().fill('/');
+    await vis(page, '[data-testid="savebar-save"]').click();
+    await expect.poll(() => neg.calls.find(c => c.path === '/api/config/sample-id')?.body).toEqual({ enabled: true, datePrefix: 'yymm', separator: '/', padding: 5, serialMode: 'numeric', letterCount: 2 });
   });
 
   test('phone: the page tabs scroll, nothing overflows', async ({ page }) => {

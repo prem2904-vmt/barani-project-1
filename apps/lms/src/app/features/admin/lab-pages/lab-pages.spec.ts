@@ -67,7 +67,8 @@ describe('Sample ID format card (moved from Organization › Sample ID)', () => 
     const p = await renderLabPage(LabSampleNumbersPage, '/page', {
       getFor: u => u === '/api/config/sample-id' ? { datePrefix: 'ddmmyy', separator: '/', padding: 4, serialMode: 'alpha', letterCount: 3 } : cfgGet()(u),
     });
-    p.el.querySelector<HTMLButtonElement>('.pf-sf__save')!.click();
+    // Save sits in the card's Save bar (shown once something changed); drive the card's save directly.
+    (p.harness.routeDebugElement!.query(d => d.name === 'pf-sample-id-format-card').componentInstance as { save(): void }).save();
     expect(p.api.post).toHaveBeenCalledWith('/api/config/sample-id', {
       enabled: true, datePrefix: 'ddmmyy', separator: '/', padding: 4, serialMode: 'alpha', letterCount: 3,
     });
@@ -182,7 +183,7 @@ describe('Lab › Results and validation', () => {
     });
     expect(p.el.querySelectorAll('pf-hero-band').length).toBe(1);
     expect(groupLabels(p.el)).toEqual(expect.arrayContaining(['Stage lock', 'Turnaround targets']));
-    p.el.querySelector<HTMLButtonElement>('[data-testid="culture-save"]')!.click();
+    (p.harness.routeDebugElement!.query(d => d.name === 'pf-culture-settings').componentInstance as { save(): void }).save();
     expect(p.api.put).toHaveBeenCalledWith('/api/microbiology/settings', {
       lockTimeoutMinutes: 45, allowSupervisorTakeover: true, stageTats: [{ stageKey: 'gram', tatHours: 6 }],
     });

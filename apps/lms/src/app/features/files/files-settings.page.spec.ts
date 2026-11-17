@@ -75,7 +75,7 @@ describe('Settings → Files', () => {
     const { page, el, office, settle, toast } = make();
     await settle();
     const saveBtn = () => el.querySelector<HTMLButtonElement>('[data-testid="files-settings-save"]')!;
-    expect(saveBtn().disabled).toBe(true);
+    expect(el.querySelector('[data-testid="files-settings-save"]')).toBeNull();   // the card's Save bar shows only once something changed
     page.setEnabled(page.apps[0], false);
     page.setRoles(page.apps[1], ['Doctor', 'Admin']);
     page.patch({ editOnPhones: true, trashDays: 60, patientNames: false });
@@ -110,7 +110,7 @@ describe('Settings → Files', () => {
     expect(el.querySelector('[data-testid="files-viewonly-chip"]')).toBeTruthy();
     page.patch({ trashDays: 90 });
     await settle();
-    expect(el.querySelector<HTMLButtonElement>('[data-testid="files-settings-save"]')!.disabled).toBe(true);
+    expect(el.querySelector('[data-testid="files-settings-save"]')).toBeNull();   // view only: never dirty, no Save bar
     page.pickCat('templates'); await settle();
     expect(el.querySelector<HTMLButtonElement>('[data-testid="files-add-template"]')!.disabled).toBe(true);
   });

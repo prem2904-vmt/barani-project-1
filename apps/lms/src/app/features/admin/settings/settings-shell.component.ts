@@ -69,7 +69,11 @@ const SINGLE = '__setting';
             (back)="closeDetail()"
             (navBack)="toSections()"
           >
-            <ng-container panel-tools>@if (headTools(); as ht) { <ng-container *ngTemplateOutlet="ht"></ng-container> }</ng-container>
+            <ng-container panel-tools>
+              @if (headTools(); as ht) { <ng-container *ngTemplateOutlet="ht"></ng-container> }
+              <!-- The page's actions, IN the pane they act on (never the band's corner): this group's, or the page's. -->
+              @for (pa of paneActions(); track $index) { <span class="pf-ss__acts"><ng-container *ngTemplateOutlet="pa.tpl"></ng-container></span> }
+            </ng-container>
             <div class="pf-ss__main pf-ss__main--one" data-testid="settings-main"><router-outlet (activate)="onActivate($event)"></router-outlet></div>
           </pf-two-panel>
       </div>
@@ -81,6 +85,7 @@ const SINGLE = '__setting';
     :root:not(.design-new) .pf-ss { display: flex; flex-direction: column; height: calc(100dvh - var(--top-strip-h, 64px)); padding: 0 16px; }
     :root:not(.design-new) .pf-ss__body { flex: 1; display: flex; flex-direction: column; padding-bottom: 12px; }
     .pf-ss__card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+    .pf-ss__acts { display: inline-flex; align-items: center; gap: 8px; }
     .pf-ss__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex: none; }
     .pf-ss__scroll { flex: 1 1 auto; min-height: 0; }
     .pf-ss__title { margin: 0; flex: none; }
@@ -170,6 +175,11 @@ export class SettingsShellComponent implements OnDestroy {
   /** The routed page (RouterOutlet activate) — a converted grid page exposes `headTools` (a TemplateRef viewChild). */
   private readonly activePage = signal<unknown>(null);
   onActivate(c: unknown): void { this.activePage.set(c); }
+  /** Actions of the shown group (or of the whole page). */
+  readonly paneActions = computed(() => {
+    const sel = this.single() ? null : this.selectedId();
+    return this.host.actions().filter((a) => !a.group || !sel || a.group === sel);
+  });
   readonly headTools = computed<TemplateRef<unknown> | null>(() => {
     const f = (this.activePage() as { headTools?: () => TemplateRef<unknown> | undefined } | null)?.headTools;
     return typeof f === 'function' ? (f() ?? null) : null;

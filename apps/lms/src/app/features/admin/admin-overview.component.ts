@@ -108,6 +108,9 @@ interface SectionTile {
                 <pf-segmented size="sm" ariaLabel="Category" [options]="inlineCats()" [value]="inlineTab()" (valueChange)="pickInlineTab($any($event))"></pf-segmented>
               }
               @if (inlineHeadTools(); as ht) { <ng-container *ngTemplateOutlet="ht"></ng-container> }
+              @if (inlineCmp()) {
+                @for (pa of inlineActions(); track $index) { <span class="pf-ov__acts"><ng-container *ngTemplateOutlet="pa.tpl"></ng-container></span> }
+              }
             </ng-container>
             @if (inlineCmp(); as cmp) {
               <!-- A section with ONE setting shows that setting right here (owner): no tile, no extra click. -->
@@ -153,6 +156,7 @@ interface SectionTile {
       :root:not(.design-new) .pf-ov__body { flex: 1; display: flex; flex-direction: column; padding-bottom: 12px; }
       .pf-ov__results { flex: 1 1 auto; }
       .pf-ov__inline { padding: 4px 6px 16px; }
+      .pf-ov__acts { display: inline-flex; align-items: center; gap: 8px; }
 
       /* Main card body: this section's tiles — the existing tile look, tighter. */
       .pf-ov__tiles { display: grid; gap: 10px; align-content: start; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
@@ -266,6 +270,11 @@ export class AdminOverviewComponent implements OnDestroy {
   });
   /** Its categories (hosted ones, `?tab=`), as a switch in the main card head. */
   private readonly host = inject(SETTINGS_HOST);
+  /** The inline page's actions, in its card head (never the band's corner); per picked category when they belong to one. */
+  readonly inlineActions = computed(() => {
+    const sel = this.inlineCats().length > 1 ? this.inlineTab() : null;
+    return this.host.actions().filter((a) => !a.group || !sel || a.group === sel);
+  });
   /** Its categories as the card head's pill: the page's run-time list (SETTINGS_HOST.categories), else the map's `?tab=` ones. */
   readonly inlineCats = computed(() => {
     const dyn = this.host.categories();

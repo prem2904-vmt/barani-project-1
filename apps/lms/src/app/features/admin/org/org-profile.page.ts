@@ -1,3 +1,5 @@
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
+import { injectSettingsHosted } from '../../../shared/utils/settings-host';
 import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, Injector, computed, effect, inject, signal } from '@angular/core';
@@ -29,13 +31,14 @@ const SHORT_NAME_MAX = 30;
 @Component({
   selector: 'pf-org-profile',
   standalone: true,
-  imports: [SettingRowComponent, SettingGroupComponent, BusyDirective, FormsModule, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, ImageUploadComponent],
+  imports: [SettingsSavebarComponent, SettingRowComponent, SettingGroupComponent, BusyDirective, FormsModule, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, ImageUploadComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10" data-testid="org-profile">
       @if (theme.isNewDesign()) {
         <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-actions>
+            @if (!hosted) {
             @if (hasUnsavedChanges()) { <span class="pf-savestate" role="status" data-testid="unsaved-state"><span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved</span> }
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="op-save"
                     [disabled]="saving() || !canSave()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
@@ -43,6 +46,7 @@ const SHORT_NAME_MAX = 30;
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
               {{ saving() ? 'Saving…' : 'Save' }}
             </button>
+            }
           </ng-container>
         </pf-hero-band>
       }
@@ -90,6 +94,9 @@ const SHORT_NAME_MAX = 30;
                    placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
           </pf-setting-row>
           </pf-setting-group>
+          @if (hosted) {
+            <pf-settings-savebar [dirty]="hasUnsavedChanges()" [saving]="saving()" [canSave]="canSave()" (save)="save()" (discard)="discard()"></pf-settings-savebar>
+          }
         </div>
         <div class="pf-classic-only pf-op__save">
           <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving() || !canSave()" [pfBusy]="saving()" (click)="save()">{{ saving() ? 'Saving…' : 'Save' }}</button>
@@ -197,6 +204,13 @@ export class OrgProfilePage implements HasUnsavedChanges {
   // ── Unsaved changes (ask before leaving; the browser asks on tab close) ──
   readonly unsavedLabel = 'the organization profile';
   hasUnsavedChanges(): boolean { return this.profileDirty() || this.slugDirty(); }
+  /** In the Settings frame Save sits in the card's bar (owner: no button in the band's corner). */
+  protected readonly hosted = injectSettingsHosted();
+  discard(): void {
+    const b = this.base();
+    this.name.set(b.name); this.shortName.set(b.brandingName ?? ''); this.mode.set(b.brandingMode ?? 'both'); this.logoUrl.set(b.logoUrl ?? '');
+    this.slug.set(this.slugBase());
+  }
   async saveChanges(): Promise<boolean> { await this.save(); return !this.hasUnsavedChanges(); }
   private readonly _unload = guardUnsavedOnUnload(this);
 

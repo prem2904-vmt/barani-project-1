@@ -1,3 +1,4 @@
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -34,7 +35,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
 @Component({
   selector: 'pf-appointments-config',
   standalone: true,
-  imports: [SettingRowComponent, SettingGroupComponent, BusyDirective, RouterLink, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, PfTimeComponent],
+  imports: [SettingsSavebarComponent, SettingRowComponent, SettingGroupComponent, BusyDirective, RouterLink, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, PfTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Page is fluid; guard against any accidental horizontal overflow only. */
@@ -98,6 +99,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
                           (valueChange)="tab.set($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
+            @if (!hosted) {
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || !cfg()" [pfBusy]="saving()" pfBusyLabel="Saving…"
                     (click)="save()" aria-label="Save" title="Save">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -107,6 +109,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
               </svg>
               {{ saving() ? 'Saving…' : 'Save' }}
             </button>
+            }
           </ng-container>
         </pf-hero-band>
       }
@@ -134,6 +137,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
           <pf-setting-row label="How patients are called" [hint]="modeDesc()">
             <pf-segmented size="sm" ariaLabel="Queue mode" [options]="modeSeg()" [value]="cfg()!.queueMode" (valueChange)="setMode($any($event))"></pf-segmented>
           </pf-setting-row>
+          @if (hosted) { <pf-settings-savebar [dirty]="dirty()" [saving]="saving()" (save)="save()" (discard)="discard()"></pf-settings-savebar> }
         </pf-setting-group>
         }
 
@@ -160,6 +164,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
               <pf-time label="End time" [value]="endTime()" (valueChange)="setEnd($event)"></pf-time>
             </pf-setting-row>
           }
+          @if (hosted) { <pf-settings-savebar [dirty]="dirty()" [saving]="saving()" (save)="save()" (discard)="discard()"></pf-settings-savebar> }
         </pf-setting-group>
         }
 
@@ -171,6 +176,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
               <pf-number-input [value]="opt(f.key)" [step]="f.step" [min]="0" (valueChange)="patchOpt(f.key, $event ?? 0)"></pf-number-input>
             </pf-setting-row>
           }
+          @if (hosted) { <pf-settings-savebar [dirty]="dirty()" [saving]="saving()" (save)="save()" (discard)="discard()"></pf-settings-savebar> }
         </pf-setting-group>
         }
       }
@@ -237,7 +243,7 @@ export class AppointmentsConfigComponent implements OnInit {
   readonly endTime = this._endTime.asReadonly();
 
   ngOnInit() {
-    this.svc.getConfig().subscribe({ next: c => { this._cfg.set(c); this.hydrateHours(c); } });
+    this.svc.getConfig().subscribe({ next: c => { this._cfg.set(c); this.hydrateHours(c); this.baseline.set(this.snapshot()); } });
   }
 
   setStart(v: string | null) { if (v) this._startTime.set(v); }
@@ -265,6 +271,19 @@ export class AppointmentsConfigComponent implements OnInit {
     if (cur) this._cfg.set({ ...cur, queueOptions: { ...cur.queueOptions, [key]: value } });
   }
 
+  // ── Unsaved changes: the group card's Save bar (owner: Save sits in the pane, never the band) ──
+  private snapshot(): string { return JSON.stringify([this._cfg(), this._startTime(), this._endTime()]); }
+  private readonly baseline = signal('');
+  readonly dirty = computed(() => !!this._cfg() && this.snapshot() !== this.baseline());
+  readonly unsavedLabel = 'the front desk settings';
+  hasUnsavedChanges(): boolean { return this.dirty(); }
+  discard(): void {
+    const b = this.baseline();
+    if (!b) return;
+    const [c] = JSON.parse(b);
+    this._cfg.set(c); this.hydrateHours(c);
+  }
+
   save() {
     const cur = this._cfg();
     if (!cur) return;
@@ -287,7 +306,7 @@ export class AppointmentsConfigComponent implements OnInit {
 
     this._saving.set(true);
     this.svc.saveConfig(payload).subscribe({
-      next: c => { this._cfg.set(c); this.hydrateHours(c); this._saving.set(false); this.toast.success('Saved.'); },
+      next: c => { this._cfg.set(c); this.hydrateHours(c); this.baseline.set(this.snapshot()); this._saving.set(false); this.toast.success('Saved.'); },
       error: e => { this._saving.set(false); this.toast.error(ApiError.from(e).message); }
     });
   }
