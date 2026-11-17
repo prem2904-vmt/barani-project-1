@@ -306,3 +306,27 @@
   flex: none;
 }
 
+
+/* In-pane page actions (owner 2026-11-17: no band buttons in Settings): a compact secondary button at the right end
+   of the card head, after the head tools — "Add …", "Create …", "Refresh". */
+.pf-sg-act {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  gap: 6px;
+  flex: none;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.pf-sg-act svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* The card's Save bar (pf-settings-savebar) sits flush at the bottom of a grid card. */
+:host ::ng-deep .pf-sg-main > pf-settings-savebar .pf-ssb__bar,
+:host ::ng-deep .pf-sg-main pf-settings-savebar .pf-ssb__bar {
+  margin: 0;
+  padding: 10px 14px;
+}

@@ -70,7 +70,8 @@ export function renderBandPage(cmp: Type<unknown>, opts: {
     f, el, api, toasts, cmp: f.componentInstance as any,
     band, bandInput, type,
     /** Buttons projected into the band's top-right actions. */
-    actions: () => Array.from(el.querySelectorAll<HTMLElement>('pf-hero-band .pf-hb__actions button, pf-hero-band .pf-hb__actions a')),
+    /** The page's actions: the band's (Test Master and other work pages) or, in Settings, the pane's (card head `.pf-sg-act`). */
+    actions: () => Array.from(el.querySelectorAll<HTMLElement>('pf-hero-band .pf-hb__actions button, pf-hero-band .pf-hb__actions a, .pf-sg-act')),
     /** Controls projected INSIDE the pill (after the divider). */
     tools: () => el.querySelector<HTMLElement>('pf-hero-band .pf-hb__tools'),
     body: () => el.querySelector<HTMLElement>('.pf-band-page > .pf-band-body'),

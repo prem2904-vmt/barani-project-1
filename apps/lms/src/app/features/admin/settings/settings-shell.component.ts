@@ -127,7 +127,8 @@ export class SettingsShellComponent implements OnDestroy {
   readonly itemIcon = computed(() => this.loc()?.item.iconPath ?? null);
   readonly itemBlurb = computed(() => this.loc()?.item.blurb ?? null);
   /** The main card head's note: the selected category's scope ("this branch" …). */
-  readonly panelNote = computed(() => this.cats().find((c) => c.id === this.selectedId())?.scope ?? null);
+  /** A page's run-time rows carry counts for the side card; the main card head shows the page's own count (headTools), never an echo. */
+  readonly panelNote = computed(() => (this.host.categories()?.length ? null : this.cats().find((c) => c.id === this.selectedId())?.scope ?? null));
   readonly sectionLabel = computed(() => this.loc()?.section.label ?? 'Settings');
   /** Categories this person can open (a hidden one never lists; a hosted URL that names one is still served by its guard). */
   readonly cats = computed<SettingsCategory[]>(() => {
