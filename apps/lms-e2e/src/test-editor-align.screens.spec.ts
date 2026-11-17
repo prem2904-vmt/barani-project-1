@@ -102,7 +102,9 @@ test.describe('test editor alignment', () => {
         expect(Math.abs(aside.y - main.y), 'side + main card tops align').toBeLessThan(2);
         expect(Math.abs((aside.y + aside.height) - (main.y + main.height)), 'side + main card bottoms align').toBeLessThan(2);
       }
-      if (!isPhone()) {
+      // Rows of 3 / 4 only when the card is wide; narrower cards step down to 2 per row, phones to 1.
+      const cardW = (await vis(page, '#sec-identity').boundingBox())!.width;
+      if (cardW > 800) {
         const t = await fieldTops(page, ['Type', 'Flow', 'Department', 'Test code', 'Short name', 'Section', 'Methodology']);
         const row1 = [t['Type'], t['Flow'], t['Department']];
         const row2 = [t['Test code'], t['Short name'], t['Section'], t['Methodology']];
