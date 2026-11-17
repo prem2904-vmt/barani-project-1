@@ -1,3 +1,5 @@
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
+import { injectSettingsHosted } from '../../../shared/utils/settings-host';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -94,7 +96,7 @@ const SAME = (a: EmailForm, b: EmailForm) => JSON.stringify(a) === JSON.stringif
 @Component({
   selector: 'pf-communication-settings',
   standalone: true,
-  imports: [FormsModule, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonCardComponent, BusyDirective, WaSettingsSectionComponent],
+  imports: [SettingsSavebarComponent, FormsModule, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SelectComponent, SkeletonCardComponent, BusyDirective, WaSettingsSectionComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full" data-testid="comms-page">
@@ -105,7 +107,7 @@ const SAME = (a: EmailForm, b: EmailForm) => JSON.stringify(a) === JSON.stringif
                           (valueChange)="pickTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
-            @if (tab() === 'email' && canManage()) {
+            @if (tab() === 'email' && canManage() && !hosted) {
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="cm-email-save"
                       [disabled]="!emailDirty() || emailSaving() || loading()" [pfBusy]="emailSaving()" pfBusyLabel="Saving…"
                       (click)="saveEmail()" aria-label="Save email settings">
@@ -246,6 +248,11 @@ const SAME = (a: EmailForm, b: EmailForm) => JSON.stringify(a) === JSON.stringif
           </div>
         </section>
 
+        @if (hosted && canManage()) {
+          <!-- Settings (owner): Save sits IN the card — the Save bar, only while the email settings changed. -->
+          <pf-settings-savebar saveTestId="cm-email-save" [dirty]="emailDirty()" [saving]="emailSaving()" [canSave]="!loading()"
+                               (save)="saveEmail()" (discard)="discardEmail()"></pf-settings-savebar>
+        }
         <!-- Test send: proves the SAVED settings reach a real inbox. -->
         <section class="pf-card pf-cm__card" data-testid="cm-email-test">
           <div class="pf-card__head">
@@ -407,6 +414,9 @@ export class CommunicationSettingsPage implements OnInit {
   readonly changingPassword = signal(false);
   readonly problems = computed(() => emailFormProblems(this.form(), this.passwordSet()));
   readonly emailSaving = signal(false);
+  /** In the Settings frame Save sits in the card's Save bar (owner: no button in the band's corner). */
+  protected readonly hosted = injectSettingsHosted();
+  discardEmail(): void { this.form.set({ ...this.saved() }); this.changingPassword.set(false); }
 
   readonly testTo = signal('');
   readonly testing = signal(false);

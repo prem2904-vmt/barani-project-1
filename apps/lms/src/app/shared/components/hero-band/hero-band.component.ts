@@ -120,7 +120,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
                becomes the pill so the filters can drop to their own row. -->
           @if (!tabsOnly()) {
           <div class="pf-hb__field">
-            @if (shellBand() && host?.search(); as pageSearch) {
+            @if (shellBand() && pageSearch(); as pageSearch) {
               <ng-container *ngTemplateOutlet="pageSearch"></ng-container>
             } @else {
               <ng-container *ngTemplateOutlet="fieldTpl"></ng-container>
@@ -415,6 +415,8 @@ export class HeroBandComponent {
   private readonly el = inject(ElementRef);
   /** THE shell's own band: it shows the hosted page's actions and search instead of hiding itself. */
   readonly shellBand = input<boolean>(false);
+  /** THE shell's band: the hosted page's search for the shown group (the shell picks it). */
+  readonly pageSearch = input<TemplateRef<unknown> | null>(null);
   /** A hosted page's band: renders nothing in place; hands the shell its actions (and its search, unless tabs-only). */
   protected readonly hosted = computed(() => !!this.host && !this.shellBand());
   private readonly actionsTpl = viewChild.required<TemplateRef<unknown>>('actionsTpl');
@@ -425,7 +427,7 @@ export class HeroBandComponent {
     const mine: TemplateRef<unknown>[] = [];
     inject(DestroyRef).onDestroy(() => {
       host.actions.update((l) => l.filter((t) => !mine.includes(t.tpl)));
-      if (host.search() && mine.includes(host.search()!)) host.search.set(null);
+      host.searches.update((l) => l.filter((t) => !mine.includes(t.tpl)));
     });
     return effect(() => {
       if (!this.hosted()) return;
@@ -437,7 +439,7 @@ export class HeroBandComponent {
         // The group this band sits in (Front desk › Referring doctors …): its actions show only with that group.
         const group = (this.el.nativeElement as HTMLElement).closest('pf-setting-group[data-group]')?.getAttribute('data-group') ?? null;
         host.actions.update((l) => [...l.filter((t) => !before.includes(t.tpl)), { tpl: a, group }]);
-        if (f) host.search.set(f);
+        host.searches.update((l) => [...l.filter((t) => !before.includes(t.tpl)), ...(f ? [{ tpl: f, group }] : [])]);
       });
     });
   })();

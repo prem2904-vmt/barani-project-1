@@ -266,12 +266,12 @@ describe('pf-hero-band — hosted in the Settings shell (SETTINGS_HOST)', () => 
 
   it('a tabs-only page hands no search (its tabs are the shell\'s categories)', () => {
     const { host } = makeHosted(true);
-    expect(host.search()).toBeNull();
+    expect(host.searches().length).toBe(0);
   });
 
   it('a page with a search hands the shell its search field', () => {
     const { host } = makeHosted(false);
-    expect(host.search()).not.toBeNull();
+    expect(host.searches().length).toBe(1);
   });
 
   it('outside the shell nothing changes', () => {

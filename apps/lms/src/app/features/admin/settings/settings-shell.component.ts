@@ -7,7 +7,7 @@ import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from '@prefrontal/shared';
 import { NavBackService } from '../../../core/services/nav-back.service';
-import { SETTINGS_HOST, createSettingsHost } from '../../../shared/utils/settings-host';
+import { SETTINGS_HOST, createSettingsHost, pickHostSearch } from '../../../shared/utils/settings-host';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SettingsSiblingsComponent } from './settings-siblings.component';
 import { SettingsAccessService } from './settings-access.service';
@@ -43,7 +43,7 @@ const SINGLE = '__setting';
     <section class="pf-ss pf-band-page" data-testid="settings-shell">
       <!-- Test Master's band: back · lab · the search pill (the page's own search, else "Search <setting>" filtering
            the rows) with the page switch · the page's save state and actions. -->
-      <pf-hero-band [shellBand]="true" [back]="true" [backAction]="backToSection"
+      <pf-hero-band [shellBand]="true" [pageSearch]="pageSearch()" [back]="true" [backAction]="backToSection"
                     [placeholder]="'Search ' + itemLabel()" [value]="q()" (valueChange)="q.set($event)">
         <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
       </pf-hero-band>
@@ -175,6 +175,8 @@ export class SettingsShellComponent implements OnDestroy {
   /** The routed page (RouterOutlet activate) — a converted grid page exposes `headTools` (a TemplateRef viewChild). */
   private readonly activePage = signal<unknown>(null);
   onActivate(c: unknown): void { this.activePage.set(c); }
+  /** The band pill: the shown group's search (Front desk › Referring doctors), else the page's. */
+  readonly pageSearch = computed(() => pickHostSearch(this.host.searches(), this.single() ? null : this.selectedId()));
   /** Actions of the shown group (or of the whole page). */
   readonly paneActions = computed(() => {
     const sel = this.single() ? null : this.selectedId();

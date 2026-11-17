@@ -1,3 +1,4 @@
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import {
   ChangeDetectionStrategy,
@@ -81,7 +82,7 @@ interface GstRow {
 @Component({
   selector: "pf-billing-config",
   standalone: true,
-  imports: [SettingRowComponent, SkeletonFormComponent, BusyDirective, RouterLink,
+  imports: [SettingsSavebarComponent, SettingRowComponent, SkeletonFormComponent, BusyDirective, RouterLink,
     FormsModule,
     NumberInputComponent,
     ScreenHeaderComponent,
@@ -109,6 +110,7 @@ interface GstRow {
             }
           </ng-container>
           <ng-container band-actions>
+            @if (!hosted) {
             <button
               type="button"
               class="pf-hb-btn pf-hb-btn--primary press"
@@ -138,6 +140,7 @@ interface GstRow {
               </svg>
               Save
             </button>
+            }
           </ng-container>
         </pf-hero-band>
       }
@@ -786,6 +789,7 @@ interface GstRow {
                     >Show result-tracking QR
                   </button>
                 </div>
+                @if (!hosted) {
                 <!-- Secondary: the band's Save (billing config) is the ONE primary. -->
                 <button
                   type="button"
@@ -797,6 +801,7 @@ interface GstRow {
                 >
                   {{ savingTpl() ? "Saving…" : "Save letterhead" }}
                 </button>
+                }
               </div>
             </div>
 
@@ -858,6 +863,10 @@ interface GstRow {
             </div>
           </div>
         }
+        }
+        @if (hosted) {
+          <!-- Settings (owner): Save sits IN the card — the Save bar, only while something changed. -->
+          <pf-settings-savebar [dirty]="hasUnsavedChanges()" [saving]="savingConfig() || savingTpl()" (save)="saveChanges()" (discard)="discardChanges()"></pf-settings-savebar>
         }
       </div>
     </section>
@@ -1235,6 +1244,11 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   readonly tplDirty = computed(() => this.savedTplJson() !== null && JSON.stringify(this._tpl()) !== this.savedTplJson());
   readonly configDirty = computed(() => this.savedConfigJson() !== null && JSON.stringify(this._config()) !== this.savedConfigJson());
   hasUnsavedChanges(): boolean { return this.tplDirty() || this.configDirty(); }
+  /** The Save bar's Discard: back to what the server holds. */
+  discardChanges(): void {
+    const c = this.savedConfigJson(); if (c) this._config.set(JSON.parse(c));
+    const t = this.savedTplJson(); if (t) this._tpl.set(JSON.parse(t));
+  }
   /** Save from the "Save your changes?" prompt: billing config and/or the bill design; true only when all saved. */
   async saveChanges(): Promise<boolean> {
     let ok = true;

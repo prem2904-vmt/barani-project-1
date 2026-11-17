@@ -13,7 +13,7 @@ import {
   signal,
 } from "@angular/core";
 import { Location, NgComponentOutlet, NgTemplateOutlet } from "@angular/common";
-import { SETTINGS_HOST, createSettingsHost } from "../../shared/utils/settings-host";
+import { SETTINGS_HOST, createSettingsHost, pickHostSearch } from "../../shared/utils/settings-host";
 import { confirmLeaveUnsaved, hasUnsavedChangesContract } from "../../shared/utils/unsaved-changes";
 import { DialogService } from "../../core/services/dialog.service";
 import { SegmentedComponent } from "../../shared/primitives/segmented.component";
@@ -67,6 +67,7 @@ interface SectionTile {
       <!-- Test Master's frame (DESIGN-V2): the search is the band pill — no second search box. -->
       <pf-hero-band
         [shellBand]="true"
+        [pageSearch]="inlineSearch()"
         [back]="true"
         [backAction]="compact() && detailOpen() ? closeFn : null"
         placeholder="Search all settings"
@@ -270,6 +271,7 @@ export class AdminOverviewComponent implements OnDestroy {
   });
   /** Its categories (hosted ones, `?tab=`), as a switch in the main card head. */
   private readonly host = inject(SETTINGS_HOST);
+  readonly inlineSearch = computed(() => this.inlineCmp() ? pickHostSearch(this.host.searches(), this.inlineCats().length > 1 ? this.inlineTab() : null) : null);
   /** The inline page's actions, in its card head (never the band's corner); per picked category when they belong to one. */
   readonly inlineActions = computed(() => {
     const sel = this.inlineCats().length > 1 ? this.inlineTab() : null;

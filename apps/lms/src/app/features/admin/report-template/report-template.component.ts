@@ -1,3 +1,5 @@
+import { NgTemplateOutlet } from '@angular/common';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { AuthService } from '../../../core/auth/auth.service';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -92,7 +94,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [SettingRowComponent, ReportSendingCardComponent, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
+  imports: [NgTemplateOutlet, SettingsSavebarComponent, SettingRowComponent, ReportSendingCardComponent, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
@@ -105,20 +107,13 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-band-page px-4 md:px-6 lg:px-8 pt-3 pb-10 pf-rt-page">
-      @if (theme.isNewDesign()) {
-        <!-- Band (owner 2026-11-17): ONE page for the report — design, technician
-             notes and sending. Back chevron, a search pill that finds a setting
-             on any tab, and the tabs in the same pill; Save rides the band. -->
-        <pf-hero-band [back]="true" placeholder="Find a report setting" [value]="findQuery()"
-                      (valueChange)="onFind($event)" (submitted)="pickFirstFind()">
-          <ng-container band-tools>
-            <pf-segmented class="pf-hb-tabs pf-rt-tabs" size="sm" [options]="sectionOptions()"
-                          [value]="tab()" (valueChange)="setTab($event)" data-testid="rt-tabs"></pf-segmented>
-          </ng-container>
-          <ng-container band-actions> @if (!notesOnly()) {
+
+      <!-- The settings pane's own tools (head: Tidy up tertiary + the issues chip + the save state) and its Save bar. -->
+      <ng-template #rtPaneTools>
+        @if (!notesOnly()) {
+          <div class="pf-rt-panebar">
             @if (tidyShown()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
+              <button type="button" class="pf-btn pf-btn--tertiary press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
                       aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6Z"/><path d="M18.5 15.5 19.3 17.7 21.5 18.5 19.3 19.3 18.5 21.5 17.7 19.3 15.5 18.5 17.7 17.7Z"/></svg>
                 Tidy up
@@ -141,16 +136,27 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-rt-savestate__t">All changes saved</span>
               }
             </span>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
-                    [disabled]="saving() || tplSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" aria-label="Save template" title="Save template">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                <path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
-              </svg>
-              {{ saving() ? 'Saving…' : 'Save' }}
-            </button>
-            }
+          </div>
+        }
+      </ng-template>
+      <ng-template #rtPaneSave>
+        @if (!notesOnly()) {
+          <pf-settings-savebar saveTestId="rt-save" [dirty]="dirty()" [saving]="saving()" [canSave]="!tplSkeleton()" [canDiscard]="false"
+                               (save)="save()"></pf-settings-savebar>
+        }
+      </ng-template>
+    <section class="pf-band-page px-4 md:px-6 lg:px-8 pt-3 pb-10 pf-rt-page">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner 2026-11-17): ONE page for the report — design, technician
+             notes and sending. Back chevron, a search pill that finds a setting
+             on any tab, and the tabs in the same pill; Save rides the band. -->
+        <pf-hero-band [back]="true" placeholder="Find a report setting" [value]="findQuery()"
+                      (valueChange)="onFind($event)" (submitted)="pickFirstFind()">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs pf-rt-tabs" size="sm" [options]="sectionOptions()"
+                          [value]="tab()" (valueChange)="setTab($event)" data-testid="rt-tabs"></pf-segmented>
+          </ng-container>
+          <!-- Settings (owner 2026-11-17): no buttons in the band — Tidy up, issues and Save sit in the settings pane. -->
           </ng-container>
         </pf-hero-band>
       }
@@ -237,9 +243,11 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
             [pdfUrl]="rawPreviewUrl()" [imageCache]="imageCache()" [rendering]="rendering()"
             [canUndo]="canUndo()" [canRedo]="canRedo()" [sigSample]="sigSample()" (sigSampleChange)="sigSample.set($event)"
             (patch)="patch($event)" (undo)="undo()" (redo)="redo()"></pf-report-header-editor>
+          <div class="pf-rt-designer-bar"><ng-container *ngTemplateOutlet="rtPaneTools"></ng-container><ng-container *ngTemplateOutlet="rtPaneSave"></ng-container></div>
         } @else {
         <!-- ── Focused section panel. ── -->
         <div class="pf-rt-work">
+          <ng-container *ngTemplateOutlet="rtPaneTools"></ng-container>
           @if (!theme.isNewDesign()) {
             @if (railHidden()) {
               <button type="button" class="pf-rt-side-expand" (click)="toggleRail()"
@@ -868,6 +876,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
             }
 
           }
+          <ng-container *ngTemplateOutlet="rtPaneSave"></ng-container>
         </div>
 
         <!-- ── Right: live PDF preview, shared by every section (not for
@@ -913,6 +922,8 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
     </section>
   `,
   styles: [`
+    .pf-rt-panebar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; padding: 4px 0 10px; }
+    .pf-rt-designer-bar { display: flex; flex-direction: column; gap: 6px; }
     /* ── WYSIWYG paper insets: light "print" surfaces on the dark page ── */
     .pf-wys-paper { background: #ffffff; color: #111; border-radius: 10px; padding: 12px 14px;
       border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 1px 6px rgba(0,0,0,0.35); }

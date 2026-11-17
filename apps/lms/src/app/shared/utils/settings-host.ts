@@ -17,8 +17,9 @@ export interface SettingsHost {
    * belong to (`group` = the nearest `pf-setting-group [id]` around the band; null = the whole page).
    */
   readonly actions: WritableSignal<readonly SettingsHostAction[]>;
-  /** The hosted page's band search field (icon + input / its custom search), shown in the shell's band pill. */
-  readonly search: WritableSignal<TemplateRef<unknown> | null>;
+  /** The hosted page's band search fields (icon + input / custom search), each with its group: the band pill shows the
+   *  selected group's search (else the page's ungrouped one). */
+  readonly searches: WritableSignal<readonly SettingsHostAction[]>;
   /** A hosted page's save state ("Saves automatically" / "Saving…"), shown small and muted in the shell's band. */
   readonly status: WritableSignal<TemplateRef<unknown> | null>;
   /**
@@ -40,8 +41,15 @@ export interface SettingsHostCategory {
 export const SETTINGS_HOST = new InjectionToken<SettingsHost>('pf.settings.host');
 
 /** A fresh host (the shell provides one per instance). */
+/** The search for the shown group: that group's, else the page's ungrouped one (`sel` null = any, the first). */
+export function pickHostSearch(list: readonly SettingsHostAction[], sel: string | null): TemplateRef<unknown> | null {
+  if (!list.length) return null;
+  if (sel) return (list.find((s) => s.group === sel) ?? list.find((s) => !s.group))?.tpl ?? null;
+  return (list.find((s) => !s.group) ?? list[0]).tpl;
+}
+
 export function createSettingsHost(): SettingsHost {
-  return { hosted: true, actions: signal([]), search: signal(null), status: signal(null), categories: signal(null) };
+  return { hosted: true, actions: signal([]), searches: signal([]), status: signal(null), categories: signal(null) };
 }
 
 /** True while the page is rendered inside the Settings shell. Call from an injection context. */
