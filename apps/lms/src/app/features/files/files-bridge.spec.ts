@@ -473,3 +473,57 @@ describe('Files bridge: any app, its own prefix, global and file type', () => {
     expect(f.postMessage).toHaveBeenLastCalledWith({ type: 'synapse:canComment', allow: false }, ORIGIN);
   });
 });
+
+describe('Start screen messages (`<prefix>home`, openRecent, newFromTemplate, started)', () => {
+  const HOME = {
+    recent: [{ id: 'f1', name: 'Daily log.xlsx', updatedAt: '2026-11-16T05:00:00Z', updatedByName: 'Kavya', containsPhi: true }],
+    templates: [{ id: 'neuron:qc', name: 'QC log', source: 'builtin' as const }, { id: 'own:t1', name: 'Our stock sheet', source: 'lab' as const }],
+    canCreate: true, canOpenDevice: true, placeName: 'Micro World',
+  };
+  it('home is held until the engine says ready, then sent once with the contract fields', () => {
+    const { bridge, win, postMessage } = make();
+    bridge.setHome(HOME);
+    expect(postMessage).not.toHaveBeenCalled();
+    bridge.handle(from(win, { type: msg.ready }));
+    const home = postMessage.mock.calls.map(c => c[0]).filter(m => m.type === 'neuron:home');
+    expect(home).toHaveLength(1);
+    expect(home[0]).toMatchObject({ type: 'neuron:home', canCreate: true, canOpenDevice: true, placeName: 'Micro World' });
+    expect(home[0].recent).toEqual(HOME.recent);
+    expect(home[0].templates.map((t: { source: string }) => t.source)).toEqual(['builtin', 'lab']);
+    expect(postMessage.mock.calls.find(c => c[0].type === 'neuron:home')![1]).toBe(ORIGIN);
+  });
+  it('a later change is sent at once; clearing it stops sending and nothing is sent without data', () => {
+    const { bridge, win, postMessage } = make();
+    bridge.handle(from(win, { type: msg.ready }));
+    expect(postMessage.mock.calls.some(c => c[0].type === 'neuron:home')).toBe(false);
+    bridge.setHome(HOME);
+    expect(postMessage.mock.calls.filter(c => c[0].type === 'neuron:home')).toHaveLength(1);
+    bridge.setHome(null);
+    expect(postMessage.mock.calls.filter(c => c[0].type === 'neuron:home')).toHaveLength(1);
+  });
+  it('a new frame forgets the start screen data (a file frame never gets it)', () => {
+    const { bridge, win, postMessage } = make();
+    bridge.setHome(HOME);
+    bridge.prepareNewFrame();
+    bridge.handle(from(win, { type: msg.ready }));
+    expect(postMessage.mock.calls.some(c => c[0].type === 'neuron:home')).toBe(false);
+  });
+  it('openRecent / newFromTemplate / started reach the page; ids must be non-empty strings; strangers are ignored', () => {
+    const { bridge, win } = make();
+    const rec = vi.fn(), tpl = vi.fn(), st = vi.fn();
+    bridge.onOpenRecent = rec; bridge.onNewFromTemplate = tpl; bridge.onStarted = st;
+    bridge.handle(from(win, { type: 'neuron:openRecent', id: 'f1' }));
+    bridge.handle(from(win, { type: 'neuron:newFromTemplate', id: 'neuron:qc' }));
+    bridge.handle(from(win, { type: 'neuron:started' }));
+    expect(rec).toHaveBeenCalledWith('f1'); expect(tpl).toHaveBeenCalledWith('neuron:qc'); expect(st).toHaveBeenCalledTimes(1);
+    bridge.handle(from(win, { type: 'neuron:openRecent', id: 7 }));
+    bridge.handle(from(win, { type: 'neuron:openRecent', id: '' }));
+    bridge.handle(from(win, { type: 'neuron:newFromTemplate' }));
+    bridge.handle(from({}, { type: 'neuron:openRecent', id: 'f9' }));                    // not the frame's window
+    bridge.handle(from(win, { type: 'neuron:openRecent', id: 'f9' }, 'http://evil.example'));
+    expect(rec).toHaveBeenCalledTimes(1); expect(tpl).toHaveBeenCalledTimes(1);
+  });
+  it('every app speaks its own prefix', () => {
+    for (const a of FILES_APPS) expect(messagesFor(a.prefix)).toMatchObject({ home: `${a.prefix}home`, openRecent: `${a.prefix}openRecent`, newFromTemplate: `${a.prefix}newFromTemplate`, started: `${a.prefix}started` });
+  });
+});

@@ -126,7 +126,7 @@ describe('Start menu: right-click / long-press on a Files row', () => {
     expect(sheets.open).toHaveBeenCalledWith({ app: 'axon', source: 'Files' });
     rightClick(row(el, 'files-neuron')); await flush(f);
     el.querySelector<HTMLButtonElement>('[data-sm-ctx-act="open"]')!.click();
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/files?type=sheet');
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/files/sheet/start');
   });
 
   it('Myelin and Retina offer "Open a PDF" / "Open an image" (they edit what exists); All files has no New', async () => {

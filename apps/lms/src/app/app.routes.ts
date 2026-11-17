@@ -236,6 +236,8 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/files/files-home.page').then(m => m.FilesHomePage)
       },
       {
+        // `/files/<kind>/start` is the app's OWN start screen (the editor opened without a file: New, templates, Recent, Open); the Start menu,
+        // the bottom bar and pins open it. Any other second segment is a stored file's id or `new`.
         path: 'files/:kind/:id',
         canActivate: [betaGuard('neuron')],
         canDeactivate: [(c: { canLeave?: () => Promise<boolean> }) => c?.canLeave ? c.canLeave() : true],

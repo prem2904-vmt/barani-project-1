@@ -33,7 +33,7 @@ interface Opts { place?: 'lab' | 'device' | null; engine?: boolean; kind?: strin
 function make(o: Opts = {}) {
   const kind = o.kind ?? 'sheet';
   const app = FILES_APPS.find(a => a.route === kind)!;
-  const sheetsSvc = { take: vi.fn(() => o.request ?? null), openedFromScreen: !!o.fromScreen, back: vi.fn(), clearOrigin: vi.fn() };
+  const sheetsSvc = { open: vi.fn(async (_r?: unknown) => true), take: vi.fn(() => o.request ?? null), openedFromScreen: !!o.fromScreen, back: vi.fn(), clearOrigin: vi.fn() };
   const perms = o.perms ?? ['*all'];
   const office = {
     list: vi.fn(async () => o.list ?? [dto({ containsPhi: true, phiSources: [{ source: 'results', at: '2026-11-15T05:00:00Z', byName: 'Lakshmi Admin' }] })]),
@@ -49,6 +49,7 @@ function make(o: Opts = {}) {
   const canWrite = o.canWrite !== false;
   const access = {
     ensureLoaded: vi.fn(async () => undefined), available: () => true, full, viewOnly: () => !full(), phone: () => !!o.phone, phoneCanEdit: () => !o.phone,
+    settings: () => ({ hiddenTemplates: [], ownTemplates: [{ id: 't1', kind: 'sheet', name: 'Our stock sheet', fileId: 'tf1' }] }),
     canRead: () => o.canRead !== false, canWrite: () => full() && canWrite && !o.phone, access: () => ({ patientNames: true, trashDays: 30 }),
   };
   const device = {
@@ -503,5 +504,158 @@ describe('Files editor: comments', () => {
     fromFrame({ type: 'neuron:save', name: 'Budget.xlsx', saveAs: false, bytes: PK.slice(0) });
     await settle();
     expect(saver.store.mock.calls[0][4]).toEqual({ commentOnly: undefined, commentCount: 1 });
+  });
+});
+
+
+describe('Files editor: an app\'s own start screen (`/files/<kind>/start`)', () => {
+  const LIST = [
+    dto({ id: 's1', name: 'Newest.xlsx', updatedAt: '2026-11-16T05:00:00Z', containsPhi: true }),
+    dto({ id: 's2', name: 'Older.xlsx', updatedAt: '2026-11-10T05:00:00Z' }),
+    dto({ id: 'd1', name: 'A letter.docx', kind: 'doc', updatedAt: '2026-11-17T05:00:00Z' }),
+  ];
+  const homes = (c: { win: { postMessage: unknown } }) => (c.win.postMessage as ReturnType<typeof vi.fn>).mock.calls.map(x => x[0]).filter((m: { type: string }) => m.type === 'neuron:home');
+  async function startUp(o: Opts = {}) {
+    const m = make({ id: 'start', list: LIST, ...o });
+    await m.settle();
+    const iframe = m.el.querySelector('iframe') as HTMLIFrameElement;
+    const win = { postMessage: vi.fn() };
+    Object.defineProperty(iframe, 'contentWindow', { value: win, configurable: true });
+    m.fixture.detectChanges();
+    m.bridge.attach(iframe);
+    m.fromFrame({ type: 'neuron:ready' });
+    return { ...m, win, iframe };
+  }
+
+  it('opens the engine WITHOUT a file: the app\'s name in the band, no Save, no file name, no Share', async () => {
+    const { el, t, page } = await startUp();
+    expect(el.querySelector('iframe')).toBeTruthy();
+    expect(t('files-start-name')?.textContent?.trim()).toBe('Neuron');
+    expect(t('files-save')).toBeNull();
+    expect(t('files-name')).toBeNull();
+    expect(t('files-share-open')).toBeNull();
+    expect(t('files-savestate')).toBeNull();
+    expect(page.unsaved()).toBe(false);
+  });
+
+  it('tells the engine this app\'s Recent only (newest first, shield flag) and its templates (built-in + the lab\'s own)', async () => {
+    const c = await startUp();
+    const h = homes(c);
+    expect(h.length).toBe(1);
+    expect(h[0].recent.map((r: { id: string }) => r.id)).toEqual(['s1', 's2']);
+    expect(h[0].recent[0].containsPhi).toBe(true);
+    expect(h[0].templates.map((x: { id: string; source: string }) => `${x.id}:${x.source}`)).toEqual(['neuron:results:builtin', 'neuron:qc:builtin', 'neuron:stock:builtin', 'own:t1:lab']);
+    expect(h[0]).toMatchObject({ canCreate: true, canOpenDevice: true, placeName: 'Micro World' });
+    expect(c.office.list).toHaveBeenCalledWith('sheet');
+  });
+
+  it('VIEW ONLY lab: no templates, canCreate false, Recent and Open still there', async () => {
+    const c = await startUp({ full: false });
+    const h = homes(c)[0];
+    expect(h).toMatchObject({ canCreate: false, canOpenDevice: true, templates: [] });
+    expect(h.recent).toHaveLength(2);
+  });
+
+  it('a phone (view only) gets the same: Recent + Open, no New', async () => {
+    const h = homes(await startUp({ phone: true }))[0];
+    expect(h.canCreate).toBe(false);
+    expect(h.templates).toEqual([]);
+    expect(h.recent).toHaveLength(2);
+  });
+
+  it('a failed Recent list shows an empty start screen, not a broken one', async () => {
+    const m = make({ id: 'start' });
+    m.office.list.mockRejectedValueOnce(new Error('down'));
+    await m.settle();
+    const iframe = m.el.querySelector('iframe') as HTMLIFrameElement;
+    const win = { postMessage: vi.fn() };
+    Object.defineProperty(iframe, 'contentWindow', { value: win, configurable: true });
+    m.bridge.attach(iframe);
+    m.fromFrame({ type: 'neuron:ready' });
+    const h = win.postMessage.mock.calls.map(x => x[0]).find(x => x.type === 'neuron:home');
+    expect(h.recent).toEqual([]);
+  });
+
+  it('a Recent row opens THAT stored file through the editor service (back returns here); an id the engine was never given is ignored', async () => {
+    const c = await startUp();
+    c.fromFrame({ type: 'neuron:openRecent', id: 's2' });
+    await c.settle();
+    expect(c.sheetsSvc.open).toHaveBeenCalledWith({ app: 'neuron', source: 'Files', fileId: 's2' });
+    c.fromFrame({ type: 'neuron:openRecent', id: 'someone-elses' });
+    c.fromFrame({ type: 'neuron:openRecent', id: 'd1' });                            // a document is not in a sheet app's Recent
+    await c.settle();
+    expect(c.sheetsSvc.open).toHaveBeenCalledTimes(1);
+  });
+
+  it('a built-in template builds in the open engine and the page becomes an ordinary new file (Save appears)', async () => {
+    const c = await startUp();
+    const run = vi.fn(); (c.bridge as unknown as { runCommand: unknown }).runCommand = run;
+    c.fromFrame({ type: 'neuron:newFromTemplate', id: 'neuron:qc' });
+    await c.settle();
+    expect(run).toHaveBeenCalledWith('file.new', { sample: 'qc' });
+    expect(c.t('files-save')).toBeTruthy();
+    expect(c.t('files-start-name')).toBeNull();
+    expect(c.page.session().file.name).toBe('QC log.xlsx');
+    expect(c.page.saveState()).toBe('Not saved yet');
+  });
+
+  it('the lab\'s own template opens a COPY of that stored file (the server copies its patient-data flag)', async () => {
+    const c = await startUp();
+    c.fromFrame({ type: 'neuron:newFromTemplate', id: 'own:t1' });
+    await c.settle();
+    expect(c.office.content).toHaveBeenCalledWith('tf1');
+    expect(c.page.session().file).toMatchObject({ id: null, name: 'Our stock sheet.xlsx', copyOf: 'tf1' });
+    expect(c.page.isStart()).toBe(false);
+  });
+
+  it('templates are refused for someone who may not create, and an unknown id does nothing', async () => {
+    const ro = await startUp({ full: false });
+    ro.fromFrame({ type: 'neuron:newFromTemplate', id: 'neuron:qc' });
+    await ro.settle();
+    expect(ro.page.isStart()).toBe(true);
+    TestBed.resetTestingModule();
+    const c = await startUp();
+    c.fromFrame({ type: 'neuron:newFromTemplate', id: 'neuron:nope' });
+    await c.settle();
+    expect(c.page.isStart()).toBe(true);
+  });
+
+  it('`started` (the engine\'s own Blank) and the first unsaved change both end the start screen', async () => {
+    const a = await startUp();
+    a.fromFrame({ type: 'neuron:started' });
+    expect(a.page.isStart()).toBe(false);
+    expect(a.t('files-save')).toBeTruthy();
+    TestBed.resetTestingModule();
+    const b = await startUp();
+    b.fromFrame({ type: 'neuron:dirty', dirty: true });
+    await b.settle();
+    expect(b.page.isStart()).toBe(false);
+  });
+
+  it('Open on the start screen uses the same place picker; This device opens that file as an ordinary session', async () => {
+    const c = await startUp({ place: 'device' });
+    c.fromFrame({ type: 'neuron:openRequest' });
+    await c.settle();
+    expect(c.dialog.actions).toHaveBeenCalled();
+    expect(c.device.open).toHaveBeenCalled();
+    expect(c.page.isStart()).toBe(false);
+    expect(c.page.session().file.name).toBe('Mine.xlsx');
+  });
+
+  it('every app\'s start route hosts its own engine without a file', async () => {
+    for (const a of FILES_APPS.filter(x => x.id !== 'myelin' && x.id !== 'retina')) {
+      TestBed.resetTestingModule();
+      const { el, settle, t } = make({ kind: a.route, id: 'start' });
+      await settle();
+      expect((el.querySelector('iframe') as HTMLIFrameElement).src).toContain(`/${a.enginePath}index.html`);
+      expect(t('files-start-name')?.textContent?.trim()).toBe(a.name);
+    }
+  });
+
+  it('Ctrl+S on the start screen does not save anything', async () => {
+    const c = await startUp();
+    const save = vi.spyOn(c.bridge, 'save');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true }));
+    expect(save).not.toHaveBeenCalled();
   });
 });
