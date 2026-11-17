@@ -159,10 +159,19 @@ export const INLINE_SECTION_OF: ReadonlyMap<string, string> = new Map(
 const isInline = (r: Route) => INLINE_SECTION_OF.has('/' + (r.path ?? ''));
 /** The page routes of those inline sections — the overview loads the component from here. */
 export const INLINE_PAGE_ROUTES: Routes = ALL_SETTINGS_PAGES.filter((r) => isFull(r) && isInline(r));
+/** Same guards as the page (refused stays refused), then the hop to the overview section, query kept. */
 const toInlineSection = (r: Route): Route => ({
-  path: r.path, pathMatch: 'full',
-  redirectTo: ({ queryParams }) => inject(Router).createUrlTree(['/admin'],
-    { queryParams: { ...(queryParams as Record<string, string>), section: INLINE_SECTION_OF.get('/' + (r.path ?? '')) } }),
+  path: r.path,
+  canActivate: [
+    ...(r.canActivate ?? []),
+    ((_route, state) => {
+      const tree = inject(Router).parseUrl(state.url);
+      return inject(Router).createUrlTree(['/admin'], {
+        queryParams: { ...tree.queryParams, section: INLINE_SECTION_OF.get('/' + (r.path ?? '')) },
+      });
+    }) as CanActivateFn,
+  ],
+  loadComponent: blank,
 });
 
 export const SETTINGS_FULL_PAGE_ROUTES: Routes = [
