@@ -1,13 +1,24 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  Injector,
+  TemplateRef,
+  Type,
+  viewChild,
   OnDestroy,
   computed,
   effect,
   inject,
   signal,
 } from "@angular/core";
-import { Location } from "@angular/common";
+import { Location, NgComponentOutlet, NgTemplateOutlet } from "@angular/common";
+import { SETTINGS_HOST, createSettingsHost } from "../../shared/utils/settings-host";
+import { SegmentedComponent } from "../../shared/primitives/segmented.component";
+import { SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from "./settings/settings.routes";
+import { OPD_ADMIN_ROUTES } from "../opd/opd.routes";
+import { CASESHEET_SHELL_ROUTES } from "../casesheets/casesheets.routes";
+import { Route } from "@angular/router";
+import { map } from "rxjs";
 import { toSignal } from "@angular/core/rxjs-interop";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import { TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from "@prefrontal/shared";
@@ -45,12 +56,14 @@ interface SectionTile {
 @Component({
   selector: "pf-admin-overview",
   standalone: true,
-  imports: [RouterLink, HeroBandComponent, SettingsResultsComponent, TwoPanelComponent],
+  imports: [RouterLink, HeroBandComponent, SettingsResultsComponent, TwoPanelComponent, NgComponentOutlet, NgTemplateOutlet, SegmentedComponent],
+  providers: [{ provide: SETTINGS_HOST, useFactory: createSettingsHost }],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-ov pf-band-page">
       <!-- Test Master's frame (DESIGN-V2): the search is the band pill — no second search box. -->
       <pf-hero-band
+        [shellBand]="true"
         [back]="true"
         [backAction]="compact() && detailOpen() ? closeFn : null"
         placeholder="Search all settings"
@@ -87,6 +100,18 @@ interface SectionTile {
             (pick)="pickSection($event)"
             (back)="closeDetail()"
           >
+            <ng-container panel-tools>
+              @if (inlineCats().length > 1) {
+                <pf-segmented size="sm" ariaLabel="Category" [options]="inlineCats()" [value]="inlineTab()" (valueChange)="pickInlineTab($any($event))"></pf-segmented>
+              }
+              @if (inlineHeadTools(); as ht) { <ng-container *ngTemplateOutlet="ht"></ng-container> }
+            </ng-container>
+            @if (inlineCmp(); as cmp) {
+              <!-- A section with ONE setting shows that setting right here (owner): no tile, no extra click. -->
+              <div class="pf-ss__main pf-ov__inline" data-testid="ov-inline">
+                <ng-container *ngComponentOutlet="cmp; injector: inlineInjector()"></ng-container>
+              </div>
+            } @else {
             <div class="pf-ov__tiles" data-testid="ov-tiles">
               @for (t of selectedTiles(); track t.href + t.title) {
                 <a [routerLink]="t.href" [queryParams]="t.queryParams ?? null" class="pf-ov__tile press"
@@ -111,6 +136,7 @@ interface SectionTile {
                 </a>
               }
             </div>
+            }
           </pf-two-panel>
         }
       </div>
@@ -123,6 +149,7 @@ interface SectionTile {
       :root:not(.design-new) .pf-ov { display: flex; flex-direction: column; height: calc(100dvh - var(--top-strip-h, 64px)); padding: 0 16px; }
       :root:not(.design-new) .pf-ov__body { flex: 1; display: flex; flex-direction: column; padding-bottom: 12px; }
       .pf-ov__results { flex: 1 1 auto; }
+      .pf-ov__inline { padding: 4px 6px 16px; }
 
       /* Main card body: this section's tiles — the existing tile look, tighter. */
       .pf-ov__tiles { display: grid; gap: 10px; align-content: start; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
@@ -202,6 +229,50 @@ export class AdminOverviewComponent implements OnDestroy {
     return n ? `${n} setting${n === 1 ? '' : 's'}` : null;
   });
   readonly gearIcon = 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z';
+  // ── A section with ONE setting renders that setting inline (owner 2026-11-17) ──
+  private readonly injector = inject(Injector);
+  private readonly inlineItem = computed(() => {
+    const items = this.allItems().find(i => i.section.id === this.selectedId())?.items ?? [];
+    return items.length === 1 ? items[0] : null;
+  });
+  readonly inlineCmp = signal<Type<unknown> | null>(null);
+  private readonly loadInline = effect(() => {
+    const it = this.inlineItem();
+    this.inlineCmp.set(null);
+    if (!it) return;
+    const r = inlineRoute(it.path);
+    const load = r?.loadComponent;
+    if (!load) return;
+    void Promise.resolve(load()).then((m: unknown) => {
+      if (this.inlineItem() !== it) return;
+      const t = (m && typeof m === 'object' && 'default' in (m as object)) ? (m as { default: Type<unknown> }).default : m as Type<unknown>;
+      this.inlineCmp.set(t);
+    });
+  });
+  /** The setting's route data (e.g. which tabs a reused screen shows) on top of the overview's live route. */
+  readonly inlineInjector = computed(() => {
+    const it = this.inlineItem();
+    const data = (it && inlineRoute(it.path)?.data) ?? {};
+    const real = this.route;
+    const proxy = real ? Object.create(real, {
+      snapshot: { get: () => Object.assign(Object.create(real.snapshot), { data: { ...real.snapshot.data, ...data } }) },
+      data: { value: real.data.pipe(map((d) => ({ ...d, ...data }))) },
+    }) : null;
+    return Injector.create({ providers: proxy ? [{ provide: ActivatedRoute, useValue: proxy }] : [], parent: this.injector });
+  });
+  /** Its categories (hosted ones, `?tab=`), as a switch in the main card head. */
+  readonly inlineCats = computed(() => (this.inlineItem()?.categories ?? []).filter(c => c.query?.['tab']).map(c => ({ value: c.query!['tab'], label: c.label })));
+  readonly inlineTab = computed(() => this.params()?.get('tab') ?? this.inlineCats()[0]?.value ?? '');
+  pickInlineTab(t: string): void {
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+  private readonly outlet = viewChild(NgComponentOutlet);
+  readonly inlineHeadTools = computed<TemplateRef<unknown> | null>(() => {
+    this.inlineCmp();
+    const inst = (this.outlet() as unknown as { componentInstance?: { headTools?: () => TemplateRef<unknown> | undefined } } | undefined)?.componentInstance;
+    return typeof inst?.headTools === 'function' ? (inst.headTools() ?? null) : null;
+  });
+
   tileKey(t: SectionTile): string { return t.href.replace(/^\//, '').replace(/[^a-z0-9]+/gi, '-'); }
 
   /** True when the phone's detail was pushed by a tap here, so back can POP it. */
@@ -254,4 +325,10 @@ export class AdminOverviewComponent implements OnDestroy {
     const top = this.results()[0];
     if (top) void this.router.navigate([top.href], { queryParams: top.queryParams ?? {} });
   }
+}
+
+/** The route that serves a settings path (hosted card page, full page, OPD or case-sheet admin), for inline rendering. */
+function inlineRoute(path: string): Route | undefined {
+  const p = path.replace(/^\//, '');
+  return [...SETTINGS_SHELL_CHILDREN, ...SETTINGS_FULL_PAGE_ROUTES, ...OPD_ADMIN_ROUTES, ...CASESHEET_SHELL_ROUTES].find(r => r.path === p && !r.redirectTo);
 }
