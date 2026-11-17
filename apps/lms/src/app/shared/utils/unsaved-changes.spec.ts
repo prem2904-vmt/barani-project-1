@@ -1,4 +1,4 @@
-import { of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { vi } from 'vitest';
 import { confirmLeaveUnsaved, hasUnsavedChangesContract } from './unsaved-changes';
 import { DialogService } from '../../core/services/dialog.service';
@@ -7,7 +7,7 @@ import { DialogService } from '../../core/services/dialog.service';
 function dialog(action: string | null) {
   return { actions: vi.fn(async () => ({ action, checked: false })) } as unknown as DialogService & { actions: ReturnType<typeof vi.fn> };
 }
-const page = (dirty: boolean, save?: () => Promise<boolean> | ReturnType<typeof of<boolean>>) => ({
+const page = (dirty: boolean, save?: () => Promise<boolean> | Observable<boolean>) => ({
   hasUnsavedChanges: () => dirty, unsavedLabel: 'Billing', ...(save ? { saveChanges: save } : {}),
 });
 
