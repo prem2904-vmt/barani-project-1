@@ -3,6 +3,7 @@ import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import type { SegmentedOption } from '../primitives/segmented.component';
 import { ThemeService } from '../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from '../../features/admin/tests/tests/grid-theme';
+import { injectSettingsHosted } from '../utils/settings-host';
 
 /**
  * Settings list grids — ONE look for every list screen in Settings (owner
@@ -18,6 +19,11 @@ import { gridThemeDark, gridThemeLight } from '../../features/admin/tests/tests/
  */
 
 export type SgStatus = 'all' | 'active' | 'inactive';
+
+/** True inside the Settings shell: the grid card renders BARE (the shell's card + head frame it). */
+export function sgBare(): boolean {
+  return injectSettingsHosted();
+}
 
 /** Test Master's grid theme for the current colour scheme. */
 export function sgGridTheme(): Signal<typeof gridThemeLight> {

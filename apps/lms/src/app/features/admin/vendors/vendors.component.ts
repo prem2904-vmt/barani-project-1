@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal, TemplateRef, viewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -26,8 +26,7 @@ import { AgGridAngular } from 'ag-grid-angular';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import {
   SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, sgActions, sgActionsCol, sgByStatus, sgCell, sgGridTheme, sgInr, sgMedia,
-  sgPillCol, sgRowOff, sgStatusOptions,
-} from '../../../shared/settings-grid/settings-grid';
+  sgPillCol, sgRowOff, sgStatusOptions, sgBare } from '../../../shared/settings-grid/settings-grid';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -150,14 +149,12 @@ const EMPTY_DRAFT: NewVendorDraft = {
           }
 
           <!-- MAIN card: the credit accounts grid. -->
-          <section class="pf-card pf-sg-main pf-vn-main" aria-label="Credit accounts">
+          <section class="pf-card pf-sg-main pf-vn-main" [class.pf-sg-main--bare]="bare" aria-label="Credit accounts">
             <header class="pf-card__head pf-sg-main__head">
               <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7H5a2 2 0 0 1 0-4h13v4M3 5v14a2 2 0 0 0 2 2h16V7H5a2 2 0 0 1-2-2ZM17 14h.01"/></svg></span>
               <span class="pf-card__label">Credit accounts</span>
               <span class="pf-card__note pf-sg-hint">{{ showMoney() ? 'Top up, record a payment or email a statement from a row' : 'Partner hospitals and aggregators billed on credit' }}</span>
-              <span class="pf-sg-count pf-num">{{ visibleVendors().length }} {{ visibleVendors().length === 1 ? 'account' : 'accounts' }}</span>
-              <pf-segmented class="pf-sg-status-filter pf-vn-seg" size="sm" [options]="statusOptions()" [value]="status()"
-                            (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+              <ng-container *ngTemplateOutlet="headTools"></ng-container>
             </header>
             <div class="pf-sg-main__body">
               @if (loadingShown()) {
@@ -342,6 +339,13 @@ const EMPTY_DRAFT: NewVendorDraft = {
         </div>
       }
     </ng-template>
+
+    <!-- The grid card's head tools (count + status filter): exposed so a host can project them into its own head. -->
+    <ng-template #headTools>
+              <span class="pf-sg-count pf-num">{{ visibleVendors().length }} {{ visibleVendors().length === 1 ? 'account' : 'accounts' }}</span>
+              <pf-segmented class="pf-sg-status-filter pf-vn-seg" size="sm" [options]="statusOptions()" [value]="status()"
+                            (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+    </ng-template>
   `,
   styles: [`
     .pf-section-title {
@@ -492,6 +496,10 @@ const EMPTY_DRAFT: NewVendorDraft = {
   `]
 })
 export class VendorsComponent implements OnInit {
+  /** Hosted in the Settings shell: the grid card renders BARE (ONE card, ONE head). */
+  protected readonly bare = sgBare();
+  /** Count + status filter, for a host that projects head tools into its own head. */
+  readonly headTools = viewChild<TemplateRef<unknown>>('headTools');
   private readonly api = inject(ApiService);
   private readonly http = inject(HttpClient);
   private readonly platform = inject(PlatformService);
@@ -554,8 +562,8 @@ export class VendorsComponent implements OnInit {
     const acts: SgAction[] = [];
     if (this.showMoney()) {
       acts.push(
-        { label: 'Top up', aria: `Top up ${v.name}`, path: '<path d="M12 5v14M5 12h14"/>', run: () => this.openTopUp(v) },
-        { label: 'Record payment', aria: `Record payment for ${v.name}`, path: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>', run: () => this.openPayment(v) },
+        { label: 'Top up', aria: `Top up ${v.name}`, icon: true, path: '<path d="M12 5v14M5 12h14"/>', run: () => this.openTopUp(v) },
+        { label: 'Record payment', aria: `Record payment for ${v.name}`, icon: true, path: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>', run: () => this.openPayment(v) },
         { label: this.emailingId() === v.id ? 'Sending…' : 'Email statement', aria: `Email statement to ${v.name}`, icon: true,
           path: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>', run: () => this.emailStatement(v) },
         { label: this.openTxnsId() === v.id ? 'Hide history' : 'View history', aria: `${this.openTxnsId() === v.id ? 'Hide' : 'View'} history of ${v.name}`, icon: true,
@@ -564,7 +572,7 @@ export class VendorsComponent implements OnInit {
     }
     if (this.showSetup()) {
       acts.push(
-        { label: 'Edit', aria: `Edit ${v.name}`, path: SG_ICON.edit, run: () => this.editVendor(v) },
+        { label: 'Edit', aria: `Edit ${v.name}`, icon: true, path: SG_ICON.edit, run: () => this.editVendor(v) },
         { label: v.isActive ? 'Deactivate' : 'Reactivate', aria: `${v.isActive ? 'Deactivate' : 'Reactivate'} ${v.name}`, icon: true,
           path: SG_ICON.power, run: () => this.toggleActive(v) },
       );

@@ -36,6 +36,37 @@
   container-type: inline-size;
 }
 
+/* BARE: hosted inside the Settings shell, whose own card + head frame the page — the
+   grid card drops its chrome and its head becomes a slim tools row (count + filter),
+   so the screen shows ONE card and ONE head. The tools also sit in an exposed
+   template (#headTools) a host can project into its own head. */
+.pf-sg-main.pf-sg-main--bare {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.pf-sg-main--bare > .pf-sg-main__head {
+  padding: 0 0 8px;
+  background: transparent;
+  border: 0;
+  justify-content: flex-end;
+}
+
+.pf-sg-main--bare > .pf-sg-main__head > .pf-card__icon,
+.pf-sg-main--bare > .pf-sg-main__head > .pf-card__label,
+.pf-sg-main--bare > .pf-sg-main__head > .pf-card__note {
+  display: none;
+}
+
+.pf-sg-main--bare .pf-sg-main__body {
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
 /* A narrow main card drops the head's hint rather than wrapping it word by word. */
 @container (max-width: 760px) {
   .pf-sg-hint {

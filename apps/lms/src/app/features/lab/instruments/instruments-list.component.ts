@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { NgTemplateOutlet } from '@angular/common';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { ANALYZER_PAGES } from '../../../shared/settings-grid/page-switch';
-import { SG_ICON, SG_NARROW_MQ, sgActions, sgActionsCol, sgMedia } from '../../../shared/settings-grid/settings-grid';
+import { SG_ICON, SG_NARROW_MQ, sgActions, sgActionsCol, sgMedia, sgBare } from '../../../shared/settings-grid/settings-grid';
 import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, ModuleRegistry } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -105,14 +105,14 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
             </div>
           }
 
-          <section class="pf-card pf-sg-main pf-sg-main--clickable pf-inl__main" aria-label="Instruments">
+          <section class="pf-card pf-sg-main pf-sg-main--clickable pf-inl__main" [class.pf-sg-main--bare]="bare" aria-label="Instruments">
             <header class="pf-card__head pf-sg-main__head">
               <span class="pf-card__icon" aria-hidden="true">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4M7 10h2l1.5-3 3 6 1.5-3h2"/></svg>
               </span>
               <span class="pf-card__label">Instruments</span>
               <span class="pf-card__note pf-sg-hint">Click a row to open setup and live status</span>
-              <span class="pf-sg-count pf-num" aria-live="polite">{{ countLabel() }}</span>
+              <ng-container *ngTemplateOutlet="headTools"></ng-container>
             </header>
             <div class="pf-sg-main__body">
               @if (listSkeleton()) {
@@ -175,6 +175,11 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
         </div>
       }
     </ng-template>
+
+    <!-- The grid card's head tools (count + status filter): exposed so a host can project them into its own head. -->
+    <ng-template #headTools>
+              <span class="pf-sg-count pf-num" aria-live="polite">{{ countLabel() }}</span>
+    </ng-template>
   `,
   styles: [`
     .pf-inl { overflow-x: clip; }
@@ -194,6 +199,10 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
   `],
 })
 export class InstrumentsListComponent {
+  /** Hosted in the Settings shell: the grid card renders BARE (ONE card, ONE head). */
+  protected readonly bare = sgBare();
+  /** Count + status filter, for a host that projects head tools into its own head. */
+  readonly headTools = viewChild<TemplateRef<unknown>>('headTools');
   private readonly api = inject(InstrumentsApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);

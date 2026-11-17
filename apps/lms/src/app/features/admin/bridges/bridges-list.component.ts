@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
@@ -13,7 +13,7 @@ import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.
 import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { ANALYZER_PAGES } from '../../../shared/settings-grid/page-switch';
-import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, sgActions, sgActionsCol, sgCell, sgGridTheme, sgMedia, sgStatusWord } from '../../../shared/settings-grid/settings-grid';
+import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, sgActions, sgActionsCol, sgCell, sgGridTheme, sgMedia, sgStatusWord, sgBare } from '../../../shared/settings-grid/settings-grid';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { plural } from '../../../shared/utils/plural';
@@ -101,14 +101,14 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
             </aside>
           }
 
-          <section class="pf-card pf-sg-main pf-sg-main--clickable pf-brl__main" aria-label="Bridges">
+          <section class="pf-card pf-sg-main pf-sg-main--clickable pf-brl__main" [class.pf-sg-main--bare]="bare" aria-label="Bridges">
             <header class="pf-card__head pf-sg-main__head">
               <span class="pf-card__icon" aria-hidden="true">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 17h.01M11 17h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0"/></svg>
               </span>
               <span class="pf-card__label">Bridges</span>
               <span class="pf-card__note pf-sg-hint">Click a row to open the Bridge</span>
-              <span class="pf-sg-count pf-num" aria-live="polite">{{ countLabel() }}</span>
+              <ng-container *ngTemplateOutlet="headTools"></ng-container>
             </header>
             <div class="pf-sg-main__body">
               @if (listSkeleton()) {
@@ -179,6 +179,11 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
         }
       </div>
     </ng-template>
+
+    <!-- The grid card's head tools (count + status filter): exposed so a host can project them into its own head. -->
+    <ng-template #headTools>
+              <span class="pf-sg-count pf-num" aria-live="polite">{{ countLabel() }}</span>
+    </ng-template>
   `,
   styles: [`
     .pf-brl { overflow-x: clip; }
@@ -192,6 +197,10 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
   `],
 })
 export class BridgesListComponent {
+  /** Hosted in the Settings shell: the grid card renders BARE (ONE card, ONE head). */
+  protected readonly bare = sgBare();
+  /** Count + status filter, for a host that projects head tools into its own head. */
+  readonly headTools = viewChild<TemplateRef<unknown>>('headTools');
   private readonly api = inject(BridgesApiService);
   private readonly toasts = inject(ToastService);
   private readonly router = inject(Router);
