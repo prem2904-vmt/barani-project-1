@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   Injector,
   TemplateRef,
   Type,
@@ -108,7 +109,7 @@ interface SectionTile {
             </ng-container>
             @if (inlineCmp(); as cmp) {
               <!-- A section with ONE setting shows that setting right here (owner): no tile, no extra click. -->
-              <div class="pf-ss__main pf-ov__inline" data-testid="ov-inline">
+              <div class="pf-ss__main pf-ss__main--one pf-ov__inline" data-testid="ov-inline">
                 <ng-container *ngComponentOutlet="cmp; injector: inlineInjector()"></ng-container>
               </div>
             } @else {
@@ -226,7 +227,8 @@ export class AdminOverviewComponent implements OnDestroy {
   /** Main-card head note: how many settings the section holds. */
   readonly panelNote = computed(() => {
     const n = this.selectedTiles().length;
-    return n ? `${n} setting${n === 1 ? '' : 's'}` : null;
+    // An inline setting needs no count (its own head tools say what it holds).
+    return n > 1 ? `${n} settings` : null;
   });
   readonly gearIcon = 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z';
   // ── A section with ONE setting renders that setting inline (owner 2026-11-17) ──
@@ -261,12 +263,36 @@ export class AdminOverviewComponent implements OnDestroy {
     return Injector.create({ providers: proxy ? [{ provide: ActivatedRoute, useValue: proxy }] : [], parent: this.injector });
   });
   /** Its categories (hosted ones, `?tab=`), as a switch in the main card head. */
-  readonly inlineCats = computed(() => (this.inlineItem()?.categories ?? []).filter(c => c.query?.['tab']).map(c => ({ value: c.query!['tab'], label: c.label })));
+  private readonly host = inject(SETTINGS_HOST);
+  /** Its categories as the card head's pill: the page's run-time list (SETTINGS_HOST.categories), else the map's `?tab=` ones. */
+  readonly inlineCats = computed(() => {
+    const dyn = this.host.categories();
+    if (this.inlineItem() && dyn?.length) return dyn.map(c => ({ value: c.id, label: c.label }));
+    return (this.inlineItem()?.categories ?? []).filter(c => c.query?.['tab']).map(c => ({ value: c.query!['tab'], label: c.label }));
+  });
   readonly inlineTab = computed(() => this.params()?.get('tab') ?? this.inlineCats()[0]?.value ?? '');
   pickInlineTab(t: string): void {
     void this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true });
   }
   private readonly outlet = viewChild(NgComponentOutlet);
+  private readonly hostEl = inject(ElementRef<HTMLElement>);
+  private groupObserver: MutationObserver | null = null;
+  /** The inline page shows only the picked category's group (pages mark them `pf-setting-group [id]`). */
+  private readonly showPickedGroup = effect(() => {
+    const sel = this.inlineCmp() ? this.inlineTab() : null;
+    setTimeout(() => {
+      const root = (this.hostEl.nativeElement as HTMLElement).querySelector<HTMLElement>('[data-testid="ov-inline"]');
+      this.groupObserver?.disconnect();
+      if (!root || !sel) return;
+      const apply = () => {
+        const groups = Array.from(root.querySelectorAll<HTMLElement>('pf-setting-group[data-group]')).filter(g => !g.parentElement?.closest('pf-setting-group[data-group]'));
+        const has = groups.some(g => g.dataset['group'] === sel);
+        for (const g of groups) { const v = has && g.dataset['group'] !== sel ? 'none' : ''; if (g.style.display !== v) g.style.display = v; }
+      };
+      apply();
+      if (typeof MutationObserver !== 'undefined') { this.groupObserver = new MutationObserver(() => apply()); this.groupObserver.observe(root, { childList: true, subtree: true }); }
+    }, 0);
+  });
   readonly inlineHeadTools = computed<TemplateRef<unknown> | null>(() => {
     this.inlineCmp();
     const inst = (this.outlet() as unknown as { componentInstance?: { headTools?: () => TemplateRef<unknown> | undefined } } | undefined)?.componentInstance;
@@ -306,7 +332,7 @@ export class AdminOverviewComponent implements OnDestroy {
     if (this.compact() && this.detailOpen()) this.navBack.registerBackInterceptor(this.backHandler);
     else this.navBack.clearBackInterceptor(this.backHandler);
   });
-  ngOnDestroy(): void { this.navBack.clearBackInterceptor(this.backHandler); }
+  ngOnDestroy(): void { this.navBack.clearBackInterceptor(this.backHandler); this.groupObserver?.disconnect(); }
 
   // ── Settings search (one box across every tile) ────────────────────────
   // The search reads the ONE settings catalog (shared/utils/settings-catalog)

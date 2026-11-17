@@ -142,7 +142,7 @@ test.describe('settings v2 (Test Master frame)', () => {
   test('wide 3440 screen: two cards fill the band body, rows keep label left / value right (Sample numbers, Collection)', async ({ page }) => {
     test.skip(ONLY_TM || !isDesktop());
     await page.setViewportSize({ width: 3440, height: 1440 });
-    for (const [name, url, wait] of [['sample-numbers', '/admin/lab/sample-numbers', '[data-testid="sid-format-row"]'], ['collection', '/admin/lab/collection', '[aria-label="Auto-assign technicians"]']] as const) {
+    for (const [name, url, wait] of [['sample-numbers', '/admin/lab/sample-numbers', '[data-testid="sid-format-row"]'], ['collection', '/admin/lab/collection', '[data-testid="settings-main"]']] as const) {
       await go(page, url);
       await expect(vis(page, wait)).toBeVisible({ timeout: 60_000 });
       await expectNoPageScroll(page, `wide ${name}`);

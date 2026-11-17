@@ -369,8 +369,8 @@ test.describe('Settings → Files', () => {
     await shot(page, 'settings-overview');
     await page.locator('[data-testid="tp-item-files"]').locator('visible=true').first().click();
     await expect(page).toHaveURL(/section=files/);
-    await page.locator('[data-testid="ov-tile-admin-files"]').locator('visible=true').first().click();
-    await expect(page).toHaveURL(/\/admin\/files/);
+    // A section with ONE setting shows it inline (owner): no tile to click.
+    await expect(page.locator('[data-testid="ov-inline"] [data-testid="files-settings"]').first()).toBeAttached({ timeout: 30_000 });
   });
 
   test('without the beta the Files tile and the Files screen do not exist', async ({ page, context }) => {

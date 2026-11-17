@@ -137,11 +137,12 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
   styles: [`
     :host { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; flex: 1 1 auto; min-height: 0; min-width: 0; align-items: stretch; }
     .pf-tp__nav, .pf-tp__panel { min-height: 0; min-width: 0; }
-    .pf-tp__navhead, .pf-tp__head { flex-wrap: nowrap; }
+    .pf-tp__navhead { flex-wrap: nowrap; }
+    .pf-tp__head { flex-wrap: wrap; row-gap: 8px; }
     .pf-tp__navtitle, .pf-tp__title { margin: 0; min-width: 0; overflow-wrap: anywhere; }
     .pf-tp__title { flex: none; max-width: 60%; }
-    .pf-tp__desc { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .pf-tp__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex: none; }
+    .pf-tp__desc { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-tp__tools { margin-left: auto; display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; flex: 0 1 auto; max-width: 100%; }
     .pf-tp__tools:empty { display: none; }
     .pf-tp__iconbtn {
       width: 32px; height: 32px; display: inline-grid; place-items: center; flex: none; margin: -2px 0 -2px -4px;

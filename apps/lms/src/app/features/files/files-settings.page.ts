@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { ToggleComponent, TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from '@prefrontal/shared';
 import { SettingRowComponent } from '../../shared/components/setting-row/setting-row.component';
-import { bindTabQuery } from '../../shared/utils/settings-host';
+import { SETTINGS_HOST, bindTabQuery, injectSettingsHosted } from '../../shared/utils/settings-host';
+import { NgTemplateOutlet } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { DialogService } from '../../core/services/dialog.service';
@@ -32,7 +33,7 @@ export function bytesWords(n: number): string {
 @Component({
   selector: 'pf-files-settings',
   standalone: true,
-  imports: [SkeletonRowsComponent, HeroBandComponent, ToggleComponent, SelectComponent, FilesLogoComponent, TwoPanelComponent, SettingRowComponent],
+  imports: [SkeletonRowsComponent, HeroBandComponent, ToggleComponent, SelectComponent, FilesLogoComponent, TwoPanelComponent, SettingRowComponent, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page fs" data-testid="files-settings">
@@ -55,15 +56,11 @@ export function bytesWords(n: number): string {
             <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="load()">Try again</button>
           </div>
         } @else if (draft(); as d) {
-          <pf-two-panel [groups]="catGroups()" [selected]="selectedCat()" [compact]="compact()" [detailOpen]="detailOpen()"
-                        navLabel="Files settings" [navTitle]="name + ' settings'" [navIcon]="filesIcon" [panelNote]="null"
-                        [flush]="true" backLabel="Back to Files settings" (pick)="pickCat($event)" (back)="phoneDetail.set(false)">
-            <ng-container panel-tools>
-              @if (selectedCat() === 'templates') {
-                <button type="button" class="pf-hb-btn pf-hb-btn--ghost fs-add" data-testid="files-add-template" [disabled]="!full()" (click)="addOwn()">Add lab template</button>
-              }
-            </ng-container>
+          <ng-template #filesRows>
             <div class="fs-rows">
+              @if (hosted && selectedCat() === 'templates') {
+                <div class="fs-hostbar"><button type="button" class="pf-hb-btn pf-hb-btn--ghost fs-add" data-testid="files-add-template" [disabled]="!full()" (click)="addOwn()">Add lab template</button></div>
+              }
               @if (!full()) {
                 <p class="fs-note" data-testid="files-settings-viewonly">View only: Files are view only for your organization, so these settings can be read but not changed.</p>
               }
@@ -138,7 +135,22 @@ export function bytesWords(n: number): string {
                 }
               }
             </div>
+          </ng-template>
+          @if (hosted) {
+            <!-- Inside Settings (inline in the overview): the categories are the card head's pill — no nested side card. -->
+            <ng-container *ngTemplateOutlet="filesRows"></ng-container>
+          } @else {
+          <pf-two-panel [groups]="catGroups()" [selected]="selectedCat()" [compact]="compact()" [detailOpen]="detailOpen()"
+                        navLabel="Files settings" [navTitle]="name + ' settings'" [navIcon]="filesIcon" [panelNote]="null"
+                        [flush]="true" backLabel="Back to Files settings" (pick)="pickCat($event)" (back)="phoneDetail.set(false)">
+            <ng-container panel-tools>
+              @if (selectedCat() === 'templates') {
+                <button type="button" class="pf-hb-btn pf-hb-btn--ghost fs-add" data-testid="files-add-template" [disabled]="!full()" (click)="addOwn()">Add lab template</button>
+              }
+            </ng-container>
+            <ng-container *ngTemplateOutlet="filesRows"></ng-container>
           </pf-two-panel>
+          }
         }
       </div>
     </section>
@@ -148,6 +160,7 @@ export function bytesWords(n: number): string {
     .fs-chip { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-tertiary); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
     .fs-over { min-height: 200px; display: flex; align-items: center; justify-content: center; }
     .fs-rows { padding: 4px 18px 16px; }
+    .fs-hostbar { display: flex; justify-content: flex-end; padding-top: 10px; }
     .fs-note { margin: 10px 0 4px; font-size: 12.5px; color: var(--text-tertiary); }
     .fs-app { display: grid; grid-template-columns: auto minmax(160px, 1fr) 260px auto; align-items: center; gap: 14px; min-height: 56px; padding: 10px 0; border-bottom: 1px solid var(--pf-line); }
     .fs-app:last-child { border-bottom: 0; }
@@ -195,6 +208,15 @@ export class FilesSettingsPage {
   protected readonly detailOpen = computed(() => this.phoneDetail() || (!this.compact() && true));
   private readonly followTab = bindTabQuery(['apps', 'templates', 'devices', 'patient', 'bar'] as const, (t) => { this.cat.set(t); this.phoneDetail.set(true); });
   protected pickCat(id: string): void { this.cat.set(id); this.phoneDetail.set(true); }
+  /** Hosted (inline in the Settings overview): the categories go to the host — its card head shows them as a pill. */
+  protected readonly hosted = injectSettingsHosted();
+  private readonly settingsHost = inject(SETTINGS_HOST, { optional: true });
+  private readonly publishCats = (() => {
+    const host = this.settingsHost;
+    if (!host) return null;
+    inject(DestroyRef).onDestroy(() => host.categories.set(null));
+    return effect(() => host.categories.set(this.catGroups()[0].items.map((i) => ({ id: i.id, label: i.label }))));
+  })();
   /** The band pill narrows the rows (apps and templates by name). */
   protected match(text: string): boolean { const w = this.q().trim().toLowerCase(); return !w || text.toLowerCase().includes(w); }
   protected readonly apps = FILES_APPS;

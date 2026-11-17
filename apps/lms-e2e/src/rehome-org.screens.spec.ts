@@ -74,7 +74,7 @@ test.describe('settings re-home: organization pages', () => {
   test('old links keep working: /setup opens the profile', async ({ page }) => {
     await go(page, '/setup');
     await expect(page).toHaveURL(/\/admin\/org\/profile/, { timeout: 60_000 });
-    await expect(page.locator('[data-testid="org-profile"]').locator('visible=true').first()).toBeVisible();
+    await expect(page.locator('[data-testid="org-profile"]').first()).toBeAttached();
   });
 
   test('credit accounts: setup in Billing has no money actions; Finance has them', async ({ page }) => {

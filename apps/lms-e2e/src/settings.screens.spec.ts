@@ -68,9 +68,9 @@ test.describe('settings two-panel', () => {
   test('opening a setting: the side card becomes that setting\'s groups; ONE back (the band\'s)', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', e => errors.push(e.message));
-    await go(page, '/admin?section=billing');
-    await expect(tid(page, 'ov-tile-admin-billing')).toBeVisible({ timeout: 60_000 });
-    await tid(page, 'ov-tile-admin-billing').click();
+    // Billing is a one-setting section: the overview shows it inline; its own page is the deep link.
+    await go(page, '/admin/billing');
+    await expect(page.locator('[data-testid="settings-shell"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('[data-testid="tp-nav-back"], [data-testid="tp-back"]')).toHaveCount(0);
     const bandBack = page.locator('.pf-hb__back').locator('visible=true').first();
     if (isPhone()) {
