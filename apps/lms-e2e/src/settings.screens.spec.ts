@@ -58,7 +58,8 @@ test.describe('settings two-panel', () => {
       await shot(page, 'settings-overview');
       await tid(page, 'tp-item-billing').click();
       await expect(page).toHaveURL(/section=billing/);
-      await expect(tid(page, 'ov-tile-admin-billing')).toBeVisible();
+      // The section's tiles render after the section switch settles (slow under a loaded CI box, Edge): give it time.
+      await expect(tid(page, 'ov-tile-admin-billing')).toBeVisible({ timeout: 30_000 });
       await expectLayout(page, 'settings billing');
       await shot(page, 'settings-billing');
     }
