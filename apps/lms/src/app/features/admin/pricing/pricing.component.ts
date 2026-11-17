@@ -313,7 +313,10 @@ export interface PriceGridRow { key: string; testId: string; spec: string | null
     .pf-pr ::ng-deep .pf-pr__name { font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-pr ::ng-deep .pf-pr__meta { font-size: 12px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-pr ::ng-deep .pf-pr__spec { padding-left: 18px; }
-    @media (max-width: 640px) { .pf-pr__bulkk { display: none; } .pf-pr__branch, .pf-pr__deptpick { width: 150px; } }
+    .pf-pr ::ng-deep .ag-row .ag-cell { display: flex; align-items: center; }
+    .pf-pr ::ng-deep .ag-row .ag-cell.ag-right-aligned-cell { justify-content: flex-end; }
+    .pf-pr ::ng-deep .ag-row .ag-cell > .pf-pr__cell { flex: 1 1 auto; }
+    @media (max-width: 640px) { .pf-pr__bulkk { display: none; } .pf-2p__tools { width: 100%; } .pf-pr__branch, .pf-pr__deptpick { flex: 1 1 140px; width: auto; min-width: 0; } .pf-pr__bulk { flex: 1 1 100%; } .pf-pr__bulk .pf-2p__hbtn { margin-left: auto; } }
     .pf-pricing { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
     .pf-pricing__chrome { flex: 0 0 auto; }
     .pf-pricing__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
@@ -443,16 +446,16 @@ export class PricingComponent implements OnInit {
   readonly prRowClass = (p: RowClassParams<PriceGridRow>) => (p.data && !p.data.spec && !this.offeredNow(p.data.testId) ? 'pf-pr__row--off' : '');
   readonly prDefaultCol: ColDef<PriceGridRow> = { sortable: true, resizable: true, suppressMovable: true };
   readonly prCols: ColDef<PriceGridRow>[] = [
-    { headerName: 'Test', field: 'name', flex: 2, minWidth: 220, autoHeight: true,
+    { headerName: 'Test', field: 'name', flex: 2, minWidth: 150, autoHeight: true,
       cellRenderer: (p: ICellRendererParams<PriceGridRow>) => {
         const w = document.createElement('div'); w.className = 'pf-pr__cell' + (p.data?.spec ? ' pf-pr__spec' : '');
         const n = document.createElement('span'); n.className = 'pf-pr__name'; n.textContent = p.data?.name ?? '';
         const m = document.createElement('span'); m.className = 'pf-pr__meta';
-        m.textContent = (p.data?.meta ?? '') + (p.data && !p.data.spec && !this.offeredNow(p.data.testId) ? ' · Not offered here' : '');
+        m.textContent = (p.data?.meta ?? '') + (this.phone() && p.data && p.data.type !== 'Test' && p.data.type !== 'Specimen' && p.data.type !== p.data.meta ? ' · ' + p.data.type : '') + (p.data && !p.data.spec && !this.offeredNow(p.data.testId) ? ' · Not offered here' : '');
         w.append(n, m); return w;
       } },
-    { headerName: 'Type', field: 'type', width: 110, minWidth: 96 },
-    { headerName: 'Offered', colId: 'offered', width: 104, minWidth: 96, sortable: false,
+    { headerName: 'Type', field: 'type', colId: 'type', width: 110, minWidth: 96 },
+    { headerName: 'Offered', colId: 'offered', width: 104, minWidth: 72, sortable: false,
       cellClassRules: { 'pf-pr__dirty': p => !!p.data && !p.data.spec && this.offeredDirty(p.data.testId) },
       cellRenderer: (p: ICellRendererParams<PriceGridRow>) => {
         if (!p.data || p.data.spec) return '';
@@ -463,7 +466,7 @@ export class PricingComponent implements OnInit {
         b.addEventListener('click', ev => { ev.stopPropagation(); this.setOffered(id, !this.offeredNow(id)); });
         return b;
       } },
-    { headerName: 'Price (₹)', colId: 'price', width: 140, minWidth: 120, editable: true, type: 'rightAligned',
+    { headerName: 'Price (₹)', colId: 'price', width: 140, minWidth: 96, editable: true, type: 'rightAligned',
       cellEditor: 'agNumberCellEditor', cellEditorParams: { min: 0, precision: 2 },
       cellStyle: { fontVariantNumeric: 'tabular-nums' },
       valueGetter: p => !p.data ? null : p.data.spec ? this.specimenPriceNow(p.data.testId, p.data.spec) : this.edits()[p.data.testId],
@@ -477,7 +480,17 @@ export class PricingComponent implements OnInit {
       },
       cellClassRules: { 'pf-pr__dirty': p => !!p.data && (p.data.spec ? this.isSpecimenDirty(p.data.testId, p.data.spec) : this.priceDirty(p.data.testId)) } },
   ];
-  onPrGridReady(e: GridReadyEvent<PriceGridRow>) { this.prApi = e.api; }
+  onPrGridReady(e: GridReadyEvent<PriceGridRow>) { this.prApi = e.api; this.fitPhone(); }
+  /** Phones: Test · Offered · Price only (the type rides in the Test cell's muted line). */
+  private readonly phone = mediaSignal('(max-width: 640px)', inject(DestroyRef));
+  private readonly _phoneCols = effect(() => { this.phone(); this.fitPhone(); });
+  private fitPhone() {
+    const api = this.prApi;
+    if (!api || api.isDestroyed?.()) return;
+    const ph = this.phone();
+    api.setColumnsVisible(['type'], !ph);
+    api.setColumnWidths([{ key: 'offered', newWidth: ph ? 76 : 104 }, { key: 'price', newWidth: ph ? 104 : 140 }]);
+  }
   /** Edits live in signals: repaint the cells (dirty marks, switches) when they change. */
   private readonly _repaint = effect(() => {
     this.edits(); this.specimenEdits();
