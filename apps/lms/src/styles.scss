@@ -175,6 +175,13 @@
 :root.design-new .pf-ss__main .pf-band-page > .pf-band-body--fill:not(.pf-sgrid) {
   display: flex !important; flex-direction: column; flex: 1 1 auto; min-height: 420px;
 }
+/* A hosted page whose content is a pf-data-grid sits FLUSH in the frame's main card, exactly like Test Master's grid
+   (owner 2026-11-17): card head -> divider -> grid header -> rows -> card bottom, no inner padding and no second
+   border; the card's radius clips the grid's corners. Shell main card, overview inline page and their wrappers. */
+.pf-tp__body:has(pf-data-grid), .pf-ss__scroll:has(pf-data-grid), .pf-ss__main:has(pf-data-grid), .pf-ov__inline:has(pf-data-grid) {
+  padding: 0 !important;
+}
+.pf-tp__panel:has(pf-data-grid), .pf-ss__card:has(pf-data-grid) { overflow: hidden; }
 /* An ID FORMAT in ONE settings row (DESIGN-V2 rule 5): Date · Separator · Digits · Letters → Preview.
    Shared by Sample numbers and Patient / Order numbers. Every control is 32px tall. */
 .pf-fmt { display: flex; align-items: center; justify-content: flex-end; gap: 8px 14px; flex-wrap: wrap; }

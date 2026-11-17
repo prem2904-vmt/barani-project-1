@@ -607,7 +607,7 @@ export class UsersAccessComponent implements OnInit {
       headerName: '',
       colId: 'actions',
       cellRenderer: this.userActionsCellRenderer,
-      width: web ? 128 : 168, minWidth: web ? 128 : 168, maxWidth: web ? 128 : 168, pinned: 'right',
+      width: web ? 144 : 176, minWidth: web ? 144 : 176, maxWidth: web ? 144 : 176, pinned: 'right',
       cellClass: 'pf-sg-acts-cell',
       editable: false,
       sortable: false,
