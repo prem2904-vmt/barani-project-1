@@ -82,7 +82,7 @@ const guardAllows = (path: string, perms: string[]) =>
 
 describe('Lab Admin (Technical) — routes it CAN open', () => {
   for (const route of ['/admin/tests', '/admin/tests/new', '/admin/referral-labs', '/admin/partner-prices', '/admin/lab/outsourcing', '/admin/lab/collection',
-                       '/admin/lab/results', '/admin/lab/analyzers', '/admin/microbiology', '/admin/reports', '/admin', '/lab/my-work', '/dashboard']) {
+                       '/admin/lab/results', '/admin/lab/analyzers', '/admin/reports', '/admin', '/lab/my-work', '/dashboard']) {
     it(`${route}: nav table and real guard both admit`, () => {
       expect(canOpenRoute(route, ctxFor(LAB_ADMIN_TECH))).toBe(true);
       expect(guardAllows(route, LAB_ADMIN_TECH)).toBe(true);
@@ -98,8 +98,8 @@ describe('Lab Admin (Technical) — routes it CAN open', () => {
 describe('Lab Admin (Technical) — finance / users / org stay CLOSED', () => {
   for (const route of ['/finance', '/finance/daily', '/billing-counter', '/frontdesk', '/frontdesk/post-payment',
                        '/admin/billing', '/admin/users', '/admin/users/invite', '/admin/roles/new',
-                       '/admin/org/profile', '/admin/org/numbers', '/admin/vendors', '/admin/lab/numbers',
-                       '/admin/org/profile/branding', '/admin/lab/alerts', '/admin/lab/front-desk/referring', '/admin/lab/front-desk',
+                       '/admin/org/profile', '/admin/org/numbers', '/finance/credit-accounts', '/admin/lab/numbers',
+                       '/admin/lab/alerts', '/admin/lab/front-desk',
                        '/admin/workflows', '/admin/process', '/admin/lab/work-steps', '/stores', '/admin/inventory']) {
     it(`${route}: hidden in the nav table and refused by the guard`, () => {
       expect(canOpenRoute(route, ctxFor(LAB_ADMIN_TECH))).toBe(false);

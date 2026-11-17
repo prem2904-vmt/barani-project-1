@@ -506,15 +506,13 @@ export function rehome(path: string, query: Readonly<Record<string, string | nul
     return { ...out, ...extra };
   };
   switch (p) {
-    case '/admin/lab-settings':
-      switch (tab) {
-      {
+    case '/admin/lab-settings': {
         // The Lab pages own where each old tab / card went (LEGACY_LAB_SETTINGS_*); `?card=` picks the exact card.
         const card = query['card'] ? LEGACY_LAB_SETTINGS_CARD_TARGET[query['card'] ?? ''] : undefined;
         const t = card ?? LEGACY_LAB_SETTINGS_TARGET[tab] ?? LEGACY_LAB_SETTINGS_TARGET['collection'];
         const rest = keep(); delete rest['card'];
         return { path: t.path, query: { ...rest, tab: t.tab } };
-      }
+    }
     case '/admin/organization':
       switch (tab) {
         case 'patient': return { path: P.orgNumbers, query: keep({ tab: 'patient' }) };

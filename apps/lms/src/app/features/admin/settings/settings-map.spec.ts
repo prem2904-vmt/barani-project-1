@@ -112,25 +112,26 @@ describe('Settings route table — one row per path, every path gated and hosted
     const parents = settingsParents();
     expect(parents['/admin/referral-labs']).toBe('/admin?section=lab');
     expect(parents['/admin/billing']).toBe('/admin?section=billing');
-    expect(SETTINGS_PARENT['/admin/vendors']).toBe('/admin?section=billing');
+    expect(SETTINGS_PARENT['/admin/lab/departments']).toBe('/admin?section=lab');
     expect(SETTINGS_PARENT['/admin/ipd/departments']).toBe('/admin?section=ipd');
   });
 });
 
 describe('Old links keep working — they all land on a new home', () => {
-  it('lab-settings tabs → the new Lab homes', () => {
-    expect(rehome('/admin/lab-settings', { tab: 'queues' })).toEqual({ path: P.labCollection, query: { tab: 'queues' } });
-    expect(rehome('/admin/lab-settings', { tab: 'collection' })).toEqual({ path: P.labCollection, query: { tab: 'collection' } });
-    expect(rehome('/admin/lab-settings', { tab: 'rules' })).toEqual({ path: P.labResults, query: { tab: 'rules' } });
+  it('lab-settings tabs → the new Lab homes (LEGACY_LAB_SETTINGS_* owned by the Lab pages)', () => {
+    expect(rehome('/admin/lab-settings', { tab: 'queues' })).toEqual({ path: P.labCollection, query: { tab: 'queue' } });
+    expect(rehome('/admin/lab-settings', { tab: 'collection' })).toEqual({ path: P.labSampleNumbers, query: { tab: 'find' } });
+    expect(rehome('/admin/lab-settings', { tab: 'rules' })).toEqual({ path: P.labResults, query: { tab: 'validation' } });
     expect(rehome('/admin/lab-settings', { tab: 'report' })).toEqual({ path: P.reportOptions, query: { tab: 'notes' } });
-    expect(rehome('/admin/lab-settings')?.path).toBe(P.labCollection);
+    expect(rehome('/admin/lab-settings', { tab: 'rules', card: 'calc-constants' })).toEqual({ path: P.labResults, query: { tab: 'constants' } });
+    expect(rehome('/admin/lab-settings')?.path).toBe(P.labSampleNumbers);
   });
 
   it('organization tabs → profile / numbers / Lab sample numbers', () => {
     expect(rehome('/admin/organization', { tab: 'identity' })?.path).toBe(P.orgProfile);
     expect(rehome('/admin/organization', { tab: 'patient' })).toEqual({ path: P.orgNumbers, query: { tab: 'patient' } });
     expect(rehome('/admin/organization', { tab: 'order' })).toEqual({ path: P.orgNumbers, query: { tab: 'order' } });
-    expect(rehome('/admin/organization', { tab: 'sample' })).toEqual({ path: P.labSampleNumbers, query: { tab: 'sample' } });
+    expect(rehome('/admin/organization', { tab: 'sample' })).toEqual({ path: P.labSampleNumbers, query: { tab: 'format' } });
   });
 
   it('every other moved path', () => {
@@ -140,8 +141,13 @@ describe('Old links keep working — they all land on a new home', () => {
     expect(rehome('/admin/kpis')?.path).toBe(P.labNumbers);
     expect(rehome('/admin/home-collection')?.path).toBe(P.labHomeCollection);
     expect(rehome('/admin/partners')?.path).toBe(P.labOutsourcing);
-    expect(rehome('/admin/referring-network')?.path).toBe(P.labReferring);
-    expect(rehome('/setup')?.path).toBe(P.orgBranding);
+    expect(rehome('/admin/referring-network')).toEqual({ path: P.labFrontDesk, query: { tab: 'referring' } });
+    expect(rehome('/admin/lab/front-desk/referring')).toEqual({ path: P.labFrontDesk, query: { tab: 'referring' } });
+    expect(rehome('/admin/microbiology')).toEqual({ path: P.labResults, query: { tab: 'micro' } });
+    expect(rehome('/setup')?.path).toBe(P.orgProfile);
+    expect(rehome('/admin/org/profile/branding')?.path).toBe(P.orgProfile);
+    expect(rehome('/admin/vendors')).toEqual({ path: P.billing, query: { tab: 'credit' } });
+    expect(rehome('/admin/opd/pharmacy', { tab: 'drugs' })?.path).toBe(P.pharmacyDrugs);
     expect(rehome('/admin/opd/pharmacy')?.path).toBe(P.pharmacy);
     expect(rehome('/admin/opd/drugs')?.path).toBe(P.pharmacyDrugs);
     expect(rehome('/admin/tests')).toBeNull();
@@ -156,7 +162,7 @@ describe('Old links keep working — they all land on a new home', () => {
 
   it('rehomeHref keeps a href that did not move', () => {
     expect(rehomeHref('/admin/tests')).toEqual({ href: '/admin/tests', queryParams: undefined });
-    expect(rehomeHref('/admin/lab-settings?tab=rules')).toEqual({ href: P.labResults, queryParams: { tab: 'rules' } });
+    expect(rehomeHref('/admin/lab-settings?tab=rules')).toEqual({ href: P.labResults, queryParams: { tab: 'validation' } });
   });
 });
 

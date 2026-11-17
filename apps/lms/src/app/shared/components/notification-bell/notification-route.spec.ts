@@ -59,7 +59,7 @@ describe('notificationRoute', () => {
     expect(notificationRoute(null, 'appointment', 'a1', false)).toEqual({ commands: ['/frontdesk/appointments'] });
     expect(notificationRoute(null, 'dispatch_package', 'd1', false)).toEqual({ commands: ['/lab/receive'] });
     expect(notificationRoute(null, 'user', 'u1', false)).toEqual({ commands: ['/admin/users', 'u1', 'edit'] });
-    expect(notificationRoute(null, 'vendor', 'v1', false)).toEqual({ commands: ['/admin/vendors'] });
+    expect(notificationRoute(null, 'vendor', 'v1', false)).toEqual({ commands: ['/finance/credit-accounts'] });
     expect(notificationRoute(null, 'process_workflow', 'w1', false)).toEqual({ commands: ['/admin/process'] });
   });
 

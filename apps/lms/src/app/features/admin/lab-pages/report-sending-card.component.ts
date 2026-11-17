@@ -9,7 +9,7 @@ import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.c
 import { WaMessagePickerComponent } from '../communication/wa-message-picker.component';
 
 /** Where the WhatsApp number / templates / limits live (Organization › Message channels). */
-export const MESSAGE_CHANNELS_PATH = '/admin/communication';
+export const MESSAGE_CHANNELS_PATH = '/admin/org/channels';
 
 /**
  * Lab › Report options › Send reports on WhatsApp. What the LAB sends:

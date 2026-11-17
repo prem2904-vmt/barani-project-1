@@ -164,7 +164,6 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
 
   // ── Admin / settings ───────────────────────────────────────────────────
   '/admin':                   { perms: SETTINGS_ENTRY_PERMS },
-  '/admin/microbiology':      { perms: ['manage_lab_settings'], module: 'lab' },
   // AI connectors (MCP): anyone who opens the Lab settings hub sees the status;
   // the switch inside is admin-only (the server enforces the PUT).
   '/admin/ai-connectors':     { perms: LAB_SETTINGS_HUB_PERMS },
@@ -180,7 +179,6 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/branches':          { perms: ['manage_branches'] },
   // Lab › Departments and lab spaces: the perms the department endpoints accept (manage_departments | manage_branches).
   '/admin/lab/departments':   { perms: ['manage_departments', 'manage_branches'], module: 'lab' },
-  '/admin/vendors':           { perms: ['manage_tenant'] },
   '/admin/referral-labs':     { perms: TEST_MASTER_PERMS },
   '/admin/partner-prices':    { perms: TEST_MASTER_PERMS },
   '/admin/files':             { perms: FILES_SETTINGS_PERMS },
@@ -205,7 +203,7 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/lab/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
   '/admin/lab/numbers':           { perms: ADMIN_PERMS },
   '/admin/lab/work-steps':        { perms: ['manage_workflows'] },
-  '/admin/lab/home-collection':   { perms: ['manage_home_collection', 'manage_tenant'], module: 'homeCollection' },
+  '/admin/lab/home-collection':   { perms: ['manage_home_collection'], workflow: ['home_visits'], module: 'homeCollection' },
   '/admin/opd/departments':       { perms: ADMIN_PERMS },
   '/admin/opd/doctors':           { perms: ADMIN_PERMS },
   '/admin/opd/forms':             { perms: ADMIN_PERMS },
@@ -226,8 +224,6 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/ipd/myprefrontal/forms/:id/history': { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/myprefrontal/pending':           { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/departments':                    { perms: CASESHEET_FORMS_PERMS },
-  // IPD alerts: the notifications list filtered to IPD (same perms as the shared Notifications page).
-  '/admin/ipd/alerts':                         { perms: ['manage_tenant', 'manage_notifications'] },
   // The lab's sheets: read with casesheet_view (tenant-wide, branch-filtered, §11 Q2) or casesheet_fill; start one with fill.
   // The Prepare tab (owner 2026-11-11): Departments to start a sheet (fill), every sheet the user may read (view or fill).
   '/prepare':                                  { perms: CASESHEET_FILL_PERMS },

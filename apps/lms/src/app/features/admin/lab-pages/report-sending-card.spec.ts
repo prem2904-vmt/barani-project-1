@@ -33,7 +33,7 @@ describe('Lab › Report options › Send reports on WhatsApp', () => {
   it('what the lab SENDS lives here; the account (number, templates, limits) is linked, not repeated', async () => {
     const { provider } = wa();
     const p = await renderLabPage(LabReportOptionsPage, '/page?tab=sending', { providers: [provider] });
-    expect(p.el.querySelector('[data-testid="rs-channels-link"]')!.getAttribute('href')).toBe('/admin/communication');
+    expect(p.el.querySelector('[data-testid="rs-channels-link"]')!.getAttribute('href')).toBe('/admin/org/channels');
     expect(p.el.querySelector('pf-wa-connect-card, pf-wa-billing-card')).toBeNull();
     expect(text(p.el.querySelector('[data-testid="rs-sender"]'))).toContain('Sender');
   });

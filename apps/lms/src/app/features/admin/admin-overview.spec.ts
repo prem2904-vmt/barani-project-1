@@ -176,7 +176,7 @@ describe('Settings overview — two panels', () => {
     expect(el(h).querySelector('pf-two-panel')).toBeNull();
     cmp.setQ('queue focus');
     cmp.openTopHit();
-    expect(nav).toHaveBeenCalledWith(['/admin/lab/collection'], { queryParams: { tab: 'queues' } });
+    expect(nav).toHaveBeenCalledWith(['/admin/lab/collection'], { queryParams: { tab: 'queue' } });
     cmp.setQ('');
     h.detectChanges();
     expect(el(h).querySelector('pf-two-panel')).not.toBeNull();

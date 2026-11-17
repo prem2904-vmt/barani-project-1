@@ -36,10 +36,10 @@ describe('Organization › Patient and order numbers (/admin/org/numbers)', () =
     expect(p.api.post).toHaveBeenCalledWith('/api/config/patient-id', expect.objectContaining({ datePrefix: 'ddmmyy', serialMode: 'numeric' }));
   });
 
-  it('the old /admin/organization (no route data) keeps all four tabs', () => {
+  it('the old /admin/organization (no route data) keeps its three tabs (Sample ID moved to Lab)', () => {
     const p = renderBandPage(OrganizationSettingsComponent, { getFor: () => ({}) });
     const tabs = Array.from(p.el.querySelectorAll('pf-hero-band .pf-hb__tools pf-segmented .seg-item')).map(b => b.getAttribute('aria-label'));
-    expect(tabs).toEqual(['Identity', 'Patient ID', 'Sample ID', 'Order ID']);
+    expect(tabs).toEqual(['Identity', 'Patient ID', 'Order ID']);
   });
 });
 

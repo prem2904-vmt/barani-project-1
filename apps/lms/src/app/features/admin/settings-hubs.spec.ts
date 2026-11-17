@@ -51,7 +51,7 @@ describe('Settings search on the hubs — precise, with where it lives, Enter op
     p.type('queue focus');
     p.bandInput()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     p.f.detectChanges();
-    expect(nav).toHaveBeenCalledWith(['/admin/lab/collection'], { queryParams: { tab: 'queues' } });
+    expect(nav).toHaveBeenCalledWith(['/admin/lab/collection'], { queryParams: { tab: 'queue' } });
   });
 
   it('/admin overview: nothing matches → "No settings match"', () => {

@@ -131,7 +131,7 @@ test.describe('settings two-panel', () => {
     await go(page, '/lab/settings');
     await expect(page).toHaveURL(/\/admin\?section=lab/, { timeout: 60_000 });
     await go(page, '/admin/lab-settings?tab=queues');
-    await expect(page).toHaveURL(/\/admin\/lab\/collection\?tab=queues/, { timeout: 60_000 });
+    await expect(page).toHaveURL(/\/admin\/lab\/collection\?tab=queue\b/, { timeout: 60_000 });
     await go(page, '/admin/organization?tab=order');
     await expect(page).toHaveURL(/\/admin\/org\/numbers\?tab=order/, { timeout: 60_000 });
     await go(page, '/admin/partners');
