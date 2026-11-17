@@ -472,7 +472,7 @@ describe('ND audit D — Lab settings', () => {
     expect(st.textContent).toContain('Changes save automatically');
     expect(st.querySelector('svg')).not.toBeNull();
     expect(primaries(p.el)).toBe(0);
-    const cards = p.body()!.querySelectorAll('.pf-ls__card.pf-card');
+    const cards = p.el.querySelectorAll('.pf-ls__card.pf-card');
     expect(cards.length).toBeGreaterThan(2);
     expect(Array.from(cards).every(c => !!c.querySelector('.pf-card__head .pf-card__icon'))).toBe(true);
     hygiene(p.el);

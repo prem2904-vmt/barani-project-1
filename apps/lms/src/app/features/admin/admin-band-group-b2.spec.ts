@@ -49,7 +49,7 @@ function pillTabs(p: ReturnType<typeof renderBandPage>) {
   };
 }
 const titles = (p: ReturnType<typeof renderBandPage>, sel: string) =>
-  Array.from(p.body()!.querySelectorAll(sel)).map((h) => (h.textContent ?? '').trim());
+  Array.from((p.body() ?? p.el).querySelectorAll(sel)).map((h) => (h.textContent ?? '').trim());
 
 describe('Admin band B2 — Lab settings', () => {
   function make() {

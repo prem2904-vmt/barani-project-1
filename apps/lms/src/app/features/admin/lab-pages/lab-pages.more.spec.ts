@@ -113,28 +113,27 @@ describe('Notifications config — department input (Lab alerts, OPD alerts, IPD
     { key: 'b', module: 'results', label: 'Critical value', firesWhen: 'x', recipients: 'y', kind: 'instant', enabled: true, thresholdMinutes: null, thresholdConfigurable: false, critical: true },
     { key: 'c', module: 'opd', label: 'Consult started', firesWhen: 'x', recipients: 'y', kind: 'instant', enabled: false, thresholdMinutes: null, thresholdConfigurable: false },
   ];
-  const make = (department: string | null) => {
-    const p = renderBandPage(NotificationsConfigComponent, {
-      getFor: u => u === '/api/config/notifications/catalog' ? rows : u === '/api/config/notifications/master' ? { enabled: true } : [],
-    });
-    if (department) p.f.componentRef.setInput('department', department);
-    p.f.detectChanges();
-    return p;
-  };
+  const make = (department: string | null) => renderBandPage(NotificationsConfigComponent, {
+    getFor: u => u === '/api/config/notifications/catalog' ? rows : u === '/api/config/notifications/master' ? { enabled: true } : [],
+    inputs: department ? { department } : {},
+  });
   const labels = (p: ReturnType<typeof make>) => Array.from(p.el.querySelectorAll('.pf-nc-card p.font-semibold')).map(x => text(x));
 
   it('lab: only the lab groups', () => {
     expect(labels(make('lab'))).toEqual(['Order cancelled', 'Critical value']);
   });
-  it('opd: only the OPD group; ipd: none, and says so', () => {
+  it('opd: only the OPD group', () => {
     expect(labels(make('opd'))).toEqual(['Consult started']);
+  });
+  it('ipd: none, and says so', () => {
     const q = make('ipd');
     expect(labels(q)).toEqual([]);
     expect(q.el.querySelector('[data-testid="nc-dept-empty"]')).not.toBeNull();
   });
-  it('no department: every alert (unchanged); the master switch is unchanged either way', () => {
-    const p = make(null);
-    expect(labels(p).length).toBe(3);
+  it('no department: every alert (unchanged)', () => {
+    expect(labels(make(null)).length).toBe(3);
+  });
+  it('the master switch is unchanged: lab-wide, off asks first', () => {
     const lab = make('lab');
     lab.el.querySelector<HTMLButtonElement>('.pf-nc-master__switch')!.click();   // off asks first: dialog stub says no
     expect(lab.api.post).not.toHaveBeenCalled();
@@ -157,12 +156,11 @@ describe('KPI config — department input (Numbers on lab screens)', () => {
   const catalog = [{ id: 'k1', code: 'orders_today', name: 'Orders today', description: '', category: 'operational', unit: '', isActive: true }];
   const make = async (department: string | null) => {
     const p = renderBandPage(KpiConfigComponent, {
-      getFor: u => u.startsWith('/api/kpis/catalog') ? catalog : u.startsWith('/api/kpis/assignments') ? [] : [],
+      getFor: u => u.startsWith('/api/kpis/catalog') ? catalog : [],
+      inputs: department ? { department } : {},
     });
-    if (department) p.f.componentRef.setInput('department', department);
-    p.cmp.ngOnInit?.();
-    p.f.detectChanges();
     await p.f.whenStable();
+    p.f.detectChanges();
     return p;
   };
   it('lab: the eight lab screens, opening on the first (not the Admin dashboard)', async () => {
@@ -228,8 +226,10 @@ describe('Inventory › Enable inventory (moved from Lab settings)', () => {
       { provide: BranchLabConfigService, useValue: { update: vi.fn(), ensureLoaded: vi.fn() } },
     ],
   });
-  it('only when the lab has the Inventory module', () => {
+  it('hidden when the lab does not have the Inventory module', () => {
     expect(make(false).el.querySelector('section')).toBeNull();
+  });
+  it('shown when the lab has it', () => {
     expect(make(true).el.querySelector('[data-testid="inventory-enable"]')).not.toBeNull();
   });
   it('PATCHes only inventoryEnabled; reads the saved state', () => {
