@@ -65,6 +65,16 @@ const VENDORS = [
   { id: 'v3', name: 'Kauvery Clinic', code: 'KAUV', contactName: 'Anand', isActive: true, totalCredit: 20000, usedCredit: 52300, balance: 0, outstanding: 32300, notifyThreshold: 25000, createdAt: '2026-01-01' },
   { id: 'v4', name: 'Old Partner', code: 'OLD', isActive: false, totalCredit: 5000, usedCredit: 5000, balance: 0, outstanding: 0, createdAt: '2026-01-01' },
 ];
+const AGENTS = [
+  { id: 'a1', userId: 'u1', branchId: 'b1', areaMode: 'pincode', pincodesJson: '["600040","600041","600001-600050"]', weightage: 2, isActive: true, user: { id: 'u1', name: 'Karthik Raman', email: 'karthik@demolab.example' } },
+  { id: 'a2', userId: 'u2', branchId: 'b1', areaMode: 'radius', centerLat: 13.08, centerLng: 80.27, radiusKm: 5, weightage: 1, isActive: true, user: { id: 'u2', name: 'Lakshmi N', email: 'lakshmi@demolab.example' } },
+  { id: 'a3', userId: 'u3', branchId: 'b1', areaMode: 'pincode', pincodesJson: '[]', weightage: 1, isActive: true, user: { id: 'u3', name: 'Suresh P', email: 'suresh@demolab.example' } },
+];
+const REF_LABS = [
+  { id: 'rl1', name: 'Apollo Diagnostics', code: 'APOLLO', contactName: 'Suresh', contactPhone: '9840012345', contactEmail: 'ops@apollo.example', address: 'Greams Road, Chennai', isActive: true, departmentCodesJson: '["MIC","SER"]' },
+  { id: 'rl2', name: 'Neuberg Ehrlich', code: 'NEU', contactName: 'Priya', contactPhone: '9840099999', isActive: true, departmentCodesJson: '["BIO"]' },
+  { id: 'rl3', name: 'Metropolis', code: 'METRO', isActive: false, departmentCodesJson: null },
+];
 const ROLES = [
   { id: 'r1', name: 'Receptionist', isPreSeeded: true, scope: 'tenant' },
   { id: 'r2', name: 'Night Shift Desk', isPreSeeded: false, scope: 'tenant' },
@@ -87,6 +97,9 @@ test.beforeEach(async ({ page, context }) => {
       case '/api/instruments': return ok(INSTRUMENTS);
       case '/api/permissions': return ok(PERMS);
       case '/api/vendors': return ok(VENDORS);
+      case '/api/home-collection/agents': return ok(AGENTS);
+      case '/api/appointments/config': return ok({ branchId: 'b1', queueMode: 'token_queue', slotMinutes: 30, maxConcurrentSlots: 2, open24h: false });
+      case '/api/referral-labs': return ok(REF_LABS);
       case '/api/vendors/v3/transactions': return ok([{ id: 'x1', vendorId: 'v3', type: 'charge', amount: -2300, reason: 'Bill B-1042', createdAt: ago(60) }, { id: 'x2', vendorId: 'v3', type: 'payment', amount: 20000, reason: 'NEFT', createdAt: ago(3000) }]);
       case '/api/roles/': case '/api/roles': return ok(ROLES);
       default: return undefined;
@@ -125,7 +138,7 @@ test.describe('settings list grids', () => {
     await expect(vis(page, '.pf-brl__main .ag-row')).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText('Haematology Bridge').locator('visible=true').first()).toBeVisible();
     // Kit styles apply: the main card has a real border radius + background (was raw unstyled text).
-    const radius = await vis(page, '.pf-brl__main').evaluate(el => getComputedStyle(el).borderTopLeftRadius);
+    const radius = await vis(page, '.pf-brl__side, .pf-brl__main .pf-sg-main__body').evaluate(el => getComputedStyle(el).borderTopLeftRadius);
     expect(parseFloat(radius)).toBeGreaterThan(4);
     await expect(vis(page, 'pf-hero-band .pf-hb-btn--primary')).toContainText('Add Bridge');
     await expectSymmetric(page, '.pf-brl__side', '.pf-brl__main');
@@ -227,6 +240,41 @@ test.describe('settings list grids', () => {
     await vis(page, '.pf-vn-main .ag-row .pf-rowact[aria-label="View history of Kauvery Clinic"]').dispatchEvent('click');
     await expect(vis(page, '.pf-vn-side')).toContainText('Bill B-1042');
     await shot(page, 'sg-credit-money-history');
+    expect(errors, 'no uncaught errors').toEqual([]);
+  });
+
+  test('Home collection agents: switch strip above a full-width agents grid', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await go(page, '/admin/lab/home-collection?tab=agents');
+    await expect(vis(page, '.pf-hc-main .ag-row')).toBeVisible({ timeout: 60_000 });
+    await expect(vis(page, '[data-testid="hc-switch-card"]')).toContainText('This branch');
+    await expect(vis(page, '.pf-hc-main')).toContainText('None set');
+    // The strip spans the grid's width (not a half-width card).
+    if (!isPhone()) {
+      const a = await vis(page, '[data-testid="hc-switch-card"]').boundingBox();
+      const b = await vis(page, '.pf-hc-main').boundingBox();
+      expect(Math.abs(a!.width - b!.width)).toBeLessThan(40);
+    }
+    await expectLayout(page, 'home collection agents');
+    await shot(page, 'sg-home-collection');
+    expect(errors, 'no uncaught errors').toEqual([]);
+  });
+
+  test('Referral labs: grid, departments chips, status pill; Edit opens the side card', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await go(page, '/admin/referral-labs');
+    await expect(vis(page, '.pf-rl-main .ag-row')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('.pf-rl-main .ag-row')).toHaveCount(3);
+    await expectLayout(page, 'referral labs');
+    await shot(page, 'sg-referral-labs');
+    await vis(page, '.pf-rl-main .pf-rowact[aria-label="Edit Neuberg Ehrlich"]').dispatchEvent('click');
+    await expect(vis(page, '.pf-rl-form')).toContainText('Edit referral lab');
+    await shot(page, 'sg-referral-labs-edit');
+    await vis(page, '.pf-rl-form .pf-btn--primary').dispatchEvent('click');
+    await expect.poll(() => neg.calls.find(c => c.path === '/api/referral-labs/rl2' && c.method === 'PUT')?.body)
+      .toEqual({ name: 'Neuberg Ehrlich', code: 'NEU', contactName: 'Priya', contactPhone: '9840099999', contactEmail: null, address: null, departmentCodesJson: '["BIO"]' });
     expect(errors, 'no uncaught errors').toEqual([]);
   });
 });
