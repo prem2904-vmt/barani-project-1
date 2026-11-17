@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, OnDestroy, PLATFORM_ID, computed, effect, inject, signal,
+  ChangeDetectionStrategy, Component, Injector, OnDestroy, PLATFORM_ID, computed, effect, inject, signal, untracked,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -9,6 +9,7 @@ import { TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from '@prefro
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { SETTINGS_HOST } from '../../../shared/utils/settings-host';
 import { SettingsAccessService } from './settings-access.service';
+import { OpdAdminApi } from '../../opd/admin/opd-admin.api';
 import { SettingsCategory, categoryTarget, locateSettings } from './settings-map';
 
 const RAIL_KEY = 'pf.settings.rail';
@@ -70,6 +71,7 @@ function readRail(): boolean {
 export class SettingsShellComponent implements OnDestroy {
   private readonly router = inject(Router);
   private readonly access = inject(SettingsAccessService);
+  private readonly injector = inject(Injector);
   private readonly navBack = inject(NavBackService);
   private readonly browser = isPlatformBrowser(inject(PLATFORM_ID));
   readonly compact = injectTwoPanelCompact();
@@ -154,6 +156,11 @@ export class SettingsShellComponent implements OnDestroy {
       if (Object.entries(want).some(([k, v]) => p.query[k] !== v)) {
         void this.router.navigate([], { queryParams: want, queryParamsHandling: 'merge', replaceUrl: true });
       }
+    });
+
+    // First time the OPD settings open: the tenant's starter set (once per session, server-side) — the old OPD hub did this.
+    effect(() => {
+      if (this.loc()?.section.id === 'opd') untracked(() => this.injector.get(OpdAdminApi).ensureStarter().subscribe());
     });
 
     // Phone back: screen → categories (when there are several) → the section on the overview.

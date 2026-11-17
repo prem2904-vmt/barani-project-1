@@ -53,6 +53,8 @@ export interface SettingsSectionDef {
   blurb: string;
   /** The department exists only while the lab has it. */
   requires?: SettingsRequires;
+  /** Extra gate the whole section keeps from before the re-home (Lab: the old Lab settings hub's permissions + module). */
+  gate?: 'lab';
   iconPath: string;
   items: readonly SettingsItem[];
 }
@@ -156,7 +158,7 @@ const P = SETTINGS_PATHS;
 export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
   // ───────────────────────────── Departments ─────────────────────────────
   {
-    id: 'lab', group: 'departments', label: 'Lab', iconPath: ICON.lab,
+    id: 'lab', group: 'departments', label: 'Lab', gate: 'lab', iconPath: ICON.lab,
     blurb: 'Everything a lab decides for itself: its departments, sample numbers, tests, reports, analyzers and who it sends tests out to.',
     items: [
       { id: 'lab-departments', label: 'Departments and lab spaces', path: P.labDepartments, iconPath: ICON.space,

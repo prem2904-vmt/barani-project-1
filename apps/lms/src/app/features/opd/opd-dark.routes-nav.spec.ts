@@ -30,7 +30,8 @@ const OPD_PATH = /(^|\/)(opd|doctor)(\/|$)|^frontdesk\/consult$/;
 describe('OPD routes are all gated', () => {
   it('every OPD-looking route is one of the OPD route objects and carries opdGuard', () => {
     const opdish = all.filter(f => OPD_PATH.test(f.path));
-    expect(opdish.length).toBe(OPD_ROUTE_OBJECTS.size);
+    // Every OPD route object is mounted once (Pharmacy's two settings routes live in the OPD file but sit at /admin/pharmacy).
+    expect(all.filter(f => OPD_ROUTE_OBJECTS.has(f.route)).length).toBe(OPD_ROUTE_OBJECTS.size);
     for (const f of opdish) {
       expect(OPD_ROUTE_OBJECTS.has(f.route)).toBe(true);
       expect((f.route.canActivate ?? []).some(isOpdGuard)).toBe(true);

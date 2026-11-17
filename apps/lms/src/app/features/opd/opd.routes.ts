@@ -51,10 +51,12 @@ export const OPD_SHELL_ROUTES: Routes = [
   { path: 'doctor/consult/:id', canActivate: [opdGuard], loadComponent: () => import('./doctor/consult-room.component').then(m => m.ConsultRoomComponent) },
 ];
 
-/** OPD admin (adminGuard + opdGuard). Agent A, except pharmacy settings (D). */
+/**
+ * OPD admin (adminGuard + opdGuard). Agent A, except pharmacy settings (D). The Settings shell hosts every one of
+ * these except the full-screen editors (service editor, form builder): see features/admin/settings/settings.routes.ts.
+ * `/admin/opd` itself (the old OPD hub) redirects to the overview's OPD section.
+ */
 export const OPD_ADMIN_ROUTES: Routes = [
-  { path: 'admin/opd', canActivate: [adminGuard, opdGuard], data: { moduleId: 'opd' },
-    loadComponent: () => import('./admin/opd-admin.component').then(m => m.OpdAdminComponent) },
   { path: 'admin/opd/departments', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/departments.page').then(m => m.OpdDepartmentsPage) },
   { path: 'admin/opd/services/:id', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/service-editor.page').then(m => m.OpdServiceEditorPage) },
   // OPD → Doctors: per-doctor consultation-fee grid (existing).
@@ -64,8 +66,14 @@ export const OPD_ADMIN_ROUTES: Routes = [
   { path: 'admin/opd/workflow', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/workflow.page').then(m => m.OpdWorkflowPage) },
   // OPD → Settings: the follow-up policy (existing).
   { path: 'admin/opd/settings', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/opd-settings.component').then(m => m.OpdSettingsComponent) },
-  { path: 'admin/opd/drugs', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/drug-master.page').then(m => m.OpdDrugMasterPage) },
-  { path: 'admin/opd/pharmacy', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./pharmacy/pharmacy-settings.page').then(m => m.PharmacySettingsPage) },
+  // Pharmacy is its own department in Settings (Settings re-home 2026-11-17): its real settings and the drug master.
+  { path: 'admin/pharmacy/drugs', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/drug-master.page').then(m => m.OpdDrugMasterPage) },
+  { path: 'admin/pharmacy', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./pharmacy/pharmacy-settings.page').then(m => m.PharmacySettingsPage) },
+  // OPD front desk, alerts and numbers: the same screens the lab uses today, pointed here until each gets its own page.
+  { path: 'admin/opd/front-desk', canActivate: [adminGuard, opdGuard], loadComponent: () => import('../admin/appointments-config/appointments-config.component').then(m => m.AppointmentsConfigComponent) },
+  { path: 'admin/opd/front-desk/referring', canActivate: [adminGuard, opdGuard], loadComponent: () => import('../admin/referring-network/referring-network.component').then(m => m.ReferringNetworkComponent) },
+  { path: 'admin/opd/alerts', canActivate: [adminGuard, opdGuard], loadComponent: () => import('../admin/notifications-config/notifications-config.component').then(m => m.NotificationsConfigComponent) },
+  { path: 'admin/opd/numbers', canActivate: [adminGuard, opdGuard], loadComponent: () => import('../admin/kpis/kpi-config.component').then(m => m.KpiConfigComponent) },
 ];
 
 /** The legacy desk consult page under /frontdesk (child of the frontdesk area). */

@@ -14,7 +14,7 @@ import { TEST_MASTER_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
 import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
 import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
-import { SETTINGS_REDIRECTS, SETTINGS_SHELL_ROUTE, SHELL_HOSTED_SHEET_PATHS } from './features/admin/settings/settings.routes';
+import { OPD_FULL_SCREEN_ADMIN, SETTINGS_REDIRECTS, SETTINGS_SHELL_ROUTE, SHELL_HOSTED_SHEET_PATHS } from './features/admin/settings/settings.routes';
 import { CASESHEET_SHELL_ROUTES, withAppModes } from './features/casesheets/casesheets.routes';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
@@ -23,8 +23,6 @@ import { CASESHEET_SHELL_ROUTES, withAppModes } from './features/casesheets/case
 // config. Their legit destinations — /admin/branches, /admin/audit,
 // home-collection — are separate routes gated on their own perms and surfaced
 // via the "More" nav, so they need no admin-shell access.
-/** OPD admin editors that stay full screen (their list is hosted by the Settings shell). */
-const OPD_FULL_SCREEN_ADMIN: ReadonlySet<string> = new Set(['admin/opd/services/:id', 'admin/opd/forms/:id']);
 
 // Gate for /set-password: must be signed in, and only relevant while a
 // password change is actually owed. Bounces signed-out users to /login and

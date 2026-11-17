@@ -64,7 +64,7 @@ describe('lab-features — THE Home collection / Appointments rule', () => {
 });
 
 describe('lab-features — every surface follows the rule', () => {
-  const HOME_ROUTES = ['/frontdesk/home-collection', '/home-collections', '/admin/home-collection'];
+  const HOME_ROUTES = ['/frontdesk/home-collection', '/home-collections', '/admin/lab/home-collection'];
   const ctx = (w: ProcessWorkflowConfig | null, entitledOn: boolean) => ({
     hasAny: () => true, isSuper: true,
     isEnabled: (a: string) => workflowActionOn(w, a),
@@ -117,12 +117,12 @@ describe('lab-features — every surface follows the rule', () => {
     const homeTabs = fdHtml.split('setLeftTab(\'home\')').length - 1 + (fdHtml.split('setMobileList(\'home\')').length - 1);
     expect(homeTabs).toBe(2);
     expect(fdHtml.match(/@if \(showHome\(\)\) \{/g)?.length).toBe(3);
-    expect(src('features/lab/lab-settings-hub/lab-settings-hub.component.ts')).toMatch(/feature !== 'homeCollection' \|\| this\.features\.homeCollectionEnabled\(\)/);
+    expect(src('features/admin/settings/settings-access.service.ts')).toMatch(/case 'homeCollection': return this\.labFeatures\.homeCollectionEnabled\(\)/);
     expect(src('features/frontdesk/book-appointment/book-appointment.component.ts').match(/@if \(features\.homeCollectionEnabled\(\)\) \{/g)?.length).toBe(2);
     expect(src('features/admin/appointments-config/appointments-config.component.ts')).toMatch(/this\.features\.homeCollectionEnabled\(\)/);
     for (const f of ['features/menu-hub/menu-hub.component.ts', 'features/work-area-host/work-area-host.component.ts'])
       expect(src(f)).toMatch(/this\.features\.actionAvailable\(a\.type\)/);
-    expect(src('features/admin/admin-overview.component.ts')).toMatch(/moduleEnabled: \(m\) => this\.entitlements\.moduleEnabled\(m\)/);
+    expect(src('features/admin/settings/settings-access.service.ts')).toMatch(/moduleEnabled: \(m\) => this\.entitlements\.moduleEnabled\(m\)/);
     for (const f of ['features/frontdesk/patient-profile/patient-profile.component.html',
       'features/frontdesk/patient-register/patient-register.component.ts',
       'features/frontdesk/advanced-patient-search/advanced-patient-search.component.ts'])

@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { AuthService } from '../../../core/auth/auth.service';
-import { canOpenRoute } from '../../../core/auth/route-access';
+import { LAB_SETTINGS_HUB_PERMS, canOpenRoute, canPassAccess } from '../../../core/auth/route-access';
 import { BetaFeaturesService } from '../../../core/services/beta-features.service';
 import { LabFeaturesService } from '../../../core/services/lab-features.service';
 import { ProcessWorkflowService } from '../../../core/services/process-workflow.service';
@@ -65,8 +65,17 @@ export class SettingsAccessService {
     return this.visibleCategories(item).length > 0;
   }
 
+  /** The gates a section kept from before the re-home: Lab = the old Lab settings hub's permissions, lab module on. */
+  private sectionGate(section: SettingsSectionDef): boolean {
+    if (section.gate !== 'lab') return true;
+    return canPassAccess({ perms: LAB_SETTINGS_HUB_PERMS, module: 'lab' }, {
+      hasAny: (p) => this.auth.hasAnyPermission(p),
+      moduleEnabled: (m) => this.entitlements.moduleEnabled(m),
+    });
+  }
+
   visibleItems(section: SettingsSectionDef): SettingsItem[] {
-    if (!this.hasDepartment(section.requires)) return [];
+    if (!this.hasDepartment(section.requires) || !this.sectionGate(section)) return [];
     return section.items.filter((i) => this.itemVisible(i));
   }
 

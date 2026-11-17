@@ -1,7 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import { renderBandPage } from './admin-band.spec-helpers';
-import { OpdAdminComponent } from '../opd/admin/opd-admin.component';
 import { CultureSettingsComponent } from '../lab/culture-settings/culture-settings.component';
 import { OpdSettingsComponent } from '../opd/admin/opd-settings.component';
 import { ModulePlaceholderComponent } from '../modules/module-placeholder.component';
@@ -41,22 +40,6 @@ export function hygiene(el: HTMLElement) {
 export const primaries = (el: HTMLElement) =>
   Array.from(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn .v-primary'))
     .filter(b => !b.closest('.pf-classic-only')).length;
-
-describe('ND audit D — tile hubs (OPD)', () => {
-  for (const [name, cmp, sel] of [
-    ['OPD', OpdAdminComponent, '.pf-lsh__tile'],
-  ] as const) {
-    it(`${name}: band search, tiles are kit cards with the violet icon chip, no primary`, () => {
-      const p = renderBandPage(cmp as any);
-      expect(p.bandInput()).not.toBeNull();
-      const tile = p.el.querySelector(sel)!;
-      expect(tile.classList.contains('pf-card')).toBe(true);
-      expect(tile.querySelector('.pf-card__icon svg[aria-hidden="true"]')).not.toBeNull();
-      expect(primaries(p.el)).toBe(0);
-      hygiene(p.el);
-    });
-  }
-});
 
 describe('ND audit D — settings pages (Microbiology, OPD settings)', () => {
   it('Microbiology: pf-card sections, slate supervisor switch, kit number fields, ONE primary (band Save)', () => {

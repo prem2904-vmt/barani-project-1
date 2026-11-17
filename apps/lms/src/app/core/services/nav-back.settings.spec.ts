@@ -46,28 +46,34 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('Settings back — the one parent map', () => {
   const cases: Array<[string, string]> = [
-    ['/admin/manage', '/admin'],
-    ['/lab/settings', '/admin'],
-    ['/admin/lab-settings', '/lab/settings'],
-    ['/admin/instruments', '/lab/settings'],
-    ['/admin/bridges', '/lab/settings'],
-    ['/admin/ai-connectors', '/lab/settings'],
-    ['/admin/home-collection', '/lab/settings'],
-    ['/admin/microbiology', '/lab/settings'],
+    // every setting climbs to the overview, on the section that holds it
+    ['/admin/lab/collection', '/admin?section=lab'],
+    ['/admin/lab/results', '/admin?section=lab'],
+    ['/admin/instruments', '/admin?section=lab'],
+    ['/admin/bridges', '/admin?section=lab'],
+    ['/admin/microbiology', '/admin?section=lab'],
+    ['/admin/lab/home-collection', '/admin?section=lab'],
+    ['/admin/referral-labs', '/admin?section=lab'],
+    ['/admin/partner-prices', '/admin?section=lab'],
+    ['/admin/lab/front-desk/referring', '/admin?section=lab'],
+    ['/admin/process', '/admin?section=lab'],
+    ['/admin/workflows', '/admin?section=lab'],
+    ['/admin/ai-connectors', '/admin?section=connected'],
+    ['/admin/vendors', '/admin?section=billing'],
+    ['/admin/billing', '/admin?section=billing'],
+    ['/admin/branches', '/admin?section=branches'],
+    ['/admin/org/profile', '/admin?section=profile'],
+    ['/admin/org/numbers', '/admin?section=numbers'],
+    ['/admin/org/channels', '/admin?section=channels'],
+    ['/admin/users', '/admin?section=people'],
+    ['/admin/inventory', '/admin?section=inventory'],
+    ['/admin/ipd/departments', '/admin?section=ipd'],
+    ['/admin/pharmacy', '/admin?section=pharmacy'],
+    // editors climb to their list
     ['/admin/instruments/abc', '/admin/instruments'],
     ['/admin/bridges/abc', '/admin/bridges'],
-    ['/admin/referral-labs', '/admin/partners'],
-    ['/admin/partner-prices', '/admin/partners'],
-    ['/admin/vendors', '/admin/partners'],
-    ['/admin/referring-network', '/admin/partners'],
-    ['/admin/partners', '/admin?section=org'],
-    ['/admin/branches', '/admin?section=org'],
-    ['/admin/organization', '/admin?section=org'],
-    ['/admin/billing', '/admin?section=finance'],
-    ['/admin/process', '/admin?section=automation'],
-    ['/admin/inventory', '/admin?section=inventory'],
-    ['/admin/modules', '/admin'],
-    ['/admin/radiology', '/admin?section=radiology'],
+    ['/admin/opd/services/s1', '/admin/opd/departments'],
+    ['/admin/opd/forms/f1', '/admin/opd/forms'],
   ];
   for (const [page, parent] of cases) {
     it(`${page} → ${parent}`, () => {
@@ -78,8 +84,8 @@ describe('Settings back — the one parent map', () => {
 
   it('query strings (a tab / category) do not change the parent', () => {
     const { svc } = setup();
-    expect(svc.getParentRoute('/admin/lab-settings?tab=queues')).toBe('/lab/settings');
-    expect(svc.getParentRoute('/admin/organization?tab=sample')).toBe('/admin?section=org');
+    expect(svc.getParentRoute('/admin/lab/collection?tab=queues')).toBe('/admin?section=lab');
+    expect(svc.getParentRoute('/admin/org/numbers?tab=order')).toBe('/admin?section=numbers');
   });
 
   it('every mapped page parents to a hub that is itself mapped or the /admin root (no loops)', () => {
@@ -101,20 +107,18 @@ describe('Settings back — the one parent map', () => {
 });
 
 describe('Settings back — honours where you came from', () => {
-  it('a page opened from the settings hub search pops back to that hub', () => {
+  it('a page opened from the settings overview search pops back to the overview', () => {
     const { svc, go, location, router } = setup();
     go('/admin');
-    go('/admin/manage');
-    go('/admin/lab-settings?tab=queues'); // search hit → Lab settings › Queues
+    go('/admin/lab/collection?tab=queues'); // search hit → Lab › Collection and queues
     svc.back();
     expect(location.back).toHaveBeenCalledTimes(1);
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 
-  it('a page opened from the Lab hub pops back to it', () => {
+  it('a setting opened from a tile on the overview pops back to it', () => {
     const { svc, go, location } = setup();
-    go('/admin');
-    go('/lab/settings');
+    go('/admin?section=lab');
     go('/admin/instruments');
     svc.back();
     expect(location.back).toHaveBeenCalledTimes(1);
@@ -125,15 +129,15 @@ describe('Settings back — honours where you came from', () => {
     go('/admin/referral-labs');
     svc.back();
     expect(location.back).not.toHaveBeenCalled();
-    expect(router.navigateByUrl).toHaveBeenCalledWith('/admin/partners', { replaceUrl: true });
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/admin?section=lab', { replaceUrl: true });
   });
 
   it('a tab / category kept in the URL (replaceUrl) does not erase "came from"', () => {
     const { svc, go, location } = setup();
-    go('/lab/settings');
-    go('/admin/lab-settings');
-    go('/admin/lab-settings?tab=rules', 'replace');
-    expect(svc.cameFrom()).toBe('/lab/settings');
+    go('/admin');
+    go('/admin/lab/results');
+    go('/admin/lab/results?tab=rules', 'replace');
+    expect(svc.cameFrom()).toBe('/admin');
     svc.back();
     expect(location.back).toHaveBeenCalledTimes(1);
   });
@@ -141,14 +145,13 @@ describe('Settings back — honours where you came from', () => {
   it('hub → list → editor → list → back goes to the hub entry already in history (no duplicate)', () => {
     const { svc, go, location, historyGo, router } = setup();
     go('/admin');
-    go('/lab/settings');
     go('/admin/instruments');
     go('/admin/instruments/abc');
     // editor back: its list is right behind → pop
     svc.backTo('/admin/instruments');
     expect(location.back).toHaveBeenCalledTimes(1);
     go('/admin/instruments', 'pop');
-    // list back: came from the editor, but the Lab hub is 1 entry behind → pop
+    // list back: came from the editor, but the overview is 1 entry behind → pop
     svc.back();
     expect(location.back).toHaveBeenCalledTimes(2);
     expect(historyGo).not.toHaveBeenCalled();
@@ -158,10 +161,10 @@ describe('Settings back — honours where you came from', () => {
   it('a parent further behind is reached with history.go(-n), not a pushed copy', () => {
     const { svc, go, historyGo, router } = setup();
     go('/admin');
-    go('/admin/partners');
-    go('/admin/vendors');
-    go('/admin/vendors/x'); // a deeper screen; then jump straight up to the hub
-    svc.backTo('/admin?section=org');
+    go('/admin/referral-labs');
+    go('/admin/partner-prices');
+    go('/admin/partner-prices/x'); // a deeper screen; then jump straight up to the overview
+    svc.backTo('/admin');
     expect(historyGo).toHaveBeenCalledWith(-3);
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });

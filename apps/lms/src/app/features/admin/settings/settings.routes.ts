@@ -1,10 +1,7 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Route, Router, Routes } from '@angular/router';
 import { betaGuard } from '../../../core/services/beta-features.service';
-import { permissionGuard } from '../../../core/auth/permission.guard';
 import { routeGuards } from '../../../core/auth/route-guards';
-import { ADMIN_PERMS } from '../../../core/auth/route-access';
-import { opdGuard } from '../../opd/shared/opd.guard';
 import { OPD_ADMIN_ROUTES } from '../../opd/opd.routes';
 import { CASESHEET_SHELL_ROUTES } from '../../casesheets/casesheets.routes';
 import { casesheetGuard } from '../../casesheets/shared/casesheet.guard';
@@ -22,7 +19,6 @@ import { LEGACY_SECTION, SETTINGS_PATHS as P, rehome } from './settings-map';
  * routes in app.routes.ts and climb back to their list.
  */
 
-const adminGuard = permissionGuard(ADMIN_PERMS);
 const strip = (p: string) => p.replace(/^\//, '');
 
 interface PageOpts {
@@ -77,26 +73,16 @@ const aiConnectors = () => import('../../ai-connector/ai-connectors-settings.pag
 const channels = () => import('../communication/communication-settings.page').then((m) => m.CommunicationSettingsPage);
 const files = () => import('../../files/files-settings.page').then((m) => m.FilesSettingsPage);
 
-/** An OPD admin route (adminGuard + opdGuard) re-used under a new path. */
-function opdRoute(oldPath: string, newPath?: string): Route {
-  const r = OPD_ADMIN_ROUTES.find((x) => x.path === strip(oldPath));
-  if (!r) throw new Error(`settings.routes: no OPD admin route ${oldPath}`);
-  return newPath ? { ...r, path: strip(newPath) } : r;
-}
 /** A case-sheet admin route (casesheetGuard + its ROUTE_ACCESS guards), unchanged. */
 function sheetRoute(path: string): Route {
   const r = CASESHEET_SHELL_ROUTES.find((x) => x.path === strip(path));
   if (!r) throw new Error(`settings.routes: no case-sheet admin route ${path}`);
   return r;
 }
-const opdPage = (path: string, load: Route['loadComponent'], access: string): Route => ({
-  path: strip(path), canActivate: [adminGuard, opdGuard, ...routeGuards(access)], loadComponent: load,
-});
-
 /** The case-sheet admin routes the shell hosts (the others — the form editor, its history — stay full screen). */
 export const SHELL_HOSTED_SHEET_PATHS = [P.ipdCaseSheets, P.ipdPending, P.ipdDepartments].map(strip);
-/** OPD admin routes the shell hosts (service editor and form builder stay full screen). */
-const SHELL_HOSTED_OPD_PATHS = ['/admin/opd/departments', '/admin/opd/doctors', '/admin/opd/forms', '/admin/opd/workflow', '/admin/opd/settings'];
+/** OPD admin editors that stay full screen; every other OPD / Pharmacy admin route is hosted by the shell. */
+export const OPD_FULL_SCREEN_ADMIN: ReadonlySet<string> = new Set(['admin/opd/services/:id', 'admin/opd/forms/:id']);
 
 /** Children of the Settings shell. ORDER does not matter (every path is exact). */
 export const SETTINGS_SHELL_CHILDREN: Routes = [
@@ -124,16 +110,8 @@ export const SETTINGS_SHELL_CHILDREN: Routes = [
   page(P.workflows, workflowBuilder),
   page(P.labHomeCollection, homeCollection),
 
-  // ── OPD ──
-  ...SHELL_HOSTED_OPD_PATHS.map((p) => opdRoute(p)),
-  opdPage(P.opdFrontDesk, appointments, P.opdFrontDesk),              // placeholder: Appointments & queue
-  opdPage(P.opdReferring, referringNetwork, P.opdReferring),
-  opdPage(P.opdAlerts, notifications, P.opdAlerts),                   // placeholder: shared Notifications page
-  opdPage(P.opdNumbers, kpis, P.opdNumbers),                          // placeholder: KPI cards page
-
-  // ── Pharmacy (the real settings; they live in OPD today) ──
-  opdRoute('/admin/opd/pharmacy', P.pharmacy),
-  opdRoute('/admin/opd/drugs', P.pharmacyDrugs),
+  // ── OPD + Pharmacy (adminGuard + opdGuard; defined once in features/opd/opd.routes.ts) ──
+  ...OPD_ADMIN_ROUTES.filter((r) => !OPD_FULL_SCREEN_ADMIN.has(r.path ?? '')),
 
   // ── IPD ──
   ...SHELL_HOSTED_SHEET_PATHS.map((p) => sheetRoute(p)),
