@@ -55,6 +55,21 @@ test.describe('settings re-home: organization pages', () => {
     });
   }
 
+  // IPD is a department section on the demo tenant (case sheets on): its three settings open inside the shell.
+  for (const [name, url, marker] of [
+    ['ipd-departments', '/admin/ipd/departments', '[data-testid="tp-panel"]'],
+    ['ipd-case-sheets', '/admin/ipd/myprefrontal', '[data-testid="tp-panel"]'],
+    ['ipd-alerts', '/admin/ipd/alerts', 'pf-notifications-config'],
+  ] as const) {
+    test(name, async ({ page }) => {
+      await go(page, url);
+      await expect(page.locator(marker).locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
+      await expect(page.locator('[data-testid="settings-shell"]').locator('visible=true').first()).toBeVisible();
+      await page.waitForTimeout(1200);
+      await shot(page, `rehome-${name}`);
+    });
+  }
+
   test('old links keep working: /setup opens the profile', async ({ page }) => {
     await go(page, '/setup');
     await expect(page).toHaveURL(/\/admin\/org\/profile/, { timeout: 60_000 });

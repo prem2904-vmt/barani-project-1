@@ -233,6 +233,9 @@ test.describe('cm-comms', () => {
     // WhatsApp: the cards moved from Lab settings live here.
     await expect(visible(page, '[data-testid="ls-wa-chat"]')).toBeVisible({ timeout: 20_000 });
     await expect(visible(page, '[data-testid="ls-wa-chat-state"]')).toHaveText('On');
+    // WhatsApp Auto (and "send again", the message picker) moved to Lab › Report options › Report sending: not here.
+    await expect(page.locator('[data-testid="rs-auto"], [data-testid="rs-auto-switch"]')).toHaveCount(0);
+    await expect(page.getByText('WhatsApp Auto', { exact: true }).locator('visible=true')).toHaveCount(0);
     await noSideScroll(page);
     await page.screenshot({ path: `${out()}/comms-whatsapp--light.png` });
 
@@ -295,6 +298,22 @@ test.describe('cm-comms', () => {
     await go(page, '/admin/whatsapp');
     await page.waitForURL(/\/admin\/org\/channels\?tab=whatsapp/, { timeout: 20_000 });
     await expect(visible(page, '[data-testid="ls-wa-chat"]')).toBeVisible({ timeout: 20_000 });
+  });
+
+  test(`Lab › Report sending: WhatsApp Auto and "send again" save to the same WhatsApp settings API`, async ({ page: pg, context }) => {
+    const page = await setup(pg, context);
+    await go(page, '/admin/lab/report-options?tab=sending');
+    const auto = visible(page, '[data-testid="rs-auto-switch"]');
+    await expect(auto).toBeVisible({ timeout: 60_000 });
+    await expect(auto).toHaveAttribute('aria-checked', 'false');
+    await expect(visible(page, '[data-testid="rs-channels-link"]')).toHaveAttribute('href', '/admin/org/channels');
+    await auto.click();
+    await expect.poll(() => calls.find(c => c.method === 'PUT' && c.path === '/api/whatsapp/settings')?.body).toEqual({ autoSendEnabled: true, sendUpdatedReports: false });
+    calls = [];
+    await visible(page, '[data-testid="rs-resend-switch"]').click();
+    await expect.poll(() => calls.find(c => c.method === 'PUT' && c.path === '/api/whatsapp/settings')?.body).toHaveProperty('sendUpdatedReports');
+    await noSideScroll(page);
+    await shot(page, 'report-sending');
   });
 
   test(`Front desk Share: Email patient / doctor / both from the server answer; SMS only on phone + tablet with the right sms: link`, async ({ page: pg, context }) => {

@@ -1,6 +1,6 @@
 import { test, expect } from './support/form-factor';
 import {
-  neg, resetNeg, installNegBackend, openComms, pickCommsTab, visible, toast, serverError, type NegAnswer,
+  neg, resetNeg, installNegBackend, openComms, pickCommsTab, visible, toast, serverError, go, type NegAnswer,
 } from './support/neg-backend';
 
 /**
@@ -135,4 +135,48 @@ test.describe('neg-comms: Save and read', () => {
       expect(errors, 'no uncaught errors').toEqual([]);
     });
   }
+});
+
+/** WhatsApp Auto moved from Message channels to Lab › Report options › Report sending (Settings re-home 2026-11-17). */
+test.describe('neg-comms: WhatsApp Auto (Lab › Report sending)', () => {
+  const WA = '/api/whatsapp/settings';
+  const waSettings = (extra: Record<string, unknown> = {}) => ({
+    autoSendEnabled: false, sendUpdatedReports: false, templateName: null, templateLanguage: null, canSend: false,
+    sender: { source: 'platform', displayName: 'Prefrontal', status: 'not_connected', tokenStored: false, canConnect: false },
+    platform: { enabled: true, configured: false, webhookConfigured: false, defaultTemplateName: 'report_ready', defaultTemplateLanguage: 'en' },
+    ...extra,
+  });
+  const open = async (page: import('@playwright/test').Page) => {
+    await go(page, '/admin/lab/report-options?tab=sending');
+    await expect(visible(page, '[data-testid="rs-auto-switch"]')).toBeVisible({ timeout: 60_000 });
+  };
+
+  test('saving fails (500 with a reason): the switch goes back, the reason is said in plain words', async ({ page }) => {
+    neg.hook = r => r.method === 'PUT' && r.path === WA ? serverError(500, 'WhatsApp settings could not be saved right now') : undefined;
+    await open(page);
+    const sw = visible(page, '[data-testid="rs-auto-switch"]');
+    await sw.click();
+    await expect(toast(page, 'WhatsApp settings could not be saved right now')).toBeVisible({ timeout: 10_000 });
+    await expect(sw).toHaveAttribute('aria-checked', 'false');
+    await expect(page.getByText(NO_TECH_SPEAK)).toHaveCount(0);
+    await expect(page.getByText('WhatsApp Auto is on', { exact: false })).toHaveCount(0);
+  });
+
+  test('Prefrontal switched WhatsApp Auto off for the lab: the plain note shows and the switches are off-limits', async ({ page }) => {
+    neg.hook = r => r.method === 'GET' && r.path === WA ? { status: 200, body: { success: true, data: waSettings({ autoEntitled: false }) } } : undefined;
+    await open(page);
+    await expect(visible(page, '[data-testid="rs-auto-off"]')).toContainText('turned off for your lab by Prefrontal');
+    await expect(visible(page, '[data-testid="rs-auto-switch"]')).toBeDisabled();
+    await expect(visible(page, '[data-testid="rs-resend-switch"]')).toBeDisabled();
+    expect(neg.calls.filter(c => c.path === WA)).toEqual([]);
+  });
+
+  test('WhatsApp settings cannot be read (403): a plain line, no crash', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    neg.hook = r => r.method === 'GET' && r.path === WA ? { status: 403, body: { success: false, error: 'forbidden', message: 'No permission' } } : undefined;
+    await go(page, '/admin/lab/report-options?tab=sending');
+    await expect(visible(page, '[data-testid="rs-none"]')).toBeVisible({ timeout: 60_000 });
+    expect(errors).toEqual([]);
+  });
 });
