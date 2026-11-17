@@ -18,6 +18,14 @@ const vis = (page: Page, sel: string) => page.locator(sel).locator('visible=true
 const dialogBox = (page: Page) => page.getByText('Save your changes?', { exact: true }).locator('visible=true').first();
 const btn = (page: Page, name: string) => page.getByRole('button', { name, exact: true }).locator('visible=true').first();
 
+/** Phone: the page may open on its category list — wait for the content OR the list, and open the category if needed. */
+async function openOnPhone(page: Page, content: string, cat: string) {
+  if (!isPhone()) return;
+  const c = vis(page, content);
+  const item = vis(page, `[data-testid="tp-item-${cat}"]`);
+  await expect(c.or(item)).toBeVisible({ timeout: 60_000 });
+  if (!(await c.isVisible())) await item.click();
+}
 async function shot(page: Page, name: string) {
   for (const dark of [false, true]) {
     await page.emulateMedia({ colorScheme: dark ? 'dark' : 'light' });
@@ -86,7 +94,7 @@ test.describe('Save your changes?', () => {
 
   test('Billing › GST page: another category / the band back asks; Stay keeps the change; Leave goes', async ({ page }) => {
     await go(page, '/admin/billing?tab=gst');
-    if (isPhone() && !(await vis(page, 'button[role="switch"][aria-label="Allow discounts"]').count())) await vis(page, '[data-testid="tp-item-gst"]').click();
+    await openOnPhone(page, 'button[role="switch"][aria-label="Allow discounts"]', 'gst');
     const sw = vis(page, 'button[role="switch"][aria-label="Allow discounts"]');
     await expect(sw).toBeVisible({ timeout: 60_000 });
     if (!isPhone()) {
@@ -117,7 +125,7 @@ test.describe('Save your changes?', () => {
   test('Front desk (booking slots) and Message channels (email sender) ask before they are left', async ({ page }) => {
     // Front desk: queue mode is an explicit-Save field.
     await go(page, '/admin/lab/front-desk?tab=mode');
-    if (isPhone() && !(await vis(page, 'pf-appointments-config [aria-label="Queue mode"]').count())) await vis(page, '[data-testid="tp-item-mode"]').click();
+    await openOnPhone(page, 'pf-appointments-config [aria-label="Queue mode"]', 'mode');
     const mode = vis(page, 'pf-appointments-config [aria-label="Queue mode"] [role="radio"][aria-checked="false"]');
     await expect(mode).toBeVisible({ timeout: 60_000 });
     await mode.click();
@@ -131,7 +139,7 @@ test.describe('Save your changes?', () => {
 
     // Message channels › Email: the sender name.
     await go(page, '/admin/org/channels?tab=email');
-    if (isPhone() && !(await vis(page, 'input[placeholder="e.g. Arun Labs"]').count())) await vis(page, '[data-testid="tp-item-email"]').click();
+    await openOnPhone(page, 'input[placeholder="e.g. Arun Labs"]', 'email');
     const from = vis(page, 'input[placeholder="e.g. Arun Labs"]');
     await expect(from).toBeVisible({ timeout: 60_000 });
     await from.fill('Demo Lab Reports');
