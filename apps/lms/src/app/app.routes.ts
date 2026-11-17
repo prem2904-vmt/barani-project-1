@@ -336,6 +336,48 @@ export const appRoutes: Route[] = withAppModes([
       { path: 'admin/whatsapp', redirectTo: '/admin/communication?tab=whatsapp', pathMatch: 'full' },
       { path: 'admin/lab-settings/whatsapp', redirectTo: '/admin/communication?tab=whatsapp', pathMatch: 'full' },
       { path: 'admin/email', redirectTo: '/admin/communication?tab=email', pathMatch: 'full' },
+      // Lab › merged settings pages (Settings re-home). Each takes `?tab=` (its categories,
+      // see shared/utils/lab-settings-pages.ts).
+      {
+        path: 'admin/lab/sample-numbers',
+        canActivate: [...routeGuards('/admin/lab/sample-numbers')],
+        loadComponent: () => import('./features/admin/lab-pages/sample-numbers.page').then(m => m.LabSampleNumbersPage)
+      },
+      {
+        path: 'admin/lab/collection',
+        canActivate: [...routeGuards('/admin/lab/collection')],
+        loadComponent: () => import('./features/admin/lab-pages/collection.page').then(m => m.LabCollectionPage)
+      },
+      {
+        path: 'admin/lab/results',
+        canActivate: [...routeGuards('/admin/lab/results')],
+        loadComponent: () => import('./features/admin/lab-pages/results.page').then(m => m.LabResultsPage)
+      },
+      {
+        path: 'admin/lab/home-collection',
+        canActivate: [...routeGuards('/admin/lab/home-collection')],
+        loadComponent: () => import('./features/admin/lab-pages/home-collection.page').then(m => m.LabHomeCollectionPage)
+      },
+      {
+        path: 'admin/lab/front-desk',
+        canActivate: [...routeGuards('/admin/lab/front-desk')],
+        loadComponent: () => import('./features/admin/lab-pages/front-desk.page').then(m => m.LabFrontDeskPage)
+      },
+      {
+        path: 'admin/lab/alerts',
+        canActivate: [...routeGuards('/admin/lab/alerts')],
+        loadComponent: () => import('./features/admin/lab-pages/alerts.page').then(m => m.LabAlertsPage)
+      },
+      {
+        path: 'admin/lab/numbers',
+        canActivate: [...routeGuards('/admin/lab/numbers')],
+        loadComponent: () => import('./features/admin/lab-pages/numbers.page').then(m => m.LabNumbersPage)
+      },
+      {
+        path: 'admin/lab/report-options',
+        canActivate: [...routeGuards('/admin/lab/report-options')],
+        loadComponent: () => import('./features/admin/lab-pages/report-options.page').then(m => m.LabReportOptionsPage)
+      },
       {
         path: 'admin/lab-settings',
         canActivate: [...routeGuards('/admin/lab-settings')],

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, input, signal } from '@angular/core';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
@@ -34,8 +34,8 @@ const STAGE_LABELS: Record<string, string> = {
   imports: [FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
-      @if (theme.isNewDesign()) {
+    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full" [class.pf-cs--embedded]="embedded()">
+      @if (theme.isNewDesign() && !embedded()) {
         <!-- Band (owner): no search — the two cards become tabs in a
              tabs-only pill; Save rides the band actions. -->
         <pf-hero-band [back]="true" [tabsOnly]="true">
@@ -57,6 +57,7 @@ const STAGE_LABELS: Record<string, string> = {
           </ng-container>
         </pf-hero-band>
       }
+      @if (!embedded()) {
       <pf-screen-header class="pf-classic-only"
         eyebrow="Lab · Microbiology" title="Culture settings"
         subtitle="Stage lock + turnaround for the culture bench"
@@ -67,9 +68,18 @@ const STAGE_LABELS: Record<string, string> = {
           </button>
         </div>
       </pf-screen-header>
+      }
 
       <div class="pf-band-body">
       <div class="pf-band-narrow">
+      @if (embedded()) {
+        <!-- Inside the Results and validation page there is no band: Save sits here. -->
+        <div class="pf-cs__embedsave">
+          <button type="button" class="pf-cs__save press" data-testid="culture-save" [disabled]="saving() || formSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+            {{ saving() ? 'Saving…' : 'Save changes' }}
+          </button>
+        </div>
+      }
       @if (formSkeleton()) {
         <!-- Settings on their way: the card's fields as a skeleton (held
              600ms) — never the defaults dressed up as the saved values. -->
@@ -128,6 +138,8 @@ const STAGE_LABELS: Record<string, string> = {
       background: var(--gradient-primary, var(--brand, #a855f7)); border: 1px solid transparent; cursor: pointer; }
     .pf-cs__save:disabled { opacity: .5; cursor: default; }
     .pf-cs__card { margin-bottom: 16px; }
+    .pf-cs--embedded { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+    .pf-cs__embedsave { display: flex; justify-content: flex-end; margin-bottom: 12px; }
     .pf-cs__title { margin: 0; }
     .pf-cs__body { padding: 16px 18px 18px; }
     .pf-cs__hint { margin: 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; text-wrap: pretty; }
@@ -143,6 +155,9 @@ export class CultureSettingsComponent {
   private readonly toasts = inject(ToastService);
   protected readonly theme = inject(ThemeService);
 
+  /** Inside another page (Lab › Results and validation): no band or header, both cards, Save inline. */
+  readonly embedded = input(false);
+
   /** Band pill tabs (new design). Classic shows both cards, as before. */
   readonly tabOptions: SegmentedOption<CultureSettingsTab>[] = [
     { value: 'lock', label: 'Stage lock' },
@@ -150,7 +165,7 @@ export class CultureSettingsComponent {
   ];
   readonly tab = signal<CultureSettingsTab>('lock');
   showSec(key: CultureSettingsTab): boolean {
-    return !this.theme.isNewDesign() || this.tab() === key;
+    return this.embedded() || !this.theme.isNewDesign() || this.tab() === key;
   }
 
   lockTimeoutMinutes = 60;

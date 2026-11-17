@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, ElementRef, OnDestroy, OnInit, afterRenderEffect, inject, signal, computed, viewChild } from '@angular/core';
+import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
@@ -327,10 +328,10 @@ export const PREVIEW_LABEL: LabelData = {
             <div class="pf-lp-conn__txt">
               <span class="pf-lp-conn__k">Code on every label</span>
               <span class="pf-lp-conn__v pf-lp-code__v"><span class="pf-chip pf-chip--static pf-lp-codechip">{{ codeLabel() }}</span>
-                <span class="pf-hint">Branch policy, set by an admin in Lab settings</span></span>
+                <span class="pf-hint">Branch policy, set by an admin in Lab › Sample numbers</span></span>
             </div>
             @if (canEditCode) {
-              <a class="pf-btn pf-btn--quiet pf-lp-codelink" routerLink="/admin/lab-settings" [queryParams]="{ tab: 'collection' }">Lab settings</a>
+              <a class="pf-btn pf-btn--quiet pf-lp-codelink" [routerLink]="sampleNumbersPath" [queryParams]="{ tab: 'barcode' }">Sample numbers</a>
             }
           </div>
           <label class="pf-field pf-lp-slider">
@@ -477,6 +478,7 @@ export const PREVIEW_LABEL: LabelData = {
   `]
 })
 export class LabelPrinterComponent implements OnInit, OnDestroy {
+  protected readonly sampleNumbersPath = LAB_PAGES.sampleNumbers.path;
   protected readonly theme = inject(ThemeService);
   readonly printer = inject(PrinterService);
   readonly printConfig = inject(PrintConfigService);

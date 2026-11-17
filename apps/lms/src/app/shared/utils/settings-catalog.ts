@@ -1,5 +1,6 @@
 import type { BetaFeatureKey } from '../../core/services/beta-features.service';
 import { COMMS_SETTINGS_PERMS, FILES_SETTINGS_PERMS, PAYMENT_RULE_PERMS } from '../../core/auth/route-access';
+import { LAB_PAGES } from './lab-settings-pages';
 
 /**
  * The ONE index of every settings page and every setting on those pages.
@@ -95,7 +96,7 @@ const ORG = 'Organization & Identity';
 export const LAB_SETTINGS_TABS = ['collection', 'queues', 'rules', 'report'] as const;
 export type LabSettingsTabId = typeof LAB_SETTINGS_TABS[number];
 /** Organization & Identity band tabs, in order (the page's `?tab=`). */
-export const ORG_SETTINGS_TABS = ['identity', 'patient', 'sample', 'order'] as const;
+export const ORG_SETTINGS_TABS = ['identity', 'patient', 'order'] as const;
 export type OrgSettingsTabId = typeof ORG_SETTINGS_TABS[number];
 
 const ls = (tab: LabSettingsTabId, tabLabel: string, title: string, keywords: string[], extra: Partial<SettingsEntry> = {}): SettingsEntry =>
@@ -125,7 +126,7 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   org('identity', 'Identity', 'Organization name', ['lab name', 'company name', 'display name']),
   org('identity', 'Identity', 'Organization login handle', ['slug', 'sign in name', 'tenant handle']),
   org('patient', 'Patient ID', 'Patient ID format', ['mrn', 'uhid', 'patient number', 'registration number']),
-  org('sample', 'Sample ID', 'Sample ID format', ['sample number', 'tube id', 'barcode number', 'sample id digits']),
+  on(LAB_PAGES.sampleNumbers.path, 'Lab · Sample numbers', I.labSettings, 'Sample ID format', ['sample number', 'tube id', 'barcode number', 'sample id digits'], { tab: 'format' }),
   org('order', 'Order ID', 'Order ID format', ['order number', 'visit number']),
   { title: 'Appointments & queue', href: '/admin/appointments', section: SETTINGS_SECTION.org, icon: I.appointments, kind: 'page',
     keywords: ['appointment', 'booking', 'slots', 'token', 'walk in'] },
@@ -299,6 +300,14 @@ export const SETTINGS_PARENT: Readonly<Record<string, string>> = {
   '/admin/tests': '/lab/settings',
   '/admin/reports': '/lab/settings',
   '/admin/lab-settings': '/lab/settings',
+  '/admin/lab/sample-numbers': '/lab/settings',
+  '/admin/lab/collection': '/lab/settings',
+  '/admin/lab/results': '/lab/settings',
+  '/admin/lab/report-options': '/lab/settings',
+  '/admin/lab/home-collection': '/lab/settings',
+  '/admin/lab/front-desk': '/lab/settings',
+  '/admin/lab/alerts': '/lab/settings',
+  '/admin/lab/numbers': '/lab/settings',
   '/admin/communication': '/admin?section=communication',
   '/admin/files': '/admin?section=files',
   '/admin/microbiology': '/lab/settings',

@@ -170,6 +170,15 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/referral-labs':     { perms: TEST_MASTER_PERMS },
   '/admin/partner-prices':    { perms: TEST_MASTER_PERMS },
   '/admin/lab-settings':      { perms: ['manage_lab_settings'] },
+  // Lab › merged settings pages (Settings re-home, 2026-11-17). Same perms as the screens they merge.
+  '/admin/lab/sample-numbers': { perms: ['manage_lab_settings'] },
+  '/admin/lab/collection':    { perms: ['manage_lab_settings'] },
+  '/admin/lab/results':       { perms: ['manage_lab_settings'] },
+  '/admin/lab/report-options': { perms: ['manage_lab_settings'] },
+  '/admin/lab/home-collection': { perms: ['manage_home_collection', 'manage_tenant'], module: 'homeCollection' },
+  '/admin/lab/front-desk':    { perms: ['manage_tenant', 'manage_admin'] },
+  '/admin/lab/alerts':        { perms: ['manage_tenant', 'manage_notifications'] },
+  '/admin/lab/numbers':       { perms: ADMIN_PERMS },
   // Settings → Communication (WhatsApp, Email, SMS): the perms the WhatsApp lab settings use.
   '/admin/communication':     { perms: COMMS_SETTINGS_PERMS },
   '/admin/files':             { perms: FILES_SETTINGS_PERMS },

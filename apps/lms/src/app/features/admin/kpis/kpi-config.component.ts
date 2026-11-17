@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -11,6 +11,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SettingsDepartment, kpiScreenInDepartment } from '../../../shared/utils/department-scope';
 
 interface KpiCatalogItem {
   id: string;
@@ -126,7 +127,7 @@ const CATEGORY_LABELS: Record<string, string> = {
         </label>
 
         <div class="pf-kpi-screens" role="tablist" aria-label="Screen">
-          @for (s of screens; track s.id) {
+          @for (s of screens(); track s.id) {
             <button type="button"
                     class="pf-kpi-screen-tab"
                     [attr.aria-pressed]="selectedScreen() === s.id"
@@ -142,7 +143,9 @@ const CATEGORY_LABELS: Record<string, string> = {
       </section>
 
       <div class="pf-band-body pf-band-body--fill pf-kpi-body">
-      @if (loading()) {
+      @if (department() && !screens().length) {
+        <p class="pf-band-empty" data-testid="kpi-dept-empty">This department has no number cards yet.</p>
+      } @else if (loading()) {
         <div class="pf-kpi-loading flex justify-center py-12">
           <pf-skeleton-tiles [count]="6" min="260px" label="Loading KPI configuration…"></pf-skeleton-tiles>
         </div>
@@ -796,7 +799,10 @@ export class KpiConfigComponent implements OnInit {
   protected readonly theme = inject(ThemeService);
   private readonly dialog = inject(DialogService);
 
-  protected readonly screens = SCREENS;
+  /** Show only one department's screens (Numbers on lab screens, OPD screens).
+   *  No value = every screen (the old single page). */
+  readonly department = input<SettingsDepartment | null>(null);
+  protected readonly screens = computed(() => SCREENS.filter(s => kpiScreenInDepartment(s.id, this.department())));
 
   // Catalog + branches load once and stay.
   private readonly _catalog = signal<KpiCatalogItem[]>([]);
@@ -830,7 +836,7 @@ export class KpiConfigComponent implements OnInit {
   readonly assigned = this._draft.asReadonly();
 
   readonly currentScreenLabel = computed(() =>
-    SCREENS.find(s => s.id === this.selectedScreen())?.label ?? this.selectedScreen());
+    this.screens().find(s => s.id === this.selectedScreen())?.label ?? this.selectedScreen());
 
   readonly scopeOptions = computed<PfSelectOption<string>[]>(() => [
     { value: '__tenant', label: 'All branches (tenant-wide)' },
@@ -838,7 +844,7 @@ export class KpiConfigComponent implements OnInit {
   ]);
 
   /** Screen picker in the band pill: label carries the assigned-card count. */
-  readonly screenOptions = computed<PfSelectOption<string>[]>(() => SCREENS.map(s => {
+  readonly screenOptions = computed<PfSelectOption<string>[]>(() => this.screens().map(s => {
     const n = this.assignedCountForScreen(s.id);
     return { value: s.id, label: n > 0 ? `${s.label} · ${n}` : s.label, hint: s.hint };
   }));
@@ -890,6 +896,10 @@ export class KpiConfigComponent implements OnInit {
   });
 
   ngOnInit() {
+    // A department's first screen (the page opens on it, not on 'Admin dashboard').
+    const first = this.screens()[0];
+    if (first) this.selectedScreen.set(first.id);
+    else if (this.department()) { this._loading.set(false); return; }
     this.loadCatalog();
     this.loadBranches();
     this.loadAssignmentsForCurrentScope();
@@ -1090,8 +1100,10 @@ export class KpiConfigComponent implements OnInit {
     const scope = this.selectedScope();
     const branchParam = scope === '__tenant' ? '' : `&branchId=${scope}`;
     const counts: Record<string, number> = {};
-    let pending = SCREENS.length;
-    for (const s of SCREENS) {
+    const screens = this.screens();
+    let pending = screens.length;
+    if (pending === 0) { this._screenCounts.set(counts); return; }
+    for (const s of screens) {
       this.api.get<KpiAssignmentDto[]>(`/api/kpis/assignments?screen=${s.id}${branchParam}`).subscribe({
         next: list => {
           counts[s.id] = (list ?? []).length;

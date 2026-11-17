@@ -83,3 +83,11 @@
   }
   @media (pointer: coarse) { .pf-uf-sw { min-height: 56px; } }
   @media (prefers-reduced-motion: reduce) { .pf-uf-sw { transition: none; } }
+
+/* "Validates for" is read-only here: the validator pools are edited in Lab › Collection and queues. */
+.pf-ue-deptlist { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.pf-ue-deptall { font-size: 13px; color: var(--text-secondary); }
+.pf-ue-deptlink {
+  display: inline-block; margin-top: 8px; font-size: 12.5px; font-weight: 600;
+  color: var(--violet-text, #7c3aed); text-decoration: underline; text-underline-offset: 3px;
+}
