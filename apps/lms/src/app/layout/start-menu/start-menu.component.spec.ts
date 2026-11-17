@@ -128,7 +128,8 @@ describe('StartMenuComponent', () => {
     });
 
     it('highlights the current screen', async () => {
-      const { f, el } = setup({ url: '/results' });
+      const { f, el, prefs } = setup({ url: '/results' });
+      prefs.setPinned(['validate']);
       await flush(f);
       expect(q(el, '[data-sm-item="results"]').classList).toContain('sm-row--on');
       expect(q(el, '[data-sm-item="results"]').getAttribute('aria-current')).toBe('page');

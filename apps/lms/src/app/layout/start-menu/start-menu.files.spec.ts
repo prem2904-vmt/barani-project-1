@@ -117,10 +117,14 @@ describe('Start menu: right-click / long-press on a Files row', () => {
     el.querySelector<HTMLButtonElement>('[data-sm-ctx-act="pin"]')!.click(); await flush(f);
     expect(prefs.pinned()).toContain('files-synapse');
     expect(menu(el)).toBeNull();
+    // Pinned = on the bar, so it left More screens; the search still lists it (with Unpin).
+    expect(el.querySelector('.sm-rows[aria-label="More screens"] [data-sm-item="files-synapse"]')).toBeNull();
+    const i = el.querySelector<HTMLInputElement>('.sm-search__input')!; i.value = 'synapse'; i.dispatchEvent(new Event('input')); await flush(f);
     rightClick(row(el, 'files-synapse')); await flush(f);
     expect(acts(el).map(a => a.text)).toEqual(['Open Synapse', 'New document', 'Unpin from bar']);
     el.querySelector<HTMLButtonElement>('[data-sm-ctx-act="unpin"]')!.click(); await flush(f);
     expect(prefs.pinned()).not.toContain('files-synapse');
+    i.value = ''; i.dispatchEvent(new Event('input')); await flush(f);
     rightClick(row(el, 'files-axon')); await flush(f);
     el.querySelector<HTMLButtonElement>('[data-sm-ctx-act="new"]')!.click(); await flush(f);
     expect(sheets.open).toHaveBeenCalledWith({ app: 'axon', source: 'Files' });
