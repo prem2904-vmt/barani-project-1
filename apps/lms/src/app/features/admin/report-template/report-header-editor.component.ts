@@ -3,6 +3,8 @@ import {
   ChangeDetectionStrategy, Component, ElementRef, OnDestroy, computed, effect, inject, input, output, signal, viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { UploadsService } from '../../../core/services/uploads.service';
 import { normalizeHeaderPreset, ReportTemplate } from '../../../shared/models/report.model';
 import { computeReportPageLayout } from '../../../shared/utils/report-pdf';
 import {
@@ -73,7 +75,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
 @Component({
   selector: 'pf-report-header-editor',
   standalone: true,
-  imports: [FormsModule, ImageUploadComponent, SnapGuidesComponent, ReportLetterheadCardComponent, ReportSignatureCardComponent],
+  imports: [FormsModule, RouterLink, ImageUploadComponent, SnapGuidesComponent, ReportLetterheadCardComponent, ReportSignatureCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'pf-rhe-host' },
   template: `
@@ -332,7 +334,14 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
           }
 
           <!-- Content -->
-          @if (fieldKey(s.id); as key) {
+          @if (s.id === 'name') {
+            <!-- The lab name is set ONCE in Organization profile (Settings re-home); shown here read-only. -->
+            <div class="pf-field" data-testid="rhe-name-ro">
+              <span class="pf-field__lbl">Text</span>
+              <p class="pf-rhe-ro">{{ template().labName || 'No name set yet' }}</p>
+              <span class="pf-field__hint">Set once for the whole app. <a routerLink="/admin/org/profile" class="pf-rhe-ro__link">Change in Organization profile</a></span>
+            </div>
+          } @else if (fieldKey(s.id); as key) {
             <label class="pf-field">
               <span class="pf-field__lbl">{{ s.id === 'address' ? 'Address — press Enter for a new line' : 'Text' }}</span>
               @if (multiline(s.id)) {
@@ -376,8 +385,12 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
           @if (s.id === 'logo') {
             <div class="pf-field">
               <span class="pf-field__lbl">Logo image</span>
-              <pf-image-upload [url]="template().logoUrl" (urlChange)="emitPatch({ logoUrl: $event })"></pf-image-upload>
-              @if (!template().logoUrl) { <span class="pf-field__hint">No logo uploaded — a placeholder circle prints. Upload one, or switch the logo off.</span> }
+              <!-- The logo is set ONCE in Organization profile (Settings re-home); shown here read-only. -->
+              <div class="pf-rhe-ro-logo" data-testid="rhe-logo-ro">
+                @if (template().logoUrl) { <img [src]="logoSrc()" alt="" /> } @else { <span class="pf-field__hint">No logo</span> }
+              </div>
+              <span class="pf-field__hint">@if (!template().logoUrl) { No logo set — a placeholder circle prints. Add one, or switch the logo off below. }
+                <a routerLink="/admin/org/profile" class="pf-rhe-ro__link">Change in Organization profile</a></span>
             </div>
           }
           @if (s.id === 'nabl') {
@@ -744,6 +757,11 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     .pf-rhe-box.pf-rhe-box--bgimg:hover { border-color: rgba(124, 58, 237, .35) !important; }
     .pf-rhe-box.pf-rhe-box--bgimg.pf-rhe-box--sel { border: 1.5px dashed #7c3aed !important; background: rgba(124, 58, 237, .04); }
     .pf-rhe-box--bgimg .pf-rhe-box__tag { bottom: auto; top: 4px; left: 4px; }
+    .pf-rhe-ro { margin: 0; padding: 8px 10px; border-radius: var(--pf-radius-sm); border: 1px solid var(--pf-line); background: var(--pf-chip-bg); font-size: 13.5px; color: var(--text-primary); }
+    .pf-rhe-ro-logo { display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 8px; background: var(--pf-chip-bg); overflow: hidden; }
+    .pf-rhe-ro-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .pf-rhe-ro__link { color: var(--violet-text, #7c3aed); font-weight: 600; text-decoration: none; }
+    .pf-rhe-ro__link:hover { text-decoration: underline; }
     /* With guides on, every element shows a faint outline — you can see what is editable. */
     .pf-rhe--guides .pf-rhe-box:not(.pf-rhe-box--bg) { border-color: rgba(124, 58, 237, .22); }
     .pf-rhe-box--r .pf-rhe-box__tag, .pf-rhe-box--r .pf-rhe-box__live { left: auto; right: -1px; }
@@ -1030,6 +1048,9 @@ export class ReportHeaderEditorComponent implements OnDestroy {
   mm(pt: number): string { return ptToMm(pt).toFixed(1); }
   round(n: number | undefined | null): number { return Math.round((n ?? 0) * 10) / 10; }
   label(id: string): string { return FIELD_LABEL[id] ?? id; }
+  private readonly uploads = inject(UploadsService);
+  /** The profile's logo through the session ("/uploads/…" is private). */
+  logoSrc(): string { return this.uploads.src(this.template().logoUrl) ?? ''; }
   fieldKey(id: string): keyof ReportTemplate | null { return FIELD_KEY[id] ?? null; }
   multiline(id: string): boolean { return id === 'address' || id === 'disclaimer' || id === 'footerText'; }
   fieldValue(f: string): string { const k = FIELD_KEY[f]; return k ? String((this.template() as unknown as Record<string, unknown>)[k] ?? '') : ''; }

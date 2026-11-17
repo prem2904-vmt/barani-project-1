@@ -174,6 +174,12 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/communication':     { perms: COMMS_SETTINGS_PERMS },
   '/admin/files':             { perms: FILES_SETTINGS_PERMS },
   '/admin/organization':      { perms: ['manage_tenant'] },
+  // Settings re-home (Organization): profile (name + logo, set once), patient / order numbers, message channels.
+  '/admin/org/profile':       { perms: ['manage_tenant'] },
+  '/admin/org/numbers':       { perms: ['manage_tenant'] },
+  '/admin/org/channels':      { perms: COMMS_SETTINGS_PERMS },
+  // Credit accounts: money actions (top up, payment, statement) live on Finance; setup is in Billing and taxes.
+  '/finance/credit-accounts': { perms: ['manage_tenant'] },
   // Billing config APIs accept manage_billing_config as well as manage_tenant.
   '/admin/billing':           { perms: ['manage_tenant', 'manage_billing_config'] },
   '/admin/inventory':         { perms: ['manage_inventory'], module: 'inventory' },
@@ -202,6 +208,8 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/ipd/myprefrontal/forms/:id/history': { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/myprefrontal/pending':           { perms: CASESHEET_FORMS_PERMS },
   '/admin/ipd/departments':                    { perms: CASESHEET_FORMS_PERMS },
+  // IPD alerts: the notifications list filtered to IPD (same perms as the shared Notifications page).
+  '/admin/ipd/alerts':                         { perms: ['manage_tenant', 'manage_notifications'] },
   // The lab's sheets: read with casesheet_view (tenant-wide, branch-filtered, §11 Q2) or casesheet_fill; start one with fill.
   // The Prepare tab (owner 2026-11-11): Departments to start a sheet (fill), every sheet the user may read (view or fill).
   '/prepare':                                  { perms: CASESHEET_FILL_PERMS },

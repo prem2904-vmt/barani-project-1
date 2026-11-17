@@ -8,11 +8,13 @@ import { DEFAULT_PHARMACY_CONFIG, type PharmacyConfig } from '../shared/opd.mode
 import { PharmacyApi } from './pharmacy.api';
 import { errText } from './pharmacy-math';
 import { PharmacyDrugMasterComponent } from './drug-master.component';
+import { PHARMACY_VIEW } from './pharmacy-view';
 
 type Tab = 'settings' | 'drugs';
 
+
 /**
- * Admin → OPD → Pharmacy (`/admin/opd/pharmacy`): how the pharmacy works at
+ * Settings → Pharmacy (`/admin/pharmacy`, the drug master at `/admin/pharmacy/drugs`; the old `/admin/opd/pharmacy` redirects here): how the pharmacy works at
  * this lab (opd_settings.PharmacyJson — batch pick: earliest expiry vs the
  * pharmacist picks; walk-in bills editable until paid; Schedule H / H1 / X
  * enforcement) and the DRUG MASTER grid (copy-on-write over the Prefrontal
@@ -27,13 +29,15 @@ type Tab = 'settings' | 'drugs';
   styleUrls: ['./pharmacy.scss'],
   template: `
     <section class="pf-band-page ph">
-      <pf-hero-band [back]="true" backTo="/admin/opd" [customSearch]="true" [contextBar]="true">
+      <pf-hero-band [back]="true" [backTo]="fixedView() ? '/admin' : '/admin/opd'" [customSearch]="true" [contextBar]="true">
         <div band-search class="pf-ctx ph-ctx">
-          <span class="pf-ctx__primary">Pharmacy</span>
+          <span class="pf-ctx__primary">{{ fixedView() ? (tab() === 'drugs' ? 'Drug master' : 'Pharmacy settings') : 'Pharmacy' }}</span>
+          @if (!fixedView()) {
           <div class="pf-seg" role="tablist" aria-label="Pharmacy settings sections">
             <button type="button" class="pf-seg__item" role="tab" [attr.aria-selected]="tab() === 'settings'" [attr.aria-pressed]="tab() === 'settings'" (click)="tab.set('settings')">How it works</button>
             <button type="button" class="pf-seg__item" role="tab" [attr.aria-selected]="tab() === 'drugs'" [attr.aria-pressed]="tab() === 'drugs'" (click)="tab.set('drugs')">Drug master</button>
           </div>
+          }
         </div>
         <ng-container band-actions>
           @if (tab() === 'settings') {
@@ -86,7 +90,14 @@ export class PharmacySettingsPage {
   private readonly toast = inject(ToastService);
   private readonly dialog = inject(DialogService);
   protected readonly master = viewChild(PharmacyDrugMasterComponent);
-  protected readonly tab = signal<Tab>(inject(ActivatedRoute).snapshot.queryParamMap.get('tab') === 'drugs' ? 'drugs' : 'settings');
+  private readonly route = inject(ActivatedRoute);
+  /** 'settings' | 'drugs' when the route pins one view (Settings re-home); null = the old two-tab page. */
+  protected readonly fixedView = signal<Tab | null>(this.pinnedView());
+  protected readonly tab = signal<Tab>(this.fixedView() ?? (this.route.snapshot.queryParamMap.get('tab') === 'drugs' ? 'drugs' : 'settings'));
+  private pinnedView(): Tab | null {
+    const v = this.route.snapshot.data?.[PHARMACY_VIEW];
+    return v === 'drugs' || v === 'settings' ? v : null;
+  }
   protected readonly cfg = signal<PharmacyConfig>({ ...DEFAULT_PHARMACY_CONFIG });
   private readonly saved = signal<PharmacyConfig>({ ...DEFAULT_PHARMACY_CONFIG });
   protected readonly saving = signal(false);

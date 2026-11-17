@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AppointmentQueueService } from '../../../core/services/appointment-queue.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -86,7 +86,7 @@ const MODES: ModeOption[] = [
              tabs-only pill; Save rides the band actions. -->
         <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-tools>
-            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
+            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions()" [value]="tab()"
                           (valueChange)="tab.set($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
@@ -212,12 +212,17 @@ export class AppointmentsConfigComponent implements OnInit {
   protected readonly theme = inject(ThemeService);
 
   /** Band pill tabs (new design). Classic shows every card, as before. */
-  readonly tabOptions: SegmentedOption<AppointmentsTab>[] = [
+  private readonly allTabOptions: SegmentedOption<AppointmentsTab>[] = [
     { value: 'mode', label: 'Queue mode' },
     { value: 'slots', label: 'Booking slots' },
     { value: 'priority', label: 'Priority engine' },
   ];
+  /** Settings re-home: a department's Front desk shows only some of the cards (OPD: Booking slots), so it pins the
+   *  tabs here. Unset = all three, exactly as before. */
+  readonly tabs = input<AppointmentsTab[] | null>(null);
+  readonly tabOptions = computed(() => { const t = this.tabs(); return t ? this.allTabOptions.filter(o => t.includes(o.value)) : this.allTabOptions; });
   readonly tab = signal<AppointmentsTab>('mode');
+  private readonly pinFirstTab = effect(() => { const t = this.tabs(); if (t?.length && !t.includes(this.tab())) this.tab.set(t[0]); });
   showSec(key: AppointmentsTab): boolean {
     return !this.theme.isNewDesign() || this.tab() === key;
   }

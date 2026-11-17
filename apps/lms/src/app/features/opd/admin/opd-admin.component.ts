@@ -123,10 +123,10 @@ export class OpdAdminComponent {
     { title: 'Follow-up policy', href: '/admin/opd/settings',
       subtitle: 'Clinic-wide follow-up discounts for services without their own follow-up rule',
       iconPath: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7 19.4l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 5 4.6l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 11 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.83 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 20.91 9H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z' },
-    { title: 'Drug master & stock', href: '/admin/opd/drugs',
+    { title: 'Drug master & stock', href: '/admin/pharmacy/drugs',
       subtitle: 'Generic, brand, schedule, HSN / GST, MRP — batches and expiry per branch',
       iconPath: 'M10.5 20.5 3.5 13.5a5 5 0 0 1 7-7l7 7a5 5 0 0 1-7 7ZM7 7l7 7' },
-    { title: 'Pharmacy settings', href: '/admin/opd/pharmacy',
+    { title: 'Pharmacy settings', href: '/admin/pharmacy',
       subtitle: 'Batch picking, walk-in bills and Schedule H / H1 / X checks',
       iconPath: 'M3 9h18l-2 11H5L3 9ZM8 9V6a4 4 0 0 1 8 0v3' },
   ];

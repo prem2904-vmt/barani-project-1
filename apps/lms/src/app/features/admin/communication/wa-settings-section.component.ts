@@ -27,6 +27,7 @@ export const COMMS_MANAGE_PERMS = COMMS_SETTINGS_PERMS;
     @if (loading()) {
       <pf-skeleton-card [lines]="4" label="Loading WhatsApp settings…"></pf-skeleton-card>
     } @else if (waSettings(); as wa) {
+      @if (!channelsOnly()) {
       <!-- WhatsApp auto-send (Meta Cloud API): tenant switch; the sender number + token are platform config. -->
       <section class="pf-card pf-ls__card" data-testid="ls-whatsapp">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-12.4 7.4L3 21l2.1-5.4A8.4 8.4 0 1 1 21 11.5z"/><path d="M9 10h6M9 13.5h4"/></svg></span><h3 class="pf-card__label pf-ls__title">WhatsApp Auto: send the report automatically when it is ready</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span><span class="pf-card__spacer"></span>
@@ -73,6 +74,7 @@ export const COMMS_MANAGE_PERMS = COMMS_SETTINGS_PERMS;
           </p>
         </div>
       </section>
+      }
       <!-- WhatsApp Chat: staff open WhatsApp from a report and press Send (a platform switch, read-only here). -->
       <section class="pf-card pf-ls__card" data-testid="ls-wa-chat">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span><h3 class="pf-card__label pf-ls__title">WhatsApp Chat</h3><span class="pf-card__spacer"></span>
@@ -136,6 +138,9 @@ export class WaSettingsSectionComponent implements OnInit {
   readonly loading = signal(true);
   /** WhatsApp Chat platform switch (read-only mirror from GET /api/settings/communication). */
   readonly chatOn = input(true);
+  /** Settings → Message channels shows the ACCOUNT only (number, usage); what the lab SENDS on it (WhatsApp Auto,
+   *  send updated reports, the report message) lives in Lab › Report, so that card is hidden here. */
+  readonly channelsOnly = input(false);
   /** Prefrontal switched WhatsApp Auto off for this lab (the platform console). */
   protected readonly waAutoOff = computed(() => this.waSettings()?.autoEntitled === false);
   readonly waSender = computed(() => waSenderLine(this.waSettings()?.sender));

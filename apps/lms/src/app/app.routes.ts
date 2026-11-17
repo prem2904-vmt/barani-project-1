@@ -15,6 +15,7 @@ import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.l
 import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
 import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
 import { CASESHEET_SHELL_ROUTES, withAppModes } from './features/casesheets/casesheets.routes';
+import { SETTINGS_REHOME_ROUTES } from './features/admin/org/settings-rehome.routes';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
 // KPIs). Deliberately EXCLUDES manage_branch(es): those are read-tier branch
@@ -239,10 +240,10 @@ export const appRoutes: Route[] = withAppModes([
         // The module "coming soon" page; with the case-sheet gate open (+ casesheet_forms_manage) a hub with the MyPrefrontal tile.
         loadComponent: () => import('./features/casesheets/studio/ipd-hub.component').then(m => m.IpdHubComponent)
       },
-      {
-        path: 'admin/pharmacy', canActivate: [adminGuard], data: { moduleId: 'pharmacy' },
-        loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
-      },
+      // Settings re-home: Organization profile / numbers / channels, Billing hosts, credit accounts (Finance), OPD front
+      // desk, IPD alerts and the real Pharmacy settings + drug master (replaces the "coming soon" /admin/pharmacy).
+      // Defined ONCE in features/admin/org/settings-rehome.routes.ts.
+      ...SETTINGS_REHOME_ROUTES,
       {
         path: 'admin/payroll', canActivate: [adminGuard], data: { moduleId: 'payroll' },
         loadComponent: () => import('./features/modules/module-placeholder.component').then(m => m.ModulePlaceholderComponent)
@@ -393,7 +394,7 @@ export const appRoutes: Route[] = withAppModes([
       {
         path: 'admin/billing',
         canActivate: [...routeGuards('/admin/billing')],
-        loadComponent: () => import('./features/admin/billing-config/billing-config.component').then(m => m.BillingConfigComponent)
+        loadComponent: () => import('./features/admin/billing-config/billing-settings.page').then(m => m.BillingSettingsPage)
       },
       {
         path: 'admin/inventory',
@@ -457,11 +458,8 @@ export const appRoutes: Route[] = withAppModes([
         canActivate: [permissionGuard('manage_workflows')],
         loadComponent: () => import('./features/admin/workflow-builder/field-editor.component').then(m => m.FieldEditorComponent)
       },
-      {
-        path: 'setup',
-        canActivate: [...routeGuards('/setup')],
-        loadComponent: () => import('./features/admin/setup-wizard/setup-wizard.component').then(m => m.SetupWizardComponent)
-      },
+      // Top-bar branding (name, logo, mode) is part of the ONE Organization profile now; the old URL keeps working.
+      { path: 'setup', redirectTo: '/admin/org/profile', pathMatch: 'full' },
       {
         path: 'admin/kpis',
         canActivate: [...routeGuards('/admin/kpis')],

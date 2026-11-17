@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ORG_SETTINGS_TABS } from '../../../shared/utils/settings-catalog';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -311,13 +311,17 @@ export class OrganizationSettingsComponent implements OnInit {
   protected readonly theme = inject(ThemeService);
 
   /** Band pill tabs (new design). Classic shows every card, as before. */
-  readonly tabOptions: SegmentedOption<OrgSettingsTab>[] = [
+  private readonly route = inject(ActivatedRoute);
+  /** Settings re-home: `/admin/org/numbers` shows only these tabs (route `data.orgTabs`); the old
+   *  `/admin/organization` has no data and shows all of them, as before. */
+  private readonly onlyTabs = (this.route.snapshot.data?.['orgTabs'] as OrgSettingsTab[] | undefined) ?? null;
+  readonly tabOptions: SegmentedOption<OrgSettingsTab>[] = ([
     { value: 'identity', label: 'Identity' },
     { value: 'patient', label: 'Patient ID' },
     { value: 'sample', label: 'Sample ID' },
     { value: 'order', label: 'Order ID' },
-  ];
-  readonly tab = signal<OrgSettingsTab>('identity');
+  ] as SegmentedOption<OrgSettingsTab>[]).filter(o => !this.onlyTabs || this.onlyTabs.includes(o.value));
+  readonly tab = signal<OrgSettingsTab>(this.onlyTabs?.[0] ?? 'identity');
   private readonly router = inject(Router);
   /** Switch tab and keep it in the URL (`?tab=`, replacing this history
    *  entry) so a reload, a shared link and back all return to it. */
@@ -525,7 +529,7 @@ export class OrganizationSettingsComponent implements OnInit {
     // Deep link: …/organization?tab=<identity|patient|sample|order> (the
     // settings search and Lab settings link straight to a card).
     const t = this.router.parseUrl(this.router.url).queryParams['tab'];
-    if ((ORG_SETTINGS_TABS as readonly string[]).includes(t)) this.tab.set(t as OrgSettingsTab);
+    if ((ORG_SETTINGS_TABS as readonly string[]).includes(t) && (!this.onlyTabs || this.onlyTabs.includes(t))) this.tab.set(t as OrgSettingsTab);
     // Current tenant login handle (OPS-13).
     this.api.get<any>('/api/tenants/current').subscribe({
       next: t => {
