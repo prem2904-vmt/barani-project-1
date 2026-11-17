@@ -221,6 +221,8 @@ test.describe('settings list grids', () => {
     await expect.poll(() => rowCount(page, '.re-main')).toBe(1);
     await vis(page, '.re-main .ag-row .pf-sg-switch').dispatchEvent('click');
     // Save lives in the card's Save bar (shown once something changed).
+    await expect(vis(page, '.re-main [data-testid="role-save"]')).toBeVisible();
+    await shot(page, 'sg-role-editor-dirty');
     // (dispatched: the floating "Bridge nearby" banner can sit over the card's bottom-right corner)
     await vis(page, '.re-main [data-testid="role-save"]').dispatchEvent('click');
     await expect.poll(() => neg.calls.find(c => c.path === '/api/roles/r2/permissions')?.body)
