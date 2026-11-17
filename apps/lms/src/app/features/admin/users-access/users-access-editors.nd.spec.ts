@@ -89,7 +89,9 @@ function hygiene(el: HTMLElement) {
   expect(el.querySelector('select, datalist, code, .mono, .font-mono, .c-green, .c-amber, pf-tile')).toBeNull();
   expect(el.querySelectorAll('input[type="checkbox"]').length).toBe(0);
   expect(/[✕✓✔●↑↓]/.test(el.textContent ?? '')).toBe(false);
-  expect(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(1);
+  // Settings: no band buttons and no violet primary — the page's action is a secondary IN the pane.
+  expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
+  expect(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(0);
 }
 
 describe('Users & Access editors — new design (ND §14: pill = name only)', () => {
@@ -98,11 +100,11 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelectorAll('pf-hero-band .pf-ctx > *').length).toBe(1);
   };
 
-  it('Create user: band + ONE primary; the pill is only the name ("New user" → typed) with a pencil', async () => {
+  it('Create user: Create at the form\'s foot (in the pane, secondary); the pill is only the name ("New user" → typed) with a pencil', async () => {
     const { el, f, c, txt } = render(UserInviteComponent);
-    const primaries = el.querySelectorAll('pf-hero-band .pf-hb__actions .pf-hb-btn--primary');
-    expect(primaries.length).toBe(1);
-    expect(primaries[0].textContent).toContain('Create user');
+    const create = el.querySelectorAll('.pf-band-body .ui-page-foot .pf-btn--secondary');
+    expect(create.length).toBe(1);
+    expect(create[0].textContent).toContain('Create user');
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('New user');
     c.patch({ title: 'Dr.', firstName: 'Priya', fathersName: 'Raman', username: 'DrPriya' });
     f.detectChanges();
@@ -125,7 +127,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('button[class*="--on"], label[class*="--on"], a[class*="--on"]')).toBeNull();
     c.patch({ username: 'drpriya', password: 'secret123' });
     f.detectChanges();
-    expect((el.querySelector('pf-hero-band .pf-hb-btn--primary') as HTMLButtonElement).disabled).toBe(false);
+    expect((el.querySelector('.ui-page-foot .pf-uf-primary') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('Create user: sections are pf-cards with kit fields; title + country code are pf-select', () => {
@@ -135,11 +137,11 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('.pf-uf-phone pf-select')).not.toBeNull();
   });
 
-  it('Edit user: the pill is the full name only; Save changes is the primary; summary strip; sections LEFT, roles pre-switched', () => {
+  it('Edit user: the pill is the full name only; Save in the card\'s Save bar once changed; summary strip; sections LEFT, roles pre-switched', () => {
     const { el, f, c, txt } = render(UserEditComponent, { id: 'u1' });
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Dr. Prem Kumar');
     noFacts(el);
-    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Save changes');
+    expect(el.querySelector('[data-testid="ue-save"]')).toBeNull();   // nothing changed yet
     // Slim summary strip: name, username, status, branches.
     const strip = el.querySelector('.ue-strip')!;
     expect(txt(strip)).toContain('Dr. Prem Kumar');
@@ -156,6 +158,8 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelectorAll('.pf-uf-roles .pf-toggle[aria-checked="true"]').length).toBe(1);
     expect(txt(el.querySelector('[data-testid="ue-perm-note"]'))).toContain('1 of 2 permissions from 1 role');
     hygiene(el);
+    c.patch({ firstName: 'Premnath' }); f.detectChanges();
+    expect(el.querySelector('.ue-main pf-settings-savebar [data-testid="ue-save"]')).not.toBeNull();
   });
 
   it('Edit user: a missing branch / role flags its section; Save stays off', () => {
@@ -165,15 +169,15 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('[data-testid="ue-sec-roles"] .ue-sec__note--err')).not.toBeNull();
   });
 
-  it('Edit user: Reset password + Deactivate are band SECONDARIES that reuse the list\'s confirms', async () => {
+  it('Edit user: Reset password + Deactivate are quiet icons in the summary strip (in the pane) that reuse the list\'s confirms', async () => {
     const confirm = vi.fn(async () => true);
     const { el, f, api } = render(UserEditComponent, { id: 'u1', confirm });
-    const reset = el.querySelector<HTMLButtonElement>('pf-hero-band .pf-ue-reset')!;
-    const active = () => el.querySelector<HTMLButtonElement>('pf-hero-band .pf-ue-active')!;
-    expect(reset.classList.contains('pf-hb-btn--ghost')).toBe(true);
-    expect(active().classList.contains('pf-hb-btn--ghost')).toBe(true);
+    const reset = el.querySelector<HTMLButtonElement>('.ue-strip .pf-ue-reset')!;
+    const active = () => el.querySelector<HTMLButtonElement>('.ue-strip .pf-ue-active')!;
+    expect(reset.classList.contains('pf-rowact--icon')).toBe(true);
+    expect(active().classList.contains('pf-rowact--icon')).toBe(true);
     expect(active().textContent).toContain('Deactivate');
-    expect(el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(1);
+    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
 
     reset.click();
     await new Promise(r => setTimeout(r));
@@ -194,24 +198,26 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
 
   it('Edit user: a cancelled confirm changes nothing', async () => {
     const { el, api } = render(UserEditComponent, { id: 'u1' });
-    el.querySelector<HTMLButtonElement>('pf-hero-band .pf-ue-active')!.click();
+    el.querySelector<HTMLButtonElement>('.ue-strip .pf-ue-active')!.click();
     await new Promise(r => setTimeout(r));
     expect(api.delete).not.toHaveBeenCalled();
-    expect(el.querySelector('pf-hero-band .pf-ue-active')!.textContent).toContain('Deactivate');
+    expect(el.querySelector('.ue-strip .pf-ue-active')!.textContent).toContain('Deactivate');
   });
 
-  it('New role: Test Master frame — band pill finds a permission, ONE primary Create role; name in the summary strip; groups LEFT, permissions grid RIGHT', () => {
+  it('New role: Test Master frame — band pill finds a permission, Save in the card\'s Save bar once named; name in the summary strip; groups LEFT, permissions grid RIGHT', () => {
     const { el, f, c } = render(RoleEditorComponent);
     // The band pill is the permission search (no record chips in the band).
     expect(el.querySelector('pf-hero-band .pf-hb__input')).not.toBeNull();
     expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
-    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Create role');
+    expect(el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
+    expect(el.querySelector('[data-testid="role-save"]')).toBeNull();
     // Role name lives in the slim summary strip.
     const name = el.querySelector<HTMLInputElement>('.re-strip input.pf-re-name')!;
     expect(name).not.toBeNull();
     c.onNameChange('Billing Supervisor');
     f.detectChanges();
     expect(c.newRoleName()).toBe('Billing Supervisor');
+    expect(el.querySelector('.re-main pf-settings-savebar [data-testid="role-save"]')).not.toBeNull();
     expect(el.querySelector('.re-strip')!.textContent).toContain('of');
     // OPD dark build: the Doctor role type is an OPD surface — hidden while OPD is dark.
     expect(el.querySelectorAll('.re-type.pf-seg [role="radio"]').length).toBe(0);
@@ -282,7 +288,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('input.pf-re-name')).toBeNull();
     expect(el.querySelector('.re-strip')!.textContent).toContain('Editing the permissions saves a copy for your organisation only.');
     expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
-    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Save');
+    expect(el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
     hygiene(el);
   });
 
@@ -294,10 +300,11 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
 });
 
 describe('Users & Access list — current rules', () => {
-  it('Noto grid, one primary in the band, no mono count', () => {
+  it('Noto grid, Create user in the card head (no band buttons), no mono count', () => {
     const { el, c } = render(UsersAccessComponent);
     expect(c.gridTheme()).toBeTruthy();
-    expect(el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(1);
+    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
+    expect(el.querySelector('.pf-sg-act')!.textContent).toContain('Create user');
     expect(el.querySelector('.font-mono')).toBeNull();
   });
 

@@ -8,3 +8,6 @@
 .ui-panel .pf-uf-card .pf-card__body { padding: 4px 0 8px; }
 .ui-panel .pf-uf-name-row, .ui-panel .pf-uf-account-row { grid-template-columns: minmax(0, 1fr); }
 .ui-panel .pf-uf-roles { grid-template-columns: minmax(0, 1fr); }
+
+/* Full-page Create user: the action at the form's foot, in the pane (no band buttons in Settings). */
+.ui-page-foot { display: flex; justify-content: flex-end; padding: 16px 0 0; }

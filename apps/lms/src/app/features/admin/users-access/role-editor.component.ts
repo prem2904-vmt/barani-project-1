@@ -15,6 +15,7 @@ import { SG_NARROW_MQ, SG_PHONE_MQ, sgCell, sgGridTheme, sgMedia, sgSwitch } fro
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { PERMISSION_GROUPS, PERMISSION_INFO, ROLE_INFO } from './permission-catalog';
 import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 
@@ -67,6 +68,7 @@ interface PermGroupView {
     ScreenHeaderComponent,
     TouchButtonComponent,
     HeroBandComponent,
+    SettingsSavebarComponent,
     BusyDirective,
     SkeletonFormComponent,
     SkeletonCardComponent,
@@ -90,15 +92,7 @@ interface PermGroupView {
               </button>
             }
           </ng-container>
-          <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
-                    [disabled]="saving() || recordSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
-                    [attr.aria-label]="saving() ? 'Saving' : (editing()?.id ? 'Save' : 'Create role')"
-                    [title]="editing()?.id ? 'Save' : 'Create role'">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-              {{ saving() ? 'Saving…' : (editing()?.id ? 'Save' : 'Create role') }}
-            </button>
-          </ng-container>
+          
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
@@ -210,6 +204,9 @@ interface PermGroupView {
                   <div class="pf-sg-empty"><p class="pf-sg-empty__title re-empty">Nothing matches “{{ search() }}”.</p></div>
                 }
               </div>
+              <!-- Save IN the card, only while something changed (a new role: once it has a name). -->
+              <pf-settings-savebar [dirty]="hasUnsavedChanges() || saving()" [saving]="saving()" [canDiscard]="!!editing()?.id"
+                                   [label]="editing()?.id ? 'Unsaved changes' : 'New role'" saveTestId="role-save" (save)="save()" (discard)="discardGrants()"></pf-settings-savebar>
             </section>
           </div>
         }
@@ -543,6 +540,11 @@ export class RoleEditorComponent implements OnInit, HasUnsavedChanges {
   }
   /** The prompt's Save: same request as the band's, resolves whether it went through. */
   saveChanges(): Promise<boolean> { return this.persist(false); }
+  /** The Save bar's Discard: back to the grants as loaded / last saved. */
+  discardGrants(): void {
+    const ids = this._savedIds();
+    this._grantedIds.set(new Set(ids ? ids.split(',') : []));
+  }
 
   save() { void this.persist(true); }
 

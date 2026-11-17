@@ -82,14 +82,6 @@ interface CreateForm {
         <!-- ND "Editors": band = back · tenant · the ONE primary; the pill is
              the CONTEXT BAR (who is being created, as it is typed). -->
         <pf-hero-band [back]="true" [backTo]="'/admin?section=people'" [customSearch]="true" [contextBar]="true">
-          <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
-                    [disabled]="!canCreate() || saving()" [pfBusy]="saving()" pfBusyLabel="Creating…" (click)="submit()"
-                    [attr.aria-label]="saving() ? 'Creating user' : 'Create user'" title="Create user">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
-              {{ saving() ? 'Creating…' : 'Create user' }}
-            </button>
-          </ng-container>
           <div band-search class="pf-ctx pf-uf-ctx">
             <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
             <span class="pf-ctx__primary pf-uf-ctx__name">
@@ -114,6 +106,11 @@ interface CreateForm {
 
       <div class="pf-band-body">
         <ng-container *ngTemplateOutlet="inviteBody"></ng-container>
+        <!-- Create IN the pane, at the form's foot (owner: no band buttons in Settings). -->
+        <div class="ui-page-foot">
+          <button type="button" class="pf-btn pf-btn--secondary pf-uf-primary press" [disabled]="!canCreate() || saving()"
+                  [pfBusy]="saving()" pfBusyLabel="Creating…" (click)="submit()">{{ saving() ? 'Creating…' : 'Create user' }}</button>
+        </div>
       </div>
     </section>
     }

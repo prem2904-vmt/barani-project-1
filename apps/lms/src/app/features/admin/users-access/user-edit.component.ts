@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal, untracked, ElementRef, viewChild } from '@angular/core';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -57,6 +58,7 @@ interface EditForm {
   selector: 'pf-user-edit',
   standalone: true,
   imports: [
+    SettingsSavebarComponent,
     FormsModule,
     RouterLink,
     ScreenHeaderComponent,
@@ -127,35 +129,6 @@ interface EditForm {
              the CONTEXT BAR (the user being edited as read-only chips). -->
         <pf-hero-band [back]="true" [backTo]="'/admin?section=people'" [customSearch]="true" [contextBar]="true"
                       [backAction]="narrow() && sectionPicked() ? backToSections : null">
-          <ng-container band-actions>
-            <!-- Account actions (owner): the list's row actions + their
-                 confirms, as band secondaries. Icons on phones. -->
-            @if (loaded()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ue-reset press"
-                      [disabled]="accountBusy()" [pfBusy]="accountAction() === 'reset'" pfBusyLabel="Resetting…" (click)="resetPassword()"
-                      aria-label="Reset password" title="Reset password">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
-                Reset password
-              </button>
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ue-active press"
-                      [disabled]="accountBusy()" [pfBusy]="accountAction() === 'active'" pfBusyLabel="Updating…" (click)="toggleActive()"
-                      [attr.aria-label]="isActive() ? 'Deactivate' : 'Reactivate'" [title]="isActive() ? 'Deactivate' : 'Reactivate'">
-                @if (isActive()) {
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>
-                  Deactivate
-                } @else {
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
-                  Reactivate
-                }
-              </button>
-            }
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
-                    [disabled]="!canSave() || saving() || recordSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
-                    [attr.aria-label]="saving() ? 'Saving' : 'Save changes'" title="Save changes">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-              {{ saving() ? 'Saving…' : 'Save changes' }}
-            </button>
-          </ng-container>
           <div band-search class="pf-ctx pf-uf-ctx">
             <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
             <span class="pf-ctx__primary pf-uf-ctx__name">
@@ -195,6 +168,19 @@ interface EditForm {
             <span class="ue-strip__meta" data-testid="ue-branch-summary">{{ scopeSummary() }}</span>
             <span class="pf-card__spacer"></span>
             <span class="ue-strip__meta">{{ permSummary() }}</span>
+            <!-- Account actions IN the pane (owner: no band buttons in Settings) — the list's icons + confirms. -->
+            @if (loaded()) {
+                <button type="button" class="pf-rowact pf-rowact--icon pf-sg-rowact-sm pf-ue-reset press" [disabled]="accountBusy()" [pfBusy]="accountAction() === 'reset'"
+                        (click)="resetPassword()" aria-label="Reset password" title="Reset password">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+                  <span class="pf-rowact__t">Reset password</span>
+                </button>
+                <button type="button" class="pf-rowact pf-rowact--icon pf-sg-rowact-sm pf-ue-active press" [disabled]="accountBusy()" [pfBusy]="accountAction() === 'active'"
+                        (click)="toggleActive()" [attr.aria-label]="isActive() ? 'Deactivate' : 'Reactivate'" [title]="isActive() ? 'Deactivate' : 'Reactivate'">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg>
+                  <span class="pf-rowact__t">{{ isActive() ? 'Deactivate' : 'Reactivate' }}</span>
+                </button>
+              }
           </section>
 
           <div class="pf-sg-panels ue-panels" [class.pf-sg-panels--narrow]="narrow()">
@@ -238,6 +224,8 @@ interface EditForm {
                   @case ('validates') { <ng-container *ngTemplateOutlet="secValidates"></ng-container> }
                 }
               </div>
+              <pf-settings-savebar [dirty]="hasUnsavedChanges()" [saving]="saving()" [canSave]="canSave() && !recordSkeleton()"
+                                   [canDiscard]="false" saveTestId="ue-save" (save)="save()"></pf-settings-savebar>
             </section>
             }
           </div>

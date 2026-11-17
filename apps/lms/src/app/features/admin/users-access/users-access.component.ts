@@ -103,29 +103,7 @@ function rowAction(web: boolean, label: string, icon: string, title: string): HT
         <pf-hero-band [back]="true"
                       [placeholder]="tab() === 'users' ? 'Search users — name, username, email…' : 'Search roles…'"
                       [value]="search()" (valueChange)="onSearch($event)">
-          <ng-container band-actions>
-            @if (tab() === 'users') {
-              <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!panelOpen()" [class.pf-hb-btn--ghost]="panelOpen()" (click)="openInvite()"
-                      (pointerenter)="warmInvite()" (focus)="warmInvite()"
-                      title="Create user" aria-label="Create user">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 5v14"/><path d="M5 12h14"/>
-                </svg>
-                Create user
-              </button>
-            } @else {
-              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openNewRole()"
-                      (pointerenter)="warmRoleEditor()" (focus)="warmRoleEditor()"
-                      title="Create role" aria-label="Create role">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 5v14"/><path d="M5 12h14"/>
-                </svg>
-                Create role
-              </button>
-            }
-          </ng-container>
+          
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
@@ -233,7 +211,29 @@ function rowAction(web: boolean, label: string, icon: string, title: string): HT
           <!-- Hosted: the frame's head already carries the Users | Roles pill (the setting's categories). -->
           <pf-segmented class="pf-ua-tabseg" size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)" aria-label="Users or roles"></pf-segmented>
         }
-      </ng-template>
+            <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+            @if (tab() === 'users') {
+              <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="openInvite()"
+                      (pointerenter)="warmInvite()" (focus)="warmInvite()"
+                      title="Create user" aria-label="Create user">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"/><path d="M5 12h14"/>
+                </svg>
+                Create user
+              </button>
+            } @else {
+              <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="openNewRole()"
+                      (pointerenter)="warmRoleEditor()" (focus)="warmRoleEditor()"
+                      title="Create role" aria-label="Create role">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"/><path d="M5 12h14"/>
+                </svg>
+                Create role
+              </button>
+            }
+    </ng-template>
     </section>
   `,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
