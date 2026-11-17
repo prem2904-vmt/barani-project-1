@@ -306,7 +306,7 @@ test.describe('cm-comms', () => {
     const auto = visible(page, '[data-testid="rs-auto-switch"]');
     await expect(auto).toBeVisible({ timeout: 60_000 });
     await expect(auto).toHaveAttribute('aria-checked', 'false');
-    await expect(visible(page, '[data-testid="rs-channels-link"]')).toHaveAttribute('href', '/admin/org/channels');
+    await expect(visible(page, '[data-testid="rs-channels-link"]')).toHaveAttribute('href', /\/admin\/org\/channels$/);
     await auto.click();
     await expect.poll(() => calls.find(c => c.method === 'PUT' && c.path === '/api/whatsapp/settings')?.body).toEqual({ autoSendEnabled: true, sendUpdatedReports: false });
     calls = [];

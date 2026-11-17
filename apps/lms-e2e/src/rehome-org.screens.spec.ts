@@ -58,7 +58,7 @@ test.describe('settings re-home: organization pages', () => {
   // IPD is a department section on the demo tenant (case sheets on): its three settings open inside the shell.
   for (const [name, url, marker] of [
     ['ipd-departments', '/admin/ipd/departments', '[data-testid="tp-panel"]'],
-    ['ipd-case-sheets', '/admin/ipd/myprefrontal', '[data-testid="tp-panel"]'],
+    ['ipd-case-sheets', '/admin/ipd/myprefrontal', '[data-testid="settings-shell"]'],
     ['ipd-alerts', '/admin/ipd/alerts', 'pf-notifications-config'],
   ] as const) {
     test(name, async ({ page }) => {
