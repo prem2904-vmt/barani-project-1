@@ -29,6 +29,7 @@ export const DEPTS = [
   { id: 'd2', name: 'Biochemistry', code: 'BIO', isActive: true, catalogKey: 'bio' },
   { id: 'd3', name: 'Microbiology', code: 'MIC', isActive: true, catalogKey: 'mic' },
   { id: 'd4', name: 'Serology', code: 'SER', isActive: false, catalogKey: 'ser' },
+  { id: 'd5', name: 'Cytogenetics', code: 'CYTO', isActive: true, catalogKey: null, metadata: '{"labMade":true}' },
 ];
 const TEST = (i: number, name: string, code: string, dept: string, price: number, active = true) => ({
   id: `t${i}`, tenantId: 'tn', name, testCode: code, type: 'individual', flow: 'direct', taxSlab: 0, price, discount: 0,
@@ -91,7 +92,9 @@ test.beforeEach(async ({ page, context }) => {
     if (r.path === '/api/roles/r2/permissions') return ok(['p1', 'p4']);
     switch (r.path) {
       case '/api/tenants/departments': return ok(DEPTS);
-      case '/api/tenants/branches': return ok([{ id: 'b1', name: 'Main', defaultLabCode: 'LAB', isActive: true }]);
+      case '/api/tenants/branches': return ok([{ id: 'b1', name: 'Main', code: 'MAIN', defaultLabCode: 'LAB', isActive: true }, { id: 'b2', name: 'Anna Nagar', code: 'ANN', defaultLabCode: 'ANN', isActive: true }]);
+      case '/api/tenants/lab-spaces': return ok([{ id: 's1', branchId: 'b1', name: 'Microbiology', code: 'MIC', order: 1 }, { id: 's2', branchId: 'b1', name: 'Biochemistry', code: 'BIO', order: 2 }, { id: 's3', branchId: 'b2', name: 'Pathology', code: 'PAT', order: 1 }]);
+      case '/api/tenants/department-space-links': return ok([{ branchId: 'b1', departmentId: 'd3', spaceId: 's1' }, { branchId: 'b1', departmentId: 'd2', spaceId: 's2' }]);
       case '/api/bridges': return ok(BRIDGES);
       case '/api/bridges/nearby': return ok([{ announcementId: 'a1', serialShort: 'PFB-91D0', model: 'Pi 5', version: '1.4.2', lastSeenAt: ago(1) }]);
       case '/api/instruments': return ok(INSTRUMENTS);
@@ -138,7 +141,7 @@ test.describe('settings list grids', () => {
     await expect(vis(page, '.pf-brl__main .ag-row')).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText('Haematology Bridge').locator('visible=true').first()).toBeVisible();
     // Kit styles apply: the main card has a real border radius + background (was raw unstyled text).
-    const radius = await vis(page, '.pf-brl__side, .pf-brl__main .pf-sg-main__body').evaluate(el => getComputedStyle(el).borderTopLeftRadius);
+    const radius = await vis(page, '.pf-brl__main').evaluate(el => getComputedStyle(el).borderTopLeftRadius);
     expect(parseFloat(radius)).toBeGreaterThan(4);
     await expect(vis(page, 'pf-hero-band .pf-hb-btn--primary')).toContainText('Add Bridge');
     await expectSymmetric(page, '.pf-brl__side', '.pf-brl__main');
@@ -275,6 +278,21 @@ test.describe('settings list grids', () => {
     await vis(page, '.pf-rl-form .pf-btn--primary').dispatchEvent('click');
     await expect.poll(() => neg.calls.find(c => c.path === '/api/referral-labs/rl2' && c.method === 'PUT')?.body)
       .toEqual({ name: 'Neuberg Ehrlich', code: 'NEU', contactName: 'Priya', contactPhone: '9840099999', contactEmail: null, address: null, departmentCodesJson: '["BIO"]' });
+    expect(errors, 'no uncaught errors').toEqual([]);
+  });
+
+  test('Departments and lab spaces: tree LEFT, departments grid; a branch shows only its board', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await go(page, '/admin/lab/departments?tab=departments');
+    await expect(vis(page, '.ld-main .ag-row')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('.ld-main .ag-row')).toHaveCount(5);
+    await expectLayout(page, 'lab departments');
+    await shot(page, 'sg-lab-departments');
+    await go(page, '/admin/lab/departments?tab=spaces&branch=b2');
+    await expect(vis(page, '[data-testid="ld-spaces-title"]')).toContainText('Anna Nagar', { timeout: 60_000 });
+    await expect(page.locator('.ld-spaces .pf-lane:visible')).toHaveCount(2);
+    await shot(page, 'sg-lab-spaces-branch');
     expect(errors, 'no uncaught errors').toEqual([]);
   });
 });
