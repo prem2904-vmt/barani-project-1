@@ -20,10 +20,14 @@ import { injectSettingsHosted } from '../utils/settings-host';
 
 export type SgStatus = 'all' | 'active' | 'inactive';
 
-/** True inside the Settings shell: the grid card renders BARE (the shell's card + head frame it). */
+/** BARE grid card inside the Settings shell (coordinator decision 2026-11-17): the SHELL keeps its main card +
+ *  head; the page's grid renders bare inside it. The shell renders the page's `headTools` (count + filter, a
+ *  TemplateRef viewChild every converted page exposes) on the right of ITS card head (684b3a99). */
 export function sgBare(): boolean {
   return injectSettingsHosted();
 }
+
+
 
 /** Test Master's grid theme for the current colour scheme. */
 export function sgGridTheme(): Signal<typeof gridThemeLight> {

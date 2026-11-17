@@ -11,8 +11,7 @@ import { ApiError } from '../../../shared/models/api-response.model';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
-import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
-import { ANALYZER_PAGES } from '../../../shared/settings-grid/page-switch';
+import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
 import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, sgActions, sgActionsCol, sgCell, sgGridTheme, sgMedia, sgStatusWord, sgBare } from '../../../shared/settings-grid/settings-grid';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { bandFilter } from '../../../shared/utils/band-search';
@@ -45,7 +44,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
 @Component({
   selector: 'pf-bridges-list',
   standalone: true,
-  imports: [AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SkeletonTableComponent, SkeletonRowsComponent, BusyDirective, NgTemplateOutlet],
+  imports: [SettingsSiblingsComponent, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, SkeletonRowsComponent, BusyDirective, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
@@ -63,8 +62,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
                 Overview
               </button>
             }
-            <pf-segmented class="pf-brl__switch" size="sm" [options]="pages" value="/admin/bridges"
-                          (valueChange)="goPage($event)" aria-label="Analyzers and bridges"></pf-segmented>
+            <pf-settings-siblings></pf-settings-siblings>
           </ng-container>
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="loading()" [pfBusy]="loading()" pfBusyLabel="Refreshing…"
@@ -215,7 +213,6 @@ export class BridgesListComponent {
   readonly narrow = sgMedia(SG_NARROW_MQ);
   readonly phone = sgMedia(SG_PHONE_MQ);
   readonly sheetOpen = signal(false);
-  readonly pages = ANALYZER_PAGES;
 
   readonly q = signal('');
   readonly rows = signal<BridgeDto[]>([]);
@@ -281,8 +278,6 @@ export class BridgesListComponent {
 
   add() { void this.router.navigate(['/admin/bridges', 'add']); }
   addNearby(announcementId: string) { void this.router.navigate(['/admin/bridges', 'add'], { queryParams: { nearby: announcementId } }); }
-
-  goPage(path: string) { if (path && path !== '/admin/bridges') void this.router.navigateByUrl(path); }
 
   open(b: BridgeDto | undefined) { if (b?.id) void this.router.navigate(['/admin/bridges', b.id]); }
 

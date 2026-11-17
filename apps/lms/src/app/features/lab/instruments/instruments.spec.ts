@@ -72,7 +72,7 @@ describe('Instruments list', () => {
     expect(p.bandInput()).not.toBeNull();
     expect(primaries(p.el)).toBe(1);
     expect(p.el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Add instrument');
-    expect(p.el.querySelector('pf-hero-band pf-segmented')!.textContent).toContain('Bridges');
+    expect(p.el.querySelector('pf-hero-band pf-settings-siblings')).not.toBeNull();
     // Side card LEFT (first), grid card second — like Test Master.
     expect(p.el.querySelector('.pf-sg-panels')!.firstElementChild!.querySelector('.pf-inl__side')).not.toBeNull();
     expect(p.el.querySelector('.pf-inl__main.pf-card .pf-card__icon svg')).not.toBeNull();

@@ -1,8 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { NgTemplateOutlet } from '@angular/common';
-import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
-import { ANALYZER_PAGES } from '../../../shared/settings-grid/page-switch';
+import { SettingsSiblingsComponent } from '../../admin/settings/settings-siblings.component';
 import { SG_ICON, SG_NARROW_MQ, sgActions, sgActionsCol, sgMedia, sgBare } from '../../../shared/settings-grid/settings-grid';
 import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, ModuleRegistry } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -44,7 +43,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
 @Component({
   selector: 'pf-instruments-list',
   standalone: true,
-  imports: [AgGridAngular, RouterLink, NgTemplateOutlet, SegmentedComponent, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
+  imports: [SettingsSiblingsComponent, AgGridAngular, RouterLink, NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
@@ -62,8 +61,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
                 Connect
               </button>
             }
-            <pf-segmented class="pf-inl__switch" size="sm" [options]="pages" value="/admin/instruments"
-                          (valueChange)="goPage($event)" aria-label="Analyzers and bridges"></pf-segmented>
+            <pf-settings-siblings></pf-settings-siblings>
           </ng-container>
           <ng-container band-actions>
             <pf-assistant-button [expanded]="assistantOpen()" (pressed)="assistantOpen.set(!assistantOpen())"></pf-assistant-button>
@@ -215,7 +213,6 @@ export class InstrumentsListComponent {
   /** Narrow widths: the Connect side card is a sheet opened from the band. */
   readonly narrow = sgMedia(SG_NARROW_MQ);
   readonly sheetOpen = signal(false);
-  readonly pages = ANALYZER_PAGES;
 
   readonly isPhone = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
   readonly isCoarse = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
@@ -294,8 +291,6 @@ export class InstrumentsListComponent {
     if (!p.instrumentId) return;
     void this.router.navigate(['/admin/instruments', p.instrumentId], { state: { [MAP_PREFILL_STATE_KEY]: p } });
   }
-
-  goPage(path: string) { if (path && path !== '/admin/instruments') void this.router.navigateByUrl(path); }
 
   open(i: InstrumentDto | undefined) { if (i?.id) void this.router.navigate(['/admin/instruments', i.id]); }
 

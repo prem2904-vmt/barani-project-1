@@ -140,7 +140,7 @@ describe('Bridges list', () => {
     expect(p.el.querySelector('pf-hero-band .pf-hb__input')).not.toBeNull();
     expect(primaries(p.el)).toBe(1);
     expect(p.el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Add Bridge');
-    expect(p.el.querySelector('pf-hero-band pf-segmented')!.textContent).toContain('Analyzers');
+    expect(p.el.querySelector('pf-hero-band pf-settings-siblings')).not.toBeNull();
     // Side card comes FIRST (left), the grid card second — like Test Master.
     const panels = p.el.querySelector('.pf-sg-panels')!;
     expect(panels.firstElementChild!.classList.contains('pf-sg-side')).toBe(true);
