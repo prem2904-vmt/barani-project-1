@@ -536,7 +536,7 @@ type Tab = 'mine' | 'all';
     .pv-body { gap: 16px; }
     /* Tablet: the side card stays, narrower. */
     @media (min-width: 641px) and (max-width: 1023px) {
-      .pv-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); }
+      .pv-body { display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
     }
 
     /* Band filter: neutral segmented, plain tabular counts. */
