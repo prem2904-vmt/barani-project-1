@@ -28,6 +28,9 @@ export interface SettingsCategory {
   pageLabel?: string;
   /** Where it applies ("this branch" / "all branches"): the side-card row's muted note and the main card head's note. */
   scope?: string;
+  /** Run-time tree (SETTINGS_HOST.categories): a heading row, or the heading this row sits under. */
+  heading?: boolean;
+  parent?: string;
 }
 
 /** Lab / OPD / IPD facts the overview resolves live (never hard-coded here). */

@@ -25,6 +25,10 @@ export interface TwoPanelItem {
   icon?: string;
   /** The row opens its own full-screen page (an arrow marks it). */
   external?: boolean;
+  /** A tree heading (e.g. "Lab spaces"): a chevron toggles the rows naming it as `parent`, shown indented under it. */
+  heading?: boolean;
+  /** The heading row this row sits under. */
+  parent?: string;
 }
 
 /** A headed group of rows ("Departments", "Organization"…). */
@@ -98,7 +102,16 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
             <span class="pf-tp__heading" [attr.data-testid]="'tp-group-' + g.key">{{ g.heading }}</span>
           }
           @for (it of g.items; track it.id) {
-            <button type="button" class="pf-tp__item" [class.is-on]="it.id === selected()"
+            @if (it.heading) {
+              <button type="button" class="pf-tp__item pf-tp__item--head" [attr.aria-expanded]="isOpen(it.id)"
+                      [attr.data-testid]="'tp-item-' + it.id" (click)="toggle(it.id)">
+                <svg class="pf-tp__tree" [class.is-open]="isOpen(it.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                <span class="pf-tp__label">{{ it.label }}</span>
+                @if (it.note) { <span class="pf-tp__note pf-num">{{ it.note }}</span> }
+              </button>
+            } @else if (!it.parent || isOpen(it.parent)) {
+            <button type="button" class="pf-tp__item" [class.pf-tp__item--child]="!!it.parent" [class.is-on]="it.id === selected()"
                     [attr.aria-current]="it.id === selected() ? 'true' : null"
                     [attr.aria-pressed]="it.id === selected()"
                     [attr.data-testid]="'tp-item-' + it.id"
@@ -112,6 +125,7 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
               <svg class="pf-tp__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
             </button>
+            }
           }
         }
       </div>
@@ -168,6 +182,10 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
     .pf-tp__label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
     .pf-tp__note { flex: none; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
     .pf-tp__ext { flex: none; color: var(--text-tertiary); }
+    .pf-tp__item--head { gap: 6px; color: var(--text-secondary); }
+    .pf-tp__tree { flex: none; transition: transform 160ms ease; }
+    .pf-tp__tree.is-open { transform: rotate(90deg); }
+    .pf-tp__item--child { padding-left: 30px; }
     .pf-tp__chev { display: none; flex: none; color: var(--text-tertiary); }
 
     @keyframes pf-tp-nav-a { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
@@ -245,6 +263,18 @@ export class TwoPanelComponent {
   readonly hideNav = input(false);
 
   readonly navBack = output<void>();
+  /** Tree headings the person collapsed (all open by default; a heading holding the selected row stays open). */
+  private readonly closed = signal<ReadonlySet<string>>(new Set());
+  isOpen(id: string): boolean {
+    if (!this.closed().has(id)) return true;
+    const sel = this.selected();
+    return this.groups().some((g) => g.items.some((i) => i.id === sel && i.parent === id));
+  }
+  toggle(id: string): void {
+    const next = new Set(this.closed());
+    if (next.has(id)) next.delete(id); else next.add(id);
+    this.closed.set(next);
+  }
 
   readonly pick = output<string>();
   readonly back = output<void>();

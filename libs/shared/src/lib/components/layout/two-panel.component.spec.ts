@@ -86,4 +86,25 @@ describe('pf-two-panel (shared)', () => {
     expect(el.querySelector('.pf-tp__title')).toBeNull();
     expect(el.querySelectorAll('.pf-tp__item').length).toBe(3);
   });
+
+  it('tree rows: a heading toggles its children (indented); a heading holding the selected row stays open', () => {
+    const f = TestBed.createComponent(TwoPanelComponent);
+    f.componentRef.setInput('groups', [{ key: 't', heading: '', items: [
+      { id: 'departments', label: 'Departments' },
+      { id: 'spaces', label: 'Lab spaces', heading: true },
+      { id: 'spaces-b1', label: 'Main', parent: 'spaces' },
+      { id: 'spaces-b2', label: 'Annex', parent: 'spaces' },
+    ] }]);
+    f.componentRef.setInput('selected', 'departments');
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('.pf-tp__item--child').length).toBe(2);
+    el.querySelector<HTMLButtonElement>('[data-testid="tp-item-spaces"]')!.click();
+    f.detectChanges();
+    expect(el.querySelectorAll('.pf-tp__item--child').length).toBe(0);
+    expect(el.querySelector('[data-testid="tp-item-spaces"]')!.getAttribute('aria-expanded')).toBe('false');
+    f.componentRef.setInput('selected', 'spaces-b2');
+    f.detectChanges();
+    expect(el.querySelectorAll('.pf-tp__item--child').length).toBe(2);
+  });
 });

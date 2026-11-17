@@ -128,7 +128,7 @@ export class SettingsShellComponent implements OnDestroy {
     if (!l) return [];
     // A page that knows its sections only at run time (alerts by module) lists them itself.
     const dyn = this.host.categories();
-    if (dyn?.length) return dyn.map((c) => ({ id: c.id, label: c.label, path: this.parsed().path, query: { tab: c.id }, scope: c.note }));
+    if (dyn?.length) return dyn.map((c) => ({ id: c.id, label: c.label, path: this.parsed().path, query: { tab: c.id }, scope: c.note, heading: c.heading, parent: c.parent }));
     // Full-screen pages are not hosted: they are the band's page switch, never a category row here.
     return this.access.visibleCategories(l.item).filter((c) => !isFullScreenSettingsPath(categoryPath(l.item, c)));
   });
@@ -141,7 +141,7 @@ export class SettingsShellComponent implements OnDestroy {
     // One category: ONE main card (no side card) headed by the setting itself — the SAME outlet, so the page is never
     // re-created when a page's run-time sections arrive.
     if (this.single()) return [{ key: l.item.id, heading: l.item.label, items: [{ id: SINGLE, label: l.item.label }] }];
-    return [{ key: l.item.id, heading: l.item.label, items: this.cats().map((c) => ({ id: c.id, label: c.label, note: c.scope })) }];
+    return [{ key: l.item.id, heading: l.item.label, items: this.cats().map((c) => ({ id: c.id, label: c.label, note: c.scope, heading: (c as { heading?: boolean }).heading, parent: (c as { parent?: string }).parent })) }];
   });
 
   /** Wide: the URL's category, else the first. Phone: only what the URL names. */
