@@ -57,20 +57,7 @@ const EMPTY: LabDraft = {
         <!-- Test Master frame: search in the band pill; "Add referral lab" is the ONE primary. -->
         <pf-hero-band [back]="true" placeholder="Search referral labs — name, code, contact, department…"
                       [value]="q()" (valueChange)="q.set($event)">
-          <ng-container band-actions>
-            <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!formOpen()"
-                    [class.pf-hb-btn--ghost]="formOpen()" (click)="toggleForm()"
-                    [attr.aria-label]="formOpen() ? 'Cancel' : 'Add referral lab'">
-              @if (formOpen()) {
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              } @else {
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              }
-              {{ formOpen() ? 'Cancel' : 'Add referral lab' }}
-            </button>
-          </ng-container>
+          
           <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
         </pf-hero-band>
       }
@@ -171,6 +158,18 @@ const EMPTY: LabDraft = {
               <span class="pf-sg-count pf-num">{{ visibleLabs().length }} {{ visibleLabs().length === 1 ? 'lab' : 'labs' }}</span>
               <pf-segmented class="pf-sg-status-filter" size="sm" [options]="statusOptions()" [value]="status()"
                             (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+          <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+            <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="toggleForm()"
+                    [attr.aria-label]="formOpen() ? 'Cancel' : 'Add referral lab'">
+              @if (formOpen()) {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              } @else {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              }
+              {{ formOpen() ? 'Cancel' : 'Add referral lab' }}
+            </button>
     </ng-template>
   `,
   styles: [`

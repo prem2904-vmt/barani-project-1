@@ -114,14 +114,14 @@ describe('ND audit D — Branches', () => {
 
   it('ONE primary: "Add branch" in the band; while the form is open the band turns Cancel and "Create branch" is the primary', () => {
     const p = render();
-    expect(primaries(p.el)).toBe(1);
+    expect(primaries(p.el)).toBe(0);   // Settings: no violet primary — the action is a secondary in the pane
     p.cmp.toggleNewBranch(); p.f.detectChanges();
     expect(primaries(p.el)).toBe(1);
     const form = p.el.querySelector('.pf-br-new.pf-card')!;
     expect(form.querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
     expect(form.querySelectorAll('input.pf-input').length).toBe(4);
     expect(form.querySelector('.pf-btn--primary')!.textContent).toContain('Create branch');
-    expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
+    expect(p.actions()[0].classList.contains('pf-sg-act')).toBe(true);
   });
 
   it('branches grid: full names (wrap, never truncated); no sub-branch section; no × / → glyphs; PF Box under the name', () => {
@@ -150,7 +150,7 @@ describe('ND audit D — Vendors', () => {
 
   it('ONE primary (band "Add vendor"); row actions are kit .pf-rowact (text on web, quiet icons for the rest) in a Test Master grid', () => {
     const p = render();
-    expect(primaries(p.el)).toBe(1);
+    expect(primaries(p.el)).toBe(0);   // Settings: no violet primary — the action is a secondary in the pane
     expect(p.el.querySelector('.pf-sg-main ag-grid-angular')).not.toBeNull();
     const cell = p.cmp.colDefs().find((c: any) => c.colId === 'actions').cellRenderer({ data: vendors[0] }) as HTMLElement;
     const acts = cell.querySelectorAll('.pf-rowact');
@@ -159,7 +159,7 @@ describe('ND audit D — Vendors', () => {
     expect(Array.from(acts).every(a => !!a.querySelector('svg[aria-hidden="true"]'))).toBe(true);
     p.cmp.openTopUp(vendors[0]); p.f.detectChanges();
     expect(p.el.querySelector('.pf-sg-side .pf-topup')).not.toBeNull();
-    expect(primaries(p.el)).toBe(1);
+    expect(primaries(p.el)).toBe(0);   // Settings: no violet primary — the action is a secondary in the pane
     hygiene(p.el);
   });
 
@@ -171,7 +171,7 @@ describe('ND audit D — Vendors', () => {
     expect(form.querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
     expect(form.querySelectorAll('input.pf-input').length).toBeGreaterThanOrEqual(8);
     expect(primaries(p.el)).toBe(1);
-    expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
+    expect(p.actions()[0].classList.contains('pf-sg-act')).toBe(true);
   });
 
   it('palette: status = neutral pill, in-credit = violet, due = warning tone, filter = Test Master segmented in the card head', () => {
@@ -199,7 +199,7 @@ describe('ND audit D — Referral labs', () => {
 
   it('ONE primary; Edit / Deactivate are quiet same-size icon .pf-rowact; code column tabular; departments as neutral chips', () => {
     const p = render();
-    expect(primaries(p.el)).toBe(1);
+    expect(primaries(p.el)).toBe(0);   // Settings: no violet primary — the action is a secondary in the pane
     const cols = p.cmp.colDefs();
     const acts = cols.find((c: any) => c.colId === 'actions').cellRenderer({ data: labs[0] }) as HTMLElement;
     const btns = Array.from(acts.querySelectorAll('.pf-rowact'));
@@ -247,7 +247,7 @@ describe('ND audit D — Referring network', () => {
     p.cmp.setHospitalFilter('h1'); p.f.detectChanges();
     expect(acts(doctors[0])).toEqual(['Edit', 'Remove', 'Deactivate']);
     expect(p.cmp.doctorActions(doctors[0]).every((a: any) => a.icon)).toBe(true);
-    expect(primaries(p.el)).toBe(1);
+    expect(primaries(p.el)).toBe(0);   // Settings: no violet primary — the action is a secondary in the pane
     hygiene(p.el);
   });
 
@@ -388,7 +388,7 @@ describe('ND audit D — Home-collection agents', () => {
 
   it('agents grid: full name (wraps, no truncate), weight column, Edit / Remove kit .pf-rowact; ONE primary', () => {
     const p = render();
-    expect(primaries(p.el)).toBe(1);
+    expect(primaries(p.el)).toBe(0);   // Settings: no violet primary — the action is a secondary in the pane
     const cols = p.cmp.colDefs();
     const name = cols.find((c: any) => c.colId === 'agent').cellRenderer({ data: agents[0] }) as HTMLElement;
     expect(name.textContent).toContain('Karthikeyan Subramaniam Ramasamy');
@@ -414,7 +414,7 @@ describe('ND audit D — Home-collection agents', () => {
     expect(form.querySelectorAll('.pf-seg [role="radio"]').length).toBe(2);
     expect(form.querySelector('input.pf-input')).not.toBeNull();
     expect(primaries(p.el)).toBe(1);
-    expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
+    expect(p.actions()[0].classList.contains('pf-sg-act')).toBe(true);
     hygiene(p.el);
   });
 });

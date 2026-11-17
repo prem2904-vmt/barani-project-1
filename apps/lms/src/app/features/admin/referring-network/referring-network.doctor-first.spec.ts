@@ -83,7 +83,7 @@ describe('Referring network — doctor-first screen', () => {
     expect(chips.textContent).toContain('Apollo Hospitals');
     // Independent doctors: the hospital filter offers them.
     expect(p.cmp.hospitalFilterOptions().some((o: any) => o.value === NO_HOSPITAL)).toBe(true);
-    expect(primaries(p.el)).toBe(1);
+    expect(primaries(p.el)).toBe(0);   // Settings: the action is a secondary in the pane
     hygiene(p.el);
   });
 
@@ -102,9 +102,9 @@ describe('Referring network — doctor-first screen', () => {
     p.cmp.setHospitalFilter(ALL_HOSPITALS);
     p.type('kauvery');                       // band search covers the hospitals column
     expect(p.cmp.gridDoctors().map((d: any) => d.id)).toEqual(['d1']);
-    // The view's ONE primary is Add doctor.
+    // The view's action is Add doctor, in the card head (no band buttons in Settings).
     expect(p.actions().map(b => b.textContent?.trim())).toEqual(['Add doctor']);
-    expect(primaries(p.el)).toBe(1);
+    expect(primaries(p.el)).toBe(0);
     hygiene(p.el);
   });
 

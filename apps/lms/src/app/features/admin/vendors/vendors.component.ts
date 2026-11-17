@@ -101,22 +101,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
              vendor" is the ONE primary (a quiet Cancel while its form is open). -->
         <pf-hero-band [back]="true" placeholder="Search credit accounts — name, code, contact, GSTIN…"
                       [value]="q()" (valueChange)="q.set($event)">
-          <ng-container band-actions>
-            @if (showSetup()) {
-            <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!newVendorOpen()"
-                    [class.pf-hb-btn--ghost]="newVendorOpen()" (click)="toggleNewVendor()"
-                    [attr.aria-label]="newVendorOpen() ? 'Cancel new vendor' : 'Add vendor'">
-              @if (newVendorOpen()) {
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              } @else {
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              }
-              {{ newVendorOpen() ? 'Cancel' : 'Add vendor' }}
-            </button>
-            }
-          </ng-container>
+          
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
@@ -343,6 +328,20 @@ const EMPTY_DRAFT: NewVendorDraft = {
               <span class="pf-sg-count pf-num">{{ visibleVendors().length }} {{ visibleVendors().length === 1 ? 'account' : 'accounts' }}</span>
               <pf-segmented class="pf-sg-status-filter pf-vn-seg" size="sm" [options]="statusOptions()" [value]="status()"
                             (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+          <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+            @if (showSetup()) {
+            <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="toggleNewVendor()"
+                    [attr.aria-label]="newVendorOpen() ? 'Cancel new vendor' : 'Add vendor'">
+              @if (newVendorOpen()) {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              } @else {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              }
+              {{ newVendorOpen() ? 'Cancel' : 'Add vendor' }}
+            </button>
+            }
     </ng-template>
   `,
   styles: [`

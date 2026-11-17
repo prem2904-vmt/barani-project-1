@@ -74,29 +74,7 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
                       [placeholder]="view() === 'hospitals' ? 'Search hospitals — name, code, phone, address…' : 'Search doctors — name, hospital, department, phone…'"
                       [value]="view() === 'hospitals' ? hospitalSearch() : doctorSearch()"
                       (valueChange)="onBandSearch($event)">
-          <ng-container band-actions>
-            <!-- While an editor modal is open its footer Save is the ONE
-                 primary: this steps down (secondary, disabled) behind it. -->
-            @if (view() === 'hospitals') {
-              <button type="button" class="pf-hb-btn press pf-rn-add"
-                      [class.pf-hb-btn--primary]="!editorOpen()" [class.pf-hb-btn--ghost]="editorOpen()"
-                      [disabled]="editorOpen()" (click)="openHospitalEditor(null)"
-                      aria-label="Add hospital">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                Add hospital
-              </button>
-            } @else {
-              <button type="button" class="pf-hb-btn press pf-rn-add-doc"
-                      [class.pf-hb-btn--primary]="!editorOpen()" [class.pf-hb-btn--ghost]="editorOpen()"
-                      [disabled]="editorOpen()" (click)="openDoctorEditor(null, filterHospital()?.id ?? null)"
-                      aria-label="Add doctor">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                Add doctor
-              </button>
-            }
-          </ng-container>
+          
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
@@ -168,7 +146,26 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
                       (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
         <pf-segmented class="pf-rn-viewseg" size="sm" [options]="viewOptions()" [value]="view()"
                       (valueChange)="setView($event)" aria-label="Doctors or hospitals"></pf-segmented>
-      </ng-template>
+            <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+            
+            @if (view() === 'hospitals') {
+              <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press pf-rn-add"
+                      [disabled]="editorOpen()" (click)="openHospitalEditor(null)"
+                      aria-label="Add hospital">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Add hospital
+              </button>
+            } @else {
+              <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press pf-rn-add-doc"
+                      [disabled]="editorOpen()" (click)="openDoctorEditor(null, filterHospital()?.id ?? null)"
+                      aria-label="Add doctor">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Add doctor
+              </button>
+            }
+    </ng-template>
 
       <!-- ── Hospital editor modal ─────────────────────────────── -->
       @if (hospitalEditor(); as he) {

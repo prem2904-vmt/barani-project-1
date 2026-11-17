@@ -43,20 +43,7 @@ interface GstRow { branchId: string; gstin: string; }
              "Add branch" rides the band's actions. -->
         <pf-hero-band [back]="true" placeholder="Search branches…"
                       [value]="q()" (valueChange)="q.set($event)">
-          <ng-container band-actions>
-            <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!newBranchOpen()"
-                    [class.pf-hb-btn--ghost]="newBranchOpen()" (click)="toggleNewBranch()"
-                    [attr.aria-label]="newBranchOpen() ? 'Cancel new branch' : 'Add branch'">
-              @if (newBranchOpen()) {
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              } @else {
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              }
-              {{ newBranchOpen() ? 'Cancel' : 'Add branch' }}
-            </button>
-          </ng-container>
+          
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
@@ -128,6 +115,18 @@ interface GstRow { branchId: string; gstin: string; }
     <ng-template #headToolsTpl>
       <span class="pf-sg-count pf-num">{{ gridBranches().length }} {{ gridBranches().length === 1 ? 'branch' : 'branches' }}</span>
       <pf-segmented class="pf-sg-status-filter" size="sm" [options]="statusOptions()" [value]="status()" (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+          <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+            <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="toggleNewBranch()"
+                    [attr.aria-label]="newBranchOpen() ? 'Cancel new branch' : 'Add branch'">
+              @if (newBranchOpen()) {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              } @else {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              }
+              {{ newBranchOpen() ? 'Cancel' : 'Add branch' }}
+            </button>
     </ng-template>
   `,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],

@@ -72,18 +72,7 @@ export const LAB_DEPARTMENTS_TABS: readonly LabDepartmentsTab[] = ['departments'
             }
           </ng-container>
           @if (tab() === 'departments') {
-            <ng-container band-actions>
-              <button type="button" class="pf-hb-btn press" data-testid="ld-add"
-                      [class.pf-hb-btn--primary]="!addOpen()" [class.pf-hb-btn--ghost]="addOpen()"
-                      (click)="toggleAdd()" [attr.aria-label]="addOpen() ? 'Cancel new department' : 'Add department'">
-                @if (addOpen()) {
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-                } @else {
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                }
-                {{ addOpen() ? 'Cancel' : 'Add department' }}
-              </button>
-            </ng-container>
+            
           }
         </pf-hero-band>
       }
@@ -240,6 +229,16 @@ export const LAB_DEPARTMENTS_TABS: readonly LabDepartmentsTab[] = ['departments'
       <span class="pf-sg-count pf-num">{{ visibleDepartments().length }} {{ visibleDepartments().length === 1 ? 'department' : 'departments' }}</span>
       <pf-segmented class="pf-sg-status-filter" size="sm" [options]="statusOptions()" [value]="status()"
                     (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+          <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+              <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" data-testid="ld-add"
+                      (click)="toggleAdd()" [attr.aria-label]="addOpen() ? 'Cancel new department' : 'Add department'">
+                @if (addOpen()) {
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                } @else {
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                }
+                {{ addOpen() ? 'Cancel' : 'Add department' }}
+              </button>
     </ng-template>
     <ng-template #spaceTools>
       @if (selectedBranch(); as b) {

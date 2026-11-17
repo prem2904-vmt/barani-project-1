@@ -191,21 +191,19 @@ describe('Admin band — Referring network', () => {
     expect(p.cmp.hospitalColDefs().map((c: any) => c.colId)).toEqual(['name', 'code', 'doctors', 'phone', 'gstin', 'status', 'actions']);
   });
 
-  it('an open editor modal owns the ONE primary: the band "Add hospital" steps down + disables', async () => {
+  it('an open editor modal owns the ONE primary: the in-pane "Add hospital" (secondary) disables behind it', async () => {
     const p = await hospitalsView();
-    const add = () => p.el.querySelector<HTMLButtonElement>('pf-hero-band .pf-rn-add')!;
-    expect(add().classList.contains('pf-hb-btn--primary')).toBe(true);
+    const add = () => p.el.querySelector<HTMLButtonElement>('.pf-rn-add')!;
+    expect(add().classList.contains('pf-sg-act')).toBe(true);
     add().click();
     p.f.detectChanges();
-    expect(add().classList.contains('pf-hb-btn--primary')).toBe(false);
-    expect(add().classList.contains('pf-hb-btn--ghost')).toBe(true);
     expect(add().disabled).toBe(true);
     const primaries = p.el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary');
     expect(primaries.length).toBe(1);
     expect(primaries[0].closest('.pf-rn-modal__ftr')).not.toBeNull();
     p.cmp.closeHospitalEditor();
     p.f.detectChanges();
-    expect(add().classList.contains('pf-hb-btn--primary')).toBe(true);
+    expect(add().disabled).toBe(false);
   });
 
   it('"Add hospital" in the band opens the hospital editor', async () => {

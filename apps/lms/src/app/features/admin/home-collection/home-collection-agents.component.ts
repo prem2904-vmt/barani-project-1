@@ -65,20 +65,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
         <!-- Band pill: agent search (name, pincodes, area); "Add agent" is the ONE primary. -->
         <pf-hero-band [back]="true" placeholder="Search agents — name, pincode, area…"
                       [value]="q()" (valueChange)="q.set($event)">
-          <ng-container band-actions>
-            <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!formOpen()"
-                    [class.pf-hb-btn--ghost]="formOpen()" (click)="toggleForm()"
-                    [attr.aria-label]="formOpen() ? 'Cancel' : 'Add agent'">
-              @if (formOpen()) {
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              } @else {
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              }
-              {{ formOpen() ? 'Cancel' : 'Add agent' }}
-            </button>
-          </ng-container>
+          
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
@@ -195,6 +182,18 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
     <!-- The grid card's head tools (count): exposed so a host can project them into its own head. -->
     <ng-template #headTools>
       <span class="pf-sg-count pf-num">{{ visibleAgents().length }} {{ visibleAgents().length === 1 ? 'agent' : 'agents' }}</span>
+          <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+            <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="toggleForm()"
+                    [attr.aria-label]="formOpen() ? 'Cancel' : 'Add agent'">
+              @if (formOpen()) {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              } @else {
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              }
+              {{ formOpen() ? 'Cancel' : 'Add agent' }}
+            </button>
     </ng-template>
   `
 })
