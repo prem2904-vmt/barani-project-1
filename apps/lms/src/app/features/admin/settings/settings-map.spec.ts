@@ -1,6 +1,6 @@
 import {
   LEGACY_SECTION, SETTINGS_GROUPS, SETTINGS_PATHS as P, SETTINGS_SECTIONS, allSettingsPaths, categoryPath, locateSettings,
-  rehome, rehomeHref, settingsParents,
+  categoriesFromPage, rehome, rehomeHref, settingsParents,
 } from './settings-map';
 import { ROUTE_ACCESS } from '../../../core/auth/route-access';
 import { SETTINGS_SHELL_CHILDREN } from './settings.routes';
@@ -122,7 +122,7 @@ describe('Old links keep working — they all land on a new home', () => {
     expect(rehome('/admin/lab-settings', { tab: 'queues' })).toEqual({ path: P.labCollection, query: { tab: 'queues' } });
     expect(rehome('/admin/lab-settings', { tab: 'collection' })).toEqual({ path: P.labCollection, query: { tab: 'collection' } });
     expect(rehome('/admin/lab-settings', { tab: 'rules' })).toEqual({ path: P.labResults, query: { tab: 'rules' } });
-    expect(rehome('/admin/lab-settings', { tab: 'report' })).toEqual({ path: P.reportNotes, query: { tab: 'report' } });
+    expect(rehome('/admin/lab-settings', { tab: 'report' })).toEqual({ path: P.reportOptions, query: { tab: 'notes' } });
     expect(rehome('/admin/lab-settings')?.path).toBe(P.labCollection);
   });
 
@@ -183,5 +183,21 @@ describe('Settings catalog — search finds every setting at its new home', () =
     expect(e.href).toBe(P.labCollection);
     expect(e.section).toContain('Lab');
     expect(e.section).toContain('Collection and queues');
+  });
+});
+
+describe('Categories from a page list (the Lab pages\' LAB_PAGES shape)', () => {
+  it('each id becomes a category on the page path with ?tab=<id>', () => {
+    const cats = categoriesFromPage({ path: '/admin/lab/results', categories: [{ id: 'validation', label: 'Validation' }, { id: 'micro', label: 'Microbiology' }] });
+    expect(cats).toEqual([
+      { id: 'validation', label: 'Validation', path: '/admin/lab/results', query: { tab: 'validation' } },
+      { id: 'micro', label: 'Microbiology', path: '/admin/lab/results', query: { tab: 'micro' } },
+    ]);
+  });
+
+  it('Report design lists Report design, Technician notes and Report sending (report-options ?tab=notes|sending)', () => {
+    const rd = SETTINGS_SECTIONS.flatMap((s) => s.items).find((i) => i.id === 'lab-report')!;
+    const tail = rd.categories.slice(-2).map((c) => [c.path, c.query?.['tab']]);
+    expect(tail).toEqual([['/admin/lab/report-options', 'notes'], ['/admin/lab/report-options', 'sending']]);
   });
 });

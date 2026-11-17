@@ -91,7 +91,7 @@ export const SETTINGS_SHELL_CHILDREN: Routes = [
   page(P.labSampleNumbers, organization),                             // placeholder: Organization › Sample ID tab
   page(P.tests, tests),
   page(P.reports, reportTemplate, { leave: true }),
-  page(P.reportNotes, labSettings),                                   // placeholder: Lab settings › Report tab
+  page(P.reportOptions, labSettings),                                 // placeholder: Lab settings › Report tab (notes); repoint to the Lab agent's page
   page(P.labCollection, labSettings),                                 // placeholder: Lab settings › Collection / Queues tabs
   page(P.labResults, labSettings),                                    // placeholder: Lab settings › Rules tab
   page(P.microbiology, culture),

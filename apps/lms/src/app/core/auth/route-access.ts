@@ -193,7 +193,7 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // ── Settings re-home (2026-11-17): the new homes carry EXACTLY the gate of the screen behind them today ──
   '/admin/lab/departments':       { perms: ['manage_branches'] },
   '/admin/lab/sample-numbers':    { perms: ['manage_tenant'] },
-  '/admin/reports/notes':         { perms: ['manage_lab_settings'] },
+  '/admin/lab/report-options':         { perms: ['manage_lab_settings'] },
   '/admin/lab/collection':        { perms: ['manage_lab_settings'] },
   '/admin/lab/results':           { perms: ['manage_lab_settings'] },
   '/admin/lab/outsourcing':       { perms: TEST_MASTER_PERMS },

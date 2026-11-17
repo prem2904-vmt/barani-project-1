@@ -799,7 +799,7 @@ export class LabSettingsComponent implements OnInit {
   ];
   readonly tab = signal<LabSettingsTab>('collection');
   protected readonly hosted = injectSettingsHosted();
-  private readonly followTab = bindTabQuery(LAB_SETTINGS_TABS, (t) => this.tab.set(t));
+  private readonly followTab = bindTabQuery([...LAB_SETTINGS_TABS, 'notes'] as const, (t) => this.tab.set(t === 'notes' ? 'report' : t));
 
   // ── Loading feedback (PF-PATTERN "Loading feedback") ──
   /** First load: skeleton cards until the branch config answers (held, no flash). */

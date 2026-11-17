@@ -42,7 +42,7 @@ exports[`non-OPD routes are exactly today's lab set > matches the snapshot 1`] =
   "admin/lab/sample-numbers",
   "admin/tests",
   "admin/reports",
-  "admin/reports/notes",
+  "admin/lab/report-options",
   "admin/lab/collection",
   "admin/lab/results",
   "admin/microbiology",

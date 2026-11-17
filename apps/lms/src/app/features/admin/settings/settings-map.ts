@@ -103,7 +103,7 @@ export const SETTINGS_PATHS = {
   labSampleNumbers: '/admin/lab/sample-numbers',
   tests: '/admin/tests',
   reports: '/admin/reports',
-  reportNotes: '/admin/reports/notes',
+  reportOptions: '/admin/lab/report-options',
   labCollection: '/admin/lab/collection',
   labResults: '/admin/lab/results',
   labOutsourcing: '/admin/lab/outsourcing',
@@ -187,7 +187,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'table', label: 'Results table', query: { tab: 'table' } },
           { id: 'sequence', label: 'Sequencing', query: { tab: 'sequence' } },
           { id: 'footer', label: 'Footer', query: { tab: 'footer' } },
-          { id: 'notes', label: 'Technician notes', path: P.reportNotes, query: { tab: 'report' } },
+          { id: 'notes', label: 'Technician notes', path: P.reportOptions, query: { tab: 'notes' } },
+          { id: 'sending', label: 'Report sending', path: P.reportOptions, query: { tab: 'sending' } },
         ] },
       { id: 'lab-collection', label: 'Collection and queues', path: P.labCollection, iconPath: ICON.queue,
         blurb: 'Queue focus, auto-assign per department, supervisor claim.',
@@ -405,6 +406,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
 
 // ───────────────────────────── Lookups ─────────────────────────────
 
+/**
+ * Categories from a page list (`{ path, categories: [{ id, label }] }`, every page reading `?tab=<id>`) — the shape the
+ * Lab pages export as LAB_PAGES. A setting can spread `categoriesFromPage(page)` instead of listing them by hand.
+ */
+export function categoriesFromPage(page: { path: string; categories: ReadonlyArray<{ id: string; label: string }> }): SettingsCategory[] {
+  return page.categories.map((c) => ({ id: c.id, label: c.label, path: page.path, query: { tab: c.id } }));
+}
+
 /** Where a category links: its own path, or the setting's, plus the view query. */
 export function categoryTarget(item: SettingsItem, cat: SettingsCategory): { path: string; query: Record<string, string> } {
   return { path: cat.path ?? item.path, query: { ...(cat.query ?? {}) } };
@@ -517,7 +526,7 @@ export function rehome(path: string, query: Readonly<Record<string, string | nul
       switch (tab) {
         case 'queues': return { path: P.labCollection, query: keep({ tab: 'queues' }) };
         case 'rules': return { path: P.labResults, query: keep({ tab: 'rules' }) };
-        case 'report': return { path: P.reportNotes, query: keep({ tab: 'report' }) };
+        case 'report': return { path: P.reportOptions, query: keep({ tab: 'notes' }) };
         default: return { path: P.labCollection, query: keep({ tab: 'collection' }) };
       }
     case '/admin/organization':
