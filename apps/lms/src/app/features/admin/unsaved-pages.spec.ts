@@ -89,14 +89,14 @@ describe('Message channels and Front desk ask before they are left', () => {
     expect(await cp.saveChanges.call(self)).toBe(false);
   });
 
-  it('Front desk: booking settings dirty against the loaded copy (config + open hours)', () => {
+  it('Front desk: unsaved = the booking settings differ from the loaded copy; Save from the prompt posts them', async () => {
     const ap = AppointmentsConfigComponent.prototype as any;
-    const self: any = { _cfg: signal({ queueMode: 'token_queue' }), _startTime: signal('09:00'), _endTime: signal('17:00'), savedJson: signal<string | null>(null) };
-    self.snapshot = ap.snapshot.bind(self);
-    expect(ap.hasUnsavedChanges.call(self)).toBe(false);         // not loaded yet
-    ap.markSaved.call(self);
+    const self: any = { dirty: signal(false) };
     expect(ap.hasUnsavedChanges.call(self)).toBe(false);
-    self._endTime.set('18:00');
+    self.dirty.set(true);
     expect(ap.hasUnsavedChanges.call(self)).toBe(true);
+    self.post = vi.fn(async () => true);
+    expect(await ap.saveChanges.call(self)).toBe(true);
+    expect(self.post).toHaveBeenCalled();
   });
 });
