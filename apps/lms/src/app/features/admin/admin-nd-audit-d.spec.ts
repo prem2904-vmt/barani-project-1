@@ -149,34 +149,41 @@ describe('ND audit D — Vendors', () => {
     providers: [provideHttpClient()],
   });
 
-  it('ONE primary (band "Add vendor"); per-vendor actions are .pf-rowact text buttons with icons for touch', () => {
+  it('ONE primary (band "Add vendor"); row actions are kit .pf-rowact (text on web, quiet icons for the rest) in a Test Master grid', () => {
     const p = render();
     expect(primaries(p.el)).toBe(1);
-    const acts = p.el.querySelectorAll('.pf-vn-card')[0].querySelectorAll('.pf-vendor__actions .pf-rowact');
+    expect(p.el.querySelector('.pf-sg-main ag-grid-angular')).not.toBeNull();
+    const cell = p.cmp.colDefs().find((c: any) => c.colId === 'actions').cellRenderer({ data: vendors[0] }) as HTMLElement;
+    const acts = cell.querySelectorAll('.pf-rowact');
     expect(Array.from(acts).map(a => a.querySelector('.pf-rowact__t')!.textContent!.trim()))
-      .toEqual(['Top up', 'Record payment', 'Email statement', 'View history', 'Deactivate']);
+      .toEqual(['Top up', 'Record payment', 'Email statement', 'View history', 'Edit', 'Deactivate']);
     expect(Array.from(acts).every(a => !!a.querySelector('svg[aria-hidden="true"]'))).toBe(true);
     p.cmp.openTopUp(vendors[0]); p.f.detectChanges();
+    expect(p.el.querySelector('.pf-sg-side .pf-topup')).not.toBeNull();
     expect(primaries(p.el)).toBe(1);
     hygiene(p.el);
   });
 
-  it('new-vendor editor = kit card with kit fields; the band button becomes a quiet Cancel', () => {
+  it('new-vendor editor = kit side card (LEFT) with kit fields; the band button becomes a quiet Cancel', () => {
     const p = render();
     p.cmp.toggleNewVendor(); p.f.detectChanges();
-    const form = p.el.querySelector('.pf-vn-new.pf-card')!;
+    const form = p.el.querySelector('.pf-sg-side.pf-card')!;
+    expect(p.el.querySelector('.pf-sg-panels')!.firstElementChild).toBe(form);
     expect(form.querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
     expect(form.querySelectorAll('input.pf-input').length).toBeGreaterThanOrEqual(8);
     expect(primaries(p.el)).toBe(1);
     expect(p.actions()[0].classList.contains('pf-hb-btn--ghost')).toBe(true);
   });
 
-  it('palette: code / inactive = neutral chips, in-credit = violet (never green), filter = neutral pf-seg', () => {
+  it('palette: status = neutral pill, in-credit = violet, due = warning tone, filter = Test Master segmented in the card head', () => {
     const p = render();
-    const chips = p.el.querySelectorAll('.pf-vendor__code.pf-chip');
-    expect(chips.length).toBe(3);
-    expect(p.el.querySelector('.pf-vendor__bal-amt--credit')).not.toBeNull();
-    expect(p.tools()!.querySelectorAll('.pf-seg [role="radio"]').length).toBe(3);
+    const out = p.cmp.colDefs().find((c: any) => c.colId === 'outstanding').cellRenderer;
+    expect((out({ data: vendors[0] }) as HTMLElement).querySelector('.pf-sg-tone--credit')!.textContent).toContain('in credit');
+    expect((out({ data: { ...vendors[0], outstanding: 3 } }) as HTMLElement).querySelector('.pf-sg-tone--warn')!.textContent).toContain('due');
+    expect((out({ data: { ...vendors[0], outstanding: 0 } }) as HTMLElement).querySelector('.pf-sg-tone--muted')!.textContent).toBe('Settled');
+    const pill = p.cmp.colDefs().find((c: any) => c.colId === 'status').cellRenderer({ data: vendors[1] }) as HTMLElement;
+    expect(pill.textContent).toBe('Inactive');
+    expect(p.el.querySelector('.pf-sg-main__head pf-segmented')).not.toBeNull();
     expect(p.el.querySelector('pf-chip, pf-tile')).toBeNull();
   });
 });

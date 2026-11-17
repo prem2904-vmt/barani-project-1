@@ -84,17 +84,17 @@ describe('Credit accounts — setup in Billing, money on Finance', () => {
     getFor: (u) => (u.startsWith('/api/vendors') && !u.includes('/transactions') ? [vendor] : []),
     providers: [route(data)],
   });
-  const labels = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-rowact__t')).map(e => e.textContent!.trim());
+  const labels = (p: any) => p.cmp.actionsFor(vendor).map((a: any) => a.label);
 
-  it('setup view: add and deactivate only — no top up, payment, statement or history', () => {
+  it('setup view: add, edit and deactivate only — no top up, payment, statement or history', () => {
     const p = make({ creditView: 'setup' });
-    expect(labels(p.el)).toEqual(['Deactivate']);
+    expect(labels(p)).toEqual(['Edit', 'Deactivate']);
     expect(p.actions().some(b => b.textContent?.includes('Add vendor'))).toBe(true);
   });
 
   it('money view: top up, record payment, email statement, history — and no Add vendor', () => {
     const p = make({ creditView: 'money' });
-    expect(labels(p.el)).toEqual(['Top up', 'Record payment', 'Email statement', 'View history']);
+    expect(labels(p)).toEqual(['Top up', 'Record payment', 'Email statement', 'View history']);
     expect(p.actions().some(b => b.textContent?.includes('Add vendor'))).toBe(false);
     p.cmp.toggleNewVendor();
     p.f.detectChanges();
@@ -103,8 +103,8 @@ describe('Credit accounts — setup in Billing, money on Finance', () => {
 
   it('the old Vendor Wallets page (no data) shows both, and the money APIs are unchanged', () => {
     const p = make({});
-    expect(labels(p.el)).toContain('Top up');
-    expect(labels(p.el)).toContain('Deactivate');
+    expect(labels(p)).toContain('Top up');
+    expect(labels(p)).toContain('Deactivate');
     p.cmp.openTopUp(vendor);
     p.cmp.topUpAmount.set('1000');
     p.cmp.confirmTopUp(vendor);

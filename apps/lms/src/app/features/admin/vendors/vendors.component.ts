@@ -13,7 +13,6 @@ import { WalletOutstandingPipe } from '../../../shared/pipes/wallet-outstanding.
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
@@ -21,6 +20,16 @@ import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/p
 import { heldFlag } from '../../../shared/utils/min-duration';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
+import { NgTemplateOutlet } from '@angular/common';
+import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
+import { AgGridAngular } from 'ag-grid-angular';
+import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
+import {
+  SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, sgActions, sgActionsCol, sgByStatus, sgCell, sgGridTheme, sgInr, sgMedia,
+  sgPillCol, sgRowOff, sgStatusOptions,
+} from '../../../shared/settings-grid/settings-grid';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 type VendorStatus = 'all' | 'active' | 'inactive';
 
@@ -58,6 +67,8 @@ interface VendorTxn {
 }
 
 interface NewVendorDraft {
+  /** Set when editing an existing account (PUT); absent = create (POST). */
+  id?: string;
   name: string;
   code: string;
   contactName: string;
@@ -80,24 +91,17 @@ const EMPTY_DRAFT: NewVendorDraft = {
   imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent,
     FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent, TouchButtonComponent,
-    HeroBandComponent, PfDateComponent
+    HeroBandComponent, PfDateComponent, NgTemplateOutlet, AgGridAngular, SegmentedComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
-        <!-- Band pill (owner): vendor search + status filter; "Add vendor"
-             rides the band's actions. -->
-        <pf-hero-band [back]="true" placeholder="Search vendors — name, code, contact, GSTIN…"
+        <!-- Test Master frame: the band pill searches the accounts; "Add
+             vendor" is the ONE primary (a quiet Cancel while its form is open). -->
+        <pf-hero-band [back]="true" placeholder="Search credit accounts — name, code, contact, GSTIN…"
                       [value]="q()" (valueChange)="q.set($event)">
-          <ng-container band-tools>
-            <span class="pf-seg pf-vn-seg" role="radiogroup" aria-label="Vendor status">
-              @for (o of statusOptions(); track o.value) {
-                <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="status() === o.value"
-                        (click)="status.set(o.value)">{{ o.label }} <span class="pf-num pf-vn-seg__n">{{ o.count }}</span></button>
-              }
-            </span>
-          </ng-container>
           <ng-container band-actions>
             @if (showSetup()) {
             <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!newVendorOpen()"
@@ -130,221 +134,214 @@ const EMPTY_DRAFT: NewVendorDraft = {
         </pf-touch-btn>
       </pf-screen-header>
 
-      <div class="pf-band-body">
-      @if (newVendorOpen() && showSetup()) {
-        <section class="pf-card pf-anim-in pf-vn-new" aria-label="New vendor">
-          <div class="pf-card__head">
-            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7H5a2 2 0 0 1 0-4h13v4M3 5v14a2 2 0 0 0 2 2h16V7H5a2 2 0 0 1-2-2ZM17 14h.01"/></svg></span>
-            <h3 class="pf-card__label">New vendor</h3>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pf-vn-new__body">
-            <div><label class="pf-field__lbl pf-vn-lbl">Name *</label>
-              <input type="text" class="pf-input" [class.pf-input--error]="nameError()" [ngModel]="draft().name" (ngModelChange)="patchDraft({ name: $event })" placeholder="Apollo Hospital"/>
-              @if (nameError()) { <p class="pf-field-err">{{ nameError() }}</p> }</div>
-            <div><label class="pf-field__lbl pf-vn-lbl">Code</label>
-              <input type="text" class="pf-input pf-num uppercase" [class.pf-input--error]="codeError()" [ngModel]="draft().code" (ngModelChange)="patchDraft({ code: $event.toUpperCase() })" placeholder="APOLLO"/>
-              @if (codeError()) { <p class="pf-field-err">{{ codeError() }}</p> }</div>
-            <div><label class="pf-field__lbl pf-vn-lbl">Contact name</label>
-              <input type="text" class="pf-input" [class.pf-input--error]="fieldErr()['contactName']" [ngModel]="draft().contactName" (ngModelChange)="patchDraft({ contactName: $event })"/>
-              @if (fieldErr()['contactName']) { <p class="pf-field-err">{{ fieldErr()['contactName'] }}</p> }</div>
-            <div><label class="pf-field__lbl pf-vn-lbl">Contact phone</label>
-              <input type="tel" class="pf-input" [class.pf-input--error]="fieldErr()['contactPhone']" [ngModel]="draft().contactPhone" (ngModelChange)="patchDraft({ contactPhone: $event })"/>
-              @if (fieldErr()['contactPhone']) { <p class="pf-field-err">{{ fieldErr()['contactPhone'] }}</p> }</div>
-            <div><label class="pf-field__lbl pf-vn-lbl">Contact email</label>
-              <input type="email" class="pf-input" [class.pf-input--error]="fieldErr()['contactEmail']" [ngModel]="draft().contactEmail" (ngModelChange)="patchDraft({ contactEmail: $event })"/>
-              @if (fieldErr()['contactEmail']) { <p class="pf-field-err">{{ fieldErr()['contactEmail'] }}</p> }</div>
-            <div><label class="pf-field__lbl pf-vn-lbl">GSTIN</label>
-              <input type="text" class="pf-input" [class.pf-input--error]="fieldErr()['gstin']" [ngModel]="draft().gstin" (ngModelChange)="patchDraft({ gstin: $event })"/>
-              @if (fieldErr()['gstin']) { <p class="pf-field-err">{{ fieldErr()['gstin'] }}</p> }</div>
-            <div class="sm:col-span-2"><label class="pf-field__lbl pf-vn-lbl">Address</label>
-              <input type="text" class="pf-input" [class.pf-input--error]="fieldErr()['address']" [ngModel]="draft().address" (ngModelChange)="patchDraft({ address: $event })"/>
-              @if (fieldErr()['address']) { <p class="pf-field-err">{{ fieldErr()['address'] }}</p> }</div>
-            <div>
-              <label class="pf-field__lbl pf-vn-lbl">Opening settlement (₹)</label>
-              <input type="number" min="0" step="1" class="pf-input"
-                     [ngModel]="draft().openingCredit"
-                     (ngModelChange)="patchDraft({ openingCredit: $event })"
-                     placeholder="0"/>
-              <p class="pf-field__hint pf-vn-hint">Optional — a prepayment that offsets the tab.</p>
-            </div>
-            <div>
-              <label class="pf-field__lbl pf-vn-lbl">Alert threshold (₹)</label>
-              <input type="number" min="0" step="1" class="pf-input"
-                     [ngModel]="draft().notifyThreshold"
-                     (ngModelChange)="patchDraft({ notifyThreshold: $event })"
-                     placeholder="No limit"/>
-              <p class="pf-field__hint pf-vn-hint">Notify when the outstanding crosses this. Blank = unlimited.</p>
-            </div>
-          </div>
-          <div class="pf-card__foot">
-            <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleNewVendor()">Cancel</button>
-            <button type="button" class="pf-btn pf-btn--primary press" (click)="createVendor()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" pfBusyLabel="Creating…">
-              {{ saving() ? 'Creating…' : 'Create vendor' }}
-            </button>
-          </div>
-        </section>
-      }
-
-      @if (loading()) {
-        <div class="flex justify-center py-6">
-          <pf-skeleton-rows [rows]="5" label="Loading vendors…"></pf-skeleton-rows>
-        </div>
-      } @else if (vendors().length === 0) {
-        <p class="pf-band-empty">No vendors yet. Add your first partner hospital or aggregator to start tracking B2B credit.</p>
-      } @else if (visibleVendors().length === 0) {
-        <p class="pf-band-empty">No vendors match{{ q() ? ' "' + q() + '"' : ' this filter' }}.</p>
-      } @else {
-        <div class="space-y-3">
-          @for (v of visibleVendors(); track v.id) {
-            <div class="pf-card pf-vn-card">
-              <div class="flex items-start justify-between gap-4 flex-wrap">
-                <div class="min-w-0 flex-1">
-                  <div class="pf-vendor__name-row flex items-center gap-2 mb-1">
-                    <h3 class="pf-vendor__name">{{ v.name }}</h3>
-                    @if (v.code) { <span class="pf-chip pf-chip--static pf-num pf-vendor__code">{{ v.code }}</span> }
-                    @if (!v.isActive) { <span class="pf-chip pf-chip--static pf-vendor__code">Inactive</span> }
-                  </div>
-                  @if (v.contactName || v.contactPhone) {
-                    <p class="pf-vendor__meta">
-                      {{ v.contactName || '—' }} · {{ v.contactPhone || 'no phone' }}
-                    </p>
-                  }
-                  @if (v.gstin) {
-                    <p class="pf-vendor__meta">GSTIN <span class="pf-num">{{ v.gstin }}</span></p>
-                  }
-                </div>
-
-                <div class="pf-vendor__balance">
-                  <p class="pf-eyebrow">Outstanding</p>
-                  <p class="pf-vendor__bal-amt" [class.pf-vendor__bal-amt--low]="v.outstanding > 0"
-                     [class.pf-vendor__bal-amt--over]="overThreshold(v)"
-                     [class.pf-vendor__bal-amt--credit]="v.outstanding < 0">
-                    {{ v.outstanding | walletOutstanding }}
-                  </p>
-                  <p class="pf-vendor__meta">
-                    {{ v.usedCredit | inr }} charged · {{ v.totalCredit | inr }} settled
-                  </p>
-                  @if (v.notifyThreshold) {
-                    <p class="pf-vendor__meta" [class.pf-vendor__meta--over]="overThreshold(v)">
-                      Alert at {{ v.notifyThreshold | inr }}{{ overThreshold(v) ? ' · exceeded' : '' }}
-                    </p>
-                    <div class="pf-vendor__bar">
-                      <span [style.width.%]="thresholdPct(v)"></span>
-                    </div>
-                  }
-                </div>
-              </div>
-
-              <div class="pf-vendor__actions">
-                <!-- Row actions: text on web, icons on touch (never a gradient). -->
-                @if (showMoney()) {
-                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="openTopUp(v)" aria-label="Top up" title="Top up"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="pf-rowact__t">Top up</span></button>
-                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="openPayment(v)" aria-label="Record payment" title="Record payment"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg><span class="pf-rowact__t">Record payment</span></button>
-                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="emailStatement(v)" [disabled]="emailingId() === v.id"
-                        [attr.aria-label]="emailingId() === v.id ? 'Sending statement' : 'Email statement'" title="Email statement"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg><span class="pf-rowact__t">{{ emailingId() === v.id ? 'Sending…' : 'Email statement' }}</span></button>
-                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="toggleTransactions(v.id)" [attr.aria-expanded]="openTxnsId() === v.id"
-                        [attr.aria-label]="openTxnsId() === v.id ? 'Hide history' : 'View history'" [title]="openTxnsId() === v.id ? 'Hide history' : 'View history'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/></svg><span class="pf-rowact__t">{{ openTxnsId() === v.id ? 'Hide history' : 'View history' }}</span></button>
-                }
-                @if (showSetup()) {
-                <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="toggleActive(v)"
-                        [attr.aria-label]="v.isActive ? 'Deactivate' : 'Reactivate'" [title]="v.isActive ? 'Deactivate' : 'Reactivate'"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="pf-rowact__t">{{ v.isActive ? 'Deactivate' : 'Reactivate' }}</span></button>
-                }
-              </div>
-
-              @if (topUpVendorId() === v.id) {
-                <div class="pf-topup">
-                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                    <div><label class="pf-field__lbl pf-vn-lbl">Amount (₹)</label>
-                      <input type="number" min="1" step="1" class="pf-input"
-                             [ngModel]="topUpAmount()" (ngModelChange)="topUpAmount.set($event)"
-                             placeholder="50000"/></div>
-                    <div class="sm:col-span-2"><label class="pf-field__lbl pf-vn-lbl">Reason / reference</label>
-                      <input type="text" class="pf-input"
-                             [ngModel]="topUpReason()" (ngModelChange)="topUpReason.set($event)"
-                             placeholder="UPI from accounts dept · ref XYZ"/></div>
-                  </div>
-                  <div class="mt-3 flex gap-2 justify-end">
-                    <pf-touch-btn size="sm" variant="ghost" (pressed)="closeTopUp()">Cancel</pf-touch-btn>
-                    <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmTopUp(v)" [disabled]="!topUpAmountValid() || saving()" [busy]="saving()" busyLabel="Saving…">
-                      Add ₹{{ topUpAmount() || '0' }}
-                    </pf-touch-btn>
-                  </div>
-                </div>
+      <div class="pf-band-body pf-band-body--fill">
+        <div class="pf-sg-panels pf-vn-panels" [class.pf-sg-panels--single]="!panel()" [class.pf-sg-panels--narrow]="narrow()">
+          <!-- SIDE card (LEFT): the open form / money panel for one account. -->
+          @if (panel(); as pn) {
+            @if (narrow()) { <div class="pf-sheet-backdrop" (click)="closePanel()"></div> }
+            <aside class="pf-card pf-sg-side pf-vn-side" [class.pf-sg-side--sheet]="narrow()" [attr.role]="narrow() ? 'dialog' : null"
+                   [attr.aria-modal]="narrow() ? 'true' : null" [attr.aria-label]="panelTitle()" (keydown.escape)="closePanel()">
+              @if (narrow()) { <span class="pf-sg-sheet-handle" aria-hidden="true"></span> }
+              @switch (pn) {
+                @case ('form') { <ng-container *ngTemplateOutlet="vendorForm"></ng-container> }
+                @default { <ng-container *ngTemplateOutlet="moneyPanel"></ng-container> }
               }
+            </aside>
+          }
 
-              @if (paymentVendorId() === v.id) {
-                <div class="pf-topup">
-                  <p class="pf-field__hint pf-vn-hint">
-                    Record a payment received from this org (or credit granted by them). Adds to the wallet's available credit.
-                  </p>
-                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                    <div><label class="pf-field__lbl pf-vn-lbl">Amount (₹)</label>
-                      <input type="number" min="1" step="1" class="pf-input"
-                             [ngModel]="paymentAmount()" (ngModelChange)="paymentAmount.set($event)"
-                             placeholder="50000"/></div>
-                    <div><label class="pf-field__lbl pf-vn-lbl" for="pf-vn-payment-date">Payment date</label>
-                      <pf-date label="Payment date" inputId="pf-vn-payment-date"
-                                  [value]="paymentDate() || null"
-                                  (valueChange)="paymentDate.set($event ?? '')"></pf-date></div>
-                    <div><label class="pf-field__lbl pf-vn-lbl">Note / reference</label>
-                      <input type="text" class="pf-input"
-                             [ngModel]="paymentNote()" (ngModelChange)="paymentNote.set($event)"
-                             placeholder="NEFT ref · UTR number"/></div>
-                  </div>
-                  <div class="mt-3 flex flex-wrap items-center gap-2">
-                    <label class="pf-file-btn">
-                      {{ paymentFileName() || 'Attach payment copy' }}
-                      <input type="file" class="hidden" accept="image/*,application/pdf"
-                             (change)="onPaymentFilePick($event)"/>
-                    </label>
-                    @if (paymentFileName()) {
-                      <button type="button" class="pf-file-clear" (click)="clearPaymentFile()">Remove</button>
-                    }
-                  </div>
-                  <div class="mt-3 flex gap-2 justify-end">
-                    <pf-touch-btn size="sm" variant="ghost" (pressed)="closePayment()">Cancel</pf-touch-btn>
-                    <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmPayment(v)" [disabled]="!paymentAmountValid() || saving()" [busy]="saving()" busyLabel="Saving…">
-                      {{ saving() ? 'Saving…' : 'Record ₹' + (paymentAmount() || '0') }}
-                    </pf-touch-btn>
-                  </div>
-                </div>
+          <!-- MAIN card: the credit accounts grid. -->
+          <section class="pf-card pf-sg-main pf-vn-main" aria-label="Credit accounts">
+            <header class="pf-card__head pf-sg-main__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7H5a2 2 0 0 1 0-4h13v4M3 5v14a2 2 0 0 0 2 2h16V7H5a2 2 0 0 1-2-2ZM17 14h.01"/></svg></span>
+              <span class="pf-card__label">Credit accounts</span>
+              <span class="pf-card__note pf-sg-hint">{{ showMoney() ? 'Top up, record a payment or email a statement from a row' : 'Partner hospitals and aggregators billed on credit' }}</span>
+              <span class="pf-sg-count pf-num">{{ visibleVendors().length }} {{ visibleVendors().length === 1 ? 'account' : 'accounts' }}</span>
+              <pf-segmented class="pf-sg-status-filter pf-vn-seg" size="sm" [options]="statusOptions()" [value]="status()"
+                            (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+            </header>
+            <div class="pf-sg-main__body">
+              @if (loadingShown()) {
+                <pf-skeleton-table class="pf-sg-skel" [rows]="6" [cols]="6" label="Loading vendors…"></pf-skeleton-table>
               }
-
-              @if (openTxnsId() === v.id) {
-                <div class="pf-txns">
-                  @if (loadingTxnsShown()) {
-                    <div class="flex justify-center py-3">
-                      <pf-skeleton-table [rows]="3" [cols]="4" [header]="false" label="Loading transactions…"></pf-skeleton-table>
-                    </div>
-                  } @else if ((txns()[v.id] ?? []).length === 0) {
-                    <p class="pf-band-empty">No transactions yet.</p>
+              <ag-grid-angular class="pf-sg-grid pf-vn-grid" [theme]="gridTheme()" [rowData]="visibleVendors()" [columnDefs]="colDefs()"
+                               [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [animateRows]="true"
+                               [suppressNoRowsOverlay]="true" [suppressCellFocus]="true"></ag-grid-angular>
+              @if (!loading() && visibleVendors().length === 0) {
+                <div class="pf-sg-empty pf-band-empty">
+                  @if (vendors().length === 0) {
+                    <p class="pf-sg-empty__title">No credit accounts yet</p>
+                    <p class="pf-sg-empty__body">Add your first partner hospital or aggregator to start tracking B2B credit.</p>
                   } @else {
-                    <ul class="pf-txns__list">
-                      @for (t of txns()[v.id]; track t.id) {
-                        <li class="pf-txn">
-                          <span class="pf-txn__type" [attr.data-kind]="t.type">{{ t.type }}</span>
-                          <span class="pf-txn__reason">
-                            {{ t.reason || '—' }}
-                            @if (t.attachmentUrl) {
-                              <a class="pf-txn__proof" [href]="t.attachmentUrl" target="_blank" rel="noopener">proof</a>
-                            }
-                          </span>
-                          <span class="pf-txn__amt" [class.pf-txn__amt--neg]="t.amount < 0">
-                            {{ t.amount < 0 ? '−' : '+' }}{{ absMoney(t.amount) | inr }}
-                          </span>
-                          <span class="pf-txn__when pf-num">{{ formatDate(t.paidAt || t.createdAt) }}</span>
-                        </li>
-                      }
-                    </ul>
+                    <p class="pf-sg-empty__title">No vendors match{{ q() ? ' "' + q() + '"' : ' this filter' }}.</p>
                   }
                 </div>
+              }
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- New / edit vendor (setup). -->
+    <ng-template #vendorForm>
+      <div class="pf-card__head">
+        <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7H5a2 2 0 0 1 0-4h13v4M3 5v14a2 2 0 0 0 2 2h16V7H5a2 2 0 0 1-2-2ZM17 14h.01"/></svg></span>
+        <h3 class="pf-card__label">{{ draft().id ? 'Edit vendor' : 'New vendor' }}</h3>
+        <span class="pf-card__spacer"></span>
+        <button type="button" class="pf-btn pf-btn--icon" (click)="closePanel()" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="pf-card__body pf-vn-new">
+        <div><label class="pf-field__lbl pf-vn-lbl">Name *</label>
+          <input type="text" class="pf-input" [class.pf-input--error]="nameError()" [ngModel]="draft().name" (ngModelChange)="patchDraft({ name: $event })" placeholder="Apollo Hospital"/>
+          @if (nameError()) { <p class="pf-field-err">{{ nameError() }}</p> }</div>
+        <div><label class="pf-field__lbl pf-vn-lbl">Code</label>
+          <input type="text" class="pf-input pf-num uppercase" [class.pf-input--error]="codeError()" [ngModel]="draft().code" (ngModelChange)="patchDraft({ code: $event.toUpperCase() })" placeholder="APOLLO"/>
+          @if (codeError()) { <p class="pf-field-err">{{ codeError() }}</p> }</div>
+        <div><label class="pf-field__lbl pf-vn-lbl">Contact name</label>
+          <input type="text" class="pf-input" [class.pf-input--error]="fieldErr()['contactName']" [ngModel]="draft().contactName" (ngModelChange)="patchDraft({ contactName: $event })"/>
+          @if (fieldErr()['contactName']) { <p class="pf-field-err">{{ fieldErr()['contactName'] }}</p> }</div>
+        <div><label class="pf-field__lbl pf-vn-lbl">Contact phone</label>
+          <input type="tel" class="pf-input" [class.pf-input--error]="fieldErr()['contactPhone']" [ngModel]="draft().contactPhone" (ngModelChange)="patchDraft({ contactPhone: $event })"/>
+          @if (fieldErr()['contactPhone']) { <p class="pf-field-err">{{ fieldErr()['contactPhone'] }}</p> }</div>
+        <div><label class="pf-field__lbl pf-vn-lbl">Contact email</label>
+          <input type="email" class="pf-input" [class.pf-input--error]="fieldErr()['contactEmail']" [ngModel]="draft().contactEmail" (ngModelChange)="patchDraft({ contactEmail: $event })"/>
+          @if (fieldErr()['contactEmail']) { <p class="pf-field-err">{{ fieldErr()['contactEmail'] }}</p> }</div>
+        <div><label class="pf-field__lbl pf-vn-lbl">GSTIN</label>
+          <input type="text" class="pf-input" [class.pf-input--error]="fieldErr()['gstin']" [ngModel]="draft().gstin" (ngModelChange)="patchDraft({ gstin: $event })"/>
+          @if (fieldErr()['gstin']) { <p class="pf-field-err">{{ fieldErr()['gstin'] }}</p> }</div>
+        <div><label class="pf-field__lbl pf-vn-lbl">Address</label>
+          <input type="text" class="pf-input" [class.pf-input--error]="fieldErr()['address']" [ngModel]="draft().address" (ngModelChange)="patchDraft({ address: $event })"/>
+          @if (fieldErr()['address']) { <p class="pf-field-err">{{ fieldErr()['address'] }}</p> }</div>
+        @if (!draft().id) {
+          <div>
+            <label class="pf-field__lbl pf-vn-lbl">Opening settlement (₹)</label>
+            <input type="number" min="0" step="1" class="pf-input"
+                   [ngModel]="draft().openingCredit"
+                   (ngModelChange)="patchDraft({ openingCredit: $event })"
+                   placeholder="0"/>
+            <p class="pf-field__hint pf-vn-hint">Optional — a prepayment that offsets the tab.</p>
+          </div>
+          <div>
+            <label class="pf-field__lbl pf-vn-lbl">Alert threshold (₹)</label>
+            <input type="number" min="0" step="1" class="pf-input"
+                   [ngModel]="draft().notifyThreshold"
+                   (ngModelChange)="patchDraft({ notifyThreshold: $event })"
+                   placeholder="No limit"/>
+            <p class="pf-field__hint pf-vn-hint">Notify when the outstanding crosses this. Blank = unlimited.</p>
+          </div>
+        }
+      </div>
+      <div class="pf-card__foot pf-vn-foot">
+        <button type="button" class="pf-btn pf-btn--tertiary press" (click)="closePanel()">Cancel</button>
+        <button type="button" class="pf-btn pf-btn--primary press" (click)="draft().id ? saveVendor() : createVendor()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" [pfBusyLabel]="draft().id ? 'Saving…' : 'Creating…'">
+          {{ saving() ? (draft().id ? 'Saving…' : 'Creating…') : (draft().id ? 'Save changes' : 'Create vendor') }}
+        </button>
+      </div>
+    </ng-template>
+
+    <!-- Money panel (top up / record payment / history) for ONE account. -->
+    <ng-template #moneyPanel>
+      @if (panelVendor(); as v) {
+        <div class="pf-card__head">
+          <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span>
+          <h3 class="pf-card__label">{{ panelTitle() }}</h3>
+          <span class="pf-card__spacer"></span>
+          <button type="button" class="pf-btn pf-btn--icon" (click)="closePanel()" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="pf-card__body">
+          <div class="pf-vn-acct">
+            <span class="pf-vn-acct__name">{{ v.name }}</span>
+            <span class="pf-vn-acct__meta">{{ [v.code, v.contactName].filter(isText).join(' · ') }}</span>
+            <span class="pf-vn-acct__bal pf-num" [class.pf-vendor__bal-amt--over]="overThreshold(v)" [class.pf-vendor__bal-amt--credit]="v.outstanding < 0">{{ v.outstanding | walletOutstanding }}</span>
+          </div>
+          @if (topUpVendorId() === v.id) {
+            <div class="pf-topup">
+              <div><label class="pf-field__lbl pf-vn-lbl">Amount (₹)</label>
+                <input type="number" min="1" step="1" class="pf-input"
+                       [ngModel]="topUpAmount()" (ngModelChange)="topUpAmount.set($event)"
+                       placeholder="50000"/></div>
+              <div><label class="pf-field__lbl pf-vn-lbl">Reason / reference</label>
+                <input type="text" class="pf-input"
+                       [ngModel]="topUpReason()" (ngModelChange)="topUpReason.set($event)"
+                       placeholder="UPI from accounts dept · ref XYZ"/></div>
+              <div class="pf-vn-row-end">
+                <pf-touch-btn size="sm" variant="ghost" (pressed)="closeTopUp()">Cancel</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmTopUp(v)" [disabled]="!topUpAmountValid() || saving()" [busy]="saving()" busyLabel="Saving…">
+                  Add ₹{{ topUpAmount() || '0' }}
+                </pf-touch-btn>
+              </div>
+            </div>
+          }
+          @if (paymentVendorId() === v.id) {
+            <div class="pf-topup">
+              <p class="pf-field__hint pf-vn-hint">
+                Record a payment received from this org (or credit granted by them). Adds to the wallet's available credit.
+              </p>
+              <div><label class="pf-field__lbl pf-vn-lbl">Amount (₹)</label>
+                <input type="number" min="1" step="1" class="pf-input"
+                       [ngModel]="paymentAmount()" (ngModelChange)="paymentAmount.set($event)"
+                       placeholder="50000"/></div>
+              <div><label class="pf-field__lbl pf-vn-lbl" for="pf-vn-payment-date">Payment date</label>
+                <pf-date label="Payment date" inputId="pf-vn-payment-date"
+                            [value]="paymentDate() || null"
+                            (valueChange)="paymentDate.set($event ?? '')"></pf-date></div>
+              <div><label class="pf-field__lbl pf-vn-lbl">Note / reference</label>
+                <input type="text" class="pf-input"
+                       [ngModel]="paymentNote()" (ngModelChange)="paymentNote.set($event)"
+                       placeholder="NEFT ref · UTR number"/></div>
+              <div class="flex flex-wrap items-center gap-2">
+                <label class="pf-file-btn">
+                  {{ paymentFileName() || 'Attach payment copy' }}
+                  <input type="file" class="hidden" accept="image/*,application/pdf"
+                         (change)="onPaymentFilePick($event)"/>
+                </label>
+                @if (paymentFileName()) {
+                  <button type="button" class="pf-file-clear" (click)="clearPaymentFile()">Remove</button>
+                }
+              </div>
+              <div class="pf-vn-row-end">
+                <pf-touch-btn size="sm" variant="ghost" (pressed)="closePayment()">Cancel</pf-touch-btn>
+                <pf-touch-btn size="sm" variant="secondary" (pressed)="confirmPayment(v)" [disabled]="!paymentAmountValid() || saving()" [busy]="saving()" busyLabel="Saving…">
+                  {{ saving() ? 'Saving…' : 'Record ₹' + (paymentAmount() || '0') }}
+                </pf-touch-btn>
+              </div>
+            </div>
+          }
+          @if (openTxnsId() === v.id) {
+            <div class="pf-txns">
+              <h4 class="pf-sg-side__sec">History</h4>
+              @if (loadingTxnsShown()) {
+                <pf-skeleton-table [rows]="3" [cols]="3" [header]="false" label="Loading transactions…"></pf-skeleton-table>
+              } @else if ((txns()[v.id] ?? []).length === 0) {
+                <p class="pf-band-empty">No transactions yet.</p>
+              } @else {
+                <ul class="pf-txns__list">
+                  @for (t of txns()[v.id]; track t.id) {
+                    <li class="pf-txn">
+                      <span class="pf-txn__type" [attr.data-kind]="t.type">{{ t.type }}</span>
+                      <span class="pf-txn__amt" [class.pf-txn__amt--neg]="t.amount < 0">
+                        {{ t.amount < 0 ? '−' : '+' }}{{ absMoney(t.amount) | inr }}
+                      </span>
+                      <span class="pf-txn__reason">
+                        {{ t.reason || '—' }}
+                        @if (t.attachmentUrl) {
+                          <a class="pf-txn__proof" [href]="t.attachmentUrl" target="_blank" rel="noopener">proof</a>
+                        }
+                      </span>
+                      <span class="pf-txn__when pf-num">{{ formatDate(t.paidAt || t.createdAt) }}</span>
+                    </li>
+                  }
+                </ul>
               }
             </div>
           }
         </div>
       }
-      </div>
-    </section>
+    </ng-template>
   `,
   styles: [`
     .pf-section-title {
@@ -377,56 +374,22 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-input--error:focus { box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.18); }
     .pf-field-err { margin: 4px 0 0; font-size: 11.5px; color: var(--red-text); }
 
-    /* Vendor row */
-    .pf-vendor__name {
-      margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);
-      letter-spacing: -0.01em;
-    }
-    .pf-vendor__code { height: 24px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
-    .pf-vendor__meta {
-      margin: 2px 0 0;
-      font-size: 12px; color: var(--text-secondary);
-    }
-
-    .pf-vendor__balance {
-      flex: 0 0 auto; min-width: 200px;
-      text-align: right;
-    }
-    .pf-vendor__bal-amt {
-      margin: 4px 0;
-      font-size: 22px; font-weight: 600;
-      color: var(--text-primary);
-      font-variant-numeric: tabular-nums;
-    }
-    /* Palette only (PF-PATTERN §2): owed = normal text, in credit = violet,
-       over the alert threshold = red (a real warning — the one exception). */
-    .pf-vendor__bal-amt--low { color: var(--text-primary); }
+    /* Side card account header (money panel) */
+    .pf-vn-acct { display: flex; flex-direction: column; gap: 2px; padding-bottom: 10px; border-bottom: 1px solid var(--pf-line); }
+    .pf-vn-acct__name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+    .pf-vn-acct__meta { font-size: 12px; color: var(--text-tertiary); }
+    .pf-vn-acct__bal { margin-top: 4px; font-size: 18px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+    /* Palette only (PF-PATTERN §2): over the alert threshold = red, in credit = violet. */
     .pf-vendor__bal-amt--over { color: var(--red-text); }
     .pf-vendor__bal-amt--credit { color: var(--violet-text, #6d28d9); }
-    .pf-vendor__meta--over { color: var(--red-text); }
-    .pf-vendor__bar {
-      margin-top: 6px; height: 4px;
-      background: var(--glass-border); border-radius: 9999px; overflow: hidden;
-    }
-    .pf-vendor__bar > span {
-      display: block; height: 100%;
-      background: var(--color-violet-500, #8b5cf6);   /* palette only */
-      transition: width 0.25s ease;
-    }
-
-    .pf-vendor__actions {
-      margin-top: 14px;
-      padding-top: 12px;
-      border-top: 1px solid var(--pf-line);
-      display: flex; gap: 8px; flex-wrap: wrap;
-    }
+    .pf-vn-panels { grid-template-columns: 380px minmax(0, 1fr); }
+    .pf-vn-panels.pf-sg-panels--single, .pf-vn-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
+    .pf-vn-row-end { display: flex; gap: 8px; justify-content: flex-end; }
     /* ── ND audit ── */
     .pf-vn-seg { flex: none; }
     .pf-vn-seg .pf-seg__item { height: 32px; }
     .pf-vn-seg__n { color: var(--text-tertiary); font-weight: 500; margin-left: 2px; }
-    .pf-vn-new { margin-bottom: 16px; }
-    .pf-vn-new__body { padding: 16px 18px; }
-    .pf-vn-card { padding: 16px 18px; overflow: visible; }
+    .pf-vn-new { gap: 12px; }
     .pf-vn-lbl { display: block; margin-bottom: 6px; }
     .pf-vn-hint { margin-top: 4px; }
     /* pf-date defaults to inline-block (shrink to content) so it sits
@@ -437,7 +400,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
 
     /* Inline top-up panel */
     .pf-topup {
-      margin-top: 14px;
+      display: flex; flex-direction: column; gap: 12px;
       padding: 14px;
       background: var(--pf-chip-bg);
       border: 1px solid var(--pf-line);
@@ -466,7 +429,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
 
     /* Transactions list */
     .pf-txns {
-      margin-top: 14px;
+      display: flex; flex-direction: column; gap: 8px;
       padding: 12px;
       background: var(--pf-chip-bg);
       border: 1px solid var(--pf-line);
@@ -475,14 +438,15 @@ const EMPTY_DRAFT: NewVendorDraft = {
     .pf-txns__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
     .pf-txn {
       display: grid;
-      grid-template-columns: 90px minmax(0, 1fr) 110px 130px;
-      gap: 10px; align-items: center;
+      grid-template-columns: auto 1fr;
+      grid-template-areas: "type amt" "reason when";
+      gap: 4px 10px; align-items: center;
       padding: 8px 10px;
       background: rgba(255,255,255,0.02);
       border-radius: 8px;
       font-size: 12px;
     }
-    .pf-txn__type {
+    .pf-txn__type { grid-area: type; justify-self: start;
       /* Neutral chip — the signed amount carries the direction. */
       background: var(--pf-card-bg); border: 1px solid var(--pf-line); color: var(--text-secondary);
       padding: 2px 8px;
@@ -490,13 +454,13 @@ const EMPTY_DRAFT: NewVendorDraft = {
       font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
       text-transform: uppercase; text-align: center;
     }
-    .pf-txn__reason { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pf-txn__amt {
+    .pf-txn__reason { grid-area: reason; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-txn__amt { grid-area: amt;
       font-variant-numeric: tabular-nums;
       font-weight: 600; text-align: right; color: var(--text-primary);
     }
     .pf-txn__amt--neg { color: var(--text-secondary); }
-    .pf-txn__when {
+    .pf-txn__when { grid-area: when;
       font-size: 11px; color: var(--text-tertiary); text-align: right;
       font-variant-numeric: tabular-nums;
     }
@@ -513,42 +477,6 @@ const EMPTY_DRAFT: NewVendorDraft = {
         padding: 10px 12px;
       }
 
-      /* Balance block: don't force a 200px min on a narrow screen —
-         let it sit full-width under the vendor name, left-aligned. */
-      :host .pf-vendor__balance {
-        min-width: 0;
-        width: 100%;
-        text-align: left;
-      }
-
-      /* Long vendor names must truncate rather than shove the code chip /
-         inactive badge off-screen. The name row is a flex; give the name
-         a shrinkable box with ellipsis and keep the chip/badge intact. */
-      :host .pf-vendor__name-row { min-width: 0; }
-      :host .pf-vendor__name {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      :host .pf-vendor__code { flex: 0 0 auto; }
-
-      /* Transaction row: the 90px/1fr/110px/130px grid (~340px) overflows
-         phones. Restack into label-amount header + reason + date. */
-      :host .pf-txn {
-        grid-template-columns: auto 1fr;
-        grid-template-areas:
-          "type amt"
-          "reason reason"
-          "when when";
-        row-gap: 4px;
-        column-gap: 10px;
-        padding: 10px 12px;
-      }
-      :host .pf-txn__type   { grid-area: type; justify-self: start; }
-      :host .pf-txn__amt    { grid-area: amt;  text-align: right; }
-      :host .pf-txn__reason { grid-area: reason; white-space: normal; }
-      :host .pf-txn__when   { grid-area: when; text-align: left; }
     }
 
     /* Touch devices: ensure transaction rows that are tappable feel
@@ -584,24 +512,169 @@ export class VendorsComponent implements OnInit {
   /** Row actions: text on web, icon on touch (PF-PATTERN). */
   protected readonly web = webPointerSignal();
 
-  /** Band pill: free-text search + Active / Inactive status filter. */
+  /** Band pill: free-text search; the card head's status filter (Test Master's All · Active · Inactive). */
   readonly q = signal('');
   readonly status = signal<VendorStatus>('all');
-  readonly statusOptions = computed<SegmentedOption<VendorStatus>[]>(() => {
+  readonly statusOptions = computed(() => {
     const all = this.vendors();
-    const active = all.filter(v => v.isActive).length;
-    return [
-      { value: 'all', label: 'All', count: all.length },
-      { value: 'active', label: 'Active', count: active },
-      { value: 'inactive', label: 'Inactive', count: all.length - active },
-    ];
+    return sgStatusOptions(all.length, all.filter(v => !v.isActive).length);
   });
   readonly visibleVendors = computed(() => {
-    const st = this.status();
-    const rows = this.vendors().filter(v => st === 'all' || (st === 'active' ? v.isActive : !v.isActive));
+    const rows = sgByStatus(this.vendors(), this.status(), v => v.isActive);
     return bandFilter(rows, this.q(), v => [v.name, v.code, v.contactName, v.contactPhone, v.contactEmail, v.gstin, v.address]);
   });
+
+  // ── Test Master frame: grid + the LEFT side card for ONE open panel ──
+  readonly narrow = sgMedia(SG_NARROW_MQ);
+  readonly phone = sgMedia(SG_PHONE_MQ);
+  readonly gridTheme = sgGridTheme();
+  readonly getRowId = (p: GetRowIdParams<VendorRow>) => p.data.id;
+  readonly rowClass = sgRowOff<VendorRow>(v => v.isActive);
+  readonly defaultColDef: ColDef<VendorRow> = { sortable: true, resizable: true, filter: false, minWidth: 90, wrapText: true, autoHeight: true };
+  protected readonly isText = (s: unknown): s is string => typeof s === 'string' && !!s;
+  /** Which side panel is open: the setup form, a money panel, or none. */
+  readonly panel = computed<'form' | 'money' | null>(() => {
+    if (this.newVendorOpen() && this.showSetup()) return 'form';
+    if (this.topUpVendorId() || this.paymentVendorId() || this.openTxnsId()) return 'money';
+    return null;
+  });
+  readonly panelVendor = computed(() => {
+    const id = this.topUpVendorId() ?? this.paymentVendorId() ?? this.openTxnsId();
+    return this.vendors().find(v => v.id === id) ?? null;
+  });
+  readonly panelTitle = computed(() => {
+    if (this.panel() === 'form') return this.draft().id ? 'Edit vendor' : 'New vendor';
+    if (this.topUpVendorId()) return 'Top up';
+    if (this.paymentVendorId()) return 'Record payment';
+    return 'History';
+  });
+
+  /** The row's actions: setup = Edit + Deactivate/Reactivate; money = Top up, Record payment, Email statement, History. */
+  actionsFor(v: VendorRow, web = this.web()): SgAction[] {
+    const acts: SgAction[] = [];
+    if (this.showMoney()) {
+      acts.push(
+        { label: 'Top up', aria: `Top up ${v.name}`, path: '<path d="M12 5v14M5 12h14"/>', run: () => this.openTopUp(v) },
+        { label: 'Record payment', aria: `Record payment for ${v.name}`, path: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>', run: () => this.openPayment(v) },
+        { label: this.emailingId() === v.id ? 'Sending…' : 'Email statement', aria: `Email statement to ${v.name}`, icon: true,
+          path: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>', run: () => this.emailStatement(v) },
+        { label: this.openTxnsId() === v.id ? 'Hide history' : 'View history', aria: `${this.openTxnsId() === v.id ? 'Hide' : 'View'} history of ${v.name}`, icon: true,
+          path: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/><path d="M12 7v5l3 2"/>', run: () => this.toggleTransactions(v.id) },
+      );
+    }
+    if (this.showSetup()) {
+      acts.push(
+        { label: 'Edit', aria: `Edit ${v.name}`, path: SG_ICON.edit, run: () => this.editVendor(v) },
+        { label: v.isActive ? 'Deactivate' : 'Reactivate', aria: `${v.isActive ? 'Deactivate' : 'Reactivate'} ${v.name}`, icon: true,
+          path: SG_ICON.power, run: () => this.toggleActive(v) },
+      );
+    }
+    void web;
+    return acts;
+  }
+
+  readonly colDefs = computed<ColDef<VendorRow>[]>(() => {
+    const web = this.web() && !this.phone();
+    const phone = this.phone();
+    const money = (n: number) => { const el = sgCell(sgInr(n)); el.classList.add('pf-sg-money'); return el; };
+    const sample = this.actionsFor({ id: '', name: '', isActive: true } as VendorRow, web);
+    const cols: ColDef<VendorRow>[] = [
+      { colId: 'name', headerName: 'Account', flex: 1.5, minWidth: 190, sort: 'asc', valueGetter: p => p.data?.name ?? '',
+        cellRenderer: (p: ICellRendererParams<VendorRow>) => {
+          const v = p.data;
+          // Two "Apollo D"s stay distinguishable: contact (+ code on phone) under the name.
+          const sub = [phone ? v?.code : null, v?.contactName, v?.contactPhone].filter(this.isText).join(' · ') || (v?.gstin ? `GSTIN ${v.gstin}` : '');
+          return sgCell(v?.name, sub || 'No contact', true);
+        } },
+      { colId: 'code', headerName: 'Code', field: 'code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num',
+        valueFormatter: p => p.value || '—' },
+      sgPillCol<VendorRow>(v => v.isActive),
+      { colId: 'charged', headerName: 'Charged', width: 130, minWidth: 110, flex: 0, type: 'rightAligned', valueGetter: p => p.data?.usedCredit ?? 0,
+        cellRenderer: (p: ICellRendererParams<VendorRow>) => money(p.data?.usedCredit ?? 0) },
+      { colId: 'settled', headerName: 'Settled', width: 130, minWidth: 110, flex: 0, type: 'rightAligned', valueGetter: p => p.data?.totalCredit ?? 0,
+        cellRenderer: (p: ICellRendererParams<VendorRow>) => money(p.data?.totalCredit ?? 0) },
+      { colId: 'outstanding', headerName: 'Outstanding', flex: 1, minWidth: 210, type: 'rightAligned', valueGetter: p => p.data?.outstanding ?? 0,
+        cellRenderer: (p: ICellRendererParams<VendorRow>) => {
+          const v = p.data!;
+          const over = this.overThreshold(v);
+          const n = v.outstanding ?? 0;
+          const tone = over ? 'over' : Math.abs(n) < 0.005 ? 'muted' : n > 0 ? 'warn' : 'credit';
+          const sub = v.notifyThreshold ? `Alert at ${sgInr(v.notifyThreshold, 0)}${over ? ' · exceeded' : ''}` : null;
+          const el = sgCell(this.outstandingText(n), sub);
+          el.classList.add('pf-sg-money');
+          el.firstElementChild?.classList.add('pf-sg-tone--' + tone, 'pf-vn-out');
+          return el;
+        } },
+      sgActionsCol<VendorRow>(web, sample.filter(a => !a.icon).map(a => a.label), sample.filter(a => a.icon).length,
+        (p) => (p.data ? sgActions(web, this.actionsFor(p.data, web)) : document.createElement('span'))),
+    ];
+    if (phone) return cols.filter(c => ['name', 'outstanding', 'actions'].includes(c.colId ?? ''));
+    return cols;
+  });
+
+  private readonly outFmt = new WalletOutstandingPipe();
+  outstandingText(n: number): string { return this.outFmt.transform(n); }
+
+  /** Close whatever side panel is open. */
+  closePanel() {
+    if (this.newVendorOpen()) this.toggleNewVendor();
+    this.topUpVendorId.set(null);
+    this.closePayment();
+    this.openTxnsId.set(null);
+  }
+  private closeMoney() { this.topUpVendorId.set(null); this.paymentVendorId.set(null); this.clearPaymentFile(); this.openTxnsId.set(null); }
+
+  /** Edit an account (setup): the same form, saved with the same PUT the status switch uses. */
+  editVendor(v: VendorRow) {
+    this.closeMoney();
+    this.clearFieldErrors();
+    this.draft.set({
+      id: v.id, name: v.name, code: v.code ?? '', contactName: v.contactName ?? '', contactPhone: v.contactPhone ?? '',
+      contactEmail: v.contactEmail ?? '', gstin: v.gstin ?? '', address: v.address ?? '', openingCredit: '', notifyThreshold: '',
+    });
+    this.newVendorOpen.set(true);
+  }
+
+  saveVendor() {
+    const d = this.draft();
+    const v = this.vendors().find(x => x.id === d.id);
+    if (!d.id || !v || !d.name.trim()) return;
+    this.clearFieldErrors();
+    const bad = vendorErrors(d);
+    if (Object.keys(bad).length) {
+      const { name, code, ...rest } = bad;
+      this.nameError.set(name ?? null); this.codeError.set(code ?? null); this.fieldErr.set(rest);
+      return;
+    }
+    this.saving.set(true);
+    this.api.put<VendorRow>(`/api/vendors/${d.id}`, {
+      name: d.name.trim(), code: d.code.trim() || null,
+      contactName: d.contactName.trim() || null, contactPhone: d.contactPhone.trim() || null,
+      contactEmail: d.contactEmail.trim() || null, gstin: d.gstin.trim() || null,
+      address: d.address.trim() || null,
+      isActive: v.isActive,
+    }).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.toasts.success('Vendor updated');
+        this.newVendorOpen.set(false);
+        this.draft.set({ ...EMPTY_DRAFT });
+        this.refresh();
+      },
+      error: e => {
+        this.saving.set(false);
+        const err = ApiError.from(e);
+        if (err.field === 'name') this.nameError.set(err.message);
+        else if (err.field === 'code') this.codeError.set(err.message);
+        else if (err.field) this.fieldErr.set({ [err.field]: err.message });
+        else this.toasts.error(err.message);
+      }
+    });
+  }
+
   protected readonly loading = signal<boolean>(true);
+  /** First-load skeleton over the grid, held so a fast load never flashes it. */
+  readonly loadingShown = heldFlag(this.loading);
   protected readonly saving = signal<boolean>(false);
   protected readonly newVendorOpen = signal<boolean>(false);
   protected readonly draft = signal<NewVendorDraft>({ ...EMPTY_DRAFT });
@@ -650,6 +723,7 @@ export class VendorsComponent implements OnInit {
   }
 
   toggleNewVendor() {
+    this.closeMoney();
     this.newVendorOpen.update(v => !v);
     if (!this.newVendorOpen()) { this.draft.set({ ...EMPTY_DRAFT }); this.clearFieldErrors(); }
   }
@@ -705,6 +779,8 @@ export class VendorsComponent implements OnInit {
   }
 
   openTopUp(v: VendorRow) {
+    if (this.newVendorOpen()) this.toggleNewVendor();
+    this.closeMoney();
     this.topUpVendorId.set(v.id);
     this.topUpAmount.set('');
     this.topUpReason.set('');
@@ -731,6 +807,8 @@ export class VendorsComponent implements OnInit {
 
   // ── Record payment received (144/146) ───────────────────────────
   openPayment(v: VendorRow) {
+    if (this.newVendorOpen()) this.toggleNewVendor();
+    this.closeMoney();
     this.paymentVendorId.set(v.id);
     this.paymentAmount.set('');
     this.paymentDate.set('');
@@ -809,6 +887,8 @@ export class VendorsComponent implements OnInit {
 
   toggleTransactions(id: string) {
     if (this.openTxnsId() === id) { this.openTxnsId.set(null); return; }
+    if (this.newVendorOpen()) this.toggleNewVendor();
+    this.closeMoney();
     this.openTxnsId.set(id);
     if (!this.txns()[id]) this.loadTxns(id);
   }

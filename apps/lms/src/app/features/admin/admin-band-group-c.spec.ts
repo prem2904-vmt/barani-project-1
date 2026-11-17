@@ -77,14 +77,14 @@ describe('Admin band — Vendors', () => {
     getFor: (url) => url.startsWith('/api/vendors') && !url.includes('/transactions') ? vendors : [],
     providers: [provideHttpClient()],
   });
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-vendor__name')).map(n => text(n));
+  const names = (p: any) => p.cmp.visibleVendors().map((v: any) => v.name);
 
-  it('band present, header classic-only, status filter inside the pill', () => {
+  it('band present, header classic-only, status filter in the grid card head (Test Master)', () => {
     const p = render();
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.tools()!.querySelector('.pf-seg[role="radiogroup"]')).not.toBeNull();
-    expect(names(p.el).length).toBe(3);
+    expect(p.el.querySelector('.pf-sg-main__head pf-segmented')).not.toBeNull();
+    expect(names(p).length).toBe(3);
   });
 
   it('"Add vendor" in the band opens the form', () => {
@@ -94,15 +94,15 @@ describe('Admin band — Vendors', () => {
     expect(text(p.body())).toContain('New vendor');
   });
 
-  it('pill search + status filter narrow the list; empty state', () => {
+  it('pill search + status filter narrow the grid; empty state', () => {
     const p = render();
     p.type('kauv');
-    expect(names(p.el)).toEqual(['Kauvery Clinic']);
+    expect(names(p)).toEqual(['Kauvery Clinic']);
     p.type('');
     p.cmp.status.set('inactive'); p.f.detectChanges();
-    expect(names(p.el)).toEqual(['Old Partner']);
+    expect(names(p)).toEqual(['Old Partner']);
     p.type('apollo');
-    expect(names(p.el).length).toBe(0);
+    expect(names(p).length).toBe(0);
     expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
   });
 });
