@@ -13,6 +13,7 @@ import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SettingsDepartment, kpiScreenInDepartment } from '../../../shared/utils/department-scope';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SETTINGS_HOST } from '../../../shared/utils/settings-host';
 import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import { SG_ICON, SG_NARROW_MQ, sgActions, sgActionsCol, sgCell, sgMedia, sgRowOff, sgSwitch } from '../../../shared/settings-grid/settings-grid';
@@ -77,7 +78,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-kpi-config',
   standalone: true,
-  imports: [BusyDirective, SkeletonTilesComponent, CommonModule, SelectComponent, HeroBandComponent, DataGridComponent],
+  imports: [BusyDirective, SkeletonTilesComponent, CommonModule, SelectComponent, HeroBandComponent, DataGridComponent, SettingsSavebarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-kpi-page pf-band-page">
@@ -91,23 +92,7 @@ const CATEGORY_LABELS: Record<string, string> = {
                        [value]="selectedScope()" (valueChange)="onScopeChange($event)"
                        aria-label="Configure for"></pf-select>
           </ng-container>
-          <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="!dirty()" (click)="reload()">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
-              </svg>
-              Discard
-            </button>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                <path d="M17 21v-8H7v8M7 3v5h8"/>
-              </svg>
-              {{ saving() ? 'Saving…' : 'Save' }}
-            </button>
-          </ng-container>
+          
         </pf-hero-band>
       }
       <header class="pf-kpi-hdr pf-classic-only items-center">
@@ -185,6 +170,8 @@ const CATEGORY_LABELS: Record<string, string> = {
                             [loading]="loading()" loadingLabel="Loading number cards…"
                             emptyTitle="No cards on this screen yet" emptyBody="Add KPI picks one from the catalogue; drag rows to reorder."></pf-data-grid>
             </div>
+            <!-- Save / Discard IN the card, only while something changed (owner: no band buttons in Settings). -->
+            <pf-settings-savebar [dirty]="dirty()" [saving]="saving()" (save)="save()" (discard)="reload()"></pf-settings-savebar>
           </section>
         </div>
       }

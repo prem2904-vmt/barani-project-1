@@ -12,14 +12,15 @@ describe('Partner prices — Test Master grid (pf-data-grid)', () => {
     getFor: (u) => (u === '/api/referral-labs' ? [{ id: 'rl1', name: 'Apollo' }] : u.startsWith('/api/partner-test-prices') ? rows : []),
   });
 
-  it('the grid fills the card; the lab filter is a head tool; Add price + Save in the band once a lab is picked', async () => {
+  it('the grid fills the card; the lab filter is a head tool; Add price in the head once a lab is picked; Save in the card\'s Save bar', async () => {
     const p = make();
     expect(p.el.querySelector('.ptp-main pf-data-grid')).not.toBeNull();
     expect(p.el.querySelector('.pf-sg-main__head pf-select.ptp-filter')).not.toBeNull();
     expect(p.actions().length).toBe(0);
     await p.cmp.pickLab('rl1'); p.f.detectChanges();
     expect(p.cmp.visibleRows().length).toBe(2);
-    expect(p.actions().map((b: HTMLElement) => b.textContent?.trim())).toEqual(['Add price', 'Save changes']);
+    expect(p.actions().map((b: HTMLElement) => b.textContent?.trim())).toEqual(['Add price']);
+    expect(p.el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
     p.type('lipid');
     expect(p.cmp.visibleRows().map((r: any) => r.testCatalogKey)).toEqual(['LIPID']);
   });
@@ -29,6 +30,8 @@ describe('Partner prices — Test Master grid (pf-data-grid)', () => {
     await p.cmp.pickLab('rl1');
     p.cmp.onCellChanged({ data: Object.assign(p.cmp.rows()[0], { cost: 200 }) });
     expect(p.cmp.hasUnsavedChanges()).toBe(true);
+    p.f.detectChanges();
+    expect(p.el.querySelector('.ptp-main pf-settings-savebar [data-testid="savebar-save"]')).not.toBeNull();
     p.api.post.mockReturnValue(of({}));
     expect(await p.cmp.saveChanges()).toBe(true);
     expect(p.api.post).toHaveBeenCalledWith('/api/partner-test-prices/batch', {

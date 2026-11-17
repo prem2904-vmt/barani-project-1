@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, sign
 import { CellValueChangedEvent, ColDef, ICellRendererParams } from 'ag-grid-community';
 import { NgTemplateOutlet } from '@angular/common';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SG_ICON, sgActions, sgActionsCol, sgBare } from '../../../shared/settings-grid/settings-grid';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { HasUnsavedChanges, confirmLeaveUnsaved, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
@@ -41,25 +42,14 @@ interface PriceRow {
 @Component({
   selector: 'pf-partner-test-prices',
   standalone: true,
-  imports: [SettingsSiblingsComponent, HeroBandComponent, SelectComponent, DataGridComponent, NgTemplateOutlet],
+  imports: [SettingsSiblingsComponent, HeroBandComponent, SelectComponent, DataGridComponent, NgTemplateOutlet, SettingsSavebarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       <pf-hero-band [back]="true" placeholder="Search prices — test, catalogue key…" [value]="q()" (valueChange)="q.set($event)">
         <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
-        <ng-container band-actions>
-          @if (referralLabId()) {
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" (click)="addRow()" aria-label="Add price">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              Add price
-            </button>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" (click)="save()" aria-label="Save changes">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
-              {{ saving() ? 'Saving…' : 'Save changes' }}
-            </button>
-          }
-        </ng-container>
+        
       </pf-hero-band>
 
       <div class="pf-band-body pf-band-body--fill">
@@ -80,6 +70,7 @@ interface PriceRow {
                           [emptyBody]="referralLabId() ? '' : 'What it charges per test is the cost Analytics resolves the outsourcing margin from.'"
                           (cellValueChanged)="onCellChanged($event)"></pf-data-grid>
           </div>
+          <pf-settings-savebar [dirty]="dirty()" [saving]="saving()" (save)="save()" (discard)="discardEdits()"></pf-settings-savebar>
         </section>
       </div>
     </section>
@@ -89,6 +80,12 @@ interface PriceRow {
       @if (referralLabId()) { <span class="pf-sg-count pf-num">{{ visibleRows().length }} {{ visibleRows().length === 1 ? 'price' : 'prices' }}</span> }
       <pf-select class="ptp-filter" size="sm" [options]="labOptions()" [value]="referralLabId()"
                  [searchable]="true" (valueChange)="pickLab($event)" aria-label="Referral lab"></pf-select>
+      @if (referralLabId()) {
+        <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="addRow()" aria-label="Add price">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Add price
+        </button>
+      }
     </ng-template>
   `,
   styles: [`
@@ -198,6 +195,8 @@ export class PartnerTestPricesComponent implements HasUnsavedChanges {
   }
 
   save(): void { void this.persist(); }
+  /** The Save bar's Discard: back to the saved prices for this lab. */
+  discardEdits(): void { this.onLabChange(this.referralLabId()); }
 
   private persist(): Promise<boolean> {
     return new Promise<boolean>((resolve) => {

@@ -142,13 +142,14 @@ describe('Admin band — KPI configuration', () => {
   let cur: any;
   const names = (_el: HTMLElement) => cur.cmp.addOptions().map((o: any) => o.label);
 
-  it('band + fill body; screens LEFT, the screen\'s cards as a Test Master grid; Discard / Save in the band', () => {
+  it('band + fill body; screens LEFT, the screen\'s cards as a Test Master grid; Discard / Save in the card\'s Save bar (never the band)', () => {
     const p = cur = make();
     expect(p.band()).not.toBeNull();
     expect(p.el.querySelector('.pf-band-body.pf-band-body--fill')).not.toBeNull();
     expect(p.el.querySelector('.pf-kpi-hdr')?.classList.contains('pf-classic-only')).toBe(true);
     expect(p.el.querySelector('.pf-kpi-controls')?.classList.contains('pf-classic-only')).toBe(true);
-    expect(p.actions().map((b) => b.textContent?.trim())).toEqual(['Discard', 'Save']);
+    expect(p.actions().length).toBe(0);
+    expect(p.el.querySelector('[data-testid="unsaved-state"]')).toBeNull();
     expect(p.tools()!.querySelectorAll('pf-select').length).toBe(1);   // the scope; screens are the side card
     expect(p.el.querySelector('.pf-sg-panels')!.firstElementChild!.classList.contains('pf-kpi-side')).toBe(true);
     expect(p.el.querySelector('.pf-kpi-main pf-data-grid')).not.toBeNull();
@@ -156,6 +157,9 @@ describe('Admin band — KPI configuration', () => {
     p.cmp.addById('k1');
     expect(p.cmp.gridRows().map((r: any) => r.kpiId)).toEqual(['k1']);
     expect(p.cmp.hasUnsavedChanges()).toBe(true);
+    p.f.detectChanges();
+    expect(p.el.querySelector('.pf-kpi-main pf-settings-savebar [data-testid="savebar-save"]')).not.toBeNull();
+    expect(p.el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
   });
 
   it('pill search filters the Add KPI catalogue', () => {
