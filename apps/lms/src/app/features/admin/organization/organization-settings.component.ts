@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { ORG_SETTINGS_TABS } from '../../../shared/utils/settings-catalog';
 import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
 import { FormsModule } from '@angular/forms';
@@ -22,7 +22,7 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
 @Component({
   selector: 'pf-organization-settings',
   standalone: true,
-  imports: [BusyDirective, FormsModule, RouterLink, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
+  imports: [BusyDirective, FormsModule, ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">

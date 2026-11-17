@@ -12,7 +12,8 @@ import { Department, Tenant } from '../../../shared/models/tenant.model';
 import { Role, User } from '../../../shared/models/user.model';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
-import { SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { BusyComponent, SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { spinDelay } from '../../../shared/utils/busy';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
 import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
@@ -45,7 +46,7 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, RouterLink, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, BusyComponent, SkeletonCardComponent],
+  imports: [FormsModule, SelectComponent, BusyComponent, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- A card host: the Lab settings pages (Sample numbers, Collection and
@@ -66,8 +67,19 @@ interface AutoAssignConfig {
            whole organisation. Each card says which. -->
       <p class="pf-ls__scopenote" data-testid="ls-scope-note">
         Cards marked <strong>This branch</strong> apply to <strong>{{ branchName() }}</strong> only — switch branch to set
-        another branch. <strong>All branches</strong> cards apply everywhere. Changes save as you make them.
+        another branch. <strong>All branches</strong> cards apply everywhere.
       </p>
+      <!-- Autosave is authoritative here (no Save button): say so as the neutral save state. -->
+      <span class="pf-savestate pf-ls__savestate" role="status" title="Every change saves as you make it"
+            [attr.aria-busy]="savingShown() ? 'true' : null">
+        @if (savingShown()) {
+          <pf-busy label="Saving…"></pf-busy>
+          <span class="pf-ls__savestate-t">Saving…</span>
+        } @else {
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          <span class="pf-ls__savestate-t">Changes save automatically</span>
+        }
+      </span>
 
       @if (show('counters')) {
       <!-- Counters & collection — now driven by the Workflow (single source) -->
@@ -462,6 +474,7 @@ interface AutoAssignConfig {
   `,
   styles: [`
     :host { display: block; }
+    .pf-ls__savestate { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px; }
     .pf-ls__skel { display: flex; flex-direction: column; gap: 16px; }
     .pf-ls__autosave {
       display: inline-flex; align-items: center; gap: 6px;
@@ -646,6 +659,8 @@ export class LabSettingsComponent implements OnInit {
   readonly firstLoad = this.loadHold.active;
   /** Autosaves in flight — the band's save state reads "Saving…" meanwhile. */
   private readonly pendingSaves = signal(0);
+  /** "Saving…" after 150ms (no flicker for a fast answer), held 300ms. */
+  readonly savingShown = spinDelay(computed(() => this.pendingSaves() > 0));
   /** Counts one autosave request while it runs (request itself unchanged). */
   private tracked<T>(): MonoTypeOperatorFunction<T> {
     return src => defer(() => {
