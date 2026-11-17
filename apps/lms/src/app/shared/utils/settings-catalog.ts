@@ -122,7 +122,7 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   pg('Tests and packages', P.tests, I.tests, ['test master', 'tests', 'packages', 'profiles', 'parameters', 'reference range', 'catalogue', 'test price', 'tests & packages', 'consumables', 'test consumables']),
   pg('Report design', P.reports, I.report, ['report', 'report template', 'letterhead', 'header', 'footer', 'signature', 'nabl', 'report logo', 'patient strip']),
   st('Consolidated abnormal results sheet', P.reports, I.report, ['abnormal summary', 'high low results'], { tab: 'table' }),
-  st('Technician notes on report', P.reports, I.report, ['tech notes', 'report notes'], { tab: 'notes' }),
+  st('Report notes', P.reports, I.report, ['tech notes', 'report notes'], { tab: 'notes' }),
   st('WhatsApp Auto: send the report automatically when it is ready', P.reports, I.report, ['send report', 'whatsapp auto', 'auto send', 'report sending'], { tab: 'sending' }),
   pg('Collection and queues', P.labCollection, I.queue, ['lab settings', 'lab rules', 'collection', 'queues'], {}, { tab: 'queue' }),
   st('Queue focus', P.labCollection, I.queue, ['patient focused', 'sample focused', 'worklist'], { tab: 'queue' }),

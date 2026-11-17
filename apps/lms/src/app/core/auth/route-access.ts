@@ -186,7 +186,7 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/billing':           { perms: ['manage_tenant', 'manage_billing_config'] },
   '/admin/inventory':         { perms: ['manage_inventory'], module: 'inventory' },
   // Report design saves on manage_report_template (ConfigController / ReportLayoutController).
-  '/admin/reports':           { perms: ['manage_tenant', 'manage_tests', 'manage_report_template'] },
+  '/admin/reports':           { perms: ['manage_tenant', 'manage_tests', 'manage_report_template', 'manage_lab_settings'] },
   '/admin/workflows':         { perms: ['manage_workflows'] },
   '/admin/process':           { perms: ['manage_workflows'] },
   '/admin/audit':             { perms: ['view_audit_log'] },

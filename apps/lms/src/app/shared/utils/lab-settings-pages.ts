@@ -84,7 +84,7 @@ export const LAB_PAGES = {
     path: '/admin/reports',
     title: 'Report design',
     categories: [
-      { id: 'notes', label: 'Technician notes', scope: 'this branch' },
+      { id: 'notes', label: 'Report notes', scope: 'this branch' },
       { id: 'sending', label: 'Sending' },
     ],
   },

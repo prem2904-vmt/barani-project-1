@@ -1,3 +1,4 @@
+import { AuthService } from '../../../core/auth/auth.service';
 import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
@@ -111,10 +112,10 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
         <pf-hero-band [back]="true" placeholder="Find a report setting" [value]="findQuery()"
                       (valueChange)="onFind($event)" (submitted)="pickFirstFind()">
           <ng-container band-tools>
-            <pf-segmented class="pf-hb-tabs pf-rt-tabs" size="sm" [options]="sectionOptions"
+            <pf-segmented class="pf-hb-tabs pf-rt-tabs" size="sm" [options]="sectionOptions()"
                           [value]="tab()" (valueChange)="setTab($event)" data-testid="rt-tabs"></pf-segmented>
           </ng-container>
-          <ng-container band-actions>
+          <ng-container band-actions> @if (!notesOnly()) {
             @if (tidyShown()) {
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
                       aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">
@@ -130,7 +131,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
               </button>
             }
             <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite" data-testid="rt-savestate"
-                  [attr.title]="selfSavingTab() ? 'Technician notes and sending save as you switch them' : null">
+                  [attr.title]="selfSavingTab() ? 'Report notes and sending save as you switch them' : null">
               @if (optionsSaving()) {
                 <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Saving…</span>
               } @else if (dirty()) {
@@ -148,6 +149,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
               </svg>
               {{ saving() ? 'Saving…' : 'Save' }}
             </button>
+            }
           </ng-container>
         </pf-hero-band>
       }
@@ -832,12 +834,12 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
             @case ('notes') {
               <div class="pf-rt-flat">
                 <div class="pf-rtb" data-testid="ls-tech-notes">
-                  <h4 class="pf-rtb-h">Technician notes on report</h4>
+                  <h4 class="pf-rtb-h">Report notes</h4>
                   <p class="pf-rtb-s">This branch only. Saves as you switch it.</p>
                   <pf-setting-row label="Technicians can add notes"
                                   hint="A note prints on the final report under a test, a profile, a department or the whole report. Off hides notes on result entry; notes already written still print.">
                     <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="techNotes() === true"
-                            aria-label="Technician notes on report" [disabled]="techNotes() === null || notesSaving() > 0"
+                            aria-label="Report notes" [disabled]="techNotes() === null || notesSaving() > 0"
                             (click)="setTechNotes(!techNotes())">
                       <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
                     </button>
@@ -1284,12 +1286,17 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'table',      label: 'Results table', desc: 'Report theme, font, table colours, zebra rows, abnormal marking, departments' },
     { value: 'sequence',   label: 'Sequencing',    desc: 'The order departments and tests print in' },
     { value: 'footer',     label: 'Footer',        desc: 'Disclaimer, end-of-report, watermark, page extras' },
-    { value: 'notes',      label: 'Technician notes', desc: 'Whether technicians can add notes that print on the report' },
+    { value: 'notes',      label: 'Report notes', desc: 'Whether technicians can add notes that print on the report' },
     { value: 'sending',    label: 'Sending',       desc: 'WhatsApp Auto, sending a corrected report again, and the message' },
   ];
   /** The same sections as the band pill's tabs (new design). The
    *  description rides as the tab's tooltip. */
-  readonly sectionOptions: SegmentedOption<Tab>[] = this.sections.map(s => ({ value: s.value, label: s.label, hint: s.desc }));
+  /** A person with Lab settings but no report-design permission reaches this page for Report notes only (owner 2026-11-17). */
+  private readonly authSvc = inject(AuthService);
+  readonly notesOnly = computed(() => !this.authSvc.hasAnyPermission(['manage_tenant', 'manage_tests', 'manage_report_template']));
+  readonly sectionOptions = computed<SegmentedOption<Tab>[]>(() => this.sections
+    .filter(s => !this.notesOnly() || s.value === 'notes')
+    .map(s => ({ value: s.value, label: s.label, hint: s.desc })));
   readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
   private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
@@ -1356,6 +1363,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   }
 
   setTab(t: Tab) {
+    if (this.notesOnly() && t !== 'notes') t = 'notes';
     const changed = t !== this._tab();
     this._tab.set(t);
     if (t === 'notes') this.loadTechNotes();
@@ -2056,6 +2064,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     if (initial && this.sections.some(o => o.value === initial)) {
       this._tab.set(initial);
     }
+    if (this.notesOnly()) { this._tab.set('notes'); this.loadTechNotes(); this.tplHold.done(); return; }
     if (this._tab() === 'table') this.loadSourceSansFace();
     if (this._tab() === 'notes') this.loadTechNotes();
     this.destroyRef.onDestroy(() => this.tplHold.cancel());

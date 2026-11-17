@@ -206,10 +206,10 @@ interface AutoAssignConfig {
 
       @if (show('tech-notes')) {
         <pf-setting-group [label]="gLabel('tech-notes')" [scope]="groupScope('tech-notes')" [id]="groupId('tech-notes')" [icon]="gIcon('tech-notes')">
-        <pf-setting-row class="pf-ls__card" data-testid="ls-tech-notes" label="Technician notes on report"
+        <pf-setting-row class="pf-ls__card" data-testid="ls-tech-notes" label="Report notes"
                         hint="A note written at result entry prints on the final report (never a preliminary). Off hides them at entry; written notes still print.">
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="techReportNotes()"
-                  aria-label="Technician notes on report" (click)="setTechReportNotes(!techReportNotes())">
+                  aria-label="Report notes" (click)="setTechReportNotes(!techReportNotes())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </pf-setting-row>
