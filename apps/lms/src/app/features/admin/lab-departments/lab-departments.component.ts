@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NgTemplateOutlet } from '@angular/common';
 import { AllCommunityModule, CellValueChangedEvent, ColDef, GetRowIdParams, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
@@ -421,6 +421,11 @@ export class LabDepartmentsComponent implements OnInit {
 
   // ── Settings shell: the shell's side card lists Departments + one row per branch; its head shows headTools ──
   private readonly settingsHost = inject(SETTINGS_HOST, { optional: true });
+  private readonly branchesLoaded = signal(false);
+  /** The ?tab= the page was opened with (before the shell had this page's rows). */
+  private initialTab: string | null = (() => {
+    try { return String(inject(Router).parseUrl(inject(Router).url).queryParams['tab'] ?? '') || null; } catch { return null; }
+  })();
   private readonly deptToolsTpl = viewChild<TemplateRef<unknown>>('deptTools');
   private readonly spaceToolsTpl = viewChild<TemplateRef<unknown>>('spaceTools');
   /** Count + status filter (departments) / space count (a branch), for the shell's card head. */
@@ -430,16 +435,26 @@ export class LabDepartmentsComponent implements OnInit {
     if (!host?.categories) return null;
     inject(DestroyRef).onDestroy(() => host.categories.set(null));
     return effect(() => {
+      // Publish only once the branches are known, and never fewer than TWO rows: the shell switches between its
+      // one-card and two-panel frames on the row count, and a switch re-creates this page (a reload loop).
+      if (!this.branchesLoaded()) return;
       const branches = this._branches();
       const n = this._departments().length;
       const spaces = this._spaces();
       host.categories.set([
         { id: 'departments', label: 'Departments', note: String(n) },
-        ...branches.map((b) => {
+        ...(branches.length ? branches.map((b) => {
           const k = spaces.filter((x) => x.branchId === b.id).length;
           return { id: SPACE_TAB_PREFIX + b.id, label: b.name, note: `Lab spaces · ${k} ${k === 1 ? 'space' : 'spaces'}` };
-        }),
+        }) : [{ id: 'spaces', label: 'Lab spaces', note: 'No branches yet' }]),
       ]);
+      // A deep link to a branch (?tab=spaces-<id>) arrived before these rows existed, so the shell fell back to its
+      // first row: take the person to the branch they asked for, once.
+      const want = this.initialTab;
+      if (want?.startsWith(SPACE_TAB_PREFIX) && branches.some((b) => SPACE_TAB_PREFIX + b.id === want)) {
+        this.initialTab = null;
+        untracked(() => this.pickBranch(want.slice(SPACE_TAB_PREFIX.length)));
+      }
     });
   })();
   // ── Tree: Lab spaces ▸ branch (deep link ?tab=spaces&branch=<id>; default = the user's current branch) ──
@@ -567,7 +582,10 @@ export class LabDepartmentsComponent implements OnInit {
       next: l => { this._departments.set(l ?? []); this.listHold.done(); },
       error: () => this.listHold.done(),
     });
-    this.api.get<Branch[]>('/api/tenants/branches?includeInactive=true').subscribe({ next: l => this._branches.set((l ?? []).filter(b => b.isActive !== false)) });
+    this.api.get<Branch[]>('/api/tenants/branches?includeInactive=true').subscribe({
+      next: l => { this._branches.set((l ?? []).filter(b => b.isActive !== false)); this.branchesLoaded.set(true); },
+      error: () => this.branchesLoaded.set(true),
+    });
     this.api.get<LabSpace[]>('/api/tenants/lab-spaces').subscribe({ next: l => this._spaces.set(l ?? []) });
     this.api.get<DeptSpaceLink[]>('/api/tenants/department-space-links').subscribe({ next: l => this._links.set(l ?? []) });
   }
