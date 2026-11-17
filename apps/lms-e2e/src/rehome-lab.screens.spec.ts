@@ -84,6 +84,8 @@ const PAGES: Array<{ name: string; url: string; ready: string; text?: string }> 
   { name: 'front-desk-referring', url: '/admin/lab/front-desk?tab=referring', ready: 'pf-referring-network' },
   { name: 'alerts', url: '/admin/lab/alerts', ready: '.pf-nc-card', text: 'Order cancelled' },
   { name: 'numbers', url: '/admin/lab/numbers', ready: 'pf-kpi-config' },
+  { name: 'report-letterhead', url: '/admin/reports?tab=letterhead', ready: 'pf-report-header-editor .pf-rhe-side', text: 'Letterhead elements' },
+  { name: 'report-patient', url: '/admin/reports?tab=patient', ready: '.pf-rt-work', text: 'Patient block' },
   { name: 'report-notes', url: '/admin/reports?tab=notes', ready: '[data-testid="ls-tech-notes"]', text: 'Technician notes on report' },
   { name: 'report-sending', url: '/admin/reports?tab=sending', ready: 'pf-report-sending-card', text: 'WhatsApp Auto' },
   { name: 'inventory', url: '/admin/inventory', ready: '[data-testid="inventory-enable"]', text: 'Enable inventory' },
@@ -119,6 +121,13 @@ test.describe('lab settings pages', () => {
     await go(page, '/admin/lab/report-options');
     await expect(page).toHaveURL(/\/admin\/reports\?tab=notes/, { timeout: 60_000 });
     await expect(vis(page, '[data-testid="ls-tech-notes"]')).toBeVisible({ timeout: 60_000 });
+    // The band search finds a setting on another tab and opens it.
+    const input = vis(page, 'pf-hero-band .pf-hb__input');
+    await input.fill('whatsapp');
+    await expect(vis(page, '[data-testid="rt-find"]')).toBeVisible();
+    await shot(page, 'report-find');
+    await vis(page, '[data-testid="rt-find"] .pf-rt-find__hit').click();
+    await expect(page).toHaveURL(/\/admin\/reports\?tab=sending/, { timeout: 20_000 });
   });
 
   test('sample ID format saves through the same API', async ({ page }) => {

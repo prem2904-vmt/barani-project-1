@@ -1244,6 +1244,12 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['notes', 'sending']);
     .pf-rt-issues:focus-visible { outline: 2px solid var(--warning-text); outline-offset: 2px; }
     @media (max-width: 640px) { .pf-rt-issues__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .pf-rt-issues { width: 34px; padding: 0; justify-content: center; } }
     .pf-rt-savestate { margin-right: 4px; }
+    /* Search + eight tabs share the pill: on tablet widths the tabs scroll sideways so the search keeps room. */
+    @media (min-width: 768px) {
+      :host ::ng-deep pf-hero-band .pf-hb__input { min-width: 150px; }
+      :host ::ng-deep pf-hero-band .pf-hb__tools { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+      :host ::ng-deep pf-hero-band .pf-hb__tools::-webkit-scrollbar { display: none; }
+    }
     /* Band search results: a card under the band, over the body. */
     .pf-rt-body { position: relative; }
     .pf-rt-find { position: absolute; z-index: 30; left: 50%; transform: translateX(-50%); top: 0;
