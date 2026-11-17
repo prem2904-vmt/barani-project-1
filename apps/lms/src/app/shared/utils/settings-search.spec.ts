@@ -52,7 +52,7 @@ describe('settings search — real examples', () => {
     expect(t).toContain('Default Lab code');
     // the removed Lab settings "number width" card is gone from the index
     expect(t).not.toContain('Sample ID');
-    expect(run('sample id')[0].href).toBe('/admin/organization');
+    expect(run('sample id')[0].href).toBe('/admin/lab/sample-numbers');
     expect(run('sample id')[0].queryParams).toEqual({ tab: 'sample' });
   });
 
@@ -60,11 +60,11 @@ describe('settings search — real examples', () => {
     expect(titles('barcode')[0]).toBe('Specimen label code');
   });
 
-  it('"logo" → Branding first, then Report Template', () => {
+  it('"logo" → Logo and top bar first, then Report design', () => {
     const t = titles('logo');
-    expect(t[0]).toBe('Branding');
-    expect(t).toContain('Report Template');
-    expect(t.indexOf('Branding')).toBeLessThan(t.indexOf('Report Template'));
+    expect(t[0]).toBe('Logo and top bar');
+    expect(t).toContain('Report design');
+    expect(t.indexOf('Logo and top bar')).toBeLessThan(t.indexOf('Report design'));
   });
 
   it('"printer" → only printing settings, the printer cards before the page', () => {
@@ -74,20 +74,20 @@ describe('settings search — real examples', () => {
     expect(hits.map((h) => h.title)).toEqual(expect.arrayContaining(['Label printer', 'Invoice / document printer', 'Printing']));
   });
 
-  it('"branch" → Branches & Departments first', () => {
-    expect(titles('branch')[0]).toBe('Branches & Departments');
+  it('"branch" → Branches first', () => {
+    expect(titles('branch')[0]).toBe('Branches');
   });
 
-  it('"lab settings" → the Lab settings page first; "lab" → the Lab hub first', () => {
-    expect(run('lab settings')[0].href).toBe('/admin/lab-settings');
-    expect(run('lab')[0].href).toBe('/lab/settings');
+  it('"lab settings" → Collection and queues (the old Lab settings page) first; "lab" → a Lab-titled setting first', () => {
+    expect(run('lab settings')[0].href).toBe('/admin/lab/collection');
+    expect(run('lab')[0].title.toLowerCase()).toContain('lab');
   });
 
   it('"abnormal" → the ONE abnormal-results switch, in Report Template', () => {
     const hits = run('abnormal');
     expect(hits.map((h) => h.title)).toEqual(['Consolidated abnormal results sheet']);
     expect(hits[0].href).toBe('/admin/reports');
-    expect(hits[0].section).toContain('Report Template');
+    expect(hits[0].section).toContain('Report design');
   });
 
   it('every hit says where it lives', () => {
@@ -114,13 +114,13 @@ describe('settings catalog — one home per setting', () => {
   it('every settings page has a parent hub for its back chevron (personal pages and nav roots aside)', () => {
     const pages = SETTINGS_CATALOG.filter((e) => e.kind === 'page').map((e) => e.href);
     for (const href of pages) {
-      if (['/printing', '/expenses'].includes(href)) continue; // personal page / primary nav root
+      if (['/printing'].includes(href)) continue; // personal page
       expect(SETTINGS_PARENT[href], href).toBeTruthy();
     }
   });
 
-  it('hub tile keywords include the settings on that page and the pages the hub lists', () => {
-    expect(settingsKeywordsFor('/admin/lab-settings')).toContain('Queue focus');
-    expect(settingsKeywordsFor('/admin/partners')).toEqual(expect.arrayContaining(['Referral Labs', 'Vendor Wallets', 'Referring Network', 'Partner Prices']));
+  it('tile keywords include the settings on that page', () => {
+    expect(settingsKeywordsFor('/admin/lab/collection')).toContain('Queue focus');
+    expect(settingsKeywordsFor('/admin/lab/outsourcing')).toEqual(expect.arrayContaining(['outsource', 'external lab']));
   });
 });

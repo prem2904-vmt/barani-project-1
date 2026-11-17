@@ -80,6 +80,8 @@ const RULES: readonly Rule[] = [
   [/^\/admin\/bridges$/, 'grid', 'Bridges'],
   [/^\/admin\/bridges\/add$/, 'form', 'Add a Bridge'],
   [/^\/admin\/bridges\/[^/]+$/, 'detail', 'Bridge'],
+  // Settings re-home: the screens that open inside the Settings shell (its left panel keeps the categories).
+  [/^\/admin\/(lab|org|opd|pharmacy|ipd)\/.+$/, 'form', 'Settings'],
   [/^\/admin\//, 'form', 'Settings'],
   [/^\/(printing|signature|setup)$/, 'form', 'Settings'],
   [/^\/stores$/, 'grid', 'Stores'],

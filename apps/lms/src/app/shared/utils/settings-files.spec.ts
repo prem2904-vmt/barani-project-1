@@ -1,29 +1,28 @@
 import { COMMS_SETTINGS_PERMS, FILES_SETTINGS_PERMS, ROUTE_ACCESS, canOpenRoute } from '../../core/auth/route-access';
-import { SETTINGS_CATALOG, SETTINGS_PARENT, SETTINGS_SECTION, settingsKeywordsFor } from './settings-catalog';
+import { SETTINGS_CATALOG, SETTINGS_PARENT, settingsKeywordsFor } from './settings-catalog';
 
 const ctx = (perms: string[], moduleOn = true) => ({ hasAny: (p: string[]) => perms.some(x => p.includes(x)), isEnabled: () => true, moduleEnabled: () => moduleOn });
 
-describe('Settings → All departments: Communication and Files', () => {
-  it('Communication is listed under All departments, still found by search, and its parent is the Settings overview', () => {
-    const page = SETTINGS_CATALOG.find(e => e.href === '/admin/communication' && e.kind === 'page')!;
-    expect(page.section).toBe(SETTINGS_SECTION.allDepartments);
-    expect(SETTINGS_SECTION.allDepartments).toBe('All departments');
+describe('Settings → Organization: Message channels and Files', () => {
+  it('Message channels is listed under Organization, still found by search, and its parent is the Settings overview', () => {
+    const page = SETTINGS_CATALOG.find(e => e.href === '/admin/org/channels' && e.kind === 'page')!;
+    expect(page.section).toBe('Message channels · WhatsApp, email and SMS accounts');
     expect(page.keywords).toEqual(expect.arrayContaining(['whatsapp', 'email', 'sms']));
-    expect(SETTINGS_PARENT['/admin/communication']).toBe('/admin?section=communication');
-    expect(SETTINGS_CATALOG.some(e => e.href === '/admin/communication' && e.title === 'Send a test email')).toBe(true);
+    expect(SETTINGS_PARENT['/admin/org/channels']).toBe('/admin?section=channels');
+    expect(SETTINGS_CATALOG.some(e => e.href === '/admin/org/channels' && e.title === 'Send a test email')).toBe(true);
   });
 
   it('OPD, IPD and Pharmacy admins without lab permissions can open Communication; a role with none of them cannot', () => {
     for (const p of ['manage_opd', 'manage_ipd', 'manage_pharmacy', 'manage_lab_settings', 'manage_notifications'])
-      expect(canOpenRoute('/admin/communication', ctx([p])), p).toBe(true);
-    expect(canOpenRoute('/admin/communication', ctx(['view_report', 'create_order']))).toBe(false);
+      expect(canOpenRoute('/admin/org/channels', ctx([p])), p).toBe(true);
+    expect(canOpenRoute('/admin/org/channels', ctx(['view_report', 'create_order']))).toBe(false);
     expect(COMMS_SETTINGS_PERMS).toEqual(expect.arrayContaining(['manage_opd', 'manage_ipd', 'manage_pharmacy']));
   });
 
   it('Files is an ordinary page in the catalog: beta neuron, settings admins only, with its cards searchable', () => {
     const page = SETTINGS_CATALOG.find(e => e.href === '/admin/files' && e.kind === 'page')!;
     expect(page.title).toBe('Files');
-    expect(page.section).toBe('All departments');
+    expect(page.section).toBe('Files · Files');
     expect(page.beta).toBe('neuron');
     expect(page.perms).toEqual(FILES_SETTINGS_PERMS);
     expect(page.keywords).toEqual(expect.arrayContaining(['neuron', 'synapse', 'axon', 'myelin', 'retina', 'office', 'storage', 'trash']));

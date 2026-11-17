@@ -81,7 +81,8 @@ const I = {
 function whereIs(path: string, query?: Record<string, string>): string {
   const loc = locateSettings(path, query ?? {});
   if (!loc) return 'Settings';
-  const cat = loc.category && loc.category.label !== loc.item.label && loc.item.categories.length > 1 ? ` · ${loc.category.label}` : '';
+  const named = !!query && Object.keys(query).length > 0;
+  const cat = named && loc.category && loc.category.label !== loc.item.label && loc.item.categories.length > 1 ? ` · ${loc.category.label}` : '';
   return `${loc.section.label} · ${loc.item.label}${cat}`;
 }
 
