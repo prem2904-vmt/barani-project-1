@@ -45,7 +45,8 @@ import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-stri
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
-import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
+import { bindTabQuery } from '../../../shared/utils/settings-host';
+import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
 
 /** More sample tests so the live preview runs to three pages. */
 const previewTest = (testId: string, name: string, rows: Array<[string, string, string, string]>) => ({
@@ -83,7 +84,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [RouterLink, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
+  imports: [SettingsSiblingsComponent, RouterLink, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
@@ -102,6 +103,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
              pill — the page has nothing to search); Save rides the band. -->
         <pf-hero-band [back]="true" [tabsOnly]="true">
           <ng-container band-tools>
+            <pf-settings-siblings></pf-settings-siblings>
             <pf-segmented class="pf-hb-tabs" size="sm" [options]="sectionOptions"
                           [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
           </ng-container>
@@ -1233,7 +1235,6 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
   private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
-  protected readonly hosted = injectSettingsHosted();
   private readonly followTab = bindTabQuery(['letterhead', 'patient', 'table', 'columns', 'sequence', 'footer'] as const, (t) => { if (t !== this._tab()) this.setTab(t); });
   /** Left section list hide/unhide — Test Master departments pattern. */
   readonly railHidden = signal<boolean>(

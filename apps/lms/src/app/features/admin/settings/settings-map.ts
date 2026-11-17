@@ -166,6 +166,21 @@ export const SETTINGS_PATHS = {
 } as const;
 const P = SETTINGS_PATHS;
 
+/**
+ * Full-screen pages (owner 2026-11-17, DESIGN-V2 rule 2): a page with its own band / two cards / grid opens as its
+ * OWN page, never inside the Settings shell; its band's back chevron climbs to the Settings section it belongs to
+ * (`settingsParents`). Every other settings path is a card-style page the shell hosts. ONE list — the routes and the
+ * shell both read it.
+ */
+export const SETTINGS_FULL_SCREEN_PATHS: ReadonlySet<string> = new Set<string>([
+  P.tests, P.reports, P.users, P.instruments, P.bridges, P.process, P.workflows, P.inventory,
+  P.referralLabs, P.partnerPrices,
+  P.opdDepartments, P.opdDoctors, P.opdForms, P.opdWorkflow, P.pharmacyDrugs,
+  P.ipdDepartments, P.ipdCaseSheets, P.ipdPending,
+  P.branches, P.files, P.aiConnectors,
+]);
+export const isFullScreenSettingsPath = (path: string): boolean => SETTINGS_FULL_SCREEN_PATHS.has(normPath(path));
+
 export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
   // ───────────────────────────── Departments ─────────────────────────────
   {
@@ -546,4 +561,32 @@ export function rehomeHref(href: string, queryParams?: Readonly<Record<string, s
   const moved = rehome(path, q);
   if (moved) return { href: moved.path, queryParams: Object.keys(moved.query).length ? moved.query : undefined };
   return { href: path, queryParams: Object.keys(q).length ? q : undefined };
+}
+
+/** One page of a setting: the distinct paths its categories live on, in order (a page with `?tab=` views is one). */
+export interface SettingsPageRef { path: string; label: string; query: Record<string, string>; fullScreen: boolean }
+
+/**
+ * The pages a setting is made of. A full-screen page with several pages (Analyzers · Bridges, Referral labs ·
+ * Partner prices …) shows them as a small switch in its band; the shell lists a full-screen page as one row that
+ * leaves the frame. A page's label: the setting's own name when it is the setting's own path, else its first category.
+ */
+export function settingsPages(item: SettingsItem, cats: readonly SettingsCategory[] = item.categories): SettingsPageRef[] {
+  const out: SettingsPageRef[] = [];
+  for (const c of cats) {
+    const path = categoryPath(item, c);
+    if (out.some((o) => o.path === path)) continue;
+    const full = isFullScreenSettingsPath(path);
+    out.push({ path, label: full && path === item.path ? item.label : c.label, query: full ? {} : { ...(c.query ?? {}) }, fullScreen: full });
+  }
+  return out;
+}
+
+/** The setting a full-screen page belongs to (by path), for its band switch and back chevron. */
+export function settingForPath(path: string): { section: SettingsSectionDef; item: SettingsItem } | null {
+  const p = normPath(path);
+  for (const section of SETTINGS_SECTIONS) for (const item of section.items) {
+    if (item.path === p || item.categories.some((c) => categoryPath(item, c) === p)) return { section, item };
+  }
+  return null;
 }

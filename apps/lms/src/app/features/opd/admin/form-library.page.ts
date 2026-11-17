@@ -13,6 +13,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { OpdAdminApi, OpdFormListRow } from './opd-admin.api';
 import { libraryVersion, opdGridDark, opdGridLight } from './opd-admin.util';
+import { SettingsSiblingsComponent } from '../../admin/settings/settings-siblings.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 type Show = 'active' | 'archived';
@@ -27,7 +28,7 @@ type Show = 'active' | 'archived';
 @Component({
   selector: 'pf-opd-form-library',
   standalone: true,
-  imports: [AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SkeletonTableComponent],
+  imports: [SettingsSiblingsComponent, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SkeletonTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./opd-admin.shared.scss'],
   template: `
@@ -40,6 +41,7 @@ type Show = 'active' | 'archived';
               New form
             </button>
           </ng-container>
+        <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only" eyebrow="OPD" title="Consultation forms" parentRoute="/admin/opd"

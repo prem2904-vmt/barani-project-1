@@ -43,7 +43,7 @@ import {
   ROLE_EDITOR_PREFETCH_KEY, USER_EDIT_PREFETCH_KEY, USER_INVITE_PREFETCH_KEY,
   loadRoleEditor, loadUserEdit, loadUserInvite,
 } from './user-editors.loader';
-import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
+import { bindTabQuery } from '../../../shared/utils/settings-host';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -122,10 +122,8 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
             }
           </span>
           <ng-container band-tools>
-            @if (!hosted) {
-              <pf-segmented size="sm" [options]="tabOptions" [value]="tab()"
-                            (valueChange)="setTab($event)"></pf-segmented>
-            }
+            <pf-segmented size="sm" [options]="tabOptions" [value]="tab()"
+                          (valueChange)="setTab($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
             @if (tab() === 'users') {
@@ -180,7 +178,6 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
       </pf-screen-header>
 
       <div class="pf-classic-only flex items-center justify-between gap-3 mb-4 flex-wrap">
-        @if (!hosted) {
         <div class="pf-tabbar">
           <pf-segmented
             [options]="tabOptions"
@@ -189,7 +186,6 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
             (valueChange)="setTab($event)">
           </pf-segmented>
         </div>
-        }
 
         <div class="flex items-center gap-3 ml-auto">
           <span class="text-[12px] pf-num" style="color: var(--text-muted);">
@@ -311,7 +307,6 @@ export class UsersAccessComponent implements OnInit {
   ];
   private readonly _tab = signal<Tab>('users');
   readonly tab = this._tab.asReadonly();
-  protected readonly hosted = injectSettingsHosted();
 
   private readonly _users = signal<User[]>([]);
   private readonly _roles = signal<Role[]>([]);

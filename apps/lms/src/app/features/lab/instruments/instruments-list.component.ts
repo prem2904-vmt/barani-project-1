@@ -21,6 +21,7 @@ import { AssistantButtonComponent } from '../../../shared/assistant/assistant-bu
 import { AssistantPanelComponent } from '../../../shared/assistant/assistant-panel.component';
 import { AssistantPageContext, MAP_PREFILL_STATE_KEY, MappingPrefill } from '../../../shared/assistant/assistant.models';
 import { SupportSessionCardComponent } from './support-session-card.component';
+import { SettingsSiblingsComponent } from '../../admin/settings/settings-siblings.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -40,7 +41,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
 @Component({
   selector: 'pf-instruments-list',
   standalone: true,
-  imports: [AgGridAngular, RouterLink, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
+  imports: [SettingsSiblingsComponent, AgGridAngular, RouterLink, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-inl pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -55,6 +56,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
               Refresh
             </button>
           </ng-container>
+        <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only" eyebrow="Lab settings" title="Instruments" subtitle="Analyzers connected to the lab" parentRoute="/lab/settings"></pf-screen-header>

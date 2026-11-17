@@ -3,9 +3,8 @@ import { CanActivateFn, Route, Router, Routes } from '@angular/router';
 import { betaGuard } from '../../../core/services/beta-features.service';
 import { routeGuards } from '../../../core/auth/route-guards';
 import { OPD_ADMIN_ROUTES } from '../../opd/opd.routes';
-import { CASESHEET_SHELL_ROUTES } from '../../casesheets/casesheets.routes';
 import { casesheetGuard } from '../../casesheets/shared/casesheet.guard';
-import { LEGACY_SECTION, SETTINGS_PATHS as P, rehome } from './settings-map';
+import { LEGACY_SECTION, SETTINGS_FULL_SCREEN_PATHS, SETTINGS_PATHS as P, rehome } from './settings-map';
 
 /**
  * THE Settings route table. Every screen that opens INSIDE the Settings shell (the two-panel frame with the
@@ -15,8 +14,9 @@ import { LEGACY_SECTION, SETTINGS_PATHS as P, rehome } from './settings-map';
  * settings-map.ts and the shell never change. New paths whose real page is not built yet render the closest
  * existing screen (marked `placeholder`), so nothing 404s while the other pieces land.
  *
- * Detail screens (a test, a user, an instrument, a form editor …) are NOT hosted: they keep their own full-screen
- * routes in app.routes.ts and climb back to their list.
+ * Full-screen pages (Test Master, Report design, Users, Analyzers … — SETTINGS_FULL_SCREEN_PATHS) and detail screens
+ * (a test, a user, an instrument, a form editor …) are NOT hosted: they are top-level routes (SETTINGS_FULL_PAGE_ROUTES
+ * here, the editors in app.routes.ts) and climb back to their Settings section / list.
  */
 
 const strip = (p: string) => p.replace(/^\//, '');
@@ -43,8 +43,6 @@ function page(path: string, load: Route['loadComponent'], o: PageOpts = {}): Rou
 }
 
 /** A setting's own path when it only forwards to its first category (the shell does the hop). */
-const blank = () => import('./settings-blank.component').then((m) => m.SettingsBlankComponent);
-const alias = (path: string): Route => page(path, blank);
 
 // ── The pages behind the paths ──
 // Lab merged pages (features/admin/lab-pages); their categories are LAB_PAGES in shared/utils/lab-settings-pages.ts.
@@ -76,19 +74,22 @@ const aiConnectors = () => import('../../ai-connector/ai-connectors-settings.pag
 const channels = () => import('../communication/communication-settings.page').then((m) => m.CommunicationSettingsPage);
 const files = () => import('../../files/files-settings.page').then((m) => m.FilesSettingsPage);
 
-/** A case-sheet admin route (casesheetGuard + its ROUTE_ACCESS guards), unchanged. */
-function sheetRoute(path: string): Route {
-  const r = CASESHEET_SHELL_ROUTES.find((x) => x.path === strip(path));
-  if (!r) throw new Error(`settings.routes: no case-sheet admin route ${path}`);
-  return r;
-}
-/** The case-sheet admin routes the shell hosts (the others — the form editor, its history — stay full screen). */
-export const SHELL_HOSTED_SHEET_PATHS = [P.ipdCaseSheets, P.ipdPending, P.ipdDepartments].map(strip);
-/** OPD admin editors that stay full screen; every other OPD / Pharmacy admin route is hosted by the shell. */
-export const OPD_FULL_SCREEN_ADMIN: ReadonlySet<string> = new Set(['admin/opd/services/:id', 'admin/opd/forms/:id']);
+/** The case-sheet admin routes the shell hosts — none: case sheets are full-screen pages (DESIGN-V2 rule 2). */
+export const SHELL_HOSTED_SHEET_PATHS: readonly string[] = [];
+/** OPD / Pharmacy admin routes the shell hosts (card-style pages); every other OPD admin route is a full page. */
+const OPD_HOSTED: ReadonlySet<string> = new Set([P.opdSettings, P.pharmacy, P.opdFrontDesk].map(strip));
+/** OPD admin routes that stay at the top level (full-screen pages and their editors). */
+export const OPD_FULL_SCREEN_ADMIN: ReadonlySet<string> = new Set(
+  OPD_ADMIN_ROUTES.map((r) => r.path ?? '').filter((p) => !OPD_HOSTED.has(p)),
+);
 
-/** Children of the Settings shell. ORDER does not matter (every path is exact). */
-export const SETTINGS_SHELL_CHILDREN: Routes = [
+/** A setting whose pages are all full-screen: its own path forwards to the first one. */
+function forward(path: string, to: string): Route {
+  return { path: strip(path), pathMatch: 'full', redirectTo: () => inject(Router).createUrlTree([to]) };
+}
+
+/** Every settings page, hosted or not. Which ones the shell hosts is SETTINGS_FULL_SCREEN_PATHS (settings-map). */
+const ALL_SETTINGS_PAGES: Routes = [
   // ── Lab ──
   page(P.labDepartments, labDepartments),
   page(P.labSampleNumbers, labSampleNumbers),
@@ -97,25 +98,18 @@ export const SETTINGS_SHELL_CHILDREN: Routes = [
   page(P.reportOptions, labReportOptions),
   page(P.labCollection, labCollection),
   page(P.labResults, labResults),
-  alias(P.labOutsourcing),
   page(P.referralLabs, referralLabs),
   page(P.partnerPrices, partnerPrices),
-  alias(P.labAnalyzers),
   page(P.instruments, instruments),
   page(P.bridges, bridges),
   page(P.labFrontDesk, labFrontDesk),
   page(P.labAlerts, labAlerts),
   page(P.labNumbers, labNumbers),
-  alias(P.labWorkSteps),
   page(P.process, processBuilder),
   page(P.workflows, workflowBuilder),
   page(P.labHomeCollection, labHomeCollection),
 
-  // ── OPD + Pharmacy (adminGuard + opdGuard; defined once in features/opd/opd.routes.ts) ──
-  ...OPD_ADMIN_ROUTES.filter((r) => !OPD_FULL_SCREEN_ADMIN.has(r.path ?? '')),
-
   // ── IPD ──
-  ...SHELL_HOSTED_SHEET_PATHS.map((p) => sheetRoute(p)),
   { path: strip(P.ipdAlerts), canActivate: [casesheetGuard, ...routeGuards(P.ipdAlerts)], data: { department: 'ipd' }, loadComponent: notifications },
 
   // ── Inventory ──
@@ -132,7 +126,29 @@ export const SETTINGS_SHELL_CHILDREN: Routes = [
   page(P.files, files, { before: [betaGuard('neuron')] }),
 ];
 
-/** Every path hosted by the shell (without the leading slash) — app.routes.ts removes these from the old flat table. */
+const isFull = (r: Route) => SETTINGS_FULL_SCREEN_PATHS.has('/' + (r.path ?? ''));
+
+/** Children of the Settings shell (card-style pages). ORDER does not matter (every path is exact). */
+export const SETTINGS_SHELL_CHILDREN: Routes = [
+  ...ALL_SETTINGS_PAGES.filter((r) => !isFull(r)),
+  // OPD + Pharmacy card pages (adminGuard + opdGuard; defined once in features/opd/opd.routes.ts).
+  ...OPD_ADMIN_ROUTES.filter((r) => OPD_HOSTED.has(r.path ?? '')),
+];
+
+/**
+ * Full-screen settings pages (DESIGN-V2 rule 2): their own band, two cards or grid, as before the re-home. They sit
+ * at the top level beside the shell; the band's back chevron climbs to their Settings section (settingsParents).
+ * A setting made only of such pages (Outsourcing, Analyzers and bridges, Work steps and forms) forwards to its first.
+ */
+export const SETTINGS_FULL_PAGE_ROUTES: Routes = [
+  ...ALL_SETTINGS_PAGES.filter(isFull),
+  forward(P.labOutsourcing, P.referralLabs),
+  forward(P.labAnalyzers, P.instruments),
+  forward(P.labWorkSteps, P.process),
+  // Case sheets (IPD departments, case sheets, pending) stay in CASESHEET_SHELL_ROUTES (app.routes.ts) as they were.
+];
+
+/** Every path hosted by the shell (without the leading slash). */
 export const SETTINGS_HOSTED_PATHS: ReadonlySet<string> = new Set(
   SETTINGS_SHELL_CHILDREN.map((r) => r.path ?? ''),
 );

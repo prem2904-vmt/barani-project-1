@@ -28,6 +28,7 @@ import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
 
 interface HistoryRow {
   id: string;
@@ -40,7 +41,7 @@ interface HistoryRow {
 @Component({
   selector: 'pf-workflow-builder',
   standalone: true,
-  imports: [BusyDirective, SkeletonRowsComponent,
+  imports: [SettingsSiblingsComponent, BusyDirective, SkeletonRowsComponent,
     FormsModule,
     DragDropModule,
     DatePipe,
@@ -58,7 +59,8 @@ interface HistoryRow {
         @if (theme.isNewDesign()) {
           <!-- Band pill (owner): search the screen forms. -->
           <pf-hero-band [back]="true" placeholder="Search forms — patient register, order create…"
-                        [value]="q()" (valueChange)="q.set($event)"></pf-hero-band>
+                        [value]="q()" (valueChange)="q.set($event)"><ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
+        </pf-hero-band>
         }
         <pf-screen-header class="pf-classic-only"
           eyebrow="Admin"

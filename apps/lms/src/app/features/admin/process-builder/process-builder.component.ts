@@ -13,6 +13,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
 import { ACTION_CATALOG, ACTION_POLICY, ActionCatalogEntry, KNOWN_ROLES, ProcessCategory, ProcessWorkflowConfig, ProcessWorkflowRecord, WORKAREA_ICONS, catalogFor, coupledTypes, dependentsOf, isAllowedPlacement, isFixedSlotAction, isLockedItem, isMandatoryItem, actionHome, normalizeWorkflow, requiresOf, workAreaIconPath } from '../../../shared/models/process-workflow.model';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
 
 interface LaneItem { id: string; type: string; label?: string; enabled: boolean; }
 interface Lane { cat: ProcessCategory; items: LaneItem[]; }
@@ -30,7 +31,7 @@ const LANE_COLOR = '#7c3aed';
 @Component({
   selector: 'pf-process-builder',
   standalone: true,
-  imports: [BusyDirective, FormsModule, DragDropModule, HeroBandComponent, SelectComponent],
+  imports: [SettingsSiblingsComponent, BusyDirective, FormsModule, DragDropModule, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pb pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-12">
@@ -41,6 +42,7 @@ const LANE_COLOR = '#7c3aed';
         <pf-hero-band [back]="true" placeholder="Search actions to place — collect, validate, print…"
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-tools>
+            <pf-settings-siblings></pf-settings-siblings>
             @if (branches().length > 0) {
               <pf-select class="pb-bandsel" size="sm" [options]="scopeOptions()" [value]="scope() ?? ''"
                          [searchable]="branches().length > 8"

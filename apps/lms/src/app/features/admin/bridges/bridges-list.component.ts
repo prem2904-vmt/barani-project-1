@@ -20,6 +20,7 @@ import { BridgesApiService } from '../../../shared/bridges/bridges-api.service';
 import { BridgeNearbyService } from '../../../shared/bridges/bridge-nearby.service';
 import type { BridgeDto } from '../../../shared/bridges/bridge.models';
 import { agoText, bridgeStatusWord, versionText, wifiSummary } from '../../../shared/bridges/bridge-status';
+import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -43,7 +44,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
 @Component({
   selector: 'pf-bridges-list',
   standalone: true,
-  imports: [AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective],
+  imports: [SettingsSiblingsComponent, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-brl pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -57,6 +58,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
               <span class="pf-brl__hide-phone">Refresh</span>
             </button>
           </ng-container>
+        <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only" eyebrow="Lab settings" title="Bridges" subtitle="Prefrontal Bridges that connect analyzers to the lab" parentRoute="/lab/settings"></pf-screen-header>

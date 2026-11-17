@@ -7,6 +7,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -45,12 +46,13 @@ interface PriceRow {
 @Component({
   selector: 'pf-partner-test-prices',
   standalone: true,
-  imports: [HeroBandComponent, SelectComponent, SkeletonTableComponent, AgGridAngular],
+  imports: [SettingsSiblingsComponent, HeroBandComponent, SelectComponent, SkeletonTableComponent, AgGridAngular],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-page px-4 md:px-8 pt-6">
       <pf-hero-band [back]="true">
         <ng-container band-tools>
+            <pf-settings-siblings></pf-settings-siblings>
           <pf-select class="ptp-filter" size="sm" [options]="labOptions()" [value]="referralLabId()"
                      [searchable]="true" (valueChange)="onLabChange($event)"></pf-select>
         </ng-container>

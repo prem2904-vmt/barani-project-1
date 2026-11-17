@@ -7,6 +7,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { OpdAdminApi, OpdWorkflowPatch, OpdWorkflowSettings } from './opd-admin.api';
+import { SettingsSiblingsComponent } from '../../admin/settings/settings-siblings.component';
 
 interface Opt<T extends string> { value: T; label: string; hint: string; }
 
@@ -32,7 +33,7 @@ export const DEFAULT_WORKFLOW_SETTINGS: OpdWorkflowSettings = {
 @Component({
   selector: 'pf-opd-workflow',
   standalone: true,
-  imports: [HeroBandComponent, ScreenHeaderComponent, SkeletonFormComponent],
+  imports: [SettingsSiblingsComponent, HeroBandComponent, ScreenHeaderComponent, SkeletonFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./opd-admin.shared.scss'],
   styles: [`
@@ -77,6 +78,7 @@ export const DEFAULT_WORKFLOW_SETTINGS: OpdWorkflowSettings = {
             </span>
           </ng-container>
           <div band-search class="pf-ctx"><span class="pf-ctx__primary">OPD workflow</span><span class="pf-ctx__chip"><span class="pf-ctx__k">Lab</span>unchanged</span></div>
+        <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only" eyebrow="OPD" title="OPD workflow" parentRoute="/admin/opd"

@@ -14,7 +14,7 @@ import { TEST_MASTER_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
 import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
 import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
-import { OPD_FULL_SCREEN_ADMIN, SETTINGS_REDIRECTS, SETTINGS_SHELL_ROUTE, SHELL_HOSTED_SHEET_PATHS } from './features/admin/settings/settings.routes';
+import { OPD_FULL_SCREEN_ADMIN, SETTINGS_FULL_PAGE_ROUTES, SETTINGS_REDIRECTS, SETTINGS_SHELL_ROUTE, SHELL_HOSTED_SHEET_PATHS } from './features/admin/settings/settings.routes';
 import { CASESHEET_SHELL_ROUTES, withAppModes } from './features/casesheets/casesheets.routes';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
@@ -126,9 +126,11 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/frontdesk/patient-profile/patient-profile.component').then(m => m.PatientProfileComponent)
       },
 
-      // Settings: every setting opens INSIDE the shell (sections → that setting's categories on the left, the screen on
-      // the right); the whole table lives in features/admin/settings/settings.routes.ts. Old links redirect there.
+      // Settings: card-style settings open INSIDE the shell (Test Master's frame: band, side card of categories, main
+      // card of rows); full-screen pages (Test Master, Report design, Users, Analyzers …) are their own pages. The whole
+      // table lives in features/admin/settings/settings.routes.ts. Old links redirect there.
       SETTINGS_SHELL_ROUTE,
+      ...SETTINGS_FULL_PAGE_ROUTES,
       ...SETTINGS_REDIRECTS,
 
       // Admin — gated: hidden from nav + blocked at route level if the user

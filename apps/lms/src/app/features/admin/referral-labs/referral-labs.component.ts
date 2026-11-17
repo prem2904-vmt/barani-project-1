@@ -13,6 +13,7 @@ import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
 
 interface LabDraft {
   id?: string;
@@ -37,7 +38,7 @@ const EMPTY: LabDraft = {
 @Component({
   selector: 'pf-referral-labs',
   standalone: true,
-  imports: [BusyDirective, SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
+  imports: [SettingsSiblingsComponent, BusyDirective, SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -60,6 +61,7 @@ const EMPTY: LabDraft = {
               {{ formOpen() ? 'Cancel' : 'Add referral lab' }}
             </button>
           </ng-container>
+        <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
