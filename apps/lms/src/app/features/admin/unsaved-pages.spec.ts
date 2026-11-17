@@ -5,6 +5,8 @@ import { ReportTemplateComponent } from './report-template/report-template.compo
 import { BillingConfigComponent } from './billing-config/billing-config.component';
 import { TestEditorComponent } from './tests/test-editor/test-editor.component';
 import { hasUnsavedChangesContract } from '../../shared/utils/unsaved-changes';
+import { CommunicationSettingsPage } from './communication/communication-settings.page';
+import { AppointmentsConfigComponent } from './appointments-config/appointments-config.component';
 
 /**
  * "Save your changes?" (owner 2026-11-17) on the pages with an explicit Save: Report design, Billing › GST / Invoices
@@ -77,7 +79,6 @@ describe('Test editor asks before it is left', () => {
 
 describe('Message channels and Front desk ask before they are left', () => {
   it('Message channels: unsaved = the email form is dirty; Save from the prompt runs the form Save', async () => {
-    const { CommunicationSettingsPage } = await import('./communication/communication-settings.page');
     const cp = CommunicationSettingsPage.prototype as any;
     const self: any = { emailDirty: signal(true) };
     self.saveEmail = vi.fn(async () => { self.emailDirty.set(false); });
@@ -88,8 +89,7 @@ describe('Message channels and Front desk ask before they are left', () => {
     expect(await cp.saveChanges.call(self)).toBe(false);
   });
 
-  it('Front desk: booking settings dirty against the loaded copy (config + open hours)', async () => {
-    const { AppointmentsConfigComponent } = await import('./appointments-config/appointments-config.component');
+  it('Front desk: booking settings dirty against the loaded copy (config + open hours)', () => {
     const ap = AppointmentsConfigComponent.prototype as any;
     const self: any = { _cfg: signal({ queueMode: 'token_queue' }), _startTime: signal('09:00'), _endTime: signal('17:00'), savedJson: signal<string | null>(null) };
     self.snapshot = ap.snapshot.bind(self);
