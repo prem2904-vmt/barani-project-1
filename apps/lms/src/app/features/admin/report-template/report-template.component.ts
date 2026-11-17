@@ -157,7 +157,6 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
                           [value]="tab()" (valueChange)="setTab($event)" data-testid="rt-tabs"></pf-segmented>
           </ng-container>
           <!-- Settings (owner 2026-11-17): no buttons in the band — Tidy up, issues and Save sit in the settings pane. -->
-          </ng-container>
         </pf-hero-band>
       }
       <header class="pf-rt-head pf-classic-only">
