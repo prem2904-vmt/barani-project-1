@@ -156,9 +156,9 @@ export class OrgProfilePage {
 
   readonly shortMax = SHORT_NAME_MAX;
   readonly modeOptions: SegmentedOption<TenantBrandingMode>[] = [
-    { value: 'both', label: 'Logo and name' },
-    { value: 'logo', label: 'Logo only' },
-    { value: 'name', label: 'Name only' },
+    { value: 'both', label: 'Both' },
+    { value: 'logo', label: 'Logo' },
+    { value: 'name', label: 'Name' },
   ];
 
   readonly name = signal('');

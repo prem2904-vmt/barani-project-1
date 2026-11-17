@@ -2,9 +2,10 @@ import type { BrowserContext, Page } from '@playwright/test';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import {
-  test, expect, shotsDir, isTouch, isDesktopApp, projectName, engine,
+  test, expect, shotsDir, isTouch, isPhone, isDesktopApp, projectName, engine,
   expectDeviceTier, expectNoHorizontalScroll, expectRowFits,
 } from './support/form-factor';
+import { openComms as sharedOpenComms, pickCommsTab as sharedPickCommsTab } from './support/neg-backend';
 
 /**
  * Settings → Communication (WhatsApp, Email, SMS) + Email sharing + SMS Chat (2026-11-13), element-based,
@@ -196,13 +197,10 @@ async function go(page: Page, route: string) {
 const visible = (page: Page, sel: string) => page.locator(sel).locator('visible=true').first();
 
 async function openComms(page: Page, tab?: string) {
-  await go(page, `/admin/communication${tab ? `?tab=${tab}` : ''}`);
-  await expect(visible(page, '[data-testid="comms-page"]')).toBeVisible({ timeout: 60_000 });
+  await sharedOpenComms(page, tab);
   await theme(page, false);
 }
-async function pickTab(page: Page, label: string) {
-  await visible(page, 'pf-hero-band pf-segmented').getByText(label, { exact: true }).click();
-}
+const pickTab = sharedPickCommsTab;
 
 async function openDesk(page: Page) {
   await go(page, '/frontdesk');
@@ -230,8 +228,8 @@ test.describe('cm-comms', () => {
     const page = await setup(pg, context);
     await openComms(page);
     await expectDeviceTier(page);
-    const tabs = visible(page, 'pf-hero-band pf-segmented');
-    for (const t of ['WhatsApp', 'Email', 'SMS']) await expect(tabs.getByText(t, { exact: true })).toBeVisible();
+    // The three channels are the setting's categories in the Settings shell (left panel on wide screens).
+    if (!isPhone()) for (const t of ['whatsapp', 'email', 'sms']) await expect(visible(page, `[data-testid="tp-item-${t}"]`)).toBeVisible();
     // WhatsApp: the cards moved from Lab settings live here.
     await expect(visible(page, '[data-testid="ls-whatsapp"]')).toBeVisible({ timeout: 20_000 });
     await expect(visible(page, '[data-testid="ls-wa-chat-state"]')).toHaveText('On');
@@ -288,14 +286,14 @@ test.describe('cm-comms', () => {
     expect(calls.find(c => c.path === '/api/settings/communication/sms')!.body).toEqual({ chat: false });
   });
 
-  test(`Lab settings hub lists Communication; the old WhatsApp link redirects`, async ({ page: pg, context }) => {
+  test(`Settings lists Message channels under Organization; the old Communication and WhatsApp links redirect`, async ({ page: pg, context }) => {
     const page = await setup(pg, context);
-    await go(page, '/lab/settings');
-    const tile = page.locator('a[href$="/admin/communication"]').locator('visible=true').first();
-    await expect(tile).toBeVisible({ timeout: 60_000 });
-    await expect(tile).toContainText('Communication');
+    await go(page, '/admin?section=channels');
+    await expect(visible(page, '[data-testid="ov-tile-admin-org-channels"]')).toBeVisible({ timeout: 60_000 });
+    await go(page, '/admin/communication?tab=email');
+    await page.waitForURL(/\/admin\/org\/channels\?tab=email/, { timeout: 20_000 });
     await go(page, '/admin/whatsapp');
-    await page.waitForURL(/\/admin\/communication\?tab=whatsapp/, { timeout: 20_000 });
+    await page.waitForURL(/\/admin\/org\/channels\?tab=whatsapp/, { timeout: 20_000 });
     await expect(visible(page, '[data-testid="ls-whatsapp"]')).toBeVisible({ timeout: 20_000 });
   });
 

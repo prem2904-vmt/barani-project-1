@@ -310,7 +310,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     items: [
       { id: 'org-profile', label: 'Name and logo', path: P.orgProfile, iconPath: ICON.person,
         blurb: 'Organization name, short name and logo, login handle.',
-        categories: [{ id: 'profile', label: 'Name and logo' }] },
+        categories: [{ id: 'profile', label: 'Name, logo and login handle' }] },
     ],
   },
   {

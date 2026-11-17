@@ -67,20 +67,20 @@ test.beforeEach(async ({ page, context }) => {
 });
 
 const PAGES: Array<{ name: string; url: string; ready: string; text?: string }> = [
-  { name: 'sample-numbers-format', url: '/admin/lab/sample-numbers', ready: '[data-testid="sample-id-format"]', text: 'Sample ID format' },
+  { name: 'sample-numbers-format', url: '/admin/lab/sample-numbers?tab=format', ready: '[data-testid="sample-id-format"]', text: 'Sample ID format' },
   { name: 'sample-numbers-prefixes', url: '/admin/lab/sample-numbers?tab=prefixes', ready: '[data-testid="space-prefixes"]', text: 'Prefix per lab space' },
   { name: 'sample-numbers-structure', url: '/admin/lab/sample-numbers?tab=structure', ready: 'pf-lab-settings .pf-ls__card', text: 'Lab structure' },
   { name: 'sample-numbers-barcode', url: '/admin/lab/sample-numbers?tab=barcode', ready: 'pf-lab-settings .pf-ls__card', text: 'Specimen label code' },
   { name: 'sample-numbers-find', url: '/admin/lab/sample-numbers?tab=find', ready: 'pf-lab-settings .pf-ls__card', text: 'Pre-fill sample search' },
-  { name: 'collection-queue', url: '/admin/lab/collection', ready: 'pf-lab-settings .pf-ls__card', text: 'Queue focus' },
+  { name: 'collection-queue', url: '/admin/lab/collection?tab=queue', ready: 'pf-lab-settings .pf-ls__card', text: 'Queue focus' },
   { name: 'collection-assign', url: '/admin/lab/collection?tab=assign', ready: '.pf-ls__dept', text: 'Validators' },
   { name: 'collection-noscan', url: '/admin/lab/collection?tab=noscan', ready: 'pf-lab-settings .pf-ls__card', text: 'no-scan' },
-  { name: 'results-validation', url: '/admin/lab/results', ready: 'pf-lab-settings .pf-ls__card', text: 'Require validation' },
+  { name: 'results-validation', url: '/admin/lab/results?tab=validation', ready: 'pf-lab-settings .pf-ls__card', text: 'Require validation' },
   { name: 'results-constants', url: '/admin/lab/results?tab=constants', ready: 'pf-lab-settings .pf-ls__card', text: 'Calculation constants' },
   { name: 'results-micro', url: '/admin/lab/results?tab=micro', ready: '[data-testid="culture-save"]', text: 'Turnaround' },
-  { name: 'home-collection', url: '/admin/lab/home-collection', ready: '[data-testid="hc-switch-card"]', text: 'Home collection' },
+  { name: 'home-collection', url: '/admin/lab/home-collection?tab=switch', ready: '[data-testid="hc-switch-card"]', text: 'Home collection' },
   { name: 'home-collection-agents', url: '/admin/lab/home-collection?tab=agents', ready: 'pf-home-collection-agents', text: 'agent' },
-  { name: 'front-desk', url: '/admin/lab/front-desk', ready: 'pf-appointments-config .pf-mode-btn', text: 'Walk-up' },
+  { name: 'front-desk', url: '/admin/lab/front-desk?tab=mode', ready: 'pf-appointments-config .pf-mode-btn', text: 'Walk-up' },
   { name: 'front-desk-referring', url: '/admin/lab/front-desk?tab=referring', ready: 'pf-referring-network' },
   { name: 'alerts', url: '/admin/lab/alerts', ready: '.pf-nc-card', text: 'Order cancelled' },
   { name: 'numbers', url: '/admin/lab/numbers', ready: 'pf-kpi-config' },
@@ -104,7 +104,7 @@ test.describe('lab settings pages', () => {
   }
 
   test('sample numbers: tabs write ?tab=; the legacy Organization link lands here', async ({ page }) => {
-    await go(page, '/admin/lab/sample-numbers');
+    await go(page, '/admin/lab/sample-numbers?tab=format');
     await expect(vis(page, '[data-testid="sample-id-format"]')).toBeVisible({ timeout: 60_000 });
     await page.getByRole('radio', { name: 'Barcode type' }).first().click().catch(() => undefined);
     await go(page, '/admin/organization?tab=sample');
@@ -112,7 +112,7 @@ test.describe('lab settings pages', () => {
   });
 
   test('sample ID format saves through the same API', async ({ page }) => {
-    await go(page, '/admin/lab/sample-numbers');
+    await go(page, '/admin/lab/sample-numbers?tab=format');
     await expect(vis(page, '[data-testid="sample-id-format"]')).toBeVisible({ timeout: 60_000 });
     await vis(page, '.pf-sf__save').click();
     await expect.poll(() => neg.calls.find(c => c.path === '/api/config/sample-id')?.body).toEqual({ enabled: true, datePrefix: 'yymm', separator: '-', padding: 5, serialMode: 'numeric', letterCount: 2 });
@@ -120,7 +120,7 @@ test.describe('lab settings pages', () => {
 
   test('phone: the page tabs scroll, nothing overflows', async ({ page }) => {
     test.skip(!isPhone(), 'phone only');
-    await go(page, '/admin/lab/sample-numbers');
+    await go(page, '/admin/lab/sample-numbers?tab=format');
     await expect(vis(page, '[data-testid="sample-id-format"]')).toBeVisible({ timeout: 60_000 });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);

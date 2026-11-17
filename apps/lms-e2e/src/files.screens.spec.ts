@@ -356,12 +356,12 @@ test.describe('Settings → Files', () => {
     await shot(page, 'files-settings-viewonly');
   });
 
-  test('the Settings overview lists Departments, then Organization, then All departments LAST with Communication and Files as sections', async ({ page, context }) => {
+  test('the Settings overview lists Departments, then Organization; Message channels and Files are Organization sections', async ({ page, context }) => {
     await boot(page, context, { route: '/admin' });
     await expect(page.locator('[data-testid="tp-item-files"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     const order = await page.locator('[data-testid^="tp-group-"]').evaluateAll(els => els.map(e => (e.textContent ?? '').trim().toUpperCase()));
-    expect(order).toEqual(['DEPARTMENTS', 'ORGANIZATION', 'ALL DEPARTMENTS']);
-    await expect(page.locator('[data-testid="tp-item-communication"]').locator('visible=true').first()).toBeVisible();
+    expect(order).toEqual(['DEPARTMENTS', 'ORGANIZATION']);
+    await expect(page.locator('[data-testid="tp-item-channels"]').locator('visible=true').first()).toBeVisible();
     await expectLayout(page, 'settings overview');
     await shot(page, 'settings-overview');
     await page.locator('[data-testid="tp-item-files"]').locator('visible=true').first().click();
@@ -372,7 +372,7 @@ test.describe('Settings → Files', () => {
 
   test('without the beta the Files tile and the Files screen do not exist', async ({ page, context }) => {
     await boot(page, context, { route: '/admin', beta: false });
-    await expect(page.locator('[data-testid="tp-item-communication"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('[data-testid="tp-item-channels"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('[data-testid="tp-item-files"]')).toHaveCount(0);
     await page.goto('/files');
     await expect(page).not.toHaveURL(/\/files$/, { timeout: 30_000 });

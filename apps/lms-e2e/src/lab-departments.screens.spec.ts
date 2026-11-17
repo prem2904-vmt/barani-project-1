@@ -86,7 +86,7 @@ test.describe('lab departments page', () => {
   test('departments: origin marks, on/off, add, duplicate refused, rename, delete', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', e => errors.push(e.message));
-    await go(page, '/admin/lab/departments');
+    await go(page, '/admin/lab/departments?tab=departments');
     await expect(tid(page, 'ld-list')).toBeVisible({ timeout: 60_000 });
     await expect(tid(page, 'ld-row-BIO').locator('[data-testid="ld-origin"]')).toContainText('From the catalogue');
     await expect(tid(page, 'ld-row-CYTO').locator('[data-testid="ld-origin"]')).toContainText('Made here');

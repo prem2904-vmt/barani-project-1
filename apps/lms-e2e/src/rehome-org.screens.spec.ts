@@ -30,8 +30,8 @@ test.beforeEach(async ({ page, context }) => {
 
 const PAGES: Array<{ name: string; url: string; marker: string }> = [
   { name: 'profile', url: '/admin/org/profile', marker: '[data-testid="org-profile"]' },
-  { name: 'numbers', url: '/admin/org/numbers', marker: 'text=Patient ID format' },
-  { name: 'channels', url: '/admin/org/channels', marker: '[data-testid="comms-page"]' },
+  { name: 'numbers', url: '/admin/org/numbers?tab=patient', marker: 'text=Patient ID format' },
+  { name: 'channels', url: '/admin/org/channels?tab=whatsapp', marker: '[data-testid="comms-page"]' },
   { name: 'billing-gst', url: '/admin/billing?tab=gst', marker: 'text=Allow discounts' },
   { name: 'billing-invoice', url: '/admin/billing?tab=invoice', marker: '[data-testid="bc-name-ro"]' },
   { name: 'billing-payments', url: '/admin/billing?tab=payments', marker: '[data-testid="billing-payments"]' },

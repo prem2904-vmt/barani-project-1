@@ -225,12 +225,23 @@ export async function go(page: Page, route: string): Promise<void> {
 export const visible = (page: Page, sel: string) => page.locator(sel).locator('visible=true').first();
 export const toast = (page: Page, text: string | RegExp) => page.getByText(text).locator('visible=true').first();
 
+/** Message channels live at Organization › Message channels (Settings shell); each channel is a category (`?tab=`). */
+export const COMMS_TAB: Record<string, string> = { WhatsApp: 'whatsapp', Email: 'email', SMS: 'sms' };
 export async function openComms(page: Page, tab?: string): Promise<void> {
-  await go(page, `/admin/communication${tab ? `?tab=${tab}` : ''}`);
+  await go(page, `/admin/org/channels?tab=${tab ?? 'whatsapp'}`);
   await expect(visible(page, '[data-testid="comms-page"]')).toBeVisible({ timeout: 60_000 });
 }
+/** Switch channel the way a person does: the shell's category in the left panel (wide), or back to the list and pick it (phone). */
 export async function pickCommsTab(page: Page, label: string): Promise<void> {
-  await visible(page, 'pf-hero-band pf-segmented').getByText(label, { exact: true }).click();
+  const id = COMMS_TAB[label] ?? label.toLowerCase();
+  const item = page.locator(`[data-testid="tp-item-${id}"]`).locator('visible=true').first();
+  if (!(await item.count())) {
+    const back = page.locator('[data-testid="tp-back"], [data-testid="tp-nav-back"]').locator('visible=true').first();
+    if (await back.count()) await back.click();
+  }
+  await page.locator(`[data-testid="tp-item-${id}"]`).locator('visible=true').first().click();
+  await expect(page).toHaveURL(new RegExp(`tab=${id}`));
+  await expect(visible(page, '[data-testid="comms-page"]')).toBeVisible({ timeout: 20_000 });
 }
 
 /** Front desk → Completed tab, with the first demo patient listed. */
