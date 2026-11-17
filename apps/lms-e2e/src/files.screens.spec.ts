@@ -658,5 +658,41 @@ test.describe('each app opens its own start screen', () => {
   });
 });
 
+// The loading screen IS the app about to appear (owner 2026-11-17): each engine's own first screen drawn while it boots. The stand-in
+// engine never says ready, so the loader stays up for the shot; the first-time hint shows only after ~3 s.
+test.describe('each app loads looking like itself', () => {
+  const LOADERS = [
+    { id: 'neuron', route: 'sheet', file: 'file-1', mark: '.fl-sheet' },
+    { id: 'synapse', route: 'doc', file: 'file-2', mark: '.fl-page--doc' },
+    { id: 'axon', route: 'slides', file: 'file-3', mark: '.fl-slide' },
+    { id: 'myelin', route: 'pdf', file: 'file-6', mark: '.fl-page--pdf' },
+    { id: 'retina', route: 'image', file: 'file-7', mark: '.fl-checker' },
+  ];
+  for (const a of LOADERS) {
+    for (const mode of ['file', 'start'] as const) {
+      test(`${a.id} ${mode}: the app's own first screen while the engine boots, the hint after 3 s`, async ({ page, context }) => {
+        await stubEngine(page, a.id);
+        const errors = await boot(page, context, { route: `/files/${a.route}/${mode === 'start' ? 'start' : a.file}` });
+        const loader = tid(page, 'files-loading');
+        await expect(loader).toBeVisible({ timeout: 60_000 });
+        await expect(loader).toHaveAttribute('data-app', a.id);
+        await expect(loader).toHaveAttribute('data-mode', mode);
+        await expect(tid(page, `files-loader-${a.id}-${mode}`)).toBeVisible();
+        if (mode === 'file') await expect(loader.locator(a.mark).first()).toBeVisible();
+        else await expect(loader.locator('.fl-home').first()).toBeVisible();
+        await expect(page.locator('pf-skeleton-detail, pf-skeleton-rows').locator('visible=true')).toHaveCount(0);
+        await expect(tid(page, 'files-loading-hint')).toBeVisible();
+        await expect.poll(() => tid(page, 'files-loading-hint').evaluate(e => Number(getComputedStyle(e).opacity)), { timeout: 8_000 }).toBeGreaterThan(0.9);
+        // The loader covers the whole stage: the engine's own "Loading…" text never shows through.
+        const [st, ld] = await Promise.all([tid(page, 'files-stage').boundingBox(), loader.boundingBox()]);
+        expect(Math.abs((st?.height ?? 0) - (ld?.height ?? 0))).toBeLessThan(2);
+        expect(await loader.evaluate(e => getComputedStyle(e).backgroundColor)).not.toMatch(/rgba\(.*, 0(\.\d+)?\)$/);
+        await shot(page, `loading-${a.id}-${mode}`);
+        expect(errors, 'no uncaught errors').toEqual([]);
+      });
+    }
+  }
+});
+
 void neg; void isDesktopApp;
 

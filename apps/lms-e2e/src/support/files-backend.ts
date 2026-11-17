@@ -9,6 +9,8 @@ import { neg } from './neg-backend';
  *   apps        per-app { enabled, canRead, canWrite } as the server would answer for the signed-in person
  *   flaggedExportDenied   device-export of a flagged file answers 403 phi_export_denied
  */
+/** A real 1x1 PNG, so a stored image passes the editor's type check. */
+const PNG_BYTES = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 export interface FbFile { id: string; name: string; kind: string; sizeBytes: number; version: number; updatedAt: string; updatedByName: string; ownerId?: string; containsPhi?: boolean; phiSources?: unknown[]; sharedAccess?: string; deletedAt?: string; bytes?: Buffer }
 export interface FbCall { method: string; path: string; body: unknown; ifMatch: string | null; head: string | null; query: string }
 const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -116,7 +118,7 @@ export async function installFilesBackend(page: Page, o: { beta?: boolean } = {}
     const f = one ? (fb.files.get(one[1]) ?? fb.trash.get(one[1])) : undefined;
     if (!one || !f) return json(404, { success: false, error: 'not_found' });
     const sub = one[2];
-    if (sub === '/content' && m === 'GET') return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/octet-stream', etag: `"${f.version}"` }, body: f.bytes ?? (f.kind === 'pdf' ? PDF_BYTES : RESULTS_XLSX) });
+    if (sub === '/content' && m === 'GET') return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/octet-stream', etag: `"${f.version}"` }, body: f.bytes ?? (f.kind === 'pdf' ? PDF_BYTES : f.kind === 'image' ? PNG_BYTES : RESULTS_XLSX) });
     if (sub === '/device-export') {
       if (f.containsPhi && fb.flaggedExportDenied) return json(403, { success: false, error: 'phi_export_denied', message: 'x' });
       return ok({ allowed: true, flagged: !!f.containsPhi });

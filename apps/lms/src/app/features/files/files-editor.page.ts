@@ -8,11 +8,11 @@ import { DialogService } from '../../core/services/dialog.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { ToastService } from '../../core/services/toast.service';
 import { ApiError } from '../../shared/models/api-response.model';
-import { SkeletonRowsComponent, SkeletonDetailComponent } from '@prefrontal/shared';
 import { HeroBandComponent } from '../../shared/components/hero-band/hero-band.component';
 import { PfDateComponent } from '../../shared/components/pf-date/pf-date.component';
 import { FilesLogoComponent } from '../../shared/components/files-logo/files-logo.component';
 import { FilesShareDialogComponent } from './files-share.dialog';
+import { FilesLoadingComponent, FilesLoadingMode } from './files-loading.component';
 import { PfSelectOption, SelectComponent } from '../../shared/primitives/select.component';
 import { labDaysAgo, labToday } from '../../shared/utils/lab-clock';
 import { PATIENT_HIDDEN_NOTE, neuronAccess } from '../neuron/neuron-access';
@@ -41,7 +41,7 @@ interface Session { /** True while the app shows its OWN start screen (no file y
 @Component({
   selector: 'pf-files-editor',
   standalone: true,
-  imports: [SkeletonRowsComponent, SkeletonDetailComponent, HeroBandComponent, NgTemplateOutlet, SelectComponent, PfDateComponent, FilesLogoComponent, FilesShareDialogComponent],
+  imports: [FilesLoadingComponent, HeroBandComponent, NgTemplateOutlet, SelectComponent, PfDateComponent, FilesLogoComponent, FilesShareDialogComponent],
   providers: [FilesBridge],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -133,18 +133,17 @@ interface Session { /** True while the app shows its OWN start screen (no file y
               <p class="pf-empty__body">{{ bridge.failure() }}</p>
               <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="closeFn()">Back</button>
             </div>
-          } @else if (bridge.state() !== 'ready') {
-            <div class="nr-over" role="status" aria-live="polite" data-testid="files-loading">
-              <pf-skeleton-detail [label]="'Opening ' + app().name + '…'"></pf-skeleton-detail>
-              <p class="nr-over__hint">The first time can take a moment while it downloads. After that it opens fast.</p>
-            </div>
+          } @else if (!ready() || loaderFading()) {
+            <!-- The app's own first screen drawn while its engine boots; it fades out (200 ms) once the bridge says ready. -->
+            <pf-files-loading data-testid="files-loading" [app]="app().id" [mode]="loaderMode()" [class.pf-fl-leave]="ready()" />
           }
           @if (insertOpen() && canInsert()) {
             <div class="nr-float"><ng-container *ngTemplateOutlet="insertCard"></ng-container></div>
           }
         </div>
-      } @else if (loading()) {
-        <div class="nr-over nr-over--flow" role="status"><pf-skeleton-rows [rows]="4" [avatar]="false" label="Opening…"></pf-skeleton-rows></div>
+      } @else {
+        <!-- Before the file is in hand: the same app loader in the same place, so nothing jumps when the session starts. -->
+        <div class="nr-stage"><pf-files-loading data-testid="files-loading" [app]="app().id" [mode]="loaderMode()" /></div>
       }
     </section>
 
@@ -232,7 +231,6 @@ interface Session { /** True while the app shows its OWN start screen (no file y
     .nr-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--card-bg, #fff); }
     .nr-over { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--card-bg, #fff) 92%, transparent); }
     .nr-over--flow { position: static; min-height: 200px; background: transparent; }
-    .nr-over__hint { margin: 0; max-width: 340px; font-size: 13px; line-height: 1.5; color: var(--text-tertiary); }
     .nr-over--solid { background: var(--card-bg, #fff); }
     .nr-float { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(400px, calc(100% - 24px)); display: flex; z-index: 3; }
     .nr-float .nr-side { flex: 1 1 auto; box-shadow: 0 12px 32px rgba(0,0,0,.18); }
@@ -309,6 +307,11 @@ export class FilesEditorPage {
   }
   /** The app is showing its own start screen: no file yet, so nothing to save, rename or share. */
   protected readonly isStart = computed(() => !!this.session()?.start);
+  /** Which first screen the loader draws: the app's start screen for `/files/<kind>/start`, else the editor with a file. */
+  protected readonly loaderMode = computed<FilesLoadingMode>(() => {
+    const s = this.session();
+    return (s ? !!s.start : this.route.snapshot.paramMap.get('id') === START_ID) ? 'start' : 'file';
+  });
   protected readonly unsaved = computed(() => {
     const s = this.session();
     return !!s && !s.start && this.canWrite() && (this.bridge.dirty() || this.pendingStore() || (s.file.id === null && s.fromResults));
@@ -342,7 +345,20 @@ export class FilesEditorPage {
 
   readonly closeFn = (): void => { void this.close(); };
 
+  /** True for the ~200 ms the loader fades out after the engine said ready (it stays in the DOM, opacity 0, then goes). */
+  protected readonly loaderFading = signal(false);
+  private fadeTimer: ReturnType<typeof setTimeout> | undefined;
+
   constructor() {
+    effect(() => {
+      if (this.bridge.state() !== 'ready') return;
+      untracked(() => {
+        this.loaderFading.set(true);
+        clearTimeout(this.fadeTimer);
+        this.fadeTimer = setTimeout(() => this.loaderFading.set(false), 220);
+      });
+    });
+    inject(DestroyRef).onDestroy(() => clearTimeout(this.fadeTimer));
     inject(DestroyRef).onDestroy(() => this.bridge.destroy());
     this.bridge.configure(this.app());
     this.bridge.onSave = f => { this.chain = this.chain.then(() => this.handleSaved(f)); };
