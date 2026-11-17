@@ -242,7 +242,8 @@ test.describe('settings list grids', () => {
     await expect(vis(page, '.pf-vn-main .ag-row')).toBeVisible({ timeout: 60_000 });
     await expect.poll(() => rowCount(page, '.pf-vn-main')).toBe(4);
     await expect(vis(page, '.pf-vn-main .pf-sg-tone--credit')).toContainText('in credit');
-    await expect(vis(page, 'pf-hero-band .pf-hb-btn--primary')).toContainText('Add vendor');
+    // The page's action sits in the pane (no band-corner primary in Settings).
+    await expect(page.getByRole('button', { name: /Add vendor/ }).locator('visible=true').first()).toBeVisible();
     await expectLayout(page, 'credit accounts');
     await shot(page, 'sg-credit-setup');
     await vis(page, '.pf-vn-main .ag-row .pf-rowact[aria-label="Edit Kauvery Clinic"]').dispatchEvent('click');

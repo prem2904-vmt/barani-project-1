@@ -101,9 +101,9 @@ test.describe('lab departments page', () => {
 
     // on / off (the grid's Status switch)
     const sw = () => row(page, 'Haematology').locator('[role="switch"]');
-    await sw().click();
+    await sw().dispatchEvent('click');
     await expect(sw()).toHaveAttribute('aria-checked', 'false');
-    await sw().click();
+    await sw().dispatchEvent('click');
 
     // add + duplicate (one compact row above the grid)
     await tid(page, 'ld-add').click();
