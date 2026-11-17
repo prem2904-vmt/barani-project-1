@@ -96,7 +96,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
               </aside>
             }
           } @else {
-            <div class="pf-inl__sidecol">
+            <div class="pf-sg-sidecol pf-inl__sidecol">
               <aside class="pf-card pf-sg-side pf-inl__side" aria-label="Connect">
                 <ng-container *ngTemplateOutlet="sideCard; context: { sheet: false }"></ng-container>
               </aside>
@@ -179,8 +179,6 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
   styles: [`
     .pf-inl { overflow-x: clip; }
     .pf-inl__switch { flex-shrink: 0; }
-    .pf-inl__sidecol { display: flex; flex-direction: column; gap: 16px; min-width: 0; min-height: 0; }
-    .pf-inl__sidecol > .pf-inl__side { flex: 0 1 auto; }
     .pf-inl__main ::ng-deep .pf-inl-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; padding: 6px 0; }
     .pf-inl__main ::ng-deep .pf-inl-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
     .pf-inl__main ::ng-deep .pf-inl-cell__sub--err { color: var(--red-text, #b91c1c); }
@@ -252,7 +250,7 @@ export class InstrumentsListComponent {
       { colId: 'unmatched', headerName: 'Unmatched', width: 120, minWidth: 110, flex: 0, type: 'rightAligned',
         valueGetter: (p) => p.data?.unmatchedCount ?? 0,
         cellRenderer: (p: { data?: InstrumentDto }) => `<span class="pf-num">${esc(p.data?.unmatchedCount ?? 0)}</span>` },
-      sgActionsCol<InstrumentDto>(web, 0, 1, (p) => sgActions(web, [
+      sgActionsCol<InstrumentDto>(web, [], 1, (p) => sgActions(web, [
         { label: 'Open', aria: `Open ${p.data?.name ?? 'instrument'}`, path: SG_ICON.open, icon: true, run: () => this.open(p.data) },
       ])),
     ];

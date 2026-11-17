@@ -247,7 +247,7 @@ export class BridgesListComponent {
         cellRenderer: (p: { data?: BridgeDto }) => sgCell(versionText(p.data ?? { version: null })) },
       { colId: 'wifi', headerName: 'Wi-Fi', flex: 1.1, minWidth: 130, valueGetter: (p) => p.data?.network?.ssid ?? '',
         cellRenderer: (p: { data?: BridgeDto }) => sgCell(wifiSummary(p.data ?? {})) },
-      sgActionsCol<BridgeDto>(web, 0, 1, (p) => sgActions(web, [
+      sgActionsCol<BridgeDto>(web, [], 1, (p) => sgActions(web, [
         { label: 'Open', aria: `Open ${p.data?.name ?? 'Bridge'}`, path: SG_ICON.open, icon: true, run: () => this.open(p.data) },
       ])),
     ];

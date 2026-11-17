@@ -94,19 +94,19 @@ export function sgStatusWord(label: string, tone: string, sub?: string | null): 
   return el;
 }
 
-/** Test Master's Active/Inactive switch cell (violet ON, never green). */
+/** The kit switch (.pf-toggle, violet ON — Test Master's department switch) in a grid cell. */
 export function sgSwitch(active: boolean, name: string, onToggle: () => void, disabled = false): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'pf-sg-switchcell';
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'pf-sg-switch' + (active ? ' pf-sg-switch--on' : '');
+  btn.className = 'pf-toggle pf-sg-switch';
   btn.setAttribute('role', 'switch');
   btn.setAttribute('aria-checked', String(active));
   btn.title = active ? 'Deactivate' : 'Activate';
   btn.setAttribute('aria-label', (active ? 'Deactivate ' : 'Activate ') + name);
   btn.disabled = disabled;
-  btn.innerHTML = '<span class="pf-sg-switch__knob" aria-hidden="true"></span>';
+  btn.innerHTML = '<span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>';
   btn.addEventListener('click', (e) => { e.stopPropagation(); onToggle(); });
   wrap.appendChild(btn);
   return wrap;
@@ -158,16 +158,42 @@ export function sgActions(web: boolean, actions: readonly SgAction[]): HTMLEleme
 }
 
 /** The actions column width that fits its content (Test Master's rule):
- *  `text` = number of text actions on web, `icons` = quiet 28px icons. */
-export function sgActionsCol<T>(web: boolean, text: number, icons: number,
+ *  `texts` = the labels shown as TEXT on web, `icons` = quiet 28px icons.
+ *  On touch every action is a 44px icon. */
+export function sgActionsCol<T>(web: boolean, texts: readonly string[], icons: number,
   render: (p: ICellRendererParams<T>) => HTMLElement, pinned = true): ColDef<T> {
-  const w = web ? 20 + text * 64 + icons * 32 : 16 + (text + icons) * 48;
+  const textPx = texts.reduce((n, t) => n + 26 + Math.ceil(t.length * 7), 0);
+  const gaps = Math.max(0, texts.length + icons - 1) * 4;
+  const w = web ? 14 + textPx + icons * 28 + gaps : 14 + (texts.length + icons) * 48;
   return {
     headerName: '', colId: 'actions', cellRenderer: render, cellClass: 'pf-sg-acts-cell',
     editable: false, sortable: false, filter: false, resizable: false, suppressSizeToFit: true,
     width: w, minWidth: w, maxWidth: w, flex: 0, wrapText: false, autoHeight: false,
     ...(pinned ? { pinned: 'right' as const } : {}),
   };
+}
+
+/** A neutral status pill: Active (violet dot) / Inactive (muted). */
+export function sgActivePill(active: boolean): HTMLElement {
+  const el = document.createElement('span');
+  el.className = 'pf-sg-pill' + (active ? ' pf-sg-pill--on' : '');
+  el.textContent = active ? 'Active' : 'Inactive';
+  return el;
+}
+
+/** Status column as a pill (sorted Active first). */
+export function sgPillCol<T>(isActive: (r: T) => boolean): ColDef<T> {
+  return {
+    headerName: 'Status', colId: 'status', width: 104, minWidth: 96, maxWidth: 120, flex: 0, wrapText: false, autoHeight: false,
+    valueGetter: (p) => (p.data && isActive(p.data) ? 'Active' : 'Inactive'),
+    cellRenderer: (p: ICellRendererParams<T>) => (p.data ? sgActivePill(isActive(p.data)) : document.createElement('span')),
+  };
+}
+
+/** "₹1,500" (2 decimals only when there are paise). */
+export function sgInr(n: number | null | undefined, decimals = 2): string {
+  const v = Number(n ?? 0);
+  return '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
 /** The status column (Test Master's): the switch, sorted by Active/Inactive. */
