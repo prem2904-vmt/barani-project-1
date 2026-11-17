@@ -30,11 +30,11 @@ jobs:
         env:
           ENGINES: https://prefrontal-dev.blr1.digitaloceanspaces.com/engines
         run: |
-          NEURON_URL=$ENGINES/neuron-web-1.1.1.tar.gz tools/fetch-neuron.sh
-          SYNAPSE_URL=$ENGINES/synapse-web-1.1.0.tar.gz tools/fetch-synapse.sh
-          AXON_URL=$ENGINES/axon-web-1.1.0.tar.gz tools/fetch-axon.sh
-          MYELIN_URL=$ENGINES/myelin-web-1.1.0.tar.gz tools/fetch-myelin.sh
-          RETINA_URL=$ENGINES/retina-web-1.1.0.tar.gz tools/fetch-retina.sh
+          NEURON_URL=$ENGINES/neuron-web-1.2.0.tar.gz tools/fetch-neuron.sh
+          SYNAPSE_URL=$ENGINES/synapse-web-1.2.0.tar.gz tools/fetch-synapse.sh
+          AXON_URL=$ENGINES/axon-web-1.2.0.tar.gz tools/fetch-axon.sh
+          MYELIN_URL=$ENGINES/myelin-web-1.2.0.tar.gz tools/fetch-myelin.sh
+          RETINA_URL=$ENGINES/retina-web-1.2.0.tar.gz tools/fetch-retina.sh
       - name: Build site image
         run: |
           flock /tmp/pf-build.lock docker build --pull -f deploy/web.Dockerfile \

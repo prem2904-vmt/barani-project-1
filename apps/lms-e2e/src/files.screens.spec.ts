@@ -600,6 +600,22 @@ test.describe('each app opens its own start screen', () => {
     });
   }
 
+  // The five REAL start screens (engines fetched by tools/fetch-<app>.sh); skips for an engine this build lacks.
+  for (const x of APPS) {
+    test(`${x.name} real engine: its own start screen shows this lab's Recent files of its kind`, async ({ page, context }) => {
+      test.skip(browser() === 'firefox', 'no WebGL in the Firefox image');
+      const r = await page.request.get(`/${x.id}-engine/index.html`).catch(() => null);
+      test.skip(!r || !r.ok() || !(await r.text()).includes('_bg.wasm'), `${x.name} is not in this build`);
+      await boot(page, context, { route: `/files/${x.route}/start` });
+      await expect(page.locator('iframe[data-testid="files-frame"]')).toHaveCount(1, { timeout: 60_000 });
+      await expect(tid(page, 'files-loading')).toHaveCount(0, { timeout: 120_000 });
+      await expect(tid(page, 'files-failed')).toHaveCount(0);
+      await expect(tid(page, 'files-save')).toHaveCount(0);
+      await page.waitForTimeout(3000);
+      await shot(page, `files-start-real-${x.id}`);
+    });
+  }
+
   test('a Recent row opens that file; Back returns to the start screen', async ({ page, context }) => {
     await startStub(page, 'neuron', 'neuron:');
     await boot(page, context, { route: '/files/sheet/start' });
