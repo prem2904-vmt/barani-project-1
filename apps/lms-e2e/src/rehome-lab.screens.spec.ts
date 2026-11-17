@@ -158,6 +158,39 @@ test.describe('lab settings pages', () => {
     expect(new URL(page.url()).pathname).toBe(new URL(settingsUrl).pathname);
   });
 
+  test('Report design › Sending: compact rows — Message and Language right-aligned, rows start at the top', async ({ page }) => {
+    const body = 'Hello {{1}}, your lab test report from {{2}} is ready. Tap the button below to view your report.';
+    const prev = neg.hook;
+    neg.hook = r => (r.method === 'GET' && r.path === '/api/settings/whatsapp') ? { status: 200, body: { success: true, data: {
+      autoSendEnabled: true, sendUpdatedReports: false, canSend: true,
+      sender: { source: 'platform', displayName: 'Prefrontal', status: 'not_connected', tokenStored: false, canConnect: false },
+      platform: { enabled: true, configured: true, webhookConfigured: true, defaultTemplateName: 'report_ready', defaultTemplateLanguage: 'en' },
+      message: { sender: 'platform', senderLine: "Prefrontal's shared number", kind: 'link', code: 'report_ready', language: 'en', chosenKind: null, labName: 'Demo Lab',
+        templates: [
+          { kind: 'link', code: 'report_ready', label: 'Report ready — link', status: 'APPROVED', approved: true, languages: [{ code: 'en', label: 'English' }, { code: 'ta', label: 'Tamil' }],
+            components: { header: null, body, footer: null, buttons: [{ type: 'URL', text: 'View report' }] } },
+          { kind: 'pdf', code: 'report_pdf', label: 'Report ready — PDF + link', status: 'APPROVED', approved: true, languages: [{ code: 'en', label: 'English' }],
+            components: { header: { format: 'DOCUMENT' }, body, footer: null, buttons: [{ type: 'URL', text: 'View report' }] } },
+        ], pending: [],
+        sample: { bodyParams: ['Asha', 'Demo Lab'], buttonUrl: 'https://reports.example/r/abc', documentFilename: 'Report-Asha.pdf' } },
+    } } } : prev?.(r);
+    await go(page, '/admin/reports?tab=sending');
+    await expect(vis(page, '[data-testid="wmp-message"]')).toBeVisible({ timeout: 60_000 });
+    await expect(vis(page, '[data-testid="wmp-language"]')).toBeVisible();
+    const labels = await page.locator('pf-report-sending-card pf-setting-row .pf-srow__label').locator('visible=true').allInnerTexts();
+    expect(labels.map(l => l.trim())).toEqual(['WhatsApp Auto', 'Send again when a report is corrected', 'Sender', 'Message', 'Language', 'What the patient gets']);
+    if (!isPhone()) {
+      // Message / Language controls sit flush right in their rows, beside the label (not floating under a gap).
+      const row = vis(page, 'pf-report-sending-card pf-setting-row:has([data-testid="wmp-message"])');
+      const rb = (await row.boundingBox())!;
+      const cb = (await vis(page, '[data-testid="wmp-message"]').boundingBox())!;
+      expect(Math.abs((cb.x + cb.width) - (rb.x + rb.width))).toBeLessThan(4);
+      expect(rb.height).toBeLessThan(90);
+    }
+    await expectLayout(page, 'report-sending-rows');
+    await shot(page, 'lab-report-sending-rows');
+  });
+
   test('sample ID format saves through the same API', async ({ page }) => {
     await go(page, '/admin/lab/sample-numbers?tab=format');
     await expect(vis(page, '[data-testid="sample-id-format"]')).toBeVisible({ timeout: 60_000 });
