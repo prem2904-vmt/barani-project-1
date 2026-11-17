@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, TemplateRef, computed, viewChild } from '@angular/core';
 import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
 import { HomeCollectionAgentsComponent } from '../home-collection/home-collection-agents.component';
 import { HomeCollectionSwitchCardComponent } from './home-collection-switch-card.component';
@@ -28,4 +28,11 @@ export class LabHomeCollectionPage {
   private readonly t = labPageTab(LAB_PAGES.homeCollection);
   protected readonly tab = this.t.tab;
   protected pick(id: string) { this.t.pick(id); }
+  /** The Settings frame shows the agents grid's head tools (count, filter) in its card head while Agents is open. */
+  private readonly agents = viewChild(HomeCollectionAgentsComponent);
+  readonly headTools = computed<TemplateRef<unknown> | null>(() => {
+    if (this.tab() !== 'agents') return null;
+    const a = this.agents() as unknown as { headTools?: () => TemplateRef<unknown> | undefined } | undefined;
+    return typeof a?.headTools === 'function' ? (a.headTools() ?? null) : null;
+  });
 }
