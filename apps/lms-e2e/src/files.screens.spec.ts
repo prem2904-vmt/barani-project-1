@@ -333,12 +333,15 @@ test.describe('the editor band', () => {
 
 test.describe('Settings → Files', () => {
   test('lists the five apps with on/off and who can edit, templates, storage; Save sends the change', async ({ page, context }) => {
-    await boot(page, context, { route: '/admin/files' });
+    // Test Master frame: categories in the side card (?tab=), the picked one in the main card.
+    await boot(page, context, { route: '/admin/files?tab=devices' });
     await expect(tid(page, 'files-settings')).toBeVisible({ timeout: 60_000 });
-    for (const id of ['neuron', 'synapse', 'axon', 'myelin', 'retina']) await expect(tid(page, `files-app-${id}`)).toBeVisible();
     await expect(tid(page, 'files-storage')).toContainText('412 sheets');
     await expect(tid(page, 'files-storage')).toContainText('1.2 GB');
-    await expect(tid(page, 'files-templates-settings')).toContainText('Daily results log');
+    await go(page, '/admin/files?tab=templates');
+    await expect(tid(page, 'files-templates-settings')).toContainText('Daily results log', { timeout: 60_000 });
+    await go(page, '/admin/files?tab=apps');
+    for (const id of ['neuron', 'synapse', 'axon', 'myelin', 'retina']) await expect(tid(page, `files-app-${id}`)).toBeVisible({ timeout: 60_000 });
     await expectLayout(page, 'files settings');
     await shot(page, 'files-settings');
     await tid(page, 'files-toggle-axon').click();
@@ -349,7 +352,7 @@ test.describe('Settings → Files', () => {
   });
 
   test('View only: the page reads, the controls and Save are off, with the plain note', async ({ page, context }) => {
-    await boot(page, context, { route: '/admin/files', full: false });
+    await boot(page, context, { route: '/admin/files?tab=templates', full: false });
     await expect(tid(page, 'files-settings-viewonly')).toContainText('view only', { timeout: 60_000 });
     await expect(tid(page, 'files-settings-save')).toBeDisabled();
     await expect(tid(page, 'files-add-template')).toBeDisabled();

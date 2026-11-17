@@ -29,8 +29,8 @@ test.beforeEach(async ({ page, context }) => {
 });
 
 const PAGES: Array<{ name: string; url: string; marker: string }> = [
-  { name: 'profile', url: '/admin/org/profile', marker: '[data-testid="org-profile"]' },
-  { name: 'numbers', url: '/admin/org/numbers?tab=patient', marker: 'text=Patient ID format' },
+  { name: 'profile', url: '/admin/org/profile?tab=name', marker: '[data-testid="org-profile"]' },
+  { name: 'numbers', url: '/admin/org/numbers?tab=patient', marker: '[data-testid="fmt-row"]' },
   { name: 'channels', url: '/admin/org/channels?tab=whatsapp', marker: '[data-testid="comms-page"]' },
   { name: 'billing-gst', url: '/admin/billing?tab=gst', marker: 'text=Allow discounts' },
   { name: 'billing-invoice', url: '/admin/billing?tab=invoice', marker: '[data-testid="bc-name-ro"]' },
@@ -55,16 +55,17 @@ test.describe('settings re-home: organization pages', () => {
     });
   }
 
-  // IPD is a department section on the demo tenant (case sheets on): its three settings open inside the shell.
-  for (const [name, url, marker] of [
-    ['ipd-departments', '/admin/ipd/departments', '[data-testid="tp-panel"]'],
-    ['ipd-case-sheets', '/admin/ipd/myprefrontal', '[data-testid="settings-shell"]'],
-    ['ipd-alerts', '/admin/ipd/alerts', 'pf-notifications-config'],
+  // IPD on the demo tenant (case sheets on): IPD departments and case sheets are full-screen pages (DESIGN-V2 rule 2);
+  // IPD alerts open inside the Settings frame.
+  for (const [name, url, marker, hosted] of [
+    ['ipd-departments', '/admin/ipd/departments', 'pf-hero-band', false],
+    ['ipd-case-sheets', '/admin/ipd/myprefrontal', 'pf-hero-band', false],
+    ['ipd-alerts', '/admin/ipd/alerts', 'pf-notifications-config', true],
   ] as const) {
     test(name, async ({ page }) => {
       await go(page, url);
-      await expect(page.locator(marker).locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
-      await expect(page.locator('[data-testid="settings-shell"]').locator('visible=true').first()).toBeVisible();
+      await expect(page.locator(marker).first()).toBeAttached({ timeout: 60_000 });
+      await expect(page.locator('[data-testid="settings-shell"]').locator('visible=true')).toHaveCount(hosted ? 1 : 0, { timeout: 20_000 });
       await page.waitForTimeout(1200);
       await shot(page, `rehome-${name}`);
     });
