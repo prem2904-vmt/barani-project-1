@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import {
   AllCommunityModule, CellClickedEvent, ColDef, ICellRendererParams, ModuleRegistry,
 } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -62,7 +62,7 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
   selector: 'pf-referring-network',
   standalone: true,
   imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent,
-    HeroBandComponent, SegmentedComponent, SelectComponent, AgGridAngular, NgTemplateOutlet],
+    HeroBandComponent, SegmentedComponent, SelectComponent, DataGridComponent, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -140,16 +140,12 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
               <pf-skeleton-table class="pf-sg-skel" [rows]="8" [cols]="6" [label]="view() === 'doctors' ? 'Loading doctors…' : 'Loading hospitals…'"></pf-skeleton-table>
             }
             @if (view() === 'doctors') {
-              <ag-grid-angular class="pf-sg-grid pf-rn-grid-doctors" [theme]="gridTheme()" [rowData]="gridDoctors()" [columnDefs]="doctorColDefs()"
-                               [defaultColDef]="defaultColDef" [getRowId]="rowId" [getRowClass]="doctorRowClass" [animateRows]="true"
-                               [suppressNoRowsOverlay]="true" [suppressCellFocus]="true"></ag-grid-angular>
+              <pf-data-grid [rowData]="gridDoctors()" [columnDefs]="doctorColDefs()" [defaultColDef]="defaultColDef" [getRowId]="rowId" [getRowClass]="doctorRowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!loadingDoctorsShown() && gridDoctors().length === 0) {
                 <div class="pf-sg-empty"><p class="pf-sg-empty__title pf-rn-empty">{{ emptyDoctorsText() }}</p></div>
               }
             } @else {
-              <ag-grid-angular class="pf-sg-grid pf-sg-main--clickable pf-rn-grid-hospitals" [theme]="gridTheme()" [rowData]="gridHospitals()" [columnDefs]="hospitalColDefs()"
-                               [defaultColDef]="defaultColDef" [getRowId]="hospitalRowId" [getRowClass]="hospitalRowClass" [animateRows]="true"
-                               [suppressNoRowsOverlay]="true" [suppressCellFocus]="true" (cellClicked)="onHospitalCell($event)"></ag-grid-angular>
+              <pf-data-grid [clickable]="true" [rowData]="gridHospitals()" [columnDefs]="hospitalColDefs()" [defaultColDef]="defaultColDef" [getRowId]="hospitalRowId" [getRowClass]="hospitalRowClass" [suppressCellFocus]="true" (cellClicked)="onHospitalCell($event)"></pf-data-grid>
               @if (!loadingHospitalsShown() && gridHospitals().length === 0) {
                 <div class="pf-sg-empty"><p class="pf-sg-empty__title pf-rn-empty">{{ hospitalSearch() ? 'No hospitals match.' : 'No hospitals yet. Use Add hospital to start.' }}</p></div>
               }
@@ -161,8 +157,8 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
       <!-- Head tools: Doctors | Hospitals, the hospital filter (doctors), All / Active / Inactive, count.
            Exposed as headTools so the Settings shell can show them in ITS card head. -->
       <ng-template #headToolsTpl>
-        <pf-segmented class="pf-rn-viewseg" size="sm" [options]="viewOptions()" [value]="view()"
-                      (valueChange)="setView($event)" aria-label="Doctors or hospitals"></pf-segmented>
+        <!-- Left → right: count · dynamic filters · the STATIC Doctors | Hospitals switch at the far right (owner). -->
+        <span class="pf-sg-count pf-num">{{ countLabel() }}</span>
         @if (view() === 'doctors') {
           <pf-select class="pf-rn-hfilter" size="sm" [searchable]="true"
                      [options]="hospitalFilterOptions()" [value]="hospitalFilter()"
@@ -170,7 +166,8 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
         }
         <pf-segmented class="pf-sg-status-filter" size="sm" [options]="statusOptions()" [value]="status()"
                       (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
-        <span class="pf-sg-count pf-num">{{ countLabel() }}</span>
+        <pf-segmented class="pf-rn-viewseg" size="sm" [options]="viewOptions()" [value]="view()"
+                      (valueChange)="setView($event)" aria-label="Doctors or hospitals"></pf-segmented>
       </ng-template>
 
       <!-- ── Hospital editor modal ─────────────────────────────── -->

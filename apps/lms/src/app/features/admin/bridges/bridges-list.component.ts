@@ -3,7 +3,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, ModuleRegistry } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { WorkEventsService } from '../../../core/services/work-events.service';
@@ -44,7 +44,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
 @Component({
   selector: 'pf-bridges-list',
   standalone: true,
-  imports: [SettingsSiblingsComponent, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, SkeletonRowsComponent, BusyDirective, NgTemplateOutlet],
+  imports: [SettingsSiblingsComponent, DataGridComponent, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, SkeletonRowsComponent, BusyDirective, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
@@ -112,9 +112,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
               @if (listSkeleton()) {
                 <pf-skeleton-table class="pf-sg-skel" [rows]="6" [cols]="6" label="Loading Bridges…"></pf-skeleton-table>
               }
-              <ag-grid-angular class="pf-sg-grid pf-brl__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
-                               [defaultColDef]="defaultColDef" [getRowId]="getRowId" [animateRows]="true"
-                               [suppressNoRowsOverlay]="true" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></ag-grid-angular>
+              <pf-data-grid [clickable]="true" [rowData]="visibleRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></pf-data-grid>
               @if (!listSkeleton() && !loading() && visibleRows().length === 0) {
                 <div class="pf-sg-empty">
                   <p class="pf-sg-empty__title">{{ q().trim() ? 'No Bridges match "' + q().trim() + '"' : 'No Bridges yet' }}</p>

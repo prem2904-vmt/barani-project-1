@@ -22,7 +22,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { NgTemplateOutlet } from '@angular/common';
 import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import {
   SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, sgActions, sgActionsCol, sgByStatus, sgCell, sgGridTheme, sgInr, sgMedia,
@@ -90,7 +90,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
   imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent,
     FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent, TouchButtonComponent,
-    HeroBandComponent, PfDateComponent, NgTemplateOutlet, AgGridAngular, SegmentedComponent
+    HeroBandComponent, PfDateComponent, NgTemplateOutlet, DataGridComponent, SegmentedComponent
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
@@ -160,9 +160,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
               @if (loadingShown()) {
                 <pf-skeleton-table class="pf-sg-skel" [rows]="6" [cols]="6" label="Loading vendors…"></pf-skeleton-table>
               }
-              <ag-grid-angular class="pf-sg-grid pf-vn-grid" [theme]="gridTheme()" [rowData]="visibleVendors()" [columnDefs]="colDefs()"
-                               [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [animateRows]="true"
-                               [suppressNoRowsOverlay]="true" [suppressCellFocus]="true"></ag-grid-angular>
+              <pf-data-grid [rowData]="visibleVendors()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!loading() && visibleVendors().length === 0) {
                 <div class="pf-sg-empty pf-band-empty">
                   @if (vendors().length === 0) {

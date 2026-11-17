@@ -4,7 +4,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { SettingsSiblingsComponent } from '../../admin/settings/settings-siblings.component';
 import { SG_ICON, SG_NARROW_MQ, sgActions, sgActionsCol, sgMedia, sgBare } from '../../../shared/settings-grid/settings-grid';
 import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, ModuleRegistry } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { ApiError } from '../../../shared/models/api-response.model';
@@ -43,7 +43,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
 @Component({
   selector: 'pf-instruments-list',
   standalone: true,
-  imports: [SettingsSiblingsComponent, AgGridAngular, RouterLink, NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
+  imports: [SettingsSiblingsComponent, DataGridComponent, RouterLink, NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
@@ -116,9 +116,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
               @if (listSkeleton()) {
                 <pf-skeleton-table class="pf-sg-skel" [rows]="6" [cols]="5" label="Loading instruments…"></pf-skeleton-table>
               }
-              <ag-grid-angular class="pf-sg-grid pf-inl__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
-                               [defaultColDef]="defaultColDef" [getRowId]="getRowId" [animateRows]="true"
-                               [suppressNoRowsOverlay]="true" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></ag-grid-angular>
+              <pf-data-grid [clickable]="true" [rowData]="visibleRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></pf-data-grid>
               @if (!listSkeleton() && !loading() && visibleRows().length === 0) {
                 <div class="pf-sg-empty">
                   <p class="pf-sg-empty__title">{{ q().trim() ? 'No instruments match "' + q().trim() + '"' : 'No instruments yet' }}</p>

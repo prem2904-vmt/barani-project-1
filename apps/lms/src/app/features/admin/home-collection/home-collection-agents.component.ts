@@ -20,7 +20,7 @@ import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { HomeCollectionSwitchCardComponent } from '../lab-pages/home-collection-switch-card.component';
 import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, sgActions, sgActionsCol, sgCell, sgGridTheme, sgMedia, sgPillCol, sgRowOff, sgBare } from '../../../shared/settings-grid/settings-grid';
 
@@ -42,7 +42,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
   selector: 'pf-home-collection-agents',
   standalone: true,
   imports: [NgTemplateOutlet, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent,
-    AgGridAngular, HomeCollectionSwitchCardComponent],
+    DataGridComponent, HomeCollectionSwitchCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   styles: [`
@@ -179,9 +179,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
               @if (listSkeleton()) {
                 <pf-skeleton-table class="pf-sg-skel" [rows]="5" [cols]="4" label="Loading agents…"></pf-skeleton-table>
               }
-              <ag-grid-angular class="pf-sg-grid pf-hc-grid" [theme]="gridTheme()" [rowData]="visibleAgents()" [columnDefs]="colDefs()"
-                               [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [animateRows]="true"
-                               [suppressNoRowsOverlay]="true" [suppressCellFocus]="true"></ag-grid-angular>
+              <pf-data-grid [rowData]="visibleAgents()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!listSkeleton() && visibleAgents().length === 0) {
                 <div class="pf-sg-empty pf-band-empty">
                   <p class="pf-sg-empty__title">{{ agents().length === 0 ? 'No home-collection agents yet.' : 'No agents match "' + q() + '".' }}</p>

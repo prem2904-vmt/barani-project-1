@@ -18,7 +18,7 @@ import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
 import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import {
   SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, SgStatus, sgActions, sgActionsCol, sgByStatus, sgCell, sgChips, sgGridTheme, sgMedia,
   sgPillCol, sgRowOff, sgStatusOptions, sgBare } from '../../../shared/settings-grid/settings-grid';
@@ -48,7 +48,7 @@ const EMPTY: LabDraft = {
 @Component({
   selector: 'pf-referral-labs',
   standalone: true,
-  imports: [SettingsSiblingsComponent, NgTemplateOutlet, BusyDirective, SkeletonTableComponent, SegmentedComponent, AgGridAngular, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
+  imports: [SettingsSiblingsComponent, NgTemplateOutlet, BusyDirective, SkeletonTableComponent, SegmentedComponent, DataGridComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
@@ -150,9 +150,7 @@ const EMPTY: LabDraft = {
               @if (loadingShown()) {
                 <pf-skeleton-table class="pf-sg-skel" [rows]="5" [cols]="5" label="Loading referral labs…"></pf-skeleton-table>
               }
-              <ag-grid-angular class="pf-sg-grid pf-rl-grid" [theme]="gridTheme()" [rowData]="visibleLabs()" [columnDefs]="colDefs()"
-                               [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [animateRows]="true"
-                               [suppressNoRowsOverlay]="true" [suppressCellFocus]="true"></ag-grid-angular>
+              <pf-data-grid [rowData]="visibleLabs()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!loading() && visibleLabs().length === 0) {
                 <div class="pf-sg-empty pf-band-empty">
                   @if (labs().length === 0) {
