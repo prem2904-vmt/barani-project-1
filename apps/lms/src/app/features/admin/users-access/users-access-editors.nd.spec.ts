@@ -320,6 +320,17 @@ describe('Users & Access list — current rules', () => {
     expect(custom.getAttribute('style') ?? '').not.toMatch(/16,\s*185|10b981|059669/);
   });
 
+  it('ONE Test Master grid card: the Users | Roles switch, status filter and count are head tools (headTools for a host head)', () => {
+    const { c, f, el } = render(UsersAccessComponent);
+    expect(el.querySelector('.pf-sg-main .pf-sg-main__head pf-segmented.pf-ua-tabseg')).not.toBeNull();
+    expect(c.headTools()).toBeTruthy();
+    expect(c.gridUsers().length).toBe(1);
+    c.status.set('inactive'); f.detectChanges();
+    expect(c.gridUsers().length).toBe(0);
+    // The grid sizes by flex (never a % height that a host without a definite height collapses to 0).
+    expect(el.querySelector('ag-grid-angular')!.classList.contains('pf-sg-grid')).toBe(true);
+  });
+
   it('touch: row actions become 44px icon buttons (label kept for AT)', () => {
     const { c } = render(UsersAccessComponent);
     const actions = c.userColDefs().find((d: any) => d.colId === 'actions').cellRenderer;

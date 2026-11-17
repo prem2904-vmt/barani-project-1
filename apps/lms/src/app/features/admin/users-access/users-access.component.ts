@@ -1,5 +1,5 @@
 import { firstValueFrom } from 'rxjs';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -8,9 +8,7 @@ import {
   GridApi,
   ICellRendererParams,
   ModuleRegistry,
-  colorSchemeDark,
-  colorSchemeLight,
-  themeQuartz,
+  RowClickedEvent,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../core/services/api.service';
@@ -22,6 +20,8 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { Role, User, userDisplayName } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { NgTemplateOutlet } from '@angular/common';
+import { SgStatus, sgBare, sgByStatus, sgGridTheme, sgRowOff, sgStatusOptions } from '../../../shared/settings-grid/settings-grid';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { WebrtcService } from '../../../core/services/webrtc.service';
@@ -68,30 +68,13 @@ export function isDeletableRole(r: Pick<Role, 'isPreSeeded' | 'tenantId' | 'name
 function rowAction(web: boolean, label: string, icon: string, title: string): HTMLButtonElement {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = web ? 'pf-rowact' : 'pf-rowact pf-rowact--icon';
+  // Test Master's quiet row actions: same-size icons (28px on web, 44px on touch); the label stays for AT + tooltip.
+  b.className = 'pf-rowact pf-rowact--icon' + (web ? ' pf-sg-rowact-sm' : '');
   b.title = title;
   b.setAttribute('aria-label', title);
   b.innerHTML = `${icon}<span class="pf-rowact__t">${label}</span>`;
   return b;
 }
-
-const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
-  fontFamily: "'Noto Sans', system-ui, sans-serif",
-  fontSize: 13,
-  rowHeight: 52,
-  headerHeight: 40,
-  borderRadius: 12,
-  accentColor: '#7c3aed',
-});
-
-const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
-  fontFamily: "'Noto Sans', system-ui, sans-serif",
-  fontSize: 13,
-  rowHeight: 52,
-  headerHeight: 40,
-  borderRadius: 12,
-  accentColor: '#a855f7',
-});
 
 @Component({
   selector: 'pf-users-access',
@@ -101,6 +84,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
     AgGridAngular,
     ScreenHeaderComponent,
     SegmentedComponent,
+    NgTemplateOutlet,
     TouchButtonComponent,
     HeroBandComponent,
     SkeletonTableComponent,
@@ -114,17 +98,6 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
         <pf-hero-band [back]="true"
                       [placeholder]="tab() === 'users' ? 'Search users — name, username, email…' : 'Search roles…'"
                       [value]="search()" (valueChange)="onSearch($event)">
-          <span band-inline class="pf-ua-count">
-            @if (tab() === 'users') {
-              {{ filteredUsers().length }} user{{ filteredUsers().length === 1 ? '' : 's' }}
-            } @else {
-              {{ filteredRoles().length }} role{{ filteredRoles().length === 1 ? '' : 's' }}
-            }
-          </span>
-          <ng-container band-tools>
-            <pf-segmented size="sm" [options]="tabOptions" [value]="tab()"
-                          (valueChange)="setTab($event)"></pf-segmented>
-          </ng-container>
           <ng-container band-actions>
             @if (tab() === 'users') {
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openInvite()"
@@ -200,53 +173,56 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
         </div>
       </div>
 
-      <!-- The grid fills the band body and scrolls itself (no page scroll). -->
+      <!-- ONE Test Master grid card: Users or Roles. Inside the Settings shell / overview the grid is bare and the
+           frame's card head shows #headTools (the Users | Roles switch, status filter, count). -->
       <div class="pf-band-body pf-band-body--fill">
-      @if (tab() === 'users') {
-        <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
-             style="border-color: var(--border-color, rgba(0,0,0,0.1));">
-          @if (listSkeleton()) {
-            <!-- First load: the grid's shape (PF-PATTERN "Loading feedback"). -->
-            <pf-skeleton-table class="pf-ua-gridskel" [rows]="10" [cols]="5" label="Loading users…"></pf-skeleton-table>
-          }
-          <ag-grid-angular
-            style="width: 100%; height: 100%;"
-            [theme]="gridTheme()"
-            [rowData]="filteredUsers()"
-            [columnDefs]="userColDefs()"
-            [context]="gridContext"
-            [animateRows]="true"
-            [rowSelection]="'single'">
-          </ag-grid-angular>
-        </div>
-      } @else {
-        <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
-             style="border-color: var(--border-color, rgba(0,0,0,0.1));">
-          @if (listSkeleton()) {
-            <pf-skeleton-table class="pf-ua-gridskel" [rows]="8" [cols]="4" label="Loading roles…"></pf-skeleton-table>
-          }
-          <ag-grid-angular
-            style="width: 100%; height: 100%;"
-            [theme]="gridTheme()"
-            [rowData]="filteredRoles()"
-            [columnDefs]="roleColDefs()"
-            [context]="gridContext"
-            [animateRows]="true"
-            [rowSelection]="'single'">
-          </ag-grid-angular>
-        </div>
-      }
+        <section class="pf-card pf-sg-main pf-sg-main--clickable pf-ua-main" [class.pf-sg-main--bare]="bare" [attr.aria-label]="tab() === 'users' ? 'Users' : 'Roles'">
+          <header class="pf-card__head pf-sg-main__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <span class="pf-card__label">{{ tab() === 'users' ? 'Users' : 'Roles' }}</span>
+            <span class="pf-card__spacer"></span>
+            <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
+          </header>
+          <div class="pf-sg-main__body pf-ua-grid">
+            @if (listSkeleton()) {
+              <pf-skeleton-table class="pf-sg-skel pf-ua-gridskel" [rows]="10" [cols]="5" [label]="tab() === 'users' ? 'Loading users…' : 'Loading roles…'"></pf-skeleton-table>
+            }
+            @if (tab() === 'users') {
+              <ag-grid-angular class="pf-sg-grid" [theme]="gridTheme()" [rowData]="gridUsers()" [columnDefs]="userColDefs()"
+                               [context]="gridContext" [animateRows]="true" [getRowClass]="userRowClass" [suppressCellFocus]="true"
+                               (rowClicked)="onUserRow($event)"></ag-grid-angular>
+            } @else {
+              <ag-grid-angular class="pf-sg-grid" [theme]="gridTheme()" [rowData]="filteredRoles()" [columnDefs]="roleColDefs()"
+                               [context]="gridContext" [animateRows]="true" [suppressCellFocus]="true"
+                               (rowClicked)="onRoleRow($event)"></ag-grid-angular>
+            }
+          </div>
+        </section>
       </div>
+
+      <ng-template #headToolsTpl>
+        @if (!bare) {
+          <!-- Hosted: the frame's head already carries the Users | Roles pill (the setting's categories). -->
+          <pf-segmented class="pf-ua-tabseg" size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)" aria-label="Users or roles"></pf-segmented>
+        }
+        @if (tab() === 'users') {
+          <pf-segmented class="pf-sg-status-filter" size="sm" [options]="statusOptions()" [value]="status()" (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+        }
+        <span class="pf-sg-count pf-num pf-ua-count">
+          @if (tab() === 'users') {
+            {{ gridUsers().length }} user{{ gridUsers().length === 1 ? '' : 's' }}
+          } @else {
+            {{ filteredRoles().length }} role{{ filteredRoles().length === 1 ? '' : 's' }}
+          }
+        </span>
+      </ng-template>
     </section>
   `,
+  styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   styles: [`
-    /* Classic: the grid sizes off the viewport; new design: it fills the band body. */
-    .pf-ua-grid { position: relative; height: calc(100vh - 240px); min-height: 420px; }
-    .pf-ua-gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--pf-card-bg, var(--bg-primary)); border-radius: inherit; }
-    /* The grid box flexes (height:auto), so the grid inside must flex too — a 100% height of an auto box is 0 and the
-       rows render invisible (owner: "People and access grid is empty", inline in the overview). */
-    :host-context(.design-new) .pf-ua-grid { flex: 1 1 auto; height: auto; min-height: 320px; display: flex; flex-direction: column; }
-    :host-context(.design-new) .pf-ua-grid > ag-grid-angular { flex: 1 1 0; min-height: 320px; height: auto !important; }
+    /* The grid fills the card body (flex, never a % height — a host without a definite height left it at 0). */
+    .pf-ua-tabseg { flex-shrink: 0; }
+    :root:not(.design-new) .pf-ua-main { height: calc(100vh - 240px); min-height: 420px; }
     .pf-ua-count {
       font-size: 12px; font-variant-numeric: tabular-nums;
       color: var(--text-muted); white-space: nowrap; padding: 0 6px;
@@ -273,7 +249,25 @@ export class UsersAccessComponent implements OnInit {
   private readonly accountActions = inject(UserAccountActionsService);
   private readonly entitlements = inject(TenantEntitlementsService);
 
-  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  readonly gridTheme = sgGridTheme();
+  /** In the Settings shell / overview: bare grid; the frame's card head renders headTools. */
+  protected readonly bare = sgBare();
+  private readonly headToolsTpl = viewChild<TemplateRef<unknown>>('headToolsTpl');
+  /** Users | Roles switch + status filter + count, for a host card head. */
+  readonly headTools = computed(() => this.headToolsTpl());
+  readonly status = signal<SgStatus>('all');
+  readonly statusOptions = computed(() => sgStatusOptions(this._users().length, this._users().filter(u => !u.isActive).length));
+  readonly gridUsers = computed(() => sgByStatus(this.filteredUsers(), this.status(), u => u.isActive));
+  readonly userRowClass = sgRowOff<User>(u => u.isActive);
+  /** A row opens its editor (the actions cell keeps its own clicks). */
+  onUserRow(e: RowClickedEvent<User>): void {
+    if ((e.event?.target as HTMLElement | null)?.closest?.('button, a')) return;
+    if (e.data) this.editUser(e.data);
+  }
+  onRoleRow(e: RowClickedEvent<Role>): void {
+    if ((e.event?.target as HTMLElement | null)?.closest?.('button, a')) return;
+    if (e.data) this.openRole(e.data);
+  }
   /** Row actions: TEXT on web (fine pointer + hover), ICON on touch. */
   readonly web = webPointerSignal();
 
@@ -362,10 +356,20 @@ export class UsersAccessComponent implements OnInit {
     avatar.textContent = initials;
     wrap.appendChild(avatar);
 
+    const text = document.createElement('span');
+    text.style.cssText = 'display:flex;flex-direction:column;min-width:0;line-height:1.3;';
     const nameSpan = document.createElement('span');
-    nameSpan.style.cssText = 'font-weight:500;font-size:14px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nameSpan.style.cssText = 'font-weight:600;font-size:13.5px;color:var(--text-primary);overflow-wrap:anywhere;';
     nameSpan.textContent = name;
-    wrap.appendChild(nameSpan);
+    text.appendChild(nameSpan);
+    const handle = u.username || u.email;
+    if (handle) {
+      const sub = document.createElement('span');
+      sub.style.cssText = 'font-size:11.5px;color:var(--text-tertiary);overflow-wrap:anywhere;';
+      sub.textContent = handle;
+      text.appendChild(sub);
+    }
+    wrap.appendChild(text);
 
     return wrap;
   };
@@ -426,7 +430,7 @@ export class UsersAccessComponent implements OnInit {
 
   private userActionsCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;gap:8px;justify-content:flex-end;width:100%;';
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;gap:4px;justify-content:flex-end;width:100%;';
     if (!params.data) return wrap;
 
     const u = params.data;
@@ -512,7 +516,7 @@ export class UsersAccessComponent implements OnInit {
       const del = rowAction(web, 'Delete', ICON_TRASH, `Delete ${r.name}`);
       del.classList.add('pf-ua-del');
       del.style.color = 'var(--red-text, #dc2626)';
-      del.style.marginLeft = '8px';
+      del.style.marginLeft = '4px';
       del.addEventListener('click', (e) => {
         e.stopPropagation();
         const ctx = params.context as { deleteRole?: (r: Role, el?: HTMLElement) => void };
@@ -534,15 +538,6 @@ export class UsersAccessComponent implements OnInit {
       cellRenderer: this.userCellRenderer,
       flex: 1.2,
       minWidth: 220,
-      sortable: true,
-      filter: true,
-    },
-    {
-      headerName: 'Username / Email',
-      colId: 'username',
-      valueGetter: p => p.data?.username || p.data?.email || 'no login',
-      flex: 1,
-      minWidth: 180,
       sortable: true,
       filter: true,
     },
@@ -590,7 +585,8 @@ export class UsersAccessComponent implements OnInit {
       headerName: '',
       colId: 'actions',
       cellRenderer: this.userActionsCellRenderer,
-      minWidth: web ? 300 : 170,
+      width: web ? 112 : 160, minWidth: web ? 112 : 160, maxWidth: web ? 112 : 160, pinned: 'right',
+      cellClass: 'pf-sg-acts-cell',
       editable: false,
       sortable: false,
       filter: false,
@@ -642,7 +638,8 @@ export class UsersAccessComponent implements OnInit {
       headerName: '',
       colId: 'actions',
       cellRenderer: this.roleActionsCellRenderer,
-      width: web ? 300 : 120,
+      width: web ? 84 : 112, minWidth: web ? 84 : 112, maxWidth: web ? 84 : 112, pinned: 'right',
+      cellClass: 'pf-sg-acts-cell',
       editable: false,
       sortable: false,
       filter: false,
