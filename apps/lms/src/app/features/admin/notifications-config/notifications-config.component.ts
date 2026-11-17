@@ -1,6 +1,6 @@
-import { injectSettingsHosted } from '../../../shared/utils/settings-host';
+import { SETTINGS_HOST, injectSettingsHosted } from '../../../shared/utils/settings-host';
 import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
@@ -85,7 +85,7 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
       @if (!loading()) {
         <!-- Master switch: ONE row above the list. Off = nothing sends except critical result alerts; the per-alert
              choices below are kept and come back when it is switched on. -->
-        <pf-setting-group class="pf-nc-mastergroup" label="All notifications" scope="lab-wide" icon="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0">
+        <pf-setting-group class="pf-nc-mastergroup" id="all" label="All notifications" scope="lab-wide" icon="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0">
         <pf-setting-row class="pf-nc-master" [class.pf-nc-master--off]="!masterOn()" label="Every alert"
                         [hint]="masterOn() ? 'On for the whole lab — ' + enabledTotal() + ' of ' + rows().length + ' alerts are on. Critical result alerts always send.' : 'Off for the whole lab — your choices below are kept. Critical result alerts always send.'">
           <button type="button" class="pf-toggle pf-nc-switch pf-nc-master__switch" role="switch"
@@ -119,7 +119,7 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
       }
 
       @for (m of visibleModules(); track m) {
-        <pf-setting-group class="pf-nc-group" [class.pf-nc-paused]="!masterOn()" [label]="moduleLabel(m)" icon="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0">
+        <pf-setting-group class="pf-nc-group" [id]="hosted ? m : null" [class.pf-nc-paused]="!masterOn()" [label]="moduleLabel(m)" icon="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0">
           <span group-tools class="pf-nc-section__meta pf-num">{{ enabledCount(m) }}/{{ countFor(m) }} on</span>
           @for (r of rowsFor(m); track r.key) {
             <div class="pf-nc-card" data-testid="alert-row" [class.pf-nc-card--live]="r.critical" [class.pf-nc-card--off]="!r.enabled">
@@ -292,6 +292,21 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
 export class NotificationsConfigComponent implements OnInit {
   /** In the Settings shell: the alert groups are cards in the page grid. */
   protected readonly hosted = injectSettingsHosted();
+  /** In the Settings shell the alert sections are the side card (owner: headings on the left), each with its n/m on. */
+  private readonly settingsHost = inject(SETTINGS_HOST, { optional: true });
+  private readonly listSections = (() => {
+    const host = this.settingsHost;
+    if (!host) return null;
+    inject(DestroyRef).onDestroy(() => host.categories.set(null));
+    return effect(() => {
+      if (this.loading()) return;
+      const mods = this.modules();
+      host.categories.set([
+        { id: 'all', label: 'All notifications', note: this.masterOn() ? 'on' : 'off' },
+        ...mods.map((m) => ({ id: m, label: this.moduleLabel(m), note: `${this.enabledCount(m)}/${this.countFor(m)} on` })),
+      ]);
+    });
+  })();
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);

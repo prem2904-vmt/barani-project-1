@@ -1,7 +1,7 @@
 import {
-  ChangeDetectionStrategy, Component, ElementRef, Injector, OnDestroy, PLATFORM_ID, computed, effect, inject, signal, untracked,
+  ChangeDetectionStrategy, Component, ElementRef, Injector, TemplateRef, OnDestroy, PLATFORM_ID, computed, effect, inject, signal, untracked,
 } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
+import { NgTemplateOutlet, isPlatformBrowser } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
@@ -33,7 +33,7 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
 @Component({
   selector: 'pf-settings-shell',
   standalone: true,
-  imports: [RouterOutlet, TwoPanelComponent, HeroBandComponent, SettingsSiblingsComponent],
+  imports: [RouterOutlet, NgTemplateOutlet, TwoPanelComponent, HeroBandComponent, SettingsSiblingsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [{ provide: SETTINGS_HOST, useFactory: createSettingsHost }],
   template: `
@@ -55,9 +55,10 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
               </span>
               <h2 class="pf-card__label pf-ss__title" data-testid="tp-nav-title">{{ itemLabel() }}</h2>
               @if (itemBlurb()) { <span class="pf-card__note pf-ss__note">{{ itemBlurb() }}</span> }
+              @if (headTools(); as ht) { <span class="pf-ss__tools"><ng-container *ngTemplateOutlet="ht"></ng-container></span> }
             </header>
             <div class="pf-ss__scroll">
-              <div class="pf-ss__main" data-testid="settings-main"><router-outlet></router-outlet></div>
+              <div class="pf-ss__main" data-testid="settings-main"><router-outlet (activate)="onActivate($event)"></router-outlet></div>
               @if (q().trim() && noMatch()) { <p class="pf-band-empty" data-testid="ss-no-match">No settings match "{{ q() }}".</p> }
             </div>
           </section>
@@ -82,7 +83,8 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
             (back)="closeDetail()"
             (navBack)="toSections()"
           >
-            <div class="pf-ss__main pf-ss__main--one" data-testid="settings-main"><router-outlet></router-outlet></div>
+            <ng-container panel-tools>@if (headTools(); as ht) { <ng-container *ngTemplateOutlet="ht"></ng-container> }</ng-container>
+            <div class="pf-ss__main pf-ss__main--one" data-testid="settings-main"><router-outlet (activate)="onActivate($event)"></router-outlet></div>
           </pf-two-panel>
         }
       </div>
@@ -94,7 +96,7 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
     :root:not(.design-new) .pf-ss { display: flex; flex-direction: column; height: calc(100dvh - var(--top-strip-h, 64px)); padding: 0 16px; }
     :root:not(.design-new) .pf-ss__body { flex: 1; display: flex; flex-direction: column; padding-bottom: 12px; }
     .pf-ss__card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
-    .pf-ss__card--bare .pf-ss__main { padding: 0 !important; }
+    .pf-ss__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex: none; }
     .pf-ss__scroll { flex: 1 1 auto; min-height: 0; }
     .pf-ss__title { margin: 0; flex: none; }
     .pf-ss__note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -105,6 +107,8 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
 })
 export class SettingsShellComponent implements OnDestroy {
   private readonly router = inject(Router);
+  /** The hosted page's band parts (its actions, its search, run-time sections) — this shell's own SETTINGS_HOST. */
+  protected readonly host = inject(SETTINGS_HOST);
   private readonly access = inject(SettingsAccessService);
   private readonly injector = inject(Injector);
   private readonly navBack = inject(NavBackService);
@@ -137,6 +141,9 @@ export class SettingsShellComponent implements OnDestroy {
   readonly cats = computed<SettingsCategory[]>(() => {
     const l = this.loc();
     if (!l) return [];
+    // A page that knows its sections only at run time (alerts by module) lists them itself.
+    const dyn = this.host.categories();
+    if (dyn?.length) return dyn.map((c) => ({ id: c.id, label: c.label, path: this.parsed().path, query: { tab: c.id }, scope: c.note }));
     // Full-screen pages are not hosted: they are the band's page switch, never a category row here.
     return this.access.visibleCategories(l.item).filter((c) => !isFullScreenSettingsPath(categoryPath(l.item, c)));
   });
@@ -153,6 +160,10 @@ export class SettingsShellComponent implements OnDestroy {
   readonly selectedId = computed(() => {
     const l = this.loc();
     if (!l) return 'x';
+    if (this.host.categories()?.length) {
+      const t = this.parsed().query['tab'];
+      return this.cats().some((c) => c.id === t) ? t : (this.compact() ? null : (this.cats()[0]?.id ?? null));
+    }
     return l.category?.id ?? (this.compact() ? null : (this.cats()[0]?.id ?? null));
   });
 
@@ -162,12 +173,18 @@ export class SettingsShellComponent implements OnDestroy {
   private lastItem: string | null = null;
   readonly detailOpen = computed(() => this.phoneDetail() || this.cats().length <= 1);
 
-  /** The hosted page's band parts (its actions, its search) — this shell's own SETTINGS_HOST. */
-  protected readonly host = inject(SETTINGS_HOST);
   readonly q = signal('');
   readonly noMatch = signal(false);
-  /** The shown page renders its OWN card (a grid page, a board): the frame drops its wrapper card — never card-in-card. */
+  /** Kept false: the frame's main card ALWAYS renders (owner); a grid page stays bare inside it and hands its head
+   *  tools (count, filters) to the card head (`headTools`). */
   readonly ownsCard = signal(false);
+  /** The routed page (RouterOutlet activate) — a converted grid page exposes `headTools` (a TemplateRef viewChild). */
+  private readonly activePage = signal<unknown>(null);
+  onActivate(c: unknown): void { this.activePage.set(c); }
+  readonly headTools = computed<TemplateRef<unknown> | null>(() => {
+    const f = (this.activePage() as { headTools?: () => TemplateRef<unknown> | undefined } | null)?.headTools;
+    return typeof f === 'function' ? (f() ?? null) : null;
+  });
   private readonly hostEl = inject(ElementRef<HTMLElement>);
   /** The band pill filters the rows on this page (label + hint text); a group card with no match hides. */
   private filterState: { words: string; sel: string | null } = { words: '', sel: null };
@@ -218,9 +235,7 @@ export class SettingsShellComponent implements OnDestroy {
       show(g, !(words && rows.length > 0 && rows.every((r) => r.style.display === 'none')));
     });
     if (this.noMatch() !== (!!words && shown === 0)) this.noMatch.set(!!words && shown === 0);
-    // A visible card inside the page (root holds only the page — the frame's own cards are outside it).
-    const own = Array.from(root.querySelectorAll<HTMLElement>('.pf-card')).some((c) => c.getClientRects().length > 0);
-    if (this.ownsCard() !== own) this.ownsCard.set(own);
+
   }
   /** The band's back chevron: where the person came from (an in-app link), else up to this setting's section. */
   readonly backToSection = (): void => this.navBack.back();
@@ -247,6 +262,12 @@ export class SettingsShellComponent implements OnDestroy {
       const cats = this.cats();
       if (!cats.length) return;
       const p = this.parsed();
+      if (this.host.categories()?.length) {
+        if (!cats.some((c) => c.id === p.query['tab'])) {
+          void this.router.navigate([], { queryParams: { tab: cats[0].id }, queryParamsHandling: 'merge', replaceUrl: true });
+        }
+        return;
+      }
       if (!l.category) {
         const t = categoryTarget(l.item, cats[0]);
         void this.router.navigate([t.path], { queryParams: t.query, replaceUrl: true });
@@ -281,7 +302,7 @@ export class SettingsShellComponent implements OnDestroy {
   pickCategory(id: string): void {
     const l = this.loc();
     if (!l) return;
-    const cat = l.item.categories.find((c) => c.id === id);
+    const cat = this.cats().find((c) => c.id === id) ?? l.item.categories.find((c) => c.id === id);
     if (!cat) return;
     const t = categoryTarget(l.item, cat);
     const queryParams: Record<string, string | null> = { ...t.query };

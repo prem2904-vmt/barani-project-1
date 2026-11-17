@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { map } from 'rxjs';
@@ -48,4 +48,10 @@ export class BillingSettingsPage {
   private readonly route = inject(ActivatedRoute);
   private readonly tab = toSignal(this.route.queryParamMap.pipe(map(q => q.get('tab'))), { initialValue: this.route.snapshot.queryParamMap.get('tab') });
   readonly section = computed<BillingSection>(() => billingSectionOf(this.tab()));
+  /** The Settings frame shows the hosted grid's head tools (count, filter pill) in ITS card head. */
+  private readonly vendors = viewChild(VendorsComponent);
+  readonly headTools = computed<TemplateRef<unknown> | null>(() => {
+    const v = this.vendors() as unknown as { headTools?: () => TemplateRef<unknown> | undefined } | undefined;
+    return typeof v?.headTools === 'function' ? (v.headTools() ?? null) : null;
+  });
 }

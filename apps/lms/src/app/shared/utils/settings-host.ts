@@ -17,12 +17,18 @@ export interface SettingsHost {
   readonly search: WritableSignal<TemplateRef<unknown> | null>;
   /** A hosted page's save state ("Saves automatically" / "Saving…"), shown small and muted in the shell's band. */
   readonly status: WritableSignal<TemplateRef<unknown> | null>;
+  /**
+   * A page whose sections are only known at run time (alerts by module …) lists them here: the shell's side card shows
+   * them (`?tab=<id>`, the note muted on the right) and the main card shows the matching `pf-setting-group [id]`.
+   */
+  readonly categories: WritableSignal<readonly SettingsHostCategory[] | null>;
 }
+export interface SettingsHostCategory { readonly id: string; readonly label: string; readonly note?: string }
 export const SETTINGS_HOST = new InjectionToken<SettingsHost>('pf.settings.host');
 
 /** A fresh host (the shell provides one per instance). */
 export function createSettingsHost(): SettingsHost {
-  return { hosted: true, actions: signal([]), search: signal(null), status: signal(null) };
+  return { hosted: true, actions: signal([]), search: signal(null), status: signal(null), categories: signal(null) };
 }
 
 /** True while the page is rendered inside the Settings shell. Call from an injection context. */
