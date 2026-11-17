@@ -243,7 +243,10 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
     /* Classic: the grid sizes off the viewport; new design: it fills the band body. */
     .pf-ua-grid { position: relative; height: calc(100vh - 240px); min-height: 420px; }
     .pf-ua-gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--pf-card-bg, var(--bg-primary)); border-radius: inherit; }
-    :host-context(.design-new) .pf-ua-grid { flex: 1 1 auto; height: auto; min-height: 320px; }
+    /* The grid box flexes (height:auto), so the grid inside must flex too — a 100% height of an auto box is 0 and the
+       rows render invisible (owner: "People and access grid is empty", inline in the overview). */
+    :host-context(.design-new) .pf-ua-grid { flex: 1 1 auto; height: auto; min-height: 320px; display: flex; flex-direction: column; }
+    :host-context(.design-new) .pf-ua-grid > ag-grid-angular { flex: 1 1 0; min-height: 320px; height: auto !important; }
     .pf-ua-count {
       font-size: 12px; font-variant-numeric: tabular-nums;
       color: var(--text-muted); white-space: nowrap; padding: 0 6px;
