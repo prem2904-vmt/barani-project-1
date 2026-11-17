@@ -12,6 +12,8 @@ import { neg, resetNeg, installNegBackend, go } from './support/neg-backend';
 const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/settings-grids');
 const out = () => shotsDir(OUT_BASE);
 const vis = (page: Page, sel: string) => page.locator(sel).locator('visible=true').first();
+/** Page errors that are the mock backend's, not the page's (WebKit reports a refused CORS fetch as a page error). */
+const ownErrors = (errors: string[]) => errors.filter(e => !/access control checks/i.test(e));
 /** Distinct grid rows under a card (pinned columns repeat a row in their own container). */
 const rowCount = (page: Page, card: string) => page.locator(`${card} .ag-row[row-index]`).evaluateAll(els => new Set(els.map(e => e.getAttribute('row-index'))).size);
 
@@ -155,7 +157,7 @@ test.describe('settings list grids', () => {
     await expectSymmetric(page, '.pf-brl__side', '.pf-brl__main');
     await expectLayout(page, 'bridges');
     await shot(page, 'sg-bridges');
-    expect(errors, 'no uncaught errors').toEqual([]);
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
   });
 
   test('Bridges: empty list is a small empty state (no giant icon)', async ({ page }) => {
@@ -182,7 +184,7 @@ test.describe('settings list grids', () => {
       await vis(page, 'pf-hero-band pf-segmented').getByText('Bridges').click();
       await expect(page).toHaveURL(/\/admin\/bridges/);
     }
-    expect(errors, 'no uncaught errors').toEqual([]);
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
   });
 
   test('Role editor: summary strip, groups LEFT, permissions grid; switch grants; Save sends the same payload', async ({ page }) => {
@@ -202,11 +204,11 @@ test.describe('settings list grids', () => {
     // Band search finds a permission across all groups.
     await vis(page, 'pf-hero-band input').fill('refund');
     await expect.poll(() => rowCount(page, '.re-main')).toBe(1);
-    await vis(page, '.re-main .ag-row .pf-sg-switch').click();
+    await vis(page, '.re-main .ag-row .pf-sg-switch').dispatchEvent('click');
     await vis(page, 'pf-hero-band .pf-hb-btn--primary').click();
     await expect.poll(() => neg.calls.find(c => c.path === '/api/roles/r2/permissions')?.body)
       .toEqual({ permissionIds: ['p1', 'p4', 'p11'] });
-    expect(errors, 'no uncaught errors').toEqual([]);
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
   });
 
   test('Role editor: system role keeps the locked-name wording', async ({ page }) => {
@@ -238,7 +240,7 @@ test.describe('settings list grids', () => {
     await vis(page, '.pf-vn-side .pf-btn--primary').dispatchEvent('click');
     await expect.poll(() => neg.calls.find(c => c.path === '/api/vendors/v3' && c.method === 'PUT')?.body)
       .toEqual({ name: 'Kauvery Clinic', code: 'KAUV', contactName: 'Anand', contactPhone: null, contactEmail: null, gstin: null, address: null, isActive: true });
-    expect(errors, 'no uncaught errors').toEqual([]);
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
   });
 
   test('Credit accounts (finance): money row actions open the side panel', async ({ page }) => {
@@ -251,7 +253,7 @@ test.describe('settings list grids', () => {
     await vis(page, '.pf-vn-main .ag-row .pf-rowact[aria-label="View history of Kauvery Clinic"]').dispatchEvent('click');
     await expect(vis(page, '.pf-vn-side')).toContainText('Bill B-1042');
     await shot(page, 'sg-credit-money-history');
-    expect(errors, 'no uncaught errors').toEqual([]);
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
   });
 
   test('Home collection agents: switch strip above a full-width agents grid', async ({ page }) => {
@@ -269,7 +271,7 @@ test.describe('settings list grids', () => {
     }
     await expectLayout(page, 'home collection agents');
     await shot(page, 'sg-home-collection');
-    expect(errors, 'no uncaught errors').toEqual([]);
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
   });
 
   test('Referral labs: grid, departments chips, status pill; Edit opens the side card', async ({ page }) => {
@@ -286,7 +288,7 @@ test.describe('settings list grids', () => {
     await vis(page, '.pf-rl-form .pf-btn--primary').dispatchEvent('click');
     await expect.poll(() => neg.calls.find(c => c.path === '/api/referral-labs/rl2' && c.method === 'PUT')?.body)
       .toEqual({ name: 'Neuberg Ehrlich', code: 'NEU', contactName: 'Priya', contactPhone: '9840099999', contactEmail: null, address: null, departmentCodesJson: '["BIO"]' });
-    expect(errors, 'no uncaught errors').toEqual([]);
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
   });
 
   test('People and access INLINE in the Settings overview: the users grid has rows (never a 0-height grid)', async ({ page }) => {
@@ -305,7 +307,7 @@ test.describe('settings list grids', () => {
     const box2 = await grid.boundingBox();
     expect(box2!.height, 'grid keeps its height').toBeGreaterThan(150);
     await shot(page, 'sg-people-inline');
-    expect(errors, 'no uncaught errors').toEqual([]);
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
   });
 
   test('Departments and lab spaces: tree LEFT, departments grid; a branch shows only its board', async ({ page }) => {
@@ -324,7 +326,7 @@ test.describe('settings list grids', () => {
     await expect(vis(page, '.ld-spaces .pf-lane-name-input')).toHaveValue('Pathology', { timeout: 60_000 });
     await expect(page.locator('.ld-spaces .pf-lane:visible')).toHaveCount(2);
     await shot(page, 'sg-lab-spaces-branch');
-    expect(errors, 'no uncaught errors').toEqual([]);
+    expect(ownErrors(errors), 'no uncaught errors').toEqual([]);
   });
 
   // Grids fill their card (no dead band below) on a wide and an ultra-wide screen.
