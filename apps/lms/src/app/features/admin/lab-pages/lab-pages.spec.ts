@@ -160,9 +160,9 @@ describe('Lab › Collection and queues', () => {
 });
 
 describe('Lab › Results and validation', () => {
-  it('ONE page of group cards: Validation, Calculations, Stage lock, Turnaround targets', async () => {
+  it('ONE page of group cards: Calculations, Validation, Stage lock, Turnaround targets', async () => {
     const p = await renderLabPage(LabResultsPage, '/page', { getFor: cfgGet() });
-    expect(groupLabels(p.el).slice(0, 2)).toEqual(['Validation', 'Calculations']);
+    expect(groupLabels(p.el).slice(0, 2)).toEqual(['Calculations', 'Validation']);
     p.el.querySelector<HTMLButtonElement>('button[aria-label="Require validation for all results"]')!.click();
     expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/branch-lab-config', { requireValidationForAllResults: true });
   });

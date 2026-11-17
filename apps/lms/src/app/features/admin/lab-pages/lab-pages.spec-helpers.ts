@@ -75,6 +75,6 @@ export const groupLabels = (el: HTMLElement) => Array.from(el.querySelectorAll('
 export const rowLabels = (el: HTMLElement) => Array.from(el.querySelectorAll('pf-setting-row .pf-srow__label')).map(h => text(h));
 /** The options of a segmented control (by its aria-label on the radiogroup). */
 export const segButtons = (el: HTMLElement, aria: string) =>
-  Array.from(el.querySelectorAll<HTMLButtonElement>(`[role="radiogroup"][aria-label="${aria}"] [role="radio"]`));
+  Array.from(el.querySelectorAll<HTMLButtonElement>(`:is(pf-segmented[aria-label="${aria}"], [role="radiogroup"][aria-label="${aria}"]) [role="radio"]`));
 export const pillLabels = (el: HTMLElement) =>
   Array.from(el.querySelectorAll<HTMLButtonElement>('pf-hero-band pf-segmented button')).map(b => b.getAttribute('aria-label'));

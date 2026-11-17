@@ -108,7 +108,7 @@ interface AutoAssignConfig {
       @if (show('scan-mode')) {
         <pf-setting-group [label]="gLabel('scan-mode')" [scope]="groupScope('scan-mode')" [id]="groupId('scan-mode')" [icon]="gIcon('scan-mode')">
         <pf-setting-row class="pf-ls__card" label="Find a sample" [hint]="optDesc(scanModeOptions, scanMode())">
-          <pf-segmented class="pf-ls__gate" size="sm" aria-label="Find a sample" [options]="seg(scanModeOptions)" [value]="scanMode()"
+          <pf-segmented class="pf-ls__gate" size="sm" ariaLabel="Find a sample" [options]="seg(scanModeOptions)" [value]="scanMode()"
                         (valueChange)="setScanMode($any($event))"></pf-segmented>
         </pf-setting-row>
         <pf-setting-row class="pf-ls__card pf-ls__preset" label="Pre-fill sample search">
@@ -133,7 +133,7 @@ interface AutoAssignConfig {
       @if (show('label-code')) {
         <pf-setting-group [label]="gLabel('label-code')" [scope]="groupScope('label-code')" [id]="groupId('label-code')" [icon]="gIcon('label-code')">
         <pf-setting-row class="pf-ls__card" label="Barcode on tube labels" [hint]="optDesc(labelCodeOptions, labelCodeMode())">
-          <pf-segmented class="pf-ls__gate" size="sm" aria-label="Barcode on tube labels" [options]="seg(labelCodeOptions)" [value]="labelCodeMode()"
+          <pf-segmented class="pf-ls__gate" size="sm" ariaLabel="Barcode on tube labels" [options]="seg(labelCodeOptions)" [value]="labelCodeMode()"
                         (valueChange)="setLabelCodeMode($any($event))"></pf-segmented>
         </pf-setting-row>
         </pf-setting-group>
@@ -146,7 +146,7 @@ interface AutoAssignConfig {
           @if (queueFocusMode() !== 'auto') {
             <button type="button" class="pf-ls__link" (click)="setQueueFocusMode('auto')">Follow lab structure</button>
           }
-          <pf-segmented class="pf-ls__gate" size="sm" aria-label="Queue focus" [options]="seg(queueFocusOptions)" [value]="queueFocusSelected()"
+          <pf-segmented class="pf-ls__gate" size="sm" ariaLabel="Queue focus" [options]="seg(queueFocusOptions)" [value]="queueFocusSelected()"
                         (valueChange)="setQueueFocusMode($any($event))"></pf-segmented>
         </pf-setting-row>
         @if (show('counters')) {
@@ -160,7 +160,7 @@ interface AutoAssignConfig {
       @if (show('lab-structure')) {
         <pf-setting-group [label]="gLabel('lab-structure')" [scope]="groupScope('lab-structure')" [id]="groupId('lab-structure')" [icon]="gIcon('lab-structure')">
         <pf-setting-row class="pf-ls__card" label="Lab structure" [hint]="optDesc(labStructureOptions, labStructure())">
-          <pf-segmented class="pf-ls__gate" size="sm" aria-label="Lab structure" [options]="seg(labStructureOptions)" [value]="labStructure()"
+          <pf-segmented class="pf-ls__gate" size="sm" ariaLabel="Lab structure" [options]="seg(labStructureOptions)" [value]="labStructure()"
                         (valueChange)="setLabStructure($any($event))"></pf-segmented>
         </pf-setting-row>
         </pf-setting-group>

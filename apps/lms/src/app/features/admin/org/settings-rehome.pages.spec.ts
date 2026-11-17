@@ -12,7 +12,8 @@ import { CommunicationSettingsPage } from '../communication/communication-settin
 import { OrganizationSettingsComponent } from '../organization/organization-settings.component';
 import { VendorsComponent } from '../vendors/vendors.component';
 import { readFileSync } from 'node:fs';
-import { SETTINGS_SHELL_CHILDREN } from '../settings/settings.routes';
+import { SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from '../settings/settings.routes';
+import { OPD_ADMIN_ROUTES } from '../../opd/opd.routes';
 import { PHARMACY_VIEW } from '../../opd/pharmacy/pharmacy-view';
 import { ROUTE_ACCESS } from '../../../core/auth/route-access';
 
@@ -25,7 +26,7 @@ describe('Organization › Patient and order numbers (/admin/org/numbers)', () =
     const tabs = Array.from(p.el.querySelectorAll('pf-hero-band .pf-hb__tools pf-segmented .seg-item')).map(b => b.getAttribute('aria-label'));
     expect(tabs).toEqual(['Patient ID', 'Order ID']);
     expect(p.cmp.tab()).toBe('patient');
-    expect(p.el.textContent).toContain('Patient ID format');
+    expect(p.el.querySelector('pf-setting-group .pf-sgroup__label')?.textContent?.trim()).toBe('Patient ID');
     expect(p.el.textContent).not.toContain('Organization login handle');
     expect(p.el.textContent).not.toContain('Sample ID format');
   });
@@ -112,11 +113,15 @@ describe('Credit accounts — setup in Billing, money on Finance', () => {
 });
 
 describe('Settings re-home routes (hosted by the Settings shell; one route table)', () => {
-  const by = (path: string) => SETTINGS_SHELL_CHILDREN.find(r => r.path === path)!;
-  it('declares every routed page the left panel needs, once', () => {
-    for (const p of ['admin/org/profile', 'admin/org/numbers', 'admin/org/channels', 'admin/billing', 'admin/ipd/alerts', 'admin/pharmacy', 'admin/pharmacy/drugs', 'admin/opd/front-desk']) {
+  // Card-style pages are hosted by the shell; full-screen ones (Drug master …) are top-level routes (DESIGN-V2 rule 2).
+  const ALL = [...SETTINGS_SHELL_CHILDREN, ...SETTINGS_FULL_PAGE_ROUTES, ...OPD_ADMIN_ROUTES.filter(r => !SETTINGS_SHELL_CHILDREN.includes(r))];
+  const by = (path: string) => ALL.find(r => r.path === path)!;
+  it('declares every routed page once (hosted card pages in the shell)', () => {
+    for (const p of ['admin/org/profile', 'admin/org/numbers', 'admin/org/channels', 'admin/billing', 'admin/ipd/alerts', 'admin/pharmacy', 'admin/opd/front-desk']) {
       expect(SETTINGS_SHELL_CHILDREN.filter(r => r.path === p).length, p).toBe(1);
     }
+    expect(ALL.filter(r => r.path === 'admin/pharmacy/drugs').length).toBe(1);
+    expect(SETTINGS_SHELL_CHILDREN.some(r => r.path === 'admin/pharmacy/drugs')).toBe(false);
   });
   it('every page is guarded (nothing opens without a permission or module gate)', () => {
     for (const p of ['admin/org/profile', 'admin/org/numbers', 'admin/org/channels', 'admin/billing', 'admin/ipd/alerts', 'admin/pharmacy', 'admin/pharmacy/drugs']) {
