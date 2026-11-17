@@ -74,3 +74,29 @@ describe('Test editor asks before it is left', () => {
     expect(await te.saveChanges.call(self)).toBe(true);
   });
 });
+
+describe('Message channels and Front desk ask before they are left', () => {
+  it('Message channels: unsaved = the email form is dirty; Save from the prompt runs the form Save', async () => {
+    const { CommunicationSettingsPage } = await import('./communication/communication-settings.page');
+    const cp = CommunicationSettingsPage.prototype as any;
+    const self: any = { emailDirty: signal(true) };
+    self.saveEmail = vi.fn(async () => { self.emailDirty.set(false); });
+    expect(cp.hasUnsavedChanges.call(self)).toBe(true);
+    expect(await cp.saveChanges.call(self)).toBe(true);
+    expect(self.saveEmail).toHaveBeenCalled();
+    self.emailDirty.set(true); self.saveEmail = vi.fn(async () => undefined); // a problem: the form stays dirty
+    expect(await cp.saveChanges.call(self)).toBe(false);
+  });
+
+  it('Front desk: booking settings dirty against the loaded copy (config + open hours)', async () => {
+    const { AppointmentsConfigComponent } = await import('./appointments-config/appointments-config.component');
+    const ap = AppointmentsConfigComponent.prototype as any;
+    const self: any = { _cfg: signal({ queueMode: 'token_queue' }), _startTime: signal('09:00'), _endTime: signal('17:00'), savedJson: signal<string | null>(null) };
+    self.snapshot = ap.snapshot.bind(self);
+    expect(ap.hasUnsavedChanges.call(self)).toBe(false);         // not loaded yet
+    ap.markSaved.call(self);
+    expect(ap.hasUnsavedChanges.call(self)).toBe(false);
+    self._endTime.set('18:00');
+    expect(ap.hasUnsavedChanges.call(self)).toBe(true);
+  });
+});
