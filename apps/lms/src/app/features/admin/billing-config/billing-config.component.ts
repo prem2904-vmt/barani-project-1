@@ -1,3 +1,4 @@
+import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -80,7 +81,7 @@ interface GstRow {
 @Component({
   selector: "pf-billing-config",
   standalone: true,
-  imports: [SkeletonFormComponent, BusyDirective, RouterLink,
+  imports: [SettingRowComponent, SkeletonFormComponent, BusyDirective, RouterLink,
     FormsModule,
     NumberInputComponent,
     ScreenHeaderComponent,
@@ -422,39 +423,18 @@ interface GstRow {
           >
             <div class="min-w-0">
               <div class="pf-bc-card">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-                  <div>
-                    <label class="pf-label">Invoice prefix</label>
-                    <input
-                      type="text"
-                      class="pf-input"
-                      [ngModel]="config().invoicePrefix"
-                      (ngModelChange)="patch({ invoicePrefix: $event })"
-                    />
-                  </div>
-                  <div>
-                    <label class="pf-label">Next invoice number</label>
-                    <pf-number-input
-                      [value]="config().invoiceStartNumber"
-                      [min]="1"
-                      [step]="1"
-                      (valueChange)="patch({ invoiceStartNumber: $event ?? 1 })"
-                    >
-                    </pf-number-input>
-                    <p class="pf-bc-hint">Can only move forward — issued numbers are never reused.</p>
-                  </div>
-                </div>
-
-                <div class="pf-invoice-preview">
-                  <p class="pf-bc-sub">Next invoice</p>
-                  <p
-                    class="pf-num text-[16px] font-semibold"
-                    style="color: var(--text-primary);"
-                  >
-                    {{ invoicePreview() }}
-                  </p>
-                </div>
-
+                <!-- Invoice number: one setting per row (owner) — title left, control right. -->
+                <pf-setting-row label="Invoice prefix">
+                  <input type="text" class="pf-input pf-bc-in" aria-label="Invoice prefix"
+                         [ngModel]="config().invoicePrefix" (ngModelChange)="patch({ invoicePrefix: $event })" />
+                </pf-setting-row>
+                <pf-setting-row label="Next invoice number" hint="Can only move forward — issued numbers are never reused.">
+                  <pf-number-input [value]="config().invoiceStartNumber" [min]="1" [step]="1"
+                                   (valueChange)="patch({ invoiceStartNumber: $event ?? 1 })"></pf-number-input>
+                </pf-setting-row>
+                <pf-setting-row label="Next invoice">
+                  <strong class="pf-fmt__value pf-num">{{ invoicePreview() }}</strong>
+                </pf-setting-row>
                 <div
                   class="flex items-start justify-between gap-4 mt-5 pt-5"
                   style="border-top: 1px solid var(--glass-border);"
@@ -881,6 +861,7 @@ interface GstRow {
   `,
   styles: [
     `
+      .pf-bc-in { width: 140px; height: 34px; min-height: 34px; }
       .pf-scope-card {
         display: flex;
         flex-direction: column;
