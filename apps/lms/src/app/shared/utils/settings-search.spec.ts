@@ -74,8 +74,8 @@ describe('settings search — real examples', () => {
     expect(hits.map((h) => h.title)).toEqual(expect.arrayContaining(['Label printer', 'Invoice / document printer', 'Printing']));
   });
 
-  it('"branch" → Branches & Departments first', () => {
-    expect(titles('branch')[0]).toBe('Branches & Departments');
+  it('"branch" → Branches first', () => {
+    expect(titles('branch')[0]).toBe('Branches');
   });
 
   it('"lab settings" → the Lab settings page first; "lab" → the Lab hub first', () => {

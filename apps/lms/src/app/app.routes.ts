@@ -309,6 +309,11 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/admin/branches/branches.component').then(m => m.BranchesComponent)
       },
       {
+        path: 'admin/lab/departments',
+        canActivate: [...routeGuards('/admin/lab/departments')],
+        loadComponent: () => import('./features/admin/lab-departments/lab-departments.component').then(m => m.LabDepartmentsComponent)
+      },
+      {
         path: 'admin/vendors',
         canActivate: [...routeGuards('/admin/vendors')],
         loadComponent: () => import('./features/admin/vendors/vendors.component').then(m => m.VendorsComponent)

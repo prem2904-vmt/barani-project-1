@@ -116,10 +116,16 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
     keywords: ['audit log', 'history', 'who changed', 'activity'] },
 
   // ── Branches & Organization ──
-  { title: 'Branches & Departments', href: '/admin/branches', section: SETTINGS_SECTION.org, icon: I.branches, kind: 'page',
-    keywords: ['branch', 'department', 'lab spaces', 'space code', 'sample id prefix', 'tube colour', 'container'] },
-  on('/admin/branches', 'Branches & Departments', I.branches, 'Departments & lab spaces', ['drag department', 'space', 'tube sharing']),
-  on('/admin/branches', 'Branches & Departments', I.branches, 'Default Lab code', ['sample id prefix', 'space code', 'lab code']),
+  { title: 'Branches', href: '/admin/branches', section: SETTINGS_SECTION.org, icon: I.branches, kind: 'page',
+    keywords: ['branch', 'new branch', 'deactivate branch', 'gstin', 'city'] },
+  // Lab › Departments and lab spaces (owner 2026-11-17): the lab's departments (its own + the
+  // catalogue's) and the per-branch lab spaces board that used to live on Branches.
+  { title: 'Departments and lab spaces', href: '/admin/lab/departments', section: SETTINGS_SECTION.org, icon: I.branches, kind: 'page',
+    keywords: ['department', 'add department', 'lab spaces', 'space code', 'sample id prefix', 'tube colour', 'container'] },
+  on('/admin/lab/departments', 'Departments and lab spaces', I.branches, 'Add a department', ['new department', 'own department', 'made here', 'rename department', 'delete department'], { tab: 'departments' }),
+  on('/admin/lab/departments', 'Departments and lab spaces', I.branches, 'Departments on or off', ['switch department', 'deactivate department', 'catalogue'], { tab: 'departments' }),
+  on('/admin/lab/departments', 'Departments and lab spaces', I.branches, 'Lab spaces', ['drag department', 'space', 'tube sharing', 'space name', 'space code'], { tab: 'spaces' }),
+  on('/admin/lab/departments', 'Departments and lab spaces', I.branches, 'Default Lab code', ['sample id prefix', 'space code', 'lab code'], { tab: 'spaces' }),
   { title: ORG, href: '/admin/organization', section: SETTINGS_SECTION.org, icon: I.org, kind: 'page',
     keywords: ['organisation', 'company', 'id format'] },
   org('identity', 'Identity', 'Organization name', ['lab name', 'company name', 'display name']),
@@ -279,6 +285,7 @@ export const SETTINGS_PARENT: Readonly<Record<string, string>> = {
   '/admin/audit': '/admin?section=people',
   // Branches & Organization
   '/admin/branches': '/admin?section=org',
+  '/admin/lab/departments': '/admin?section=org',
   '/admin/organization': '/admin?section=org',
   '/admin/appointments': '/admin?section=org',
   '/admin/partners': '/admin?section=org',

@@ -63,7 +63,7 @@ describe('Lab settings — removed settings are gone', () => {
     expect(writes.some((c) => JSON.stringify(c[1] ?? {}).includes('sampleNumberWidth'))).toBe(false);
   });
 
-  it('a "Sample IDs" pointer links to the two real homes (Organization format, Branches prefixes)', () => {
+  it('a "Sample IDs" pointer links to the two real homes (Organization format, lab-space prefixes)', () => {
     const p = make();
     const nav = vi.spyOn(p.f.debugElement.injector.get(Router), 'navigate').mockResolvedValue(true);
     p.cmp.tab.set('collection');
@@ -75,7 +75,7 @@ describe('Lab settings — removed settings are gone', () => {
     fmt.click();
     expect(nav).toHaveBeenLastCalledWith(['/admin/organization'], { queryParams: { tab: 'sample' } });
     branches.click();
-    expect(nav).toHaveBeenLastCalledWith(['/admin/branches']);
+    expect(nav).toHaveBeenLastCalledWith(['/admin/lab/departments'], { queryParams: { tab: 'spaces' } });
   });
 
   it('no second abnormal-results switch — a link to its one home in Report Template', () => {

@@ -183,14 +183,11 @@ describe('ND audit D — Branches', () => {
     expect(card).not.toBeNull();
     expect(p.el.querySelector('.pf-trunc')).toBeNull();
     expect(card.querySelector('.pf-br-name')!.textContent).toContain('Anna Nagar Collection Centre');
-    p.cmp.toggle('b1'); p.f.detectChanges();
     expect(card.textContent).not.toMatch(/[×→]/);
-    // Sub-branches were removed (owner, 2026-09-27): the open card is the
-    // departments board only, every department on it.
+    // Sub-branches were removed (owner, 2026-09-27); the departments board moved to Lab
+    // (owner 2026-11-17) — the branch card is just the branch.
     expect(card.textContent).not.toMatch(/sub-branch/i);
-    expect(card.querySelector('.pf-br-count')!.textContent).not.toContain('sub');
-    expect(card.querySelector('.pf-board')).not.toBeNull();
-    expect(card.querySelector('.pf-dcard-name')!.textContent).toContain('Haematology');
+    expect(card.querySelector('.pf-board')).toBeNull();
     hygiene(p.el);
   });
 });

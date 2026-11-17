@@ -142,10 +142,32 @@ export function restoreDefaultsSummary(r: { deleted?: number; parked?: number; c
   return `Catalogue restored — ${r.cloned} default tests loaded (${r.deleted ?? 0} removed, ${r.parked ?? 0} archived); prices kept.`;
 }
 
-/** Departments are master-provided (owner rule 4): labs place, enable or
- *  disable them, never create one (server: 403 `departments_master_only`). */
-export const DEPARTMENTS_FROM_MASTER =
-  'Departments come from the Admin Test Master. Place them in spaces and turn them on or off here; new ones are added there.';
+/** Where a department comes from. Owner 2026-11-17: the catalogue (Admin Test
+ *  Master) provides the master departments, and a lab may ALSO make its own.
+ *  A lab-made department has no CatalogKey and is marked `labMade` in its
+ *  metadata; master updates never touch it or its tests. Anything else (a
+ *  CatalogKey, or a legacy un-keyed one) is the catalogue's. */
+export type DepartmentOrigin = 'catalogue' | 'lab';
 
-/** The server's refusal when a lab tries to create a department. */
-export const DEPARTMENTS_MASTER_ONLY_ERROR = 'departments_master_only';
+export const DEPARTMENT_ORIGIN_LABEL = { catalogue: 'From the catalogue', lab: 'Made here' } as const;
+
+export function departmentOrigin(d: { catalogKey?: string | null; metadata?: string | null }): DepartmentOrigin {
+  if ((d.catalogKey ?? '').trim() || !d.metadata) return 'catalogue';
+  try {
+    const m = JSON.parse(d.metadata);
+    return m && m.labMade === true ? 'lab' : 'catalogue';
+  } catch { return 'catalogue'; }
+}
+
+/** Plain-words message for the department errors the server returns
+ *  (409 `dept_name_taken` / `dept_code_taken` / `dept_in_use`, 403
+ *  `department_master_owned`); anything else keeps the server's own text. */
+export function departmentErrorMessage(code: string | undefined, fallback: string): string {
+  switch (code) {
+    case 'dept_name_taken': return 'A department with that name already exists. Pick another name.';
+    case 'dept_code_taken': return 'That code is already used by another department. Pick another code.';
+    case 'dept_in_use': return 'Tests, samples or appointments already use this department, so it cannot be deleted. Switch it off instead.';
+    case 'department_master_owned': return 'This department comes from the catalogue, so it cannot be renamed or deleted here. You can switch it off.';
+    default: return fallback;
+  }
+}

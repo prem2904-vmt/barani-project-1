@@ -185,10 +185,10 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'sample' | 'order';
         <div class="pf-card__body pf-ls__body">
           <p class="pf-ls__hint">
             Every tube's ID is <strong>SPACE-DATE-NUMBER</strong> (e.g. <span class="pf-num">MIC-2607-00001</span>).
-            The <strong>space code</strong> comes from Branches → “Departments &amp; lab spaces”. The number restarts <strong>each month per space</strong>.
+            The <strong>space code</strong> comes from Lab → “Departments and lab spaces”. The number restarts <strong>each month per space</strong>.
             This is the one place the sample-ID format is set.
           </p>
-          <a class="pf-ls__link" routerLink="/admin/branches">Set space codes in Branches</a>
+          <a class="pf-ls__link" routerLink="/admin/lab/departments" [queryParams]="{ tab: 'spaces' }">Set space codes in Departments and lab spaces</a>
           <div class="pf-ls__grid pf-ls__grid--3">
             <div class="pf-field">
               <span class="pf-field__lbl">Date</span>
