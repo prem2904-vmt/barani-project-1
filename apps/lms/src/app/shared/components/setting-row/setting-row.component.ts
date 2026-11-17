@@ -26,10 +26,9 @@ import { NgTemplateOutlet } from '@angular/common';
     <div class="pf-srow__ctl"><ng-content></ng-content></div>
   `,
   styles: [`
-    /* Two columns (owner 2026-11-17): a fixed label column, the control column starts right after it and is
-       LEFT-aligned, so every control on the card lines up on one vertical edge. Equal row rhythm. */
+    /* Owner 2026-11-17 (final): the label on the LEFT, the value / control flush RIGHT at the card's edge. */
     :host {
-      display: grid; grid-template-columns: minmax(150px, 340px) minmax(0, 1fr); align-items: center; gap: 6px 20px;
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 24px;
       min-height: 56px; padding: 10px 0; border-bottom: 1px solid var(--pf-line, var(--glass-border));
     }
     :host(:last-child) { border-bottom: 0; }
@@ -38,9 +37,10 @@ import { NgTemplateOutlet } from '@angular/common';
     .pf-srow__label { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; font-weight: 500; color: var(--text-primary); line-height: 1.35; }
     .pf-srow__hint { font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
     :host(.pf-srow--off) .pf-srow__label, :host(.pf-srow--off) .pf-srow__hint { opacity: .6; }
-    .pf-srow__ctl { display: flex; align-items: center; justify-content: flex-start; gap: 8px 10px; flex-wrap: wrap; min-width: 0; }
+    .pf-srow__ctl { display: flex; align-items: center; justify-content: flex-end; gap: 8px 10px; flex-wrap: wrap; min-width: 0; max-width: 100%; }
     :host(.pf-srow--stack) .pf-srow__ctl { justify-content: flex-start; }
-    @media (max-width: 767px) { :host { grid-template-columns: minmax(0, 1fr); } }
+    :host(.pf-srow--stack) .pf-srow__ctl { justify-content: flex-start; }
+    @media (max-width: 767px) { :host { grid-template-columns: minmax(0, 1fr); } .pf-srow__ctl { justify-content: flex-start; } }
   `],
 })
 export class SettingRowComponent {
@@ -73,20 +73,14 @@ export const SETTING_GROUP_ICON = 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0
   template: `
     <ng-template #rows><ng-content></ng-content></ng-template>
     @if (label()) {
-      <section class="pf-card pf-sgroup__card" [attr.aria-label]="label()">
-        <header class="pf-card__head pf-sgroup__head">
-          <span class="pf-card__icon" aria-hidden="true">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="icon() || defaultIcon"/></svg>
-          </span>
-          <h3 class="pf-card__label pf-sgroup__label">{{ label() }}</h3>
-          @if (scope()) { <span class="pf-card__note pf-sgroup__scope">{{ scope() }}</span> }
+      <section class="pf-sgroup__sec" [attr.aria-label]="label()">
+        <header class="pf-sgroup__head">
+          <h3 class="pf-sgroup__label">{{ label() }}</h3>
+          @if (scope()) { <span class="pf-sgroup__scope">{{ scope() }}</span> }
           <span class="pf-sgroup__tools"><ng-content select="[group-tools]"></ng-content></span>
         </header>
-        <div class="pf-sgroup__rows">
-          @if (hint()) { <p class="pf-sgroup__hint">{{ hint() }}</p> }
-          <ng-container *ngTemplateOutlet="rows"></ng-container>
-        </div>
+        @if (hint()) { <p class="pf-sgroup__hint">{{ hint() }}</p> }
+        <div class="pf-sgroup__rows"><ng-container *ngTemplateOutlet="rows"></ng-container></div>
       </section>
     } @else {
       <ng-container *ngTemplateOutlet="rows"></ng-container>
@@ -94,16 +88,14 @@ export const SETTING_GROUP_ICON = 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0
   `,
   styles: [`
     :host { display: block; min-width: 0; scroll-margin-top: 8px; }
-    :host(.pf-sgroup--wide) { grid-column: 1 / -1; }
     :host(.pf-sgroup--plain) { display: contents; }
-    .pf-sgroup__card { overflow: visible; }
-    .pf-sgroup__head { flex-wrap: nowrap; }
-    .pf-sgroup__label { margin: 0; flex: none; }
-    .pf-sgroup__scope { flex: 1 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    :host + :host:not(.pf-sgroup--plain) .pf-sgroup__sec { margin-top: 14px; padding-top: 4px; border-top: 1px solid var(--pf-line, var(--glass-border)); }
+    .pf-sgroup__head { display: flex; align-items: center; gap: 10px; min-height: 36px; padding-top: 8px; }
+    .pf-sgroup__label { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
+    .pf-sgroup__scope { font-size: 12px; color: var(--text-tertiary); opacity: .85; }
     .pf-sgroup__tools { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; flex: none; }
     .pf-sgroup__tools:empty { display: none; }
-    .pf-sgroup__rows { padding: 2px 16px 4px; }
-    .pf-sgroup__hint { margin: 10px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
+    .pf-sgroup__hint { margin: 2px 0 2px; font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); }
   `],
 })
 export class SettingGroupComponent {

@@ -46,11 +46,21 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
       </pf-hero-band>
       <div class="pf-band-body pf-band-body--fill pf-ss__body">
         @if (single()) {
-          <!-- ONE page of group cards in a grid that fills the width — no wrapper card, no side card. -->
-          <div class="pf-ss__scroll" [attr.aria-label]="itemLabel()">
-            <div class="pf-ss__main pf-ss__main--grid" data-testid="settings-main"><router-outlet></router-outlet></div>
-            @if (q().trim() && noMatch()) { <p class="pf-band-empty" data-testid="ss-no-match">No settings match "{{ q() }}".</p> }
-          </div>
+          <!-- One category: ONE main card (TM head), its groups one under the other. -->
+          <section class="pf-card pf-ss__card" [attr.aria-label]="itemLabel()">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="itemIcon()"/></svg>
+              </span>
+              <h2 class="pf-card__label pf-ss__title" data-testid="tp-nav-title">{{ itemLabel() }}</h2>
+              @if (itemBlurb()) { <span class="pf-card__note pf-ss__note">{{ itemBlurb() }}</span> }
+            </header>
+            <div class="pf-ss__scroll">
+              <div class="pf-ss__main" data-testid="settings-main"><router-outlet></router-outlet></div>
+              @if (q().trim() && noMatch()) { <p class="pf-band-empty" data-testid="ss-no-match">No settings match "{{ q() }}".</p> }
+            </div>
+          </section>
         } @else {
           <pf-two-panel
             [groups]="groups()"
@@ -61,6 +71,7 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
             [navHead]="loc() ? itemLabel() : null"
             [navIcon]="itemIcon()"
             [panelIcon]="itemIcon()"
+            [panelNote]="panelNote()"
             [backLabel]="'Back to ' + itemLabel()"
             [navBackLabel]="'Back to ' + sectionLabel()"
             [navKey]="loc() ? itemId() : null"
@@ -70,7 +81,7 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
             (back)="closeDetail()"
             (navBack)="toSections()"
           >
-            <div class="pf-ss__main" data-testid="settings-main"><router-outlet></router-outlet></div>
+            <div class="pf-ss__main pf-ss__main--one" data-testid="settings-main"><router-outlet></router-outlet></div>
           </pf-two-panel>
         }
       </div>
@@ -81,7 +92,8 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
     .pf-ss__body { min-height: 0; }
     :root:not(.design-new) .pf-ss { display: flex; flex-direction: column; height: calc(100dvh - var(--top-strip-h, 64px)); padding: 0 16px; }
     :root:not(.design-new) .pf-ss__body { flex: 1; display: flex; flex-direction: column; padding-bottom: 12px; }
-    .pf-ss__main--grid { padding: 2px 2px 24px !important; }
+    .pf-ss__card { flex: 1 1 auto; min-height: 0; }
+    .pf-ss__scroll { flex: 1 1 auto; min-height: 0; }
     .pf-ss__title { margin: 0; flex: none; }
     .pf-ss__note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-ss__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; margin: 0 -4px; padding: 0 4px; }
@@ -116,6 +128,8 @@ export class SettingsShellComponent implements OnDestroy {
   readonly itemId = computed(() => this.loc()?.item.id ?? '');
   readonly itemIcon = computed(() => this.loc()?.item.iconPath ?? null);
   readonly itemBlurb = computed(() => this.loc()?.item.blurb ?? null);
+  /** The main card head's note: the selected category's scope ("this branch" …). */
+  readonly panelNote = computed(() => this.cats().find((c) => c.id === this.selectedId())?.scope ?? null);
   readonly sectionLabel = computed(() => this.loc()?.section.label ?? 'Settings');
   /** Categories this person can open (a hidden one never lists; a hosted URL that names one is still served by its guard). */
   readonly cats = computed<SettingsCategory[]>(() => {
@@ -125,12 +139,12 @@ export class SettingsShellComponent implements OnDestroy {
     return this.access.visibleCategories(l.item).filter((c) => !isFullScreenSettingsPath(categoryPath(l.item, c)));
   });
   /** ONE main card (no side card): a `single` setting, or one with a single hosted category. */
-  readonly single = computed(() => !!this.loc()?.item.single || this.cats().length <= 1);
+  readonly single = computed(() => this.cats().length <= 1);
 
   readonly groups = computed<TwoPanelGroup[]>(() => {
     const l = this.loc();
     if (!l) return [{ key: 'x', heading: 'Settings', items: [{ id: 'x', label: 'Settings' }] }];
-    return [{ key: l.item.id, heading: l.item.label, items: this.cats().map((c) => ({ id: c.id, label: c.label })) }];
+    return [{ key: l.item.id, heading: l.item.label, items: this.cats().map((c) => ({ id: c.id, label: c.label, note: c.scope })) }];
   });
 
   /** Wide: the URL's category, else the first. Phone: only what the URL names. */
@@ -155,17 +169,23 @@ export class SettingsShellComponent implements OnDestroy {
   private readonly filterRows = effect(() => {
     const words = this.q().trim().toLowerCase();
     this.url();
+    const sel = this.single() ? null : this.selectedId();
     if (!this.browser) return;
     setTimeout(() => {
       const root = (this.hostEl.nativeElement as HTMLElement).querySelector('[data-testid="settings-main"]');
       if (!root) return;
+      // Two cards: the main card shows ONLY the selected group (its head names it); the page keeps its other groups.
+      const groups = Array.from(root.querySelectorAll<HTMLElement>('pf-setting-group[data-group]'))
+        .filter((g) => !g.parentElement?.closest('pf-setting-group[data-group]'));
+      const has = !!sel && groups.some((g) => g.dataset['group'] === sel);
+      for (const g of groups) g.style.display = has && g.dataset['group'] !== sel ? 'none' : '';
       let shown = 0;
       root.querySelectorAll<HTMLElement>('pf-setting-row, .pf-nc-card').forEach((r) => {
         const hit = !words || (r.textContent ?? '').toLowerCase().includes(words);
         r.hidden = !hit;
         if (hit) shown++;
       });
-      root.querySelectorAll<HTMLElement>('pf-setting-group:not(.pf-sgroup--plain)').forEach((g) => {
+      root.querySelectorAll<HTMLElement>('pf-setting-group:not(.pf-sgroup--plain):not([style*="none"])').forEach((g) => {
         const rows = g.querySelectorAll('pf-setting-row, .pf-nc-card');
         g.hidden = !!words && rows.length > 0 && Array.from(rows).every((r) => (r as HTMLElement).hidden)
           && !(g.textContent ?? '').toLowerCase().includes(words);

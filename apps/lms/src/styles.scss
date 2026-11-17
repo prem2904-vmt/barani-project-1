@@ -168,7 +168,7 @@
 :root.design-new .pf-ss__main .pf-band-page > .pf-band-body--fill:not(.pf-sgrid) { display: block !important; }
 /* An ID FORMAT in ONE settings row (DESIGN-V2 rule 5): Date · Separator · Digits · Letters → Preview.
    Shared by Sample numbers and Patient / Order numbers. Every control is 32px tall. */
-.pf-fmt { display: flex; align-items: center; justify-content: flex-start; gap: 8px 14px; flex-wrap: wrap; }
+.pf-fmt { display: flex; align-items: center; justify-content: flex-end; gap: 8px 14px; flex-wrap: wrap; }
 .pf-fmt__f { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
 .pf-fmt__f > .pf-input { width: 64px; height: 32px; min-height: 32px; padding: 0 8px; font-size: 13px; }
 .pf-fmt__f > .pf-input.pf-fmt__sep { width: 72px; }
@@ -177,14 +177,11 @@
 .pf-fmt__f > pf-select .pf-dd__trigger { min-height: 32px !important; height: 32px !important; padding-top: 0 !important; padding-bottom: 0 !important; }
 .pf-fmt__preview { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
 .pf-fmt__preview strong { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text-primary); }
-@media (max-width: 767px) { .pf-fmt__f > .pf-input { font-size: 16px; } }
+@media (max-width: 767px) { .pf-fmt { justify-content: flex-start; } .pf-fmt__f > .pf-input { font-size: 16px; } }
 
-/* A card-style setting = its group cards in a grid that FILLS the width (owner 2026-11-17): 1 column on phones,
-   2 from 1100px, 3 from 1800px, 4 from 2600px; cards keep their own height (align start). */
-.pf-sgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
-@media (min-width: 1100px) { .pf-sgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1800px) { .pf-sgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 2600px) { .pf-sgrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/* A card-style setting's groups (owner 2026-11-17, final): the Settings frame shows ONE group at a time in its main
+   card (the side card lists the groups); a page with one category shows its groups one under the other. */
+.pf-sgrid { display: block; }
 
 /* Empty state for a band search that matches nothing. */
 .pf-band-empty {
@@ -2868,3 +2865,9 @@ input::-ms-clear {
 .pf-sgrid :is(pf-appointments-config, pf-notifications-config) > .pf-band-page,
 .pf-sgrid :is(pf-appointments-config, pf-notifications-config) > .pf-band-page > .pf-band-body { display: contents !important; }
 .pf-sgrid :is(pf-appointments-config, pf-notifications-config) > .pf-band-page > :is(pf-hero-band, pf-screen-header) { display: none; }
+
+/* Two cards: the main card's head already names the selected group — the group's own label goes, its tools stay. */
+.pf-ss__main--one .pf-sgroup__label, .pf-ss__main--one .pf-sgroup__scope { display: none; }
+.pf-ss__main--one .pf-sgroup__head { min-height: 0; padding-top: 0; }
+.pf-ss__main--one .pf-sgroup__head:has(.pf-sgroup__tools:not(:empty)) { padding-top: 10px; }
+.pf-ss__main--one .pf-sgroup__sec { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }

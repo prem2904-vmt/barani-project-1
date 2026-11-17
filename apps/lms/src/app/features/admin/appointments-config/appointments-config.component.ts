@@ -124,7 +124,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
         <pf-skeleton-form [fields]="6" label="Loading appointment settings…"></pf-skeleton-form>
       } @else {
         @if (showSec('mode')) {
-        <pf-setting-group class="pf-ap-card" label="Queue mode" scope="this branch" icon="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01">
+        <pf-setting-group class="pf-ap-card" id="mode" label="Queue mode" scope="this branch" icon="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01">
           @if (homeCollectionRuns()) {
             <p class="pf-ap-hint pf-ap-hc" data-testid="ap-hc-note">
               This branch's queue runs as <strong>home collection</strong> visits. Pick a queue mode to switch it back, or
@@ -138,7 +138,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
         }
 
         @if (showSec('slots')) {
-        <pf-setting-group class="pf-ap-card" label="Booking slots" scope="this branch" icon="M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM8 3v4M16 3v4M3 10h18">
+        <pf-setting-group class="pf-ap-card" id="slots" label="Booking slots" scope="this branch" icon="M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2ZM8 3v4M16 3v4M3 10h18">
           <pf-setting-row label="Time between appointments" hint="Minutes per slot.">
             <pf-number-input [value]="cfg()!.slotMinutes" [step]="5" [min]="5" [max]="240" suffix="min"
               (valueChange)="patch({ slotMinutes: $event ?? 30 })"></pf-number-input>
@@ -164,7 +164,7 @@ export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
         }
 
         @if (showSec('priority')) {
-        <pf-setting-group class="pf-ap-card" label="Priority engine" scope="this branch" icon="M3 12h4l3-9 4 18 3-9h4"
+        <pf-setting-group class="pf-ap-card" id="priority" label="Priority engine" scope="this branch" icon="M3 12h4l3-9 4 18 3-9h4"
                           hint="Higher score is called sooner: base + minutes waited × weight − late penalty; urgent jumps to the top.">
           @for (f of optionFields; track f.key) {
             <pf-setting-row [label]="f.label">

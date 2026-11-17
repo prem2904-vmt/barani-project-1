@@ -50,7 +50,7 @@ const SHORT_NAME_MAX = 30;
 
       <div class="pf-band-body">
         <div class="pf-op__rows pf-sgrid">
-          <pf-setting-group label="Name" scope="everywhere" icon="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01">
+          <pf-setting-group id="name" label="Name" scope="everywhere" icon="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01">
           <pf-setting-row data-testid="op-name" label="Organization name" hint="Shown across the app and printed on reports and bills.">
             <input class="pf-input pf-op__in" data-testid="op-name-input" maxlength="80" aria-label="Organization name"
                    [ngModel]="name()" (ngModelChange)="name.set($event)" placeholder="e.g. Arun Labs" />
@@ -60,7 +60,7 @@ const SHORT_NAME_MAX = 30;
                    [ngModel]="shortName()" (ngModelChange)="onShortName($event)" placeholder="e.g. ARUN" />
           </pf-setting-row>
           </pf-setting-group>
-          <pf-setting-group label="Logo" scope="top bar, reports and bills" icon="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM9 7a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM21 15l-5-5L5 21">
+          <pf-setting-group id="logo" label="Logo" scope="top bar, reports and bills" icon="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM9 7a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM21 15l-5-5L5 21">
           <pf-setting-row data-testid="op-logo" label="Logo" hint="One logo for the top bar, reports and bills.">
             <pf-image-upload [url]="logoUrl()" (urlChange)="logoUrl.set($event)"></pf-image-upload>
           </pf-setting-row>
@@ -82,7 +82,7 @@ const SHORT_NAME_MAX = 30;
             </span>
           </pf-setting-row>
           </pf-setting-group>
-          <pf-setting-group label="Sign-in" scope="all staff" icon="M7.5 11a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9ZM21 2l-9.6 9.6M15.5 7.5l3 3L22 7l-3-3">
+          <pf-setting-group id="signin" label="Sign-in" scope="all staff" icon="M7.5 11a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9ZM21 2l-9.6 9.6M15.5 7.5l3 3L22 7l-3-3">
           <pf-setting-row data-testid="op-handle" label="Login handle" hint="What staff type on the sign-in screen. Changing it changes how everyone logs in.">
             <input class="pf-input pf-op__in" data-testid="op-slug-input" maxlength="40" aria-label="Login handle" [ngModel]="slug()" (ngModelChange)="onSlug($event)"
                    placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />

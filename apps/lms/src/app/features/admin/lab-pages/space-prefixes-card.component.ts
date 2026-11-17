@@ -70,7 +70,7 @@ export function buildBranchPrefixes(branches: readonly Branch[], spaces: readonl
   `,
   styles: [`
     :host { display: block; }
-    .pf-sp__list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+    .pf-sp__list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
     .pf-sp__row { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 10px; border: 1px solid var(--pf-line); border-radius: 8px; background: var(--pf-card-bg); }
     .pf-sp__name { font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
     .pf-sp__code { min-width: 22px; text-align: center; font-size: 11.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: var(--pf-chip-bg); color: var(--text-primary); }

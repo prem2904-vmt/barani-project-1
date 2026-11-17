@@ -244,18 +244,18 @@ interface AutoAssignConfig {
               <div class="pf-ls__drow pf-ls__dept" role="row">
                 <span class="pf-ls__dname" role="cell">{{ d.name }} <span class="pf-ls__dept-code">{{ d.code }}</span></span>
                 <span class="pf-ls__dcell" role="cell" [class.pf-ls__pool--off]="!autoAssignEnabled()">
-                  <pf-select [multiple]="true" [options]="allUserOptions()" [values]="assigneesFor(d.id)" placeholder="People…"
+                  <pf-select size="sm" [multiple]="true" [options]="allUserOptions()" [values]="assigneesFor(d.id)" placeholder="People…"
                              [disabled]="!autoAssignEnabled()" (valuesChange)="setAssignees(d.id, $any($event))"></pf-select>
-                  <pf-select [multiple]="true" [options]="allRoleOptions()" [values]="rolesFor(d.id)" placeholder="Roles…"
+                  <pf-select size="sm" [multiple]="true" [options]="allRoleOptions()" [values]="rolesFor(d.id)" placeholder="Roles…"
                              [disabled]="!autoAssignEnabled()" (valuesChange)="setRoles(d.id, $any($event))"></pf-select>
                   @if (autoAssignEnabled() && !assigneesFor(d.id).length && !rolesFor(d.id).length) {
                     <span class="pf-ls__warn">No one set — shared queue.</span>
                   }
                 </span>
                 <span class="pf-ls__dcell" role="cell">
-                  <pf-select [multiple]="true" [options]="allUserOptions()" [values]="validatorsFor(d.id)" placeholder="People…"
+                  <pf-select size="sm" [multiple]="true" [options]="allUserOptions()" [values]="validatorsFor(d.id)" placeholder="People…"
                              (valuesChange)="setValidators(d.id, $any($event))"></pf-select>
-                  <pf-select [multiple]="true" [options]="allRoleOptions()" [values]="validatorRolesFor(d.id)" placeholder="Roles…"
+                  <pf-select size="sm" [multiple]="true" [options]="allRoleOptions()" [values]="validatorRolesFor(d.id)" placeholder="Roles…"
                              (valuesChange)="setValidatorRoles(d.id, $any($event))"></pf-select>
                   @if (autoAssignValidatorsEnabled() && !validatorsFor(d.id).length && !validatorRolesFor(d.id).length) {
                     <span class="pf-ls__warn">No one set — shared validation queue.</span>
@@ -300,9 +300,10 @@ interface AutoAssignConfig {
     .pf-ls__pool--off { opacity: 0.5; }
     /* Per-department pools: one compact row per department (no tile grid). */
     .pf-ls__depts { margin-top: 4px; }
-    .pf-ls__drow { display: grid; grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.6fr) minmax(0, 1.6fr); gap: 12px; align-items: start; padding: 10px 0; border-top: 1px solid var(--pf-line); }
-    .pf-ls__drow--head { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-tertiary); padding: 8px 0 6px; }
-    .pf-ls__dname { font-size: 13.5px; font-weight: 500; color: var(--text-primary); padding-top: 8px; }
+    .pf-ls__depts { border: 1px solid var(--pf-line); border-radius: 10px; overflow: hidden; margin-top: 10px; }
+    .pf-ls__drow { display: grid; grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.6fr) minmax(0, 1.6fr); gap: 0 12px; align-items: center; min-height: 48px; padding: 6px 12px; border-top: 1px solid var(--pf-line); }
+    .pf-ls__drow--head { min-height: 40px; border-top: 0; background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg)); font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+    .pf-ls__dname { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
     .pf-ls__dept-code { margin-left: 4px; font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
     .pf-ls__dcell { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
     .pf-ls__dcell .pf-ls__warn { grid-column: 1 / -1; }

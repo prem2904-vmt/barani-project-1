@@ -52,7 +52,7 @@ const STAGE_LABELS: Record<string, string> = {
             </button>
           </pf-setting-row>
         </pf-setting-group>
-        <pf-setting-group label="Turnaround targets" scope="microbiology" hint="Each stage raises an overdue alert past its target." icon="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v5l3 2">
+        <pf-setting-group label="Turnaround targets" scope="microbiology" id="micro" hint="Each stage raises an overdue alert past its target." icon="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v5l3 2">
           @for (t of stageTats(); track t.stageKey) {
             <pf-setting-row [label]="label(t.stageKey)">
               <span class="pf-cs__inline"><input [id]="'pf-cs-tat-' + t.stageKey" type="number" min="1" max="336" inputmode="numeric" class="pf-input pf-num pf-cs__num"

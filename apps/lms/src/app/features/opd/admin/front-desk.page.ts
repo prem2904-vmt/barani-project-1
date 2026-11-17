@@ -29,8 +29,8 @@ export type OpdFrontDeskSection = typeof OPD_FRONT_DESK_SECTIONS[number]['id'];
   template: `
     <!-- ONE page (owner 2026-11-17): booking slots and OPD alerts as group cards, the shared referring list full width. -->
     <div class="pf-sgrid">
-      <pf-appointments-config [tabs]="['slots']"></pf-appointments-config>
-      <pf-notifications-config [department]="'opd'"></pf-notifications-config>
+      <pf-setting-group id="appointments"><pf-appointments-config [tabs]="['slots']"></pf-appointments-config></pf-setting-group>
+      <pf-setting-group id="alerts"><pf-notifications-config [department]="'opd'"></pf-notifications-config></pf-setting-group>
       <pf-setting-group label="Referring doctors and hospitals" scope="one shared list" id="referring" [wide]="true"
                         icon="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01">
         <pf-segmented group-tools size="sm" ariaLabel="Hospitals or doctors" [options]="rn.viewOptions()" [value]="rn.view()" (valueChange)="rn.setView($any($event))"></pf-segmented>
