@@ -52,6 +52,8 @@ function render() {
   });
   const f = TestBed.createComponent(UserEditComponent);
   f.detectChanges();
+  // Phone (matchMedia matches): the sections list comes first — open Profile.
+  (f.componentInstance as any).pickSection('profile'); f.detectChanges();
   return { f, el: f.nativeElement as HTMLElement, api, c: f.componentInstance as any };
 }
 

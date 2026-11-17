@@ -135,14 +135,34 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('.pf-uf-phone pf-select')).not.toBeNull();
   });
 
-  it('Edit user: the pill is the full name only; Save changes is the primary; roles pre-switched', () => {
-    const { el, txt } = render(UserEditComponent, { id: 'u1' });
+  it('Edit user: the pill is the full name only; Save changes is the primary; summary strip; sections LEFT, roles pre-switched', () => {
+    const { el, f, c, txt } = render(UserEditComponent, { id: 'u1' });
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Dr. Prem Kumar');
     noFacts(el);
     expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Save changes');
+    // Slim summary strip: name, username, status, branches.
+    const strip = el.querySelector('.ue-strip')!;
+    expect(txt(strip)).toContain('Dr. Prem Kumar');
+    expect(txt(strip)).toContain('drprem');
+    expect(txt(strip.querySelector('[data-testid="ue-status"]'))).toBe('Active');
+    // Sections side card first (LEFT), main card second; Profile rows are label-left / control-right.
+    const panels = el.querySelector('.pf-sg-panels')!;
+    expect(panels.firstElementChild!.classList.contains('ue-side')).toBe(true);
+    expect(Array.from(el.querySelectorAll('.ue-sec__name')).map(n => txt(n).replace('*', ''))).toEqual(['Profile', 'Branches', 'Roles', 'Validates for']);
+    expect(el.querySelectorAll('.ue-main pf-setting-row').length).toBeGreaterThanOrEqual(5);
+    expect(txt(el.querySelector('.ue-main .ue-ro'))).toBe('drprem');
+    // Roles section: Role | what it means | switch, one on; the combined-permissions note in the head.
+    c.pickSection('roles'); f.detectChanges();
     expect(el.querySelectorAll('.pf-uf-roles .pf-toggle[aria-checked="true"]').length).toBe(1);
-    expect(el.querySelector<HTMLInputElement>('input[readonly]')!.classList.contains('pf-input')).toBe(true);
+    expect(txt(el.querySelector('[data-testid="ue-perm-note"]'))).toContain('1 of 2 permissions from 1 role');
     hygiene(el);
+  });
+
+  it('Edit user: a missing branch / role flags its section; Save stays off', () => {
+    const { f, c, el } = render(UserEditComponent, { id: 'u1' });
+    c.toggleRole('r1'); f.detectChanges();
+    expect(c.canSave()).toBe(false);
+    expect(el.querySelector('[data-testid="ue-sec-roles"] .ue-sec__note--err')).not.toBeNull();
   });
 
   it('Edit user: Reset password + Deactivate are band SECONDARIES that reuse the list\'s confirms', async () => {

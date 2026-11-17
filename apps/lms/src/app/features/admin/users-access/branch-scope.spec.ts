@@ -133,6 +133,7 @@ describe('Edit user — Branch scope multi-select', () => {
   it('Priya (Chennai Main only) loads as exactly that one branch, and saves it unchanged', () => {
     const { f, el, c, api } = render(UserEditComponent, [{ roleId: 'r1', branchId: 'chn' }], 'u1');
     expect(c.form().scope).toEqual(['b:chn']);
+    c.pickSection('branches'); f.detectChanges();
     const sel = el.querySelector('pf-select.pf-uf-scope');
     expect(sel).not.toBeNull();
     expect(el.querySelector('select')).toBeNull();                 // no native control
@@ -165,6 +166,7 @@ describe('Edit user — Branch scope multi-select', () => {
   it('no branch picked → Save disabled with an inline message', () => {
     const { f, el, c, api } = render(UserEditComponent, [{ roleId: 'r1', branchId: 'chn' }], 'u1');
     c.onScopeChange([]);
+    c.pickSection('branches');
     f.detectChanges();
     expect(c.canSave()).toBe(false);
     expect(el.textContent).toContain('Pick at least one branch, or All branches.');
