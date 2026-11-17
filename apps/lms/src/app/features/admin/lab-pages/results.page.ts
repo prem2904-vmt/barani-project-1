@@ -28,7 +28,7 @@ export class LabResultsPage {
   protected readonly tab = this.t.tab;
   protected pick(id: string) { this.t.pick(id); }
   protected readonly groups = {
-    'require-validation': { id: 'validation', label: '' },
-    'calc-constants': { id: 'constants', label: '' },
+    'require-validation': { id: 'validation', label: 'Validation', scope: 'this branch' },
+    'calc-constants': { id: 'constants', label: 'Calculations', scope: 'all branches' },
   } as const;
 }

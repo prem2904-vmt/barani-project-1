@@ -38,9 +38,10 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
   providers: [{ provide: SETTINGS_HOST, useFactory: createSettingsHost }],
   template: `
     <section class="pf-ss pf-band-page" data-testid="settings-shell">
-      <pf-hero-band [shellBand]="true" [back]="true" [backAction]="backToSection"
-                    placeholder="Search all settings" [value]="q()" (valueChange)="q.set($event)" (submitted)="searchAll($event)">
-        <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
+      <!-- ONE slim band row (back · lab · page switch · the page's actions); a search pill only when the page has a search. -->
+      <pf-hero-band [shellBand]="true" [back]="true" [backAction]="backToSection" [slim]="!host.search()"
+                    placeholder="Search" [value]="q()" (valueChange)="q.set($event)">
+        <ng-container band-center><pf-settings-siblings></pf-settings-siblings></ng-container>
       </pf-hero-band>
       <div class="pf-band-body pf-band-body--fill pf-ss__body">
         @if (single()) {
@@ -89,8 +90,8 @@ import { SettingsCategory, categoryPath, categoryTarget, isFullScreenSettingsPat
     .pf-ss__title { margin: 0; flex: none; }
     .pf-ss__note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-ss__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
-    .pf-ss__main { padding: 4px 20px 20px; }
-    @media (max-width: 767px) { .pf-ss__main { padding: 2px 14px 16px; } .pf-ss__note { display: none; } }
+    .pf-ss__main { padding: 14px 24px 24px; }
+    @media (max-width: 767px) { .pf-ss__main { padding: 8px 14px 16px; } .pf-ss__note { display: none; } }
   `],
 })
 export class SettingsShellComponent implements OnDestroy {
@@ -150,14 +151,11 @@ export class SettingsShellComponent implements OnDestroy {
   private lastItem: string | null = null;
   readonly detailOpen = computed(() => this.phoneDetail() || this.cats().length <= 1);
 
-  /** The band pill's own words ("Search all settings"); Enter opens the overview's search with them. */
+  /** The hosted page's band parts (its actions, its search) — this shell's own SETTINGS_HOST. */
+  protected readonly host = inject(SETTINGS_HOST);
   readonly q = signal('');
-  searchAll(words: string): void {
-    const w = (words ?? '').trim();
-    void this.router.navigate(['/admin'], { queryParams: w ? { q: w } : {} });
-  }
-  /** The band's back chevron: up to the overview, on this setting's section. */
-  readonly backToSection = (): void => this.toSections();
+  /** The band's back chevron: where the person came from (an in-app link), else up to this setting's section. */
+  readonly backToSection = (): void => this.navBack.back();
 
   constructor() {
     // A setting just opened: a category-specific URL (deep link, search hit) shows the screen; the setting's own

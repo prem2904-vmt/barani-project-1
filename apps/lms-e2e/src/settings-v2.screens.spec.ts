@@ -101,7 +101,7 @@ test.describe('settings v2 (Test Master frame)', () => {
     { name: 'sample-numbers-barcode', url: '/admin/lab/sample-numbers?tab=barcode', wait: '[aria-label="Barcode on tube labels"]' },
     { name: 'org-profile', url: '/admin/org/profile', wait: '[data-testid="org-profile"]' },
     { name: 'billing-payments', url: '/admin/billing?tab=payments', wait: '[data-testid="pr-gate"]' },
-    { name: 'lab-alerts', url: '/admin/lab/alerts', wait: '[data-testid="alert-row"]' },
+    { name: 'lab-alerts', url: '/admin/lab/alerts', wait: '.pf-nc-master' },
     { name: 'org-numbers', url: '/admin/org/numbers?tab=patient', wait: '[data-testid="fmt-row"]' },
     { name: 'collection', url: '/admin/lab/collection?tab=queue', wait: '[data-testid="settings-main"]' },
   ];

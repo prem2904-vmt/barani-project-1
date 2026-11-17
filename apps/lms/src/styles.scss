@@ -166,22 +166,21 @@
 }
 .pf-ss__main .pf-band-narrow { max-width: none; }
 /* An ID FORMAT in ONE settings row (DESIGN-V2 rule 5): Date · Separator · Digits · Letters → Preview.
-   Shared by Sample numbers and Patient / Order numbers. */
-.pf-fmt { display: flex; align-items: center; justify-content: flex-end; gap: 8px 12px; flex-wrap: wrap; }
+   Shared by Sample numbers and Patient / Order numbers. Every control is 32px tall. */
+.pf-fmt { display: flex; align-items: center; justify-content: flex-start; gap: 8px 14px; flex-wrap: wrap; }
 .pf-fmt__f { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
-.pf-fmt__f > .pf-input { width: 64px; height: 34px; min-height: 34px; padding: 0 8px; font-size: 13px; }
+.pf-fmt__f > .pf-input { width: 64px; height: 32px; min-height: 32px; padding: 0 8px; font-size: 13px; }
+.pf-fmt__f > .pf-input.pf-fmt__sep { width: 72px; }
 .pf-fmt__f > .pf-input.pf-fmt__wide { width: 96px; }
-.pf-fmt__f > pf-select { min-width: 148px; }
-.pf-fmt__preview {
-  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 8px;
-  background: var(--pf-chip-bg); border: 1px solid var(--pf-line); font-size: 12px; color: var(--text-tertiary); white-space: nowrap;
-}
+.pf-fmt__f > pf-select { width: 120px; }
+.pf-fmt__f > pf-select .pf-dd__trigger { min-height: 32px !important; height: 32px; padding-top: 0; padding-bottom: 0; }
+.pf-fmt__preview { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
 .pf-fmt__preview strong { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text-primary); }
-.pf-fmt__save { height: 34px !important; padding: 0 14px !important; font-size: 13px !important; }
-@media (max-width: 767px) {
-  .pf-fmt { justify-content: flex-start; }
-  .pf-fmt__f > .pf-input { font-size: 16px; }
-}
+@media (max-width: 767px) { .pf-fmt__f > .pf-input { font-size: 16px; } }
+
+/* Settings rows read in ONE centred column (owner 2026-11-17: no eye travel across a wide card). */
+.pf-ss__main, .pf-ov__tiles { max-width: 1000px; margin-inline: auto; width: 100%; box-sizing: border-box; }
+
 /* Empty state for a band search that matches nothing. */
 .pf-band-empty {
   padding: 28px 12px; text-align: center; font-size: 13px;

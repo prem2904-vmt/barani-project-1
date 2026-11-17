@@ -34,7 +34,6 @@ export const DEFAULT_QUEUE_MODE: QueueMode = 'token_queue';
       <div class="pf-hs" data-testid="hc-switch-card">
         <pf-setting-row label="Run this branch's queue as home collection"
                         [hint]="'Visits ordered by scheduled time, agents assigned below. Off: back to the ' + backTo() + '.'">
-          <span row-badge class="pf-hs__scope" title="Applies to the branch you are signed in to">This branch</span>
           <button type="button" class="pf-toggle pf-hs__switch" role="switch" data-testid="hc-switch"
                   [attr.aria-checked]="running()" aria-label="Run this branch's queue as home collection"
                   [disabled]="saving() || !canSwitch()" (click)="toggle()">

@@ -65,9 +65,6 @@ interface AutoAssignConfig {
       @if (!embedded()) {
         <!-- Where these apply: "This branch" rows are for the signed-in branch; "All branches" rows everywhere. -->
         <div class="pf-ls__meta">
-          <p class="pf-ls__scopenote" data-testid="ls-scope-note">
-            <strong>This branch</strong> rows apply to <strong>{{ branchName() }}</strong> only; <strong>All branches</strong> rows apply everywhere.
-          </p>
           <span class="pf-savestate pf-ls__savestate" role="status" title="Every change saves as you make it"
                 [attr.aria-busy]="savingShown() ? 'true' : null">
             @if (savingShown()) {
@@ -82,22 +79,19 @@ interface AutoAssignConfig {
       }
 
       @if (show('counters')) {
-        @if (groupId('counters'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('counters') }}</div> }
+        @if (groupId('counters'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('counters') }}@if (groupScope('counters'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
         <pf-setting-row class="pf-ls__card" label="Counters and collection" [hint]="'Billing: ' + (billingMode() === 'separate_counter' ? 'separate counter' : 'front desk') + ' · Collection: ' + (collectionMode() === 'dedicated_counter' ? 'dedicated counter' : 'front desk') + ' — set in Work steps.'">
-          <span row-badge class="pf-ls__scope">This branch</span>
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ls__wfbtn" (click)="goWorkflow()">Edit in Work steps</button>
         </pf-setting-row>
       }
 
       @if (show('scan-mode')) {
-        @if (groupId('scan-mode'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('scan-mode') }}</div> }
+        @if (groupId('scan-mode'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('scan-mode') }}@if (groupScope('scan-mode'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
         <pf-setting-row class="pf-ls__card" label="Find a sample" [hint]="optDesc(scanModeOptions, scanMode())">
-          <span row-badge class="pf-ls__scope pf-ls__scope--all">All branches</span>
           <pf-segmented class="pf-ls__gate" size="sm" aria-label="Find a sample" [options]="seg(scanModeOptions)" [value]="scanMode()"
                         (valueChange)="setScanMode($any($event))"></pf-segmented>
         </pf-setting-row>
         <pf-setting-row class="pf-ls__card pf-ls__preset" label="Pre-fill sample search">
-          <span row-badge class="pf-ls__scope pf-ls__scope--all">All branches</span>
           <span row-hint class="pf-ls__hint">
             @if (presetExample(); as ex) {
               Search opens with <strong class="pf-ls__mono">{{ ex.now }}</strong> typed — enter only the number.
@@ -115,11 +109,18 @@ interface AutoAssignConfig {
         </pf-setting-row>
       }
 
+      @if (show('label-code')) {
+        @if (groupId('label-code'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('label-code') }}@if (groupScope('label-code'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
+        <pf-setting-row class="pf-ls__card" label="Barcode on tube labels" [hint]="optDesc(labelCodeOptions, labelCodeMode())">
+          <pf-segmented class="pf-ls__gate" size="sm" aria-label="Barcode on tube labels" [options]="seg(labelCodeOptions)" [value]="labelCodeMode()"
+                        (valueChange)="setLabelCodeMode($any($event))"></pf-segmented>
+        </pf-setting-row>
+      }
+
       @if (show('queue-focus')) {
-        @if (groupId('queue-focus'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('queue-focus') }}</div> }
+        @if (groupId('queue-focus'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('queue-focus') }}@if (groupScope('queue-focus'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
         <pf-setting-row class="pf-ls__card" label="Queue focus"
                         [hint]="queueFocusMode() === 'auto' ? 'Follows the lab structure — now ' + (effectiveQueueFocus() === 'sample' ? 'by sample.' : 'by patient.') : optDesc(queueFocusOptions, queueFocusSelected())">
-          <span row-badge class="pf-ls__scope">This branch</span>
           @if (queueFocusMode() !== 'auto') {
             <button type="button" class="pf-ls__link" (click)="setQueueFocusMode('auto')">Follow lab structure</button>
           }
@@ -129,21 +130,16 @@ interface AutoAssignConfig {
       }
 
       @if (show('lab-structure')) {
-        @if (groupId('lab-structure'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('lab-structure') }}</div> }
+        @if (groupId('lab-structure'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('lab-structure') }}@if (groupScope('lab-structure'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
         <pf-setting-row class="pf-ls__card" label="Lab structure" [hint]="optDesc(labStructureOptions, labStructure())">
-          <span row-badge class="pf-ls__scope">This branch</span>
           <pf-segmented class="pf-ls__gate" size="sm" aria-label="Lab structure" [options]="seg(labStructureOptions)" [value]="labStructure()"
                         (valueChange)="setLabStructure($any($event))"></pf-segmented>
-        </pf-setting-row>
-        <pf-setting-row class="pf-ls__note" label="Default &quot;Lab&quot; code" hint="The prefix for departments without their own space — set on the lab spaces board.">
-          <button type="button" class="pf-ls__link" (click)="goBranches()">Open lab spaces</button>
         </pf-setting-row>
       }
 
       @if (show('calc-constants')) {
-        @if (groupId('calc-constants'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('calc-constants') }}</div> }
+        @if (groupId('calc-constants'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('calc-constants') }}@if (groupScope('calc-constants'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
         <pf-setting-row class="pf-ls__card" label="Calculation constants" hint="ISI and MNPT drive INR; Normal HCT the reticulocyte index. Blank = the default shown.">
-          <span row-badge class="pf-ls__scope pf-ls__scope--all">All branches</span>
           <label class="pf-ls__mini"><span>ISI</span>
             <input class="pf-input pf-num" type="number" step="0.01" min="0" placeholder="1.0" aria-label="ISI"
                    [ngModel]="calcIsi()" (ngModelChange)="calcIsi.set($event)" (blur)="saveCalcConstants()" /></label>
@@ -157,9 +153,8 @@ interface AutoAssignConfig {
       }
 
       @if (show('no-scan')) {
-        @if (groupId('no-scan'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('no-scan') }}</div> }
+        @if (groupId('no-scan'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('no-scan') }}@if (groupScope('no-scan'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
         <pf-setting-row class="pf-ls__card" label="Allow no-scan claim" hint="A supervisor can claim a test without scanning (broken barcodes). Every override is logged.">
-          <span row-badge class="pf-ls__scope pf-ls__scope--all">All branches</span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="allowNoScan()" aria-label="Allow no-scan claim (supervisor override)"
                   (click)="setAllowNoScan(!allowNoScan())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
@@ -167,19 +162,9 @@ interface AutoAssignConfig {
         </pf-setting-row>
       }
 
-      @if (show('label-code')) {
-        @if (groupId('label-code'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('label-code') }}</div> }
-        <pf-setting-row class="pf-ls__card" label="Barcode on tube labels" [hint]="optDesc(labelCodeOptions, labelCodeMode())">
-          <span row-badge class="pf-ls__scope">This branch</span>
-          <pf-segmented class="pf-ls__gate" size="sm" aria-label="Barcode on tube labels" [options]="seg(labelCodeOptions)" [value]="labelCodeMode()"
-                        (valueChange)="setLabelCodeMode($any($event))"></pf-segmented>
-        </pf-setting-row>
-      }
-
       @if (show('require-validation')) {
-        @if (groupId('require-validation'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('require-validation') }}</div> }
+        @if (groupId('require-validation'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('require-validation') }}@if (groupScope('require-validation'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
         <pf-setting-row class="pf-ls__card" label="Require validation for all results" hint="Every result needs a pathologist — even direct-flow tests that would auto-validate.">
-          <span row-badge class="pf-ls__scope">This branch</span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="requireValidation()" aria-label="Require validation for all results"
                   (click)="setRequireValidation(!requireValidation())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
@@ -188,10 +173,9 @@ interface AutoAssignConfig {
       }
 
       @if (show('tech-notes')) {
-        @if (groupId('tech-notes'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('tech-notes') }}</div> }
+        @if (groupId('tech-notes'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('tech-notes') }}@if (groupScope('tech-notes'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
         <pf-setting-row class="pf-ls__card" data-testid="ls-tech-notes" label="Technician notes on report"
                         hint="Notes written at result entry print on the final report (never on a preliminary). Off hides them at entry; written notes still print.">
-          <span row-badge class="pf-ls__scope">This branch</span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="techReportNotes()"
                   aria-label="Technician notes on report" (click)="setTechReportNotes(!techReportNotes())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
@@ -200,16 +184,14 @@ interface AutoAssignConfig {
       }
 
       @if (show('auto-assign')) {
-        @if (groupId('auto-assign'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('auto-assign') }}</div> }
+        @if (groupId('auto-assign'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('auto-assign') }}@if (groupScope('auto-assign'); as sc) {<span class="pf-ls__gscope"> · {{ sc }}</span>}</div> }
         <pf-setting-row class="pf-ls__card" label="Auto-assign technicians" hint="On receive, each test goes to its department's people or least-loaded role member. Off: the shared bench queue.">
-          <span row-badge class="pf-ls__scope">This branch</span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignEnabled()" aria-label="Auto-assign technicians"
                   (click)="setAutoAssignEnabled(!autoAssignEnabled())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
           </button>
         </pf-setting-row>
         <pf-setting-row class="pf-ls__card" label="Auto-assign validators" hint="On submit, a result goes to its department's validators. A consultant listed here signs only those departments.">
-          <span row-badge class="pf-ls__scope">This branch</span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignValidatorsEnabled()" aria-label="Auto-assign validators"
                   (click)="setAutoAssignValidatorsEnabled(!autoAssignValidatorsEnabled())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
@@ -258,9 +240,10 @@ interface AutoAssignConfig {
     :host { display: block; }
     .pf-ls__group { display: flex; align-items: center; min-height: 36px; padding-top: 14px; margin-top: 6px; border-top: 1px solid var(--pf-line); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); scroll-margin-top: 8px; }
     .pf-ls__host > .pf-ls__group:first-child, .pf-ls__meta + .pf-ls__group { border-top: 0; margin-top: 0; }
+    .pf-ls__gscope { font-weight: 500; letter-spacing: .04em; text-transform: none; color: var(--text-tertiary); opacity: .85; }
     .pf-ls__group:empty { min-height: 0; padding: 0; margin: 0; border: 0; }
     .pf-ls__skel { display: flex; flex-direction: column; gap: 16px; padding-top: 12px; }
-    .pf-ls__meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 0 2px; }
+    .pf-ls__meta { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; padding: 10px 0 2px; }
     .pf-ls__scopenote { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary); }
     .pf-ls__scopenote strong { color: var(--text-secondary); font-weight: 600; }
     .pf-ls__savestate { display: inline-flex; align-items: center; gap: 6px; }
@@ -309,7 +292,8 @@ export class LabSettingsComponent implements OnInit {
   /** Which cards to show; null = all (the legacy single page). */
   readonly cards = input<readonly LabSettingsCard[] | null>(null);
   /** Group label (small uppercase) shown before a card's rows — the page's categories when it is ONE card. */
-  readonly groups = input<Partial<Record<LabSettingsCard, { id: string; label: string }>>>({});
+  readonly groups = input<Partial<Record<LabSettingsCard, { id: string; label: string; scope?: string }>>>({});
+  groupScope(key: LabSettingsCard): string | null { return this.groups()[key]?.scope ?? null; }
   groupLabel(key: LabSettingsCard): string | null { return this.groups()[key]?.label ?? null; }
   groupId(key: LabSettingsCard): string | null { return this.groups()[key]?.id ?? null; }
   /** Inside a page that already says where rows apply and how they save (several hosts on one card): no meta line. */

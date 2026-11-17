@@ -1,4 +1,4 @@
-import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
+import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { forkJoin, of } from 'rxjs';
@@ -41,22 +41,23 @@ export function buildBranchPrefixes(branches: readonly Branch[], spaces: readonl
 @Component({
   selector: 'pf-space-prefixes-card',
   standalone: true,
-  imports: [SettingRowComponent, RouterLink, SkeletonRowsComponent],
+  imports: [SettingRowComponent, SettingGroupComponent, RouterLink, SkeletonRowsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-sp" data-testid="space-prefixes">
+    <pf-setting-group class="pf-sp" data-testid="space-prefixes" id="prefixes" label="Prefixes" scope="per branch"
+                      [hint]="'A sample ID starts with its lab space code; departments without a space share the default Lab code (blank = ' + defaultPrefix + ').'">
+      <a group-tools class="pf-sp__link" [routerLink]="spacesPath" [queryParams]="spacesQuery" data-testid="space-prefixes-link">Edit lab spaces</a>
       @if (loading()) {
         <pf-skeleton-rows [rows]="2" [avatar]="false" label="Loading lab spaces…"></pf-skeleton-rows>
       } @else {
         @for (b of groups(); track b.branchId) {
-          <pf-setting-row class="pf-sp__branch" data-testid="space-branch" [label]="'Prefix per lab space · ' + b.branchName">
-            <span row-badge class="pf-sp__scope">This branch</span>
+          <pf-setting-row class="pf-sp__branch" data-testid="space-branch" [label]="b.branchName">
             <ul class="pf-sp__list" role="list">
               @for (r of b.rows; track r.key) {
                 <li class="pf-sp__row">
                   <span class="pf-sp__name">{{ r.name }}</span>
                   @if (r.code) { <span class="pf-sp__code pf-num" data-testid="space-code">{{ r.code }}</span> }
-                  @else { <span class="pf-sp__none">dept code</span> }
+                  @else { <span class="pf-sp__code pf-sp__code--none" title="Uses the department code">—</span> }
                 </li>
               }
             </ul>
@@ -65,21 +66,16 @@ export function buildBranchPrefixes(branches: readonly Branch[], spaces: readonl
           <pf-setting-row label="No branches yet"></pf-setting-row>
         }
       }
-      <pf-setting-row label="Space codes" [hint]="'Set where the lab spaces are. Departments without a space share the default Lab code (blank = ' + defaultPrefix + ').'">
-        <a class="pf-hb-btn pf-hb-btn--ghost press pf-sp__link" [routerLink]="spacesPath" [queryParams]="spacesQuery" data-testid="space-prefixes-link">Edit lab spaces</a>
-      </pf-setting-row>
-    </div>
+    </pf-setting-group>
   `,
   styles: [`
     :host { display: block; }
-    .pf-sp__scope { padding: 1px 7px; border-radius: 999px; border: 1px solid var(--pf-line); background: var(--pf-chip-bg); font-size: 10.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
-    .pf-sp__list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
-    .pf-sp__row { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 10px; border: 1px solid var(--pf-line); border-radius: 8px; background: var(--pf-card-bg); }
+    .pf-sp__list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+    .pf-sp__row { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 10px; border: 1px solid var(--pf-line); border-radius: 8px; background: var(--pf-card-bg); }
     .pf-sp__name { font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
-    .pf-sp__code { font-size: 11.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: var(--pf-chip-bg); color: var(--text-primary); }
-    .pf-sp__none { font-size: 11.5px; color: var(--text-tertiary); padding-right: 6px; }
-    .pf-sp__link { height: 32px; padding: 0 12px; font-size: 13px; }
-    @media (max-width: 767px) { .pf-sp__list { justify-content: flex-start; } }
+    .pf-sp__code { min-width: 22px; text-align: center; font-size: 11.5px; font-weight: 600; padding: 1px 6px; border-radius: 6px; background: var(--pf-chip-bg); color: var(--text-primary); }
+    .pf-sp__code--none { color: var(--text-tertiary); font-weight: 500; }
+    .pf-sp__link { font-size: 12.5px; font-weight: 600; color: var(--violet-text, #7c3aed); text-decoration: underline; text-underline-offset: 3px; }
   `],
 })
 export class SpacePrefixesCardComponent implements OnInit {

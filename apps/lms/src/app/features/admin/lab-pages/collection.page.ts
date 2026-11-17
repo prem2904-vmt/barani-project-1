@@ -25,8 +25,8 @@ export class LabCollectionPage {
   protected readonly tab = this.t.tab;
   protected pick(id: string) { this.t.pick(id); }
   protected readonly groups = {
-    counters: { id: 'queue', label: '' },
-    'no-scan': { id: 'noscan', label: '' },
-    'auto-assign': { id: 'assign', label: '' },
+    counters: { id: 'queue', label: 'Queue', scope: 'this branch' },
+    'no-scan': { id: 'noscan', label: 'Claiming', scope: 'all branches' },
+    'auto-assign': { id: 'assign', label: 'Auto-assign', scope: 'this branch' },
   } as const;
 }

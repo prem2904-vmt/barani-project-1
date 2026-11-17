@@ -39,13 +39,11 @@ export const PAYMENT_GATE_OPTIONS: ReadonlyArray<{ value: PaymentGateStage; labe
       } @else {
         <pf-setting-row class="pf-pr" data-testid="pr-gate" label="Require full payment to progress"
                         [hint]="gateDesc()">
-          <span row-badge class="pf-pr__scope" title="Applies to the branch you are signed in to">This branch</span>
           <pf-segmented size="sm" ariaLabel="Require full payment" [options]="gateSeg" [value]="paymentGateStage()"
                         (valueChange)="setPaymentGateStage($any($event))"></pf-segmented>
         </pf-setting-row>
         <pf-setting-row class="pf-pr" data-testid="pr-due" label="Show the Payments due tab"
-                        hint="The front desk lists every order with an outstanding balance. In Progress and Completed always show.">
-          <span row-badge class="pf-pr__scope" title="Applies to the branch you are signed in to">This branch</span>
+                        hint="The front desk lists every order with an outstanding balance. This branch.">
           <button type="button" class="pf-toggle pf-pr__switch" role="switch" [attr.aria-checked]="showPaymentsDue()" aria-label="Show &quot;Payments due&quot; tab"
                   (click)="setShowPaymentsDue(!showPaymentsDue())">
             <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
@@ -73,7 +71,7 @@ export class PaymentRulesCardComponent implements OnInit {
 
   readonly gateOptions = PAYMENT_GATE_OPTIONS;
   readonly gateSeg = PAYMENT_GATE_OPTIONS.map((o) => ({ value: o.value, label: o.label }));
-  gateDesc(): string { return PAYMENT_GATE_OPTIONS.find((o) => o.value === this.paymentGateStage())?.desc ?? ''; }
+  gateDesc(): string { return (PAYMENT_GATE_OPTIONS.find((o) => o.value === this.paymentGateStage())?.desc ?? '') + ' This branch.'; }
   readonly loading = signal(true);
   readonly paymentGateStage = signal<PaymentGateStage>('none');
   readonly showPaymentsDue = signal(true);
