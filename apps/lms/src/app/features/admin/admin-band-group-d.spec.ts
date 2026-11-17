@@ -5,8 +5,6 @@ import { ProcessBuilderComponent } from './process-builder/process-builder.compo
 import { KpiConfigComponent } from './kpis/kpi-config.component';
 import { AuditLogComponent } from './audit-log/audit-log.component';
 import { DoctorsAdminComponent } from '../opd/admin/doctors-admin.component';
-import { AdminModulesComponent } from './modules/modules.component';
-import { TenantEntitlementsService } from '../../core/services/tenant-entitlements.service';
 import { of } from 'rxjs';
 import { TestBed } from '@angular/core/testing';
 import { DialogService } from '../../core/services/dialog.service';
@@ -251,55 +249,5 @@ describe('Admin band — OPD doctors', () => {
     p.type('nobody');
     expect(p.cmp.visibleRows()).toEqual([]);
     expect(p.el.querySelector('.pf-band-empty')).not.toBeNull();
-  });
-});
-
-describe('Admin band — Modules', () => {
-  const make = async () => {
-    const p = renderBandPage(AdminModulesComponent, {
-      providers: [{
-        provide: TenantEntitlementsService,
-        useValue: { ensureLoaded: async () => undefined, effectiveState: () => ({ lab: { enabled: true } }), save: () => of({}) },
-      }],
-    });
-    await p.f.whenStable();
-    p.f.detectChanges();
-    return p;
-  };
-  const titles = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body .pf-mod__title')).map((t) => t.textContent?.trim());
-
-  it('band + body, header classic-only, no band actions (toggles save live)', async () => {
-    const p = await make();
-    expect(p.band()).not.toBeNull();
-    expect(p.body()).not.toBeNull();
-    expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.actions().length).toBe(0);
-  });
-
-  it('pill search matches a module by its own text or by a feature', async () => {
-    const p = await make();
-    const all = titles(p.el).length;
-    expect(all).toBeGreaterThan(3);
-    p.type('pharmacy');
-    expect(titles(p.el)).toEqual(['Pharmacy']);
-    p.type('discharge'); // an IPD feature
-    expect(titles(p.el)).toEqual(['IPD (Inpatient)']);
-    p.type('prescriptions'); // an OPD feature — OPD is dark (not listed) unless the OPD gate is open
-    expect(titles(p.el)).toEqual([]);
-    p.type('zzz');
-    expect(titles(p.el)).toEqual([]);
-    expect(p.el.querySelector('.pf-band-empty')).not.toBeNull();
-  });
-
-  it('On / Off switch in the pill filters by module state, with counts', async () => {
-    const p = await make();
-    const opts = p.cmp.statusOptions();
-    expect(opts.find((o: any) => o.value === 'on').count).toBe(1);
-    p.cmp.status.set('on');
-    p.f.detectChanges();
-    expect(titles(p.el)).toEqual(['Lab (Diagnostics)']);
-    p.cmp.status.set('off');
-    p.f.detectChanges();
-    expect(titles(p.el)).not.toContain('Lab (Diagnostics)');
   });
 });

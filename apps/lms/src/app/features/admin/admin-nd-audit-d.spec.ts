@@ -1,9 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import { renderBandPage } from './admin-band.spec-helpers';
-import { AdminModulesComponent } from './modules/modules.component';
-import { PartnersComponent } from './partners/partners.component';
-import { LabSettingsHubComponent } from '../lab/lab-settings-hub/lab-settings-hub.component';
 import { OpdAdminComponent } from '../opd/admin/opd-admin.component';
 import { CultureSettingsComponent } from '../lab/culture-settings/culture-settings.component';
 import { OpdSettingsComponent } from '../opd/admin/opd-settings.component';
@@ -45,41 +42,8 @@ export const primaries = (el: HTMLElement) =>
   Array.from(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn .v-primary'))
     .filter(b => !b.closest('.pf-classic-only')).length;
 
-/** A real /api/tenants/modules payload: the entitlements service parses the
- *  response, so the generic [] stub would throw an unhandled error. */
-const modulesWire = { modulesJson: null, legacy: { messages: true, homeCollection: true, reports: true, inventory: true } };
-const renderModules = () => renderBandPage(AdminModulesComponent, {
-  getFor: (url) => (url.startsWith('/api/tenants/modules') ? modulesWire : []),
-});
-
-describe('ND audit D — Modules', () => {
-  it('module + feature toggles are slate switches (role=switch); the On/Off filter is a neutral kit segment', () => {
-    const p = renderModules();
-    p.cmp.state.set({ ipd: { enabled: true, features: {} } }); // (OPD is dark → not listed)
-    p.f.detectChanges();
-    const sw = p.el.querySelectorAll('.pf-mod .pf-toggle[role="switch"]');
-    expect(sw.length).toBeGreaterThan(3);
-    expect(p.el.querySelector('.pf-mod .pf-toggle[aria-checked="true"]')).not.toBeNull();
-    expect(p.el.querySelector('.pf-mod.pf-card .pf-card__icon')).not.toBeNull();
-    const seg = p.tools()!.querySelector('.pf-seg[role="radiogroup"]')!;
-    expect(seg.querySelectorAll('[role="radio"]').length).toBe(3);
-    expect(p.tools()!.querySelector('pf-segmented')).toBeNull();
-    expect(primaries(p.el)).toBe(0);   // toggles save live — no band actions
-    hygiene(p.el);
-  });
-
-  it('a switch click flips the module (persist is called)', () => {
-    const p = renderModules();
-    const spy = vi.spyOn(p.cmp as any, 'persist').mockImplementation(() => {});
-    (p.el.querySelector('.pf-mod .pf-mod__head .pf-toggle') as HTMLButtonElement).click();
-    expect(spy).toHaveBeenCalled();
-  });
-});
-
-describe('ND audit D — tile hubs (Lab settings, Partners, OPD)', () => {
+describe('ND audit D — tile hubs (OPD)', () => {
   for (const [name, cmp, sel] of [
-    ['Lab settings hub', LabSettingsHubComponent, '.pf-lsh__tile'],
-    ['Partners', PartnersComponent, '.pf-ph__tile'],
     ['OPD', OpdAdminComponent, '.pf-lsh__tile'],
   ] as const) {
     it(`${name}: band search, tiles are kit cards with the violet icon chip, no primary`, () => {

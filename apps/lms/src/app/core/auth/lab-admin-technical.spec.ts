@@ -1,10 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { Route } from '@angular/router';
 import { appRoutes } from '../../app.routes';
-import { MORE_NAV, NavVisibilityCtx, navItemVisible } from '../../layout/nav-items';
-import { LabSettingsHubComponent } from '../../features/lab/lab-settings-hub/lab-settings-hub.component';
+import { ADMIN_NAV, MORE_NAV, NavVisibilityCtx, navItemVisible } from '../../layout/nav-items';
+import { SettingsAccessService } from '../../features/admin/settings/settings-access.service';
 import { PERMISSION_GROUPS, PERMISSION_INFO, ROLE_INFO } from '../../features/admin/users-access/permission-catalog';
-import { ThemeService } from '../services/theme.service';
+import { BetaFeaturesService } from '../services/beta-features.service';
+import { LabFeaturesService } from '../services/lab-features.service';
+import { ProcessWorkflowService } from '../services/process-workflow.service';
+import { TenantEntitlementsService } from '../services/tenant-entitlements.service';
+import { OpdGateService } from '../../features/opd/shared/opd-gate.service';
+import { CasesheetGateService } from '../../features/casesheets/shared/casesheet-gate.service';
 import { AuthService } from './auth.service';
 import { pickLanding } from './landing.guard';
 import {
@@ -76,8 +81,8 @@ const guardAllows = (path: string, perms: string[]) =>
   guardsFor(path).every(g => !g.requiredPerms || g.requiredPerms.some(c => perms.includes('*') || perms.includes(c)));
 
 describe('Lab Admin (Technical) — routes it CAN open', () => {
-  for (const route of ['/admin/tests', '/admin/tests/new', '/admin/referral-labs', '/admin/partner-prices', '/admin/partners', '/admin/lab-settings',
-                       '/lab/settings', '/admin/microbiology', '/admin/reports', '/lab/my-work', '/dashboard']) {
+  for (const route of ['/admin/tests', '/admin/tests/new', '/admin/referral-labs', '/admin/partner-prices', '/admin/lab/outsourcing', '/admin/lab/collection',
+                       '/admin/lab/results', '/admin/lab/analyzers', '/admin/microbiology', '/admin/reports', '/admin', '/lab/my-work', '/dashboard']) {
     it(`${route}: nav table and real guard both admit`, () => {
       expect(canOpenRoute(route, ctxFor(LAB_ADMIN_TECH))).toBe(true);
       expect(guardAllows(route, LAB_ADMIN_TECH)).toBe(true);
@@ -93,9 +98,9 @@ describe('Lab Admin (Technical) — routes it CAN open', () => {
 describe('Lab Admin (Technical) — finance / users / org stay CLOSED', () => {
   for (const route of ['/finance', '/finance/daily', '/billing-counter', '/frontdesk', '/frontdesk/post-payment',
                        '/admin/billing', '/admin/users', '/admin/users/invite', '/admin/roles/new',
-                       '/admin/organization', '/admin/vendors', '/admin', '/admin/manage', '/admin/modules',
-                       '/admin/kpis', '/setup', '/admin/notifications', '/admin/referring-network',
-                       '/admin/workflows', '/admin/process', '/admin/appointments', '/stores', '/admin/inventory']) {
+                       '/admin/org/profile', '/admin/org/numbers', '/admin/vendors', '/admin/lab/numbers',
+                       '/admin/org/profile/branding', '/admin/lab/alerts', '/admin/lab/front-desk/referring', '/admin/lab/front-desk',
+                       '/admin/workflows', '/admin/process', '/admin/lab/work-steps', '/stores', '/admin/inventory']) {
     it(`${route}: hidden in the nav table and refused by the guard`, () => {
       expect(canOpenRoute(route, ctxFor(LAB_ADMIN_TECH))).toBe(false);
       expect(guardAllows(route, LAB_ADMIN_TECH)).toBe(false);
@@ -109,18 +114,19 @@ describe('Lab Admin (Technical) — finance / users / org stay CLOSED', () => {
     expect(LAB_ADMIN_TECH.filter(c => banned.includes(c))).toEqual([]);
   });
 
-  it('More menu: Tests + Lab settings show; Daily statement, Billing cfg, Users, Admin overview do not', () => {
-    const visible = MORE_NAV.filter(i => navItemVisible(i, navCtx(LAB_ADMIN_TECH))).map(i => i.id);
-    expect(visible).toEqual(expect.arrayContaining(['tests', 'lab-settings', 'reports-t']));
-    for (const id of ['daily-statement', 'billing', 'users', 'admin-overview', 'admin-manage', 'notifs', 'process', 'workflows']) {
+  it('Settings is the ONE entry: the Settings item shows, the old per-setting shortcuts and hubs are gone', () => {
+    const c = navCtx(LAB_ADMIN_TECH);
+    expect(navItemVisible(ADMIN_NAV, c)).toBe(true);
+    const visible = MORE_NAV.filter(i => navItemVisible(i, c)).map(i => i.id);
+    for (const id of ['tests', 'lab-settings', 'reports-t', 'daily-statement', 'billing', 'users', 'admin-overview', 'admin-manage', 'notifs', 'process', 'workflows', 'setup']) {
       expect(visible).not.toContain(id);
     }
   });
 
   it('lands on the bench (never /403, never /admin)', () => {
     expect(pickLanding(ctxFor(LAB_ADMIN_TECH))).toBe('/lab/my-work');
-    // A Test-Master-only custom role lands on the Lab settings hub.
-    expect(pickLanding(ctxFor(['manage_test_master']))).toBe('/lab/settings');
+    // A Test-Master-only custom role lands on Settings.
+    expect(pickLanding(ctxFor(['manage_test_master']))).toBe('/admin');
   });
 });
 
@@ -147,31 +153,45 @@ describe('Test Master grants — Admin unchanged', () => {
   });
 });
 
-describe('Lab settings hub — tiles filtered by what the user can open', () => {
-  function hubFor(perms: string[]) {
+describe('Settings — what each role sees (Lab Admin (Technical) keeps its tiles, nothing more)', () => {
+  function accessFor(perms: string[]) {
     TestBed.resetTestingModule();
+    const has = (c: string[]) => perms.includes('*') || c.some(x => perms.includes(x));
     TestBed.configureTestingModule({
       providers: [
-        { provide: ThemeService, useValue: {} },
-        { provide: AuthService, useValue: {
-          hasAnyPermission: (c: string[]) => perms.includes('*') || c.some(x => perms.includes(x)),
-        } },
+        { provide: AuthService, useValue: { hasAnyPermission: has } },
+        { provide: ProcessWorkflowService, useValue: { isEnabled: () => true } },
+        { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true, moduleOn: () => true } },
+        { provide: BetaFeaturesService, useValue: { enabled: () => false } },
+        { provide: LabFeaturesService, useValue: { homeCollectionEnabled: () => true } },
+        { provide: OpdGateService, useValue: { visible: () => false } },
+        { provide: CasesheetGateService, useValue: { visible: () => false } },
       ],
     });
-    return TestBed.runInInjectionContext(() => new LabSettingsHubComponent());
+    return TestBed.inject(SettingsAccessService);
   }
+  const ids = (a: SettingsAccessService) => a.visibleSections().flatMap(s => s.items.map(i => i.id));
 
-  it('Lab Admin (Technical) sees only openable tiles', () => {
-    const hrefs = hubFor(LAB_ADMIN_TECH).visibleTiles().map(t => t.href);
-    // Referral Labs now lives ONLY in the Referral & Vendors hub; the Lab hub
-    // links to that hub (test-master perms open it), so the role still reaches it.
-    // Communication (WhatsApp / Email / SMS) opens with manage_lab_settings, like the WhatsApp cards it took over.
-    expect(hrefs).toEqual(['/admin/tests', '/admin/reports', '/admin/lab-settings', '/admin/communication', '/admin/microbiology', '/admin/instruments', '/admin/partners']);
+  it('Lab Admin (Technical) reaches the Lab settings it had, and none of the admin ones', () => {
+    const seen = ids(accessFor(LAB_ADMIN_TECH));
+    for (const id of ['lab-tests', 'lab-report', 'lab-collection', 'lab-results', 'lab-outsourcing', 'lab-analyzers', 'org-channels']) {
+      expect(seen, id).toContain(id);
+    }
+    for (const id of ['lab-front-desk', 'lab-alerts', 'lab-numbers', 'lab-work-steps', 'org-people', 'org-billing', 'org-files', 'org-profile']) {
+      expect(seen, id).not.toContain(id);
+    }
   });
 
-  it('super-admin sees every tile (a BETA tile only with its switch — off here)', () => {
-    const hub = hubFor(['*']);
-    expect(hub.visibleTiles().length).toBe(hub.tiles.filter(t => !t.beta).length);
+  it('super-admin sees every setting whose department the lab has (OPD / Pharmacy / IPD / betas off here)', () => {
+    const a = accessFor(['*']);
+    const seen = ids(a);
+    expect(seen).toContain('lab-departments');
+    expect(seen).toContain('org-billing');
+    expect(seen).not.toContain('opd-doctors');
+    expect(seen).not.toContain('pharmacy-settings');
+    expect(seen).not.toContain('ipd-case-sheets');
+    expect(seen).not.toContain('org-connected'); // beta mcp off
+    expect(seen).not.toContain('org-files');     // beta neuron off
   });
 });
 

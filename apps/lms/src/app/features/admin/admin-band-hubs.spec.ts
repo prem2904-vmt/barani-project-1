@@ -1,17 +1,13 @@
 import { renderBandPage } from './admin-band.spec-helpers';
-import { LabSettingsHubComponent } from '../lab/lab-settings-hub/lab-settings-hub.component';
-import { PartnersComponent } from './partners/partners.component';
 import { OpdAdminComponent } from '../opd/admin/opd-admin.component';
 
 /**
- * Tile hubs (Lab settings, Referral & Vendors, OPD): no search before, so
+ * Tile hubs (OPD; the Lab and Referral & Vendors hubs are now sections of the Settings overview): no search before, so
  * the band pill gains one that filters the tiles; the page header is
  * classic-only and the tiles sit in the scrolling band body.
  */
 describe('Admin band — tile hubs', () => {
   const hubs = [
-    { name: 'Lab settings hub', cmp: LabSettingsHubComponent, hit: 'report', expect: 'Report Template' },
-    { name: 'Referral & Vendors hub', cmp: PartnersComponent, hit: 'vendor', expect: 'Vendor' },
     { name: 'OPD hub', cmp: OpdAdminComponent, hit: 'doctor', expect: 'Doctor' },
   ];
 

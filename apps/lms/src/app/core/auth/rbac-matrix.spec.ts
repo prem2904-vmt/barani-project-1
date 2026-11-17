@@ -323,7 +323,7 @@ describe('canOpenRoute', () => {
     expect(canOpenRoute('/frontdesk/queue', ctx(['collect_sample', 'register_patient']))).toBe(true);
   });
   it('ignores query strings and honours workflow + module gates', () => {
-    expect(canOpenRoute('/admin/manage?cat=org', ctx(['manage_tests']))).toBe(true);
+    expect(canOpenRoute('/admin/tests?type=profile', ctx(['manage_tests']))).toBe(true);
     expect(canOpenRoute('/lab/my-work', { ...ctx(['enter_result']), isEnabled: a => a !== 'result_entry' })).toBe(false);
     expect(canOpenRoute('/stores', { ...ctx(['inventory_issue']), moduleEnabled: () => false })).toBe(false);
   });
@@ -450,18 +450,19 @@ describe('OPS-108: Branch Manager holds Lab settings (owner 2026-11-07)', () => 
   const w = who('Branch Manager');
   const nav = () => ALL_NAV.filter(i => navItemVisible(i, navCtx(w))).map(i => i.href);
 
-  it('opens the Lab settings hub and the Lab settings page', () => {
-    expect(guardAllows('/lab/settings', w)).toBe(true);
-    expect(guardAllows('/admin/lab-settings', w)).toBe(true);
-    expect(nav()).toContain('/lab/settings');
+  it('opens Lab settings through Settings (the one entry; the Lab hub is gone)', () => {
+    expect(guardAllows('/admin', w)).toBe(true);
+    expect(guardAllows('/admin/lab/collection', w)).toBe(true);
+    expect(guardAllows('/admin/lab/results', w)).toBe(true);
+    expect(navItemVisible(ADMIN_NAV, navCtx(w))).toBe(true);
+    expect(nav()).toContain('/admin');
+    expect(nav()).not.toContain('/lab/settings');
   });
 
-  it('does NOT open the admin config shell (manage_branches / lab settings never admit it)', () => {
-    for (const r of ['/admin', '/admin/manage', '/admin/modules', '/setup', '/admin/tests', '/admin/users']) {
-      if (guardChain(r)) expect(guardAllows(r, w)).toBe(false);
+  it('still does NOT reach tenant config: users, organization, billing, workflows stay closed', () => {
+    for (const r of ['/admin/users', '/admin/org/profile', '/admin/org/numbers', '/admin/billing', '/admin/process', '/admin/lab/numbers']) {
+      if (guardChain(r)) expect(guardAllows(r, w), r).toBe(false);
     }
-    expect(navItemVisible(ADMIN_NAV, navCtx(w))).toBe(false);
-    expect(nav()).not.toContain('/admin');
   });
 
   it('keeps its own landing (the dashboard), unchanged by the new permission', () => {

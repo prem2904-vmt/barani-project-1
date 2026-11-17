@@ -53,8 +53,6 @@ export interface NavItem {
    * may not include. APF-ed with the other visibility checks.
    */
   module?: ModuleKey;
-  /** Hide for anyone who can open Settings (it is their one entry to this screen). */
-  hideWithSettings?: boolean;
 }
 
 // Admin is intentionally NOT in the primary nav anymore — it's a
@@ -391,7 +389,6 @@ export interface NavVisibilityCtx extends RouteAccessCtx {
 export function navItemVisible(i: NavItem, ctx: NavVisibilityCtx): boolean {
   if (i.permissions?.length && !ctx.isSuper && !ctx.hasAny(i.permissions)) return false;
   if (!canOpenRoute(i.href, ctx)) return false;
-  if (i.hideWithSettings && !ctx.isSuper && ctx.hasAny(SETTINGS_ENTRY_PERMS)) return false;
   if (i.collectionModes && !i.collectionModes.includes(ctx.collectionMode)) return false;
   if (i.billingModes && !i.billingModes.includes(ctx.billingMode)) return false;
   // Inventory work area only appears when the branch has it enabled.
@@ -505,10 +502,8 @@ export const MORE_NAV: NavItem[] = withRoutePerms([
     module: 'reports'
   },
   {
-    // Branch Managers hold manage_branches only (they cannot open Settings): their way to Branches. Anyone who can
-    // open Settings reaches Branches there, so the shortcut hides for them.
+    // Branch Managers hold manage_branches only (they cannot open Settings): their way to Branches.
     id: 'branches', label: 'Branches', href: '/admin/branches', iconPath: ['M4 21V7l8-4 8 4v14M9 21v-5h6v5'],
-    hideWithSettings: true,
   },
   {
     // Finance — day-end cash reconciliation + closure.

@@ -13,6 +13,7 @@ import {
   opdNavActive,
 } from './nav-items';
 import { ProcessWorkflowConfig } from '../shared/models/process-workflow.model';
+import { SETTINGS_ENTRY_PERMS } from '../core/auth/route-access';
 
 describe('NavItem interface', () => {
   it('defines required and optional fields for a nav item', () => {
@@ -48,12 +49,9 @@ describe('ADMIN_NAV', () => {
     expect(ADMIN_NAV.href).toBe('/admin');
   });
 
-  it('requires admin-config manage_* permissions (NOT manage_branches)', () => {
-    expect(ADMIN_NAV.permissions).toEqual([
-      'manage_tests',
-      'manage_users',
-      'manage_workflows',
-    ]);
+  it('is the ONE Settings entry: admits every settings role (SETTINGS_ENTRY_PERMS), never manage_branches', () => {
+    expect(ADMIN_NAV.permissions).toEqual(SETTINGS_ENTRY_PERMS);
+    expect(ADMIN_NAV.permissions).toEqual(expect.arrayContaining(['manage_tests', 'manage_users', 'manage_workflows', 'manage_lab_settings', 'manage_test_master']));
     // Branch browsing must NOT open the admin shell — a Branch Manager reaches
     // /admin/branches via its own route, not the admin config hub.
     expect(ADMIN_NAV.permissions).not.toContain('manage_branches');
@@ -217,13 +215,21 @@ describe('MORE_NAV', () => {
     expect(uniqueIds.size).toBe(allIds.length);
   });
 
-  it('admin-overview requires admin-config manage_* permissions (NOT manage_branches)', () => {
-    const adminOverview = MORE_NAV.find((item) => item.id === 'admin-overview');
-    expect(adminOverview).toBeDefined();
-    expect(adminOverview!.permissions).toEqual(
-      expect.arrayContaining(['manage_tests', 'manage_users', 'manage_workflows'])
-    );
-    expect(adminOverview!.permissions).not.toContain('manage_branches');
+  it('no per-setting shortcuts: Admin overview, Manage settings, the Lab hub, Branding and every settings page are gone from the menus', () => {
+    const ids = MORE_NAV.map((i) => i.id);
+    for (const gone of ['admin-overview', 'admin-manage', 'lab-settings', 'setup', 'users', 'tests', 'billing', 'inventory', 'reports-t',
+      'notifs', 'process', 'workflows', 'kpis', 'vendors', 'referral-labs', 'appts']) {
+      expect(ids, gone).not.toContain(gone);
+    }
+    const hrefs = [...MORE_NAV, ...PRIMARY_NAV].map((i) => i.href);
+    for (const h of ['/admin/manage', '/lab/settings', '/setup', '/admin/modules', '/admin/users', '/admin/tests', '/admin/billing']) {
+      expect(hrefs, h).not.toContain(h);
+    }
+  });
+
+  it('screens that live outside Settings stay reachable from the menus (Audit trail, Daily statement, Branches for branch managers)', () => {
+    const ids = MORE_NAV.map((i) => i.id);
+    expect(ids).toEqual(expect.arrayContaining(['audit', 'daily-statement', 'branches']));
   });
 
   it('module-specific items (opd, ipd, pharmacy) have module entitlement', () => {
