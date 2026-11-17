@@ -65,9 +65,9 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
     <section class="pf-bra pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
         <pf-hero-band [back]="true" backTo="/admin/bridges" [customSearch]="true" [contextBar]="true" [standardPill]="true">
-          <div band-search class="nd-ctx">
-            <span class="nd-ctx__primary">Add a Bridge</span>
-            @if (qr(); as q) { <span class="nd-ctx__chip"><span class="nd-ctx__k">Serial</span><span class="nd-num">{{ q.serialShort }}</span></span> }
+          <div band-search class="pf-ctx">
+            <span class="pf-ctx__primary">Add a Bridge</span>
+            @if (qr(); as q) { <span class="pf-ctx__chip"><span class="pf-ctx__k">Serial</span><span class="pf-num">{{ q.serialShort }}</span></span> }
           </div>
         </pf-hero-band>
       }
@@ -76,12 +76,12 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
       <div class="pf-band-body pf-bra__body">
         <div class="pf-bra__split">
           <!-- ── MAIN: how to find the Bridge / the relay / the result ── -->
-          <section class="nd-card pf-bra__main" aria-label="Add a Bridge">
-            <header class="nd-card__head">
-              <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 17h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0"/></svg></span>
-              <h2 class="nd-card__label">{{ relay() ? 'Set up its Wi-Fi' : result() ? 'Added' : 'Find the Bridge' }}</h2>
+          <section class="pf-card pf-bra__main" aria-label="Add a Bridge">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 17h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0"/></svg></span>
+              <h2 class="pf-card__label">{{ relay() ? 'Set up its Wi-Fi' : result() ? 'Added' : 'Find the Bridge' }}</h2>
             </header>
-            <div class="nd-card__body pf-bra__mainbody">
+            <div class="pf-card__body pf-bra__mainbody">
               @if (relay(); as flow) {
                 <ol class="pf-bra__steps" aria-label="Setup steps">
                   @for (s of relaySteps; track s.id) {
@@ -96,7 +96,7 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
                 @switch (flow.state().step) {
                   @case ('pick_network') {
                     <pf-bridge-wifi-form [networks]="flow.state().networks ?? []" [touched]="wifiTouched()" (formChange)="wifiForm.set($event)"></pf-bridge-wifi-form>
-                    <button type="button" class="nd-btn nd-btn--tertiary press pf-bra__rescan" (click)="flow.rescan()">Scan again (the setup Wi-Fi drops for ~10 seconds)</button>
+                    <button type="button" class="pf-btn pf-btn--tertiary press pf-bra__rescan" (click)="flow.rescan()">Scan again (the setup Wi-Fi drops for ~10 seconds)</button>
                     @if (flow.state().error) { <p class="pf-bra__err" role="alert">{{ errText(flow.state().error, flow.state().errorMessage) }}</p> }
                   }
                   @case ('scanning') { <pf-skeleton-rows [rows]="4" label="Reading the networks the Bridge sees…"></pf-skeleton-rows> }
@@ -139,13 +139,13 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
               } @else {
                 <div class="pf-bra__methods" role="radiogroup" aria-label="How to find the Bridge">
                   @for (m of methods(); track m.id) {
-                    <button type="button" class="nd-tile-sel pf-bra__method press" role="radio" [attr.aria-checked]="method() === m.id" (click)="choose(m.id)">
-                      <span class="nd-card__icon pf-bra__method-ic" aria-hidden="true">
+                    <button type="button" class="pf-tile-sel pf-bra__method press" role="radio" [attr.aria-checked]="method() === m.id" (click)="choose(m.id)">
+                      <span class="pf-card__icon pf-bra__method-ic" aria-hidden="true">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="m.icon"/></svg>
                       </span>
                       <span class="pf-bra__method-t">{{ m.title }}</span>
                       <span class="pf-bra__method-s">{{ m.sub }}</span>
-                      @if (m.count != null) { <span class="pf-bra__method-n nd-num" [attr.aria-label]="m.count + ' found'">{{ m.count }}</span> }
+                      @if (m.count != null) { <span class="pf-bra__method-n pf-num" [attr.aria-label]="m.count + ' found'">{{ m.count }}</span> }
                     </button>
                   }
                 </div>
@@ -155,42 +155,42 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
                     @case ('qr') {
                       @if (qr(); as q) {
                         <dl class="pf-bra__facts">
-                          <div><dt>Serial</dt><dd class="nd-num">{{ q.serial }}</dd></div>
-                          <div><dt>Claim code</dt><dd class="nd-num">{{ q.claimCode }}</dd></div>
+                          <div><dt>Serial</dt><dd class="pf-num">{{ q.serial }}</dd></div>
+                          <div><dt>Claim code</dt><dd class="pf-num">{{ q.claimCode }}</dd></div>
                           <div><dt>Setup Wi-Fi</dt><dd>{{ q.hotspotSsid }}{{ q.hotspotPsk ? '' : ' (open)' }}</dd></div>
                         </dl>
-                        <button type="button" class="nd-btn nd-btn--tertiary press" (click)="scanning.set(true)">Scan a different QR</button>
+                        <button type="button" class="pf-btn pf-btn--tertiary press" (click)="scanning.set(true)">Scan a different QR</button>
                       } @else {
                         <p class="pf-bra__note">The QR is on the Bridge's label and on its setup page (join its Wi-Fi from a phone).</p>
-                        <button type="button" class="nd-btn nd-btn--secondary press" (click)="scanning.set(true)">Open the camera</button>
+                        <button type="button" class="pf-btn pf-btn--secondary press" (click)="scanning.set(true)">Open the camera</button>
                       }
                       @if (qrError()) { <p class="pf-bra__err" role="alert">{{ qrError() }}</p> }
                     }
                     @case ('code') {
-                      <label class="nd-field pf-bra__code">
-                        <span class="nd-field__lbl">Claim code</span>
-                        <input class="nd-input nd-num pf-bra__code-in" [value]="code()" (input)="onCode($any($event.target))" placeholder="XXXXX-XXXXX"
+                      <label class="pf-field pf-bra__code">
+                        <span class="pf-field__lbl">Claim code</span>
+                        <input class="pf-input pf-num pf-bra__code-in" [value]="code()" (input)="onCode($any($event.target))" placeholder="XXXXX-XXXXX"
                                autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" maxlength="11" aria-describedby="pf-bra-code-h" />
-                        <span class="nd-field__hint" id="pf-bra-code-h">Ten letters and numbers, printed under the QR. The Bridge must be online — otherwise scan the QR.</span>
+                        <span class="pf-field__hint" id="pf-bra-code-h">Ten letters and numbers, printed under the QR. The Bridge must be online — otherwise scan the QR.</span>
                       </label>
                     }
                     @case ('nearby') {
                       @if (nearby.offers().length) {
                         <ul class="pf-bra__list" role="radiogroup" aria-label="Bridges found on this network">
                           @for (n of nearby.offers(); track n.announcementId) {
-                            <li><button type="button" class="nd-row nd-tile-sel pf-bra__pick press" role="radio" [attr.aria-checked]="nearbyId() === n.announcementId" (click)="nearbyId.set(n.announcementId)">
+                            <li><button type="button" class="pf-row pf-tile-sel pf-bra__pick press" role="radio" [attr.aria-checked]="nearbyId() === n.announcementId" (click)="nearbyId.set(n.announcementId)">
                               <span class="pf-bra__pick-main">
-                                <span class="nd-row__name">Prefrontal Bridge <span class="nd-num">{{ n.serialShort }}</span></span>
-                                <span class="nd-row__meta nd-num">{{ [n.model, n.version].filter(isText).join(' · ') }}{{ n.lastSeenAt ? ' · seen ' + ago(n.lastSeenAt).toLowerCase() : '' }}</span>
+                                <span class="pf-row__name">Prefrontal Bridge <span class="pf-num">{{ n.serialShort }}</span></span>
+                                <span class="pf-row__meta pf-num">{{ [n.model, n.version].filter(isText).join(' · ') }}{{ n.lastSeenAt ? ' · seen ' + ago(n.lastSeenAt).toLowerCase() : '' }}</span>
                               </span>
                             </button></li>
                           }
                         </ul>
-                        <p class="nd-field__hint">Check the serial against the Bridge's label before adding — another lab on the same internet connection could see the same offer.</p>
+                        <p class="pf-field__hint">Check the serial against the Bridge's label before adding — another lab on the same internet connection could see the same offer.</p>
                       } @else {
-                        <div class="nd-empty nd-empty--compact">
-                          <p class="nd-empty__title">No new Bridge on this network</p>
-                          <p class="nd-empty__body">A Bridge shows here a minute after it reaches the internet from the same network as you. Otherwise scan its QR.</p>
+                        <div class="pf-empty pf-empty--compact">
+                          <p class="pf-empty__title">No new Bridge on this network</p>
+                          <p class="pf-empty__body">A Bridge shows here a minute after it reaches the internet from the same network as you. Otherwise scan its QR.</p>
                         </div>
                       }
                     }
@@ -198,17 +198,17 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
                       @if (local.discovered().length) {
                         <ul class="pf-bra__list" role="radiogroup" aria-label="Bridges on this Wi-Fi">
                           @for (d of local.discovered(); track d.serial) {
-                            <li><button type="button" class="nd-row nd-tile-sel pf-bra__pick press" role="radio" [attr.aria-checked]="localSerial() === d.serial" [disabled]="d.claimState === 'claimed'" (click)="localSerial.set(d.serial)">
+                            <li><button type="button" class="pf-row pf-tile-sel pf-bra__pick press" role="radio" [attr.aria-checked]="localSerial() === d.serial" [disabled]="d.claimState === 'claimed'" (click)="localSerial.set(d.serial)">
                               <span class="pf-bra__pick-main">
-                                <span class="nd-row__name">{{ d.name }}</span>
-                                <span class="nd-row__meta nd-num">{{ d.host }}{{ d.version ? ' · ' + d.version : '' }}{{ d.claimState === 'claimed' ? ' · already in a lab' : '' }}</span>
+                                <span class="pf-row__name">{{ d.name }}</span>
+                                <span class="pf-row__meta pf-num">{{ d.host }}{{ d.version ? ' · ' + d.version : '' }}{{ d.claimState === 'claimed' ? ' · already in a lab' : '' }}</span>
                               </span>
                             </button></li>
                           }
                         </ul>
                       } @else {
                         <pf-skeleton-rows [rows]="2" label="Looking for Bridges on this Wi-Fi…"></pf-skeleton-rows>
-                        <p class="nd-field__hint">Searching this Wi-Fi. {{ local.kind === 'native' ? 'If nothing appears, allow Local Network access for Prefrontal in Settings.' : '' }}</p>
+                        <p class="pf-field__hint">Searching this Wi-Fi. {{ local.kind === 'native' ? 'If nothing appears, allow Local Network access for Prefrontal in Settings.' : '' }}</p>
                       }
                     }
                   }
@@ -218,20 +218,20 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
           </section>
 
           <!-- ── SIDE: name, branch and the ONE primary ── -->
-          <aside class="nd-card pf-bra__side" aria-label="Details">
-            <header class="nd-card__head">
-              <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg></span>
-              <h2 class="nd-card__label">Details</h2>
+          <aside class="pf-card pf-bra__side" aria-label="Details">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg></span>
+              <h2 class="pf-card__label">Details</h2>
             </header>
-            <div class="nd-card__body pf-bra__sidebody">
+            <div class="pf-card__body pf-bra__sidebody">
               @if (!result() && !relay()) {
-                <label class="nd-field">
-                  <span class="nd-field__lbl">Name <span class="pf-bra__opt">optional</span></span>
-                  <input class="nd-input" [value]="name()" (input)="name.set($any($event.target).value)" maxlength="120" placeholder="e.g. Haematology Bridge" autocomplete="off" />
+                <label class="pf-field">
+                  <span class="pf-field__lbl">Name <span class="pf-bra__opt">optional</span></span>
+                  <input class="pf-input" [value]="name()" (input)="name.set($any($event.target).value)" maxlength="120" placeholder="e.g. Haematology Bridge" autocomplete="off" />
                 </label>
                 @if (branchOptions().length > 1) {
-                  <div class="nd-field">
-                    <span class="nd-field__lbl" id="pf-bra-br">Branch</span>
+                  <div class="pf-field">
+                    <span class="pf-field__lbl" id="pf-bra-br">Branch</span>
                     <pf-select aria-labelledby="pf-bra-br" [options]="branchOptions()" [value]="branchId()" (valueChange)="branchId.set($event)"></pf-select>
                   </div>
                 }
@@ -242,7 +242,7 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
               @if (error()) { <p class="pf-bra__err" role="alert">{{ error() }}</p> }
             </div>
             @if (!isPhone) {
-              <div class="nd-card__foot"><ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
+              <div class="pf-card__foot"><ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
             }
           </aside>
         </div>
@@ -255,40 +255,40 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
               @if (relay(); as flow) {
                 @switch (flow.state().step) {
                   @case ('pick_network') {
-                    <button type="button" class="nd-btn nd-btn--secondary press" (click)="cancelRelay()">Cancel</button>
-                    <button type="button" class="nd-btn nd-btn--primary press" [disabled]="!wifiForm()" (click)="sendWifi()">Send to Bridge</button>
+                    <button type="button" class="pf-btn pf-btn--secondary press" (click)="cancelRelay()">Cancel</button>
+                    <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!wifiForm()" (click)="sendWifi()">Send to Bridge</button>
                   }
-                  @case ('online') { <button type="button" class="nd-btn nd-btn--primary nd-span press" (click)="open(flow.state().bridge?.id)">Open Bridge</button> }
+                  @case ('online') { <button type="button" class="pf-btn pf-btn--primary pf-span press" (click)="open(flow.state().bridge?.id)">Open Bridge</button> }
                   @case ('timeout') {
-                    <button type="button" class="nd-btn nd-btn--secondary press" (click)="open(flow.state().bridge?.id)">Open Bridge</button>
-                    <button type="button" class="nd-btn nd-btn--primary press" (click)="flow.waitOnline()">Check again</button>
+                    <button type="button" class="pf-btn pf-btn--secondary press" (click)="open(flow.state().bridge?.id)">Open Bridge</button>
+                    <button type="button" class="pf-btn pf-btn--primary press" (click)="flow.waitOnline()">Check again</button>
                   }
                   @case ('failed') {
-                    <button type="button" class="nd-btn nd-btn--secondary press" (click)="cancelRelay()">Close</button>
-                    <button type="button" class="nd-btn nd-btn--primary press" (click)="flow.start()">Try again</button>
+                    <button type="button" class="pf-btn pf-btn--secondary press" (click)="cancelRelay()">Close</button>
+                    <button type="button" class="pf-btn pf-btn--primary press" (click)="flow.start()">Try again</button>
                   }
-                  @default { <button type="button" class="nd-btn nd-btn--secondary nd-span press" (click)="cancelRelay()">Cancel</button> }
+                  @default { <button type="button" class="pf-btn pf-btn--secondary pf-span press" (click)="cancelRelay()">Cancel</button> }
                 }
               } @else if (result(); as r) {
                 @if (r.state === 'pending_device' && canRelay() && qr()) {
-                  <button type="button" class="nd-btn nd-btn--secondary press" (click)="startRelay(true)">Set up its Wi-Fi</button>
-                  <button type="button" class="nd-btn nd-btn--primary press" (click)="open(r.bridge.id)">Open Bridge</button>
+                  <button type="button" class="pf-btn pf-btn--secondary press" (click)="startRelay(true)">Set up its Wi-Fi</button>
+                  <button type="button" class="pf-btn pf-btn--primary press" (click)="open(r.bridge.id)">Open Bridge</button>
                 } @else {
-                  <button type="button" class="nd-btn nd-btn--secondary press" (click)="reset()">Add another</button>
-                  <button type="button" class="nd-btn nd-btn--primary press" (click)="open(r.bridge.id)">Open Bridge</button>
+                  <button type="button" class="pf-btn pf-btn--secondary press" (click)="reset()">Add another</button>
+                  <button type="button" class="pf-btn pf-btn--primary press" (click)="open(r.bridge.id)">Open Bridge</button>
                 }
               } @else {
                 @if (method() === 'qr' && qr() && canRelay()) {
-                  <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="busy()" (click)="startRelay(false)">Add + set up Wi-Fi</button>
+                  <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="busy()" (click)="startRelay(false)">Add + set up Wi-Fi</button>
                 }
-                <button type="button" class="nd-btn nd-btn--primary press" [class.nd-span]="!(method() === 'qr' && qr() && canRelay())"
+                <button type="button" class="pf-btn pf-btn--primary press" [class.pf-span]="!(method() === 'qr' && qr() && canRelay())"
                         [disabled]="!canSubmit() || busy()" [pfBusy]="busy()" pfBusyLabel="Adding…" (click)="submit()">
                   {{ busy() ? 'Adding…' : 'Add Bridge' }}
                 </button>
               }
     </ng-template>
     @if (isPhone) {
-      <div class="nd-bottombar pf-bra__bar"><ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
+      <div class="pf-bottombar pf-bra__bar"><ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
     }
 
     @if (scanning()) {
@@ -304,7 +304,7 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
     .pf-bra__mainbody { gap: 16px; }
     .pf-bra__methods { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
     .pf-bra__method { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; row-gap: 2px;
-      align-items: center; min-height: 76px; padding: 12px 14px; text-align: left; border-radius: 14px; border: 1px solid var(--nd-line);
+      align-items: center; min-height: 76px; padding: 12px 14px; text-align: left; border-radius: 14px; border: 1px solid var(--pf-line);
       background: transparent; color: var(--text-primary); cursor: pointer; }
     .pf-bra__method-ic { grid-row: 1 / span 2; }
     .pf-bra__method-t { font-size: 14px; font-weight: 600; }
@@ -314,13 +314,13 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
     .pf-bra__code { max-width: 320px; }
     .pf-bra__code-in { font-size: 20px; letter-spacing: 0.08em; text-transform: uppercase; }
     .pf-bra__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-    .pf-bra__pick { width: 100%; min-height: 56px; padding: 8px 12px; text-align: left; border-radius: 12px; border: 1px solid var(--nd-line); background: transparent; color: var(--text-primary); cursor: pointer; }
+    .pf-bra__pick { width: 100%; min-height: 56px; padding: 8px 12px; text-align: left; border-radius: 12px; border: 1px solid var(--pf-line); background: transparent; color: var(--text-primary); cursor: pointer; }
     .pf-bra__pick:disabled { opacity: 0.55; cursor: not-allowed; }
     /* The kit's neutral selected state (the base rules above would out-rank it). */
     .pf-bra__method[aria-checked='true'], .pf-bra__pick[aria-checked='true'] { @include nd.neutral-selected; }
     .pf-bra__pick-main { display: flex; flex-direction: column; gap: 2px; }
     .pf-bra__facts { margin: 0; display: grid; }
-    .pf-bra__facts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--nd-line); }
+    .pf-bra__facts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--pf-line); }
     .pf-bra__facts dt { font-size: 12.5px; color: var(--text-tertiary); }
     .pf-bra__facts dd { margin: 0; font-size: 13.5px; overflow-wrap: anywhere; }
     .pf-bra__note { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-secondary); }
@@ -329,8 +329,8 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
     .pf-bra__sidebody { gap: 14px; }
     .pf-bra__done { display: flex; gap: 12px; align-items: flex-start; }
     .pf-bra__ok { flex: none; display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 999px;
-      color: var(--color-primary, #7c3aed); background: var(--nd-done-tint, color-mix(in srgb, #7c3aed 12%, transparent)); }
-    .pf-bra__callout { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--nd-line); }
+      color: var(--color-primary, #7c3aed); background: var(--pf-done-tint, color-mix(in srgb, #7c3aed 12%, transparent)); }
+    .pf-bra__callout { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--pf-line); }
     .pf-bra__callout-t { margin: 0 0 4px; font-size: 14.5px; font-weight: 600; color: var(--text-primary); }
     .pf-bra__tips { margin: 6px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.55; color: var(--text-secondary); }
     .pf-bra__steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -338,13 +338,13 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
     .pf-bra__step[data-state='active'] { color: var(--text-primary); font-weight: 500; }
     .pf-bra__step[data-state='done'] { color: var(--text-secondary); }
     .pf-bra__step-dot { flex: none; display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; border-radius: 999px;
-      border: 1.5px solid var(--nd-line); color: #fff; }
+      border: 1.5px solid var(--pf-line); color: #fff; }
     .pf-bra__step[data-state='done'] .pf-bra__step-dot { background: var(--color-primary, #7c3aed); border-color: var(--color-primary, #7c3aed); }
-    .pf-bra__step[data-state='active'] .pf-bra__step-dot { border-color: var(--color-primary, #7c3aed); box-shadow: inset 0 0 0 4px var(--nd-card-bg); background: var(--color-primary, #7c3aed); }
+    .pf-bra__step[data-state='active'] .pf-bra__step-dot { border-color: var(--color-primary, #7c3aed); box-shadow: inset 0 0 0 4px var(--pf-card-bg); background: var(--color-primary, #7c3aed); }
     .pf-bra__rescan { align-self: flex-start; }
     @media (max-width: 640px) {
       /* ND §12: card labels are 12px on phones — beat the global phone h2 cap. */
-      .nd-card__label { font-size: 12px !important; line-height: 1.3 !important; }
+      .pf-card__label { font-size: 12px !important; line-height: 1.3 !important; }
       .pf-bra__methods { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
       .pf-bra__method { grid-template-columns: minmax(0, 1fr); min-height: 96px; }
       .pf-bra__method-ic { grid-row: auto; margin-bottom: 4px; }
@@ -352,8 +352,8 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
       .pf-bra__facts > div { grid-template-columns: 100px minmax(0, 1fr); }
       .pf-bra__body { padding-bottom: 96px !important; }
       .pf-bra__bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 10px; }
-      .pf-bra__bar > :only-child, .pf-bra__bar > .nd-span { grid-column: 1 / -1; }
-      .pf-bra__bar .nd-btn { min-height: 44px; }
+      .pf-bra__bar > :only-child, .pf-bra__bar > .pf-span { grid-column: 1 / -1; }
+      .pf-bra__bar .pf-btn { min-height: 44px; }
     }
   `],
 })

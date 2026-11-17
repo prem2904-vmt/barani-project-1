@@ -26,23 +26,23 @@ type Phase = 'scanning' | 'form' | 'sending' | 'done' | 'failed' | 'waiting';
   imports: [ModalPortalDirective, SkeletonRowsComponent, BridgeWifiFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="nd-dialog" role="dialog" aria-modal="true" aria-labelledby="pf-bwd-title" pfModalPortal>
-      <div class="nd-dialog__backdrop" (click)="close()"></div>
-      <form class="nd-dialog__card pf-bwd" (submit)="$event.preventDefault(); submit()">
-        <header class="nd-dialog__head">
-          <span class="nd-card__icon" aria-hidden="true">
+    <div class="pf-dialog" role="dialog" aria-modal="true" aria-labelledby="pf-bwd-title" pfModalPortal>
+      <div class="pf-dialog__backdrop" (click)="close()"></div>
+      <form class="pf-dialog__card pf-bwd" (submit)="$event.preventDefault(); submit()">
+        <header class="pf-dialog__head">
+          <span class="pf-card__icon" aria-hidden="true">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h.01M8.5 16.4a5 5 0 0 1 7 0M5 12.9a10 10 0 0 1 14 0M1.5 9.4a15 15 0 0 1 21 0"/></svg>
           </span>
-          <div class="nd-dialog__titles">
-            <h2 id="pf-bwd-title" class="nd-card__label">Change Wi-Fi</h2>
-            <p class="nd-dialog__sub">{{ bridge().name }}{{ bridge().network?.ssid ? ' · now on ' + bridge().network?.ssid : '' }}</p>
+          <div class="pf-dialog__titles">
+            <h2 id="pf-bwd-title" class="pf-card__label">Change Wi-Fi</h2>
+            <p class="pf-dialog__sub">{{ bridge().name }}{{ bridge().network?.ssid ? ' · now on ' + bridge().network?.ssid : '' }}</p>
           </div>
-          <button type="button" class="nd-btn nd-btn--icon" (click)="close()" aria-label="Close">
+          <button type="button" class="pf-btn pf-btn--icon" (click)="close()" aria-label="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </header>
 
-        <div class="nd-dialog__body" aria-live="polite">
+        <div class="pf-dialog__body" aria-live="polite">
           @switch (phase()) {
             @case ('scanning') {
               <p class="pf-bwd__note">Asking the Bridge which networks it can see. It checks in every 30 seconds, so this can take up to a minute.</p>
@@ -51,7 +51,7 @@ type Phase = 'scanning' | 'form' | 'sending' | 'done' | 'failed' | 'waiting';
             @case ('form') {
               @if (scanNote()) { <p class="pf-bwd__note">{{ scanNote() }}</p> }
               <pf-bridge-wifi-form [networks]="networks()" [touched]="touched()" (formChange)="form.set($event)"></pf-bridge-wifi-form>
-              <p class="nd-field__hint">The Bridge keeps its current network and switches back to it if the new one doesn't work.</p>
+              <p class="pf-field__hint">The Bridge keeps its current network and switches back to it if the new one doesn't work.</p>
             }
             @case ('sending') {
               <div class="pf-bwd__state">
@@ -76,7 +76,7 @@ type Phase = 'scanning' | 'form' | 'sending' | 'done' | 'failed' | 'waiting';
                 <span class="pf-bwd__ok" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg></span>
                 <div>
                   <p class="pf-bwd__state-t">Connected to {{ form()?.ssid }}</p>
-                  @if (doneIp()) { <p class="pf-bwd__note">Address on that network: <span class="nd-num">{{ doneIp() }}</span></p> }
+                  @if (doneIp()) { <p class="pf-bwd__note">Address on that network: <span class="pf-num">{{ doneIp() }}</span></p> }
                 </div>
               </div>
             }
@@ -87,17 +87,17 @@ type Phase = 'scanning' | 'form' | 'sending' | 'done' | 'failed' | 'waiting';
           @if (phase() === 'form' && error()) { <p class="pf-bwd__err" role="alert">{{ error() }}</p> }
         </div>
 
-        <footer class="nd-dialog__foot">
+        <footer class="pf-dialog__foot">
           @if (phase() === 'form') {
-            <button type="button" class="nd-btn nd-btn--secondary" (click)="close()">Cancel</button>
-            <button type="submit" class="nd-btn nd-btn--primary" [disabled]="!form()">Change Wi-Fi</button>
+            <button type="button" class="pf-btn pf-btn--secondary" (click)="close()">Cancel</button>
+            <button type="submit" class="pf-btn pf-btn--primary" [disabled]="!form()">Change Wi-Fi</button>
           } @else if (phase() === 'failed') {
-            <button type="button" class="nd-btn nd-btn--secondary" (click)="close()">Close</button>
-            <button type="button" class="nd-btn nd-btn--primary" (click)="retry()">Try again</button>
+            <button type="button" class="pf-btn pf-btn--secondary" (click)="close()">Close</button>
+            <button type="button" class="pf-btn pf-btn--primary" (click)="retry()">Try again</button>
           } @else if (phase() === 'done' || phase() === 'waiting') {
-            <button type="button" class="nd-btn nd-btn--secondary nd-span" (click)="close()">Close</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-span" (click)="close()">Close</button>
           } @else {
-            <button type="button" class="nd-btn nd-btn--secondary nd-span" (click)="close()">Cancel</button>
+            <button type="button" class="pf-btn pf-btn--secondary pf-span" (click)="close()">Cancel</button>
           }
         </footer>
       </form>
@@ -111,9 +111,9 @@ type Phase = 'scanning' | 'form' | 'sending' | 'done' | 'failed' | 'waiting';
     .pf-bwd__state-t { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--text-primary); }
     .pf-bwd__pulse { flex: none; width: 10px; height: 10px; margin-top: 6px; border-radius: 999px; background: var(--color-primary, #7c3aed); animation: pf-bwd-pulse 1.4s ease-in-out infinite; }
     .pf-bwd__ok { flex: none; display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 999px;
-      color: var(--color-primary, #7c3aed); background: var(--nd-done-tint, color-mix(in srgb, #7c3aed 12%, transparent)); }
+      color: var(--color-primary, #7c3aed); background: var(--pf-done-tint, color-mix(in srgb, #7c3aed 12%, transparent)); }
     @keyframes pf-bwd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-    @media (max-width: 640px) { .nd-card__label { font-size: 12px !important; line-height: 1.3 !important; } }
+    @media (max-width: 640px) { .pf-card__label { font-size: 12px !important; line-height: 1.3 !important; } }
     @media (prefers-reduced-motion: reduce) { .pf-bwd__pulse { animation: none; } }
   `],
 })

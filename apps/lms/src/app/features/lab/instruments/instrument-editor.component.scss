@@ -143,11 +143,11 @@
    the recent-results list, one neutral icon chip + a quiet action. */
 .pf-ie-notice {
   display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px 12px;
-  border-radius: var(--nd-radius-sm, 10px); border: 1px solid var(--nd-sel-border); background: var(--nd-chip-bg);
+  border-radius: var(--pf-radius-sm, 10px); border: 1px solid var(--pf-sel-border); background: var(--pf-chip-bg);
   font-size: 13px; color: var(--text-secondary);
 }
 .pf-ie-notice > svg { flex: none; color: var(--violet-text, #7c3aed); }
 .pf-ie-notice > span { flex: 1 1 auto; }
-.pf-ie-notice .nd-btn { flex: none; }
+.pf-ie-notice .pf-btn { flex: none; }
 
 .pf-ie-testing { margin-inline-start: 6px; font-size: 11px; line-height: 1; padding: 3px 7px; }

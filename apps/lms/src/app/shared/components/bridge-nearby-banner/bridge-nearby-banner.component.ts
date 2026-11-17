@@ -24,16 +24,16 @@ import { listenForBridgeLinks } from '../../bridges/bridge-link';
   template: `
     @if (visible(); as n) {
       <div class="pf-bnb" role="status" aria-live="polite">
-        <span class="nd-card__icon pf-bnb__icon" aria-hidden="true">
+        <span class="pf-card__icon pf-bnb__icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 17h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0"/></svg>
         </span>
         <span class="pf-bnb__text">
           <span class="pf-bnb__title">New Bridge found nearby — add it?</span>
-          <span class="pf-bnb__note">Prefrontal Bridge <span class="nd-num">{{ n.serialShort }}</span> is on the same network as you.</span>
+          <span class="pf-bnb__note">Prefrontal Bridge <span class="pf-num">{{ n.serialShort }}</span> is on the same network as you.</span>
         </span>
         <span class="pf-bnb__actions">
-          <button type="button" class="nd-btn nd-btn--secondary press" (click)="notNow(n.announcementId)">Not now</button>
-          <button type="button" class="nd-btn nd-btn--primary press" (click)="add(n.announcementId)">Add</button>
+          <button type="button" class="pf-btn pf-btn--secondary press" (click)="notNow(n.announcementId)">Not now</button>
+          <button type="button" class="pf-btn pf-btn--primary press" (click)="add(n.announcementId)">Add</button>
         </span>
       </div>
     }
@@ -41,14 +41,14 @@ import { listenForBridgeLinks } from '../../bridges/bridge-link';
   styles: [`
     .pf-bnb {
       /* Above the app nav from its MEASURED footprint (--pf-nav-h, safe area
-         included; layout/shell/nav-insets.ts) — the old --nd-nav-h never
+         included; layout/shell/nav-insets.ts) — the old --pf-nav-h never
          existed, so the banner covered the docked bar's bell / avatar. */
       position: fixed; z-index: 64; right: 16px;
       bottom: max(calc(var(--pf-nav-h, 0px) + 16px), calc(env(safe-area-inset-bottom, 0px) + 16px));
       display: flex; align-items: center; gap: 12px; max-width: min(520px, calc(100vw - 32px));
-      padding: 10px 12px; border-radius: var(--nd-radius, 14px);
-      background: var(--nd-card-bg, #fff); border: 1px solid var(--nd-line, #e5e7eb); box-shadow: 0 10px 32px rgba(15, 23, 42, 0.18);
-      animation: pf-bnb-in var(--nd-dur, 320ms) var(--nd-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
+      padding: 10px 12px; border-radius: var(--pf-radius, 14px);
+      background: var(--pf-card-bg, #fff); border: 1px solid var(--pf-line, #e5e7eb); box-shadow: 0 10px 32px rgba(15, 23, 42, 0.18);
+      animation: pf-bnb-in var(--pf-dur, 320ms) var(--pf-spring, cubic-bezier(0.32, 0.72, 0, 1)) both;
     }
     .pf-bnb__icon { flex: none; }
     .pf-bnb__text { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
@@ -61,7 +61,7 @@ import { listenForBridgeLinks } from '../../bridges/bridge-link';
       .pf-bnb { left: 16px; right: 16px; max-width: none; flex-wrap: wrap; }
       .pf-bnb__text { flex: 1 1 calc(100% - 48px); }
       .pf-bnb__actions { width: 100%; }
-      .pf-bnb__actions .nd-btn { flex: 1 1 0; min-height: 44px; }
+      .pf-bnb__actions .pf-btn { flex: 1 1 0; min-height: 44px; }
     }
   `],
 })

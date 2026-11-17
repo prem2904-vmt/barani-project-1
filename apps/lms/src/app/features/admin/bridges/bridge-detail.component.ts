@@ -110,14 +110,14 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
               </pf-actions-menu>
             }
           </ng-container>
-          <div band-search class="nd-ctx">
+          <div band-search class="pf-ctx">
             @if (b(); as br) {
-              <span class="nd-ctx__primary">{{ br.name }}</span>
-              <span class="nd-ctx__chip"><span class="nd-sdot" [attr.data-tone]="sdot(status().tone)">{{ status().label }}</span></span>
-              @if (br.serialShort) { <span class="nd-ctx__chip"><span class="nd-ctx__k">Serial</span><span class="nd-num">{{ br.serialShort }}</span></span> }
-              @if (br.branchName) { <span class="nd-ctx__chip"><span class="nd-ctx__k">Branch</span>{{ br.branchName }}</span> }
+              <span class="pf-ctx__primary">{{ br.name }}</span>
+              <span class="pf-ctx__chip"><span class="pf-sdot" [attr.data-tone]="sdot(status().tone)">{{ status().label }}</span></span>
+              @if (br.serialShort) { <span class="pf-ctx__chip"><span class="pf-ctx__k">Serial</span><span class="pf-num">{{ br.serialShort }}</span></span> }
+              @if (br.branchName) { <span class="pf-ctx__chip"><span class="pf-ctx__k">Branch</span>{{ br.branchName }}</span> }
             } @else {
-              <span class="nd-ctx__primary">Bridge</span>
+              <span class="pf-ctx__primary">Bridge</span>
             }
           </div>
         </pf-hero-band>
@@ -128,20 +128,20 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
         @if (skeleton()) {
           <pf-skeleton-detail label="Loading Bridge…"></pf-skeleton-detail>
         } @else if (notFound()) {
-          <section class="nd-card"><div class="nd-empty">
-            <p class="nd-empty__title">This Bridge was not found</p>
-            <p class="nd-empty__body">It may have been removed. Go back to the list.</p>
+          <section class="pf-card"><div class="pf-empty">
+            <p class="pf-empty__title">This Bridge was not found</p>
+            <p class="pf-empty__body">It may have been removed. Go back to the list.</p>
           </div></section>
         } @else if (b(); as br) {
           <div class="pf-brd__split">
-            <section class="nd-card pf-brd__main" aria-label="Analyzers">
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4M7 10h2l1.5-3 3 6 1.5-3h2"/></svg></span>
-                <h2 class="nd-card__label">Analyzers</h2>
-                <span class="nd-card__spacer"></span>
-                <span class="pf-brd__count nd-num">{{ plural(rows().length, 'analyzer') }}</span>
+            <section class="pf-card pf-brd__main" aria-label="Analyzers">
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 20h10M12 16v4M7 10h2l1.5-3 3 6 1.5-3h2"/></svg></span>
+                <h2 class="pf-card__label">Analyzers</h2>
+                <span class="pf-card__spacer"></span>
+                <span class="pf-brd__count pf-num">{{ plural(rows().length, 'analyzer') }}</span>
               </header>
-              <div class="nd-card__body pf-brd__mainbody">
+              <div class="pf-card__body pf-brd__mainbody">
                 @if (br.status === 'pending') {
                   <div class="pf-brd__pending" role="status">
                     <span class="pf-brd__pulse" aria-hidden="true"></span>
@@ -149,7 +149,7 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
                       <p class="pf-brd__pending-t">Waiting for the Bridge to come online</p>
                       <p class="pf-brd__note">Power it on near Wi-Fi. If it can't join a network by itself it starts its own setup Wi-Fi ({{ hotspotName() }}) — join it from a phone and pick the lab's network.</p>
                       @if (local.canJoinHotspot()) {
-                        <button type="button" class="nd-btn nd-btn--secondary press pf-brd__relay" (click)="relay()">Set up its Wi-Fi with this phone</button>
+                        <button type="button" class="pf-btn pf-btn--secondary press pf-brd__relay" (click)="relay()">Set up its Wi-Fi with this phone</button>
                       }
                     </div>
                   </div>
@@ -158,16 +158,16 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
                 @if (sources().length) {
                   <ul class="pf-brd__sources" aria-label="New analyzers found">
                     @for (s of sources(); track s.id) {
-                      <li class="nd-row pf-brd__source">
+                      <li class="pf-row pf-brd__source">
                         <span class="pf-brd__source-ic" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/></svg></span>
                         <span class="pf-brd__source-main">
                           <span class="pf-brd__source-t">{{ headline(s) }} — link it?</span>
-                          <span class="nd-row__meta nd-num">{{ sourceMeta(s) }}</span>
+                          <span class="pf-row__meta pf-num">{{ sourceMeta(s) }}</span>
                         </span>
                         @if (canManage()) {
                           <span class="pf-brd__source-acts">
-                            <button type="button" class="nd-btn nd-btn--tertiary press" [pfBusy]="ignoring() === s.id" pfBusyLabel="Ignoring…" (click)="ignore(s)">Ignore</button>
-                            <button type="button" class="nd-btn nd-btn--secondary press" (click)="linkSource.set(s)">Link it</button>
+                            <button type="button" class="pf-btn pf-btn--tertiary press" [pfBusy]="ignoring() === s.id" pfBusyLabel="Ignoring…" (click)="ignore(s)">Ignore</button>
+                            <button type="button" class="pf-btn pf-btn--secondary press" (click)="linkSource.set(s)">Link it</button>
                           </span>
                         }
                       </li>
@@ -177,9 +177,9 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
 
                 @if (rows().length === 0) {
                   @if (br.status !== 'pending') {
-                    <div class="nd-empty nd-empty--compact">
-                      <p class="nd-empty__title">No analyzers on this Bridge yet</p>
-                      <p class="nd-empty__body">Cable an analyzer to the Bridge's network port and send a result — it shows up here to link. Or assign one you already set up.</p>
+                    <div class="pf-empty pf-empty--compact">
+                      <p class="pf-empty__title">No analyzers on this Bridge yet</p>
+                      <p class="pf-empty__body">Cable an analyzer to the Bridge's network port and send a result — it shows up here to link. Or assign one you already set up.</p>
                     </div>
                   }
                 } @else {
@@ -189,8 +189,8 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
                 }
               </div>
               @if (canManage()) {
-                <div class="nd-card__foot">
-                  <button type="button" class="nd-btn nd-btn--primary nd-span press" [disabled]="br.status === 'pending'" (click)="assignOpen.set(true)">
+                <div class="pf-card__foot">
+                  <button type="button" class="pf-btn pf-btn--primary pf-span press" [disabled]="br.status === 'pending'" (click)="assignOpen.set(true)">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                     Assign analyzer
                   </button>
@@ -198,13 +198,13 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
               }
             </section>
 
-            <aside class="nd-card pf-brd__side" aria-label="Bridge">
-              <header class="nd-card__head">
-                <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 17h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0"/></svg></span>
-                <h2 class="nd-card__label">Bridge</h2>
+            <aside class="pf-card pf-brd__side" aria-label="Bridge">
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 17h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0"/></svg></span>
+                <h2 class="pf-card__label">Bridge</h2>
               </header>
-              <div class="nd-card__body pf-brd__sidebody">
-                <p class="pf-brd__statusline"><span class="nd-sdot" [attr.data-tone]="sdot(status().tone)">{{ status().label }}</span>
+              <div class="pf-card__body pf-brd__sidebody">
+                <p class="pf-brd__statusline"><span class="pf-sdot" [attr.data-tone]="sdot(status().tone)">{{ status().label }}</span>
                   @if (br.lastSeenAt) { <span class="pf-brd__muted">· {{ br.status === 'online' ? 'checked in' : 'last seen' }} {{ ago(br.lastSeenAt).toLowerCase() }}</span> }
                 </p>
                 @if (br.serialConflict) {
@@ -212,14 +212,14 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
                 }
                 <dl class="pf-brd__facts">
                   <div><dt>Wi-Fi</dt><dd>{{ wifiLine() }}</dd></div>
-                  @if (br.network?.ipv4) { <div><dt>Address</dt><dd class="nd-num">{{ br.network?.ipv4 }}</dd></div> }
+                  @if (br.network?.ipv4) { <div><dt>Address</dt><dd class="pf-num">{{ br.network?.ipv4 }}</dd></div> }
                   <div><dt>Last result</dt><dd>{{ br.lastMessageAt ? ago(br.lastMessageAt) : '—' }}</dd></div>
-                  <div><dt>Waiting to send</dt><dd class="nd-num">{{ plural(br.queueTotal ?? 0, 'result') }}{{ (br.quarantineTotal ?? 0) ? ' · ' + br.quarantineTotal + ' held for linking' : '' }}</dd></div>
+                  <div><dt>Waiting to send</dt><dd class="pf-num">{{ plural(br.queueTotal ?? 0, 'result') }}{{ (br.quarantineTotal ?? 0) ? ' · ' + br.quarantineTotal + ' held for linking' : '' }}</dd></div>
                   <div><dt>Software</dt><dd>{{ version() }}</dd></div>
                   <div><dt>Model</dt><dd>{{ modelWord() }}</dd></div>
-                  @if (br.serial) { <div><dt>Serial</dt><dd class="nd-num">{{ br.serial }}</dd></div> }
+                  @if (br.serial) { <div><dt>Serial</dt><dd class="pf-num">{{ br.serial }}</dd></div> }
                   @if (br.claimedAt) { <div><dt>Added</dt><dd>{{ fmt(br.claimedAt) }}{{ br.claimedByName ? ' by ' + br.claimedByName : '' }}</dd></div> }
-                  @if (br.tlsFingerprint) { <div><dt>Security pin</dt><dd class="nd-num">{{ br.tlsFingerprint }}</dd></div> }
+                  @if (br.tlsFingerprint) { <div><dt>Security pin</dt><dd class="pf-num">{{ br.tlsFingerprint }}</dd></div> }
                 </dl>
 
                 @if (br.recentCommands?.length) {
@@ -229,19 +229,19 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
                       <li class="pf-brd__act">
                         <span class="pf-brd__act-main">
                           <span class="pf-brd__act-t">{{ cmdLine(c) }}</span>
-                          <span class="pf-brd__muted nd-num">{{ ago(c.issuedAt) }}{{ c.issuedByName ? ' · ' + c.issuedByName : '' }}</span>
+                          <span class="pf-brd__muted pf-num">{{ ago(c.issuedAt) }}{{ c.issuedByName ? ' · ' + c.issuedByName : '' }}</span>
                           @if (c.state === 'failed' && c.result?.error) { <span class="pf-brd__act-err">{{ errorText(c.result?.error, c.result?.message) }}</span> }
                         </span>
-                        <span class="nd-sdot" [attr.data-tone]="sdot(cmdState(c.state).tone)">{{ cmdState(c.state).label }}</span>
+                        <span class="pf-sdot" [attr.data-tone]="sdot(cmdState(c.state).tone)">{{ cmdState(c.state).label }}</span>
                       </li>
                     }
                   </ul>
                 }
               </div>
               @if (canManage()) {
-                <div class="nd-card__foot">
-                  <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="br.status === 'pending'" (click)="wifiOpen.set(true)">Change Wi-Fi</button>
-                  <button type="button" class="nd-btn nd-btn--secondary press" [disabled]="br.status !== 'online' || acting()" (click)="startHotspot()">Setup hotspot</button>
+                <div class="pf-card__foot">
+                  <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="br.status === 'pending'" (click)="wifiOpen.set(true)">Change Wi-Fi</button>
+                  <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="br.status !== 'online' || acting()" (click)="startHotspot()">Setup hotspot</button>
                 </div>
               }
             </aside>
@@ -283,13 +283,13 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
     .pf-brd__main ::ng-deep .ag-cell.pf-brd-actcell { padding-left: 6px; padding-right: 6px; }
     .pf-brd__sources { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
     .pf-brd__source { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 12px; border-radius: 12px;
-      border: 1px solid var(--nd-sel-border, rgba(124, 58, 237, 0.4)); background: var(--nd-done-tint, color-mix(in srgb, #7c3aed 6%, transparent)); flex-wrap: wrap; }
+      border: 1px solid var(--pf-sel-border, rgba(124, 58, 237, 0.4)); background: var(--pf-done-tint, color-mix(in srgb, #7c3aed 6%, transparent)); flex-wrap: wrap; }
     .pf-brd__source-ic { flex: none; display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 10px;
       color: var(--color-primary, #7c3aed); background: color-mix(in srgb, var(--color-primary, #7c3aed) 12%, transparent); }
     .pf-brd__source-main { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .pf-brd__source-t { font-size: 14px; font-weight: 500; color: var(--text-primary); }
     .pf-brd__source-acts { display: flex; gap: 8px; margin-left: auto; }
-    .pf-brd__pending { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; border: 1px dashed var(--nd-line); }
+    .pf-brd__pending { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 12px; border: 1px dashed var(--pf-line); }
     .pf-brd__pending-t { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--text-primary); }
     .pf-brd__note { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); }
     .pf-brd__relay { margin-top: 10px; }
@@ -301,21 +301,21 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
     .pf-brd__muted { font-size: 12px; color: var(--text-tertiary); }
     .pf-brd__warn { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--amber-text, #b45309); }
     .pf-brd__facts { margin: 0; display: grid; gap: 0; }
-    .pf-brd__facts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--nd-line); }
+    .pf-brd__facts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--pf-line); }
     .pf-brd__facts dt { font-size: 12.5px; color: var(--text-tertiary); }
     .pf-brd__facts dd { margin: 0; font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; }
     .pf-brd__sec { margin: 4px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-brd__acts { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-    .pf-brd__act { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; padding: 8px 2px; border-bottom: 1px solid var(--nd-line); }
+    .pf-brd__act { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; padding: 8px 2px; border-bottom: 1px solid var(--pf-line); }
     .pf-brd__act-main { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
     .pf-brd__act-t { font-size: 13px; color: var(--text-primary); }
     .pf-brd__act-err { font-size: 12px; color: var(--red-text, #dc2626); }
     @media (max-width: 640px) {
       /* ND §12: card labels are 12px on phones — beat the global phone h2 cap. */
-      .nd-card__label { font-size: 12px !important; line-height: 1.3 !important; }
+      .pf-card__label { font-size: 12px !important; line-height: 1.3 !important; }
       .pf-brd__hide-phone { display: none; }
       .pf-brd__source-acts { width: 100%; }
-      .pf-brd__source-acts .nd-btn { flex: 1 1 0; min-height: 44px; }
+      .pf-brd__source-acts .pf-btn { flex: 1 1 0; min-height: 44px; }
       .pf-brd__facts > div { grid-template-columns: 110px minmax(0, 1fr); }
     }
   `],
@@ -390,9 +390,9 @@ export class BridgeDetailComponent implements OnInit {
     const cell = (main: string, sub?: string, cls = '') =>
       `<div class="pf-brd-cell"><span class="${cls}">${esc(main)}</span>${sub ? `<span class="pf-brd-cell__sub">${esc(sub)}</span>` : ''}</div>`;
     const btn = (act: string, label: string, d: string, name: string) =>
-      `<button type="button" class="nd-rowact${web ? '' : ' nd-rowact--icon'}" data-act="${act}" aria-label="${esc(label)} ${esc(name)}" title="${esc(label)}">` +
+      `<button type="button" class="pf-rowact${web ? '' : ' pf-rowact--icon'}" data-act="${act}" aria-label="${esc(label)} ${esc(name)}" title="${esc(label)}">` +
       `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>` +
-      `<span class="nd-rowact__t">${esc(label)}</span></button>`;
+      `<span class="pf-rowact__t">${esc(label)}</span></button>`;
     const cols: ColDef<BridgeAnalyzerRow>[] = [
       { colId: 'name', headerName: 'Analyzer', flex: 1.3, minWidth: this.isPhone ? 120 : 170, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => cell(p.data?.name ?? '',
@@ -403,10 +403,10 @@ export class BridgeDetailComponent implements OnInit {
       { colId: 'link', headerName: 'Link', flex: 1, minWidth: this.isPhone ? 96 : 120, valueGetter: (p) => p.data?.linkState ?? '',
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => {
           const w = linkStateWord(p.data?.linkState);
-          return `<div class="pf-brd-cell"><span class="nd-sdot" data-tone="${sdotTone(w.tone)}">${esc(w.label)}</span>${p.data?.lastMessageAt ? `<span class="pf-brd-cell__sub">Last result ${esc(agoText(p.data.lastMessageAt).toLowerCase())}</span>` : ''}</div>`;
+          return `<div class="pf-brd-cell"><span class="pf-sdot" data-tone="${sdotTone(w.tone)}">${esc(w.label)}</span>${p.data?.lastMessageAt ? `<span class="pf-brd-cell__sub">Last result ${esc(agoText(p.data.lastMessageAt).toLowerCase())}</span>` : ''}</div>`;
         } },
       { colId: 'queue', headerName: 'Queue', width: 96, minWidth: 90, flex: 0, type: 'rightAligned', valueGetter: (p) => p.data?.queueDepth ?? 0,
-        cellRenderer: (p: { data?: BridgeAnalyzerRow }) => `<span class="nd-num">${esc(p.data?.queueDepth ?? 0)}</span>` },
+        cellRenderer: (p: { data?: BridgeAnalyzerRow }) => `<span class="pf-num">${esc(p.data?.queueDepth ?? 0)}</span>` },
     ];
     if (manage) {
       cols.push({ colId: 'actions', headerName: '', sortable: false, resizable: false, width: web ? 224 : 124, minWidth: web ? 224 : 124, flex: 0, cellClass: 'pf-brd-actcell',
