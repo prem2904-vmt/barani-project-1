@@ -29,7 +29,7 @@ describe('Payment rules (moved here from Lab settings)', () => {
   it('reads the branch config: gate stage and the Payments due switch', () => {
     const p = make({ paymentGateStage: 'report', showPaymentsDueTab: false });
     expect(p.api.get).toHaveBeenCalledWith('/api/tenants/branch-lab-config');
-    expect(p.el.querySelector('[data-testid="pr-gate"] [aria-checked="true"] .pf-pr__t')!.textContent).toContain('Block at report');
+    expect(p.el.querySelector('[data-testid="pr-gate"] [aria-checked="true"]')!.textContent).toContain('Block at report');
     expect(p.el.querySelector('[data-testid="pr-due"] [role="switch"]')!.getAttribute('aria-checked')).toBe('false');
   });
 

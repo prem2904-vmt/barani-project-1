@@ -62,14 +62,19 @@ describe('KPIs — ND audit', () => {
     getFor: (u) => (u === '/api/kpis' ? catalog : u.startsWith('/api/kpis/assignments') ? [] : []),
   });
 
-  it('ONE primary (Save) in the band; assigned cards use slate switches + SVG arrows', () => {
+  it('no band primary — Save lives in the card\'s Save bar; the grid\'s Shown cell is the kit switch, moves are SVG icon actions', () => {
     const p = make();
-    expect(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(1);
+    expect(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(0);
     p.cmp.addToScreen(catalog[0]);
     p.f.detectChanges();
-    const tile = p.el.querySelector('.pf-kpi-tile')!;
-    expect(tile.querySelector('.pf-toggle[role="switch"]')).not.toBeNull();
-    expect(tile.querySelector('input[type=checkbox]')).toBeNull();
+    expect(p.el.querySelector('pf-settings-savebar .pf-btn--secondary')!.textContent).toContain('Save');
+    const row = p.cmp.gridRows()[0];
+    const cols = p.cmp.colDefs();
+    const shown = cols.find((c: any) => c.colId === 'status').cellRenderer({ data: row }) as HTMLElement;
+    expect(shown.querySelector('.pf-toggle[role="switch"]')).not.toBeNull();
+    expect(shown.querySelector('input[type=checkbox]')).toBeNull();
+    const acts = cols.find((c: any) => c.colId === 'actions').cellRenderer({ data: row }) as HTMLElement;
+    expect(acts.querySelectorAll('button svg').length).toBe(3);
     expect(/[▲▼⋮＋]/.test(p.el.querySelector('.pf-band-body')!.textContent ?? '')).toBe(false);
     noMono(p.el);
   });

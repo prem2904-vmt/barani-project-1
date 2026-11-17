@@ -35,17 +35,18 @@ then use it. Don't write a one-off look inside a component.
 │      ┌ pill = CONTEXT BAR ─────────────────────────────────────┐ │
 └──────│ search  OR  subject chips + this step's filters + count │─┘
        └─────────────────────────────────────────────────────────┘
-┌ main work card (.pf-card) ───────────┐ ┌ side action card ────┐
-│ ICON  LABEL      note / controls     │ │ ICON  LABEL  toggles │
-│ ──────────────────────────────────── │ │ body (scrolls)       │
-│ body (scrolls)                       │ │                      │
-│                                      │ │ [secondary][PRIMARY] │ ← sticky footer
-└──────────────────────────────────────┘ └──────────────────────┘
+┌ side card ───────────┐ ┌ main work card (.pf-card) ───────────┐
+│ ICON  LABEL  toggles │ │ ICON  LABEL      note / controls     │
+│ body (scrolls)       │ │ ──────────────────────────────────── │
+│                      │ │ body (scrolls)                       │
+│ [secondary][PRIMARY] │ │                                      │  ← sticky footer (side card)
+└──────────────────────┘ └──────────────────────────────────────┘
 ```
 
 - Page: `.pf-page`. There is no page-level scroll; only card bodies scroll.
 - Body: `.pf-body.pf-body--split` holds the main card plus a 400px side card
-  at ≥1024px. Below that it is one column.
+  at ≥1024px — the side card on the LEFT (owner 2026-11-17, same across the app; the DOM keeps main first so
+  phones stack main first). Below that it is one column.
 - Cards: `.pf-card` > `.pf-card__head` (`.pf-card__icon`, `.pf-card__label`
   in uppercase, optional `.pf-card__note`, `.pf-card__spacer`, header
   controls) > `.pf-card__body` (scrolls) > `.pf-card__foot` (sticky, a 2-column
@@ -88,16 +89,16 @@ actions.
 
 **Two jobs on one screen = a main card (the work) + a side card (the
 companion), styled like BILLING, collapsible to a strip; a sheet on phones.
-Which side it sits on depends on what the companion does:**
+The side card sits on the LEFT, always (owner 2026-11-17: "same across the app", like Test Master's
+Departments) — whether it filters / navigates or summarises / acts:**
 
 - **FILTER / NAVIGATION companion → LEFT.** Reading goes left to right:
   filter first, then the content it filters. Test Master
   (`features/admin/tests/tests/`): DEPARTMENTS (~340px) on the left, the
   test grid (main; its header has the count + the muted "Double-click a cell
   to edit" hint) on the right, filling the rest.
-- **ACTION / SUMMARY companion → RIGHT.** What you do with the work comes
-  after it. Order & Payments: the catalogue (main) on the left, BILLING
-  (totals, confirm) on the right.
+- **ACTION / SUMMARY companion → also LEFT** (was right before 2026-11-17). Collect: COLLECTION on the left,
+  VIALS (main) on the right; Order & Payments follows as its screen is moved over.
 - Both are the same `.pf-card` with the BILLING header: violet icon chip +
   UPPERCASE label + a neutral collapse icon button. Rows are whole-row
   targets with the neutral selected state; a switch in a row is a separate
@@ -2083,3 +2084,8 @@ code); the screens are `features/admin/bridges/`. Gate: `manage_bridges`.
 - The QR link `/b#1.S.C.P.F` is public: the fragment is handed to the add
   screen through sessionStorage and scrubbed from the address bar — a claim
   secret never rides a URL param.
+
+
+### Settings: actions live in the pane (owner 2026-11-17)
+
+Settings pages (the Settings frame, the overview's inline pages and the full-screen settings pages; Test Master excepted) put NO button in the band: back chevron + search pill only. Card-level actions go in that card's head (right, after the head tools); a card's Save / Discard go in its sticky footer (`pf-settings-savebar`), shown only while something changed. Buttons: Save and Add = secondary (Add with a + icon), Discard / Cancel / Reset = tertiary. No violet gradient primary in Settings.

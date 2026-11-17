@@ -28,57 +28,57 @@ export function linkableInstruments(list: readonly InstrumentDto[], bridge: Pick
   imports: [ModalPortalDirective, BusyDirective, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="nd-dialog" role="dialog" aria-modal="true" aria-labelledby="pf-dsl-title" pfModalPortal>
-      <div class="nd-dialog__backdrop" (click)="close()"></div>
-      <form class="nd-dialog__card" (submit)="$event.preventDefault(); save()">
-        <header class="nd-dialog__head">
-          <span class="nd-card__icon" aria-hidden="true">
+    <div class="pf-dialog" role="dialog" aria-modal="true" aria-labelledby="pf-dsl-title" pfModalPortal>
+      <div class="pf-dialog__backdrop" (click)="close()"></div>
+      <form class="pf-dialog__card" (submit)="$event.preventDefault(); save()">
+        <header class="pf-dialog__head">
+          <span class="pf-card__icon" aria-hidden="true">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
           </span>
-          <div class="nd-dialog__titles">
-            <h2 id="pf-dsl-title" class="nd-card__label">Link analyzer</h2>
-            <p class="nd-dialog__sub">{{ headline() }} · {{ framing() }}{{ source().quarantined ? ' · ' + source().quarantined + ' results held' : '' }}</p>
+          <div class="pf-dialog__titles">
+            <h2 id="pf-dsl-title" class="pf-card__label">Link analyzer</h2>
+            <p class="pf-dialog__sub">{{ headline() }} · {{ framing() }}{{ source().quarantined ? ' · ' + source().quarantined + ' results held' : '' }}</p>
           </div>
-          <button type="button" class="nd-btn nd-btn--icon" (click)="close()" aria-label="Close">
+          <button type="button" class="pf-btn pf-btn--icon" (click)="close()" aria-label="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </header>
 
-        <div class="nd-dialog__body">
-          <div class="nd-seg pf-dsl__seg" role="radiogroup" aria-label="Link to">
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="mode() === 'create'" (click)="mode.set('create')">New analyzer</button>
-            <button type="button" class="nd-seg__item" role="radio" [attr.aria-checked]="mode() === 'existing'" (click)="mode.set('existing')" [disabled]="!options().length">Existing analyzer</button>
+        <div class="pf-dialog__body">
+          <div class="pf-seg pf-dsl__seg" role="radiogroup" aria-label="Link to">
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="mode() === 'create'" (click)="mode.set('create')">New analyzer</button>
+            <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="mode() === 'existing'" (click)="mode.set('existing')" [disabled]="!options().length">Existing analyzer</button>
           </div>
 
           @if (mode() === 'existing') {
-            <div class="nd-field">
-              <span class="nd-field__lbl" id="pf-dsl-inst">Analyzer in {{ bridge().branchName || 'this branch' }}</span>
+            <div class="pf-field">
+              <span class="pf-field__lbl" id="pf-dsl-inst">Analyzer in {{ bridge().branchName || 'this branch' }}</span>
               <pf-select aria-labelledby="pf-dsl-inst" [options]="options()" [value]="instrumentId()" [searchable]="true" placeholder="Pick the analyzer"
                          (valueChange)="instrumentId.set($event)"></pf-select>
-              <span class="nd-field__hint">Its connection is set from what the Bridge saw, if it has none yet. Code mapping stays as it is.</span>
+              <span class="pf-field__hint">Its connection is set from what the Bridge saw, if it has none yet. Code mapping stays as it is.</span>
             </div>
           } @else {
-            <label class="nd-field">
-              <span class="nd-field__lbl">Name</span>
-              <input class="nd-input" [value]="name()" (input)="name.set($any($event.target).value)" maxlength="120" autocomplete="off" />
+            <label class="pf-field">
+              <span class="pf-field__lbl">Name</span>
+              <input class="pf-input" [value]="name()" (input)="name.set($any($event.target).value)" maxlength="120" autocomplete="off" />
             </label>
             <div class="pf-dsl__row">
-              <label class="nd-field"><span class="nd-field__lbl">Make</span>
-                <input class="nd-input" [value]="make()" (input)="make.set($any($event.target).value)" autocomplete="off" /></label>
-              <label class="nd-field"><span class="nd-field__lbl">Model</span>
-                <input class="nd-input" [value]="model()" (input)="model.set($any($event.target).value)" autocomplete="off" /></label>
+              <label class="pf-field"><span class="pf-field__lbl">Make</span>
+                <input class="pf-input" [value]="make()" (input)="make.set($any($event.target).value)" autocomplete="off" /></label>
+              <label class="pf-field"><span class="pf-field__lbl">Model</span>
+                <input class="pf-input" [value]="model()" (input)="model.set($any($event.target).value)" autocomplete="off" /></label>
             </div>
             @if (source().guess?.profileKey) {
-              <p class="nd-field__hint">Codes are mapped with the {{ source().guess?.label || 'matching' }} profile — check them in the analyzer's Code mapping.</p>
+              <p class="pf-field__hint">Codes are mapped with the {{ source().guess?.label || 'matching' }} profile — check them in the analyzer's Code mapping.</p>
             }
           }
-          <p class="nd-field__hint">Results stay a prefill: the technician checks and submits every value.</p>
+          <p class="pf-field__hint">Results stay a prefill: the technician checks and submits every value.</p>
           @if (error()) { <p class="pf-dsl__err" role="alert">{{ error() }}</p> }
         </div>
 
-        <footer class="nd-dialog__foot">
-          <button type="button" class="nd-btn nd-btn--secondary" [disabled]="saving()" (click)="close()">Cancel</button>
-          <button type="submit" class="nd-btn nd-btn--primary" [disabled]="!canSave() || saving()" [pfBusy]="saving()" pfBusyLabel="Linking…">
+        <footer class="pf-dialog__foot">
+          <button type="button" class="pf-btn pf-btn--secondary" [disabled]="saving()" (click)="close()">Cancel</button>
+          <button type="submit" class="pf-btn pf-btn--primary" [disabled]="!canSave() || saving()" [pfBusy]="saving()" pfBusyLabel="Linking…">
             {{ saving() ? 'Linking…' : 'Link analyzer' }}
           </button>
         </footer>
@@ -90,7 +90,7 @@ export function linkableInstruments(list: readonly InstrumentDto[], bridge: Pick
     .pf-dsl__seg { align-self: flex-start; }
     .pf-dsl__row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .pf-dsl__err { margin: 0; font-size: 12.5px; color: var(--red-text, #dc2626); }
-    @media (max-width: 640px) { .nd-card__label { font-size: 12px !important; line-height: 1.3 !important; } }
+    @media (max-width: 640px) { .pf-card__label { font-size: 12px !important; line-height: 1.3 !important; } }
     @media (max-width: 640px) { .pf-dsl__row { grid-template-columns: minmax(0, 1fr); } .pf-dsl__seg { align-self: stretch; } }
   `],
 })

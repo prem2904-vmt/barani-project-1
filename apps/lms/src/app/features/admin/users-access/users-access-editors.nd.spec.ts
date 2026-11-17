@@ -89,7 +89,9 @@ function hygiene(el: HTMLElement) {
   expect(el.querySelector('select, datalist, code, .mono, .font-mono, .c-green, .c-amber, pf-tile')).toBeNull();
   expect(el.querySelectorAll('input[type="checkbox"]').length).toBe(0);
   expect(/[✕✓✔●↑↓]/.test(el.textContent ?? '')).toBe(false);
-  expect(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(1);
+  // Settings: no band buttons and no violet primary — the page's action is a secondary IN the pane.
+  expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
+  expect(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(0);
 }
 
 describe('Users & Access editors — new design (ND §14: pill = name only)', () => {
@@ -98,11 +100,11 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelectorAll('pf-hero-band .pf-ctx > *').length).toBe(1);
   };
 
-  it('Create user: band + ONE primary; the pill is only the name ("New user" → typed) with a pencil', async () => {
+  it('Create user: Create at the form\'s foot (in the pane, secondary); the pill is only the name ("New user" → typed) with a pencil', async () => {
     const { el, f, c, txt } = render(UserInviteComponent);
-    const primaries = el.querySelectorAll('pf-hero-band .pf-hb__actions .pf-hb-btn--primary');
-    expect(primaries.length).toBe(1);
-    expect(primaries[0].textContent).toContain('Create user');
+    const create = el.querySelectorAll('.pf-band-body .ui-page-foot .pf-btn--secondary');
+    expect(create.length).toBe(1);
+    expect(create[0].textContent).toContain('Create user');
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('New user');
     c.patch({ title: 'Dr.', firstName: 'Priya', fathersName: 'Raman', username: 'DrPriya' });
     f.detectChanges();
@@ -125,7 +127,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('button[class*="--on"], label[class*="--on"], a[class*="--on"]')).toBeNull();
     c.patch({ username: 'drpriya', password: 'secret123' });
     f.detectChanges();
-    expect((el.querySelector('pf-hero-band .pf-hb-btn--primary') as HTMLButtonElement).disabled).toBe(false);
+    expect((el.querySelector('.ui-page-foot .pf-uf-primary') as HTMLButtonElement).disabled).toBe(false);
   });
 
   it('Create user: sections are pf-cards with kit fields; title + country code are pf-select', () => {
@@ -135,25 +137,47 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('.pf-uf-phone pf-select')).not.toBeNull();
   });
 
-  it('Edit user: the pill is the full name only; Save changes is the primary; roles pre-switched', () => {
-    const { el, txt } = render(UserEditComponent, { id: 'u1' });
+  it('Edit user: the pill is the full name only; Save in the card\'s Save bar once changed; summary strip; sections LEFT, roles pre-switched', () => {
+    const { el, f, c, txt } = render(UserEditComponent, { id: 'u1' });
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Dr. Prem Kumar');
     noFacts(el);
-    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Save changes');
+    expect(el.querySelector('[data-testid="ue-save"]')).toBeNull();   // nothing changed yet
+    // Slim summary strip: name, username, status, branches.
+    const strip = el.querySelector('.ue-strip')!;
+    expect(txt(strip)).toContain('Dr. Prem Kumar');
+    expect(txt(strip)).toContain('drprem');
+    expect(txt(strip.querySelector('[data-testid="ue-status"]'))).toBe('Active');
+    // Sections side card first (LEFT), main card second; Profile rows are label-left / control-right.
+    const panels = el.querySelector('.pf-sg-panels')!;
+    expect(panels.firstElementChild!.classList.contains('ue-side')).toBe(true);
+    expect(Array.from(el.querySelectorAll('.ue-sec__name')).map(n => txt(n).replace('*', ''))).toEqual(['Profile', 'Branches', 'Roles', 'Validates for']);
+    expect(el.querySelectorAll('.ue-main pf-setting-row').length).toBeGreaterThanOrEqual(5);
+    expect(txt(el.querySelector('.ue-main .ue-ro'))).toBe('drprem');
+    // Roles section: Role | what it means | switch, one on; the combined-permissions note in the head.
+    c.pickSection('roles'); f.detectChanges();
     expect(el.querySelectorAll('.pf-uf-roles .pf-toggle[aria-checked="true"]').length).toBe(1);
-    expect(el.querySelector<HTMLInputElement>('input[readonly]')!.classList.contains('pf-input')).toBe(true);
+    expect(txt(el.querySelector('[data-testid="ue-perm-note"]'))).toContain('1 of 2 permissions from 1 role');
     hygiene(el);
+    c.patch({ firstName: 'Premnath' }); f.detectChanges();
+    expect(el.querySelector('.ue-main pf-settings-savebar [data-testid="ue-save"]')).not.toBeNull();
   });
 
-  it('Edit user: Reset password + Deactivate are band SECONDARIES that reuse the list\'s confirms', async () => {
+  it('Edit user: a missing branch / role flags its section; Save stays off', () => {
+    const { f, c, el } = render(UserEditComponent, { id: 'u1' });
+    c.toggleRole('r1'); f.detectChanges();
+    expect(c.canSave()).toBe(false);
+    expect(el.querySelector('[data-testid="ue-sec-roles"] .ue-sec__note--err')).not.toBeNull();
+  });
+
+  it('Edit user: Reset password + Deactivate are quiet icons in the summary strip (in the pane) that reuse the list\'s confirms', async () => {
     const confirm = vi.fn(async () => true);
     const { el, f, api } = render(UserEditComponent, { id: 'u1', confirm });
-    const reset = el.querySelector<HTMLButtonElement>('pf-hero-band .pf-ue-reset')!;
-    const active = () => el.querySelector<HTMLButtonElement>('pf-hero-band .pf-ue-active')!;
-    expect(reset.classList.contains('pf-hb-btn--ghost')).toBe(true);
-    expect(active().classList.contains('pf-hb-btn--ghost')).toBe(true);
+    const reset = el.querySelector<HTMLButtonElement>('.ue-strip .pf-ue-reset')!;
+    const active = () => el.querySelector<HTMLButtonElement>('.ue-strip .pf-ue-active')!;
+    expect(reset.classList.contains('pf-rowact--icon')).toBe(true);
+    expect(active().classList.contains('pf-rowact--icon')).toBe(true);
     expect(active().textContent).toContain('Deactivate');
-    expect(el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(1);
+    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
 
     reset.click();
     await new Promise(r => setTimeout(r));
@@ -174,31 +198,59 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
 
   it('Edit user: a cancelled confirm changes nothing', async () => {
     const { el, api } = render(UserEditComponent, { id: 'u1' });
-    el.querySelector<HTMLButtonElement>('pf-hero-band .pf-ue-active')!.click();
+    el.querySelector<HTMLButtonElement>('.ue-strip .pf-ue-active')!.click();
     await new Promise(r => setTimeout(r));
     expect(api.delete).not.toHaveBeenCalled();
-    expect(el.querySelector('pf-hero-band .pf-ue-active')!.textContent).toContain('Deactivate');
+    expect(el.querySelector('.ue-strip .pf-ue-active')!.textContent).toContain('Deactivate');
   });
 
-  it('New role: "New role" → the typed name, pencil focuses Role name; role type pf-seg; permissions are switches', () => {
-    const { el, f, c, txt } = render(RoleEditorComponent);
-    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('New role');
+  it('New role: Test Master frame — band pill finds a permission, Save in the card\'s Save bar once named; name in the summary strip; groups LEFT, permissions grid RIGHT', () => {
+    const { el, f, c } = render(RoleEditorComponent);
+    // The band pill is the permission search (no record chips in the band).
+    expect(el.querySelector('pf-hero-band .pf-hb__input')).not.toBeNull();
+    expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
+    expect(el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
+    expect(el.querySelector('[data-testid="role-save"]')).toBeNull();
+    // Role name lives in the slim summary strip.
+    const name = el.querySelector<HTMLInputElement>('.re-strip input.pf-re-name')!;
+    expect(name).not.toBeNull();
     c.onNameChange('Billing Supervisor');
     f.detectChanges();
-    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Billing Supervisor');
-    noFacts(el);
-    expect(el.querySelector('.pf-uf-ctx__badge')).toBeNull();
-    (el.querySelector('.pf-ctx__edit') as HTMLButtonElement).click();
-    expect(document.activeElement?.classList.contains('pf-re-name')).toBe(true);
-    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Create role');
+    expect(c.newRoleName()).toBe('Billing Supervisor');
+    expect(el.querySelector('.re-main pf-settings-savebar [data-testid="role-save"]')).not.toBeNull();
+    expect(el.querySelector('.re-strip')!.textContent).toContain('of');
     // OPD dark build: the Doctor role type is an OPD surface — hidden while OPD is dark.
     expect(el.querySelectorAll('.re-type.pf-seg [role="radio"]').length).toBe(0);
-    const sw = el.querySelectorAll<HTMLButtonElement>('.re-perm-grid .pf-toggle[role="switch"]');
-    expect(sw.length).toBe(2);
-    sw[1].click();
+    // Side card first (LEFT): All + one row per group; the grid card second.
+    const panels = el.querySelector('.pf-sg-panels')!;
+    expect(panels.firstElementChild!.classList.contains('re-side')).toBe(true);
+    expect(el.querySelectorAll('.re-side .re-g__btn').length).toBeGreaterThan(1);
+    expect(c.colDefs().map((d: any) => d.colId)).toEqual(['allowed', 'title', 'what', 'impact', 'code']);
+    expect(c.gridRows().length).toBe(2);
+    // The Allowed cell is the kit switch; flipping it grants the permission.
+    const cell = c.colDefs()[0].cellRenderer({ data: c.gridRows()[1] }) as HTMLElement;
+    const sw = cell.querySelector<HTMLButtonElement>('button[role="switch"]')!;
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    sw.click();
     f.detectChanges();
     expect(c.grantedCount()).toBe(1);
+    expect(c.gridRows()[1].allowed).toBe(true);
     hygiene(el);
+  });
+
+  it('Role editor: band search finds a permission across all groups; a group filters the grid; Grant all / Clear', () => {
+    const { f, c } = render(RoleEditorComponent);
+    const groups = c.groupViews();
+    c.pickGroup(groups[0].key);
+    f.detectChanges();
+    expect(c.gridRows().every((r: any) => r.group === groups[0].key)).toBe(true);
+    c.grantGroup(c.selectedGroup(), true);
+    expect(c.selectedGroup().granted).toBe(c.selectedGroup().items.length);
+    c.grantGroup(c.selectedGroup(), false);
+    expect(c.selectedGroup().granted).toBe(0);
+    c.onSearch('enter_results');
+    expect(c.groupKey()).toBeNull();
+    expect(c.gridRows().map((r: any) => r.perm.code)).toEqual(['enter_results']);
   });
 
   it('Create user, doctor-type role, OPD dark: registration number only (no OPD department / specialisation / procedures)', () => {
@@ -229,13 +281,14 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelectorAll('.re-type.pf-seg [role="radio"]').length).toBe(2);
   });
 
-  it('Edit role: the role name + ONE tiny muted badge (Pre-seeded), no pencil (the name is locked), no fact chips', () => {
+  it('Edit role: the name + ONE tiny muted badge (Pre-seeded) in the summary strip, no name field (locked), system-role wording kept', () => {
     const { el, txt } = render(RoleEditorComponent, { id: 'r1' });
-    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Lab Technician');
-    expect(txt(el.querySelector('.pf-uf-ctx__badge'))).toBe('Pre-seeded');
-    expect(el.querySelector('.pf-ctx__edit')).toBeNull();
-    noFacts(el);
-    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Save');
+    expect(txt(el.querySelector('.re-strip .pf-uf-ctx__text'))).toBe('Lab Technician');
+    expect(txt(el.querySelector('.re-strip .pf-uf-ctx__badge'))).toBe('Pre-seeded');
+    expect(el.querySelector('input.pf-re-name')).toBeNull();
+    expect(el.querySelector('.re-strip')!.textContent).toContain('Editing the permissions saves a copy for your organisation only.');
+    expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
+    expect(el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
     hygiene(el);
   });
 
@@ -247,10 +300,11 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
 });
 
 describe('Users & Access list — current rules', () => {
-  it('Noto grid, one primary in the band, no mono count', () => {
+  it('Noto grid, Create user in the card head (no band buttons), no mono count', () => {
     const { el, c } = render(UsersAccessComponent);
     expect(c.gridTheme()).toBeTruthy();
-    expect(el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(1);
+    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
+    expect(el.querySelector('.pf-sg-act')!.textContent).toContain('Create user');
     expect(el.querySelector('.font-mono')).toBeNull();
   });
 
@@ -273,6 +327,17 @@ describe('Users & Access list — current rules', () => {
     expect(custom.getAttribute('style') ?? '').not.toMatch(/16,\s*185|10b981|059669/);
   });
 
+  it('ONE Test Master grid card: the Users | Roles switch, status filter and count are head tools (headTools for a host head)', () => {
+    const { c, f, el } = render(UsersAccessComponent);
+    expect(el.querySelector('.pf-sg-main .pf-sg-main__head pf-segmented.pf-ua-tabseg')).not.toBeNull();
+    expect(c.headTools()).toBeTruthy();
+    expect(c.gridUsers().length).toBe(1);
+    c.status.set('inactive'); f.detectChanges();
+    expect(c.gridUsers().length).toBe(0);
+    // The grid sizes by flex (never a % height that a host without a definite height collapses to 0).
+    expect(el.querySelector('pf-data-grid ag-grid-angular')).not.toBeNull();
+  });
+
   it('touch: row actions become 44px icon buttons (label kept for AT)', () => {
     const { c } = render(UsersAccessComponent);
     const actions = c.userColDefs().find((d: any) => d.colId === 'actions').cellRenderer;
@@ -281,5 +346,65 @@ describe('Users & Access list — current rules', () => {
     expect(edit.classList.contains('pf-rowact--icon')).toBe(true);
     expect(edit.querySelector('svg')).not.toBeNull();
     expect(edit.getAttribute('aria-label')).toContain('Edit');
+  });
+});
+
+describe('User editor — panel mode (beside the People grid)', () => {
+  it('ONE scrolling form: Profile · Branches · Roles · Validates for, account actions in the head, Save at the foot; save closes', () => {
+    const { el, f, c, api } = render(UserEditComponent);
+    f.componentRef.setInput('panelId', 'u1');
+    c.ngOnInit(); f.detectChanges();
+    const panel = el.querySelector('[data-testid="ue-panel"]')!;
+    expect(panel).not.toBeNull();
+    expect(el.querySelector('pf-hero-band')).toBeNull();
+    expect(Array.from(panel.querySelectorAll('.ue-panel__sec')).map(h => h.textContent!.trim().split(' ')[0])).toEqual(['Profile', 'Branches', 'Roles', 'Validates']);
+    expect(panel.querySelector('.pf-ue-reset')).not.toBeNull();
+    expect(panel.querySelectorAll('.pf-btn--primary').length).toBe(1);
+    let closed = 0; c.closed.subscribe(() => closed++);
+    c.save();
+    expect(api.patch).toHaveBeenCalledWith('/api/users/u1', expect.anything());
+    expect(closed).toBe(1);
+  });
+});
+
+describe('People grid — Create user opens the form beside the grid', () => {
+  it('Create user → the invite panel (one form, Create at the foot); the band button steps down to ghost', async () => {
+    const { el, f, c } = render(UsersAccessComponent);
+    c.openInvite(); f.detectChanges();
+    expect(el.querySelector('.pf-ua-panel [data-testid="ui-panel"]')).not.toBeNull();
+    expect(el.querySelector('.pf-sg-panels')!.firstElementChild!.classList.contains('pf-ua-panel')).toBe(true);
+    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')).toBeNull();
+    expect(el.querySelectorAll('.pf-ua-panel .pf-btn--primary').length).toBe(1);
+    await c.openInvite(); await Promise.resolve(); f.detectChanges();
+    expect(el.querySelector('.pf-ua-panel')).toBeNull();
+  });
+
+  it('closing a panel with unsaved edits asks first (DialogService "Save your changes?"); Stay keeps it open', async () => {
+    const { el, f, c } = render(UsersAccessComponent);
+    const dialog = TestBed.inject(DialogService) as any;
+    dialog.actions = vi.fn(async () => ({ action: null, checked: false }));
+    await c.openInvite(); f.detectChanges();
+    const inv = (c as any).invitePanel();
+    inv.patch({ firstName: 'Priya' });
+    expect(c.hasUnsavedChanges()).toBe(true);
+    await c.requestClosePanel(); f.detectChanges();
+    expect(dialog.actions).toHaveBeenCalled();
+    expect(el.querySelector('.pf-ua-panel')).not.toBeNull();
+    dialog.actions = vi.fn(async () => ({ action: 'leave', checked: false }));
+    await c.requestClosePanel(); f.detectChanges();
+    expect(el.querySelector('.pf-ua-panel')).toBeNull();
+  });
+});
+
+describe('Role editor — unsaved changes', () => {
+  it('a changed grant is an unsaved change; the prompt\'s Save sends the same PATCH and clears it', async () => {
+    const { f, c, api } = render(RoleEditorComponent, { id: 'r1' });
+    f.detectChanges();
+    expect(c.hasUnsavedChanges()).toBe(false);
+    c.setGranted('p2', true);
+    expect(c.hasUnsavedChanges()).toBe(true);
+    expect(await c.saveChanges()).toBe(true);
+    expect(api.patch).toHaveBeenCalledWith('/api/roles/r1/permissions', { permissionIds: ['p1', 'p2'] });
+    expect(c.hasUnsavedChanges()).toBe(false);
   });
 });

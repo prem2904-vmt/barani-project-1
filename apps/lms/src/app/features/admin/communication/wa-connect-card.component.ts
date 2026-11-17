@@ -111,7 +111,7 @@ export const WA_INFO_WAIT_MS = 2500;
         @if (canManage() && (showConnect() || hasNumber())) {
           <div class="pf-wac__actions">
             @if (showConnect()) {
-              <button type="button" class="pf-btn pf-btn--primary pf-wac__btn" data-testid="wac-connect"
+              <button type="button" class="pf-btn pf-btn--secondary pf-wac__btn" data-testid="wac-connect"
                       [disabled]="busy() || !sdkReady()" [pfBusy]="localConnecting()" pfBusyLabel="Connecting…" (click)="connect()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
                 {{ hasNumber() ? 'Reconnect WhatsApp' : 'Connect WhatsApp' }}

@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, TemplateRef, computed, viewChild } from '@angular/core';
 import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
 import { HomeCollectionAgentsComponent } from '../home-collection/home-collection-agents.component';
 import { HomeCollectionSwitchCardComponent } from './home-collection-switch-card.component';
+import { SettingGroupComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { LabPageComponent, labPageTab } from './lab-page.component';
 
 /**
@@ -13,17 +14,13 @@ import { LabPageComponent, labPageTab } from './lab-page.component';
 @Component({
   selector: 'pf-lab-home-collection-page',
   standalone: true,
-  imports: [LabPageComponent, HomeCollectionSwitchCardComponent, HomeCollectionAgentsComponent],
+  imports: [SettingGroupComponent, LabPageComponent, HomeCollectionSwitchCardComponent, HomeCollectionAgentsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (tab() === 'agents') {
-      <pf-home-collection-agents></pf-home-collection-agents>
-    } @else {
-      <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)"
-                   subtitle="Whether this branch collects at the patient's home, and who goes.">
-        <pf-home-collection-switch-card></pf-home-collection-switch-card>
-      </pf-lab-page>
-    }
+    <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)">
+      <pf-setting-group label="Home collection" scope="this branch" id="switch"><pf-home-collection-switch-card></pf-home-collection-switch-card></pf-setting-group>
+      <pf-setting-group label="Agents" scope="coverage area and share of work" id="agents" [wide]="true"><pf-home-collection-agents></pf-home-collection-agents></pf-setting-group>
+    </pf-lab-page>
   `,
 })
 export class LabHomeCollectionPage {
@@ -31,4 +28,11 @@ export class LabHomeCollectionPage {
   private readonly t = labPageTab(LAB_PAGES.homeCollection);
   protected readonly tab = this.t.tab;
   protected pick(id: string) { this.t.pick(id); }
+  /** The Settings frame shows the agents grid's head tools (count, filter) in its card head while Agents is open. */
+  private readonly agents = viewChild(HomeCollectionAgentsComponent);
+  readonly headTools = computed<TemplateRef<unknown> | null>(() => {
+    if (this.tab() !== 'agents') return null;
+    const a = this.agents() as unknown as { headTools?: () => TemplateRef<unknown> | undefined } | undefined;
+    return typeof a?.headTools === 'function' ? (a.headTools() ?? null) : null;
+  });
 }

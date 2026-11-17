@@ -146,6 +146,59 @@
 }
 /* A readable column for form-style settings pages inside the full-width body. */
 :root.design-new .pf-band-body .pf-band-narrow { max-width: 56rem; margin-inline: auto; width: 100%; }
+/* A card-style settings page HOSTED in the Settings shell (Test Master's frame): the shell owns the band and the
+   card; the page's own band-page / band-body become plain blocks inside the main card's body (the ONE scroll). */
+.pf-ss__main .pf-band-page,
+:root.design-new .pf-ss__main .pf-band-page {
+  --pf-hb-bleed: 0px;
+  display: block !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.pf-ss__main .pf-band-page > .pf-band-body,
+:root.design-new .pf-ss__main .pf-band-page > .pf-band-body {
+  overflow: visible !important;
+  padding: 0 !important;
+  max-width: none;
+}
+.pf-ss__main .pf-band-narrow { max-width: none; }
+/* A hosted grid page (its body fills): the frame's main card body, the page wrappers and the fill body form ONE flex
+   column so the grid gets the card's height (never 0) — in the Settings shell and inline in the overview. */
+.pf-tp__body:has(> .pf-ss__main .pf-band-body--fill), .pf-ss__scroll:has(> .pf-ss__main .pf-band-body--fill) { display: flex; flex-direction: column; }
+.pf-ss__main:has(.pf-band-body--fill) { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.pf-ss__main *:has(.pf-band-body--fill):not(pf-setting-group, .pf-sgrid, pf-appointments-config, pf-notifications-config, pf-lab-settings, .pf-sgroup__sec, .pf-sgroup__rows) {
+  display: flex !important; flex-direction: column; flex: 1 1 auto; min-height: 0;
+}
+.pf-ss__main .pf-band-page > .pf-band-body--fill:not(.pf-sgrid),
+:root.design-new .pf-ss__main .pf-band-page > .pf-band-body--fill:not(.pf-sgrid) {
+  display: flex !important; flex-direction: column; flex: 1 1 auto; min-height: 420px;
+}
+/* A hosted page whose content is a pf-data-grid sits FLUSH in the frame's main card, exactly like Test Master's grid
+   (owner 2026-11-17): card head -> divider -> grid header -> rows -> card bottom, no inner padding and no second
+   border; the card's radius clips the grid's corners. Shell main card, overview inline page and their wrappers. */
+.pf-tp__body:has(pf-data-grid), .pf-ss__scroll:has(pf-data-grid), .pf-ss__main:has(pf-data-grid), .pf-ov__inline:has(pf-data-grid) {
+  padding: 0 !important;
+}
+.pf-tp__panel:has(pf-data-grid), .pf-ss__card:has(pf-data-grid) { overflow: hidden; }
+/* An ID FORMAT in ONE settings row (DESIGN-V2 rule 5): Date · Separator · Digits · Letters → Preview.
+   Shared by Sample numbers and Patient / Order numbers. Every control is 32px tall. */
+.pf-fmt { display: flex; align-items: center; justify-content: flex-end; gap: 8px 14px; flex-wrap: wrap; }
+.pf-fmt__f { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+.pf-fmt__f > .pf-input { width: 64px; height: 32px; min-height: 32px; padding: 0 8px; font-size: 13px; }
+.pf-fmt__f > .pf-input.pf-fmt__sep { width: 72px; }
+.pf-fmt__f > .pf-input.pf-fmt__wide { width: 96px; }
+.pf-fmt__f > pf-select { width: 120px; }
+.pf-fmt__f > pf-select .pf-dd__trigger { min-height: 32px !important; height: 32px !important; padding-top: 0 !important; padding-bottom: 0 !important; }
+.pf-fmt__preview { display: inline-flex; align-items: baseline; gap: 6px; font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+.pf-fmt__preview strong { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+@media (max-width: 767px) { .pf-fmt { justify-content: flex-start; } .pf-fmt__f > .pf-input { font-size: 16px; } }
+
+/* A card-style setting's groups (owner 2026-11-17, final): the Settings frame shows ONE group at a time in its main
+   card (the side card lists the groups); a page with one category shows its groups one under the other. */
+.pf-sgrid { display: block; }
+
 /* Empty state for a band search that matches nothing. */
 .pf-band-empty {
   padding: 28px 12px; text-align: center; font-size: 13px;
@@ -2820,4 +2873,50 @@ html.device-touch {
 input::-ms-reveal,
 input::-ms-clear {
   display: none;
+}
+
+/* Settings pages composed of other settings screens (Front desk = appointments + referring …): inside a .pf-sgrid the
+   embedded screen's own wrappers melt away so its group cards are items of the ONE grid. */
+.pf-sgrid :is(pf-appointments-config, pf-notifications-config, pf-lab-settings, pf-culture-settings) { display: contents; }
+.pf-sgrid :is(pf-appointments-config, pf-notifications-config) > .pf-band-page,
+.pf-sgrid :is(pf-appointments-config, pf-notifications-config) > .pf-band-page > .pf-band-body { display: contents !important; }
+.pf-sgrid :is(pf-appointments-config, pf-notifications-config) > .pf-band-page > :is(pf-hero-band, pf-screen-header) { display: none; }
+
+/* Two cards: the main card's head already names the selected group — the group's own label goes, its tools stay. */
+.pf-ss__main--one .pf-sgroup__label, .pf-ss__main--one .pf-sgroup__scope { display: none !important; }
+.pf-ss__main--one .pf-sgroup__head { min-height: 0 !important; padding-top: 0 !important; }
+.pf-ss__main--one .pf-sgroup__head:has(.pf-sgroup__tools:not(:empty)) { padding-top: 10px !important; }
+.pf-ss__main--one .pf-sgroup__sec { margin-top: 0 !important; padding-top: 0 !important; border-top: 0 !important; }
+
+/* Settings frame: a hosted screen's old cards read as ROWS of the main card (owner 2026-11-17: no nested cards, full
+   width) — the card chrome goes, its head becomes the row (title left, its controls / chips flush right), the body is
+   the row's hint and details. Message channels (WhatsApp / email / SMS), the switch cards. */
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card) {
+  background: none !important; border: 0 !important; border-bottom: 1px solid var(--pf-line) !important;
+  border-radius: 0 !important; box-shadow: none !important; backdrop-filter: none !important; margin: 0 !important;
+  max-width: none !important; overflow: visible;
+}
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card):last-child { border-bottom: 0 !important; }
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card) > .pf-card__head {
+  background: none !important; border: 0 !important; padding: 14px 0 2px !important; border-radius: 0 !important;
+}
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card) > .pf-card__head > .pf-card__icon { display: none; }
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card) > .pf-card__head > .pf-card__label {
+  font-size: 13.5px !important; font-weight: 500 !important; letter-spacing: 0 !important; text-transform: none !important; color: var(--text-primary) !important;
+}
+.pf-ss__main :is(.pf-wac, .pf-wab, .pf-ls__card.pf-card, .pf-cm__card) > :not(.pf-card__head) { padding-left: 0 !important; padding-right: 0 !important; padding-top: 2px !important; }
+.pf-ss__main .pf-band-narrow { max-width: none !important; margin: 0 !important; }
+
+/* No centred narrow columns inside the frame's main card: rows span its full width. */
+.pf-ss__main :is(.pf-ls__col, .pf-lp__col, .pf-op__rows, .pf-bs__col) { max-width: none !important; margin-inline: 0 !important; }
+.pf-fmt__value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+/* Settings (owner 2026-11-17): no violet primary anywhere in Settings — Save / Add are SECONDARY, Discard / Cancel
+   tertiary, and they sit in the pane they act on. Inside the frame any page primary reads as a secondary button. */
+:is(.pf-ss, .pf-ov) :is(.pf-hb-btn--primary, .pf-btn--primary) {
+  background: var(--pf-card-bg, #fff) !important; color: var(--text-primary) !important;
+  border: 1px solid var(--pf-line) !important; box-shadow: none !important; filter: none !important;
+}
+:is(.pf-ss, .pf-ov) :is(.pf-hb-btn--primary, .pf-btn--primary):hover:not(:disabled) {
+  border-color: var(--pf-sel-border) !important; background: var(--pf-chip-bg) !important;
 }

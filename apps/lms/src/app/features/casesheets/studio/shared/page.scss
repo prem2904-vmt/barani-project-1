@@ -32,7 +32,7 @@
 @include dt.tablet-tier {
   @media (min-width: 1024px) {
     .pg .pf-body--split {
-      grid-template-columns: minmax(0, 1fr) 340px;
+      grid-template-columns: 340px minmax(0, 1fr);
     }
   }
 }

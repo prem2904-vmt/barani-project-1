@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { unsavedChangesGuard } from '../../shared/utils/unsaved-changes';
 import { permissionGuard } from '../../core/auth/permission.guard';
 import { ADMIN_PERMS } from '../../core/auth/route-access';
 import { opdGuard } from './shared/opd.guard';
@@ -76,7 +77,7 @@ export const OPD_ADMIN_ROUTES: Routes = [
     loadComponent: () => import('./pharmacy/pharmacy-settings.page').then(m => m.PharmacySettingsPage) },
   // OPD front desk, alerts and numbers (`?tab=` = OPD_FRONT_DESK_SECTIONS): appointments and booking, the shared
   // referring list, OPD alerts. Numbers on OPD screens waits for OPD screens in the KPI-card list.
-  { path: 'admin/opd/front-desk', canActivate: [adminGuard, opdGuard], loadComponent: () => import('./admin/front-desk.page').then(m => m.OpdFrontDeskPage) },
+  { path: 'admin/opd/front-desk', canActivate: [adminGuard, opdGuard], canDeactivate: [unsavedChangesGuard], loadComponent: () => import('./admin/front-desk.page').then(m => m.OpdFrontDeskPage) },
 ];
 
 /** The legacy desk consult page under /frontdesk (child of the frontdesk area). */

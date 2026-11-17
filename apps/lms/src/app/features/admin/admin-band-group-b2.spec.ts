@@ -76,7 +76,7 @@ describe('Admin band B2 — Lab settings', () => {
     p.f.componentRef.setInput('cards', cards);
     p.f.detectChanges();
   };
-  const t = (p: ReturnType<typeof make>) => titles(p, '.pf-ls__title');
+  const t = (p: ReturnType<typeof make>) => titles(p, '.pf-sgroup__label');
 
   it('is a card host: no band or header of its own (the Lab page supplies them)', () => {
     const p = make();
@@ -87,17 +87,17 @@ describe('Admin band B2 — Lab settings', () => {
   it('shows only the cards a page gives it', () => {
     const p = make();
     show(p, ['queue-focus']);
-    expect(t(p)).toEqual(['Queue focus']);
+    expect(t(p)).toEqual(['Queue']);
     show(p, ['scan-mode']);
-    expect(t(p)).toEqual(['Sample identification']);
+    expect(t(p)).toEqual(['Finding a sample']);
     show(p, ['lab-structure']);
-    expect(t(p)).toEqual(['Lab structure']);
+    expect(t(p)).toEqual(['Structure']);
     show(p, ['label-code']);
-    expect(t(p)).toEqual(['Specimen label code']);
+    expect(t(p)).toEqual(['Labels']);
     show(p, ['auto-assign']);
-    expect(t(p)).toEqual(['Auto-assign by department']);
+    expect(t(p)).toEqual(['Auto-assign']);
     show(p, ['require-validation']);
-    expect(t(p)).toEqual(['Require validation for all results']);
+    expect(t(p)).toEqual(['Validation']);
   });
 
   it('the moved cards are gone: payment rules (Billing), Enable inventory (Inventory), the pointer cards', () => {
@@ -142,10 +142,10 @@ describe('Admin band B2 — Organization & Identity', () => {
     expect(primary().length).toBe(1);
     expect((primary()[0] as HTMLButtonElement).disabled).toBe(true);   // nothing changed yet
     pillTabs(p).click('Patient ID');
-    expect(t()).toEqual(['Patient ID format']);
+    expect(Array.from(p.el.querySelectorAll('.pf-sgroup__label')).map((x) => x.textContent?.trim())).toEqual(['Patient ID']);
     expect(primary()[0].textContent).toContain('Save format');
     pillTabs(p).click('Order ID');
-    expect(t()).toEqual(['Order ID format']);
+    expect(Array.from(p.el.querySelectorAll('.pf-sgroup__label')).map((x) => x.textContent?.trim())).toEqual(['Order ID']);
     expect(p.actions().length).toBe(1);
   });
 
@@ -201,7 +201,7 @@ describe('Admin band B2 — Appointments & queue', () => {
 
   it('pill tabs swap the section cards', () => {
     const p = make();
-    const t = () => titles(p, '.pf-section-title');
+    const t = () => titles(p, '.pf-sgroup__label');
     expect(t()).toEqual(['Queue mode']);
     pillTabs(p).click('Booking slots');
     expect(t()).toEqual(['Booking slots']);

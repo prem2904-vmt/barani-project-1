@@ -19,8 +19,16 @@ export interface TwoPanelItem {
   label: string;
   /** Small muted note at the row's right edge (a count, "Soon"). */
   note?: string;
-  /** Right-panel heading text under the title. */
+  /** Main-card head note beside the label (when the parent passes no `panelNote`). */
   description?: string;
+  /** Main-card head icon (stroked path, 24-unit box) for this row; falls back to `panelIcon`. */
+  icon?: string;
+  /** The row opens its own full-screen page (an arrow marks it). */
+  external?: boolean;
+  /** A tree heading (e.g. "Lab spaces"): a chevron toggles the rows naming it as `parent`, shown indented under it. */
+  heading?: boolean;
+  /** The heading row this row sits under. */
+  parent?: string;
 }
 
 /** A headed group of rows ("Departments", "Organization"…). */
@@ -55,19 +63,16 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
 }
 
 /**
- * The shared two-panel settings layout (owner 2026-11-15): LEFT a grouped
- * list of sections, RIGHT the selected section's content (projected).
+ * The shared two-panel settings layout, in TEST MASTER's frame (owner 2026-11-17, DESIGN-V2): LEFT a side card
+ * (`aside.pf-card`, head = icon + label, body = the grouped rows in Test Master's department-row style), RIGHT the
+ * main card (`section.pf-card`, head = the selected row's icon + label + note, body = the projected content, which
+ * scrolls INSIDE the card). The host fills its parent (a `pf-band-body--fill`), so the page itself never scrolls.
  *
- * Settings-style hubs in the LMS and the admin console use THIS component;
- * work screens keep band + work card + side card. It is purely presentational:
- * the parent owns the selected id (and keeps it in the URL), decides when the
- * phone is showing the detail, and renders the section's tiles into the
- * default slot.
- *
- * Phone (`compact`): the list fills the screen; picking a row shows only the
- * detail with a back chevron (`back` output) — the parent wires that to the
- * history / swipe-back. Motion is a ~260 ms slide + fade, off under
- * prefers-reduced-motion.
+ * Purely presentational: the parent owns the selected id (and keeps it in the URL), decides when the phone shows the
+ * detail, and projects the content. Phone (`compact`): the side card fills the screen; picking a row shows only the
+ * main card. There is NO back button in either card (owner 2026-11-17: "only the top back"): the band's back chevron
+ * climbs (the parent registers a NavBackService interceptor: group → list → section). Inside a setting (`navHead`) the
+ * side card head shows that setting and the rows slide in (~260 ms, off under prefers-reduced-motion).
  */
 @Component({
   selector: 'pf-two-panel',
@@ -77,120 +82,112 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
     class: 'pf-tp',
     '[class.pf-tp--compact]': 'compact()',
     '[class.pf-tp--detail]': 'compact() && detailOpen()',
-    '[class.pf-tp--rail]': '!compact() && rail()',
-    '[class.pf-tp--flush]': 'flush()',
-    '[class.pf-tp--sticky]': 'stickyNav() && !compact()',
+    '[class.pf-tp--nonav]': 'hideNav()',
   },
   template: `
-    <nav class="pf-tp__nav pf-card" [attr.aria-label]="navLabel()" data-testid="tp-nav">
-      @if (navHead(); as head) {
-        <!-- Inside a setting: the left panel carries that setting's categories under a back arrow. -->
-        <div class="pf-tp__navhead">
-          <button type="button" class="pf-tp__navback" [attr.aria-label]="navBackLabel()" data-testid="tp-nav-back"
-                  (click)="navBack.emit()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <span class="pf-tp__navtitle" data-testid="tp-nav-title">{{ head }}</span>
-          @if (collapsible() && !compact()) {
-            <button type="button" class="pf-tp__railbtn" data-testid="tp-rail-toggle"
-                    [attr.aria-label]="rail() ? 'Show the category names' : 'Shrink to a thin rail'"
-                    [attr.aria-pressed]="rail()" (click)="railChange.emit(!rail())">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path [attr.d]="rail() ? 'm13 6 6 6-6 6M5 6l6 6-6 6' : 'm11 18-6-6 6-6M19 18l-6-6 6-6'"/>
-              </svg>
-            </button>
-          }
-        </div>
-      }
-      <div class="pf-tp__scroll" [class.pf-tp__scroll--a]="navPhase() === 0" [class.pf-tp__scroll--b]="navPhase() === 1"
+    <aside class="pf-card pf-tp__nav" [attr.aria-label]="navLabel()" data-testid="tp-nav">
+      <header class="pf-card__head pf-tp__navhead">
+        @if (navIcon()) {
+          <span class="pf-card__icon" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="navIcon()"/></svg>
+          </span>
+        }
+        <span class="pf-card__label pf-tp__navtitle" data-testid="tp-nav-title">{{ navHead() ?? navTitle() }}</span>
+      </header>
+      <div class="pf-card__body pf-tp__scroll" [class.pf-tp__scroll--a]="navPhase() === 0" [class.pf-tp__scroll--b]="navPhase() === 1"
            [class.pf-tp__scroll--back]="navDir() === 'back'">
         @for (g of groups(); track g.key) {
-          @if (!navHead()) {
+          @if (!navHead() && g.heading) {
             <span class="pf-tp__heading" [attr.data-testid]="'tp-group-' + g.key">{{ g.heading }}</span>
           }
           @for (it of g.items; track it.id) {
-            <button type="button" class="pf-tp__item" [class.is-on]="it.id === selected()"
+            @if (it.heading) {
+              <button type="button" class="pf-tp__item pf-tp__item--head" [attr.aria-expanded]="isOpen(it.id)"
+                      [attr.data-testid]="'tp-item-' + it.id" (click)="toggle(it.id)">
+                <svg class="pf-tp__tree" [class.is-open]="isOpen(it.id)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                <span class="pf-tp__label">{{ it.label }}</span>
+                @if (it.note) { <span class="pf-tp__note pf-num">{{ it.note }}</span> }
+              </button>
+            } @else if (!it.parent || isOpen(it.parent)) {
+            <button type="button" class="pf-tp__item" [class.pf-tp__item--child]="!!it.parent" [class.is-on]="it.id === selected()"
                     [attr.aria-current]="it.id === selected() ? 'true' : null"
+                    [attr.aria-pressed]="it.id === selected()"
                     [attr.data-testid]="'tp-item-' + it.id"
-                    [attr.title]="rail() && !compact() ? it.label : null"
                     (click)="pick.emit(it.id)">
-              <span class="pf-tp__dot" aria-hidden="true"></span>
-              <span class="pf-tp__mono" aria-hidden="true">{{ it.label.charAt(0) }}</span>
               <span class="pf-tp__label">{{ it.label }}</span>
-              @if (it.note) { <span class="pf-tp__note">{{ it.note }}</span> }
+              @if (it.note) { <span class="pf-tp__note pf-num">{{ it.note }}</span> }
+              @if (it.external) {
+                <svg class="pf-tp__ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Opens its own page"><path d="M7 17 17 7M8 7h9v9"/></svg>
+              }
               <svg class="pf-tp__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
             </button>
+            }
           }
         }
       </div>
-    </nav>
+    </aside>
 
-    <section class="pf-tp__panel pf-card" [attr.aria-label]="current()?.label ?? null" data-testid="tp-panel"
+    <section class="pf-tp__panel" [class.pf-card]="!bareMain()" [class.pf-tp__panel--bare]="bareMain()" [attr.aria-label]="current()?.label ?? null" data-testid="tp-panel"
              [class.pf-tp__panel--a]="phase() === 0" [class.pf-tp__panel--b]="phase() === 1">
       @if (current(); as cur) {
-        <header class="pf-tp__head">
-          @if (compact()) {
-            <button type="button" class="pf-tp__back" aria-label="Back to sections" data-testid="tp-back" (click)="back.emit()">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-            </button>
+        <header class="pf-card__head pf-tp__head" [hidden]="bareMain()">
+          @if (cur.icon ?? panelIcon(); as ic) {
+            <span class="pf-card__icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="ic"/></svg>
+            </span>
           }
-          <div class="pf-tp__titles">
-            @if (currentGroup(); as grp) { <span class="pf-tp__eyebrow">{{ grp.heading }}</span> }
-            <h2 class="pf-tp__title">{{ cur.label }}</h2>
-            @if (cur.description) { <span class="pf-tp__desc">{{ cur.description }}</span> }
-          </div>
+          <h2 class="pf-card__label pf-tp__title">{{ cur.label }}</h2>
+          @if (panelNote() ?? cur.description; as note) { <span class="pf-card__note pf-tp__desc">{{ note }}</span> }
+          <span class="pf-tp__tools"><ng-content select="[panel-tools]"></ng-content></span>
         </header>
-        <div class="pf-tp__body"><ng-content></ng-content></div>
+        <div class="pf-tp__body" [class.pf-tp__body--flush]="flush()"><ng-content></ng-content></div>
       }
     </section>
   `,
   styles: [`
-    :host { display: flex; gap: 20px; flex: 1; min-height: 0; min-width: 0; }
-    .pf-tp__nav { width: 300px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; padding: 0; }
-    .pf-tp__scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 2px; }
-    .pf-tp__heading { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); padding: 12px 12px 6px; }
-    .pf-tp__item {
-      display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border: 0; border-radius: 10px;
-      background: transparent; color: var(--text-primary); font: inherit; font-size: 14px; text-align: left; cursor: pointer;
-      transition: background-color 120ms ease;
+    :host { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; flex: 1 1 auto; min-height: 0; min-width: 0; align-items: stretch; }
+    .pf-tp__nav, .pf-tp__panel { min-height: 0; min-width: 0; }
+    .pf-tp__navhead { flex-wrap: nowrap; }
+    .pf-tp__head { flex-wrap: wrap; row-gap: 8px; }
+    .pf-tp__navtitle, .pf-tp__title { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+    .pf-tp__title { flex: none; max-width: 60%; }
+    .pf-tp__desc { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-tp__tools { margin-left: auto; display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; flex: 0 1 auto; max-width: 100%; }
+    .pf-tp__tools:empty { display: none; }
+    .pf-tp__iconbtn {
+      width: 32px; height: 32px; display: inline-grid; place-items: center; flex: none; margin: -2px 0 -2px -4px;
+      border: 1px solid var(--pf-line, var(--glass-border)); border-radius: 9px; background: var(--pf-card-bg, transparent);
+      color: var(--text-secondary); cursor: pointer; transition: border-color 160ms ease, color 160ms ease;
     }
-    .pf-tp__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    @media (hover: hover) { .pf-tp__item:not(.is-on):hover { background: var(--glass-bg, rgba(124,58,237,.06)); } }
-    .pf-tp__item.is-on { background: rgba(124,58,237,.13); color: var(--text-primary); font-weight: 600; }
-    .pf-tp__dot { width: 8px; height: 8px; border-radius: 50%; background: transparent; flex-shrink: 0; }
-    .pf-tp__item.is-on .pf-tp__dot { background: var(--color-violet-600, #7c3aed); }
-    .pf-tp__label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-    .pf-tp__note { font-size: 12px; color: var(--text-muted); font-weight: 400; }
-    .pf-tp__chev { display: none; color: var(--text-muted); flex-shrink: 0; }
+    .pf-tp__iconbtn:hover { border-color: var(--pf-sel-border); color: var(--text-primary); }
+    .pf-tp__iconbtn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
 
-    /* Inside a setting: back arrow + the setting's name above its categories. */
-    .pf-tp__navhead { display: flex; align-items: center; gap: 4px; padding: 10px 10px 4px; flex-shrink: 0; }
-    .pf-tp__navback, .pf-tp__railbtn {
-      width: 36px; height: 36px; display: inline-grid; place-items: center; flex-shrink: 0; border: 0; border-radius: 10px;
-      background: transparent; color: var(--text-primary); cursor: pointer;
+    /* Rows: Test Master's department rows (44px, 13.5px, neutral selected state). */
+    .pf-tp__scroll { padding: 8px; gap: 2px; }
+    .pf-tp__heading { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); padding: 10px 10px 4px; }
+    .pf-tp__heading:first-child { padding-top: 4px; }
+    .pf-tp__item {
+      flex: none; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 10px; border: 0; border-radius: 10px;
+      background: transparent; color: var(--text-primary); font: inherit; font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer;
+      transition: background var(--pf-dur-fast, 200ms) ease, box-shadow var(--pf-dur-fast, 200ms) ease;
     }
-    .pf-tp__navback:focus-visible, .pf-tp__railbtn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
-    @media (hover: hover) { .pf-tp__navback:hover, .pf-tp__railbtn:hover { background: var(--glass-bg, rgba(124,58,237,.06)); } }
-    .pf-tp__navtitle { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
-    .pf-tp__railbtn { color: var(--text-muted); }
-    .pf-tp__mono { display: none; }
-    /* Thin rail: a slim strip with one round initial per category. */
-    :host(.pf-tp--rail) .pf-tp__nav { width: 64px; }
-    :host(.pf-tp--rail) .pf-tp__navtitle, :host(.pf-tp--rail) .pf-tp__label, :host(.pf-tp--rail) .pf-tp__note, :host(.pf-tp--rail) .pf-tp__dot { display: none; }
-    :host(.pf-tp--rail) .pf-tp__navhead { flex-direction: column; padding: 8px 0 4px; }
-    :host(.pf-tp--rail) .pf-tp__scroll { padding: 6px 0; align-items: center; }
-    :host(.pf-tp--rail) .pf-tp__item { width: 40px; min-height: 40px; padding: 0; justify-content: center; border-radius: 50%; }
-    :host(.pf-tp--rail) .pf-tp__mono { display: inline; font-weight: 600; }
-    :host(.pf-tp--flush) .pf-tp__body { padding: 0; }
-    /* The page grows with its content (document scroll); the left panel stays in view. */
-    :host(.pf-tp--sticky) { align-items: flex-start; }
-    :host(.pf-tp--sticky) .pf-tp__nav { position: sticky; top: 12px; max-height: calc(100dvh - var(--top-strip-h, 64px) - 32px); }
-    :host(.pf-tp--sticky) .pf-tp__panel { overflow: visible; min-height: 320px; }
-    :host(.pf-tp--flush) .pf-tp__head { padding-bottom: 14px; }
+    .pf-tp__item:hover { background: var(--pf-chip-bg); }
+    .pf-tp__item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+    .pf-tp__item.is-on { background: var(--pf-sel-bg); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
+    .pf-tp__label { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+    .pf-tp__note { flex: none; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
+    .pf-tp__ext { flex: none; color: var(--text-tertiary); }
+    .pf-tp__item--head { gap: 6px; color: var(--text-secondary); }
+    .pf-tp__tree { flex: none; transition: transform 160ms ease; }
+    .pf-tp__tree.is-open { transform: rotate(90deg); }
+    .pf-tp__item--child { padding-left: 30px; }
+    .pf-tp__chev { display: none; flex: none; color: var(--text-tertiary); }
+
     @keyframes pf-tp-nav-a { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
     @keyframes pf-tp-nav-b { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
     @keyframes pf-tp-nav-ra { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
@@ -199,42 +196,36 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
     .pf-tp__scroll--b { animation: pf-tp-nav-b 260ms cubic-bezier(.2,.7,.2,1) both; }
     .pf-tp__scroll--back.pf-tp__scroll--a { animation-name: pf-tp-nav-ra; }
     .pf-tp__scroll--back.pf-tp__scroll--b { animation-name: pf-tp-nav-rb; }
-    @media (prefers-reduced-motion: reduce) { .pf-tp__scroll--a, .pf-tp__scroll--b { animation: none !important; } }
 
-    .pf-tp__panel { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; padding: 0; }
-    .pf-tp__head { display: flex; align-items: flex-start; gap: 8px; padding: 22px 26px 16px; border-bottom: 1px solid var(--pf-line, var(--glass-border)); }
-    .pf-tp__titles { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-    .pf-tp__eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
-    .pf-tp__title { margin: 0; font-size: 24px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
-    .pf-tp__desc { font-size: 14px; color: var(--text-secondary, var(--text-muted)); }
-    .pf-tp__body { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 26px; }
-    .pf-tp__back {
-      width: 40px; height: 40px; margin: -4px 0 0 -12px; display: inline-grid; place-items: center; flex-shrink: 0;
-      border: 0; border-radius: 11px; background: transparent; color: var(--text-primary); cursor: pointer;
-    }
-    .pf-tp__back:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+    /* Main card body: the ONE scroll container. */
+    .pf-tp__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 14px; overscroll-behavior: contain; }
+    .pf-tp__body--flush { padding: 0; }
+    /* The hosted page brings its OWN card (never card-in-card): the panel is a bare column, the page's card is the main card. */
+    .pf-tp__panel--bare { display: flex; flex-direction: column; background: none; border: 0; box-shadow: none; }
+    .pf-tp__panel--bare .pf-tp__body { padding: 0; }
 
-    /* Section switch: slide + fade, ~260 ms. Two identical keyframes alternate so
-       the animation restarts on every pick. */
     @keyframes pf-tp-in-a { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
     @keyframes pf-tp-in-b { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
-    .pf-tp__panel--a .pf-tp__body, .pf-tp__panel--a .pf-tp__head { animation: pf-tp-in-a 260ms cubic-bezier(.2,.7,.2,1) both; }
-    .pf-tp__panel--b .pf-tp__body, .pf-tp__panel--b .pf-tp__head { animation: pf-tp-in-b 260ms cubic-bezier(.2,.7,.2,1) both; }
+    .pf-tp__panel--a .pf-tp__body { animation: pf-tp-in-a 260ms cubic-bezier(.2,.7,.2,1) both; }
+    .pf-tp__panel--b .pf-tp__body { animation: pf-tp-in-b 260ms cubic-bezier(.2,.7,.2,1) both; }
     @media (prefers-reduced-motion: reduce) {
-      .pf-tp__panel--a .pf-tp__body, .pf-tp__panel--a .pf-tp__head,
-      .pf-tp__panel--b .pf-tp__body, .pf-tp__panel--b .pf-tp__head { animation: none; }
+      .pf-tp__scroll--a, .pf-tp__scroll--b, .pf-tp__panel--a .pf-tp__body, .pf-tp__panel--b .pf-tp__body { animation: none !important; }
       .pf-tp__item { transition: none; }
     }
 
-    /* Phone: list first; picking a row drills into that section only. */
-    :host(.pf-tp--compact) { display: block; }
-    :host(.pf-tp--compact) .pf-tp__nav { width: auto; height: 100%; }
+    :host(.pf-tp--nonav) { display: flex; flex-direction: column; }
+    :host(.pf-tp--nonav) .pf-tp__nav { display: none !important; }
+    :host(.pf-tp--nonav) .pf-tp__panel { display: flex !important; flex: 1 1 auto; }
+    /* Tablet portrait: a narrower side card. */
+    @media (max-width: 1100px) { :host(:not(.pf-tp--compact)) { grid-template-columns: 280px minmax(0, 1fr); } }
+
+    /* Phone: side card first; picking a row shows only the main card (back chevron in its head). */
+    :host(.pf-tp--compact) { display: flex; flex-direction: column; }
+    :host(.pf-tp--compact) .pf-tp__nav, :host(.pf-tp--compact) .pf-tp__panel { flex: 1 1 auto; }
     :host(.pf-tp--compact) .pf-tp__item { min-height: 48px; }
     :host(.pf-tp--compact) .pf-tp__chev { display: block; }
-    :host(.pf-tp--compact) .pf-tp__panel { height: 100%; }
-    :host(.pf-tp--compact) .pf-tp__head { padding: 14px 16px 12px; }
-    :host(.pf-tp--compact) .pf-tp__title { font-size: 20px; }
-    :host(.pf-tp--compact) .pf-tp__body { padding: 14px 16px; }
+    :host(.pf-tp--compact) .pf-tp__desc { display: none; }
+    :host(.pf-tp--compact) .pf-tp__title { max-width: none; flex: 1 1 auto; }
     :host(.pf-tp--compact:not(.pf-tp--detail)) .pf-tp__panel { display: none; }
     :host(.pf-tp--compact.pf-tp--detail) .pf-tp__nav { display: none; }
   `],
@@ -256,16 +247,34 @@ export class TwoPanelComponent {
   readonly navDir = input<'in' | 'back'>('in');
   /** Slide the left panel in once on first render (a freshly opened setting). */
   readonly animateNav = input(false);
-  /** Offer the thin-rail toggle (wide only) and its state. */
-  readonly collapsible = input(false);
-  readonly rail = input(false);
-  /** Right body without its own padding (the hosted page keeps its own). */
+  /** Side-card head: icon (stroked path) and label when not inside a setting. */
+  readonly navIcon = input<string | null>(null);
+  readonly navTitle = input('Settings');
+  /** Main-card head icon when the selected row has none, and its note (defaults to the row's description). */
+  readonly panelIcon = input<string | null>(null);
+  readonly panelNote = input<string | null>(null);
+  /** Phone back chevron's label. */
+  readonly backLabel = input('Back to sections');
+  /** Main-card body without its own padding (the content brings its own rows). */
   readonly flush = input(false);
-  /** Wide: the left panel sticks while the right one scrolls with the page. */
-  readonly stickyNav = input(false);
+  /** The content brings its own card: no main-card chrome or head around it. */
+  readonly bareMain = input(false);
+  /** No side card (the host lists the categories elsewhere, e.g. as a pill in its own card head). */
+  readonly hideNav = input(false);
 
   readonly navBack = output<void>();
-  readonly railChange = output<boolean>();
+  /** Tree headings the person collapsed (all open by default; a heading holding the selected row stays open). */
+  private readonly closed = signal<ReadonlySet<string>>(new Set());
+  isOpen(id: string): boolean {
+    if (!this.closed().has(id)) return true;
+    const sel = this.selected();
+    return this.groups().some((g) => g.items.some((i) => i.id === sel && i.parent === id));
+  }
+  toggle(id: string): void {
+    const next = new Set(this.closed());
+    if (next.has(id)) next.delete(id); else next.add(id);
+    this.closed.set(next);
+  }
 
   readonly pick = output<string>();
   readonly back = output<void>();

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -12,6 +12,15 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { SkeletonTilesComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SettingsDepartment, kpiScreenInDepartment } from '../../../shared/utils/department-scope';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
+import { SETTINGS_HOST } from '../../../shared/utils/settings-host';
+import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
+import { SG_ICON, SG_NARROW_MQ, sgActions, sgActionsCol, sgCell, sgMedia, sgRowOff, sgSwitch } from '../../../shared/settings-grid/settings-grid';
+import { PfSelectOptGroup } from '../../../shared/primitives/select.component';
+import { ActivatedRoute } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import type { ColDef, GetRowIdParams, ICellRendererParams, RowDragEndEvent } from 'ag-grid-community';
 
 interface KpiCatalogItem {
   id: string;
@@ -69,40 +78,21 @@ const CATEGORY_LABELS: Record<string, string> = {
 @Component({
   selector: 'pf-kpi-config',
   standalone: true,
-  imports: [BusyDirective, SkeletonTilesComponent, CommonModule, SelectComponent, HeroBandComponent],
+  imports: [BusyDirective, SkeletonTilesComponent, CommonModule, SelectComponent, HeroBandComponent, DataGridComponent, SettingsSavebarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-kpi-page pf-band-page">
       @if (theme.isNewDesign()) {
         <!-- Band pill (owner): the catalog search, plus the scope and screen
              pickers; Discard / Save ride the band actions. -->
-        <pf-hero-band [back]="true" placeholder="Search KPIs — name, code, description…"
+        <pf-hero-band [back]="true" placeholder="Search KPIs to add — name, code, description…"
                       [value]="filterQuery()" (valueChange)="filterQuery.set($event)">
           <ng-container band-tools>
             <pf-select class="pf-kpi-bandsel pf-kpi-bandsel--scope" size="sm" [options]="scopeOptions()"
                        [value]="selectedScope()" (valueChange)="onScopeChange($event)"
                        aria-label="Configure for"></pf-select>
-            <pf-select class="pf-kpi-bandsel" size="sm" [options]="screenOptions()"
-                       [value]="selectedScreen()" (valueChange)="selectScreen($event)"
-                       aria-label="Screen"></pf-select>
           </ng-container>
-          <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="!dirty()" (click)="reload()">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>
-              </svg>
-              Discard
-            </button>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                <path d="M17 21v-8H7v8M7 3v5h8"/>
-              </svg>
-              {{ saving() ? 'Saving…' : 'Save' }}
-            </button>
-          </ng-container>
+          
         </pf-hero-band>
       }
       <header class="pf-kpi-hdr pf-classic-only items-center">
@@ -145,127 +135,60 @@ const CATEGORY_LABELS: Record<string, string> = {
       <div class="pf-band-body pf-band-body--fill pf-kpi-body">
       @if (department() && !screens().length) {
         <p class="pf-band-empty" data-testid="kpi-dept-empty">This department has no number cards yet.</p>
-      } @else if (loading()) {
-        <div class="pf-kpi-loading flex justify-center py-12">
-          <pf-skeleton-tiles [count]="6" min="260px" label="Loading KPI configuration…"></pf-skeleton-tiles>
-        </div>
       } @else {
-        <section class="pf-kpi-workshop">
-          <!-- Catalog -->
-          <aside class="pf-kpi-catalog">
-            <header class="pf-kpi-catalog__hdr">
-              <h2>Available KPIs</h2>
-              <input type="search"
-                     class="pf-kpi-search pf-classic-only"
-                     placeholder="Filter…"
-                     [value]="filterQuery()"
-                     (input)="filterQuery.set($any($event.target).value)" />
-            </header>
-
-            @for (group of filteredCatalog(); track group.category) {
-              <div class="pf-kpi-cat">
-                <h3>{{ group.label }}</h3>
-                <ul>
-                  @for (k of group.items; track k.id) {
-                    <li>
-                      <button type="button"
-                              class="pf-kpi-cat__row"
-                              [class.pf-kpi-cat__row--assigned]="isAssigned(k.id)"
-                              [disabled]="isAssigned(k.id)"
-                              (click)="addToScreen(k)">
-                        <span class="pf-kpi-cat__name">{{ k.defaultLabel || k.name }}</span>
-                        @if (k.description) {
-                          <span class="pf-kpi-cat__desc">{{ k.description }}</span>
-                        }
-                        <span class="pf-kpi-cat__type">{{ k.valueType }}</span>
-                        @if (isAssigned(k.id)) {
-                          <span class="pf-kpi-cat__pill">added</span>
-                        } @else {
-                          <span class="pf-kpi-cat__add">+ Add</span>
-                        }
-                      </button>
-                    </li>
-                  }
-                </ul>
-              </div>
-            } @empty {
-              <p class="pf-kpi-empty">No KPIs match "{{ filterQuery() }}".</p>
-            }
-          </aside>
-
-          <!-- Assigned column -->
-          <main class="pf-kpi-assigned">
-            <header class="pf-kpi-assigned__hdr">
-              <div>
-                <h2>{{ currentScreenLabel() }}</h2>
-                <p class="pf-kpi-assigned__sub">
-                  {{ scopeLabel() }} · {{ assigned().length }} card{{ assigned().length === 1 ? '' : 's' }}
-                </p>
-              </div>
-              <div class="pf-kpi-assigned__actions pf-classic-only">
-                <button type="button" class="pf-kpi-btn pf-kpi-btn--ghost"
-                        [disabled]="!dirty()"
-                        (click)="reload()">Discard</button>
-                <button type="button" class="pf-kpi-btn pf-kpi-btn--primary"
-                        [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…"
-                        (click)="save()">
-                  {{ saving() ? 'Saving…' : 'Save changes' }}
-                </button>
-              </div>
-            </header>
-
-            @if (assigned().length === 0) {
-              <div class="pf-kpi-empty pf-kpi-empty--card">
-                <p><strong>No KPIs assigned yet.</strong></p>
-                <p>Add cards from the catalog on the left. Drag them to reorder; remove one with its close button.</p>
-              </div>
-            } @else {
-              <ul class="pf-kpi-assigned__list">
-                @for (a of assigned(); track a.kpiId; let i = $index) {
-                  <li class="pf-kpi-tile"
-                      draggable="true"
-                      [class.pf-kpi-tile--dragging]="draggingIndex() === i"
-                      [class.pf-kpi-tile--over]="dragOverIndex() === i && draggingIndex() !== i"
-                      (dragstart)="onDragStart($event, i)"
-                      (dragover)="onDragOver($event, i)"
-                      (drop)="onDrop($event, i)"
-                      (dragend)="onDragEnd()">
-                    <span class="pf-kpi-tile__grip" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></span>
-                    <span class="pf-kpi-tile__pos pf-num">{{ i + 1 }}</span>
-                    <div class="pf-kpi-tile__body">
-                      <span class="pf-kpi-tile__label">{{ kpiName(a.kpiId) }}</span>
-                      <span class="pf-kpi-tile__meta">
-                        {{ kpiCategory(a.kpiId) }} · {{ kpiValueType(a.kpiId) }}
-                      </span>
-                    </div>
-                    <button type="button" class="pf-toggle pf-kpi-tile__switch" role="switch" [attr.aria-checked]="a.enabled"
-                            [attr.aria-label]="kpiName(a.kpiId) + (a.enabled ? ' — shown' : ' — hidden')"
-                            [title]="a.enabled ? 'Disable' : 'Enable'" (click)="toggleEnabled(i)">
-                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-                    </button>
-                    <span class="pf-kpi-tile__updown" aria-hidden="false">
-                      <button type="button" class="pf-kpi-tile__mv" [disabled]="i === 0"
-                              (click)="move(i, -1)" aria-label="Move up"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
-                      <button type="button" class="pf-kpi-tile__mv" [disabled]="i === assigned().length - 1"
-                              (click)="move(i, 1)" aria-label="Move down"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
-                    </span>
-                    <button type="button" class="pf-kpi-tile__x"
-                            (click)="removeAt(i)" aria-label="Remove">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
-                      </svg>
+        <div class="pf-sg-panels pf-kpi-panels" [class.pf-sg-panels--single]="hosted" [class.pf-sg-panels--narrow]="narrow()">
+          <!-- SIDE card (LEFT): the screens. In the Settings shell its side card lists them (SETTINGS_HOST.categories). -->
+          @if (!hosted && !narrow()) {
+            <aside class="pf-card pf-sg-side pf-kpi-side" aria-label="Screens">
+              <header class="pf-card__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>
+                <span class="pf-card__label">Screens</span>
+              </header>
+              <ul class="pf-card__body pf-kpi-scr">
+                @for (s of screens(); track s.id) {
+                  <li>
+                    <button type="button" class="pf-kpi-scr__btn" [attr.aria-pressed]="selectedScreen() === s.id" (click)="selectScreen(s.id)" [attr.data-testid]="'kpi-scr-' + s.id">
+                      <span class="pf-kpi-scr__name">{{ s.label }}<span class="pf-kpi-scr__hint">{{ s.hint }}</span></span>
+                      <span class="pf-kpi-scr__n pf-num">{{ assignedCountForScreen(s.id) }}</span>
                     </button>
                   </li>
                 }
               </ul>
-            }
-          </main>
-        </section>
+            </aside>
+          }
+          <!-- MAIN card: THIS screen's cards as a Test Master grid. -->
+          <section class="pf-card pf-sg-main pf-kpi-main" [class.pf-sg-main--bare]="hosted" [attr.aria-label]="currentScreenLabel()">
+            <header class="pf-card__head pf-sg-main__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg></span>
+              <span class="pf-card__label">{{ currentScreenLabel() }}</span>
+              <span class="pf-card__spacer"></span>
+              <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
+            </header>
+            <div class="pf-sg-main__body">
+              <pf-data-grid [rowData]="gridRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
+                            [getRowClass]="rowClass" [rowDragManaged]="true" (rowDragEnd)="onRowDragEnd($event)"
+                            [loading]="loading()" loadingLabel="Loading number cards…"
+                            emptyTitle="No cards on this screen yet" emptyBody="Add KPI picks one from the catalogue; drag rows to reorder."></pf-data-grid>
+            </div>
+            <!-- Save / Discard IN the card, only while something changed (owner: no band buttons in Settings). -->
+            <pf-settings-savebar [dirty]="dirty()" [saving]="saving()" (save)="save()" (discard)="reload()"></pf-settings-savebar>
+          </section>
+        </div>
       }
       </div>
     </div>
+
+    <!-- Head tools (left → right): the scope and count note · the dynamic Add KPI picker · (narrow) the screen picker. -->
+    <ng-template #headToolsTpl>
+      <span class="pf-sg-count" data-testid="kpi-note">{{ scopeLabel() }} · {{ assigned().length }} {{ assigned().length === 1 ? 'card' : 'cards' }}</span>
+      @if (narrow() && !hosted) {
+        <pf-select class="pf-kpi-headsel" size="sm" [options]="screenOptions()" [value]="selectedScreen()" (valueChange)="selectScreen($event)" aria-label="Screen"></pf-select>
+      }
+      <pf-select class="pf-kpi-add" size="sm" [groups]="addGroups()" [options]="addOptions()" [value]="''" [searchable]="true"
+                 placeholder="+ Add KPI" (valueChange)="addById($event)" aria-label="Add KPI" data-testid="kpi-add"></pf-select>
+    </ng-template>
   `,
+  styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   styles: [`
     @use '../../../shared/styles/device-tier' as dt;
     :host { display: block; }
@@ -298,6 +221,19 @@ const CATEGORY_LABELS: Record<string, string> = {
       :host-context(.design-new) .pf-kpi-assigned { overflow-y: visible; }
     }
     .pf-kpi-bandsel { display: block; min-width: 190px; }
+    .pf-kpi-page.pf-band-page { max-width: none; margin: 0; padding: 24px clamp(16px, 3vw, 32px) 40px; gap: 0; }
+    .pf-kpi-panels { grid-template-columns: 300px minmax(0, 1fr); }
+    .pf-kpi-panels.pf-sg-panels--single, .pf-kpi-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
+    .pf-kpi-scr { list-style: none; margin: 0; padding: 6px; gap: 2px; }
+    .pf-kpi-scr__btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 8px 10px;
+      border: 0; border-radius: var(--pf-radius-sm); background: transparent; font: inherit; text-align: left; cursor: pointer; color: var(--text-primary); }
+    .pf-kpi-scr__btn:hover:not([aria-pressed='true']) { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
+    .pf-kpi-scr__btn[aria-pressed='true'] { background: var(--pf-sel-bg); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
+    .pf-kpi-scr__name { display: flex; flex-direction: column; min-width: 0; font-size: 13.5px; font-weight: 500; }
+    .pf-kpi-scr__hint { font-size: 11.5px; font-weight: 400; color: var(--text-tertiary); }
+    .pf-kpi-scr__n { flex: none; font-size: 12px; color: var(--text-tertiary); }
+    .pf-kpi-add { flex: 0 1 220px; min-width: 180px; }
+    .pf-kpi-headsel { flex: 0 1 200px; min-width: 160px; }
     .pf-kpi-bandsel--scope { min-width: 170px; }
     @media (max-width: 640px) { .pf-kpi-bandsel, .pf-kpi-bandsel--scope { min-width: 150px; } }
 
@@ -792,7 +728,95 @@ const CATEGORY_LABELS: Record<string, string> = {
     }
 `]
 })
-export class KpiConfigComponent implements OnInit {
+export class KpiConfigComponent implements OnInit, HasUnsavedChanges {
+  // ── Test Master frame (owner 2026-11-17: "this screen is horrible") ──
+  /** In the Settings shell its side card lists the screens; the grid is bare and the shell's head shows headTools. */
+  private readonly settingsHost = inject(SETTINGS_HOST, { optional: true });
+  protected readonly hosted = !!this.settingsHost;
+  readonly narrow = sgMedia(SG_NARROW_MQ);
+  private readonly headToolsTpl = viewChild<TemplateRef<unknown>>('headToolsTpl');
+  readonly headTools = computed(() => this.headToolsTpl());
+  readonly defaultColDef: ColDef = { sortable: false, resizable: true, filter: false, minWidth: 90, wrapText: true, autoHeight: true };
+  readonly getRowId = (p: GetRowIdParams<KpiAssignmentDto & { idx: number }>) => p.data.kpiId;
+  readonly rowClass = sgRowOff<KpiAssignmentDto>(a => a.enabled);
+  readonly gridRows = computed(() => this._draft().map((a, idx) => ({ ...a, idx })));
+  readonly colDefs = computed<ColDef<KpiAssignmentDto & { idx: number }>[]>(() => {
+    this._catalog();
+    const web = !this.narrow();
+    const n = this._draft().length;
+    return [
+      { colId: 'order', headerName: '#', width: 76, minWidth: 76, maxWidth: 76, flex: 0, rowDrag: true, cellClass: 'pf-num',
+        valueGetter: p => (p.data ? p.data.idx + 1 : '') },
+      { colId: 'kpi', headerName: 'KPI', flex: 1.6, minWidth: 200,
+        valueGetter: p => (p.data ? this.kpiName(p.data.kpiId) : ''),
+        cellRenderer: (p: ICellRendererParams<KpiAssignmentDto & { idx: number }>) => sgCell(p.data ? this.kpiName(p.data.kpiId) : '', p.data ? this.kpiDesc(p.data.kpiId) : null, true) },
+      { colId: 'kind', headerName: 'Category · type', flex: 1, minWidth: 150,
+        valueGetter: p => (p.data ? `${this.kpiCategory(p.data.kpiId)} · ${this.kpiValueType(p.data.kpiId)}` : ''),
+        cellRenderer: (p: ICellRendererParams<KpiAssignmentDto & { idx: number }>) => { const el = sgCell(null, p.data ? `${this.kpiCategory(p.data.kpiId)} · ${this.kpiValueType(p.data.kpiId)}` : null); el.firstElementChild?.remove(); return el; } },
+      { colId: 'status', headerName: 'Shown', width: 96, minWidth: 96, maxWidth: 96, flex: 0, wrapText: false, autoHeight: false,
+        cellRenderer: (p: ICellRendererParams<KpiAssignmentDto & { idx: number }>) => (p.data
+          ? sgSwitch(p.data.enabled, this.kpiName(p.data.kpiId), () => this.toggleEnabled(p.data!.idx)) : document.createElement('span')) },
+      sgActionsCol<KpiAssignmentDto & { idx: number }>(web, [], 3, p => {
+        const d = p.data;
+        if (!d) return document.createElement('span');
+        const el = sgActions(web, [
+          { label: 'Move up', aria: `Move ${this.kpiName(d.kpiId)} up`, icon: true, path: '<path d="m18 15-6-6-6 6"/>', run: () => this.move(d.idx, -1) },
+          { label: 'Move down', aria: `Move ${this.kpiName(d.kpiId)} down`, icon: true, path: '<path d="m6 9 6 6 6-6"/>', run: () => this.move(d.idx, 1) },
+          { label: 'Remove', aria: `Remove ${this.kpiName(d.kpiId)}`, icon: true, danger: true, path: SG_ICON.trash, run: () => this.removeAt(d.idx) },
+        ]);
+        const btns = el.querySelectorAll('button');
+        if (d.idx === 0) btns[0].disabled = true;
+        if (d.idx === n - 1) btns[1].disabled = true;
+        return el;
+      }, false),
+    ];
+  });
+  /** Drag-to-reorder (the # column's handle): the grid's new order becomes the draft's. */
+  onRowDragEnd(e: RowDragEndEvent<KpiAssignmentDto & { idx: number }>): void {
+    const ids: string[] = [];
+    e.api.forEachNode(n => { if (n.data) ids.push(n.data.kpiId); });
+    const byId = new Map(this._draft().map(a => [a.kpiId, a] as const));
+    const next = ids.map((id, i) => ({ ...byId.get(id)!, sortOrder: i })).filter(a => !!a.kpiId);
+    if (next.length === this._draft().length) this._draft.set(next);
+  }
+  /** Add KPI: the catalogue grouped by category (Financial, Operational, TAT & SLA …), already-added ones left out. */
+  readonly addGroups = computed<PfSelectOptGroup<string>[]>(() => this.filteredCatalog()
+    .map(g => ({ label: g.label, options: g.items.filter(k => !this.isAssigned(k.id)).map(k => ({ value: k.id, label: k.defaultLabel || k.name, hint: k.valueType })) }))
+    .filter(g => g.options.length));
+  readonly addOptions = computed<PfSelectOption<string>[]>(() => this.addGroups().flatMap(g => g.options));
+  addById(id: string): void {
+    const k = this._catalog().find(x => x.id === id);
+    if (k) this.addToScreen(k);
+  }
+  kpiDesc(kpiId: string): string | null { return this._catalog().find(x => x.id === kpiId)?.description ?? null; }
+
+  /** Shell side card: one row per screen (with its card count); the shell writes ?tab=<screen>. */
+  private readonly listScreens = (() => {
+    const host = this.settingsHost;
+    if (!host?.categories) return null;
+    inject(DestroyRef).onDestroy(() => host.categories.set(null));
+    return effect(() => {
+      const list = this.screens();
+      if (list.length < 2) return;   // never flip the shell between its one-card and two-panel frames
+      host.categories.set(list.map(s => ({ id: s.id, label: s.label, note: `${this.assignedCountForScreen(s.id)} cards` })));
+    });
+  })();
+  private readonly route = inject(ActivatedRoute, { optional: true });
+  private readonly destroyRefK = inject(DestroyRef);
+  /** ?tab=<screen> (the shell's side card) picks the screen — subscribed in ngOnInit, once the fields exist. */
+  private followScreenTab(): void {
+    this.route?.queryParamMap.pipe(takeUntilDestroyed(this.destroyRefK)).subscribe(q => {
+      const t = q.get('tab');
+      if (t && t !== untracked(() => this.selectedScreen()) && this.screens().some(s => s.id === t)) void this.selectScreen(t);
+    });
+  }
+
+  // ── Unsaved changes ──
+  readonly unsavedLabel = 'the number cards';
+  hasUnsavedChanges(): boolean { return this.dirty() && !this.saving(); }
+  saveChanges(): Promise<boolean> { return this.persist(); }
+  private readonly unloadGuard = guardUnsavedOnUnload(this);
+
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   protected readonly navBack = inject(NavBackService);
@@ -900,6 +924,9 @@ export class KpiConfigComponent implements OnInit {
     const first = this.screens()[0];
     if (first) this.selectedScreen.set(first.id);
     else if (this.department()) { this._loading.set(false); return; }
+    const tab = this.route?.snapshot.queryParamMap.get('tab');
+    if (tab && this.screens().some(s => s.id === tab)) this.selectedScreen.set(tab);
+    this.followScreenTab();
     this.loadCatalog();
     this.loadBranches();
     this.loadAssignmentsForCurrentScope();
@@ -1022,7 +1049,10 @@ export class KpiConfigComponent implements OnInit {
   }
 
   // ── Persist ────────────────────────────────────────────────
-  save() {
+  save() { void this.persist(); }
+
+  private persist(): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
     const items: KpiSaveItem[] = this._draft().map((a, i) => ({
       kpiId: a.kpiId,
       enabled: a.enabled,
@@ -1041,11 +1071,14 @@ export class KpiConfigComponent implements OnInit {
         this._saving.set(false);
         this.toasts.success('KPI layout saved');
         this.refreshScreenCounts();
+        resolve(true);
       },
       error: e => {
         this._saving.set(false);
         this.toasts.error(ApiError.from(e).message);
+        resolve(false);
       }
+    });
     });
   }
 

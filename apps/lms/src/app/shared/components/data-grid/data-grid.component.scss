@@ -1,0 +1,237 @@
+/* pf-data-grid: Test Master's grid as ONE component (owner 2026-11-17: "take that as a component").
+   The host is the sizing contract: a flex column that takes its parent's width and every pixel of height the page
+   can give it (and, when an ancestor chain is not flex, it measures the room down to the frame's bottom). */
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  min-height: 280px;
+  align-self: stretch;
+}
+
+.pf-dg__grid {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+}
+
+.pf-dg__skel {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  overflow: hidden;
+  background: var(--pf-card-bg, var(--bg-primary));
+}
+
+.pf-dg__empty {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40px;
+  z-index: 5;
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.pf-dg__empty-title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text-secondary); }
+.pf-dg__empty-body { margin: 0; max-width: 44ch; font-size: 12.5px; color: var(--text-tertiary); }
+
+@media (max-width: 640px) {
+  :host { min-height: 320px; }
+}
+
+/* ── Grid cells (Test Master: wrap, centre, card is the frame) ────────── */
+:host ::ng-deep .ag-root-wrapper {
+  border: 0;
+  border-radius: 0;
+}
+
+:host ::ng-deep .ag-row .ag-cell {
+  display: flex;
+  align-items: center;
+  line-height: 1.4;
+}
+
+:host ::ng-deep .ag-row .ag-cell.ag-right-aligned-cell {
+  justify-content: flex-end;
+}
+
+:host ::ng-deep .ag-row .ag-cell > .ag-cell-wrapper,
+:host ::ng-deep .ag-row .ag-cell > .pf-sg-cell,
+:host ::ng-deep .ag-row .ag-cell > .pf-sg-chips {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+:host ::ng-deep .pf-sg-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-height: 42px;
+  padding: 6px 0;
+  box-sizing: border-box;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+:host ::ng-deep .pf-sg-cell__main {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+:host ::ng-deep .pf-sg-cell__sub {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+:host ::ng-deep .pf-sg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+:host ::ng-deep .pf-sg-chips .pf-sg-chip {
+  height: auto;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  background: var(--pf-chip-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--pf-line);
+}
+
+:host ::ng-deep .pf-sg-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  white-space: nowrap;
+  --pf-sg-tone: var(--text-secondary);
+  color: color-mix(in srgb, var(--pf-sg-tone) 70%, var(--text-primary));
+}
+
+:host ::ng-deep .pf-sg-status[data-tone='green'] { --pf-sg-tone: var(--green-text, #15803d); }
+:host ::ng-deep .pf-sg-status[data-tone='amber'] { --pf-sg-tone: var(--amber-text, #b45309); }
+:host ::ng-deep .pf-sg-status[data-tone='red'] { --pf-sg-tone: var(--red-text, #b91c1c); }
+
+:host ::ng-deep .pf-sg-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--pf-sg-tone);
+  flex: none;
+}
+
+/* Status pill (neutral; Active carries a violet dot). */
+:host ::ng-deep .pf-sg-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-tertiary);
+  background: var(--pf-chip-bg);
+  border: 1px solid var(--pf-line);
+}
+
+:host ::ng-deep .pf-sg-pill--on {
+  color: var(--text-secondary);
+}
+
+:host ::ng-deep .pf-sg-pill--on::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-violet-500, #8b5cf6);
+}
+
+/* Money cells: tabular numbers. */
+:host ::ng-deep .pf-sg-money {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+:host ::ng-deep .pf-sg-tone--warn { color: var(--amber-text, #b45309); font-weight: 600; }
+:host ::ng-deep .pf-sg-tone--over { color: var(--red-text, #b91c1c); font-weight: 600; }
+:host ::ng-deep .pf-sg-tone--credit { color: var(--violet-text, #6d28d9); font-weight: 600; }
+:host ::ng-deep .pf-sg-tone--muted { color: var(--text-tertiary); }
+
+/* Status switch (Test Master's grid switch, violet ON). */
+:host ::ng-deep .pf-sg-switchcell {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+:host ::ng-deep .pf-sg-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Actions column: fits its content (Test Master's .pf-tm-acts). */
+:host ::ng-deep .ag-cell.pf-sg-acts-cell {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+:host ::ng-deep .pf-sg-acts {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 100%;
+  width: 100%;
+}
+
+:host ::ng-deep .pf-rowact.pf-rowact--icon.pf-sg-rowact-sm {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+}
+
+:host ::ng-deep .pf-sg-rowact-sm > svg {
+  width: 14px;
+  height: 14px;
+}
+
+:host ::ng-deep .pf-rowact.pf-sg-rowact-danger:hover:not(:disabled) {
+  color: var(--red-text, #b91c1c);
+}
+
+/* Clickable rows (a row opens its record). */
+:host(.pf-dg--clickable) ::ng-deep .ag-row {
+  cursor: pointer;
+}
+
+/* Inactive rows: data greyed, switch + actions keep full strength. */
+:host ::ng-deep .ag-row.pf-sg-row--off .ag-cell:not([col-id='status']):not([col-id='actions']) {
+  opacity: 0.55;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  :host ::ng-deep .ag-cell button.pf-sg-switch {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+}
+

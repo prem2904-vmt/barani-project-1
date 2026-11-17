@@ -47,7 +47,7 @@ describe('ND audit — Report designer', () => {
     for (const t of ['Letterhead', 'Patient strip', 'Results table', 'Footer']) {
       tabBtn(p.el, t).click();
       p.f.detectChanges();
-      expect(primaries(p.el).map(b => b.textContent?.trim()), t).toEqual(['Save']);
+      expect(primaries(p.el).map(b => b.textContent?.trim()), t).toEqual([]);   // Settings: no violet primary; Save is the pane's bar
       hygiene(p.el);
     }
     tabBtn(p.el, 'Letterhead').click();

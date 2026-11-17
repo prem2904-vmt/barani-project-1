@@ -179,6 +179,41 @@ describe('Files editor: access', () => {
   });
 });
 
+describe('Files editor: the loading screen is the app itself', () => {
+  it('while the engine boots each app shows ITS OWN first screen (not a generic skeleton) and the frame stays behind it', async () => {
+    for (const a of FILES_APPS) {
+      TestBed.resetTestingModule();
+      const { settle, t, el } = make({ kind: a.route });
+      await settle();
+      const loader = t('files-loading');
+      expect(loader?.tagName.toLowerCase()).toBe('pf-files-loading');
+      expect(loader?.getAttribute('data-app')).toBe(a.id);
+      expect(loader?.getAttribute('data-mode')).toBe('file');
+      expect(loader?.getAttribute('aria-label')).toBe(`Opening ${a.name}…`);
+      expect(el.querySelector('pf-skeleton-detail, pf-skeleton-rows')).toBeNull();
+      expect(el.querySelector('iframe')).toBeTruthy();
+    }
+  });
+
+  it('the start route draws the app\'s start screen; the loader leaves once the engine says ready', async () => {
+    const { settle, t, fromFrame } = make({ id: 'start' });
+    await settle();
+    expect(t('files-loading')?.getAttribute('data-mode')).toBe('start');
+    expect(t('files-loader-neuron-start')).toBeTruthy();
+    fromFrame({ type: 'neuron:ready' });
+    expect(t('files-loading')?.classList.contains('pf-fl-leave')).toBe(true);   // fading out over the app, no jump
+    await new Promise(r => setTimeout(r, 260));
+    await settle();
+    expect(t('files-loading')).toBeNull();
+  });
+
+  it('before the file is in hand the same loader holds the place (no second, different loader)', () => {
+    const { t, el } = make({ id: 'f1' });                          // first render: the list/content calls have not resolved yet
+    expect(t('files-loading')?.getAttribute('data-app')).toBe('neuron');
+    expect(el.querySelectorAll('pf-files-loading').length).toBe(1);
+  });
+});
+
 describe('Files editor: an engine that is not shipped yet', () => {
   it('shows the plain "can\'t open here" state for the app, with Back, and no endless loading', async () => {
     const { settle, t, el } = make({ kind: 'doc', engine: false });

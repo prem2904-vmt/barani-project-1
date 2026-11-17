@@ -57,3 +57,43 @@ describe('Vendors — Record payment date (no native browser control)', () => {
     expect(fd.get('paidAt')).toBe('2026-09-26');
   });
 });
+
+describe('Credit accounts grid — edit, status and search (same APIs)', () => {
+  const rows = [
+    { id: 'v1', name: 'Apollo D', code: 'APD1', contactName: 'Ravi', contactPhone: '9876543210', isActive: true, totalCredit: 0, usedCredit: 3, balance: 0, outstanding: 3, createdAt: '2026-01-01' },
+    { id: 'v2', name: 'Apollo D', code: 'APD2', contactName: 'Meena', isActive: true, totalCredit: 471888, usedCredit: 3, balance: 0, outstanding: -471885, createdAt: '2026-01-01' },
+    { id: 'v3', name: 'Old Partner', code: 'OLD', isActive: false, totalCredit: 0, usedCredit: 0, balance: 0, outstanding: 0, createdAt: '2026-01-01' },
+  ];
+  const render = () => renderBandPage(VendorsComponent, {
+    getFor: (url) => (url.startsWith('/api/vendors') && !url.includes('/transactions') ? rows : []),
+    providers: [{ provide: HttpClient, useValue: { post: vi.fn() } }, { provide: PlatformService, useValue: { getApiUrl: () => '' } }],
+  });
+
+  it('duplicate names stay distinguishable: code column + contact under the name', () => {
+    const p = render();
+    const name = p.cmp.colDefs().find((c: any) => c.colId === 'name').cellRenderer;
+    expect((name({ data: rows[0] }) as HTMLElement).textContent).toContain('Ravi');
+    expect((name({ data: rows[1] }) as HTMLElement).textContent).toContain('Meena');
+    expect(p.cmp.colDefs().map((c: any) => c.colId)).toEqual(['name', 'code', 'status', 'charged', 'settled', 'outstanding', 'actions']);
+  });
+
+  it('Edit opens the form on the LEFT and saves with the same PUT (isActive kept)', () => {
+    const p = render();
+    p.cmp.editVendor(rows[0]);
+    p.f.detectChanges();
+    expect(p.el.querySelector('.pf-sg-side')!.textContent).toContain('Edit vendor');
+    p.cmp.patchDraft({ contactName: 'Ravi K' });
+    p.cmp.saveVendor();
+    expect(p.api.put).toHaveBeenCalledWith('/api/vendors/v1', {
+      name: 'Apollo D', code: 'APD1', contactName: 'Ravi K', contactPhone: '9876543210', contactEmail: null, gstin: null, address: null, isActive: true,
+    });
+  });
+
+  it('Deactivate from the row: the same PUT with isActive flipped; status filter Inactive', () => {
+    const p = render();
+    p.cmp.actionsFor(rows[0]).find((a: any) => a.label === 'Deactivate').run();
+    expect(p.api.put).toHaveBeenCalledWith('/api/vendors/v1', expect.objectContaining({ isActive: false }));
+    p.cmp.status.set('inactive');
+    expect(p.cmp.visibleVendors().map((v: any) => v.id)).toEqual(['v3']);
+  });
+});

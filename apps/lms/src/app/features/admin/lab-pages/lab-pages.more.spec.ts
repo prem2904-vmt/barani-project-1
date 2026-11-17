@@ -32,7 +32,7 @@ describe('Lab › Front desk', () => {
   it('appointments and queue: token queue / walk-up only (Home collection moved to its own page)', async () => {
     const p = await renderLabPage(LabFrontDeskPage, '/page', { getFor: u => u === '/api/appointments/config' ? apptCfg() : [] });
     expect(p.el.querySelector('pf-appointments-config')).not.toBeNull();
-    const tiles = Array.from(p.el.querySelectorAll('.pf-mode-btn')).map(t => text(t.querySelector('.pf-mode-btn__t')));
+    const tiles = Array.from(p.el.querySelectorAll('[role="radiogroup"][aria-label="Queue mode"] [role="radio"]')).map(t => text(t));
     expect(tiles).toEqual(['Token queue', 'Walk-up']);
     expect(p.el.querySelector('[data-testid="ap-hc-note"]')).toBeNull();
   });
@@ -42,13 +42,14 @@ describe('Lab › Front desk', () => {
     const note = p.el.querySelector('[data-testid="ap-hc-note"]')!;
     expect(note.textContent).toContain('home collection');
     expect(note.querySelector('a')!.getAttribute('href')).toBe('/admin/lab/home-collection');
-    expect(p.el.querySelector('.pf-mode-btn[aria-checked="true"]')).toBeNull();
+    expect(p.el.querySelector('[aria-label="Queue mode"] [role="radio"][aria-checked="true"]')).toBeNull();
   });
 
-  it('?tab=referring shows the shared referring doctors and hospitals list (embeddable component)', async () => {
+  it('ONE page: queue mode / slots / priority cards AND the shared referring list (full width, Hospitals | Doctors in its head)', async () => {
     const p = await renderLabPage(LabFrontDeskPage, '/page?tab=referring');
     expect(p.el.querySelector('pf-referring-network')).not.toBeNull();
-    expect(p.el.querySelector('pf-appointments-config')).toBeNull();
+    expect(p.el.querySelector('pf-appointments-config')).not.toBeNull();
+    expect(p.el.querySelector('[data-group="referring"] .pf-sgroup__tools pf-segmented')).not.toBeNull();
   });
 });
 
@@ -87,10 +88,11 @@ describe('Lab › Home collection', () => {
     expect(p.el.querySelector<HTMLButtonElement>('[data-testid="hc-switch"]')!.disabled).toBe(false);
   });
 
-  it('?tab=agents is the existing agents screen (coverage area and share of work)', async () => {
+  it('one page: the switch card and the agents grid as group cards; the agents group carries the switch as ONE compact strip (owner 2026-11-17)', async () => {
     const p = await renderLabPage(LabHomeCollectionPage, '/page?tab=agents', { providers: [features(true)] });
-    expect(p.el.querySelector('pf-home-collection-agents')).not.toBeNull();
-    expect(p.el.querySelector('[data-testid="hc-switch"]')).toBeNull();
+    expect(p.el.querySelector('[data-group="agents"] pf-home-collection-agents')).not.toBeNull();
+    expect(p.el.querySelector('[data-testid="hc-switch"]')).not.toBeNull();
+    expect(p.el.querySelector('[data-group="agents"] pf-home-collection-agents .pf-hs-strip [data-testid="hc-switch"]')).not.toBeNull();
   });
 });
 
@@ -137,7 +139,7 @@ describe('Notifications config — department input (Lab alerts, OPD alerts, IPD
     const lab = make('lab');
     lab.el.querySelector<HTMLButtonElement>('.pf-nc-master__switch')!.click();   // off asks first: dialog stub says no
     expect(lab.api.post).not.toHaveBeenCalled();
-    expect(text(lab.el.querySelector('.pf-nc-master__sub'))).toContain('2 of 2 alerts');
+    expect(text(lab.el.querySelector('.pf-nc-master .pf-srow__hint'))).toContain('2 of 2 alerts');
   });
   it('a row switch posts the same body as before', () => {
     const p = make('lab');
@@ -206,7 +208,7 @@ describe('Payment rules card (moved to Billing; one extractable component)', () 
   });
   it('require full payment PATCHes paymentGateStage; payments-due tab PATCHes showPaymentsDueTab', () => {
     const p = make(true, { paymentGateStage: 'none', showPaymentsDueTab: true });
-    expect(Array.from(p.el.querySelectorAll('.pf-card__label')).map(x => text(x))).toEqual(['Require full payment to progress', 'Show "Payments due" tab']);
+    expect(Array.from(p.el.querySelectorAll('.pf-srow__label')).map(x => text(x))).toEqual(['Require full payment to progress', 'Show the Payments due tab']);
     Array.from(p.el.querySelectorAll<HTMLButtonElement>('[role="radio"]')).find(b => text(b).startsWith('Block at report'))!.click();
     expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/branch-lab-config', { paymentGateStage: 'report' });
     p.el.querySelector<HTMLButtonElement>('button[aria-label="Show &quot;Payments due&quot; tab"], [data-testid="pr-due"] button[role="switch"]')!.click();

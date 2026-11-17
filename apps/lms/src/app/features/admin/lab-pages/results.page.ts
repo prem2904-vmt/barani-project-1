@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, viewChild } from '@angular/core';
 import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
 import { CultureSettingsComponent } from '../../lab/culture-settings/culture-settings.component';
 import { LabSettingsComponent } from '../lab-settings/lab-settings.component';
@@ -15,13 +15,9 @@ import { LabPageComponent, labPageTab } from './lab-page.component';
   imports: [LabPageComponent, LabSettingsComponent, CultureSettingsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)"
-                 subtitle="Who signs results, the numbers calculated results use, and how the culture bench is timed.">
-      @switch (tab()) {
-        @case ('validation') { <pf-lab-settings [cards]="['require-validation']"></pf-lab-settings> }
-        @case ('constants') { <pf-lab-settings [cards]="['calc-constants']"></pf-lab-settings> }
-        @case ('micro') { <pf-culture-settings [embedded]="true"></pf-culture-settings> }
-      }
+    <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)">
+      <pf-lab-settings [cards]="['require-validation', 'calc-constants']" [groups]="groups" [embedded]="true"></pf-lab-settings>
+      <pf-culture-settings #cult [embedded]="true"></pf-culture-settings>
     </pf-lab-page>
   `,
 })
@@ -30,4 +26,12 @@ export class LabResultsPage {
   private readonly t = labPageTab(LAB_PAGES.results);
   protected readonly tab = this.t.tab;
   protected pick(id: string) { this.t.pick(id); }
+  /** Ask before leaving with unsaved microbiology changes. */
+  private readonly culture = viewChild(CultureSettingsComponent);
+  readonly unsavedLabel = 'the microbiology settings';
+  hasUnsavedChanges(): boolean { return !!this.culture()?.isDirty(); }
+  protected readonly groups = {
+    'require-validation': { id: 'validation', label: 'Validation', scope: 'this branch' },
+    'calc-constants': { id: 'constants', label: 'Calculations', scope: 'all branches' },
+  } as const;
 }

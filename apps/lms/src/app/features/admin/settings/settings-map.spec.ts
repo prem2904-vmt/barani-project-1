@@ -1,9 +1,11 @@
 import {
   LEGACY_SECTION, SETTINGS_GROUPS, SETTINGS_PATHS as P, SETTINGS_SECTIONS, allSettingsPaths, categoryPath, locateSettings,
-  categoriesFromPage, rehome, rehomeHref, settingsParents,
+  categoriesFromPage, categoryTarget, rehome, rehomeHref, settingsParents, SETTINGS_FULL_SCREEN_PATHS,
 } from './settings-map';
 import { ROUTE_ACCESS } from '../../../core/auth/route-access';
-import { SETTINGS_SHELL_CHILDREN } from './settings.routes';
+import { SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from './settings.routes';
+import { CASESHEET_SHELL_ROUTES } from '../../casesheets/casesheets.routes';
+import { OPD_ADMIN_ROUTES } from '../../opd/opd.routes';
 import { SETTINGS_CATALOG, SETTINGS_PARENT } from '../../../shared/utils/settings-catalog';
 
 describe('Settings map — the approved structure', () => {
@@ -73,9 +75,18 @@ describe('Settings map — the approved structure', () => {
 
 describe('Settings route table — one row per path, every path gated and hosted', () => {
   const hosted = new Set(SETTINGS_SHELL_CHILDREN.map((r) => '/' + (r.path ?? '')));
+  const full = new Set(SETTINGS_FULL_PAGE_ROUTES.map((r) => '/' + (r.path ?? '')));
+  const sheets = new Set(CASESHEET_SHELL_ROUTES.map((r) => '/' + (r.path ?? '')));
+  const opd = new Set(OPD_ADMIN_ROUTES.map((r) => '/' + (r.path ?? '')));
 
-  it('every path a setting or category answers on is a hosted route (nothing 404s)', () => {
-    for (const p of allSettingsPaths()) expect(hosted.has(p), p).toBe(true);
+  it('every path a setting or category answers on is routed (hosted card page or full-screen page — nothing 404s)', () => {
+    for (const p of allSettingsPaths()) expect(hosted.has(p) || full.has(p) || sheets.has(p) || opd.has(p), p).toBe(true);
+  });
+
+  it('full-screen pages are never hosted; card-style pages always are (DESIGN-V2 rule 2)', () => {
+    for (const p of SETTINGS_FULL_SCREEN_PATHS) expect(hosted.has(p), p).toBe(false);
+    for (const p of ['/admin/lab/sample-numbers', '/admin/lab/collection', '/admin/org/profile', '/admin/billing']) expect(hosted.has(p), p).toBe(true);
+    expect(full.has('/admin/tests')).toBe(true);
   });
 
   it('every hosted path has a ROUTE_ACCESS gate (or its own guards)', () => {
@@ -100,8 +111,8 @@ describe('Settings route table — one row per path, every path gated and hosted
   });
 
   it('locate: a tabbed page picks the category the URL names, else the first', () => {
-    expect(locateSettings('/admin/org/numbers', { tab: 'order' })?.category?.id).toBe('order');
-    expect(locateSettings('/admin/org/numbers')?.category?.id).toBe('patient');
+    expect(locateSettings('/admin/billing', { tab: 'payments' })?.category?.id).toBe('payments');
+    expect(locateSettings('/admin/billing')?.category?.id).toBe('gst');
     expect(locateSettings('/admin/tests', { view: 'pricing' })?.category?.id).toBe('pricing');
     expect(locateSettings('/admin/lab/outsourcing')?.category).toBeNull();
     expect(locateSettings('/admin/lab/outsourcing')?.item.id).toBe('lab-outsourcing');
@@ -122,7 +133,12 @@ describe('Old links keep working — they all land on a new home', () => {
     expect(rehome('/admin/lab-settings', { tab: 'queues' })).toEqual({ path: P.labCollection, query: { tab: 'queue' } });
     expect(rehome('/admin/lab-settings', { tab: 'collection' })).toEqual({ path: P.labSampleNumbers, query: { tab: 'find' } });
     expect(rehome('/admin/lab-settings', { tab: 'rules' })).toEqual({ path: P.labResults, query: { tab: 'validation' } });
-    expect(rehome('/admin/lab-settings', { tab: 'report' })).toEqual({ path: P.reportOptions, query: { tab: 'notes' } });
+    expect(rehome('/admin/lab-settings', { tab: 'report' })).toEqual({ path: P.reports, query: { tab: 'table' } });
+    // Report options are tabs of Report design now (one page, owner 2026-11-17).
+    expect(rehome('/admin/lab/report-options', { tab: 'sending' })).toEqual({ path: P.reports, query: { tab: 'sending' } });
+    // Report notes is a row of the Results table tab.
+    expect(rehome('/admin/lab/report-options', { tab: 'notes' })).toEqual({ path: P.reports, query: { tab: 'table' } });
+    expect(rehome('/admin/lab/report-options')).toEqual({ path: P.reports, query: { tab: 'table' } });
     expect(rehome('/admin/lab-settings', { tab: 'rules', card: 'calc-constants' })).toEqual({ path: P.labResults, query: { tab: 'constants' } });
     expect(rehome('/admin/lab-settings')?.path).toBe(P.labSampleNumbers);
   });
@@ -201,9 +217,10 @@ describe('Categories from a page list (the Lab pages\' LAB_PAGES shape)', () => 
     ]);
   });
 
-  it('Report design lists Report design, Technician notes and Report sending (report-options ?tab=notes|sending)', () => {
+  it('Report design lists its tabs, ending with Footer and Sending (Report notes is a row of Results table)', () => {
     const rd = SETTINGS_SECTIONS.flatMap((s) => s.items).find((i) => i.id === 'lab-report')!;
-    const tail = rd.categories.slice(-2).map((c) => [c.path, c.query?.['tab']]);
-    expect(tail).toEqual([['/admin/lab/report-options', 'notes'], ['/admin/lab/report-options', 'sending']]);
+    expect(rd.categories.slice(-2).map((c) => c.query?.['tab'])).toEqual(['footer', 'sending']);
+    expect(categoryTarget(rd, rd.categories.at(-1)!).path).toBe('/admin/reports');
+    expect(rd.categories.some((c) => c.query?.['tab'] === 'notes')).toBe(false);
   });
 });

@@ -189,6 +189,10 @@ export async function installNegBackend(page: Page, context: BrowserContext, o: 
   await context.route(/(whatsapp\.com|wa\.me)\//, route => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>WhatsApp (stub)</title><p>stub</p>' }));
   await page.routeWebSocket(/\/hubs\//, ws => { ws.onMessage(() => ws.send('{}\x1e')); });
   await page.addInitScript(([session, storage, hint]) => {
+    // A frame without storage (the report designer's PDF preview iframe) has nothing to seed.
+    let store: Storage | null = null;
+    try { store = window.sessionStorage; } catch { store = null; }
+    if (!store) return;
     // Seed with the REAL storage first, then (maybe) break it for the app.
     if (!sessionStorage.getItem('pf.e2e.seeded')) {
       sessionStorage.setItem('pf.e2e.seeded', '1'); localStorage.clear();
@@ -236,7 +240,7 @@ export async function pickCommsTab(page: Page, label: string): Promise<void> {
   const id = COMMS_TAB[label] ?? label.toLowerCase();
   const item = page.locator(`[data-testid="tp-item-${id}"]`).locator('visible=true').first();
   if (!(await item.count())) {
-    const back = page.locator('[data-testid="tp-back"], [data-testid="tp-nav-back"]').locator('visible=true').first();
+    const back = page.locator('.pf-hb__back').locator('visible=true').first();
     if (await back.count()) await back.click();
   }
   await page.locator(`[data-testid="tp-item-${id}"]`).locator('visible=true').first().click();

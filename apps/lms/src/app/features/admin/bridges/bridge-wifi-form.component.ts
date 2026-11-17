@@ -23,7 +23,7 @@ const OTHER = '\u0000other';
       <ul class="pf-bwf__nets" role="radiogroup" aria-label="Wi-Fi networks the Bridge can see">
         @for (n of networks(); track n.ssid) {
           <li>
-            <button type="button" class="nd-row nd-tile-sel pf-bwf__net press" role="radio" [attr.aria-checked]="picked() === n.ssid" (click)="pick(n)">
+            <button type="button" class="pf-row pf-tile-sel pf-bwf__net press" role="radio" [attr.aria-checked]="picked() === n.ssid" (click)="pick(n)">
               <svg class="pf-bwf__wifi" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 20h.01"/>
                 <path d="M8.5 16.4a5 5 0 0 1 7 0" [attr.opacity]="bars(n) >= 2 ? 1 : 0.3"/>
@@ -31,8 +31,8 @@ const OTHER = '\u0000other';
                 <path d="M1.5 9.4a15 15 0 0 1 21 0" [attr.opacity]="bars(n) >= 4 ? 1 : 0.3"/>
               </svg>
               <span class="pf-bwf__net-main">
-                <span class="nd-row__name">{{ n.ssid }}</span>
-                <span class="nd-row__meta">{{ netMeta(n) }}</span>
+                <span class="pf-row__name">{{ n.ssid }}</span>
+                <span class="pf-row__meta">{{ netMeta(n) }}</span>
               </span>
               @if (n.security !== 'open') {
                 <svg class="pf-bwf__lock" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
@@ -41,11 +41,11 @@ const OTHER = '\u0000other';
           </li>
         }
         <li>
-          <button type="button" class="nd-row nd-tile-sel pf-bwf__net press" role="radio" [attr.aria-checked]="picked() === OTHER" (click)="pickOther()">
+          <button type="button" class="pf-row pf-tile-sel pf-bwf__net press" role="radio" [attr.aria-checked]="picked() === OTHER" (click)="pickOther()">
             <svg class="pf-bwf__wifi" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             <span class="pf-bwf__net-main">
-              <span class="nd-row__name">Other network</span>
-              <span class="nd-row__meta">A hidden network — type its name</span>
+              <span class="pf-row__name">Other network</span>
+              <span class="pf-row__meta">A hidden network — type its name</span>
             </span>
           </button>
         </li>
@@ -54,25 +54,25 @@ const OTHER = '\u0000other';
       @if (picked()) {
         <div class="pf-bwf__fields">
           @if (picked() === OTHER) {
-            <label class="nd-field">
-              <span class="nd-field__lbl">Network name</span>
-              <input class="nd-input" [class.nd-input--error]="touched() && !!issue('ssid')" [value]="form().ssid" (input)="patch({ ssid: val($event) })"
+            <label class="pf-field">
+              <span class="pf-field__lbl">Network name</span>
+              <input class="pf-input" [class.pf-input--error]="touched() && !!issue('ssid')" [value]="form().ssid" (input)="patch({ ssid: val($event) })"
                      autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64" />
               @if (touched() && issue('ssid')) { <span class="pf-bwf__err" role="alert">{{ issue('ssid') }}</span> }
             </label>
-            <div class="nd-field">
-              <span class="nd-field__lbl" id="pf-bwf-sec">Security</span>
+            <div class="pf-field">
+              <span class="pf-field__lbl" id="pf-bwf-sec">Security</span>
               <pf-select aria-labelledby="pf-bwf-sec" [options]="securityOptions" [value]="form().security" (valueChange)="patch({ security: $event })"></pf-select>
             </div>
           }
 
           @if (form().security === 'wpa2-psk' || form().security === 'wpa3-sae') {
-            <label class="nd-field">
-              <span class="nd-field__lbl">Wi-Fi password</span>
+            <label class="pf-field">
+              <span class="pf-field__lbl">Wi-Fi password</span>
               <span class="pf-bwf__pw">
-                <input class="nd-input" [type]="showPw() ? 'text' : 'password'" [class.nd-input--error]="touched() && !!issue('psk')" [value]="form().psk"
+                <input class="pf-input" [type]="showPw() ? 'text' : 'password'" [class.pf-input--error]="touched() && !!issue('psk')" [value]="form().psk"
                        (input)="patch({ psk: val($event) })" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="63" />
-                <button type="button" class="nd-btn nd-btn--icon pf-bwf__eye" (click)="showPw.set(!showPw())" [attr.aria-label]="showPw() ? 'Hide password' : 'Show password'" [attr.aria-pressed]="showPw()">
+                <button type="button" class="pf-btn pf-btn--icon pf-bwf__eye" (click)="showPw.set(!showPw())" [attr.aria-label]="showPw() ? 'Hide password' : 'Show password'" [attr.aria-pressed]="showPw()">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
               </span>
@@ -82,29 +82,29 @@ const OTHER = '\u0000other';
 
           @if (form().security === 'wpa2-eap') {
             <div class="pf-bwf__grid">
-              <label class="nd-field">
-                <span class="nd-field__lbl">Username</span>
-                <input class="nd-input" [class.nd-input--error]="touched() && !!issue('identity')" [value]="form().identity" (input)="patch({ identity: val($event) })"
+              <label class="pf-field">
+                <span class="pf-field__lbl">Username</span>
+                <input class="pf-input" [class.pf-input--error]="touched() && !!issue('identity')" [value]="form().identity" (input)="patch({ identity: val($event) })"
                        autocomplete="off" autocapitalize="off" spellcheck="false" />
                 @if (touched() && issue('identity')) { <span class="pf-bwf__err" role="alert">{{ issue('identity') }}</span> }
               </label>
-              <label class="nd-field">
-                <span class="nd-field__lbl">Password</span>
-                <input class="nd-input" type="password" [class.nd-input--error]="touched() && !!issue('password')" [value]="form().password" (input)="patch({ password: val($event) })" autocomplete="off" />
+              <label class="pf-field">
+                <span class="pf-field__lbl">Password</span>
+                <input class="pf-input" type="password" [class.pf-input--error]="touched() && !!issue('password')" [value]="form().password" (input)="patch({ password: val($event) })" autocomplete="off" />
                 @if (touched() && issue('password')) { <span class="pf-bwf__err" role="alert">{{ issue('password') }}</span> }
               </label>
-              <label class="nd-field">
-                <span class="nd-field__lbl">Server domain <span class="pf-bwf__opt">recommended</span></span>
-                <input class="nd-input" [value]="form().domainSuffixMatch" (input)="patch({ domainSuffixMatch: val($event) })" placeholder="e.g. radius.hospital.in"
+              <label class="pf-field">
+                <span class="pf-field__lbl">Server domain <span class="pf-bwf__opt">recommended</span></span>
+                <input class="pf-input" [value]="form().domainSuffixMatch" (input)="patch({ domainSuffixMatch: val($event) })" placeholder="e.g. radius.hospital.in"
                        autocomplete="off" autocapitalize="off" spellcheck="false" />
               </label>
-              <label class="nd-field">
-                <span class="nd-field__lbl">Anonymous identity <span class="pf-bwf__opt">optional</span></span>
-                <input class="nd-input" [value]="form().anonymousIdentity" (input)="patch({ anonymousIdentity: val($event) })" autocomplete="off" autocapitalize="off" spellcheck="false" />
+              <label class="pf-field">
+                <span class="pf-field__lbl">Anonymous identity <span class="pf-bwf__opt">optional</span></span>
+                <input class="pf-input" [value]="form().anonymousIdentity" (input)="patch({ anonymousIdentity: val($event) })" autocomplete="off" autocapitalize="off" spellcheck="false" />
               </label>
-              <label class="nd-field pf-bwf__span">
-                <span class="nd-field__lbl">CA certificate <span class="pf-bwf__opt">recommended — from IT</span></span>
-                <textarea class="nd-input pf-bwf__pem" rows="3" [class.nd-input--error]="touched() && !!issue('caCertPem')" [value]="form().caCertPem" (input)="patch({ caCertPem: val($event) })"
+              <label class="pf-field pf-bwf__span">
+                <span class="pf-field__lbl">CA certificate <span class="pf-bwf__opt">recommended — from IT</span></span>
+                <textarea class="pf-input pf-bwf__pem" rows="3" [class.pf-input--error]="touched() && !!issue('caCertPem')" [value]="form().caCertPem" (input)="patch({ caCertPem: val($event) })"
                           placeholder="-----BEGIN CERTIFICATE-----" spellcheck="false"></textarea>
                 @if (touched() && issue('caCertPem')) { <span class="pf-bwf__err" role="alert">{{ issue('caCertPem') }}</span> }
               </label>
@@ -115,11 +115,11 @@ const OTHER = '\u0000other';
                 <span>Without the CA certificate or the server domain, the Bridge can't tell this network from an impostor that copies its name, which could collect this password. Ask IT for one of them.</span>
               </div>
             }
-            <p class="nd-field__hint">Enterprise Wi-Fi uses PEAP (MSCHAPv2). Certificate-only (EAP-TLS) networks aren't supported yet.</p>
+            <p class="pf-field__hint">Enterprise Wi-Fi uses PEAP (MSCHAPv2). Certificate-only (EAP-TLS) networks aren't supported yet.</p>
           }
 
           @if (form().security === 'open') {
-            <p class="nd-field__hint">This network has no password. If it opens a sign-in page (guest Wi-Fi), the Bridge can't use it.</p>
+            <p class="pf-field__hint">This network has no password. If it opens a sign-in page (guest Wi-Fi), the Bridge can't use it.</p>
           }
         </div>
       }
@@ -131,7 +131,7 @@ const OTHER = '\u0000other';
     .pf-bwf { display: flex; flex-direction: column; gap: 14px; }
     .pf-bwf__nets { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
     .pf-bwf__net { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px; text-align: left; border-radius: 12px;
-      border: 1px solid var(--nd-line); background: transparent; color: var(--text-primary); cursor: pointer; }
+      border: 1px solid var(--pf-line); background: transparent; color: var(--text-primary); cursor: pointer; }
     /* The kit's neutral selected state (the base rule above would out-rank it). */
     .pf-bwf__net[aria-checked='true'] { @include nd.neutral-selected; }
     .pf-bwf__net-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -140,7 +140,7 @@ const OTHER = '\u0000other';
     .pf-bwf__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .pf-bwf__span { grid-column: 1 / -1; }
     .pf-bwf__pw { position: relative; display: flex; align-items: center; }
-    .pf-bwf__pw .nd-input { flex: 1 1 auto; padding-right: 44px; }
+    .pf-bwf__pw .pf-input { flex: 1 1 auto; padding-right: 44px; }
     .pf-bwf__eye { position: absolute; right: 2px; }
     .pf-bwf__pem { font-size: 12px; min-height: 72px; }
     .pf-bwf__opt { font-weight: 400; color: var(--text-tertiary); }
@@ -151,7 +151,7 @@ const OTHER = '\u0000other';
     .pf-bwf__warn svg { flex: none; margin-top: 2px; }
     @media (max-width: 640px) {
       .pf-bwf__grid { grid-template-columns: minmax(0, 1fr); }
-      .pf-bwf .nd-input { font-size: 16px; min-height: 44px; }
+      .pf-bwf .pf-input { font-size: 16px; min-height: 44px; }
     }
   `],
 })

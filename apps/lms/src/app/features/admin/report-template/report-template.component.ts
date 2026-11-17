@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
+import { AuthService } from '../../../core/auth/auth.service';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { OrgProfileService } from '../org/org-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -45,7 +47,12 @@ import { ORDER_QR_KEY, PROFILE_QR_KEY } from '../../../shared/utils/patient-stri
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
-import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
+import { bindTabQuery } from '../../../shared/utils/settings-host';
+import { HasUnsavedChanges } from '../../../shared/utils/unsaved-changes';
+import { ReportSendingCardComponent } from '../lab-pages/report-sending-card.component';
+import type { BranchLabConfig } from '../../../shared/models/branch-lab-config.model';
+import { findReportSettings, type ReportFindHit } from './report-find';
+import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 
 /** More sample tests so the live preview runs to three pages. */
 const previewTest = (testId: string, name: string, rows: Array<[string, string, string, string]>) => ({
@@ -73,7 +80,11 @@ const PREVIEW_EXTRA_TESTS = [
   previewTest('x6', 'HbA1c', [['HbA1c', '5.6', '%', '4.0 – 5.6'], ['Estimated Average Glucose', '114', 'mg/dL', '< 117']]),
 ];
 
-type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer';
+type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer' | 'sending';
+/** Every tab of the ONE report page, in band order (the URL's ?tab= names one). */
+export const REPORT_TABS: readonly Tab[] = ['letterhead', 'patient', 'columns', 'table', 'sequence', 'footer', 'sending'];
+/** Tabs that are not part of the template: they save on their own as you switch (no Save needed). */
+const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
 
 /** Admin editor for the per-tenant ReportTemplateEntity. Seven tabs:
  *  Identity / Header & Logo / Theme / Patient / Date & Time / Columns /
@@ -83,7 +94,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [RouterLink, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
+  imports: [NgTemplateOutlet, SettingsSavebarComponent, SettingRowComponent, ReportSendingCardComponent, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
@@ -96,23 +107,13 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-band-page px-4 md:px-6 lg:px-8 pt-3 pb-10 pf-rt-page">
-      @if (theme.isNewDesign()) {
-        <!-- Band (owner): the report's sections are the pill's tabs (tabs-only
-             pill — the page has nothing to search); Save rides the band. -->
-        <pf-hero-band [back]="true" [tabsOnly]="true">
-          <ng-container band-tools>
-            <pf-segmented class="pf-hb-tabs" size="sm" [options]="sectionOptions"
-                          [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
-          </ng-container>
-          <ng-container band-actions>
-            <a class="pf-hb-btn pf-hb-btn--ghost press pf-rt-options" [routerLink]="reportOptionsPath" data-testid="rt-report-options"
-               aria-label="Report options: technician notes and WhatsApp sending" title="Report options: technician notes and WhatsApp sending">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
-              Report options
-            </a>
+
+      <!-- The settings pane's own tools (head: Tidy up tertiary + the issues chip + the save state) and its Save bar. -->
+      <ng-template #rtPaneTools>
+        @if (!notesOnly()) {
+          <div class="pf-rt-panebar">
             @if (tidyShown()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
+              <button type="button" class="pf-btn pf-btn--tertiary press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
                       aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 3.5 12.9 8.6 18 10.5 12.9 12.4 11 17.5 9.1 12.4 4 10.5 9.1 8.6Z"/><path d="M18.5 15.5 19.3 17.7 21.5 18.5 19.3 19.3 18.5 21.5 17.7 19.3 15.5 18.5 17.7 17.7Z"/></svg>
                 Tidy up
@@ -125,23 +126,37 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                 <span class="pf-rt-issues__t">{{ issuesLabel() }}</span>
               </button>
             }
-            <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite">
-              @if (dirty()) {
+            <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite" data-testid="rt-savestate"
+                  [attr.title]="selfSavingTab() ? 'Sending saves as you switch it' : null">
+              @if (optionsSaving()) {
+                <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Saving…</span>
+              } @else if (dirty()) {
                 <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-rt-savestate__t">Unsaved changes</span>
               } @else {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-rt-savestate__t">All changes saved</span>
               }
             </span>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
-                    [disabled]="saving() || tplSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" aria-label="Save template" title="Save template">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                <path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>
-              </svg>
-              {{ saving() ? 'Saving…' : 'Save' }}
-            </button>
+          </div>
+        }
+      </ng-template>
+      <ng-template #rtPaneSave>
+        @if (!notesOnly()) {
+          <pf-settings-savebar saveTestId="rt-save" [dirty]="dirty()" [saving]="saving()" [canSave]="!tplSkeleton()" [canDiscard]="false"
+                               (save)="save()"></pf-settings-savebar>
+        }
+      </ng-template>
+    <section class="pf-band-page px-4 md:px-6 lg:px-8 pt-3 pb-10 pf-rt-page">
+      @if (theme.isNewDesign()) {
+        <!-- Band (owner 2026-11-17): ONE page for the report — design, technician
+             notes and sending. Back chevron, a search pill that finds a setting
+             on any tab, and the tabs in the same pill; Save rides the band. -->
+        <pf-hero-band [back]="true" placeholder="Find a report setting" [value]="findQuery()"
+                      (valueChange)="onFind($event)" (submitted)="pickFirstFind()">
+          <ng-container band-tools>
+            <pf-segmented class="pf-hb-tabs pf-rt-tabs" size="sm" [options]="sectionOptions()"
+                          [value]="tab()" (valueChange)="setTab($event)" data-testid="rt-tabs"></pf-segmented>
           </ng-container>
+          <!-- Settings (owner 2026-11-17): no buttons in the band — Tidy up, issues and Save sit in the settings pane. -->
         </pf-hero-band>
       }
       <header class="pf-rt-head pf-classic-only">
@@ -149,12 +164,6 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           <h1 class="pf-rt-title">Report designer</h1>
           <p class="pf-rt-sub">How every printed report looks — edit on the left, watch the page on the right.</p>
         </div>
-        <a class="pf-hb-btn pf-hb-btn--ghost press pf-rt-options" [routerLink]="reportOptionsPath" data-testid="rt-report-options-classic"
-               aria-label="Report options: technician notes and WhatsApp sending" title="Report options: technician notes and WhatsApp sending">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
-              Report options
-            </a>
-            
         @if (tidyShown()) {
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
                   aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">
@@ -170,7 +179,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           </button>
         }
         <span class="pf-savestate pf-rt-savestate" role="status" aria-live="polite">
-          @if (dirty()) { <span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
+          @if (optionsSaving()) { <span class="pf-savestate__dot" aria-hidden="true"></span>Saving… } @else if (dirty()) { <span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes } @else { All changes saved }
         </span>
         <pf-touch-btn size="sm" variant="primary" (pressed)="save()" [disabled]="saving() || tplSkeleton()" [busy]="saving()" busyLabel="Saving…">
           {{ saving() ? 'Saving…' : 'Save' }}
@@ -181,7 +190,19 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
         <pf-report-tidy-card [tpl]="tpl()" [base]="tb" (applied)="applyTidy($event)" (close)="tidyOpen.set(false)"></pf-report-tidy-card>
       }
 
-      <div class="pf-band-body pf-band-body--fill">
+      <div class="pf-band-body pf-band-body--fill pf-rt-body">
+      @if (findQuery().trim()) {
+        <div class="pf-card pf-rt-find" role="listbox" aria-label="Report settings found" data-testid="rt-find">
+          @for (h of findHits(); track h.label + h.tab) {
+            <button type="button" class="pf-rt-find__hit press" role="option" aria-selected="false" (click)="pickFind(h)">
+              <span class="pf-rt-find__l">{{ h.label }}</span>
+              <span class="pf-rt-find__t">{{ tabLabel(h.tab) }}</span>
+            </button>
+          } @empty {
+            <p class="pf-rt-find__none">Nothing on the report pages matches “{{ findQuery().trim() }}”.</p>
+          }
+        </div>
+      }
       @if (tplSkeleton()) {
         <!-- First load: the designer's shape until the lab's template lands
              (never the defaults flashing before the saved template). -->
@@ -191,7 +212,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
         </div>
       } @else {
       <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden() || theme.isNewDesign()"
-           [class.pf-rt-grid--designer]="designerTab()">
+           [class.pf-rt-grid--designer]="designerTab()" [class.pf-rt-grid--solo]="notesOnly()">
         <!-- ── Section rail (CLASSIC only): the new design puts the
              sections in the band pill, so the rail is gone and the editor +
              preview get the full width. ── -->
@@ -221,9 +242,11 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
             [pdfUrl]="rawPreviewUrl()" [imageCache]="imageCache()" [rendering]="rendering()"
             [canUndo]="canUndo()" [canRedo]="canRedo()" [sigSample]="sigSample()" (sigSampleChange)="sigSample.set($event)"
             (patch)="patch($event)" (undo)="undo()" (redo)="redo()"></pf-report-header-editor>
+          <div class="pf-rt-designer-bar"><ng-container *ngTemplateOutlet="rtPaneTools"></ng-container><ng-container *ngTemplateOutlet="rtPaneSave"></ng-container></div>
         } @else {
         <!-- ── Focused section panel. ── -->
         <div class="pf-rt-work">
+          <ng-container *ngTemplateOutlet="rtPaneTools"></ng-container>
           @if (!theme.isNewDesign()) {
             @if (railHidden()) {
               <button type="button" class="pf-rt-side-expand" (click)="toggleRail()"
@@ -539,6 +562,8 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
             <!-- ══ RESULTS TABLE — style ══ -->
             @case ('table') {
               <div class="pf-rt-flat">
+                <!-- Lab-settings-only people (notesOnly) see ONLY the Report notes row below. -->
+                @if (!notesOnly()) {
                 <pf-report-style-cards [tpl]="tpl()" [applied]="appliedBanner()"
                   (preset)="applyPreset($event)" (palette)="applyPalette($event)" (custom)="applyCustomColors($event)"
                   (printSafeChange)="setPrintSafe($event)" (undo)="undo()"></pf-report-style-cards>
@@ -806,6 +831,22 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
                   </div>
                 </div>
                 </div>
+                }
+
+                <!-- Report notes: one switch, grouped with what prints under the
+                     results. Per branch (branch-lab-config.techReportNotes) and
+                     saves as you switch it — not with the template's Save. -->
+                <div class="pf-rtb" id="pf-rt-notes" data-testid="ls-tech-notes">
+                  <h4 class="pf-rtb-h">Report notes</h4>
+                  <pf-setting-row label="Technicians can add notes"
+                                  hint="Prints under a test, profile, department or the whole report. This branch only; saves as you switch it.">
+                    <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="techNotes() === true"
+                            aria-label="Report notes" [disabled]="techNotes() === null || notesSaving() > 0"
+                            (click)="setTechNotes(!techNotes())">
+                      <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                    </button>
+                  </pf-setting-row>
+                </div>
               </div>
             }
 
@@ -813,6 +854,17 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
             @case ('columns') {
               <pf-report-columns-editor (stateChange)="onColumnsState($event)">
               </pf-report-columns-editor>
+            }
+
+            <!-- ══ SENDING — WhatsApp Auto (same settings API), saves on each switch ══ -->
+            @case ('sending') {
+              <div class="pf-rt-flat">
+                <div class="pf-rtb">
+                  <h4 class="pf-rtb-h">Send reports on WhatsApp</h4>
+                  <p class="pf-rtb-s">What the lab sends when a report is ready. Saves as you switch.</p>
+                  <pf-report-sending-card (savingChange)="sendingSaving.set($event)"></pf-report-sending-card>
+                </div>
+              </div>
             }
 
             <!-- ══ SEQUENCING — department + test print order ══ -->
@@ -823,9 +875,12 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
             }
 
           }
+          <ng-container *ngTemplateOutlet="rtPaneSave"></ng-container>
         </div>
 
-        <!-- ── Right: live PDF preview, shared by every section. ─────── -->
+        <!-- ── Right: live PDF preview, shared by every section (not for
+             Lab-settings-only people: they see the Report notes row only). ── -->
+        @if (!notesOnly()) {
         <aside class="pf-rt-aside" [class.pf-card]="theme.isNewDesign()" aria-label="Live preview">
           @if (theme.isNewDesign()) {
             <div class="pf-card__head pf-rt-aside__head">
@@ -844,9 +899,12 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
             <span class="pf-rt-bw__t">Black &amp; white preview <span class="pf-rt-bw__d">— see how it photocopies</span></span>
           </div>
           <div class="pf-pdf-frame" [class.pf-bw]="bwPreview()">
-            @if (previewSafe()) {
-              <iframe [src]="previewSafe()" title="Report PDF preview"
-                      class="w-full pf-pdf-iframe"></iframe>
+            @if (previewSafe(); as src) {
+              <!-- One iframe per preview URL (keyed): a NEW frame's first load replaces its blank page, so no session-history entry; re-pointing a live frame's src adds one per render and Back needs several presses. -->
+              @for (u of [src]; track u) {
+                <iframe [src]="u" title="Report PDF preview"
+                        class="w-full pf-pdf-iframe"></iframe>
+              }
             } @else {
               <div class="flex items-center justify-center h-[600px]" style="color: var(--text-tertiary);">
                 Loading preview…
@@ -856,12 +914,15 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
           <p class="pf-rt-aside__hint">Preview uses a sample order. Save to apply this template to real reports.</p>
         </aside>
         }
+        }
       </div>
       }
       </div>
     </section>
   `,
   styles: [`
+    .pf-rt-panebar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; padding: 4px 0 10px; }
+    .pf-rt-designer-bar { display: flex; flex-direction: column; gap: 6px; }
     /* ── WYSIWYG paper insets: light "print" surfaces on the dark page ── */
     .pf-wys-paper { background: #ffffff; color: #111; border-radius: 10px; padding: 12px 14px;
       border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 1px 6px rgba(0,0,0,0.35); }
@@ -1175,6 +1236,7 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     /* ── Letterhead / Footer designer: the page card + its side card take
        the whole body (after the classic rail, when it shows). ── */
     .pf-rt-grid.pf-rt-grid--designer { grid-template-columns: 188px minmax(0, 1fr); }
+    .pf-rt-grid.pf-rt-grid--solo { grid-template-columns: minmax(0, 1fr); }
     .pf-rt-grid.pf-rt-grid--designer.pf-rt-grid--norail { grid-template-columns: minmax(0, 1fr); }
     @media (max-width: 1180px) { .pf-rt-grid.pf-rt-grid--designer { grid-template-columns: minmax(0, 1fr); } }
     .pf-rt-designer { min-width: 0; min-height: 0; }
@@ -1202,13 +1264,29 @@ type Tab = 'letterhead' | 'patient' | 'table' | 'columns' | 'sequence' | 'footer
     .pf-rt-issues:focus-visible { outline: 2px solid var(--warning-text); outline-offset: 2px; }
     @media (max-width: 640px) { .pf-rt-issues__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } .pf-rt-issues { width: 34px; padding: 0; justify-content: center; } }
     .pf-rt-savestate { margin-right: 4px; }
+    /* Search + eight tabs share the pill: on tablet widths the tabs scroll sideways so the search keeps room. */
+    @media (min-width: 768px) {
+      :host ::ng-deep pf-hero-band .pf-hb__input { min-width: 150px; }
+      :host ::ng-deep pf-hero-band .pf-hb__tools { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+      :host ::ng-deep pf-hero-band .pf-hb__tools::-webkit-scrollbar { display: none; }
+    }
+    /* Band search results: a card under the band, over the body. */
+    .pf-rt-body { position: relative; }
+    .pf-rt-find { position: absolute; z-index: 30; left: 50%; transform: translateX(-50%); top: 0;
+      width: min(560px, calc(100% - 32px)); max-height: min(60dvh, 420px); overflow-y: auto; padding: 6px;
+      display: flex; flex-direction: column; gap: 2px; box-shadow: var(--shadow-lg, 0 12px 32px rgba(15,23,42,.18)); }
+    .pf-rt-find__hit { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 12px; border-radius: 10px;
+      border: 0; background: transparent; text-align: left; cursor: pointer; font: inherit; color: var(--text-primary); }
+    @media (hover: hover) { .pf-rt-find__hit:hover { background: var(--glass-bg-hover, rgba(148,163,184,.1)); } }
+    .pf-rt-find__hit:focus-visible { outline: 2px solid var(--focus-ring, var(--primary)); outline-offset: -2px; }
+    .pf-rt-find__l { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; }
+    .pf-rt-find__t { flex: none; font-size: 12px; color: var(--text-tertiary); }
+    .pf-rt-find__none { margin: 0; padding: 12px; font-size: 12.5px; color: var(--text-tertiary); }
     .pf-classic-only .pf-rt-savestate, .pf-rt-head .pf-rt-savestate { align-self: center; }
     @media (max-width: 640px) { .pf-rt-savestate__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
   `],
 })
-export class ReportTemplateComponent implements OnInit, OnDestroy {
-  /** Technician notes + WhatsApp sending sit next to the report design. */
-  protected readonly reportOptionsPath = LAB_PAGES.reportOptions.path;
+export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedChanges {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly route = inject(ActivatedRoute);
@@ -1223,18 +1301,97 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     { value: 'letterhead', label: 'Letterhead',    desc: 'Name, tagline, logo, brand colours, NABL — everything at the top of the page' },
     { value: 'patient',    label: 'Patient strip', desc: 'Which patient fields print, arranged how, with the date format' },
     { value: 'columns',    label: 'Table columns', desc: 'Per-department table columns & widths' },
-    { value: 'table',      label: 'Results table', desc: 'Report theme, font, table colours, zebra rows, abnormal marking, departments' },
+    { value: 'table',      label: 'Results table', desc: 'Report theme, font, table colours, zebra rows, abnormal marking, departments, report notes' },
     { value: 'sequence',   label: 'Sequencing',    desc: 'The order departments and tests print in' },
     { value: 'footer',     label: 'Footer',        desc: 'Disclaimer, end-of-report, watermark, page extras' },
+    { value: 'sending',    label: 'Sending',       desc: 'WhatsApp Auto, sending a corrected report again, and the message' },
   ];
   /** The same sections as the band pill's tabs (new design). The
    *  description rides as the tab's tooltip. */
-  readonly sectionOptions: SegmentedOption<Tab>[] = this.sections.map(s => ({ value: s.value, label: s.label, hint: s.desc }));
+  /** A person with Lab settings but no report-design permission reaches this page for Report notes only (owner 2026-11-17). */
+  private readonly authSvc = inject(AuthService);
+  readonly notesOnly = computed(() => !this.authSvc.hasAnyPermission(['manage_tenant', 'manage_tests', 'manage_report_template']));
+  readonly sectionOptions = computed<SegmentedOption<Tab>[]>(() => this.sections
+    .filter(s => !this.notesOnly() || s.value === 'table')
+    .map(s => ({ value: s.value, label: s.label, hint: s.desc })));
   readonly activeSection = () => this.sections.find(s => s.value === this._tab()) ?? null;
   private readonly _tab = signal<Tab>('letterhead');
   readonly tab = this._tab.asReadonly();
-  protected readonly hosted = injectSettingsHosted();
-  private readonly followTab = bindTabQuery(['letterhead', 'patient', 'table', 'columns', 'sequence', 'footer'] as const, (t) => { if (t !== this._tab()) this.setTab(t); });
+  // ?tab=notes (old links): Report notes is a row of Results table now — open it there, even when this page is already open.
+  private readonly followTab = bindTabQuery<Tab | 'notes'>([...REPORT_TABS, 'notes'], (t) => {
+    if (t === 'notes') { this.openNotesRow(); return; }
+    if (t !== this._tab()) this.setTab(t);
+  });
+  private readonly router = inject(Router);
+  private readonly host = inject(ElementRef<HTMLElement>);
+  readonly selfSavingTab = computed(() => SELF_SAVING_TABS.has(this._tab()));
+
+  // ── Technician notes (per branch, branch-lab-config.techReportNotes) ──
+  /** null until the branch config answers. */
+  readonly techNotes = signal<boolean | null>(null);
+  readonly notesSaving = signal(0);
+  private notesLoading = false;
+  private loadTechNotes() {
+    if (this.techNotes() !== null || this.notesLoading) return;
+    this.notesLoading = true;
+    this.api.get<BranchLabConfig>('/api/tenants/branch-lab-config').subscribe({
+      next: c => { this.notesLoading = false; this.techNotes.set(c?.techReportNotes === true); },
+      error: () => { this.notesLoading = false; this.techNotes.set(false); },
+    });
+  }
+  setTechNotes(v: boolean) {
+    this.techNotes.set(v);
+    this.notesSaving.update(n => n + 1);
+    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { techReportNotes: v }).subscribe({
+      next: () => {
+        this.notesSaving.update(n => Math.max(0, n - 1));
+        this.toasts.success(v ? 'Technicians can now add notes that print on the report' : 'Technician report notes turned off — saved notes still print');
+      },
+      error: e => { this.notesSaving.update(n => Math.max(0, n - 1)); this.techNotes.set(!v); this.toasts.error(ApiError.from(e).message); },
+    });
+  }
+  /** WhatsApp sending saves on each switch; the band save state reads it. */
+  readonly sendingSaving = signal(false);
+  /** Notes / sending saves in flight → the ONE band save state says "Saving…". */
+  readonly optionsSaving = computed(() => this.notesSaving() > 0 || this.sendingSaving());
+
+  // ── Band search: find a setting on any tab ──
+  readonly findQuery = signal('');
+  readonly findHits = computed(() => findReportSettings(this.findQuery()));
+  tabLabel(t: Tab): string { return this.sections.find(s => s.value === t)?.label ?? ''; }
+  onFind(q: string) { this.findQuery.set(q); }
+  pickFirstFind() { const h = this.findHits()[0]; if (h) this.pickFind(h); }
+  pickFind(h: ReportFindHit) {
+    this.findQuery.set('');
+    this.setTab(h.tab as Tab);
+    if (!h.heading) return;
+    // After the tab renders: bring the setting's group into view.
+    setTimeout(() => {
+      const heads = Array.from((this.host.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.pf-rtb-h'));
+      const el = heads.find(x => (x.textContent ?? '').trim() === h.heading)?.closest<HTMLElement>('.pf-rtb');
+      const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      el?.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+    }, 60);
+  }
+  /** An old ?tab=notes link: Results table, the URL says so (history replaced), the Report notes row in view. */
+  private openNotesRow() {
+    setTimeout(() => {
+      this.setTab('table');
+      if (this.route.snapshot.queryParamMap.get('tab') === 'notes') {
+        void this.router.navigate([], { relativeTo: this.route, queryParams: { tab: 'table' }, queryParamsHandling: 'merge', replaceUrl: true });
+      }
+      setTimeout(() => this.scrollToNotes(), 150);
+    });
+  }
+  /** Bring the Report notes row (Results table) into view — once it has rendered (the template may still be loading). */
+  private scrollToNotes(tries = 30) {
+    const el = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>('#pf-rt-notes');
+    if (!el) { if (tries > 0) setTimeout(() => this.scrollToNotes(tries - 1), 100); return; }
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView?.({ block: 'start', behavior: still ? 'auto' : 'smooth' });
+  }
+  @HostListener('document:keydown.escape')
+  closeFind() { if (this.findQuery()) this.findQuery.set(''); }
   /** Left section list hide/unhide — Test Master departments pattern. */
   readonly railHidden = signal<boolean>(
     typeof localStorage !== 'undefined' && localStorage.getItem('pf-rt-rail') === 'hidden');
@@ -1244,7 +1401,14 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   }
 
   setTab(t: Tab) {
+    if (this.notesOnly() && t !== 'table') t = 'table';
+    const changed = t !== this._tab();
     this._tab.set(t);
+    if (t === 'table') this.loadTechNotes();
+    // Keep ?tab= in step (replacing history) so a reload, a shared link and the Settings panel land here.
+    if (changed && this.route.snapshot.queryParamMap.get('tab') !== t) {
+      void this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true });
+    }
     if (t === 'table') this.loadSourceSansFace();
     // Re-pull the form-flow fields when entering the Patient tab so the list
     // reflects the latest saved Patient Registration flow (not a stale copy).
@@ -1456,14 +1620,15 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
   onBeforeUnload(ev: BeforeUnloadEvent) {
     if (this.dirty() || this.deptPatientDirty()) { ev.preventDefault(); ev.returnValue = ''; }
   }
-  /** Route guard: leaving with unsaved changes asks first. */
-  async canLeave(): Promise<boolean> {
-    if (!this.dirty() && !this.deptPatientDirty()) return true;
-    return this.dialog.confirm({
-      title: 'Leave without saving?',
-      message: 'Your report design changes are not saved yet. Save first to keep them.',
-      confirmLabel: 'Leave without saving', cancelLabel: 'Stay', tone: 'danger',
-    });
+  // ── Leaving with unsaved changes: the shared "Save your changes?" prompt (HasUnsavedChanges + the settings route guard). ──
+  readonly unsavedLabel = 'the report design';
+  hasUnsavedChanges(): boolean { return this.dirty() || this.deptPatientDirty(); }
+  /** Save from the prompt: the template and/or the department's patient strip; true only when everything saved. */
+  async saveChanges(): Promise<boolean> {
+    let ok = true;
+    if (this.dirty()) ok = await this.postTemplate();
+    if (ok && this.deptPatientDirty()) ok = await this.postDeptPatient();
+    return ok;
   }
 
   // ── Report style (report-style.ts) — text fitting, stored in the template metadata ──
@@ -1934,11 +2099,14 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.orgProfile.ensureLoaded();
-    const initial = this.route.snapshot.queryParamMap.get('tab') as Tab | null;
+    // Report notes moved into Results table (owner 2026-11-17): an old ?tab=notes link lands there.
+    const rawTab = this.route.snapshot.queryParamMap.get('tab');
+    const initial = (rawTab === 'notes' ? 'table' : rawTab) as Tab | null;
     if (initial && this.sections.some(o => o.value === initial)) {
       this._tab.set(initial);
     }
-    if (this._tab() === 'table') this.loadSourceSansFace();
+    if (this.notesOnly()) { this._tab.set('table'); this.loadTechNotes(); this.tplHold.done(); return; }
+    if (this._tab() === 'table') { this.loadSourceSansFace(); this.loadTechNotes(); }
     this.destroyRef.onDestroy(() => this.tplHold.cancel());
     this.api.get<ReportTemplate>('/api/config/report-template').subscribe({
       next: t => {
@@ -2127,11 +2295,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
     });
   }
 
-  saveDeptPatient() {
+  saveDeptPatient() { void this.postDeptPatient(); }
+  private postDeptPatient(): Promise<boolean> {
     const dept = this.patientScope();
-    if (dept === 'default' || this.deptPatientSaving()) return;
+    if (dept === 'default' || this.deptPatientSaving()) return Promise.resolve(dept === 'default');
     this.deptPatientSaving.set(true);
-    this.api.post(`/api/report-layout/department/${dept}/patient`, {
+    return new Promise<boolean>(resolve => this.api.post(`/api/report-layout/department/${dept}/patient`, {
       patient: { layout: this.deptPatientLayout(), columns: this.patientCols() },
     }).subscribe({
       next: () => {
@@ -2139,9 +2308,10 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
         this.deptPatientConfigured.set(true);
         this.deptPatientDirty.set(false);
         this.toasts.success('Department patient strip saved');
+        resolve(true);
       },
-      error: (e: ApiError) => { this.deptPatientSaving.set(false); this.toasts.error(e?.message || 'Save failed'); },
-    });
+      error: (e: ApiError) => { this.deptPatientSaving.set(false); this.toasts.error(e?.message || 'Save failed'); resolve(false); },
+    }));
   }
 
   resetDeptPatient() {
@@ -2293,15 +2463,16 @@ export class ReportTemplateComponent implements OnInit, OnDestroy {
 
   // ── Save ────────────────────────────────────────────────────
   readonly saving = signal<boolean>(false);
-  save() {
-    if (this.saving()) return;
+  save() { void this.postTemplate(); }
+  private postTemplate(): Promise<boolean> {
+    if (this.saving()) return Promise.resolve(false);
     this.saving.set(true);
     // Send every field — the server merges with defaults and writes one row.
     const sent = this._tpl();
-    this.api.post('/api/config/report-template', sent).subscribe({
-      next: () => { this.savedJson.set(JSON.stringify(sent)); this.toasts.success('Template saved'); this.saving.set(false); },
-      error: (e) => { this.toasts.error(ApiError.from(e).message); this.saving.set(false); },
-    });
+    return new Promise<boolean>(resolve => this.api.post('/api/config/report-template', sent).subscribe({
+      next: () => { this.savedJson.set(JSON.stringify(sent)); this.toasts.success('Template saved'); this.saving.set(false); resolve(true); },
+      error: (e) => { this.toasts.error(ApiError.from(e).message); this.saving.set(false); resolve(false); },
+    }));
   }
 }
 

@@ -1,4 +1,5 @@
 import { AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, HostListener, OnDestroy, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../../shared/utils/unsaved-changes';
 import type { LiveLayout } from '../../../../shared/utils/report-profile-layout';
 import { NgTemplateOutlet } from '@angular/common';
 import { HeroBandComponent } from '../../../../shared/components/hero-band/hero-band.component';
@@ -199,7 +200,7 @@ function makeEmptyDraft(): DraftTest {
   templateUrl: './test-editor.component.html',
   styleUrl: './test-editor.component.scss'
 })
-export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
+export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, HasUnsavedChanges {
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly layoutSvc = inject(ReportLayoutService);
@@ -1160,6 +1161,16 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy {
 
   /** Unsaved-changes hint (no autosave). Cleared on fresh hydrate. */
   readonly dirty = signal(false);
+  // ── Leaving with unsaved changes: the shared "Save your changes?" prompt (route guard + tab close). ──
+  readonly unsavedLabel = 'this test';
+  hasUnsavedChanges(): boolean { return this.dirty() && !this.recordSkeleton(); }
+  /** Save from the prompt: the editor's own Save; true once it finished and nothing is left unsaved. */
+  async saveChanges(): Promise<boolean> {
+    this.saveTest();
+    while (this._saving()) await new Promise(r => setTimeout(r, 100));
+    return !this.dirty();
+  }
+  private readonly _unloadGuard = guardUnsavedOnUnload(this);
 
   /** Debounced token so the embedded live preview re-renders after edits settle. */
   private readonly _previewToken = signal(0);

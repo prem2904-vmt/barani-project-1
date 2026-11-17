@@ -1,6 +1,15 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NgTemplateOutlet } from '@angular/common';
+import { AllCommunityModule, CellValueChangedEvent, ColDef, GetRowIdParams, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
+import { AuthService } from '../../../core/auth/auth.service';
+import {
+  SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, SgStatus, sgActions, sgActionsCol, sgByStatus, sgCell, sgGridTheme, sgMedia, sgRowOff, sgStatusCol,
+  sgStatusOptions,
+} from '../../../shared/settings-grid/settings-grid';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { CdkDragDrop, CdkDropList, CdkDrag, CdkDragHandle } from '@angular/cdk/drag-drop';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -12,11 +21,13 @@ import { DEPARTMENT_ORIGIN_LABEL, departmentOrigin, departmentErrorMessage } fro
 import { bandMatch } from '../../../shared/utils/band-search';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
-import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
+import { SETTINGS_HOST, bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 
 /** A physical lab space within a branch; departments are placed into one. */
 interface LabSpace { id: string; branchId: string; name: string; code?: string | null; order: number; }
@@ -25,6 +36,8 @@ interface LabSpace { id: string; branchId: string; name: string; code?: string |
 interface DeptSpaceLink { branchId: string; departmentId: string; spaceId: string; }
 
 export type LabDepartmentsTab = 'departments' | 'spaces';
+/** A branch's lab spaces as a Settings-shell category: `?tab=spaces-<branchId>`. */
+export const SPACE_TAB_PREFIX = 'spaces-';
 export const LAB_DEPARTMENTS_TABS: readonly LabDepartmentsTab[] = ['departments', 'spaces'];
 
 /**
@@ -39,23 +52,185 @@ export const LAB_DEPARTMENTS_TABS: readonly LabDepartmentsTab[] = ['departments'
 @Component({
   selector: 'pf-lab-departments',
   standalone: true,
-  imports: [SkeletonRowsComponent, BusyDirective, RouterLink, FormsModule, CdkDropList, CdkDrag, CdkDragHandle,
-    ScreenHeaderComponent, HeroBandComponent, SegmentedComponent],
+  imports: [SkeletonRowsComponent, SkeletonTableComponent, BusyDirective, RouterLink, FormsModule, CdkDropList, CdkDrag, CdkDragHandle,
+    ScreenHeaderComponent, HeroBandComponent, SegmentedComponent, NgTemplateOutlet, DataGridComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
         <pf-hero-band [back]="true" [placeholder]="tab() === 'departments' ? 'Search departments…' : 'Search branches and departments…'"
                       [value]="q()" (valueChange)="q.set($event)">
-          @if (!hosted) {
-            <ng-container band-tools>
-              <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="pickTab($event)"></pf-segmented>
-            </ng-container>
-          }
+          <ng-container band-tools>
+            @if (narrow() && !hosted) {
+              <!-- Narrow widths: the Departments / Lab spaces tree opens as a sheet (Test Master). -->
+              <button type="button" class="pf-chip pf-sg-chip press" (click)="sheetOpen.set(true)" aria-haspopup="dialog"
+                      [attr.aria-expanded]="sheetOpen()" data-testid="ld-tree-chip">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+                {{ tab() === 'departments' ? 'Departments' : 'Lab spaces · ' + (selectedBranch()?.name || 'Branch') }}
+              </button>
+            }
+          </ng-container>
           @if (tab() === 'departments') {
-            <ng-container band-actions>
-              <button type="button" class="pf-hb-btn press" data-testid="ld-add"
-                      [class.pf-hb-btn--primary]="!addOpen()" [class.pf-hb-btn--ghost]="addOpen()"
+            
+          }
+        </pf-hero-band>
+      }
+      <pf-screen-header class="pf-classic-only" eyebrow="Lab" title="Departments and lab spaces"
+        subtitle="Which departments the lab runs, and the lab space each one works in."></pf-screen-header>
+
+      <div class="pf-band-body pf-band-body--fill">
+        <div class="pf-sg-panels ld-panels" [class.pf-sg-panels--narrow]="narrow()" [class.pf-sg-panels--single]="hosted">
+          <!-- SIDE card (LEFT): Departments, and Lab spaces with its branch tree. In the Settings shell the shell's
+               side card lists the same (SETTINGS_HOST.categories: Departments + one row per branch). -->
+          @if (hosted) {
+          } @else if (narrow()) {
+            @if (sheetOpen()) {
+              <div class="pf-sheet-backdrop" (click)="sheetOpen.set(false)"></div>
+              <aside class="pf-card pf-sg-side pf-sg-side--sheet ld-side" role="dialog" aria-modal="true" aria-label="Departments and lab spaces"
+                     (keydown.escape)="sheetOpen.set(false)">
+                <span class="pf-sg-sheet-handle" aria-hidden="true"></span>
+                <ng-container *ngTemplateOutlet="tree; context: { sheet: true }"></ng-container>
+              </aside>
+            }
+          } @else {
+            <aside class="pf-card pf-sg-side ld-side" aria-label="Departments and lab spaces">
+              <ng-container *ngTemplateOutlet="tree; context: { sheet: false }"></ng-container>
+            </aside>
+          }
+
+          <!-- MAIN card (RIGHT) -->
+          @if (tab() === 'departments') {
+            <section class="pf-card pf-sg-main ld-main" [class.pf-sg-main--bare]="hosted" aria-label="Departments">
+              <header class="pf-card__head pf-sg-main__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+                <span class="pf-card__label">Departments</span>
+                <span class="pf-card__note pf-sg-hint">{{ originLabel.catalogue }}: switch on or off · {{ originLabel.lab }}: double-click the name to rename, or delete if unused</span>
+                <ng-container *ngTemplateOutlet="deptTools"></ng-container>
+              </header>
+              @if (addOpen()) {
+                <!-- Add department: ONE compact row above the grid. -->
+                <div class="ld-add pf-anim-in" aria-label="New department" data-testid="ld-add-form">
+                  <label class="pf-field ld-add__name"><span class="pf-field__lbl">Name</span>
+                    <input type="text" class="pf-input" [class.pf-input-error]="!!addErr().name" maxlength="80" data-testid="ld-add-name"
+                           [ngModel]="draftName()" (ngModelChange)="draftName.set($event); addErr.set({})" placeholder="e.g. Cytogenetics" />
+                    @if (addErr().name) { <span class="pf-field-error" data-testid="ld-add-name-err">{{ addErr().name }}</span> }
+                  </label>
+                  <label class="pf-field ld-add__code"><span class="pf-field__lbl">Code</span>
+                    <input type="text" class="pf-input pf-num uppercase" [class.pf-input-error]="!!addErr().code" maxlength="12" data-testid="ld-add-code"
+                           [ngModel]="draftCode()" (ngModelChange)="draftCode.set($event.toUpperCase()); addErr.set({})" placeholder="e.g. CYTO" />
+                    @if (addErr().code) { <span class="pf-field-error" data-testid="ld-add-code-err">{{ addErr().code }}</span> }
+                  </label>
+                  <div class="ld-add__acts">
+                    <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleAdd()">Cancel</button>
+                    <button type="button" class="pf-btn pf-btn--primary press" data-testid="ld-add-save"
+                            [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Adding…" (click)="createDepartment()">Add department</button>
+                  </div>
+                </div>
+              }
+              <div class="pf-sg-main__body">
+                <pf-data-grid [rowData]="visibleDepartments()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
+                              [getRowClass]="rowClass" [singleClickEdit]="isCoarse" [suppressCellFocus]="false"
+                              [loading]="listSkeleton()" loadingLabel="Loading departments…"
+                              [emptyTitle]="departments().length === 0 ? 'No departments yet.' : 'No departments match your search.'"
+                              (gridReady)="onGridReady($event)" (cellValueChanged)="onCellValueChanged($event)"></pf-data-grid>
+              </div>
+            </section>
+          } @else {
+            <section class="pf-card pf-sg-main ld-main ld-spaces" [class.pf-sg-main--bare]="hosted" aria-label="Lab spaces">
+              <header class="pf-card__head pf-sg-main__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span>
+                <span class="pf-card__label" data-testid="ld-spaces-title">Lab spaces{{ selectedBranch() ? ' · ' + selectedBranch()!.name : '' }}</span>
+                @if (selectedBranch(); as b) {
+                  <span class="pf-card__note pf-sg-hint">Drag a department into a space · each code prefixes sample IDs</span>
+                  <span class="pf-sg-count pf-num">{{ spacesFor(b.id).length }} {{ spacesFor(b.id).length === 1 ? 'space' : 'spaces' }}</span>
+                }
+              </header>
+              <div class="pf-card__body ld-board-body">
+                @if (listSkeleton()) {
+                  <pf-skeleton-rows [rows]="4" [avatar]="false" label="Loading lab spaces…"></pf-skeleton-rows>
+                } @else if (branches().length === 0) {
+                  <p class="pf-band-empty">No branches yet.</p>
+                } @else if (selectedBranch(); as b) {
+                  <p class="ld-hint">Tubes are counted per space and colour — departments in one space sharing a colour share a vial.</p>
+                  <p class="ld-hint" data-testid="br-sample-id-note">
+                    Each space's code (and the Lab code) is the sample-ID prefix; the date and number part is set in
+                    <a class="ld-link" routerLink="/admin/lab/sample-numbers" [queryParams]="{ tab: 'sample' }">Lab › Sample numbers</a>.
+                  </p>
+                  @if (structureOf(b) === 'integrated') {
+                    <p class="ld-hint">This branch runs <strong>Integrated</strong> — one lab, one space: every department shares "Lab (default)". The arrangement below is saved but only applies after switching the branch to <strong>Auto</strong> in Lab structure (Sample numbers).</p>
+                  } @else if (structureOf(b) === 'standalone') {
+                    <p class="ld-hint">This branch runs <strong>Standalone</strong> — every department keeps its own sample-ID prefix; tubes are still shared across departments. The arrangement below only applies after switching the branch to <strong>Auto</strong> in Lab structure (Sample numbers).</p>
+                  }
+            <div class="pf-board">
+              <div class="pf-lane">
+                <div class="pf-lane-hdr">
+                  <span class="pf-lane-name">Lab (default)</span>
+                  <input class="pf-lane-code-input uppercase" [value]="b.defaultLabCode || ''" (change)="setDefaultLabCode(b, $any($event.target).value)"
+                         maxlength="16" placeholder="no prefix" aria-label="Default Lab code — prefixes sample IDs"
+                         title="Sample-ID prefix for the default Lab space (e.g. LAB → LAB-2607-00001). Leave blank for no prefix." />
+                  <span class="pf-lane-count">{{ branchDeptsNoSpace(b.id).length }}</span>
+                </div>
+                <div class="pf-lane-body" cdkDropList [cdkDropListData]="branchDeptsNoSpace(b.id)"
+                     [cdkDropListConnectedTo]="laneIdsFor(b.id)" [id]="'unassigned-' + b.id"
+                     (cdkDropListDropped)="dropDept($event, b.id, null)">
+                  @for (d of branchDeptsNoSpace(b.id); track d.id) {
+                    <div class="pf-dcard" cdkDrag [class.pf-dcard--inactive]="!d.isActive">
+                      <span class="pf-dcard-grip" cdkDragHandle aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
+                      <span class="pf-dcard-name">{{ d.name }}</span>
+                      <span class="pf-dcard-code">{{ d.code }}</span>
+                    </div>
+                  } @empty { <p class="pf-lane-empty">No departments in the default Lab space</p> }
+                </div>
+              </div>
+              @for (sp of spacesFor(b.id); track sp.id) {
+                <div class="pf-lane">
+                  <div class="pf-lane-hdr">
+                    <span class="pf-lane-edit">
+                      <input class="pf-lane-name-input" [value]="sp.name" (change)="renameSpace(sp, $any($event.target).value)" placeholder="Space name" aria-label="Space name" />
+                      <svg class="pf-lane-edit-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4Zm11-13 4 4"/></svg>
+                    </span>
+                    <input class="pf-lane-code-input uppercase" [class.pf-lane-code-input--missing]="!sp.code" [value]="sp.code || ''" (change)="setSpaceCode(sp, $any($event.target).value)" maxlength="16" placeholder="CODE" aria-label="Space code — prefixes sample IDs" title="Sample-ID prefix (e.g. MIC → MIC-2607-00001)" />
+                    <button type="button" class="pf-lane-del press" (click)="deleteSpace(sp)" aria-label="Delete space" title="Delete space">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                    </button>
+                  </div>
+                  <div class="pf-lane-body" cdkDropList [cdkDropListData]="branchDeptsInSpace(sp.id)"
+                       [cdkDropListConnectedTo]="laneIdsFor(b.id)" [id]="'sp-' + sp.id"
+                       (cdkDropListDropped)="dropDept($event, b.id, sp.id)">
+                    @for (d of branchDeptsInSpace(sp.id); track d.id) {
+                      <div class="pf-dcard" cdkDrag [class.pf-dcard--inactive]="!d.isActive">
+                        <span class="pf-dcard-grip" cdkDragHandle aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
+                        <span class="pf-dcard-name">{{ d.name }}</span>
+                        <span class="pf-dcard-code">{{ d.code }}</span>
+                      </div>
+                    } @empty { <p class="pf-lane-empty">Drag departments here</p> }
+                  </div>
+                </div>
+              }
+              <button type="button" class="pf-add-space-lane press" [disabled]="addingSpaceFor() === b.id" [pfBusy]="addingSpaceFor() === b.id" pfBusyLabel="Adding…" (click)="addSpace(b.id)">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Add space
+              </button>
+            </div>
+
+                } @else {
+                  <p class="pf-band-empty">Pick a branch.</p>
+                }
+              </div>
+            </section>
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- Head tools (count + status filter): the shell renders them in ITS card head when hosted (headTools). -->
+    <ng-template #deptTools>
+      <span class="pf-sg-count pf-num">{{ visibleDepartments().length }} {{ visibleDepartments().length === 1 ? 'department' : 'departments' }}</span>
+      <pf-segmented class="pf-sg-status-filter" size="sm" [options]="statusOptions()" [value]="status()"
+                    (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+          <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+              <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" data-testid="ld-add"
                       (click)="toggleAdd()" [attr.aria-label]="addOpen() ? 'Cancel new department' : 'Add department'">
                 @if (addOpen()) {
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -64,233 +239,96 @@ export const LAB_DEPARTMENTS_TABS: readonly LabDepartmentsTab[] = ['departments'
                 }
                 {{ addOpen() ? 'Cancel' : 'Add department' }}
               </button>
-            </ng-container>
-          }
-        </pf-hero-band>
+    </ng-template>
+    <ng-template #spaceTools>
+      @if (selectedBranch(); as b) {
+        <span class="pf-sg-count pf-num">{{ spacesFor(b.id).length }} {{ spacesFor(b.id).length === 1 ? 'space' : 'spaces' }}</span>
       }
-      <pf-screen-header class="pf-classic-only" eyebrow="Lab" title="Departments and lab spaces"
-        subtitle="Which departments the lab runs, and the lab space each one works in."></pf-screen-header>
+    </ng-template>
 
-      <div class="pf-band-body">
-        @if (!theme.isNewDesign() && !hosted) {
-          <pf-segmented class="ld-classic-tabs" size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="pickTab($event)"></pf-segmented>
+    <!-- The tree: Departments · Lab spaces ▸ branches (Test Master's department rows). -->
+    <ng-template #tree let-sheet="sheet">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14"/></svg></span>
+        <span class="pf-card__label">Lab</span>
+        <span class="pf-card__spacer"></span>
+        @if (sheet) {
+          <button type="button" class="pf-btn pf-btn--icon" (click)="sheetOpen.set(false)" aria-label="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
         }
-
-        @if (listSkeleton()) {
-          <pf-skeleton-rows [rows]="4" [avatar]="false" label="Loading departments…"></pf-skeleton-rows>
-        } @else if (tab() === 'departments') {
-          @if (addOpen()) {
-            <section class="pf-card pf-anim-in ld-add" aria-label="New department" data-testid="ld-add-form">
-              <div class="pf-card__head">
-                <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span>
-                <h3 class="pf-card__label">New department</h3>
-              </div>
-              <div class="ld-add__body">
-                <label class="pf-field"><span class="pf-field__lbl">Name</span>
-                  <input type="text" class="pf-input" [class.pf-input-error]="!!addErr().name" maxlength="80" data-testid="ld-add-name"
-                         [ngModel]="draftName()" (ngModelChange)="draftName.set($event); addErr.set({})" placeholder="e.g. Cytogenetics" />
-                  @if (addErr().name) { <span class="pf-field-error" data-testid="ld-add-name-err">{{ addErr().name }}</span> }
-                </label>
-                <label class="pf-field"><span class="pf-field__lbl">Code</span>
-                  <input type="text" class="pf-input pf-num uppercase" [class.pf-input-error]="!!addErr().code" maxlength="12" data-testid="ld-add-code"
-                         [ngModel]="draftCode()" (ngModelChange)="draftCode.set($event.toUpperCase()); addErr.set({})" placeholder="e.g. CYTO" />
-                  @if (addErr().code) { <span class="pf-field-error" data-testid="ld-add-code-err">{{ addErr().code }}</span> }
-                </label>
-              </div>
-              <div class="pf-card__foot">
-                <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleAdd()">Cancel</button>
-                <button type="button" class="pf-btn pf-btn--primary press" data-testid="ld-add-save"
-                        [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Adding…" (click)="createDepartment()">Add department</button>
-              </div>
-            </section>
-          }
-
-          @if (departments().length === 0) {
-            <p class="pf-band-empty">No departments yet.</p>
-          } @else if (visibleDepartments().length === 0) {
-            <p class="pf-band-empty">No departments match "{{ q() }}".</p>
-          } @else {
-            <p class="ld-hint">
-              Departments marked <strong>{{ originLabel.catalogue }}</strong> arrive with the catalogue — switch them on or off.
-              Departments marked <strong>{{ originLabel.lab }}</strong> are your own: rename, switch off, or delete them if nothing uses them.
-            </p>
-            <div class="space-y-2" data-testid="ld-list">
-              @for (d of visibleDepartments(); track d.id) {
-                <div class="pf-card ld-row" [class.ld-row--off]="!d.isActive" [attr.data-testid]="'ld-row-' + d.code">
-                  <div class="ld-row__main">
-                    @if (renamingId() === d.id) {
-                      <input type="text" class="pf-input ld-row__rename" maxlength="80" data-testid="ld-rename-input"
-                             [class.pf-input-error]="!!renameErr()" [ngModel]="renameDraft()" (ngModelChange)="renameDraft.set($event); renameErr.set('')"
-                             (keydown.enter)="saveRename(d)" (keydown.escape)="cancelRename()" aria-label="Department name" />
-                      @if (renameErr()) { <span class="pf-field-error" data-testid="ld-rename-err">{{ renameErr() }}</span> }
-                    } @else {
-                      <p class="ld-row__name">{{ d.name }}</p>
-                    }
-                    <p class="ld-row__meta">
-                      <span class="pf-num">{{ d.code }}</span>
-                      <span class="pf-chip pf-chip--static ld-chip" [class.ld-chip--own]="isLabMade(d)" data-testid="ld-origin">{{ isLabMade(d) ? originLabel.lab : originLabel.catalogue }}</span>
-                    </p>
-                  </div>
-                  <div class="ld-row__acts">
-                    @if (isLabMade(d)) {
-                      @if (renamingId() === d.id) {
-                        <button type="button" class="pf-btn pf-btn--tertiary press" (click)="cancelRename()">Cancel</button>
-                        <button type="button" class="pf-btn pf-btn--primary press" data-testid="ld-rename-save" (click)="saveRename(d)">Save</button>
-                      } @else {
-                        <button type="button" class="ld-act press" data-testid="ld-rename" (click)="beginRename(d)" [attr.aria-label]="'Rename ' + d.name" title="Rename">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4Zm11-13 4 4"/></svg>
-                        </button>
-                        <button type="button" class="ld-act ld-act--danger press" data-testid="ld-delete" (click)="deleteDepartment(d)" [attr.aria-label]="'Delete ' + d.name" title="Delete">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
-                        </button>
-                      }
-                    }
-                    <button type="button" class="ld-switch press" role="switch" data-testid="ld-switch"
-                            [class.ld-switch--on]="d.isActive" [attr.aria-checked]="d.isActive"
-                            [attr.aria-label]="(d.isActive ? 'Switch off ' : 'Switch on ') + d.name" (click)="toggleActive(d)">
-                      <span class="ld-switch__knob"></span>
-                    </button>
-                  </div>
-                </div>
-              }
-            </div>
-          }
-        } @else {
-          <!-- LAB SPACES — per branch: space names/codes (sample-ID prefixes) and
-               where each department works. Tubes are counted per (space, colour). -->
-          @if (branches().length === 0) {
-            <p class="pf-band-empty">No branches yet.</p>
-          } @else if (visibleBranches().length === 0) {
-            <p class="pf-band-empty">No branches match "{{ q() }}".</p>
-          } @else {
-            <div class="space-y-2.5">
+      </header>
+      <ul class="pf-card__body ld-tree" role="tree" aria-label="Departments and lab spaces">
+        <li class="ld-node" role="treeitem" [attr.aria-selected]="tab() === 'departments'">
+          <button type="button" class="ld-node__btn" data-testid="ld-node-departments" [attr.aria-pressed]="tab() === 'departments'" (click)="pickTab('departments')">
+            <span class="ld-node__name">Departments</span>
+            <span class="ld-node__n pf-num">{{ departments().length }}</span>
+          </button>
+        </li>
+        <li class="ld-node" role="treeitem" [attr.aria-expanded]="spacesOpen()">
+          <div class="ld-node__row">
+            <button type="button" class="ld-node__chev" (click)="spacesOpen.set(!spacesOpen())" [attr.aria-label]="spacesOpen() ? 'Collapse lab spaces' : 'Expand lab spaces'">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [class.ld-chev--open]="spacesOpen()"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+            <button type="button" class="ld-node__btn" data-testid="ld-node-spaces" [attr.aria-pressed]="tab() === 'spaces' && !branchId()" (click)="pickTab('spaces')">
+              <span class="ld-node__name">Lab spaces</span>
+              <span class="ld-node__n pf-num">{{ branches().length }} {{ branches().length === 1 ? 'branch' : 'branches' }}</span>
+            </button>
+          </div>
+          @if (spacesOpen()) {
+            <ul class="ld-tree__kids" role="group">
               @for (b of visibleBranches(); track b.id) {
-                <div class="pf-card">
-                  <button type="button" class="ld-br-toggle" [attr.aria-expanded]="isOpen(b.id)" (click)="toggleOpen(b.id)">
-                    <span class="ld-br-badge">{{ (b.code || '??').slice(0, 2) }}</span>
-                    <span class="ld-br-titles">
-                      <span class="ld-row__name">{{ b.name }}</span>
-                      <span class="ld-row__meta"><span class="pf-num">{{ b.code }}</span> · {{ spacesFor(b.id).length }} {{ spacesFor(b.id).length === 1 ? 'lab space' : 'lab spaces' }}</span>
-                    </span>
-                    <span class="ld-chev" [class.ld-chev--open]="isOpen(b.id)" aria-hidden="true">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                    </span>
+                <li class="ld-node ld-node--kid" role="treeitem" [attr.aria-selected]="tab() === 'spaces' && selectedBranch()?.id === b.id">
+                  <button type="button" class="ld-node__btn" [attr.data-testid]="'ld-branch-' + b.id"
+                          [attr.aria-pressed]="tab() === 'spaces' && selectedBranch()?.id === b.id" (click)="pickBranch(b.id)">
+                    <span class="ld-node__name">{{ b.name }}@if (b.code) {<span class="ld-node__code pf-num">{{ b.code }}</span>}</span>
+                    <span class="ld-node__n pf-num">{{ spacesFor(b.id).length }} {{ spacesFor(b.id).length === 1 ? 'space' : 'spaces' }}</span>
                   </button>
-                  @if (isOpen(b.id)) {
-                    <div class="ld-br-body">
-                      <p class="ld-hint">Drag a department into a space. Tubes are counted per space and colour — departments in one space sharing a colour share a vial.</p>
-                      <p class="ld-hint" data-testid="br-sample-id-note">
-                        Each space's code (and the Lab code) is the sample-ID prefix; the date and number part is set in
-                        <a class="ld-link" routerLink="/admin/lab/sample-numbers" [queryParams]="{ tab: 'sample' }">Lab › Sample numbers</a>.
-                      </p>
-                      @if (structureOf(b) === 'integrated') {
-                        <p class="ld-hint">This branch runs <strong>Integrated</strong> — one lab, one space: every department shares "Lab (default)". The arrangement below is saved but only applies after switching the branch to <strong>Auto</strong> in Lab structure (Sample numbers).</p>
-                      } @else if (structureOf(b) === 'standalone') {
-                        <p class="ld-hint">This branch runs <strong>Standalone</strong> — every department keeps its own sample-ID prefix; tubes are still shared across departments. The arrangement below only applies after switching the branch to <strong>Auto</strong> in Lab structure (Sample numbers).</p>
-                      }
-                      <div class="pf-board">
-                        <div class="pf-lane">
-                          <div class="pf-lane-hdr">
-                            <span class="pf-lane-name">Lab (default)</span>
-                            <input class="pf-lane-code-input uppercase" [value]="b.defaultLabCode || ''" (change)="setDefaultLabCode(b, $any($event.target).value)"
-                                   maxlength="16" placeholder="no prefix" aria-label="Default Lab code — prefixes sample IDs"
-                                   title="Sample-ID prefix for the default Lab space (e.g. LAB → LAB-2607-00001). Leave blank for no prefix." />
-                            <span class="pf-lane-count">{{ branchDeptsNoSpace(b.id).length }}</span>
-                          </div>
-                          <div class="pf-lane-body" cdkDropList [cdkDropListData]="branchDeptsNoSpace(b.id)"
-                               [cdkDropListConnectedTo]="laneIdsFor(b.id)" [id]="'unassigned-' + b.id"
-                               (cdkDropListDropped)="dropDept($event, b.id, null)">
-                            @for (d of branchDeptsNoSpace(b.id); track d.id) {
-                              <div class="pf-dcard" cdkDrag [class.pf-dcard--inactive]="!d.isActive">
-                                <span class="pf-dcard-grip" cdkDragHandle aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
-                                <span class="pf-dcard-name">{{ d.name }}</span>
-                                <span class="pf-dcard-code">{{ d.code }}</span>
-                              </div>
-                            } @empty { <p class="pf-lane-empty">No departments in the default Lab space</p> }
-                          </div>
-                        </div>
-                        @for (sp of spacesFor(b.id); track sp.id) {
-                          <div class="pf-lane">
-                            <div class="pf-lane-hdr">
-                              <span class="pf-lane-edit">
-                                <input class="pf-lane-name-input" [value]="sp.name" (change)="renameSpace(sp, $any($event.target).value)" placeholder="Space name" aria-label="Space name" />
-                                <svg class="pf-lane-edit-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L20 8l-4-4L4 16v4Zm11-13 4 4"/></svg>
-                              </span>
-                              <input class="pf-lane-code-input uppercase" [class.pf-lane-code-input--missing]="!sp.code" [value]="sp.code || ''" (change)="setSpaceCode(sp, $any($event.target).value)" maxlength="16" placeholder="CODE" aria-label="Space code — prefixes sample IDs" title="Sample-ID prefix (e.g. MIC → MIC-2607-00001)" />
-                              <button type="button" class="pf-lane-del press" (click)="deleteSpace(sp)" aria-label="Delete space" title="Delete space">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
-                              </button>
-                            </div>
-                            <div class="pf-lane-body" cdkDropList [cdkDropListData]="branchDeptsInSpace(sp.id)"
-                                 [cdkDropListConnectedTo]="laneIdsFor(b.id)" [id]="'sp-' + sp.id"
-                                 (cdkDropListDropped)="dropDept($event, b.id, sp.id)">
-                              @for (d of branchDeptsInSpace(sp.id); track d.id) {
-                                <div class="pf-dcard" cdkDrag [class.pf-dcard--inactive]="!d.isActive">
-                                  <span class="pf-dcard-grip" cdkDragHandle aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></span>
-                                  <span class="pf-dcard-name">{{ d.name }}</span>
-                                  <span class="pf-dcard-code">{{ d.code }}</span>
-                                </div>
-                              } @empty { <p class="pf-lane-empty">Drag departments here</p> }
-                            </div>
-                          </div>
-                        }
-                        <button type="button" class="pf-add-space-lane press" [disabled]="addingSpaceFor() === b.id" [pfBusy]="addingSpaceFor() === b.id" pfBusyLabel="Adding…" (click)="addSpace(b.id)">
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                          Add space
-                        </button>
-                      </div>
-                    </div>
-                  }
-                </div>
+                </li>
+              } @empty {
+                <li class="ld-node ld-node--kid ld-node--empty">{{ branches().length ? 'No branches match "' + q() + '"' : 'No branches yet' }}</li>
               }
-            </div>
+            </ul>
           }
-        }
-      </div>
-    </section>
+        </li>
+      </ul>
+    </ng-template>
   `,
   styles: [`
     .ld-hint { margin: 0 0 10px; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); }
     .ld-link { color: var(--violet-text, #7c3aed); font-weight: 600; text-decoration: none; }
     .ld-link:hover { text-decoration: underline; }
-    .ld-classic-tabs { display: block; margin-bottom: 14px; }
-    .ld-add { margin-bottom: 16px; }
-    .ld-add__body { padding: 16px 18px; display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
-    .pf-card.ld-row { display: flex; flex-direction: row; text-align: left; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; overflow: visible; }
-    .ld-row--off .ld-row__main { opacity: .55; }
-    .ld-row__main { min-width: 0; flex: 1; }
-    .ld-row__name { margin: 0; font-size: 14.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
-    .ld-row__meta { margin: 3px 0 0; font-size: 12px; color: var(--text-tertiary); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .ld-row__rename { max-width: 360px; }
-    .ld-row__acts { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-    .ld-chip { height: 22px; font-size: 11px; }
-    .ld-chip--own { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); color: var(--violet-text, #7c3aed); }
-    .ld-act { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px;
-      border: 1px solid var(--pf-line); background: transparent; color: var(--text-secondary); cursor: pointer; }
-    .ld-act:hover { color: var(--text-primary); background: var(--bg-hover); }
-    .ld-act--danger:hover { color: var(--red-text, #dc2626); }
-    .ld-switch { position: relative; width: 42px; height: 24px; border-radius: 999px; padding: 0; cursor: pointer;
-      border: 1px solid var(--pf-toggle-off, #e3e7eb); background: var(--pf-toggle-off, #e3e7eb); transition: background .2s, border-color .2s; flex-shrink: 0; }
-    .ld-switch--on { background: var(--pf-switch-on, #7c3aed); border-color: var(--pf-switch-on, #7c3aed); }
-    .ld-switch__knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
-    .ld-switch--on .ld-switch__knob { transform: translateX(18px); }
-    @media (prefers-reduced-motion: reduce) { .ld-switch, .ld-switch__knob { transition: none; } }
-    .ld-br-toggle { width: 100%; display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: transparent; border: 0; cursor: pointer; text-align: left; }
-    .ld-br-badge { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
-      background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); color: var(--violet-text, #7c3aed); font-size: 13px; font-weight: 600; }
-    .ld-br-titles { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-    .ld-chev { display: inline-flex; color: var(--text-muted); transition: transform .2s; }
-    .ld-chev--open { transform: rotate(180deg); }
-    .ld-br-body { padding: 16px 18px 18px; border-top: 1px solid var(--pf-line); }
+    .ld-panels { flex: 1 1 auto; }
+    /* Tree (Test Master's department rows) */
+    .ld-tree { list-style: none; margin: 0; padding: 6px; gap: 2px; }
+    .ld-tree__kids { list-style: none; margin: 2px 0 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 2px; }
+    .ld-node__row { display: flex; align-items: center; gap: 2px; }
+    .ld-node__btn { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      min-height: 40px; padding: 8px 10px; border: 0; border-radius: var(--pf-radius-sm); background: transparent;
+      font: inherit; text-align: left; cursor: pointer; color: var(--text-primary); }
+    .ld-node__btn:hover:not([aria-pressed='true']) { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
+    .ld-node__btn[aria-pressed='true'] { background: var(--pf-sel-bg); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
+    .ld-node__btn:focus-visible, .ld-node__chev:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+    .ld-node__name { min-width: 0; font-size: 13.5px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .ld-node__code { font-size: 11px; font-weight: 600; color: var(--text-tertiary); }
+    .ld-node__n { flex: none; font-size: 12px; color: var(--text-tertiary); }
+    .ld-node__chev { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 32px; padding: 0;
+      border: 0; background: transparent; color: var(--text-tertiary); cursor: pointer; border-radius: 6px; }
+    .ld-node__chev svg { transition: transform var(--pf-dur-fast, 120ms) ease; }
+    .ld-chev--open { transform: rotate(90deg); }
+    .ld-node--empty { padding: 8px 10px; font-size: 12px; color: var(--text-tertiary); }
+    @media (pointer: coarse) { .ld-node__chev { width: 44px; height: 44px; } .ld-node__btn { min-height: 44px; } }
+    /* Add department: one compact row above the grid */
+    .ld-add { flex: none; display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--pf-line); }
+    .ld-add__name { flex: 2 1 220px; }
+    .ld-add__code { flex: 1 1 120px; }
+    .ld-add__acts { display: flex; gap: 8px; margin-left: auto; }
+    .ld-board-body { padding: 14px 16px; }
+    :host ::ng-deep .ld-chip { height: 22px; font-size: 11px; }
+    :host ::ng-deep .ld-chip--own { background: color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent); color: var(--violet-text, #7c3aed); }
     .pf-field-error { font-size: 11px; color: var(--red-text); }
     .pf-input-error { border-color: #ef4444 !important; }
-    @media (max-width: 640px) {
-      .ld-add__body { grid-template-columns: 1fr; }
-      .pf-card.ld-row { flex-wrap: wrap; padding: 12px 14px; }
-      .ld-row__acts { width: 100%; justify-content: flex-end; }
-      :host .pf-input { font-size: 16px; }
-      .ld-br-toggle, .ld-br-body { padding-left: 14px; padding-right: 14px; }
-    }
+    @media (max-width: 640px) { :host .pf-input { font-size: 16px; } }
     /* ── Lab spaces board (drag-drop, workflow-style) ── */
     .pf-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
     .pf-lane {
@@ -368,7 +406,134 @@ export class LabDepartmentsComponent implements OnInit {
   pickTab(t: LabDepartmentsTab): void {
     this.tab.set(t);
     this.q.set('');
-    void this.router.navigate([], { queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true });
+    if (t === 'spaces') this.spacesOpen.set(true);
+    if (this.narrow() && t === 'departments') this.sheetOpen.set(false);
+    void this.router.navigate([], { queryParams: { tab: t, branch: t === 'spaces' ? this.selectedBranch()?.id ?? null : null }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+
+  // ── Settings shell: the shell's side card lists Departments + one row per branch; its head shows headTools ──
+  private readonly settingsHost = inject(SETTINGS_HOST, { optional: true });
+  private readonly branchesLoaded = signal(false);
+  /** The ?tab= the page was opened with (before the shell had this page's rows). */
+  private initialTab: string | null = (() => {
+    try { return String(inject(Router).parseUrl(inject(Router).url).queryParams['tab'] ?? '') || null; } catch { return null; }
+  })();
+  private readonly deptToolsTpl = viewChild<TemplateRef<unknown>>('deptTools');
+  private readonly spaceToolsTpl = viewChild<TemplateRef<unknown>>('spaceTools');
+  /** Count + status filter (departments) / space count (a branch), for the shell's card head. */
+  readonly headTools = computed(() => (this.tab() === 'departments' ? this.deptToolsTpl() : this.spaceToolsTpl()));
+  private readonly listSections = (() => {
+    const host = this.settingsHost;
+    if (!host?.categories) return null;
+    inject(DestroyRef).onDestroy(() => host.categories.set(null));
+    return effect(() => {
+      // Publish only once the branches are known, and never fewer than TWO rows: the shell switches between its
+      // one-card and two-panel frames on the row count, and a switch re-creates this page (a reload loop).
+      if (!this.branchesLoaded()) return;
+      const branches = this._branches();
+      const n = this._departments().length;
+      const spaces = this._spaces();
+      host.categories.set([
+        { id: 'departments', label: 'Departments', note: String(n) },
+        // A tree (owner): "Lab spaces" is a heading row, its branches are indented children.
+        ...(branches.length ? [
+          { id: 'spaces', label: 'Lab spaces', note: `${branches.length} ${branches.length === 1 ? 'branch' : 'branches'}`, heading: true },
+          ...branches.map((b) => {
+            const k = spaces.filter((x) => x.branchId === b.id).length;
+            return { id: SPACE_TAB_PREFIX + b.id, label: b.name, note: `${k} ${k === 1 ? 'space' : 'spaces'}`, parent: 'spaces' };
+          }),
+        ] : [{ id: 'spaces', label: 'Lab spaces', note: 'No branches yet' }]),
+      ]);
+      // A deep link to a branch (?tab=spaces-<id>) arrived before these rows existed, so the shell fell back to its
+      // first row: take the person to the branch they asked for, once.
+      const want = this.initialTab;
+      if (want?.startsWith(SPACE_TAB_PREFIX) && branches.some((b) => SPACE_TAB_PREFIX + b.id === want)) {
+        this.initialTab = null;
+        untracked(() => this.pickBranch(want.slice(SPACE_TAB_PREFIX.length)));
+      }
+    });
+  })();
+  // ── Tree: Lab spaces ▸ branch (deep link ?tab=spaces&branch=<id>; default = the user's current branch) ──
+  private readonly auth = inject(AuthService, { optional: true });
+  readonly branchId = signal<string | null>(null);
+  readonly spacesOpen = signal(true);
+  readonly narrow = sgMedia(SG_NARROW_MQ);
+  readonly phone = sgMedia(SG_PHONE_MQ);
+  readonly sheetOpen = signal(false);
+  readonly selectedBranch = computed(() => {
+    const list = this._branches();
+    const want = this.branchId() ?? this.auth?.activeBranchId?.() ?? null;
+    return list.find(b => b.id === want) ?? list[0] ?? null;
+  });
+  /** The shell writes ?tab=spaces-<branchId> for a branch row. */
+  private readonly followBranchTab = (() => {
+    inject(ActivatedRoute, { optional: true })?.queryParamMap.pipe(takeUntilDestroyed()).subscribe((q) => {
+      const t = q.get('tab') ?? '';
+      if (t.startsWith(SPACE_TAB_PREFIX)) { this.tab.set('spaces'); this.branchId.set(t.slice(SPACE_TAB_PREFIX.length)); }
+      else if (t === 'spaces' && q.get('branch')) this.branchId.set(q.get('branch'));
+    });
+  })();
+
+  pickBranch(id: string): void {
+    this.branchId.set(id);
+    this.tab.set('spaces');
+    if (this.narrow()) this.sheetOpen.set(false);
+    const queryParams = this.hosted ? { tab: SPACE_TAB_PREFIX + id, branch: null } : { tab: 'spaces', branch: id };
+    void this.router.navigate([], { queryParams, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+
+  // ── Departments grid (Test Master) ──
+  readonly isCoarse = typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  readonly status = signal<SgStatus>('all');
+  readonly statusOptions = computed(() => sgStatusOptions(this._departments().length, this._departments().filter(d => !d.isActive).length));
+  readonly gridTheme = sgGridTheme();
+  private gridApi: GridApi<Department> | null = null;
+  readonly getRowId = (p: GetRowIdParams<Department>) => p.data.id;
+  readonly rowClass = sgRowOff<Department>(d => d.isActive);
+  readonly defaultColDef: ColDef<Department> = { sortable: true, resizable: true, filter: false, minWidth: 90, wrapText: true, autoHeight: true };
+  actionsFor(d: Department): SgAction[] {
+    if (!this.isLabMade(d)) return [];
+    return [
+      { label: 'Rename', aria: 'Rename ' + d.name, path: SG_ICON.edit, icon: true, run: () => this.beginRename(d) },
+      { label: 'Delete', aria: 'Delete ' + d.name, path: SG_ICON.trash, icon: true, danger: true, run: () => { void this.deleteDepartment(d); } },
+    ];
+  }
+  readonly colDefs = computed<ColDef<Department>[]>(() => {
+    const web = !this.isCoarse && !this.phone();
+    const cols: ColDef<Department>[] = [
+      { colId: 'name', field: 'name', headerName: 'Department', flex: 1.6, minWidth: 180, sort: 'asc',
+        editable: p => !!p.data && this.isLabMade(p.data),
+        valueParser: p => String(p.newValue ?? '').trim().slice(0, 80) || p.oldValue,
+        cellRenderer: (p: ICellRendererParams<Department>) => sgCell(p.data?.name, null, true) },
+      { colId: 'code', field: 'code', headerName: 'Code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num' },
+      { colId: 'origin', headerName: 'Origin', width: 170, minWidth: 140, flex: 0,
+        valueGetter: p => (p.data && this.isLabMade(p.data) ? this.originLabel.lab : this.originLabel.catalogue),
+        cellRenderer: (p: ICellRendererParams<Department>) => {
+          const el = document.createElement('span');
+          const own = !!p.data && this.isLabMade(p.data);
+          el.className = 'pf-chip pf-chip--static ld-chip' + (own ? ' ld-chip--own' : '');
+          el.dataset['testid'] = 'ld-origin';
+          el.textContent = own ? this.originLabel.lab : this.originLabel.catalogue;
+          return el;
+        } },
+      sgStatusCol<Department>(d => d.isActive, d => d.name, d => this.toggleActive(d)),
+    ];
+    // Rename / Delete only exist for the lab's own departments: no blank, divided actions column for a catalogue-only list.
+    if (this._departments().some(d => this.isLabMade(d))) {
+      cols.push(sgActionsCol<Department>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), false));
+    }
+    if (this.phone()) return cols.filter(c => c.colId !== 'origin');
+    return cols;
+  });
+  onGridReady(e: GridReadyEvent<Department>) { this.gridApi = e.api; }
+  /** Inline rename (lab-made only): the grid edit lands here → the same PATCH as before. */
+  onCellValueChanged(e: CellValueChangedEvent<Department>) {
+    if (e.colDef.colId !== 'name' || !e.data) return;
+    const d = this._departments().find(x => x.id === e.data!.id);
+    if (!d) return;
+    // AG-Grid has already written the new value into the row object: compare with the value it replaced.
+    this.renameDraft.set(String(e.newValue ?? ''));
+    this.saveRename({ ...d, name: String(e.oldValue ?? '') });
   }
 
   readonly q = signal('');
@@ -382,7 +547,7 @@ export class LabDepartmentsComponent implements OnInit {
 
   readonly visibleDepartments = computed(() => {
     const q = this.q();
-    const all = this._departments();
+    const all = sgByStatus(this._departments(), this.status(), d => d.isActive);
     return q.trim() ? all.filter(d => bandMatch(q, d.name, d.code)) : all;
   });
   readonly visibleBranches = computed(() => {
@@ -411,11 +576,16 @@ export class LabDepartmentsComponent implements OnInit {
     this.destroyRef.onDestroy(() => this.listHold.cancel());
     const t = this.router.parseUrl(this.router.url).queryParams['tab'];
     if ((LAB_DEPARTMENTS_TABS as readonly string[]).includes(t)) this.tab.set(t as LabDepartmentsTab);
+    const br = this.router.parseUrl(this.router.url).queryParams['branch'];
+    if (typeof br === 'string' && br) this.branchId.set(br);
     this.api.get<Department[]>('/api/tenants/departments').subscribe({
       next: l => { this._departments.set(l ?? []); this.listHold.done(); },
       error: () => this.listHold.done(),
     });
-    this.api.get<Branch[]>('/api/tenants/branches?includeInactive=true').subscribe({ next: l => this._branches.set((l ?? []).filter(b => b.isActive !== false)) });
+    this.api.get<Branch[]>('/api/tenants/branches?includeInactive=true').subscribe({
+      next: l => { this._branches.set((l ?? []).filter(b => b.isActive !== false)); this.branchesLoaded.set(true); },
+      error: () => this.branchesLoaded.set(true),
+    });
     this.api.get<LabSpace[]>('/api/tenants/lab-spaces').subscribe({ next: l => this._spaces.set(l ?? []) });
     this.api.get<DeptSpaceLink[]>('/api/tenants/department-space-links').subscribe({ next: l => this._links.set(l ?? []) });
   }
@@ -451,7 +621,11 @@ export class LabDepartmentsComponent implements OnInit {
       },
     });
   }
-  beginRename(d: Department) { this.renamingId.set(d.id); this.renameDraft.set(d.name); this.renameErr.set(''); }
+  beginRename(d: Department) {
+    this.renamingId.set(d.id); this.renameDraft.set(d.name); this.renameErr.set('');
+    const node = this.gridApi?.getRowNode(d.id);
+    if (node && node.rowIndex != null) this.gridApi!.startEditingCell({ rowIndex: node.rowIndex, colKey: 'name' });
+  }
   cancelRename() { this.renamingId.set(null); this.renameErr.set(''); }
   saveRename(d: Department) {
     const name = this.renameDraft().trim();
@@ -463,7 +637,14 @@ export class LabDepartmentsComponent implements OnInit {
         this.toasts.success('Renamed');
         this.cancelRename();
       },
-      error: e => { const err = ApiError.from(e); this.renameErr.set(departmentErrorMessage(err.code, err.message)); },
+      error: e => {
+        const err = ApiError.from(e);
+        const msg = departmentErrorMessage(err.code, err.message);
+        this.renameErr.set(msg);
+        this.toasts.error(msg);
+        // The grid cell shows the saved name again.
+        this._departments.update(l => l.map(x => x.id === d.id ? { ...x } : x));
+      },
     });
   }
   async deleteDepartment(d: Department) {

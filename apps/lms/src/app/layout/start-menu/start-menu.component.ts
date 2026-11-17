@@ -217,10 +217,14 @@ export class StartMenuComponent {
   }
   /** Home, then the pinned screens in bar order. */
   protected readonly tiles = computed<MenuRow[]>(() => [this.homeRow(), ...this.layout().pinned.map(i => this.toRow(i, true))]);
-  /** Every other screen the person may open (each once). */
+  /** Screens NOT on the bar (owner 2026-11-17: never repeat what the bar already shows): pinned screens that do not
+   *  fit on the bar at this width, then every other screen the person may open (each once). */
   protected readonly others = computed<MenuRow[]>(() => {
-    const m = this.layout().menu;
-    return [...m.work, ...m.more, ...m.settings].map(i => this.toRow(i));
+    const l = this.layout();
+    const onBar = new Set(l.bar.map(i => i.id));
+    const offBar = l.pinned.filter(i => !onBar.has(i.id));
+    const m = l.menu;
+    return [...offBar, ...m.work, ...m.more, ...m.settings].map(i => this.toRow(i));
   });
   protected isPinnedId(id: string): boolean { return this.layout().pinned.some(p => p.id === id); }
   protected isLockedId(id: string): boolean { return this.layout().lockedIds.has(id); }

@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { SETTINGS_HOST, injectSettingsHosted } from '../../../shared/utils/settings-host';
+import { SettingGroupComponent, SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
@@ -54,7 +56,7 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
 @Component({
   selector: 'pf-notifications-config',
   standalone: true,
-  imports: [SkeletonRowsComponent, FormsModule, NumberInputComponent, ScreenHeaderComponent, HeroBandComponent, SelectComponent],
+  imports: [SettingRowComponent, SettingGroupComponent, SkeletonRowsComponent, FormsModule, NumberInputComponent, ScreenHeaderComponent, HeroBandComponent, SelectComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -75,54 +77,25 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
         subtitle="Every in-app alert the platform can raise — switch them all off at once, switch each one on or off, and set how long to wait before 'didn't happen in time' alerts fire.">
       </pf-screen-header>
 
-      <div class="pf-band-body">
+      <div class="pf-band-body" [class.pf-sgrid]="hosted">
       <!-- Master switch (owner): one lab-wide "All notifications" control above
            the list. Off = nothing sends (bells, phone / browser pushes, overdue
            watches) except critical result alerts; the per-alert choices below
            are kept untouched and come back exactly when it's switched on. -->
       @if (!loading()) {
-        <div class="pf-card pf-nc-master mb-5" [class.pf-nc-master--off]="!masterOn()">
-          <div class="pf-nc-master__row">
-            <div class="pf-nc-master__icon" aria-hidden="true">
-              @if (masterOn()) {
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
-                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
-                </svg>
-              } @else {
-                <!-- bell-off -->
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/>
-                  <path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/>
-                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
-                  <path d="m2 2 20 20"/>
-                </svg>
-              }
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="pf-nc-master__title">All notifications</p>
-              <p class="pf-nc-master__sub">
-                @if (masterOn()) {
-                  On for the whole lab — {{ enabledTotal() }} of {{ rows().length }} alerts below are switched on.
-                } @else {
-                  Off for the whole lab — no bells, phone or browser alerts. Your choices below are kept and come back when you switch this on.
-                }
-              </p>
-              <p class="pf-nc-master__note">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
-                </svg>
-                Critical result alerts always send.
-              </p>
-            </div>
-            <button type="button" class="pf-toggle pf-nc-switch pf-nc-master__switch" role="switch"
-                    [attr.aria-checked]="masterOn()" [disabled]="masterSaving()"
-                    [attr.aria-label]="'All notifications — ' + (masterOn() ? 'on' : 'off')"
-                    (click)="toggleMaster()">
-              <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-            </button>
-          </div>
-        </div>
+        <!-- Master switch: ONE row above the list. Off = nothing sends except critical result alerts; the per-alert
+             choices below are kept and come back when it is switched on. -->
+        <pf-setting-group class="pf-nc-mastergroup" id="all" label="All notifications" scope="lab-wide" icon="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0">
+        <pf-setting-row class="pf-nc-master" [class.pf-nc-master--off]="!masterOn()" label="Every alert"
+                        [hint]="masterOn() ? 'On for the whole lab — ' + enabledTotal() + ' of ' + rows().length + ' alerts are on. Critical result alerts always send.' : 'Off for the whole lab — your choices below are kept. Critical result alerts always send.'">
+          <button type="button" class="pf-toggle pf-nc-switch pf-nc-master__switch" role="switch"
+                  [attr.aria-checked]="masterOn()" [disabled]="masterSaving()"
+                  [attr.aria-label]="'All notifications — ' + (masterOn() ? 'on' : 'off')"
+                  (click)="toggleMaster()">
+            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+          </button>
+        </pf-setting-row>
+        </pf-setting-group>
       }
 
       <!-- Module filter chips (classic; the new design has them in the pill) -->
@@ -142,73 +115,37 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
       </div>
 
       @if (loading()) {
-        <!-- The catalogue's shape (module cards of alert rows), not a line of text. -->
         <pf-skeleton-rows [rows]="6" [avatar]="false" label="Loading the event catalog…"></pf-skeleton-rows>
       }
 
       @for (m of visibleModules(); track m) {
-        <div class="mb-6" [class.pf-nc-paused]="!masterOn()">
-          <div class="pf-nc-section">
-            <h3 class="pf-nc-section__title">{{ moduleLabel(m) }}</h3>
-            <span class="pf-nc-section__meta pf-num">{{ enabledCount(m) }}/{{ countFor(m) }} on</span>
-          </div>
-          <div class="space-y-2">
-            @for (r of rowsFor(m); track r.key) {
-              <div class="pf-card pf-nc-card" [class.pf-nc-card--live]="r.critical">
-                <div class="pf-nc-row">
-                  <div class="pf-nc-row__icon" [class.pf-nc-row__icon--overdue]="r.kind === 'overdue'"
-                       [class.pf-nc-row__icon--off]="!r.enabled">
-                    @if (r.kind === 'overdue') {
-                      <!-- clock: something did NOT happen in time -->
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="9"/>
-                        <path d="M12 7v5l3 2"/>
-                      </svg>
-                    } @else {
-                      <!-- bell: something happened -->
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
-                        <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
-                      </svg>
-                    }
-                  </div>
-
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <p class="font-semibold text-[14.5px]" style="color: var(--text-primary);">{{ r.label }}</p>
-                      @if (r.kind === 'overdue') {
-                        <span class="pf-chip pf-chip--static pf-nc-badge">Overdue watch</span>
-                      }
-                      @if (r.critical && !masterOn()) {
-                        <span class="pf-chip pf-chip--static pf-nc-badge pf-nc-badge--always">Always sends</span>
-                      }
-                    </div>
-                    <p class="text-[12.5px] mt-0.5 leading-snug" style="color: var(--text-secondary);">{{ r.firesWhen }}</p>
-                    <p class="text-[11.5px] mt-1" style="color: var(--text-muted);">
-                      Notifies: {{ r.recipients }}
-                    </p>
-
-                    @if (r.thresholdConfigurable && r.enabled) {
-                      <div class="pf-nc-threshold mt-2.5">
-                        <span class="text-[12px]" style="color: var(--text-secondary);">Alert after</span>
-                        <pf-number-input
-                          [value]="r.thresholdMinutes ?? 0"
-                          [min]="5" [step]="5" suffix="min"
-                          (valueChange)="setThreshold(r, $event)">
-                        </pf-number-input>
-                      </div>
-                    }
-                  </div>
-
-                  <button type="button" class="pf-toggle pf-nc-switch" role="switch" [attr.aria-checked]="r.enabled"
-                          [attr.aria-label]="r.label + (r.enabled ? ' — on' : ' — off')" (click)="setEnabled(r, !r.enabled)">
-                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-                  </button>
+        <pf-setting-group class="pf-nc-group" [id]="hosted ? m : null" [class.pf-nc-paused]="!masterOn()" [label]="moduleLabel(m)" icon="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0">
+          <span group-tools class="pf-nc-section__meta pf-num">{{ enabledCount(m) }}/{{ countFor(m) }} on</span>
+          @for (r of rowsFor(m); track r.key) {
+            <div class="pf-nc-card" data-testid="alert-row" [class.pf-nc-card--live]="r.critical" [class.pf-nc-card--off]="!r.enabled">
+              <div class="pf-nc-row__text">
+                <div class="pf-nc-row__name">
+                  <p class="font-semibold pf-nc-row__label">{{ r.label }}</p>
+                  @if (r.kind === 'overdue') { <span class="pf-chip pf-chip--static pf-nc-badge">Overdue watch</span> }
+                  @if (r.critical && !masterOn()) { <span class="pf-chip pf-chip--static pf-nc-badge pf-nc-badge--always">Always sends</span> }
                 </div>
+                <p class="pf-nc-row__hint" [title]="r.firesWhen + ' — notifies: ' + r.recipients">{{ r.firesWhen }} · {{ r.recipients }}</p>
               </div>
-            }
-          </div>
-        </div>
+              <div class="pf-nc-row__ctl">
+                @if (r.thresholdConfigurable && r.enabled) {
+                  <span class="pf-nc-threshold">after
+                    <pf-number-input [value]="r.thresholdMinutes ?? 0" [min]="5" [step]="5" suffix="min"
+                                     (valueChange)="setThreshold(r, $event)"></pf-number-input>
+                  </span>
+                }
+                <button type="button" class="pf-toggle pf-nc-switch" role="switch" [attr.aria-checked]="r.enabled"
+                        [attr.aria-label]="r.label + (r.enabled ? ' — on' : ' — off')" (click)="setEnabled(r, !r.enabled)">
+                  <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                </button>
+              </div>
+            </div>
+          }
+        </pf-setting-group>
       }
       @if (!loading() && dept() && !scoped().length) {
         <p class="pf-band-empty" data-testid="nc-dept-empty">There are no {{ deptName() }} alerts yet. They will appear here, each with its own on / off, as {{ deptName() }} raises them.</p>
@@ -221,9 +158,21 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
   `,
   styles: [`
     .pf-nc-modsel { display: block; min-width: 200px; }
+    /* Minimal rows (DESIGN-V2 rule 5): name + one hint line | "after" + switch. */
+    .pf-nc-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 20px; padding: 10px 0; border-bottom: 1px solid var(--pf-line); }
+    .pf-nc-card:last-child { border-bottom: 0; }
+    .pf-nc-row__name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-nc-row__label { margin: 0; font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
+    .pf-nc-row__hint { margin: 2px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-nc-card--off .pf-nc-row__label { color: var(--text-secondary); }
+    .pf-nc-row__ctl { display: flex; align-items: center; gap: 14px; }
+    .pf-nc-threshold { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+    .pf-nc-badge { padding: 1px 7px; border-radius: 999px; border: 1px solid var(--pf-line); background: var(--pf-chip-bg); font-size: 10.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+    .pf-nc-section__meta { font-size: 12px; color: var(--text-tertiary); }
+    .pf-nc-paused .pf-nc-card:not(.pf-nc-card--live) { opacity: .55; }
+    @media (max-width: 767px) { .pf-nc-card { grid-template-columns: minmax(0, 1fr); } .pf-nc-row__hint { white-space: normal; } }
 
     /* Master switch card — the one lab-wide control, above the list. */
-    .pf-nc-master { padding: 14px 16px; }
     .pf-nc-master__row { display: flex; align-items: center; gap: 14px; }
     .pf-nc-master__icon {
       width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0;
@@ -239,11 +188,9 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
       font-size: 12px; font-weight: 500; color: var(--text-secondary);
     }
     .pf-nc-master__note svg { color: var(--violet-text, #7c3aed); flex: none; }
-    .pf-nc-master__switch { min-width: 44px; min-height: 44px; justify-content: center; }
+    .pf-nc-switch { flex: none; }
     /* Master off: the per-alert list stays editable (choices are kept) but
        reads as paused; critical rows carry an "Always sends" chip. */
-    .pf-nc-paused .pf-nc-card { opacity: 0.6; }
-    .pf-nc-paused .pf-nc-card--live { opacity: 1; }
     .pf-nc-badge--always { color: var(--text-primary); }
     @media (max-width: 640px) { .pf-nc-modsel { min-width: 0; width: 100%; } }
     .pf-nc-chips {
@@ -322,17 +269,8 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
       color: var(--text-muted);
     }
 
-    .pf-nc-card { padding: 12px 14px; }
-    .pf-nc-badge { height: 22px; font-size: 11px; }
-    .pf-nc-switch { flex: none; min-height: 44px; }
     @media (pointer: coarse) { .pf-nc-switch { min-width: 44px; min-height: 44px; justify-content: center; } }
 
-    .pf-nc-threshold {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      max-width: 240px;
-    }
 
     /* ===== Phone overrides (<=640px) — additive only ===== */
     @media (max-width: 640px) {
@@ -352,6 +290,23 @@ const DEPARTMENT_NAMES: Record<AlertDepartment, string> = { lab: 'Lab', opd: 'OP
   `]
 })
 export class NotificationsConfigComponent implements OnInit {
+  /** In the Settings shell: the alert groups are cards in the page grid. */
+  protected readonly hosted = injectSettingsHosted();
+  /** In the Settings shell the alert sections are the side card (owner: headings on the left), each with its n/m on. */
+  private readonly settingsHost = inject(SETTINGS_HOST, { optional: true });
+  private readonly listSections = (() => {
+    const host = this.settingsHost;
+    if (!host) return null;
+    inject(DestroyRef).onDestroy(() => host.categories.set(null));
+    return effect(() => {
+      if (this.loading()) return;
+      const mods = this.modules();
+      host.categories.set([
+        { id: 'all', label: 'All notifications', note: this.masterOn() ? 'on' : 'off' },
+        ...mods.map((m) => ({ id: m, label: this.moduleLabel(m), note: `${this.enabledCount(m)}/${this.countFor(m)} on` })),
+      ]);
+    });
+  })();
   private readonly api = inject(ApiService);
   private readonly toasts = inject(ToastService);
   private readonly dialog = inject(DialogService);

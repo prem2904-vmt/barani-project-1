@@ -1,5 +1,5 @@
 import { firstValueFrom } from 'rxjs';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -8,11 +8,8 @@ import {
   GridApi,
   ICellRendererParams,
   ModuleRegistry,
-  colorSchemeDark,
-  colorSchemeLight,
-  themeQuartz,
+  RowClickedEvent,
 } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
 import { ApiService } from '../../../core/services/api.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { UserAccountActionsService } from './user-account-actions.service';
@@ -22,6 +19,12 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { Role, User, userDisplayName } from '../../../shared/models/user.model';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
+import { NgTemplateOutlet } from '@angular/common';
+import { SG_NARROW_MQ, SgStatus, sgBare, sgByStatus, sgGridTheme, sgMedia, sgRowOff, sgStatusOptions } from '../../../shared/settings-grid/settings-grid';
+import { UserEditComponent } from './user-edit.component';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
+import { UserInviteComponent } from './user-invite.component';
+import { confirmLeaveUnsaved } from '../../../shared/utils/unsaved-changes';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { WebrtcService } from '../../../core/services/webrtc.service';
@@ -43,7 +46,7 @@ import {
   ROLE_EDITOR_PREFETCH_KEY, USER_EDIT_PREFETCH_KEY, USER_INVITE_PREFETCH_KEY,
   loadRoleEditor, loadUserEdit, loadUserInvite,
 } from './user-editors.loader';
-import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
+import { bindTabQuery } from '../../../shared/utils/settings-host';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -68,39 +71,25 @@ export function isDeletableRole(r: Pick<Role, 'isPreSeeded' | 'tenantId' | 'name
 function rowAction(web: boolean, label: string, icon: string, title: string): HTMLButtonElement {
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = web ? 'pf-rowact' : 'pf-rowact pf-rowact--icon';
+  // Test Master's quiet row actions: same-size icons (28px on web, 44px on touch); the label stays for AT + tooltip.
+  b.className = 'pf-rowact pf-rowact--icon' + (web ? ' pf-sg-rowact-sm' : '');
   b.title = title;
   b.setAttribute('aria-label', title);
   b.innerHTML = `${icon}<span class="pf-rowact__t">${label}</span>`;
   return b;
 }
 
-const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
-  fontFamily: "'Noto Sans', system-ui, sans-serif",
-  fontSize: 13,
-  rowHeight: 52,
-  headerHeight: 40,
-  borderRadius: 12,
-  accentColor: '#7c3aed',
-});
-
-const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
-  fontFamily: "'Noto Sans', system-ui, sans-serif",
-  fontSize: 13,
-  rowHeight: 52,
-  headerHeight: 40,
-  borderRadius: 12,
-  accentColor: '#a855f7',
-});
-
 @Component({
   selector: 'pf-users-access',
   standalone: true,
   imports: [
     FormsModule,
-    AgGridAngular,
     ScreenHeaderComponent,
     SegmentedComponent,
+    NgTemplateOutlet,
+    UserEditComponent,
+    DataGridComponent,
+    UserInviteComponent,
     TouchButtonComponent,
     HeroBandComponent,
     SkeletonTableComponent,
@@ -114,42 +103,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
         <pf-hero-band [back]="true"
                       [placeholder]="tab() === 'users' ? 'Search users — name, username, email…' : 'Search roles…'"
                       [value]="search()" (valueChange)="onSearch($event)">
-          <span band-inline class="pf-ua-count">
-            @if (tab() === 'users') {
-              {{ filteredUsers().length }} user{{ filteredUsers().length === 1 ? '' : 's' }}
-            } @else {
-              {{ filteredRoles().length }} role{{ filteredRoles().length === 1 ? '' : 's' }}
-            }
-          </span>
-          <ng-container band-tools>
-            @if (!hosted) {
-              <pf-segmented size="sm" [options]="tabOptions" [value]="tab()"
-                            (valueChange)="setTab($event)"></pf-segmented>
-            }
-          </ng-container>
-          <ng-container band-actions>
-            @if (tab() === 'users') {
-              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openInvite()"
-                      (pointerenter)="warmInvite()" (focus)="warmInvite()"
-                      title="Create user" aria-label="Create user">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 5v14"/><path d="M5 12h14"/>
-                </svg>
-                Create user
-              </button>
-            } @else {
-              <button type="button" class="pf-hb-btn pf-hb-btn--primary press" (click)="openNewRole()"
-                      (pointerenter)="warmRoleEditor()" (focus)="warmRoleEditor()"
-                      title="Create role" aria-label="Create role">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M12 5v14"/><path d="M5 12h14"/>
-                </svg>
-                Create role
-              </button>
-            }
-          </ng-container>
+          
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
@@ -180,7 +134,6 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
       </pf-screen-header>
 
       <div class="pf-classic-only flex items-center justify-between gap-3 mb-4 flex-wrap">
-        @if (!hosted) {
         <div class="pf-tabbar">
           <pf-segmented
             [options]="tabOptions"
@@ -189,7 +142,6 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
             (valueChange)="setTab($event)">
           </pf-segmented>
         </div>
-        }
 
         <div class="flex items-center gap-3 ml-auto">
           <span class="text-[12px] pf-num" style="color: var(--text-muted);">
@@ -204,50 +156,95 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
         </div>
       </div>
 
-      <!-- The grid fills the band body and scrolls itself (no page scroll). -->
+      <!-- ONE Test Master grid card: Users or Roles. Inside the Settings shell / overview the grid is bare and the
+           frame's card head shows #headTools (the Users | Roles switch, status filter, count). -->
       <div class="pf-band-body pf-band-body--fill">
-      @if (tab() === 'users') {
-        <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
-             style="border-color: var(--border-color, rgba(0,0,0,0.1));">
-          @if (listSkeleton()) {
-            <!-- First load: the grid's shape (PF-PATTERN "Loading feedback"). -->
-            <pf-skeleton-table class="pf-ua-gridskel" [rows]="10" [cols]="5" label="Loading users…"></pf-skeleton-table>
-          }
-          <ag-grid-angular
-            style="width: 100%; height: 100%;"
-            [theme]="gridTheme()"
-            [rowData]="filteredUsers()"
-            [columnDefs]="userColDefs()"
-            [context]="gridContext"
-            [animateRows]="true"
-            [rowSelection]="'single'">
-          </ag-grid-angular>
+        <div class="pf-sg-panels pf-ua-panels" [class.pf-sg-panels--single]="!panelOpen()" [class.pf-sg-panels--narrow]="narrow()">
+        <!-- The user beside the grid (owner 2026-11-17: "too many clicks"): ONE form in a LEFT panel, sheet on narrow. -->
+        @if (panelOpen()) {
+          @if (narrow()) { <div class="pf-sheet-backdrop" (click)="requestClosePanel()"></div> }
+          <aside class="pf-card pf-sg-side pf-ua-panel" [class.pf-sg-side--sheet]="narrow()" role="dialog" [attr.aria-modal]="narrow() ? 'true' : null"
+                 [attr.aria-label]="creating() ? 'Create user' : 'Edit user'" (keydown.escape)="requestClosePanel()">
+            @if (narrow()) { <span class="pf-sg-sheet-handle" aria-hidden="true"></span> }
+            @if (creating()) {
+              <pf-user-invite [panel]="true" (closed)="closePanel()" (saved)="reload()"></pf-user-invite>
+            } @else {
+              <pf-user-edit [panelId]="panelUserId()" (closed)="closePanel()" (saved)="reload()"></pf-user-edit>
+            }
+          </aside>
+        }
+        <section class="pf-card pf-sg-main pf-sg-main--clickable pf-ua-main" [class.pf-sg-main--bare]="bare" [attr.aria-label]="tab() === 'users' ? 'Users' : 'Roles'">
+          <header class="pf-card__head pf-sg-main__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+            <span class="pf-card__label">{{ tab() === 'users' ? 'Users' : 'Roles' }}</span>
+            <span class="pf-card__spacer"></span>
+            <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
+          </header>
+          <div class="pf-sg-main__body pf-ua-grid">
+            @if (tab() === 'users') {
+              <pf-data-grid [rowData]="gridUsers()" [columnDefs]="userColDefs()" [context]="gridContext" [getRowClass]="userRowClass"
+                            [loading]="listSkeleton()" loadingLabel="Loading users…" [clickable]="true"
+                            [emptyTitle]="search() ? 'No users match.' : 'No users yet.'" (rowClicked)="onUserRow($event)"></pf-data-grid>
+            } @else {
+              <pf-data-grid [rowData]="filteredRoles()" [columnDefs]="roleColDefs()" [context]="gridContext"
+                            [loading]="listSkeleton()" loadingLabel="Loading roles…" [clickable]="true"
+                            [emptyTitle]="search() ? 'No roles match.' : 'No roles yet.'" (rowClicked)="onRoleRow($event)"></pf-data-grid>
+            }
+          </div>
+        </section>
         </div>
-      } @else {
-        <div class="pf-ua-grid w-full rounded-2xl overflow-hidden border shadow-sm"
-             style="border-color: var(--border-color, rgba(0,0,0,0.1));">
-          @if (listSkeleton()) {
-            <pf-skeleton-table class="pf-ua-gridskel" [rows]="8" [cols]="4" label="Loading roles…"></pf-skeleton-table>
-          }
-          <ag-grid-angular
-            style="width: 100%; height: 100%;"
-            [theme]="gridTheme()"
-            [rowData]="filteredRoles()"
-            [columnDefs]="roleColDefs()"
-            [context]="gridContext"
-            [animateRows]="true"
-            [rowSelection]="'single'">
-          </ag-grid-angular>
-        </div>
-      }
       </div>
+
+      <!-- Head tools, left → right: count · dynamic filters · the STATIC view switch at the far right (owner). -->
+      <ng-template #headToolsTpl>
+        <span class="pf-sg-count pf-num pf-ua-count">
+          @if (tab() === 'users') {
+            {{ gridUsers().length }} user{{ gridUsers().length === 1 ? '' : 's' }}
+          } @else {
+            {{ filteredRoles().length }} role{{ filteredRoles().length === 1 ? '' : 's' }}
+          }
+        </span>
+        @if (tab() === 'users') {
+          <pf-segmented class="pf-sg-status-filter" size="sm" [options]="statusOptions()" [value]="status()" (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+        }
+        @if (!bare) {
+          <!-- Hosted: the frame's head already carries the Users | Roles pill (the setting's categories). -->
+          <pf-segmented class="pf-ua-tabseg" size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)" aria-label="Users or roles"></pf-segmented>
+        }
+            <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+            @if (tab() === 'users') {
+              <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="openInvite()"
+                      (pointerenter)="warmInvite()" (focus)="warmInvite()"
+                      title="Create user" aria-label="Create user">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"/><path d="M5 12h14"/>
+                </svg>
+                Create user
+              </button>
+            } @else {
+              <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="openNewRole()"
+                      (pointerenter)="warmRoleEditor()" (focus)="warmRoleEditor()"
+                      title="Create role" aria-label="Create role">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 5v14"/><path d="M5 12h14"/>
+                </svg>
+                Create role
+              </button>
+            }
+    </ng-template>
     </section>
   `,
+  styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   styles: [`
-    /* Classic: the grid sizes off the viewport; new design: it fills the band body. */
-    .pf-ua-grid { position: relative; height: calc(100vh - 240px); min-height: 420px; }
-    .pf-ua-gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--pf-card-bg, var(--bg-primary)); border-radius: inherit; }
-    :host-context(.design-new) .pf-ua-grid { flex: 1 1 auto; height: auto; min-height: 320px; }
+    /* The grid fills the card body (flex, never a % height — a host without a definite height left it at 0). */
+    .pf-ua-tabseg { flex-shrink: 0; }
+    .pf-ua-panels { grid-template-columns: 440px minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+    .pf-ua-panels.pf-sg-panels--single, .pf-ua-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
+    .pf-ua-panel { overflow: hidden; }
+    .pf-ua-panel > pf-user-invite, .pf-ua-panel > pf-user-edit { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+    :root:not(.design-new) .pf-ua-main { height: calc(100vh - 240px); min-height: 420px; }
     .pf-ua-count {
       font-size: 12px; font-variant-numeric: tabular-nums;
       color: var(--text-muted); white-space: nowrap; padding: 0 6px;
@@ -274,7 +271,25 @@ export class UsersAccessComponent implements OnInit {
   private readonly accountActions = inject(UserAccountActionsService);
   private readonly entitlements = inject(TenantEntitlementsService);
 
-  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  readonly gridTheme = sgGridTheme();
+  /** In the Settings shell / overview: bare grid; the frame's card head renders headTools. */
+  protected readonly bare = sgBare();
+  private readonly headToolsTpl = viewChild<TemplateRef<unknown>>('headToolsTpl');
+  /** Users | Roles switch + status filter + count, for a host card head. */
+  readonly headTools = computed(() => this.headToolsTpl());
+  readonly status = signal<SgStatus>('all');
+  readonly statusOptions = computed(() => sgStatusOptions(this._users().length, this._users().filter(u => !u.isActive).length));
+  readonly gridUsers = computed(() => sgByStatus(this.filteredUsers(), this.status(), u => u.isActive));
+  readonly userRowClass = sgRowOff<User>(u => u.isActive);
+  /** A row opens its editor (the actions cell keeps its own clicks). */
+  onUserRow(e: RowClickedEvent<User>): void {
+    if ((e.event?.target as HTMLElement | null)?.closest?.('button, a')) return;
+    if (e.data) this.editUser(e.data);
+  }
+  onRoleRow(e: RowClickedEvent<Role>): void {
+    if ((e.event?.target as HTMLElement | null)?.closest?.('button, a')) return;
+    if (e.data) this.openRole(e.data);
+  }
   /** Row actions: TEXT on web (fine pointer + hover), ICON on touch. */
   readonly web = webPointerSignal();
 
@@ -311,7 +326,6 @@ export class UsersAccessComponent implements OnInit {
   ];
   private readonly _tab = signal<Tab>('users');
   readonly tab = this._tab.asReadonly();
-  protected readonly hosted = injectSettingsHosted();
 
   private readonly _users = signal<User[]>([]);
   private readonly _roles = signal<Role[]>([]);
@@ -334,7 +348,7 @@ export class UsersAccessComponent implements OnInit {
     const s = this._search().toLowerCase();
     const scopes = this._scopes();
     const list = s
-      ? this._users().filter(u => userDisplayName(u).toLowerCase().includes(s) || (u.username ?? '').toLowerCase().includes(s) || u.email.toLowerCase().includes(s)
+      ? this._users().filter(u => (userDisplayName(u) ?? '').toLowerCase().includes(s) || (u.username ?? '').toLowerCase().includes(s) || (u.email ?? '').toLowerCase().includes(s)
           || branchScopeChips(scopes.get(u.id)).some(c => c.toLowerCase().includes(s)))
       : this._users();
     return scopes.size ? list.map(u => ({ ...u, branchScope: scopes.get(u.id) })) : list;
@@ -360,14 +374,24 @@ export class UsersAccessComponent implements OnInit {
     // the gradient is reserved for the ONE primary action).
     avatar.className = 'pf-ua-avatar';
     avatar.style.cssText = 'width:32px;height:32px;border-radius:50%;background:color-mix(in srgb, var(--color-primary, #7c3aed) 14%, transparent);color:var(--violet-text, #6d28d9);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0;';
-    const initials = name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+    const initials = String(name).split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase();
     avatar.textContent = initials;
     wrap.appendChild(avatar);
 
+    const text = document.createElement('span');
+    text.style.cssText = 'display:flex;flex-direction:column;min-width:0;line-height:1.3;';
     const nameSpan = document.createElement('span');
-    nameSpan.style.cssText = 'font-weight:500;font-size:14px;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    nameSpan.style.cssText = 'font-weight:600;font-size:13.5px;color:var(--text-primary);overflow-wrap:anywhere;';
     nameSpan.textContent = name;
-    wrap.appendChild(nameSpan);
+    text.appendChild(nameSpan);
+    const handle = u.username || u.email;
+    if (handle) {
+      const sub = document.createElement('span');
+      sub.style.cssText = 'font-size:11.5px;color:var(--text-tertiary);overflow-wrap:anywhere;';
+      sub.textContent = handle;
+      text.appendChild(sub);
+    }
+    wrap.appendChild(text);
 
     return wrap;
   };
@@ -428,7 +452,7 @@ export class UsersAccessComponent implements OnInit {
 
   private userActionsCellRenderer = (params: ICellRendererParams<User>): HTMLElement => {
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;gap:8px;justify-content:flex-end;width:100%;';
+    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;gap:4px;justify-content:flex-end;width:100%;';
     if (!params.data) return wrap;
 
     const u = params.data;
@@ -514,7 +538,7 @@ export class UsersAccessComponent implements OnInit {
       const del = rowAction(web, 'Delete', ICON_TRASH, `Delete ${r.name}`);
       del.classList.add('pf-ua-del');
       del.style.color = 'var(--red-text, #dc2626)';
-      del.style.marginLeft = '8px';
+      del.style.marginLeft = '4px';
       del.addEventListener('click', (e) => {
         e.stopPropagation();
         const ctx = params.context as { deleteRole?: (r: Role, el?: HTMLElement) => void };
@@ -536,15 +560,6 @@ export class UsersAccessComponent implements OnInit {
       cellRenderer: this.userCellRenderer,
       flex: 1.2,
       minWidth: 220,
-      sortable: true,
-      filter: true,
-    },
-    {
-      headerName: 'Username / Email',
-      colId: 'username',
-      valueGetter: p => p.data?.username || p.data?.email || 'no login',
-      flex: 1,
-      minWidth: 180,
       sortable: true,
       filter: true,
     },
@@ -575,7 +590,7 @@ export class UsersAccessComponent implements OnInit {
       headerName: 'Phone',
       colId: 'phone',
       valueGetter: p => p.data?.phone || 'no phone',
-      width: 150,
+      width: 170, minWidth: 160, flex: 0, wrapText: false, autoHeight: false, cellClass: 'pf-num',
       sortable: true,
       filter: true,
     },
@@ -592,7 +607,8 @@ export class UsersAccessComponent implements OnInit {
       headerName: '',
       colId: 'actions',
       cellRenderer: this.userActionsCellRenderer,
-      minWidth: web ? 300 : 170,
+      width: web ? 144 : 176, minWidth: web ? 144 : 176, maxWidth: web ? 144 : 176, pinned: 'right',
+      cellClass: 'pf-sg-acts-cell',
       editable: false,
       sortable: false,
       filter: false,
@@ -644,7 +660,8 @@ export class UsersAccessComponent implements OnInit {
       headerName: '',
       colId: 'actions',
       cellRenderer: this.roleActionsCellRenderer,
-      width: web ? 300 : 120,
+      width: web ? 96 : 120, minWidth: web ? 96 : 120, maxWidth: web ? 96 : 120, pinned: 'right',
+      cellClass: 'pf-sg-acts-cell',
       editable: false,
       sortable: false,
       filter: false,
@@ -706,6 +723,9 @@ export class UsersAccessComponent implements OnInit {
       if (params['tab'] === 'roles' || params['tab'] === 'users') {
         this._tab.set(params['tab']);
       }
+      // /admin/users/:id/edit (and old links) land here with ?edit=<id>: open that user beside the grid.
+      const edit = typeof params['edit'] === 'string' ? params['edit'] : null;
+      if (edit !== this.panelUserId()) this.panelUserId.set(edit);
     });
 
     this.api.get<User[]>('/api/users/').subscribe({ next: l => {
@@ -739,7 +759,13 @@ export class UsersAccessComponent implements OnInit {
   }
   onSearch(v: string) { this._search.set(v); }
 
-  openInvite() { this.router.navigateByUrl('/admin/users/invite'); }
+  /** Create user: the form opens beside the grid (owner: fewer clicks); pressing it again closes it. */
+  async openInvite() {
+    if (this.creating()) { void this.requestClosePanel(); return; }
+    if (this.panelOpen() && !(await this.requestClosePanel())) return;
+    this.panelUserId.set(null);
+    this.creating.set(true);
+  }
   openNewRole() { this.router.navigateByUrl('/admin/roles/new'); }
   /** Hover / focus of Create user / Create role: warm that editor's code. */
   warmInvite() { void prefetch(USER_INVITE_PREFETCH_KEY, loadUserInvite); }
@@ -750,9 +776,40 @@ export class UsersAccessComponent implements OnInit {
     this.pageOpen.markSource(el);
     this.router.navigate(['/admin/roles', r.id, 'edit']);
   }
-  editUser(u: User, el?: HTMLElement) {
-    this.pageOpen.markSource(el);
-    this.router.navigate(['/admin/users', u.id, 'edit']);
+  /** Edit opens the user beside the grid (no page change); `?edit=<id>` deep-links it. */
+  async editUser(u: User, _el?: HTMLElement) {
+    if (this.panelOpen() && this.panelUserId() !== u.id && !(await this.requestClosePanel())) return;
+    this.creating.set(false);
+    this.panelUserId.set(u.id);
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { edit: u.id }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+  readonly panelUserId = signal<string | null>(null);
+  /** Create user opens the same panel (one form, no page change). */
+  readonly creating = signal(false);
+  readonly panelOpen = computed(() => this.creating() || !!this.panelUserId());
+  readonly narrow = sgMedia(SG_NARROW_MQ);
+  /** The open panel's form (edit or create) — its unsaved changes are asked about before it closes. */
+  private readonly editPanel = viewChild(UserEditComponent);
+  private readonly invitePanel = viewChild(UserInviteComponent);
+  hasUnsavedChanges(): boolean { return !!(this.editPanel()?.hasUnsavedChanges() || this.invitePanel()?.hasUnsavedChanges()); }
+  saveChanges(): Promise<boolean> { return this.editPanel()?.hasUnsavedChanges() ? this.editPanel()!.saveChanges() : Promise.resolve(false); }
+  readonly unsavedLabel = 'this user';
+  /** Backdrop / Escape / switching rows: ask first when the open form has unsaved changes. */
+  async requestClosePanel(): Promise<boolean> {
+    const open = this.editPanel() ?? this.invitePanel();
+    if (open && !(await confirmLeaveUnsaved(this.dialog, open))) return false;
+    this.closePanel();
+    return true;
+  }
+  closePanel() {
+    this.panelUserId.set(null);
+    this.creating.set(false);
+    void this.router.navigate([], { relativeTo: this.route, queryParams: { edit: null }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+  /** After a save in the panel: the grid shows the new name / roles / status. */
+  reload() {
+    this.api.get<User[]>('/api/users/').subscribe({ next: l => this._users.set(l ?? []) });
+    this.api.get<UserBranchScope[]>('/api/users/branch-scopes').subscribe({ next: l => this._scopes.set(new Map((l ?? []).map(x => [x.userId, x] as const))) });
   }
 
   /** Delete a custom role (DialogService confirm, danger tone). The server

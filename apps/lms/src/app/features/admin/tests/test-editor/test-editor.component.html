@@ -204,7 +204,10 @@
           <p class="pf-card__note pf-te2-sec__sub">{{ d.type === 'package' ? 'The package’s name and type. Its members keep their own departments.' : 'The test’s name, department and codes.' }}</p>
         </div>
         <div class="pf-te2-sec__body pf-card__body">
-          <div class="pf-te2-grid">
+          <!-- 12-column field grid: Name · Type/Flow/Department (4 each) ·
+               Code/Short name/Section/Methodology (3 each). Hints that would
+               make a row ragged live in a small info tip on the label. -->
+          <div class="pf-te2-grid pf-te2-grid--form">
             <div class="pf-uf pf-uf--span">
               <label class="pf-uf__lbl">Name</label>
               <input type="text" class="pf-input pf-te2-name" #nameInput
@@ -212,18 +215,18 @@
                      [ngModel]="d.name" (ngModelChange)="patch({ name: $event })" />
               @if (fieldError('name')) { <p class="pf-field-err">{{ fieldError('name') }}</p> }
             </div>
-            <div class="pf-uf">
+            <div class="pf-uf pf-uf--c4">
               <label class="pf-uf__lbl">Type</label>
               <pf-select [options]="typeOptions" [value]="d.type" (valueChange)="patch({ type: $event })"></pf-select>
             </div>
-            <div class="pf-uf">
+            <div class="pf-uf pf-uf--c4">
               <label class="pf-uf__lbl">Flow</label>
               <pf-select [options]="flowOptions" [value]="d.flow" (valueChange)="patch({ flow: $event })"></pf-select>
             </div>
             <!-- A package bundles several departments' tests, so it carries
                  no department (owner 2026-09-27); tests & profiles keep it. -->
             @if (d.type !== 'package') {
-              <div class="pf-uf" data-field="department">
+              <div class="pf-uf pf-uf--c4" data-field="department">
                 <label class="pf-uf__lbl">Department</label>
                 <pf-select [options]="departmentOptions()" [value]="selectedDeptName()"
                            placeholder="— Select department —"
@@ -276,27 +279,34 @@
               </div>
             }
             @if (d.type === 'individual' || d.type === 'profile') {
-              <div class="pf-uf">
-                <label class="pf-uf__lbl">{{ d.type === 'profile' ? 'Profile code' : 'Test code' }}</label>
-                <input type="text" class="pf-input pf-num" readonly aria-readonly="true"
-                       [value]="codeText()" [attr.title]="codeHint" />
-                <p class="pf-hint">{{ codeHint }}</p>
+              <div class="pf-uf pf-uf--c3">
+                <span class="pf-uf__lblrow">
+                  <label class="pf-uf__lbl" for="te-code">{{ d.type === 'profile' ? 'Profile code' : 'Test code' }}</label>
+                  <span class="pf-uf__info" tabindex="0" role="img" [attr.aria-label]="codeHint" [title]="codeHint"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+                </span>
+                <input id="te-code" type="text" class="pf-input pf-num" readonly aria-readonly="true"
+                       [value]="codeText()" [attr.title]="codeHint" [attr.aria-description]="codeHint" />
               </div>
             }
-            <div class="pf-uf">
+            <div class="pf-uf" [class.pf-uf--c3]="d.type !== 'package'" [class.pf-uf--c4]="d.type === 'package'">
               <label class="pf-uf__lbl">Short name</label>
               <input type="text" class="pf-input" [ngModel]="d.shortName"
                      (ngModelChange)="patch({ shortName: $event })" placeholder="e.g. CBC" />
             </div>
             @if (d.type === 'individual') {
-              <div class="pf-uf">
+              <div class="pf-uf pf-uf--c3">
                 <label class="pf-uf__lbl">Section</label>
                 <input type="text" class="pf-input" [ngModel]="d.section"
                        (ngModelChange)="patch({ section: $event })"
                        placeholder="Sub-group under the department" />
               </div>
-              <div class="pf-uf">
-                <label class="pf-uf__lbl">Methodology</label>
+              <div class="pf-uf pf-uf--c3">
+                <span class="pf-uf__lblrow">
+                  <label class="pf-uf__lbl">Methodology</label>
+                  <span class="pf-uf__info" tabindex="0" role="img"
+                        aria-label="Pick one, or type your own and choose “Use …”."
+                        title="Pick one, or type your own and choose “Use …”."><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg></span>
+                </span>
                 <pf-select class="pf-uf__in" [searchable]="true"
                            [allowCreate]="true" createVerb="Use"
                            createHint="Not in the list — saved as this test's methodology"
@@ -304,7 +314,6 @@
                            [value]="d.methodology || ''"
                            placeholder="Pick or type a methodology"
                            (valueChange)="onMethodologyPicked($any($event))"></pf-select>
-                <p class="pf-uf__hint">Pick one, or type your own and choose “Use …”.</p>
               </div>
             }
           </div>
@@ -314,14 +323,19 @@
           @if (d.type === 'individual') {
             <div class="pf-profpanel">
               <div class="pf-profpanel__head">
-                <div>
+                <div class="pf-profpanel__title">
                   <h3 class="pf-te2-h">Profiles</h3>
                   <p class="pf-rr2__sub">Tick the profiles this test belongs to — ordering a ticked profile includes this test.</p>
                 </div>
-                @if (d.id && allProfiles().length > 8) {
-                  <input type="search" class="pf-input pf-profpanel__search" aria-label="Find a profile"
-                         placeholder="Find a profile…" [ngModel]="profSearch()"
-                         (ngModelChange)="profSearch.set($event)" />
+                @if (d.id && allProfiles().length > 0) {
+                  <div class="pf-profpanel__tools">
+                    <span class="pf-profpanel__count" role="status" aria-live="polite">{{ linkedProfileIds().length }} selected</span>
+                    @if (allProfiles().length > 8) {
+                      <input type="search" class="pf-input pf-profpanel__search" aria-label="Find a profile"
+                             placeholder="Find a profile…" [ngModel]="profSearch()"
+                             (ngModelChange)="profSearch.set($event)" />
+                    }
+                  </div>
                 }
               </div>
               @if (!d.id) {
@@ -329,7 +343,8 @@
               } @else if (allProfiles().length === 0) {
                 <p class="pf-hint">No profiles in the catalogue yet.</p>
               } @else {
-                <div class="pf-profpanel__grid">
+                <!-- A dense checklist (check · name · code), not a wall of tiles. -->
+                <div class="pf-profpanel__grid" role="group" aria-label="Profiles">
                   @for (pr of visibleProfiles(); track pr.id) {
                     <label class="pf-row pf-profpanel__item" [class.pf-row--in]="isLinkedProfile(pr.id)">
                       <input type="checkbox" class="pf-te2-srcheck" [checked]="isLinkedProfile(pr.id)"
@@ -340,7 +355,7 @@
                     </label>
                   }
                   @if (visibleProfiles().length === 0) {
-                    <p class="pf-hint">Nothing matches “{{ profSearch() }}”.</p>
+                    <p class="pf-hint pf-profpanel__none">Nothing matches “{{ profSearch() }}”.</p>
                   }
                 </div>
               }
@@ -359,26 +374,26 @@
           <p class="pf-card__note pf-te2-sec__sub">What it costs, how long it takes, and how the sample is drawn.</p>
         </div>
         <div class="pf-te2-sec__body pf-card__body">
-          <div class="pf-te2-grid">
-            <div class="pf-uf">
+          <div class="pf-te2-grid pf-te2-grid--form">
+            <div class="pf-uf pf-uf--c4">
               <label class="pf-uf__lbl">Price</label>
               <pf-number-input [value]="d.price" [min]="0" [step]="50" suffix="₹" [disabled]="!canEditPrices()"
                                (valueChange)="patch({ price: $event ?? 0 })"></pf-number-input>
               @if (!canEditPrices()) { <p class="pf-uf__hint">Prices are set by someone with the “Change test prices” permission.</p> }
               @if (fieldError('price')) { <p class="pf-field-err">{{ fieldError('price') }}</p> }
             </div>
-            <div class="pf-uf">
+            <div class="pf-uf pf-uf--c4">
               <label class="pf-uf__lbl">Tax slab</label>
               <pf-number-input [value]="d.taxSlab" [min]="0" [max]="50" [step]="0.5" suffix="%" [disabled]="!canEditPrices()"
                                (valueChange)="patch({ taxSlab: $event ?? 0 })"></pf-number-input>
             </div>
-            <div class="pf-uf">
+            <div class="pf-uf pf-uf--c4">
               <label class="pf-uf__lbl">TAT</label>
               <pf-number-input [value]="d.tatHours" [min]="1" [step]="1" suffix="hrs"
                                (valueChange)="patch({ tatHours: $event ?? 1 })"></pf-number-input>
             </div>
             @if (d.type === 'individual') {
-              <div class="pf-uf">
+              <div class="pf-uf pf-uf--c4">
                 <label class="pf-uf__lbl">{{ isMicroDept() ? 'Specimen' : 'Sample type' }}</label>
                 @if (isMicroDept()) {
                   <!-- Microbiology picks from the specimen master (blood, urine,
@@ -394,12 +409,12 @@
                          (ngModelChange)="patch({ sampleType: $event })" placeholder="e.g. Serum" />
                 }
               </div>
-              <div class="pf-uf">
+              <div class="pf-uf pf-uf--c4">
                 <label class="pf-uf__lbl">Sample volume (mL)</label>
                 <pf-number-input [value]="d.sampleVolumeMl" [allowEmpty]="true" [min]="0" [step]="0.5" suffix="mL"
                                  (valueChange)="patch({ sampleVolumeMl: $event ?? null })"></pf-number-input>
               </div>
-              <div class="pf-uf">
+              <div class="pf-uf pf-uf--c4">
                 <label class="pf-uf__lbl">Fasting required</label>
                 <span class="pf-seg pf-te2-seg" role="radiogroup" aria-label="Fasting required">
                   @for (o of fastingOptions; track o.label) {
@@ -428,15 +443,15 @@
 
             <details class="pf-te2-adv">
               <summary class="pf-te2-adv-s">Outsourcing <span>optional</span></summary>
-              <div class="pf-te2-grid mt-3">
-                <div class="pf-uf pf-uf--span">
+              <div class="pf-te2-grid pf-te2-grid--form mt-3">
+                <div class="pf-uf pf-uf--c6">
                   <label class="pf-uf__lbl">Outsource to</label>
                   <pf-select [options]="referralLabOptions()" [value]="d.outsourcedVendorId"
                              placeholder="— In-house (not outsourced) —"
                              (valueChange)="patch({ outsourcedVendorId: $event, outsourcedDepartmentId: '' })"></pf-select>
                 </div>
                 @if (isOutsourced()) {
-                  <div class="pf-uf pf-uf--span">
+                  <div class="pf-uf pf-uf--c6">
                     <label class="pf-uf__lbl">Department at vendor</label>
                     <pf-select [options]="outsourcedDeptOptions()" [value]="selectedOutsourcedDeptName()"
                                placeholder="— Same as test department —"
@@ -462,9 +477,9 @@
           @if (isSingleValue() && !entryKind()) { <span class="pf-te2-sec__warn"><span class="pf-dot-unpriced" aria-hidden="true"></span>Choose what the tech enters</span> }
         </div>
         <div class="pf-te2-sec__body pf-card__body">
-          <div class="pf-te2-grid">
+          <div class="pf-te2-grid pf-te2-grid--form">
             @if (isSingleValue()) {
-              <div class="pf-uf">
+              <div class="pf-uf pf-uf--c4">
                 <label class="pf-uf__lbl">What will the tech enter?</label>
                 <pf-select [options]="entryKindSelectOptions()" [disabled]="entryKind() === 'family'" [value]="entryKind()"
                            (valueChange)="setEntryKind($any($event))"></pf-select>
@@ -476,7 +491,7 @@
                  multi-value test the unit is each value's own (in its batch)
                  while a panel always prints as a results table. -->
             @if (isSingleValue() && (numericFields().length > 0 || entryKind() === 'text')) {
-              <div class="pf-uf">
+              <div class="pf-uf pf-uf--c4">
                 <label class="pf-uf__lbl">Unit</label>
                 <pf-select [options]="unitOptions(d.unit)" [searchable]="true"
                            [value]="d.unit || ''" placeholder="— pick a unit —"
@@ -485,7 +500,7 @@
               </div>
             }
             @if (isSingleValue() && numericFields().length > 0) {
-              <div class="pf-uf">
+              <div class="pf-uf pf-uf--c4">
                 <label class="pf-uf__lbl">Report format</label>
                 <pf-select [options]="reportFormatOptions" [value]="d.reportFormat || 'tabular'"
                            (valueChange)="patch({ reportFormat: $event })"></pf-select>
@@ -1397,9 +1412,11 @@
 
     </div>
 
-    <!-- ═══════════════════════════ Right rail ═══════════════════════════ -->
-    <!-- New design: the LIVE PREVIEW is the side card (it adds what the form
-         can't show: the printed page). Below 1024px it is a sheet behind the
+    <!-- ═══════════════════════════ Side card ═══════════════════════════ -->
+    <!-- New design: the LIVE PREVIEW is the side card on the RIGHT (owner
+         2026-11-17: navigation/filter side cards left, live previews right —
+         choose on the left, see the result on the right), same height as the
+         main card, its body scrolls. Below 1024px it is a sheet behind the
          Preview button. -->
     @if (nd() && previewOpen()) {
       <div class="pf-sheet-backdrop pf-te2-previewscrim" (click)="previewOpen.set(false)" aria-hidden="true"></div>

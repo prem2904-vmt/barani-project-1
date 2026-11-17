@@ -25,13 +25,16 @@ describe('Admin band — Branches', () => {
       : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Haematology', code: 'HEM', isActive: true }]
           : [],
   });
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-branch-toggle')).map(b => text(b));
+  let curB: any;
+  const names = (_el: HTMLElement) => curB.cmp.gridBranches().map((b: any) => b.name);
 
-  it('band present, header classic-only, list in the band body', () => {
-    const p = render();
+  it('band present, header classic-only, branches in a Test Master grid', () => {
+    const p = curB = render();
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.body()!.querySelectorAll('.pf-branch-toggle').length).toBe(3);
+    expect(p.body()!.querySelector('pf-data-grid')).not.toBeNull();
+    expect(names(p.el).length).toBe(3);
+    expect(p.cmp.colDefs().map((c: any) => c.colId).slice(0, 5)).toEqual(['name', 'code', 'place', 'gstin', 'status']);
   });
 
   it('"Add branch" rides the band actions and toggles the form (Cancel while open)', () => {
@@ -44,7 +47,7 @@ describe('Admin band — Branches', () => {
   });
 
   it('pill search matches branch fields', () => {
-    const p = render();
+    const p = curB = render();
     p.type('madurai');
     expect(names(p.el).length).toBe(1);
     expect(names(p.el)[0]).toContain('Madurai Centre');
@@ -54,16 +57,16 @@ describe('Admin band — Branches', () => {
   });
 
   it('departments moved to Lab: a department word no longer matches a branch', () => {
-    const p = render();
+    const p = curB = render();
     p.type('haem');
     expect(names(p.el).length).toBe(0);
   });
 
   it('no match → empty state', () => {
-    const p = render();
+    const p = curB = render();
     p.type('zzz');
     expect(names(p.el).length).toBe(0);
-    expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
+    expect(p.body()!.querySelector('[data-testid="dg-empty"]')!.textContent).toContain('No branches match');
   });
 });
 
@@ -77,14 +80,14 @@ describe('Admin band — Vendors', () => {
     getFor: (url) => url.startsWith('/api/vendors') && !url.includes('/transactions') ? vendors : [],
     providers: [provideHttpClient()],
   });
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-vendor__name')).map(n => text(n));
+  const names = (p: any) => p.cmp.visibleVendors().map((v: any) => v.name);
 
-  it('band present, header classic-only, status filter inside the pill', () => {
+  it('band present, header classic-only, status filter in the grid card head (Test Master)', () => {
     const p = render();
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.tools()!.querySelector('.pf-seg[role="radiogroup"]')).not.toBeNull();
-    expect(names(p.el).length).toBe(3);
+    expect(p.el.querySelector('.pf-sg-main__head pf-segmented')).not.toBeNull();
+    expect(names(p).length).toBe(3);
   });
 
   it('"Add vendor" in the band opens the form', () => {
@@ -94,15 +97,15 @@ describe('Admin band — Vendors', () => {
     expect(text(p.body())).toContain('New vendor');
   });
 
-  it('pill search + status filter narrow the list; empty state', () => {
+  it('pill search + status filter narrow the grid; empty state', () => {
     const p = render();
     p.type('kauv');
-    expect(names(p.el)).toEqual(['Kauvery Clinic']);
+    expect(names(p)).toEqual(['Kauvery Clinic']);
     p.type('');
     p.cmp.status.set('inactive'); p.f.detectChanges();
-    expect(names(p.el)).toEqual(['Old Partner']);
+    expect(names(p)).toEqual(['Old Partner']);
     p.type('apollo');
-    expect(names(p.el).length).toBe(0);
+    expect(names(p).length).toBe(0);
     expect(p.body()!.querySelector('.pf-band-empty')).not.toBeNull();
   });
 });
@@ -117,13 +120,25 @@ describe('Admin band — Referral labs', () => {
       : url.startsWith('/api/tenants/departments') ? [{ id: 'd1', name: 'Microbiology', code: 'MIC', isActive: true }]
         : [],
   });
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-rl__name')).map(n => text(n));
+  let cur: any;
+  const names = (_el: HTMLElement) => cur.cmp.visibleLabs().map((l: any) => l.name);
 
-  it('band present, header classic-only, labs in the band body', () => {
-    const p = render();
+  it('band present, header classic-only, labs in a Test Master grid card', () => {
+    const p = cur = render();
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
+    expect(p.el.querySelector('.pf-band-body .pf-sg-main ag-grid-angular')).not.toBeNull();
     expect(names(p.el).length).toBe(2);
+    expect(p.cmp.colDefs().map((c: any) => c.colId)).toEqual(['name', 'code', 'contact', 'departments', 'status', 'actions']);
+  });
+
+  it('status filter (card head, like Test Master) + Deactivate sends the same PUT with isActive flipped', () => {
+    const p = cur = render();
+    p.cmp.actionsFor(labs[0]).find((a: any) => a.label === 'Deactivate').run();
+    expect(p.api.put).toHaveBeenCalledWith('/api/referral-labs/r1', expect.objectContaining({ name: 'Apollo Diagnostics', isActive: false }));
+    p.cmp.status.set('inactive');
+    expect(names(p.el)).toEqual([]);
+    expect(p.el.querySelector('.pf-sg-main__head pf-segmented')).not.toBeNull();
   });
 
   it('"Add referral lab" in the band opens the form and flips to Cancel', () => {
@@ -135,7 +150,7 @@ describe('Admin band — Referral labs', () => {
   });
 
   it('pill search matches name, contact and handled department names; empty state', () => {
-    const p = render();
+    const p = cur = render();
     p.type('priya');
     expect(names(p.el)).toEqual(['Neuberg']);
     p.type('microbio');
@@ -159,42 +174,47 @@ describe('Admin band — Referring network', () => {
     p.f.detectChanges();
     return p;
   };
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-rn-row__name')).map(n => text(n));
+  let cur: any;
+  const names = (_el: HTMLElement) => cur.cmp.gridHospitals().map((h: any) => h.name);
+  const hospitalsView = async () => { const p = cur = await render(); p.cmp.setView('hospitals'); p.f.detectChanges(); return p; };
 
-  it('band present, header classic-only, the pane search box is classic-only', async () => {
-    const p = await render();
+  it('band present, header classic-only; ONE Test Master grid card (Doctors first) with the view switch in its head', async () => {
+    const p = cur = await render();
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.el.querySelector('.pf-rn-search')!.classList.contains('pf-classic-only')).toBe(true);
+    expect(p.cmp.view()).toBe('doctors');
+    expect(p.el.querySelectorAll('.pf-band-body .pf-card').length).toBe(1);
+    expect(p.el.querySelector('.pf-sg-main__head pf-segmented.pf-rn-viewseg')).not.toBeNull();
+    expect(p.el.querySelector('.pf-sg-main__head pf-select.pf-rn-hfilter')).not.toBeNull();
+    p.cmp.setView('hospitals'); p.f.detectChanges();
     expect(names(p.el).length).toBe(2);
+    expect(p.cmp.hospitalColDefs().map((c: any) => c.colId)).toEqual(['name', 'code', 'doctors', 'phone', 'gstin', 'status', 'actions']);
   });
 
-  it('an open editor modal owns the ONE primary: the band "Add hospital" steps down + disables', async () => {
-    const p = await render();
-    const add = () => p.el.querySelector<HTMLButtonElement>('pf-hero-band .pf-rn-add')!;
-    expect(add().classList.contains('pf-hb-btn--primary')).toBe(true);
+  it('an open editor modal owns the ONE primary: the in-pane "Add hospital" (secondary) disables behind it', async () => {
+    const p = await hospitalsView();
+    const add = () => p.el.querySelector<HTMLButtonElement>('.pf-rn-add')!;
+    expect(add().classList.contains('pf-sg-act')).toBe(true);
     add().click();
     p.f.detectChanges();
-    expect(add().classList.contains('pf-hb-btn--primary')).toBe(false);
-    expect(add().classList.contains('pf-hb-btn--ghost')).toBe(true);
     expect(add().disabled).toBe(true);
     const primaries = p.el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary');
     expect(primaries.length).toBe(1);
     expect(primaries[0].closest('.pf-rn-modal__ftr')).not.toBeNull();
     p.cmp.closeHospitalEditor();
     p.f.detectChanges();
-    expect(add().classList.contains('pf-hb-btn--primary')).toBe(true);
+    expect(add().disabled).toBe(false);
   });
 
   it('"Add hospital" in the band opens the hospital editor', async () => {
-    const p = await render();
+    const p = await hospitalsView();
     p.actions().find(b => /Add hospital/.test(b.textContent ?? ''))!.click();
     p.f.detectChanges();
     expect(p.el.querySelector('.pf-rn-modal')).not.toBeNull();
   });
 
   it('the pill search filters hospitals (name, code, address); empty state', async () => {
-    const p = await render();
+    const p = await hospitalsView();
     p.type('manapakkam');
     expect(names(p.el)).toEqual(['MIOT International']);
     p.type('zzz');
@@ -272,13 +292,18 @@ describe('Admin band — Home-collection agents', () => {
   const render = () => renderBandPage(HomeCollectionAgentsComponent, {
     getFor: (url) => url.startsWith('/api/home-collection/agents') ? agents : [],
   });
-  const names = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-band-body .pf-hc-name')).map(n => text(n));
+  const names = (el: HTMLElement) => (el as any).__cmp.visibleAgents().map((a: any) => a.user.name);
 
-  it('band present, header classic-only, agents in the band body', () => {
+  it('band present, header classic-only, agents in a Test Master grid card; branch switch strip above it', () => {
     const p = render();
+    (p.el as any).__cmp = p.cmp;
     expect(p.band()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
+    expect(p.el.querySelector('.pf-band-body .pf-sg-main ag-grid-angular')).not.toBeNull();
+    expect(p.el.querySelector('.pf-band-body [data-testid="hc-switch-card"]')).not.toBeNull();
     expect(names(p.el)).toEqual(['Karthik', 'Lakshmi']);
+    expect(p.cmp.colDefs().map((c: any) => c.colId)).toEqual(['agent', 'coverage', 'weight', 'actions']);
+    expect(p.cmp.coverageText(agents[1])).toBe('Radius 5 km around 13.080, 80.270');
   });
 
   it('"Add agent" in the band opens the form and flips to Cancel', () => {
@@ -291,6 +316,7 @@ describe('Admin band — Home-collection agents', () => {
 
   it('pill search matches name and covered pincodes; empty state', () => {
     const p = render();
+    (p.el as any).__cmp = p.cmp;
     p.type('600041');
     expect(names(p.el)).toEqual(['Karthik']);
     p.type('lakshmi');

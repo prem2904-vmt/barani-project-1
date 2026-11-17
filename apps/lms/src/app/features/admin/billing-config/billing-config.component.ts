@@ -1,3 +1,5 @@
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
+import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -80,7 +82,7 @@ interface GstRow {
 @Component({
   selector: "pf-billing-config",
   standalone: true,
-  imports: [SkeletonFormComponent, BusyDirective, RouterLink,
+  imports: [SettingsSavebarComponent, SettingRowComponent, SkeletonFormComponent, BusyDirective, RouterLink,
     FormsModule,
     NumberInputComponent,
     ScreenHeaderComponent,
@@ -108,6 +110,7 @@ interface GstRow {
             }
           </ng-container>
           <ng-container band-actions>
+            @if (!hosted) {
             <button
               type="button"
               class="pf-hb-btn pf-hb-btn--primary press"
@@ -137,6 +140,7 @@ interface GstRow {
               </svg>
               Save
             </button>
+            }
           </ng-container>
         </pf-hero-band>
       }
@@ -422,39 +426,18 @@ interface GstRow {
           >
             <div class="min-w-0">
               <div class="pf-bc-card">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-                  <div>
-                    <label class="pf-label">Invoice prefix</label>
-                    <input
-                      type="text"
-                      class="pf-input"
-                      [ngModel]="config().invoicePrefix"
-                      (ngModelChange)="patch({ invoicePrefix: $event })"
-                    />
-                  </div>
-                  <div>
-                    <label class="pf-label">Next invoice number</label>
-                    <pf-number-input
-                      [value]="config().invoiceStartNumber"
-                      [min]="1"
-                      [step]="1"
-                      (valueChange)="patch({ invoiceStartNumber: $event ?? 1 })"
-                    >
-                    </pf-number-input>
-                    <p class="pf-bc-hint">Can only move forward — issued numbers are never reused.</p>
-                  </div>
-                </div>
-
-                <div class="pf-invoice-preview">
-                  <p class="pf-bc-sub">Next invoice</p>
-                  <p
-                    class="pf-num text-[16px] font-semibold"
-                    style="color: var(--text-primary);"
-                  >
-                    {{ invoicePreview() }}
-                  </p>
-                </div>
-
+                <!-- Invoice number: one setting per row (owner) — title left, control right. -->
+                <pf-setting-row label="Invoice prefix">
+                  <input type="text" class="pf-input pf-bc-in" aria-label="Invoice prefix"
+                         [ngModel]="config().invoicePrefix" (ngModelChange)="patch({ invoicePrefix: $event })" />
+                </pf-setting-row>
+                <pf-setting-row label="Next invoice number" hint="Can only move forward — issued numbers are never reused.">
+                  <pf-number-input [value]="config().invoiceStartNumber" [min]="1" [step]="1"
+                                   (valueChange)="patch({ invoiceStartNumber: $event ?? 1 })"></pf-number-input>
+                </pf-setting-row>
+                <pf-setting-row label="Next invoice">
+                  <strong class="pf-fmt__value pf-num">{{ invoicePreview() }}</strong>
+                </pf-setting-row>
                 <div
                   class="flex items-start justify-between gap-4 mt-5 pt-5"
                   style="border-top: 1px solid var(--glass-border);"
@@ -806,6 +789,7 @@ interface GstRow {
                     >Show result-tracking QR
                   </button>
                 </div>
+                @if (!hosted) {
                 <!-- Secondary: the band's Save (billing config) is the ONE primary. -->
                 <button
                   type="button"
@@ -817,6 +801,7 @@ interface GstRow {
                 >
                   {{ savingTpl() ? "Saving…" : "Save letterhead" }}
                 </button>
+                }
               </div>
             </div>
 
@@ -856,12 +841,15 @@ interface GstRow {
                   [style.--pf-inv-scale]="invoicePreviewScale()"
                 >
                   <div class="pf-invoice-stage">
+                    <!-- One iframe per preview URL (keyed): a NEW frame's first load replaces its blank page, so no session-history entry; re-pointing a live frame's src adds one per render and Back needs several presses. -->
+                    @for (u of [src]; track u) {
                     <iframe
-                      [src]="src"
+                      [src]="u"
                       title="Invoice preview"
                       class="pf-invoice-iframe"
                       style="width:100%;height:62dvh;border:1px solid var(--glass-border);border-radius:12px;background:#525659"
                     ></iframe>
+                    }
                   </div>
                 </div>
               } @else {
@@ -876,11 +864,16 @@ interface GstRow {
           </div>
         }
         }
+        @if (hosted) {
+          <!-- Settings (owner): Save sits IN the card — the Save bar, only while something changed. -->
+          <pf-settings-savebar [dirty]="hasUnsavedChanges()" [saving]="savingConfig() || savingTpl()" (save)="saveChanges()" (discard)="discardChanges()"></pf-settings-savebar>
+        }
       </div>
     </section>
   `,
   styles: [
     `
+      .pf-bc-in { width: 140px; height: 34px; min-height: 34px; }
       .pf-scope-card {
         display: flex;
         flex-direction: column;
@@ -1225,18 +1218,43 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
   patchTpl(p: Record<string, unknown>) {
     this._tpl.set({ ...this._tpl(), ...p });
   }
-  saveTpl() {
+  saveTpl() { void this.postTpl(); }
+  private postTpl(): Promise<boolean> {
     this.savingTpl.set(true);
-    this.api.post("/api/config/invoice-template", this.effectiveTpl()).subscribe({
+    const sent = this._tpl();
+    return new Promise<boolean>((resolve) => this.api.post("/api/config/invoice-template", this.effectiveTpl()).subscribe({
       next: () => {
         this.savingTpl.set(false);
+        this.savedTplJson.set(JSON.stringify(sent));
         this.toasts.success("Letterhead saved");
+        resolve(true);
       },
       error: (e) => {
         this.savingTpl.set(false);
         this.toasts.error(ApiError.from(e).message);
+        resolve(false);
       },
-    });
+    }));
+  }
+
+  // ── Unsaved changes (owner 2026-11-17: ask before leaving). The routed page (BillingSettingsPage) asks through this. ──
+  /** What the server holds, as JSON — null until it answers (nothing to lose before that). */
+  private readonly savedTplJson = signal<string | null>(null);
+  private readonly savedConfigJson = signal<string | null>(null);
+  readonly tplDirty = computed(() => this.savedTplJson() !== null && JSON.stringify(this._tpl()) !== this.savedTplJson());
+  readonly configDirty = computed(() => this.savedConfigJson() !== null && JSON.stringify(this._config()) !== this.savedConfigJson());
+  hasUnsavedChanges(): boolean { return this.tplDirty() || this.configDirty(); }
+  /** The Save bar's Discard: back to what the server holds. */
+  discardChanges(): void {
+    const c = this.savedConfigJson(); if (c) this._config.set(JSON.parse(c));
+    const t = this.savedTplJson(); if (t) this._tpl.set(JSON.parse(t));
+  }
+  /** Save from the "Save your changes?" prompt: billing config and/or the bill design; true only when all saved. */
+  async saveChanges(): Promise<boolean> {
+    let ok = true;
+    if (this.configDirty()) ok = await this.postConfig();
+    if (ok && this.tplDirty()) ok = await this.postTpl();
+    return ok;
   }
 
   // ── Live invoice preview (right pane) ──────────────────────────
@@ -1463,6 +1481,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     this.api.get<any>("/api/config/invoice-template").subscribe({
       next: (t) => {
         this._tpl.set({ ...this.TPL_DEFAULTS, ...(t ?? {}) });
+        this.savedTplJson.set(JSON.stringify(this._tpl()));
       },
     });
     this.api.get<Branch[]>("/api/tenants/branches").subscribe({
@@ -1534,6 +1553,7 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     this.api.get<TenantBillingConfig>("/api/config/billing").subscribe({
       next: (c) => {
         if (c) this._config.set({ ...this._config(), ...c });
+        this.savedConfigJson.set(JSON.stringify(this._config()));
         landed?.();
       },
       ...(landed ? { error: () => landed() } : {}),
@@ -1550,14 +1570,16 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
     if (!line || line === (this._tpl().bankDetails ?? "")) return;
     this.patchTpl({ bankDetails: line });
     this.api.post("/api/config/invoice-template", { ...this.effectiveTpl(), bankDetails: line }).subscribe({
+      next: () => this.savedTplJson.set(JSON.stringify(this._tpl())),
       error: (e) => this.toasts.error(ApiError.from(e).message),
     });
   }
 
-  saveConfig() {
-    if (this.savingConfig()) return;
+  saveConfig() { void this.postConfig(); }
+  private postConfig(): Promise<boolean> {
+    if (this.savingConfig()) return Promise.resolve(false);
     const c = this._config();
-    this.api
+    return new Promise<boolean>((resolve) => this.api
       .post("/api/config/billing", {
         gstEnabled: c.gstEnabled,
         gstScope: c.gstScope,
@@ -1582,8 +1604,9 @@ export class BillingConfigComponent implements OnInit, OnDestroy {
           this.toasts.success("Billing config saved");
           this.loadConfig();
           this.syncBankDetails(bankDetailsLine(c));
+          resolve(true);
         },
-        error: (e) => this.toasts.error(ApiError.from(e).message),
-      });
+        error: (e) => { this.toasts.error(ApiError.from(e).message); resolve(false); },
+      }));
   }
 }

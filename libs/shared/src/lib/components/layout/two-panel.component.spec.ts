@@ -36,7 +36,6 @@ describe('pf-two-panel (shared)', () => {
     expect(el.querySelector('[data-testid="tp-item-one"]')!.getAttribute('aria-current')).toBe('true');
     expect(el.querySelector('[data-testid="tp-item-one"] .pf-tp__note')!.textContent).toBe('3');
     expect(el.querySelector('.pf-tp__title')!.textContent).toBe('One');
-    expect(el.querySelector('.pf-tp__eyebrow')!.textContent).toBe('ALPHA');
     expect(el.querySelector('.pf-tp__desc')!.textContent).toBe('First section.');
     expect(el.querySelector('.inner')!.textContent).toBe('tiles for one');
   });
@@ -46,7 +45,7 @@ describe('pf-two-panel (shared)', () => {
     el.querySelector<HTMLButtonElement>('[data-testid="tp-item-three"]')!.click();
     f.detectChanges();
     expect(host.picked).toEqual(['three']);
-    expect(el.querySelector('.pf-tp__eyebrow')!.textContent).toBe('BETA');
+    expect(el.querySelector('.pf-tp__title')!.textContent).toBe('Three');
   });
 
   it('the slide/fade restarts on every pick (alternating phase class)', () => {
@@ -65,14 +64,20 @@ describe('pf-two-panel (shared)', () => {
     expect(el.querySelector('.pf-tp--compact')).toBeNull();
   });
 
-  it('compact list: detail is not shown; compact detail: back chevron emits back', () => {
+  it('compact list: detail is not shown; compact detail shows it — and NO back button in either card (the band owns back)', () => {
     const { f, host, el } = mount();
     host.compact.set(true); f.detectChanges();
     expect(el.querySelector('pf-two-panel')!.classList.contains('pf-tp--detail')).toBe(false);
     host.detail.set(true); f.detectChanges();
     expect(el.querySelector('pf-two-panel')!.classList.contains('pf-tp--detail')).toBe(true);
-    el.querySelector<HTMLButtonElement>('[data-testid="tp-back"]')!.click();
-    expect(host.backs).toBe(1);
+    expect(el.querySelector('[data-testid="tp-back"], [data-testid="tp-nav-back"]')).toBeNull();
+  });
+
+  it('Test Master frame: side card + main card, each with a pf-card__head; the side head shows navTitle', () => {
+    const { el } = mount();
+    expect(el.querySelector('aside.pf-card.pf-tp__nav > .pf-card__head [data-testid="tp-nav-title"]')!.textContent!.trim()).toBe('Settings');
+    expect(el.querySelector('section.pf-card.pf-tp__panel > .pf-card__head .pf-tp__title')!.textContent).toBe('One');
+    expect(el.querySelector('[data-testid="tp-nav-back"]')).toBeNull();
   });
 
   it('nothing selected renders the list only', () => {
@@ -80,5 +85,26 @@ describe('pf-two-panel (shared)', () => {
     host.sel.set(null); f.detectChanges();
     expect(el.querySelector('.pf-tp__title')).toBeNull();
     expect(el.querySelectorAll('.pf-tp__item').length).toBe(3);
+  });
+
+  it('tree rows: a heading toggles its children (indented); a heading holding the selected row stays open', () => {
+    const f = TestBed.createComponent(TwoPanelComponent);
+    f.componentRef.setInput('groups', [{ key: 't', heading: '', items: [
+      { id: 'departments', label: 'Departments' },
+      { id: 'spaces', label: 'Lab spaces', heading: true },
+      { id: 'spaces-b1', label: 'Main', parent: 'spaces' },
+      { id: 'spaces-b2', label: 'Annex', parent: 'spaces' },
+    ] }]);
+    f.componentRef.setInput('selected', 'departments');
+    f.detectChanges();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('.pf-tp__item--child').length).toBe(2);
+    el.querySelector<HTMLButtonElement>('[data-testid="tp-item-spaces"]')!.click();
+    f.detectChanges();
+    expect(el.querySelectorAll('.pf-tp__item--child').length).toBe(0);
+    expect(el.querySelector('[data-testid="tp-item-spaces"]')!.getAttribute('aria-expanded')).toBe('false');
+    f.componentRef.setInput('selected', 'spaces-b2');
+    f.detectChanges();
+    expect(el.querySelectorAll('.pf-tp__item--child').length).toBe(2);
   });
 });

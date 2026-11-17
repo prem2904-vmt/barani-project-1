@@ -8,6 +8,8 @@
 export interface LabPageCategory {
   readonly id: string;
   readonly label: string;
+  /** Where it applies ("this branch" / "all branches"), said once on its side-card row and card head. */
+  readonly scope?: string;
 }
 
 export interface LabPageDef {
@@ -21,36 +23,36 @@ export const LAB_PAGES = {
     path: '/admin/lab/sample-numbers',
     title: 'Sample numbers',
     categories: [
-      { id: 'format', label: 'Sample ID format' },
-      { id: 'prefixes', label: 'Prefix per lab space' },
-      { id: 'structure', label: 'Lab structure' },
-      { id: 'barcode', label: 'Barcode type' },
-      { id: 'find', label: 'Find a sample' },
+      { id: 'format', label: 'Format', scope: 'all branches' },
+      { id: 'prefixes', label: 'Prefixes', scope: 'per branch' },
+      { id: 'find', label: 'Finding a sample', scope: 'all branches' },
+      { id: 'barcode', label: 'Labels', scope: 'this branch' },
+      { id: 'structure', label: 'Structure', scope: 'this branch' },
     ],
   },
   collection: {
     path: '/admin/lab/collection',
     title: 'Collection and queues',
     categories: [
-      { id: 'queue', label: 'Queue focus' },
-      { id: 'assign', label: 'Auto-assign technicians and validators' },
-      { id: 'noscan', label: 'Claim without scanning' },
+      { id: 'queue', label: 'Queue', scope: 'this branch' },
+      { id: 'noscan', label: 'Claiming', scope: 'all branches' },
+      { id: 'assign', label: 'Auto-assign', scope: 'this branch' },
     ],
   },
   results: {
     path: '/admin/lab/results',
     title: 'Results and validation',
     categories: [
-      { id: 'validation', label: 'Require validation' },
-      { id: 'constants', label: 'Calculation constants' },
-      { id: 'micro', label: 'Microbiology' },
+      { id: 'constants', label: 'Calculations', scope: 'all branches' },
+      { id: 'validation', label: 'Validation', scope: 'this branch' },
+      { id: 'micro', label: 'Microbiology', scope: 'all branches' },
     ],
   },
   homeCollection: {
     path: '/admin/lab/home-collection',
     title: 'Home collection',
     categories: [
-      { id: 'switch', label: 'Home collection on or off' },
+      { id: 'switch', label: 'Home collection', scope: 'this branch' },
       { id: 'agents', label: 'Agents' },
     ],
   },
@@ -59,10 +61,10 @@ export const LAB_PAGES = {
     title: 'Front desk',
     categories: [
       // The appointments screen's own sections (it follows ?tab=mode|slots|priority), then the shared referring list.
-      { id: 'mode', label: 'Queue mode' },
-      { id: 'slots', label: 'Booking slots' },
-      { id: 'priority', label: 'Priority engine' },
-      { id: 'referring', label: 'Referring doctors and hospitals' },
+      { id: 'mode', label: 'Queue mode', scope: 'this branch' },
+      { id: 'slots', label: 'Booking slots', scope: 'this branch' },
+      { id: 'priority', label: 'Priority engine', scope: 'this branch' },
+      { id: 'referring', label: 'Referring doctors', scope: 'one shared list' },
     ],
   },
   alerts: {
@@ -75,12 +77,15 @@ export const LAB_PAGES = {
     title: 'Numbers on lab screens',
     categories: [{ id: 'numbers', label: 'Number cards' }],
   },
+  // Not a page of its own any more (owner 2026-11-17, "all in one"): Sending is
+  // a tab of Report design, and the Report notes switch is a row inside its
+  // Results table tab (no tab of its own). The old /admin/lab/report-options
+  // link redirects there (settings-map `rehome`).
   reportOptions: {
-    path: '/admin/lab/report-options',
-    title: 'Report options',
+    path: '/admin/reports',
+    title: 'Report design',
     categories: [
-      { id: 'notes', label: 'Technician notes on report' },
-      { id: 'sending', label: 'Send reports on WhatsApp' },
+      { id: 'sending', label: 'Sending' },
     ],
   },
 } as const satisfies Record<string, LabPageDef>;
@@ -102,7 +107,7 @@ export const LEGACY_LAB_SETTINGS_TARGET: Readonly<Record<string, { path: string;
   collection: { path: LAB_PAGES.sampleNumbers.path, tab: 'find' },
   queues: { path: LAB_PAGES.collection.path, tab: 'queue' },
   rules: { path: LAB_PAGES.results.path, tab: 'validation' },
-  report: { path: LAB_PAGES.reportOptions.path, tab: 'notes' },
+  report: { path: LAB_PAGES.reportOptions.path, tab: 'table' },
 };
 
 /** Old `?tab=` + card → exact new target (finer than the tab-level map). */
@@ -116,7 +121,7 @@ export const LEGACY_LAB_SETTINGS_CARD_TARGET: Readonly<Record<string, { path: st
   'no-scan': { path: LAB_PAGES.collection.path, tab: 'noscan' },
   'require-validation': { path: LAB_PAGES.results.path, tab: 'validation' },
   'calc-constants': { path: LAB_PAGES.results.path, tab: 'constants' },
-  'tech-notes': { path: LAB_PAGES.reportOptions.path, tab: 'notes' },
+  'tech-notes': { path: LAB_PAGES.reportOptions.path, tab: 'table' },
 };
 
 /**

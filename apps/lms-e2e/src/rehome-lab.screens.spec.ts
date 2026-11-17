@@ -67,25 +67,28 @@ test.beforeEach(async ({ page, context }) => {
 });
 
 const PAGES: Array<{ name: string; url: string; ready: string; text?: string }> = [
-  { name: 'sample-numbers-format', url: '/admin/lab/sample-numbers?tab=format', ready: '[data-testid="sample-id-format"]', text: 'Sample ID format' },
-  { name: 'sample-numbers-prefixes', url: '/admin/lab/sample-numbers?tab=prefixes', ready: '[data-testid="space-prefixes"]', text: 'Prefix per lab space' },
+  { name: 'sample-numbers-format', url: '/admin/lab/sample-numbers?tab=format', ready: '[data-testid="sample-id-format"]', text: 'Preview' },
+  { name: 'sample-numbers-prefixes', url: '/admin/lab/sample-numbers?tab=prefixes', ready: '[data-testid="space-prefixes"]', text: 'Edit lab spaces' },
   { name: 'sample-numbers-structure', url: '/admin/lab/sample-numbers?tab=structure', ready: 'pf-lab-settings .pf-ls__card', text: 'Lab structure' },
-  { name: 'sample-numbers-barcode', url: '/admin/lab/sample-numbers?tab=barcode', ready: 'pf-lab-settings .pf-ls__card', text: 'Specimen label code' },
+  { name: 'sample-numbers-barcode', url: '/admin/lab/sample-numbers?tab=barcode', ready: 'pf-lab-settings .pf-ls__card', text: 'Barcode on tube labels' },
   { name: 'sample-numbers-find', url: '/admin/lab/sample-numbers?tab=find', ready: 'pf-lab-settings .pf-ls__card', text: 'Pre-fill sample search' },
   { name: 'collection-queue', url: '/admin/lab/collection?tab=queue', ready: 'pf-lab-settings .pf-ls__card', text: 'Queue focus' },
-  { name: 'collection-assign', url: '/admin/lab/collection?tab=assign', ready: '.pf-ls__dept', text: 'Validators' },
+  { name: 'collection-assign', url: '/admin/lab/collection?tab=assign', ready: '.pf-ls__dept', text: 'Auto-assign validators' },
   { name: 'collection-noscan', url: '/admin/lab/collection?tab=noscan', ready: 'pf-lab-settings .pf-ls__card', text: 'no-scan' },
   { name: 'results-validation', url: '/admin/lab/results?tab=validation', ready: 'pf-lab-settings .pf-ls__card', text: 'Require validation' },
   { name: 'results-constants', url: '/admin/lab/results?tab=constants', ready: 'pf-lab-settings .pf-ls__card', text: 'Calculation constants' },
-  { name: 'results-micro', url: '/admin/lab/results?tab=micro', ready: '[data-testid="culture-save"]', text: 'Turnaround' },
+  { name: 'results-micro', url: '/admin/lab/results?tab=micro', ready: '#pf-cs-lock', text: 'Auto-release after' },
   { name: 'home-collection', url: '/admin/lab/home-collection?tab=switch', ready: '[data-testid="hc-switch-card"]', text: 'Home collection' },
   { name: 'home-collection-agents', url: '/admin/lab/home-collection?tab=agents', ready: 'pf-home-collection-agents', text: 'agent' },
-  { name: 'front-desk', url: '/admin/lab/front-desk?tab=mode', ready: 'pf-appointments-config .pf-mode-btn', text: 'Walk-up' },
+  { name: 'front-desk', url: '/admin/lab/front-desk?tab=mode', ready: 'pf-appointments-config [aria-label="Queue mode"]', text: 'Walk-up' },
   { name: 'front-desk-referring', url: '/admin/lab/front-desk?tab=referring', ready: 'pf-referring-network' },
-  { name: 'alerts', url: '/admin/lab/alerts', ready: '.pf-nc-card', text: 'Order cancelled' },
-  { name: 'numbers', url: '/admin/lab/numbers', ready: 'pf-kpi-config' },
-  { name: 'report-notes', url: '/admin/lab/report-options', ready: '[data-testid="ls-tech-notes"]', text: 'Technician notes on report' },
-  { name: 'report-sending', url: '/admin/lab/report-options?tab=sending', ready: 'pf-report-sending-card', text: 'WhatsApp Auto' },
+  { name: 'alerts', url: '/admin/lab/alerts?tab=all', ready: '.pf-nc-master', text: 'Every alert' },
+  // A screen named in the URL: phones otherwise open on the screens list (the shell's categories).
+  { name: 'numbers', url: '/admin/lab/numbers?tab=frontdesk_landing', ready: 'pf-kpi-config' },
+  { name: 'report-letterhead', url: '/admin/reports?tab=letterhead', ready: 'pf-report-header-editor .pf-rhe-side', text: 'Letterhead elements' },
+  { name: 'report-patient', url: '/admin/reports?tab=patient', ready: '.pf-rt-work', text: 'Patient block' },
+  { name: 'report-notes', url: '/admin/reports?tab=table', ready: '[data-testid="ls-tech-notes"]', text: 'Report notes' },
+  { name: 'report-sending', url: '/admin/reports?tab=sending', ready: 'pf-report-sending-card', text: 'WhatsApp Auto' },
   { name: 'inventory', url: '/admin/inventory', ready: '[data-testid="inventory-enable"]', text: 'Enable inventory' },
 ];
 
@@ -111,11 +114,91 @@ test.describe('lab settings pages', () => {
     await expect(page).toHaveURL(/\/admin\/lab\/sample-numbers\?tab=format/, { timeout: 60_000 });
   });
 
+  test('report options are tabs of Report design: the old link redirects, one band, no second page', async ({ page }) => {
+    await go(page, '/admin/lab/report-options?tab=sending');
+    await expect(page).toHaveURL(/\/admin\/reports\?tab=sending/, { timeout: 60_000 });
+    await expect(vis(page, 'pf-report-sending-card')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('[data-testid="rt-report-options"]')).toHaveCount(0);
+    // Report notes is a row of Results table (owner 2026-11-17): old links land there, row in view.
+    await go(page, '/admin/lab/report-options');
+    await expect(page).toHaveURL(/\/admin\/reports\?tab=table/, { timeout: 60_000 });
+    await expect(vis(page, '[data-testid="ls-tech-notes"]')).toBeVisible({ timeout: 60_000 });
+    await go(page, '/admin/reports?tab=notes');
+    await expect(page).toHaveURL(/\/admin\/reports\?tab=table/, { timeout: 60_000 });
+    await expect(vis(page, '[data-testid="ls-tech-notes"]')).toBeInViewport({ timeout: 20_000 });
+    await expect(page.locator('pf-hero-band').getByText('Report notes', { exact: true })).toHaveCount(0);
+    // The band search finds a setting on another tab and opens it.
+    const input = vis(page, 'pf-hero-band .pf-hb__input');
+    await input.fill('whatsapp');
+    await expect(vis(page, '[data-testid="rt-find"]')).toBeVisible();
+    await shot(page, 'report-find');
+    await vis(page, '[data-testid="rt-find"] .pf-rt-find__hit').click();
+    await expect(page).toHaveURL(/\/admin\/reports\?tab=sending/, { timeout: 20_000 });
+  });
+
+  test('Report design: ONE Back press returns to Settings after the live preview re-renders', async ({ page }) => {
+    // Owner 2026-11-17: Back needed several presses — every preview re-render re-pointed the iframe's src,
+    // and each iframe navigation is a session-history entry. Preview frames are now keyed per URL.
+    await go(page, '/admin?section=lab');
+    const tile = page.getByText('Report design', { exact: true }).locator('visible=true').first();
+    await expect(tile).toBeVisible({ timeout: 60_000 });
+    const settingsUrl = page.url();
+    await tile.click();
+    await expect(page).toHaveURL(/\/admin\/reports/, { timeout: 60_000 });
+    // Letterhead (the default tab) draws its own canvas; the PDF preview lives on the other tabs.
+    await vis(page, 'pf-hero-band').getByText('Patient strip', { exact: true }).click();
+    await expect(page.locator('iframe.pf-pdf-iframe').first()).toBeAttached({ timeout: 60_000 });
+    // Change a few options: each one re-renders the preview.
+    const sw = page.locator('.pf-rt-work [role="switch"]').locator('visible=true');
+    const n = Math.min(3, await sw.count());
+    expect(n, 'some report options to change').toBeGreaterThan(0);
+    for (let i = 0; i < n; i++) { await sw.nth(i).click(); await page.waitForTimeout(900); }
+    await expect(page.locator('iframe.pf-pdf-iframe')).toHaveCount(1);
+    await page.goBack();
+    await expect(page, 'one Back press leaves Report design').not.toHaveURL(/\/admin\/reports/, { timeout: 10_000 });
+    expect(new URL(page.url()).pathname).toBe(new URL(settingsUrl).pathname);
+  });
+
+  test('Report design › Sending: compact rows — Message and Language right-aligned, rows start at the top', async ({ page }) => {
+    const body = 'Hello {{1}}, your lab test report from {{2}} is ready. Tap the button below to view your report.';
+    const prev = neg.hook;
+    neg.hook = r => (r.method === 'GET' && r.path === '/api/whatsapp/settings') ? { status: 200, body: { success: true, data: {
+      autoSendEnabled: true, sendUpdatedReports: false, canSend: true,
+      sender: { source: 'platform', displayName: 'Prefrontal', status: 'not_connected', tokenStored: false, canConnect: false },
+      platform: { enabled: true, configured: true, webhookConfigured: true, defaultTemplateName: 'report_ready', defaultTemplateLanguage: 'en' },
+      message: { sender: 'platform', senderLine: "Prefrontal's shared number", kind: 'link', code: 'report_ready', language: 'en', chosenKind: null, labName: 'Demo Lab',
+        templates: [
+          { kind: 'link', code: 'report_ready', label: 'Report ready — link', status: 'APPROVED', approved: true, languages: [{ code: 'en', label: 'English' }, { code: 'ta', label: 'Tamil' }],
+            components: { header: null, body, footer: null, buttons: [{ type: 'URL', text: 'View report' }] } },
+          { kind: 'pdf', code: 'report_pdf', label: 'Report ready — PDF + link', status: 'APPROVED', approved: true, languages: [{ code: 'en', label: 'English' }],
+            components: { header: { format: 'DOCUMENT' }, body, footer: null, buttons: [{ type: 'URL', text: 'View report' }] } },
+        ], pending: [],
+        sample: { bodyParams: ['Asha', 'Demo Lab'], buttonUrl: 'https://reports.example/r/abc', documentFilename: 'Report-Asha.pdf' } },
+    } } } : prev?.(r);
+    await go(page, '/admin/reports?tab=sending');
+    await expect(vis(page, '[data-testid="wmp-message"]')).toBeVisible({ timeout: 60_000 });
+    await expect(vis(page, '[data-testid="wmp-language"]')).toBeVisible();
+    const labels = await page.locator('pf-report-sending-card pf-setting-row .pf-srow__label').locator('visible=true').allInnerTexts();
+    expect(labels.map(l => l.trim())).toEqual(['WhatsApp Auto', 'Send again when a report is corrected', 'Sender', 'Message', 'Language', 'What the patient gets']);
+    if (!isPhone()) {
+      // Message / Language controls sit flush right in their rows, beside the label (not floating under a gap).
+      const row = vis(page, 'pf-report-sending-card pf-setting-row:has([data-testid="wmp-message"])');
+      const rb = (await row.boundingBox())!;
+      const cb = (await vis(page, '[data-testid="wmp-message"]').boundingBox())!;
+      expect(Math.abs((cb.x + cb.width) - (rb.x + rb.width))).toBeLessThan(4);
+      expect(rb.height).toBeLessThan(90);
+    }
+    await expectLayout(page, 'report-sending-rows');
+    await shot(page, 'lab-report-sending-rows');
+  });
+
   test('sample ID format saves through the same API', async ({ page }) => {
     await go(page, '/admin/lab/sample-numbers?tab=format');
     await expect(vis(page, '[data-testid="sample-id-format"]')).toBeVisible({ timeout: 60_000 });
-    await vis(page, '.pf-sf__save').click();
-    await expect.poll(() => neg.calls.find(c => c.path === '/api/config/sample-id')?.body).toEqual({ enabled: true, datePrefix: 'yymm', separator: '-', padding: 5, serialMode: 'numeric', letterCount: 2 });
+    // Change the separator → the card's Save bar appears (owner: Save in the pane, never the band).
+    await page.locator('[data-testid="sample-id-format"] input[aria-label="Separator"]').locator('visible=true').first().fill('/');
+    await vis(page, '[data-testid="savebar-save"]').click();
+    await expect.poll(() => neg.calls.find(c => c.path === '/api/config/sample-id')?.body).toEqual({ enabled: true, datePrefix: 'yymm', separator: '/', padding: 5, serialMode: 'numeric', letterCount: 2 });
   });
 
   test('phone: the page tabs scroll, nothing overflows', async ({ page }) => {

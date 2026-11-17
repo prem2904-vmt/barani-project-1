@@ -1,4 +1,5 @@
 import { inject } from '@angular/core';
+import { unsavedChangesGuard } from './shared/utils/unsaved-changes';
 import { cultureResultRedirectGuard, cultureSampleRedirectGuard, cultureValidateRedirectGuard } from './core/navigation/culture-redirect.guard';
 import { ORDER_PAY_RECREATE_ON } from './core/navigation/identity-reuse.strategy';
 import { CanActivateFn, Route, Router } from '@angular/router';
@@ -12,9 +13,9 @@ import { permissionGuard } from './core/auth/permission.guard';
 import { routeGuards } from './core/auth/route-guards';
 import { TEST_MASTER_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
-import { loadRoleEditor, loadUserEdit, loadUserInvite } from './features/admin/users-access/user-editors.loader';
+import { loadRoleEditor, loadUserInvite } from './features/admin/users-access/user-editors.loader';
 import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
-import { OPD_FULL_SCREEN_ADMIN, SETTINGS_REDIRECTS, SETTINGS_SHELL_ROUTE, SHELL_HOSTED_SHEET_PATHS } from './features/admin/settings/settings.routes';
+import { OPD_FULL_SCREEN_ADMIN, SETTINGS_FULL_PAGE_ROUTES, SETTINGS_REDIRECTS, SETTINGS_SHELL_ROUTE, SHELL_HOSTED_SHEET_PATHS } from './features/admin/settings/settings.routes';
 import { CASESHEET_SHELL_ROUTES, withAppModes } from './features/casesheets/casesheets.routes';
 
 // Perms that open the ADMIN CONFIG shell (overview, manage hub, modules, setup,
@@ -126,9 +127,11 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: () => import('./features/frontdesk/patient-profile/patient-profile.component').then(m => m.PatientProfileComponent)
       },
 
-      // Settings: every setting opens INSIDE the shell (sections → that setting's categories on the left, the screen on
-      // the right); the whole table lives in features/admin/settings/settings.routes.ts. Old links redirect there.
+      // Settings: card-style settings open INSIDE the shell (Test Master's frame: band, side card of categories, main
+      // card of rows); full-screen pages (Test Master, Report design, Users, Analyzers …) are their own pages. The whole
+      // table lives in features/admin/settings/settings.routes.ts. Old links redirect there.
       SETTINGS_SHELL_ROUTE,
+      ...SETTINGS_FULL_PAGE_ROUTES,
       ...SETTINGS_REDIRECTS,
 
       // Admin — gated: hidden from nav + blocked at route level if the user
@@ -180,18 +183,20 @@ export const appRoutes: Route[] = withAppModes([
         loadComponent: loadUserInvite
       },
       {
+        // The user opens beside the People grid (owner 2026-11-17): the old editor URL deep-links that panel.
         path: 'admin/users/:id/edit',
-        canActivate: [permissionGuard('manage_users')],
-        loadComponent: loadUserEdit
+        redirectTo: ({ params }) => `/admin?section=people&edit=${encodeURIComponent(params['id'] ?? '')}`,
       },
       {
         path: 'admin/roles/new',
         canActivate: [...routeGuards('/admin/roles/new')],
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: loadRoleEditor
       },
       {
         path: 'admin/roles/:id/edit',
         canActivate: [permissionGuard('manage_users')],
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: loadRoleEditor
       },
       {
@@ -202,10 +207,11 @@ export const appRoutes: Route[] = withAppModes([
       {
         path: 'admin/tests/:id/edit',
         canActivate: [permissionGuard(TEST_MASTER_PERMS)],
+        canDeactivate: [unsavedChangesGuard],
         loadComponent: loadTestEditor
       },
       { path: 'admin/whatsapp', redirectTo: '/admin/org/channels?tab=whatsapp', pathMatch: 'full' },
-      { path: 'admin/lab-settings/whatsapp', redirectTo: '/admin/lab/report-options?tab=sending', pathMatch: 'full' },
+      { path: 'admin/lab-settings/whatsapp', redirectTo: '/admin/reports?tab=sending', pathMatch: 'full' },
       { path: 'admin/email', redirectTo: '/admin/org/channels?tab=email', pathMatch: 'full' },
       {
         // Per-station printing setup — available to any signed-in user (not

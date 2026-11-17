@@ -24,6 +24,13 @@ export interface SettingsCategory {
   beta?: BetaFeatureKey;
   /** Extra permission the category itself needs beyond its page's route. */
   perms?: readonly string[];
+  /** Name of the PAGE this category lives on, for the band's page switch (defaults to the label). */
+  pageLabel?: string;
+  /** Where it applies ("this branch" / "all branches"): the side-card row's muted note and the main card head's note. */
+  scope?: string;
+  /** Run-time tree (SETTINGS_HOST.categories): a heading row, or the heading this row sits under. */
+  heading?: boolean;
+  parent?: string;
 }
 
 /** Lab / OPD / IPD facts the overview resolves live (never hard-coded here). */
@@ -43,6 +50,12 @@ export interface SettingsItem {
   /** BETA surface — listed only while that beta is on. */
   beta?: BetaFeatureKey;
   requires?: SettingsRequires;
+  /**
+   * ONE full-width main card, no side card (owner 2026-11-17: "two-panel was just an option"): the setting's few short
+   * categories are small uppercase group labels inside the card's rows. Without it a setting with 2+ hosted categories
+   * gets the side card.
+   */
+  single?: boolean;
 }
 
 export interface SettingsSectionDef {
@@ -120,7 +133,6 @@ export const SETTINGS_PATHS = {
   labSampleNumbers: '/admin/lab/sample-numbers',
   tests: '/admin/tests',
   reports: '/admin/reports',
-  reportOptions: '/admin/lab/report-options',
   labCollection: '/admin/lab/collection',
   labResults: '/admin/lab/results',
   labOutsourcing: '/admin/lab/outsourcing',
@@ -166,6 +178,21 @@ export const SETTINGS_PATHS = {
 } as const;
 const P = SETTINGS_PATHS;
 
+/**
+ * Full-screen pages (owner 2026-11-17, DESIGN-V2 rule 2): a page with its own band / two cards / grid opens as its
+ * OWN page, never inside the Settings shell; its band's back chevron climbs to the Settings section it belongs to
+ * (`settingsParents`). Every other settings path is a card-style page the shell hosts. ONE list — the routes and the
+ * shell both read it.
+ */
+export const SETTINGS_FULL_SCREEN_PATHS: ReadonlySet<string> = new Set<string>([
+  P.tests, P.reports, P.users, P.instruments, P.bridges, P.process, P.workflows, P.inventory,
+  P.referralLabs, P.partnerPrices,
+  P.opdDepartments, P.opdDoctors, P.opdForms, P.opdWorkflow, P.pharmacyDrugs,
+  P.ipdDepartments, P.ipdCaseSheets, P.ipdPending,
+  P.branches, P.files, P.aiConnectors,
+]);
+export const isFullScreenSettingsPath = (path: string): boolean => SETTINGS_FULL_SCREEN_PATHS.has(normPath(path));
+
 export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
   // ───────────────────────────── Departments ─────────────────────────────
   {
@@ -193,7 +220,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'pending', label: 'Pending changes', query: { view: 'pending' }, beta: 'assistant' },
         ] },
       { id: 'lab-report', label: 'Report design', path: P.reports, iconPath: ICON.report,
-        blurb: 'Letterhead, patient strip, columns, results table, order and footer.',
+        blurb: 'Letterhead, patient strip, columns, results table and report notes, order, footer and sending.',
         categories: [
           { id: 'letterhead', label: 'Letterhead', query: { tab: 'letterhead' } },
           { id: 'patient', label: 'Patient strip', query: { tab: 'patient' } },
@@ -310,7 +337,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     items: [
       { id: 'org-profile', label: 'Name and logo', path: P.orgProfile, iconPath: ICON.person,
         blurb: 'Organization name, short name and logo, login handle.',
-        categories: [{ id: 'profile', label: 'Name, logo and login handle' }] },
+        // One page (owner): Name · Logo · Sign-in are short groups on the same page, not categories.
+        categories: [{ id: 'profile', label: 'Name, logo and sign-in' }] },
     ],
   },
   {
@@ -328,10 +356,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     items: [
       { id: 'org-numbers', label: 'Patient and order numbers', path: P.orgNumbers, iconPath: ICON.id,
         blurb: 'Patient ID and Order ID formats.',
-        categories: [
-          { id: 'patient', label: 'Patient ID', query: { tab: 'patient' } },
-          { id: 'order', label: 'Order ID', query: { tab: 'order' } },
-        ] },
+        // One page (owner): Patient ID and Order ID together fit one screen of rows.
+        categories: [{ id: 'numbers', label: 'Patient ID and Order ID' }] },
     ],
   },
   {
@@ -394,8 +420,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
  * Categories from a page list (`{ path, categories: [{ id, label }] }`, every page reading `?tab=<id>`) — the shape the
  * Lab pages export as LAB_PAGES. A setting can spread `categoriesFromPage(page)` instead of listing them by hand.
  */
-export function categoriesFromPage(page: { path: string; categories: ReadonlyArray<{ id: string; label: string }> }): SettingsCategory[] {
-  return page.categories.map((c) => ({ id: c.id, label: c.label, path: page.path, query: { tab: c.id } }));
+export function categoriesFromPage(page: { path: string; title?: string; categories: ReadonlyArray<{ id: string; label: string; scope?: string }> }): SettingsCategory[] {
+  return page.categories.map((c) => ({ id: c.id, label: c.label, path: page.path, query: { tab: c.id }, ...(page.title ? { pageLabel: page.title } : {}), ...(c.scope ? { scope: c.scope } : {}) }));
 }
 
 /** Where a category links: its own path, or the setting's, plus the view query. */
@@ -520,6 +546,9 @@ export function rehome(path: string, query: Readonly<Record<string, string | nul
         case 'sample': return { path: P.labSampleNumbers, query: keep({ tab: 'format' }) };
         default: return { path: P.orgProfile, query: keep() };
       }
+    // Report options became tabs of Report design (one page, owner 2026-11-17).
+    // Report notes is a row of the Results table tab (owner 2026-11-17).
+    case '/admin/lab/report-options': return { path: P.reports, query: keep({ tab: tab === 'sending' ? 'sending' : 'table' }) };
     case '/admin/communication': return { path: P.orgChannels, query: keep(tab ? { tab } : {}) };
     case '/admin/appointments': return { path: P.labFrontDesk, query: keep(tab ? { tab } : {}) };
     case '/admin/referring-network': return { path: P.labFrontDesk, query: keep({ tab: 'referring' }) };
@@ -546,4 +575,32 @@ export function rehomeHref(href: string, queryParams?: Readonly<Record<string, s
   const moved = rehome(path, q);
   if (moved) return { href: moved.path, queryParams: Object.keys(moved.query).length ? moved.query : undefined };
   return { href: path, queryParams: Object.keys(q).length ? q : undefined };
+}
+
+/** One page of a setting: the distinct paths its categories live on, in order (a page with `?tab=` views is one). */
+export interface SettingsPageRef { path: string; label: string; query: Record<string, string>; fullScreen: boolean }
+
+/**
+ * The pages a setting is made of. A full-screen page with several pages (Analyzers · Bridges, Referral labs ·
+ * Partner prices …) shows them as a small switch in its band; the shell lists a full-screen page as one row that
+ * leaves the frame. A page's label: the setting's own name when it is the setting's own path, else its first category.
+ */
+export function settingsPages(item: SettingsItem, cats: readonly SettingsCategory[] = item.categories): SettingsPageRef[] {
+  const out: SettingsPageRef[] = [];
+  for (const c of cats) {
+    const path = categoryPath(item, c);
+    if (out.some((o) => o.path === path)) continue;
+    const full = isFullScreenSettingsPath(path);
+    out.push({ path, label: path === item.path ? item.label : (c.pageLabel ?? c.label), query: full ? {} : { ...(c.query ?? {}) }, fullScreen: full });
+  }
+  return out;
+}
+
+/** The setting a full-screen page belongs to (by path), for its band switch and back chevron. */
+export function settingForPath(path: string): { section: SettingsSectionDef; item: SettingsItem } | null {
+  const p = normPath(path);
+  for (const section of SETTINGS_SECTIONS) for (const item of section.items) {
+    if (item.path === p || item.categories.some((c) => categoryPath(item, c) === p)) return { section, item };
+  }
+  return null;
 }

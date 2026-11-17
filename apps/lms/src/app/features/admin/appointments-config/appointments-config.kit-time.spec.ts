@@ -21,7 +21,7 @@ describe('Appointments config — Start/End time (kit, no native time input)', (
     const p = render();
     (p.cmp as any).tab.set('slots');
     p.f.detectChanges();
-    const card = p.el.querySelector('.pf-ap-card.pf-card')!;
+    const card = p.el.querySelector('pf-setting-group.pf-ap-card')!;
     expect(card.querySelectorAll('pf-time').length).toBe(2);
     expect(card.querySelector('input[type="time"]:not([aria-hidden="true"])')).toBeNull();
   });

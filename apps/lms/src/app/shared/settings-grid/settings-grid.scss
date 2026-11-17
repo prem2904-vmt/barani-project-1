@@ -1,0 +1,332 @@
+/* Settings list grids — Test Master's frame (tests.component.scss), shared so
+   every list screen in Settings reads the same (owner 2026-11-17).
+   Markup (inside pf-band-page → pf-hero-band → .pf-band-body.pf-band-body--fill):
+     <div class="pf-sg-panels" [class.pf-sg-panels--single]>      side card LEFT, main card right
+       <aside class="pf-card pf-sg-side">…</aside>                 (optional; a sheet on narrow widths)
+       <section class="pf-card pf-sg-main">
+         <header class="pf-card__head pf-sg-main__head"> icon · label · note · count · status segmented </header>
+         <div class="pf-sg-main__body"> <pf-data-grid> (the grid itself: shared/components/data-grid) </div>
+       </section>
+     </div>
+   Add to a component's styleUrls. The grid, its cells and its sizing are pf-data-grid's (never styled here). */
+
+:host {
+  display: block;
+  max-width: 100%;
+  min-height: 0;
+}
+
+/* The page itself is a flex column down to the fill body, so the grid gets every pixel the host gives the page
+   (in the Settings shell / overview the host is a flex column; a block band page stopped at the grid's min-height). */
+.pf-band-page:has(> .pf-band-body--fill) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pf-band-page > .pf-band-body--fill {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pf-sg-panels {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 16px;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.pf-sg-panels--single,
+.pf-sg-panels--narrow {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pf-sg-main {
+  min-width: 0;
+  min-height: 0;
+  /* The card takes its width from the host (inside a shrink-to-fit host it once collapsed to 0 px). */
+  width: 100%;
+  align-self: stretch;
+  /* Directly inside a fill body (flex column) the card takes ALL its height, not just its content's. */
+  flex: 1 1 auto;
+}
+
+/* The narrow-card hint rule queries the HEAD (never the card: containment on the card can drop its size in a
+   shrink-to-fit host — the blank inline grid). */
+.pf-sg-main__head {
+  container-type: inline-size;
+}
+
+/* BARE: hosted inside the Settings shell, whose own card + head frame the page — the
+   grid drops its card chrome and head, so the screen shows ONE card and ONE head. The
+   shell renders the page's #headTools (count + filter) in its card head. */
+.pf-sg-main.pf-sg-main--bare {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+/* Inside the Settings shell the frame's card head renders the page's #headTools (count + filter),
+   so the grid's own slim tools row would be a duplicate (owner 2026-11-17): hide it. */
+.pf-sg-main--bare > .pf-sg-main__head {
+  display: none;
+}
+
+.pf-sg-main--bare .pf-sg-main__body {
+  overflow: hidden;
+}
+
+/* A narrow main card drops the head's hint rather than wrapping it word by word. */
+@container (max-width: 760px) {
+  .pf-sg-hint {
+    display: none;
+  }
+}
+
+.pf-sg-main__head {
+  flex-wrap: nowrap;
+}
+
+.pf-sg-hint {
+  color: var(--text-tertiary);
+}
+
+.pf-sg-count {
+  flex: none;
+  margin-left: auto;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.pf-sg-status-filter {
+  flex-shrink: 0;
+}
+
+.pf-sg-main__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* First-load skeleton rows sit OVER the mounted grid (Test Master). */
+.pf-sg-skel {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  overflow: hidden;
+  background: var(--pf-card-bg, var(--bg-primary));
+  border-radius: inherit;
+}
+
+/* Small empty state over the grid's empty body (no giant icons). */
+.pf-sg-empty {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40px;
+  z-index: 5;
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.pf-sg-empty__title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pf-sg-empty__body {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+/* SIDE card (LEFT, like Test Master's Departments): the SAME height as the
+   main card — both stretch to the body; a long list scrolls INSIDE. */
+.pf-sg-side {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  align-self: stretch;
+}
+
+.pf-sg-side > .pf-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  gap: 12px;
+}
+
+.pf-sg-side > .pf-card__foot {
+  padding: 12px 16px 16px;
+}
+
+/* A side column holding the side card (+ an optional extra card below):
+   the side card takes the remaining height. */
+.pf-sg-sidecol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pf-sg-sidecol > :empty {
+  display: none;
+}
+
+.pf-sg-sidecol > .pf-sg-side {
+  flex: 1 1 auto;
+  height: auto;
+}
+
+.pf-sg-side.pf-sg-side--sheet {
+  height: auto;
+  position: fixed;
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: var(--pf-nav-h, 0px);
+  z-index: 1002;
+  max-height: min(78dvh, calc(100dvh - env(safe-area-inset-top, 0px) - var(--pf-nav-h, 0px) - 8px));
+  border-radius: 20px 20px 0 0;
+  animation: pf-rise var(--pf-dur-sheet, 360ms) var(--pf-spring-bounce, ease) both;
+}
+
+@media (min-width: 641px) {
+  .pf-sg-side.pf-sg-side--sheet {
+    left: max(16px, calc(50% - 300px));
+    right: max(16px, calc(50% - 300px));
+  }
+}
+
+.pf-sg-sheet-handle {
+  display: block;
+  flex: none;
+  width: 40px;
+  height: 5px;
+  margin: 8px auto 2px;
+  border-radius: 999px;
+  background: var(--pf-line);
+}
+
+.pf-sg-chip {
+  flex-shrink: 0;
+  height: 32px;
+}
+
+.pf-sg-side__lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.pf-sg-side__sec {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.pf-sg-stats {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.pf-sg-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--pf-line);
+}
+
+.pf-sg-stat dt {
+  font-size: 12.5px;
+}
+
+.pf-sg-stat dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-sg-side.pf-sg-side--sheet {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .pf-sg-hint {
+    display: none;
+  }
+}
+
+/* Status words outside the grid (side cards, strips); inside grids pf-data-grid styles them. */
+.pf-sg-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  white-space: nowrap;
+  --pf-sg-tone: var(--text-secondary);
+  color: color-mix(in srgb, var(--pf-sg-tone) 70%, var(--text-primary));
+}
+.pf-sg-status[data-tone='green'] { --pf-sg-tone: var(--green-text, #15803d); }
+.pf-sg-status[data-tone='amber'] { --pf-sg-tone: var(--amber-text, #b45309); }
+.pf-sg-status[data-tone='red'] { --pf-sg-tone: var(--red-text, #b91c1c); }
+.pf-sg-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--pf-sg-tone);
+  flex: none;
+}
+
+
+/* In-pane page actions (owner 2026-11-17: no band buttons in Settings): a compact secondary button at the right end
+   of the card head, after the head tools — "Add …", "Create …", "Refresh". */
+.pf-sg-act {
+  height: 32px;
+  min-height: 32px;
+  padding: 0 12px;
+  gap: 6px;
+  flex: none;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.pf-sg-act svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* The card's Save bar (pf-settings-savebar) sits flush at the bottom of a grid card. */
+:host ::ng-deep .pf-sg-main > pf-settings-savebar .pf-ssb__bar,
+:host ::ng-deep .pf-sg-main pf-settings-savebar .pf-ssb__bar {
+  margin: 0;
+  padding: 10px 14px;
+}

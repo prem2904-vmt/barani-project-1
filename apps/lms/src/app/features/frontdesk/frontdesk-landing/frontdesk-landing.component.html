@@ -2198,7 +2198,7 @@
          handled by this scroller. ≥641px is unchanged (wrappers are display:contents). -->
     <div class="pf-inv-preview__viewport">
       <div class="pf-inv-preview__stage">
-        <iframe class="pf-inv-preview__frame" [src]="src" title="Invoice PDF"></iframe>
+        @for (u of [src]; track u) { <iframe class="pf-inv-preview__frame" [src]="u" title="Invoice PDF"></iframe> }
       </div>
     </div>
   </div>

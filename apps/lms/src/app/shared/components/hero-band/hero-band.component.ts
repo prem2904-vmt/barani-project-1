@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, inject, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, TemplateRef, computed, effect, inject, input, output, untracked, viewChild } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
 import { NavBackService } from '../../../core/services/nav-back.service';
 import { injectTenantBrand } from './tenant-brand';
-import { injectSettingsHosted } from '../../utils/settings-host';
+import { SETTINGS_HOST } from '../../utils/settings-host';
 import { PfKeysDirective } from '../numpad/pf-keys.directive';
 import { SamplePresetDirective } from '../../directives/sample-preset.directive';
 import { PfKeysKind } from '../numpad/pf-keys-layouts';
@@ -39,13 +40,41 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
 @Component({
   selector: 'pf-hero-band',
   standalone: true,
-  imports: [PfKeysDirective, SamplePresetDirective],
+  imports: [PfKeysDirective, SamplePresetDirective, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="pf-hb" [class.pf-hb--slim]="slim()" [class.pf-hb--hosted]="hosted">
+    <!-- HOSTED in the Settings shell: nothing renders here; the shell's band shows this page's actions (and search). -->
+    <ng-template #actionsTpl><ng-content select="[band-actions]"></ng-content></ng-template>
+    <ng-template #fieldTpl>
+          @if (customSearch()) {
+            <ng-content select="[band-search]"></ng-content>
+          } @else {
+            <svg class="pf-hb__glass" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+            </svg>
+            <input class="pf-hb__input" type="text"
+                   [pfKeys]="keys()" [pfKeysEnter]="keysEnter()" [pfKeysEnterAria]="keysEnterAria()"
+                   [pfSamplePreset]="keys() === 'sample'"
+                   [attr.aria-label]="keys() ? placeholder() : null"
+                   [placeholder]="placeholder()"
+                   [value]="value()"
+                   (input)="valueChange.emit($any($event.target).value)"
+                   (keydown.enter)="submitted.emit($any($event.target).value)" />
+          }
+          <!-- Anything that FEEDS the search (camera scan, voice, ⌘K) rides
+               inside the field, BEFORE the divider (owner) — it's part of
+               typing, not a tool sitting next to the bar. -->
+          <div class="pf-hb__inline">
+            <ng-content select="[band-inline]"></ng-content>
+          </div>
+</ng-template>
+    @if (!hosted()) {
+    <div class="pf-hb" [class.pf-hb--slim]="slim()">
       <div class="pf-hb__band">
         <div class="pf-hb__tenant">
-          @if (back() && !hosted && (navBack.showBack() || !!backAction())) {
+          @if (back() && (navBack.showBack() || !!backAction())) {
             <button type="button" class="pf-hb__back press" (click)="goBack()" aria-label="Go back" title="Back">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -78,10 +107,10 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
           }
         </div>
         @if (slim()) { <div class="pf-hb__center"><ng-content select="[band-center]"></ng-content></div> }
-        <div class="pf-hb__actions"><ng-content select="[band-actions]"></ng-content></div>
+        <div class="pf-hb__actions">@if (shellBand() && host?.status(); as pageStatus) {<ng-container *ngTemplateOutlet="pageStatus"></ng-container>}<ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
       </div>
 
-      @if (!slim() && !(hosted && tabsOnly())) {
+      @if (!slim()) {
       <div class="pf-hb__searchrow">
         <div class="pf-hb__search" [class.pf-hb__search--tabs]="tabsOnly()" [class.pf-hb__search--ctx]="contextBar()"
              [class.pf-hb__search--std]="standardPill()">
@@ -91,29 +120,11 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
                becomes the pill so the filters can drop to their own row. -->
           @if (!tabsOnly()) {
           <div class="pf-hb__field">
-          @if (customSearch()) {
-            <ng-content select="[band-search]"></ng-content>
-          } @else {
-            <svg class="pf-hb__glass" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                 aria-hidden="true">
-              <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
-            </svg>
-            <input class="pf-hb__input" type="text"
-                   [pfKeys]="keys()" [pfKeysEnter]="keysEnter()" [pfKeysEnterAria]="keysEnterAria()"
-                   [pfSamplePreset]="keys() === 'sample'"
-                   [attr.aria-label]="keys() ? placeholder() : null"
-                   [placeholder]="placeholder()"
-                   [value]="value()"
-                   (input)="valueChange.emit($any($event.target).value)"
-                   (keydown.enter)="submitted.emit($any($event.target).value)" />
-          }
-          <!-- Anything that FEEDS the search (camera scan, voice, ⌘K) rides
-               inside the field, BEFORE the divider (owner) — it's part of
-               typing, not a tool sitting next to the bar. -->
-          <div class="pf-hb__inline">
-            <ng-content select="[band-inline]"></ng-content>
-          </div>
+            @if (shellBand() && pageSearch(); as pageSearch) {
+              <ng-container *ngTemplateOutlet="pageSearch"></ng-container>
+            } @else {
+              <ng-container *ngTemplateOutlet="fieldTpl"></ng-container>
+            }
           </div>
           }
           <div class="pf-hb__tools">
@@ -123,6 +134,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
       </div>
       }
     </div>
+    }
   `,
   styles: [`
     /* ── Band — exact Figma 446-113 values. Full-bleed when the host sets
@@ -194,21 +206,6 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
     :host-context([data-theme='dark']) .pf-hb__back { color: var(--text-primary, #e5e7eb); }
     :host-context(.dark) .pf-hb__back:hover,
     :host-context([data-theme='dark']) .pf-hb__back:hover { background: rgba(255, 255, 255, 0.08); }
-
-    /* HOSTED in the Settings shell (SETTINGS_HOST): the shell's left panel already names the screen and lists its
-       categories, so the band drops its brand, back chevron, gradient and tab pill and keeps only the page's
-       actions (Save …) and, when the page has one, its search. */
-    .pf-hb--hosted { margin: 12px 0; }
-    .pf-hb--hosted .pf-hb__band,
-    :host-context(.dark) .pf-hb--hosted .pf-hb__band,
-    :host-context([data-theme='dark']) .pf-hb--hosted .pf-hb__band {
-      background: none; min-height: 0; padding: 0 0 4px; border: 0; box-shadow: none;
-      justify-content: flex-end;
-    }
-    .pf-hb--hosted .pf-hb__tenant { display: none; }
-    .pf-hb--hosted .pf-hb__band:has(.pf-hb__actions:empty) { display: none; }
-    .pf-hb--hosted .pf-hb__searchrow { padding: 0; margin-top: 0; }
-    .pf-hb--hosted .pf-hb__search { margin-inline: 0; max-width: none; }
 
     /* Tabs-only pill: no search field, the tools own the whole pill and the
        section switch is spread evenly across it (owner). */
@@ -413,8 +410,39 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
 export class HeroBandComponent {
   protected readonly navBack = inject(NavBackService);
   private readonly router = inject(Router);
-  /** Rendered inside the Settings shell (see shared/utils/settings-host.ts). */
-  protected readonly hosted = injectSettingsHosted();
+  /** The Settings shell (shared/utils/settings-host.ts) when this band's page is routed inside it. */
+  protected readonly host = inject(SETTINGS_HOST, { optional: true });
+  private readonly el = inject(ElementRef);
+  /** THE shell's own band: it shows the hosted page's actions and search instead of hiding itself. */
+  readonly shellBand = input<boolean>(false);
+  /** THE shell's band: the hosted page's search for the shown group (the shell picks it). */
+  readonly pageSearch = input<TemplateRef<unknown> | null>(null);
+  /** A hosted page's band: renders nothing in place; hands the shell its actions (and its search, unless tabs-only). */
+  protected readonly hosted = computed(() => !!this.host && !this.shellBand());
+  private readonly actionsTpl = viewChild.required<TemplateRef<unknown>>('actionsTpl');
+  private readonly fieldTpl = viewChild.required<TemplateRef<unknown>>('fieldTpl');
+  private readonly registerWithShell = (() => {
+    const host = this.host;
+    if (!host) return null;
+    const mine: TemplateRef<unknown>[] = [];
+    inject(DestroyRef).onDestroy(() => {
+      host.actions.update((l) => l.filter((t) => !mine.includes(t.tpl)));
+      host.searches.update((l) => l.filter((t) => !mine.includes(t.tpl)));
+    });
+    return effect(() => {
+      if (!this.hosted()) return;
+      const a = this.actionsTpl();
+      const f = this.tabsOnly() || this.slim() ? null : this.fieldTpl();
+      const before = [...mine];
+      mine.splice(0, mine.length, a, ...(f ? [f] : []));
+      untracked(() => {
+        // The group this band sits in (Front desk › Referring doctors …): its actions show only with that group.
+        const group = (this.el.nativeElement as HTMLElement).closest('pf-setting-group[data-group]')?.getAttribute('data-group') ?? null;
+        host.actions.update((l) => [...l.filter((t) => !before.includes(t.tpl)), { tpl: a, group }]);
+        host.searches.update((l) => [...l.filter((t) => !before.includes(t.tpl)), ...(f ? [{ tpl: f, group }] : [])]);
+      });
+    });
+  })();
 
   /** Plain href="/" (middle-click / new tab work natively); a normal click navigates in-app. Deliberately not
    *  RouterLink: that forces every host screen (and its spec) to provide ActivatedRoute + a full Router. */

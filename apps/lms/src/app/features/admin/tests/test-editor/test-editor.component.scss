@@ -980,6 +980,41 @@ select.pf-input--compact {
   .pf-te2-grid { gap: 16px 20px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
   .pf-uf { gap: 6px; }
   .pf-uf__lbl { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+
+  /* The field grid (owner 2026-11-17 "align it properly"): 12 columns,
+     label above input, rows align top, equal 16/20 gaps. Fields say how
+     many columns they take (c3 / c4 / c6; --span = the full row). A very
+     wide card keeps the form at a readable width — the lists below
+     (profiles, ranges) still use the full card. Steps down by the CARD's
+     width (container query), not the window's, since the preview takes
+     part of it. */
+  .pf-te2-sec__body { container: te-card / inline-size; }
+  .pf-te2-grid--form {
+    grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: start;
+    gap: 16px 20px; max-width: 1280px;
+    > .pf-uf { grid-column: span 4; }
+    > .pf-uf--c3 { grid-column: span 3; }
+    > .pf-uf--c4 { grid-column: span 4; }
+    > .pf-uf--c6 { grid-column: span 6; }
+    > .pf-uf--span, > .pf-hint.pf-uf--span { grid-column: 1 / -1; }
+  }
+  @container te-card (max-width: 760px) {
+    .pf-te2-grid--form > .pf-uf--c3 { grid-column: span 6; }
+    .pf-te2-grid--form > .pf-uf--c4, .pf-te2-grid--form > .pf-uf:not([class*='pf-uf--c']):not(.pf-uf--span) { grid-column: span 6; }
+  }
+  @container te-card (max-width: 480px) {
+    .pf-te2-grid--form > .pf-uf { grid-column: 1 / -1; }
+  }
+  /* Label + a small info tip (a hint that would make the row ragged). */
+  .pf-uf__lblrow { display: inline-flex; align-items: center; gap: 6px; min-height: 18px; }
+  .pf-uf__lblrow .pf-uf__lbl { margin: 0; }
+  .pf-uf__info {
+    display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px;
+    border-radius: 50%; color: var(--text-tertiary); cursor: help;
+    transition: color var(--pf-dur-fast) ease;
+  }
+  .pf-uf__info:hover { color: var(--text-secondary); }
+  .pf-uf__info:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; color: var(--text-secondary); }
   .pf-uf__hint, .pf-hint, .pf-rr2__sub, .pf-picker-sub { font-size: 12px; line-height: 1.45; color: var(--text-tertiary); }
   .pf-te2-h { display: block; margin: 0; font-size: 13px; font-weight: 600; color: var(--text-primary); }
   .pf-te2-adv-s { font-size: 13px; font-weight: 500; }
@@ -987,8 +1022,33 @@ select.pf-input--compact {
   /* Profiles + member picker: kit rows (a visually hidden checkbox keeps the
      native keyboard + form semantics; the kit check draws the state). */
   .pf-profpanel { margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--pf-line); }
-  .pf-profpanel__grid, .pf-pick-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
-  .pf-profpanel__item, .pf-pkg-pick { min-height: 48px; }
+  .pf-pick-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+  .pf-pkg-pick { min-height: 48px; }
+
+  /* Profiles = a DENSE checklist (check · name · code muted) in one hairline
+     box, columns that fill the card's width — not a wall of bordered tiles. */
+  .pf-profpanel { max-width: 1280px; } /* right edge lines up with the field grid */
+  .pf-profpanel__head { align-items: center; margin-bottom: 12px; }
+  .pf-profpanel__title { min-width: 0; }
+  .pf-profpanel__tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .pf-profpanel__count { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .pf-profpanel__search { width: 260px; max-width: 100%; }
+  .pf-profpanel__grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0 24px;
+    border: 1px solid var(--pf-line); border-radius: var(--pf-radius); padding: 4px 12px;
+    background: var(--pf-card-bg);
+  }
+  .pf-profpanel__item.pf-row {
+    min-height: 36px; padding: 6px 4px; gap: 10px; border: 0; border-radius: 0;
+    border-bottom: 1px solid var(--pf-line); background: transparent;
+  }
+  .pf-profpanel__item.pf-row:hover { background: var(--pf-chip-bg); border-color: var(--pf-line); }
+  .pf-profpanel__item.pf-row--in { background: transparent; }
+  .pf-profpanel__item.pf-row--in .pf-profpanel__name { font-weight: 600; }
+  .pf-profpanel__item .pf-row__check { width: 18px; height: 18px; border-color: var(--pf-sel-border); }
+  .pf-profpanel__item .pf-profpanel__name { font-size: 13px; font-weight: 500; }
+  .pf-profpanel__item .pf-profpanel__code { font-size: 12px; color: var(--text-tertiary); }
+  .pf-profpanel__none { grid-column: 1 / -1; padding: 10px 4px; margin: 0; }
   .pf-profpanel__item:has(.pf-te2-srcheck:focus-visible), .pf-pkg-pick:has(.pf-te2-srcheck:focus-visible) {
     outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px;
   }
@@ -1012,7 +1072,9 @@ select.pf-input--compact {
   .pf-te2-previewclose { width: 36px; height: 36px; min-height: 36px; }
 
   @media (min-width: 1024px) {
-    .pf-te2 { grid-template-columns: minmax(0, 1fr) 400px; }
+    /* Live preview on the RIGHT (owner 2026-11-17: choose on the left,
+       see the result on the right), same height as the main card. */
+    .pf-te2 { grid-template-columns: minmax(0, 1fr) clamp(400px, 24vw, 560px); }
     .pf-te2-aside { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; position: static; }
     .pf-te2-previewbtn, .pf-te2-previewclose, .pf-te2-previewscrim { display: none; }
   }

@@ -45,11 +45,11 @@ test.describe('settings two-panel', () => {
       await shot(page, 'settings-phone-list');
       await tid(page, 'tp-item-lab').click();
       await expect(page).toHaveURL(/section=lab/);
-      await expect(tid(page, 'tp-back')).toBeVisible();
+      await expect(tid(page, 'tp-back')).toHaveCount(0);   // only the band's back (owner)
       await expect(tid(page, 'ov-tile-admin-lab-numbers')).toBeVisible();
       await expectLayout(page, 'settings section');
       await shot(page, 'settings-phone-section');
-      await tid(page, 'tp-back').click();
+      await page.locator('.pf-hb__back').locator('visible=true').first().click();
       await expect(tid(page, 'tp-item-lab')).toBeVisible();
       await expect(page.locator('[data-testid="ov-tiles"]')).toHaveCount(0);
     } else {
@@ -65,69 +65,58 @@ test.describe('settings two-panel', () => {
     expect(errors, 'no uncaught errors').toEqual([]);
   });
 
-  test('opening a setting: the left panel becomes that setting\'s categories under a back arrow; the screen fills the right', async ({ page }) => {
+  test('opening a setting: the side card becomes that setting\'s groups; ONE back (the band\'s)', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', e => errors.push(e.message));
-    await go(page, '/admin?section=lab');
-    await expect(tid(page, 'ov-tile-admin-lab-outsourcing')).toBeVisible({ timeout: 60_000 });
-    await tid(page, 'ov-tile-admin-lab-outsourcing').click();
+    // Billing is a one-setting section: the overview shows it inline; its own page is the deep link.
+    await go(page, '/admin/billing');
+    await expect(page.locator('[data-testid="settings-shell"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('[data-testid="tp-nav-back"], [data-testid="tp-back"]')).toHaveCount(0);
+    const bandBack = page.locator('.pf-hb__back').locator('visible=true').first();
     if (isPhone()) {
-      // phone: categories list first (no hop), then drill in
-      await expect(page).toHaveURL(/\/admin\/lab\/outsourcing$/);
-      await expect(tid(page, 'tp-nav-title')).toHaveText('Outsourcing');
-      await expect(tid(page, 'tp-item-referral-labs')).toBeVisible();
+      await expect(page).toHaveURL(/\/admin\/billing$/);
+      await expect(tid(page, 'tp-nav-title')).toHaveText('Billing and taxes');
       await expectLayout(page, 'settings inside (list)');
       await shot(page, 'settings-phone-inside-list');
-      await tid(page, 'tp-item-partner-prices').click();
-      await expect(page).toHaveURL(/\/admin\/partner-prices/);
-      await expect(tid(page, 'tp-back')).toBeVisible();
+      await tid(page, 'tp-item-payments').click();
+      await expect(page).toHaveURL(/tab=payments/);
       await expectLayout(page, 'settings inside (screen)');
       await shot(page, 'settings-phone-inside');
-      await tid(page, 'tp-back').click();
-      await expect(tid(page, 'tp-item-referral-labs')).toBeVisible();
-      await tid(page, 'tp-nav-back').click();
-      await expect(page).toHaveURL(/\/admin\?section=lab/);
+      await bandBack.click();                                  // group → list
+      await expect(tid(page, 'tp-item-gst')).toBeVisible();
+      await bandBack.click();                                  // list → where you came from (the overview)
+      await expect(page).toHaveURL(/\/admin\?section=billing/);
     } else {
-      await expect(page).toHaveURL(/\/admin\/referral-labs/, { timeout: 30_000 });
-      await expect(tid(page, 'tp-nav-title')).toHaveText('Outsourcing');
-      await expect(tid(page, 'tp-nav-back')).toBeVisible();
-      await expect(tid(page, 'tp-item-referral-labs')).toHaveAttribute('aria-current', 'true');
-      await expect(page.locator('.pf-tp__heading')).toHaveCount(0);
+      await expect(page).toHaveURL(/\/admin\/billing\?tab=gst/, { timeout: 30_000 });
+      await expect(tid(page, 'tp-nav-title')).toHaveText('Billing and taxes');
+      await expect(tid(page, 'tp-item-gst')).toHaveAttribute('aria-current', 'true');
       await expectLayout(page, 'settings inside');
       await shot(page, 'settings-inside');
-      await tid(page, 'tp-item-partner-prices').click();
-      await expect(page).toHaveURL(/\/admin\/partner-prices/);
-      // the shell's categories replace the page's own tabs / back chevron
-      await expect(page.locator('pf-hero-band .pf-hb__back')).toHaveCount(0);
-      await tid(page, 'tp-rail-toggle').click();
-      await expect(page.locator('.pf-tp--rail')).toBeVisible();
-      await shot(page, 'settings-inside-rail');
-      await tid(page, 'tp-rail-toggle').click();
-      await tid(page, 'tp-nav-back').click();
-      await expect(page).toHaveURL(/\/admin\?section=lab/);
-      await expect(tid(page, 'ov-tile-admin-lab-outsourcing')).toBeVisible();
+      await tid(page, 'tp-item-payments').click();
+      await expect(page).toHaveURL(/tab=payments/);
+      await bandBack.click();
+      await expect(page).toHaveURL(/\/admin\?section=billing/);
     }
     expect(errors, 'no uncaught errors').toEqual([]);
   });
 
-  test('a tabbed page is driven by its categories: Organization numbers → Patient ID / Order ID, no tab strip of its own', async ({ page }) => {
-    await go(page, '/admin/org/numbers?tab=order');
-    await expect(page.locator('.pf-tp__eyebrow').locator('visible=true').first()).toHaveText(/Patient and order numbers/i, { timeout: 60_000 });
+  test('a tabbed page is driven by its categories: Message channels → WhatsApp / Email / SMS, no tab strip of its own', async ({ page }) => {
+    await go(page, '/admin/org/channels?tab=email');
+    await expect(page.locator('[data-testid="settings-shell"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('pf-hero-band .pf-hb-tabs')).toHaveCount(0);
     if (!isPhone()) {
-      await expect(tid(page, 'tp-nav-title')).toHaveText('Patient and order numbers');
-      await expect(tid(page, 'tp-item-order')).toHaveAttribute('aria-current', 'true');
-      await tid(page, 'tp-item-patient').click();
-      await expect(page).toHaveURL(/tab=patient/);
+      await expect(tid(page, 'tp-nav-title')).toHaveText('WhatsApp, email and SMS accounts');
+      await expect(tid(page, 'tp-item-email')).toHaveAttribute('aria-current', 'true');
+      await tid(page, 'tp-item-sms').click();
+      await expect(page).toHaveURL(/tab=sms/);
       await shot(page, 'settings-inside-numbers');
-    } else {
-      await expect(tid(page, 'tp-back')).toBeVisible();
     }
   });
 
   test('old deep links open the new home', async ({ page }) => {
     await go(page, '/admin/manage?cat=org');
     await expect(page).toHaveURL(/\/admin\?section=profile/, { timeout: 60_000 });
+    await page.waitForTimeout(800);   // the inline page settles (WebKit: a late in-app replace interrupts the next goto)
     await go(page, '/lab/settings');
     await expect(page).toHaveURL(/\/admin\?section=lab/, { timeout: 60_000 });
     await go(page, '/admin/lab-settings?tab=queues');
@@ -135,8 +124,7 @@ test.describe('settings two-panel', () => {
     await go(page, '/admin/organization?tab=order');
     await expect(page).toHaveURL(/\/admin\/org\/numbers\?tab=order/, { timeout: 60_000 });
     await go(page, '/admin/partners');
-    await expect(page).toHaveURL(/\/admin\/(lab\/outsourcing|referral-labs)/, { timeout: 60_000 });
-    await expect(tid(page, 'tp-nav-title')).toHaveText('Outsourcing'); // the in-app hop to the first category has settled
+    await expect(page).toHaveURL(/\/admin\/referral-labs/, { timeout: 60_000 });
     await page.waitForTimeout(800);
     await go(page, '/admin/modules');
     await expect(page).toHaveURL(/\/admin$/, { timeout: 60_000 });

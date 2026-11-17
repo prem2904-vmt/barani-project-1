@@ -92,8 +92,7 @@ describe('Users & access — loading feedback', () => {
     const { el } = render(UserEditComponent, { id: 'u1', slow: { '/api/users/': rec$ } });
     expect(el.querySelector('.pf-ue-loading pf-skeleton-form[aria-busy="true"]')).not.toBeNull();
     expect(el.querySelector('.pf-band-body input.pf-input')).toBeNull();
-    const save = el.querySelector<HTMLButtonElement>('.pf-uf-primary')!;
-    expect(save.disabled).toBe(true);
+    expect(el.querySelector('[data-testid="ue-save"]')).toBeNull();   // the Save bar appears only once something changed
   });
 
   it('Edit user: the record lands → skeleton held for the minimum, then the real form', async () => {
@@ -111,8 +110,9 @@ describe('Users & access — loading feedback', () => {
 
   it('Edit user: Save is disabled + aria-busy the same frame, dots after 150ms', () => {
     const put$ = new Subject<unknown>();
-    const { f, el } = render(UserEditComponent, { id: 'u1', put$ });
-    const save = el.querySelector<HTMLButtonElement>('.pf-uf-primary')!;
+    const { f, el, c } = render(UserEditComponent, { id: 'u1', put$ });
+    c.patch({ firstName: 'Premnath' }); f.detectChanges();   // a change → the card's Save bar
+    const save = el.querySelector<HTMLButtonElement>('[data-testid="ue-save"]')!;
     expect(save.disabled).toBe(false);
     save.click();
     f.detectChanges();
@@ -147,12 +147,14 @@ describe('Users & access — loading feedback', () => {
     expect(el.querySelector('.pf-ua-grid pf-skeleton-table')).toBeNull();
   });
 
-  it('Users list: a row\'s Edit marks the pressed button busy (held until the editor opens)', () => {
-    const { c, pageOpen } = render(UsersAccessComponent);
+  it('Users list: a row\'s Edit opens the user BESIDE the grid (no page change; ?edit=<id> keeps it linkable)', () => {
+    const { c } = render(UsersAccessComponent);
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     const btn = document.createElement('button');
     c.gridContext.editUser(users[0], btn);
-    expect(pageOpen.markSource).toHaveBeenCalledWith(btn);
-    expect(navigate).toHaveBeenCalledWith(['/admin/users', 'u1', 'edit']);
+    expect(c.panelUserId()).toBe('u1');
+    expect(navigate).toHaveBeenCalledWith([], expect.objectContaining({ queryParams: { edit: 'u1' } }));
+    c.closePanel();
+    expect(c.panelUserId()).toBeNull();
   });
 });

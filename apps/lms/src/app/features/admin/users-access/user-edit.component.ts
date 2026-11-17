@@ -1,4 +1,6 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal, ElementRef, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal, untracked, ElementRef, viewChild } from '@angular/core';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
+import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
@@ -26,6 +28,11 @@ import { DEPARTMENTS_HINT, UserDepartmentsRow, viaRoleLabels } from './consultan
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
+import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
+import { HasUnsavedChanges, confirmLeaveUnsaved, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
+import { DialogService } from '../../../core/services/dialog.service';
+import { SG_NARROW_MQ, sgMedia } from '../../../shared/settings-grid/settings-grid';
+import { Permission } from '../../../shared/models/user.model';
 import { SCOPE_HINT, applyScopePick, scopeOptions as buildScopeOptions, scopePayload, scopeValuesFromRoles, soleScope } from './branch-scope';
 
 /** Did the admin change the registration number (trim-insensitive)? */
@@ -51,6 +58,7 @@ interface EditForm {
   selector: 'pf-user-edit',
   standalone: true,
   imports: [
+    SettingsSavebarComponent,
     FormsModule,
     RouterLink,
     ScreenHeaderComponent,
@@ -62,43 +70,65 @@ interface EditForm {
     BusyDirective,
     SkeletonFormComponent,
     SkeletonCardComponent,
+    SettingRowComponent,
+    NgTemplateOutlet,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (panel()) {
+      <!-- PANEL (owner 2026-11-17: "too many clicks"): the whole user on ONE scrolling form beside the grid —
+           account actions in the head, Save at the foot. Same payloads and validation as the page. -->
+      <div class="ue-panel" data-testid="ue-panel">
+        <header class="pf-card__head ue-panel__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="ue-panel__title">
+            <span class="ue-strip__name pf-uf-ctx__text">{{ displayPreview() || loadedName() || 'User' }}</span>
+            <span class="ue-strip__meta">{{ username() }}@if (username()) { · }{{ isActive() ? 'Active' : 'Inactive' }}</span>
+          </span>
+          <span class="pf-card__spacer"></span>
+          @if (loaded()) {
+            <button type="button" class="pf-rowact pf-rowact--icon pf-sg-rowact-sm pf-ue-reset press" [disabled]="accountBusy()" [pfBusy]="accountAction() === 'reset'"
+                    (click)="resetPassword()" aria-label="Reset password" title="Reset password">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+              <span class="pf-rowact__t">Reset password</span>
+            </button>
+            <button type="button" class="pf-rowact pf-rowact--icon pf-sg-rowact-sm pf-ue-active press" [disabled]="accountBusy()" [pfBusy]="accountAction() === 'active'"
+                    (click)="toggleActive()" [attr.aria-label]="isActive() ? 'Deactivate' : 'Reactivate'" [title]="isActive() ? 'Deactivate' : 'Reactivate'">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg>
+              <span class="pf-rowact__t">{{ isActive() ? 'Deactivate' : 'Reactivate' }}</span>
+            </button>
+          }
+          <button type="button" class="pf-btn pf-btn--icon ue-panel__close" (click)="requestClose()" aria-label="Close" title="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </header>
+        <div class="pf-card__body ue-panel__body">
+          @if (recordSkeleton()) {
+            <pf-skeleton-form [fields]="6" [cols]="1" label="Loading user…"></pf-skeleton-form>
+          } @else {
+            <h3 class="ue-panel__sec">Profile</h3>
+            <ng-container *ngTemplateOutlet="secProfile"></ng-container>
+            <h3 class="ue-panel__sec">Branches</h3>
+            <ng-container *ngTemplateOutlet="secBranches"></ng-container>
+            <h3 class="ue-panel__sec">Roles <span class="ue-panel__note" data-testid="ue-perm-note">{{ permSummary() }}</span></h3>
+            <ng-container *ngTemplateOutlet="secRoles"></ng-container>
+            <h3 class="ue-panel__sec">Validates for</h3>
+            <ng-container *ngTemplateOutlet="secValidates"></ng-container>
+          }
+        </div>
+        <div class="pf-card__foot ue-panel__foot">
+          <button type="button" class="pf-btn pf-btn--tertiary press" (click)="requestClose()">Cancel</button>
+          <button type="button" class="pf-btn pf-btn--primary pf-uf-primary press" [disabled]="!canSave() || saving() || recordSkeleton()"
+                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
+        </div>
+      </div>
+    } @else {
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
         <!-- ND "Editors": band = back · tenant · the ONE primary; the pill is
              the CONTEXT BAR (the user being edited as read-only chips). -->
-        <pf-hero-band [back]="true" [backTo]="'/admin/users?tab=users'" [customSearch]="true" [contextBar]="true">
-          <ng-container band-actions>
-            <!-- Account actions (owner): the list's row actions + their
-                 confirms, as band secondaries. Icons on phones. -->
-            @if (loaded()) {
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ue-reset press"
-                      [disabled]="accountBusy()" [pfBusy]="accountAction() === 'reset'" pfBusyLabel="Resetting…" (click)="resetPassword()"
-                      aria-label="Reset password" title="Reset password">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
-                Reset password
-              </button>
-              <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ue-active press"
-                      [disabled]="accountBusy()" [pfBusy]="accountAction() === 'active'" pfBusyLabel="Updating…" (click)="toggleActive()"
-                      [attr.aria-label]="isActive() ? 'Deactivate' : 'Reactivate'" [title]="isActive() ? 'Deactivate' : 'Reactivate'">
-                @if (isActive()) {
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>
-                  Deactivate
-                } @else {
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
-                  Reactivate
-                }
-              </button>
-            }
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
-                    [disabled]="!canSave() || saving() || recordSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
-                    [attr.aria-label]="saving() ? 'Saving' : 'Save changes'" title="Save changes">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-              {{ saving() ? 'Saving…' : 'Save changes' }}
-            </button>
-          </ng-container>
+        <pf-hero-band [back]="true" [backTo]="'/admin?section=people'" [customSearch]="true" [contextBar]="true"
+                      [backAction]="narrow() && sectionPicked() ? backToSections : null">
           <div band-search class="pf-ctx pf-uf-ctx">
             <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
             <span class="pf-ctx__primary pf-uf-ctx__name">
@@ -121,167 +151,193 @@ interface EditForm {
         </pf-touch-btn>
       </pf-screen-header>
 
-      <div class="pf-band-body">
+      <div class="pf-band-body pf-band-body--fill ue-body">
         @if (recordSkeleton()) {
-          <!-- Opening a user: the editor's own shape until the record lands
-               (PF-PATTERN "Loading feedback") — never a blank form. -->
-          <div class="pf-uf-body pf-ue-loading">
-            <div class="pf-uf-grid2">
-              <section class="pf-card pf-uf-card"><div class="pf-card__body"><pf-skeleton-form [fields]="6" [cols]="2" label="Loading user…"></pf-skeleton-form></div></section>
-              <section class="pf-card pf-uf-card"><div class="pf-card__body"><pf-skeleton-card [lines]="4" [boxed]="false" label="Loading roles…"></pf-skeleton-card></div></section>
-            </div>
+          <!-- Opening a user: the editor's own shape until the record lands — never a blank form. -->
+          <div class="pf-uf-body pf-ue-loading ue-loading">
+            <section class="pf-card ue-strip"><div class="pf-card__body"><pf-skeleton-form [fields]="2" [cols]="2" label="Loading user…"></pf-skeleton-form></div></section>
+            <section class="pf-card ue-loading__main"><div class="pf-card__body"><pf-skeleton-card [lines]="6" [boxed]="false" label="Loading roles…"></pf-skeleton-card></div></section>
           </div>
         } @else {
-        <div class="pf-uf-body">
-          <div class="pf-uf-grid2">
-            <!-- PROFILE -->
-            <section class="pf-card pf-uf-card">
-              <div class="pf-card__head">
-                <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-                <h2 class="pf-card__label pf-uf-h">Profile</h2>
-                <span class="pf-card__note"><span class="pf-uf-req">*</span> required</span>
-              </div>
-              <div class="pf-card__body">
-                <div class="pf-uf-fields">
-                  <div class="pf-uf-name-row">
-                    <div class="pf-field">
-                      <span class="pf-field__lbl">Title</span>
-                      <pf-select [options]="titleOptions" [value]="form().title" placeholder="—"
-                                 (valueChange)="patch({ title: $any($event) ?? '' })"></pf-select>
-                    </div>
-                    <label class="pf-field">
-                      <span class="pf-field__lbl">First name</span>
-                      <input type="text" pfAlpha #nameInput class="pf-input" [class.pf-input--error]="!!fieldError()['firstName']"
-                             placeholder="e.g. Prem" [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
-                      @if (fieldError()['firstName']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
-                    </label>
-                    <label class="pf-field">
-                      <span class="pf-field__lbl">Last name</span>
-                      <input type="text" pfAlpha class="pf-input" [class.pf-input--error]="!!fieldError()['fathersName']"
-                             placeholder="e.g. Kumar" [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
-                      @if (fieldError()['fathersName']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
-                    </label>
-                  </div>
-                  <div class="pf-uf-account-row">
-                    @if (username()) {
-                      <label class="pf-field">
-                        <span class="pf-field__lbl">Username</span>
-                        <input type="text" class="pf-input pf-num" [value]="username()" readonly aria-readonly="true" />
-                        <p class="pf-field__hint">The login handle can't be changed. Use “Reset password” in Users to issue a new password.</p>
-                      </label>
-                    }
-                    <div class="pf-field" [class.pf-uf-span]="!username()">
-                      <span class="pf-field__lbl">Phone</span>
-                      <div class="pf-uf-phone" [class.pf-uf-phone--error]="!!fieldError()['phone']">
-                        <pf-select class="pf-uf-phone__cc" [options]="countryOptions" [value]="countryCode()"
-                                   [searchable]="true" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
-                        <span class="pf-uf-phone__sep" aria-hidden="true"></span>
-                        <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()"
-                               class="pf-num pf-uf-phone__num" aria-label="Mobile number"
-                               [class.pf-input--error]="!!fieldError()['phone']"
-                               [placeholder]="phoneMaxDigits() + '-digit mobile number'"
-                               [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
-                      </div>
-                      @if (fieldError()['phone']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
-                    </div>
-                  </div>
-                  <label class="pf-field">
-                    <span class="pf-field__lbl">Registration number</span>
-                    <input type="text" class="pf-input pf-num pf-ue-regno" maxlength="64" autocomplete="off"
-                           [class.pf-input--error]="!!fieldError()['registrationId']"
-                           placeholder="e.g. TN-12345" aria-label="Registration number"
-                           [ngModel]="form().registrationId" (ngModelChange)="patch({ registrationId: $event })" />
-                    @if (fieldError()['registrationId']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
-                    <p class="pf-field__hint">Medical council registration for doctors and consultants — prints under their signature on reports. They can also add it themselves in My signature.</p>
-                  </label>
-                </div>
-              </div>
-            </section>
+          <!-- SUMMARY strip: who this is, at a glance. -->
+          <section class="pf-card ue-strip" aria-label="User">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <span class="ue-strip__name">{{ displayPreview() || loadedName() || 'User' }}</span>
+            @if (username()) { <span class="ue-strip__meta pf-num">{{ username() }}</span> }
+            <span class="pf-sg-pill" [class.pf-sg-pill--on]="isActive()" data-testid="ue-status">{{ isActive() ? 'Active' : 'Inactive' }}</span>
+            <span class="ue-strip__meta" data-testid="ue-branch-summary">{{ scopeSummary() }}</span>
+            <span class="pf-card__spacer"></span>
+            <span class="ue-strip__meta">{{ permSummary() }}</span>
+            <!-- Account actions IN the pane (owner: no band buttons in Settings) — the list's icons + confirms. -->
+            @if (loaded()) {
+                <button type="button" class="pf-rowact pf-rowact--icon pf-sg-rowact-sm pf-ue-reset press" [disabled]="accountBusy()" [pfBusy]="accountAction() === 'reset'"
+                        (click)="resetPassword()" aria-label="Reset password" title="Reset password">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+                  <span class="pf-rowact__t">Reset password</span>
+                </button>
+                <button type="button" class="pf-rowact pf-rowact--icon pf-sg-rowact-sm pf-ue-active press" [disabled]="accountBusy()" [pfBusy]="accountAction() === 'active'"
+                        (click)="toggleActive()" [attr.aria-label]="isActive() ? 'Deactivate' : 'Reactivate'" [title]="isActive() ? 'Deactivate' : 'Reactivate'">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg>
+                  <span class="pf-rowact__t">{{ isActive() ? 'Deactivate' : 'Reactivate' }}</span>
+                </button>
+              }
+          </section>
 
-            <!-- BRANCH -->
-            <section class="pf-card pf-uf-card">
-              <div class="pf-card__head">
-                <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg></span>
-                <h2 class="pf-card__label pf-uf-h">Branch scope</h2>
+          <div class="pf-sg-panels ue-panels" [class.pf-sg-panels--narrow]="narrow()">
+            <!-- SIDE card (LEFT): the editor's sections. -->
+            @if (!narrow() || !sectionPicked()) {
+              <aside class="pf-card pf-sg-side ue-side" aria-label="Sections">
+                <header class="pf-card__head">
+                  <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+                  <span class="pf-card__label">Edit user</span>
+                </header>
+                <ul class="pf-card__body ue-secs">
+                  @for (sec of sections(); track sec.id) {
+                    <li>
+                      <button type="button" class="ue-sec" [attr.aria-pressed]="section() === sec.id" [attr.data-testid]="'ue-sec-' + sec.id" (click)="pickSection(sec.id)">
+                        <span class="ue-sec__name">{{ sec.label }}@if (sec.req) {<span class="pf-uf-req">*</span>}</span>
+                        <span class="ue-sec__note" [class.ue-sec__note--err]="sec.err">{{ sec.note }}</span>
+                      </button>
+                    </li>
+                  }
+                </ul>
+              </aside>
+            }
+
+            <!-- MAIN card (RIGHT): the selected section. -->
+            @if (!narrow() || sectionPicked()) {
+            <section class="pf-card pf-sg-main ue-main" [attr.aria-label]="sectionLabel()">
+              <header class="pf-card__head pf-sg-main__head">
+                <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path [attr.d]="sectionIcon()"/></svg></span>
+                <span class="pf-card__label">{{ sectionLabel() }}</span>
+                @switch (section()) {
+                  @case ('profile') { <span class="pf-card__note"><span class="pf-uf-req">*</span> required</span> }
+                  @case ('roles') { <span class="pf-card__note" data-testid="ue-perm-note">{{ permSummary() }} · combined from every role switched on</span> }
+                  @case ('validates') { <span class="pf-card__note">For consultants who validate results</span> }
+                }
+              </header>
+              <div class="pf-card__body ue-main__body">
+                @switch (section()) {
+                  @case ('profile') { <ng-container *ngTemplateOutlet="secProfile"></ng-container> }
+                  @case ('branches') { <ng-container *ngTemplateOutlet="secBranches"></ng-container> }
+                  @case ('roles') { <ng-container *ngTemplateOutlet="secRoles"></ng-container> }
+                  @case ('validates') { <ng-container *ngTemplateOutlet="secValidates"></ng-container> }
+                }
               </div>
-              <div class="pf-card__body">
-                <div class="pf-field">
-                  <span class="pf-field__lbl">Branches <span class="pf-uf-req">*</span></span>
-                  <pf-select class="pf-uf-scope" [multiple]="true" [searchable]="true"
-                             [options]="scopeOptions()" [values]="form().scope" placeholder="Pick branches"
-                             (valuesChange)="onScopeChange($event)"></pf-select>
-                  @if (rolesLoaded() && !form().scope.length) { <p class="pf-uf-err">Pick at least one branch, or All branches.</p> }
-                  <p class="pf-field__hint">{{ scopeHint }}</p>
-                </div>
-              </div>
+              <pf-settings-savebar [dirty]="hasUnsavedChanges()" [saving]="saving()" [canSave]="canSave() && !recordSkeleton()"
+                                   [canDiscard]="false" saveTestId="ue-save" (save)="save()"></pf-settings-savebar>
             </section>
+            }
           </div>
-
-          <!-- ROLES -->
-          <section class="pf-card pf-uf-card">
-            <div class="pf-card__head">
-              <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
-              <h2 class="pf-card__label pf-uf-h">Roles <span class="pf-uf-req">*</span></h2>
-              <span class="pf-card__note">The user gets the combined permissions of every role switched on.</span>
-            </div>
-            <div class="pf-card__body">
-              <div class="pf-uf-roles">
-                @for (r of roleOptions(); track r.value) {
-                  <button type="button" class="pf-toggle pf-uf-sw press" role="switch" [attr.aria-checked]="hasRole(r.value)"
-                          [class.pf-uf-sw--locked]="r.locked" [attr.aria-disabled]="r.locked || null"
-                          [title]="r.locked ? lockedHint : ''"
-                          (click)="toggleRole(r.value)">
-                    <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-                    <span class="pf-uf-sw__txt">
-                      <span class="pf-uf-sw__name">{{ r.label }}</span>
-                      @if (r.hint) { <span class="pf-uf-sw__what">{{ r.hint }}</span> }
-                      @if (r.locked) { <span class="pf-uf-sw__lock">Kept — you can't assign or remove this role</span> }
-                    </span>
-                  </button>
-                }
-              </div>
-              @if (hasLocked()) { <p class="pf-field__hint pf-uf-lock-note">{{ lockedHint }}</p> }
-            </div>
-          </section>
-
-          <!-- DEPARTMENTS — a consultant's departments (owner 2026-09-27: a
-               pathologist / microbiologist sees only their departments).
-               Stored in each department's validator pool — edited in ONE place,
-               Lab › Collection and queues; here it is read-only. -->
-          <section class="pf-card pf-uf-card pf-ue-depts">
-            <div class="pf-card__head">
-              <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M20 2v17.5a2.5 2.5 0 0 1-5 0V2"/><path d="M3 2h7M14 2h7"/></svg></span>
-              <h2 class="pf-card__label pf-uf-h">Departments</h2>
-              <span class="pf-card__note">For consultants who validate results</span>
-            </div>
-            <div class="pf-card__body">
-              <div class="pf-field">
-                <span class="pf-field__lbl">Validates for</span>
-                <div class="pf-ue-deptlist" data-testid="ue-validates-for">
-                  @for (n of deptNames(); track n) { <span class="pf-chip pf-chip--static">{{ n }}</span> }
-                  @empty { <span class="pf-ue-deptall">All departments</span> }
-                </div>
-                <p class="pf-field__hint">{{ deptHint }}</p>
-                @if (viaRoles().length) {
-                  <p class="pf-field__hint pf-ue-via">Also through a role: {{ viaRoles().join(', ') }}</p>
-                }
-                <a class="pf-ue-deptlink" [routerLink]="validatorPoolsPath" [queryParams]="{ tab: 'assign' }" data-testid="ue-validates-link">
-                  Change who validates which department
-                </a>
-              </div>
-            </div>
-          </section>
-        </div>
         }
       </div>
     </section>
+    }
+
+    <!-- The editor's sections: shown one at a time on the page, all on one scrolling form in the panel. -->
+    <ng-template #secProfile>
+                    <pf-setting-row label="Title">
+                      <pf-select class="ue-ctl ue-ctl--s" [options]="titleOptions" [value]="form().title" placeholder="—"
+                                 (valueChange)="patch({ title: $any($event) ?? '' })"></pf-select>
+                    </pf-setting-row>
+                    <pf-setting-row label="First name *">
+                      <span class="ue-ctlwrap">
+                        <input type="text" pfAlpha #nameInput class="pf-input ue-ctl" [class.pf-input--error]="!!fieldError()['firstName']"
+                               placeholder="e.g. Prem" aria-label="First name" [ngModel]="form().firstName" (ngModelChange)="patch({ firstName: $event })" />
+                        @if (fieldError()['firstName']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
+                      </span>
+                    </pf-setting-row>
+                    <pf-setting-row label="Last name *">
+                      <span class="ue-ctlwrap">
+                        <input type="text" pfAlpha class="pf-input ue-ctl" [class.pf-input--error]="!!fieldError()['fathersName']"
+                               placeholder="e.g. Kumar" aria-label="Last name" [ngModel]="form().fathersName" (ngModelChange)="patch({ fathersName: $event })" />
+                        @if (fieldError()['fathersName']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
+                      </span>
+                    </pf-setting-row>
+                    @if (username()) {
+                      <pf-setting-row label="Username" hint="The login handle can't be changed. Reset password issues a new password.">
+                        <span class="ue-ro pf-num">{{ username() }}</span>
+                      </pf-setting-row>
+                    }
+                    <pf-setting-row label="Phone">
+                      <span class="ue-ctlwrap">
+                        <div class="pf-uf-phone ue-ctl ue-ctl--phone" [class.pf-uf-phone--error]="!!fieldError()['phone']">
+                          <pf-select class="pf-uf-phone__cc" [options]="countryOptions" [value]="countryCode()"
+                                     [searchable]="true" (valueChange)="onCountryCodeChange($any($event))"></pf-select>
+                          <span class="pf-uf-phone__sep" aria-hidden="true"></span>
+                          <input type="tel" pfNumeric [maxDigits]="phoneMaxDigits()" [attr.maxlength]="phoneMaxDigits()"
+                                 class="pf-num pf-uf-phone__num" aria-label="Mobile number"
+                                 [class.pf-input--error]="!!fieldError()['phone']"
+                                 [placeholder]="phoneMaxDigits() + '-digit mobile number'"
+                                 [ngModel]="phoneDigits()" (ngModelChange)="onPhoneChange($event)" />
+                        </div>
+                        @if (fieldError()['phone']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
+                      </span>
+                    </pf-setting-row>
+                    <pf-setting-row label="Registration number" hint="Medical council registration for doctors and consultants — prints under their signature on reports. They can also add it in My signature.">
+                      <span class="ue-ctlwrap">
+                        <input type="text" class="pf-input pf-num pf-ue-regno ue-ctl" maxlength="64" autocomplete="off"
+                               [class.pf-input--error]="!!fieldError()['registrationId']"
+                               placeholder="e.g. TN-12345" aria-label="Registration number"
+                               [ngModel]="form().registrationId" (ngModelChange)="patch({ registrationId: $event })" />
+                        @if (fieldError()['registrationId']; as msg) { <p class="pf-uf-err">{{ msg }}</p> }
+                      </span>
+                    </pf-setting-row>
+    </ng-template>
+    <ng-template #secBranches>
+                    <pf-setting-row label="Branches *" [hint]="scopeHint">
+                      <span class="ue-ctlwrap">
+                        <pf-select class="pf-uf-scope ue-ctl ue-ctl--l" [multiple]="true" [searchable]="true"
+                                   [options]="scopeOptions()" [values]="form().scope" placeholder="Pick branches"
+                                   (valuesChange)="onScopeChange($event)"></pf-select>
+                        @if (rolesLoaded() && !form().scope.length) { <p class="pf-uf-err">Pick at least one branch, or All branches.</p> }
+                      </span>
+                    </pf-setting-row>
+    </ng-template>
+    <ng-template #secRoles>
+                    <!-- Roles: a compact Test Master-style list (Role | what it means | switch). -->
+                    <div class="pf-uf-roles ue-roles" role="list">
+                      @for (r of roleOptions(); track r.value) {
+                        <div class="ue-role" role="listitem" [class.ue-role--on]="hasRole(r.value)">
+                          <span class="ue-role__name">{{ r.label }}</span>
+                          <span class="ue-role__what">{{ r.locked ? 'Kept — you can\'t assign or remove this role' : (r.hint || '') }}</span>
+                          <button type="button" class="pf-toggle pf-uf-sw ue-role__sw press" role="switch" [attr.aria-checked]="hasRole(r.value)"
+                                  [class.pf-uf-sw--locked]="r.locked" [attr.aria-disabled]="r.locked || null"
+                                  [attr.aria-label]="r.label" [title]="r.locked ? lockedHint : ''"
+                                  (click)="toggleRole(r.value)">
+                            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                    @if (!form().roleIds.length) { <p class="pf-uf-err ue-pad">Switch on at least one role.</p> }
+                    @if (hasLocked()) { <p class="pf-field__hint pf-uf-lock-note ue-pad">{{ lockedHint }}</p> }
+    </ng-template>
+    <ng-template #secValidates>
+                    <!-- Read-only here: validator pools are edited in ONE place, Lab › Collection and queues. -->
+                    <div class="pf-ue-depts">
+                      <pf-setting-row label="Validates for" [hint]="deptHint">
+                        <div class="pf-ue-deptlist" data-testid="ue-validates-for">
+                          @for (n of deptNames(); track n) { <span class="pf-chip pf-chip--static">{{ n }}</span> }
+                          @empty { <span class="pf-ue-deptall">All departments</span> }
+                        </div>
+                      </pf-setting-row>
+                      @if (viaRoles().length) {
+                        <p class="pf-field__hint pf-ue-via ue-pad">Also through a role: {{ viaRoles().join(', ') }}</p>
+                      }
+                      <a class="pf-ue-deptlink ue-pad" [routerLink]="validatorPoolsPath" [queryParams]="{ tab: 'assign' }" data-testid="ue-validates-link">
+                        Change who validates which department
+                      </a>
+                    </div>
+    </ng-template>
   `,
-  styleUrl: './user-form.styles.scss'
+  styleUrls: ['./user-form.styles.scss', '../../../shared/settings-grid/settings-grid.scss', './user-edit.component.scss']
 })
-export class UserEditComponent implements OnInit {
+export class UserEditComponent implements OnInit, HasUnsavedChanges {
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   /** The pill's pencil: put the caret in the name field. */
   editName(): void {
+    if (this.section() !== 'profile') { this.pickSection('profile'); setTimeout(() => this.editName()); return; }
     const el = this.nameInput()?.nativeElement;
     if (el) { el.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); el.focus(); el.select(); }
   }
@@ -292,7 +348,13 @@ export class UserEditComponent implements OnInit {
   private readonly navBack = inject(NavBackService);
   protected readonly theme = inject(ThemeService);
   private readonly route = inject(ActivatedRoute);
-  private readonly id = this.route.snapshot.paramMap.get('id')!;
+  /** Panel mode: the user to edit (the Users grid opens the editor beside itself); else the route's :id. */
+  readonly panelId = input<string | null>(null);
+  readonly panel = computed(() => !!this.panelId());
+  readonly closed = output<void>();
+  readonly saved = output<void>();
+  private readonly routeId = this.route.snapshot.paramMap.get('id');
+  private get id(): string { return this.panelId() ?? this.routeId ?? ''; }
 
   private readonly _roles = signal<Role[]>([]);
   private readonly _branches = signal<Branch[]>([]);
@@ -389,11 +451,75 @@ export class UserEditComponent implements OnInit {
   /** The ONE home of the validator pools. */
   protected readonly validatorPoolsPath = LAB_PAGES.collection.path;
 
+  // ── Two-panel editor (owner 2026-11-17): sections LEFT, the selected section RIGHT ──
+  readonly narrow = sgMedia(SG_NARROW_MQ);
+  readonly section = signal<'profile' | 'branches' | 'roles' | 'validates'>('profile');
+  /** Phone: the sections list first, then the picked section. */
+  readonly sectionPicked = signal(false);
+  readonly sections = computed(() => {
+    const f = this._form();
+    const fe = this._fieldError();
+    const nRoles = f.roleIds.length;
+    return [
+      { id: 'profile' as const, label: 'Profile', req: true, note: this.displayPreview() || 'Name, phone, registration', err: !!(fe['firstName'] || fe['fathersName'] || fe['phone'] || fe['registrationId']) },
+      { id: 'branches' as const, label: 'Branches', req: true, note: f.scope.length ? this.scopeSummary() : 'None picked', err: this.rolesLoaded() && !f.scope.length },
+      { id: 'roles' as const, label: 'Roles', req: true, note: nRoles ? `${nRoles} ${nRoles === 1 ? 'role' : 'roles'}` : 'None on', err: !nRoles },
+      { id: 'validates' as const, label: 'Validates for', req: false, note: this.deptNames().length ? this.deptNames().join(', ') : 'All departments', err: false },
+    ];
+  });
+  readonly sectionLabel = computed(() => this.sections().find(x => x.id === this.section())?.label ?? '');
+  readonly sectionIcon = computed(() => ({
+    profile: 'M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z',
+    branches: 'M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6',
+    roles: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+    validates: 'M9 2v17.5a2.5 2.5 0 0 1-5 0V2M20 2v17.5a2.5 2.5 0 0 1-5 0V2M3 2h7M14 2h7',
+  })[this.section()]);
+  pickSection(id: 'profile' | 'branches' | 'roles' | 'validates') { this.section.set(id); this.sectionPicked.set(true); }
+  /** Phone: the band's ONE back returns from a section to the sections list first. */
+  readonly backToSections = (): void => this.sectionPicked.set(false);
+  /** A field error (server or validation) brings its section forward. */
+  private readonly showErrors = effect(() => {
+    const fe = this._fieldError();
+    if (fe['firstName'] || fe['fathersName'] || fe['phone'] || fe['registrationId']) untracked(() => this.section.set('profile'));
+  });
+  /** "All branches" / "Main, Annex" — the scope's labels. */
+  readonly scopeSummary = computed(() => {
+    const opts = this.scopeOptions();
+    const labels = this._form().scope.map(v => opts.find(o => o.value === v)?.label ?? v);
+    return labels.length ? labels.join(', ') : 'No branch';
+  });
+  /** Combined permissions of the roles switched on ("8 of 70 permissions from 1 role"). */
+  private readonly _permTotal = signal<number | null>(null);
+  private readonly _rolePerms = signal<Map<string, string[]>>(new Map());
+  readonly permSummary = computed(() => {
+    const ids = this._form().roleIds;
+    const map = this._rolePerms();
+    const n = ids.length;
+    const roles = `${n} ${n === 1 ? 'role' : 'roles'}`;
+    if (this._permTotal() == null || ids.some(id => !map.has(id))) return n ? `From ${roles}` : 'No role on';
+    const set = new Set(ids.flatMap(id => map.get(id) ?? []));
+    return `${set.size} of ${this._permTotal()} permissions from ${roles}`;
+  });
+  private readonly loadRolePerms = effect(() => {
+    const ids = this._form().roleIds;
+    const have = untracked(() => this._rolePerms());
+    for (const id of ids) {
+      if (have.has(id) || this.pendingPerms.has(id)) continue;
+      this.pendingPerms.add(id);
+      this.api.get<string[]>(`/api/roles/${id}/permissions`).subscribe({
+        next: l => { this.pendingPerms.delete(id); this._rolePerms.update(m => new Map(m).set(id, l ?? [])); },
+        error: () => this.pendingPerms.delete(id),
+      });
+    }
+  });
+  private readonly pendingPerms = new Set<string>();
+
   readonly canSave = computed(() => this._form().roleIds.length > 0 && this._form().scope.length > 0);
 
   ngOnInit() {
     this.destroyRef.onDestroy(() => this.recordHold.cancel());
     this.api.get<Role[]>('/api/roles/').subscribe({ next: l => this._roles.set(l ?? []) });
+    this.api.get<Permission[]>('/api/permissions').subscribe({ next: l => this._permTotal.set((l ?? []).length), error: () => {} });
     this.api.get<Branch[]>('/api/tenants/branches').subscribe({
       next: l => {
         const branches = l ?? [];
@@ -435,6 +561,7 @@ export class UserEditComponent implements OnInit {
         const held = [...new Set(rs.map(r => r.roleId))];
         this._heldIds.set(held);
         this._form.update(v => ({ ...v, roleIds: held, scope }));
+        this._savedForm.set(this.formKey());
         this.recordHold.done();
       },
       error: () => this.recordHold.done(),
@@ -472,7 +599,14 @@ export class UserEditComponent implements OnInit {
     const keys = Object.keys(p);
     if (keys.length) this._fieldError.update(fe => { const n = { ...fe }; for (const k of keys) delete n[k]; return n; });
   }
-  back() { this.navBack.backTo('/admin/users?tab=users'); }
+  back() { this.navBack.backTo('/admin?section=people'); }
+  /** Saved: the panel tells its grid (and closes); the page goes back where the person came from. */
+  private finish() { if (this.panel()) { this.saved.emit(); this.closed.emit(); } else this.back(); }
+  private readonly dialog = inject(DialogService);
+  /** Panel close / Cancel: "Save your changes?" first when something changed. */
+  async requestClose(): Promise<void> {
+    if (await confirmLeaveUnsaved(this.dialog, this)) this.closed.emit();
+  }
   hasRole(id: string) { return this._form().roleIds.includes(id); }
   toggleRole(id: string) {
     if (this.roleOptions().find(r => r.value === id)?.locked) return;
@@ -482,29 +616,50 @@ export class UserEditComponent implements OnInit {
     this.patch({ scope: applyScopePick(this._form().scope, next ?? [], this._branches()) });
   }
 
-  save() {
-    if (!this.canSave()) return;
-    const i = this._form();
-    this._saving.set(true);
-    this._fieldError.set({});
-    // Details first, then roles (full-replace). Both must land for a clean save.
-    this.api.patch<User>(`/api/users/${this.id}`, {
-      title: i.title, firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
-      // Only when changed (blank clears); the server audit-logs the change.
-      ...(regIdChanged(i.registrationId, this._loadedUser()?.registrationId) ? { registrationId: i.registrationId.trim() } : {}),
-    }).subscribe({
-      next: () => {
-        // Roles apply at every selected branch (one assignment per role × branch).
-        this.api.put(`/api/users/${this.id}/roles`, {
-          roleIds: i.roleIds, ...scopePayload(i.scope, this._branches()),
-        }).subscribe({
-          next: () => { this._saving.set(false); this.toasts.success('User updated'); this.back(); },
-          error: e => { this._saving.set(false); this.showError(e); },
-        });
-      },
-      error: e => { this._saving.set(false); this.showError(e); },
+  // ── Unsaved changes (owner 2026-11-17: ask before leaving / closing the panel) ──
+  readonly unsavedLabel = 'this user';
+  private readonly _savedForm = signal('');
+  private formKey(): string { const f = this._form(); return JSON.stringify({ ...f, roleIds: [...f.roleIds].sort(), scope: [...f.scope].sort() }); }
+  hasUnsavedChanges(): boolean { return !this._saving() && this._savedForm() !== '' && this.formKey() !== this._savedForm(); }
+  saveChanges(): Promise<boolean> { return this.persist(false); }
+  private readonly unloadGuard = guardUnsavedOnUnload(this);
+
+  save() { void this.persist(true); }
+
+  private persist(leave: boolean): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      if (!this.canSave()) { resolve(false); return; }
+      const i = this._form();
+      this._saving.set(true);
+      this._fieldError.set({});
+      const fail = (e: unknown) => { this._saving.set(false); this.showError(e); resolve(false); };
+      // Details first, then roles (full-replace). Both must land for a clean save.
+      this.api.patch<User>(`/api/users/${this.id}`, {
+        title: i.title, firstName: i.firstName, fathersName: i.fathersName, phone: i.phone || undefined,
+        // Only when changed (blank clears); the server audit-logs the change.
+        ...(regIdChanged(i.registrationId, this._loadedUser()?.registrationId) ? { registrationId: i.registrationId.trim() } : {}),
+      }).subscribe({
+        next: () => {
+          // Roles apply at every selected branch (one assignment per role × branch).
+          this.api.put(`/api/users/${this.id}/roles`, {
+            roleIds: i.roleIds, ...scopePayload(i.scope, this._branches()),
+          }).subscribe({
+            next: () => {
+              this._saving.set(false);
+              this._savedForm.set(this.formKey());
+              this.toasts.success('User updated');
+              resolve(true);
+              if (leave) this.finish();
+              else if (this.panel()) this.saved.emit();
+            },
+            error: fail,
+          });
+        },
+        error: fail,
+      });
     });
   }
+
 
   /** Route field-named backend failures to the offending input; toast the rest. */
   private showError(e: unknown) {

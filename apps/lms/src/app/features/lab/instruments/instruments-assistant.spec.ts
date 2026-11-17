@@ -39,7 +39,8 @@ const GLU: MappingPrefill = { instrumentId: 'i1', analyzerCode: 'GLU', unit: 'mg
 const beta = (on: boolean) => ({ provide: BetaFeaturesService, useValue: { enabled: (k: string) => on && k === 'assistant', ensureLoaded: async () => undefined } });
 const assistantApi = { provide: AssistantApiService, useValue: { providers: () => of([{ id: 'gemini', label: 'Gemini', available: true }]), chat: vi.fn() } };
 const senseOn = SENSE_ON;
-const sparkle = (el: HTMLElement) => el.querySelector('pf-hero-band .pf-hb__actions pf-assistant-button button');
+// The sparkle: in the band on the editor / wizard; in the card head on the list (no band buttons in Settings lists).
+const sparkle = (el: HTMLElement) => el.querySelector('pf-hero-band .pf-hb__actions pf-assistant-button button, .pf-card__head pf-assistant-button button');
 
 describe('Instruments assistant — band button (beta gate)', () => {
   afterEach(() => TestBed.resetTestingModule());

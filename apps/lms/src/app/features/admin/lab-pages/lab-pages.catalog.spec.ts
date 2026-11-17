@@ -12,11 +12,12 @@ describe('Lab settings pages — catalog', () => {
   const routes = readFileSync('apps/lms/src/app/features/admin/settings/settings.routes.ts', 'utf8');
   const map = readFileSync('apps/lms/src/app/features/admin/settings/settings-map.ts', 'utf8');
 
-  it('has the eight pages of the re-home, each under /admin/lab/', () => {
+  it('has the seven pages of the re-home under /admin/lab/; report options are tabs of Report design (/admin/reports)', () => {
     expect(pages.map(p => p.path)).toEqual([
       '/admin/lab/sample-numbers', '/admin/lab/collection', '/admin/lab/results', '/admin/lab/home-collection',
-      '/admin/lab/front-desk', '/admin/lab/alerts', '/admin/lab/numbers', '/admin/lab/report-options',
+      '/admin/lab/front-desk', '/admin/lab/alerts', '/admin/lab/numbers', '/admin/reports',
     ]);
+    expect(LAB_PAGES.reportOptions.categories.map(c => c.id)).toEqual(['sending']);
   });
 
   it('every page is guarded (route access) and routed, and category ids are unique', () => {
@@ -42,7 +43,9 @@ describe('Lab settings pages — catalog', () => {
     for (const t of [...Object.values(LEGACY_LAB_SETTINGS_TARGET), ...Object.values(LEGACY_LAB_SETTINGS_CARD_TARGET)]) {
       const page = pages.find(p => p.path === t.path);
       expect(page, t.path).toBeDefined();
-      expect(page!.categories.map(c => c.id), `${t.path} ${t.tab}`).toContain(t.tab);
+      // Report design's own tabs count too: Report notes is a row of its Results table tab (owner 2026-11-17).
+      const ids = page!.path === LAB_PAGES.reportOptions.path ? [...page!.categories.map(c => c.id), 'table'] : page!.categories.map(c => c.id);
+      expect(ids, `${t.path} ${t.tab}`).toContain(t.tab);
     }
   });
 

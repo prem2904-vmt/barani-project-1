@@ -333,12 +333,15 @@ test.describe('the editor band', () => {
 
 test.describe('Settings → Files', () => {
   test('lists the five apps with on/off and who can edit, templates, storage; Save sends the change', async ({ page, context }) => {
-    await boot(page, context, { route: '/admin/files' });
+    // Test Master frame: categories in the side card (?tab=), the picked one in the main card.
+    await boot(page, context, { route: '/admin/files?tab=devices' });
     await expect(tid(page, 'files-settings')).toBeVisible({ timeout: 60_000 });
-    for (const id of ['neuron', 'synapse', 'axon', 'myelin', 'retina']) await expect(tid(page, `files-app-${id}`)).toBeVisible();
     await expect(tid(page, 'files-storage')).toContainText('412 sheets');
     await expect(tid(page, 'files-storage')).toContainText('1.2 GB');
-    await expect(tid(page, 'files-templates-settings')).toContainText('Daily results log');
+    await go(page, '/admin/files?tab=templates');
+    await expect(tid(page, 'files-templates-settings')).toContainText('Daily results log', { timeout: 60_000 });
+    await go(page, '/admin/files?tab=apps');
+    for (const id of ['neuron', 'synapse', 'axon', 'myelin', 'retina']) await expect(tid(page, `files-app-${id}`)).toBeVisible({ timeout: 60_000 });
     await expectLayout(page, 'files settings');
     await shot(page, 'files-settings');
     await tid(page, 'files-toggle-axon').click();
@@ -349,9 +352,9 @@ test.describe('Settings → Files', () => {
   });
 
   test('View only: the page reads, the controls and Save are off, with the plain note', async ({ page, context }) => {
-    await boot(page, context, { route: '/admin/files', full: false });
+    await boot(page, context, { route: '/admin/files?tab=templates', full: false });
     await expect(tid(page, 'files-settings-viewonly')).toContainText('view only', { timeout: 60_000 });
-    await expect(tid(page, 'files-settings-save')).toBeDisabled();
+    await expect(page.locator('[data-testid="files-settings-save"]')).toHaveCount(0);   // view only: no Save bar
     await expect(tid(page, 'files-add-template')).toBeDisabled();
     await shot(page, 'files-settings-viewonly');
   });
@@ -366,8 +369,8 @@ test.describe('Settings → Files', () => {
     await shot(page, 'settings-overview');
     await page.locator('[data-testid="tp-item-files"]').locator('visible=true').first().click();
     await expect(page).toHaveURL(/section=files/);
-    await page.locator('[data-testid="ov-tile-admin-files"]').locator('visible=true').first().click();
-    await expect(page).toHaveURL(/\/admin\/files/);
+    // A section with ONE setting shows it inline (owner): no tile to click.
+    await expect(page.locator('[data-testid="ov-inline"] [data-testid="files-settings"]').first()).toBeAttached({ timeout: 30_000 });
   });
 
   test('without the beta the Files tile and the Files screen do not exist', async ({ page, context }) => {
@@ -387,6 +390,13 @@ test.describe('Start menu and bottom bar', () => {
     await page.waitForTimeout(900);                                   // the menu grows out of the logo and its rows fade in: let it settle
   };
   const menuRow = (page: Page, id: string) => page.locator(`[data-start-menu] [data-sm-item="${id}"]`).locator('visible=true').first();
+  /** The bar's screens are not repeated under More screens: reach one through the menu's search. */
+  const findInMenu = async (page: Page, words: string) => {
+    const input = page.locator('[data-start-menu] .sm-search__input').locator('visible=true').first();
+    await expect(page.locator('[data-start-menu] .sm-rows').locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
+    await input.evaluate((el, w) => { (el as HTMLInputElement).value = w; el.dispatchEvent(new Event('input', { bubbles: true })); }, words);
+    await expect(page.locator('[data-start-menu] .sm-rows[aria-label="Screens"]').locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
+  };
   const press = async (page: Page, id: string) => {
     if (isPhone()) {
       const b = (await menuRow(page, id).boundingBox())!;
@@ -406,7 +416,7 @@ test.describe('Start menu and bottom bar', () => {
     await expect(menuRow(page, 'files-myelin')).toContainText('Myelin · PDFs');
     await expect(menuRow(page, 'files-retina')).toContainText('Retina · images');
     await expect(menuRow(page, 'files-neuron').locator('[data-files-logo="neuron"]')).toBeVisible();
-    await expect(page.locator('[data-start-menu] .sm-sec__t')).toHaveText(['On your bar', 'More screens']);
+    await expect(page.locator('[data-start-menu] .sm-sec__t')).toHaveText(['More screens']);   // the bar is never repeated (owner)
     await expect(page.locator('[data-start-menu] .sm-search__input')).toHaveAttribute('placeholder', 'Search screens and files');
     await expectLayout(page, 'start menu');
     await shot(page, 'start-menu');
@@ -442,15 +452,17 @@ test.describe('Start menu and bottom bar', () => {
     await expect(menu).toHaveCount(0);
     await expect(page.locator('nav [data-files-logo="synapse"], [class*="pf-nav"] [data-files-logo="synapse"], [class*="pf-topnav"] [data-files-logo="synapse"]').locator('visible=true').first()).toBeVisible();
     await openMenu(page);
+    await findInMenu(page, 'synapse');   // on the bar now: reach it via search
     await press(page, 'files-synapse');
     await expect(page.locator('[data-start-menu] [data-sm-ctx-act="unpin"]')).toBeVisible();
     await page.locator('[data-start-menu] [data-sm-ctx-act="unpin"]').click();
-    await expect(page.locator('[data-start-menu] .sm-tile [data-files-logo="synapse"]')).toHaveCount(0);
+    await expect(page.locator('nav [data-files-logo="synapse"], [class*="pf-nav"] [data-files-logo="synapse"], [class*="pf-topnav"] [data-files-logo="synapse"]').locator('visible=true')).toHaveCount(0);
   });
 
   test('an app the admin locked on the bar cannot be unpinned (disabled, "Kept by admin")', async ({ page, context }) => {
     await boot(page, context, { route: '/frontdesk', prep: () => { (fb as unknown as { navDefaults: unknown }).navDefaults = { 'Lab Admin': { pinned: ['files-neuron'], locked: ['files-neuron'] } }; } });
     await openMenu(page);
+    await findInMenu(page, 'neuron');    // on the bar: reach it via search
     await press(page, 'files-neuron');
     const un = page.locator('[data-start-menu] [data-sm-ctx-act="unpin"]');
     await expect(un).toBeDisabled();
@@ -656,6 +668,42 @@ test.describe('each app opens its own start screen', () => {
     await expect(startFrame(page).locator('#msg')).toHaveText('Nothing here yet.', { timeout: 60_000 });
     expect(errors).toEqual([]);
   });
+});
+
+// The loading screen IS the app about to appear (owner 2026-11-17): each engine's own first screen drawn while it boots. The stand-in
+// engine never says ready, so the loader stays up for the shot; the first-time hint shows only after ~3 s.
+test.describe('each app loads looking like itself', () => {
+  const LOADERS = [
+    { id: 'neuron', route: 'sheet', file: 'file-1', mark: '.fl-sheet' },
+    { id: 'synapse', route: 'doc', file: 'file-2', mark: '.fl-page--doc' },
+    { id: 'axon', route: 'slides', file: 'file-3', mark: '.fl-slide' },
+    { id: 'myelin', route: 'pdf', file: 'file-6', mark: '.fl-page--pdf' },
+    { id: 'retina', route: 'image', file: 'file-7', mark: '.fl-checker' },
+  ];
+  for (const a of LOADERS) {
+    for (const mode of ['file', 'start'] as const) {
+      test(`${a.id} ${mode}: the app's own first screen while the engine boots, the hint after 3 s`, async ({ page, context }) => {
+        await stubEngine(page, a.id);
+        const errors = await boot(page, context, { route: `/files/${a.route}/${mode === 'start' ? 'start' : a.file}` });
+        const loader = tid(page, 'files-loading');
+        await expect(loader).toBeVisible({ timeout: 60_000 });
+        await expect(loader).toHaveAttribute('data-app', a.id);
+        await expect(loader).toHaveAttribute('data-mode', mode);
+        await expect(tid(page, `files-loader-${a.id}-${mode}`)).toBeVisible();
+        if (mode === 'file') await expect(loader.locator(a.mark).first()).toBeVisible();
+        else await expect(loader.locator('.fl-home').first()).toBeVisible();
+        await expect(page.locator('pf-skeleton-detail, pf-skeleton-rows').locator('visible=true')).toHaveCount(0);
+        await expect(tid(page, 'files-loading-hint')).toBeVisible();
+        await expect.poll(() => tid(page, 'files-loading-hint').evaluate(e => Number(getComputedStyle(e).opacity)), { timeout: 8_000 }).toBeGreaterThan(0.9);
+        // The loader covers the whole stage: the engine's own "Loading…" text never shows through.
+        const [st, ld] = await Promise.all([tid(page, 'files-stage').boundingBox(), loader.boundingBox()]);
+        expect(Math.abs((st?.height ?? 0) - (ld?.height ?? 0))).toBeLessThan(2);
+        expect(await loader.evaluate(e => getComputedStyle(e).backgroundColor)).not.toMatch(/rgba\(.*, 0(\.\d+)?\)$/);
+        await shot(page, `loading-${a.id}-${mode}`);
+        expect(errors, 'no uncaught errors').toEqual([]);
+      });
+    }
+  }
 });
 
 void neg; void isDesktopApp;

@@ -99,12 +99,12 @@ describe('consultant-departments helpers', () => {
 });
 
 describe('User edit — DEPARTMENTS card (Validates for is read-only)', () => {
-  it('a kit card that LISTS the departments (no select) and links to Lab › Collection and queues', async () => {
+  it('the "Validates for" section LISTS the departments (no select) and links to Lab › Collection and queues', async () => {
     const { el, f } = render(UserEditComponent, 'u1');
     await f.whenStable(); f.detectChanges();
+    (f.componentInstance as any).pickSection('validates'); f.detectChanges();
+    expect(el.querySelector('.ue-main .pf-card__label')!.textContent!.trim()).toBe('Validates for');
     const card = el.querySelector('.pf-ue-depts') as HTMLElement;
-    expect(card.classList).toContain('pf-card');
-    expect(card.querySelector('.pf-card__label')!.textContent!.trim()).toBe('Departments');
     expect(card.querySelector('pf-select')).toBeNull();
     expect(el.querySelector('select, datalist')).toBeNull();
     const chips = Array.from(card.querySelectorAll('[data-testid="ue-validates-for"] .pf-chip')).map(c => c.textContent!.trim());

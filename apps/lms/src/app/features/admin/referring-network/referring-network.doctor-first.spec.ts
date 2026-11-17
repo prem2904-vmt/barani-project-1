@@ -72,16 +72,18 @@ describe('Referring network — doctor-first screen', () => {
     return p;
   };
 
-  it('loads every doctor once (with or without hospital) and the hospital pane lists its doctors, visiting ones too', async () => {
+  it('loads every doctor once; a hospital row opens the Doctors grid filtered to it (visiting doctors too, all hospitals as chips)', async () => {
     const p = await render();
     expect(p.api.get).toHaveBeenCalledWith('/api/referring-network/doctors?includeInactive=true');
-    p.cmp.selectHospital('h2'); p.f.detectChanges();
-    const names = Array.from(p.el.querySelectorAll('.pf-rn-doc__name')).map(n => n.textContent?.trim());
-    expect(names).toEqual(['Dr. Priya Krishnan']);
-    expect(p.el.querySelector('.pf-rn-doc__also')?.textContent).toContain('Also at Apollo Hospitals');
-    // Independent doctors are one tap away.
-    expect(p.el.querySelector('.pf-rn-indep')?.textContent).toContain('1 independent doctor');
-    expect(primaries(p.el)).toBe(1);
+    p.cmp.setView('hospitals'); p.f.detectChanges();
+    p.cmp.onHospitalCell({ colDef: { colId: 'name' }, data: HOSPITALS[1] });
+    expect(p.cmp.view()).toBe('doctors');
+    expect(p.cmp.gridDoctors().map((d: any) => d.name)).toEqual(['Dr. Priya Krishnan']);
+    const chips = p.cmp.doctorColDefs().find((c: any) => c.colId === 'hospitals').cellRenderer({ data: p.cmp.gridDoctors()[0] }) as HTMLElement;
+    expect(chips.textContent).toContain('Apollo Hospitals');
+    // Independent doctors: the hospital filter offers them.
+    expect(p.cmp.hospitalFilterOptions().some((o: any) => o.value === NO_HOSPITAL)).toBe(true);
+    expect(primaries(p.el)).toBe(0);   // Settings: the action is a secondary in the pane
     hygiene(p.el);
   });
 
@@ -91,7 +93,7 @@ describe('Referring network — doctor-first screen', () => {
     expect(p.el.querySelector('ag-grid-angular')).not.toBeNull();
     expect(p.el.querySelector('pf-select.pf-rn-hfilter')).not.toBeNull();
     const cols = p.cmp.doctorColDefs().map((c: any) => c.headerName);
-    expect(cols).toContain('Hospitals');
+    expect(cols).toContain('Hospital(s)');
     expect(p.cmp.gridDoctors().map((d: any) => d.id)).toEqual(['d1', 'd2', 'd3']);
     p.cmp.setHospitalFilter('h2');
     expect(p.cmp.gridDoctors().map((d: any) => d.id)).toEqual(['d1']);
@@ -100,9 +102,9 @@ describe('Referring network — doctor-first screen', () => {
     p.cmp.setHospitalFilter(ALL_HOSPITALS);
     p.type('kauvery');                       // band search covers the hospitals column
     expect(p.cmp.gridDoctors().map((d: any) => d.id)).toEqual(['d1']);
-    // The view's ONE primary is Add doctor.
+    // The view's action is Add doctor, in the card head (no band buttons in Settings).
     expect(p.actions().map(b => b.textContent?.trim())).toEqual(['Add doctor']);
-    expect(primaries(p.el)).toBe(1);
+    expect(primaries(p.el)).toBe(0);
     hygiene(p.el);
   });
 
@@ -130,10 +132,10 @@ describe('Referring network — doctor-first screen', () => {
       expect.objectContaining({ hospitalIds: ['h2', 'h1'], hospitalId: 'h1' }));
   });
 
-  it('"Add doctor" from a hospital pane pre-links that hospital', async () => {
+  it('"Add doctor" while the grid is filtered to a hospital pre-links that hospital', async () => {
     const p = await render();
-    p.cmp.selectHospital('h2'); p.f.detectChanges();
-    const add = Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-rn-hdrbtn')).find(b => /Add doctor/.test(b.textContent ?? ''))!;
+    p.cmp.setHospitalFilter('h2'); p.f.detectChanges();
+    const add = p.actions().find(b => /Add doctor/.test(b.textContent ?? ''))!;
     add.click(); p.f.detectChanges();
     expect(p.cmp.doctorEditor().hospitalIds).toEqual(['h2']);
   });

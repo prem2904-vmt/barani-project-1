@@ -108,6 +108,18 @@ export class NavBackService {
     this.stack.push(next);
   }
 
+  /** The in-app page right behind the current history entry (this tab, since load), or null. */
+  private entryBehind(current: string): string | null {
+    const top = this.stack.length - 1;
+    if (top < 1 || this.stack[top] !== current) return null;
+    const b = this.stack[top - 1];
+    return b && b !== current ? b : null;
+  }
+  /** Settings pages and the screens settings cross-link to (Finance credit accounts). */
+  private isSettingsArea(u: string): boolean {
+    return u === '/admin' || u.startsWith('/admin/') || u.startsWith('/finance/');
+  }
+
   /** Strip query/hash + trailing slashes so "/lab/my-work/" === "/lab/my-work". */
   private norm(u: string): string {
     return u.split('?')[0].split('#')[0].replace(/\/+$/, '');
@@ -258,11 +270,13 @@ export class NavBackService {
     if (this.interceptor && this.interceptor()) return;
 
     const current = this.norm(this.router.url);
-    // A settings page opened from a settings hub (its tiles or its search)
-    // goes back to THAT hub — the one the person came from — by popping
-    // history, so browser back and the chevron agree.
-    if (SETTINGS_PARENT[current] && this.previousUrl !== null && this.previousUrl !== current
-        && SETTINGS_HUBS.includes(this.previousUrl)) {
+    // Settings (owner 2026-11-17): back returns to WHERE THE PERSON CAME FROM when they arrived by an in-app link
+    // (a hub tile, a search hit, a cross-link such as Collection → Work steps, Billing → Finance credit accounts) — by
+    // popping history, so browser back and the chevron agree. Only a deep link / reload (nothing of ours behind this
+    // entry) climbs the static parent map below.
+    const behind = this.entryBehind(current);
+    if (behind !== null && (SETTINGS_PARENT[current] || SETTINGS_PARENT[behind] || SETTINGS_HUBS.includes(behind)
+        || this.isSettingsArea(current) || this.isSettingsArea(behind))) {
       this.location.back();
       return;
     }

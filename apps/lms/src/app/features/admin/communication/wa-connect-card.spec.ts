@@ -125,8 +125,9 @@ describe('WhatsApp connect card — states', () => {
     expect(script.src).toBe('https://connect.facebook.net/en_US/sdk.js');
     const connect = p.q('wac-connect') as HTMLButtonElement;
     expect(connect.textContent).toContain('Connect WhatsApp');
-    expect(connect.classList.contains('pf-btn--primary')).toBe(true);
-    expect(p.el.querySelectorAll('.pf-btn--primary').length).toBe(1);
+    // In content a secondary button (owner: the violet primary is ONLY the page's one band action).
+    expect(connect.classList.contains('pf-btn--secondary')).toBe(true);
+    expect(p.el.querySelectorAll('.pf-btn--primary').length).toBe(0);
     expect(connect.querySelector('svg')).not.toBeNull();   // SVG icon, never emoji
   });
 

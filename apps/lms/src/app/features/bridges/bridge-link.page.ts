@@ -16,12 +16,12 @@ import { openBridgeLink } from '../../shared/bridges/bridge-link';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="pf-blp">
-      <section class="nd-card pf-blp__card" aria-live="polite">
-        <header class="nd-card__head">
-          <span class="nd-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 17h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0"/></svg></span>
-          <h1 class="nd-card__label">Prefrontal Bridge</h1>
+      <section class="pf-card pf-blp__card" aria-live="polite">
+        <header class="pf-card__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 17h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0"/></svg></span>
+          <h1 class="pf-card__label">Prefrontal Bridge</h1>
         </header>
-        <div class="nd-card__body">
+        <div class="pf-card__body">
           @if (error()) {
             <p class="pf-blp__t">{{ error() }}</p>
             <p class="pf-blp__s">Open Lab settings → Bridges → Add Bridge in the Prefrontal app and type the claim code printed under the QR.</p>

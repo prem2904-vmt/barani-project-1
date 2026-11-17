@@ -1,21 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import { AgGridAngular } from 'ag-grid-angular';
-import { AllCommunityModule, CellValueChangedEvent, ColDef, ICellRendererParams, ModuleRegistry, colorSchemeDark, colorSchemeLight, themeQuartz } from 'ag-grid-community';
+import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
+import { CellValueChangedEvent, ColDef, ICellRendererParams } from 'ag-grid-community';
+import { NgTemplateOutlet } from '@angular/common';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
+import { SG_ICON, sgActions, sgActionsCol, sgBare } from '../../../shared/settings-grid/settings-grid';
+import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { HasUnsavedChanges, confirmLeaveUnsaved, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
+import { bandFilter } from '../../../shared/utils/band-search';
 import { ApiService } from '../../../core/services/api.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
-import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
-
-ModuleRegistry.registerModules([AllCommunityModule]);
-
-const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({
-  fontFamily: 'inherit', fontSize: 13, rowHeight: 44, headerHeight: 40, borderRadius: 12, accentColor: '#7c3aed',
-});
-const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({
-  fontFamily: 'inherit', fontSize: 13, rowHeight: 44, headerHeight: 40, borderRadius: 12, accentColor: '#a855f7',
-});
+import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
 
 interface ReferralLabOption { id: string; name: string; }
 
@@ -45,63 +42,68 @@ interface PriceRow {
 @Component({
   selector: 'pf-partner-test-prices',
   standalone: true,
-  imports: [HeroBandComponent, SelectComponent, SkeletonTableComponent, AgGridAngular],
+  imports: [SettingsSiblingsComponent, HeroBandComponent, SelectComponent, DataGridComponent, NgTemplateOutlet, SettingsSavebarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
-    <section class="pf-page px-4 md:px-8 pt-6">
-      <pf-hero-band [back]="true">
-        <ng-container band-tools>
-          <pf-select class="ptp-filter" size="sm" [options]="labOptions()" [value]="referralLabId()"
-                     [searchable]="true" (valueChange)="onLabChange($event)"></pf-select>
-        </ng-container>
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+      <pf-hero-band [back]="true" placeholder="Search prices — test, catalogue key…" [value]="q()" (valueChange)="q.set($event)">
+        <ng-container band-tools><pf-settings-siblings></pf-settings-siblings></ng-container>
+        
       </pf-hero-band>
 
-      <div class="pf-body">
-        <div class="pf-card">
-          <div class="pf-card__head">
+      <div class="pf-band-body pf-band-body--fill">
+        <section class="pf-card pf-sg-main ptp-main" [class.pf-sg-main--bare]="bare" aria-label="Partner prices">
+          <header class="pf-card__head pf-sg-main__head">
             <span class="pf-card__icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9"/>
-              </svg>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9"/></svg>
             </span>
             <span class="pf-card__label">Partner prices{{ activeLabName() ? ' — ' + activeLabName() : '' }}</span>
+            <span class="pf-card__note pf-sg-hint">The catalogue key must match the Test Master's CatalogKey — the name is a label only</span>
             <span class="pf-card__spacer"></span>
-            @if (!referralLabId()) {
-              <span class="pf-card__note">Pick a referral lab above</span>
-            } @else {
-              <button type="button" class="pf-btn pf-btn--tertiary" (click)="addRow()">+ Add price</button>
-              <button type="button" class="pf-btn pf-btn--primary" [disabled]="!dirty() || saving()" (click)="save()">
-                {{ saving() ? 'Saving…' : 'Save changes' }}
-              </button>
-            }
+            <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
+          </header>
+          <div class="pf-sg-main__body">
+            <pf-data-grid [rowData]="visibleRows()" [columnDefs]="colDefs" [defaultColDef]="defaultColDef" [singleClickEdit]="true"
+                          [suppressCellFocus]="false" [loading]="loading()" loadingLabel="Loading prices…"
+                          [emptyTitle]="referralLabId() ? (q() ? 'No prices match your search.' : 'No prices yet — Add price.') : 'Pick a referral lab'"
+                          [emptyBody]="referralLabId() ? '' : 'What it charges per test is the cost Analytics resolves the outsourcing margin from.'"
+                          (cellValueChanged)="onCellChanged($event)"></pf-data-grid>
           </div>
-          <div class="pf-card__body">
-            @if (!referralLabId()) {
-              <p style="padding: 16px; color: var(--text-secondary);">
-                Select a referral lab to view or edit what it charges per test. This cost is what Analytics'
-                Outsourcing and Profitability tabs resolve the outsourcing margin from — a test with no price on
-                record here shows revenue only, never a guessed cost.
-              </p>
-            } @else if (loading()) {
-              <pf-skeleton-table [rows]="6" [cols]="4"></pf-skeleton-table>
-            } @else {
-              <ag-grid-angular style="width: 100%; height: 480px;"
-                [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="colDefs" [defaultColDef]="defaultColDef"
-                [singleClickEdit]="true" (cellValueChanged)="onCellChanged($event)"></ag-grid-angular>
-              <p class="ptp-note">Test catalogue key must match the Test Master's CatalogKey (see the test's detail page) — name is a label only, never matched by.</p>
-            }
-          </div>
-        </div>
+          <pf-settings-savebar [dirty]="dirty()" [saving]="saving()" (save)="save()" (discard)="discardEdits()"></pf-settings-savebar>
+        </section>
       </div>
     </section>
+
+    <!-- Head tools: count · the referral-lab filter (dynamic). -->
+    <ng-template #headToolsTpl>
+      @if (referralLabId()) { <span class="pf-sg-count pf-num">{{ visibleRows().length }} {{ visibleRows().length === 1 ? 'price' : 'prices' }}</span> }
+      <pf-select class="ptp-filter" size="sm" [options]="labOptions()" [value]="referralLabId()"
+                 [searchable]="true" (valueChange)="pickLab($event)" aria-label="Referral lab"></pf-select>
+      @if (referralLabId()) {
+        <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press" (click)="addRow()" aria-label="Add price">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          Add price
+        </button>
+      }
+    </ng-template>
   `,
   styles: [`
-    :host { display: block; }
-    .ptp-filter { min-width: 220px; }
-    .ptp-note { font-size: 12px; color: var(--text-tertiary); padding: 10px 2px 0; }
+    .ptp-filter { flex: 0 1 240px; min-width: 200px; }
   `],
 })
-export class PartnerTestPricesComponent {
+export class PartnerTestPricesComponent implements HasUnsavedChanges {
+  protected readonly bare = sgBare();
+  private readonly web = webPointerSignal();
+  readonly q = signal('');
+  private readonly headToolsTpl = viewChild<TemplateRef<unknown>>('headToolsTpl');
+  readonly headTools = computed(() => this.headToolsTpl());
+  readonly visibleRows = computed(() => bandFilter(this.rows(), this.q(), r => [r.testName, r.testCatalogKey]));
+  // ── Unsaved changes ──
+  readonly unsavedLabel = 'the partner prices';
+  hasUnsavedChanges(): boolean { return this.dirty() && !this.saving(); }
+  saveChanges(): Promise<boolean> { return this.persist(); }
+  private readonly unloadGuard = guardUnsavedOnUnload(this);
   private readonly api = inject(ApiService);
   private readonly dialog = inject(DialogService);
   protected readonly theme = inject(ThemeService);
@@ -119,18 +121,12 @@ export class PartnerTestPricesComponent {
   readonly saving = signal(false);
   readonly dirty = computed(() => this.rows().some(r => r._dirty));
 
-  readonly gridTheme = computed(() => this.theme.isDark() ? gridThemeDark : gridThemeLight);
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, flex: 1, minWidth: 110 };
 
-  private deleteRenderer = (params: ICellRendererParams<PriceRow>): HTMLElement => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'pf-btn pf-btn--tertiary';
-    btn.style.padding = '4px 10px';
-    btn.textContent = 'Delete';
-    btn.addEventListener('click', () => void this.deleteRow(params.data!));
-    return btn;
-  };
+  private deleteRenderer = (params: ICellRendererParams<PriceRow>): HTMLElement => (params.data
+    ? sgActions(this.web(), [{ label: 'Delete', aria: `Delete ${params.data.testName || params.data.testCatalogKey || 'price'}`, icon: true, danger: true,
+        path: SG_ICON.trash, run: () => { void this.deleteRow(params.data!); } }])
+    : document.createElement('span'));
 
   readonly colDefs: ColDef<PriceRow>[] = [
     { field: 'testCatalogKey', headerName: 'Test catalogue key', editable: true, minWidth: 180 },
@@ -144,14 +140,18 @@ export class PartnerTestPricesComponent {
       field: 'effectiveFrom', headerName: 'Effective from', editable: true, minWidth: 140,
       valueParser: p => /^\d{4}-\d{2}-\d{2}$/.test(p.newValue) ? p.newValue : p.oldValue,
     },
-    {
-      headerName: '', colId: 'actions', editable: false, sortable: false, filter: false, resizable: false,
-      maxWidth: 90, pinned: 'right', cellRenderer: this.deleteRenderer,
-    },
+    sgActionsCol<PriceRow>(true, [], 1, p => this.deleteRenderer(p), false),
   ];
 
   constructor() {
     this.api.get<ReferralLabOption[]>('/api/referral-labs').subscribe({ next: d => this.labs.set(d ?? []) });
+  }
+
+  /** Switching lab drops unsaved edits: "Save your changes?" first. */
+  async pickLab(labId: string): Promise<void> {
+    if (labId === this.referralLabId()) return;
+    if (!(await confirmLeaveUnsaved(this.dialog, this))) return;
+    this.onLabChange(labId);
   }
 
   onLabChange(labId: string): void {
@@ -194,9 +194,14 @@ export class PartnerTestPricesComponent {
     });
   }
 
-  save(): void {
+  save(): void { void this.persist(); }
+  /** The Save bar's Discard: back to the saved prices for this lab. */
+  discardEdits(): void { this.onLabChange(this.referralLabId()); }
+
+  private persist(): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
     const toSave = this.rows().filter(r => r._dirty && r.testCatalogKey.trim());
-    if (toSave.length === 0) return;
+    if (toSave.length === 0) { resolve(true); return; }
     this.saving.set(true);
     const payload = {
       rows: toSave.map(r => ({
@@ -205,8 +210,9 @@ export class PartnerTestPricesComponent {
       })),
     };
     this.api.post('/api/partner-test-prices/batch', payload).subscribe({
-      next: () => { this.saving.set(false); this.onLabChange(this.referralLabId()); },
-      error: () => this.saving.set(false),
+      next: () => { this.saving.set(false); this.onLabChange(this.referralLabId()); resolve(true); },
+      error: () => { this.saving.set(false); resolve(false); },
+    });
     });
   }
 }

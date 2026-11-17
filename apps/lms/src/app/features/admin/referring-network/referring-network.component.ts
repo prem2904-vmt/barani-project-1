@@ -1,11 +1,10 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import {
-  AllCommunityModule, ColDef, ICellRendererParams, ModuleRegistry,
-  colorSchemeDark, colorSchemeLight, themeQuartz,
+  AllCommunityModule, CellClickedEvent, ColDef, ICellRendererParams, ModuleRegistry,
 } from 'ag-grid-community';
-import { AgGridAngular } from 'ag-grid-angular';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -20,7 +19,12 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
-import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { NgTemplateOutlet } from '@angular/common';
+import {
+  SG_ICON, SG_PHONE_MQ, SgAction, SgStatus, sgActions, sgActionsCol, sgBare, sgByStatus, sgCell, sgChips, sgMedia, sgPillCol,
+  sgRowOff, sgStatusOptions, sgGridTheme,
+} from '../../../shared/settings-grid/settings-grid';
 import { heldFlag } from '../../../shared/utils/min-duration';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import {
@@ -36,28 +40,6 @@ type View = 'hospitals' | 'doctors';
 type DoctorDraft = Partial<Doctor> & { hospitalIds: string[] };
 /** Hospital editor draft: the hospital plus the doctors attached to it. */
 type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
-
-const svg = (d: string) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
-const ICON_EDIT = svg('<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>');
-const ICON_POWER = svg('<path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/>');
-
-/** Kit row action (PF-PATTERN): text button on web, 44px icon on touch. */
-function rowAction(web: boolean, label: string, icon: string, title: string): HTMLButtonElement {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = web ? 'pf-rowact' : 'pf-rowact pf-rowact--icon';
-  b.title = title;
-  b.setAttribute('aria-label', title);
-  b.innerHTML = `${icon}<span class="pf-rowact__t">${label}</span>`;
-  return b;
-}
-
-const gridParams = {
-  fontFamily: "'Noto Sans', system-ui, sans-serif",
-  fontSize: 13, rowHeight: 52, headerHeight: 40, borderRadius: 12,
-};
-const gridThemeLight = themeQuartz.withPart(colorSchemeLight).withParams({ ...gridParams, accentColor: '#7c3aed' });
-const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...gridParams, accentColor: '#a855f7' });
 
 /**
  * Admin → Referring Network. Two views (band toggle):
@@ -79,11 +61,11 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
 @Component({
   selector: 'pf-referring-network',
   standalone: true,
-  imports: [BusyDirective, SkeletonRowsComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent,
-    HeroBandComponent, SegmentedComponent, SelectComponent, AgGridAngular],
+  imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent,
+    HeroBandComponent, SegmentedComponent, SelectComponent, DataGridComponent, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-screen-2xl mx-auto w-full">
+    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
         <!-- Band pill (owner): search + the Hospitals / Doctors switch ride in
              the pill; the view's ONE primary ("Add hospital" / "Add doctor")
@@ -92,33 +74,7 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
                       [placeholder]="view() === 'hospitals' ? 'Search hospitals — name, code, phone, address…' : 'Search doctors — name, hospital, department, phone…'"
                       [value]="view() === 'hospitals' ? hospitalSearch() : doctorSearch()"
                       (valueChange)="onBandSearch($event)">
-          <ng-container band-tools>
-            <pf-segmented class="pf-rn-viewseg" size="sm" [options]="viewOptions()" [value]="view()"
-                          (valueChange)="setView($event)"></pf-segmented>
-          </ng-container>
-          <ng-container band-actions>
-            <!-- While an editor modal is open its footer Save is the ONE
-                 primary: this steps down (secondary, disabled) behind it. -->
-            @if (view() === 'hospitals') {
-              <button type="button" class="pf-hb-btn press pf-rn-add"
-                      [class.pf-hb-btn--primary]="!editorOpen()" [class.pf-hb-btn--ghost]="editorOpen()"
-                      [disabled]="editorOpen()" (click)="openHospitalEditor(null)"
-                      aria-label="Add hospital">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                Add hospital
-              </button>
-            } @else {
-              <button type="button" class="pf-hb-btn press pf-rn-add-doc"
-                      [class.pf-hb-btn--primary]="!editorOpen()" [class.pf-hb-btn--ghost]="editorOpen()"
-                      [disabled]="editorOpen()" (click)="openDoctorEditor(null, null)"
-                      aria-label="Add doctor">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                Add doctor
-              </button>
-            }
-          </ng-container>
+          
         </pf-hero-band>
       }
       <pf-screen-header class="pf-classic-only"
@@ -141,165 +97,75 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
         <pf-segmented size="sm" [options]="viewOptions()" [value]="view()" (valueChange)="setView($event)"></pf-segmented>
       </div>
 
-      @if (view() === 'hospitals') {
-      <div class="pf-band-body">
-      <div class="pf-rn-grid">
-        <!-- ── Hospitals (left) ────────────────────────────────── -->
-        <aside class="pf-rn-pane pf-rn-pane--list pf-card">
-          <header class="pf-card__head pf-rn-pane__hdr">
-            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01"/></svg></span>
-            <h2 class="pf-card__label pf-rn-pane__title">Hospitals</h2>
-            <span class="pf-rn-pane__count pf-num">{{ hospitals().length }}</span>
-          </header>
-          <input type="search" class="pf-rn-search pf-classic-only"
-                 placeholder="Search hospitals…"
-                 [value]="hospitalSearch()"
-                 (input)="setHospitalSearch(asInput($event))" />
-
-          @if (loadingHospitalsShown()) {
-            <div class="flex justify-center py-10">
-              <pf-skeleton-rows [rows]="6" label="Loading hospitals…"></pf-skeleton-rows>
-            </div>
-          } @else if (filteredHospitals().length === 0) {
-            <p class="pf-rn-empty">
-              @if (hospitalSearch()) { No hospitals match. }
-              @else { No hospitals yet. Use <b>Add hospital</b> to start. }
-            </p>
-          } @else {
-            <ul class="pf-rn-list" role="listbox" aria-label="Hospitals">
-              @for (h of filteredHospitals(); track h.id) {
-                <li>
-                  <button type="button" class="pf-rn-row press" role="option"
-                          [attr.aria-selected]="selectedHospitalId() === h.id"
-                          (click)="selectHospital(h.id)">
-                    <div class="min-w-0 flex-1">
-                      <p class="pf-rn-row__name">{{ h.name }}</p>
-                      <p class="pf-rn-row__meta">
-                        @if (h.code) { <span class="pf-num">{{ h.code }}</span> · }
-                        <span class="pf-num">{{ h.doctorCount }}</span> doctor<span [class.hidden]="h.doctorCount === 1">s</span>
-                        @if (!h.isActive) { · <span class="pf-rn-row__inactive">Inactive</span> }
-                      </p>
-                    </div>
-                  </button>
-                </li>
+      <!-- ONE Test Master grid (owner 2026-11-17: "a grid, with filters"): Doctors (default) or Hospitals.
+           Inside the Settings shell the grid is bare and the shell's card head shows #headTools. -->
+      <div class="pf-band-body pf-band-body--fill">
+        <section class="pf-card pf-sg-main pf-rn-main" [class.pf-sg-main--bare]="bare" [attr.aria-label]="view() === 'doctors' ? 'Doctors' : 'Hospitals'">
+          <header class="pf-card__head pf-sg-main__head">
+            <span class="pf-card__icon" aria-hidden="true">
+              @if (view() === 'doctors') {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              } @else {
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01"/></svg>
               }
-            </ul>
-          }
-          @if (independentCount() > 0) {
-            <!-- Doctors with no hospital live in the Doctors view. -->
-            <button type="button" class="pf-btn pf-btn--tertiary pf-rn-indep press" (click)="showIndependent()">
-              <span class="pf-num">{{ independentCount() }}</span> independent doctor{{ independentCount() === 1 ? '' : 's' }}
-            </button>
-          }
-        </aside>
-
-        <!-- ── Doctors at the selected hospital (right) ────────── -->
-        <section class="pf-rn-pane pf-card">
-          @if (!selectedHospital(); as _) {
-            <div class="pf-rn-placeholder">
-              <p class="pf-rn-placeholder__title">Pick a hospital to manage its doctors</p>
-              <p class="pf-rn-placeholder__sub">
-                Or add a new hospital from the top-right. Doctors without a hospital are in the Doctors view.
-              </p>
-            </div>
-          }
-          @if (selectedHospital(); as h) {
-            <header class="pf-card__head pf-rn-pane__hdr">
-              <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-              <div class="min-w-0 flex-1">
-                <h2 class="pf-rn-pane__title pf-rn-pane__title--name">{{ h.name }}</h2>
-                <p class="pf-rn-pane__sub">
-                  @if (h.code) { <span class="pf-num">{{ h.code }}</span> · }
-                  @if (h.phone) { <span class="pf-num">{{ h.phone }}</span> · }
-                  @if (h.address) { {{ h.address }} }
-                  @if (!h.code && !h.phone && !h.address) { no details yet }
-                </p>
-              </div>
-              <button type="button" class="pf-btn pf-btn--tertiary pf-rn-hdrbtn press" (click)="openHospitalEditor(h)">Edit hospital</button>
-              <button type="button" class="pf-btn pf-btn--tertiary pf-rn-hdrbtn press" (click)="openLinkEditor(h)">Link doctors</button>
-              <!-- Secondary: "Add hospital" in the band is this view's one primary. -->
-              <button type="button" class="pf-btn pf-btn--secondary pf-rn-hdrbtn press" (click)="openDoctorEditor(null, h.id)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                Add doctor
-              </button>
-            </header>
-
-            @if (loadingDoctorsShown()) {
-              <div class="flex justify-center py-10">
-                <pf-skeleton-rows [rows]="6" label="Loading doctors…"></pf-skeleton-rows>
-              </div>
-            } @else if (doctorsForSelected().length === 0) {
-              <p class="pf-rn-empty">No doctors at this hospital yet. <b>Add doctor</b> creates one here; <b>Link doctors</b> adds doctors you already have.</p>
-            } @else {
-              <ul class="pf-rn-doc-list">
-                @for (d of doctorsForSelected(); track d.id) {
-                  <li class="pf-rn-doc">
-                    <div class="pf-rn-doc__main">
-                      <p class="pf-rn-doc__name">{{ d.name }}</p>
-                      <p class="pf-rn-doc__meta">
-                        @if (d.designation) { {{ d.designation }} }
-                        @if (d.designation && d.department) { · }
-                        @if (d.department) { {{ d.department }} }
-                      </p>
-                      <p class="pf-rn-doc__sub">
-                        @if (d.qualification) { {{ d.qualification }} }
-                        @if (d.qualification && d.registrationNo) { · }
-                        @if (d.registrationNo) { Reg #<span class="pf-num">{{ d.registrationNo }}</span> }
-                      </p>
-                      <p class="pf-rn-doc__contact">
-                        @if (d.phone) { <span class="pf-num">{{ d.phone }}</span> }
-                        @if (d.phone && d.email) { · }
-                        @if (d.email) { {{ d.email }} }
-                      </p>
-                      @if (otherHospitals(d, h.id); as others) { <p class="pf-rn-doc__also">Also at {{ others }}</p> }
-                    </div>
-                    <div class="pf-rn-doc__actions">
-                      @if (!d.isActive) { <span class="pf-chip pf-chip--static pf-rn-chip">Inactive</span> }
-                      <!-- Row actions: text on web, icon on touch. -->
-                      <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="openDoctorEditor(d, null)" aria-label="Edit doctor" title="Edit"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg><span class="pf-rowact__t">Edit</span></button>
-                      <button type="button" class="pf-rowact pf-rn-unlink" [class.pf-rowact--icon]="!web()" (click)="unlinkDoctor(d, h)" aria-label="Remove from this hospital" title="Remove from this hospital"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.84 12.25 20.25 10.84a5 5 0 0 0-7.07-7.07l-1.41 1.41"/><path d="m5.16 11.75-1.41 1.41a5 5 0 0 0 7.07 7.07l1.41-1.41"/><path d="M8 2v3M2 8h3M16 22v-3M22 16h-3"/></svg><span class="pf-rowact__t">Remove</span></button>
-                      @if (d.isActive) {
-                        <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" (click)="deactivateDoctor(d)" aria-label="Deactivate doctor" title="Deactivate"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg><span class="pf-rowact__t">Deactivate</span></button>
-                      }
-                    </div>
-                  </li>
-                }
-              </ul>
+            </span>
+            <span class="pf-card__label">{{ view() === 'doctors' ? 'Doctors' : 'Hospitals' }}</span>
+            <span class="pf-card__spacer"></span>
+            <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
+          </header>
+          <div class="pf-sg-main__body">
+            @if (view() === 'doctors' ? loadingDoctorsShown() : loadingHospitalsShown()) {
+              <pf-skeleton-table class="pf-sg-skel" [rows]="8" [cols]="6" [label]="view() === 'doctors' ? 'Loading doctors…' : 'Loading hospitals…'"></pf-skeleton-table>
             }
-          }
+            @if (view() === 'doctors') {
+              <pf-data-grid [rowData]="gridDoctors()" [columnDefs]="doctorColDefs()" [defaultColDef]="defaultColDef" [getRowId]="rowId" [getRowClass]="doctorRowClass" [suppressCellFocus]="true"></pf-data-grid>
+              @if (!loadingDoctorsShown() && gridDoctors().length === 0) {
+                <div class="pf-sg-empty"><p class="pf-sg-empty__title pf-rn-empty">{{ emptyDoctorsText() }}</p></div>
+              }
+            } @else {
+              <pf-data-grid [clickable]="true" [rowData]="gridHospitals()" [columnDefs]="hospitalColDefs()" [defaultColDef]="defaultColDef" [getRowId]="hospitalRowId" [getRowClass]="hospitalRowClass" [suppressCellFocus]="true" (cellClicked)="onHospitalCell($event)"></pf-data-grid>
+              @if (!loadingHospitalsShown() && gridHospitals().length === 0) {
+                <div class="pf-sg-empty"><p class="pf-sg-empty__title pf-rn-empty">{{ hospitalSearch() ? 'No hospitals match.' : 'No hospitals yet. Use Add hospital to start.' }}</p></div>
+              }
+            }
+          </div>
         </section>
       </div>
-      </div>
-      } @else {
-      <!-- ── Doctors view: one grid, filterable by hospital ───────── -->
-      <div class="pf-band-body pf-band-body--fill">
-        <div class="pf-rn-docbar">
+
+      <!-- Head tools: Doctors | Hospitals, the hospital filter (doctors), All / Active / Inactive, count.
+           Exposed as headTools so the Settings shell can show them in ITS card head. -->
+      <ng-template #headToolsTpl>
+        <!-- Left → right: count · dynamic filters · the STATIC Doctors | Hospitals switch at the far right (owner). -->
+        <span class="pf-sg-count pf-num">{{ countLabel() }}</span>
+        @if (view() === 'doctors') {
           <pf-select class="pf-rn-hfilter" size="sm" [searchable]="true"
                      [options]="hospitalFilterOptions()" [value]="hospitalFilter()"
                      (valueChange)="setHospitalFilter($event)" placeholder="All hospitals"></pf-select>
-          <input type="search" class="pf-rn-search pf-rn-search--docs pf-classic-only"
-                 placeholder="Search doctors…" [value]="doctorSearch()"
-                 (input)="doctorSearch.set(asInput($event))" />
-          <span class="pf-rn-docbar__count pf-num">{{ gridDoctors().length }} doctor{{ gridDoctors().length === 1 ? '' : 's' }}</span>
-        </div>
-        <div class="pf-rn-docgrid">
-          @if (loadingDoctorsShown()) {
-            <div class="pf-rn-docgrid__skel"><pf-skeleton-rows [rows]="8" label="Loading doctors…"></pf-skeleton-rows></div>
-          }
-          <ag-grid-angular
-            style="width: 100%; height: 100%;"
-            [theme]="gridTheme()"
-            [rowData]="gridDoctors()"
-            [columnDefs]="doctorColDefs()"
-            [context]="gridContext"
-            [animateRows]="true"
-            [getRowId]="rowId"
-            [overlayNoRowsTemplate]="noRowsText()">
-          </ag-grid-angular>
-        </div>
-      </div>
-      }
+        }
+        <pf-segmented class="pf-sg-status-filter" size="sm" [options]="statusOptions()" [value]="status()"
+                      (valueChange)="status.set($event)" aria-label="Filter by status"></pf-segmented>
+        <pf-segmented class="pf-rn-viewseg" size="sm" [options]="viewOptions()" [value]="view()"
+                      (valueChange)="setView($event)" aria-label="Doctors or hospitals"></pf-segmented>
+            <!-- The page's action, IN the pane (owner: no band buttons in Settings), after the head tools. -->
+            
+            @if (view() === 'hospitals') {
+              <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press pf-rn-add"
+                      [disabled]="editorOpen()" (click)="openHospitalEditor(null)"
+                      aria-label="Add hospital">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Add hospital
+              </button>
+            } @else {
+              <button type="button" class="pf-btn pf-btn--secondary pf-sg-act press pf-rn-add-doc"
+                      [disabled]="editorOpen()" (click)="openDoctorEditor(null, filterHospital()?.id ?? null)"
+                      aria-label="Add doctor">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                Add doctor
+              </button>
+            }
+    </ng-template>
 
       <!-- ── Hospital editor modal ─────────────────────────────── -->
       @if (hospitalEditor(); as he) {
@@ -483,8 +349,11 @@ const gridThemeDark = themeQuartz.withPart(colorSchemeDark).withParams({ ...grid
       }
     </section>
   `,
+  styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   styles: [`
     @use '../../../shared/styles/device-tier' as dt;
+    .pf-rn-hfilter { flex: 0 1 220px; min-width: 160px; }
+    .pf-rn-viewseg { flex-shrink: 0; }
     .pf-rn-grid {
       display: grid;
       grid-template-columns: 1fr;
@@ -700,7 +569,8 @@ export class ReferringNetworkComponent implements OnInit {
   protected readonly web = webPointerSignal();
 
   // ── State ───────────────────────────────────────────────────────
-  readonly view = signal<View>('hospitals');
+  /** Doctors first (owner 2026-11-17): the list reception actually uses. */
+  readonly view = signal<View>('doctors');
 
   readonly hospitals = signal<Hospital[]>([]);
   readonly loadingHospitals = signal(false);
@@ -773,7 +643,7 @@ export class ReferringNetworkComponent implements OnInit {
   /** Doctors view rows: hospital filter, then the band search (name,
    *  hospitals, department, qualification, registration, phone, email). */
   readonly gridDoctors = computed<Doctor[]>(() =>
-    bandFilter(filterDoctorsByHospital(this.doctorsAll(), this.hospitalFilter()), this.doctorSearch(),
+    bandFilter(sgByStatus(filterDoctorsByHospital(this.doctorsAll(), this.hospitalFilter()), this.status(), d => d.isActive), this.doctorSearch(),
       d => [d.name, doctorHospitalsLabel(d), d.designation, d.department, d.qualification, d.specialisation,
             d.registrationNo, d.phone, d.email]));
 
@@ -825,105 +695,106 @@ export class ReferringNetworkComponent implements OnInit {
     return doctorHospitals(d).filter(h => h.id !== hospitalId).map(h => h.name).filter(Boolean).join(', ');
   }
 
-  // ── Grid ────────────────────────────────────────────────────────
-  readonly gridTheme = computed(() => (this.theme.isDark() ? gridThemeDark : gridThemeLight));
+  // ── Grid (Test Master) ──────────────────────────────────────────
+  /** Hosted in the Settings shell (Front desk): bare grid; the shell's card head shows headTools. */
+  protected readonly bare = sgBare();
+  private readonly headToolsTpl = viewChild<TemplateRef<unknown>>('headToolsTpl');
+  /** View switch + hospital filter + status filter + count, for a host card head. */
+  readonly headTools = computed(() => this.headToolsTpl());
+  readonly phone = sgMedia(SG_PHONE_MQ);
+  readonly gridTheme = sgGridTheme();
   readonly rowId = (p: { data: Doctor }) => p.data.id;
-  readonly gridContext = {
-    web: () => this.web(),
-    edit: (d: Doctor) => this.openDoctorEditor(d, null),
-    deactivate: (d: Doctor) => void this.deactivateDoctor(d),
-  };
+  readonly hospitalRowId = (p: { data: Hospital }) => p.data.id;
+  readonly doctorRowClass = sgRowOff<Doctor>(d => d.isActive);
+  readonly hospitalRowClass = sgRowOff<Hospital>(h => h.isActive);
+  readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, minWidth: 90, wrapText: true, autoHeight: true };
+  /** All · Active · Inactive for the current view. */
+  readonly status = signal<SgStatus>('all');
+  readonly statusOptions = computed(() => {
+    const rows: { isActive: boolean }[] = this.view() === 'doctors'
+      ? filterDoctorsByHospital(this.doctorsAll(), this.hospitalFilter()) : this.hospitals();
+    return sgStatusOptions(rows.length, rows.filter(r => !r.isActive).length);
+  });
+  readonly gridHospitals = computed(() => sgByStatus(this.filteredHospitals(), this.status(), h => h.isActive));
+  readonly countLabel = computed(() => {
+    const n = this.view() === 'doctors' ? this.gridDoctors().length : this.gridHospitals().length;
+    return `${n} ${this.view() === 'doctors' ? (n === 1 ? 'doctor' : 'doctors') : (n === 1 ? 'hospital' : 'hospitals')}`;
+  });
+  readonly emptyDoctorsText = computed(() => {
+    const f = this.hospitalFilter();
+    return this.doctorSearch() ? 'No doctors match.'
+      : f === NO_HOSPITAL ? 'No independent doctors.'
+      : f !== ALL_HOSPITALS ? 'No doctors at this hospital yet.'
+      : 'No doctors yet. Use Add doctor to start.';
+  });
+  /** The hospital the doctors grid is filtered to (enables "Remove from this hospital"). */
+  readonly filterHospital = computed(() => this.hospitals().find(h => h.id === this.hospitalFilter()) ?? null);
 
-  private doctorCellRenderer = (p: ICellRendererParams<Doctor>): HTMLElement => {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-direction:column;justify-content:center;height:100%;line-height:1.3;min-width:0;';
-    if (!p.data) return wrap;
-    const name = document.createElement('span');
-    name.style.cssText = 'font-weight:600;color:var(--text-primary);white-space:normal;overflow-wrap:anywhere;';
-    name.textContent = p.data.name;
-    wrap.appendChild(name);
-    const sub = [p.data.designation, p.data.qualification].filter(Boolean).join(' · ');
-    if (sub) {
-      const s = document.createElement('span');
-      s.style.cssText = 'font-size:12px;color:var(--text-tertiary);white-space:normal;';
-      s.textContent = sub;
-      wrap.appendChild(s);
+  doctorActions(d: Doctor): SgAction[] {
+    const acts: SgAction[] = [{ label: 'Edit', aria: `Edit ${d.name}`, path: SG_ICON.edit, icon: true, run: () => this.openDoctorEditor(d, null) }];
+    const h = this.filterHospital();
+    if (h && doctorHospitalIds(d).includes(h.id)) {
+      acts.push({ label: 'Remove', aria: `Remove ${d.name} from ${h.name}`, icon: true,
+        path: '<path d="M18.84 12.25 20.25 10.84a5 5 0 0 0-7.07-7.07l-1.41 1.41"/><path d="m5.16 11.75-1.41 1.41a5 5 0 0 0 7.07 7.07l1.41-1.41"/><path d="M8 2v3M2 8h3M16 22v-3M22 16h-3"/>',
+        run: () => { void this.unlinkDoctor(d, h); } });
     }
-    return wrap;
-  };
-
-  private hospitalsCellRenderer = (p: ICellRendererParams<Doctor>): HTMLElement => {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-wrap:wrap;align-items:center;gap:4px;min-height:100%;padding:6px 0;';
-    if (!p.data) return wrap;
-    const hs = doctorHospitals(p.data);
-    if (!hs.length) {
-      const none = document.createElement('span');
-      none.style.cssText = 'font-size:12px;color:var(--text-tertiary);';
-      none.textContent = 'Independent';
-      wrap.appendChild(none);
-      return wrap;
-    }
-    for (const h of hs) {
-      const chip = document.createElement('span');
-      chip.className = 'pf-chip pf-chip--static';
-      chip.style.cssText = 'height:24px;font-size:11.5px;';
-      chip.textContent = h.name;
-      wrap.appendChild(chip);
-    }
-    return wrap;
-  };
-
-  private statusCellRenderer = (p: ICellRendererParams<Doctor>): HTMLElement => {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;';
-    if (!p.data) return wrap;
-    const chip = document.createElement('span');
-    chip.className = 'pf-chip pf-chip--static';
-    chip.style.cssText = 'height:24px;font-size:11.5px;';
-    chip.textContent = p.data.isActive ? 'Active' : 'Inactive';
-    wrap.appendChild(chip);
-    return wrap;
-  };
-
-  private actionsCellRenderer = (p: ICellRendererParams<Doctor>): HTMLElement => {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:inline-flex;align-items:center;height:100%;gap:8px;justify-content:flex-end;width:100%;';
-    if (!p.data) return wrap;
-    const d = p.data;
-    const ctx = p.context as ReferringNetworkComponent['gridContext'];
-    const web = ctx?.web?.() ?? true;
-    const edit = rowAction(web, 'Edit', ICON_EDIT, `Edit ${d.name}`);
-    edit.addEventListener('click', e => { e.stopPropagation(); ctx?.edit(d); });
-    wrap.appendChild(edit);
-    if (d.isActive) {
-      const off = rowAction(web, 'Deactivate', ICON_POWER, `Deactivate ${d.name}`);
-      off.addEventListener('click', e => { e.stopPropagation(); ctx?.deactivate(d); });
-      wrap.appendChild(off);
-    }
-    return wrap;
-  };
+    if (d.isActive) acts.push({ label: 'Deactivate', aria: `Deactivate ${d.name}`, path: SG_ICON.power, icon: true, run: () => { void this.deactivateDoctor(d); } });
+    return acts;
+  }
+  hospitalActions(h: Hospital): SgAction[] {
+    return [
+      { label: 'Edit hospital', aria: `Edit ${h.name}`, path: SG_ICON.edit, icon: true, run: () => this.openHospitalEditor(h) },
+      { label: 'Link doctors', aria: `Link doctors to ${h.name}`, icon: true,
+        path: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+        run: () => this.openLinkEditor(h) },
+    ];
+  }
 
   readonly doctorColDefs = computed<ColDef<Doctor>[]>(() => {
-    const web = this.web();
-    return [
-      { headerName: 'Doctor', colId: 'name', field: 'name', cellRenderer: this.doctorCellRenderer,
-        flex: 1.2, minWidth: 200, sortable: true, filter: true, autoHeight: true },
-      { headerName: 'Hospitals', colId: 'hospitals', valueGetter: q => q.data ? doctorHospitalsLabel(q.data) : '',
-        cellRenderer: this.hospitalsCellRenderer, flex: 1.4, minWidth: 220, sortable: true, filter: true, autoHeight: true },
-      { headerName: 'Department', colId: 'department', valueGetter: q => q.data?.department || q.data?.specialisation || '',
-        flex: 0.8, minWidth: 140, sortable: true, filter: true },
-      { headerName: 'Reg #', colId: 'registrationNo', field: 'registrationNo', width: 130, sortable: true, filter: true },
-      { headerName: 'Phone', colId: 'phone', field: 'phone', width: 150, sortable: true, filter: true },
-      { headerName: 'Status', colId: 'status', valueGetter: q => (q.data?.isActive ? 'Active' : 'Inactive'),
-        cellRenderer: this.statusCellRenderer, width: 110, sortable: true, filter: true },
-      { headerName: '', colId: 'actions', cellRenderer: this.actionsCellRenderer, minWidth: web ? 200 : 120,
-        sortable: false, filter: false, resizable: false },
+    const web = this.web() && !this.phone();
+    this.hospitalFilter(); this.hospitals();
+    const cols: ColDef<Doctor>[] = [
+      { headerName: 'Doctor', colId: 'name', field: 'name', flex: 1.3, minWidth: 190, sort: 'asc',
+        cellRenderer: (p: ICellRendererParams<Doctor>) => sgCell(p.data?.name, [p.data?.designation, p.data?.registrationNo ? 'Reg ' + p.data.registrationNo : null].filter(Boolean).join(' · ') || null, true) },
+      { headerName: 'Qualification', colId: 'qualification', valueGetter: q => q.data?.qualification || '', flex: 0.8, minWidth: 120 },
+      { headerName: 'Hospital(s)', colId: 'hospitals', valueGetter: q => q.data ? doctorHospitalsLabel(q.data) : '', flex: 1.3, minWidth: 180,
+        cellRenderer: (p: ICellRendererParams<Doctor>) => sgChips(p.data ? doctorHospitals(p.data).map(h => h.name) : [], 'Independent') },
+      { headerName: 'Department', colId: 'department', valueGetter: q => q.data?.department || q.data?.specialisation || '', flex: 0.8, minWidth: 130 },
+      { headerName: 'Phone', colId: 'phone', field: 'phone', width: 140, flex: 0, cellClass: 'pf-num' },
+      sgPillCol<Doctor>(d => d.isActive),
+      sgActionsCol<Doctor>(web, [], 3, p => (p.data ? sgActions(web, this.doctorActions(p.data)) : document.createElement('span'))),
     ];
+    if (this.phone()) return cols.filter(c => ['name', 'hospitals', 'actions'].includes(c.colId ?? ''));
+    return cols;
   });
 
+  readonly hospitalColDefs = computed<ColDef<Hospital>[]>(() => {
+    const web = this.web() && !this.phone();
+    const cols: ColDef<Hospital>[] = [
+      { headerName: 'Hospital', colId: 'name', field: 'name', flex: 1.4, minWidth: 190, sort: 'asc',
+        cellRenderer: (p: ICellRendererParams<Hospital>) => sgCell(p.data?.name, p.data?.address || null, true) },
+      { headerName: 'Code', colId: 'code', valueGetter: q => q.data?.code || '—', width: 110, flex: 0, cellClass: 'pf-num' },
+      { headerName: 'Doctors', colId: 'doctors', valueGetter: q => q.data?.doctorCount ?? 0, width: 110, flex: 0, type: 'rightAligned', cellClass: 'pf-num' },
+      { headerName: 'Phone', colId: 'phone', valueGetter: q => q.data?.phone || '', width: 140, flex: 0, cellClass: 'pf-num' },
+      { headerName: 'GSTIN', colId: 'gstin', valueGetter: q => q.data?.gstin || '', flex: 0.9, minWidth: 150, cellClass: 'pf-num',
+        cellRenderer: (p: ICellRendererParams<Hospital>) => { const el = sgCell(p.data?.gstin || null, p.data?.gstin ? null : 'Not set'); if (!p.data?.gstin) el.firstElementChild?.remove(); return el; } },
+      sgPillCol<Hospital>(h => h.isActive),
+      sgActionsCol<Hospital>(web, [], 2, p => (p.data ? sgActions(web, this.hospitalActions(p.data)) : document.createElement('span'))),
+    ];
+    if (this.phone()) return cols.filter(c => ['name', 'doctors', 'actions'].includes(c.colId ?? ''));
+    return cols;
+  });
+
+  /** A hospital row opens its doctors (the Doctors view filtered to it). */
+  onHospitalCell(e: CellClickedEvent<Hospital>): void {
+    if (e.colDef.colId === 'actions' || !e.data) return;
+    this.hospitalFilter.set(e.data.id);
+    this.status.set('all');
+    this.view.set('doctors');
+  }
+
   // ── View / search ───────────────────────────────────────────────
-  setView(v: View): void { this.view.set(v); }
+  setView(v: View): void { this.view.set(v); this.status.set('all'); }
   onBandSearch(v: string): void {
     if (this.view() === 'hospitals') this.hospitalSearch.set(v); else this.doctorSearch.set(v);
   }

@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { SettingGroupComponent } from '../../../shared/components/setting-row/setting-row.component';
+import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
+import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
+import { ChangeDetectionStrategy, Component, computed, inject, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
@@ -22,27 +25,34 @@ export type OpdFrontDeskSection = typeof OPD_FRONT_DESK_SECTIONS[number]['id'];
 @Component({
   selector: 'pf-opd-front-desk',
   standalone: true,
-  imports: [RouterLink, AppointmentsConfigComponent, ReferringNetworkComponent, NotificationsConfigComponent],
+  imports: [SettingGroupComponent, SegmentedComponent, RouterLink, AppointmentsConfigComponent, ReferringNetworkComponent, NotificationsConfigComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @switch (section()) {
-      @case ('referring') { <pf-referring-network></pf-referring-network> }
-      @case ('alerts') { <pf-notifications-config [department]="'opd'"></pf-notifications-config> }
-      @default {
-        <pf-appointments-config [tabs]="['slots']"></pf-appointments-config>
-        <p class="pf-ofd__note">
-          OPD tokens and queue order are set in <a routerLink="/admin/opd/workflow">OPD workflow</a>.
-        </p>
-      }
-    }
+    <!-- ONE page (owner 2026-11-17): booking slots and OPD alerts as group cards, the shared referring list full width. -->
+    <div class="pf-sgrid">
+      <pf-setting-group id="appointments"><pf-appointments-config [tabs]="['slots']"></pf-appointments-config></pf-setting-group>
+      <pf-setting-group id="alerts"><pf-notifications-config [department]="'opd'"></pf-notifications-config></pf-setting-group>
+      <pf-setting-group label="Referring doctors and hospitals" scope="one shared list" id="referring" [wide]="true"
+                        icon="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9h.01M9 13h.01M9 17h.01">
+        <pf-segmented group-tools size="sm" ariaLabel="Hospitals or doctors" [options]="rn.viewOptions()" [value]="rn.view()" (valueChange)="rn.setView($any($event))"></pf-segmented>
+        <pf-referring-network #rn></pf-referring-network>
+      </pf-setting-group>
+      <p class="pf-ofd__note">OPD tokens and queue order are set in <a routerLink="/admin/opd/workflow">OPD workflow</a>.</p>
+    </div>
   `,
   styles: [`
-    .pf-ofd__note { margin: 4px 0 0; padding: 0 16px 24px; max-width: 56rem; margin-inline: auto; font-size: 12.5px; color: var(--text-tertiary); }
+    .pf-ofd__note { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--text-tertiary); }
     .pf-ofd__note a { color: var(--violet-text, #7c3aed); font-weight: 600; text-decoration: none; }
     .pf-ofd__note a:hover { text-decoration: underline; }
   `],
 })
-export class OpdFrontDeskPage {
+export class OpdFrontDeskPage implements HasUnsavedChanges {
+  /** Booking slots / queue mode / priority have an explicit Save: leaving with edits asks first. */
+  private readonly appointments = viewChild(AppointmentsConfigComponent);
+  readonly unsavedLabel = 'the OPD front desk settings';
+  hasUnsavedChanges(): boolean { return this.appointments()?.hasUnsavedChanges() ?? false; }
+  saveChanges(): Promise<boolean> { return this.appointments()?.saveChanges() ?? Promise.resolve(true); }
+  private readonly _unloadGuard = guardUnsavedOnUnload(this);
   private readonly route = inject(ActivatedRoute);
   private readonly tab = toSignal(this.route.queryParamMap.pipe(map(q => q.get('tab'))), { initialValue: this.route.snapshot.queryParamMap.get('tab') });
   readonly section = computed<OpdFrontDeskSection>(() => {

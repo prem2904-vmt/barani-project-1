@@ -91,9 +91,11 @@ function render<T>(cmp: Type<T>, opts: { id?: string; me?: string; held?: string
   });
   const f = TestBed.createComponent(cmp);
   f.detectChanges();
+  // The user editor shows one section at a time (sections LEFT): open Roles.
+  (f.componentInstance as any).pickSection?.('roles'); f.detectChanges();
   const el = f.nativeElement as HTMLElement;
   const switches = () => [...el.querySelectorAll<HTMLButtonElement>('.pf-uf-roles .pf-toggle[role="switch"]')];
-  const names = () => switches().map(b => b.querySelector('.pf-uf-sw__name')!.textContent!.trim());
+  const names = () => switches().map(b => (b.querySelector('.pf-uf-sw__name') ?? b.closest('.ue-role')!.querySelector('.ue-role__name'))!.textContent!.trim());
   return { f, el, api, c: f.componentInstance as any, switches, names };
 }
 

@@ -57,9 +57,9 @@ describe('Admin band — Users & Access', () => {
     expect(p.cmp.filteredUsers().map((u: any) => u.id)).toEqual(['u2']);
   });
 
-  it('the Users / Roles switch rides in the pill and swaps the band action', () => {
+  it('the Users / Roles switch sits at the right end of the grid card head and swaps the band action', () => {
     const p = renderUsers();
-    const seg = p.tools()!.querySelectorAll<HTMLButtonElement>('pf-segmented button');
+    const seg = p.el.querySelectorAll<HTMLButtonElement>('.pf-sg-main__head pf-segmented.pf-ua-tabseg button');
     expect(Array.from(seg).map((b) => b.textContent?.trim())).toEqual(['Users', 'Roles & Permissions']);
     seg[1].click();
     p.f.detectChanges();

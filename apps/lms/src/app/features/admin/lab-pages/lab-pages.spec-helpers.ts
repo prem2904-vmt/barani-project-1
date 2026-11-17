@@ -60,11 +60,21 @@ export async function renderLabPage(page: Type<unknown>, url: string, opts: {
   const harness = await RouterTestingHarness.create();
   const cmp = await harness.navigateByUrl(url, page as Type<unknown>);
   harness.detectChanges();
+  // Group cards render their rows a turn later; let the first-load hold (600 ms minimum) settle too.
+  await new Promise((r) => setTimeout(r, 650));
+  harness.detectChanges();
   const el = harness.routeNativeElement as HTMLElement;
   return { harness, cmp: cmp as any, el, api, toasts };
 }
 
 export const text = (el: Element | null | undefined) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
 export const cardTitles = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-card__label')).map(h => text(h));
+/** Group card labels (one compact card per group, DESIGN-V2). */
+export const groupLabels = (el: HTMLElement) => Array.from(el.querySelectorAll('pf-setting-group .pf-sgroup__label')).map(h => text(h));
+/** Row labels (pf-setting-row). */
+export const rowLabels = (el: HTMLElement) => Array.from(el.querySelectorAll('pf-setting-row .pf-srow__label')).map(h => text(h));
+/** The options of a segmented control (by its aria-label on the radiogroup). */
+export const segButtons = (el: HTMLElement, aria: string) =>
+  Array.from(el.querySelectorAll<HTMLButtonElement>(`:is(pf-segmented[aria-label="${aria}"], [role="radiogroup"][aria-label="${aria}"]) [role="radio"]`));
 export const pillLabels = (el: HTMLElement) =>
   Array.from(el.querySelectorAll<HTMLButtonElement>('pf-hero-band pf-segmented button')).map(b => b.getAttribute('aria-label'));

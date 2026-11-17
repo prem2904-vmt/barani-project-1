@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, ElementRef, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, output, signal, ElementRef, viewChild } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { DialogService } from '../../../core/services/dialog.service';
+import { HasUnsavedChanges, confirmLeaveUnsaved, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -43,6 +46,7 @@ interface CreateForm {
   selector: 'pf-user-invite',
   standalone: true,
   imports: [
+    NgTemplateOutlet,
     FormsModule,
     ScreenHeaderComponent,
     SelectComponent,
@@ -54,19 +58,30 @@ interface CreateForm {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (panel()) {
+      <!-- PANEL: create a user beside the People grid — ONE scrolling form, Create at the foot. -->
+      <div class="ue-panel ui-panel" data-testid="ui-panel">
+        <header class="pf-card__head ue-panel__head">
+          <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg></span>
+          <span class="ue-panel__title"><span class="ue-strip__name pf-uf-ctx__text">{{ displayPreview() || 'New user' }}</span></span>
+          <span class="pf-card__spacer"></span>
+          <button type="button" class="pf-btn pf-btn--icon ue-panel__close" (click)="requestClose()" aria-label="Close" title="Close">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </header>
+        <div class="pf-card__body ue-panel__body"><ng-container *ngTemplateOutlet="inviteBody"></ng-container></div>
+        <div class="pf-card__foot ue-panel__foot">
+          <button type="button" class="pf-btn pf-btn--tertiary press" (click)="requestClose()">Cancel</button>
+          <button type="button" class="pf-btn pf-btn--primary pf-uf-primary press" [disabled]="!canCreate() || saving()"
+                  [pfBusy]="saving()" pfBusyLabel="Creating…" (click)="submit()">{{ saving() ? 'Creating…' : 'Create user' }}</button>
+        </div>
+      </div>
+    } @else {
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
         <!-- ND "Editors": band = back · tenant · the ONE primary; the pill is
              the CONTEXT BAR (who is being created, as it is typed). -->
-        <pf-hero-band [back]="true" [backTo]="'/admin/users?tab=users'" [customSearch]="true" [contextBar]="true">
-          <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-uf-primary press"
-                    [disabled]="!canCreate() || saving()" [pfBusy]="saving()" pfBusyLabel="Creating…" (click)="submit()"
-                    [attr.aria-label]="saving() ? 'Creating user' : 'Create user'" title="Create user">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg>
-              {{ saving() ? 'Creating…' : 'Create user' }}
-            </button>
-          </ng-container>
+        <pf-hero-band [back]="true" [backTo]="'/admin?section=people'" [customSearch]="true" [contextBar]="true">
           <div band-search class="pf-ctx pf-uf-ctx">
             <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
             <span class="pf-ctx__primary pf-uf-ctx__name">
@@ -90,6 +105,17 @@ interface CreateForm {
       </pf-screen-header>
 
       <div class="pf-band-body">
+        <ng-container *ngTemplateOutlet="inviteBody"></ng-container>
+        <!-- Create IN the pane, at the form's foot (owner: no band buttons in Settings). -->
+        <div class="ui-page-foot">
+          <button type="button" class="pf-btn pf-btn--secondary pf-uf-primary press" [disabled]="!canCreate() || saving()"
+                  [pfBusy]="saving()" pfBusyLabel="Creating…" (click)="submit()">{{ saving() ? 'Creating…' : 'Create user' }}</button>
+        </div>
+      </div>
+    </section>
+    }
+
+    <ng-template #inviteBody>
         <div class="pf-uf-body">
           <div class="pf-uf-grid2">
             <!-- PROFILE -->
@@ -251,12 +277,11 @@ interface CreateForm {
             </section>
           }
         </div>
-      </div>
-    </section>
+    </ng-template>
   `,
-  styleUrl: './user-form.styles.scss'
+  styleUrls: ['./user-form.styles.scss', './user-edit.component.scss', './user-invite.panel.scss']
 })
-export class UserInviteComponent implements OnInit {
+export class UserInviteComponent implements OnInit, HasUnsavedChanges {
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   /** The pill's pencil: put the caret in the name field. */
   editName(): void {
@@ -376,7 +401,26 @@ export class UserInviteComponent implements OnInit {
   }
 
   patch(p: Partial<CreateForm>) { this._form.update(v => ({ ...v, ...p })); }
-  back() { this.navBack.backTo('/admin/users?tab=users'); }
+  back() { this.navBack.backTo('/admin?section=people'); }
+  /** Panel mode: create a user beside the People grid (no page change). */
+  readonly panel = input(false);
+  readonly closed = output<void>();
+  readonly saved = output<void>();
+  private finish() { this._done = true; if (this.panel()) { this.saved.emit(); this.closed.emit(); } else this.back(); }
+
+  // ── Unsaved changes: anything typed before Create is asked about on leave / panel close ──
+  readonly unsavedLabel = 'the new user';
+  private _done = false;
+  hasUnsavedChanges(): boolean {
+    if (this._done || this._saving()) return false;
+    const f = this._form();
+    return !!(f.username.trim() || f.password || f.firstName.trim() || f.fathersName.trim() || f.phone.trim() || f.roleIds.length);
+  }
+  private readonly unloadGuard = guardUnsavedOnUnload(this);
+  private readonly dialogSvc = inject(DialogService);
+  async requestClose(): Promise<void> {
+    if (await confirmLeaveUnsaved(this.dialogSvc, this)) this.closed.emit();
+  }
 
   onUsernameChange(v: string) {
     if (this._usernameError()) this._usernameError.set(null);
@@ -452,7 +496,7 @@ export class UserInviteComponent implements OnInit {
       next: u => {
         this._saving.set(false);
         this.toasts.success(`${u.displayName || u.username} created. Share the password with them securely.`);
-        this.back();
+        this.finish();
       },
       error: e => {
         this._saving.set(false);

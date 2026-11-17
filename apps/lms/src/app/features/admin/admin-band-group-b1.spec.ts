@@ -25,13 +25,15 @@ describe('Admin band — Report designer (/admin/reports)', () => {
       : null,
   });
 
-  it('tabs-only pill carries the report sections; rail and page title are gone', () => {
+  it('ONE page: search pill + one tab strip (design tabs, Sending); rail and page title are gone', () => {
     const p = make();
     expect(p.band()).not.toBeNull();
-    expect(p.bandInput()).toBeNull();
-    expect(p.el.querySelector('.pf-hb__search--tabs')).not.toBeNull();
+    expect(p.bandInput()).not.toBeNull();
+    expect(p.bandInput()!.placeholder).toBe('Find a report setting');
+    expect(p.el.querySelector('.pf-hb__search--tabs')).toBeNull();
     expect(pillTabs(p.el).map((b) => b.getAttribute('aria-label')))
-      .toEqual(['Letterhead', 'Patient strip', 'Table columns', 'Results table', 'Sequencing', 'Footer']);
+      .toEqual(['Letterhead', 'Patient strip', 'Table columns', 'Results table', 'Sequencing', 'Footer', 'Sending']);
+    expect(p.el.querySelector('[data-testid="rt-report-options"]')).toBeNull();
     expect(p.el.querySelector('.pf-rt-rail')).toBeNull();
     expect(p.el.querySelector('.pf-rt-work__title')).toBeNull();
     expect(p.el.querySelector('.pf-rt-head')?.classList.contains('pf-classic-only')).toBe(true);
@@ -54,11 +56,41 @@ describe('Admin band — Report designer (/admin/reports)', () => {
     expect(tabByLabel(p.el, 'Footer').classList.contains('is-selected')).toBe(true);
   });
 
-  it('Save sits in the band actions and posts the template', () => {
+  it('Report notes is a row of Results table and Sending renders in the same body frame; one Save, notes PATCH only techReportNotes', () => {
     const p = make();
-    const save = p.actions().find((b) => b.textContent?.includes('Save'))!;
-    expect(save).toBeTruthy();
-    save.click();
+    expect(tabByLabel(p.el, 'Report notes')).toBeUndefined();
+    tabByLabel(p.el, 'Results table').click();
+    p.f.detectChanges();
+    expect(p.cmp.tab()).toBe('table');
+    const work = p.body()!.querySelector('.pf-rt-work')!;
+    expect(work.querySelector('[data-testid="ls-tech-notes"]')).not.toBeNull();
+    expect(p.body()!.querySelector('.pf-rt-aside')).not.toBeNull();
+    const sw = work.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Report notes"]')!;
+    sw.click();
+    expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/branch-lab-config', { techReportNotes: true });
+    tabByLabel(p.el, 'Sending').click();
+    p.f.detectChanges();
+    expect(p.body()!.querySelector('.pf-rt-work pf-report-sending-card')).not.toBeNull();
+    expect(p.actions().filter((b) => /\bSave\b/.test(b.textContent ?? '')).length).toBe(0);   // never in the band
+    expect(p.el.querySelectorAll('[data-testid="rt-save"]').length).toBeLessThanOrEqual(1);       // at most ONE Save (the pane's bar)
+  });
+
+  it('the band search finds a setting on another tab and opens it', () => {
+    const p = make();
+    p.type('whatsapp');
+    p.f.detectChanges();
+    const hit = p.el.querySelector<HTMLButtonElement>('[data-testid="rt-find"] .pf-rt-find__hit')!;
+    expect(hit.textContent).toContain('WhatsApp Auto');
+    hit.click();
+    p.f.detectChanges();
+    expect(p.cmp.tab()).toBe('sending');
+    expect(p.el.querySelector('[data-testid="rt-find"]')).toBeNull();
+  });
+
+  it('no button in the band (owner): Save sits in the settings pane\'s Save bar and posts the template', () => {
+    const p = make();
+    expect(p.actions().some((b) => /\bSave\b/.test(b.textContent ?? ''))).toBe(false);
+    p.cmp.save();
     expect(p.api.post).toHaveBeenCalledWith('/api/config/report-template', expect.objectContaining({ labName: 'Micro World Labs' }));
   });
 });

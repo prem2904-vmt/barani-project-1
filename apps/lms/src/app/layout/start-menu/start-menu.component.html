@@ -26,24 +26,8 @@
   </div>
   <div class="sm-scroll" [class.sm-scroll--intro]="intro()">
     @if (!searching()) {
-    <h3 class="sm-sec__t">On your bar</h3>
-    <div class="sm-tiles" role="list" aria-label="On your bar">
-      @for (r of tiles(); track r.item?.id ?? 'home'; let i = $index) {
-      <button type="button" role="listitem" class="sm-tile press" data-sm-row [style.--i]="i" [attr.data-sm-item]="r.item?.id ?? 'home'"
-        [class.sm-tile--on]="r.active" [attr.aria-current]="r.active ? 'page' : null" (click)="openRow(r)"
-        (contextmenu)="r.item && openCtx($event, r.item)" (pointerdown)="r.item && pressStart($event, r.item)" (pointerup)="pressEnd()" (pointerleave)="pressEnd()" (pointercancel)="pressEnd()">
-        @if (r.item?.logo) { <pf-files-logo [app]="r.item!.logo!" [size]="24" /> } @else {
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
-          stroke-linejoin="round" aria-hidden="true">@for (p of r.iconPath; track p) { <path [attr.d]="p" /> }</svg> }
-        <span class="sm-tile__lbl">{{ r.label }}</span>
-      </button>
-      }
-    </div>
-    @if (hiddenPins() > 0) {
-    <p class="sm-note">{{ hiddenPins() }} {{ hiddenPins() === 1 ? 'screen does' : 'screens do' }} not fit on the bar at this width. Open {{ hiddenPins() === 1 ? 'it' : 'them' }} here.</p>
-    }
     @if (others().length) {
-    <h3 class="sm-sec__t sm-sec__t--gap">More screens</h3>
+    <h3 class="sm-sec__t">More screens</h3>
     <div class="sm-rows" role="list" aria-label="More screens">
       @for (r of others(); track r.item!.id; let i = $index) {
       <button type="button" role="listitem" class="sm-row press" data-sm-row [style.--i]="i + 3" [attr.data-sm-item]="r.item!.id"
@@ -61,7 +45,8 @@
     <div class="sm-rows" role="list" aria-label="Screens">
       @for (r of results(); track r.item?.id ?? 'home') {
       <button type="button" role="listitem" class="sm-row press" data-sm-row [attr.data-sm-item]="r.item?.id ?? 'home'"
-        [class.sm-row--on]="r.active" (click)="openRow(r)" (contextmenu)="r.item && openCtx($event, r.item)">
+        [class.sm-row--on]="r.active" (click)="openRow(r)" (contextmenu)="r.item && openCtx($event, r.item)"
+        (pointerdown)="r.item && pressStart($event, r.item)" (pointerup)="pressEnd()" (pointerleave)="pressEnd()" (pointercancel)="pressEnd()">
         @if (r.item?.logo) { <pf-files-logo [app]="r.item!.logo!" [size]="22" /> } @else {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
           stroke-linejoin="round" aria-hidden="true">@for (p of r.iconPath; track p) { <path [attr.d]="p" /> }</svg> }

@@ -166,3 +166,28 @@ describe('Settings back — honours where you came from', () => {
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
 });
+
+describe('Settings back — where the person came from (owner 2026-11-17)', () => {
+  it('a cross-link (Collection → Work steps) goes back to Collection, not the Settings home', () => {
+    const { svc, go, location, router } = setup('/admin');
+    go('/admin/lab/collection?tab=queue');
+    go('/admin/process');
+    svc.back();
+    expect(location.back).toHaveBeenCalledTimes(1);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  });
+
+  it('Billing → Finance credit accounts goes back to Billing', () => {
+    const { svc, go, location } = setup('/admin/billing');
+    go('/finance/credit-accounts');
+    svc.back();
+    expect(location.back).toHaveBeenCalledTimes(1);
+  });
+
+  it('a deep link (nothing of ours behind it) climbs to the Settings section it belongs to', () => {
+    const { svc, location, router } = setup('/admin/process');
+    svc.back();
+    expect(location.back).not.toHaveBeenCalled();
+    expect(router.navigateByUrl).toHaveBeenCalledWith('/admin?section=lab', { replaceUrl: true });
+  });
+});

@@ -28,7 +28,7 @@ import { BridgeLinkPage, handleBridgeLinkHref } from '../../bridges/bridge-link.
 const flush = async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0)); };
 /** The detail's first-load skeleton is HELD 600 ms (heldFlag, ND "Loading feedback"). */
 const settle = async () => { await new Promise((r) => setTimeout(r, 650)); await flush(); };
-const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-hb-btn--primary, .nd-btn--primary').length;
+const primaries = (el: HTMLElement) => el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary').length;
 
 function memStorage() {
   const m = new Map<string, string>();
@@ -134,12 +134,18 @@ describe('Bridges — routes, permission, hub tile', () => {
 
 // ── List ────────────────────────────────────────────────────────────────────
 describe('Bridges list', () => {
-  it('band search + grid card + side card whose ONE primary is "Add Bridge"; nearby offers listed', async () => {
+  it('Test Master frame: band search + Analyzers|Bridges switch, "Add Bridge" in the card head (no band buttons), overview side card LEFT; nearby offers listed', async () => {
     const p = render(BridgesListComponent);
     await flush(); p.f.detectChanges();
     expect(p.el.querySelector('pf-hero-band .pf-hb__input')).not.toBeNull();
-    expect(primaries(p.el)).toBe(1);
-    expect(p.el.querySelector('.pf-brl__side .nd-btn--primary')!.textContent).toContain('Add Bridge');
+    expect(primaries(p.el)).toBe(0);
+    expect(p.el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
+    expect(Array.from(p.el.querySelectorAll('.pf-sg-act')).map(b => b.textContent!.trim())).toEqual(['Refresh', 'Add Bridge']);
+    expect(p.el.querySelector('pf-hero-band pf-settings-siblings')).not.toBeNull();
+    // Side card comes FIRST (left), the grid card second — like Test Master.
+    const panels = p.el.querySelector('.pf-sg-panels')!;
+    expect(panels.firstElementChild!.classList.contains('pf-sg-side')).toBe(true);
+    expect(p.el.querySelector('.pf-sg-main .pf-card__head')).not.toBeNull();
     expect(p.cmp.visibleRows()).toHaveLength(3);
     expect(p.cmp.statusCounts().find((s: any) => s.label === 'Online').n).toBe(1);
     expect(p.cmp.queuedTotal()).toBe(12);
@@ -178,9 +184,9 @@ describe('Bridge detail', () => {
     await settle(); p.f.detectChanges();
     expect(p.el.querySelector('.pf-brd__source-t')!.textContent).toContain('Sysmex XN-350 connected on port 6662 — link it?');
     expect(primaries(p.el)).toBe(1);
-    expect(p.el.querySelector('.pf-brd__main .nd-btn--primary')!.textContent).toContain('Assign analyzer');
+    expect(p.el.querySelector('.pf-brd__main .pf-btn--primary')!.textContent).toContain('Assign analyzer');
     expect(p.cmp.rows().map((r: any) => r.connection)).toEqual(['Connects to 192.168.50.20:5100', 'Listens on port 6661']);
-    expect(p.el.querySelector('pf-hero-band .nd-ctx__primary')!.textContent).toContain('Haematology Bridge');
+    expect(p.el.querySelector('pf-hero-band .pf-ctx__primary')!.textContent).toContain('Haematology Bridge');
     expect(p.el.querySelector('.pf-brd__facts')!.textContent).toContain('LabWiFi');
     expect(p.el.querySelector('.pf-brd__acts')!.textContent).toContain('Wrong Wi-Fi password');
   });
@@ -191,7 +197,7 @@ describe('Bridge detail', () => {
     expect(p.el.querySelector('pf-actions-menu')).toBeNull();
     expect(primaries(p.el)).toBe(0);
     expect(p.el.querySelector('.pf-brd__source-acts')).toBeNull();
-    expect(p.el.querySelector('.pf-brd__side .nd-card__foot')).toBeNull();
+    expect(p.el.querySelector('.pf-brd__side .pf-card__foot')).toBeNull();
   });
 
   it('Remove asks first (DialogService) and states what is discarded; cancel = no DELETE', async () => {
@@ -268,12 +274,12 @@ describe('Bridge detail', () => {
     p.api.get.mockImplementation(((u: string) => u.includes('/commands/')
       ? of({ id: 'c-new', type: 'wifi.set', state: 'succeeded', issuedAt: 't', result: { detail: { ssid: 'LabWiFi', ipv4: '192.168.1.40' } } })
       : of(mockBridgeApi('GET', u)?.body.data ?? [])) as never);
-    document.querySelector<HTMLFormElement>('.nd-dialog form')!.dispatchEvent(new Event('submit'));
+    document.querySelector<HTMLFormElement>('.pf-dialog form')!.dispatchEvent(new Event('submit'));
     await flush(); p.f.detectChanges();
     expect(p.api.post).toHaveBeenCalledWith(`/api/bridges/${FX_BRIDGE_HAEM.id}/commands`,
       { type: 'wifi.set', payload: { ssid: 'LabWiFi', security: 'wpa2-psk', psk: 'secret123', keepPrevious: true } });
-    expect(document.querySelector('.nd-dialog')!.textContent).toContain('Connected to LabWiFi');
-    expect(document.querySelector('.nd-dialog')!.textContent).toContain('192.168.1.40');
+    expect(document.querySelector('.pf-dialog')!.textContent).toContain('Connected to LabWiFi');
+    expect(document.querySelector('.pf-dialog')!.textContent).toContain('192.168.1.40');
   });
 
   it('analyzerRows joins instruments with the heartbeat link states', () => {
