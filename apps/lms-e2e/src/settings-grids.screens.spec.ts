@@ -362,9 +362,25 @@ test.describe('settings list grids', () => {
         const g = (await grid.boundingBox())!;
         const body = (await page.locator('.pf-band-body').locator('visible=true').first().boundingBox())!;
         expect(g.width, `${url} grid width`).toBeGreaterThan(w * 0.4);
+        // Hosted in the shell / overview: the grid is FLUSH in the frame's card (Test Master's fill — no inset box).
+        const flush = await grid.evaluate((el) => {
+          const card = el.closest('.pf-tp__panel, .pf-ss__card') as HTMLElement | null;
+          if (!card) return null;
+          const c = card.getBoundingClientRect(); const r = el.getBoundingClientRect();
+          return { left: Math.abs(r.left - c.left), right: Math.abs(r.right - c.right) };
+        });
+        if (flush) {
+          expect(flush.left, `${url}: grid flush to the card's left edge`).toBeLessThan(3);
+          expect(flush.right, `${url}: grid flush to the card's right edge`).toBeLessThan(3);
+        }
         expect(body.y + body.height - (g.y + g.height), `${url}: grid reaches the bottom`).toBeLessThan(60);
         await page.screenshot({ path: `${out()}/sg-fill-${w}-${card.replace(/[^a-z]/g, '')}.png` });
       }
+      // Test Master at the same size, for the side-by-side.
+      await go(page, '/admin/tests');
+      await expect(vis(page, '.pf-tm')).toBeVisible({ timeout: 60_000 });
+      await page.waitForTimeout(1200);
+      await page.screenshot({ path: `${out()}/sg-fill-${w}-testmaster.png` });
     });
   }
 

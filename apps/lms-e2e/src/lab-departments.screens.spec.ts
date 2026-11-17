@@ -91,8 +91,10 @@ test.describe('lab departments page', () => {
     page.on('pageerror', e => errors.push(e.message));
     await go(page, '/admin/lab/departments?tab=departments');
     await expect(row(page, 'Biochemistry')).toBeVisible({ timeout: 60_000 });
-    await expect(row(page, 'Biochemistry').locator('[data-testid="ld-origin"]')).toContainText('From the catalogue');
-    await expect(row(page, 'Cytogenetics').locator('[data-testid="ld-origin"]')).toContainText('Made here');
+    if (!isPhone()) {   // phones keep the key columns (no Origin column)
+      await expect(row(page, 'Biochemistry').locator('[data-testid="ld-origin"]')).toContainText('From the catalogue');
+      await expect(row(page, 'Cytogenetics').locator('[data-testid="ld-origin"]')).toContainText('Made here');
+    }
     await expect(row(page, 'Biochemistry').locator('button[aria-label^="Delete"]')).toHaveCount(0);
     await expectLayout(page, 'departments list');
     await shot(page, 'lab-departments-list');
@@ -115,7 +117,7 @@ test.describe('lab departments page', () => {
     await tid(page, 'ld-add-name').fill('Toxicology');
     await tid(page, 'ld-add-save').click();
     await expect(row(page, 'Toxicology')).toBeVisible();
-    await expect(row(page, 'Toxicology').locator('[data-testid="ld-origin"]')).toContainText('Made here');
+    if (!isPhone()) await expect(row(page, 'Toxicology').locator('[data-testid="ld-origin"]')).toContainText('Made here');
     expect(calls.some(c => c.method === 'POST' && c.body?.name === 'Toxicology' && c.body?.code === 'BX')).toBe(true);
 
     // rename: the Rename icon starts the grid's inline edit of the name
@@ -146,7 +148,8 @@ test.describe('lab departments page', () => {
 
   test('branches keeps new branch / deactivate / GSTIN and has no board', async ({ page }) => {
     await go(page, '/admin/branches');
-    await expect(page.locator('.pf-br-main .ag-row').filter({ hasText: '33AAAAA0000A1Z5' }).locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
+    // GSTIN column (phones keep Branch / Status only).
+    await expect(page.locator('.pf-br-main .ag-row').filter({ hasText: isPhone() ? 'Main' : '33AAAAA0000A1Z5' }).locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('.pf-board')).toHaveCount(0);
     await expect(page.getByText('Departments & lab spaces')).toHaveCount(0);
     await expectLayout(page, 'branches');
