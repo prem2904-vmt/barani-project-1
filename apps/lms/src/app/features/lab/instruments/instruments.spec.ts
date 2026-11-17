@@ -71,7 +71,10 @@ describe('Instruments list', () => {
     await flush(); p.f.detectChanges();
     expect(p.bandInput()).not.toBeNull();
     expect(primaries(p.el)).toBe(1);
-    expect(p.el.querySelector('.pf-inl__side .pf-btn--primary')!.textContent).toContain('Add instrument');
+    expect(p.el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Add instrument');
+    expect(p.el.querySelector('pf-hero-band pf-segmented')!.textContent).toContain('Bridges');
+    // Side card LEFT (first), grid card second — like Test Master.
+    expect(p.el.querySelector('.pf-sg-panels')!.firstElementChild!.querySelector('.pf-inl__side')).not.toBeNull();
     expect(p.el.querySelector('.pf-inl__main.pf-card .pf-card__icon svg')).not.toBeNull();
     expect(p.cmp.statusCounts().find((s: { label: string }) => s.label === 'Online').n).toBe(1);
     expect(p.cmp.unmatchedTotal()).toBe(2);
