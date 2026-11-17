@@ -162,6 +162,9 @@ test.describe('Test editor — real layout', () => {
     const aw = (await aside.boundingBox())!.width;
     expect(aw).toBeGreaterThan(380);
     expect(aw).toBeLessThan(420);
+    // …on the LEFT of the main card (owner 2026-11-17: side cards sit left).
+    const mainX = (await page.locator('.pf-te2-main').boundingBox())!.x;
+    expect((await aside.boundingBox())!.x).toBeLessThan(mainX);
     await expect(page.locator('.pf-te2-previewbtn')).toBeHidden();
 
     // No page-level scroll: only the card bodies scroll.
