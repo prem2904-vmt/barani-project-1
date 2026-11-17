@@ -22,6 +22,8 @@ const settings = () => ({
 const storage = { totalBytes: 1.2 * 1024 ** 3, byKind: [{ kind: 'sheet', count: 412, bytes: 1 }, { kind: 'doc', count: 1, bytes: 1 }, { kind: 'slides', count: 18, bytes: 1 }, { kind: 'pdf', count: 0, bytes: 0 }, { kind: 'image', count: 3, bytes: 1 }], trashCount: 0, trashBytes: 0 };
 
 function make(o: { full?: boolean; roles?: boolean; fail?: boolean; saveFail?: boolean } = {}) {
+  // Wide layout, whatever an earlier spec in this worker left on window.matchMedia (the phone list hides the rows).
+  (window as unknown as { matchMedia: unknown }).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
   const office = {
     settings: vi.fn(async () => { if (o.fail) throw new Error('x'); return { settings: settings(), access: { full: o.full !== false } }; }),
     saveSettings: vi.fn(async (s: unknown) => { if (o.saveFail) throw new Error('x'); return { settings: s, access: { full: true } }; }),
