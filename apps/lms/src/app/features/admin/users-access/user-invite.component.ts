@@ -65,23 +65,22 @@ interface CreateForm {
           <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg></span>
           <span class="ue-panel__title"><span class="ue-strip__name pf-uf-ctx__text">{{ displayPreview() || 'New user' }}</span></span>
           <span class="pf-card__spacer"></span>
-          <button type="button" class="pf-btn pf-btn--icon ue-panel__close" (click)="requestClose()" aria-label="Close" title="Close">
+          <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+          <button type="button" class="pf-btn pf-btn--primary pf-uf-primary press" [disabled]="!canCreate() || saving()"
+                  [pfBusy]="saving()" pfBusyLabel="Creating…" (click)="submit()">{{ saving() ? 'Creating…' : 'Create user' }}</button>
+<button type="button" class="pf-btn pf-btn--icon ue-panel__close" (click)="requestClose()" aria-label="Close" title="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </header>
         <div class="pf-card__body ue-panel__body"><ng-container *ngTemplateOutlet="inviteBody"></ng-container></div>
-        <div class="pf-card__foot ue-panel__foot">
-          <button type="button" class="pf-btn pf-btn--tertiary press" (click)="requestClose()">Cancel</button>
-          <button type="button" class="pf-btn pf-btn--primary pf-uf-primary press" [disabled]="!canCreate() || saving()"
-                  [pfBusy]="saving()" pfBusyLabel="Creating…" (click)="submit()">{{ saving() ? 'Creating…' : 'Create user' }}</button>
-        </div>
+        
       </div>
     } @else {
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
         <!-- ND "Editors": band = back · tenant · the ONE primary; the pill is
              the CONTEXT BAR (who is being created, as it is typed). -->
-        <pf-hero-band [back]="true" [backTo]="'/admin?section=people'" [customSearch]="true" [contextBar]="true">
+        <pf-hero-band [back]="true" [customSearch]="true" [contextBar]="true">
           <div band-search class="pf-ctx pf-uf-ctx">
             <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
             <span class="pf-ctx__primary pf-uf-ctx__name">
@@ -97,7 +96,7 @@ interface CreateForm {
       <pf-screen-header class="pf-classic-only"
         eyebrow="Admin · Users"
         title="Create user"
-        parentRoute="/admin/users?tab=users"
+        parentRoute="/admin?section=people&tab=users"
         subtitle="Set a username and password, pick the roles and branch scope. Share the password with them — there's no email.">
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canCreate() || saving()" [busy]="saving()" busyLabel="Creating…" (pressed)="submit()">
           {{ saving() ? 'Creating…' : 'Create user' }}
@@ -401,7 +400,7 @@ export class UserInviteComponent implements OnInit, HasUnsavedChanges {
   }
 
   patch(p: Partial<CreateForm>) { this._form.update(v => ({ ...v, ...p })); }
-  back() { this.navBack.backTo('/admin?section=people'); }
+  back() { this.navBack.back(); }
   /** Panel mode: create a user beside the People grid (no page change). */
   readonly panel = input(false);
   readonly closed = output<void>();

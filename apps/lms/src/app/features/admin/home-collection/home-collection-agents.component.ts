@@ -93,7 +93,11 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
                 <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10M9 21v-6h6v6"/></svg></span>
                 <h3 class="pf-card__label">{{ editing() ? 'Edit area' : 'New agent' }}</h3>
                 <span class="pf-card__spacer"></span>
-                <button type="button" class="pf-btn pf-btn--icon" (click)="toggleForm()" aria-label="Close">
+                <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!draft().userId || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+                  {{ saving() ? 'Saving…' : 'Save agent' }}
+                </button>
+<button type="button" class="pf-btn pf-btn--icon" (click)="toggleForm()" aria-label="Close">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
               </div>
@@ -146,12 +150,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
                     (valueChange)="patch({ weightage: $event ?? 1 })"></pf-number-input>
                 </div>
               </div>
-              <div class="pf-card__foot">
-                <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleForm()">Cancel</button>
-                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!draft().userId || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
-                  {{ saving() ? 'Saving…' : 'Save agent' }}
-                </button>
-              </div>
+              
             </aside>
           }
 

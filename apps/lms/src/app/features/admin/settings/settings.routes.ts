@@ -5,7 +5,7 @@ import { routeGuards } from '../../../core/auth/route-guards';
 import { OPD_ADMIN_ROUTES } from '../../opd/opd.routes';
 import { casesheetGuard } from '../../casesheets/shared/casesheet.guard';
 import { unsavedChangesGuard } from '../../../shared/utils/unsaved-changes';
-import { LEGACY_SECTION, SETTINGS_FULL_SCREEN_PATHS, SETTINGS_PATHS as P, rehome } from './settings-map';
+import { LEGACY_SECTION, SETTINGS_FULL_SCREEN_PATHS, SETTINGS_PATHS as P, SETTINGS_SECTIONS, rehome } from './settings-map';
 
 /**
  * THE Settings route table. Every screen that opens INSIDE the Settings shell (the two-panel frame with the
@@ -146,8 +146,28 @@ export const SETTINGS_SHELL_CHILDREN: Routes = [
  * at the top level beside the shell; the band's back chevron climbs to their Settings section (settingsParents).
  * A setting made only of such pages (Outsourcing, Analyzers and bridges, Work steps and forms) forwards to its first.
  */
+/**
+ * A section made of ONE full-screen setting (People and access, Branches, Connected apps, Files…) renders that page
+ * INLINE in the Settings overview (new design). Its own path no longer opens a second, standalone copy of the page:
+ * it redirects to the overview section with the same query (?tab=, ?edit=…), so a back from an editor — or an old
+ * link — always lands on the new-design page, in one press (owner 2026-11-17).
+ */
+export const INLINE_SECTION_OF: ReadonlyMap<string, string> = new Map(
+  SETTINGS_SECTIONS.filter((sec) => sec.items.length === 1 && SETTINGS_FULL_SCREEN_PATHS.has(sec.items[0].path))
+    .map((sec) => [sec.items[0].path, sec.id] as const),
+);
+const isInline = (r: Route) => INLINE_SECTION_OF.has('/' + (r.path ?? ''));
+/** The page routes of those inline sections — the overview loads the component from here. */
+export const INLINE_PAGE_ROUTES: Routes = ALL_SETTINGS_PAGES.filter((r) => isFull(r) && isInline(r));
+const toInlineSection = (r: Route): Route => ({
+  path: r.path, pathMatch: 'full',
+  redirectTo: ({ queryParams }) => inject(Router).createUrlTree(['/admin'],
+    { queryParams: { ...(queryParams as Record<string, string>), section: INLINE_SECTION_OF.get('/' + (r.path ?? '')) } }),
+});
+
 export const SETTINGS_FULL_PAGE_ROUTES: Routes = [
-  ...ALL_SETTINGS_PAGES.filter(isFull),
+  ...ALL_SETTINGS_PAGES.filter((r) => isFull(r) && !isInline(r)),
+  ...INLINE_PAGE_ROUTES.map(toInlineSection),
   forward(P.labOutsourcing, P.referralLabs),
   forward(P.labAnalyzers, P.instruments),
   forward(P.labWorkSteps, P.process),

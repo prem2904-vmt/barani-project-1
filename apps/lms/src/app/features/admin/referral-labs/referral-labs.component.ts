@@ -85,7 +85,11 @@ const EMPTY: LabDraft = {
                 <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3v6l-5 9a2 2 0 0 0 2 3h12a2 2 0 0 0 2-3l-5-9V3M9 3h6M7.5 14h9"/></svg></span>
                 <h3 class="pf-card__label">{{ draft().id ? 'Edit referral lab' : 'New referral lab' }}</h3>
                 <span class="pf-card__spacer"></span>
-                <button type="button" class="pf-btn pf-btn--icon" (click)="toggleForm()" aria-label="Close">
+                <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+                <button type="button" class="pf-btn pf-btn--primary press" (click)="save()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…">
+                  {{ saving() ? 'Saving…' : (draft().id ? 'Save changes' : 'Create referral lab') }}
+                </button>
+<button type="button" class="pf-btn pf-btn--icon" (click)="toggleForm()" aria-label="Close">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
               </div>
@@ -117,12 +121,7 @@ const EMPTY: LabDraft = {
                   <p class="pf-field__hint pf-rl-hint">Optional — scopes the department picker on outsourced tests.</p>
                 </div>
               </div>
-              <div class="pf-card__foot">
-                <button type="button" class="pf-btn pf-btn--tertiary press" (click)="toggleForm()">Cancel</button>
-                <button type="button" class="pf-btn pf-btn--primary press" (click)="save()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…">
-                  {{ saving() ? 'Saving…' : (draft().id ? 'Save changes' : 'Create referral lab') }}
-                </button>
-              </div>
+              
             </aside>
           }
 

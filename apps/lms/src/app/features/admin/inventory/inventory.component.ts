@@ -169,7 +169,9 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
           <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></span>
           <h3 class="pf-card__label" id="pf-inv-side-t">{{ form().id ? 'Edit item' : 'New item' }}</h3>
           <span class="pf-card__spacer"></span>
-          <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="editing.set(false)" aria-label="Close the item form">
+          <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!canSave() || itemSaving()" [pfBusy]="itemSaving()" pfBusyLabel="Saving…" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
+<button type="button" class="pf-btn pf-btn--icon inv-close" (click)="editing.set(false)" aria-label="Close the item form">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </header>
@@ -203,10 +205,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
             </div>
           </div>
         </div>
-        <div class="pf-card__foot">
-          <button type="button" class="pf-btn pf-btn--secondary press" (click)="editing.set(false)">Cancel</button>
-          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!canSave() || itemSaving()" [pfBusy]="itemSaving()" pfBusyLabel="Saving…" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
-        </div>
+        
       } @else if (sel(); as it) {
         <header class="pf-card__head">
           <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
@@ -215,7 +214,23 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
           <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="closeSide()" [attr.aria-label]="sheet ? 'Close' : 'Close the item'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
-        </header>
+        <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+          @switch (section()) {
+            @case ('receive') {
+              <button type="button" class="pf-btn pf-btn--secondary press" (click)="setSection(it, 'batches')">Cancel</button>
+              <button type="button" class="pf-btn press" [class.pf-btn--primary]="rcv().qty > 0" [class.pf-btn--secondary]="rcv().qty <= 0"
+                      [disabled]="rcv().qty<=0 || receiving()" [pfBusy]="receiving()" pfBusyLabel="Adding stock…" (click)="doReceive(it)">Add stock</button>
+            }
+            @case ('label') {
+              <button type="button" class="pf-btn pf-btn--secondary press" (click)="startEdit(it)">Edit item</button>
+              <button type="button" class="pf-btn pf-btn--primary press" (click)="printLabel()">Print label</button>
+            }
+            @default {
+              <button type="button" class="pf-btn pf-btn--secondary press" (click)="startEdit(it)">Edit item</button>
+              <button type="button" class="pf-btn pf-btn--primary press" (click)="openReceive(it)">Receive stock</button>
+            }
+          }
+</header>
         <div class="pf-card__body">
           <div class="inv-subject">
             <div>
@@ -302,23 +317,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
             }
           }
         </div>
-        <div class="pf-card__foot">
-          @switch (section()) {
-            @case ('receive') {
-              <button type="button" class="pf-btn pf-btn--secondary press" (click)="setSection(it, 'batches')">Cancel</button>
-              <button type="button" class="pf-btn press" [class.pf-btn--primary]="rcv().qty > 0" [class.pf-btn--secondary]="rcv().qty <= 0"
-                      [disabled]="rcv().qty<=0 || receiving()" [pfBusy]="receiving()" pfBusyLabel="Adding stock…" (click)="doReceive(it)">Add stock</button>
-            }
-            @case ('label') {
-              <button type="button" class="pf-btn pf-btn--secondary press" (click)="startEdit(it)">Edit item</button>
-              <button type="button" class="pf-btn pf-btn--primary press" (click)="printLabel()">Print label</button>
-            }
-            @default {
-              <button type="button" class="pf-btn pf-btn--secondary press" (click)="startEdit(it)">Edit item</button>
-              <button type="button" class="pf-btn pf-btn--primary press" (click)="openReceive(it)">Receive stock</button>
-            }
-          }
-        </div>
+        
       } @else {
         <header class="pf-card__head">
           <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg></span>

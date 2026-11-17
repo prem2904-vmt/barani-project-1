@@ -140,6 +140,17 @@ interface EdModel {
                 <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
                 <span class="pf-card__label pf-mm__sname">{{ ed.isNew ? 'New ' + singular(ed.kind) : ed.model.name || ed.model.antibiotic }}</span>
                 <span class="pf-card__spacer"></span>
+                <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+                @if (!ed.isNew && (ed.model.tenantId || ed.model.tenant)) {
+                  <button type="button" class="pf-btn pf-btn--tertiary pf-mm__del press" (click)="deleteEd()"
+                          [disabled]="deleting() || saving()" [pfBusy]="deleting()" pfBusyLabel="Removing…">
+                    {{ hasStandard(ed) ? 'Revert to standard' : 'Delete' }}
+                  </button>
+                }
+                
+                <button type="button" class="pf-btn pf-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
+                  {{ saving() ? 'Saving…' : 'Save' }}
+                </button>
                 <button type="button" class="pf-btn pf-btn--icon pf-mm__x press" (click)="editor.set(null)" aria-label="Close" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
               <div class="pf-card__body">
@@ -210,18 +221,6 @@ interface EdModel {
                 </div>
               }
 
-              </div>
-              <div class="pf-mm__actions">
-                @if (!ed.isNew && (ed.model.tenantId || ed.model.tenant)) {
-                  <button type="button" class="pf-btn pf-btn--tertiary pf-mm__del press" (click)="deleteEd()"
-                          [disabled]="deleting() || saving()" [pfBusy]="deleting()" pfBusyLabel="Removing…">
-                    {{ hasStandard(ed) ? 'Revert to standard' : 'Delete' }}
-                  </button>
-                }
-                <span class="pf-mm__spacer"></span>
-                <button type="button" class="pf-btn pf-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
-                  {{ saving() ? 'Saving…' : 'Save' }}
-                </button>
               </div>
             </aside>
           } @else if (section() === 'organisms' && selOrg(); as org) {
@@ -364,7 +363,8 @@ interface EdModel {
       -moz-appearance: textfield; appearance: textfield; }
     .pf-mm__cutin::-webkit-inner-spin-button, .pf-mm__cutin::-webkit-outer-spin-button { display: none; }
         .pf-mm__cutin--i { width: 80px; }
-    .pf-mm__save, .pf-mm__add { height: 40px; min-height: 40px; }
+    .pf-mm__add { height: 40px; min-height: 40px; }
+    .pf-mm__save, .pf-mm__del { height: 34px; min-height: 34px; }
     .pf-mm__hint2 { font-size: 12px; color: var(--text-tertiary); margin: 10px 0 0; }
         .pf-mm__fld { margin-bottom: 6px; }
         .pf-mm__flags { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 6px 0 4px; }

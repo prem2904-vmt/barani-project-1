@@ -98,7 +98,10 @@ interface EditForm {
               <span class="pf-rowact__t">{{ isActive() ? 'Deactivate' : 'Reactivate' }}</span>
             </button>
           }
-          <button type="button" class="pf-btn pf-btn--icon ue-panel__close" (click)="requestClose()" aria-label="Close" title="Close">
+          <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+          <button type="button" class="pf-btn pf-btn--primary pf-uf-primary press" [disabled]="!canSave() || saving() || recordSkeleton()"
+                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
+<button type="button" class="pf-btn pf-btn--icon ue-panel__close" (click)="requestClose()" aria-label="Close" title="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </header>
@@ -116,18 +119,14 @@ interface EditForm {
             <ng-container *ngTemplateOutlet="secValidates"></ng-container>
           }
         </div>
-        <div class="pf-card__foot ue-panel__foot">
-          <button type="button" class="pf-btn pf-btn--tertiary press" (click)="requestClose()">Cancel</button>
-          <button type="button" class="pf-btn pf-btn--primary pf-uf-primary press" [disabled]="!canSave() || saving() || recordSkeleton()"
-                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
-        </div>
+        
       </div>
     } @else {
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
         <!-- ND "Editors": band = back · tenant · the ONE primary; the pill is
              the CONTEXT BAR (the user being edited as read-only chips). -->
-        <pf-hero-band [back]="true" [backTo]="'/admin?section=people'" [customSearch]="true" [contextBar]="true"
+        <pf-hero-band [back]="true" [customSearch]="true" [contextBar]="true"
                       [backAction]="narrow() && sectionPicked() ? backToSections : null">
           <div band-search class="pf-ctx pf-uf-ctx">
             <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
@@ -144,7 +143,7 @@ interface EditForm {
       <pf-screen-header class="pf-classic-only"
         eyebrow="Admin · Users"
         [title]="'Edit ' + (loadedName() || 'user')"
-        parentRoute="/admin/users?tab=users"
+        parentRoute="/admin?section=people&tab=users"
         subtitle="Update the user's details, roles and branch scope.">
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canSave() || saving() || recordSkeleton()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save changes' }}
@@ -599,7 +598,7 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
     const keys = Object.keys(p);
     if (keys.length) this._fieldError.update(fe => { const n = { ...fe }; for (const k of keys) delete n[k]; return n; });
   }
-  back() { this.navBack.backTo('/admin?section=people'); }
+  back() { this.navBack.back(); }
   /** Saved: the panel tells its grid (and closes); the page goes back where the person came from. */
   private finish() { if (this.panel()) { this.saved.emit(); this.closed.emit(); } else this.back(); }
   private readonly dialog = inject(DialogService);

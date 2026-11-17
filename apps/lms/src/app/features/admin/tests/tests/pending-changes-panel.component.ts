@@ -120,6 +120,26 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
         </span>
         <span class="pf-card__label">Review</span>
         <span class="pf-card__spacer"></span>
+        <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+        @if (detail(); as p) {
+          @if (actionable(p)) {
+            <span class="pf-tmp__acts" data-tmp-actions>
+            @if (p.isMine) {
+              <button type="button" class="pf-btn pf-btn--tertiary pf-span press" [disabled]="busy()" [pfBusy]="busyKey() === 'withdraw'"
+                      pfBusyLabel="Withdrawing…" (click)="withdraw()" data-tmp-withdraw>Withdraw my suggestion</button>
+            }
+            <button type="button" class="pf-btn pf-btn--danger press" [disabled]="busy()" [pfBusy]="busyKey() === 'reject'"
+                    pfBusyLabel="Rejecting…" (click)="reject()" data-tmp-reject>Reject</button>
+            @if (p.status === 'pending') {
+              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="busy()" [pfBusy]="busyKey() === 'approve'"
+                      pfBusyLabel="Approving…" (click)="approve()" data-tmp-approve>Approve</button>
+            } @else {
+              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="busy()" [pfBusy]="busyKey() === 'rereview'"
+                      pfBusyLabel="Checking…" (click)="reReview()" data-tmp-rereview>Re-review</button>
+            }
+            </span>
+          }
+        }
         @if (sheet) {
           <button type="button" class="pf-btn pf-btn--icon" (click)="closeSheet()" aria-label="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -208,28 +228,12 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
             @if (p.resolutionNote) { <div><dt>Note</dt><dd>{{ p.resolutionNote }}</dd></div> }
           </dl>
         </div>
-        @if (actionable(p)) {
-          <footer class="pf-card__foot pf-tmp__foot" data-tmp-actions>
-            @if (p.isMine) {
-              <button type="button" class="pf-btn pf-btn--tertiary pf-span press" [disabled]="busy()" [pfBusy]="busyKey() === 'withdraw'"
-                      pfBusyLabel="Withdrawing…" (click)="withdraw()" data-tmp-withdraw>Withdraw my suggestion</button>
-            }
-            <button type="button" class="pf-btn pf-btn--danger press" [disabled]="busy()" [pfBusy]="busyKey() === 'reject'"
-                    pfBusyLabel="Rejecting…" (click)="reject()" data-tmp-reject>Reject</button>
-            @if (p.status === 'pending') {
-              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="busy()" [pfBusy]="busyKey() === 'approve'"
-                      pfBusyLabel="Approving…" (click)="approve()" data-tmp-approve>Approve</button>
-            } @else {
-              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="busy()" [pfBusy]="busyKey() === 'rereview'"
-                      pfBusyLabel="Checking…" (click)="reReview()" data-tmp-rereview>Re-review</button>
-            }
-          </footer>
-        }
+
       } @else if (detailLoading()) {
         <div class="pf-card__body"><pf-skeleton-rows [rows]="5" [avatar]="false" [dense]="true" [trailing]="false" label="Loading the change…"></pf-skeleton-rows></div>
       } @else {
         <div class="pf-card__body pf-tmp__pick">
-          <p>Pick a change on the left to see it before and after.</p>
+          <p>Pick a change in the list to see it before and after.</p>
           <p class="pf-tmp__pick-sub">Each change is approved or rejected on its own.</p>
         </div>
       }
@@ -240,6 +244,8 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
     /* Test Master's two-panel (owner 2026-11-17): the side card (Review) on the LEFT, the main card on the right. */
     .pf-tmp { display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 16px; align-items: stretch; height: 100%; min-height: 0; }
     .pf-tmp > .pf-tmp__side:not(.pf-tmp__side--sheet) { order: -1; }
+    .pf-tmp__acts { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-tmp__acts .pf-btn { height: 34px; min-height: 34px; padding: 0 12px; }
     .pf-tmp--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-tmp__main, .pf-tmp__side { min-height: 0; }
     .pf-tmp__head { row-gap: 8px; }

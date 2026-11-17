@@ -140,6 +140,11 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
                 <h2 class="pf-card__label">Analyzers</h2>
                 <span class="pf-card__spacer"></span>
                 <span class="pf-brd__count pf-num">{{ plural(rows().length, 'analyzer') }}</span>
+                <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+                @if (canManage()) { <span class="pf-card__spacer"></span><button type="button" class="pf-btn pf-btn--primary press" [disabled]="br.status === 'pending'" (click)="assignOpen.set(true)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    Assign analyzer
+                  </button> }
               </header>
               <div class="pf-card__body pf-brd__mainbody">
                 @if (br.status === 'pending') {
@@ -188,20 +193,14 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
                                    [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></ag-grid-angular>
                 }
               </div>
-              @if (canManage()) {
-                <div class="pf-card__foot">
-                  <button type="button" class="pf-btn pf-btn--primary pf-span press" [disabled]="br.status === 'pending'" (click)="assignOpen.set(true)">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                    Assign analyzer
-                  </button>
-                </div>
-              }
             </section>
 
             <aside class="pf-card pf-brd__side" aria-label="Bridge">
               <header class="pf-card__head">
                 <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 17h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0"/></svg></span>
                 <h2 class="pf-card__label">Bridge</h2>
+                @if (canManage()) { <span class="pf-card__spacer"></span><button type="button" class="pf-btn pf-btn--secondary press" [disabled]="br.status === 'pending'" (click)="wifiOpen.set(true)">Change Wi-Fi</button>
+                  <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="br.status !== 'online' || acting()" (click)="startHotspot()">Setup hotspot</button> }
               </header>
               <div class="pf-card__body pf-brd__sidebody">
                 <p class="pf-brd__statusline"><span class="pf-sdot" [attr.data-tone]="sdot(status().tone)">{{ status().label }}</span>
@@ -238,12 +237,6 @@ export function analyzerRows(b: BridgeDetailDto, instruments: readonly Instrumen
                   </ul>
                 }
               </div>
-              @if (canManage()) {
-                <div class="pf-card__foot">
-                  <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="br.status === 'pending'" (click)="wifiOpen.set(true)">Change Wi-Fi</button>
-                  <button type="button" class="pf-btn pf-btn--secondary press" [disabled]="br.status !== 'online' || acting()" (click)="startHotspot()">Setup hotspot</button>
-                </div>
-              }
             </aside>
           </div>
         }

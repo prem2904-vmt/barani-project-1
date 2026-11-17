@@ -17,7 +17,7 @@ import { SETTINGS_HOST, createSettingsHost, pickHostSearch } from "../../shared/
 import { confirmLeaveUnsaved, hasUnsavedChangesContract } from "../../shared/utils/unsaved-changes";
 import { DialogService } from "../../core/services/dialog.service";
 import { SegmentedComponent } from "../../shared/primitives/segmented.component";
-import { SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from "./settings/settings.routes";
+import { INLINE_PAGE_ROUTES, SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from "./settings/settings.routes";
 import { OPD_ADMIN_ROUTES } from "../opd/opd.routes";
 import { CASESHEET_SHELL_ROUTES } from "../casesheets/casesheets.routes";
 import { Route } from "@angular/router";
@@ -379,5 +379,5 @@ export class AdminOverviewComponent implements OnDestroy {
 /** The route that serves a settings path (hosted card page, full page, OPD or case-sheet admin), for inline rendering. */
 function inlineRoute(path: string): Route | undefined {
   const p = path.replace(/^\//, '');
-  return [...SETTINGS_SHELL_CHILDREN, ...SETTINGS_FULL_PAGE_ROUTES, ...OPD_ADMIN_ROUTES, ...CASESHEET_SHELL_ROUTES].find(r => r.path === p && !r.redirectTo);
+  return [...SETTINGS_SHELL_CHILDREN, ...INLINE_PAGE_ROUTES, ...SETTINGS_FULL_PAGE_ROUTES, ...OPD_ADMIN_ROUTES, ...CASESHEET_SHELL_ROUTES].find(r => r.path === p && !r.redirectTo);
 }

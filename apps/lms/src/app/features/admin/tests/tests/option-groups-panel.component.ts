@@ -81,8 +81,16 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
               <span class="pf-card__label">New option group</span>
               <span class="pf-card__spacer"></span>
               <button type="button" class="pf-btn pf-btn--tertiary pf-2p__hbtn press" (click)="mode.set('idle')">Cancel</button>
+              <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+              <button type="button" class="pf-btn pf-btn--primary pf-2p__hbtn pf-og__save press" [disabled]="saving() || !draftValid() || !targets().length"
+                      [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="create()">{{ saving() ? 'Saving…' : 'Create & map' }}</button>
             </div>
             <div class="pf-card__body">
+              @if (warnCount() > 0) {
+                <span class="pf-og__warn pf-og__warn--amber">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+                  {{ warnCount() }} parameter{{ warnCount() === 1 ? ' is' : 's are' }} already mapped — saving replaces the existing table.</span>
+              }
               <div class="pf-og__slabel">Values</div>
               @for (r of draft(); track $index) {
                 <div class="pf-og__row">
@@ -126,15 +134,6 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
                 </div>
               }
             </div>
-            <div class="pf-og__editact">
-              @if (warnCount() > 0) {
-                <span class="pf-og__warn pf-og__warn--amber">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
-                  {{ warnCount() }} parameter{{ warnCount() === 1 ? ' is' : 's are' }} already mapped — saving replaces the existing table.</span>
-              } @else { <span class="pf-og__warn"></span> }
-              <button type="button" class="pf-btn pf-btn--primary pf-og__save press" [disabled]="saving() || !draftValid() || !targets().length"
-                      [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="create()">{{ saving() ? 'Saving…' : 'Create & map' }}</button>
-            </div>
           }
 
           @else if (selected(); as g) {
@@ -144,6 +143,10 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
               <span class="pf-card__spacer"></span>
               @if (editing()) {
                 <button type="button" class="pf-btn pf-btn--tertiary pf-2p__hbtn press" (click)="editing.set(false)">Cancel</button>
+                <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+                <button type="button" class="pf-btn pf-btn--primary pf-2p__hbtn pf-og__save press" [disabled]="saving() || !draftValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save(g)">
+                  {{ saving() ? 'Saving…' : 'Save everywhere' }}
+                </button>
               } @else {
                 <button type="button" class="pf-btn pf-btn--secondary pf-2p__hbtn pf-og__edit press" (click)="startEdit(g)">Edit values</button>
               }
@@ -162,6 +165,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
               </div>
 
               @if (editing()) {
+                <span class="pf-og__warn">Updates <span class="pf-num">{{ g.links.length }}</span> parameter{{ g.links.length === 1 ? '' : 's' }} across <span class="pf-num">{{ testsOf(g).length }}</span> test{{ testsOf(g).length === 1 ? '' : 's' }}.</span>
                 <div class="pf-og__slabel">Values</div>
                 @for (r of draft(); track $index) {
                   <div class="pf-og__row">
@@ -192,14 +196,6 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
                 }
               </div>
             </div>
-            @if (editing()) {
-              <div class="pf-og__editact">
-                <span class="pf-og__warn">Updates <span class="pf-num">{{ g.links.length }}</span> parameter{{ g.links.length === 1 ? '' : 's' }} across <span class="pf-num">{{ testsOf(g).length }}</span> test{{ testsOf(g).length === 1 ? '' : 's' }}.</span>
-                <button type="button" class="pf-btn pf-btn--primary pf-og__save press" [disabled]="saving() || !draftValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save(g)">
-                  {{ saving() ? 'Saving…' : 'Save everywhere' }}
-                </button>
-              </div>
-            }
           }
 
           @else {

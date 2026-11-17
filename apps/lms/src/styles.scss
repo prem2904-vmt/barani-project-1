@@ -2920,3 +2920,8 @@ input::-ms-clear {
 :is(.pf-ss, .pf-ov) :is(.pf-hb-btn--primary, .pf-btn--primary):hover:not(:disabled) {
   border-color: var(--pf-sel-border) !important; background: var(--pf-chip-bg) !important;
 }
+
+/* Owner 2026-11-17: nothing clickable at the bottom of a screen / card (next to the bottom nav) — a panel's actions
+   sit in its HEAD. Text buttons there are compact so the head stays one line where it can. */
+.pf-card__head > .pf-btn:not(.pf-btn--icon),
+.pf-card__head > pf-touch-btn { height: 34px; min-height: 34px; padding-inline: 12px; flex: none; }

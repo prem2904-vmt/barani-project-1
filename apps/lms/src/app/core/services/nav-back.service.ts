@@ -132,10 +132,10 @@ export class NavBackService {
 
     // People & Access editors
     if (normUrl === '/admin/users/invite' || (normUrl.startsWith('/admin/users/') && normUrl !== '/admin/users')) {
-      return '/admin/users?tab=users';
+      return '/admin?section=people&tab=users';
     }
     if (normUrl === '/admin/roles/new' || (normUrl.startsWith('/admin/roles/') && normUrl !== '/admin/roles')) {
-      return '/admin/users?tab=roles';
+      return '/admin?section=people&tab=roles';
     }
 
     // Nested settings editors climb to their list.
