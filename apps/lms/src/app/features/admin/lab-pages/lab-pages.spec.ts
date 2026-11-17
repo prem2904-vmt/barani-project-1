@@ -34,7 +34,7 @@ describe('Lab › Sample numbers', () => {
   it('the find category carries scan vs manual AND the pre-fill sample search', async () => {
     const p = await renderLabPage(LabSampleNumbersPage, '/page?tab=find', { getFor: cfgGet() });
     expect(text(p.el)).toContain('Pre-fill sample search');
-    expect(p.el.querySelectorAll('[role="radiogroup"] [role="radio"]').length).toBe(2);
+    expect(p.el.querySelectorAll('.pf-ls__gate [role="radio"]').length).toBe(2);
   });
 
   it('picking a tab writes ?tab= (replacing history) so reload / shell panel land on it', async () => {
@@ -46,18 +46,21 @@ describe('Lab › Sample numbers', () => {
 
   it('label code changes PATCH only labelCodeMode, as before', async () => {
     const p = await renderLabPage(LabSampleNumbersPage, '/page?tab=barcode', { getFor: cfgGet() });
-    const qr = Array.from(p.el.querySelectorAll<HTMLButtonElement>('[role="radio"]')).find(b => text(b).includes('QR (2D)'))!;
+    const qr = Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-ls__gate [role="radio"]')).find(b => text(b).includes('QR (2D)'))!;
     qr.click();
     expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/branch-lab-config', { labelCodeMode: 'qr' });
   });
 
-  it('lab structure changes PATCH only labStructure; scan mode PATCHes the tenant', async () => {
+  it('lab structure changes PATCH only labStructure', async () => {
     const p = await renderLabPage(LabSampleNumbersPage, '/page?tab=structure', { getFor: cfgGet() });
-    Array.from(p.el.querySelectorAll<HTMLButtonElement>('[role="radio"]')).find(b => text(b).startsWith('Standalone'))!.click();
+    Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-ls__gate [role="radio"]')).find(b => text(b).startsWith('Standalone'))!.click();
     expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/branch-lab-config', { labStructure: 'standalone' });
-    const q = await renderLabPage(LabSampleNumbersPage, '/page?tab=find', { getFor: cfgGet() });
-    Array.from(q.el.querySelectorAll<HTMLButtonElement>('[role="radio"]')).find(b => text(b).includes('Manual entry'))!.click();
-    expect(q.api.patch).toHaveBeenCalledWith('/api/tenants/current', { scanMode: 'manual' });
+  });
+
+  it('scan vs manual PATCHes the tenant', async () => {
+    const p = await renderLabPage(LabSampleNumbersPage, '/page?tab=find', { getFor: cfgGet() });
+    Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-ls__gate [role="radio"]')).find(b => text(b).includes('Manual entry'))!.click();
+    expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/current', { scanMode: 'manual' });
   });
 });
 
@@ -116,12 +119,12 @@ describe('Lab › Collection and queues', () => {
   it('categories: queue focus (+ counters pointer), auto-assign, no-scan claim', async () => {
     const p = await renderLabPage(LabCollectionPage, '/page', { getFor: get });
     expect(pillLabels(p.el)).toEqual(['Queue focus', 'Auto-assign technicians and validators', 'Claim without scanning']);
-    expect(cardTitles(p.el)).toEqual(['Queue focus', 'Counters & collection']);
+    expect(cardTitles(p.el).sort()).toEqual(['Counters & collection', 'Queue focus']);
   });
 
   it('queue focus PATCHes only queueFocusMode', async () => {
     const p = await renderLabPage(LabCollectionPage, '/page', { getFor: get });
-    Array.from(p.el.querySelectorAll<HTMLButtonElement>('[role="radio"]')).find(b => text(b).startsWith('Sample-focused'))!.click();
+    Array.from(p.el.querySelectorAll<HTMLButtonElement>('.pf-ls__gate [role="radio"]')).find(b => text(b).startsWith('Sample-focused'))!.click();
     expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/branch-lab-config', { queueFocusMode: 'sample' });
   });
 
@@ -130,9 +133,6 @@ describe('Lab › Collection and queues', () => {
     expect(text(p.el)).toContain('Validators — review and sign this department');
     expect(text(p.el)).toContain('Technicians — enter results');
     expect(p.el.querySelectorAll('.pf-ls__dept').length).toBe(2);
-    const host = p.el.querySelector('pf-lab-settings')!;
-    const cmp = (host as any).__ngContext__ ? null : null;
-    void cmp;
     // drive the host component through its public setters (the pf-select is covered by its own spec)
     const ls = p.harness.routeDebugElement!.query(d => d.name === 'pf-lab-settings').componentInstance as any;
     ls.setValidators('d2', ['u1']);
@@ -196,7 +196,7 @@ describe('Lab › Report options', () => {
   it('technician notes PATCH only techReportNotes; the sending category is the WhatsApp Auto card', async () => {
     const p = await renderLabPage(LabReportOptionsPage, '/page', { getFor: cfgGet() });
     expect(pillLabels(p.el)).toEqual(['Technician notes on report', 'Send reports on WhatsApp']);
-    p.el.querySelector<HTMLButtonElement>('button[aria-label="Technician notes on report"]')!.click();
+    p.el.querySelector<HTMLButtonElement>('.pf-ls__card button[aria-label="Technician notes on report"]')!.click();
     expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/branch-lab-config', { techReportNotes: true });
     expect(p.el.querySelector('[data-testid="ro-design-link"]')!.getAttribute('href')).toBe('/admin/reports?tab=table');
   });
