@@ -110,6 +110,7 @@ async function expectSymmetric(page: Page, side: string, main: string) {
 
 test.describe('settings list grids', () => {
   test('Test Master (reference)', async ({ page }) => {
+    test.skip(isPhone(), 'phone opens the Settings category list first (shell-owned)');
     await go(page, '/admin/tests');
     await expect(vis(page, '.pf-tm')).toBeVisible({ timeout: 60_000 });
     await page.waitForTimeout(1200);
