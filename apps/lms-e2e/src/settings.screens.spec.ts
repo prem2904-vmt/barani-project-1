@@ -116,6 +116,7 @@ test.describe('settings two-panel', () => {
   test('old deep links open the new home', async ({ page }) => {
     await go(page, '/admin/manage?cat=org');
     await expect(page).toHaveURL(/\/admin\?section=profile/, { timeout: 60_000 });
+    await page.waitForTimeout(800);   // the inline page settles (WebKit: a late in-app replace interrupts the next goto)
     await go(page, '/lab/settings');
     await expect(page).toHaveURL(/\/admin\?section=lab/, { timeout: 60_000 });
     await go(page, '/admin/lab-settings?tab=queues');
