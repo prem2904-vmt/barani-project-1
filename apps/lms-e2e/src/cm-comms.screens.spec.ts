@@ -231,7 +231,7 @@ test.describe('cm-comms', () => {
     // The three channels are the setting's categories in the Settings shell (left panel on wide screens).
     if (!isPhone()) for (const t of ['whatsapp', 'email', 'sms']) await expect(visible(page, `[data-testid="tp-item-${t}"]`)).toBeVisible();
     // WhatsApp: the cards moved from Lab settings live here.
-    await expect(visible(page, '[data-testid="ls-whatsapp"]')).toBeVisible({ timeout: 20_000 });
+    await expect(visible(page, '[data-testid="ls-wa-chat"]')).toBeVisible({ timeout: 20_000 });
     await expect(visible(page, '[data-testid="ls-wa-chat-state"]')).toHaveText('On');
     await noSideScroll(page);
     await page.screenshot({ path: `${out()}/comms-whatsapp--light.png` });
@@ -294,7 +294,7 @@ test.describe('cm-comms', () => {
     await page.waitForURL(/\/admin\/org\/channels\?tab=email/, { timeout: 20_000 });
     await go(page, '/admin/whatsapp');
     await page.waitForURL(/\/admin\/org\/channels\?tab=whatsapp/, { timeout: 20_000 });
-    await expect(visible(page, '[data-testid="ls-whatsapp"]')).toBeVisible({ timeout: 20_000 });
+    await expect(visible(page, '[data-testid="ls-wa-chat"]')).toBeVisible({ timeout: 20_000 });
   });
 
   test(`Front desk Share: Email patient / doctor / both from the server answer; SMS only on phone + tablet with the right sms: link`, async ({ page: pg, context }) => {

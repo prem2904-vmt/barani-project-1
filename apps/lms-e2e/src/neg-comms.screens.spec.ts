@@ -126,7 +126,7 @@ test.describe('neg-comms: Save and read', () => {
       page.on('pageerror', e => errors.push(e.message));
       neg.hook = r => r.method === 'GET' && r.path === '/api/settings/communication' ? answer : undefined;
       await openComms(page);
-      await expect(visible(page, '[data-testid="ls-whatsapp"]')).toBeVisible({ timeout: 20_000 });
+      await expect(visible(page, '[data-testid="ls-wa-chat"]')).toBeVisible({ timeout: 20_000 });
       await pickCommsTab(page, 'Email');
       await expect(visible(page, '[data-testid="cm-email-test"]')).toBeVisible({ timeout: 20_000 });
       await pickCommsTab(page, 'SMS');
