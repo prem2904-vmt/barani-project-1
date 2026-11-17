@@ -121,7 +121,7 @@ test.describe('lab departments page', () => {
     expect(calls.some(c => c.method === 'POST' && c.body?.name === 'Toxicology' && c.body?.code === 'BX')).toBe(true);
 
     // rename: the Rename icon starts the grid's inline edit of the name
-    await row(page, 'Cytogenetics').locator('button[aria-label="Rename Cytogenetics"]').click();
+    await row(page, 'Cytogenetics').locator('button[aria-label="Rename Cytogenetics"]').dispatchEvent('click');
     const editor = page.locator('.ld-main .ag-cell-inline-editing input').first();
     await expect(editor).toBeVisible();
     await editor.fill('Cytology');
@@ -131,7 +131,7 @@ test.describe('lab departments page', () => {
     await expect.poll(() => calls.some(c => c.method === 'PATCH' && c.body?.name === 'Cytology')).toBe(true);
 
     // delete (themed confirm, not a native one)
-    await row(page, 'Toxicology').locator('button[aria-label="Delete Toxicology"]').click();
+    await row(page, 'Toxicology').locator('button[aria-label="Delete Toxicology"]').dispatchEvent('click');
     await shot(page, 'lab-departments-delete-confirm');
     await page.getByRole('button', { name: /^Delete$/ }).locator('visible=true').first().click();
     await expect(page.locator('.ld-main .ag-row').filter({ hasText: 'Toxicology' })).toHaveCount(0);

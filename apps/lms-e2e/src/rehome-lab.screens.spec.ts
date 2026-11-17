@@ -83,7 +83,8 @@ const PAGES: Array<{ name: string; url: string; ready: string; text?: string }> 
   { name: 'front-desk', url: '/admin/lab/front-desk?tab=mode', ready: 'pf-appointments-config [aria-label="Queue mode"]', text: 'Walk-up' },
   { name: 'front-desk-referring', url: '/admin/lab/front-desk?tab=referring', ready: 'pf-referring-network' },
   { name: 'alerts', url: '/admin/lab/alerts?tab=all', ready: '.pf-nc-master', text: 'Every alert' },
-  { name: 'numbers', url: '/admin/lab/numbers', ready: 'pf-kpi-config' },
+  // A screen named in the URL: phones otherwise open on the screens list (the shell's categories).
+  { name: 'numbers', url: '/admin/lab/numbers?tab=frontdesk_landing', ready: 'pf-kpi-config' },
   { name: 'report-letterhead', url: '/admin/reports?tab=letterhead', ready: 'pf-report-header-editor .pf-rhe-side', text: 'Letterhead elements' },
   { name: 'report-patient', url: '/admin/reports?tab=patient', ready: '.pf-rt-work', text: 'Patient block' },
   { name: 'report-notes', url: '/admin/reports?tab=table', ready: '[data-testid="ls-tech-notes"]', text: 'Report notes' },
