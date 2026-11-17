@@ -137,7 +137,7 @@ test.describe('settings two-panel', () => {
     await go(page, '/admin/partners');
     await expect(page).toHaveURL(/\/admin\/(lab\/outsourcing|referral-labs)/, { timeout: 60_000 });
     await expect(tid(page, 'tp-nav-title')).toHaveText('Outsourcing'); // the in-app hop to the first category has settled
-    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(800);
     await go(page, '/admin/modules');
     await expect(page).toHaveURL(/\/admin$/, { timeout: 60_000 });
   });
