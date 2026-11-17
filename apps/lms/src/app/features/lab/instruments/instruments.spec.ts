@@ -10,7 +10,7 @@ import type { ElectronInstrumentsApi, InstrumentDto, ListenEvent } from '../../.
 import { emptyInstrumentForm, buildInstrumentConfig } from '../../../shared/instruments/instrument-config';
 import { InstrumentsListComponent, searchInstruments } from './instruments-list.component';
 import { InstrumentEditorComponent } from './instrument-editor.component';
-import { LabSettingsHubComponent } from '../lab-settings-hub/lab-settings-hub.component';
+import { SETTINGS_SECTIONS } from '../../admin/settings/settings-map';
 import { ROUTE_ACCESS } from '../../../core/auth/route-access';
 
 const flush = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0)); };
@@ -54,12 +54,12 @@ describe('Instruments — routes + hub tile', () => {
     expect(ROUTE_ACCESS['/lab/analyzer-results']).toEqual({ perms: ['enter_result', 'edit_result'], module: 'lab' });
   });
 
-  it('Lab settings hub shows an Instruments tile (SVG icon) → /admin/instruments', () => {
-    const p = renderBandPage(LabSettingsHubComponent);
-    const tile = Array.from(p.el.querySelectorAll<HTMLAnchorElement>('.pf-lsh__tile')).find((a) => a.textContent!.includes('Instruments'))!;
-    expect(tile).toBeTruthy();
-    expect(tile.getAttribute('href')).toBe('/admin/instruments');
-    expect(tile.querySelector('svg path')).not.toBeNull();
+  it('Settings › Lab › Analyzers and bridges lists Analyzers → /admin/instruments', () => {
+    const lab = SETTINGS_SECTIONS.find((x) => x.id === 'lab')!;
+    const item = lab.items.find((i) => i.id === 'lab-analyzers')!;
+    expect(item.label).toBe('Analyzers and bridges');
+    expect(item.categories.find((c) => c.id === 'analyzers')?.path).toBe('/admin/instruments');
+    expect(item.iconPath.length).toBeGreaterThan(10);
   });
 });
 
