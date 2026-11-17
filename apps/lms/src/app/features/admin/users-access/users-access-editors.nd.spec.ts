@@ -180,25 +180,51 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('pf-hero-band .pf-ue-active')!.textContent).toContain('Deactivate');
   });
 
-  it('New role: "New role" → the typed name, pencil focuses Role name; role type pf-seg; permissions are switches', () => {
-    const { el, f, c, txt } = render(RoleEditorComponent);
-    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('New role');
+  it('New role: Test Master frame — band pill finds a permission, ONE primary Create role; name in the summary strip; groups LEFT, permissions grid RIGHT', () => {
+    const { el, f, c } = render(RoleEditorComponent);
+    // The band pill is the permission search (no record chips in the band).
+    expect(el.querySelector('pf-hero-band .pf-hb__input')).not.toBeNull();
+    expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
+    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Create role');
+    // Role name lives in the slim summary strip.
+    const name = el.querySelector<HTMLInputElement>('.re-strip input.pf-re-name')!;
+    expect(name).not.toBeNull();
     c.onNameChange('Billing Supervisor');
     f.detectChanges();
-    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Billing Supervisor');
-    noFacts(el);
-    expect(el.querySelector('.pf-uf-ctx__badge')).toBeNull();
-    (el.querySelector('.pf-ctx__edit') as HTMLButtonElement).click();
-    expect(document.activeElement?.classList.contains('pf-re-name')).toBe(true);
-    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Create role');
+    expect(c.newRoleName()).toBe('Billing Supervisor');
+    expect(el.querySelector('.re-strip')!.textContent).toContain('of');
     // OPD dark build: the Doctor role type is an OPD surface — hidden while OPD is dark.
     expect(el.querySelectorAll('.re-type.pf-seg [role="radio"]').length).toBe(0);
-    const sw = el.querySelectorAll<HTMLButtonElement>('.re-perm-grid .pf-toggle[role="switch"]');
-    expect(sw.length).toBe(2);
-    sw[1].click();
+    // Side card first (LEFT): All + one row per group; the grid card second.
+    const panels = el.querySelector('.pf-sg-panels')!;
+    expect(panels.firstElementChild!.classList.contains('re-side')).toBe(true);
+    expect(el.querySelectorAll('.re-side .re-g__btn').length).toBeGreaterThan(1);
+    expect(c.colDefs().map((d: any) => d.colId)).toEqual(['allowed', 'title', 'what', 'impact', 'code']);
+    expect(c.gridRows().length).toBe(2);
+    // The Allowed cell is the kit switch; flipping it grants the permission.
+    const cell = c.colDefs()[0].cellRenderer({ data: c.gridRows()[1] }) as HTMLElement;
+    const sw = cell.querySelector<HTMLButtonElement>('button[role="switch"]')!;
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    sw.click();
     f.detectChanges();
     expect(c.grantedCount()).toBe(1);
+    expect(c.gridRows()[1].allowed).toBe(true);
     hygiene(el);
+  });
+
+  it('Role editor: band search finds a permission across all groups; a group filters the grid; Grant all / Clear', () => {
+    const { f, c } = render(RoleEditorComponent);
+    const groups = c.groupViews();
+    c.pickGroup(groups[0].key);
+    f.detectChanges();
+    expect(c.gridRows().every((r: any) => r.group === groups[0].key)).toBe(true);
+    c.grantGroup(c.selectedGroup(), true);
+    expect(c.selectedGroup().granted).toBe(c.selectedGroup().items.length);
+    c.grantGroup(c.selectedGroup(), false);
+    expect(c.selectedGroup().granted).toBe(0);
+    c.onSearch('enter_results');
+    expect(c.groupKey()).toBeNull();
+    expect(c.gridRows().map((r: any) => r.perm.code)).toEqual(['enter_results']);
   });
 
   it('Create user, doctor-type role, OPD dark: registration number only (no OPD department / specialisation / procedures)', () => {
@@ -229,12 +255,13 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelectorAll('.re-type.pf-seg [role="radio"]').length).toBe(2);
   });
 
-  it('Edit role: the role name + ONE tiny muted badge (Pre-seeded), no pencil (the name is locked), no fact chips', () => {
+  it('Edit role: the name + ONE tiny muted badge (Pre-seeded) in the summary strip, no name field (locked), system-role wording kept', () => {
     const { el, txt } = render(RoleEditorComponent, { id: 'r1' });
-    expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Lab Technician');
-    expect(txt(el.querySelector('.pf-uf-ctx__badge'))).toBe('Pre-seeded');
-    expect(el.querySelector('.pf-ctx__edit')).toBeNull();
-    noFacts(el);
+    expect(txt(el.querySelector('.re-strip .pf-uf-ctx__text'))).toBe('Lab Technician');
+    expect(txt(el.querySelector('.re-strip .pf-uf-ctx__badge'))).toBe('Pre-seeded');
+    expect(el.querySelector('input.pf-re-name')).toBeNull();
+    expect(el.querySelector('.re-strip')!.textContent).toContain('Editing the permissions saves a copy for your organisation only.');
+    expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
     expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')!.textContent).toContain('Save');
     hygiene(el);
   });
