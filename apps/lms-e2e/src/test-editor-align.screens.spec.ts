@@ -5,8 +5,8 @@ import { test, expect, isPhone, isDesktop, expectLayout, shotsDir } from './supp
 import { neg, resetNeg, installNegBackend, go } from './support/neg-backend';
 
 /**
- * TEST EDITOR ALIGNMENT (owner 2026-11-17: "bring the live preview to the left and align it properly").
- * API mocked, demo data only; the editor is the real app. Checks: the live preview side card is LEFT of the
+ * TEST EDITOR ALIGNMENT (owner 2026-11-17: "bring the live preview to the left and align it properly"; then: live previews on the RIGHT).
+ * API mocked, demo data only; the editor is the real app. Checks: the live preview side card is RIGHT of the
  * main card with the same top / bottom edges; Basics fields sit on a 12-column grid (Type · Flow · Department
  * share a top edge, Test code · Short name · Section · Methodology share the next); Profiles are a dense
  * checklist with the search + "n selected" in the section header. Desktop is also shot at 3440 wide.
@@ -81,7 +81,7 @@ async function fieldTops(page: Page, labels: string[]) {
 }
 
 test.describe('test editor alignment', () => {
-  test('preview LEFT, field grid aligned, dense Profiles checklist (1440 + 3440)', async ({ page }) => {
+  test('preview RIGHT, field grid aligned, dense Profiles checklist (1440 + 3440)', async ({ page }) => {
     await open(page);
     await expectLayout(page, 'test editor');
 
@@ -98,7 +98,7 @@ test.describe('test editor alignment', () => {
       if (vw >= 1024) {
         const aside = (await page.locator('#pf-te2-preview').boundingBox())!;
         const main = (await vis(page, '#sec-identity').boundingBox())!;
-        expect(aside.x, 'live preview on the LEFT').toBeLessThan(main.x);
+        expect(aside.x, 'live preview on the RIGHT').toBeGreaterThan(main.x);
         expect(Math.abs(aside.y - main.y), 'side + main card tops align').toBeLessThan(2);
         expect(Math.abs((aside.y + aside.height) - (main.y + main.height)), 'side + main card bottoms align').toBeLessThan(2);
       }

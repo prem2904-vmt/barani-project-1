@@ -1413,10 +1413,10 @@
     </div>
 
     <!-- ═══════════════════════════ Side card ═══════════════════════════ -->
-    <!-- New design: the LIVE PREVIEW is the side card — on the LEFT (owner
-         2026-11-17; side cards sit left across the app), same height as the
-         main card, its body scrolls. The DOM keeps the main card first so
-         phones lead with the form. Below 1024px it is a sheet behind the
+    <!-- New design: the LIVE PREVIEW is the side card on the RIGHT (owner
+         2026-11-17: navigation/filter side cards left, live previews right —
+         choose on the left, see the result on the right), same height as the
+         main card, its body scrolls. Below 1024px it is a sheet behind the
          Preview button. -->
     @if (nd() && previewOpen()) {
       <div class="pf-sheet-backdrop pf-te2-previewscrim" (click)="previewOpen.set(false)" aria-hidden="true"></div>

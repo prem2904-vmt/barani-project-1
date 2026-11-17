@@ -139,7 +139,9 @@ test.describe('lab settings pages', () => {
     const settingsUrl = page.url();
     await tile.click();
     await expect(page).toHaveURL(/\/admin\/reports/, { timeout: 60_000 });
-    await expect(vis(page, 'iframe.pf-pdf-iframe')).toBeAttached({ timeout: 60_000 });
+    // Letterhead (the default tab) draws its own canvas; the PDF preview lives on the other tabs.
+    await vis(page, 'pf-hero-band').getByText('Patient strip', { exact: true }).click();
+    await expect(page.locator('iframe.pf-pdf-iframe').first()).toBeAttached({ timeout: 60_000 });
     // Change a few options: each one re-renders the preview.
     const sw = page.locator('.pf-rt-work [role="switch"]').locator('visible=true');
     const n = Math.min(3, await sw.count());
