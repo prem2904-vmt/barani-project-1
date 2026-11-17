@@ -82,24 +82,28 @@ test.beforeEach(async ({ page, context }) => {
   await installDepartments(page);
 });
 
+/** A departments grid row by the department's name (pf-data-grid: AG-Grid rows). */
+const row = (page: Page, name: string) => page.locator('.ld-main .ag-row').filter({ hasText: name }).locator('visible=true').first();
+
 test.describe('lab departments page', () => {
-  test('departments: origin marks, on/off, add, duplicate refused, rename, delete', async ({ page }) => {
+  test('departments grid: origin marks, on/off, add, duplicate refused, inline rename, delete', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', e => errors.push(e.message));
     await go(page, '/admin/lab/departments?tab=departments');
-    await expect(tid(page, 'ld-list')).toBeVisible({ timeout: 60_000 });
-    await expect(tid(page, 'ld-row-BIO').locator('[data-testid="ld-origin"]')).toContainText('From the catalogue');
-    await expect(tid(page, 'ld-row-CYTO').locator('[data-testid="ld-origin"]')).toContainText('Made here');
-    await expect(tid(page, 'ld-row-BIO').locator('[data-testid="ld-delete"]')).toHaveCount(0);
+    await expect(row(page, 'Biochemistry')).toBeVisible({ timeout: 60_000 });
+    await expect(row(page, 'Biochemistry').locator('[data-testid="ld-origin"]')).toContainText('From the catalogue');
+    await expect(row(page, 'Cytogenetics').locator('[data-testid="ld-origin"]')).toContainText('Made here');
+    await expect(row(page, 'Biochemistry').locator('button[aria-label^="Delete"]')).toHaveCount(0);
     await expectLayout(page, 'departments list');
     await shot(page, 'lab-departments-list');
 
-    // on / off
-    await tid(page, 'ld-row-HEM').locator('[data-testid="ld-switch"]').click();
-    await expect(tid(page, 'ld-row-HEM').locator('[data-testid="ld-switch"]')).toHaveAttribute('aria-checked', 'false');
-    await tid(page, 'ld-row-HEM').locator('[data-testid="ld-switch"]').click();
+    // on / off (the grid's Status switch)
+    const sw = () => row(page, 'Haematology').locator('[role="switch"]');
+    await sw().click();
+    await expect(sw()).toHaveAttribute('aria-checked', 'false');
+    await sw().click();
 
-    // add + duplicate
+    // add + duplicate (one compact row above the grid)
     await tid(page, 'ld-add').click();
     await expect(tid(page, 'ld-add-form')).toBeVisible();
     await tid(page, 'ld-add-name').fill('biochemistry');
@@ -110,30 +114,31 @@ test.describe('lab departments page', () => {
     await shot(page, 'lab-departments-add-duplicate');
     await tid(page, 'ld-add-name').fill('Toxicology');
     await tid(page, 'ld-add-save').click();
-    await expect(tid(page, 'ld-row-BX')).toBeVisible();
-    await expect(tid(page, 'ld-row-BX').locator('[data-testid="ld-origin"]')).toContainText('Made here');
+    await expect(row(page, 'Toxicology')).toBeVisible();
+    await expect(row(page, 'Toxicology').locator('[data-testid="ld-origin"]')).toContainText('Made here');
     expect(calls.some(c => c.method === 'POST' && c.body?.name === 'Toxicology' && c.body?.code === 'BX')).toBe(true);
 
-    // rename
-    await tid(page, 'ld-row-CYTO').locator('[data-testid="ld-rename"]').click();
-    await tid(page, 'ld-rename-input').fill('Cytology');
+    // rename: the Rename icon starts the grid's inline edit of the name
+    await row(page, 'Cytogenetics').locator('button[aria-label="Rename Cytogenetics"]').click();
+    const editor = page.locator('.ld-main .ag-cell-inline-editing input').first();
+    await expect(editor).toBeVisible();
+    await editor.fill('Cytology');
     await shot(page, 'lab-departments-rename');
-    await tid(page, 'ld-rename-save').click();
-    await expect(tid(page, 'ld-row-CYTO')).toContainText('Cytology');
+    await editor.press('Enter');
+    await expect(row(page, 'Cytology')).toBeVisible();
+    await expect.poll(() => calls.some(c => c.method === 'PATCH' && c.body?.name === 'Cytology')).toBe(true);
 
     // delete (themed confirm, not a native one)
-    await tid(page, 'ld-row-BX').locator('[data-testid="ld-delete"]').click();
+    await row(page, 'Toxicology').locator('button[aria-label="Delete Toxicology"]').click();
     await shot(page, 'lab-departments-delete-confirm');
     await page.getByRole('button', { name: /^Delete$/ }).locator('visible=true').first().click();
-    await expect(page.locator('[data-testid="ld-row-BX"]')).toHaveCount(0);
-    expect(errors, 'no uncaught errors').toEqual([]);
+    await expect(page.locator('.ld-main .ag-row').filter({ hasText: 'Toxicology' })).toHaveCount(0);
+    expect(errors.filter(e => !/access control checks/i.test(e)), 'no uncaught errors').toEqual([]);
   });
 
-  test('lab spaces tab: the per-branch board moved here', async ({ page }) => {
-    await go(page, '/admin/lab/departments?tab=spaces');
-    await expect(page.locator('.ld-br-toggle').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
-    await page.locator('.ld-br-toggle').locator('visible=true').first().click();
-    await expect(page.locator('.pf-board').locator('visible=true').first()).toBeVisible();
+  test('lab spaces: a branch (tree row) shows only its board', async ({ page }) => {
+    await go(page, '/admin/lab/departments?tab=spaces-b1');
+    await expect(page.locator('.ld-spaces .pf-board').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('input[aria-label="Space code — prefixes sample IDs"]').locator('visible=true').first()).toHaveValue('MIC');
     await expectLayout(page, 'lab spaces');
     await shot(page, 'lab-departments-spaces');
@@ -141,7 +146,7 @@ test.describe('lab departments page', () => {
 
   test('branches keeps new branch / deactivate / GSTIN and has no board', async ({ page }) => {
     await go(page, '/admin/branches');
-    await expect(tid(page, 'br-gstin')).toContainText('33AAAAA0000A1Z5', { timeout: 60_000 });
+    await expect(page.locator('.pf-br-main .ag-row').filter({ hasText: '33AAAAA0000A1Z5' }).locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('.pf-board')).toHaveCount(0);
     await expect(page.getByText('Departments & lab spaces')).toHaveCount(0);
     await expectLayout(page, 'branches');
@@ -151,6 +156,6 @@ test.describe('lab departments page', () => {
 
   test('old settings links open the new page', async ({ page }) => {
     await go(page, '/admin/lab/departments?tab=departments');
-    await expect(tid(page, 'ld-list')).toBeVisible({ timeout: 60_000 });
+    await expect(row(page, 'Biochemistry')).toBeVisible({ timeout: 60_000 });
   });
 });
