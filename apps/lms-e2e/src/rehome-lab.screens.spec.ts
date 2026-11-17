@@ -82,7 +82,7 @@ const PAGES: Array<{ name: string; url: string; ready: string; text?: string }> 
   { name: 'home-collection-agents', url: '/admin/lab/home-collection?tab=agents', ready: 'pf-home-collection-agents', text: 'agent' },
   { name: 'front-desk', url: '/admin/lab/front-desk?tab=mode', ready: 'pf-appointments-config [aria-label="Queue mode"]', text: 'Walk-up' },
   { name: 'front-desk-referring', url: '/admin/lab/front-desk?tab=referring', ready: 'pf-referring-network' },
-  { name: 'alerts', url: '/admin/lab/alerts', ready: '.pf-nc-master', text: 'Every alert' },
+  { name: 'alerts', url: '/admin/lab/alerts?tab=all', ready: '.pf-nc-master', text: 'Every alert' },
   { name: 'numbers', url: '/admin/lab/numbers', ready: 'pf-kpi-config' },
   { name: 'report-letterhead', url: '/admin/reports?tab=letterhead', ready: 'pf-report-header-editor .pf-rhe-side', text: 'Letterhead elements' },
   { name: 'report-patient', url: '/admin/reports?tab=patient', ready: '.pf-rt-work', text: 'Patient block' },
