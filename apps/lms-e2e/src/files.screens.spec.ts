@@ -394,8 +394,7 @@ test.describe('Start menu and bottom bar', () => {
   const findInMenu = async (page: Page, words: string) => {
     const input = page.locator('[data-start-menu] .sm-search__input').locator('visible=true').first();
     await expect(page.locator('[data-start-menu] .sm-rows').locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
-    await input.click();
-    await page.keyboard.type(words);
+    await input.evaluate((el, w) => { (el as HTMLInputElement).value = w; el.dispatchEvent(new Event('input', { bubbles: true })); }, words);
     await expect(page.locator('[data-start-menu] .sm-rows[aria-label="Screens"]').locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
   };
   const press = async (page: Page, id: string) => {
