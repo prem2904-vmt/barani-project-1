@@ -12,7 +12,6 @@ import { BarcodeDisplayComponent } from '../../../shared/components/barcode-disp
 import { printLabelOnly } from '../../../shared/utils/print-label';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
-import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { ThemeService } from '../../../core/services/theme.service';
 import { bandFilter } from '../../../shared/utils/band-search';
@@ -20,17 +19,15 @@ import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { mediaSignal } from '../../../shared/utils/media-query';
 import { plural } from '../../../shared/utils/plural';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
-import { testListUrl } from '../../../shared/utils/test-list-url';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { InventoryEnableCardComponent } from './inventory-enable-card.component';
 import { gridThemeDark, gridThemeLight } from '../tests/tests/grid-theme';
 import {
-  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, ledgerWord, qty, signedQty, stockLevel, testsCovered,
+  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, ledgerWord, qty, signedQty, stockLevel,
 } from '../../stores/inventory-view';
-import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-type InvTab = 'items' | 'bom';
 /** What the ITEM side card shows for the picked item. */
 type ItemSection = 'batches' | 'receive' | 'label' | 'ledger';
 
@@ -47,10 +44,8 @@ interface InvBatch {
 /** One `GET /api/inventory/items/{id}/ledger` row (InventoryTxnEntity). */
 interface InvTxn { id: string; type: string; delta: number; reason?: string | null; at: string; batchId?: string | null }
 /** A `?view=summary` test row (TestSummaryDto) — only what the list shows / searches. */
-interface TestRow { id: string; name: string; testCode?: string | null; shortName?: string | null; department?: { name?: string | null } | null }
 const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 /** Rows the test list renders at once; the band search narrows the rest. */
-const TEST_LIST_CAP = 300;
 
 /**
  * Admin → Inventory (PF-PATTERN: band → main card + side card).
@@ -70,7 +65,7 @@ const TEST_LIST_CAP = 300;
   selector: 'pf-inventory',
   standalone: true,
   imports: [BusyDirective, SkeletonTableComponent, DecimalPipe, DatePipe, NgTemplateOutlet, AgGridAngular, BarcodeDisplayComponent,
-    HeroBandComponent, PfDateComponent, SegmentedComponent, SelectComponent],
+    HeroBandComponent, PfDateComponent, SelectComponent, InventoryEnableCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../stores/inv-layout.scss'],
   template: `
@@ -78,33 +73,26 @@ const TEST_LIST_CAP = 300;
       @if (theme.isNewDesign()) {
         <!-- Band pill (owner): the search + Items / Test consumables switch
              (+ the category filter on Items). Items: "New item" in the band. -->
-        <pf-hero-band [back]="true" [placeholder]="tab() === 'items' ? 'Search items — name, SKU, unit…' : 'Search tests — name or code…'"
-                      [value]="tab() === 'items' ? q() : testQ()" (valueChange)="onBandSearch($event)">
+        <pf-hero-band [back]="true" placeholder="Search items — name, SKU, unit…"
+                      [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-tools>
-            @if (narrow() && tab() === 'items') {
+            @if (narrow()) {
               <button type="button" class="pf-chip pf-inv-attnchip press" (click)="attnOpen.set(true)" aria-haspopup="dialog"
                       [attr.aria-expanded]="attnOpen()" [attr.aria-label]="'Attention, ' + attentionCount()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
                 <span class="pf-num">{{ attentionCount() }}</span>
               </button>
             }
-            @if (!hosted) {
-              <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
-            }
-            @if (tab() === 'items') {
-              <pf-select class="pf-inv-bandsel" size="sm" [options]="categoryFilterOptions" [value]="category()"
-                         (valueChange)="category.set($event)" aria-label="Category"></pf-select>
-            }
+            <pf-select class="pf-inv-bandsel" size="sm" [options]="categoryFilterOptions" [value]="category()"
+                       (valueChange)="category.set($event)" aria-label="Category"></pf-select>
           </ng-container>
           <ng-container band-actions>
-            @if (tab() === 'items') {
               <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="bandNewPrimary()" [class.pf-hb-btn--ghost]="!bandNewPrimary()"
                       (click)="startNew()" aria-label="New item">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 New item
               </button>
-            }
           </ng-container>
         </pf-hero-band>
       }
@@ -121,16 +109,13 @@ const TEST_LIST_CAP = 300;
           <p class="text-sm" style="color:var(--text-tertiary)">Stock for the active branch. Usage is auto-deducted per test at sample collection.</p>
         </div>
         <div class="flex items-center gap-2">
-          @if (!hosted) {
-            <pf-segmented size="sm" [options]="tabOptions" [value]="tab()" (valueChange)="setTab($event)"></pf-segmented>
-          }
           <button type="button" class="pf-btn pf-btn--secondary" (click)="startNew()">New item</button>
         </div>
       </div>
 
       <div class="pf-band-body pf-band-body--fill">
-      @if (showItems()) {
-        <div class="inv-body">
+      <pf-inventory-enable-card></pf-inventory-enable-card>
+      <div class="inv-body">
           <!-- MAIN: the item grid -->
           <section class="pf-card" aria-labelledby="pf-inv-items-t">
             <header class="pf-card__head">
@@ -173,58 +158,7 @@ const TEST_LIST_CAP = 300;
               <ng-container [ngTemplateOutlet]="sideCard" [ngTemplateOutletContext]="{ sheet: true }"></ng-container>
             </aside>
           }
-        </div>
-      }
-
-      <!-- Per-test consumables (BOM) — drives auto-deduction at collection -->
-      @if (showBom()) {
-        <div class="inv-body inv-body--left">
-          <!-- LEFT: the tests (navigation companion) -->
-          <section class="pf-card" aria-labelledby="pf-inv-tests-t">
-            <header class="pf-card__head">
-              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
-              <span class="pf-card__label" id="pf-inv-tests-t">Tests</span>
-              <span class="pf-card__spacer"></span>
-              <span class="inv-count pf-num">{{ plural(testRows().length, 'test') }}</span>
-            </header>
-            <div class="pf-card__body pf-inv-tests">
-              <ul class="inv-rows" role="list">
-                @for (t of testRows().slice(0, testCap); track t.id) {
-                  <li>
-                    <button type="button" class="inv-row" [attr.aria-pressed]="bomTestId() === t.id" (click)="selectTest(t.id)">
-                      <span class="inv-row__main">
-                        <span class="inv-row__name">{{ t.name }}</span>
-                        @if (testMeta(t); as m) { <span class="inv-row__meta pf-num">{{ m }}</span> }
-                      </span>
-                    </button>
-                  </li>
-                } @empty {
-                  <li class="pf-empty pf-empty--compact">
-                    <p class="pf-empty__title">{{ tests().length ? 'No tests match' : 'No tests yet' }}</p>
-                    <p class="pf-empty__body">{{ tests().length ? 'Try another name or code.' : 'Tests come from the Test Master.' }}</p>
-                  </li>
-                }
-              </ul>
-              @if (testRows().length > testCap) {
-                <p class="inv-sub pf-inv-tests__more">Showing {{ testCap }} of {{ testRows().length }} — search to find the rest.</p>
-              }
-            </div>
-          </section>
-
-          <!-- MAIN: what the picked test consumes (a sheet on narrow widths) -->
-          @if (!narrow()) {
-            <section class="pf-card pf-inv-bom" aria-labelledby="pf-inv-bom-t">
-              <ng-container [ngTemplateOutlet]="bomCard" [ngTemplateOutletContext]="{ sheet: false }"></ng-container>
-            </section>
-          } @else if (bomTestId()) {
-            <div class="inv-sheet-backdrop" (click)="selectTest('')"></div>
-            <section class="pf-card inv-side--sheet pf-inv-bom" role="dialog" aria-modal="true" aria-labelledby="pf-inv-bom-t" (keydown.escape)="selectTest('')">
-              <span class="inv-sheet-handle" aria-hidden="true"></span>
-              <ng-container [ngTemplateOutlet]="bomCard" [ngTemplateOutletContext]="{ sheet: true }"></ng-container>
-            </section>
-          }
-        </div>
-      }
+      </div>
       </div>
     </section>
 
@@ -427,65 +361,6 @@ const TEST_LIST_CAP = 300;
         </div>
       }
     </ng-template>
-
-    <!-- ══ Consumables card for the picked test ══ -->
-    <ng-template #bomCard let-sheet="sheet">
-      <header class="pf-card__head">
-        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg></span>
-        <span class="pf-card__label" id="pf-inv-bom-t">Per-test consumables</span>
-        @if (bomTest(); as t) { <span class="pf-card__note">{{ t.name }}</span> } @else { <span class="pf-card__spacer"></span> }
-        @if (sheet) {
-          <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="selectTest('')" aria-label="Close consumables">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
-        }
-      </header>
-      @if (bomTestId()) {
-        <div class="pf-card__body pf-inv-bom__body">
-          <p class="inv-sub">What one {{ bomTest()?.name || 'test' }} uses. It's deducted from this branch's stock (earliest expiry first) when the sample is collected.</p>
-          @if (!items().length) {
-            <div class="inv-note">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
-              <div class="inv-note__body">There are no inventory items to map yet.
-                <div class="inv-note__actions"><button type="button" class="pf-btn pf-btn--quiet" (click)="setTab('items'); startNew()">Create an item</button></div>
-              </div>
-            </div>
-          }
-          @if (bomLines().length) {
-            <div class="pf-inv-bomhead" aria-hidden="true"><span>Item</span><span>Per test</span><span>Covers</span><span></span></div>
-          }
-          @for (line of bomLines(); track $index) {
-            <div class="bom-line">
-              <pf-select class="bom-line__item" [options]="itemOptions()" [value]="line.itemId" [searchable]="true"
-                         placeholder="Item…" (valueChange)="setLine($index,'itemId',$event)" aria-label="Item"></pf-select>
-              <input class="pf-input pf-num bom-line__qty" type="number" min="0" step="0.001" inputmode="decimal" [value]="line.qtyPerTest" (input)="setLine($index,'qtyPerTest', +$any($event.target).value)" aria-label="Quantity per test"/>
-              <span class="bom-line__cover pf-num">{{ coverLabel(line) }}</span>
-              <button type="button" class="pf-btn pf-btn--icon pf-inv-x" (click)="removeLine($index)" aria-label="Remove item" title="Remove item">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              </button>
-            </div>
-          } @empty {
-            <div class="pf-empty pf-empty--compact">
-              <p class="pf-empty__title">Nothing mapped</p>
-              <p class="pf-empty__body">This test doesn't use any stock yet. Add the items it consumes.</p>
-            </div>
-          }
-          <div><button type="button" class="pf-btn pf-btn--tertiary" (click)="addLine()">+ Add item</button></div>
-        </div>
-        <div class="pf-card__foot">
-          <button type="button" class="pf-btn pf-btn--secondary press" (click)="selectTest(bomTestId())">Revert</button>
-          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="bomSaving()" [pfBusy]="bomSaving()" pfBusyLabel="Saving…" (click)="saveBom()">Save consumables</button>
-        </div>
-      } @else {
-        <div class="pf-card__body">
-          <div class="pf-empty">
-            <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
-            <p class="pf-empty__title">Pick a test</p>
-            <p class="pf-empty__body">Map the tubes, reagents and kits one test uses. Collection then deducts them from stock automatically, and you see how many tests the stock still covers.</p>
-          </div>
-        </div>
-      }
-    </ng-template>
   `,
   styles: [`
     /* Band pill (new design). */
@@ -501,31 +376,11 @@ const TEST_LIST_CAP = 300;
     .pf-inv-active { justify-content: flex-end; padding-bottom: 10px; }
     .pf-inv-batch__q { min-width: 44px; text-align: center; }
     .pf-inv-adj { width: 36px; min-width: 36px; height: 36px; min-height: 36px; }
-    .pf-inv-tests { padding: 8px 4px; }
-    .pf-inv-tests__more { padding: 4px 12px 8px; }
-
-    /* Consumables lines: item · per test · covers · remove. */
-    .pf-inv-bomhead, .bom-line {
-      display: grid; grid-template-columns: minmax(0, 1fr) 110px 120px 44px; gap: 10px; align-items: center;
-    }
-    .pf-inv-bomhead { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
-    .bom-line__cover { font-size: 12.5px; color: var(--text-tertiary); }
-    .bom-line__item { min-width: 0; }
-    .pf-inv-x { color: var(--text-tertiary); }
-    .pf-inv-x:hover { color: var(--red-text, #b91c1c); }
 
     .pf-hdr-back { width:38px; height:38px; margin-left:-8px; border-radius:11px; color:var(--text-primary); background:transparent; border:0; cursor:pointer; -webkit-tap-highlight-color:transparent; transition:background .15s ease, transform .08s ease; }
     .pf-hdr-back:active { transform:scale(0.9); background:var(--glass-bg, rgba(255,255,255,0.06)); }
     @media (hover:hover){ .pf-hdr-back:hover{ background:var(--glass-bg, rgba(255,255,255,0.06)); } }
 
-    @media (max-width: 640px) {
-      .pf-inv-bomhead { display: none; }
-      .bom-line { grid-template-columns: minmax(0, 1fr) 96px 44px; padding-bottom: 10px; border-bottom: 1px solid var(--pf-line); }
-      .bom-line__item { grid-column: 1 / -1; }
-      .bom-line__cover { grid-column: 1 / 2; grid-row: 2; }
-      .bom-line__qty { grid-row: 2; grid-column: 2; }
-      .pf-inv-x { grid-row: 2; grid-column: 3; }
-    }
     @media (pointer: coarse) {
       .pf-inv-adj { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
     }
@@ -546,24 +401,9 @@ export class InventoryComponent implements OnInit {
   protected readonly plural = plural;
   protected readonly ledgerWord = ledgerWord;
   protected readonly signedQty = signedQty;
-  protected readonly testCap = TEST_LIST_CAP;
-  protected readonly isText = (s: unknown): s is string => typeof s === 'string' && s.trim().length > 0;
   readonly categories = CATEGORIES;
   readonly categoryOptions: PfSelectOption[] = CATEGORIES.map(c => ({ value: c, label: c[0].toUpperCase() + c.slice(1) }));
 
-  // ── Band pill ────────────────────────────────────────────────
-  /** Items vs Test consumables (one at a time). */
-  readonly tab = signal<InvTab>('items');
-  protected readonly hosted = injectSettingsHosted();
-  private readonly followTab = bindTabQuery(['items', 'bom'] as const, (t) => this.tab.set(t));
-  readonly tabOptions: SegmentedOption<InvTab>[] = [
-    { value: 'items', label: 'Items' },
-    { value: 'bom', label: 'Test consumables' },
-  ];
-  setTab(t: InvTab) { this.tab.set(t); this.attnOpen.set(false); }
-  readonly showItems = computed(() => this.tab() === 'items');
-  readonly showBom = computed(() => this.tab() === 'bom');
-  onBandSearch(v: string) { if (this.tab() === 'items') this.q.set(v); else this.testQ.set(v); }
   /** Item search + category filter ('' = all categories). */
   readonly q = signal('');
   readonly category = signal('');
@@ -574,15 +414,6 @@ export class InventoryComponent implements OnInit {
     return bandFilter(rows, this.q(), i => [i.name, i.sku, i.category, i.uom, i.barcode ?? '']);
   });
   readonly itemsLabel = computed(() => plural(this.visibleItems().length, 'item'));
-  readonly testOptions = computed<PfSelectOption[]>(() => this.tests().map(t => ({ value: t.id, label: t.name })));
-  readonly itemOptions = computed<PfSelectOption[]>(() =>
-    this.items().map(it => ({ value: it.id, label: `${it.name} (${it.uom})` })));
-  /** Tests for the consumables list, narrowed by the band search. */
-  readonly testQ = signal('');
-  readonly testRows = computed(() => bandFilter(this.tests(), this.testQ(), t => [t.name, t.testCode ?? '', t.shortName ?? '', t.department?.name ?? '']));
-  testMeta(t: TestRow): string { return [t.testCode, t.department?.name].filter(this.isText).join(' · '); }
-  readonly bomTest = computed(() => this.tests().find(t => t.id === this.bomTestId()) ?? null);
-
   readonly items = signal<InvItem[]>([]);
   readonly batches = signal<InvBatch[]>([]);
   readonly loading = signal(true);
@@ -621,11 +452,6 @@ export class InventoryComponent implements OnInit {
 
   readonly canSave = computed(() => !!this.form().sku?.trim() && !!this.form().name?.trim());
 
-  // Per-test consumable BOM
-  readonly tests = signal<TestRow[]>([]);
-  readonly bomTestId = signal('');
-  readonly bomLines = signal<{ itemId: string; qtyPerTest: number }[]>([]);
-  readonly bomSaving = signal(false);
   /** Loading feedback: Save item / Add stock running. */
   readonly itemSaving = signal(false);
   readonly receiving = signal(false);
@@ -664,43 +490,7 @@ export class InventoryComponent implements OnInit {
   levelLabel(it: InvItem) { return STOCK_LEVEL_LABEL[stockLevel(it)]; }
   expiry(daysLeft: number) { return expiryView(daysLeft); }
 
-  async ngOnInit() { await Promise.all([this.load(), this.loadAlerts(), this.loadTests()]); }
-
-  private async loadTests() {
-    try { this.tests.set(await firstValueFrom(this.api.get<TestRow[]>(testListUrl())) ?? []); }
-    catch { /* */ }
-  }
-
-  async selectTest(id: string) {
-    this.bomTestId.set(id);
-    this.bomLines.set([]);
-    if (!id) return;
-    try {
-      const rows = await firstValueFrom(this.api.get<any[]>(`/api/inventory/tests/${id}/consumables`)) ?? [];
-      this.bomLines.set(rows.map(r => ({ itemId: r.itemId, qtyPerTest: r.qtyPerTest })));
-    } catch { /* */ }
-  }
-  addLine() { this.bomLines.update(l => [...l, { itemId: '', qtyPerTest: 1 }]); }
-  removeLine(i: number) { this.bomLines.update(l => l.filter((_, idx) => idx !== i)); }
-  setLine(i: number, field: 'itemId' | 'qtyPerTest', value: unknown) {
-    this.bomLines.update(l => l.map((ln, idx) => idx === i ? { ...ln, [field]: value } : ln));
-  }
-  /** "≈ 240 tests" — what this branch's stock of the line's item still covers. */
-  coverLabel(line: { itemId: string; qtyPerTest: number }): string {
-    const it = this.items().find(i => i.id === line.itemId);
-    const n = testsCovered(it?.onHand, line.qtyPerTest);
-    return n == null ? '—' : `≈ ${n.toLocaleString('en-IN')} ${n === 1 ? 'test' : 'tests'}`;
-  }
-  async saveBom() {
-    const id = this.bomTestId(); if (!id) return;
-    this.bomSaving.set(true);
-    try {
-      const lines = this.bomLines().filter(l => l.itemId && l.qtyPerTest > 0);
-      await firstValueFrom(this.api.put(`/api/inventory/tests/${id}/consumables`, { lines }));
-      this.toasts.success('Consumables saved');
-    } catch (e) { this.toasts.error(ApiError.from(e).message); }
-    this.bomSaving.set(false);
-  }
+  async ngOnInit() { await Promise.all([this.load(), this.loadAlerts()]); }
 
   private async load() {
     this.loading.set(true);

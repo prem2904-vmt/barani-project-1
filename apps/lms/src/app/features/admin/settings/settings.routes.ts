@@ -47,24 +47,27 @@ const blank = () => import('./settings-blank.component').then((m) => m.SettingsB
 const alias = (path: string): Route => page(path, blank);
 
 // ── The pages behind the paths ──
+// Lab merged pages (features/admin/lab-pages); their categories are LAB_PAGES in shared/utils/lab-settings-pages.ts.
+const labSampleNumbers = () => import('../lab-pages/sample-numbers.page').then((m) => m.LabSampleNumbersPage);
+const labCollection = () => import('../lab-pages/collection.page').then((m) => m.LabCollectionPage);
+const labResults = () => import('../lab-pages/results.page').then((m) => m.LabResultsPage);
+const labHomeCollection = () => import('../lab-pages/home-collection.page').then((m) => m.LabHomeCollectionPage);
+const labFrontDesk = () => import('../lab-pages/front-desk.page').then((m) => m.LabFrontDeskPage);
+const labAlerts = () => import('../lab-pages/alerts.page').then((m) => m.LabAlertsPage);
+const labNumbers = () => import('../lab-pages/numbers.page').then((m) => m.LabNumbersPage);
+const labReportOptions = () => import('../lab-pages/report-options.page').then((m) => m.LabReportOptionsPage);
 const labDepartments = () => import('../lab-departments/lab-departments.component').then((m) => m.LabDepartmentsComponent);
 const branches = () => import('../branches/branches.component').then((m) => m.BranchesComponent);
 const organization = () => import('../organization/organization-settings.component').then((m) => m.OrganizationSettingsComponent);
-const labSettings = () => import('../lab-settings/lab-settings.component').then((m) => m.LabSettingsComponent);
 const tests = () => import('../tests/tests/tests.component').then((m) => m.TestsComponent);
 const reportTemplate = () => import('../report-template/report-template.component').then((m) => m.ReportTemplateComponent);
-const culture = () => import('../../lab/culture-settings/culture-settings.component').then((m) => m.CultureSettingsComponent);
 const referralLabs = () => import('../referral-labs/referral-labs.component').then((m) => m.ReferralLabsComponent);
 const partnerPrices = () => import('../partner-test-prices/partner-test-prices.component').then((m) => m.PartnerTestPricesComponent);
 const instruments = () => import('../../lab/instruments/instruments-list.component').then((m) => m.InstrumentsListComponent);
 const bridges = () => import('../bridges/bridges-list.component').then((m) => m.BridgesListComponent);
-const appointments = () => import('../appointments-config/appointments-config.component').then((m) => m.AppointmentsConfigComponent);
-const referringNetwork = () => import('../referring-network/referring-network.component').then((m) => m.ReferringNetworkComponent);
 const notifications = () => import('../notifications-config/notifications-config.component').then((m) => m.NotificationsConfigComponent);
-const kpis = () => import('../kpis/kpi-config.component').then((m) => m.KpiConfigComponent);
 const processBuilder = () => import('../process-builder/process-builder.component').then((m) => m.ProcessBuilderComponent);
 const workflowBuilder = () => import('../workflow-builder/workflow-builder.component').then((m) => m.WorkflowBuilderComponent);
-const homeCollection = () => import('../home-collection/home-collection-agents.component').then((m) => m.HomeCollectionAgentsComponent);
 const inventory = () => import('../inventory/inventory.component').then((m) => m.InventoryComponent);
 const setup = () => import('../setup-wizard/setup-wizard.component').then((m) => m.SetupWizardComponent);
 const users = () => import('../users-access/users-access.component').then((m) => m.UsersAccessComponent);
@@ -89,27 +92,25 @@ export const OPD_FULL_SCREEN_ADMIN: ReadonlySet<string> = new Set(['admin/opd/se
 export const SETTINGS_SHELL_CHILDREN: Routes = [
   // ── Lab ──
   page(P.labDepartments, labDepartments),
-  page(P.labSampleNumbers, organization),                             // placeholder: Organization › Sample ID tab
+  page(P.labSampleNumbers, labSampleNumbers),
   page(P.tests, tests),
   page(P.reports, reportTemplate, { leave: true }),
-  page(P.reportOptions, labSettings),                                 // placeholder: Lab settings › Report tab (notes); repoint to the Lab agent's page
-  page(P.labCollection, labSettings),                                 // placeholder: Lab settings › Collection / Queues tabs
-  page(P.labResults, labSettings),                                    // placeholder: Lab settings › Rules tab
-  page(P.microbiology, culture),
+  page(P.reportOptions, labReportOptions),
+  page(P.labCollection, labCollection),
+  page(P.labResults, labResults),
   alias(P.labOutsourcing),
   page(P.referralLabs, referralLabs),
   page(P.partnerPrices, partnerPrices),
   alias(P.labAnalyzers),
   page(P.instruments, instruments),
   page(P.bridges, bridges),
-  page(P.labFrontDesk, appointments),                                 // placeholder: Appointments & queue
-  page(P.labReferring, referringNetwork),
-  page(P.labAlerts, notifications),                                   // placeholder: shared Notifications page
-  page(P.labNumbers, kpis),
+  page(P.labFrontDesk, labFrontDesk),
+  page(P.labAlerts, labAlerts),
+  page(P.labNumbers, labNumbers),
   alias(P.labWorkSteps),
   page(P.process, processBuilder),
   page(P.workflows, workflowBuilder),
-  page(P.labHomeCollection, homeCollection),
+  page(P.labHomeCollection, labHomeCollection),
 
   // ── OPD + Pharmacy (adminGuard + opdGuard; defined once in features/opd/opd.routes.ts) ──
   ...OPD_ADMIN_ROUTES.filter((r) => !OPD_FULL_SCREEN_ADMIN.has(r.path ?? '')),
@@ -175,6 +176,8 @@ export const SETTINGS_REDIRECTS: Routes = [
   moved('/admin/communication'),
   moved('/admin/appointments'),
   moved('/admin/referring-network'),
+  moved('/admin/lab/front-desk/referring'),
+  moved('/admin/microbiology'),
   moved('/admin/notifications'),
   moved('/admin/kpis'),
   moved('/admin/home-collection'),

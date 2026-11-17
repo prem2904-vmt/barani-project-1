@@ -193,19 +193,18 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
 
 
   // ── Settings re-home (2026-11-17): the new homes carry EXACTLY the gate of the screen behind them today ──
-  '/admin/lab/departments':       { perms: ['manage_branches'] },
-  '/admin/lab/sample-numbers':    { perms: ['manage_tenant'] },
+  '/admin/lab/sample-numbers':    { perms: ['manage_lab_settings', 'manage_tenant'] },
   '/admin/lab/report-options':         { perms: ['manage_lab_settings'] },
   '/admin/lab/collection':        { perms: ['manage_lab_settings'] },
   '/admin/lab/results':           { perms: ['manage_lab_settings'] },
   '/admin/lab/outsourcing':       { perms: TEST_MASTER_PERMS },
   '/admin/lab/analyzers':         { perms: ['manage_lab_settings', ...BRIDGE_PERMS], module: 'lab' },
-  '/admin/lab/front-desk':        { perms: ['manage_tenant'] },
+  '/admin/lab/front-desk':        { perms: ['manage_tenant', 'manage_admin'] },
   '/admin/lab/front-desk/referring': { perms: ['manage_tenant', 'manage_admin'] },
   '/admin/lab/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
   '/admin/lab/numbers':           { perms: ADMIN_PERMS },
   '/admin/lab/work-steps':        { perms: ['manage_workflows'] },
-  '/admin/lab/home-collection':   { perms: ['manage_home_collection'], workflow: ['home_visits'], module: 'homeCollection' },
+  '/admin/lab/home-collection':   { perms: ['manage_home_collection', 'manage_tenant'], module: 'homeCollection' },
   '/admin/opd/departments':       { perms: ADMIN_PERMS },
   '/admin/opd/doctors':           { perms: ADMIN_PERMS },
   '/admin/opd/forms':             { perms: ADMIN_PERMS },

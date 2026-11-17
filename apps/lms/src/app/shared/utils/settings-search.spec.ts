@@ -53,7 +53,7 @@ describe('settings search — real examples', () => {
     // the removed Lab settings "number width" card is gone from the index
     expect(t).not.toContain('Sample ID');
     expect(run('sample id')[0].href).toBe('/admin/lab/sample-numbers');
-    expect(run('sample id')[0].queryParams).toEqual({ tab: 'sample' });
+    expect(run('sample id')[0].queryParams).toEqual({ tab: 'format' });
   });
 
   it('"barcode" → Specimen label code first (exact keyword)', () => {

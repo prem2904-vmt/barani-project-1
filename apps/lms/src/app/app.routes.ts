@@ -204,9 +204,9 @@ export const appRoutes: Route[] = withAppModes([
         canActivate: [permissionGuard(TEST_MASTER_PERMS)],
         loadComponent: loadTestEditor
       },
-      { path: 'admin/whatsapp', redirectTo: '/admin/communication?tab=whatsapp', pathMatch: 'full' },
-      { path: 'admin/lab-settings/whatsapp', redirectTo: '/admin/communication?tab=whatsapp', pathMatch: 'full' },
-      { path: 'admin/email', redirectTo: '/admin/communication?tab=email', pathMatch: 'full' },
+      { path: 'admin/whatsapp', redirectTo: '/admin/org/channels?tab=whatsapp', pathMatch: 'full' },
+      { path: 'admin/lab-settings/whatsapp', redirectTo: '/admin/lab/report-options?tab=sending', pathMatch: 'full' },
+      { path: 'admin/email', redirectTo: '/admin/org/channels?tab=email', pathMatch: 'full' },
       {
         // Per-station printing setup — available to any signed-in user (not
         // admin-only): the printer + label roll are physical to the station.

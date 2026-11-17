@@ -10,6 +10,7 @@
  * finished page changes only that file, never this map.
  */
 import type { BetaFeatureKey } from '../../../core/services/beta-features.service';
+import { LAB_PAGES, LEGACY_LAB_SETTINGS_CARD_TARGET, LEGACY_LAB_SETTINGS_TARGET } from '../../../shared/utils/lab-settings-pages';
 
 /** One screen (or one `?tab=` / `?view=` of a screen) inside a setting — a row in the shell's left panel. */
 export interface SettingsCategory {
@@ -113,14 +114,12 @@ export const SETTINGS_PATHS = {
   instruments: '/admin/instruments',
   bridges: '/admin/bridges',
   labFrontDesk: '/admin/lab/front-desk',
-  labReferring: '/admin/lab/front-desk/referring',
   labAlerts: '/admin/lab/alerts',
   labNumbers: '/admin/lab/numbers',
   labWorkSteps: '/admin/lab/work-steps',
   process: '/admin/process',
   workflows: '/admin/workflows',
   labHomeCollection: '/admin/lab/home-collection',
-  microbiology: '/admin/microbiology',
   // OPD
   opdDepartments: '/admin/opd/departments',
   opdDoctors: '/admin/opd/doctors',
@@ -169,7 +168,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
         ] },
       { id: 'lab-sample-numbers', label: 'Sample numbers', path: P.labSampleNumbers, iconPath: ICON.barcode,
         blurb: 'Sample ID format, prefix per lab space, barcode type, scan or type.',
-        categories: [{ id: 'sample', label: 'Sample numbers', query: { tab: 'sample' } }] },
+        categories: categoriesFromPage(LAB_PAGES.sampleNumbers) },
       { id: 'lab-tests', label: 'Tests and packages', path: P.tests, iconPath: ICON.tests,
         blurb: 'Tests, profiles, packages, option groups, microbiology lists and prices.',
         categories: [
@@ -190,21 +189,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'table', label: 'Results table', query: { tab: 'table' } },
           { id: 'sequence', label: 'Sequencing', query: { tab: 'sequence' } },
           { id: 'footer', label: 'Footer', query: { tab: 'footer' } },
-          { id: 'notes', label: 'Technician notes', path: P.reportOptions, query: { tab: 'notes' } },
-          { id: 'sending', label: 'Report sending', path: P.reportOptions, query: { tab: 'sending' } },
+          ...categoriesFromPage(LAB_PAGES.reportOptions),
         ] },
       { id: 'lab-collection', label: 'Collection and queues', path: P.labCollection, iconPath: ICON.queue,
         blurb: 'Queue focus, auto-assign per department, supervisor claim.',
-        categories: [
-          { id: 'collection', label: 'Collection and IDs', query: { tab: 'collection' } },
-          { id: 'queues', label: 'Queues and assignment', query: { tab: 'queues' } },
-        ] },
+        categories: categoriesFromPage(LAB_PAGES.collection) },
       { id: 'lab-results', label: 'Results and validation', path: P.labResults, iconPath: ICON.check,
         blurb: 'Validation, calculation constants, microbiology stage lock and turnaround.',
-        categories: [
-          { id: 'rules', label: 'Rules and gates', query: { tab: 'rules' } },
-          { id: 'micro', label: 'Microbiology', path: P.microbiology },
-        ] },
+        categories: categoriesFromPage(LAB_PAGES.results) },
       { id: 'lab-outsourcing', label: 'Outsourcing', path: P.labOutsourcing, iconPath: ICON.partners,
         blurb: 'Referral labs, partner prices and the departments each partner handles.',
         categories: [
@@ -219,18 +211,13 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
         ] },
       { id: 'lab-front-desk', label: 'Front desk', path: P.labFrontDesk, iconPath: ICON.desk,
         blurb: 'Lab appointments and queue, and the referring doctors and hospitals.',
-        categories: [
-          { id: 'mode', label: 'Queue mode', query: { tab: 'mode' } },
-          { id: 'slots', label: 'Booking slots', query: { tab: 'slots' } },
-          { id: 'priority', label: 'Priority engine', query: { tab: 'priority' } },
-          { id: 'referring', label: 'Referring doctors and hospitals', path: P.labReferring },
-        ] },
+        categories: categoriesFromPage(LAB_PAGES.frontDesk) },
       { id: 'lab-alerts', label: 'Lab alerts', path: P.labAlerts, iconPath: ICON.bell,
         blurb: 'Which alerts the lab gets, and when each one fires.',
-        categories: [{ id: 'alerts', label: 'Lab alerts' }] },
+        categories: categoriesFromPage(LAB_PAGES.alerts) },
       { id: 'lab-numbers', label: 'Numbers on lab screens', path: P.labNumbers, iconPath: ICON.kpi,
         blurb: 'Which number cards show on each lab screen.',
-        categories: [{ id: 'numbers', label: 'Numbers on lab screens' }] },
+        categories: categoriesFromPage(LAB_PAGES.numbers) },
       { id: 'lab-work-steps', label: 'Work steps and forms', path: P.labWorkSteps, iconPath: ICON.process,
         blurb: 'Lab workflows, work areas and menus, and custom forms per screen.',
         categories: [
@@ -238,8 +225,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'forms', label: 'Custom forms', path: P.workflows },
         ] },
       { id: 'lab-home-collection', label: 'Home collection', path: P.labHomeCollection, iconPath: ICON.home, requires: 'homeCollection',
-        blurb: 'Home collection agents: coverage area and share of work.',
-        categories: [{ id: 'agents', label: 'Agents' }] },
+        blurb: 'Home collection on or off, and the agents: coverage area and share of work.',
+        categories: categoriesFromPage(LAB_PAGES.homeCollection) },
     ],
   },
   {
@@ -307,10 +294,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     items: [
       { id: 'inventory-items', label: 'Stock items', path: P.inventory, iconPath: ICON.box,
         blurb: 'Item master, reorder level, near-expiry days, active.',
-        categories: [
-          { id: 'items', label: 'Items', query: { tab: 'items' } },
-          { id: 'bom', label: 'Test consumables', query: { tab: 'bom' } },
-        ] },
+        categories: [{ id: 'items', label: 'Items' }] },
     ],
   },
 
@@ -527,24 +511,28 @@ export function rehome(path: string, query: Readonly<Record<string, string | nul
   switch (p) {
     case '/admin/lab-settings':
       switch (tab) {
-        case 'queues': return { path: P.labCollection, query: keep({ tab: 'queues' }) };
-        case 'rules': return { path: P.labResults, query: keep({ tab: 'rules' }) };
-        case 'report': return { path: P.reportOptions, query: keep({ tab: 'notes' }) };
-        default: return { path: P.labCollection, query: keep({ tab: 'collection' }) };
+      {
+        // The Lab pages own where each old tab / card went (LEGACY_LAB_SETTINGS_*); `?card=` picks the exact card.
+        const card = query['card'] ? LEGACY_LAB_SETTINGS_CARD_TARGET[query['card'] ?? ''] : undefined;
+        const t = card ?? LEGACY_LAB_SETTINGS_TARGET[tab] ?? LEGACY_LAB_SETTINGS_TARGET['collection'];
+        const rest = keep(); delete rest['card'];
+        return { path: t.path, query: { ...rest, tab: t.tab } };
       }
     case '/admin/organization':
       switch (tab) {
         case 'patient': return { path: P.orgNumbers, query: keep({ tab: 'patient' }) };
         case 'order': return { path: P.orgNumbers, query: keep({ tab: 'order' }) };
-        case 'sample': return { path: P.labSampleNumbers, query: keep({ tab: 'sample' }) };
+        case 'sample': return { path: P.labSampleNumbers, query: keep({ tab: 'format' }) };
         default: return { path: P.orgProfile, query: keep({ tab: 'identity' }) };
       }
     case '/admin/communication': return { path: P.orgChannels, query: keep(tab ? { tab } : {}) };
     case '/admin/appointments': return { path: P.labFrontDesk, query: keep(tab ? { tab } : {}) };
-    case '/admin/referring-network': return { path: P.labReferring, query: keep() };
+    case '/admin/referring-network': return { path: P.labFrontDesk, query: keep({ tab: 'referring' }) };
+    case '/admin/lab/front-desk/referring': return { path: P.labFrontDesk, query: keep({ tab: 'referring' }) };
+    case '/admin/microbiology': return { path: P.labResults, query: keep({ tab: 'micro' }) };
     case '/admin/notifications': return { path: P.labAlerts, query: keep() };
     case '/admin/kpis': return { path: P.labNumbers, query: keep() };
-    case '/admin/home-collection': return { path: P.labHomeCollection, query: keep() };
+    case '/admin/home-collection': return { path: P.labHomeCollection, query: keep({ tab: 'agents' }) };
     case '/admin/partners': return { path: P.labOutsourcing, query: keep() };
     case '/setup': return { path: P.orgBranding, query: keep() };
     case '/admin/opd/pharmacy': return { path: P.pharmacy, query: keep() };

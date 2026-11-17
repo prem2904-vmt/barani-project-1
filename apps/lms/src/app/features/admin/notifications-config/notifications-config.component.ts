@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { ToastService } from '../../../core/services/toast.service';
@@ -11,6 +11,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { bandMatch } from '../../../shared/utils/band-search';
 import { DialogService } from '../../../core/services/dialog.service';
 import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { SettingsDepartment, alertModuleInDepartment } from '../../../shared/utils/department-scope';
 
 /** One catalog event merged with the tenant's override — mirrors the
  *  middleware's NotificationCatalogRow. The catalog itself lives in the
@@ -204,6 +205,9 @@ const MODULE_LABELS: Record<string, string> = {
           </div>
         </div>
       }
+      @if (!loading() && department() && !rows().length) {
+        <p class="pf-band-empty" data-testid="nc-dept-empty">This department has no alerts yet.</p>
+      }
       @if (!loading() && q().trim() && !visibleModules().length) {
         <p class="pf-band-empty">No alerts match "{{ q() }}".</p>
       }
@@ -351,10 +355,14 @@ export class NotificationsConfigComponent implements OnInit {
    *  notification gate; this only reflects and flips it). */
   readonly masterOn = signal<boolean>(true);
   readonly masterSaving = signal<boolean>(false);
-  readonly enabledTotal = computed(() => this._rows().filter(r => r.enabled).length);
+  readonly enabledTotal = computed(() => this.rows().filter(r => r.enabled).length);
 
+  /** Show only one department's alerts (Lab alerts, OPD alerts, IPD alerts).
+   *  No value = every alert (the old single page). The master switch stays
+   *  lab-wide either way. */
+  readonly department = input<SettingsDepartment | null>(null);
   private readonly _rows = signal<CatalogRow[]>([]);
-  readonly rows = this._rows.asReadonly();
+  readonly rows = computed(() => this._rows().filter(r => alertModuleInDepartment(r.module, this.department())));
   readonly loading = signal<boolean>(true);
 
   private readonly _moduleFilter = signal<string | null>(null);
@@ -364,7 +372,7 @@ export class NotificationsConfigComponent implements OnInit {
   /** Module keys in backend catalog order (first-seen order of rows). */
   readonly modules = computed(() => {
     const seen: string[] = [];
-    for (const r of this._rows()) if (!seen.includes(r.module)) seen.push(r.module);
+    for (const r of this.rows()) if (!seen.includes(r.module)) seen.push(r.module);
     return seen;
   });
   protected readonly theme = inject(ThemeService);
@@ -376,18 +384,18 @@ export class NotificationsConfigComponent implements OnInit {
     const f = this._moduleFilter();
     const mods = f === null ? this.modules() : this.modules().filter(m => m === f);
     if (!this.q().trim()) return mods;
-    return mods.filter(m => this._rows().some(r => r.module === m && this.matches(r)));
+    return mods.filter(m => this.rows().some(r => r.module === m && this.matches(r)));
   });
   /** Module picker in the pill ('' = All), counts in the label. */
   readonly moduleOptions = computed<PfSelectOption<string>[]>(() => [
-    { value: '', label: `All modules · ${this._rows().length}` },
+    { value: '', label: `All modules · ${this.rows().length}` },
     ...this.modules().map(m => ({ value: m, label: `${this.moduleLabel(m)} · ${this.countFor(m)}` })),
   ]);
 
   moduleLabel(m: string): string { return MODULE_LABELS[m] ?? m; }
   /** Rows of a module that pass the pill search (all rows when no query). */
-  rowsFor(m: string): CatalogRow[] { return this._rows().filter(r => r.module === m && this.matches(r)); }
-  private allRowsFor(m: string): CatalogRow[] { return this._rows().filter(r => r.module === m); }
+  rowsFor(m: string): CatalogRow[] { return this.rows().filter(r => r.module === m && this.matches(r)); }
+  private allRowsFor(m: string): CatalogRow[] { return this.rows().filter(r => r.module === m); }
   countFor(m: string): number { return this.allRowsFor(m).length; }
   enabledCount(m: string): number { return this.allRowsFor(m).filter(r => r.enabled).length; }
 

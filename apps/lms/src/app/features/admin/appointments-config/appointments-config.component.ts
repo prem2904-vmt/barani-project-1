@@ -12,7 +12,8 @@ import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/
 import { ThemeService } from '../../../core/services/theme.service';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
-import { LabFeaturesService } from '../../../core/services/lab-features.service';
+import { RouterLink } from '@angular/router';
+import { LAB_PAGES } from '../../../shared/utils/lab-settings-pages';
 import { PfTimeComponent } from '../../../shared/components/pf-time/pf-time.component';
 import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
@@ -24,13 +25,15 @@ interface ModeOption { value: QueueMode; label: string; desc: string }
 const MODES: ModeOption[] = [
   { value: 'token_queue', label: 'Token queue', desc: 'Patients check in, get a token, and are called by priority. Full real-time queue board.' },
   { value: 'walk_up', label: 'Walk-up', desc: 'No formal queue — patients served roughly first-come. The board is a simple "who\'s here" list.' },
-  { value: 'home_collection', label: 'Home collection', desc: 'Appointments are home-collection visits, ordered by scheduled time rather than a counter queue.' }
 ];
+
+/** The mode the Home collection setting turns on (Lab › Home collection owns it). */
+export const HOME_COLLECTION_MODE: QueueMode = 'home_collection';
 
 @Component({
   selector: 'pf-appointments-config',
   standalone: true,
-  imports: [BusyDirective, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, PfTimeComponent],
+  imports: [BusyDirective, RouterLink, SkeletonFormComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent, SegmentedComponent, PfTimeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     /* Page is fluid; guard against any accidental horizontal overflow only. */
@@ -40,6 +43,8 @@ const MODES: ModeOption[] = [
     .pf-ap-card .pf-section-title { margin: 0; }
     .pf-ap-body { padding: 16px 18px 18px; }
     .pf-ap-hint { margin: 8px 0 0; font-size: 12px; line-height: 1.5; color: var(--text-tertiary); }
+    .pf-ap-hc { padding-bottom: 0; }
+    .pf-ap-link { color: var(--violet-text, #7c3aed); text-decoration: underline; text-underline-offset: 3px; }
     .pf-ap-hint--top { margin: 0 0 12px; }
     .pf-mode-btn {
       display: flex; flex-direction: column; gap: 4px; height: 100%; padding: 12px 14px;
@@ -120,7 +125,13 @@ const MODES: ModeOption[] = [
         <!-- Queue mode -->
         <section class="pf-card pf-ap-card">
           <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="pf-card__label pf-section-title">Queue mode</h3></div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pf-ap-body" role="radiogroup" aria-label="Queue mode">
+          @if (homeCollectionRuns()) {
+            <p class="pf-ap-hint pf-ap-body pf-ap-hc" data-testid="ap-hc-note">
+              This branch's queue runs as <strong>home collection</strong> visits. Pick a queue mode below to switch it back, or
+              manage home collection in <a class="pf-ap-link" [routerLink]="homeCollectionPath">Lab › Home collection</a>.
+            </p>
+          }
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pf-ap-body" role="radiogroup" aria-label="Queue mode">
             @for (m of modes(); track m.value) {
               <!-- Neutral selected tile (PF-PATTERN §3), never a violet tile. -->
               <button type="button" class="pf-mode-btn pf-tile-sel text-left" role="radio"
@@ -225,11 +236,12 @@ export class AppointmentsConfigComponent implements OnInit {
     return !this.theme.isNewDesign() || this.tab() === key;
   }
 
-  /** Home collection off (the ONE lab-feature rule) ⇒ its queue mode is not
-   *  offered — unless it is the stored mode, so the admin can see and change it. */
-  private readonly features = inject(LabFeaturesService);
-  readonly modes = computed(() => MODES.filter(m => m.value !== 'home_collection'
-    || this.features.homeCollectionEnabled() || this.cfg()?.queueMode === 'home_collection'));
+  /** Home collection is no longer a queue mode here — it moved to Lab › Home
+   *  collection (same server setting, `queueMode: 'home_collection'`). */
+  readonly modes = computed(() => MODES);
+  protected readonly homeCollectionPath = LAB_PAGES.homeCollection.path;
+  /** The stored mode is the home-collection one: say so instead of showing nothing selected. */
+  readonly homeCollectionRuns = computed(() => this.cfg()?.queueMode === HOME_COLLECTION_MODE);
   readonly optionFields: { key: keyof AppointmentConfig['queueOptions']; label: string; step: number }[] = [
     { key: 'baseAppointment', label: 'Appointment base', step: 50 },
     { key: 'baseWalkin', label: 'Walk-in base', step: 50 },

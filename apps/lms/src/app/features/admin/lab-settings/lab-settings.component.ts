@@ -1,33 +1,35 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, signal } from '@angular/core';
 import { MonoTypeOperatorFunction, defer, finalize } from 'rxjs';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { AuthService } from '../../../core/auth/auth.service';
-import { PAYMENT_RULE_PERMS } from '../../../core/auth/route-access';
 import { ApiService } from '../../../core/services/api.service';
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
-import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { TenantStateService } from '../../../core/services/tenant-state.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { BillingMode, BranchLabConfig, CollectionMode } from '../../../shared/models/branch-lab-config.model';
 import { Department, Tenant } from '../../../shared/models/tenant.model';
 import { Role, User } from '../../../shared/models/user.model';
 import { ApiError } from '../../../shared/models/api-response.model';
-import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
-import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { ThemeService } from '../../../core/services/theme.service';
-import { LAB_SETTINGS_TABS } from '../../../shared/utils/settings-catalog';
 import { BusyComponent, SkeletonCardComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { spinDelay } from '../../../shared/utils/busy';
+import { LAB_SPACES_PATH, LAB_SPACES_QUERY } from '../../../shared/utils/lab-settings-pages';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { SampleSearchPresetService } from '../../../core/services/sample-search-preset.service';
 import { labDate, nextLabMonth, sampleIdHead } from '../../../shared/utils/sample-id-preset';
-import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
-/** Band pill tabs — the 13 section cards grouped by what they govern. */
-export type LabSettingsTab = 'collection' | 'queues' | 'rules' | 'report';
+/**
+ * The cards this host can show. A Lab settings PAGE lists the ones it owns
+ * through `[cards]`; no input = every card (the legacy single page).
+ *  Sample numbers: scan-mode · lab-structure · label-code
+ *  Collection and queues: counters · queue-focus · auto-assign · no-scan
+ *  Results and validation: require-validation · calc-constants
+ *  Report options: tech-notes
+ */
+export type LabSettingsCard =
+  | 'counters' | 'scan-mode' | 'queue-focus' | 'lab-structure' | 'calc-constants' | 'no-scan'
+  | 'label-code' | 'require-validation' | 'tech-notes' | 'auto-assign';
 
 interface AutoAssignConfig {
   id?: string;
@@ -45,61 +47,19 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [FormsModule, RouterLink, ScreenHeaderComponent, SelectComponent, HeroBandComponent, SegmentedComponent, BusyComponent, SkeletonCardComponent],
+  imports: [FormsModule, SelectComponent, BusyComponent, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
-      @if (theme.isNewDesign()) {
-        <!-- Band (owner): no search here — the section cards are grouped into
-             tabs in a tabs-only pill. Every change autosaves, so no actions. -->
-        <pf-hero-band [back]="true" [tabsOnly]="true">
-          <ng-container band-tools>
-            <pf-segmented class="pf-hb-tabs" size="sm" [options]="tabOptions" [value]="tab()"
-                          (valueChange)="pickTab($event)"></pf-segmented>
-          </ng-container>
-          <!-- Autosave is authoritative here (no Save button): the band says
-               so as the neutral save state with a violet check. -->
-          <ng-container band-actions>
-            <span class="pf-savestate pf-ls__savestate" role="status" title="Every change saves as you make it"
-                  [attr.aria-busy]="savingShown() ? 'true' : null">
-              @if (savingShown()) {
-                <pf-busy label="Saving…"></pf-busy>
-                <span class="pf-ls__savestate-t">Saving…</span>
-              } @else {
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-                <span class="pf-ls__savestate-t">Changes save automatically</span>
-              }
-            </span>
-          </ng-container>
-        </pf-hero-band>
-      }
-      <pf-screen-header class="pf-classic-only"
-        eyebrow="Admin · Lab"
-        title="Lab settings"
-        subtitle="Control how samples are auto-assigned to techs and whether supervisors can claim without a scan.">
-      </pf-screen-header>
-
-      <div class="pf-band-body">
-      <!-- This page has no Save button by design: every change persists the
-           moment you make it (OPS-15). Make that explicit so it doesn't read as
-           unsaved. -->
-      <div class="pf-ls__autosave pf-classic-only" role="status" [attr.aria-busy]="savingShown() ? 'true' : null">
-        @if (savingShown()) {
-          <pf-busy label="Saving…"></pf-busy>
-          <span>Saving…</span>
-        } @else {
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
-          <span>Changes are saved automatically</span>
-        }
-      </div>
-
+    <!-- A card host: the Lab settings pages (Sample numbers, Collection and
+         queues, Results and validation, Report options) each list the cards
+         they own through [cards]; the page supplies the band and category tabs.
+         Every change autosaves — each card says so with a toast. -->
+    <div class="pf-ls__host">
       @if (firstLoad()) {
         <!-- First load: the section cards' shape until the branch config lands. -->
         <div class="pf-ls__skel">
           <pf-skeleton-card [lines]="3" label="Loading lab settings…"></pf-skeleton-card>
           <pf-skeleton-card [lines]="4" label="Loading lab settings…"></pf-skeleton-card>
-          <pf-skeleton-card [lines]="3" label="Loading lab settings…"></pf-skeleton-card>
         </div>
       } @else {
 
@@ -110,8 +70,19 @@ interface AutoAssignConfig {
         Cards marked <strong>This branch</strong> apply to <strong>{{ branchName() }}</strong> only — switch branch to set
         another branch. <strong>All branches</strong> cards apply everywhere.
       </p>
+      <!-- Autosave is authoritative here (no Save button): say so as the neutral save state. -->
+      <span class="pf-savestate pf-ls__savestate" role="status" title="Every change saves as you make it"
+            [attr.aria-busy]="savingShown() ? 'true' : null">
+        @if (savingShown()) {
+          <pf-busy label="Saving…"></pf-busy>
+          <span class="pf-ls__savestate-t">Saving…</span>
+        } @else {
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          <span class="pf-ls__savestate-t">Changes save automatically</span>
+        }
+      </span>
 
-      @if (showSec('collection')) {
+      @if (show('counters')) {
       <!-- Counters & collection — now driven by the Workflow (single source) -->
       <section class="pf-card pf-ls__card">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3h18v4H3zM5 7v14h14V7M9 11h6"/></svg></span><h3 class="pf-card__label pf-ls__title">Counters &amp; collection</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
@@ -134,7 +105,7 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('collection')) {
+      @if (show('scan-mode')) {
       <!-- Sample identification mode (tenant-wide) — governs the lab screens. -->
       <section class="pf-card pf-ls__card">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14"/></svg></span><h3 class="pf-card__label pf-ls__title">Sample identification</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span></div>
@@ -186,7 +157,7 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('queues')) {
+      @if (show('queue-focus')) {
       <!-- Queue focus (per-branch) — how the lab worklists group work. -->
       <section class="pf-card pf-ls__card">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span><h3 class="pf-card__label pf-ls__title">Queue focus</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
@@ -223,14 +194,14 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('queues')) {
+      @if (show('lab-structure')) {
       <!-- Lab structure (per-branch): integrated / standalone / auto -->
       <section class="pf-card pf-ls__card">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><h3 class="pf-card__label pf-ls__title">Lab structure</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
         <div class="pf-ls__cardbody">
         <p class="pf-ls__hint">
           How this branch's tubes group into spaces.
-          <strong>Auto</strong> (default) = arrange freely on the Branches board —
+          <strong>Auto</strong> (default) = arrange freely on the lab spaces board —
           placed departments follow their space, the rest share the default "Lab".
           <strong>Integrated</strong> = one lab, ONE space — everything shares the
           default "Lab" space.
@@ -256,33 +227,13 @@ interface AutoAssignConfig {
           dedicated space) on the default "Lab" lane in <strong>Departments and lab spaces</strong> —
           leave it blank for no prefix.
         </p>
-        <button type="button" class="pf-ls__link" style="margin-top: 6px;" (click)="goBranches()">Open Departments and lab spaces</button>
+        <button type="button" class="pf-ls__link" style="margin-top: 6px;" (click)="goBranches()">Open lab spaces</button>
       </div>
       </section>
       }
 
-      @if (showSec('collection')) {
-      <!-- Sample IDs have ONE home each: the format (date, separator, digits)
-           is Organization › Sample ID; each space's prefix is on the
-           Branches board. (The old "number width" here was read by nothing
-           — removed 2026-11-01.) This is a pointer, not an editor. -->
-      <section class="pf-card pf-ls__card" data-testid="ls-sample-ids">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/></svg></span><h3 class="pf-card__label pf-ls__title">Sample IDs</h3></div>
-        <div class="pf-ls__cardbody">
-          <p class="pf-ls__hint">
-            Every tube's ID is <strong>prefix + date + number</strong> (e.g. <span class="pf-num">MIC-2607-00001</span>).
-            The <strong>format</strong> is set once for the organisation; the <strong>prefix</strong> is each
-            lab space's code, set per branch.
-          </p>
-          <div class="pf-ls__links">
-            <button type="button" class="pf-btn pf-btn--secondary pf-ls__linkbtn" (click)="goSampleIdFormat()">Sample ID format</button>
-            <button type="button" class="pf-btn pf-btn--secondary pf-ls__linkbtn" (click)="goBranches()">Prefixes in lab spaces</button>
-          </div>
-        </div>
-      </section>
-      }
 
-      @if (showSec('rules')) {
+      @if (show('calc-constants')) {
       <!-- Calculation constants (tenant-wide) — feed calculated results. -->
       <section class="pf-card pf-ls__card">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h8"/></svg></span><h3 class="pf-card__label pf-ls__title">Calculation constants</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span></div>
@@ -320,7 +271,7 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('rules')) {
+      @if (show('no-scan')) {
       <!-- No-scan override (tenant-wide) -->
       <section class="pf-card pf-ls__card">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5l-8-3Z"/></svg></span><h3 class="pf-card__label pf-ls__title">Allow no-scan claim (supervisor override)</h3><span class="pf-ls__scope pf-ls__scope--all" title="Applies to every branch">All branches</span><span class="pf-card__spacer"></span>
@@ -339,56 +290,9 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('rules')) {
-      <!-- Inventory master switch — only when the tenant is entitled to the
-           inventory module, so an admin can't turn on a module they don't have. -->
-      @if (entitlements.moduleEnabled('inventory')) {
-      <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5"/><path d="M12 22V12"/></svg></span><h3 class="pf-card__label pf-ls__title">Enable inventory</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span><span class="pf-card__spacer"></span>
-          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="inventoryEnabled()" aria-label="Enable inventory"
-                  (click)="setInventoryEnabled(!inventoryEnabled())">
-            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-          </button>
-        </div>
-        <div class="pf-ls__cardbody">
-          <p class="pf-ls__hint">
-              Track consumable stock (tubes, kits, reagents). When ON, usage is auto-deducted at
-              collection and a test <strong>can't be ordered if its kit isn't fully in stock</strong>.
-              When OFF, inventory is ignored entirely. Manage stock under Admin → Inventory.
-            </p>
-        </div>
-      </section>
-      }
-      }
 
-      @if (showSec('rules') && canManagePayments()) {
-      <!-- Payment gate: choose WHERE an unpaid balance blocks the workflow.
-           Revenue policy — billing / organisation admins only (never the
-           Lab Admin (Technical) role); the server refuses it the same way. -->
-      <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span><h3 class="pf-card__label pf-ls__title">Require full payment to progress</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
-        <div class="pf-ls__cardbody">
-        <p class="pf-ls__hint">
-          Choose where an unpaid balance blocks the workflow. Sample <em>collection</em> is never blocked —
-          you can bill pay-later / part-advance and still draw the tube; the difference is settled at the gate.
-        </p>
-        <div class="pf-ls__gate" role="radiogroup">
-          @for (opt of gateOptions; track opt.value) {
-            <button type="button" class="pf-ls__gate-opt" role="radio" [attr.aria-checked]="paymentGateStage() === opt.value"
-                    (click)="setPaymentGateStage(opt.value)">
-              <span class="pf-ls__gate-radio"></span>
-              <span class="pf-ls__gate-text">
-                <span class="pf-ls__gate-t">{{ opt.label }}</span>
-                <span class="pf-ls__gate-s">{{ opt.desc }}</span>
-              </span>
-            </button>
-          }
-        </div>
-      </div>
-      </section>
-      }
 
-      @if (showSec('collection')) {
+      @if (show('label-code')) {
       <!-- Specimen label CODE — a per-branch policy (branch-lab-config). Label SIZE + printer + darkness
            are per-station (a user's Print settings), never stored in the cloud. -->
       <section class="pf-card pf-ls__card">
@@ -417,7 +321,7 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('rules')) {
+      @if (show('require-validation')) {
       <!-- Require validation for all results -->
       <section class="pf-card pf-ls__card">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><h3 class="pf-card__label pf-ls__title">Require validation for all results</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span><span class="pf-card__spacer"></span>
@@ -435,43 +339,9 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('rules') && canManagePayments()) {
-      <!-- Front-desk Payments-due tab visibility (billing admins only). -->
-      <section class="pf-card pf-ls__card">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span><h3 class="pf-card__label pf-ls__title">Show "Payments due" tab</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span><span class="pf-card__spacer"></span>
-          <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="showPaymentsDue()" aria-label="Show &quot;Payments due&quot; tab"
-                  (click)="setShowPaymentsDue(!showPaymentsDue())">
-            <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
-          </button>
-        </div>
-        <div class="pf-ls__cardbody">
-          <p class="pf-ls__hint">
-              When ON, the front-desk shows a <strong>Payments due</strong> tab listing every order with an
-              outstanding balance. In Progress and Completed are always shown. Leave OFF to hide it.
-            </p>
-        </div>
-      </section>
-      }
 
-      @if (showSec('report')) {
-      <!-- The consolidated abnormal-results sheet is a report-template option:
-           its ONE switch lives in Report Template › Results table (with the
-           live preview). A pointer here, never a second switch. -->
-      <section class="pf-card pf-ls__card" data-testid="ls-abnormal-link">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg></span><h3 class="pf-card__label pf-ls__title">Report layout</h3></div>
-        <div class="pf-ls__cardbody">
-          <p class="pf-ls__hint">
-            The consolidated abnormal results sheet, columns, letterhead and the rest of the report layout
-            are set in <strong>Report Template</strong>.
-          </p>
-          <div class="pf-ls__links">
-            <button type="button" class="pf-btn pf-btn--secondary pf-ls__linkbtn" (click)="goReportTemplate()">Open Report Template</button>
-          </div>
-        </div>
-      </section>
-      }
 
-      @if (showSec('report')) {
+      @if (show('tech-notes')) {
       <!-- Technician notes on the report (per branch, like the other
            result-entry switches): the bench writes rich-text notes that print
            under a test, a profile, a department section or the whole report. -->
@@ -494,20 +364,8 @@ interface AutoAssignConfig {
       </section>
       }
 
-      @if (showSec('report')) {
-      <!-- WhatsApp, Email and SMS moved to Settings → Communication (2026-11-13): ONE place for them. -->
-      <section class="pf-card pf-ls__card" data-testid="ls-comms-link">
-        <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8M8 13h5"/></svg></span><h3 class="pf-card__label pf-ls__title">WhatsApp, email and SMS</h3><span class="pf-card__spacer"></span></div>
-        <div class="pf-ls__cardbody">
-          <p class="pf-ls__hint">Sending reports and invoices by WhatsApp, email and SMS is set up in <strong>Communication</strong>.</p>
-          <div class="pf-ls__links">
-            <a class="pf-btn pf-btn--secondary pf-ls__linkbtn press" routerLink="/admin/communication" data-testid="ls-comms-open">Open Communication</a>
-          </div>
-        </div>
-      </section>
-      }
 
-      @if (showSec('queues')) {
+      @if (show('auto-assign')) {
       <!-- Auto-assign per department -->
       <section class="pf-card pf-ls__card">
         <div class="pf-card__head"><span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><h3 class="pf-card__label pf-ls__title">Auto-assign by department</h3><span class="pf-ls__scope" title="Applies to the branch you are signed in to">This branch</span></div>
@@ -544,7 +402,7 @@ interface AutoAssignConfig {
         </div>
 
         @if (departments().length === 0) {
-          <p class="pf-ls__empty">No departments yet — add them from Branches first.</p>
+          <p class="pf-ls__empty">No departments yet — add them in Departments and lab spaces first.</p>
         } @else {
           <div class="pf-ls__dept-grid" [class.pf-ls__dept-grid--off]="!autoAssignEnabled() && !autoAssignValidatorsEnabled()">
             @for (d of departments(); track d.id) {
@@ -613,10 +471,11 @@ interface AutoAssignConfig {
       </section>
       }
       }
-      </div>
-    </section>
+    </div>
   `,
   styles: [`
+    :host { display: block; }
+    .pf-ls__savestate { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px; }
     .pf-ls__skel { display: flex; flex-direction: column; gap: 16px; }
     .pf-ls__autosave {
       display: inline-flex; align-items: center; gap: 6px;
@@ -649,9 +508,6 @@ interface AutoAssignConfig {
     .pf-ls__switch { flex: none; }
     .pf-ls__chipm { height: auto; min-height: 30px; white-space: normal; }
     .pf-ls__wfbtn { height: 32px; min-height: 32px; }
-    @media (max-width: 640px) {
-      .pf-ls__savestate-t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-    }
     .pf-ls__preset { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--glass-border, rgba(148,163,184,0.25)); }
     .pf-ls__preset-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .pf-ls__preset-t { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
@@ -785,21 +641,15 @@ export class LabSettingsComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
-  protected readonly entitlements = inject(TenantEntitlementsService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
-  protected readonly theme = inject(ThemeService);
+  /** Which cards to show; null = all (the legacy single page). */
+  readonly cards = input<readonly LabSettingsCard[] | null>(null);
+  show(key: LabSettingsCard): boolean {
+    const c = this.cards();
+    return c === null || c.includes(key);
+  }
 
-  /** Band pill tabs (new design). Classic shows every card, as before. */
-  readonly tabOptions: SegmentedOption<LabSettingsTab>[] = [
-    { value: 'collection', label: 'Collection & IDs' },
-    { value: 'queues', label: 'Queues & assignment' },
-    { value: 'rules', label: 'Rules & gates' },
-    { value: 'report', label: 'Report' },
-  ];
-  readonly tab = signal<LabSettingsTab>('collection');
-  protected readonly hosted = injectSettingsHosted();
-  private readonly followTab = bindTabQuery([...LAB_SETTINGS_TABS, 'notes'] as const, (t) => this.tab.set(t === 'notes' ? 'report' : t));
 
   // ── Loading feedback (PF-PATTERN "Loading feedback") ──
   /** First load: skeleton cards until the branch config answers (held, no flash). */
@@ -816,18 +666,9 @@ export class LabSettingsComponent implements OnInit {
       return src.pipe(finalize(() => this.pendingSaves.update(n => Math.max(0, n - 1))));
     });
   }
-  /** Switch tab and keep it in the URL (`?tab=`, replacing this history
-   *  entry) so a reload, a shared link and back all return to it. */
-  pickTab(t: LabSettingsTab): void {
-    this.tab.set(t);
-    void this.router.navigate([], { queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true });
-  }
   /** The branch the per-branch cards on this page apply to (the signed-in /
    *  active branch — the server scopes branch-lab-config to it). */
   readonly branchName = computed(() => this.auth.activeBranch?.()?.name ?? this.auth.user()?.branchName ?? 'this branch');
-  showSec(key: LabSettingsTab): boolean {
-    return !this.theme.isNewDesign() || this.tab() === key;
-  }
 
   private readonly _departments = signal<Department[]>([]);
   private readonly _roles = signal<Role[]>([]);
@@ -875,26 +716,16 @@ export class LabSettingsComponent implements OnInit {
   // arranged it behaves exactly like Integrated — everything in the one Lab).
   protected readonly labStructure = signal<'auto' | 'integrated' | 'standalone'>('auto');
   protected readonly labStructureOptions: Array<{ value: 'auto' | 'integrated' | 'standalone'; label: string; desc: string }> = [
-    { value: 'auto', label: 'Auto (default)', desc: 'You arrange it: drag departments between spaces on the Branches board. A placed department follows its space (code + shared vials); unplaced departments share the default "Lab" space.' },
-    { value: 'integrated', label: 'Integrated', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared tube with the Lab-code prefix. Space arrangement on the Branches board is ignored.' },
+    { value: 'auto', label: 'Auto (default)', desc: 'You arrange it: drag departments between spaces on the lab spaces board. A placed department follows its space (code + shared vials); unplaced departments share the default "Lab" space.' },
+    { value: 'integrated', label: 'Integrated', desc: 'One lab, ONE space. Every department shares the default "Lab" space — same-colour tests draw one shared tube with the Lab-code prefix. Space arrangement on the lab spaces board is ignored.' },
     { value: 'standalone', label: 'Standalone', desc: 'Every department keeps its own sample-ID prefix (the department code). Tubes are still shared: one tube per tube type per visit, whatever the department.' },
   ];
   readonly collectionMode = this.labCfg.collectionMode;
   readonly billingMode = this.labCfg.billingMode;
 
-  // Branch lab-config toggles.
-  protected readonly inventoryEnabled = signal(false);
-  /** Where the "require full payment" gate applies: none | dispatch | report. */
-  protected readonly paymentGateStage = signal<'none' | 'dispatch' | 'report'>('none');
-  protected readonly gateOptions: Array<{ value: 'none' | 'dispatch' | 'report'; label: string; desc: string }> = [
-    { value: 'none', label: 'Off', desc: 'Billing, dispatch and reporting run independently (default).' },
-    { value: 'dispatch', label: 'Block at dispatch', desc: "Samples can't be dispatched to the lab until the bill is fully paid (strongest)." },
-    { value: 'report', label: 'Block at report', desc: "Dispatch is allowed, but the report can't be shared until the bill is fully paid." },
-  ];
   protected readonly requireValidation = signal(false);
   /** Technician notes on the report (per branch, off by default). */
   protected readonly techReportNotes = signal(false);
-  protected readonly showPaymentsDue = signal(true);
   /** The SINGLE code that prints on a specimen label. A tube label can't fit
    *  more than one, so this is a mutually-exclusive choice. */
   protected readonly labelCodeMode = signal<'barcode' | 'qr' | 'datamatrix'>('barcode');
@@ -903,30 +734,6 @@ export class LabSettingsComponent implements OnInit {
     { value: 'qr', label: 'QR (2D)', desc: 'A QR encoding the MRN + Sample ID.' },
     { value: 'datamatrix', label: 'Data Matrix (2D)', desc: 'A compact Data Matrix (Sample ID) — fits a tiny tube area and still scans.' },
   ];
-  setInventoryEnabled(v: boolean) {
-    this.inventoryEnabled.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { inventoryEnabled: v }).pipe(this.tracked()).subscribe({
-      next: cfg => {
-        // Push the fresh config into the shared service so the Stores nav entry
-        // appears / disappears immediately (no reload needed).
-        if (cfg) this.labCfg.update(cfg);
-        this.toasts.success(v ? 'Inventory enabled for this branch' : 'Inventory disabled');
-      },
-      error: e => { this.inventoryEnabled.set(!v); this.toasts.error(ApiError.from(e).message); }
-    });
-  }
-  setPaymentGateStage(v: 'none' | 'dispatch' | 'report') {
-    const prev = this.paymentGateStage();
-    if (prev === v) return;
-    this.paymentGateStage.set(v);
-    const msg = v === 'none' ? 'Payment gate removed'
-      : v === 'dispatch' ? 'Full payment now required before dispatch'
-      : 'Full payment now required before sharing the report';
-    this.api.patch('/api/tenants/branch-lab-config', { paymentGateStage: v }).pipe(this.tracked()).subscribe({
-      next: () => this.toasts.success(msg),
-      error: e => { this.paymentGateStage.set(prev); this.toasts.error(ApiError.from(e).message); }
-    });
-  }
   setLabelCodeMode(v: 'barcode' | 'qr' | 'datamatrix') {
     const prev = this.labelCodeMode();
     if (prev === v) return;
@@ -974,47 +781,22 @@ export class LabSettingsComponent implements OnInit {
       error: e => { this.techReportNotes.set(!v); this.toasts.error(ApiError.from(e).message); }
     });
   }
-  setShowPaymentsDue(v: boolean) {
-    this.showPaymentsDue.set(v);
-    this.api.patch<BranchLabConfig>('/api/tenants/branch-lab-config', { showPaymentsDueTab: v }).pipe(this.tracked()).subscribe({
-      next: cfg => { if (cfg) this.labCfg.update(cfg); this.toasts.success(v ? '"Payments due" tab shown at the front desk' : '"Payments due" tab hidden'); },
-      error: e => { this.showPaymentsDue.set(!v); this.toasts.error(ApiError.from(e).message); }
-    });
-  }
-
-  goReportTemplate() { this.router.navigate(['/admin/reports'], { queryParams: { tab: 'table' } }); }
-  goSampleIdFormat() { this.router.navigate(['/admin/organization'], { queryParams: { tab: 'sample' } }); }
-  goBranches() { this.router.navigate(['/admin/lab/departments'], { queryParams: { tab: 'spaces' } }); }
+  /** Lab spaces (names + codes) are edited on the Departments and lab spaces page. */
+  goBranches() { this.router.navigate([LAB_SPACES_PATH], { queryParams: LAB_SPACES_QUERY }); }
 
   private readonly destroyRef = inject(DestroyRef);
-  /** Payment gate + Payments-due tab — revenue policy (PATCH branch-lab-config
-   *  refuses those fields without manage_tenant / manage_billing_config). */
-  readonly canManagePayments = computed(() => this.auth.hasAnyPermission(PAYMENT_RULE_PERMS));
-
   ngOnInit() {
     this.destroyRef.onDestroy(() => this.loadHold.cancel());
-    // Deep link: …/lab-settings?tab=<collection|queues|rules|report> opens that
-    // tab (the settings search and other pages link straight to a card).
-    const t = this.router.parseUrl(this.router.url).queryParams['tab'];
-    if ((LAB_SETTINGS_TABS as readonly string[]).includes(t)) this.tab.set(t as LabSettingsTab);
-    // The old WhatsApp deep link (…/lab-settings?tab=whatsapp) lands on Communication.
-    if (t === 'whatsapp' || t === 'email' || t === 'sms') {
-      void this.router.navigate(['/admin/communication'], { queryParams: { tab: t }, replaceUrl: true });
-    }
     this.tenantState.ensureLoaded();
     this.samplePresets.reload();
     this.labCfg.ensureLoaded();
-    this.entitlements.ensureLoaded();
     this.api.get<any>('/api/tenants/branch-lab-config').subscribe({
       next: c => {
-        this.inventoryEnabled.set(c?.inventoryEnabled === true);
-        this.paymentGateStage.set(c?.paymentGateStage ?? (c?.requireBillBeforeCollection ? 'dispatch' : 'none'));
         this.labelCodeMode.set(c?.labelCodeMode === 'both' ? 'barcode' : (c?.labelCodeMode ?? 'barcode'));
         this.requireValidation.set(c?.requireValidationForAllResults === true);
         this.techReportNotes.set(c?.techReportNotes === true);
         this.autoAssignEnabled.set(c?.autoAssignEnabled === true);
         this.autoAssignValidatorsEnabled.set(c?.autoAssignValidatorsEnabled === true);
-        this.showPaymentsDue.set(c?.showPaymentsDueTab !== false);
         this.queueFocusMode.set(c?.queueFocusMode ?? 'auto');
         this.effectiveQueueFocus.set(c?.effectiveQueueFocus ?? 'patient');
         // Legacy "individual" reads as standalone; anything unknown/empty is

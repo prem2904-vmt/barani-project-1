@@ -17,6 +17,8 @@ import { DialogService } from '../../core/services/dialog.service';
 export function renderBandPage(cmp: Type<unknown>, opts: {
   getFor?: (url: string) => unknown;
   providers?: unknown[];
+  /** Component inputs, set BEFORE the first change detection (ngOnInit sees them). */
+  inputs?: Record<string, unknown>;
 } = {}) {
   // Always install the stub (never 'only if missing'): another spec in the same
   // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
@@ -52,6 +54,7 @@ export function renderBandPage(cmp: Type<unknown>, opts: {
     ],
   });
   const f = TestBed.createComponent(cmp);
+  for (const [k, v] of Object.entries(opts.inputs ?? {})) f.componentRef.setInput(k, v);
   f.detectChanges();
   const el = f.nativeElement as HTMLElement;
   const band = () => el.querySelector('pf-hero-band');

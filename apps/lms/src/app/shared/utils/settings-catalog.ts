@@ -93,7 +93,7 @@ export const SETTINGS_SECTION = { personal: 'Your settings' } as const;
 export const LAB_SETTINGS_TABS = ['collection', 'queues', 'rules', 'report'] as const;
 export type LabSettingsTabId = typeof LAB_SETTINGS_TABS[number];
 /** Organization & Identity band tabs, in order (the page's `?tab=`). */
-export const ORG_SETTINGS_TABS = ['identity', 'patient', 'sample', 'order'] as const;
+export const ORG_SETTINGS_TABS = ['identity', 'patient', 'order'] as const;
 export type OrgSettingsTabId = typeof ORG_SETTINGS_TABS[number];
 
 /** A SCREEN (page) of a setting. */
@@ -113,31 +113,28 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   st('Departments on or off', P.labDepartments, I.space, ['switch department', 'deactivate department', 'catalogue'], { tab: 'departments' }),
   st('Lab spaces', P.labDepartments, I.space, ['drag department', 'space', 'tube sharing', 'space name', 'space code'], { tab: 'spaces' }),
   st('Default Lab code', P.labDepartments, I.space, ['sample id prefix', 'space code', 'lab code'], { tab: 'spaces' }),
-  pg('Sample numbers', P.labSampleNumbers, I.barcode, ['sample number', 'tube id', 'barcode number', 'sample id digits', 'prefix per lab space'], {}, { tab: 'sample' }),
-  st('Sample ID format', P.labSampleNumbers, I.barcode, ['sample number', 'tube id', 'barcode number', 'sample id digits'], { tab: 'sample' }),
-  pg('Tests and packages', P.tests, I.tests, ['test master', 'tests', 'packages', 'profiles', 'parameters', 'reference range', 'catalogue', 'test price', 'tests & packages']),
+  pg('Sample numbers', P.labSampleNumbers, I.barcode, ['sample number', 'tube id', 'barcode number', 'sample id digits', 'prefix per lab space'], {}, { tab: 'format' }),
+  st('Sample ID format', P.labSampleNumbers, I.barcode, ['sample number', 'tube id', 'barcode number', 'sample id digits'], { tab: 'format' }),
+  st('Prefix per lab space', P.labSampleNumbers, I.barcode, ['space code', 'sample id prefix', 'prefix'], { tab: 'prefixes' }),
+  st('Lab structure', P.labSampleNumbers, I.barcode, ['integrated', 'standalone'], { tab: 'structure' }),
+  st('Specimen label code', P.labSampleNumbers, I.barcode, ['barcode', 'qr code', 'datamatrix', 'label code', 'barcode type'], { tab: 'barcode' }),
+  st('Sample identification', P.labSampleNumbers, I.barcode, ['scan mode', 'manual entry', 'barcode scanner', 'camera', 'find a sample'], { tab: 'find' }),
+  pg('Tests and packages', P.tests, I.tests, ['test master', 'tests', 'packages', 'profiles', 'parameters', 'reference range', 'catalogue', 'test price', 'tests & packages', 'consumables', 'test consumables']),
   pg('Report design', P.reports, I.report, ['report', 'report template', 'letterhead', 'header', 'footer', 'signature', 'nabl', 'report logo', 'patient strip']),
   st('Consolidated abnormal results sheet', P.reports, I.report, ['abnormal summary', 'high low results'], { tab: 'table' }),
   st('Technician notes on report', P.reportOptions, I.report, ['tech notes', 'report notes'], { tab: 'notes' }),
-  st('Report sending', P.reportOptions, I.report, ['send report', 'whatsapp auto', 'email report'], { tab: 'sending' }),
-  pg('Collection and queues', P.labCollection, I.queue, ['lab settings', 'lab rules', 'collection', 'queues'], {}, { tab: 'collection' }),
-  st('Counters & collection', P.labCollection, I.queue, ['collection mode', 'billing mode', 'separate counter'], { tab: 'collection' }),
-  st('Sample identification', P.labCollection, I.queue, ['scan mode', 'manual entry', 'barcode scanner', 'camera'], { tab: 'collection' }),
-  st('Pre-fill sample search', P.labCollection, I.queue, ['sample search preset'], { tab: 'collection' }),
-  st('Specimen label code', P.labCollection, I.queue, ['barcode', 'qr code', 'datamatrix', 'label code'], { tab: 'collection' }),
-  st('Queue focus', P.labCollection, I.queue, ['patient focused', 'sample focused', 'worklist'], { tab: 'queues' }),
-  st('Lab structure', P.labCollection, I.queue, ['integrated', 'standalone'], { tab: 'queues' }),
-  st('Auto-assign by department', P.labCollection, I.queue, ['auto assign', 'validators', 'technician routing'], { tab: 'queues' }),
-  pg('Results and validation', P.labResults, I.check, ['lab rules', 'rules and gates'], {}, { tab: 'rules' }),
-  st('Calculation constants', P.labResults, I.check, ['isi', 'mnpt', 'inr', 'normal hct'], { tab: 'rules' }),
-  st('Allow no-scan claim (supervisor override)', P.labResults, I.check, ['no scan', 'supervisor override'], { tab: 'rules' }),
-  st('Enable inventory', P.labResults, I.check, ['stock deduction'], { tab: 'rules' }, { module: 'inventory' }),
-  st('Require full payment to progress', P.labResults, I.check, ['payment gate', 'unpaid balance'], { tab: 'rules' }, { perms: PAYMENT_RULE_PERMS }),
-  st('Require validation for all results', P.labResults, I.check, ['validation', 'pathologist', 'direct flow'], { tab: 'rules' }),
-  st('Show "Payments due" tab', P.labResults, I.check, ['payments due', 'outstanding balance'], { tab: 'rules' }, { perms: PAYMENT_RULE_PERMS }),
-  pg('Microbiology / Culture', P.microbiology, I.micro, ['culture', 'microbiology', 'culture bench']),
-  st('Stage lock', P.microbiology, I.micro, ['lock timeout', 'takeover']),
-  st('Turnaround targets', P.microbiology, I.micro, ['culture tat', 'stage tat']),
+  st('WhatsApp Auto: send the report automatically when it is ready', P.reportOptions, I.report, ['send report', 'whatsapp auto', 'auto send', 'report sending'], { tab: 'sending' }),
+  pg('Collection and queues', P.labCollection, I.queue, ['lab settings', 'lab rules', 'collection', 'queues'], {}, { tab: 'queue' }),
+  st('Queue focus', P.labCollection, I.queue, ['patient focused', 'sample focused', 'worklist'], { tab: 'queue' }),
+  st('Counters & collection', P.labCollection, I.queue, ['collection mode', 'billing mode', 'separate counter'], { tab: 'queue' }),
+  st('Auto-assign technicians and validators', P.labCollection, I.queue, ['auto assign', 'validators', 'validates for', 'technician routing', 'auto-assign by department'], { tab: 'assign' }),
+  st('Allow no-scan claim (supervisor override)', P.labCollection, I.queue, ['no scan', 'supervisor override', 'claim without scanning'], { tab: 'noscan' }),
+  pg('Results and validation', P.labResults, I.check, ['lab rules', 'rules and gates'], {}, { tab: 'validation' }),
+  st('Require validation for all results', P.labResults, I.check, ['validation', 'pathologist', 'direct flow'], { tab: 'validation' }),
+  st('Calculation constants', P.labResults, I.check, ['isi', 'mnpt', 'inr', 'normal hct'], { tab: 'constants' }),
+  st('Microbiology / Culture', P.labResults, I.micro, ['culture', 'microbiology', 'culture bench'], { tab: 'micro' }),
+  st('Stage lock', P.labResults, I.micro, ['lock timeout', 'takeover'], { tab: 'micro' }),
+  st('Turnaround targets', P.labResults, I.micro, ['culture tat', 'stage tat'], { tab: 'micro' }),
   pg('Outsourcing', P.labOutsourcing, I.partners, ['partners', 'outsource', 'external lab', 'referral', 'send out']),
   pg('Referral Labs', P.referralLabs, I.report, ['outsource', 'outsourcing', 'external lab', 'send out']),
   pg('Partner Prices', P.partnerPrices, I.partners, ['outsourcing cost', 'referral lab price', 'margin']),
@@ -147,12 +144,13 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   st('Queue mode', P.labFrontDesk, I.desk, ['token', 'walk in'], { tab: 'mode' }),
   st('Booking slots', P.labFrontDesk, I.desk, ['slot duration', 'open hours', '24x7'], { tab: 'slots' }),
   st('Priority engine', P.labFrontDesk, I.desk, ['priority', 'urgent'], { tab: 'priority' }),
-  pg('Referring doctors and hospitals', P.labReferring, I.partners, ['referring network', 'hospital', 'doctor', 'referrer', 'commission']),
+  st('Referring doctors and hospitals', P.labFrontDesk, I.partners, ['referring network', 'hospital', 'doctor', 'referrer', 'commission'], { tab: 'referring' }),
   pg('Lab alerts', P.labAlerts, I.bell, ['notifications', 'alerts', 'bell', 'overdue', 'critical value', 'escalation']),
   pg('Numbers on lab screens', P.labNumbers, I.kpi, ['kpi cards', 'kpi', 'metrics', 'dashboard cards']),
   pg('Work steps', P.process, I.process, ['process builder', 'workflow', 'menu', 'navigation', 'work area', 'collection counter', 'billing counter', 'dispatch', 'intake', 'work steps and forms']),
   pg('Custom forms', P.workflows, I.forms, ['form flows', 'form', 'fields', 'custom field', 'registration form']),
-  pg('Home-collection agents', P.labHomeCollection, I.home, ['home collection', 'agent', 'pickup', 'coverage area', 'pincode'], { feature: 'homeCollection' }),
+  pg('Home collection', P.labHomeCollection, I.home, ['home collection on or off', 'home visits'], { feature: 'homeCollection' }, { tab: 'switch' }),
+  st('Home-collection agents', P.labHomeCollection, I.home, ['home collection', 'agent', 'pickup', 'coverage area', 'pincode'], { tab: 'agents' }, { feature: 'homeCollection' }),
 
   // ── OPD ──
   pg('OPD departments and services', P.opdDepartments, I.stetho, ['opd', 'services', 'prices', 'follow-up rule'], { requires: 'opd' }),
@@ -175,7 +173,8 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   pg('IPD alerts', P.ipdAlerts, I.bell, ['ipd notifications'], { casesheets: true }),
 
   // ── Inventory ──
-  pg('Stock items', P.inventory, I.inventory, ['inventory', 'stock', 'batch', 'expiry', 'reagent', 'kit', 'consumables', 'purchase', 'item master', 'reorder level'], {}, { tab: 'items' }),
+  pg('Stock items', P.inventory, I.inventory, ['inventory', 'stock', 'batch', 'expiry', 'reagent', 'kit', 'purchase', 'item master', 'reorder level']),
+  st('Enable inventory', P.inventory, I.inventory, ['stock deduction', 'inventory on or off'], undefined, { module: 'inventory' }),
 
   // ── Organization ──
   pg('Name and logo', P.orgProfile, I.person, ['organisation', 'company', 'organization profile'], {}, { tab: 'identity' }),
@@ -193,12 +192,13 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   st('Online payment (UPI)', P.billing, I.billing, ['upi', 'payment link', 'qr payment'], { tab: 'invoice' }),
   st('Bank account', P.billing, I.billing, ['settlement', 'ifsc'], { tab: 'invoice' }),
   st('Letterhead & document type', P.billing, I.billing, ['invoice letterhead', 'bill format'], { tab: 'invoice' }),
+  st('Require full payment to progress', P.billing, I.billing, ['payment gate', 'unpaid balance', 'payment rules'], { tab: 'payments' }, { perms: PAYMENT_RULE_PERMS }),
+  st('Show "Payments due" tab', P.billing, I.billing, ['payments due', 'outstanding balance'], { tab: 'payments' }, { perms: PAYMENT_RULE_PERMS }),
   pg('Credit accounts', P.vendors, I.vendors, ['vendor', 'vendor wallets', 'credit', 'wallet', 'b2b', 'top up', 'vendor credit wallets']),
   pg('Cortex connectors', P.aiConnectors, I.connectors, ['mcp', 'claude', 'connector', 'ai connectors', 'connected apps'], { beta: 'mcp' }),
 
   // Message channels (WhatsApp, Email, SMS): ONE set of accounts for the organization.
   pg('Message channels', P.orgChannels, I.comms, ['communication', 'whatsapp', 'email', 'sms', 'messages', 'share report', 'send report'], { perms: COMMS_SETTINGS_PERMS }),
-  st('WhatsApp Auto: send the report automatically when it is ready', P.orgChannels, I.comms, ['whatsapp', 'auto send', 'whatsapp auto'], { tab: 'whatsapp' }),
   st('Your WhatsApp number', P.orgChannels, I.comms, ['whatsapp number', 'embedded signup', 'whatsapp billing'], { tab: 'whatsapp' }),
   st('Email sender', P.orgChannels, I.comms, ['email', 'smtp', 'mailbox', 'reply to', 'from name', 'own mailbox'], { tab: 'email' }),
   st('Send a test email', P.orgChannels, I.comms, ['test email'], { tab: 'email' }),
