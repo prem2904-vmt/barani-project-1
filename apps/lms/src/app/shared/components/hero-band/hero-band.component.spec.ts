@@ -258,6 +258,7 @@ describe('pf-hero-band — hosted in the Settings shell (SETTINGS_HOST)', () => 
   it('marks the band hosted and keeps the page actions', () => {
     const el = makeHosted(false);
     expect(el.querySelector('.pf-hb--hosted')).not.toBeNull();
+    expect(el.querySelector('.pf-hb__back')).toBeNull();
     expect(el.querySelector('.pf-hb__actions .act')?.textContent).toBe('Save');
   });
 

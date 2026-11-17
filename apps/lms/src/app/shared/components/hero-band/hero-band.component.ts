@@ -45,7 +45,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
     <div class="pf-hb" [class.pf-hb--slim]="slim()" [class.pf-hb--hosted]="hosted">
       <div class="pf-hb__band">
         <div class="pf-hb__tenant">
-          @if (back() && (navBack.showBack() || !!backAction())) {
+          @if (back() && !hosted && (navBack.showBack() || !!backAction())) {
             <button type="button" class="pf-hb__back press" (click)="goBack()" aria-label="Go back" title="Back">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

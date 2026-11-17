@@ -112,9 +112,10 @@ test.describe('settings two-panel', () => {
 
   test('a tabbed page is driven by its categories: Organization numbers → Patient ID / Order ID, no tab strip of its own', async ({ page }) => {
     await go(page, '/admin/org/numbers?tab=order');
-    await expect(tid(page, 'tp-nav-title')).toHaveText('Patient and order numbers', { timeout: 60_000 });
+    await expect(page.locator('.pf-tp__eyebrow').locator('visible=true').first()).toHaveText(/Patient and order numbers/i, { timeout: 60_000 });
     await expect(page.locator('pf-hero-band .pf-hb-tabs')).toHaveCount(0);
     if (!isPhone()) {
+      await expect(tid(page, 'tp-nav-title')).toHaveText('Patient and order numbers');
       await expect(tid(page, 'tp-item-order')).toHaveAttribute('aria-current', 'true');
       await tid(page, 'tp-item-patient').click();
       await expect(page).toHaveURL(/tab=patient/);
