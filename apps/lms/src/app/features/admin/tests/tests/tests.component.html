@@ -163,7 +163,7 @@
 
   <!-- Everything under the band: the grid view FILLS the body (the grid
        scrolls itself); the side views scroll the body. -->
-  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView() || ogView() || pendingView()">
+  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView() || ogView() || microView() || pricingView() || pendingView()">
   @if (pendingView()) {
     <!-- Pending changes (beta assistant): suggested by Cortex / an outside
          assistant, reviewed ONE BY ONE — no bulk approve anywhere. -->

@@ -14,6 +14,7 @@ import { SkeletonCardComponent, SkeletonTableComponent } from '../../../../share
 import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { prefetch } from '../../../../shared/utils/prefetch';
 import { TEST_EDITOR_PREFETCH_KEY, loadTestEditor } from '../test-editor/test-editor.loader';
+import { TM_NARROW, TM_TWO_PANEL_STYLES, mediaSignal } from './tm-two-panel';
 
 interface OgRow { code: string | null; value: string; normal: boolean; active: boolean; }
 interface OgLink { testId: string; testCode: string | null; testName: string; paramName: string; paramTitle: string; }
@@ -50,44 +51,27 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-og">
-      <div class="pf-og__bar">
-        @if (bandQuery() === null) {
+      @if (bandQuery() === null) {
+        <!-- Classic only: Test Master's band pill carries search + "New" in the new design. -->
+        <div class="pf-og__bar">
           <input type="search" class="pf-input pf-og__search" placeholder="Search values, tests, parameters…" aria-label="Search option groups"
                  [ngModel]="query()" (ngModelChange)="query.set($event)" />
-        }
-        <span class="pf-og__count"><span class="pf-num">{{ rows().length }}</span> option group{{ rows().length === 1 ? '' : 's' }}</span>
-        <span class="pf-og__spacer"></span>
-        @if (bandQuery() === null) {
+          <span class="pf-og__spacer"></span>
           <button type="button" class="pf-btn pf-og__new press" [class.pf-btn--primary]="!sheetOpen()"
                   [class.pf-btn--secondary]="sheetOpen()" (click)="startCreate()">+ New option group</button>
-        }
-      </div>
-
-      <div class="pf-og__cols">
-        <!-- ── LEFT: the groups grid ── -->
-        <div class="pf-og__grid">
-          @if (listSkeleton()) {
-            <!-- First load: the grid's shape over the mounted grid (PF-PATTERN "Loading feedback"). -->
-            <pf-skeleton-table class="pf-og__gridskel" [rows]="8" [cols]="5" label="Loading option groups…"></pf-skeleton-table>
-          }
-          <ag-grid-angular
-            style="width: 100%; height: 100%; min-height: 320px;"
-            [theme]="gridTheme()"
-            [rowData]="rows()"
-            [columnDefs]="columnDefs"
-            [defaultColDef]="defaultColDef"
-            [animateRows]="true"
-            [suppressCellFocus]="true"
-            (rowClicked)="onRowClicked($event)">
-          </ag-grid-angular>
         </div>
+      }
 
-        <!-- ── RIGHT: detail / editor side card (phones: a sheet above the
-             navbar while creating / editing). ── -->
-        @if (sheetOpen()) { <div class="pf-sheet-backdrop" (click)="closeEditor()" aria-hidden="true"></div> }
-        <aside class="pf-card pf-og__side" [class.pf-sheet]="sheetOpen()"
-               [attr.aria-label]="mode() === 'create' ? 'New option group' : 'Option group'">
-          <span class="pf-sheet__handle" aria-hidden="true"></span>
+      <!-- Test Master's two-panel (owner 2026-11-17): LEFT side card = the selected group's detail / editor,
+           RIGHT main card = the groups grid, flush. Same height; only the bodies scroll. Narrow: the side card
+           is a sheet opened by a row click. -->
+      <div class="pf-2p pf-og__cols" [class.pf-2p--narrow]="narrow()">
+        @if (narrow() && sideShown()) { <div class="pf-2p__backdrop" (click)="closeSide()" aria-hidden="true"></div> }
+        @if (!narrow() || sideShown()) {
+        <aside class="pf-card pf-2p__side pf-og__side" [class.pf-2p__sheet]="narrow()" data-testid="og-side"
+               [attr.role]="narrow() ? 'dialog' : null" [attr.aria-modal]="narrow() ? 'true' : null"
+               [attr.aria-label]="mode() === 'create' ? 'New option group' : 'Option group'" (keydown.escape)="closeSide()">
+          <span class="pf-2p__handle" aria-hidden="true"></span>
           @if (listSkeleton() && mode() !== 'create') {
             <pf-skeleton-card [lines]="5" [boxed]="false" label="Loading option group…"></pf-skeleton-card>
           }
@@ -96,7 +80,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
               <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
               <span class="pf-card__label">New option group</span>
               <span class="pf-card__spacer"></span>
-              <button type="button" class="pf-btn pf-btn--tertiary pf-og__hbtn press" (click)="mode.set('idle')">Cancel</button>
+              <button type="button" class="pf-btn pf-btn--tertiary pf-2p__hbtn press" (click)="mode.set('idle')">Cancel</button>
             </div>
             <div class="pf-card__body">
               <div class="pf-og__slabel">Values</div>
@@ -156,12 +140,15 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
           @else if (selected(); as g) {
             <div class="pf-card__head">
               <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
-              <span class="pf-card__label pf-og__sname">{{ g.name }}</span>
+              <span class="pf-card__label pf-2p__name pf-og__sname">{{ g.name }}</span>
               <span class="pf-card__spacer"></span>
               @if (editing()) {
-                <button type="button" class="pf-btn pf-btn--tertiary pf-og__hbtn press" (click)="editing.set(false)">Cancel</button>
+                <button type="button" class="pf-btn pf-btn--tertiary pf-2p__hbtn press" (click)="editing.set(false)">Cancel</button>
               } @else {
-                <button type="button" class="pf-btn pf-btn--secondary pf-og__hbtn pf-og__edit press" (click)="startEdit(g)">Edit values</button>
+                <button type="button" class="pf-btn pf-btn--secondary pf-2p__hbtn pf-og__edit press" (click)="startEdit(g)">Edit values</button>
+              }
+              @if (narrow()) {
+                <button type="button" class="pf-btn pf-btn--icon pf-2p__hbtn" (click)="closeSide()" aria-label="Close option group"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               }
             </div>
             <div class="pf-card__body">
@@ -195,7 +182,7 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
                 @for (t of testsOf(g); track t.testId) {
                   <button type="button" class="pf-row pf-og__test press" (click)="openTest(t.testId)"
                           (pointerenter)="warmEditor()" (focus)="warmEditor()"
-                          [title]="'Open ' + (t.testCode || t.testName) + ' in the test editor'">
+                          [attr.aria-label]="'Open ' + (t.testCode || t.testName) + ' in the test editor'">
                     <span class="pf-num pf-og__tcode">{{ t.testCode || '—' }}</span>
                     <span class="pf-row__name pf-og__tname">{{ t.testName }}</span>
                     @if (paramsHint(t); as hint) {
@@ -219,6 +206,33 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
             <div class="pf-og__note">Select an option group to see its values and linked tests — or create a new one.</div>
           }
         </aside>
+        }
+
+        <section class="pf-card pf-2p__main pf-og__main" aria-label="Option groups" data-testid="og-main">
+          <header class="pf-card__head pf-2p__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+            <span class="pf-card__label">Option groups</span>
+            <span class="pf-card__note">Edit once — every linked parameter changes</span>
+            <span class="pf-2p__count pf-og__count"><span class="pf-num">{{ rows().length }}</span> group{{ rows().length === 1 ? '' : 's' }}</span>
+          </header>
+          <div class="pf-2p__body">
+            @if (listSkeleton()) {
+              <!-- First load: the grid's shape over the mounted grid (PF-PATTERN "Loading feedback"). -->
+              <pf-skeleton-table class="pf-2p__skel" [rows]="8" [cols]="5" label="Loading option groups…"></pf-skeleton-table>
+            }
+            <ag-grid-angular
+              class="pf-2p__grid"
+              [theme]="gridTheme()"
+              [rowData]="rows()"
+              [columnDefs]="columnDefs"
+              [defaultColDef]="defaultColDef"
+              [getRowClass]="rowClass"
+              [animateRows]="true"
+              [suppressCellFocus]="true"
+              (rowClicked)="onRowClicked($event)">
+            </ag-grid-angular>
+          </div>
+        </section>
       </div>
     </div>
   `,
@@ -226,28 +240,14 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
     :host { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
     .pf-og { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; }
     .pf-og__bar { display: flex; align-items: center; gap: 12px; flex: none; }
+    .pf-og__main ::ng-deep .ag-row.pf-og__row--sel { background: var(--pf-sel-bg); }
     .pf-og__spacer { flex: 1; }
     .pf-og__search { flex: 0 1 320px; }
     .pf-og__search--full { margin-bottom: 6px; }
-    .pf-og__count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
     .pf-og__note { padding: 28px 12px; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
 
-    /* Two panels — grid left, detail / editor side card right. The grid and
-       the side card body scroll themselves; the page never does. */
-    .pf-og__cols { flex: 1 1 auto; min-height: 0; display: grid;
-      grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr); grid-template-rows: minmax(0, 1fr); gap: 16px; align-items: stretch; }
-    .pf-og__grid { position: relative; min-height: 0; border-radius: var(--pf-radius, 12px); overflow: hidden; }
-    .pf-og__gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--pf-card-bg, var(--bg-primary)); border-radius: inherit; }
-    .pf-og__side { min-height: 0; max-height: 100%; }
-    .pf-og__side:not(.pf-sheet) .pf-sheet__handle { display: none; }
     .pf-og__side .pf-card__body { gap: 8px; }
-    .pf-og__sname { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text-primary); }
-    @media (min-width: 641px) { .pf-og__cols > .pf-sheet-backdrop { display: none; } }
-    .pf-og__hbtn { height: 36px; min-height: 36px; }
-    @media (max-width: 980px) {
-      .pf-og__cols { grid-template-columns: 1fr; grid-template-rows: none; }
-      .pf-og__grid { height: 55dvh; }
-    }
+    .pf-og__count { font-size: 12.5px; }
 
     .pf-og__slabel { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 10px 0 2px; }
     .pf-og__chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -280,12 +280,13 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
     .pf-og__pickparam { display: block; font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
     .pf-og__pickwarn { flex: none; font-size: 11.5px; color: var(--text-secondary); }
 
-    .pf-og__tests { display: flex; flex-direction: column; gap: 6px; }
-    .pf-og__test { width: 100%; cursor: pointer; min-height: 44px; }
-    .pf-og__test:hover { border-color: var(--pf-sel-border); }
+    /* Linked tests: compact flush rows (hairline between), each opens the test editor. */
+    .pf-og__tests { display: flex; flex-direction: column; }
+    .pf-og__test { width: 100%; cursor: pointer; min-height: 40px; padding: 8px 4px; text-align: left;
+      border: 0; border-bottom: 1px solid var(--pf-line); border-radius: 0; background: transparent; box-shadow: none; }
+    .pf-og__test:hover { background: var(--pf-sel-bg); }
     .pf-og__tcode { flex-shrink: 0; font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
-    @media (max-width: 640px) { .pf-og__side.pf-sheet { z-index: 80; } }
-  `],
+  `, TM_TWO_PANEL_STYLES],
 })
 export class OptionGroupsPanelComponent implements OnInit {
   private readonly api = inject(ApiService);
@@ -328,6 +329,13 @@ export class OptionGroupsPanelComponent implements OnInit {
     inject(DestroyRef).onDestroy(() => this.listHold.cancel());
   }
   closeEditor() { this.mode.set('idle'); this.editing.set(false); }
+
+  /** ≤900px: one column; the side card is a sheet opened by a row click. */
+  readonly narrow = mediaSignal(TM_NARROW, inject(DestroyRef));
+  private readonly detailOpen = signal(false);
+  readonly sideShown = computed(() => this.detailOpen() || this.sheetOpen());
+  closeSide() { this.closeEditor(); this.detailOpen.set(false); }
+  readonly rowClass = (p: { data?: OgGridRow }) => (p.data && p.data.group.code === this.selected()?.code ? 'pf-og__row--sel' : '');
 
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, suppressMovable: true };
   readonly columnDefs: ColDef<OgGridRow>[] = [
@@ -397,8 +405,11 @@ export class OptionGroupsPanelComponent implements OnInit {
   onRowClicked(e: RowClickedEvent<OgGridRow>) {
     const g = e.data?.group ?? null;
     this.mode.set('idle');
-    this.selected.set(this.selected()?.code === g?.code ? null : g);
+    // Desktop: the side card always shows a group (never toggled empty); narrow: the row opens the sheet.
+    if (g) this.selected.set(g);
     this.editing.set(false);
+    if (this.narrow()) this.detailOpen.set(true);
+    e.api?.redrawRows?.();
   }
 
   // ── Edit existing ──────────────────────────────────────────────
@@ -419,7 +430,7 @@ export class OptionGroupsPanelComponent implements OnInit {
       values: this.draft().filter(r => r.value.trim()),
     }).subscribe({
       next: res => {
-        this.saving.set(false); this.editing.set(false); this.selected.set(null);
+        this.saving.set(false); this.editing.set(false);
         this.toasts.success(`Option group updated across ${res.updatedTests} test${res.updatedTests === 1 ? '' : 's'}`);
         this.load();
       },
@@ -485,7 +496,9 @@ export class OptionGroupsPanelComponent implements OnInit {
         this.listHold.done();
         // Deep link (?og=<code>) wins; otherwise default-select the top
         // group so the side panel is never an empty "select one" placeholder.
-        if (this.mode() === 'idle' && !this.selected() && gs?.length) {
+        const cur = this.selected();
+        if (cur) this.selected.set((gs ?? []).find(g => g.code === cur.code) ?? (gs?.[0] ?? null));
+        else if (this.mode() === 'idle' && gs?.length) {
           const wanted = this.route.snapshot.queryParamMap.get('og');
           this.selected.set(gs.find(g => g.code === wanted) ?? gs[0]);
         }

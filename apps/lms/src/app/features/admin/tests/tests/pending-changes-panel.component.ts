@@ -237,7 +237,9 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
   `,
   styles: [`
     :host { display: block; min-height: 0; height: 100%; }
-    .pf-tmp { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 16px; align-items: stretch; height: 100%; min-height: 0; }
+    /* Test Master's two-panel (owner 2026-11-17): the side card (Review) on the LEFT, the main card on the right. */
+    .pf-tmp { display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 16px; align-items: stretch; height: 100%; min-height: 0; }
+    .pf-tmp > .pf-tmp__side:not(.pf-tmp__side--sheet) { order: -1; }
     .pf-tmp--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-tmp__main, .pf-tmp__side { min-height: 0; }
     .pf-tmp__head { row-gap: 8px; }
