@@ -68,7 +68,7 @@ describe('Start menu: Files in the plain "More screens" list (no new section)', 
     const l = labels(el);
     expect(l).toEqual(expect.arrayContaining(['Lab settings', 'Critical results', 'Files', 'Neuron · sheets', 'Synapse · documents', 'Axon · slides', 'Myelin · PDFs', 'Retina · images']));
     expect(el.querySelector('[data-sm-files-title]')).toBeNull();                            // no extra section
-    expect(Array.from(el.querySelectorAll('.sm-sec__t')).map(e => e.textContent!.trim())).toEqual(['On your bar', 'More screens']);
+    expect(Array.from(el.querySelectorAll('.sm-sec__t')).map(e => e.textContent!.trim())).toEqual(['More screens']);   // no "On your bar" (owner)
     expect(row(el, 'files-neuron').querySelector('[data-files-logo="neuron"]')).toBeTruthy();
     expect(row(el, 'files').querySelector('[data-files-logo]')).toBeNull();                 // Files itself: a plain stroked icon
   });
@@ -149,7 +149,9 @@ describe('Start menu: right-click / long-press on a Files row', () => {
     const { el, f, prefs } = setup({ roleMap: { roles: { Technician: { pinned: ['files-neuron'], locked: ['files-neuron'] } } } });
     await flush(f);
     expect(prefs.roleDefaults()?.locked).toContain('files-neuron');
-    rightClick(el.querySelector<HTMLElement>('.sm-tile[data-sm-item="files-neuron"]')!); await flush(f);
+    // On the bar, so not under More screens: reach it through the search, which lists everything.
+    const i = el.querySelector<HTMLInputElement>('.sm-search__input')!; i.value = 'neuron'; i.dispatchEvent(new Event('input')); await flush(f);
+    rightClick(el.querySelector<HTMLElement>('.sm-row[data-sm-item="files-neuron"]')!); await flush(f);
     const u = acts(el).find(a => a.id === 'unpin')!;
     expect(u.disabled).toBe(true);
     expect(u.text).toContain('Kept by admin');
@@ -161,12 +163,12 @@ describe('Start menu: right-click / long-press on a Files row', () => {
     const { el, f, host, prefs } = setup();
     prefs.setPinned(['files-synapse', 'lab']);
     await flush(f);
-    expect(Array.from(el.querySelectorAll('.sm-tile .sm-tile__lbl')).map(e => e.textContent!.trim())).toContain('Synapse');
+    expect(labels(el)).not.toContain('Synapse · documents');                               // pinned = on the bar, not repeated here
     host.files.set(FILES_ITEMS.filter(i => i.id !== 'files-synapse'));                    // the lab switched Synapse off
     await flush(f);
-    const tiles = Array.from(el.querySelectorAll('.sm-tile .sm-tile__lbl')).map(e => e.textContent!.trim());
-    expect(tiles).not.toContain('Synapse');
-    expect(tiles).toContain('Lab');
+    expect(labels(el)).not.toContain('Synapse · documents');
+    const i = el.querySelector<HTMLInputElement>('.sm-search__input')!; i.value = 'synapse'; i.dispatchEvent(new Event('input')); await flush(f);
+    expect(el.querySelector('.sm-row[data-sm-item="files-synapse"]')).toBeNull();          // gone everywhere
   });
 
   it('Esc closes the context menu first, an outside tap too; a long press (touch) opens it and the tap that ends it does not open the screen', async () => {

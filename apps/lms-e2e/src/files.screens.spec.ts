@@ -409,7 +409,7 @@ test.describe('Start menu and bottom bar', () => {
     await expect(menuRow(page, 'files-myelin')).toContainText('Myelin · PDFs');
     await expect(menuRow(page, 'files-retina')).toContainText('Retina · images');
     await expect(menuRow(page, 'files-neuron').locator('[data-files-logo="neuron"]')).toBeVisible();
-    await expect(page.locator('[data-start-menu] .sm-sec__t')).toHaveText(['On your bar', 'More screens']);
+    await expect(page.locator('[data-start-menu] .sm-sec__t')).toHaveText(['More screens']);   // the bar is never repeated (owner)
     await expect(page.locator('[data-start-menu] .sm-search__input')).toHaveAttribute('placeholder', 'Search screens and files');
     await expectLayout(page, 'start menu');
     await shot(page, 'start-menu');
@@ -445,15 +445,17 @@ test.describe('Start menu and bottom bar', () => {
     await expect(menu).toHaveCount(0);
     await expect(page.locator('nav [data-files-logo="synapse"], [class*="pf-nav"] [data-files-logo="synapse"], [class*="pf-topnav"] [data-files-logo="synapse"]').locator('visible=true').first()).toBeVisible();
     await openMenu(page);
+    await page.locator('[data-start-menu] .sm-search__input').locator('visible=true').first().fill('synapse');   // on the bar now: reach it via search
     await press(page, 'files-synapse');
     await expect(page.locator('[data-start-menu] [data-sm-ctx-act="unpin"]')).toBeVisible();
     await page.locator('[data-start-menu] [data-sm-ctx-act="unpin"]').click();
-    await expect(page.locator('[data-start-menu] .sm-tile [data-files-logo="synapse"]')).toHaveCount(0);
+    await expect(page.locator('nav [data-files-logo="synapse"], [class*="pf-nav"] [data-files-logo="synapse"], [class*="pf-topnav"] [data-files-logo="synapse"]').locator('visible=true')).toHaveCount(0);
   });
 
   test('an app the admin locked on the bar cannot be unpinned (disabled, "Kept by admin")', async ({ page, context }) => {
     await boot(page, context, { route: '/frontdesk', prep: () => { (fb as unknown as { navDefaults: unknown }).navDefaults = { 'Lab Admin': { pinned: ['files-neuron'], locked: ['files-neuron'] } }; } });
     await openMenu(page);
+    await page.locator('[data-start-menu] .sm-search__input').locator('visible=true').first().fill('neuron');    // on the bar: reach it via search
     await press(page, 'files-neuron');
     const un = page.locator('[data-start-menu] [data-sm-ctx-act="unpin"]');
     await expect(un).toBeDisabled();

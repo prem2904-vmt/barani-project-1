@@ -102,14 +102,14 @@ describe('StartMenuComponent', () => {
       expect(q(el, '.sm-me__line').textContent!.trim()).toBe('Micro World · Receptionist');
     });
 
-    it('the pinned screens are tiles in bar order (Home first); the rest are plain rows', async () => {
+    it('lists only the screens NOT on the bar (owner: never repeat the bar) — no "On your bar" tiles', async () => {
       const { f, el, prefs } = setup();
       prefs.setPinned(['validate', 'frontdesk']);
       await flush(f);
-      expect(tileLabels(el)).toEqual(['Home', 'Validate', 'Frontdesk']);
+      expect(tileLabels(el)).toEqual([]);
       expect(rowLabels(el)).toEqual(['Lab', 'Results', 'Lab settings', 'Settings']);
       const titles = Array.from(el.querySelectorAll('.sm-sec__t')).map(e => e.textContent!.trim());
-      expect(titles).toEqual(['On your bar', 'More screens']);
+      expect(titles).toEqual(['More screens']);
     });
 
     it('has no pin / arrow buttons on tiles or rows; the search box is docked at the bottom, always visible', async () => {
@@ -128,36 +128,28 @@ describe('StartMenuComponent', () => {
     });
 
     it('highlights the current screen', async () => {
-      const { f, el } = setup({ url: '/lab' });
+      const { f, el } = setup({ url: '/results' });
       await flush(f);
-      expect(q(el, '[data-sm-item="lab"]').classList).toContain('sm-tile--on');
-      expect(q(el, '[data-sm-item="lab"]').getAttribute('aria-current')).toBe('page');
-      expect(q(el, '[data-sm-item="validate"]').classList).not.toContain('sm-tile--on');
+      expect(q(el, '[data-sm-item="results"]').classList).toContain('sm-row--on');
+      expect(q(el, '[data-sm-item="results"]').getAttribute('aria-current')).toBe('page');
     });
 
-    it('a tile and a row navigate and close; Home goes to the landing screen', async () => {
+    it('a row navigates and closes', async () => {
       const { f, el, router, host, prefs } = setup();
       prefs.setPinned(['lab']);
       await flush(f);
-      q(el, '.sm-tile[data-sm-item="lab"]').click();
-      expect(router.navigateByUrl).toHaveBeenCalledWith('/lab');
-      host.open.set(true);
-      await flush(f);
+      expect(el.querySelector('[data-sm-item="lab"]')).toBeNull();          // on the bar: not repeated
       q(el, '.sm-row[data-sm-item="results"]').click();
       expect(router.navigateByUrl).toHaveBeenCalledWith('/results');
-      host.open.set(true);
-      await flush(f);
-      q(el, '[data-sm-item="home"]').click();
-      expect(router.navigate).toHaveBeenCalledWith(['/frontdesk']);
-      expect(host.closes).toBe(3);
+      expect(host.closes).toBe(1);
     });
 
-    it('says when pinned screens do not fit on the bar at this width', async () => {
+    it('a pinned screen that does not fit on the bar at this width is listed first under More screens', async () => {
       const { f, el, prefs } = setup({ cap: 2 });
       prefs.setPinned(['frontdesk', 'lab', 'validate']);
       await flush(f);
-      expect(tileLabels(el)).toEqual(['Home', 'Frontdesk', 'Lab', 'Validate']);
-      expect(q(el, '.sm-note').textContent).toContain('1 screen does not fit');
+      expect(rowLabels(el)[0]).toBe('Validate');
+      expect(rowLabels(el)).not.toContain('Frontdesk');
     });
 
     it('opts out of the phone auto bottom-sheet rule (it would force width:100% and push the sheet off the right edge)', async () => {
@@ -216,12 +208,12 @@ describe('StartMenuComponent', () => {
       type(el, 'lab');
       await flush(f);
       expect(el.querySelector('.sm-head')).not.toBeNull();
-      expect(el.querySelector('.sm-tiles')).toBeNull();
+      expect(el.querySelector('.sm-rows[aria-label="More screens"]')).toBeNull();
       expect(rowLabels(el)).toEqual(['Lab', 'Lab settings']);
       q<HTMLButtonElement>(el, '[aria-label="Clear search"]').click();
       await flush(f);
       expect((q(el, '.sm-search__input') as HTMLInputElement).value).toBe('');
-      expect(el.querySelector('.sm-tiles')).not.toBeNull();
+      expect(el.querySelector('.sm-rows[aria-label="More screens"]')).not.toBeNull();
     });
 
     it('"/" focuses the search box without typing a slash; Esc clears first, then closes', async () => {
@@ -239,7 +231,7 @@ describe('StartMenuComponent', () => {
       await flush(f);
       expect(host.closes).toBe(0);
       expect((q(el, '.sm-search__input') as HTMLInputElement).value).toBe('');
-      expect(el.querySelector('.sm-tiles')).not.toBeNull();
+      expect(el.querySelector('.sm-rows[aria-label="More screens"]')).not.toBeNull();
       key(document, 'Escape');
       expect(host.closes).toBe(1);
     });
@@ -384,7 +376,7 @@ describe('StartMenuComponent', () => {
       expect(primaries[0].textContent!.trim()).toBe('Done');
       (primaries[0] as HTMLButtonElement).click();
       await flush(f);
-      expect(el.querySelector('.sm-tiles')).not.toBeNull();
+      expect(el.querySelector('.sm-rows[aria-label="More screens"]')).not.toBeNull();
     });
 
     it('"−" takes a screen off the bar (saved for this person in this browser)', async () => {
