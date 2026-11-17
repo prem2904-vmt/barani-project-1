@@ -18,7 +18,7 @@ import { LabPageComponent, labPageTab } from './lab-page.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)">
-      <pf-setting-group label="Home collection on or off" id="switch"><pf-home-collection-switch-card></pf-home-collection-switch-card></pf-setting-group>
+      <pf-setting-group id="switch"><pf-home-collection-switch-card></pf-home-collection-switch-card></pf-setting-group>
       <pf-setting-group label="Agents" id="agents"><pf-home-collection-agents></pf-home-collection-agents></pf-setting-group>
     </pf-lab-page>
   `,

@@ -19,7 +19,7 @@ import { ReportSendingCardComponent } from './report-sending-card.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)">
-      <pf-lab-settings [cards]="['tech-notes']" [groups]="{ 'tech-notes': { id: 'notes', label: 'Technician notes on report' } }"></pf-lab-settings>
+      <pf-lab-settings [cards]="['tech-notes']" [groups]="{ 'tech-notes': { id: 'notes', label: '' } }"></pf-lab-settings>
       <pf-setting-group label="Send reports on WhatsApp" id="sending"><pf-report-sending-card></pf-report-sending-card></pf-setting-group>
       <p class="pf-ro__back">
         The layout of the report itself is in

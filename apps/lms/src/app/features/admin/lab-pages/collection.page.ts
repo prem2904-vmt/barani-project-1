@@ -25,8 +25,8 @@ export class LabCollectionPage {
   protected readonly tab = this.t.tab;
   protected pick(id: string) { this.t.pick(id); }
   protected readonly groups = {
-    counters: { id: 'queue', label: 'Queue focus' },
-    'no-scan': { id: 'noscan', label: 'Claim without scanning' },
-    'auto-assign': { id: 'assign', label: 'Auto-assign technicians and validators' },
+    counters: { id: 'queue', label: '' },
+    'no-scan': { id: 'noscan', label: '' },
+    'auto-assign': { id: 'assign', label: '' },
   } as const;
 }

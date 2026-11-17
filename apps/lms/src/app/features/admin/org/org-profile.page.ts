@@ -1,3 +1,4 @@
+import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, Injector, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -27,7 +28,7 @@ const SHORT_NAME_MAX = 30;
 @Component({
   selector: 'pf-org-profile',
   standalone: true,
-  imports: [BusyDirective, FormsModule, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, ImageUploadComponent],
+  imports: [SettingRowComponent, BusyDirective, FormsModule, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, ImageUploadComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10" data-testid="org-profile">
@@ -48,101 +49,58 @@ const SHORT_NAME_MAX = 30;
       </pf-screen-header>
 
       <div class="pf-band-body">
-      <div class="pf-op__col">
-        <section class="pf-card pf-op__card" data-testid="op-name">
-          <div class="pf-card__head">
-            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01M15 9h.01M15 13h.01M15 17h.01"/></svg></span>
-            <h3 class="pf-card__label pf-op__title">Name</h3>
-          </div>
-          <div class="pf-card__body pf-op__body">
-            <p class="pf-op__hint">The name shown across the app and printed on reports and bills, for example "Arun Labs".</p>
-            <label class="pf-field">
-              <span class="pf-field__lbl">Organization name</span>
-              <input class="pf-input" data-testid="op-name-input" maxlength="80" [ngModel]="name()" (ngModelChange)="name.set($event)" placeholder="e.g. Arun Labs" />
-            </label>
-            <label class="pf-field">
-              <span class="pf-field__lbl">Short name for the top bar <span class="pf-op__opt">({{ shortName().length }}/{{ shortMax }})</span></span>
-              <input class="pf-input" data-testid="op-short-input" [attr.maxlength]="shortMax" [ngModel]="shortName()" (ngModelChange)="onShortName($event)" placeholder="e.g. ARUN" />
-            </label>
-          </div>
-        </section>
-
-        <section class="pf-card pf-op__card" data-testid="op-logo">
-          <div class="pf-card__head">
-            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg></span>
-            <h3 class="pf-card__label pf-op__title">Logo</h3>
-          </div>
-          <div class="pf-card__body pf-op__body">
-            <p class="pf-op__hint">One logo for the top bar, reports and bills.</p>
+        <div class="pf-op__rows">
+          <pf-setting-row data-testid="op-name" label="Organization name" hint="Shown across the app and printed on reports and bills.">
+            <input class="pf-input pf-op__in" data-testid="op-name-input" maxlength="80" aria-label="Organization name"
+                   [ngModel]="name()" (ngModelChange)="name.set($event)" placeholder="e.g. Arun Labs" />
+          </pf-setting-row>
+          <pf-setting-row label="Short name for the top bar" [hint]="shortName().length + ' of ' + shortMax + ' letters'">
+            <input class="pf-input pf-op__in pf-op__in--short" data-testid="op-short-input" [attr.maxlength]="shortMax" aria-label="Short name for the top bar"
+                   [ngModel]="shortName()" (ngModelChange)="onShortName($event)" placeholder="e.g. ARUN" />
+          </pf-setting-row>
+          <pf-setting-row data-testid="op-logo" label="Logo" hint="One logo for the top bar, reports and bills.">
             <pf-image-upload [url]="logoUrl()" (urlChange)="logoUrl.set($event)"></pf-image-upload>
-            <div class="pf-field">
-              <span class="pf-field__lbl" id="op-mode-l">What the top bar shows</span>
-              <pf-segmented size="sm" [options]="modeOptions" [value]="mode()" ariaLabel="What the top bar shows" (valueChange)="mode.set($event)"></pf-segmented>
-            </div>
-            <div class="pf-op__preview" data-testid="op-preview" [class.pf-op__preview--empty]="!hasBrand()">
+          </pf-setting-row>
+          <pf-setting-row label="What the top bar shows">
+            <pf-segmented size="sm" [options]="modeOptions" [value]="mode()" ariaLabel="What the top bar shows" (valueChange)="mode.set($event)"></pf-segmented>
+            <span class="pf-op__preview" data-testid="op-preview" [class.pf-op__preview--empty]="!hasBrand()">
               @if (showLogoPreview()) { <img [src]="logoSrc() ?? ''" alt="" class="pf-op__preview-logo" /> }
               @if (showNamePreview()) { <span class="pf-op__preview-name">{{ shortName() }}</span> }
-              @if (!hasBrand()) { <span class="pf-op__preview-name pf-op__preview-name--ph">Top bar preview</span> }
-            </div>
-          </div>
-        </section>
-
-        <section class="pf-card pf-op__card" data-testid="op-prints">
-          <div class="pf-card__head">
-            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>
-            <h3 class="pf-card__label pf-op__title">Printed on reports and bills</h3>
-          </div>
-          <div class="pf-card__body pf-op__body">
-            <p class="pf-op__hint" data-testid="op-prints-status">
+              @if (!hasBrand()) { <span class="pf-op__preview-name pf-op__preview-name--ph">Preview</span> }
+            </span>
+          </pf-setting-row>
+          <pf-setting-row data-testid="op-prints" label="Printed on reports and bills">
+            <span row-hint class="pf-op__hint" data-testid="op-prints-status">
               @if (printsDiffer()) {
-                Reports or bills still print a different name or logo. Press <strong>Save</strong> to use this profile on both.
+                Reports or bills still print a different name or logo — Save to use this profile on both.
               } @else {
-                Reports and bills print this name and logo. The rest of each letterhead (tagline, NABL, colours, address) stays in Report design and Billing.
+                Reports and bills print this name and logo; the rest of each letterhead stays in Report design and Billing.
               }
-            </p>
-          </div>
-        </section>
-
-        <section class="pf-card pf-op__card" data-testid="op-handle">
-          <div class="pf-card__head">
-            <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg></span>
-            <h3 class="pf-card__label pf-op__title">Login handle</h3>
-          </div>
-          <div class="pf-card__body pf-op__body">
-            <p class="pf-op__hint">
-              The organization name your staff type on the sign-in screen.
-              <strong>Changing it changes how everyone logs in</strong> — old links and saved credentials that use the previous handle stop working.
-            </p>
-            <label class="pf-field">
-              <span class="pf-field__lbl">Handle</span>
-              <input class="pf-input" data-testid="op-slug-input" maxlength="40" [ngModel]="slug()" (ngModelChange)="onSlug($event)"
-                     placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
-            </label>
-          </div>
-        </section>
-
+            </span>
+          </pf-setting-row>
+          <pf-setting-row data-testid="op-handle" label="Login handle" hint="What staff type on the sign-in screen. Changing it changes how everyone logs in.">
+            <input class="pf-input pf-op__in" data-testid="op-slug-input" maxlength="40" aria-label="Login handle" [ngModel]="slug()" (ngModelChange)="onSlug($event)"
+                   placeholder="e.g. microworld" autocapitalize="off" autocorrect="off" spellcheck="false" />
+          </pf-setting-row>
+        </div>
         <div class="pf-classic-only pf-op__save">
           <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving() || !canSave()" [pfBusy]="saving()" (click)="save()">{{ saving() ? 'Saving…' : 'Save' }}</button>
         </div>
       </div>
-      </div>
     </section>
   `,
   styles: [`
-    .pf-op__col { display: flex; flex-direction: column; gap: 16px; max-width: 56rem; margin-inline: auto; width: 100%; }
-    .pf-op__card { overflow: visible; }
-    .pf-op__body { overflow: visible; gap: 14px; padding: 14px 16px 18px; display: flex; flex-direction: column; }
-    .pf-op__title { margin: 0; }
-    .pf-op__hint { margin: 0; font-size: 12.5px; color: var(--text-tertiary); line-height: 1.55; }
-    .pf-op__opt { font-weight: 400; color: var(--text-tertiary); }
-    .pf-op__preview { display: inline-flex; align-self: flex-start; align-items: center; gap: 10px; padding: 10px 14px; min-height: 44px;
-      border-radius: 12px; background: var(--glass-bg); border: 1px solid var(--glass-border); }
+    .pf-op__in { width: 300px; max-width: 100%; height: 36px; min-height: 36px; }
+    .pf-op__in--short { width: 160px; }
+    .pf-op__hint { font-size: 12.5px; color: var(--text-tertiary); line-height: 1.4; }
+    .pf-op__preview { display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; height: 34px;
+      border-radius: 8px; background: var(--pf-chip-bg); border: 1px solid var(--pf-line); }
     .pf-op__preview--empty { border-style: dashed; }
-    .pf-op__preview-logo { max-height: 24px; max-width: 80px; object-fit: contain; }
-    .pf-op__preview-name { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
+    .pf-op__preview-logo { max-height: 22px; max-width: 72px; object-fit: contain; }
+    .pf-op__preview-name { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--text-primary); }
     .pf-op__preview-name--ph { color: var(--text-tertiary); font-weight: 600; }
     .pf-op__save { display: flex; justify-content: flex-end; }
-    @media (max-width: 640px) { :host input.pf-input { font-size: 16px; } }
+    @media (max-width: 767px) { .pf-op__in, .pf-op__in--short { width: 100%; } :host input.pf-input { font-size: 16px; } }
   `],
 })
 export class OrgProfilePage {

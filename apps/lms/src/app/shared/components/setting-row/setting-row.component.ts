@@ -55,17 +55,20 @@ export class SettingRowComponent {
   selector: 'pf-setting-group',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'pf-sgroup', '[attr.data-group]': 'id()' },
+  host: { class: 'pf-sgroup', '[class.pf-sgroup--plain]': '!label()', '[attr.data-group]': 'id()' },
   template: `
-    <div class="pf-sgroup__head">
-      <span class="pf-sgroup__label">{{ label() }}</span>
-      <span class="pf-sgroup__tools"><ng-content select="[group-tools]"></ng-content></span>
-    </div>
+    @if (label()) {
+      <div class="pf-sgroup__head">
+        <span class="pf-sgroup__label">{{ label() }}</span>
+        <span class="pf-sgroup__tools"><ng-content select="[group-tools]"></ng-content></span>
+      </div>
+    }
     <div class="pf-sgroup__rows"><ng-content></ng-content></div>
   `,
   styles: [`
     :host { display: block; scroll-margin-top: 8px; }
-    :host + :host { margin-top: 10px; border-top: 1px solid var(--pf-line, var(--glass-border)); }
+    :host + :host:not(.pf-sgroup--plain) { margin-top: 10px; border-top: 1px solid var(--pf-line, var(--glass-border)); }
+    :host(.pf-sgroup--plain) { border-bottom: 1px solid var(--pf-line, var(--glass-border)); }
     .pf-sgroup__head { display: flex; align-items: center; gap: 10px; min-height: 36px; padding-top: 12px; }
     .pf-sgroup__label { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); }
     .pf-sgroup__tools { margin-left: auto; display: inline-flex; gap: 8px; align-items: center; }
@@ -73,7 +76,8 @@ export class SettingRowComponent {
   `],
 })
 export class SettingGroupComponent {
-  readonly label = input.required<string>();
+  /** Empty = no heading (an anchor for `?tab=` only — the row label already names it). */
+  readonly label = input<string>('');
   readonly id = input<string | null>(null);
 }
 

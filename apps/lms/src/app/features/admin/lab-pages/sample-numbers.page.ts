@@ -18,9 +18,9 @@ import { SpacePrefixesCardComponent } from './space-prefixes-card.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-lab-page [page]="page" [tab]="tab()" (tabChange)="pick($event)">
-      <pf-setting-group label="Sample ID format" id="format"><pf-sample-id-format-card></pf-sample-id-format-card></pf-setting-group>
-      <pf-setting-group label="Prefix per lab space" id="prefixes"><pf-space-prefixes-card></pf-space-prefixes-card></pf-setting-group>
-      <pf-lab-settings [cards]="['scan-mode', 'lab-structure', 'label-code']" [groups]="groups"></pf-lab-settings>
+      <pf-setting-group id="format"><pf-sample-id-format-card></pf-sample-id-format-card></pf-setting-group>
+      <pf-setting-group id="prefixes"><pf-space-prefixes-card></pf-space-prefixes-card></pf-setting-group>
+      <pf-lab-settings [cards]="['scan-mode', 'lab-structure', 'label-code']" [groups]="groups" [embedded]="true"></pf-lab-settings>
     </pf-lab-page>
   `,
 })
@@ -30,8 +30,9 @@ export class LabSampleNumbersPage {
   protected readonly tab = this.t.tab;
   protected pick(id: string) { this.t.pick(id); }
   protected readonly groups = {
-    'lab-structure': { id: 'structure', label: 'Lab structure' },
-    'label-code': { id: 'barcode', label: 'Barcode type' },
-    'scan-mode': { id: 'find', label: 'Find a sample' },
+    // The row labels name each one: anchors only (no duplicate headings).
+    'lab-structure': { id: 'structure', label: '' },
+    'label-code': { id: 'barcode', label: '' },
+    'scan-mode': { id: 'find', label: '' },
   } as const;
 }

@@ -82,7 +82,7 @@ interface AutoAssignConfig {
       }
 
       @if (show('counters')) {
-        @if (groupLabel('counters'); as g) { <div class="pf-ls__group" [attr.data-group]="groupId('counters')">{{ g }}</div> }
+        @if (groupId('counters'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('counters') }}</div> }
         <pf-setting-row class="pf-ls__card" label="Counters and collection" [hint]="'Billing: ' + (billingMode() === 'separate_counter' ? 'separate counter' : 'front desk') + ' · Collection: ' + (collectionMode() === 'dedicated_counter' ? 'dedicated counter' : 'front desk') + ' — set in Work steps.'">
           <span row-badge class="pf-ls__scope">This branch</span>
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ls__wfbtn" (click)="goWorkflow()">Edit in Work steps</button>
@@ -90,7 +90,7 @@ interface AutoAssignConfig {
       }
 
       @if (show('scan-mode')) {
-        @if (groupLabel('scan-mode'); as g) { <div class="pf-ls__group" [attr.data-group]="groupId('scan-mode')">{{ g }}</div> }
+        @if (groupId('scan-mode'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('scan-mode') }}</div> }
         <pf-setting-row class="pf-ls__card" label="Find a sample" [hint]="optDesc(scanModeOptions, scanMode())">
           <span row-badge class="pf-ls__scope pf-ls__scope--all">All branches</span>
           <pf-segmented class="pf-ls__gate" size="sm" aria-label="Find a sample" [options]="seg(scanModeOptions)" [value]="scanMode()"
@@ -116,7 +116,7 @@ interface AutoAssignConfig {
       }
 
       @if (show('queue-focus')) {
-        @if (groupLabel('queue-focus'); as g) { <div class="pf-ls__group" [attr.data-group]="groupId('queue-focus')">{{ g }}</div> }
+        @if (groupId('queue-focus'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('queue-focus') }}</div> }
         <pf-setting-row class="pf-ls__card" label="Queue focus"
                         [hint]="queueFocusMode() === 'auto' ? 'Follows the lab structure — now ' + (effectiveQueueFocus() === 'sample' ? 'by sample.' : 'by patient.') : optDesc(queueFocusOptions, queueFocusSelected())">
           <span row-badge class="pf-ls__scope">This branch</span>
@@ -129,7 +129,7 @@ interface AutoAssignConfig {
       }
 
       @if (show('lab-structure')) {
-        @if (groupLabel('lab-structure'); as g) { <div class="pf-ls__group" [attr.data-group]="groupId('lab-structure')">{{ g }}</div> }
+        @if (groupId('lab-structure'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('lab-structure') }}</div> }
         <pf-setting-row class="pf-ls__card" label="Lab structure" [hint]="optDesc(labStructureOptions, labStructure())">
           <span row-badge class="pf-ls__scope">This branch</span>
           <pf-segmented class="pf-ls__gate" size="sm" aria-label="Lab structure" [options]="seg(labStructureOptions)" [value]="labStructure()"
@@ -141,7 +141,7 @@ interface AutoAssignConfig {
       }
 
       @if (show('calc-constants')) {
-        @if (groupLabel('calc-constants'); as g) { <div class="pf-ls__group" [attr.data-group]="groupId('calc-constants')">{{ g }}</div> }
+        @if (groupId('calc-constants'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('calc-constants') }}</div> }
         <pf-setting-row class="pf-ls__card" label="Calculation constants" hint="ISI and MNPT drive INR; Normal HCT the reticulocyte index. Blank = the default shown.">
           <span row-badge class="pf-ls__scope pf-ls__scope--all">All branches</span>
           <label class="pf-ls__mini"><span>ISI</span>
@@ -157,7 +157,7 @@ interface AutoAssignConfig {
       }
 
       @if (show('no-scan')) {
-        @if (groupLabel('no-scan'); as g) { <div class="pf-ls__group" [attr.data-group]="groupId('no-scan')">{{ g }}</div> }
+        @if (groupId('no-scan'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('no-scan') }}</div> }
         <pf-setting-row class="pf-ls__card" label="Allow no-scan claim" hint="A supervisor can claim a test without scanning (broken barcodes). Every override is logged.">
           <span row-badge class="pf-ls__scope pf-ls__scope--all">All branches</span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="allowNoScan()" aria-label="Allow no-scan claim (supervisor override)"
@@ -168,7 +168,7 @@ interface AutoAssignConfig {
       }
 
       @if (show('label-code')) {
-        @if (groupLabel('label-code'); as g) { <div class="pf-ls__group" [attr.data-group]="groupId('label-code')">{{ g }}</div> }
+        @if (groupId('label-code'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('label-code') }}</div> }
         <pf-setting-row class="pf-ls__card" label="Barcode on tube labels" [hint]="optDesc(labelCodeOptions, labelCodeMode())">
           <span row-badge class="pf-ls__scope">This branch</span>
           <pf-segmented class="pf-ls__gate" size="sm" aria-label="Barcode on tube labels" [options]="seg(labelCodeOptions)" [value]="labelCodeMode()"
@@ -177,7 +177,7 @@ interface AutoAssignConfig {
       }
 
       @if (show('require-validation')) {
-        @if (groupLabel('require-validation'); as g) { <div class="pf-ls__group" [attr.data-group]="groupId('require-validation')">{{ g }}</div> }
+        @if (groupId('require-validation'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('require-validation') }}</div> }
         <pf-setting-row class="pf-ls__card" label="Require validation for all results" hint="Every result needs a pathologist — even direct-flow tests that would auto-validate.">
           <span row-badge class="pf-ls__scope">This branch</span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="requireValidation()" aria-label="Require validation for all results"
@@ -188,7 +188,7 @@ interface AutoAssignConfig {
       }
 
       @if (show('tech-notes')) {
-        @if (groupLabel('tech-notes'); as g) { <div class="pf-ls__group" [attr.data-group]="groupId('tech-notes')">{{ g }}</div> }
+        @if (groupId('tech-notes'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('tech-notes') }}</div> }
         <pf-setting-row class="pf-ls__card" data-testid="ls-tech-notes" label="Technician notes on report"
                         hint="Notes written at result entry print on the final report (never on a preliminary). Off hides them at entry; written notes still print.">
           <span row-badge class="pf-ls__scope">This branch</span>
@@ -200,7 +200,7 @@ interface AutoAssignConfig {
       }
 
       @if (show('auto-assign')) {
-        @if (groupLabel('auto-assign'); as g) { <div class="pf-ls__group" [attr.data-group]="groupId('auto-assign')">{{ g }}</div> }
+        @if (groupId('auto-assign'); as gid) { <div class="pf-ls__group" [attr.data-group]="gid">{{ groupLabel('auto-assign') }}</div> }
         <pf-setting-row class="pf-ls__card" label="Auto-assign technicians" hint="On receive, each test goes to its department's people or least-loaded role member. Off: the shared bench queue.">
           <span row-badge class="pf-ls__scope">This branch</span>
           <button type="button" class="pf-toggle pf-ls__switch" role="switch" [attr.aria-checked]="autoAssignEnabled()" aria-label="Auto-assign technicians"
@@ -258,6 +258,7 @@ interface AutoAssignConfig {
     :host { display: block; }
     .pf-ls__group { display: flex; align-items: center; min-height: 36px; padding-top: 14px; margin-top: 6px; border-top: 1px solid var(--pf-line); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-tertiary); scroll-margin-top: 8px; }
     .pf-ls__host > .pf-ls__group:first-child, .pf-ls__meta + .pf-ls__group { border-top: 0; margin-top: 0; }
+    .pf-ls__group:empty { min-height: 0; padding: 0; margin: 0; border: 0; }
     .pf-ls__skel { display: flex; flex-direction: column; gap: 16px; padding-top: 12px; }
     .pf-ls__meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 0 2px; }
     .pf-ls__scopenote { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-tertiary); }

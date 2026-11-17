@@ -49,7 +49,7 @@ export function buildBranchPrefixes(branches: readonly Branch[], spaces: readonl
         <pf-skeleton-rows [rows]="2" [avatar]="false" label="Loading lab spaces…"></pf-skeleton-rows>
       } @else {
         @for (b of groups(); track b.branchId) {
-          <pf-setting-row class="pf-sp__branch" data-testid="space-branch" [label]="b.branchName">
+          <pf-setting-row class="pf-sp__branch" data-testid="space-branch" [label]="'Prefix per lab space · ' + b.branchName">
             <span row-badge class="pf-sp__scope">This branch</span>
             <ul class="pf-sp__list" role="list">
               @for (r of b.rows; track r.key) {
