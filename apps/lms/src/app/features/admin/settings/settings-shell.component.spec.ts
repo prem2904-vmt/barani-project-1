@@ -32,6 +32,7 @@ function setup(opts: { compact?: boolean; hide?: string[] } = {}) {
             { path: 'admin/org/numbers', component: PageStub },
             { path: 'admin/billing', component: PageStub },
             { path: 'admin/lab/report-options', component: PageStub },
+            { path: 'admin/lab/alerts', component: PageStub },
           ],
         },
       ]),
@@ -120,17 +121,17 @@ describe('Settings shell — Test Master frame, two cards (wide)', () => {
   });
 });
 
-describe('Settings shell — ONE page of group cards (few short categories)', () => {
+describe('Settings shell — one category, page switch, band back', () => {
   beforeEach(() => document.documentElement.classList.add('design-new'));
 
-  it('no side card and no wrapper card: the page fills the width under the band', async () => {
+  it('one category: ONE main card (TM head: icon + setting), no side card', async () => {
     setup();
-    const h = await open('/admin/org/numbers?tab=order');
+    const h = await open('/admin/lab/alerts');
     expect(root(h).querySelector('[data-testid="tp-nav"]')).toBeNull();
     const main = root(h).querySelector('[data-testid="settings-main"]')!;
     expect(main.querySelector('[data-testid="page"]')?.getAttribute('data-hosted')).toBe('true');
-    expect(main.closest('section.pf-card')).toBeNull();
-    expect(root(h).querySelector<HTMLInputElement>('.pf-hb__input')?.placeholder).toBe('Search Patient and order numbers');
+    expect(main.closest('section.pf-card')?.querySelector('.pf-card__head [data-testid="tp-nav-title"]')?.textContent).toContain('Lab alerts');
+    expect(root(h).querySelector<HTMLInputElement>('.pf-hb__input')?.placeholder).toBe('Search Lab alerts');
   });
 
   it('a setting that also has a full-screen page shows the page switch in the band (Report design · Report options)', async () => {
@@ -193,7 +194,7 @@ describe('Settings shell — phone: categories list, then drill in', () => {
 
   it('a one-page setting shows its page directly', async () => {
     setup({ compact: true });
-    const h = await open('/admin/org/numbers');
+    const h = await open('/admin/lab/alerts');
     expect(root(h).querySelector('[data-testid="settings-main"] [data-testid="page"]')).not.toBeNull();
   });
 });

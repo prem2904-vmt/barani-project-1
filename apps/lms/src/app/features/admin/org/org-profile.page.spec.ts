@@ -107,7 +107,7 @@ describe('Organization profile page', () => {
     const p = make();
     p.f.detectChanges();
     expect(p.el.querySelectorAll('.pf-hb-btn--primary').length).toBe(1);
-    expect(p.el.querySelectorAll('section.pf-card svg').length).toBeGreaterThan(0);
+    expect(p.el.querySelectorAll('pf-setting-group').length).toBe(3);   // Name · Logo · Sign-in groups
     expect(/[\u{1F300}-\u{1FAFF}]/u.test(p.el.textContent ?? '')).toBe(false);
   });
 });

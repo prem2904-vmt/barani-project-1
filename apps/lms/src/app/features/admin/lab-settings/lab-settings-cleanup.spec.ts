@@ -44,7 +44,7 @@ function make() {
   });
   return p;
 }
-const titles = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-card__label')).map((h) => h.textContent?.trim() ?? '');
+const titles = (el: HTMLElement) => Array.from(el.querySelectorAll('.pf-sgroup__label')).map((h) => h.textContent?.trim() ?? '');
 const text = (el: HTMLElement) => (el.textContent ?? '').replace(/\s+/g, ' ');
 
 const ALL = ['counters', 'scan-mode', 'queue-focus', 'lab-structure', 'calc-constants', 'no-scan', 'label-code', 'require-validation', 'tech-notes', 'auto-assign'];

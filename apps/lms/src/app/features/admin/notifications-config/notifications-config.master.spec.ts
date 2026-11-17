@@ -35,8 +35,8 @@ describe('Notifications — master switch', () => {
     expect(card.textContent).toContain('Critical result alerts always send.');
     expect(masterSwitch(p.el).getAttribute('aria-checked')).toBe('true');
     expect(card.textContent).toContain('2 of 3 alerts');
-    // SVG icons, never emoji.
-    expect(card.querySelectorAll('svg').length).toBeGreaterThan(0);
+    // never emoji
+    expect(/[\u{1F300}-\u{1FAFF}]/u.test(card.textContent ?? '')).toBe(false);
   });
 
   it('reflects a lab that is off: paused list + "Always sends" on critical rows only', () => {

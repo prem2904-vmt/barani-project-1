@@ -351,8 +351,8 @@ describe('ND audit D — Appointments & queue', () => {
   it('queue mode = neutral selected tiles (role=radio), kit card, ONE primary', () => {
     const p = render();
     expect(primaries(p.el)).toBe(1);
-    const card = p.el.querySelector('pf-setting-group.pf-ap-card .pf-card')!;
-    expect(card.querySelector('.pf-card__head .pf-card__icon')).not.toBeNull();
+    const card = p.el.querySelector('pf-setting-group.pf-ap-card')!;
+    expect(card.querySelector('.pf-sgroup__label')?.textContent).toContain('Queue mode');
     // ONE row: the modes are a segmented control (neutral selected state)
     const radios = card.querySelectorAll('pf-segmented [role="radio"]');
     expect(radios.length).toBeGreaterThanOrEqual(2);
@@ -424,9 +424,9 @@ describe('ND audit D — Lab settings', () => {
     expect(st.textContent).toContain('Changes save automatically');
     expect(st.querySelector('svg')).not.toBeNull();
     expect(primaries(p.el)).toBe(0);
-    const cards = p.el.querySelectorAll('pf-setting-group > .pf-card');
-    expect(cards.length).toBeGreaterThan(2);
-    expect(Array.from(cards).every(c => !!c.querySelector('.pf-card__head .pf-card__icon'))).toBe(true);
+    const groups = p.el.querySelectorAll('pf-setting-group .pf-sgroup__sec');
+    expect(groups.length).toBeGreaterThan(2);
+    expect(Array.from(groups).every(c => !!c.querySelector('.pf-sgroup__head .pf-sgroup__label'))).toBe(true);
     hygiene(p.el);
   });
 
