@@ -299,7 +299,7 @@ describe('ND audit D — Inventory', () => {
     const secs = Array.from(side.querySelectorAll('.pf-inv-sections [role="radio"]')).map(b => b.textContent!.trim());
     expect(secs).toEqual(['Batches', 'Receive', 'Label', 'Ledger']);
     expect(primaries(p.el)).toBe(1);
-    expect(side.querySelector('.pf-card__foot .pf-btn--primary')!.textContent).toContain('Receive stock');
+    expect(side.querySelector('.pf-card__head .pf-btn--primary')!.textContent).toContain('Receive stock');
     expect(p.actions()[0].className).toContain('pf-hb-btn--ghost');
     expect(p.api.get).toHaveBeenCalledWith('/api/inventory/items/i1/batches');
 
@@ -308,7 +308,7 @@ describe('ND audit D — Inventory', () => {
     expect(side.querySelector('pf-date')).not.toBeNull();
     expect(side.querySelector('input[type="date"]:not(.pf-date__native)')).toBeNull();
     expect(primaries(p.el)).toBe(1);
-    expect(side.querySelector('.pf-card__foot .pf-btn--primary')!.textContent).toContain('Add stock');
+    expect(side.querySelector('.pf-card__head .pf-btn--primary')!.textContent).toContain('Add stock');
 
     // Ledger reads the item ledger endpoint.
     p.cmp.setSection(items[0], 'ledger'); p.f.detectChanges();

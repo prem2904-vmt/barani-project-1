@@ -169,7 +169,8 @@ describe('ND audit — Test Master side views', () => {
     expect(side().querySelector('.pf-og__chip--normal svg')).not.toBeNull();
     p.cmp.startEdit(p.cmp.selected());
     p.f.detectChanges();
-    expect(side().classList.contains('pf-sheet')).toBe(true);
+    // Test Master's two-panel: the editor stays the LEFT side card (a sheet only at narrow widths); its save is in the head.
+    expect(side().querySelector('.pf-card__head .pf-og__save')).not.toBeNull();
     expect(emitted.at(-1)).toBe(true);
     expect(side().querySelectorAll('.pf-toggle[role="switch"]').length).toBe(2);   // Normal + Active
     expect(primaries(p.el).map(b => b.textContent?.trim())).toEqual(['Save everywhere']);
@@ -187,7 +188,7 @@ describe('ND audit — Test Master side views', () => {
     const ed = p.el.querySelector('aside.pf-mm__side--editor')!;
     expect(ed).not.toBeNull();
     expect(ed.classList.contains('pf-card')).toBe(true);
-    expect(ed.classList.contains('pf-sheet')).toBe(true);
+    expect(ed.querySelector('.pf-card__head .pf-mm__save')).not.toBeNull();   // actions in the head, never a footer
     expect(ed.querySelectorAll('.pf-toggle[role="switch"]').length).toBe(3);   // AST · Disk · MIC
     expect(ed.querySelector('input.pf-input')).not.toBeNull();
     expect(primaries(p.el).map(b => b.textContent?.trim())).toEqual(['Save']);

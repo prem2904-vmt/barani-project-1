@@ -90,7 +90,7 @@ function hygiene(el: HTMLElement) {
   expect(el.querySelectorAll('input[type="checkbox"]').length).toBe(0);
   expect(/[✕✓✔●↑↓]/.test(el.textContent ?? '')).toBe(false);
   // Settings: no band buttons and no violet primary — the page's action is a secondary IN the pane.
-  expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
+  expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)').length).toBe(0);
   expect(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(0);
 }
 
@@ -159,7 +159,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(txt(el.querySelector('[data-testid="ue-perm-note"]'))).toContain('1 of 2 permissions from 1 role');
     hygiene(el);
     c.patch({ firstName: 'Premnath' }); f.detectChanges();
-    expect(el.querySelector('.ue-main pf-settings-savebar [data-testid="ue-save"]')).not.toBeNull();
+    expect(el.querySelector('pf-hero-band [data-testid="ue-save"]')).not.toBeNull();
   });
 
   it('Edit user: a missing branch / role flags its section; Save stays off', () => {
@@ -177,7 +177,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(reset.classList.contains('pf-rowact--icon')).toBe(true);
     expect(active().classList.contains('pf-rowact--icon')).toBe(true);
     expect(active().textContent).toContain('Deactivate');
-    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
+    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)').length).toBe(0);
 
     reset.click();
     await new Promise(r => setTimeout(r));
@@ -217,7 +217,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     c.onNameChange('Billing Supervisor');
     f.detectChanges();
     expect(c.newRoleName()).toBe('Billing Supervisor');
-    expect(el.querySelector('.re-main pf-settings-savebar [data-testid="role-save"]')).not.toBeNull();
+    expect(el.querySelector('pf-hero-band [data-testid="role-save"]')).not.toBeNull();
     expect(el.querySelector('.re-strip')!.textContent).toContain('of');
     // OPD dark build: the Doctor role type is an OPD surface — hidden while OPD is dark.
     expect(el.querySelectorAll('.re-type.pf-seg [role="radio"]').length).toBe(0);
@@ -303,7 +303,7 @@ describe('Users & Access list — current rules', () => {
   it('Noto grid, Create user in the card head (no band buttons), no mono count', () => {
     const { el, c } = render(UsersAccessComponent);
     expect(c.gridTheme()).toBeTruthy();
-    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
+    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)').length).toBe(0);
     expect(el.querySelector('.pf-sg-act')!.textContent).toContain('Create user');
     expect(el.querySelector('.font-mono')).toBeNull();
   });

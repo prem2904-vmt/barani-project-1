@@ -67,7 +67,7 @@ describe('KPIs — ND audit', () => {
     expect(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(0);
     p.cmp.addToScreen(catalog[0]);
     p.f.detectChanges();
-    expect(p.el.querySelector('pf-settings-savebar .pf-btn--secondary')!.textContent).toContain('Save');
+    expect(p.el.querySelector('pf-hero-band [data-testid="band-save"] .pf-ssv__save')!.textContent).toContain('Save');
     const row = p.cmp.gridRows()[0];
     const cols = p.cmp.colDefs();
     const shown = cols.find((c: any) => c.colId === 'status').cellRenderer({ data: row }) as HTMLElement;

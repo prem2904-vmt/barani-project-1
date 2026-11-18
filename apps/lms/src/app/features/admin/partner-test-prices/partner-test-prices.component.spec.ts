@@ -31,7 +31,7 @@ describe('Partner prices — Test Master grid (pf-data-grid)', () => {
     p.cmp.onCellChanged({ data: Object.assign(p.cmp.rows()[0], { cost: 200 }) });
     expect(p.cmp.hasUnsavedChanges()).toBe(true);
     p.f.detectChanges();
-    expect(p.el.querySelector('.ptp-main pf-settings-savebar [data-testid="savebar-save"]')).not.toBeNull();
+    expect(p.el.querySelector('pf-hero-band [data-testid="savebar-save"]')).not.toBeNull();
     p.api.post.mockReturnValue(of({}));
     expect(await p.cmp.saveChanges()).toBe(true);
     expect(p.api.post).toHaveBeenCalledWith('/api/partner-test-prices/batch', {

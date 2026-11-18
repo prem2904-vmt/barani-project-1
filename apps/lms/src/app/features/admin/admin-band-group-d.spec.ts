@@ -158,7 +158,7 @@ describe('Admin band — KPI configuration', () => {
     expect(p.cmp.gridRows().map((r: any) => r.kpiId)).toEqual(['k1']);
     expect(p.cmp.hasUnsavedChanges()).toBe(true);
     p.f.detectChanges();
-    expect(p.el.querySelector('.pf-kpi-main pf-settings-savebar [data-testid="savebar-save"]')).not.toBeNull();
+    expect(p.el.querySelector('pf-hero-band [data-testid="savebar-save"]')).not.toBeNull();
     expect(p.el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
   });
 

@@ -71,8 +71,8 @@ describe('Admin band — Report designer (/admin/reports)', () => {
     tabByLabel(p.el, 'Sending').click();
     p.f.detectChanges();
     expect(p.body()!.querySelector('.pf-rt-work pf-report-sending-card')).not.toBeNull();
-    expect(p.actions().filter((b) => /\bSave\b/.test(b.textContent ?? '')).length).toBe(0);   // never in the band
-    expect(p.el.querySelectorAll('[data-testid="rt-save"]').length).toBeLessThanOrEqual(1);       // at most ONE Save (the pane's bar)
+    expect(p.el.querySelectorAll('pf-hero-band [data-testid="band-save"]').length).toBeLessThanOrEqual(1);   // ONE Save, in the band's corner
+    expect(p.el.querySelectorAll('.pf-ssb__bar').length).toBe(0);                                          // never a card-footer bar
   });
 
   it('the band search finds a setting on another tab and opens it', () => {
@@ -87,9 +87,9 @@ describe('Admin band — Report designer (/admin/reports)', () => {
     expect(p.el.querySelector('[data-testid="rt-find"]')).toBeNull();
   });
 
-  it('no button in the band (owner): Save sits in the settings pane\'s Save bar and posts the template', () => {
+  it('Save sits in the band\'s top-right corner (owner 2026-11-17) and posts the template', () => {
     const p = make();
-    expect(p.actions().some((b) => /\bSave\b/.test(b.textContent ?? ''))).toBe(false);
+    expect(p.el.querySelectorAll('.pf-ssb__bar').length).toBe(0);
     p.cmp.save();
     expect(p.api.post).toHaveBeenCalledWith('/api/config/report-template', expect.objectContaining({ labName: 'Micro World Labs' }));
   });

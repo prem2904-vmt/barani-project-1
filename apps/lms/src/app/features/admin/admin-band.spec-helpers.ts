@@ -71,7 +71,10 @@ export function renderBandPage(cmp: Type<unknown>, opts: {
     band, bandInput, type,
     /** Buttons projected into the band's top-right actions. */
     /** The page's actions: the band's (Test Master and other work pages) or, in Settings, the pane's (card head `.pf-sg-act`). */
-    actions: () => Array.from(el.querySelectorAll<HTMLElement>('pf-hero-band .pf-hb__actions button, pf-hero-band .pf-hb__actions a, .pf-sg-act')),
+    actions: () => Array.from(el.querySelectorAll<HTMLElement>('pf-hero-band .pf-hb__actions button, pf-hero-band .pf-hb__actions a, .pf-sg-act'))
+      .filter((b) => !b.closest('[data-testid="band-save"]')),   // the band-corner Save: see bandSave()
+    /** The page's ONE Save in the band's top-right corner (owner 2026-11-17), or null. */
+    bandSave: () => el.querySelector<HTMLButtonElement>('pf-hero-band [data-testid="band-save"] .pf-ssv__save'),
     /** Controls projected INSIDE the pill (after the divider). */
     tools: () => el.querySelector<HTMLElement>('pf-hero-band .pf-hb__tools'),
     body: () => el.querySelector<HTMLElement>('.pf-band-page > .pf-band-body'),
