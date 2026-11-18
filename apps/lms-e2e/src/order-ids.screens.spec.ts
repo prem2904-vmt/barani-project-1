@@ -53,7 +53,9 @@ test.beforeEach(async ({ page, context }) => {
       default: return undefined;
     }
   };
-  // The order-ID endpoint answers by ?module= (the mock hook sees the path only, so route it here).
+  await installNegBackend(page, context);
+  // Registered AFTER the shared backend so it answers first (Playwright matches the newest route first).
+  // The order-ID endpoint answers by ?module= (the shared mock sees the path only, so route it here).
   await page.route(/\/api\/config\/order-id/, async (route, req) => {
     const origin = req.headers()['origin'] ?? 'http://127.0.0.1';
     const cors = { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
@@ -67,12 +69,11 @@ test.beforeEach(async ({ page, context }) => {
     }
     return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ success: true, data: ROWS[module] ?? null }) });
   });
-  await installNegBackend(page, context);
 });
 
 const PAGES: Array<{ name: string; url: string; ready: string; text: string; absent?: string }> = [
   { name: 'lab-order-id', url: '/admin/lab/sample-numbers?tab=order', ready: '[data-testid="order-id-format-lab"]', text: 'Order ID' },
-  { name: 'org-patient-numbers', url: '/admin/org/numbers?tab=patient', ready: '[data-testid="fmt-row"]', text: 'Patient ID', absent: 'Order ID' },
+  { name: 'org-patient-numbers', url: '/admin/org/numbers?tab=patient', ready: '[data-testid="fmt-row"]', text: 'Custom format', absent: 'Order ID' },
   { name: 'opd-visit-numbers', url: '/admin/opd/numbers', ready: '[data-testid="order-id-format-opd"]', text: 'Visit numbers' },
   { name: 'pharmacy-dispense-numbers', url: '/admin/pharmacy/numbers', ready: '[data-testid="order-id-format-pharmacy"]', text: 'Dispense numbers' },
 ];
