@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { FILES_APPS, FilesApp, bytesFit, filesApp, sniff } from './files-registry';
+import { base64Bytes } from './roundtrip/sheet-roundtrip';
 
 /**
  * The Neuron spreadsheet lives in a SAME-ORIGIN iframe (`/neuron-engine/…`, the static Neuron build; NOT `/neuron/`, which is the LMS route) and talks to the
@@ -241,6 +242,21 @@ export class FilesBridge {
     if (!w || this.state() !== 'ready') return false;
     w.postMessage({ type: `${this.app.prefix}saveAsTo`, name }, this.ownOrigin);
     return true;
+  }
+  /** The open workbook's bytes straight from the engine (`file.saveBytes`): nothing is stored, the document stays as it is. null when the app is not up or answers nothing. */
+  async workbookBytes(): Promise<Uint8Array | null> {
+    const api = this.api();
+    if (this.state() !== 'ready' || !api) return null;
+    try {
+      const r = (await api.execute('file.saveBytes', { format: this.app.exts[0] })) as { base64?: unknown } | null;
+      return typeof r?.base64 === 'string' ? base64Bytes(r.base64) : null;
+    } catch { return null; }
+  }
+  /** One engine command whose ANSWER the caller needs (`sheet.read`, `cell.set`). Rejects when the app is not up or refuses. */
+  async call<T = unknown>(cmd: string, params: Record<string, unknown> = {}): Promise<T> {
+    const api = this.api();
+    if (this.state() !== 'ready' || !api) throw new Error(`${this.app.name} is still opening.`);
+    return (await api.execute(cmd, params)) as T;
   }
   /** Ask the app to save (it answers with a save message). False if it isn't ready. */
   save(): boolean { return this.run('file.save'); }

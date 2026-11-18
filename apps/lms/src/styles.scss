@@ -1500,7 +1500,7 @@ html[data-theme="light"] .pf-vial__outline {
      be small and clusters of them stack vertically when stretched. */
   .pf-msgs__react-pill, .pf-msgs__tab-pill, .pf-msgs__edited-tag,
   .pf-msgs__sys-body, .pf-msgs__pinned-tag-icon,
-  .chip, [class*='__chip'],
+  .chip, [class*='__chip']:not([class*='__chips']):not([class*='__chip-row']),
   .seg-item, .pf-seg__item, pf-segmented button {
     min-width: auto;
     min-height: auto;
@@ -1659,8 +1659,9 @@ html[data-theme="light"] .pf-vial__outline {
 }
 
 /* Status chips (chip primitive + ad-hoc chips). Consistent 24-26px
-   height + tabular numerals when they wrap a count. */
-.chip, [class*='__chip'], .pf-chip {
+   height + tabular numerals when they wrap a count. A chip ROW (`__chips`, `__chip-row`) is a container, never a
+   24px chip (owner 2026-11-18: Option groups' wrapped value chips spilled over the label below). */
+.chip, [class*='__chip']:not([class*='__chips']):not([class*='__chip-row']), .pf-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1673,7 +1674,7 @@ html[data-theme="light"] .pf-vial__outline {
   white-space: nowrap;
 }
 @media (max-width: 640px) {
-  .chip, [class*='__chip'], .pf-chip {
+  .chip, [class*='__chip']:not([class*='__chips']):not([class*='__chip-row']), .pf-chip {
     height: 26px;
     font-size: 12px;
     padding: 0 10px;

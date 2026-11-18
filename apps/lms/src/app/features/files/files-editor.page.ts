@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, signal, untracked, viewChild, ElementRef } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, Injector, computed, effect, inject, signal, untracked, viewChild, ElementRef } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
@@ -27,6 +27,15 @@ import { FILES_APPS, FILES_NAME, FilesApp, bytesFit, filesAppForRoute, withAppEx
 import { OfficeFile, OfficeService, PhiSource, toApiError } from './office.service';
 import { phiLine, phiSourceWords } from './phi-words';
 import { FilesTemplate, START_ID, buildHome } from './files-start';
+import { SheetRoundtripService, detectRoundtrip } from './roundtrip/sheet-roundtrip.service';
+import { SheetMarker } from './roundtrip/sheet-roundtrip';
+import { PRICES_DATASET_ID, PricesSheetDataset, RateCardPrice, rateCardCells } from './roundtrip/prices-dataset';
+import { AssistantButtonComponent } from '../../shared/assistant/assistant-button.component';
+import { AssistantPanelComponent } from '../../shared/assistant/assistant-panel.component';
+import { AssistantPageContext } from '../../shared/assistant/assistant.models';
+import { BetaFeaturesService } from '../../core/services/beta-features.service';
+import { TmProposalsService } from '../../core/services/tm-proposals.service';
+import { firstValueFrom } from 'rxjs';
 
 interface Session { /** True while the app shows its OWN start screen (no file yet): no Save, no name. */ start?: boolean; key: number; file: StoredRef; target: FileTarget; fromResults: boolean; phi: PhiSource[]; pendingPhi: string | null; /** How this file reached me when it was shared ("comment" opens it read-only but takes comments). */ shared: string | null; /** Open comments as the engine last reported them (sent with the next save). */ comments: number | null }
 
@@ -41,7 +50,7 @@ interface Session { /** True while the app shows its OWN start screen (no file y
 @Component({
   selector: 'pf-files-editor',
   standalone: true,
-  imports: [FilesLoadingComponent, HeroBandComponent, NgTemplateOutlet, SelectComponent, PfDateComponent, FilesLogoComponent, FilesShareDialogComponent],
+  imports: [FilesLoadingComponent, HeroBandComponent, NgTemplateOutlet, SelectComponent, PfDateComponent, FilesLogoComponent, FilesShareDialogComponent, AssistantButtonComponent, AssistantPanelComponent],
   providers: [FilesBridge],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -87,6 +96,15 @@ interface Session { /** True while the app shows its OWN start screen (no file y
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="neuron-insert" [attr.aria-pressed]="insertOpen()" aria-label="Insert results" title="Insert results" (click)="toggleInsert()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 <span class="nr-bt">Insert results</span></button>
+            }
+            @if (canReadRateCard()) {
+              <!-- A price sheet (beta assistant + Cortex switch, dev only): read a rate card; the read prices go into the Price column to check before Send. -->
+              <pf-assistant-button feature="test_master_assistant" label="Read a rate card" [expanded]="rateCardOpen()" (pressed)="rateCardOpen.set(true)" data-testid="files-ratecard" />
+            }
+            @if (canSend()) {
+              <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-send" aria-label="Send to Prefrontal" title="Send to Prefrontal" [disabled]="!ready() || sending()" (click)="sendToPrefrontal()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/></svg>
+                <span class="nr-bt">{{ sending() ? 'Reading…' : 'Send to Prefrontal' }}</span></button>
             }
             @if (shareable()) {
               <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="files-share-open" aria-label="Share" title="Share" (click)="openShare()">
@@ -166,6 +184,9 @@ interface Session { /** True while the app shows its OWN start screen (no file y
     </ng-template>
 
     <pf-files-share [file]="shareTarget()" (closed)="shareTarget.set(null)" />
+    @if (canReadRateCard()) {
+      <pf-assistant-panel [open]="rateCardOpen()" [context]="rateCardContext" (closed)="rateCardOpen.set(false)" (openPending)="fillFromRateCard($event)" />
+    }
 
     <ng-template #insertCard>
       <aside class="pf-card nr-side" aria-label="Insert results" data-testid="neuron-insert-card">
@@ -328,6 +349,59 @@ export class FilesEditorPage {
     return untracked(() => this.sanitizer.bypassSecurityTrustResourceUrl(
       filesFrameUrl(this.app(), document.baseURI, this.auth.user()?.displayName ?? '', this.theme.mode(), !this.canWrite())));
   });
+
+  // ── sheet round-trip (a Prefrontal dataset sheet, e.g. Test Master prices) ──
+  private readonly roundtripSvc = inject(SheetRoundtripService);
+  private readonly injector = inject(Injector);
+  /** What the open workbook holds, from its `_pf` sheet (null = an ordinary sheet). */
+  protected readonly roundtrip = signal<SheetMarker | null>(null);
+  protected readonly sending = signal(false);
+  protected readonly canSend = computed(() => {
+    const m = this.roundtrip();
+    return this.app().id === 'neuron' && !!m && !this.isStart() && !!this.roundtripSvc.dataset(m.dataset)?.canApply();
+  });
+  protected readonly rateCardOpen = signal(false);
+  protected readonly canReadRateCard = computed(() => this.canSend() && this.roundtrip()?.dataset === PRICES_DATASET_ID && this.betaOn('assistant'));
+  private betaOn(k: string): boolean { try { return this.injector.get(BetaFeaturesService).enabled(k as never); } catch { return false; } }
+  protected readonly rateCardContext: AssistantPageContext = { page: 'test-master', subject: 'Prices in this sheet', attachments: 'rate-card', reviewLabel: 'Put prices in the sheet' };
+
+  /** "Send to Prefrontal": the workbook as it is now (straight from the engine, nothing stored) → review → Apply. */
+  protected async sendToPrefrontal(): Promise<void> {
+    const m = this.roundtrip();
+    if (!m || this.sending()) return;
+    this.sending.set(true);
+    try {
+      const bytes = await this.bridge.workbookBytes();
+      if (!bytes) { this.toast.info(`${this.app().name} is still opening. Try again in a moment.`); return; }
+      await this.roundtripSvc.send(m, bytes);
+    } finally { this.sending.set(false); }
+  }
+
+  /** A rate card was read: its PRICE suggestions (Pending, this batch) are written into the sheet's Price column for the person to check, then Send. */
+  protected async fillFromRateCard(batchId: string | null): Promise<void> {
+    this.rateCardOpen.set(false);
+    const m = this.roundtrip();
+    if (!m || m.dataset !== PRICES_DATASET_ID || !batchId) return;
+    try {
+      const tm = this.injector.get(TmProposalsService);
+      const list = await firstValueFrom(tm.list('review', batchId));
+      const prices: RateCardPrice[] = [];
+      for (const p of list.items.filter(x => x.kind === 'price' && !!x.targetTestId)) {
+        const d = await firstValueFrom(tm.get(p.id));
+        const v = Number(d.payload?.['price']);
+        if (d.payload?.['specimenCode'] || !Number.isFinite(v)) continue;
+        prices.push({ testId: p.targetTestId!, price: v });
+      }
+      const ds = this.injector.get(PricesSheetDataset);
+      const [{ rows }, read] = await Promise.all([ds.load(m.scope), this.bridge.call<{ values?: unknown[][] }>('sheet.read', { sheet: ds.sheetName })]);
+      const { cells, missing } = rateCardCells(read?.values ?? [], rows, prices);
+      for (const c of cells) await this.bridge.call('cell.set', { sheet: ds.sheetName, cell: c.cell, input: c.input });
+      const put = cells.length;
+      this.notice.set({ tone: 'info', text: put
+        ? `${put} price${put === 1 ? '' : 's'} from the rate card ${put === 1 ? 'is' : 'are'} in the Price column. Check them, then press Send to Prefrontal.${missing ? ` ${missing} could not be placed in this sheet.` : ''}`
+        : 'The rate card had no prices for tests in this sheet.' });
+    } catch (e) { this.toast.error(e instanceof ApiError ? e.message : toApiError(e).message); }
+  }
 
   // ── insert results (Neuron) ──
   protected readonly today = labToday();
@@ -509,6 +583,9 @@ export class FilesEditorPage {
     // "Can comment": the document stays read-only for edits but the engine is told comments are allowed (Full Files only).
     this.bridge.canComment = shared === 'comment' && this.files.full();
     this.session.set({ key: ++this.seq, file, target: t, fromResults, phi, pendingPhi, shared, comments });
+    // A Prefrontal dataset sheet (its `_pf` sheet says which): read from a COPY, the bytes themselves are transferred to the frame.
+    this.roundtrip.set(null);
+    if (bytes && this.app().id === 'neuron') { const k = this.seq; void detectRoundtrip(bytes.slice(0)).then(m => { if (this.seq === k) this.roundtrip.set(m); }); }
     if (bytes) this.bridge.open(file.name, bytes, fitColumns ? [FIT_COLUMNS] : []);
     // An app whose engine is not shipped yet (Synapse, Axon, Myelin, Retina arrive one by one) shows the plain "can't open here" state.
     const key = this.seq;

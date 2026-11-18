@@ -284,7 +284,7 @@
                     @if ($any(item).summary.suggestions > 0) {
                       <div class="pf-asst-card__row pf-asst-card__row--props">
                         <button type="button" class="pf-btn pf-btn--primary pf-asst-card__btn press" (click)="reviewInPending($any(item).summary.batchId)" data-asst-review>
-                          Review in Pending
+                          {{ context().reviewLabel || 'Review in Pending' }}
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                         </button>
                       </div>
