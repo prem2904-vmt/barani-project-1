@@ -1,4 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
+import type { SettingsSaveMode } from './settings-access';
 
 /** One page's (or one card's) save: what the band-corner Save reads and calls. */
 export interface SettingsSaveReg {
@@ -20,6 +21,13 @@ export interface SettingsSaveReg {
 @Injectable({ providedIn: 'root' })
 export class SettingsSaveService {
   readonly regs = signal<SettingsSaveReg[]>([]);
+  /**
+   * Settings access (owner 2026-11-18): `approval` = the person is a CONTRIBUTOR here and the page has an approval model
+   * (Save reads "Send for approval"); `view` = contributor on a page without one (no Save, "View only"); else `save`.
+   * Kept in step with the screen by SettingsAccessService.syncSaveMode().
+   */
+  readonly mode = signal<SettingsSaveMode>('save');
+  readonly saveLabel = computed(() => (this.mode() === 'approval' ? 'Send for approval' : 'Save'));
   /** Bands that can host the Save (non-hosted pf-hero-band instances on screen). */
   readonly bands = signal(0);
   readonly present = computed(() => this.regs().length > 0);

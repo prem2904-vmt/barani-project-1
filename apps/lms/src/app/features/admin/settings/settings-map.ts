@@ -216,8 +216,9 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'package', label: 'Packages', query: { type: 'package' } },
           { id: 'option-groups', label: 'Option groups', query: { view: 'option-groups' } },
           { id: 'microbiology', label: 'Microbiology lists', query: { view: 'microbiology' } },
-          { id: 'pricing', label: 'Prices', query: { view: 'pricing' }, perms: ['manage_tests', 'manage_test_pricing'] },
-          { id: 'pending', label: 'Pending changes', query: { view: 'pending' }, beta: 'assistant' },
+          { id: 'pricing', label: 'Prices', query: { view: 'pricing' }, perms: ['manage_tests', 'manage_test_pricing', 'contribute_test_master'] },
+          // Contributors' changes wait here for a Test Master admin (Settings access, owner 2026-11-18) — no beta needed.
+          { id: 'pending', label: 'Pending changes', query: { view: 'pending' }, perms: ['manage_tests', 'manage_test_master', 'contribute_test_master'] },
         ] },
       { id: 'lab-report', label: 'Report design', path: P.reports, iconPath: ICON.report,
         blurb: 'Letterhead, patient strip, columns, results table and report notes, order, footer and sending.',

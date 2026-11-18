@@ -39,7 +39,7 @@ const perms = [
   { id: 'p2', code: 'enter_results', name: 'Enter results', description: '' },
 ];
 
-function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (...a: any[]) => Promise<boolean>; opd?: boolean } = {}) {
+function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (...a: any[]) => Promise<boolean>; opd?: boolean; access?: unknown } = {}) {
   // Always install the stub (never 'only if missing'): another spec in the same
   // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
   (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
@@ -50,6 +50,7 @@ function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (.
       if (url.startsWith('/api/permissions')) return of(perms);
       if (url.startsWith('/api/tenants/branches')) return of([{ id: 'b1', name: 'Main Lab' }, { id: 'b2', name: 'Annex' }]);
       if (url.startsWith('/api/users/u1/roles')) return of([{ roleId: 'r1', branchId: 'b1' }]);
+      if (url.startsWith('/api/settings-access/')) return of(opts.access ?? []);
       if (url.startsWith('/api/users')) return of(users);
       return of([]);
     }),
@@ -150,7 +151,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     // Sections side card first (LEFT), main card second; Profile rows are label-left / control-right.
     const panels = el.querySelector('.pf-sg-panels')!;
     expect(panels.firstElementChild!.classList.contains('ue-side')).toBe(true);
-    expect(Array.from(el.querySelectorAll('.ue-sec__name')).map(n => txt(n).replace('*', ''))).toEqual(['Profile', 'Branches', 'Roles', 'Validates for']);
+    expect(Array.from(el.querySelectorAll('.ue-sec__name')).map(n => txt(n).replace('*', ''))).toEqual(['Profile', 'Branches', 'Job role', 'Validates for']);
     expect(el.querySelectorAll('.ue-main pf-setting-row').length).toBeGreaterThanOrEqual(5);
     expect(txt(el.querySelector('.ue-main .ue-ro'))).toBe('drprem');
     // Roles section: Role | what it means | switch, one on; the combined-permissions note in the head.
@@ -357,7 +358,7 @@ describe('User editor — panel mode (beside the People grid)', () => {
     const panel = el.querySelector('[data-testid="ue-panel"]')!;
     expect(panel).not.toBeNull();
     expect(el.querySelector('pf-hero-band')).toBeNull();
-    expect(Array.from(panel.querySelectorAll('.ue-panel__sec')).map(h => h.textContent!.trim().split(' ')[0])).toEqual(['Profile', 'Branches', 'Roles', 'Validates']);
+    expect(Array.from(panel.querySelectorAll('.ue-panel__sec')).map(h => h.textContent!.trim().split(' ')[0])).toEqual(['Profile', 'Branches', 'Job', 'Validates']);
     expect(panel.querySelector('.pf-ue-reset')).not.toBeNull();
     expect(panel.querySelectorAll('.pf-btn--primary').length).toBe(1);
     let closed = 0; c.closed.subscribe(() => closed++);
@@ -406,5 +407,44 @@ describe('Role editor — unsaved changes', () => {
     expect(await c.saveChanges()).toBe(true);
     expect(api.patch).toHaveBeenCalledWith('/api/roles/r1/permissions', { permissionIds: ['p1', 'p2'] });
     expect(c.hasUnsavedChanges()).toBe(false);
+  });
+});
+
+describe('User editor — Settings access (owner 2026-11-18: Job role, then Settings access, one pf-select per area)', () => {
+  const area = (a: string, grant: string, canChange: boolean, choices: string[], fromRole = 'none') =>
+    ({ area: a, grant, fromRole, effective: grant, canChange, choices });
+  const access = { userId: 'u1', areas: [
+    area('org', 'none', false, ['none']), area('lab', 'none', true, ['none', 'contributor']),
+    area('test_master', 'none', true, ['none', 'contributor']), area('opd', 'none', false, ['none']), area('ipd', 'admin', false, ['admin'], 'admin'),
+  ] };
+
+  it('panel: Job role, then Settings access with a row per area; only what the caller may change is enabled; Save sends one PUT per change', () => {
+    const { el, f, c, api } = render(UserEditComponent, { access });
+    f.componentRef.setInput('panelId', 'u1');
+    c.ngOnInit(); f.detectChanges();
+    const heads = Array.from(el.querySelectorAll('.ue-panel__sec')).map(h => h.textContent!.trim());
+    const jr = heads.findIndex(h => h.startsWith('Job role'));
+    expect(heads[jr + 1]).toContain('Settings access');
+    const rows = Array.from(el.querySelectorAll('[data-testid="ue-settings-access"] pf-setting-row'));
+    expect(rows.length).toBe(5);
+    const ue = c as unknown as UserEditComponent;
+    expect(ue.accessRows().map((r: { area: string; canChange: boolean }) => [r.area, r.canChange])).toEqual([['org', false], ['lab', true], ['test_master', true], ['opd', false], ['ipd', false]]);
+    expect(ue.accessRows().find((r: { area: string }) => r.area === 'test_master')!.options.map((o: { label: string }) => o.label)).toEqual(['None', 'Contributor']);
+    expect(ue.hasUnsavedChanges()).toBe(false);
+    ue.setAccess('test_master', 'contributor');
+    expect(ue.hasUnsavedChanges()).toBe(true);
+    c.save();
+    expect(api.put).toHaveBeenCalledWith('/api/users/u1/roles', expect.anything());
+    return Promise.resolve().then(() => Promise.resolve()).then(() => {
+      expect(api.put).toHaveBeenCalledWith('/api/settings-access/users/u1', { area: 'test_master', level: 'contributor' });
+    });
+  });
+
+  it('no permission to see it (the server refuses): the section is not there at all', () => {
+    const { el, f, c } = render(UserEditComponent);
+    f.componentRef.setInput('panelId', 'u1');
+    c.ngOnInit(); f.detectChanges();
+    expect(el.querySelector('[data-testid="ue-settings-access"]')).toBeNull();
+    expect((c as unknown as UserEditComponent).sections().map((s: { id: string }) => s.id)).not.toContain('access');
   });
 });

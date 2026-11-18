@@ -3,15 +3,20 @@ import { firstValueFrom, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { ApiService } from './api.service';
 import { TmProposalsService } from './tm-proposals.service';
+import { BetaFeaturesService } from './beta-features.service';
 
 /**
  * Test Master "Pending changes": the list/badge read the backend's single-request shape
  * (`status=pending,stale,failed`, `counts` settled after the stale flip) - no second read.
  */
-function setup(page: unknown) {
+function setup(page: unknown, assistant = true) {
   const get = vi.fn(() => (page instanceof Error ? throwError(() => page) : of(page)));
-  TestBed.configureTestingModule({ providers: [{ provide: ApiService, useValue: { get, post: vi.fn() } }] });
-  return { svc: TestBed.inject(TmProposalsService), get };
+  const post = vi.fn(() => of({}));
+  TestBed.configureTestingModule({ providers: [
+    { provide: ApiService, useValue: { get, post } },
+    { provide: BetaFeaturesService, useValue: { enabled: (k: string) => assistant && k === 'assistant' } },
+  ] });
+  return { svc: TestBed.inject(TmProposalsService), get, post };
 }
 const row = (id: string, createdAt: string) => ({ id, createdAt });
 
@@ -43,5 +48,15 @@ describe('TmProposalsService', () => {
     TestBed.resetTestingModule();
     const b = setup(new Error('404'));
     expect(await firstValueFrom(b.svc.openCount())).toBe(0);
+  });
+
+  it('beta off (Settings access): the contributor changes route, same calls, never the beta inbox', async () => {
+    const { svc, get, post } = setup({ items: [], total: 0, pendingCount: 0, counts: { pending: 0, stale: 0, failed: 0 } }, false);
+    await firstValueFrom(svc.list('review'));
+    expect(get).toHaveBeenCalledWith('/api/settings-changes/test-master?status=pending%2Cstale%2Cfailed&take=100');
+    await firstValueFrom(svc.approve('p1', true));
+    expect(post).toHaveBeenCalledWith('/api/settings-changes/test-master/p1/approve', { confirmClinical: true });
+    await firstValueFrom(svc.withdraw('p1'));
+    expect(post).toHaveBeenCalledWith('/api/settings-changes/test-master/p1/withdraw', {});
   });
 });

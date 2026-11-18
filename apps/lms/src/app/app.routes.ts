@@ -11,7 +11,7 @@ import { landingGuard } from './core/auth/landing.guard';
 import { moduleGuard } from './core/auth/module.guard';
 import { permissionGuard } from './core/auth/permission.guard';
 import { routeGuards } from './core/auth/route-guards';
-import { TEST_MASTER_PERMS } from './core/auth/route-access';
+import { TEST_MASTER_OPEN_PERMS } from './core/auth/route-access';
 import { loadTestEditor } from './features/admin/tests/test-editor/test-editor.loader';
 import { loadRoleEditor, loadUserInvite } from './features/admin/users-access/user-editors.loader';
 import { OPD_ADMIN_ROUTES, OPD_FRONTDESK_CHILD_ROUTES, OPD_SHELL_ROUTES } from './features/opd/opd.routes';
@@ -206,7 +206,8 @@ export const appRoutes: Route[] = withAppModes([
       },
       {
         path: 'admin/tests/:id/edit',
-        canActivate: [permissionGuard(TEST_MASTER_PERMS)],
+        // A Test Master contributor opens the editor too; their Save goes for approval (Settings access).
+        canActivate: [permissionGuard(TEST_MASTER_OPEN_PERMS)],
         canDeactivate: [unsavedChangesGuard],
         loadComponent: loadTestEditor
       },

@@ -1,6 +1,7 @@
 import {
   ApplicationConfig,
   ErrorHandler,
+  Injector,
   inject,
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
@@ -112,6 +113,12 @@ export const appConfig: ApplicationConfig = {
     // Private uploads: register the session-authenticated fetcher the PDF
     // renderers use for "/uploads/…" assets (see shared/utils/upload-fetch.ts).
     provideAppInitializer(() => { inject(UploadsService); }),
+    // Settings access (owner 2026-11-18): the band Save reads "Send for approval" / view only for a contributor.
+    // (loaded lazily: the Settings map stays out of the initial bundle)
+    provideAppInitializer(() => {
+      const inj = inject(Injector);
+      void import('./features/admin/settings/settings-access.service').then((m) => inj.get(m.SettingsAccessService).syncSaveMode());
+    }),
     // Beta UI flags (console switch + server + dev): fetched once in the background — never blocks boot.
     // Not on the public case-sheet site (casesheets mode starts no LMS bootstrap — features/casesheets/public/boot-plan.ts).
     provideAppInitializer(() => { if (bootPlan({ mode: appMode(), publicPatientPage: false }).betaPrefetch) void inject(BetaFeaturesService).ensureLoaded(); }),

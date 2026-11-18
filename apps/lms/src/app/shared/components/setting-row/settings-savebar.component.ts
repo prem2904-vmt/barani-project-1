@@ -80,7 +80,13 @@ export class SettingsSavebarComponent {
   imports: [BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (svc.present()) {
+    @if (svc.present() && svc.mode() === 'view') {
+      <!-- Settings access: a contributor on a page with no approval model yet sees it, nothing to save. -->
+      <span class="pf-ssv__view" role="status" data-testid="band-view-only">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        View only
+      </span>
+    } @else if (svc.present()) {
       <div class="pf-ssv" data-testid="band-save">
         @if (svc.dirty() || svc.saving()) {
           <span class="pf-ssv__state" role="status" data-testid="unsaved-state"><span class="pf-ssv__dot" aria-hidden="true"></span>Unsaved changes</span>
@@ -89,10 +95,10 @@ export class SettingsSavebarComponent {
           }
         }
         <!-- The band's ONE primary (owner 2026-11-17: Save is the violet primary, normal band size, every Settings page). -->
-        <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ssv__save press" [attr.data-testid]="svc.testId()" aria-label="Save"
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ssv__save press" [attr.data-testid]="svc.testId()" [attr.aria-label]="svc.saveLabel()"
                 [disabled]="svc.saving() || !svc.canSave()" [pfBusy]="svc.saving()" pfBusyLabel="Saving…" (click)="svc.saveAll()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
-          {{ svc.saving() ? 'Saving…' : 'Save' }}
+          {{ svc.saving() ? (svc.mode() === 'approval' ? 'Sending…' : 'Saving…') : svc.saveLabel() }}
         </button>
       </div>
     }
@@ -103,6 +109,8 @@ export class SettingsSavebarComponent {
     .pf-ssv__state { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
     .pf-ssv__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
     .pf-ssv__save { min-width: 96px; justify-content: center; }
+    .pf-ssv__view { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 999px;
+      border: 1px solid var(--pf-line); color: var(--text-secondary); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
     @media (max-width: 640px) { .pf-ssv__state { display: none; } }
   `],
 })

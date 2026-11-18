@@ -51,6 +51,8 @@ import { TestNotesEditorComponent } from '../../report-template/test-notes-edito
 import { TestConsumablesComponent } from '../test-consumables.component';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { TEST_PRICING_PERMS } from '../../../../core/auth/route-access';
+import { TmContributorService } from '../../../../core/services/tm-contributor.service';
+import { forkJoin, type Observable } from 'rxjs';
 
 /** A shared option-group vocabulary as served by /api/option-groups. */
 interface OgGroupLite {
@@ -290,8 +292,13 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
       if (el) { el.focus(); el.select(); }
     });
   }
-  readonly canRevert = computed(() => this.codeMode() === 'tenant'
+  readonly canRevert = computed(() => this.codeMode() === 'tenant' && !this.contributorMode
     && canRevertToMaster({ origin: this.origin(), catalogMode: this.catalogMode() }));
+  /** Settings access (owner 2026-11-18): a Test Master CONTRIBUTOR edits, and Save sends the change for approval
+   *  (pending changes a Test Master admin reviews). They never revert / restore. */
+  private readonly contributors = inject(TmContributorService);
+  readonly contributorMode = this.contributors.isContributor();
+  readonly saveWord = computed(() => this.saving() ? (this.contributorMode ? 'Sending…' : 'Saving…') : (this.contributorMode ? 'Send for approval' : 'Save'));
   readonly reverting = signal(false);
   /** The read-only code field: the assigned code, or "Assigned automatically"
    *  before the first save. */
@@ -2518,6 +2525,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
 
     const body = this.buildSaveBody(d);
 
+    if (this.contributorMode) { this.sendForApproval(d, body); return; }
+
     this._saving.set(true);
     if (d.id) {
       // Copy-on-write: whatever the PATCH carries is what the lab changed, and
@@ -2569,6 +2578,33 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
         error: e => this.handleSaveError(e)
       });
     }
+  }
+
+  /** A contributor's Save: the changed fields (and a changed price) become PENDING changes, nothing is written. */
+  private sendForApproval(d: DraftTest, body: Record<string, unknown>) {
+    const sp = this._savedPrice();
+    const price = Math.max(0, Number(d.price) || 0);
+    const taxSlab = Math.max(0, Number(d.taxSlab) || 0);
+    const calls: Observable<unknown>[] = [];
+    if (d.id) {
+      const changed = changedKeys(body, this._baseline);
+      if (Object.keys(changed).length > 0) calls.push(this.contributors.proposeUpdate(d.id, changed));
+      if (price !== sp.price || taxSlab !== sp.taxSlab) calls.push(this.contributors.proposePrices([{ testId: d.id, price, taxSlab }]));
+    } else {
+      calls.push(this.contributors.proposeCreate(body, price));
+    }
+    if (calls.length === 0) { this.dirty.set(false); this.toasts.success('Nothing changed'); return; }
+    this._saving.set(true);
+    forkJoin(calls).subscribe({
+      next: () => {
+        this._saving.set(false);
+        this.dirty.set(false);
+        if (d.id) this._baseline = body;
+        this.toasts.success('Sent for approval. A Test Master admin will review it.');
+        if (!d.id) void this.router.navigate(['/admin/tests'], { queryParams: { view: 'pending' } });
+      },
+      error: e => this.handleSaveError(e),
+    });
   }
 
   /** Second half of a save: write the price to the pricing table (bulk

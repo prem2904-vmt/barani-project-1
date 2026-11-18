@@ -1,7 +1,7 @@
 import { Routes } from '@angular/router';
 import { unsavedChangesGuard } from '../../shared/utils/unsaved-changes';
 import { permissionGuard } from '../../core/auth/permission.guard';
-import { ADMIN_PERMS } from '../../core/auth/route-access';
+import { OPD_SETTINGS_OPEN_PERMS } from '../../core/auth/route-access';
 import { opdGuard } from './shared/opd.guard';
 import { PHARMACY_VIEW } from './pharmacy/pharmacy-view';
 
@@ -16,7 +16,8 @@ import { PHARMACY_VIEW } from './pharmacy/pharmacy-view';
  * consult/** (+ legacy doctor/**) → C · pharmacy/** → D · home/**, shared/** →
  * foundation (shared contracts: change only with the integrator).
  */
-const adminGuard = permissionGuard(ADMIN_PERMS);
+// Settings access: an OPD admin (manage_opd) or contributor opens these too (same list as ROUTE_ACCESS).
+const adminGuard = permissionGuard(OPD_SETTINGS_OPEN_PERMS);
 
 /** Children of the signed-in shell (app.routes.ts spreads them). */
 export const OPD_SHELL_ROUTES: Routes = [

@@ -47,6 +47,7 @@ import { CatalogProposal } from '../../../../shared/models/test.model';
 import { CatalogProposalsPanelComponent } from './catalog-proposals-panel.component';
 import { PendingChangesPanelComponent } from './pending-changes-panel.component';
 import { BetaFeaturesService } from '../../../../core/services/beta-features.service';
+import { TmContributorService } from '../../../../core/services/tm-contributor.service';
 import { TmProposalsService } from '../../../../core/services/tm-proposals.service';
 import { AssistantButtonComponent } from '../../../../shared/assistant/assistant-button.component';
 import { AssistantPanelComponent } from '../../../../shared/assistant/assistant-panel.component';
@@ -330,7 +331,8 @@ export class TestsComponent implements OnInit {
    *  hosts) = unrestricted. */
   readonly canEditPrices = computed(() => {
     const a = this.auth;
-    return !a || typeof a.hasAnyPermission !== 'function' || a.hasAnyPermission(TEST_PRICING_PERMS);
+    // A Test Master contributor edits prices too; TestPricingService sends them for approval.
+    return !a || typeof a.hasAnyPermission !== 'function' || a.hasAnyPermission(TEST_PRICING_PERMS) || this.contributors.isContributor();
   });
   private readonly destroyRef = inject(DestroyRef);
   /** ≤900px: no room for a side column — the card becomes a sheet. */
@@ -992,10 +994,20 @@ export class TestsComponent implements OnInit {
   /** The Pending view exists only with beta `assistant` on (console pf.assistant(), server flag, dev)
    *  and a Test Master or pricing permission (price changes are visible to pricing-only roles). */
   readonly pendingOn = computed(() => {
-    if (!this.beta.enabled('assistant')) return false;
     const a = this.auth;
+    if (!this.beta.enabled('assistant')) {
+      // Settings access (owner 2026-11-18): contributors' changes wait here for a Test Master admin — no beta needed.
+      const lvl = a && typeof a.settingsLevel === 'function' ? a.settingsLevel('test_master') : 'none';
+      return lvl === 'contributor' || lvl === 'admin';
+    }
     return !a || typeof a.hasAnyPermission !== 'function' || a.hasAnyPermission([...TM_ALL_PERMS]);
   });
+  /** Cortex "Read a rate card" + the assistant panel: beta `assistant` only (dev), never through Settings access. */
+  readonly assistantOn = computed(() => this.beta.enabled('assistant') && this.pendingOn());
+  /** Settings access: a Test Master CONTRIBUTOR — Save sends for approval; no Restore to default, no direct writes. */
+  private readonly contributors = inject(TmContributorService);
+  readonly contributorMode = this.contributors.isContributor();
+  readonly sendWord = this.contributorMode ? 'Send for approval' : 'Save changes';
 
   /** Department names for the Pending view's before → after. */
   readonly pendingDepartments = computed(() => this._depts().map(d => ({ id: d.id, name: d.name })));
@@ -1289,7 +1301,10 @@ export class TestsComponent implements OnInit {
     const count = this.dirtyCount();
     // Content edits PATCH the test; price edits go to the pricing table in ONE
     // bulk call (acting branch when isolation is ON) — never on the test row.
-    const calls: Observable<unknown>[] = entries.map(([id, fields]) => this.api.patch<Test>(`/api/tests/${id}`, fields));
+    // A contributor's edits become pending changes (one per test) — never the direct PATCH.
+    const calls: Observable<unknown>[] = entries.map(([id, fields]) => this.contributorMode
+      ? this.contributors.proposeUpdate(id, fields)
+      : this.api.patch<Test>(`/api/tests/${id}`, fields));
     if (prices.size > 0) {
       calls.push(this.pricing.save([...prices.entries()].map(([testId, price]) => ({ testId, price }))));
     }
@@ -1297,7 +1312,9 @@ export class TestsComponent implements OnInit {
     forkJoin(calls).subscribe({
       next: () => {
         this.saving.set(false);
-        this.toasts.success(`Saved ${count} change${count === 1 ? '' : 's'}`);
+        this.toasts.success(this.contributorMode
+          ? `Sent ${count} change${count === 1 ? '' : 's'} for approval`
+          : `Saved ${count} change${count === 1 ? '' : 's'}`);
         this._dirty.set(new Map());
         this._priceDirty.set(new Map());
         this.loadTests();

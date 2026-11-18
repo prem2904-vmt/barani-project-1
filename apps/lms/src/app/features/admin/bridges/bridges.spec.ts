@@ -116,7 +116,8 @@ afterEach(() => { TestBed.resetTestingModule(); vi.unstubAllGlobals(); });
 // ── Routes + permission gating ──────────────────────────────────────────────
 describe('Bridges — routes, permission, hub tile', () => {
   it('/admin/bridges needs manage_bridges (lab module); manage_lab_settings alone is not enough', () => {
-    expect(ROUTE_ACCESS['/admin/bridges']).toEqual({ perms: ['manage_bridges'], module: 'lab' });
+    // + the Lab contributor code (Settings access, owner 2026-11-18: view only; every Bridge action stays manage_bridges on the server).
+    expect(ROUTE_ACCESS['/admin/bridges']).toEqual({ perms: ['manage_bridges', 'contribute_lab_settings'], module: 'lab' });
     const can = (perms: string[]) => canOpenRoute('/admin/bridges', { hasAny: (c) => c.some((x) => perms.includes(x)) });
     expect(can(['manage_bridges'])).toBe(true);
     expect(can(['manage_lab_settings'])).toBe(false);

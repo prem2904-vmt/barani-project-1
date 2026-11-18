@@ -15,10 +15,13 @@ import { summarizeRanges, type RangeLike } from './reference-range';
 import { agoWords } from '../instruments/instrument-config';
 
 export const TM_PROPOSALS_URL = '/api/tm-proposals';
+/** Settings access (owner 2026-11-18): Test Master CONTRIBUTORS' changes — the same proposals, NOT beta-gated, listing and
+ *  resolving only `contributor` rows (prefrontal-mw SettingsChangesController). Used whenever beta `assistant` is off. */
+export const TM_CONTRIBUTOR_CHANGES_URL = '/api/settings-changes/test-master';
 
 /** The one action path per proposal. There is deliberately no bulk path. */
-export function tmProposalPath(id: string, action?: 'approve' | 'reject' | 'withdraw' | 're-review'): string {
-  const base = `${TM_PROPOSALS_URL}/${encodeURIComponent(id)}`;
+export function tmProposalPath(id: string, action?: 'approve' | 'reject' | 'withdraw' | 're-review', root: string = TM_PROPOSALS_URL): string {
+  const base = `${root}/${encodeURIComponent(id)}`;
   return action ? `${base}/${action}` : base;
 }
 
@@ -83,6 +86,8 @@ export function tmSourceShort(p: Pick<TmProposal, 'source'>): string {
 
 /** Full source line for the side card: "Cortex (Gemini)" / "Outside assistant through the AI connector · claude-desktop". */
 export function tmSourceLine(p: Pick<TmProposal, 'source' | 'sourceModel' | 'clientId'>): string {
+  // Settings access: a Test Master contributor saved it for approval (the proposer's name rides on its own line).
+  if (p.source === 'contributor') return 'Sent for approval by a Test Master contributor';
   if (p.source === 'connector') {
     const client = (p.clientId ?? '').trim();
     return 'Outside assistant through the AI connector' + (client ? ` · ${client}` : '');
