@@ -24,7 +24,7 @@ import { TestPricingService } from '../../core/services/test-pricing.service';
  * Test Master editors (option group, micro master) open as a side card that
  * is a sheet on phones, with the editor's save as the ONE primary.
  */
-const PRIMARY = '.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn .v-primary, .pf-sig-cta--primary';
+const PRIMARY = '.pf-hb-btn--primary:not(.pf-ssv__save), .pf-btn--primary, pf-touch-btn .v-primary, .pf-sig-cta--primary';   // the band-corner Save (.pf-ssv__save) is the ONE allowed primary (owner 2026-11-17)
 /** Primaries a new-design user can see (classic-only markup is display:none). */
 const primaries = (el: HTMLElement) =>
   Array.from(el.querySelectorAll<HTMLElement>(PRIMARY)).filter(b => !b.closest('.pf-classic-only'));

@@ -38,7 +38,7 @@ export function hygiene(el: HTMLElement) {
 }
 /** Visible primaries (the classic header stays in code as .pf-classic-only). */
 export const primaries = (el: HTMLElement) =>
-  Array.from(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn .v-primary'))
+  Array.from(el.querySelectorAll('.pf-hb-btn--primary:not(.pf-ssv__save), .pf-btn--primary, pf-touch-btn .v-primary'))   // the band-corner Save (.pf-ssv__save) is the ONE allowed primary (owner 2026-11-17)
     .filter(b => !b.closest('.pf-classic-only')).length;
 
 describe('ND audit D — settings pages (Microbiology, OPD settings)', () => {

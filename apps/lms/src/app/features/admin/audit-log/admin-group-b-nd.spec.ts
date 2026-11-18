@@ -30,7 +30,7 @@ describe('Audit trail — ND audit', () => {
     expect(p.el.querySelector('.audit-id.pf-num')!.textContent).toContain('5f1c2a9e-0000-4444-8888-123456789abc');
     noMono(p.el);
     noLoudColours(p.el);
-    expect(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(0);
+    expect(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary:not(.pf-ssv__save)').length).toBe(0);
   });
 });
 
@@ -64,7 +64,7 @@ describe('KPIs — ND audit', () => {
 
   it('no band primary — Save lives in the card\'s Save bar; the grid\'s Shown cell is the kit switch, moves are SVG icon actions', () => {
     const p = make();
-    expect(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary').length).toBe(0);
+    expect(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary:not(.pf-ssv__save)').length).toBe(0);
     p.cmp.addToScreen(catalog[0]);
     p.f.detectChanges();
     expect(p.el.querySelector('pf-hero-band [data-testid="band-save"] .pf-ssv__save')!.textContent).toContain('Save');

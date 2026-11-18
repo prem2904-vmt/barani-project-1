@@ -91,7 +91,7 @@ function hygiene(el: HTMLElement) {
   expect(/[✕✓✔●↑↓]/.test(el.textContent ?? '')).toBe(false);
   // Settings: no band buttons and no violet primary — the page's action is a secondary IN the pane.
   expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)').length).toBe(0);
-  expect(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(0);
+  expect(el.querySelectorAll('.pf-hb-btn--primary:not(.pf-ssv__save), .pf-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(0);   // the band-corner Save (.pf-ssv__save) is the ONE allowed primary (owner 2026-11-17)
 }
 
 describe('Users & Access editors — new design (ND §14: pill = name only)', () => {
@@ -373,7 +373,7 @@ describe('People grid — Create user opens the form beside the grid', () => {
     c.openInvite(); f.detectChanges();
     expect(el.querySelector('.pf-ua-panel [data-testid="ui-panel"]')).not.toBeNull();
     expect(el.querySelector('.pf-sg-panels')!.firstElementChild!.classList.contains('pf-ua-panel')).toBe(true);
-    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')).toBeNull();
+    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary:not(.pf-ssv__save)')).toBeNull();
     expect(el.querySelectorAll('.pf-ua-panel .pf-btn--primary').length).toBe(1);
     await c.openInvite(); await Promise.resolve(); f.detectChanges();
     expect(el.querySelector('.pf-ua-panel')).toBeNull();
