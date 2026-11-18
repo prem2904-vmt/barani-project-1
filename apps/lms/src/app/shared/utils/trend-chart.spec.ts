@@ -523,6 +523,21 @@ describe('renderTrendogramPng', () => {
     expect(result).toBeNull();
   });
 
+  it('returns null (draws nothing) where there is no 2D canvas — never paints into nothing', async () => {
+    vi.restoreAllMocks();
+    const real = document.createElement.bind(document);
+    vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
+      const el = real(tag);
+      if (tag === 'canvas') (el as HTMLCanvasElement).getContext = (() => null) as never;
+      return el;
+    }) as never);
+    const param: TrendParam = { parameter: 'Hb', points: [] };
+    const result = await renderTrendogramPng({
+      param, points: [{ date: '2026-11-01', value: 12 } as unknown as TrendPoint], chartType: 'line', title: 'Hb',
+    });
+    expect(result).toBeNull();
+  });
+
   it('needs-harness: full echarts + DOM mock for rendering PNG', () => {
     // This test would require proper echarts mocking which is complex
     // The renderTrendogramPng function uses dynamic import of echarts
