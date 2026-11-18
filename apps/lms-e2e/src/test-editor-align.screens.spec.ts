@@ -1,7 +1,7 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Page } from '@playwright/test';
-import { test, expect, isPhone, isDesktop, expectLayout, shotsDir } from './support/form-factor';
+import { test, expect, isPhone, isDesktop, formFactor, expectLayout, shotsDir } from './support/form-factor';
 import { neg, resetNeg, installNegBackend, go } from './support/neg-backend';
 
 /**
@@ -69,7 +69,7 @@ test.beforeEach(async ({ page, context }) => {
       });
     }
     if (r.method !== 'GET') return undefined;
-    if (r.path === '/api/tests/') return ok([OGTT, ...PROFILES]);
+    if (r.path === '/api/tests/') return ok([OGTT, ...[...PROFILES].reverse()]); // served out of order on purpose: the editor sorts like Test Master
     if (r.path === '/api/tests/t1') return ok(OGTT);
     if (r.path === '/api/tenants/departments') return ok(DEPTS);
     return undefined;
@@ -118,7 +118,19 @@ test.describe('test editor v2', () => {
 
     // Profiles: dense rows, selected first (+ removable chips), search + filter, scroll INSIDE the list box.
     const row = (await vis(page, '.pf-profpanel__item').boundingBox())!;
-    expect(row.height, 'profile row is dense').toBeLessThanOrEqual(40);
+    expect(row.height, 'profile row is a real tap target').toBeGreaterThanOrEqual(44);
+    expect(row.height, 'still a compact list').toBeLessThanOrEqual(60);
+    const chk = (await vis(page, '.pf-profpanel__item .pf-row__check').boundingBox())!;
+    expect(chk.width, 'check circle >= 22px').toBeGreaterThanOrEqual(22);
+    // Running numbers 1, 2, 3… and Test Master's code order (selected first, keeping their order).
+    const rows = await page.locator('.pf-profpanel__item').evaluateAll(els => els.map(e => ({
+      no: e.querySelector('.pf-profpanel__no')?.textContent?.trim(), code: e.querySelector('.pf-profpanel__code')?.textContent?.trim() ?? '',
+      on: e.classList.contains('pf-row--in'), hasTitle: !!e.getAttribute('title') })));
+    expect(rows.map(r => r.no)).toEqual(rows.map((_, i) => String(i + 1)));
+    const selected = rows.filter(r => r.on).map(r => r.code), rest = rows.filter(r => !r.on).map(r => r.code);
+    expect(selected, 'selected keep TM order').toEqual([...selected].sort());
+    expect(rest, 'the others follow TM code order').toEqual([...rest].sort());
+    expect(rows.some(r => r.hasTitle), 'no native tooltip').toBe(false);
     await expect(vis(page, '.pf-profpanel__head .pf-profpanel__count')).toHaveText('3 selected');
     await expect(vis(page, '.pf-profpanel__tools input[type="search"]')).toBeVisible();
     await expect(vis(page, '.pf-profpanel__tools pf-select')).toBeVisible();
@@ -131,7 +143,7 @@ test.describe('test editor v2', () => {
     expect(box.ch, 'list box has a sensible max height').toBeLessThanOrEqual(270);
     expect(box.sh, 'the 24 profiles scroll inside it').toBeGreaterThan(box.ch);
 
-    const sizes = isDesktop() ? [[1440, 900], [1720, 1000]] : [[0, 0]];
+    const sizes = isDesktop() ? [[1440, 900], [1720, 1000]] : formFactor() === 'tablet' ? [[0, 0], [1024, 1366], [1366, 1024]] : [[0, 0]];
     for (const [w, h] of sizes) {
       if (w) { await page.setViewportSize({ width: w, height: h }); await page.waitForTimeout(1200); }
       const vw = page.viewportSize()!.width;

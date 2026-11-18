@@ -38,6 +38,7 @@ import { hasLegacyFields, loadEditorFields, newFieldId, parseParametersBlob, rea
 
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
 import { methodologyChoices } from '../../../../shared/utils/methodology';
+import { compareTestCodes } from '../../../../shared/utils/test-code';
 import { TUBE_COLORS } from '../../../../shared/utils/tube-colors';
 import {
   SPECIMEN_MODE_OPTIONS, specimenModeOf, withSpecimenMode, type SpecimenMode,
@@ -1685,7 +1686,9 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
     const q = this.profSearch().trim().toLowerCase();
     const f = this.profFilter();
     const linked = new Set(this.linkedProfileIds());
-    const out = this._allProfiles().filter(p => {
+    // Test Master's order: natural code order, then name (tests.component.ts).
+    const out = [...this._allProfiles()].sort((a, b) =>
+      compareTestCodes(a.testCode, b.testCode) || (a.name ?? '').localeCompare(b.name ?? '')).filter(p => {
       if (f === 'selected' && !linked.has(p.id)) return false;
       if (f !== 'all' && f !== 'selected' && (p.departmentId ?? '') !== f) return false;
       return !q || `${p.name} ${p.testCode ?? ''}`.toLowerCase().includes(q);
