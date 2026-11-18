@@ -78,11 +78,17 @@ test.describe('Report design', () => {
                  cardScroll: (document.querySelector('.pf-rt-main') as HTMLElement).scrollTop, docScroll: document.scrollingElement!.scrollTop };
       });
       expect(Math.abs(geo.headTop - geo.cardTop), 'card head stays at the top of its card').toBeLessThan(3);
-      expect(geo.headTop, 'card head in the viewport').toBeGreaterThanOrEqual(0);
       expect(geo.cardScroll, 'the card itself never scrolls').toBe(0);
-      expect(geo.docScroll, 'the page never scrolls').toBe(0);
-      expect(geo.rowTop, 'row inside the body scroller').toBeGreaterThanOrEqual(geo.bodyTop - 1);
-      expect(geo.rowTop, 'row inside the body scroller').toBeLessThan(geo.bodyBottom);
+      if (!isPhone()) {
+        // Desktop / tablet: the page holds still — only the card body scrolls, the head stays in view.
+        expect(geo.headTop, 'card head in the viewport').toBeGreaterThanOrEqual(0);
+        expect(geo.docScroll, 'the page never scrolls').toBe(0);
+        expect(geo.rowTop, 'row inside the body scroller').toBeGreaterThanOrEqual(geo.bodyTop - 1);
+        expect(geo.rowTop, 'row inside the body scroller').toBeLessThan(geo.bodyBottom);
+      } else {
+        // Phones scroll the page: the row is in the viewport.
+        await expect(page.locator('#pf-long-text')).toBeInViewport();
+      }
       // Only navigating: the page is not dirty.
       await expect(vis(page, 'pf-hero-band [data-testid="band-save"] .pf-ssv__save')).toBeDisabled();
       await expect(page.locator('[data-testid="unsaved-state"]')).toHaveCount(0);
