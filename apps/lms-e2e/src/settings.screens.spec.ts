@@ -123,7 +123,8 @@ test.describe('settings two-panel', () => {
     await go(page, '/admin/lab-settings?tab=queues');
     await expect(page).toHaveURL(/\/admin\/lab\/collection\?tab=queue\b/, { timeout: 60_000 });
     await go(page, '/admin/organization?tab=order');
-    await expect(page).toHaveURL(/\/admin\/org\/numbers\?tab=order/, { timeout: 60_000 });
+    // Order IDs per module: the Order ID format lives in Lab › Sample numbers now (the old link follows it).
+    await expect(page).toHaveURL(/\/admin\/lab\/sample-numbers\?tab=order/, { timeout: 60_000 });
     await go(page, '/admin/partners');
     await expect(page).toHaveURL(/\/admin\/referral-labs/, { timeout: 60_000 });
     await page.waitForTimeout(800);
