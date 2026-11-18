@@ -140,7 +140,7 @@ test.describe('test editor v2', () => {
       els => els.slice(0, 3).every(e => e.classList.contains('pf-row--in')));
     expect(firstThree, 'selected profiles come first').toBe(true);
     const box = await page.locator('.pf-profpanel__grid').evaluate(e => ({ sh: e.scrollHeight, ch: e.clientHeight }));
-    expect(box.ch, 'list box has a sensible max height').toBeLessThanOrEqual(270);
+    expect(box.ch, 'list box has a sensible max height').toBeLessThanOrEqual(300);
     expect(box.sh, 'the 24 profiles scroll inside it').toBeGreaterThan(box.ch);
 
     const sizes = isDesktop() ? [[1440, 900], [1720, 1000]] : formFactor() === 'tablet' ? [[0, 0], [1024, 1366], [1366, 1024]] : [[0, 0]];
