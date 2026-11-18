@@ -12,14 +12,27 @@ const cfgGet = (extra: Record<string, unknown> = {}) => (url: string) =>
   url === '/api/tenants/branch-lab-config' ? { labStructure: 'auto', ...extra } : [];
 
 describe('Lab › Sample numbers', () => {
-  it('ONE page of group cards (DESIGN-V2): Format · Prefixes · Finding a sample · Labels · Structure, no tab pill', async () => {
+  it('ONE page of group cards (DESIGN-V2): Format · Order ID · Prefixes · Finding a sample · Labels · Structure, no tab pill', async () => {
     const p = await renderLabPage(LabSampleNumbersPage, '/page', { getFor: cfgGet() });
-    expect(groupLabels(p.el)).toEqual(['Format', 'Prefixes', 'Finding a sample', 'Labels', 'Structure']);
+    expect(groupLabels(p.el)).toEqual(['Format', 'Order ID', 'Prefixes', 'Finding a sample', 'Labels', 'Structure']);
     expect(p.el.querySelector('pf-hero-band pf-segmented')).toBeNull();
     expect(p.el.querySelector('pf-sample-id-format-card')).not.toBeNull();
     expect(p.api.get).toHaveBeenCalledWith('/api/config/sample-id');
     // every category id is still a ?tab= anchor on the page
     for (const c of LAB_PAGES.sampleNumbers.categories) expect(p.el.querySelector(`[data-group="${c.id}"]`), c.id).not.toBeNull();
+  });
+
+  it('the Order ID format lives here (moved from Organization): its own group, module=lab, ?tab=order anchors to it', async () => {
+    const p = await renderLabPage(LabSampleNumbersPage, '/page?tab=order', { getFor: cfgGet() });
+    expect(p.api.get).toHaveBeenCalledWith('/api/config/order-id?module=lab');
+    const g = p.el.querySelector('[data-group="order"]')!;
+    expect(g.querySelector('pf-order-id-format-card')).not.toBeNull();
+    expect(text(g.querySelector('.pf-sgroup__scope'))).toBe('all branches');
+    expect(text(g.querySelector('[data-testid="order-id-preview"]'))).toMatch(/^LAB-\d{4}-000001$/);
+    // an edit to the order format makes the page ask before leaving; a clean page does not
+    expect(p.cmp.hasUnsavedChanges()).toBe(false);
+    (p.harness.routeDebugElement!.query(d => d.name === 'pf-order-id-format-card').componentInstance as { prefix: { set(v: string): void } }).prefix.set('AB');
+    expect(p.cmp.hasUnsavedChanges()).toBe(true);
   });
 
   it('barcode is ONE row: 1D barcode · QR · Data Matrix; scope is said once per group (no per-row pills)', async () => {

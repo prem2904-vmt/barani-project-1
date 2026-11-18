@@ -24,6 +24,7 @@ export const LAB_PAGES = {
     title: 'Sample numbers',
     categories: [
       { id: 'format', label: 'Format', scope: 'all branches' },
+      { id: 'order', label: 'Order ID', scope: 'all branches' },
       { id: 'prefixes', label: 'Prefixes', scope: 'per branch' },
       { id: 'find', label: 'Finding a sample', scope: 'all branches' },
       { id: 'barcode', label: 'Labels', scope: 'this branch' },

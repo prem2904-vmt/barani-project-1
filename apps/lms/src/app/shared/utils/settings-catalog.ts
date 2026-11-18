@@ -93,7 +93,7 @@ export const SETTINGS_SECTION = { personal: 'Your settings' } as const;
 export const LAB_SETTINGS_TABS = ['collection', 'queues', 'rules', 'report'] as const;
 export type LabSettingsTabId = typeof LAB_SETTINGS_TABS[number];
 /** Organization & Identity band tabs, in order (the page's `?tab=`). */
-export const ORG_SETTINGS_TABS = ['identity', 'patient', 'order'] as const;
+export const ORG_SETTINGS_TABS = ['identity', 'patient'] as const;
 export type OrgSettingsTabId = typeof ORG_SETTINGS_TABS[number];
 
 /** A SCREEN (page) of a setting. */
@@ -115,6 +115,7 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   st('Default Lab code', P.labDepartments, I.space, ['sample id prefix', 'space code', 'lab code'], { tab: 'spaces' }),
   pg('Sample numbers', P.labSampleNumbers, I.barcode, ['sample number', 'tube id', 'barcode number', 'sample id digits', 'prefix per lab space'], {}, { tab: 'format' }),
   st('Sample ID format', P.labSampleNumbers, I.barcode, ['sample number', 'tube id', 'barcode number', 'sample id digits'], { tab: 'format' }),
+  st('Order ID format', P.labSampleNumbers, I.barcode, ['order number', 'lab order number', 'order id', 'order prefix'], { tab: 'order' }),
   st('Prefix per lab space', P.labSampleNumbers, I.barcode, ['space code', 'sample id prefix', 'prefix'], { tab: 'prefixes' }),
   st('Lab structure', P.labSampleNumbers, I.barcode, ['integrated', 'standalone'], { tab: 'structure' }),
   st('Specimen label code', P.labSampleNumbers, I.barcode, ['barcode', 'qr code', 'datamatrix', 'label code', 'barcode type'], { tab: 'barcode' }),
@@ -158,12 +159,14 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   pg('Consultation forms', P.opdForms, I.casesheet, ['opd forms', 'consultation'], { requires: 'opd' }),
   pg('OPD workflow', P.opdWorkflow, I.process, ['opd steps', 'stations', 'payment point', 'queue token'], { requires: 'opd' }),
   pg('Follow-up policy', P.opdSettings, I.casesheet, ['follow up', 'opd settings'], { requires: 'opd' }),
+  pg('Visit numbers', P.opdNumbers, I.id, ['opd visit number', 'visit id', 'visit prefix', 'order number', 'opd number'], { requires: 'opd' }),
   pg('OPD front desk', P.opdFrontDesk, I.desk, ['opd appointments', 'booking slots'], { requires: 'opd' }),
   st('OPD referring doctors and hospitals', P.opdFrontDesk, I.partners, ['opd referring', 'referrer'], { tab: 'referring' }, { requires: 'opd' }),
   st('OPD alerts', P.opdFrontDesk, I.bell, ['opd notifications'], { tab: 'alerts' }, { requires: 'opd' }),
 
   // ── Pharmacy ──
   pg('Pharmacy settings', P.pharmacy, I.pill, ['batch picking', 'walk-in bills', 'schedule h', 'schedule h1', 'schedule x'], { requires: 'pharmacy' }),
+  pg('Dispense numbers', P.pharmacyNumbers, I.id, ['pharmacy dispense number', 'dispense id', 'dispense prefix', 'order number', 'pharmacy number'], { requires: 'pharmacy' }),
   pg('Drug master', P.pharmacyDrugs, I.pill, ['drugs', 'medicines', 'formulary'], { requires: 'pharmacy' }),
 
   // ── IPD ──
@@ -182,9 +185,8 @@ export const SETTINGS_CATALOG: readonly SettingsEntry[] = [
   st('Organization login handle', P.orgProfile, I.person, ['slug', 'sign in name', 'tenant handle']),
   st('Logo and top bar', P.orgProfile, I.branding, ['branding', 'tenant branding', 'logo', 'top bar', 'short name', 'brand', 'report letterhead name', 'bill letterhead name']),
   pg('Branches', P.branches, I.branches, ['branch', 'new branch', 'gstin per branch', 'deactivate']),
-  pg('Patient and order numbers', P.orgNumbers, I.id, ['id format', 'numbers'], {}, { tab: 'patient' }),
+  pg('Patient numbers', P.orgNumbers, I.id, ['id format', 'numbers', 'patient id'], {}, { tab: 'patient' }),
   st('Patient ID format', P.orgNumbers, I.id, ['mrn', 'uhid', 'patient number', 'registration number'], { tab: 'patient' }),
-  st('Order ID format', P.orgNumbers, I.id, ['order number', 'visit number'], { tab: 'order' }),
   pg('People and access', P.users, I.users, ['users', 'staff', 'employee', 'roles', 'permissions', 'invite', 'password', 'pin', 'login', 'account', 'users & access'], {}, { tab: 'users' }),
   st('Roles and permissions', P.users, I.users, ['role editor', 'work areas', 'permissions'], { tab: 'roles' }),
   pg('Billing and taxes', P.billing, I.billing, ['billing config', 'billing', 'gst', 'tax', 'hsn', 'discount', 'invoice', 'invoice number', 'receipt'], {}, { tab: 'gst' }),

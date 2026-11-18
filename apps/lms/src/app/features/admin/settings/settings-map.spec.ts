@@ -20,7 +20,7 @@ describe('Settings map — the approved structure', () => {
     const dept = SETTINGS_SECTIONS.filter((s) => s.group === 'departments').map((s) => s.label);
     expect(dept).toEqual(['Lab', 'OPD', 'Pharmacy', 'IPD', 'Inventory']);
     const org = SETTINGS_SECTIONS.filter((s) => s.group === 'organization').map((s) => s.label);
-    expect(org).toEqual(['Organization profile', 'Branches', 'Patient and order numbers', 'People and access',
+    expect(org).toEqual(['Organization profile', 'Branches', 'Patient numbers', 'People and access',
       'Billing and taxes', 'Connected apps', 'Message channels', 'Files']);
   });
 
@@ -146,7 +146,8 @@ describe('Old links keep working — they all land on a new home', () => {
   it('organization tabs → profile / numbers / Lab sample numbers', () => {
     expect(rehome('/admin/organization', { tab: 'identity' })?.path).toBe(P.orgProfile);
     expect(rehome('/admin/organization', { tab: 'patient' })).toEqual({ path: P.orgNumbers, query: { tab: 'patient' } });
-    expect(rehome('/admin/organization', { tab: 'order' })).toEqual({ path: P.orgNumbers, query: { tab: 'order' } });
+    // Order IDs per module: the old Order ID tab is the Lab's order number now (Lab › Sample numbers).
+    expect(rehome('/admin/organization', { tab: 'order' })).toEqual({ path: P.labSampleNumbers, query: { tab: 'order' } });
     expect(rehome('/admin/organization', { tab: 'sample' })).toEqual({ path: P.labSampleNumbers, query: { tab: 'format' } });
   });
 

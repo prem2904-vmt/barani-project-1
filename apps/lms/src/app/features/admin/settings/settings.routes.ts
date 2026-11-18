@@ -83,7 +83,7 @@ const files = () => import('../../files/files-settings.page').then((m) => m.File
 /** The case-sheet admin routes the shell hosts — none: case sheets are full-screen pages (DESIGN-V2 rule 2). */
 export const SHELL_HOSTED_SHEET_PATHS: readonly string[] = [];
 /** OPD / Pharmacy admin routes the shell hosts (card-style pages); every other OPD admin route is a full page. */
-const OPD_HOSTED: ReadonlySet<string> = new Set([P.opdSettings, P.pharmacy, P.opdFrontDesk].map(strip));
+const OPD_HOSTED: ReadonlySet<string> = new Set([P.opdSettings, P.pharmacy, P.opdFrontDesk, P.opdNumbers, P.pharmacyNumbers].map(strip));
 /** OPD admin routes that stay at the top level (full-screen pages and their editors). */
 export const OPD_FULL_SCREEN_ADMIN: ReadonlySet<string> = new Set(
   OPD_ADMIN_ROUTES.map((r) => r.path ?? '').filter((p) => !OPD_HOSTED.has(p)),
@@ -124,7 +124,7 @@ const ALL_SETTINGS_PAGES: Routes = [
   // ── Organization ──
   page(P.orgProfile, orgProfile),
   page(P.branches, branches),
-  page(P.orgNumbers, organization, { data: { orgTabs: ['patient', 'order'] } }),
+  page(P.orgNumbers, organization, { data: { orgTabs: ['patient'] } }),
   page(P.users, users),
   page(P.billing, billing),
   page(P.aiConnectors, aiConnectors, { before: [betaGuard('mcp')] }),

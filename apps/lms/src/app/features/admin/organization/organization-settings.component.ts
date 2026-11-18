@@ -17,8 +17,8 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { bindTabQuery, injectSettingsHosted } from '../../../shared/utils/settings-host';
 
-/** Band pill tabs — one per independently-saved identity setting. */
-export type OrgSettingsTab = 'identity' | 'patient' | 'order';
+/** Band pill tabs — one per independently-saved identity setting. (The Order ID moved to Lab › Sample numbers, OPD and Pharmacy.) */
+export type OrgSettingsTab = 'identity' | 'patient';
 
 
 @Component({
@@ -151,33 +151,6 @@ export type OrgSettingsTab = 'identity' | 'patient' | 'order';
       </pf-setting-group>
       }
 
-      @if (showSec('order')) {
-      <!-- Order ID format (prefix = module code): ONE row. -->
-      <pf-setting-group [id]="hosted ? 'order' : null" label="Order ID" scope="restarts monthly per module" [wide]="true" icon="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 3h6v4H9zM9 12h6M9 16h4">
-        <pf-setting-row class="pf-ls__card" data-testid="fmt-row" label="Date" hint="MODULE-DATE-NUMBER; the module is automatic (lab → LAB).">
-          <pf-select class="pf-org__sel" [options]="dateOptions" [value]="orderFmt.date()" (valueChange)="orderFmt.date.set($any($event))" aria-label="Date"></pf-select>
-        </pf-setting-row>
-        <pf-setting-row label="Separator" hint="Blank = none.">
-          <input class="pf-input pf-num pf-org__in" maxlength="3" [ngModel]="orderFmt.sep()" (ngModelChange)="orderFmt.sep.set($event)" placeholder="none" aria-label="Separator" />
-        </pf-setting-row>
-        <pf-setting-row [label]="orderFmt.serial() === 'alpha' ? 'Minimum digits' : 'Digits'">
-          <input class="pf-input pf-num pf-org__in" type="number" min="1" [attr.max]="orderFmt.serial() === 'alpha' ? 6 : 10" [ngModel]="orderFmt.pad()" (ngModelChange)="onFormatPadChange(orderFmt, $event)" (keydown)="preventMinus($event)" aria-label="Number digits" />
-        </pf-setting-row>
-        <pf-setting-row label="Letters" hint="Alphanumeric (AA001 …). Off = plain numbers.">
-          @if (orderFmt.serial() === 'alpha') {
-            <pf-select class="pf-org__sel pf-ls__letters" [options]="letterShortOptions" [value]="orderFmt.letters()" (valueChange)="orderFmt.letters.set(+$any($event))" aria-label="Letters"></pf-select>
-          }
-          <button type="button" class="pf-toggle pf-ls__sw" role="switch" [attr.aria-checked]="orderFmt.serial() === 'alpha'" aria-label="Include letters"
-                  (click)="orderFmt.serial.set(orderFmt.serial() === 'alpha' ? 'numeric' : 'alpha')"><span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span></button>
-        </pf-setting-row>
-        <pf-setting-row label="Preview">
-          <strong class="pf-fmt__value pf-num pf-ls__preview">{{ orderFmt.preview() }}</strong>
-        </pf-setting-row>
-        @if (hosted) {
-          <pf-settings-savebar label="Order ID changed" [dirty]="orderDirty()" [saving]="orderFmt.saving()" (save)="saveIdFormat(orderFmt)" (discard)="discardOrder()"></pf-settings-savebar>
-        }
-      </pf-setting-group>
-      }
       </div>
       </div>
     </section>
@@ -232,7 +205,6 @@ export class OrganizationSettingsComponent implements OnInit {
   readonly tabOptions: SegmentedOption<OrgSettingsTab>[] = ([
     { value: 'identity', label: 'Identity' },
     { value: 'patient', label: 'Patient ID' },
-    { value: 'order', label: 'Order ID' },
   ] as SegmentedOption<OrgSettingsTab>[]).filter(o => !this.onlyTabs || this.onlyTabs.includes(o.value));
   readonly tab = signal<OrgSettingsTab>(this.onlyTabs?.[0] ?? 'identity');
   /** Inside the Settings shell the left panel lists the tabs: the URL's `?tab=` drives this page. */
@@ -262,30 +234,24 @@ export class OrganizationSettingsComponent implements OnInit {
     { value: 1, label: 'A (1 letter)' }, { value: 2, label: 'AA (2 letters)' },
     { value: 3, label: 'AAA (3 letters)' }, { value: 4, label: 'AAAA (4 letters)' },
   ];
-  readonly letterShortOptions: PfSelectOption<number>[] = [
-    { value: 1, label: 'A' }, { value: 2, label: 'AA' }, { value: 3, label: 'AAA' }, { value: 4, label: 'AAAA' },
-  ];
 
   // ── Band Save (new design): the open tab's save is the ONE primary ──
   private readonly nameDirty = computed(() => !!this.orgName().trim() && this.orgName().trim() !== this.orgNameOriginal());
   private readonly slugDirty = computed(() => !!this.slug() && this.slug() !== this.slugOriginal());
   readonly bandSaveLabel = computed(() => this.hosted || this.tab() === 'identity' ? 'Save' : 'Save format');
   readonly bandSaving = computed(() => {
-    if (this.hosted) return this.pidSaving() || this.orderFmt.saving();
+    if (this.hosted) return this.pidSaving();
     switch (this.tab()) {
       case 'identity': return this.orgNameSaving() || this.slugSaving();
-      case 'patient': return this.pidSaving();
-      default: return this.orderFmt.saving();
+      default: return this.pidSaving();
     }
   });
   readonly bandSaveDisabled = computed(() =>
     this.bandSaving() || (!this.hosted && this.tab() === 'identity' && !this.nameDirty() && !this.slugDirty()));
   /** Identity saves whichever of name / handle changed (independent PATCHes). */
   saveTab(): void {
-    // In the Settings shell both formats are on the one page: the band's ONE Save saves the ones it shows.
     if (this.hosted) {
       if (this.showSec('patient')) this.savePatientId();
-      if (this.showSec('order')) this.saveIdFormat(this.orderFmt);
       return;
     }
     switch (this.tab()) {
@@ -294,7 +260,6 @@ export class OrganizationSettingsComponent implements OnInit {
         if (this.slugDirty()) this.saveSlug();
         break;
       case 'patient': this.savePatientId(); break;
-      case 'order': this.saveIdFormat(this.orderFmt); break;
     }
   }
 
@@ -380,10 +345,6 @@ export class OrganizationSettingsComponent implements OnInit {
     this.pidPad.set(this.sanitizePadValue(val, this.pidSerial() === 'alpha'));
   }
 
-  protected onFormatPadChange(f: { serial: () => string; pad: { set: (v: number) => void } }, val: any) {
-    f.pad.set(this.sanitizePadValue(val, f.serial() === 'alpha'));
-  }
-
   /** Live sample of what a new id looks like with today's date + seq 1. */
   protected readonly pidPreview = computed(() => {
     const n = new Date();
@@ -408,44 +369,6 @@ export class OrganizationSettingsComponent implements OnInit {
     const sep = this.pidSep() ?? '';
     return head.length ? `${head}${sep}${serial}` : serial;
   });
-
-  // ── Sample-ID & Order-ID formats ──
-  // Same engine as Patient ID but with a DYNAMIC prefix: the space code for
-  // samples (e.g. MIC-2607-00001), the module code for orders (LAB-2607-000042).
-  // The preview uses a stand-in prefix. Counter restarts monthly per space/module.
-  protected readonly orderFmt = this.makeIdFormat('order', 'LAB', 'yymm', 6);
-
-  private makeIdFormat(scope: 'sample' | 'order', samplePrefix: string, defaultDate: string, defaultPad: number) {
-    const date = signal(defaultDate);
-    const sep = signal('-');
-    const pad = signal(defaultPad);
-    const serial = signal<'numeric' | 'alpha'>('numeric');
-    const letters = signal(2);
-    const saving = signal(false);
-    const preview = computed(() => {
-      const n = new Date();
-      const dd = String(n.getDate()).padStart(2, '0');
-      const mm = String(n.getMonth() + 1).padStart(2, '0');
-      const yy = String(n.getFullYear() % 100).padStart(2, '0');
-      const d = date() === 'yymmdd' ? yy + mm + dd
-        : date() === 'ddmmyy' ? dd + mm + yy
-        : date() === 'mmdd' ? mm + dd
-        : date() === 'yymm' ? yy + mm
-        : date() === 'mmyy' ? mm + yy
-        : date() === 'yy' ? yy
-        : date() === 'dd' ? dd : '';
-      const cleanPad = this.sanitizePadValue(pad(), serial() === 'alpha');
-      const ser = serial() === 'alpha'
-        ? 'A'.repeat(Math.min(Math.max(letters(), 1), 4)) + '1'.padStart(cleanPad, '0')
-        : '1'.padStart(cleanPad, '0');
-      // Separator between EVERY non-empty part — mirrors backend GenerateScoped.
-      return [samplePrefix, d, ser].filter(p => p.length).join(sep() ?? '');
-    });
-    return { scope, samplePrefix, date, sep, pad, serial, letters, saving, preview };
-  }
-  private idFmts() { return [this.orderFmt]; }
-  /** Identity passthrough so the template can bind a format object via `@if (…; as f)`. */
-  protected idSection<T>(f: T): T { return f; }
 
   ngOnInit() {
     // Deep link: …/organization?tab=<identity|patient|sample|order> (the
@@ -474,56 +397,18 @@ export class OrganizationSettingsComponent implements OnInit {
         this.pidBase.set(this.pidSnap());
       }
     });
-    for (const f of this.idFmts()) {
-      this.api.get<any>(`/api/config/${f.scope}-id`).subscribe({
-        next: c => {
-          if (!c) { if (f.scope === 'order') this.orderBase.set(this.orderSnap()); return; }
-          f.date.set(c.datePrefix ?? f.date());
-          f.sep.set(c.separator ?? '-');
-          f.pad.set(this.sanitizePadValue(c.padding ?? f.pad(), c.serialMode === 'alpha'));
-          f.serial.set(c.serialMode === 'alpha' ? 'alpha' : 'numeric');
-          f.letters.set(Math.min(Math.max(c.letterCount ?? 2, 1), 4));
-          if (f.scope === 'order') this.orderBase.set(this.orderSnap());
-        }
-      });
-    }
   }
 
   // ── Unsaved changes: each format's Save bar in its card (owner: Save sits in the pane, never the band) ──
   private pidSnap(): string { return JSON.stringify([this.pidEnabled(), this.pidDate(), this.pidSep(), this.pidPad(), this.pidPrefix(), this.pidSerial(), this.pidLetters()]); }
-  private orderSnap(): string { const f = this.orderFmt; return JSON.stringify([f.date(), f.sep(), f.pad(), f.serial(), f.letters()]); }
   private readonly pidBase = signal('');
-  private readonly orderBase = signal('');
   readonly pidDirty = computed(() => !!this.pidBase() && this.pidSnap() !== this.pidBase());
-  readonly orderDirty = computed(() => !!this.orderBase() && this.orderSnap() !== this.orderBase());
-  readonly unsavedLabel = 'the patient and order numbers';
-  hasUnsavedChanges(): boolean { return this.hosted && (this.pidDirty() || this.orderDirty()); }
+  readonly unsavedLabel = 'the patient number format';
+  hasUnsavedChanges(): boolean { return this.hosted && this.pidDirty(); }
   discardPid(): void {
     const [e, d, s, p, pr, se, l] = JSON.parse(this.pidBase());
     this.pidEnabled.set(e); this.pidDate.set(d); this.pidSep.set(s); this.pidPad.set(p); this.pidPrefix.set(pr); this.pidSerial.set(se); this.pidLetters.set(l);
   }
-  discardOrder(): void {
-    const [d, s, p, se, l] = JSON.parse(this.orderBase()); const f = this.orderFmt;
-    f.date.set(d); f.sep.set(s); f.pad.set(p); f.serial.set(se); f.letters.set(l);
-  }
-
-  saveIdFormat(f: { scope: 'sample' | 'order'; date: any; sep: any; pad: any; serial: any; letters: any; saving: any }) {
-    const cleanPad = this.sanitizePadValue(f.pad(), f.serial() === 'alpha');
-    f.pad.set(cleanPad);
-    f.saving.set(true);
-    this.api.post(`/api/config/${f.scope}-id`, {
-      enabled: true,
-      datePrefix: f.date(),
-      separator: f.sep() ?? '',
-      padding: cleanPad,
-      serialMode: f.serial(),
-      letterCount: f.letters(),
-    }).subscribe({
-      next: () => { f.saving.set(false); if (f.scope === 'order') this.orderBase.set(this.orderSnap()); this.toasts.success(`${f.scope === 'sample' ? 'Sample' : 'Order'} ID format saved`); },
-      error: e => { f.saving.set(false); this.toasts.error(ApiError.from(e).message); },
-    });
-  }
-
   savePatientId() {
     const cleanPad = this.sanitizePadValue(this.pidPad(), this.pidSerial() === 'alpha');
     this.pidPad.set(cleanPad);

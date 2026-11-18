@@ -155,9 +155,11 @@ export const SETTINGS_PATHS = {
   opdWorkflow: '/admin/opd/workflow',
   opdSettings: '/admin/opd/settings',
   opdFrontDesk: '/admin/opd/front-desk',
+  opdNumbers: '/admin/opd/numbers',
   // Pharmacy
   pharmacy: '/admin/pharmacy',
   pharmacyDrugs: '/admin/pharmacy/drugs',
+  pharmacyNumbers: '/admin/pharmacy/numbers',
   // IPD
   ipdDepartments: '/admin/ipd/departments',
   ipdCaseSheets: '/admin/ipd/myprefrontal',
@@ -206,7 +208,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'spaces', label: 'Lab spaces', query: { tab: 'spaces' } },
         ] },
       { id: 'lab-sample-numbers', label: 'Sample numbers', path: P.labSampleNumbers, iconPath: ICON.barcode,
-        blurb: 'Sample ID format, prefix per lab space, barcode type, scan or type.',
+        blurb: 'Sample ID and order ID formats, prefix per lab space, barcode type, scan or type.',
         categories: categoriesFromPage(LAB_PAGES.sampleNumbers) },
       { id: 'lab-tests', label: 'Tests and packages', path: P.tests, iconPath: ICON.tests,
         blurb: 'Tests, profiles, packages, option groups, microbiology lists and prices.',
@@ -285,6 +287,9 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'workflow', label: 'Workflow', path: P.opdWorkflow },
           { id: 'follow-up', label: 'Follow-up policy', path: P.opdSettings },
         ] },
+      { id: 'opd-numbers', label: 'Visit numbers', path: P.opdNumbers, iconPath: ICON.id, requires: 'opd',
+        blurb: 'How OPD visit numbers read (prefix, date, digits). Counted per branch.',
+        categories: [{ id: 'visit', label: 'Visit numbers' }] },
       { id: 'opd-front-desk', label: 'OPD front desk, alerts and numbers', path: P.opdFrontDesk, iconPath: ICON.desk, requires: 'opd',
         blurb: 'OPD appointments and booking, referring doctors, alerts and number cards.',
         categories: categoriesFromPage({ path: P.opdFrontDesk, categories: OPD_FRONT_DESK_SECTIONS }) },
@@ -297,6 +302,9 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
       { id: 'pharmacy-settings', label: 'Pharmacy settings', path: P.pharmacy, iconPath: ICON.pill, requires: 'pharmacy',
         blurb: 'Batch picking, walk-in bills, Schedule H / H1 / X.',
         categories: [{ id: 'settings', label: 'Pharmacy settings' }] },
+      { id: 'pharmacy-numbers', label: 'Dispense numbers', path: P.pharmacyNumbers, iconPath: ICON.id, requires: 'pharmacy',
+        blurb: 'How dispense numbers read (prefix, date, digits). Counted per branch.',
+        categories: [{ id: 'dispense', label: 'Dispense numbers' }] },
       { id: 'pharmacy-drugs', label: 'Drug master', path: P.pharmacyDrugs, iconPath: ICON.drug, requires: 'pharmacy',
         blurb: 'Drugs and their details. Stock itself stays on the Pharmacy screen.',
         categories: [{ id: 'drugs', label: 'Drug master' }] },
@@ -351,13 +359,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
     ],
   },
   {
-    id: 'numbers', group: 'organization', label: 'Patient and order numbers', iconPath: ICON.id,
-    blurb: 'Numbers that belong to the whole organization.',
+    id: 'numbers', group: 'organization', label: 'Patient numbers', iconPath: ICON.id,
+    blurb: 'The patient number, one series for the whole organization.',
     items: [
-      { id: 'org-numbers', label: 'Patient and order numbers', path: P.orgNumbers, iconPath: ICON.id,
-        blurb: 'Patient ID and Order ID formats.',
-        // One page (owner): Patient ID and Order ID together fit one screen of rows.
-        categories: [{ id: 'numbers', label: 'Patient ID and Order ID' }] },
+      { id: 'org-numbers', label: 'Patient numbers', path: P.orgNumbers, iconPath: ICON.id,
+        blurb: 'Patient ID format. Order numbers are set per module: Lab, OPD and Pharmacy.',
+        // Order IDs per module (2026-11-18): the Order ID moved to Lab › Sample numbers, OPD › Visit numbers and
+        // Pharmacy › Dispense numbers. This page is the Patient ID only.
+        categories: [{ id: 'numbers', label: 'Patient ID' }] },
     ],
   },
   {
@@ -542,7 +551,8 @@ export function rehome(path: string, query: Readonly<Record<string, string | nul
     case '/admin/organization':
       switch (tab) {
         case 'patient': return { path: P.orgNumbers, query: keep({ tab: 'patient' }) };
-        case 'order': return { path: P.orgNumbers, query: keep({ tab: 'order' }) };
+        // Order IDs per module: the old Order ID tab is the Lab's order number now.
+        case 'order': return { path: P.labSampleNumbers, query: keep({ tab: 'order' }) };
         case 'sample': return { path: P.labSampleNumbers, query: keep({ tab: 'format' }) };
         default: return { path: P.orgProfile, query: keep() };
       }

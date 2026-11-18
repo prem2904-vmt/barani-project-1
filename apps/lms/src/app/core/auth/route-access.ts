@@ -209,6 +209,9 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/opd/workflow':          { perms: ADMIN_PERMS },
   '/admin/opd/settings':          { perms: ADMIN_PERMS },
   '/admin/opd/front-desk':        { perms: ADMIN_PERMS },
+  // Order IDs per module: the numbers save on the module's own permission (ConfigController GateOrderModuleAsync).
+  '/admin/opd/numbers':           { perms: ['manage_opd'] },
+  '/admin/pharmacy/numbers':      { perms: ['manage_pharmacy'] },
   '/admin/pharmacy':              { perms: ADMIN_PERMS },
   '/admin/pharmacy/drugs':        { perms: ADMIN_PERMS },
   '/admin/ipd/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
