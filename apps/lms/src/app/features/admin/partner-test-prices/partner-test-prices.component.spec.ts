@@ -20,7 +20,7 @@ describe('Partner prices — Test Master grid (pf-data-grid)', () => {
     await p.cmp.pickLab('rl1'); p.f.detectChanges();
     expect(p.cmp.visibleRows().length).toBe(2);
     expect(p.actions().map((b: HTMLElement) => b.textContent?.trim())).toEqual(['Add price']);
-    expect(p.el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
+    expect(p.el.querySelector('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)')).toBeNull();
     p.type('lipid');
     expect(p.cmp.visibleRows().map((r: any) => r.testCatalogKey)).toEqual(['LIPID']);
   });

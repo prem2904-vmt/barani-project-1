@@ -141,7 +141,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     const { el, f, c, txt } = render(UserEditComponent, { id: 'u1' });
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Dr. Prem Kumar');
     noFacts(el);
-    expect(el.querySelector('[data-testid="ue-save"]')).toBeNull();   // nothing changed yet
+    expect(el.querySelector<HTMLButtonElement>('[data-testid="ue-save"]')?.disabled ?? true).toBe(true);   // nothing changed yet: Save disabled (never jumps)
     // Slim summary strip: name, username, status, branches.
     const strip = el.querySelector('.ue-strip')!;
     expect(txt(strip)).toContain('Dr. Prem Kumar');
@@ -209,8 +209,8 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     // The band pill is the permission search (no record chips in the band).
     expect(el.querySelector('pf-hero-band .pf-hb__input')).not.toBeNull();
     expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
-    expect(el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
-    expect(el.querySelector('[data-testid="role-save"]')).toBeNull();
+    expect(el.querySelector('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)')).toBeNull();
+    expect(el.querySelector<HTMLButtonElement>('[data-testid="role-save"]')?.disabled ?? true).toBe(true);
     // Role name lives in the slim summary strip.
     const name = el.querySelector<HTMLInputElement>('.re-strip input.pf-re-name')!;
     expect(name).not.toBeNull();
@@ -288,7 +288,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('input.pf-re-name')).toBeNull();
     expect(el.querySelector('.re-strip')!.textContent).toContain('Editing the permissions saves a copy for your organisation only.');
     expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
-    expect(el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
+    expect(el.querySelector('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)')).toBeNull();
     hygiene(el);
   });
 
