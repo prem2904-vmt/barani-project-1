@@ -223,6 +223,14 @@ describe('Test editor — new design: sections as tabs, cards, preview', () => {
     expect(el.querySelector('.pf-profpanel__count')!.textContent).toContain('1 selected');
     expect(el.querySelector('.pf-profpanel__tools input[type="search"]')).not.toBeNull();
     expect(el.querySelector('.pf-profpanel__tools pf-select')).not.toBeNull();
+    expect(el.querySelectorAll('.pf-profpanel__item .pf-profpanel__no')[0].textContent!.trim()).toBe('1');
+    expect(el.querySelectorAll('.pf-profpanel__item .pf-profpanel__no')[1].textContent!.trim()).toBe('2');
+    // Test Master order: natural code order (PRO2 < PRO10), not name.
+    c._allProfiles.set([
+      { id: 'a', name: 'Zed', type: 'profile', testCode: 'PRO010', parameters: '{}' },
+      { id: 'b', name: 'Abe', type: 'profile', testCode: 'PRO002', parameters: '{}' }]);
+    expect(c.visibleProfiles().map((p: any) => p.id)).toEqual(['b', 'a']);
+    c._allProfiles.set(profs);
     c.profFilter.set('selected');
     expect(c.visibleProfiles().map((p: any) => p.id)).toEqual(['p2']);
     c.profFilter.set('all'); c.profSearch.set('diab');

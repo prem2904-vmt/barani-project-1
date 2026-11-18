@@ -366,11 +366,12 @@
                 </div>
                 <!-- A dense checklist (check · name · code); selected first; scrolls inside the box. -->
                 <div class="pf-profpanel__grid" role="group" aria-label="Profiles">
-                  @for (pr of visibleProfiles(); track pr.id) {
+                  @for (pr of visibleProfiles(); track pr.id; let n = $index) {
                     <label class="pf-row pf-profpanel__item" [class.pf-row--in]="isLinkedProfile(pr.id)">
-                      <input type="checkbox" class="pf-te2-srcheck" [checked]="isLinkedProfile(pr.id)"
+                      <input type="checkbox" class="pf-te2-srcheck" [checked]="isLinkedProfile(pr.id)" [attr.aria-label]="pr.name + (pr.testCode ? ', ' + pr.testCode : '')"
                              (change)="toggleProfileMembership(pr, $any($event.target).checked)" />
                       <span class="pf-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                      <span class="pf-profpanel__no pf-num" aria-hidden="true">{{ n + 1 }}</span>
                       <span class="pf-row__name pf-profpanel__name">{{ pr.name }}</span>
                       @if (pr.testCode) { <span class="pf-row__meta pf-num pf-profpanel__code">{{ pr.testCode }}</span> }
                     </label>
