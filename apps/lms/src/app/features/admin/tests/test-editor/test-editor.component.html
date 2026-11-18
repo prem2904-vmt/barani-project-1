@@ -1478,7 +1478,7 @@
 
 <ng-template #previewPdf>
   <pf-report-pdf-preview class="pf-livewrap__pdf"
-    [testId]="draft().id"
+    [testId]="draft().id || ''"
     [testName]="draft().name"
     [department]="draft().type === 'package' ? '' : selectedDeptName()"
     [sampleType]="draft().sampleType"
