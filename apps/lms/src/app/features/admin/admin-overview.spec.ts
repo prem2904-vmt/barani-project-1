@@ -3,7 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { Location } from '@angular/common';
 import { of } from 'rxjs';
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 import { AdminOverviewComponent } from './admin-overview.component';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/auth/auth.service';
@@ -40,7 +40,7 @@ function setup(opts: { perms?: string[]; compact?: boolean; opd?: boolean; pharm
           waitForAuth: async () => undefined,
         },
       },
-      { provide: TenantStateService, useValue: { tenant: () => null } },
+      { provide: TenantStateService, useValue: { tenant: () => null, ensureLoaded: async () => null } },
       { provide: OpdGateService, useValue: { visible: () => !!opts.opd } },
       { provide: CasesheetGateService, useValue: { visible: () => !!opts.ipd } },
       ...(opts.pharmacy ? [{ provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true, moduleOn: () => true, ensureLoaded: async () => undefined, loaded: () => true } }] : []),
@@ -49,9 +49,18 @@ function setup(opts: { perms?: string[]; compact?: boolean; opd?: boolean; pharm
   return { api };
 }
 
+/* The overview loads the selected section's inline page lazily (dynamic import). Let those loads finish before the
+   test environment is torn down, or vitest reports "Cannot load chunk … after the environment was torn down"
+   (every test passes, but the run exits 1 — it blocked two dev releases). */
+const opened: AdminOverviewComponent[] = [];
+afterEach(async () => {
+  while (opened.length) await opened.pop()!.inlineReady.catch(() => undefined);
+  await vi.dynamicImportSettled();
+});
+
 async function open(url: string) {
   const h = await RouterTestingHarness.create();
-  await h.navigateByUrl(url, AdminOverviewComponent);
+  opened.push(await h.navigateByUrl(url, AdminOverviewComponent));
   h.detectChanges();
   return h;
 }

@@ -272,6 +272,8 @@ export class AdminOverviewComponent implements OnDestroy {
     return items.length === 1 ? items[0] : null;
   });
   readonly inlineCmp = signal<Type<unknown> | null>(null);
+  /** Settles when the inline page's lazy load has finished (specs await it before teardown). */
+  inlineReady: Promise<unknown> = Promise.resolve();
   private readonly loadInline = effect(() => {
     const it = this.inlineItem();
     this.inlineCmp.set(null);
@@ -279,7 +281,7 @@ export class AdminOverviewComponent implements OnDestroy {
     const r = inlineRoute(it.path);
     const load = r?.loadComponent;
     if (!load) return;
-    void Promise.resolve(load()).then((m: unknown) => {
+    this.inlineReady = Promise.resolve(load()).then((m: unknown) => {
       if (this.inlineItem() !== it) return;
       const t = (m && typeof m === 'object' && 'default' in (m as object)) ? (m as { default: Type<unknown> }).default : m as Type<unknown>;
       this.inlineCmp.set(t);

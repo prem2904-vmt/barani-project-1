@@ -404,7 +404,12 @@ test.describe('settings list grids', () => {
           expect(flush.left, `${url}: grid flush to the card's left edge`).toBeLessThan(3);
           expect(flush.right, `${url}: grid flush to the card's right edge`).toBeLessThan(3);
         }
-        expect(body.y + body.height - (g.y + g.height), `${url}: grid reaches the bottom`).toBeLessThan(60);
+        // The inline overview page sizes itself after its lazy load settles (slow on a loaded gate box): poll the gap.
+        await expect.poll(async () => {
+          const gg = (await grid.boundingBox())!;
+          const bb = (await page.locator('.pf-band-body').locator('visible=true').first().boundingBox())!;
+          return Math.round(bb.y + bb.height - (gg.y + gg.height));
+        }, { message: `${url}: grid reaches the bottom`, timeout: 15_000 }).toBeLessThan(60);
         await page.screenshot({ path: `${out()}/sg-fill-${w}-${card.replace(/[^a-z]/g, '')}.png` });
       }
       // Test Master at the same size, for the side-by-side.
