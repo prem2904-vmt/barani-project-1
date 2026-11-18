@@ -2011,7 +2011,15 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
   /** Centre `el` in the main card BODY's own scroller — the card head, the card and the band never move. */
   private scrollBodyTo(el: HTMLElement) {
     this.lastScrolledTo = el;
-    const scroller = el.closest<HTMLElement>('.pf-rt-main__body') ?? el.closest<HTMLElement>('.pf-rt-work');
+    // The nearest REAL scroller above the field: the card body on desktop; on phones (the page scrolls) the page's own
+    // scroller. Never the card itself (it clips).
+    let scroller: HTMLElement | null = el.parentElement;
+    while (scroller) {
+      const cs = typeof getComputedStyle === 'function' ? getComputedStyle(scroller) : null;
+      if (!scroller.classList.contains('pf-rt-main') && cs && /(auto|scroll)/.test(cs.overflowY) && scroller.scrollHeight > scroller.clientHeight + 1) break;
+      scroller = scroller.parentElement;
+    }
+    scroller ??= el.closest<HTMLElement>('.pf-rt-main__body');
     if (!scroller) return;
     const r = el.getBoundingClientRect(), sr = scroller.getBoundingClientRect();
     const top = Math.max(0, scroller.scrollTop + (r.top - sr.top) - Math.max(0, (sr.height - r.height) / 2));
