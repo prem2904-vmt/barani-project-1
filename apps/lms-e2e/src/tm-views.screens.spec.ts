@@ -115,4 +115,28 @@ test.describe('Test Master views: two-panel', () => {
     await page.waitForTimeout(500);
     await shot(page, 'pricing');
   });
+
+  test('Option groups side card: wrapped value chips never slide under "Linked tests" (no shrink in the side card)', async ({ page }) => {
+    test.skip(isPhone());
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const long = ['Detected — strongly positive', 'Not detected — negative', 'Indeterminate, repeat the test', 'Weakly positive, borderline', 'Invalid sample, recollect'];
+    const prev = neg.hook;
+    neg.hook = r => (r.method === 'GET' && r.path === '/api/option-groups')
+      ? { status: 200, body: { success: true, data: [{ code: 'ogL', name: 'Long values', values: long.map((v, i) => ({ code: null, value: v, normal: i === 1, active: true })),
+          links: TESTS.slice(0, 12).map(t => ({ testId: t.id, testCode: t.testCode, testName: t.name, paramName: 'p1', paramTitle: 'Result' })) }] } }
+      : prev?.(r);
+    await go(page, '/admin/tests?view=option-groups');
+    await expect(vis(page, '[data-testid="og-side"] .pf-og__chips')).toBeVisible({ timeout: 60_000 });
+    await page.waitForTimeout(400);
+    const g = await page.evaluate(() => {
+      const chips = document.querySelector('[data-testid="og-side"] .pf-og__chips')!;
+      const label = [...document.querySelectorAll('[data-testid="og-side"] .pf-og__slabel')].find(l => /Linked tests/.test(l.textContent ?? ''))!;
+      const rows = new Set([...chips.children].map(c => Math.round(c.getBoundingClientRect().top))).size;
+      return { chipsBottom: chips.getBoundingClientRect().bottom, labelTop: label.getBoundingClientRect().top, rows,
+               lastChipBottom: Math.max(...[...chips.children].map(c => c.getBoundingClientRect().bottom)) };
+    });
+    expect(g.rows, 'the chips wrap').toBeGreaterThan(1);
+    expect(g.labelTop, 'label below the chips box').toBeGreaterThanOrEqual(g.chipsBottom - 0.5);
+    expect(g.labelTop, 'label below the last chip').toBeGreaterThanOrEqual(g.lastChipBottom - 0.5);
+  });
 });
