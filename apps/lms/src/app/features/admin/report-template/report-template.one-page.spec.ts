@@ -23,12 +23,13 @@ describe('Report design — one page, one band', () => {
     expect(LAB_PAGES.reportOptions.categories.map(c => c.id)).toEqual(['sending']);
   });
 
-  it('the band has the search pill + the tabs, and no Report options button or second segmented', () => {
+  it('the band has the search pill only (the sections are the LEFT side card), and no Report options button', () => {
     expect(TEMPLATE).not.toContain('rt-report-options');
     expect(TEMPLATE).not.toContain('Report options');
     expect(TEMPLATE).not.toMatch(/<pf-hero-band[^>]*\[tabsOnly\]/);
     expect(TEMPLATE).toMatch(/<pf-hero-band[^>]*placeholder="Find a report setting"/);
-    expect((TEMPLATE.match(/<pf-segmented class="pf-hb-tabs/g) ?? []).length).toBe(1);
+    expect((TEMPLATE.match(/<pf-segmented class="pf-hb-tabs/g) ?? []).length).toBe(0);
+    expect(TEMPLATE).toContain('data-testid="rt-nav"');
   });
 
   it('never two Save buttons: notes and sending report into the ONE save state; Save is the pane\'s Save bar', () => {
@@ -48,7 +49,7 @@ describe('Report design — one page, one band', () => {
     expect((table.match(/<pf-setting-row label="Technicians can add notes"/g) ?? []).length).toBe(1);
     // Lab-settings-only people see only that row: the rest of the tab and the preview are behind !notesOnly().
     expect(table.indexOf('@if (!notesOnly())')).toBeLessThan(table.indexOf('data-testid="ls-tech-notes"'));
-    expect(TEMPLATE).toMatch(/@if \(!notesOnly\(\)\) \{\s*<aside class="pf-rt-aside"/);
+    expect(TEMPLATE).toMatch(/@if \(!notesOnly\(\) && !theme\.isNewDesign\(\)\) \{\s*<aside class="pf-rt-aside"/);
   });
 
   it('an old ?tab=notes link lands on Results table; notes-only people are held on it', () => {

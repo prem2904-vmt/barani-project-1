@@ -17,7 +17,7 @@ import { SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { ReportColumnsEditorComponent } from './report-columns-editor.component';
 import { ReportSequencingEditorComponent } from './report-sequencing-editor.component';
-import { lastReportSqueeze, preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
+import { buildReportPdf, lastReportSqueeze, preloadReportImages, renderReportPdfBlobUrl } from '../../../shared/utils/report-pdf';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { PlatformService } from '../../../core/services/platform.service';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -32,7 +32,7 @@ import { squeezeMessage, type SqueezeReport } from '../../../shared/utils/report
 import {
   AGE_STYLE_CHOICES, LABEL_JOINER_CHOICES, PATIENT_LABELS, RENAMEABLE_LABEL_KEYS, ageSexText, ageStyleChoice, ageText, miniStripText, patientLabel, sexText, swapAgeSexColumns,
 } from '../../../shared/utils/report-patient-text';
-import { reportIssues, type ReportIssues } from '../../../shared/utils/report-issues';
+import { LONG_TEXT_TARGET, reportIssues, stressInput, type ReportIssueSpot, type ReportIssues } from '../../../shared/utils/report-issues';
 import { ReportTidyCardComponent } from './report-tidy-card.component';
 import { BetaFeaturesService } from '../../../core/services/beta-features.service';
 import { PfSenseService } from '../../../core/services/pf-sense.service';
@@ -48,7 +48,8 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonCardComponent, SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { bindTabQuery } from '../../../shared/utils/settings-host';
-import { HasUnsavedChanges } from '../../../shared/utils/unsaved-changes';
+import { HasUnsavedChanges, confirmLeaveUnsaved } from '../../../shared/utils/unsaved-changes';
+import { SettingsSaveService } from '../../../shared/utils/settings-save';
 import { ReportSendingCardComponent } from '../lab-pages/report-sending-card.component';
 import type { BranchLabConfig } from '../../../shared/models/branch-lab-config.model';
 import { findReportSettings, type ReportFindHit } from './report-find';
@@ -141,8 +142,10 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
       </ng-template>
       <ng-template #rtPaneSave>
         @if (!notesOnly()) {
-          <pf-settings-savebar saveTestId="rt-save" [dirty]="dirty()" [saving]="saving()" [canSave]="!tplSkeleton()" [canDiscard]="false"
-                               (save)="save()"></pf-settings-savebar>
+          <pf-settings-savebar saveTestId="rt-save" [dirty]="dirty()" [saving]="saving()" [canSave]="!tplSkeleton()"
+                               (save)="save()" (discard)="discardTemplate()"></pf-settings-savebar>
+          <pf-settings-savebar saveTestId="rt-save-dept" [dirty]="deptPatientDirty()" [saving]="deptPatientSaving()"
+                               (save)="saveDeptPatient()" (discard)="discardDept()"></pf-settings-savebar>
         }
       </ng-template>
     <section class="pf-band-page px-4 md:px-6 lg:px-8 pt-3 pb-10 pf-rt-page">
@@ -152,11 +155,8 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
              on any tab, and the tabs in the same pill; Save rides the band. -->
         <pf-hero-band [back]="true" placeholder="Find a report setting" [value]="findQuery()"
                       (valueChange)="onFind($event)" (submitted)="pickFirstFind()">
-          <ng-container band-tools>
-            <pf-segmented class="pf-hb-tabs pf-rt-tabs" size="sm" [options]="sectionOptions()"
-                          [value]="tab()" (valueChange)="setTab($event)" data-testid="rt-tabs"></pf-segmented>
-          </ng-container>
-          <!-- Settings (owner 2026-11-17): no buttons in the band — Tidy up, issues and Save sit in the settings pane. -->
+          <!-- Owner 2026-11-17: back + search; the sections are the LEFT side card; ONE Save in the band's corner
+               (pf-settings-savebar registers it) saves every section at once. -->
         </pf-hero-band>
       }
       <header class="pf-rt-head pf-classic-only">
@@ -235,18 +235,75 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
         </nav>
         }
 
+        @if (theme.isNewDesign()) {
+          <!-- ── LEFT side card: the sections (Test Master two-panel). ── -->
+          <aside class="pf-card pf-rt-nav" aria-label="Report design sections" data-testid="rt-nav">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span>
+              <span class="pf-card__label">Report design</span>
+            </header>
+            <ul class="pf-card__body pf-rt-nav__list" role="tablist" aria-orientation="vertical" data-testid="rt-tabs">
+              @for (o of sectionOptions(); track o.value) {
+                <li><button type="button" class="pf-rt-nav__item" role="tab" [attr.aria-selected]="tab() === o.value" [attr.data-sec]="o.value"
+                            [attr.data-testid]="'rt-nav-' + o.value" [title]="o.hint ?? ''" (click)="pickTab(o.value)">{{ o.label }}</button></li>
+              }
+            </ul>
+          </aside>
+        }
+        <section class="pf-rt-main" [class.pf-card]="theme.isNewDesign()" [attr.aria-label]="activeSection()?.label ?? 'Report design'">
+        @if (theme.isNewDesign()) {
+          <header class="pf-card__head pf-rt-main__head" data-testid="rt-main-head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg></span>
+            <span class="pf-card__label">{{ activeSection()?.label }}</span>
+            <span class="pf-card__note">{{ activeSection()?.desc }}</span>
+            <span class="pf-rt-main__tools">
+              @if (!notesOnly()) {
+                @if (issues().count > 0) {
+                  <button type="button" class="pf-rt-warn press" data-testid="rt-warnings" (click)="warnOpen.set(!warnOpen())"
+                          [attr.aria-expanded]="warnOpen()" aria-controls="pf-rt-warnlist" [attr.aria-label]="issuesLabel()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                    Warnings <span class="pf-num">{{ issues().count }}</span>
+                  </button>
+                }
+                @if (tidyShown()) {
+                  <button type="button" class="pf-btn pf-btn--tertiary press pf-rt-tidy" (click)="openTidy()" [disabled]="tplSkeleton() || tidyBusy()"
+                          aria-label="Tidy up with Cortex (beta)" title="Tidy up with Cortex (beta)">Tidy up</button>
+                }
+                <button type="button" class="pf-btn pf-btn--secondary press pf-rt-prevbtn" data-testid="rt-preview" (click)="openPreview()"
+                        title="Preview at A4 size (Alt+P)" aria-keyshortcuts="Alt+P">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                  Preview
+                </button>
+              }
+            </span>
+          </header>
+          @if (warnOpen() && issues().count > 0) {
+            <div class="pf-rt-warnlist" id="pf-rt-warnlist" role="region" aria-label="Warnings" data-testid="rt-warnlist">
+              <p class="pf-rt-warnlist__k">With long patient, doctor or hospital names, these print on top of each other. Pick one to go to the setting that fixes it.</p>
+              <ul>
+                @for (w of warnSpots(); track $index) {
+                  <li class="pf-rt-warnlist__row">
+                    <button type="button" class="pf-rt-warnlist__go press" [attr.data-testid]="'rt-warning-' + $index" (click)="goToWarning(w)">{{ w.line }}</button>
+                    <button type="button" class="pf-btn pf-btn--tertiary pf-rt-warnlist__see press" (click)="openPreview(w)">See on the page</button>
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+        }
+        <div class="pf-rt-main__body" [class.pf-rt-main__body--flush]="designerTab() && theme.isNewDesign()">
         @if (designerTab()) {
           <!-- ── Letterhead / Footer: the page IS the editor (WYSIWYG). ── -->
-          <pf-report-header-editor class="pf-rt-designer"
+          <pf-report-header-editor class="pf-rt-designer" [flat]="theme.isNewDesign()"
             [template]="tpl()" [region]="tab() === 'footer' ? 'footer' : 'header'"
             [pdfUrl]="rawPreviewUrl()" [imageCache]="imageCache()" [rendering]="rendering()"
             [canUndo]="canUndo()" [canRedo]="canRedo()" [sigSample]="sigSample()" (sigSampleChange)="sigSample.set($event)"
             (patch)="patch($event)" (undo)="undo()" (redo)="redo()"></pf-report-header-editor>
-          <div class="pf-rt-designer-bar"><ng-container *ngTemplateOutlet="rtPaneTools"></ng-container><ng-container *ngTemplateOutlet="rtPaneSave"></ng-container></div>
+          <div class="pf-rt-designer-bar">@if (!theme.isNewDesign()) {<ng-container *ngTemplateOutlet="rtPaneTools"></ng-container>}<ng-container *ngTemplateOutlet="rtPaneSave"></ng-container></div>
         } @else {
         <!-- ── Focused section panel. ── -->
         <div class="pf-rt-work">
-          <ng-container *ngTemplateOutlet="rtPaneTools"></ng-container>
+          @if (!theme.isNewDesign()) { <ng-container *ngTemplateOutlet="rtPaneTools"></ng-container> }
           @if (!theme.isNewDesign()) {
             @if (railHidden()) {
               <button type="button" class="pf-rt-side-expand" (click)="toggleRail()"
@@ -280,10 +337,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
                       <button type="button" class="pf-btn pf-btn--tertiary pf-pt-btn press"
                               [disabled]="!deptPatientConfigured()"
                               (click)="resetDeptPatient()">Reset to default</button>
-                      <!-- Secondary: the band's Save owns the ONE primary. -->
-                      <button type="button" class="pf-btn pf-btn--secondary pf-pt-btn press"
-                              [disabled]="!deptPatientDirty() || deptPatientSaving()" [pfBusy]="deptPatientSaving()" pfBusyLabel="Saving…"
-                              (click)="saveDeptPatient()">{{ deptPatientSaving() ? 'Saving…' : 'Save for department' }}</button>
+                      <!-- The band's ONE Save saves the department's strip too (owner 2026-11-17: one Save for the page). -->
                     }
                   </div>
                 </div>
@@ -877,10 +931,13 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
           }
           <ng-container *ngTemplateOutlet="rtPaneSave"></ng-container>
         </div>
+        }
+        </div>
+        </section>
 
-        <!-- ── Right: live PDF preview, shared by every section (not for
-             Lab-settings-only people: they see the Report notes row only). ── -->
-        @if (!notesOnly()) {
+        <!-- ── Right: live PDF preview (CLASSIC only). The new design has NO live preview (owner 2026-11-17): the
+             head's Preview opens the page at A4 size on demand. ── -->
+        @if (!notesOnly() && !theme.isNewDesign()) {
         <aside class="pf-rt-aside" [class.pf-card]="theme.isNewDesign()" aria-label="Live preview">
           @if (theme.isNewDesign()) {
             <div class="pf-card__head pf-rt-aside__head">
@@ -914,13 +971,113 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
           <p class="pf-rt-aside__hint">Preview uses a sample order. Save to apply this template to real reports.</p>
         </aside>
         }
-        }
       </div>
       }
       </div>
+
+      @if (previewOpen()) {
+        <!-- The Preview popup (owner 2026-11-17): the page at true A4 size; closing returns to the field being edited.
+             A warning's spot is outlined on the long-names page it was measured on. -->
+        <div class="pf-rt-pv" role="dialog" aria-modal="true" aria-label="Report preview" data-testid="rt-preview-popup"
+             (keydown.escape)="closePreview()" (click)="closePreview()">
+          <div class="pf-card pf-rt-pv__panel" (click)="$event.stopPropagation()">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <span class="pf-card__label">Preview</span>
+              <span class="pf-card__note">{{ pvSpot() ? 'With long sample names — the outline shows: ' + pvSpot()!.line : 'Sample order · A4 · Save to apply it to real reports' }}</span>
+              <button type="button" class="pf-toggle pf-rt-sw" role="switch" [attr.aria-checked]="bwPreview()"
+                      aria-label="Black and white preview" title="Black and white — how it photocopies" (click)="bwPreview.set(!bwPreview())">
+                <span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>
+              </button>
+              <button type="button" class="pf-btn pf-btn--icon press" data-testid="rt-preview-close" (click)="closePreview()" aria-label="Close preview">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </header>
+            <div class="pf-card__body pf-rt-pv__body">
+              <div class="pf-rt-pv__page" [class.pf-rt-pv__page--one]="!!pvSpot()" [class.pf-bw]="bwPreview()">
+                @if (pvSafe(); as src) {
+                  <!-- One iframe per URL (keyed): a new frame's first load adds no session-history entry. -->
+                  @for (u of [src]; track u) { <iframe [src]="u" title="Report PDF preview" class="pf-rt-pv__frame"></iframe> }
+                  @if (pvSpot(); as sp) {
+                    <span class="pf-rt-pv__spot" data-testid="rt-preview-spot" aria-hidden="true"
+                          [style.left.%]="sp.x / 2.1" [style.width.%]="sp.w / 2.1"
+                          [style.top.%]="sp.y / 2.97" [style.height.%]="sp.h / 2.97"></span>
+                  }
+                } @else {
+                  <div class="pf-rt-pv__wait">Preparing the page…</div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      }
     </section>
   `,
   styles: [`
+    /* ── Two-panel (new design, owner 2026-11-17): sections LEFT, the section's fields RIGHT, full width. ── */
+    @media (min-width: 901px) {
+      /* Owner 2026-11-17: the sections are the LEFT side card (340px), the editor card RIGHT — same height, no page
+         scroll, at every desktop width. !important beats the old classic rules (designer / norail / ≤1180 one column). */
+      :host-context(.design-new) { display: block; height: 100%; overflow: hidden; }
+      :host-context(.design-new) .pf-rt-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 12px; }
+      :host-context(.design-new) .pf-rt-grid { grid-template-columns: 340px minmax(0, 1fr) !important; grid-template-rows: minmax(0, 1fr);
+        gap: 16px; align-items: stretch !important; flex: 1 1 auto; min-height: 0; overflow: hidden !important; }
+      :host-context(.design-new) .pf-rt-nav, :host-context(.design-new) .pf-rt-main { min-height: 0; }
+    }
+    @media (max-width: 900px) { :host-context(.design-new) .pf-rt-grid { grid-template-columns: minmax(0, 1fr) !important; } }
+    /* The card itself never scrolls (a scrollIntoView used to push its head out of view): only its body does. */
+    .pf-rt-main.pf-card { overflow: clip; }
+    .pf-rt-nav__list { list-style: none; margin: 0; padding: 8px; gap: 2px; }
+    .pf-rt-nav__item { display: flex; align-items: center; width: 100%; min-height: 40px; padding: 8px 12px; border-radius: 10px; cursor: pointer;
+      text-align: left; background: transparent; border: 1px solid transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .pf-rt-nav__item:hover { background: var(--pf-chip-bg); }
+    .pf-rt-nav__item[aria-selected='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
+    @media (max-width: 900px) {
+      .pf-rt-nav { flex: none; }
+      .pf-rt-nav > .pf-card__head { display: none; }
+      .pf-rt-nav__list { flex-direction: row; overflow-x: auto; scrollbar-width: none; padding: 6px; }
+      .pf-rt-nav__item { flex: none; width: auto; white-space: nowrap; min-height: 36px; }
+    }
+    .pf-rt-main { min-width: 0; min-height: 0; }
+    .pf-rt-main.pf-card > .pf-rt-main__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 20px 20px; }
+    /* Letterhead / Footer: the designer fills the card flush (its elements column + page, no nested cards). */
+    .pf-rt-main.pf-card > .pf-rt-main__body--flush { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+    .pf-rt-main__body--flush > .pf-rt-designer { flex: 1 1 auto; min-height: 0; }
+    .pf-rt-main.pf-card .pf-rt-work { background: transparent; border: 0; border-radius: 0; padding: 0; height: auto !important; overflow: visible !important; }
+    .pf-rt-main__head { flex-wrap: wrap; row-gap: 8px; }
+    .pf-rt-main__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-rt-main__tools .pf-btn { height: 34px; min-height: 34px; padding: 0 12px; }
+    .pf-rt-warn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--pf-radius-chip, 8px); cursor: pointer;
+      border: 1px solid color-mix(in srgb, var(--warning-text, #b45309) 40%, transparent); background: color-mix(in srgb, var(--warning-text, #b45309) 10%, transparent);
+      color: var(--warning-text, #b45309); font: inherit; font-size: 12.5px; font-weight: 600; }
+    .pf-rt-warn:focus-visible { outline: 2px solid var(--warning-text, #b45309); outline-offset: 2px; }
+    .pf-rt-warnlist { flex: none; padding: 10px 20px 12px; border-bottom: 1px solid var(--pf-line); background: color-mix(in srgb, var(--warning-text, #b45309) 5%, var(--pf-card-bg)); }
+    .pf-rt-warnlist__k { margin: 0 0 6px; font-size: 12.5px; color: var(--text-secondary); }
+    .pf-rt-warnlist ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+    .pf-rt-warnlist__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-rt-warnlist__go { flex: 1 1 260px; min-height: 36px; padding: 6px 8px; text-align: left; cursor: pointer; border: 0; border-radius: 8px; background: transparent;
+      font: inherit; font-size: 13px; color: var(--text-primary); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--pf-line); }
+    .pf-rt-warnlist__go:hover { background: var(--pf-chip-bg); }
+    .pf-rt-warnlist__see { height: 32px; min-height: 32px; padding: 0 10px; }
+    /* A warning's field: flashed + outlined when a warning sends the person there. */
+    .pf-rt-flash { outline: 2px solid var(--color-violet-600, #7c3aed) !important; outline-offset: 2px; border-radius: 10px;
+      background: color-mix(in srgb, var(--color-violet-600, #7c3aed) 12%, transparent) !important;
+      transition: background-color .3s ease, outline-color .3s ease; animation: pf-rt-flash 0.8s ease-out 2; }
+    @keyframes pf-rt-flash { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-violet-600, #7c3aed) 45%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+    @media (prefers-reduced-motion: reduce) { .pf-rt-flash { animation: none; transition: none; } }
+    /* The Preview popup: the page at true A4 width (210mm), scrolling inside the popup. */
+    .pf-rt-pv { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 16px;
+      background: rgba(0, 0, 0, .5); }
+    .pf-rt-pv__panel { width: min(100%, calc(210mm + 48px)); height: min(100%, calc(100dvh - 32px)); }
+    .pf-rt-pv__body { padding: 12px; overflow: auto; align-items: center; }
+    /* Sample: the PDF viewer at A4 width, scrolling its pages. A warning: ONE page at A4 proportions, its spot outlined. */
+    .pf-rt-pv__page { position: relative; width: 210mm; max-width: 100%; flex: 1 1 auto; min-height: 60vh; background: #fff; box-shadow: 0 1px 8px rgba(0,0,0,.25); }
+    .pf-rt-pv__page--one { flex: none; min-height: 0; aspect-ratio: 210 / 297; }
+    .pf-rt-pv__frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+    .pf-rt-pv__spot { position: absolute; border: 2px solid var(--warning-text, #b45309); border-radius: 4px; pointer-events: none;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, .12); animation: pf-rt-flash 1.2s ease-out 3; }
+    .pf-rt-pv__wait { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #64748b; font-size: 13px; }
+    .pf-rt-pv__page.pf-bw iframe { filter: grayscale(1); }
     .pf-rt-panebar { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; padding: 4px 0 10px; }
     .pf-rt-designer-bar { display: flex; flex-direction: column; gap: 6px; }
     /* ── WYSIWYG paper insets: light "print" surfaces on the dark page ── */
@@ -1618,16 +1775,23 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
   }
   @HostListener('window:beforeunload', ['$event'])
   onBeforeUnload(ev: BeforeUnloadEvent) {
-    if (this.dirty() || this.deptPatientDirty()) { ev.preventDefault(); ev.returnValue = ''; }
+    if (this.hasUnsavedChanges()) { ev.preventDefault(); ev.returnValue = ''; }
   }
   // ── Leaving with unsaved changes: the shared "Save your changes?" prompt (HasUnsavedChanges + the settings route guard). ──
   readonly unsavedLabel = 'the report design';
-  hasUnsavedChanges(): boolean { return this.dirty() || this.deptPatientDirty(); }
+  private readonly saveSvc = inject(SettingsSaveService);
+  /** Anything unsaved on the page: the template, a department's strip, or a section's own save (columns, signatories). */
+  hasUnsavedChanges(): boolean { return this.dirty() || this.deptPatientDirty() || this.saveSvc.dirty(); }
   /** Save from the prompt: the template and/or the department's patient strip; true only when everything saved. */
   async saveChanges(): Promise<boolean> {
     let ok = true;
     if (this.dirty()) ok = await this.postTemplate();
     if (ok && this.deptPatientDirty()) ok = await this.postDeptPatient();
+    if (ok && this.saveSvc.dirty()) {
+      this.saveSvc.saveAll();
+      for (let i = 0; i < 100 && (this.saveSvc.saving() || this.saveSvc.dirty()); i++) await new Promise(r => setTimeout(r, 100));
+      ok = !this.saveSvc.dirty();
+    }
     return ok;
   }
 
@@ -1763,7 +1927,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
   readonly issues = signal<ReportIssues>({ count: 0, lines: [] });
   readonly issuesLabel = computed(() => {
     const n = this.issues().count;
-    return `${n} ${n === 1 ? 'issue' : 'issues'}`;
+    return `${n} ${n === 1 ? 'warning' : 'warnings'}`;
   });
   readonly issuesTitle = computed(() => {
     const i = this.issues();
@@ -1804,9 +1968,136 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
     this.toasts.success('Tidied. Press Undo (Ctrl+Z) to take it back; nothing is saved until you press Save.');
   }
 
+  /** Classic chip: the first warning's field. */
   openIssues() {
-    this.setTab('patient');
-    setTimeout(() => document.getElementById('pf-long-text')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
+    const first = this.warnSpots()[0];
+    if (first) { void this.goToWarning(first); return; }
+    void this.goToWarning({ line: '', page: 1, x: 0, y: 0, w: 0, h: 0, target: LONG_TEXT_TARGET });
+  }
+
+  // ── Warnings (owner 2026-11-17: was "Issues") — each one jumps to the field that fixes it, highlighted ──
+  readonly warnOpen = signal(false);
+  readonly warnSpots = computed<ReportIssueSpot[]>(() => {
+    const i = this.issues();
+    return i.spots?.length ? i.spots : i.lines.map(line => ({ line, page: 1, x: 0, y: 0, w: 0, h: 0, target: LONG_TEXT_TARGET }));
+  });
+  /** The warning last sent to its field (the Preview popup outlines it). */
+  readonly activeWarning = signal<ReportIssueSpot | null>(null);
+  /**
+   * Go to a warning's field: open its section (asking first if something is unsaved), wait until the field has
+   * rendered, scroll it into the middle of its card, focus its control and flash an outline on it.
+   * (Owner bug: the old jump scrolled a node that was not there yet, so it landed elsewhere and lit nothing.)
+   */
+  async goToWarning(w: ReportIssueSpot): Promise<boolean> {
+    this.activeWarning.set(w);
+    this.warnOpen.set(false);
+    if (this._tab() !== w.target.tab && !(await this.pickTab(w.target.tab as Tab))) return false;
+    const root = this.host.nativeElement as HTMLElement;
+    for (let i = 0; i < 40; i++) {
+      const anchor = root.querySelector<HTMLElement>('#' + w.target.anchor);
+      if (anchor) {
+        const ctl = anchor.querySelector<HTMLElement>(w.target.focus) ?? anchor;
+        this.scrollBodyTo(anchor);
+        ctl.focus?.({ preventScroll: true, focusVisible: true } as FocusOptions);
+        anchor.classList.remove('pf-rt-flash');
+        void anchor.offsetWidth;
+        anchor.classList.add('pf-rt-flash');
+        setTimeout(() => anchor.classList.remove('pf-rt-flash'), 1600);
+        return true;
+      }
+      await new Promise(r => setTimeout(r, 50));
+    }
+    return false;
+  }
+
+  /** The element the last warning scrolled to (specs). */
+  lastScrolledTo: HTMLElement | null = null;
+  /** Centre `el` in the main card BODY's own scroller — the card head, the card and the band never move. */
+  private scrollBodyTo(el: HTMLElement) {
+    this.lastScrolledTo = el;
+    const scroller = el.closest<HTMLElement>('.pf-rt-main__body') ?? el.closest<HTMLElement>('.pf-rt-work');
+    if (!scroller) return;
+    const r = el.getBoundingClientRect(), sr = scroller.getBoundingClientRect();
+    const top = Math.max(0, scroller.scrollTop + (r.top - sr.top) - Math.max(0, (sr.height - r.height) / 2));
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ top, behavior: still ? 'auto' : 'smooth' });
+    else scroller.scrollTop = top;
+  }
+
+  /** A section pick from the side card. ONE Save covers every section, but switching with unsaved changes asks first
+   *  (owner): Save → saved, then switch; Leave without saving → back to the last saved design, then switch; Stay → no switch. */
+  async pickTab(t: Tab): Promise<boolean> {
+    if (t === this._tab()) return true;
+    if (this.hasUnsavedChanges()) {
+      const go = await confirmLeaveUnsaved(this.dialog, this, this.unsavedLabel);
+      if (!go) return false;
+      if (this.hasUnsavedChanges()) this.discardChanges();
+    }
+    this.setTab(t);
+    return true;
+  }
+  /** Back to the last saved design (and the department strip as saved). */
+  discardChanges() {
+    this.discardTemplate();
+    this.discardDept();
+    if (this.saveSvc.dirty()) this.saveSvc.discardAll();   // sections' own saves (columns, signatories)
+  }
+  discardTemplate() { try { if (this.dirty()) this._tpl.set(JSON.parse(this.savedJson())); } catch { /* keep */ } }
+  discardDept() { if (this.deptPatientDirty()) this.onPatientScopeChange(this.patientScope()); }
+
+  // ── Preview popup (owner 2026-11-17: no live preview; Preview / Alt+P opens the page at A4 size) ──
+  readonly previewOpen = signal(false);
+  readonly pvSpot = signal<ReportIssueSpot | null>(null);
+  private readonly pvStressUrl = signal<string | null>(null);
+  private pvReturnFocus: HTMLElement | null = null;
+  readonly pvSafe = computed<SafeResourceUrl | null>(() => {
+    const raw = this.pvSpot() ? this.pvStressUrl() : this.rawPreviewUrl();
+    if (!raw) return null;
+    const page = this.pvSpot()?.page ?? 1;
+    return this.sanitizer.bypassSecurityTrustResourceUrl(`${raw}#toolbar=0&navpanes=0&view=FitH&page=${page}`);
+  });
+  /** Open the popup; with a warning, on the long-names page with its spot outlined. Closing returns focus. */
+  async openPreview(spot?: ReportIssueSpot) {
+    this.pvReturnFocus = (typeof document !== 'undefined' ? document.activeElement : null) as HTMLElement | null;
+    this.pvSpot.set(spot ?? null);
+    this.warnOpen.set(false);
+    this.previewOpen.set(true);
+    if (!this.rawPreviewUrl()) void this.renderPreview(this._tpl());
+    if (spot) await this.renderStress();
+    setTimeout(() => (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>('[data-testid="rt-preview-close"]')?.focus(), 30);
+  }
+  closePreview() {
+    this.previewOpen.set(false);
+    this.pvSpot.set(null);
+    const back = this.pvReturnFocus;
+    this.pvReturnFocus = null;
+    setTimeout(() => back?.focus?.({ preventScroll: false }), 0);
+  }
+  @HostListener('document:keydown', ['$event'])
+  onPreviewKey(ev: KeyboardEvent) {
+    if (ev.altKey && !ev.ctrlKey && !ev.metaKey && ev.code === 'KeyP' && !this.notesOnly()) {
+      ev.preventDefault();
+      if (this.previewOpen()) this.closePreview(); else void this.openPreview(this.activeWarning() ?? undefined);
+    } else if (ev.key === 'Escape' && this.previewOpen()) {
+      this.closePreview();
+    }
+  }
+  /** The long-names render the warnings were measured on (so the outlined spot shows the real overlap). */
+  private async renderStress() {
+    try {
+      const baseInput = {
+        report: { id: 'stress-' + Date.now(), type: 'final', createdAt: new Date().toISOString(), data: this.sampleSnapshot() },
+        template: this.tpl(),
+        resolvedLayouts: this.buildPreviewLayouts(),
+      };
+      const cached = this.imageCache();
+      const imageCache = Object.keys(cached).length ? cached : await preloadReportImages(baseInput, this.platform.getApiUrl());
+      const input = stressInput({ ...baseInput, imageCache } as ReportPdfInput);
+      const doc = buildReportPdf(input);
+      const prev = this.pvStressUrl();
+      if (prev) URL.revokeObjectURL(prev);
+      this.pvStressUrl.set(URL.createObjectURL(doc.output('blob')));
+    } catch (e) { console.error('stress preview failed', e); }
   }
 
   // ── Report theme (report-theme.ts) — stored in the template metadata ──

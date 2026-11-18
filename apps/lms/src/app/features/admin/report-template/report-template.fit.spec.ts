@@ -53,12 +53,12 @@ describe('Report designer — Long text (text fitting)', () => {
     expect(m.meta().reportStyle).toBeUndefined();
   });
 
-  it('the Issues chip opens the Patient strip tab', () => {
+  it('the classic Warnings chip sends the person to the first warning\'s field', () => {
     const m = make(null, { count: 3, lines: ['a runs into b'] });
-    vi.useFakeTimers();
+    const go = vi.fn(async () => true);
+    m.self.warnSpots = () => [{ line: 'a runs into b', page: 1, x: 0, y: 0, w: 0, h: 0, target: { tab: 'patient', anchor: 'pf-long-text', focus: '' } }];
+    m.self.goToWarning = go;
     proto.openIssues.call(m.self);
-    expect(m.self.tab).toBe('patient');
-    vi.runAllTimers();
-    vi.useRealTimers();
+    expect(go).toHaveBeenCalledWith(expect.objectContaining({ line: 'a runs into b' }));
   });
 });

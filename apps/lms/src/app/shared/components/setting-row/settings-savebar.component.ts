@@ -85,22 +85,25 @@ export class SettingsSavebarComponent {
         @if (svc.dirty() || svc.saving()) {
           <span class="pf-ssv__state" role="status" data-testid="unsaved-state"><span class="pf-ssv__dot" aria-hidden="true"></span>Unsaved changes</span>
           @if (svc.canDiscard()) {
-            <button type="button" class="pf-btn pf-btn--tertiary pf-ssv__btn" data-testid="savebar-discard" [disabled]="svc.saving()" (click)="svc.discardAll()">Discard</button>
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-ssv__discard press" data-testid="savebar-discard" [disabled]="svc.saving()" (click)="svc.discardAll()">Discard</button>
           }
         }
-        <button type="button" class="pf-btn pf-btn--secondary pf-ssv__btn pf-ssv__save" [attr.data-testid]="svc.testId()"
-                [disabled]="svc.saving() || !svc.canSave()" [pfBusy]="svc.saving()" pfBusyLabel="Saving…" (click)="svc.saveAll()">{{ svc.saving() ? 'Saving…' : 'Save' }}</button>
+        <!-- The band's ONE primary (owner 2026-11-17: Save is the violet primary, normal band size, every Settings page). -->
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-ssv__save press" [attr.data-testid]="svc.testId()" aria-label="Save"
+                [disabled]="svc.saving() || !svc.canSave()" [pfBusy]="svc.saving()" pfBusyLabel="Saving…" (click)="svc.saveAll()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+          {{ svc.saving() ? 'Saving…' : 'Save' }}
+        </button>
       </div>
     }
   `,
   styles: [`
     :host { display: contents; }
-    .pf-ssv { display: inline-flex; align-items: center; gap: 8px; }
-    .pf-ssv__state { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
+    .pf-ssv { display: inline-flex; align-items: center; gap: 10px; }
+    .pf-ssv__state { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
     .pf-ssv__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
-    .pf-ssv__btn { height: 38px; min-height: 38px; padding: 0 16px; }
-    .pf-ssv__save { min-width: 84px; }
-    @media (max-width: 640px) { .pf-ssv__state { display: none; } .pf-ssv__btn { height: 40px; min-height: 40px; padding: 0 12px; } }
+    .pf-ssv__save { min-width: 96px; justify-content: center; }
+    @media (max-width: 640px) { .pf-ssv__state { display: none; } }
   `],
 })
 export class SettingsSaveComponent {

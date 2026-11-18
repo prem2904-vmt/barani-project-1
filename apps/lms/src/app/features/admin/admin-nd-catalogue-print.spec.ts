@@ -35,6 +35,9 @@ const hygiene = (el: HTMLElement) => {
 const tabBtn = (el: HTMLElement, label: string) =>
   Array.from(el.querySelectorAll<HTMLButtonElement>('pf-hero-band pf-segmented button'))
     .find(b => (b.getAttribute('aria-label') ?? '') === label)!;
+/** Report design: the sections are the LEFT side card (owner 2026-11-17). */
+const rtNav = (el: HTMLElement, label: string) =>
+  Array.from(el.querySelectorAll<HTMLButtonElement>('[data-testid="rt-nav"] .pf-rt-nav__item')).find(b => b.textContent?.trim() === label)!;
 
 describe('ND audit — Report designer', () => {
   const make = () => renderBandPage(ReportTemplateComponent, {
@@ -42,15 +45,16 @@ describe('ND audit — Report designer', () => {
       : url === '/api/tenants/departments' ? [{ id: 'd1', name: 'Haematology' }]
       : url.startsWith('/api/workflows/') ? { configJson: '{}' } : null,
   });
-  it('one primary on every tab; slate switches; neutral thumbs; preview is an pf-card', () => {
+  it('no primary on any section; slate switches; neutral thumbs; no live preview — Preview opens on demand', () => {
     const p = make();
     for (const t of ['Letterhead', 'Patient strip', 'Results table', 'Footer']) {
-      tabBtn(p.el, t).click();
+      p.cmp.setTab(({ 'Letterhead': 'letterhead', 'Patient strip': 'patient', 'Results table': 'table', 'Footer': 'footer' } as Record<string, string>)[t]);
       p.f.detectChanges();
+      expect(rtNav(p.el, t).getAttribute('aria-selected'), t).toBe('true');
       expect(primaries(p.el).map(b => b.textContent?.trim()), t).toEqual([]);   // Settings: no violet primary; Save is the pane's bar
       hygiene(p.el);
     }
-    tabBtn(p.el, 'Letterhead').click();
+    p.cmp.setTab('letterhead');
     p.f.detectChanges();
     const sw = p.el.querySelector<HTMLButtonElement>('.pf-toggle[role="switch"][aria-label="NABL accredited"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('false');
@@ -58,11 +62,10 @@ describe('ND audit — Report designer', () => {
     expect(p.cmp.tpl().nablAccredited).toBe(true);
     // Header styles: neutral selected tile in the designer's side card.
     expect(p.el.querySelector('.pf-rhe-preset.pf-tile-sel[aria-checked="true"]')).not.toBeNull();
-    tabBtn(p.el, 'Patient strip').click();
+    p.cmp.setTab('patient');
     p.f.detectChanges();
-    const aside = p.el.querySelector('.pf-rt-aside')!;
-    expect(aside.classList.contains('pf-card')).toBe(true);
-    expect(aside.querySelector('.pf-card__label')!.textContent).toContain('Live preview');
+    expect(p.el.querySelector('.pf-rt-aside')).toBeNull();
+    expect(p.el.querySelector('.pf-rt-main.pf-card [data-testid="rt-preview"].pf-btn--secondary')).not.toBeNull();
   });
 });
 

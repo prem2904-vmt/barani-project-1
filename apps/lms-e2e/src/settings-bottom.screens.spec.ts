@@ -74,6 +74,7 @@ const PAGES: [string, string][] = [
   ['lab results', '/admin/lab/results'],
   ['lab front desk', '/admin/lab/front-desk'],
   ['lab alerts', '/admin/lab/alerts'],
+  ['report design', '/admin/reports'],
   ['test master', '/admin/tests'],
   ['option groups', '/admin/tests?view=option-groups'],
   ['microbiology', '/admin/tests?view=microbiology'],
