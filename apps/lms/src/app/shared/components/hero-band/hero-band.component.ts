@@ -7,6 +7,8 @@ import { SETTINGS_HOST } from '../../utils/settings-host';
 import { PfKeysDirective } from '../numpad/pf-keys.directive';
 import { SamplePresetDirective } from '../../directives/sample-preset.directive';
 import { PfKeysKind } from '../numpad/pf-keys-layouts';
+import { SettingsSaveComponent } from '../setting-row/settings-savebar.component';
+import { SettingsSaveService } from '../../utils/settings-save';
 
 /**
  * Hero band — the designer's common screen header (Figma: "Prefrontal LMS —
@@ -40,7 +42,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
 @Component({
   selector: 'pf-hero-band',
   standalone: true,
-  imports: [PfKeysDirective, SamplePresetDirective, NgTemplateOutlet],
+  imports: [PfKeysDirective, SamplePresetDirective, NgTemplateOutlet, SettingsSaveComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- HOSTED in the Settings shell: nothing renders here; the shell's band shows this page's actions (and search). -->
@@ -107,7 +109,7 @@ import { PfKeysKind } from '../numpad/pf-keys-layouts';
           }
         </div>
         @if (slim()) { <div class="pf-hb__center"><ng-content select="[band-center]"></ng-content></div> }
-        <div class="pf-hb__actions">@if (shellBand() && host?.status(); as pageStatus) {<ng-container *ngTemplateOutlet="pageStatus"></ng-container>}<ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
+        <div class="pf-hb__actions">@if (shellBand() && host?.status(); as pageStatus) {<ng-container *ngTemplateOutlet="pageStatus"></ng-container>}<ng-container *ngTemplateOutlet="actionsTpl"></ng-container><pf-settings-save></pf-settings-save></div>
       </div>
 
       @if (!slim()) {
@@ -419,6 +421,18 @@ export class HeroBandComponent {
   readonly pageSearch = input<TemplateRef<unknown> | null>(null);
   /** A hosted page's band: renders nothing in place; hands the shell its actions (and its search, unless tabs-only). */
   protected readonly hosted = computed(() => !!this.host && !this.shellBand());
+  /** A visible (non-hosted) band hosts the page's Save in its corner: count it while it can. */
+  private readonly saveBand = (() => {
+    const svc = inject(SettingsSaveService);
+    const ref = inject(DestroyRef);
+    let off: (() => void) | null = null;
+    effect(() => {
+      const visible = !this.hosted();
+      untracked(() => { if (visible && !off) off = svc.addBand(); else if (!visible && off) { off(); off = null; } });
+    });
+    ref.onDestroy(() => off?.());
+    return null;
+  })();
   private readonly actionsTpl = viewChild.required<TemplateRef<unknown>>('actionsTpl');
   private readonly fieldTpl = viewChild.required<TemplateRef<unknown>>('fieldTpl');
   private readonly registerWithShell = (() => {

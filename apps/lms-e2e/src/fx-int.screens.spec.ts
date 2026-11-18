@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { openEditorSection } from './support/test-editor-nav';
 import { test, expect, shotsDir, expectLayout, formFactor } from './support/form-factor';
 import { deskTab } from './support/frontdesk';
 import * as os from 'node:os';
@@ -292,7 +293,7 @@ test('c. test editor: free-text test shows Unit + Reference', async ({ page }) =
   await expectLayout(page, 'test editor');
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${OUT}/c1-test-editor-first-view.png` });
-  await page.getByRole('tab', { name: /Result entry/ }).or(page.getByText('Result entry', { exact: true })).first().click();
+  await openEditorSection(page, 'results', /Result entry/);
   await page.waitForTimeout(600);
   const unit = page.locator('.pf-uf__lbl', { hasText: 'Unit' }).first();
   try { await expect(unit).toBeVisible({ timeout: 15_000 }); } catch (e) { await page.screenshot({ path: `${OUT}/DEBUG-c.png` }); throw e; }

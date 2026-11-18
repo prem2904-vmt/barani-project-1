@@ -23,10 +23,11 @@
                       (valueChange)="setView($event)"></pf-segmented>
       </ng-container>
       <ng-container band-actions>
-        @if (pendingOn()) {
+        @if (assistantOn()) {
           <!-- Beta `assistant` + Cortex switch (dev only): read a rate card → suggestions wait in Pending. -->
           <pf-assistant-button feature="test_master_assistant" label="Read a rate card" [expanded]="assistantOpen()" (pressed)="assistantOpen.set(true)"></pf-assistant-button>
         }
+        @if (!contributorMode) {
         <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="restoring()"
                 [pfBusy]="restoring()" pfBusyLabel="Restoring…" (click)="restoreDefaults()" title="Restore to default" aria-label="Restore to default">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -35,6 +36,7 @@
           </svg>
           {{ restoring() ? 'Restoring…' : 'Restore to default' }}
         </button>
+        }
         @if (dirtyCount() > 0) {
           <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="saving()"
                   (click)="discardChanges()" title="Discard changes" aria-label="Discard changes">
@@ -45,12 +47,12 @@
             Discard
           </button>
           <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()"
-                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveAll()" title="Save changes" aria-label="Save changes">
+                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveAll()" [title]="sendWord" [attr.aria-label]="sendWord">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
             </svg>
-            Save changes ({{ dirtyCount() }})
+            {{ sendWord }} ({{ dirtyCount() }})
           </button>
         }
         @if (pricingView() && pricingDirty() > 0) {
@@ -66,15 +68,15 @@
             Discard
           </button>
           <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-tm-pricesave press" [disabled]="pricingSaving()"
-                  [pfBusy]="pricingSaving()" pfBusyLabel="Saving…" (click)="pricingTable()?.save()" title="Save price changes" aria-label="Save price changes">
+                  [pfBusy]="pricingSaving()" pfBusyLabel="Saving…" (click)="pricingTable()?.save()" [title]="sendWord" [attr.aria-label]="sendWord">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
             </svg>
-            {{ pricingSaving() ? 'Saving…' : 'Save changes' }}
+            {{ pricingSaving() ? (contributorMode ? 'Sending…' : 'Saving…') : sendWord }}
           </button>
         }
-        @if (ogView()) {
+        @if (ogView() && !contributorMode) {
           <!-- ONE primary: while grid edits wait "Save changes" is it; while a
                panel editor is open, that editor's save is it. -->
           <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!bandPrimaryElsewhere()"
@@ -86,7 +88,7 @@
             </svg>
             New option group
           </button>
-        } @else {
+        } @else if (!ogView() && !(microView() && contributorMode)) {
           <button type="button" class="pf-hb-btn press" [class.pf-hb-btn--primary]="!bandPrimaryElsewhere()"
                   [class.pf-hb-btn--ghost]="bandPrimaryElsewhere()" (click)="openCreate()"
                   title="Create" aria-label="Create">
@@ -105,9 +107,11 @@
     title="Test Master"
     subtitle="Tests, profiles and packages from the Admin Test Master — edit one to keep your own version, price it inline.">
     <div actions class="flex flex-wrap items-center gap-2 justify-end">
+      @if (!contributorMode) {
       <pf-touch-btn size="sm" variant="ghost" [disabled]="restoring()" [busy]="restoring()" busyLabel="Restoring…" (pressed)="restoreDefaults()">
         {{ restoring() ? 'Restoring…' : 'Restore to default' }}
       </pf-touch-btn>
+      }
       @if (dirtyCount() > 0) {
         <pf-touch-btn size="sm" variant="secondary" [disabled]="saving()" (pressed)="discardChanges()">Discard</pf-touch-btn>
         <pf-touch-btn size="sm" variant="primary" [disabled]="saving()" [busy]="saving()" busyLabel="Saving…" (pressed)="saveAll()">Save changes ({{ dirtyCount() }})</pf-touch-btn>
@@ -163,7 +167,7 @@
 
   <!-- Everything under the band: the grid view FILLS the body (the grid
        scrolls itself); the side views scroll the body. -->
-  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView() || ogView() || pendingView()">
+  <div class="pf-band-body pf-tm-body" [class.pf-band-body--fill]="gridView() || ogView() || microView() || pricingView() || pendingView()">
   @if (pendingView()) {
     <!-- Pending changes (beta assistant): suggested by Cortex / an outside
          assistant, reviewed ONE BY ONE — no bulk approve anywhere. -->
@@ -357,7 +361,7 @@
   </ng-template>
   }
   </div>
-  @if (pendingOn()) {
+  @if (assistantOn()) {
     <pf-assistant-panel [open]="assistantOpen()" [context]="asstContext()" (closed)="assistantOpen.set(false)"
                         (openPending)="onAssistantOpenPending($event)"></pf-assistant-panel>
   }

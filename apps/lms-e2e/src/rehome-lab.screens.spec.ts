@@ -136,24 +136,25 @@ test.describe('lab settings pages', () => {
     await expect(page).toHaveURL(/\/admin\/reports\?tab=sending/, { timeout: 20_000 });
   });
 
-  test('Report design: ONE Back press returns to Settings after the live preview re-renders', async ({ page }) => {
-    // Owner 2026-11-17: Back needed several presses — every preview re-render re-pointed the iframe's src,
-    // and each iframe navigation is a session-history entry. Preview frames are now keyed per URL.
+  test('Report design: ONE Back press returns to Settings after the Preview opens a few times', async ({ page }) => {
+    // Owner 2026-11-17: Back needed several presses — every preview render re-pointed the iframe's src, and each
+    // iframe navigation is a session-history entry. There is no live preview now; the Preview popup's frame is keyed
+    // per URL, so opening it (and switching sections) adds no history entry.
     await go(page, '/admin?section=lab');
     const tile = page.getByText('Report design', { exact: true }).locator('visible=true').first();
     await expect(tile).toBeVisible({ timeout: 60_000 });
     const settingsUrl = page.url();
     await tile.click();
     await expect(page).toHaveURL(/\/admin\/reports/, { timeout: 60_000 });
-    // Letterhead (the default tab) draws its own canvas; the PDF preview lives on the other tabs.
-    await vis(page, 'pf-hero-band').getByText('Patient strip', { exact: true }).click();
-    await expect(page.locator('iframe.pf-pdf-iframe').first()).toBeAttached({ timeout: 60_000 });
-    // Change a few options: each one re-renders the preview.
-    const sw = page.locator('.pf-rt-work [role="switch"]').locator('visible=true');
-    const n = Math.min(3, await sw.count());
-    expect(n, 'some report options to change').toBeGreaterThan(0);
-    for (let i = 0; i < n; i++) { await sw.nth(i).click(); await page.waitForTimeout(900); }
-    await expect(page.locator('iframe.pf-pdf-iframe')).toHaveCount(1);
+    await vis(page, '[data-sec="patient"]').click();
+    await expect(vis(page, '[data-testid="rt-main-head"]')).toContainText('Patient strip', { timeout: 30_000 });
+    for (let i = 0; i < 3; i++) {
+      await vis(page, '[data-testid="rt-preview"]').click();
+      await expect(page.locator('[data-testid="rt-preview-popup"] iframe')).toHaveCount(1, { timeout: 30_000 });
+      await page.waitForTimeout(700);
+      await vis(page, '[data-testid="rt-preview-close"]').click();
+    }
+    await vis(page, '[data-sec="footer"]').click();
     await page.goBack();
     await expect(page, 'one Back press leaves Report design').not.toHaveURL(/\/admin\/reports/, { timeout: 10_000 });
     expect(new URL(page.url()).pathname).toBe(new URL(settingsUrl).pathname);

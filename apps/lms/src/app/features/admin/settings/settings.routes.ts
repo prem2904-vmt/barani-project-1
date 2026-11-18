@@ -5,7 +5,7 @@ import { routeGuards } from '../../../core/auth/route-guards';
 import { OPD_ADMIN_ROUTES } from '../../opd/opd.routes';
 import { casesheetGuard } from '../../casesheets/shared/casesheet.guard';
 import { unsavedChangesGuard } from '../../../shared/utils/unsaved-changes';
-import { LEGACY_SECTION, SETTINGS_FULL_SCREEN_PATHS, SETTINGS_PATHS as P, rehome } from './settings-map';
+import { LEGACY_SECTION, SETTINGS_FULL_SCREEN_PATHS, SETTINGS_PATHS as P, SETTINGS_SECTIONS, rehome } from './settings-map';
 
 /**
  * THE Settings route table. Every screen that opens INSIDE the Settings shell (the two-panel frame with the
@@ -83,7 +83,7 @@ const files = () => import('../../files/files-settings.page').then((m) => m.File
 /** The case-sheet admin routes the shell hosts — none: case sheets are full-screen pages (DESIGN-V2 rule 2). */
 export const SHELL_HOSTED_SHEET_PATHS: readonly string[] = [];
 /** OPD / Pharmacy admin routes the shell hosts (card-style pages); every other OPD admin route is a full page. */
-const OPD_HOSTED: ReadonlySet<string> = new Set([P.opdSettings, P.pharmacy, P.opdFrontDesk].map(strip));
+const OPD_HOSTED: ReadonlySet<string> = new Set([P.opdSettings, P.pharmacy, P.opdFrontDesk, P.opdNumbers, P.pharmacyNumbers].map(strip));
 /** OPD admin routes that stay at the top level (full-screen pages and their editors). */
 export const OPD_FULL_SCREEN_ADMIN: ReadonlySet<string> = new Set(
   OPD_ADMIN_ROUTES.map((r) => r.path ?? '').filter((p) => !OPD_HOSTED.has(p)),
@@ -124,7 +124,7 @@ const ALL_SETTINGS_PAGES: Routes = [
   // ── Organization ──
   page(P.orgProfile, orgProfile),
   page(P.branches, branches),
-  page(P.orgNumbers, organization, { data: { orgTabs: ['patient', 'order'] } }),
+  page(P.orgNumbers, organization, { data: { orgTabs: ['patient'] } }),
   page(P.users, users),
   page(P.billing, billing),
   page(P.aiConnectors, aiConnectors, { before: [betaGuard('mcp')] }),
@@ -146,8 +146,37 @@ export const SETTINGS_SHELL_CHILDREN: Routes = [
  * at the top level beside the shell; the band's back chevron climbs to their Settings section (settingsParents).
  * A setting made only of such pages (Outsourcing, Analyzers and bridges, Work steps and forms) forwards to its first.
  */
+/**
+ * A section made of ONE full-screen setting (People and access, Branches, Connected apps, Files…) renders that page
+ * INLINE in the Settings overview (new design). Its own path no longer opens a second, standalone copy of the page:
+ * it redirects to the overview section with the same query (?tab=, ?edit=…), so a back from an editor — or an old
+ * link — always lands on the new-design page, in one press (owner 2026-11-17).
+ */
+export const INLINE_SECTION_OF: ReadonlyMap<string, string> = new Map(
+  SETTINGS_SECTIONS.filter((sec) => sec.items.length === 1 && SETTINGS_FULL_SCREEN_PATHS.has(sec.items[0].path))
+    .map((sec) => [sec.items[0].path, sec.id] as const),
+);
+const isInline = (r: Route) => INLINE_SECTION_OF.has('/' + (r.path ?? ''));
+/** The page routes of those inline sections — the overview loads the component from here. */
+export const INLINE_PAGE_ROUTES: Routes = ALL_SETTINGS_PAGES.filter((r) => isFull(r) && isInline(r));
+/** Same guards as the page (refused stays refused), then the hop to the overview section, query kept. */
+const toInlineSection = (r: Route): Route => ({
+  path: r.path,
+  canActivate: [
+    ...(r.canActivate ?? []),
+    ((_route, state) => {
+      const tree = inject(Router).parseUrl(state.url);
+      return inject(Router).createUrlTree(['/admin'], {
+        queryParams: { ...tree.queryParams, section: INLINE_SECTION_OF.get('/' + (r.path ?? '')) },
+      });
+    }) as CanActivateFn,
+  ],
+  loadComponent: blank,
+});
+
 export const SETTINGS_FULL_PAGE_ROUTES: Routes = [
-  ...ALL_SETTINGS_PAGES.filter(isFull),
+  ...ALL_SETTINGS_PAGES.filter((r) => isFull(r) && !isInline(r)),
+  ...INLINE_PAGE_ROUTES.map(toInlineSection),
   forward(P.labOutsourcing, P.referralLabs),
   forward(P.labAnalyzers, P.instruments),
   forward(P.labWorkSteps, P.process),

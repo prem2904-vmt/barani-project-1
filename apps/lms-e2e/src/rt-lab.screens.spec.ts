@@ -1,4 +1,5 @@
 import type { Page, Request } from '@playwright/test';
+import { openEditorSection } from './support/test-editor-nav';
 import { test, expect, shotsDir, expectLayout, expectFitsWidth, projectName, isPhone } from './support/form-factor';
 import { deskTab } from './support/frontdesk';
 import * as os from 'node:os';
@@ -337,7 +338,7 @@ test.describe('OPS-117 test editor', () => {
     await page.goto('/admin/tests/t1/edit?type=individual');
     await expect(page.getByText('Written Test').first()).toBeVisible({ timeout: 60_000 });
     await expectLayout(page, 'test editor');
-    await page.getByRole('tab', { name: /Result entry/ }).or(page.getByText('Result entry', { exact: true })).first().click();
+    await openEditorSection(page, 'results', /Result entry/);
     await expect(page.locator('.pf-uf__lbl', { hasText: 'Unit' }).first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('A number rule').first()).toBeVisible();
     const ref = page.getByLabel('Reference text').first();
@@ -351,7 +352,7 @@ test.describe('OPS-117 test editor', () => {
   test('choice test has no Unit picker', async ({ page }) => {
     await page.goto('/admin/tests/t2/edit?type=individual');
     await expect(page.getByText('Choice Test').first()).toBeVisible({ timeout: 60_000 });
-    await page.getByRole('tab', { name: /Result entry/ }).or(page.getByText('Result entry', { exact: true })).first().click();
+    await openEditorSection(page, 'results', /Result entry/);
     await expect(page.getByText('What will the tech enter?').first()).toBeVisible({ timeout: 15_000 });
     await expect(page.locator('.pf-uf__lbl', { hasText: /^Unit$/ })).toHaveCount(0);
   });

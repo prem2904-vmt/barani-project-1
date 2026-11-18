@@ -226,9 +226,63 @@ export function rememberedAppName(clientId: string): string | null {
   } catch { return null; }
 }
 
-/** The three Claude steps on the settings screen. */
-export const CLAUDE_STEPS: readonly string[] = [
-  'In Claude, open Settings → Connectors and choose “Add custom connector”.',
-  'Name it “Prefrontal”, paste the connector address above and press Add.',
-  'Press Connect, sign in with your Prefrontal account and choose Allow.',
+/** One app the lab can connect. `{url}` in a step is replaced with the lab's connector address. */
+export interface ConnectApp {
+  id: string;
+  name: string;
+  /** One plain line under "Steps" (who can do this / where). */
+  note: string;
+  steps: readonly string[];
+}
+
+/** Apps that can connect, with each one's own steps (the address is the same for all). Plain words for lab staff. */
+export const CONNECT_APPS: readonly ConnectApp[] = [
+  { id: 'claude', name: 'Claude', note: 'On a Team or Enterprise plan an owner adds it once; everyone else just presses Connect.',
+    steps: [
+      'In Claude, open Customize → Connectors and choose + Add, then Add custom connector.',
+      'Name it “Prefrontal”, paste the connector address above and press Continue, then Add.',
+      'Press Connect, sign in with your Prefrontal account and choose Allow.',
+      'Team or Enterprise: an owner first opens Organization settings → Connectors, chooses Add → Custom → Web and enters the same name and address.',
+    ] },
+  { id: 'chatgpt', name: 'ChatGPT', note: 'Use ChatGPT in a web browser. Your ChatGPT plan or workspace must allow custom connectors.',
+    steps: [
+      'In ChatGPT on the web, open chatgpt.com/plugins and press the plus button, then Add custom MCP server.',
+      'Name it “Prefrontal”, paste the connector address above as the Server URL, and set sign-in to OAuth.',
+      'Read the warning, choose “I understand and want to continue”, then Create as a plugin.',
+      'Install it, sign in with your Prefrontal account and choose Allow. In a chat, type @ and pick Prefrontal.',
+    ] },
+  { id: 'copilot', name: 'Microsoft Copilot', note: 'Everyday Microsoft Copilot has no place to add one. It is added to an agent in Copilot Studio, usually by an admin.',
+    steps: [
+      'In Copilot Studio, open your agent, go to Tools, press Add a tool, then New tool, then Model Context Protocol.',
+      'Enter a name such as “Prefrontal”, a short description, and paste the connector address above as the Server URL.',
+      'Under Authentication choose OAuth 2.0, then Dynamic discovery, and press Create.',
+      'Press Next, then Create a new connection, sign in with your Prefrontal account and choose Allow. Finish with Add to agent.',
+    ] },
+  { id: 'codex', name: 'OpenAI Codex', note: 'Codex runs in a terminal window on your computer.',
+    steps: [
+      'Open a terminal and run: codex mcp add prefrontal --url {url}',
+      'Sign in by running: codex mcp login prefrontal',
+      'A browser window opens. Sign in with your Prefrontal account and choose Allow.',
+      'Check it with: codex mcp list. You can also add it by hand in the file ~/.codex/config.toml under a [mcp_servers.prefrontal] heading with url = "{url}".',
+    ] },
+  { id: 'gemini', name: 'Gemini', note: 'This works in Gemini CLI, Google’s command-line tool, on your computer.',
+    steps: [
+      'Open a terminal and run: gemini mcp add --transport http -s user prefrontal {url}',
+      'Start Gemini CLI and type: /mcp auth prefrontal',
+      'A browser window opens. Sign in with your Prefrontal account and choose Allow.',
+      'Type /mcp to check that Prefrontal is connected. You can also add it by hand in ~/.gemini/settings.json under mcpServers, with "httpUrl": "{url}".',
+    ] },
+  { id: 'cursor', name: 'Cursor', note: 'You add it in Cursor’s mcp.json file.',
+    steps: [
+      'Open the file ~/.cursor/mcp.json on your computer (create it if it is missing). Use .cursor/mcp.json inside a project to connect for that project only.',
+      'Add an entry named “prefrontal” with the connector address as its url: {"mcpServers": {"prefrontal": {"url": "{url}"}}}',
+      'Save the file. Cursor asks you to sign in: use your Prefrontal account and choose Allow.',
+    ] },
+  { id: 'other', name: 'Other (any app that supports MCP connectors)', note: 'Look for “connectors”, “tools” or “MCP” in the app’s settings.',
+    steps: [
+      'In the app, find where you add a connector or a remote MCP server.',
+      'Choose a remote server that works over the web (HTTP), then paste the connector address above.',
+      'If it asks how to sign in, choose OAuth and leave any key or client fields empty.',
+      'Sign in with your Prefrontal account and choose Allow.',
+    ] },
 ];

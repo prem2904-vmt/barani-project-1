@@ -38,7 +38,7 @@ export function hygiene(el: HTMLElement) {
 }
 /** Visible primaries (the classic header stays in code as .pf-classic-only). */
 export const primaries = (el: HTMLElement) =>
-  Array.from(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn .v-primary'))
+  Array.from(el.querySelectorAll('.pf-hb-btn--primary:not(.pf-ssv__save), .pf-btn--primary, pf-touch-btn .v-primary'))   // the band-corner Save (.pf-ssv__save) is the ONE allowed primary (owner 2026-11-17)
     .filter(b => !b.closest('.pf-classic-only')).length;
 
 describe('ND audit D — settings pages (Microbiology, OPD settings)', () => {
@@ -299,7 +299,7 @@ describe('ND audit D — Inventory', () => {
     const secs = Array.from(side.querySelectorAll('.pf-inv-sections [role="radio"]')).map(b => b.textContent!.trim());
     expect(secs).toEqual(['Batches', 'Receive', 'Label', 'Ledger']);
     expect(primaries(p.el)).toBe(1);
-    expect(side.querySelector('.pf-card__foot .pf-btn--primary')!.textContent).toContain('Receive stock');
+    expect(side.querySelector('.pf-card__head .pf-btn--primary')!.textContent).toContain('Receive stock');
     expect(p.actions()[0].className).toContain('pf-hb-btn--ghost');
     expect(p.api.get).toHaveBeenCalledWith('/api/inventory/items/i1/batches');
 
@@ -308,7 +308,7 @@ describe('ND audit D — Inventory', () => {
     expect(side.querySelector('pf-date')).not.toBeNull();
     expect(side.querySelector('input[type="date"]:not(.pf-date__native)')).toBeNull();
     expect(primaries(p.el)).toBe(1);
-    expect(side.querySelector('.pf-card__foot .pf-btn--primary')!.textContent).toContain('Add stock');
+    expect(side.querySelector('.pf-card__head .pf-btn--primary')!.textContent).toContain('Add stock');
 
     // Ledger reads the item ledger endpoint.
     p.cmp.setSection(items[0], 'ledger'); p.f.detectChanges();

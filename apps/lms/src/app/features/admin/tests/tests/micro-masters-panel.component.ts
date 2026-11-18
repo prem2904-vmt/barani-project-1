@@ -11,6 +11,7 @@ import { gridThemeDark, gridThemeLight } from './grid-theme';
 import { BusyDirective } from '../../../../shared/directives/busy.directive';
 import { SkeletonTableComponent } from '../../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../../shared/utils/min-duration';
+import { TM_NARROW, TM_TWO_PANEL_STYLES, mediaSignal } from './tm-two-panel';
 
 interface MicroOrganism {
   code: string; name: string; shortName: string | null; group: string | null;
@@ -68,42 +69,57 @@ interface EdModel {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-mm">
-      <div class="pf-mm__bar">
-        @if (bandQuery() === null) {
+      @if (bandQuery() === null) {
+        <!-- Classic only: Test Master's band pill carries the search in the new design. -->
+        <div class="pf-mm__bar">
           <input type="search" class="pf-input pf-mm__search" [placeholder]="'Search ' + label(section()) + '…'" [attr.aria-label]="'Search ' + label(section())"
                  [ngModel]="query()" (ngModelChange)="query.set($event)" />
+        </div>
+      }
+
+      <!-- Test Master's two-panel (owner 2026-11-17): LEFT the Masters side card (full height), RIGHT the main
+           card (head: icon + master + count + note) with the grid flush to the bottom. A row's detail / editor
+           is a third card on wide screens, a sheet below 1280px. Narrow: the masters pick sits in the head. -->
+      <div class="pf-2p pf-mm__cols" [class.pf-2p--narrow]="narrow()" [class.pf-mm__cols--detail]="hasDetail() && !detailSheet()">
+        @if (!narrow()) {
+          <aside class="pf-card pf-2p__side pf-mm__rail" aria-label="Masters" data-testid="mm-side">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+              <span class="pf-card__label">Masters</span>
+            </header>
+            <ul class="pf-card__body pf-side-list pf-mm__list">
+              @for (s of sections; track s.key) {
+                <li>
+                  <button type="button" class="pf-side-item pf-mm__item" [attr.aria-pressed]="section() === s.key"
+                          [title]="s.sub" (click)="select(s.key)">
+                    <span class="pf-mm__iname">{{ s.title }}</span>
+                    <span class="pf-mm__icount pf-num">{{ countOf(s.key) }}</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          </aside>
         }
-        <span class="pf-mm__count"><span class="pf-num">{{ shownCount() }}</span> of <span class="pf-num">{{ totalCount() }}</span> {{ label(section()) }}</span>
-        <span class="pf-mm__spacer"></span>
-        <span class="pf-mm__hint">Lab edits overlay the standards — used by the Culture bench (MIC200 C&amp;S)</span>
-      </div>
 
-      <div class="pf-mm__cols">
-        <!-- ── LEFT: the masters rail (mirrors the departments rail) ── -->
-        <aside class="pf-mm__rail" aria-label="Masters">
-          <div class="pf-mm__railhead">Masters</div>
-          <ul class="pf-mm__list">
-            @for (s of sections; track s.key) {
-              <li>
-                <button type="button" class="pf-mm__item" [attr.aria-pressed]="section() === s.key"
-                        (click)="select(s.key)">
-                  <span class="pf-mm__iname">{{ s.title }}<span class="pf-mm__isub">{{ s.sub }}</span></span>
-                  <span class="pf-mm__icount pf-num">{{ countOf(s.key) }}</span>
-                </button>
-              </li>
+        <section class="pf-card pf-2p__main pf-mm__main" [attr.aria-label]="titleOf(section())" data-testid="mm-main">
+          <header class="pf-card__head pf-2p__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
+            @if (narrow()) {
+              <pf-select class="pf-mm__pick" size="sm" [options]="sectionOptions" [value]="section()" aria-label="Master"
+                         (valueChange)="select($any($event))"></pf-select>
+            } @else {
+              <span class="pf-card__label">{{ titleOf(section()) }}</span>
             }
-          </ul>
-        </aside>
-
-        <!-- ── RIGHT: the selected master's grid (+ organism detail) ── -->
-        <div class="pf-mm__split" [class.pf-mm__split--detail]="editor() || (section() === 'organisms' && selOrg())">
-          <div class="pf-mm__grid">
+            <span class="pf-card__note pf-mm__hint">Lab edits overlay the standards — used by the Culture bench</span>
+            <span class="pf-2p__count pf-mm__count">@if (shownCount() !== totalCount()) {<span class="pf-num">{{ shownCount() }}</span> of }<span class="pf-num">{{ totalCount() }}</span> {{ label(section()) }}</span>
+          </header>
+          <div class="pf-2p__body">
             @if (listSkeleton()) {
               <!-- First load of the masters: the grid's shape (PF-PATTERN "Loading feedback"). -->
-              <pf-skeleton-table class="pf-mm__gridskel" [rows]="10" [cols]="4" label="Loading microbiology masters…"></pf-skeleton-table>
+              <pf-skeleton-table class="pf-2p__skel" [rows]="10" [cols]="4" label="Loading microbiology masters…"></pf-skeleton-table>
             }
             <ag-grid-angular
-              style="width: 100%; height: 62vh;"
+              class="pf-2p__grid"
               [theme]="gridTheme()"
               [rowData]="rows()"
               [columnDefs]="columnDefs()"
@@ -113,16 +129,28 @@ interface EdModel {
               (rowClicked)="onRowClicked($event)">
             </ag-grid-angular>
           </div>
+        </section>
 
           @if (editor(); as ed) {
             <!-- The master-row EDITOR: side card; a sheet above the navbar on phones. -->
-            <div class="pf-sheet-backdrop" (click)="editor.set(null)" aria-hidden="true"></div>
-            <aside class="pf-card pf-sheet pf-mm__side pf-mm__side--editor" [attr.aria-label]="ed.isNew ? 'New ' + singular(ed.kind) : 'Edit ' + singular(ed.kind)">
-              <span class="pf-sheet__handle" aria-hidden="true"></span>
+            @if (detailSheet()) { <div class="pf-2p__backdrop" (click)="editor.set(null)" aria-hidden="true"></div> }
+            <aside class="pf-card pf-2p__side pf-mm__side pf-mm__side--editor" [class.pf-2p__sheet]="detailSheet()" [attr.aria-label]="ed.isNew ? 'New ' + singular(ed.kind) : 'Edit ' + singular(ed.kind)">
+              <span class="pf-2p__handle" aria-hidden="true"></span>
               <div class="pf-card__head">
                 <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
                 <span class="pf-card__label pf-mm__sname">{{ ed.isNew ? 'New ' + singular(ed.kind) : ed.model.name || ed.model.antibiotic }}</span>
                 <span class="pf-card__spacer"></span>
+                <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+                @if (!ed.isNew && (ed.model.tenantId || ed.model.tenant)) {
+                  <button type="button" class="pf-btn pf-btn--tertiary pf-mm__del press" (click)="deleteEd()"
+                          [disabled]="deleting() || saving()" [pfBusy]="deleting()" pfBusyLabel="Removing…">
+                    {{ hasStandard(ed) ? 'Revert to standard' : 'Delete' }}
+                  </button>
+                }
+                
+                <button type="button" class="pf-btn pf-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
+                  {{ saving() ? 'Saving…' : 'Save' }}
+                </button>
                 <button type="button" class="pf-btn pf-btn--icon pf-mm__x press" (click)="editor.set(null)" aria-label="Close" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
               </div>
               <div class="pf-card__body">
@@ -194,24 +222,14 @@ interface EdModel {
               }
 
               </div>
-              <div class="pf-mm__actions">
-                @if (!ed.isNew && (ed.model.tenantId || ed.model.tenant)) {
-                  <button type="button" class="pf-btn pf-btn--tertiary pf-mm__del press" (click)="deleteEd()"
-                          [disabled]="deleting() || saving()" [pfBusy]="deleting()" pfBusyLabel="Removing…">
-                    {{ hasStandard(ed) ? 'Revert to standard' : 'Delete' }}
-                  </button>
-                }
-                <span class="pf-mm__spacer"></span>
-                <button type="button" class="pf-btn pf-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
-                  {{ saving() ? 'Saving…' : 'Save' }}
-                </button>
-              </div>
             </aside>
           } @else if (section() === 'organisms' && selOrg(); as org) {
             <!-- The organism's AST panel: its mapped antibiotics + cutoffs.
                  Rows come from the breakpoint table (group-resolved); adding
                  one writes a lab (tenant) breakpoint row. -->
-            <aside class="pf-card pf-mm__side" [attr.aria-label]="org.name + ' AST panel'">
+            @if (detailSheet()) { <div class="pf-2p__backdrop" (click)="selOrg.set(null)" aria-hidden="true"></div> }
+            <aside class="pf-card pf-2p__side pf-mm__side" [class.pf-2p__sheet]="detailSheet()" [attr.aria-label]="org.name + ' AST panel'">
+              <span class="pf-2p__handle" aria-hidden="true"></span>
               <div class="pf-card__head">
                 <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg></span>
                 <span class="pf-card__label pf-mm__sname">{{ org.name }}</span>
@@ -286,49 +304,26 @@ interface EdModel {
               </div>
             </aside>
           }
-        </div>
       </div>
     </div>
   `,
   styles: [`
-    .pf-mm { display: flex; flex-direction: column; gap: 12px; }
-    .pf-mm__bar { display: flex; align-items: center; gap: 12px; }
+    :host { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+    .pf-mm { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; }
+    .pf-mm__bar { display: flex; align-items: center; gap: 12px; flex: none; }
     .pf-mm__spacer { flex: 1; }
     .pf-mm__search { flex: 0 1 320px; }
-    .pf-mm__count { font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
-    .pf-mm__hint { font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
-    @media (max-width: 900px) { .pf-mm__hint { display: none; } }
-
-    /* Rail left, grid right — the departments-panel language. */
-    .pf-mm__cols { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 14px; align-items: start; }
-    @media (max-width: 980px) { .pf-mm__cols { grid-template-columns: 1fr; } }
-    .pf-mm__rail { border: 1px solid var(--pf-line); border-radius: var(--pf-radius-card, 16px); background: var(--pf-card-bg); box-shadow: var(--pf-shadow-sm); padding: 10px; }
-    .pf-mm__railhead { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
-      color: var(--text-tertiary); padding: 4px 8px 8px; }
-    .pf-mm__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-    .pf-mm__item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
-      padding: 9px 11px; border-radius: 10px; cursor: pointer; text-align: left;
-      background: transparent; border: 1px solid transparent; }
-    .pf-mm__item:hover { background: var(--pf-chip-bg); }
-    .pf-mm__item[aria-pressed='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
-    .pf-mm__iname { display: flex; flex-direction: column; gap: 1px; min-width: 0;
-      font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .pf-mm__pick { flex: 0 1 220px; min-width: 160px; }
+    @media (max-width: 640px) { .pf-mm__hint { display: none; } }
+    /* Wide screens: a row's detail / editor is a third card beside the grid. */
+    .pf-2p.pf-mm__cols--detail { grid-template-columns: 300px minmax(0, 1fr) 380px; }
+    .pf-mm__iname { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
     .pf-mm__isub { font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
     .pf-mm__icount { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--text-tertiary);
       font-variant-numeric: tabular-nums; }
-    .pf-mm__split { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; min-width: 0; }
-    .pf-mm__split--detail { grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); }
-    @media (max-width: 1100px) { .pf-mm__split--detail { grid-template-columns: 1fr; } }
-    .pf-mm__grid { position: relative; border-radius: 12px; overflow: hidden; min-width: 0; }
-    .pf-mm__gridskel { position: absolute; inset: 0; z-index: 2; overflow: hidden; background: var(--pf-card-bg, var(--bg-primary)); border-radius: inherit; }
-    .pf-mm__side { max-height: 62vh; min-height: 0; }
     .pf-mm__side .pf-card__body { gap: 6px; }
-    .pf-mm__side:not(.pf-sheet) .pf-sheet__handle { display: none; }
-    /* The phone-sheet scrim is only a scrim on phones — never a grid cell. */
-    @media (min-width: 641px) { .pf-mm__split > .pf-sheet-backdrop { display: none; } }
     .pf-mm__x { width: 36px; height: 36px; min-height: 36px; }
     .pf-mm__hbtn { height: 36px; min-height: 36px; }
-    @media (max-width: 640px) { .pf-mm__side.pf-sheet { max-height: none; } }
         .pf-mm__sname { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text-primary); }
     .pf-mm__smeta { font-size: 12px; color: var(--text-tertiary); margin: 0 0 4px; }
         .pf-mm__slabel { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 10px 0 4px; }
@@ -361,7 +356,8 @@ interface EdModel {
       -moz-appearance: textfield; appearance: textfield; }
     .pf-mm__cutin::-webkit-inner-spin-button, .pf-mm__cutin::-webkit-outer-spin-button { display: none; }
         .pf-mm__cutin--i { width: 80px; }
-    .pf-mm__save, .pf-mm__add { height: 40px; min-height: 40px; }
+    .pf-mm__add { height: 40px; min-height: 40px; }
+    .pf-mm__save, .pf-mm__del { height: 34px; min-height: 34px; }
     .pf-mm__hint2 { font-size: 12px; color: var(--text-tertiary); margin: 10px 0 0; }
         .pf-mm__fld { margin-bottom: 6px; }
         .pf-mm__flags { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 6px 0 4px; }
@@ -369,7 +365,7 @@ interface EdModel {
     .pf-mm__actions { flex: none; display: flex; align-items: center; gap: 10px; padding: 12px 14px 14px;
       border-top: 1px solid var(--pf-line); background: var(--pf-card-bg); }
     .pf-mm__del { color: var(--red-text, #b91c1c); }
-  `],
+  `, TM_TWO_PANEL_STYLES],
 })
 export class MicroMastersPanelComponent implements OnInit {
   private readonly api = inject(ApiService);
@@ -407,6 +403,14 @@ export class MicroMastersPanelComponent implements OnInit {
       : this.breakpoints().length;
   }
   totalCount(): number { return this.countOf(this.section()); }
+  titleOf(k: MasterKey): string { return this.sections.find(x => x.key === k)?.title ?? ''; }
+  readonly sectionOptions = this.sections.map(x => ({ value: x.key, label: x.title }));
+  private readonly destroyRef2 = inject(DestroyRef);
+  /** ≤900px: one column — the masters pick moves into the main card's head. */
+  readonly narrow = mediaSignal(TM_NARROW, this.destroyRef2);
+  /** Below 1280px a row's detail / editor is a sheet, not a third column. */
+  readonly detailSheet = mediaSignal('(max-width: 1279px)', this.destroyRef2);
+  hasDetail(): boolean { return !!this.editor() || (this.section() === 'organisms' && !!this.selOrg()); }
   shownCount(): number { return this.rows().length; }
 
   select(k: MasterKey) {

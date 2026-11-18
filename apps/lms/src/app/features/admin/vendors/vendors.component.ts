@@ -168,7 +168,11 @@ const EMPTY_DRAFT: NewVendorDraft = {
         <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7H5a2 2 0 0 1 0-4h13v4M3 5v14a2 2 0 0 0 2 2h16V7H5a2 2 0 0 1-2-2ZM17 14h.01"/></svg></span>
         <h3 class="pf-card__label">{{ draft().id ? 'Edit vendor' : 'New vendor' }}</h3>
         <span class="pf-card__spacer"></span>
-        <button type="button" class="pf-btn pf-btn--icon" (click)="closePanel()" aria-label="Close">
+        <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+        <button type="button" class="pf-btn pf-btn--primary press" (click)="draft().id ? saveVendor() : createVendor()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" [pfBusyLabel]="draft().id ? 'Saving…' : 'Creating…'">
+          {{ saving() ? (draft().id ? 'Saving…' : 'Creating…') : (draft().id ? 'Save changes' : 'Create vendor') }}
+        </button>
+<button type="button" class="pf-btn pf-btn--icon" (click)="closePanel()" aria-label="Close">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>
@@ -213,12 +217,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
           </div>
         }
       </div>
-      <div class="pf-card__foot pf-vn-foot">
-        <button type="button" class="pf-btn pf-btn--tertiary press" (click)="closePanel()">Cancel</button>
-        <button type="button" class="pf-btn pf-btn--primary press" (click)="draft().id ? saveVendor() : createVendor()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" [pfBusyLabel]="draft().id ? 'Saving…' : 'Creating…'">
-          {{ saving() ? (draft().id ? 'Saving…' : 'Creating…') : (draft().id ? 'Save changes' : 'Create vendor') }}
-        </button>
-      </div>
+      
     </ng-template>
 
     <!-- Money panel (top up / record payment / history) for ONE account. -->

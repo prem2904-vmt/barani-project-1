@@ -41,22 +41,15 @@
             {{ reverting() ? 'Reverting…' : 'Revert to master' }}
           </button>
         }
-        <!-- Below 1024px the live preview hides behind this (a sheet). -->
-        <button type="button" class="pf-hb-btn pf-hb-btn--ghost pf-te2-previewbtn press"
-                [attr.aria-expanded]="previewOpen()" aria-controls="pf-te2-preview" (click)="previewOpen.set(true)"
-                aria-label="Preview" title="Live preview">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
-          Preview
-        </button>
         <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-te2-save press"
                 [disabled]="saving() || recordSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveTest()"
-                [attr.aria-label]="saving() ? 'Saving' : 'Save'" title="Save">
+                [attr.aria-label]="saveWord()" [title]="saveWord()">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
-          {{ saving() ? 'Saving…' : 'Save' }}
+          {{ saveWord() }}
         </button>
       </ng-container>
 
-      <!-- The pill = [Test name ✎ · origin] | [section tabs]. Nothing else:
+      <!-- The pill = [Test name ✎ · origin]. Sections are the LEFT side card. Nothing else:
            code, dept, sample, price… live in the sections (no duplication). -->
       <div band-search class="pf-ctx pf-te2-ctx">
         <span class="pf-ctx__primary pf-te2-ctx__name">
@@ -73,23 +66,6 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
           </button>
         </span>
-        <span class="pf-te2-ctx__div" aria-hidden="true"></span>
-        <!-- Sections: a neutral segmented control with a sliding indicator. -->
-        <div class="pf-te2-tabs" role="tablist" aria-label="Sections" #tabsEl>
-          <span class="pf-te2-tabs__ind" aria-hidden="true"
-                [style.transform]="'translateX(' + tabInd().x + 'px)'" [style.width.px]="tabInd().w"
-                [style.opacity]="tabInd().w ? 1 : 0"></span>
-          @for (s of sectionNav(); track s.id) {
-            <button type="button" class="pf-te2-tab" role="tab"
-                    [attr.aria-selected]="section() === s.id" [attr.aria-controls]="'sec-' + s.id"
-                    [attr.data-sec]="s.id" (click)="jumpToSection(s.id)">
-              <span>{{ s.label }}</span>
-              <span class="pf-te2-tab__dot" [class.pf-te2-tab__dot--ok]="s.ok"
-                    [attr.aria-label]="s.ok ? 'complete' : 'something to finish'"
-                    [title]="s.ok ? 'Complete' : 'Something to finish here'"></span>
-            </button>
-          }
-        </div>
       </div>
     </pf-hero-band>
   }
@@ -133,7 +109,7 @@
         </pf-touch-btn>
       }
       <pf-touch-btn size="sm" variant="primary" [disabled]="saving() || recordSkeleton()" [busy]="saving()" (pressed)="saveTest()">
-        {{ saving() ? 'Saving…' : 'Save' }}
+        {{ saveWord() }}
       </pf-touch-btn>
     </div>
   </header>
@@ -141,7 +117,7 @@
 
   <div class="pf-te2-bodywrap" [class.pf-band-body]="nd()" [class.pf-band-body--fill]="nd()">
 
-  <div class="pf-te2" [class.pf-te2--norail]="railHidden() || nd()">
+  <div class="pf-te2" [class.pf-te2--norail]="railHidden()" [class.pf-te2--nd]="nd()">
     <!-- ═══════════ Section rail (classic): one task at a time ═══════════ -->
     @if (!nd()) {
     <nav class="pf-te2-nav" aria-label="Sections">
@@ -175,6 +151,31 @@
     </nav>
     }
 
+    <!-- ═══════ New design: the sections are the LEFT side card ═══════ -->
+    @if (nd()) {
+    <aside class="pf-card pf-sg-side pf-te2-side" aria-label="Sections">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+        <span class="pf-card__label">Sections</span>
+      </header>
+      <ul class="pf-card__body pf-te2-sidelist">
+        @for (s of sectionNav(); track s.id) {
+          <li>
+            <button type="button" class="pf-te2-sidebtn press" [attr.aria-pressed]="section() === s.id"
+                    [attr.aria-current]="section() === s.id ? 'page' : null" [attr.data-sec]="s.id"
+                    (click)="jumpToSection(s.id)">
+              <span class="pf-te2-sidebtn__ic"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: s.id }"></ng-container></span>
+              <span class="pf-te2-sidebtn__txt">{{ s.label }}</span>
+              <span class="pf-te2-tab__dot" [class.pf-te2-tab__dot--ok]="s.ok"
+                    [attr.aria-label]="s.ok ? 'complete' : 'something to finish'"
+                    [title]="s.ok ? 'Complete' : 'Something to finish here'"></span>
+            </button>
+          </li>
+        }
+      </ul>
+    </aside>
+    }
+
     <!-- ═══════════════════════════ Workspace ═══════════════════════════ -->
     <div class="pf-te2-main">
       @if (railHidden() && !nd()) {
@@ -183,6 +184,13 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
           Sections
         </button>
+      }
+
+      @if (nd()) {
+        <div class="pf-te2-pick" data-testid="section-picker">
+          <pf-select [options]="sectionPickOptions()" [value]="section()" aria-label="Section"
+                     (valueChange)="jumpToSection($any($event))"></pf-select>
+        </div>
       }
 
       @if (recordSkeleton()) {
@@ -202,6 +210,7 @@
           <span class="pf-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'identity' }"></ng-container></span>
           <h2 class="pf-card__label pf-te2-sec__title pf-te2-sec__h">Basics</h2>
           <p class="pf-card__note pf-te2-sec__sub">{{ d.type === 'package' ? 'The package’s name and type. Its members keep their own departments.' : 'The test’s name, department and codes.' }}</p>
+          @if (nd()) { <ng-container *ngTemplateOutlet="previewBtn"></ng-container> }
         </div>
         <div class="pf-te2-sec__body pf-card__body">
           <!-- 12-column field grid: Name · Type/Flow/Department (4 each) ·
@@ -328,14 +337,7 @@
                   <p class="pf-rr2__sub">Tick the profiles this test belongs to — ordering a ticked profile includes this test.</p>
                 </div>
                 @if (d.id && allProfiles().length > 0) {
-                  <div class="pf-profpanel__tools">
-                    <span class="pf-profpanel__count" role="status" aria-live="polite">{{ linkedProfileIds().length }} selected</span>
-                    @if (allProfiles().length > 8) {
-                      <input type="search" class="pf-input pf-profpanel__search" aria-label="Find a profile"
-                             placeholder="Find a profile…" [ngModel]="profSearch()"
-                             (ngModelChange)="profSearch.set($event)" />
-                    }
-                  </div>
+                  <span class="pf-profpanel__count" role="status" aria-live="polite">{{ linkedProfileIds().length }} selected</span>
                 }
               </div>
               @if (!d.id) {
@@ -343,19 +345,39 @@
               } @else if (allProfiles().length === 0) {
                 <p class="pf-hint">No profiles in the catalogue yet.</p>
               } @else {
-                <!-- A dense checklist (check · name · code), not a wall of tiles. -->
+                @if (linkedProfiles().length > 0) {
+                  <ul class="pf-lp-chips pf-profpanel__chips" aria-label="Selected profiles">
+                    @for (pr of linkedProfiles(); track pr.id) {
+                      <li class="pf-lp-chip"><span class="pf-lp-chip__name">{{ pr.name }}</span>
+                        <button type="button" class="pf-lp-chip__x press" (click)="removeFromProfile(pr)"
+                                [attr.aria-label]="'Remove from ' + pr.name">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
+                <div class="pf-profpanel__tools">
+                  <input type="search" class="pf-input pf-profpanel__search" aria-label="Find a profile"
+                         placeholder="Find a profile…" [ngModel]="profSearch()"
+                         (ngModelChange)="profSearch.set($event)" />
+                  <pf-select class="pf-profpanel__filter" size="sm" aria-label="Filter profiles" [options]="profFilterOptions()"
+                             [value]="profFilter()" (valueChange)="profFilter.set($any($event))"></pf-select>
+                </div>
+                <!-- A dense checklist (check · name · code); selected first; scrolls inside the box. -->
                 <div class="pf-profpanel__grid" role="group" aria-label="Profiles">
-                  @for (pr of visibleProfiles(); track pr.id) {
+                  @for (pr of visibleProfiles(); track pr.id; let n = $index) {
                     <label class="pf-row pf-profpanel__item" [class.pf-row--in]="isLinkedProfile(pr.id)">
-                      <input type="checkbox" class="pf-te2-srcheck" [checked]="isLinkedProfile(pr.id)"
+                      <input type="checkbox" class="pf-te2-srcheck" [checked]="isLinkedProfile(pr.id)" [attr.aria-label]="pr.name + (pr.testCode ? ', ' + pr.testCode : '')"
                              (change)="toggleProfileMembership(pr, $any($event.target).checked)" />
                       <span class="pf-row__check" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                      <span class="pf-profpanel__no pf-num" aria-hidden="true">{{ n + 1 }}</span>
                       <span class="pf-row__name pf-profpanel__name">{{ pr.name }}</span>
                       @if (pr.testCode) { <span class="pf-row__meta pf-num pf-profpanel__code">{{ pr.testCode }}</span> }
                     </label>
                   }
                   @if (visibleProfiles().length === 0) {
-                    <p class="pf-hint pf-profpanel__none">Nothing matches “{{ profSearch() }}”.</p>
+                    <p class="pf-hint pf-profpanel__none">Nothing matches.</p>
                   }
                 </div>
               }
@@ -372,6 +394,7 @@
           <span class="pf-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'pricing' }"></ng-container></span>
           <h2 class="pf-card__label pf-te2-sec__title pf-te2-sec__h">Price &amp; sample</h2>
           <p class="pf-card__note pf-te2-sec__sub">What it costs, how long it takes, and how the sample is drawn.</p>
+          @if (nd()) { <ng-container *ngTemplateOutlet="previewBtn"></ng-container> }
         </div>
         <div class="pf-te2-sec__body pf-card__body">
           <div class="pf-te2-grid pf-te2-grid--form">
@@ -475,6 +498,7 @@
           <h2 class="pf-card__label pf-te2-sec__title pf-te2-sec__h">Result entry</h2>
           <p class="pf-card__note pf-te2-sec__sub">What the tech enters, and what counts as normal.</p>
           @if (isSingleValue() && !entryKind()) { <span class="pf-te2-sec__warn"><span class="pf-dot-unpriced" aria-hidden="true"></span>Choose what the tech enters</span> }
+          @if (nd()) { <ng-container *ngTemplateOutlet="previewBtn"></ng-container> }
         </div>
         <div class="pf-te2-sec__body pf-card__body">
           <div class="pf-te2-grid pf-te2-grid--form">
@@ -938,6 +962,7 @@
           <span class="pf-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'results' }"></ng-container></span>
           <h2 class="pf-card__label pf-te2-sec__title pf-te2-sec__h">{{ d.type === 'profile' ? 'Profile' : 'Package' }} members</h2>
           <p class="pf-card__note pf-te2-sec__sub">{{ d.type === 'profile' ? 'The tests reported together under this profile.' : 'What this package bundles and bills as one.' }}</p>
+          @if (nd()) { <ng-container *ngTemplateOutlet="previewBtn"></ng-container> }
         </div>
         <div class="pf-te2-sec__body pf-card__body">
           <div class="pf-picker-head">
@@ -1281,6 +1306,7 @@
           <span class="pf-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'layout' }"></ng-container></span>
           <h2 class="pf-card__label pf-te2-sec__title pf-te2-sec__h">Printed report</h2>
           <p class="pf-card__note pf-te2-sec__sub">What the patient's PDF shows for this test — in print order. Drag to rearrange, tap the eye to hide a line.</p>
+          @if (nd()) { <ng-container *ngTemplateOutlet="previewBtn"></ng-container> }
         </div>
         <div class="pf-te2-sec__body pf-card__body">
           @if (d.type === 'profile' && reportOrderedMembers().length > 0) {
@@ -1398,6 +1424,7 @@
           <span class="pf-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'consumables' }"></ng-container></span>
           <h2 class="pf-card__label pf-te2-sec__title pf-te2-sec__h">Consumables</h2>
           <p class="pf-card__note pf-te2-sec__sub">Stock deducted when this test runs.</p>
+          @if (nd()) { <ng-container *ngTemplateOutlet="previewBtn"></ng-container> }
         </div>
         <div class="pf-te2-sec__body pf-card__body">
           @if (d.id) {
@@ -1412,67 +1439,82 @@
 
     </div>
 
-    <!-- ═══════════════════════════ Side card ═══════════════════════════ -->
-    <!-- New design: the LIVE PREVIEW is the side card on the RIGHT (owner
-         2026-11-17: navigation/filter side cards left, live previews right —
-         choose on the left, see the result on the right), same height as the
-         main card, its body scrolls. Below 1024px it is a sheet behind the
-         Preview button. -->
-    @if (nd() && previewOpen()) {
-      <div class="pf-sheet-backdrop pf-te2-previewscrim" (click)="previewOpen.set(false)" aria-hidden="true"></div>
-    }
-    <aside class="pf-te2-aside" id="pf-te2-preview" [class.pf-te2-aside--open]="previewOpen()"
-           [attr.aria-label]="nd() ? 'Live preview' : null">
-      @if (!nd()) {
+    <!-- Classic only: the permanent live preview. The new design has none —
+         the report preview is the popup below (Preview button / Alt+P). -->
+    @if (!nd()) {
+    <aside class="pf-te2-aside" id="pf-te2-preview">
       <div class="pf-savestate">
         @if (dirty()) { <span class="pf-savestate__pending">Unsaved changes</span> }
         @else { <span class="pf-savestate__ok">All changes saved</span> }
       </div>
-      }
-
-      <div class="pf-livewrap" [class.pf-card]="nd()">
-        @if (nd()) {
-          <span class="pf-sheet__handle" aria-hidden="true"></span>
-          <div class="pf-card__head pf-livewrap__ndhead">
-            <span class="pf-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'preview' }"></ng-container></span>
-            <span class="pf-card__label">Live preview</span>
-            <span class="pf-card__spacer"></span>
-            <button type="button" class="pf-btn pf-btn--icon pf-te2-previewclose press" (click)="previewOpen.set(false)" aria-label="Close preview" title="Close">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-            </button>
-          </div>
-        } @else {
+      <div class="pf-livewrap">
         <div class="pf-livewrap__head">
           <span class="pf-livewrap__k">LIVE PREVIEW</span>
         </div>
-        }
         @if (recordSkeleton()) {
           <div class="pf-livewrap__skel" role="status" aria-busy="true" aria-label="Loading the preview…">
             <pf-skeleton variant="block" height="420px"></pf-skeleton>
           </div>
         } @else if (d.id) {
-          <pf-report-pdf-preview class="pf-livewrap__pdf"
-            [testId]="d.id"
-            [testName]="d.name"
-            [department]="d.type === 'package' ? '' : selectedDeptName()"
-            [sampleType]="d.sampleType"
-            [parameters]="parameterNames()"
-            [profileMembers]="previewProfileMembers()"
-            [columnsOverride]="liveColumnsOverride()"
-            [parametersJson]="d.parametersJson || null"
-            [culture]="cultureBench()"
-            [pageLayout]="livePageLayout()"
-            [departmentId]="d.departmentId || null"
-            [refreshToken]="previewToken()">
-          </pf-report-pdf-preview>
+          <ng-container *ngTemplateOutlet="previewPdf"></ng-container>
         } @else {
           <div class="pf-livewrap__empty">Save the test to see its live report preview.</div>
         }
       </div>
     </aside>
+    }
   </div>
   </div>
 </section>
+
+<ng-template #previewBtn>
+  <span class="pf-card__spacer"></span>
+  <button type="button" class="pf-btn pf-btn--secondary pf-te2-previewbtn press" data-testid="preview-btn"
+          aria-haspopup="dialog" [attr.aria-expanded]="previewOpen()" aria-keyshortcuts="Alt+P"
+          [disabled]="recordSkeleton()" (click)="openPreview()" title="Preview the report (Alt+P)">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+    <span class="pf-te2-previewbtn__t">Preview</span>
+  </button>
+</ng-template>
+
+<ng-template #previewPdf>
+  <pf-report-pdf-preview class="pf-livewrap__pdf"
+    [testId]="draft().id || ''"
+    [testName]="draft().name"
+    [department]="draft().type === 'package' ? '' : selectedDeptName()"
+    [sampleType]="draft().sampleType"
+    [parameters]="parameterNames()"
+    [profileMembers]="previewProfileMembers()"
+    [columnsOverride]="liveColumnsOverride()"
+    [parametersJson]="draft().parametersJson || null"
+    [culture]="cultureBench()"
+    [pageLayout]="livePageLayout()"
+    [departmentId]="draft().departmentId || null"
+    [refreshToken]="previewToken()">
+  </pf-report-pdf-preview>
+</ng-template>
+
+@if (nd() && previewOpen()) {
+  <div class="pf-te2-pvback" (click)="closePreview()" aria-hidden="true"></div>
+  <div class="pf-te2-pv pf-card" role="dialog" aria-modal="true" aria-label="Report preview" data-testid="preview-dialog">
+    <header class="pf-card__head">
+      <span class="pf-card__icon"><ng-container *ngTemplateOutlet="secIco; context: { $implicit: 'preview' }"></ng-container></span>
+      <span class="pf-card__label">Report preview</span>
+      <span class="pf-card__note">A4, as it prints</span>
+      <span class="pf-card__spacer"></span>
+      <button type="button" #previewCloseBtn class="pf-btn pf-btn--icon press" data-testid="preview-close" (click)="closePreview()" aria-label="Close preview" title="Close (Esc)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </header>
+    <div class="pf-card__body pf-te2-pv__body">
+      @if (draft().id) {
+        <ng-container *ngTemplateOutlet="previewPdf"></ng-container>
+      } @else {
+        <div class="pf-livewrap__empty">Save the test to preview its report.</div>
+      }
+    </div>
+  </div>
+}
 
 <!-- Range entry: the tech may type "0-4", "<5" or ">100" for THIS numeric
      value (single-value and multi-value layouts share it). Off (the

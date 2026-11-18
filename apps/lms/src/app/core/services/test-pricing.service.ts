@@ -1,5 +1,6 @@
 import { Injectable, computed, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
+import { TmContributorService } from './tm-contributor.service';
 import { ApiService } from './api.service';
 import { TenantStateService } from './tenant-state.service';
 import { AuthService } from '../auth/auth.service';
@@ -23,6 +24,7 @@ export class TestPricingService {
   private readonly api = inject(ApiService);
   private readonly tenantState = inject(TenantStateService);
   private readonly auth = inject(AuthService);
+  private readonly contributor = inject(TmContributorService, { optional: true });
 
   /** Tenant runs per-branch isolation (from `GET /api/tenants/current`). */
   readonly isolationOn = computed(() => this.tenantState.tenant()?.branchIsolationEnabled === true);
@@ -41,6 +43,10 @@ export class TestPricingService {
   /** Write prices. `branchId` undefined → the acting-branch rule above;
    *  `null` → force the tenant price; a string → that branch. */
   save(items: PriceWriteItem[], branchId?: string | null): Observable<unknown> {
+    // Settings access: a Test Master CONTRIBUTOR's price edits go for approval (pending changes), never the bulk write.
+    if (this.contributor?.isContributor()) {
+      return items.some((i) => i.price !== undefined || i.taxSlab !== undefined) ? this.contributor.proposePrices(items) : of(null);
+    }
     const scope = branchId === undefined ? this.actingBranchId() : branchId;
     return this.api.patch(PRICE_BULK_PATH, priceBulkBody(items, scope));
   }

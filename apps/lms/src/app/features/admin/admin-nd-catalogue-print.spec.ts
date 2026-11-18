@@ -24,7 +24,7 @@ import { TestPricingService } from '../../core/services/test-pricing.service';
  * Test Master editors (option group, micro master) open as a side card that
  * is a sheet on phones, with the editor's save as the ONE primary.
  */
-const PRIMARY = '.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn .v-primary, .pf-sig-cta--primary';
+const PRIMARY = '.pf-hb-btn--primary:not(.pf-ssv__save), .pf-btn--primary, pf-touch-btn .v-primary, .pf-sig-cta--primary';   // the band-corner Save (.pf-ssv__save) is the ONE allowed primary (owner 2026-11-17)
 /** Primaries a new-design user can see (classic-only markup is display:none). */
 const primaries = (el: HTMLElement) =>
   Array.from(el.querySelectorAll<HTMLElement>(PRIMARY)).filter(b => !b.closest('.pf-classic-only'));
@@ -35,6 +35,9 @@ const hygiene = (el: HTMLElement) => {
 const tabBtn = (el: HTMLElement, label: string) =>
   Array.from(el.querySelectorAll<HTMLButtonElement>('pf-hero-band pf-segmented button'))
     .find(b => (b.getAttribute('aria-label') ?? '') === label)!;
+/** Report design: the sections are the LEFT side card (owner 2026-11-17). */
+const rtNav = (el: HTMLElement, label: string) =>
+  Array.from(el.querySelectorAll<HTMLButtonElement>('[data-testid="rt-nav"] .pf-rt-nav__item')).find(b => b.textContent?.trim() === label)!;
 
 describe('ND audit — Report designer', () => {
   const make = () => renderBandPage(ReportTemplateComponent, {
@@ -42,15 +45,16 @@ describe('ND audit — Report designer', () => {
       : url === '/api/tenants/departments' ? [{ id: 'd1', name: 'Haematology' }]
       : url.startsWith('/api/workflows/') ? { configJson: '{}' } : null,
   });
-  it('one primary on every tab; slate switches; neutral thumbs; preview is an pf-card', () => {
+  it('no primary on any section; slate switches; neutral thumbs; no live preview — Preview opens on demand', () => {
     const p = make();
     for (const t of ['Letterhead', 'Patient strip', 'Results table', 'Footer']) {
-      tabBtn(p.el, t).click();
+      p.cmp.setTab(({ 'Letterhead': 'letterhead', 'Patient strip': 'patient', 'Results table': 'table', 'Footer': 'footer' } as Record<string, string>)[t]);
       p.f.detectChanges();
+      expect(rtNav(p.el, t).getAttribute('aria-selected'), t).toBe('true');
       expect(primaries(p.el).map(b => b.textContent?.trim()), t).toEqual([]);   // Settings: no violet primary; Save is the pane's bar
       hygiene(p.el);
     }
-    tabBtn(p.el, 'Letterhead').click();
+    p.cmp.setTab('letterhead');
     p.f.detectChanges();
     const sw = p.el.querySelector<HTMLButtonElement>('.pf-toggle[role="switch"][aria-label="NABL accredited"]')!;
     expect(sw.getAttribute('aria-checked')).toBe('false');
@@ -58,11 +62,10 @@ describe('ND audit — Report designer', () => {
     expect(p.cmp.tpl().nablAccredited).toBe(true);
     // Header styles: neutral selected tile in the designer's side card.
     expect(p.el.querySelector('.pf-rhe-preset.pf-tile-sel[aria-checked="true"]')).not.toBeNull();
-    tabBtn(p.el, 'Patient strip').click();
+    p.cmp.setTab('patient');
     p.f.detectChanges();
-    const aside = p.el.querySelector('.pf-rt-aside')!;
-    expect(aside.classList.contains('pf-card')).toBe(true);
-    expect(aside.querySelector('.pf-card__label')!.textContent).toContain('Live preview');
+    expect(p.el.querySelector('.pf-rt-aside')).toBeNull();
+    expect(p.el.querySelector('.pf-rt-main.pf-card [data-testid="rt-preview"].pf-btn--secondary')).not.toBeNull();
   });
 });
 
@@ -169,7 +172,8 @@ describe('ND audit — Test Master side views', () => {
     expect(side().querySelector('.pf-og__chip--normal svg')).not.toBeNull();
     p.cmp.startEdit(p.cmp.selected());
     p.f.detectChanges();
-    expect(side().classList.contains('pf-sheet')).toBe(true);
+    // Test Master's two-panel: the editor stays the LEFT side card (a sheet only at narrow widths); its save is in the head.
+    expect(side().querySelector('.pf-card__head .pf-og__save')).not.toBeNull();
     expect(emitted.at(-1)).toBe(true);
     expect(side().querySelectorAll('.pf-toggle[role="switch"]').length).toBe(2);   // Normal + Active
     expect(primaries(p.el).map(b => b.textContent?.trim())).toEqual(['Save everywhere']);
@@ -187,7 +191,7 @@ describe('ND audit — Test Master side views', () => {
     const ed = p.el.querySelector('aside.pf-mm__side--editor')!;
     expect(ed).not.toBeNull();
     expect(ed.classList.contains('pf-card')).toBe(true);
-    expect(ed.classList.contains('pf-sheet')).toBe(true);
+    expect(ed.querySelector('.pf-card__head .pf-mm__save')).not.toBeNull();   // actions in the head, never a footer
     expect(ed.querySelectorAll('.pf-toggle[role="switch"]').length).toBe(3);   // AST · Disk · MIC
     expect(ed.querySelector('input.pf-input')).not.toBeNull();
     expect(primaries(p.el).map(b => b.textContent?.trim())).toEqual(['Save']);

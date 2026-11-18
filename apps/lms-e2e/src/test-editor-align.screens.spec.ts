@@ -1,18 +1,17 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Page } from '@playwright/test';
-import { test, expect, isPhone, isDesktop, expectLayout, shotsDir } from './support/form-factor';
+import { test, expect, isPhone, isDesktop, formFactor, expectLayout, shotsDir } from './support/form-factor';
 import { neg, resetNeg, installNegBackend, go } from './support/neg-backend';
 
 /**
- * TEST EDITOR ALIGNMENT (owner 2026-11-17: "bring the live preview to the left and align it properly"; then: live previews on the RIGHT).
- * API mocked, demo data only; the editor is the real app. Checks: the live preview side card is RIGHT of the
- * main card with the same top / bottom edges; Basics fields sit on a 12-column grid (Type · Flow · Department
- * share a top edge, Test code · Short name · Section · Methodology share the next); Profiles are a dense
- * checklist with the search + "n selected" in the section header. Desktop is also shot at 3440 wide.
- * Screenshots: SHOTS_DIR/<form factor>/te-*.png (light + dark).
+ * TEST EDITOR v2 (owner 2026-11-18): the five sections are the LEFT side card (340px, shared pf-sg-side) and the
+ * selected section fills the RIGHT main card; NO permanent live preview — a "Preview" button (Alt+P) opens an A4
+ * popup that closes with focus returned. Basics fits 1440×900 with no page scroll; Profiles (selected first,
+ * search + filter) scroll INSIDE their list. Phones/tablets <900px get a section picker instead of the side card.
+ * API mocked, demo data only; the editor is the real app. Screenshots: SHOTS_DIR/<form factor>/te-*.png (light + dark).
  */
-const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/test-editor-align');
+const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/test-editor-v2');
 const out = () => shotsDir(OUT_BASE);
 const vis = (page: Page, sel: string) => page.locator(sel).locator('visible=true').first();
 
@@ -52,9 +51,25 @@ test.beforeEach(async ({ page, context }) => {
   test.setTimeout(150_000);
   resetNeg();
   neg.hook = r => {
-    if (r.method !== 'GET') return undefined;
     const ok = (data: unknown) => ({ status: 200, body: { success: true, data } });
-    if (r.path === '/api/tests/') return ok([OGTT, ...PROFILES]);
+    // The engine's sample report for the Preview popup (demo values only).
+    if (r.method === 'POST' && r.path === '/api/report-layout/preview/t1') {
+      return ok({
+        testId: 't1', testName: OGTT.name, departmentName: 'Biochemistry', sampleType: 'Fluoride plasma',
+        columns: [
+          { id: 'c-name', name: 'name', label: 'Investigation', order: 1, width: 34, type: 'name', locked: false },
+          { id: 'c-result', name: 'result', label: 'Result', order: 2, width: 20, type: 'result', locked: false },
+          { id: 'c-unit', name: 'unit', label: 'Unit', order: 3, width: 16, type: 'unit', locked: false },
+          { id: 'c-range', name: 'range', label: 'Reference range', order: 4, width: 30, type: 'range', locked: false },
+        ],
+        sections: [{ id: 's1', type: 'grid', label: null, isVisible: true, rows: [
+          { id: 'r1', parameterName: 'Glucose', title: 'Glucose', unit: 'mg/dL', isMerged: false, isBold: false, color: null,
+            cells: { name: 'Glucose', result: '112', unit: 'mg/dL', range: '70 - 140' } },
+        ] }],
+      });
+    }
+    if (r.method !== 'GET') return undefined;
+    if (r.path === '/api/tests/') return ok([OGTT, ...[...PROFILES].reverse()]); // served out of order on purpose: the editor sorts like Test Master
     if (r.path === '/api/tests/t1') return ok(OGTT);
     if (r.path === '/api/tenants/departments') return ok(DEPTS);
     return undefined;
@@ -69,6 +84,17 @@ async function open(page: Page) {
   await page.waitForTimeout(900);
 }
 
+/** Switch section: the side card on wide screens, the picker below 900px. */
+async function goSection(page: Page, id: 'identity' | 'pricing' | 'results' | 'layout', label: RegExp) {
+  if (page.viewportSize()!.width >= 900) await vis(page, `.pf-te2-sidebtn[data-sec="${id}"]`).click();
+  else {
+    await vis(page, '.pf-te2-pick pf-select').click();
+    await page.getByRole('option', { name: label }).locator('visible=true').first().click();
+  }
+  await expect(vis(page, `#sec-${id}`)).toBeVisible();
+  await page.waitForTimeout(500);
+}
+
 /** Top edges of the visible Basics fields, by label. */
 async function fieldTops(page: Page, labels: string[]) {
   const out: Record<string, { x: number; y: number; w: number }> = {};
@@ -80,29 +106,63 @@ async function fieldTops(page: Page, labels: string[]) {
   return out;
 }
 
-test.describe('test editor alignment', () => {
-  test('preview RIGHT, field grid aligned, dense Profiles checklist (1440 + 3440)', async ({ page }) => {
+test.describe('test editor v2', () => {
+  test('side card left, no permanent preview, field grid, Profiles list, sections (1440 + 1720)', async ({ page }) => {
     await open(page);
     await expectLayout(page, 'test editor');
 
-    // Profiles: dense rows (no 48px+ tiles), search + "n selected" in the section header.
-    const row = (await vis(page, '.pf-profpanel__item').boundingBox())!;
-    expect(row.height, 'profile row is dense').toBeLessThanOrEqual(44);
-    await expect(vis(page, '.pf-profpanel__head .pf-profpanel__count')).toHaveText('3 selected');
-    await expect(vis(page, '.pf-profpanel__head input[type="search"]')).toBeVisible();
+    // No permanent live preview anywhere; the band has no tab strip.
+    await expect(page.locator('#pf-te2-preview, .pf-livewrap, pf-report-pdf-preview')).toHaveCount(0);
+    await expect(page.locator('.pf-te2-tabs, [role="tablist"]')).toHaveCount(0);
+    await expect(vis(page, '#sec-identity .pf-card__head .pf-te2-previewbtn')).toBeVisible();
 
-    const widths = isDesktop() ? [1440, 3440] : [0];
-    for (const w of widths) {
-      if (w) { await page.setViewportSize({ width: w, height: w > 2000 ? 1440 : 900 }); await page.waitForTimeout(1500); }
+    // Profiles: dense rows, selected first (+ removable chips), search + filter, scroll INSIDE the list box.
+    const row = (await vis(page, '.pf-profpanel__item').boundingBox())!;
+    expect(row.height, 'profile row is a real tap target').toBeGreaterThanOrEqual(44);
+    expect(row.height, 'still a compact list').toBeLessThanOrEqual(60);
+    const chk = (await vis(page, '.pf-profpanel__item .pf-row__check').boundingBox())!;
+    expect(chk.width, 'check circle >= 22px').toBeGreaterThanOrEqual(22);
+    // Running numbers 1, 2, 3… and Test Master's code order (selected first, keeping their order).
+    const rows = await page.locator('.pf-profpanel__item').evaluateAll(els => els.map(e => ({
+      no: e.querySelector('.pf-profpanel__no')?.textContent?.trim(), code: e.querySelector('.pf-profpanel__code')?.textContent?.trim() ?? '',
+      on: e.classList.contains('pf-row--in'), hasTitle: !!e.getAttribute('title') })));
+    expect(rows.map(r => r.no)).toEqual(rows.map((_, i) => String(i + 1)));
+    const selected = rows.filter(r => r.on).map(r => r.code), rest = rows.filter(r => !r.on).map(r => r.code);
+    expect(selected, 'selected keep TM order').toEqual([...selected].sort());
+    expect(rest, 'the others follow TM code order').toEqual([...rest].sort());
+    expect(rows.some(r => r.hasTitle), 'no native tooltip').toBe(false);
+    await expect(vis(page, '.pf-profpanel__head .pf-profpanel__count')).toHaveText('3 selected');
+    await expect(vis(page, '.pf-profpanel__tools input[type="search"]')).toBeVisible();
+    await expect(vis(page, '.pf-profpanel__tools pf-select')).toBeVisible();
+    await expect(page.locator('.pf-profpanel__chips .pf-lp-chip')).toHaveCount(3);
+    await expect(page.locator('.pf-profpanel__item.pf-row--in')).toHaveCount(3);
+    const firstThree = await page.locator('.pf-profpanel__item').evaluateAll(
+      els => els.slice(0, 3).every(e => e.classList.contains('pf-row--in')));
+    expect(firstThree, 'selected profiles come first').toBe(true);
+    const box = await page.locator('.pf-profpanel__grid').evaluate(e => ({ sh: e.scrollHeight, ch: e.clientHeight }));
+    expect(box.ch, 'list box has a sensible max height').toBeLessThanOrEqual(280);
+    expect(box.sh, 'the 24 profiles scroll inside it').toBeGreaterThan(box.ch);
+
+    const sizes = isDesktop() ? [[1440, 900], [1720, 1000]] : formFactor() === 'tablet' ? [[0, 0], [1024, 1366], [1366, 1024]] : [[0, 0]];
+    for (const [w, h] of sizes) {
+      if (w) { await page.setViewportSize({ width: w, height: h }); await page.waitForTimeout(1200); }
       const vw = page.viewportSize()!.width;
-      if (vw >= 1024) {
-        const aside = (await page.locator('#pf-te2-preview').boundingBox())!;
+      if (vw >= 900) {
+        const side = (await page.locator('aside.pf-sg-side').boundingBox())!;
         const main = (await vis(page, '#sec-identity').boundingBox())!;
-        expect(aside.x, 'live preview on the RIGHT').toBeGreaterThan(main.x);
-        expect(Math.abs(aside.y - main.y), 'side + main card tops align').toBeLessThan(2);
-        expect(Math.abs((aside.y + aside.height) - (main.y + main.height)), 'side + main card bottoms align').toBeLessThan(2);
+        expect(side.x, 'sections side card on the LEFT').toBeLessThan(main.x);
+        expect(Math.abs(side.width - 340), 'side card is 340px').toBeLessThan(2);
+        expect(Math.abs(side.y - main.y), 'side + main card tops align').toBeLessThan(2);
+        expect(Math.abs((side.y + side.height) - (main.y + main.height)), 'side + main card bottoms align').toBeLessThan(2);
+        expect(await page.locator('.pf-te2-sidebtn').count()).toBe(5);
+      } else {
+        await expect(vis(page, '.pf-te2-pick pf-select')).toBeVisible();
+        await expect(page.locator('aside.pf-sg-side')).toBeHidden();
       }
-      // Rows of 3 / 4 only when the card is wide; narrower cards step down to 2 per row, phones to 1.
+      if (w === 1440) {
+        const sc = await page.evaluate(() => ({ sh: document.documentElement.scrollHeight, ih: window.innerHeight }));
+        expect(sc.sh, 'no page scroll on Basics at 1440×900').toBeLessThanOrEqual(sc.ih + 1);
+      }
       const cardW = (await vis(page, '#sec-identity').boundingBox())!.width;
       if (cardW > 800) {
         const t = await fieldTops(page, ['Type', 'Flow', 'Department', 'Test code', 'Short name', 'Section', 'Methodology']);
@@ -111,27 +171,64 @@ test.describe('test editor alignment', () => {
         for (const r of [row1, row2]) {
           const y0 = r[0].y;
           for (const f of r) expect(Math.abs(f.y - y0), 'fields in a row share a top edge').toBeLessThan(2);
+          for (const f of r) expect(Math.abs(f.w - r[0].w)).toBeLessThan(2);
         }
         expect(t['Test code'].y, 'codes row below the type row').toBeGreaterThan(t['Type'].y);
-        // Equal widths within a row.
-        for (const r of [row1, row2]) for (const f of r) expect(Math.abs(f.w - r[0].w)).toBeLessThan(2);
+      }
+      // Chips, then the search row, then the list — never overlapping, single-line pills.
+      const cb = (await page.locator('.pf-profpanel__chips').boundingBox())!;
+      const tb = (await vis(page, '.pf-profpanel__tools').boundingBox())!;
+      const lb = (await vis(page, '.pf-profpanel__grid').boundingBox())!;
+      expect(cb.y + cb.height, 'chips end above the search row').toBeLessThanOrEqual(tb.y);
+      expect(tb.y + tb.height, 'search row ends above the list').toBeLessThanOrEqual(lb.y);
+      for (const c of await page.locator('.pf-profpanel__chips .pf-lp-chip').all()) {
+        const b = (await c.boundingBox())!;
+        expect(b.height, 'chip is a single-line pill').toBeLessThanOrEqual(44);
+        expect(b.height).toBeGreaterThanOrEqual(30);
       }
       await shot(page, `te-basics${w ? '-' + w : ''}`);
     }
     if (isDesktop()) await page.setViewportSize({ width: 1440, height: 900 });
 
-    for (const sec of ['pricing', 'results'] as const) {
-      await vis(page, `[role="tab"][data-sec="${sec}"]`).click();
-      await expect(vis(page, `#sec-${sec}`)).toBeVisible();
-      await page.waitForTimeout(500);
-      await shot(page, `te-${sec}`);
+    await goSection(page, 'results', /Result entry/);
+    await shot(page, 'te-results');
+    await goSection(page, 'layout', /Printed report/);
+    await shot(page, 'te-layout');
+    await goSection(page, 'pricing', /Price/);
+    await shot(page, 'te-pricing');
+    await goSection(page, 'identity', /Basics/);
+  });
+
+  test('Preview popup: button + Alt+P open it, Esc / Close return focus to where the user was', async ({ page }) => {
+    await open(page);
+    const btn = vis(page, '#sec-identity .pf-card__head .pf-te2-previewbtn');
+    await btn.focus();
+    await btn.click();
+    const dlg = page.getByTestId('preview-dialog');
+    await expect(dlg).toBeVisible();
+    await expect(dlg.locator('pf-report-pdf-preview')).toHaveCount(1);
+    await expect(page.getByTestId('preview-close')).toBeFocused();
+    // A4 scale on a big screen: the page is 794px wide.
+    if (isDesktop()) {
+      await expect.poll(async () => (await dlg.locator('iframe').first().boundingBox())?.width ?? 0, { timeout: 30_000 }).toBeGreaterThan(780);
+    } else {
+      await page.waitForTimeout(2500);
     }
-    if (isPhone()) {
-      await vis(page, '[role="tab"][data-sec="identity"]').click();
-      await vis(page, '.pf-te2-previewbtn').click();
-      await expect(page.locator('#pf-te2-preview')).toBeVisible();
-      await page.waitForTimeout(500);
-      await shot(page, 'te-preview-sheet');
+    await page.waitForTimeout(1500);
+    await shot(page, 'te-preview');
+    await page.keyboard.press('Escape');
+    await expect(dlg).toHaveCount(0);
+    await expect(btn).toBeFocused();
+
+    if (isDesktop()) {
+      // Alt+P toggles; focus returns to the field the user was in.
+      const name = vis(page, '#sec-identity .pf-te2-name');
+      await name.click();
+      await page.keyboard.press('Alt+KeyP');
+      await expect(dlg).toBeVisible();
+      await page.getByTestId('preview-close').click();
+      await expect(dlg).toHaveCount(0);
+      await expect(name).toBeFocused();
     }
   });
 });

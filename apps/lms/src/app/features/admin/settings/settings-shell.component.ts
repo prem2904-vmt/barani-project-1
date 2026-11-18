@@ -76,7 +76,9 @@ const SINGLE = '__setting';
               <!-- The page's actions, IN the pane they act on (never the band's corner): this group's, or the page's. -->
               @for (pa of paneActions(); track $index) { <span class="pf-ss__acts"><ng-container *ngTemplateOutlet="pa.tpl"></ng-container></span> }
             </ng-container>
-            <div class="pf-ss__main pf-ss__main--one" data-testid="settings-main"><router-outlet (activate)="onActivate($event)"></router-outlet></div>
+            <!-- Settings access: a contributor on a page with no approval model yet READS it (inert: nothing to change). -->
+            <div class="pf-ss__main pf-ss__main--one" data-testid="settings-main" [class.pf-ss__main--view]="viewOnly()"
+                 [attr.inert]="viewOnly() ? '' : null" [attr.aria-readonly]="viewOnly() ? 'true' : null"><router-outlet (activate)="onActivate($event)"></router-outlet></div>
           </pf-two-panel>
       </div>
     </section>
@@ -102,6 +104,8 @@ export class SettingsShellComponent implements OnDestroy {
   /** The hosted page's band parts (its actions, its search, run-time sections) — this shell's own SETTINGS_HOST. */
   protected readonly host = inject(SETTINGS_HOST);
   private readonly access = inject(SettingsAccessService);
+  /** A contributor here with no approval model yet: the screen is view only. */
+  readonly viewOnly = computed(() => typeof this.access.viewOnly === 'function' && this.access.viewOnly());
   private readonly injector = inject(Injector);
   private readonly navBack = inject(NavBackService);
   private readonly browser = isPlatformBrowser(inject(PLATFORM_ID));

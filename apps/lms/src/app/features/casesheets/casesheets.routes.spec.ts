@@ -63,9 +63,10 @@ describe('case-sheet routes: defined once, all gated', () => {
 
   it('route access uses only the case-sheet permissions', () => {
     for (const r of CASESHEET_SHELL_ROUTES) {
-      for (const p of ROUTE_ACCESS['/' + r.path!].perms ?? []) expect(p).toMatch(/^casesheet_(fill|view|forms_manage)$/);
+      // + the IPD contributor code (Settings access, owner 2026-11-18: opens the form admin and edits drafts; an admin publishes).
+      for (const p of ROUTE_ACCESS['/' + r.path!].perms ?? []) expect(p).toMatch(/^(casesheet_(fill|view|forms_manage)|contribute_ipd_settings)$/);
     }
-    expect(ROUTE_ACCESS['/admin/ipd/myprefrontal'].perms).toEqual(['casesheet_forms_manage']);
+    expect(ROUTE_ACCESS['/admin/ipd/myprefrontal'].perms).toEqual(['casesheet_forms_manage', 'contribute_ipd_settings']);
     expect(ROUTE_ACCESS['/casesheets/new'].perms).toEqual(['casesheet_fill']);
   });
 

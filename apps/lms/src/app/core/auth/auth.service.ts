@@ -8,6 +8,7 @@ import { purgeSupabaseIndexedDb, purgeSupabaseLocalStorage } from './supabase-st
 import { opdPreviewHeaders } from '../../features/opd/shared/opd-gate';
 import { casesheetsHeaders } from '../../features/casesheets/shared/casesheet-gate';
 import { betaHeaders } from '../beta/beta-gate';
+import { SettingsArea, SettingsLevel, settingsLevel } from '../../shared/utils/settings-access';
 import { appMode } from '../app-mode';
 import { ENTER_REFUSALS, EnterAnswer, readEnterAnswer, safeSessionStorage, startPkce, takePkce } from '../../features/casesheets/public/google-pkce';
 
@@ -613,6 +614,12 @@ export class AuthService {
     const perms = this._user()?.permissions ?? [];
     if (perms.includes('*')) return true;
     return codes.some(c => perms.includes(c));
+  }
+
+  /** Settings access in one area (owner 2026-11-18): read back from the effective codes /me carries (the server's
+   *  grants are already in them) through the tested mirror `settingsLevel`. */
+  settingsLevel(area: SettingsArea): SettingsLevel {
+    return settingsLevel(this._user()?.permissions ?? [], area);
   }
 
   /**

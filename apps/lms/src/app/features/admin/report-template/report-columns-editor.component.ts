@@ -14,6 +14,7 @@ import { applyDefaultResultUnitLink as defaultResultUnitLink } from '../../../sh
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 
 /** Emitted to the parent so the live preview reflects the columns being edited
  *  for the selected department before they're even saved. */
@@ -38,7 +39,7 @@ export interface ColumnsEditorState {
 @Component({
   selector: 'pf-report-columns-editor',
   standalone: true,
-  imports: [SkeletonTableComponent, SelectComponent, TouchButtonComponent, DragDropModule],
+  imports: [SkeletonTableComponent, SelectComponent, TouchButtonComponent, DragDropModule, SettingsSavebarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-ce-root">
@@ -59,18 +60,17 @@ export interface ColumnsEditorState {
           @if (configured()) { <span class="pf-status-pill pf-status-pill--ok">Configured</span> }
           @else { <span class="pf-status-pill pf-status-pill--default">Defaults — not saved</span> }
         }
+        @if (applyAllPending()) { <span class="pf-status-pill pf-status-pill--default" data-testid="ce-apply-all-pending">Applies to every department on Save</span> }
         <span class="grow"></span>
-        <pf-touch-btn size="sm" variant="secondary" (pressed)="resetToDefaults()">Reset</pf-touch-btn>
-        <pf-touch-btn size="sm" variant="secondary"
-                      [disabled]="!totalOk() || applyingAll()" [busy]="applyingAll()" busyLabel="Applying…" (pressed)="applyToAll()">
-          {{ applyingAll() ? 'Applying…' : 'Apply to all' }}
-        </pf-touch-btn>
-        <!-- Secondary: the host page's band owns the ONE primary. -->
-        <pf-touch-btn size="sm" variant="secondary"
-                      [disabled]="!totalOk() || saving()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
-          {{ saving() ? 'Saving…' : 'Save' }}
-        </pf-touch-btn>
+        <!-- Owner 2026-11-17: ONE Save (the band's corner) saves everything. Reset / Apply to all only change the page. -->
+        <button type="button" class="pf-btn pf-btn--tertiary pf-ce-act press" (click)="resetToDefaults()">Reset</button>
+        <button type="button" class="pf-btn pf-btn--tertiary pf-ce-act press" data-testid="ce-apply-all"
+                [disabled]="!totalOk() || applyingAll()" (click)="applyToAll()">Apply to all departments</button>
       </div>
+      <pf-settings-savebar saveTestId="ce-save" label="Unsaved column changes" [dirty]="colsDirty()" [saving]="saving() || applyingAll()" [canSave]="totalOk()"
+                           (save)="save()" (discard)="discardCols()"></pf-settings-savebar>
+      <pf-settings-savebar saveTestId="ce-sig-save" label="Unsaved signatory changes" [dirty]="sigDirty()" [saving]="sigSaving()"
+                           (save)="saveSignatories()" (discard)="discardSig()"></pf-settings-savebar>
       }
 
       @if (loading()) {
@@ -224,12 +224,9 @@ export interface ColumnsEditorState {
         <!-- ── SIGNATORIES: who signs this department's report block ──
              Department-scoped — not part of a per-test override. -->
         @if (!hostManaged()) {
-        <div class="pf-ce-inspector" style="margin-top: 16px;">
+        <div class="pf-ce-sigs">
           <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
             <h4 style="margin:0; font-size:13px; font-weight:700; color: var(--text-primary);">Signatories — {{ selectedDeptName() }}</h4>
-            <pf-touch-btn size="sm" variant="secondary" [disabled]="sigSaving()" [busy]="sigSaving()" busyLabel="Saving…" (pressed)="saveSignatories()">
-              {{ sigSaving() ? 'Saving…' : 'Save signatories' }}
-            </pf-touch-btn>
           </div>
           <p class="pf-ce-dim" style="margin: 0 0 10px;">
             Printed at the end of this department's report section, in this order (drag to reorder, max 7).
@@ -321,6 +318,8 @@ export interface ColumnsEditorState {
     .pf-ce-total--bad { color: #f87171; }
 
     /* ── Inspector ── */
+    /* Signatories: a flush section under the strip (a hairline above), never a box inside the card. */
+    .pf-ce-sigs { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--pf-line); }
     .pf-ce-inspector { margin-top: 10px; padding: 12px; border: 1px solid var(--glass-border, rgba(148,163,184,0.2));
       border-radius: 14px; background: rgba(255,255,255,0.02); }
     .pf-ce-insp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
@@ -508,16 +507,32 @@ export class ReportColumnsEditorComponent implements OnInit {
   private loadSignatories(deptId: string) {
     this.api.get<Array<{ mode: string; role?: string | null; userId?: string | null; designation?: string }>>(
       `/api/report-layout/department/${deptId}/signatories`).subscribe({
-      next: rows => this.signatories.set((rows ?? []).map(r => ({
+      next: rows => { this.signatories.set((rows ?? []).map(r => ({
         _key: this.sigKey(),
         mode: r.mode === 'user' ? 'user' as const : 'role' as const,
         role: r.role || 'tested_by',
         userId: r.userId ?? null,
         designation: r.designation ?? '',
-      }))),
-      error: () => this.signatories.set([]),
+      }))); this.savedSig.set(this.sigJson()); },
+      error: () => { this.signatories.set([]); this.savedSig.set(this.sigJson()); },
     });
   }
+  // ── Unsaved state (owner 2026-11-17: ONE Save in the band's corner saves columns + signatories) ──
+  private readonly savedCols = signal<string>('');
+  private readonly savedSig = signal<string>('[]');
+  /** "Apply to all departments" waits for the band's Save. */
+  readonly applyAllPending = signal(false);
+  private colsJson(): string { return JSON.stringify(this.columns().map(({ id: _i, ...c }) => c)); }
+  private sigJson(): string { return JSON.stringify(this.signatories().map(({ _key: _k, ...x }) => x)); }
+  readonly colsDirty = computed(() => !this.hostManaged() && !this.loading() && (this.applyAllPending() || (!!this.savedCols() && this.colsJson() !== this.savedCols())));
+  readonly sigDirty = computed(() => !this.hostManaged() && this.sigJson() !== this.savedSig());
+  discardCols() {
+    this.applyAllPending.set(false);
+    try { const saved = JSON.parse(this.savedColsRaw) as ReportColumn[]; this.columns.set(saved); this.emitState(); } catch { /* keep */ }
+  }
+  discardSig() { const id = this.selectedDeptId(); if (id) this.loadSignatories(id); }
+  private savedColsRaw = '[]';
+  private markColsSaved() { this.savedColsRaw = JSON.stringify(this.columns()); this.savedCols.set(this.colsJson()); }
   addSig() {
     if (this.signatories().length >= 7) return;
     this.signatories.update(l => [...l, { _key: this.sigKey(), mode: 'role', role: 'tested_by', userId: null, designation: '' }]);
@@ -537,7 +552,7 @@ export class ReportColumnsEditorComponent implements OnInit {
     this.api.post(`/api/report-layout/department/${deptId}/signatories`, {
       signatories: this.signatories().map(s => ({ mode: s.mode, role: s.role, userId: s.userId, designation: s.designation })),
     }).subscribe({
-      next: () => { this.sigSaving.set(false); this.toasts.success('Signatories saved'); },
+      next: () => { this.sigSaving.set(false); this.savedSig.set(this.sigJson()); this.toasts.success('Signatories saved'); },
       error: e => { this.sigSaving.set(false); this.toasts.error(ApiError.from(e).message); },
     });
   }
@@ -596,11 +611,15 @@ export class ReportColumnsEditorComponent implements OnInit {
         .map(c => ({ ...c, label: c.label ?? '', name: c.name && c.name.trim() ? c.name : this.slugifyName(c.label ?? '') }));
       this.columns.set(this.ensureNameColumn(this.applyDefaultResultUnitLink(sorted)));
       this.configured.set(res.configured);
+      this.markColsSaved();
+      this.applyAllPending.set(false);
       this.loading.set(false);
       this.emitState();
     }).catch(() => {
       this.columns.set(DEFAULT_RESULT_COLUMNS.map(c => ({ ...c })));
       this.configured.set(false);
+      this.markColsSaved();
+      this.applyAllPending.set(false);
       this.loading.set(false);
       this.toasts.error('Failed to load columns; showing defaults');
       this.emitState();
@@ -697,10 +716,15 @@ export class ReportColumnsEditorComponent implements OnInit {
     this.setCols(DEFAULT_RESULT_COLUMNS.map(c => ({ ...c })));
   }
 
-  /** Save the current column layout to EVERY department, so the same mapping
-   *  (e.g. Result + Unit merged) is present across all departments. */
-  async applyToAll() {
+  /** "Apply to all departments": nothing is written now — the band's Save writes this layout to EVERY department
+   *  (owner 2026-11-17: one Save). */
+  applyToAll() {
     if (!this.totalOk()) { this.toasts.error(`Column widths must sum to 100 (got ${this.totalWidth()})`); return; }
+    this.applyAllPending.set(true);
+    this.toasts.info('These columns will apply to every department when you press Save.');
+  }
+  /** Writes the current layout to every department (the band's Save, after "Apply to all departments"). */
+  private async writeToAll() {
     const depts = this.departments();
     if (depts.length === 0) return;
     this.applyingAll.set(true);
@@ -712,7 +736,7 @@ export class ReportColumnsEditorComponent implements OnInit {
       catch (e: unknown) { lastError = ApiError.from(e).message; /* keep going */ }
     }
     this.applyingAll.set(false);
-    if (ok === depts.length) this.toasts.success(`Applied to all ${ok} departments`);
+    if (ok === depts.length) { this.toasts.success(`Applied to all ${ok} departments`); this.applyAllPending.set(false); this.markColsSaved(); }
     else this.toasts.error(`Applied to ${ok} of ${depts.length} departments — ${lastError}`);
     this.configured.set(true);
   }
@@ -721,10 +745,12 @@ export class ReportColumnsEditorComponent implements OnInit {
     const deptId = this.selectedDeptId();
     if (!deptId) return;
     if (!this.totalOk()) { this.toasts.error(`Column widths must sum to 100 (got ${this.totalWidth()})`); return; }
+    if (this.applyAllPending()) { await this.writeToAll(); return; }
     this.saving.set(true);
     try {
       await this.layout.saveDeptColumns(deptId, this.columns().map((c, i) => ({ ...c, order: i + 1 })));
       this.configured.set(true);
+      this.markColsSaved();
       this.toasts.success('Column structure saved');
     } catch (e: unknown) {
       this.toasts.error(ApiError.from(e).message);

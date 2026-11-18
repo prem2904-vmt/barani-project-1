@@ -16,6 +16,15 @@ const pillTabs = (el: HTMLElement) =>
   Array.from(el.querySelectorAll<HTMLButtonElement>('pf-hero-band .pf-hb__tools pf-segmented .seg-item'));
 const tabByLabel = (el: HTMLElement, label: string) =>
   pillTabs(el).find((b) => (b.getAttribute('aria-label') ?? '') === label)!;
+/** Report design (owner 2026-11-17): the sections are the LEFT side card's list (Test Master two-panel). */
+const rtTabs = (el: HTMLElement) =>
+  Array.from(el.querySelectorAll<HTMLButtonElement>('[data-testid="rt-nav"] .pf-rt-nav__item'));
+const rtTab = (el: HTMLElement, label: string) =>
+  rtTabs(el).find((b) => (b.textContent ?? '').trim() === label)!;
+const settle = async (p: { f: { detectChanges(): void; whenStable(): Promise<unknown> } }) => {
+  for (let i = 0; i < 3; i++) { p.f.detectChanges(); await p.f.whenStable(); await new Promise((r) => setTimeout(r, 0)); }
+  p.f.detectChanges();
+};
 
 describe('Admin band — Report designer (/admin/reports)', () => {
   const make = () => renderBandPage(ReportTemplateComponent, {
@@ -25,13 +34,14 @@ describe('Admin band — Report designer (/admin/reports)', () => {
       : null,
   });
 
-  it('ONE page: search pill + one tab strip (design tabs, Sending); rail and page title are gone', () => {
+  it('ONE page: search pill in the band; the sections are the LEFT side card; no live preview pane', () => {
     const p = make();
     expect(p.band()).not.toBeNull();
     expect(p.bandInput()).not.toBeNull();
     expect(p.bandInput()!.placeholder).toBe('Find a report setting');
     expect(p.el.querySelector('.pf-hb__search--tabs')).toBeNull();
-    expect(pillTabs(p.el).map((b) => b.getAttribute('aria-label')))
+    expect(p.el.querySelector('pf-hero-band pf-segmented')).toBeNull();
+    expect(rtTabs(p.el).map((b) => (b.textContent ?? '').trim()))
       .toEqual(['Letterhead', 'Patient strip', 'Table columns', 'Results table', 'Sequencing', 'Footer', 'Sending']);
     expect(p.el.querySelector('[data-testid="rt-report-options"]')).toBeNull();
     expect(p.el.querySelector('.pf-rt-rail')).toBeNull();
@@ -40,39 +50,40 @@ describe('Admin band — Report designer (/admin/reports)', () => {
     expect(p.body()?.classList.contains('pf-band-body--fill')).toBe(true);
     // Letterhead is edited ON the page (the WYSIWYG designer) …
     expect(p.body()?.querySelector('pf-report-header-editor')).not.toBeNull();
-    // … the other sections keep the form + live preview.
+    // … the other sections fill the main card full width — NO live preview (Preview opens on demand).
     p.cmp.setTab('patient');
     p.f.detectChanges();
-    expect(p.body()?.querySelector('.pf-rt-work')).not.toBeNull();
-    expect(p.body()?.querySelector('.pf-rt-aside')).not.toBeNull();
+    expect(p.body()?.querySelector('.pf-rt-main .pf-rt-work')).not.toBeNull();
+    expect(p.body()?.querySelector('.pf-rt-aside')).toBeNull();
+    expect(p.body()?.querySelector('[data-testid="rt-preview"]')).not.toBeNull();
   });
 
-  it('clicking a pill tab switches the section', () => {
+  it('clicking a section switches it', async () => {
     const p = make();
     expect(p.cmp.tab()).toBe('letterhead');
-    tabByLabel(p.el, 'Footer').click();
-    p.f.detectChanges();
+    rtTab(p.el, 'Footer').click();
+    await settle(p);
     expect(p.cmp.tab()).toBe('footer');
-    expect(tabByLabel(p.el, 'Footer').classList.contains('is-selected')).toBe(true);
+    expect(rtTab(p.el, 'Footer').getAttribute('aria-selected')).toBe('true');
   });
 
-  it('Report notes is a row of Results table and Sending renders in the same body frame; one Save, notes PATCH only techReportNotes', () => {
+  it('Report notes is a row of Results table and Sending renders in the same body frame; one Save, notes PATCH only techReportNotes', async () => {
     const p = make();
-    expect(tabByLabel(p.el, 'Report notes')).toBeUndefined();
-    tabByLabel(p.el, 'Results table').click();
-    p.f.detectChanges();
+    expect(rtTab(p.el, 'Report notes')).toBeUndefined();
+    rtTab(p.el, 'Results table').click();
+    await settle(p);
     expect(p.cmp.tab()).toBe('table');
     const work = p.body()!.querySelector('.pf-rt-work')!;
     expect(work.querySelector('[data-testid="ls-tech-notes"]')).not.toBeNull();
-    expect(p.body()!.querySelector('.pf-rt-aside')).not.toBeNull();
+    expect(p.body()!.querySelector('.pf-rt-aside')).toBeNull();   // no live preview pane (Preview opens on demand)
     const sw = work.querySelector<HTMLButtonElement>('button[role="switch"][aria-label="Report notes"]')!;
     sw.click();
     expect(p.api.patch).toHaveBeenCalledWith('/api/tenants/branch-lab-config', { techReportNotes: true });
-    tabByLabel(p.el, 'Sending').click();
-    p.f.detectChanges();
+    rtTab(p.el, 'Sending').click();
+    await settle(p);
     expect(p.body()!.querySelector('.pf-rt-work pf-report-sending-card')).not.toBeNull();
-    expect(p.actions().filter((b) => /\bSave\b/.test(b.textContent ?? '')).length).toBe(0);   // never in the band
-    expect(p.el.querySelectorAll('[data-testid="rt-save"]').length).toBeLessThanOrEqual(1);       // at most ONE Save (the pane's bar)
+    expect(p.el.querySelectorAll('pf-hero-band [data-testid="band-save"]').length).toBeLessThanOrEqual(1);   // ONE Save, in the band's corner
+    expect(p.el.querySelectorAll('.pf-ssb__bar').length).toBe(0);                                          // never a card-footer bar
   });
 
   it('the band search finds a setting on another tab and opens it', () => {
@@ -87,9 +98,9 @@ describe('Admin band — Report designer (/admin/reports)', () => {
     expect(p.el.querySelector('[data-testid="rt-find"]')).toBeNull();
   });
 
-  it('no button in the band (owner): Save sits in the settings pane\'s Save bar and posts the template', () => {
+  it('Save sits in the band\'s top-right corner (owner 2026-11-17) and posts the template', () => {
     const p = make();
-    expect(p.actions().some((b) => /\bSave\b/.test(b.textContent ?? ''))).toBe(false);
+    expect(p.el.querySelectorAll('.pf-ssb__bar').length).toBe(0);
     p.cmp.save();
     expect(p.api.post).toHaveBeenCalledWith('/api/config/report-template', expect.objectContaining({ labName: 'Micro World Labs' }));
   });

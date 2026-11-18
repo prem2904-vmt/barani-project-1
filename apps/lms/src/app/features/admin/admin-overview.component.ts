@@ -11,13 +11,14 @@ import {
   effect,
   inject,
   signal,
+  untracked,
 } from "@angular/core";
 import { Location, NgComponentOutlet, NgTemplateOutlet } from "@angular/common";
 import { SETTINGS_HOST, createSettingsHost, pickHostSearch } from "../../shared/utils/settings-host";
 import { confirmLeaveUnsaved, hasUnsavedChangesContract } from "../../shared/utils/unsaved-changes";
 import { DialogService } from "../../core/services/dialog.service";
 import { SegmentedComponent } from "../../shared/primitives/segmented.component";
-import { SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from "./settings/settings.routes";
+import { INLINE_PAGE_ROUTES, INLINE_SECTION_OF, SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from "./settings/settings.routes";
 import { OPD_ADMIN_ROUTES } from "../opd/opd.routes";
 import { CASESHEET_SHELL_ROUTES } from "../casesheets/casesheets.routes";
 import { Route } from "@angular/router";
@@ -31,7 +32,7 @@ import { NavBackService } from "../../core/services/nav-back.service";
 import { SettingsCatalogService } from "../../core/services/settings-catalog.service";
 import { SettingsResultsComponent } from "../../shared/components/settings-results/settings-results.component";
 import { SettingsAccessService } from "./settings/settings-access.service";
-import { LEGACY_SECTION, SETTINGS_GROUPS, settingsPages } from "./settings/settings-map";
+import { LEGACY_SECTION, SETTINGS_GROUPS, settingForPath, settingsPages } from "./settings/settings-map";
 
 /** One section's tile as the right panel shows it. */
 interface SectionTile {
@@ -115,7 +116,7 @@ interface SectionTile {
             </ng-container>
             @if (inlineCmp(); as cmp) {
               <!-- A section with ONE setting shows that setting right here (owner): no tile, no extra click. -->
-              <div class="pf-ss__main pf-ov__inline" [class.pf-ss__main--one]="inlineCats().length > 1" data-testid="ov-inline">
+              <div class="pf-ss__main pf-ov__inline" [class.pf-ss__main--one]="inlineCats().length > 1" [class.pf-ov__inline--fill]="inlineFills()" data-testid="ov-inline">
                 <ng-container *ngComponentOutlet="cmp; injector: inlineInjector()"></ng-container>
               </div>
             } @else {
@@ -224,7 +225,33 @@ export class AdminOverviewComponent implements OnDestroy {
     return id && this.allItems().some(i => i.section.id === id) ? id : null;
   });
   /** Wide: the URL's section, else the first one. Phone: only what the URL names (none = the list). */
-  readonly selectedId = computed(() => this.urlSection() ?? (this.compact() ? null : (this.allItems()[0]?.section.id ?? null)));
+  readonly selectedId = computed(() => this.urlSection() ?? (this.compact() && !this.onlySection() ? null : (this.allItems()[0]?.section.id ?? null)));
+
+  // ── Settings access (owner 2026-11-18): one area = no overview of one tile ──
+  /** The ONE section this person can open anything in (e.g. a Lab contributor), else null. */
+  readonly onlySection = computed(() => (this.allItems().length === 1 ? this.allItems()[0].section.id : null));
+  /** The ONE setting this person can open (e.g. a front-desk person given Test Master contributor), else null. */
+  readonly onlyItem = computed(() => {
+    const items = this.allItems().flatMap((s) => s.items);
+    return items.length === 1 ? items[0] : null;
+  });
+  /** Exactly one setting: Settings opens straight into it. Coming BACK from it (its band chevron) leaves Settings. */
+  private readonly openOnly = effect(() => {
+    const it = this.onlyItem();
+    // A section of one full-screen page (People and access, Branches …) already renders it inline right here.
+    if (!it || this._q() || INLINE_SECTION_OF.has(it.path)) return;
+    untracked(() => {
+      const from = this.navBack.cameFrom();
+      const back = !!from && settingForPath(from.split(/[?#]/)[0])?.item.id === it.id;
+      void this.router.navigateByUrl(back ? '/' : it.path, { replaceUrl: true });
+    });
+  });
+  /** Phone, one section: open it (no list of one); its back leaves Settings (closeDetail). */
+  private readonly openOnlySection = effect(() => {
+    const id = this.onlySection();
+    if (!id || this.onlyItem() || !this.compact() || this.urlSection() !== null) return;
+    untracked(() => void this.router.navigate([], { relativeTo: this.route, queryParams: { section: id }, queryParamsHandling: 'merge', replaceUrl: true }));
+  });
   readonly detailOpen = computed(() => this.urlSection() !== null);
   readonly selectedTiles = computed<SectionTile[]>(() =>
     (this.allItems().find(i => i.section.id === this.selectedId())?.items ?? []).map((i) => ({
@@ -271,6 +298,8 @@ export class AdminOverviewComponent implements OnDestroy {
     }) : null;
     return Injector.create({ providers: proxy ? [{ provide: ActivatedRoute, useValue: proxy }] : [], parent: this.injector });
   });
+  /** Inline pages that fill the card body instead of scrolling it (a grid with a side panel). */
+  readonly inlineFills = computed(() => this.inlineItem()?.path === '/admin/users');
   /** Its categories (hosted ones, `?tab=`), as a switch in the main card head. */
   private readonly host = inject(SETTINGS_HOST);
   readonly inlineSearch = computed(() => this.inlineCmp() ? pickHostSearch(this.host.searches(), this.inlineCats().length > 1 ? this.inlineTab() : null) : null);
@@ -338,8 +367,9 @@ export class AdminOverviewComponent implements OnDestroy {
   }
   /** The band's back chevron on a phone section (the ONE back — no back inside the cards). */
   readonly closeFn = (): void => this.closeDetail();
-  /** Phone: leave the section and show the list again. */
+  /** Phone: leave the section and show the list again (one section only: there is no list — leave Settings). */
   closeDetail(): void {
+    if (this.onlySection()) { void this.router.navigateByUrl('/'); return; }
     if (this.pushedDetail) {
       this.pushedDetail = false;
       this.location.back();
@@ -381,5 +411,5 @@ export class AdminOverviewComponent implements OnDestroy {
 /** The route that serves a settings path (hosted card page, full page, OPD or case-sheet admin), for inline rendering. */
 function inlineRoute(path: string): Route | undefined {
   const p = path.replace(/^\//, '');
-  return [...SETTINGS_SHELL_CHILDREN, ...SETTINGS_FULL_PAGE_ROUTES, ...OPD_ADMIN_ROUTES, ...CASESHEET_SHELL_ROUTES].find(r => r.path === p && !r.redirectTo);
+  return [...SETTINGS_SHELL_CHILDREN, ...INLINE_PAGE_ROUTES, ...SETTINGS_FULL_PAGE_ROUTES, ...OPD_ADMIN_ROUTES, ...CASESHEET_SHELL_ROUTES].find(r => r.path === p && !r.redirectTo);
 }

@@ -49,7 +49,8 @@ describe('Instruments — routes + hub tile', () => {
   afterEach(() => TestBed.resetTestingModule());
 
   it('the settings page is gated like its lab-settings neighbours; the unmatched list on result-entry perms', () => {
-    expect(ROUTE_ACCESS['/admin/instruments']).toEqual({ perms: ['manage_lab_settings'], module: 'lab' });
+    // + the Lab contributor code (Settings access, owner 2026-11-18: a contributor views it; the server refuses their writes).
+    expect(ROUTE_ACCESS['/admin/instruments']).toEqual({ perms: ['manage_lab_settings', 'contribute_lab_settings'], module: 'lab' });
     expect(ROUTE_ACCESS['/admin/instruments'].perms).toEqual(ROUTE_ACCESS['/admin/lab/results'].perms);
     expect(ROUTE_ACCESS['/lab/analyzer-results']).toEqual({ perms: ['enter_result', 'edit_result'], module: 'lab' });
   });

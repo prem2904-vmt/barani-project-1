@@ -16,31 +16,35 @@ import { SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from '../settings/
 import { OPD_ADMIN_ROUTES } from '../../opd/opd.routes';
 import { PHARMACY_VIEW } from '../../opd/pharmacy/pharmacy-view';
 import { ROUTE_ACCESS } from '../../../core/auth/route-access';
+import { CONTRIBUTE_CODE } from '../../../shared/utils/settings-access';
 
 const route = (data: Record<string, unknown>) => ({ provide: ActivatedRoute, useValue: { snapshot: { data, queryParamMap: new Map() as any, paramMap: new Map() as any }, queryParamMap: of(new Map() as any) } });
 afterEach(() => TestBed.resetTestingModule());
 
-describe('Organization › Patient and order numbers (/admin/org/numbers)', () => {
-  it('shows only Patient ID and Order ID — the Identity and Sample ID tabs are not here', () => {
-    const p = renderBandPage(OrganizationSettingsComponent, { getFor: () => ({}), providers: [route({ orgTabs: ['patient', 'order'] })] });
+describe('Organization › Patient numbers (/admin/org/numbers)', () => {
+  it('shows only the Patient ID — Identity, Sample ID and Order ID are not here (Order ID moved to Lab, OPD, Pharmacy)', () => {
+    const p = renderBandPage(OrganizationSettingsComponent, { getFor: () => ({}), providers: [route({ orgTabs: ['patient'] })] });
     const tabs = Array.from(p.el.querySelectorAll('pf-hero-band .pf-hb__tools pf-segmented .seg-item')).map(b => b.getAttribute('aria-label'));
-    expect(tabs).toEqual(['Patient ID', 'Order ID']);
+    expect(tabs).toEqual(['Patient ID']);
     expect(p.cmp.tab()).toBe('patient');
     expect(p.el.querySelector('pf-setting-group .pf-sgroup__label')?.textContent?.trim()).toBe('Patient ID');
     expect(p.el.textContent).not.toContain('Organization login handle');
     expect(p.el.textContent).not.toContain('Sample ID format');
+    expect(p.el.querySelector('pf-order-id-format-card')).toBeNull();
+    expect(p.el.textContent).not.toContain('Order ID');
+    expect(p.api.get).not.toHaveBeenCalledWith(expect.stringContaining('/api/config/order-id'));
   });
 
   it('Patient ID still saves the same payload', () => {
-    const p = renderBandPage(OrganizationSettingsComponent, { getFor: () => ({}), providers: [route({ orgTabs: ['patient', 'order'] })] });
+    const p = renderBandPage(OrganizationSettingsComponent, { getFor: () => ({}), providers: [route({ orgTabs: ['patient'] })] });
     p.cmp.savePatientId();
     expect(p.api.post).toHaveBeenCalledWith('/api/config/patient-id', expect.objectContaining({ datePrefix: 'ddmmyy', serialMode: 'numeric' }));
   });
 
-  it('the old /admin/organization (no route data) keeps its three tabs (Sample ID moved to Lab)', () => {
+  it('the old /admin/organization (no route data) keeps its two tabs (Sample ID and Order ID moved)', () => {
     const p = renderBandPage(OrganizationSettingsComponent, { getFor: () => ({}) });
     const tabs = Array.from(p.el.querySelectorAll('pf-hero-band .pf-hb__tools pf-segmented .seg-item')).map(b => b.getAttribute('aria-label'));
-    expect(tabs).toEqual(['Identity', 'Patient ID', 'Order ID']);
+    expect(tabs).toEqual(['Identity', 'Patient ID']);
   });
 });
 
@@ -133,8 +137,17 @@ describe('Settings re-home routes (hosted by the Settings shell; one route table
     expect(by('admin/pharmacy/drugs').canActivate!.some(g => (g as any).opdGate)).toBe(true);
     expect(by('admin/ipd/alerts').canActivate!.length).toBeGreaterThanOrEqual(2);
   });
+  it('Order IDs per module: Visit numbers and Dispense numbers are hosted OPD-gated pages with their own permission', () => {
+    for (const p of ['admin/opd/numbers', 'admin/pharmacy/numbers']) {
+      expect(SETTINGS_SHELL_CHILDREN.filter(r => r.path === p).length, p).toBe(1);
+      expect(by(p).canActivate!.some(g => (g as any).opdGate), p).toBe(true);
+    }
+    // + the OPD contributor code (Settings access): contributors see the page view-only, the server refuses their saves.
+    expect(ROUTE_ACCESS['/admin/opd/numbers']).toEqual({ perms: ['manage_opd', 'manage_users', 'manage_billing_config', CONTRIBUTE_CODE.opd] });
+    expect(ROUTE_ACCESS['/admin/pharmacy/numbers']).toEqual({ perms: ['manage_pharmacy', 'manage_inventory', 'manage_billing_config', CONTRIBUTE_CODE.opd] });
+  });
   it('route data pins what each reused screen shows', () => {
-    expect(by('admin/org/numbers').data).toEqual({ orgTabs: ['patient', 'order'] });
+    expect(by('admin/org/numbers').data).toEqual({ orgTabs: ['patient'] });
     expect(by('admin/ipd/alerts').data).toEqual({ department: 'ipd' });
     expect(by('admin/pharmacy/drugs').data?.[PHARMACY_VIEW]).toBe('drugs');
     expect(readFileSync('apps/lms/src/app/app.routes.ts', 'utf8')).toMatch(/path: 'finance\/credit-accounts',[\s\S]{0,120}data: \{ creditView: 'money' \}/);

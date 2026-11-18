@@ -27,6 +27,16 @@
  * it without a TestBed.
  */
 import type { ModuleKey } from '../services/tenant-entitlements.service';
+import { CONTRIBUTE_CODE } from '../../shared/utils/settings-access';
+
+/** Settings access (owner 2026-11-18): a CONTRIBUTOR of an area opens that area's settings pages (the server admits their
+ *  reads and sends their Save for approval). Each area's routes below list its contribute code next to today's codes; a
+ *  Lab contributor is also a Test Master contributor, an Organization contributor one of every area (the server adds
+ *  those codes with the grant). People and access is never opened this way. */
+const C_ORG = CONTRIBUTE_CODE.org, C_LAB = CONTRIBUTE_CODE.lab, C_TM = CONTRIBUTE_CODE.test_master,
+  C_OPD = CONTRIBUTE_CODE.opd, C_IPD = CONTRIBUTE_CODE.ipd;
+/** OPD settings admin through Settings access (the server accepts it next to manage_users / manage_billing_config). */
+const OPD_ADMIN = 'manage_opd';
 
 export interface RouteAccess {
   perms?: string[];
@@ -41,6 +51,8 @@ export interface RouteAccess {
  *  KPIs). Deliberately EXCLUDES manage_branch(es): read-tier branch browsing held
  *  by Branch Managers, who must NOT reach tenant config. */
 export const ADMIN_PERMS = ['manage_tests', 'manage_users', 'manage_workflows'];
+/** Who may OPEN the OPD + Pharmacy settings pages: today's admins, an OPD admin (manage_opd) or an OPD contributor (view only). */
+export const OPD_SETTINGS_OPEN_PERMS = [...ADMIN_PERMS, OPD_ADMIN, C_OPD];
 
 /** Canonical permissions that grant the /frontdesk work area (landing +
  *  patient/order creation). Deliberately NOT `view_patient` (a read capability
@@ -56,10 +68,12 @@ export const FRONTDESK_PERMS = ['register_patient', 'create_order', 'create_bill
  *  profiles, packages, ranges, layouts, specimens, masters. Listed together so
  *  the guard reads right even against an older /me. */
 export const TEST_MASTER_PERMS = ['manage_tests', 'manage_test_master'];
+/** Who may OPEN Test Master: the editors plus a Test Master contributor (whose Save goes for approval). */
+export const TEST_MASTER_OPEN_PERMS = [...TEST_MASTER_PERMS, C_TM];
 /** Changing prices / tax slab / "offered here" (the pricing table). */
 export const TEST_PRICING_PERMS = ['manage_tests', 'manage_test_pricing'];
 
-export const LAB_SETTINGS_HUB_PERMS = ['manage_tests', 'manage_test_master', 'manage_test_pricing', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments', 'manage_bridges'];
+export const LAB_SETTINGS_HUB_PERMS = ['manage_tests', 'manage_test_master', 'manage_test_pricing', 'manage_lab_settings', 'manage_report_template', 'manage_notifications', 'manage_departments', 'manage_bridges', C_LAB, C_TM];
 /** Prefrontal Bridges (bridge-api v1, D12): add / rename / remove / Wi-Fi /
  *  analyzer assignment. Granted to Lab Admin + Lab Admin (Technical). */
 export const BRIDGE_PERMS = ['manage_bridges'];
@@ -97,6 +111,8 @@ export const PATIENT_DATA_EXPORT_PERMS = ['export_patient_data'];
  *  Not a `module` entry on purpose: IPD must be EXPLICITLY on and the gate also opens for a personal tenant, which
  *  moduleGuard ('no row ⇒ on' for live modules) cannot express. */
 export const CASESHEET_FORMS_PERMS = ['casesheet_forms_manage'];
+/** Who may OPEN the case-sheet form admin: the authors plus an IPD contributor (edits a form's draft; an admin publishes). */
+export const CASESHEET_FORMS_OPEN_PERMS = ['casesheet_forms_manage', 'contribute_ipd_settings'];
 export const CASESHEET_READ_PERMS = ['casesheet_view', 'casesheet_fill'];
 export const CASESHEET_FILL_PERMS = ['casesheet_fill'];
 
@@ -113,6 +129,7 @@ export const SETTINGS_ENTRY_PERMS = [...new Set([
   'manage_tenant', 'manage_admin', 'manage_billing_config', 'manage_inventory', 'manage_report_template',
   'manage_home_collection', 'manage_lab_settings', 'manage_notifications', 'manage_bridges',
   'manage_opd', 'manage_ipd', 'manage_pharmacy', ...CASESHEET_FORMS_PERMS,
+  C_ORG, C_LAB, C_TM, C_OPD, C_IPD,
 ])];
 
 export const ROUTE_ACCESS: Record<string, RouteAccess> = {
@@ -168,61 +185,65 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   // the switch inside is admin-only (the server enforces the PUT).
   '/admin/ai-connectors':     { perms: LAB_SETTINGS_HUB_PERMS },
   // Prefrontal Bridges — list, add, one Bridge (the server enforces each action).
-  '/admin/bridges':           { perms: BRIDGE_PERMS, module: 'lab' },
+  '/admin/bridges':           { perms: [...BRIDGE_PERMS, C_LAB], module: 'lab' },
   // Lab analyzers (instrument connector) — the same lab-admin perm as Lab settings / Microbiology.
-  '/admin/instruments':       { perms: ['manage_lab_settings'], module: 'lab' },
+  '/admin/instruments':       { perms: ['manage_lab_settings', C_LAB], module: 'lab' },
   '/admin/users':             { perms: ['manage_users'] },
   '/admin/users/invite':      { perms: ['manage_users'] },
   '/admin/roles/new':         { perms: ['manage_users'] },
-  '/admin/tests':             { perms: [...TEST_MASTER_PERMS, 'manage_test_pricing'] },
-  '/admin/tests/new':         { perms: TEST_MASTER_PERMS },
-  '/admin/branches':          { perms: ['manage_branches'] },
+  '/admin/tests':             { perms: [...TEST_MASTER_OPEN_PERMS, 'manage_test_pricing'] },
+  '/admin/tests/new':         { perms: TEST_MASTER_OPEN_PERMS },
+  '/admin/branches':          { perms: ['manage_branches', C_ORG] },
   // Lab › Departments and lab spaces: the perms the department endpoints accept (manage_departments | manage_branches).
-  '/admin/lab/departments':   { perms: ['manage_departments', 'manage_branches'], module: 'lab' },
-  '/admin/referral-labs':     { perms: TEST_MASTER_PERMS },
-  '/admin/partner-prices':    { perms: TEST_MASTER_PERMS },
+  '/admin/lab/departments':   { perms: ['manage_departments', 'manage_branches', C_LAB], module: 'lab' },
+  '/admin/referral-labs':     { perms: [...TEST_MASTER_PERMS, C_LAB] },
+  '/admin/partner-prices':    { perms: [...TEST_MASTER_PERMS, C_LAB] },
   '/admin/files':             { perms: FILES_SETTINGS_PERMS },
   // Billing config APIs accept manage_billing_config as well as manage_tenant.
-  '/admin/billing':           { perms: ['manage_tenant', 'manage_billing_config'] },
+  '/admin/billing':           { perms: ['manage_tenant', 'manage_billing_config', C_ORG] },
   '/admin/inventory':         { perms: ['manage_inventory'], module: 'inventory' },
   // Report design saves on manage_report_template (ConfigController / ReportLayoutController).
-  '/admin/reports':           { perms: ['manage_tenant', 'manage_tests', 'manage_report_template', 'manage_lab_settings'] },
-  '/admin/workflows':         { perms: ['manage_workflows'] },
-  '/admin/process':           { perms: ['manage_workflows'] },
+  '/admin/reports':           { perms: ['manage_tenant', 'manage_tests', 'manage_report_template', 'manage_lab_settings', C_LAB] },
+  '/admin/workflows':         { perms: ['manage_workflows', C_LAB] },
+  '/admin/process':           { perms: ['manage_workflows', C_LAB] },
   '/admin/audit':             { perms: ['view_audit_log'] },
 
 
   // ── Settings re-home (2026-11-17): the new homes carry EXACTLY the gate of the screen behind them today ──
-  '/admin/lab/sample-numbers':    { perms: ['manage_lab_settings', 'manage_tenant'] },
-  '/admin/lab/collection':        { perms: ['manage_lab_settings'] },
-  '/admin/lab/results':           { perms: ['manage_lab_settings'] },
-  '/admin/lab/outsourcing':       { perms: TEST_MASTER_PERMS },
-  '/admin/lab/analyzers':         { perms: ['manage_lab_settings', ...BRIDGE_PERMS], module: 'lab' },
-  '/admin/lab/front-desk':        { perms: ['manage_tenant', 'manage_admin'] },
-  '/admin/lab/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
-  '/admin/lab/numbers':           { perms: ADMIN_PERMS },
-  '/admin/lab/work-steps':        { perms: ['manage_workflows'] },
+  '/admin/lab/sample-numbers':    { perms: ['manage_lab_settings', 'manage_tenant', C_LAB] },
+  '/admin/lab/collection':        { perms: ['manage_lab_settings', C_LAB] },
+  '/admin/lab/results':           { perms: ['manage_lab_settings', C_LAB] },
+  '/admin/lab/outsourcing':       { perms: [...TEST_MASTER_PERMS, C_LAB] },
+  '/admin/lab/analyzers':         { perms: ['manage_lab_settings', ...BRIDGE_PERMS, C_LAB], module: 'lab' },
+  '/admin/lab/front-desk':        { perms: ['manage_tenant', 'manage_admin', C_LAB] },
+  '/admin/lab/alerts':            { perms: ['manage_tenant', 'manage_notifications', C_LAB] },
+  '/admin/lab/numbers':           { perms: [...ADMIN_PERMS, C_LAB] },
+  '/admin/lab/work-steps':        { perms: ['manage_workflows', C_LAB] },
   '/admin/lab/home-collection':   { perms: ['manage_home_collection'], workflow: ['home_visits'], module: 'homeCollection' },
-  '/admin/opd/departments':       { perms: ADMIN_PERMS },
-  '/admin/opd/doctors':           { perms: ADMIN_PERMS },
-  '/admin/opd/forms':             { perms: ADMIN_PERMS },
-  '/admin/opd/workflow':          { perms: ADMIN_PERMS },
-  '/admin/opd/settings':          { perms: ADMIN_PERMS },
-  '/admin/opd/front-desk':        { perms: ADMIN_PERMS },
-  '/admin/pharmacy':              { perms: ADMIN_PERMS },
-  '/admin/pharmacy/drugs':        { perms: ADMIN_PERMS },
-  '/admin/ipd/alerts':            { perms: ['manage_tenant', 'manage_notifications'] },
-  '/admin/org/profile':           { perms: ['manage_tenant'] },
-  '/admin/org/numbers':           { perms: ['manage_tenant'] },
-  '/admin/org/channels':          { perms: COMMS_SETTINGS_PERMS },
+  '/admin/opd/departments':       { perms: OPD_SETTINGS_OPEN_PERMS },
+  '/admin/opd/doctors':           { perms: OPD_SETTINGS_OPEN_PERMS },
+  '/admin/opd/forms':             { perms: OPD_SETTINGS_OPEN_PERMS },
+  '/admin/opd/workflow':          { perms: OPD_SETTINGS_OPEN_PERMS },
+  '/admin/opd/settings':          { perms: OPD_SETTINGS_OPEN_PERMS },
+  '/admin/opd/front-desk':        { perms: OPD_SETTINGS_OPEN_PERMS },
+  // Order IDs per module: the numbers save on the module's own code, or the codes its settings screen already uses
+  // (ConfigController.GateOrderModuleAsync / OrderModules.WritePermissions — keep in step).
+  '/admin/opd/numbers':           { perms: ['manage_opd', 'manage_users', 'manage_billing_config', C_OPD] },
+  '/admin/pharmacy/numbers':      { perms: ['manage_pharmacy', 'manage_inventory', 'manage_billing_config', C_OPD] },
+  '/admin/pharmacy':              { perms: OPD_SETTINGS_OPEN_PERMS },
+  '/admin/pharmacy/drugs':        { perms: OPD_SETTINGS_OPEN_PERMS },
+  '/admin/ipd/alerts':            { perms: ['manage_tenant', 'manage_notifications', C_IPD] },
+  '/admin/org/profile':           { perms: ['manage_tenant', C_ORG] },
+  '/admin/org/numbers':           { perms: ['manage_tenant', C_ORG] },
+  '/admin/org/channels':          { perms: [...COMMS_SETTINGS_PERMS, C_ORG] },
 
   // ── Case sheets (part of IPD; every route also behind casesheetGuard) ─
   // Admin → IPD → MyPrefrontal: author the lab's case-sheet forms.
-  '/admin/ipd/myprefrontal':                   { perms: CASESHEET_FORMS_PERMS },
-  '/admin/ipd/myprefrontal/forms/:id':         { perms: CASESHEET_FORMS_PERMS },
-  '/admin/ipd/myprefrontal/forms/:id/history': { perms: CASESHEET_FORMS_PERMS },
+  '/admin/ipd/myprefrontal':                   { perms: CASESHEET_FORMS_OPEN_PERMS },
+  '/admin/ipd/myprefrontal/forms/:id':         { perms: CASESHEET_FORMS_OPEN_PERMS },
+  '/admin/ipd/myprefrontal/forms/:id/history': { perms: CASESHEET_FORMS_OPEN_PERMS },
   '/admin/ipd/myprefrontal/pending':           { perms: CASESHEET_FORMS_PERMS },
-  '/admin/ipd/departments':                    { perms: CASESHEET_FORMS_PERMS },
+  '/admin/ipd/departments':                    { perms: CASESHEET_FORMS_OPEN_PERMS },
   // The lab's sheets: read with casesheet_view (tenant-wide, branch-filtered, §11 Q2) or casesheet_fill; start one with fill.
   // The Prepare tab (owner 2026-11-11): Departments to start a sheet (fill), every sheet the user may read (view or fill).
   '/prepare':                                  { perms: CASESHEET_FILL_PERMS },

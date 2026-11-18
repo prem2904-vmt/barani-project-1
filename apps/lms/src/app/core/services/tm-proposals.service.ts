@@ -2,7 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map, of, catchError } from 'rxjs';
 import { ApiService } from './api.service';
 import type { TmProposal, TmProposalPage } from '../../shared/models/tm-proposal.model';
-import { TM_PROPOSALS_URL, tmProposalPath, tmSort } from '../../shared/utils/tm-proposals';
+import { TM_CONTRIBUTOR_CHANGES_URL, TM_PROPOSALS_URL, tmProposalPath, tmSort } from '../../shared/utils/tm-proposals';
+import { BetaFeaturesService } from './beta-features.service';
 
 /** What the Pending view lists: the open rows (pending + stale + failed) or one closed status / all. */
 export type TmListFilter = 'review' | 'approved' | 'rejected' | 'withdrawn' | 'expired' | 'all';
@@ -23,11 +24,21 @@ export interface TmListResult {
 @Injectable({ providedIn: 'root' })
 export class TmProposalsService {
   private readonly api = inject(ApiService);
+  private readonly beta = inject(BetaFeaturesService, { optional: true });
   static readonly PAGE = 100;
+
+  /** Beta `assistant` on (dev): the full inbox (model + contributor suggestions). Else, beta `settingsaccess` (dev):
+   *  contributors' changes only. Neither: the assistant inbox (the server answers its empty 404, the view stays hidden). */
+  private root(): string {
+    const b = this.beta;
+    const on = (k: 'assistant' | 'settingsaccess') => !!b && typeof b.enabled === 'function' && b.enabled(k);
+    return !on('assistant') && on('settingsaccess') ? TM_CONTRIBUTOR_CHANGES_URL : TM_PROPOSALS_URL;
+  }
+  private path(id: string, action?: 'approve' | 'reject' | 'withdraw' | 're-review'): string { return tmProposalPath(id, action, this.root()); }
 
   private page(status: string, take = TmProposalsService.PAGE, batchId: string | null = null): Observable<TmProposalPage> {
     const batch = batchId ? `&batchId=${encodeURIComponent(batchId)}` : '';
-    return this.api.get<TmProposalPage>(`${TM_PROPOSALS_URL}?status=${encodeURIComponent(status)}&take=${take}${batch}`).pipe(
+    return this.api.get<TmProposalPage>(`${this.root()}?status=${encodeURIComponent(status)}&take=${take}${batch}`).pipe(
       map(p => ({
         items: Array.isArray(p?.items) ? p.items : [], total: Number(p?.total) || 0, pendingCount: Number(p?.pendingCount) || 0,
         counts: p?.counts ?? null,
@@ -63,25 +74,25 @@ export class TmProposalsService {
   }
 
   get(id: string): Observable<TmProposal> {
-    return this.api.get<TmProposal>(tmProposalPath(id));
+    return this.api.get<TmProposal>(this.path(id));
   }
 
   /** Approve ONE change. `confirmClinical` only after the checkbox dialog (the server refuses without it). */
   approve(id: string, confirmClinical: boolean): Observable<TmProposal> {
-    return this.api.post<TmProposal>(tmProposalPath(id, 'approve'), { confirmClinical });
+    return this.api.post<TmProposal>(this.path(id, 'approve'), { confirmClinical });
   }
 
   reject(id: string, note: string | null): Observable<TmProposal> {
     const n = (note ?? '').trim();
-    return this.api.post<TmProposal>(tmProposalPath(id, 'reject'), n ? { note: n } : {});
+    return this.api.post<TmProposal>(this.path(id, 'reject'), n ? { note: n } : {});
   }
 
   withdraw(id: string): Observable<TmProposal> {
-    return this.api.post<TmProposal>(tmProposalPath(id, 'withdraw'), {});
+    return this.api.post<TmProposal>(this.path(id, 'withdraw'), {});
   }
 
   /** "I re-checked": a changed-since-suggested (or failed) row is measured again and goes back to waiting. */
   reReview(id: string): Observable<TmProposal> {
-    return this.api.post<TmProposal>(tmProposalPath(id, 're-review'), {});
+    return this.api.post<TmProposal>(this.path(id, 're-review'), {});
   }
 }

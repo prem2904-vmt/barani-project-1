@@ -222,6 +222,9 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
             <header class="pf-card__head">
               <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/></svg></span>
               <h2 class="pf-card__label">Details</h2>
+              <!-- Actions in the head on every size (owner 2026-11-17: nothing clickable at the bottom). -->
+              <span class="pf-card__spacer"></span>
+              <span class="pf-bra__acts"><ng-container *ngTemplateOutlet="actionsTpl"></ng-container></span>
             </header>
             <div class="pf-card__body pf-bra__sidebody">
               @if (!result() && !relay()) {
@@ -241,9 +244,6 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
               }
               @if (error()) { <p class="pf-bra__err" role="alert">{{ error() }}</p> }
             </div>
-            @if (!isPhone) {
-              <div class="pf-card__foot"><ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
-            }
           </aside>
         </div>
       </div>
@@ -287,9 +287,6 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
                 </button>
               }
     </ng-template>
-    @if (isPhone) {
-      <div class="pf-bottombar pf-bra__bar"><ng-container *ngTemplateOutlet="actionsTpl"></ng-container></div>
-    }
 
     @if (scanning()) {
       <pf-barcode-scanner-modal title="Scan the Bridge QR" noun="Bridge QR" (matched)="onScanned($event)" (cancelled)="scanning.set(false)"></pf-barcode-scanner-modal>
@@ -297,6 +294,9 @@ const RELAY_ORDER: RelayStep[] = ['claiming', 'joining', 'verifying', 'scanning'
   `,
   styles: [`
     @use '../../../shared/styles/nd-mixins' as nd;
+    .pf-bra__acts { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .pf-bra__acts .pf-btn { height: 34px; min-height: 34px; padding: 0 12px; }
+    .pf-bra__acts .pf-span { flex: none; width: auto; }
     :host { display: block; min-height: 0; }
     .pf-bra__split { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
     @media (max-width: 1023px) { .pf-bra__split { grid-template-columns: minmax(0, 1fr); } }

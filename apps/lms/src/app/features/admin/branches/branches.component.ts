@@ -72,7 +72,9 @@ interface GstRow { branchId: string; gstin: string; }
                 <span class="pf-card__icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span>
                 <h3 class="pf-card__label">New branch</h3>
                 <span class="pf-card__spacer"></span>
-                <button type="button" class="pf-btn pf-btn--icon" (click)="requestCloseForm()" aria-label="Close">
+                <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="creatingBranch()" [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
+<button type="button" class="pf-btn pf-btn--icon" (click)="requestCloseForm()" aria-label="Close">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>
               </div>
@@ -86,10 +88,7 @@ interface GstRow { branchId: string; gstin: string; }
                 <label class="pf-field"><span class="pf-field__lbl">State</span>
                   <input type="text" class="pf-input" [ngModel]="newBranch().state" (ngModelChange)="patchNewBranch({ state: $event })" /></label>
               </div>
-              <div class="pf-card__foot">
-                <button type="button" class="pf-btn pf-btn--tertiary press" (click)="requestCloseForm()">Cancel</button>
-                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="creatingBranch()" [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
-              </div>
+              
             </aside>
           }
 

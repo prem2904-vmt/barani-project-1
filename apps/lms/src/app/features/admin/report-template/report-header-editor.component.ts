@@ -77,7 +77,7 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
   standalone: true,
   imports: [FormsModule, RouterLink, ImageUploadComponent, SnapGuidesComponent, ReportLetterheadCardComponent, ReportSignatureCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { class: 'pf-rhe-host' },
+  host: { class: 'pf-rhe-host', '[class.pf-rhe-host--flat]': 'flat()' },
   template: `
   <div class="pf-rhe" [class.pf-rhe--footer]="region() === 'footer'" [class.pf-rhe--guides]="guides()">
     <!-- ══ MAIN CARD: the page ══ -->
@@ -717,6 +717,21 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
   `,
   styles: [`
     :host { display: block; min-width: 0; min-height: 0; }
+    /* FLAT (inside Report design's ONE section card, owner 2026-11-17): no nested cards — the elements column and the
+       page sit flush in the host card; one head (the host's), so the designer heads lose their icon + title. */
+    :host(.pf-rhe-host--flat) .pf-rhe { gap: 0; height: 100%; }
+    :host(.pf-rhe-host--flat) .pf-rhe > .pf-card { border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+    @media (min-width: 901px) { :host(.pf-rhe-host--flat) .pf-rhe-side { border-right: 1px solid var(--pf-line); } }
+    :host(.pf-rhe-host--flat) .pf-rhe > .pf-card > .pf-card__head { background: transparent; border-radius: 0; min-height: 52px; }
+    :host(.pf-rhe-host--flat) .pf-rhe-main__head > .pf-card__icon,
+    :host(.pf-rhe-host--flat) .pf-rhe-main__head > .pf-card__label,
+    :host(.pf-rhe-host--flat) .pf-rhe-side > .pf-card__head > .pf-card__icon { display: none; }
+    :host(.pf-rhe-host--flat) .pf-rhe-side > .pf-card__head > .pf-card__label { text-transform: none; letter-spacing: 0; font-size: 13.5px; color: var(--text-primary); }
+    /* Flat: elements and setting rows are flush rows (hairline between), never little cards. */
+    :host(.pf-rhe-host--flat) .pf-rhe-list { gap: 0; }
+    :host(.pf-rhe-host--flat) .pf-rhe-li { border: 0; border-bottom: 1px solid var(--pf-line); border-radius: 0; background: transparent; padding-right: 0; }
+    :host(.pf-rhe-host--flat) .pf-rhe-li__main { padding-left: 0; }
+    :host(.pf-rhe-host--flat) .pf-rhe-row:not(.pf-rhe-row--flat) { border: 0; border-bottom: 1px solid var(--pf-line); border-radius: 0; background: transparent; padding-inline: 0; }
     /* Owner rule (2026-11-17): side cards sit on the LEFT, the same height as the main card. */
     .pf-rhe { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; height: 100%; min-height: 0; }
     @media (max-width: 1100px) { .pf-rhe { grid-template-columns: 330px minmax(0, 1fr); } }
@@ -906,6 +921,8 @@ export class ReportHeaderEditorComponent implements OnDestroy {
   private readonly platform = inject(PlatformService);
 
   readonly template = input.required<ReportTemplate>();
+  /** Inside a host card (Report design, new design): no card chrome of its own. */
+  readonly flat = input(false);
   readonly region = input<LayoutRegion>('header');
   /** blob: URL of the current full preview (page 1 is drawn). */
   readonly pdfUrl = input<string | null>(null);

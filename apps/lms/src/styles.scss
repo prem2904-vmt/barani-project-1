@@ -175,6 +175,18 @@
 :root.design-new .pf-ss__main .pf-band-page > .pf-band-body--fill:not(.pf-sgrid) {
   display: flex !important; flex-direction: column; flex: 1 1 auto; min-height: 420px;
 }
+/* People and access inline in the overview (grid + person side panel, owner 2026-11-18): the page FILLS the card body
+   (a definite height down to the panel, while the panel is open), so the panel's own body scrolls and the grid never slides out of view. */
+/* A side panel that becomes a bottom SHEET (phones) is position: fixed — the card body's slide-in animation leaves an
+   identity transform behind (fill: both), which made the card the sheet's containing block (the sheet hid under the
+   card head, its own head off screen). No transform while a sheet is open. */
+.pf-tp__body:has(.pf-sg-side--sheet), .pf-ss__scroll:has(.pf-sg-side--sheet) { animation: none !important; transform: none !important; }
+.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) { display: flex; flex-direction: column; height: 100%; min-height: 0; padding-bottom: 6px; }
+.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) > * { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+:root .pf-ss__main.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) .pf-band-page,
+:root.design-new .pf-ss__main.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) .pf-band-page { display: flex !important; flex-direction: column; flex: 1 1 auto; min-height: 0 !important; }
+:root .pf-ss__main.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) .pf-band-page > .pf-band-body--fill,
+:root.design-new .pf-ss__main.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) .pf-band-page > .pf-band-body--fill { min-height: 0 !important; }
 /* A hosted page whose content is a pf-data-grid sits FLUSH in the frame's main card, exactly like Test Master's grid
    (owner 2026-11-17): card head -> divider -> grid header -> rows -> card bottom, no inner padding and no second
    border; the card's radius clips the grid's corners. Shell main card, overview inline page and their wrappers. */
@@ -1488,7 +1500,7 @@ html[data-theme="light"] .pf-vial__outline {
      be small and clusters of them stack vertically when stretched. */
   .pf-msgs__react-pill, .pf-msgs__tab-pill, .pf-msgs__edited-tag,
   .pf-msgs__sys-body, .pf-msgs__pinned-tag-icon,
-  .chip, [class*='__chip'],
+  .chip, [class*='__chip']:not([class*='__chips']):not([class*='__chip-row']),
   .seg-item, .pf-seg__item, pf-segmented button {
     min-width: auto;
     min-height: auto;
@@ -1647,8 +1659,9 @@ html[data-theme="light"] .pf-vial__outline {
 }
 
 /* Status chips (chip primitive + ad-hoc chips). Consistent 24-26px
-   height + tabular numerals when they wrap a count. */
-.chip, [class*='__chip'], .pf-chip {
+   height + tabular numerals when they wrap a count. A chip ROW (`__chips`, `__chip-row`) is a container, never a
+   24px chip (owner 2026-11-18: Option groups' wrapped value chips spilled over the label below). */
+.chip, [class*='__chip']:not([class*='__chips']):not([class*='__chip-row']), .pf-chip {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1661,7 +1674,7 @@ html[data-theme="light"] .pf-vial__outline {
   white-space: nowrap;
 }
 @media (max-width: 640px) {
-  .chip, [class*='__chip'], .pf-chip {
+  .chip, [class*='__chip']:not([class*='__chips']):not([class*='__chip-row']), .pf-chip {
     height: 26px;
     font-size: 12px;
     padding: 0 10px;
@@ -2913,10 +2926,35 @@ input::-ms-clear {
 
 /* Settings (owner 2026-11-17): no violet primary anywhere in Settings — Save / Add are SECONDARY, Discard / Cancel
    tertiary, and they sit in the pane they act on. Inside the frame any page primary reads as a secondary button. */
-:is(.pf-ss, .pf-ov) :is(.pf-hb-btn--primary, .pf-btn--primary) {
+:is(.pf-ss, .pf-ov) :is(.pf-hb-btn--primary, .pf-btn--primary):not(.pf-ssv__save) {
   background: var(--pf-card-bg, #fff) !important; color: var(--text-primary) !important;
   border: 1px solid var(--pf-line) !important; box-shadow: none !important; filter: none !important;
 }
-:is(.pf-ss, .pf-ov) :is(.pf-hb-btn--primary, .pf-btn--primary):hover:not(:disabled) {
+:is(.pf-ss, .pf-ov) :is(.pf-hb-btn--primary, .pf-btn--primary):not(.pf-ssv__save):hover:not(:disabled) {
   border-color: var(--pf-sel-border) !important; background: var(--pf-chip-bg) !important;
 }
+
+/* Owner 2026-11-17: nothing clickable at the bottom of a screen / card (next to the bottom nav) — a panel's actions
+   sit in its HEAD. Text buttons there are compact so the head stays one line where it can. */
+.pf-card__head > .pf-btn:not(.pf-btn--icon),
+.pf-card__head > pf-touch-btn { height: 34px; min-height: 34px; padding-inline: 12px; flex: none; }
+
+
+/* ── ONE side card for every two-panel screen (owner 2026-11-17: "must be the SAME everywhere") ──
+   Width = --pf-side-w (Test Master's 340px) on Settings overview / shell, settings grids, Report design, Test Master
+   and its views. Rows = Test Master's department rows (the pf-two-panel item): 44px, 8px 10px, radius 10, 13.5px/500,
+   neutral selected state (tint + inset ring), the count on the right. pf-two-panel's own rows carry the same values. */
+:root { --pf-side-w: 340px; }
+.pf-side-list { list-style: none; margin: 0; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+.pf-side-item {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--text-primary); font: inherit; font-size: 13.5px; font-weight: 500; text-align: left; cursor: pointer;
+  transition: background var(--pf-dur-fast, 200ms) ease, box-shadow var(--pf-dur-fast, 200ms) ease;
+}
+.pf-side-item:hover { background: var(--pf-chip-bg); }
+.pf-side-item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-side-item:is([aria-pressed='true'], [aria-selected='true'], .is-on) { background: var(--pf-sel-bg); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
+
+/* Side cards (owner 2026-11-18): the body is the scroller, so its children never shrink — a wrapped row of chips kept
+   collapsing under the label that follows it (Option groups). A child that must flex sets its own flex values. */
+aside.pf-card > .pf-card__body > * { flex-shrink: 0; }

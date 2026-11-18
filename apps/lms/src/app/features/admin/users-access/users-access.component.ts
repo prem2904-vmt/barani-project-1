@@ -240,9 +240,13 @@ function rowAction(web: boolean, label: string, icon: string, title: string): HT
   styles: [`
     /* The grid fills the card body (flex, never a % height — a host without a definite height left it at 0). */
     .pf-ua-tabseg { flex-shrink: 0; }
-    .pf-ua-panels { grid-template-columns: 440px minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+    /* The person / create panel is the standard side card (--pf-side-w, owner 2026-11-18): the row is bounded to the card
+       body so the panel's own body scrolls — never the panels box (that slid the grid out of view, a blank column). */
+    .pf-ua-panels { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); flex: 1 1 auto; min-height: 0; }
+    .pf-ua-panels:not(.pf-sg-panels--narrow) { grid-template-rows: minmax(0, 1fr); overflow: hidden; }
     .pf-ua-panels.pf-sg-panels--single, .pf-ua-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
-    .pf-ua-panel { overflow: hidden; }
+    .pf-ua-panel:not(.pf-sg-side--sheet) { overflow: hidden; min-height: 0; max-height: 100%; display: flex; flex-direction: column; }
+    .pf-ua-panel.pf-sg-side--sheet { overflow: hidden; }
     .pf-ua-panel > pf-user-invite, .pf-ua-panel > pf-user-edit { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
     :root:not(.design-new) .pf-ua-main { height: calc(100vh - 240px); min-height: 420px; }
     .pf-ua-count {

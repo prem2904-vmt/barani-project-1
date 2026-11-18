@@ -80,7 +80,7 @@ interface PermGroupView {
         <!-- Test Master frame: the band pill FINDS a permission across all
              groups; Save is the ONE primary. The role itself rides the slim
              summary card under the band. -->
-        <pf-hero-band [back]="true" [backTo]="'/admin/users?tab=roles'"
+        <pf-hero-band [back]="true"
                       placeholder="Find a permission — try “discount” or “sign out”"
                       [value]="search()" (valueChange)="onSearch($event)">
           <ng-container band-tools>
@@ -98,7 +98,7 @@ interface PermGroupView {
       <pf-screen-header class="pf-classic-only"
         eyebrow="Admin · Roles"
         [title]="heading()"
-        parentRoute="/admin/users?tab=roles"
+        parentRoute="/admin?section=people&tab=roles"
         [subtitle]="subtitle()">
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="saving() || recordSkeleton()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save' }}
@@ -450,14 +450,7 @@ export class RoleEditorComponent implements OnInit, HasUnsavedChanges {
   });
 
   ngOnInit() {
-    const backHandler = () => {
-      this.back();
-      return true;
-    };
-    this.navBack.registerBackInterceptor(backHandler);
-    this.destroyRef.onDestroy(() => {
-      this.navBack.clearBackInterceptor(backHandler);
-    });
+    // Back = navBack.back() (where you came from); no interceptor — it re-entered back() and swallowed the press.
 
     const id = this.route.snapshot.paramMap.get('id');
     // First load: permissions + roles (+ this role's grants) — then the form.
@@ -521,7 +514,8 @@ export class RoleEditorComponent implements OnInit, HasUnsavedChanges {
     });
   }
 
-  back() { this.navBack.backTo('/admin/users?tab=roles'); }
+  /** One press = where you came from (the People and access page, same tab); a deep link climbs to it. */
+  back() { this.navBack.back(); }
 
   // ── Unsaved changes (owner 2026-11-17: ask before leaving) ──
   readonly unsavedLabel = 'this role';

@@ -20,7 +20,7 @@ describe('Partner prices — Test Master grid (pf-data-grid)', () => {
     await p.cmp.pickLab('rl1'); p.f.detectChanges();
     expect(p.cmp.visibleRows().length).toBe(2);
     expect(p.actions().map((b: HTMLElement) => b.textContent?.trim())).toEqual(['Add price']);
-    expect(p.el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
+    expect(p.el.querySelector('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)')).toBeNull();
     p.type('lipid');
     expect(p.cmp.visibleRows().map((r: any) => r.testCatalogKey)).toEqual(['LIPID']);
   });
@@ -31,7 +31,7 @@ describe('Partner prices — Test Master grid (pf-data-grid)', () => {
     p.cmp.onCellChanged({ data: Object.assign(p.cmp.rows()[0], { cost: 200 }) });
     expect(p.cmp.hasUnsavedChanges()).toBe(true);
     p.f.detectChanges();
-    expect(p.el.querySelector('.ptp-main pf-settings-savebar [data-testid="savebar-save"]')).not.toBeNull();
+    expect(p.el.querySelector('pf-hero-band [data-testid="savebar-save"]')).not.toBeNull();
     p.api.post.mockReturnValue(of({}));
     expect(await p.cmp.saveChanges()).toBe(true);
     expect(p.api.post).toHaveBeenCalledWith('/api/partner-test-prices/batch', {

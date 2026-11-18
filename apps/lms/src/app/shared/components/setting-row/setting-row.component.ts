@@ -40,6 +40,7 @@ import { NgTemplateOutlet } from '@angular/common';
     :host(.pf-srow--off) .pf-srow__label, :host(.pf-srow--off) .pf-srow__hint { opacity: .6; }
     .pf-srow__ctl { display: flex; align-items: center; justify-content: flex-end; gap: 8px 10px; flex-wrap: wrap; flex: 0 1 auto; margin-left: auto; min-width: 0; max-width: 100%; }
     :host(.pf-srow--stack) .pf-srow__ctl { justify-content: flex-start; margin-left: 0; }
+    :host(.pf-srow--stack) .pf-srow__text { flex: none; }   /* the 300px basis is a width beside the control, never a height */
     @media (max-width: 767px) { .pf-srow__ctl { margin-left: 0; justify-content: flex-start; } }
   `],
 })

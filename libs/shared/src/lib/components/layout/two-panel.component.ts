@@ -150,7 +150,7 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
     </section>
   `,
   styles: [`
-    :host { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 16px; flex: 1 1 auto; min-height: 0; min-width: 0; align-items: stretch; }
+    :host { display: grid; grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); gap: 16px; flex: 1 1 auto; min-height: 0; min-width: 0; align-items: stretch; }
     .pf-tp__nav, .pf-tp__panel { min-height: 0; min-width: 0; }
     .pf-tp__navhead { flex-wrap: nowrap; }
     .pf-tp__head { flex-wrap: wrap; row-gap: 8px; }
@@ -217,7 +217,7 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
     :host(.pf-tp--nonav) .pf-tp__nav { display: none !important; }
     :host(.pf-tp--nonav) .pf-tp__panel { display: flex !important; flex: 1 1 auto; }
     /* Tablet portrait: a narrower side card. */
-    @media (max-width: 1100px) { :host(:not(.pf-tp--compact)) { grid-template-columns: 280px minmax(0, 1fr); } }
+    /* ONE side-card width everywhere (--pf-side-w, owner 2026-11-17) — no narrower step of its own. */
 
     /* Phone: side card first; picking a row shows only the main card (back chevron in its head). */
     :host(.pf-tp--compact) { display: flex; flex-direction: column; }

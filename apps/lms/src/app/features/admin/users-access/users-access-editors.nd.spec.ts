@@ -39,7 +39,7 @@ const perms = [
   { id: 'p2', code: 'enter_results', name: 'Enter results', description: '' },
 ];
 
-function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (...a: any[]) => Promise<boolean>; opd?: boolean } = {}) {
+function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (...a: any[]) => Promise<boolean>; opd?: boolean; access?: unknown } = {}) {
   // Always install the stub (never 'only if missing'): another spec in the same
   // worker may have left a phone / fine-pointer matchMedia behind (order-dependent flake).
   (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
@@ -50,6 +50,7 @@ function render<T>(cmp: Type<T>, opts: { id?: string; nd?: boolean; confirm?: (.
       if (url.startsWith('/api/permissions')) return of(perms);
       if (url.startsWith('/api/tenants/branches')) return of([{ id: 'b1', name: 'Main Lab' }, { id: 'b2', name: 'Annex' }]);
       if (url.startsWith('/api/users/u1/roles')) return of([{ roleId: 'r1', branchId: 'b1' }]);
+      if (url.startsWith('/api/settings-access/')) return of(opts.access ?? []);
       if (url.startsWith('/api/users')) return of(users);
       return of([]);
     }),
@@ -90,8 +91,8 @@ function hygiene(el: HTMLElement) {
   expect(el.querySelectorAll('input[type="checkbox"]').length).toBe(0);
   expect(/[✕✓✔●↑↓]/.test(el.textContent ?? '')).toBe(false);
   // Settings: no band buttons and no violet primary — the page's action is a secondary IN the pane.
-  expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
-  expect(el.querySelectorAll('.pf-hb-btn--primary, .pf-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(0);
+  expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)').length).toBe(0);
+  expect(el.querySelectorAll('.pf-hb-btn--primary:not(.pf-ssv__save), .pf-btn--primary, pf-touch-btn:not(.pf-classic-only pf-touch-btn) .v-primary').length).toBe(0);   // the band-corner Save (.pf-ssv__save) is the ONE allowed primary (owner 2026-11-17)
 }
 
 describe('Users & Access editors — new design (ND §14: pill = name only)', () => {
@@ -141,7 +142,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     const { el, f, c, txt } = render(UserEditComponent, { id: 'u1' });
     expect(txt(el.querySelector('.pf-uf-ctx__text'))).toBe('Dr. Prem Kumar');
     noFacts(el);
-    expect(el.querySelector('[data-testid="ue-save"]')).toBeNull();   // nothing changed yet
+    expect(el.querySelector<HTMLButtonElement>('[data-testid="ue-save"]')?.disabled ?? true).toBe(true);   // nothing changed yet: Save disabled (never jumps)
     // Slim summary strip: name, username, status, branches.
     const strip = el.querySelector('.ue-strip')!;
     expect(txt(strip)).toContain('Dr. Prem Kumar');
@@ -150,7 +151,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     // Sections side card first (LEFT), main card second; Profile rows are label-left / control-right.
     const panels = el.querySelector('.pf-sg-panels')!;
     expect(panels.firstElementChild!.classList.contains('ue-side')).toBe(true);
-    expect(Array.from(el.querySelectorAll('.ue-sec__name')).map(n => txt(n).replace('*', ''))).toEqual(['Profile', 'Branches', 'Roles', 'Validates for']);
+    expect(Array.from(el.querySelectorAll('.ue-sec__name')).map(n => txt(n).replace('*', ''))).toEqual(['Profile', 'Branches', 'Job role', 'Validates for']);
     expect(el.querySelectorAll('.ue-main pf-setting-row').length).toBeGreaterThanOrEqual(5);
     expect(txt(el.querySelector('.ue-main .ue-ro'))).toBe('drprem');
     // Roles section: Role | what it means | switch, one on; the combined-permissions note in the head.
@@ -159,7 +160,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(txt(el.querySelector('[data-testid="ue-perm-note"]'))).toContain('1 of 2 permissions from 1 role');
     hygiene(el);
     c.patch({ firstName: 'Premnath' }); f.detectChanges();
-    expect(el.querySelector('.ue-main pf-settings-savebar [data-testid="ue-save"]')).not.toBeNull();
+    expect(el.querySelector('pf-hero-band [data-testid="ue-save"]')).not.toBeNull();
   });
 
   it('Edit user: a missing branch / role flags its section; Save stays off', () => {
@@ -177,7 +178,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(reset.classList.contains('pf-rowact--icon')).toBe(true);
     expect(active().classList.contains('pf-rowact--icon')).toBe(true);
     expect(active().textContent).toContain('Deactivate');
-    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
+    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)').length).toBe(0);
 
     reset.click();
     await new Promise(r => setTimeout(r));
@@ -209,15 +210,15 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     // The band pill is the permission search (no record chips in the band).
     expect(el.querySelector('pf-hero-band .pf-hb__input')).not.toBeNull();
     expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
-    expect(el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
-    expect(el.querySelector('[data-testid="role-save"]')).toBeNull();
+    expect(el.querySelector('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)')).toBeNull();
+    expect(el.querySelector<HTMLButtonElement>('[data-testid="role-save"]')?.disabled ?? true).toBe(true);
     // Role name lives in the slim summary strip.
     const name = el.querySelector<HTMLInputElement>('.re-strip input.pf-re-name')!;
     expect(name).not.toBeNull();
     c.onNameChange('Billing Supervisor');
     f.detectChanges();
     expect(c.newRoleName()).toBe('Billing Supervisor');
-    expect(el.querySelector('.re-main pf-settings-savebar [data-testid="role-save"]')).not.toBeNull();
+    expect(el.querySelector('pf-hero-band [data-testid="role-save"]')).not.toBeNull();
     expect(el.querySelector('.re-strip')!.textContent).toContain('of');
     // OPD dark build: the Doctor role type is an OPD surface — hidden while OPD is dark.
     expect(el.querySelectorAll('.re-type.pf-seg [role="radio"]').length).toBe(0);
@@ -288,7 +289,7 @@ describe('Users & Access editors — new design (ND §14: pill = name only)', ()
     expect(el.querySelector('input.pf-re-name')).toBeNull();
     expect(el.querySelector('.re-strip')!.textContent).toContain('Editing the permissions saves a copy for your organisation only.');
     expect(el.querySelectorAll('pf-hero-band .pf-ctx__chip').length).toBe(0);
-    expect(el.querySelector('pf-hero-band .pf-hb__actions button')).toBeNull();
+    expect(el.querySelector('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)')).toBeNull();
     hygiene(el);
   });
 
@@ -303,7 +304,7 @@ describe('Users & Access list — current rules', () => {
   it('Noto grid, Create user in the card head (no band buttons), no mono count', () => {
     const { el, c } = render(UsersAccessComponent);
     expect(c.gridTheme()).toBeTruthy();
-    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button').length).toBe(0);
+    expect(el.querySelectorAll('pf-hero-band .pf-hb__actions button:not([data-testid="band-save"] button)').length).toBe(0);
     expect(el.querySelector('.pf-sg-act')!.textContent).toContain('Create user');
     expect(el.querySelector('.font-mono')).toBeNull();
   });
@@ -357,7 +358,7 @@ describe('User editor — panel mode (beside the People grid)', () => {
     const panel = el.querySelector('[data-testid="ue-panel"]')!;
     expect(panel).not.toBeNull();
     expect(el.querySelector('pf-hero-band')).toBeNull();
-    expect(Array.from(panel.querySelectorAll('.ue-panel__sec')).map(h => h.textContent!.trim().split(' ')[0])).toEqual(['Profile', 'Branches', 'Roles', 'Validates']);
+    expect(Array.from(panel.querySelectorAll('.ue-panel__sec')).map(h => h.textContent!.trim().split(' ')[0])).toEqual(['Profile', 'Branches', 'Job', 'Validates']);
     expect(panel.querySelector('.pf-ue-reset')).not.toBeNull();
     expect(panel.querySelectorAll('.pf-btn--primary').length).toBe(1);
     let closed = 0; c.closed.subscribe(() => closed++);
@@ -373,7 +374,7 @@ describe('People grid — Create user opens the form beside the grid', () => {
     c.openInvite(); f.detectChanges();
     expect(el.querySelector('.pf-ua-panel [data-testid="ui-panel"]')).not.toBeNull();
     expect(el.querySelector('.pf-sg-panels')!.firstElementChild!.classList.contains('pf-ua-panel')).toBe(true);
-    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary')).toBeNull();
+    expect(el.querySelector('pf-hero-band .pf-hb-btn--primary:not(.pf-ssv__save)')).toBeNull();
     expect(el.querySelectorAll('.pf-ua-panel .pf-btn--primary').length).toBe(1);
     await c.openInvite(); await Promise.resolve(); f.detectChanges();
     expect(el.querySelector('.pf-ua-panel')).toBeNull();
@@ -406,5 +407,44 @@ describe('Role editor — unsaved changes', () => {
     expect(await c.saveChanges()).toBe(true);
     expect(api.patch).toHaveBeenCalledWith('/api/roles/r1/permissions', { permissionIds: ['p1', 'p2'] });
     expect(c.hasUnsavedChanges()).toBe(false);
+  });
+});
+
+describe('User editor — Settings access (owner 2026-11-18: Job role, then Settings access, one pf-select per area)', () => {
+  const area = (a: string, grant: string, canChange: boolean, choices: string[], fromRole = 'none') =>
+    ({ area: a, grant, fromRole, effective: grant, canChange, choices });
+  const access = { userId: 'u1', areas: [
+    area('org', 'none', false, ['none']), area('lab', 'none', true, ['none', 'contributor']),
+    area('test_master', 'none', true, ['none', 'contributor']), area('opd', 'none', false, ['none']), area('ipd', 'admin', false, ['admin'], 'admin'),
+  ] };
+
+  it('panel: Job role, then Settings access with a row per area; only what the caller may change is enabled; Save sends one PUT per change', () => {
+    const { el, f, c, api } = render(UserEditComponent, { access });
+    f.componentRef.setInput('panelId', 'u1');
+    c.ngOnInit(); f.detectChanges();
+    const heads = Array.from(el.querySelectorAll('.ue-panel__sec')).map(h => h.textContent!.trim());
+    const jr = heads.findIndex(h => h.startsWith('Job role'));
+    expect(heads[jr + 1]).toContain('Settings access');
+    const rows = Array.from(el.querySelectorAll('[data-testid="ue-settings-access"] .ue-acc-row'));
+    expect(rows.length).toBe(5);
+    const ue = c as unknown as UserEditComponent;
+    expect(ue.accessRows().map((r: { area: string; canChange: boolean }) => [r.area, r.canChange])).toEqual([['org', false], ['lab', true], ['test_master', true], ['opd', false], ['ipd', false]]);
+    expect(ue.accessRows().find((r: { area: string }) => r.area === 'test_master')!.options.map((o: { label: string }) => o.label)).toEqual(['None', 'Contributor']);
+    expect(ue.hasUnsavedChanges()).toBe(false);
+    ue.setAccess('test_master', 'contributor');
+    expect(ue.hasUnsavedChanges()).toBe(true);
+    c.save();
+    expect(api.put).toHaveBeenCalledWith('/api/users/u1/roles', expect.anything());
+    return Promise.resolve().then(() => Promise.resolve()).then(() => {
+      expect(api.put).toHaveBeenCalledWith('/api/settings-access/users/u1', { area: 'test_master', level: 'contributor' });
+    });
+  });
+
+  it('no permission to see it (the server refuses): the section is not there at all', () => {
+    const { el, f, c } = render(UserEditComponent);
+    f.componentRef.setInput('panelId', 'u1');
+    c.ngOnInit(); f.detectChanges();
+    expect(el.querySelector('[data-testid="ue-settings-access"]')).toBeNull();
+    expect((c as unknown as UserEditComponent).sections().map((s: { id: string }) => s.id)).not.toContain('access');
   });
 });

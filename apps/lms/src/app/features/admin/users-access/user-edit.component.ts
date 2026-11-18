@@ -23,6 +23,10 @@ import { ROLE_INFO } from './permission-catalog';
 import { TITLE_OPTIONS } from './user-form.styles';
 import { UserAccountActionsService } from './user-account-actions.service';
 import { AuthService } from '../../../core/auth/auth.service';
+import {
+  SETTINGS_AREAS, SETTINGS_AREA_HINT, SETTINGS_AREA_LABEL, SETTINGS_LEVELS, SETTINGS_LEVEL_LABEL, SettingsArea, SettingsLevel,
+} from '../../../shared/utils/settings-access';
+import type { SettingsAccessView } from '../../../shared/models/settings-access.model';
 import { rolePickerRows } from './role-assignability';
 import { DEPARTMENTS_HINT, UserDepartmentsRow, viaRoleLabels } from './consultant-departments';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
@@ -98,7 +102,10 @@ interface EditForm {
               <span class="pf-rowact__t">{{ isActive() ? 'Deactivate' : 'Reactivate' }}</span>
             </button>
           }
-          <button type="button" class="pf-btn pf-btn--icon ue-panel__close" (click)="requestClose()" aria-label="Close" title="Close">
+          <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
+          <button type="button" class="pf-btn pf-btn--primary pf-uf-primary press" [disabled]="!canSave() || saving() || recordSkeleton()"
+                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
+<button type="button" class="pf-btn pf-btn--icon ue-panel__close" (click)="requestClose()" aria-label="Close" title="Close">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
         </header>
@@ -110,24 +117,24 @@ interface EditForm {
             <ng-container *ngTemplateOutlet="secProfile"></ng-container>
             <h3 class="ue-panel__sec">Branches</h3>
             <ng-container *ngTemplateOutlet="secBranches"></ng-container>
-            <h3 class="ue-panel__sec">Roles <span class="ue-panel__note" data-testid="ue-perm-note">{{ permSummary() }}</span></h3>
+            <h3 class="ue-panel__sec">Job role <span class="ue-panel__note" data-testid="ue-perm-note">{{ permSummary() }}</span></h3>
             <ng-container *ngTemplateOutlet="secRoles"></ng-container>
+            @if (access()) {
+              <h3 class="ue-panel__sec">Settings access <span class="ue-panel__note">{{ accessSummary() }}</span></h3>
+              <ng-container *ngTemplateOutlet="secAccess"></ng-container>
+            }
             <h3 class="ue-panel__sec">Validates for</h3>
             <ng-container *ngTemplateOutlet="secValidates"></ng-container>
           }
         </div>
-        <div class="pf-card__foot ue-panel__foot">
-          <button type="button" class="pf-btn pf-btn--tertiary press" (click)="requestClose()">Cancel</button>
-          <button type="button" class="pf-btn pf-btn--primary pf-uf-primary press" [disabled]="!canSave() || saving() || recordSkeleton()"
-                  [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
-        </div>
+        
       </div>
     } @else {
     <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
       @if (theme.isNewDesign()) {
         <!-- ND "Editors": band = back · tenant · the ONE primary; the pill is
              the CONTEXT BAR (the user being edited as read-only chips). -->
-        <pf-hero-band [back]="true" [backTo]="'/admin?section=people'" [customSearch]="true" [contextBar]="true"
+        <pf-hero-band [back]="true" [customSearch]="true" [contextBar]="true"
                       [backAction]="narrow() && sectionPicked() ? backToSections : null">
           <div band-search class="pf-ctx pf-uf-ctx">
             <!-- ND §14: the pill = the record's name (full, quiet pencil) — no fact chips. -->
@@ -144,7 +151,7 @@ interface EditForm {
       <pf-screen-header class="pf-classic-only"
         eyebrow="Admin · Users"
         [title]="'Edit ' + (loadedName() || 'user')"
-        parentRoute="/admin/users?tab=users"
+        parentRoute="/admin?section=people&tab=users"
         subtitle="Update the user's details, roles and branch scope.">
         <pf-touch-btn actions size="sm" variant="primary" [disabled]="!canSave() || saving() || recordSkeleton()" [busy]="saving()" busyLabel="Saving…" (pressed)="save()">
           {{ saving() ? 'Saving…' : 'Save changes' }}
@@ -214,6 +221,7 @@ interface EditForm {
                   @case ('profile') { <span class="pf-card__note"><span class="pf-uf-req">*</span> required</span> }
                   @case ('roles') { <span class="pf-card__note" data-testid="ue-perm-note">{{ permSummary() }} · combined from every role switched on</span> }
                   @case ('validates') { <span class="pf-card__note">For consultants who validate results</span> }
+                  @case ('access') { <span class="pf-card__note">On top of the job role · per area</span> }
                 }
               </header>
               <div class="pf-card__body ue-main__body">
@@ -222,6 +230,7 @@ interface EditForm {
                   @case ('branches') { <ng-container *ngTemplateOutlet="secBranches"></ng-container> }
                   @case ('roles') { <ng-container *ngTemplateOutlet="secRoles"></ng-container> }
                   @case ('validates') { <ng-container *ngTemplateOutlet="secValidates"></ng-container> }
+                  @case ('access') { <ng-container *ngTemplateOutlet="secAccess"></ng-container> }
                 }
               </div>
               <pf-settings-savebar [dirty]="hasUnsavedChanges()" [saving]="saving()" [canSave]="canSave() && !recordSkeleton()"
@@ -300,7 +309,7 @@ interface EditForm {
                       @for (r of roleOptions(); track r.value) {
                         <div class="ue-role" role="listitem" [class.ue-role--on]="hasRole(r.value)">
                           <span class="ue-role__name">{{ r.label }}</span>
-                          <span class="ue-role__what">{{ r.locked ? 'Kept — you can\'t assign or remove this role' : (r.hint || '') }}</span>
+                          <span class="ue-role__what">{{ r.locked ? lockedRoleNote : (r.hint || '') }}</span>
                           <button type="button" class="pf-toggle pf-uf-sw ue-role__sw press" role="switch" [attr.aria-checked]="hasRole(r.value)"
                                   [class.pf-uf-sw--locked]="r.locked" [attr.aria-disabled]="r.locked || null"
                                   [attr.aria-label]="r.label" [title]="r.locked ? lockedHint : ''"
@@ -312,6 +321,25 @@ interface EditForm {
                     </div>
                     @if (!form().roleIds.length) { <p class="pf-uf-err ue-pad">Switch on at least one role.</p> }
                     @if (hasLocked()) { <p class="pf-field__hint pf-uf-lock-note ue-pad">{{ lockedHint }}</p> }
+    </ng-template>
+    <ng-template #secAccess>
+                    <!-- Settings access (owner 2026-11-18): on top of the job role, one pf-select per area. Contributor = view
+                         and send changes for approval; Admin = everything in the area and approves. Only an Organization
+                         admin changes Admin; an area admin gives Contributor in their own area. -->
+                    <!-- Rows: label + hint LEFT, the pf-select RIGHT at one width that fits "Contributor" — never wraps. -->
+                    <div class="ue-access" data-testid="ue-settings-access" role="list">
+                      @for (row of accessRows(); track row.area) {
+                        <div class="ue-acc-row" role="listitem">
+                          <span class="ue-acc-row__text">
+                            <span class="ue-acc-row__label">{{ row.label }}</span>
+                            <span class="ue-acc-row__hint">{{ row.hint }}</span>
+                          </span>
+                          <pf-select class="ue-acc-row__ctl" [attr.data-testid]="'ue-access-' + row.area" [options]="row.options"
+                                     [value]="row.value" [disabled]="!row.canChange || saving()" [attr.aria-label]="row.label + ' settings access'"
+                                     (valueChange)="setAccess(row.area, $any($event))"></pf-select>
+                        </div>
+                      }
+                    </div>
     </ng-template>
     <ng-template #secValidates>
                     <!-- Read-only here: validator pools are edited in ONE place, Lab › Collection and queues. -->
@@ -420,6 +448,8 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
     rolePickerRows(this._roles(), this._heldIds(), this.isSelf())
       .map(r => ({ ...r, hint: ROLE_INFO[r.label] ?? undefined })));
   readonly hasLocked = computed(() => this.roleOptions().some(r => r.locked));
+  /** A role row this caller cannot change (a plain field: an escaped quote inside the template broke the expression). */
+  readonly lockedRoleNote = 'Kept — you can\u2019t assign or remove this role';
   readonly lockedHint = 'Roles you can\'t assign stay as they are. Widening this user\'s branches with them needs someone who can assign them.';
   readonly titleOptions: PfSelectOption<string>[] = TITLE_OPTIONS;
   /** Country codes as pf-select options (code + country; no flag emoji). */
@@ -453,7 +483,7 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
 
   // ── Two-panel editor (owner 2026-11-17): sections LEFT, the selected section RIGHT ──
   readonly narrow = sgMedia(SG_NARROW_MQ);
-  readonly section = signal<'profile' | 'branches' | 'roles' | 'validates'>('profile');
+  readonly section = signal<'profile' | 'branches' | 'roles' | 'access' | 'validates'>('profile');
   /** Phone: the sections list first, then the picked section. */
   readonly sectionPicked = signal(false);
   readonly sections = computed(() => {
@@ -463,7 +493,8 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
     return [
       { id: 'profile' as const, label: 'Profile', req: true, note: this.displayPreview() || 'Name, phone, registration', err: !!(fe['firstName'] || fe['fathersName'] || fe['phone'] || fe['registrationId']) },
       { id: 'branches' as const, label: 'Branches', req: true, note: f.scope.length ? this.scopeSummary() : 'None picked', err: this.rolesLoaded() && !f.scope.length },
-      { id: 'roles' as const, label: 'Roles', req: true, note: nRoles ? `${nRoles} ${nRoles === 1 ? 'role' : 'roles'}` : 'None on', err: !nRoles },
+      { id: 'roles' as const, label: 'Job role', req: true, note: nRoles ? `${nRoles} ${nRoles === 1 ? 'role' : 'roles'}` : 'None on', err: !nRoles },
+      ...(this.access() ? [{ id: 'access' as const, label: 'Settings access', req: false, note: this.accessSummary(), err: false }] : []),
       { id: 'validates' as const, label: 'Validates for', req: false, note: this.deptNames().length ? this.deptNames().join(', ') : 'All departments', err: false },
     ];
   });
@@ -473,8 +504,9 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
     branches: 'M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6',
     roles: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
     validates: 'M9 2v17.5a2.5 2.5 0 0 1-5 0V2M20 2v17.5a2.5 2.5 0 0 1-5 0V2M3 2h7M14 2h7',
+    access: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1',
   })[this.section()]);
-  pickSection(id: 'profile' | 'branches' | 'roles' | 'validates') { this.section.set(id); this.sectionPicked.set(true); }
+  pickSection(id: 'profile' | 'branches' | 'roles' | 'access' | 'validates') { this.section.set(id); this.sectionPicked.set(true); }
   /** Phone: the band's ONE back returns from a section to the sections list first. */
   readonly backToSections = (): void => this.sectionPicked.set(false);
   /** A field error (server or validation) brings its section forward. */
@@ -530,6 +562,11 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
       }
     });
     this.api.get<Department[]>('/api/tenants/departments').subscribe({ next: l => this._departments.set(l ?? []), error: () => {} });
+    // Settings access: shown only when the server says this caller may see it (an admin of some area).
+    this.api.get<SettingsAccessView>(`/api/settings-access/users/${this.id}`).subscribe({
+      next: (v) => this.loadAccess(v),
+      error: () => this.access.set(null),
+    });
     this.api.get<UserDepartmentsRow>(`/api/users/${this.id}/departments`).subscribe({
       next: r => { this._deptRow.set(r ?? null); this.deptIds.set(r?.departmentIds ?? []); },
       error: () => { /* older server: the card stays empty */ },
@@ -599,7 +636,7 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
     const keys = Object.keys(p);
     if (keys.length) this._fieldError.update(fe => { const n = { ...fe }; for (const k of keys) delete n[k]; return n; });
   }
-  back() { this.navBack.backTo('/admin?section=people'); }
+  back() { this.navBack.back(); }
   /** Saved: the panel tells its grid (and closes); the page goes back where the person came from. */
   private finish() { if (this.panel()) { this.saved.emit(); this.closed.emit(); } else this.back(); }
   private readonly dialog = inject(DialogService);
@@ -620,7 +657,9 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
   readonly unsavedLabel = 'this user';
   private readonly _savedForm = signal('');
   private formKey(): string { const f = this._form(); return JSON.stringify({ ...f, roleIds: [...f.roleIds].sort(), scope: [...f.scope].sort() }); }
-  hasUnsavedChanges(): boolean { return !this._saving() && this._savedForm() !== '' && this.formKey() !== this._savedForm(); }
+  hasUnsavedChanges(): boolean {
+    return !this._saving() && ((this._savedForm() !== '' && this.formKey() !== this._savedForm()) || this.accessChanges().length > 0);
+  }
   saveChanges(): Promise<boolean> { return this.persist(false); }
   private readonly unloadGuard = guardUnsavedOnUnload(this);
 
@@ -645,12 +684,17 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
             roleIds: i.roleIds, ...scopePayload(i.scope, this._branches()),
           }).subscribe({
             next: () => {
-              this._saving.set(false);
-              this._savedForm.set(this.formKey());
-              this.toasts.success('User updated');
-              resolve(true);
-              if (leave) this.finish();
-              else if (this.panel()) this.saved.emit();
+              const done = () => {
+                this._saving.set(false);
+                this._savedForm.set(this.formKey());
+                this.toasts.success('User updated');
+                resolve(true);
+                if (leave) this.finish();
+                else if (this.panel()) this.saved.emit();
+              };
+              // Then the Settings access picks (one PUT per changed area); none changed = done now.
+              if (!this.accessChanges().length) { done(); return; }
+              void this.saveAccess().then((ok) => { if (ok) done(); else { this._saving.set(false); resolve(false); } });
             },
             error: fail,
           });
@@ -660,6 +704,60 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
     });
   }
 
+
+  // ── Settings access (owner 2026-11-18) ──
+  /** The server's view of this person's Settings access (null = the caller may not see it: the section hides). */
+  readonly access = signal<SettingsAccessView | null>(null);
+  /** The picks on screen (area → level); saved with the person's Save, one PUT per changed area. */
+  private readonly accessDraft = signal<Partial<Record<SettingsArea, SettingsLevel>>>({});
+  private loadAccess(v: SettingsAccessView | null): void {
+    this.access.set(v && Array.isArray(v.areas) ? v : null);
+    this.accessDraft.set(Object.fromEntries((v?.areas ?? []).map((a) => [a.area, a.grant])) as Partial<Record<SettingsArea, SettingsLevel>>);
+  }
+  readonly accessRows = computed(() => {
+    const v = this.access();
+    if (!v) return [];
+    const draft = this.accessDraft();
+    return SETTINGS_AREAS.map((area) => {
+      const a = v.areas.find((x) => x.area === area);
+      const grant = (draft[area] ?? a?.grant ?? 'none') as SettingsLevel;
+      const fromRole = (a?.fromRole ?? 'none') as SettingsLevel;
+      const choices = (a?.choices?.length ? a.choices : [grant]) as SettingsLevel[];
+      // The job role already gives more than the pick: say so (grants only ever add).
+      const roleNote = SETTINGS_LEVELS.indexOf(fromRole) > SETTINGS_LEVELS.indexOf(grant)
+        ? ` The job role already gives ${SETTINGS_LEVEL_LABEL[fromRole]}.` : '';
+      return {
+        area, label: SETTINGS_AREA_LABEL[area], hint: SETTINGS_AREA_HINT[area] + roleNote, value: grant,
+        canChange: !!a?.canChange,
+        options: SETTINGS_LEVELS.filter((l) => choices.includes(l) || l === grant).map((l) => ({ value: l, label: SETTINGS_LEVEL_LABEL[l] })),
+      };
+    });
+  });
+  /** "Test Master: Contributor" / "From the job role only". */
+  readonly accessSummary = computed(() => {
+    const on = this.accessRows().filter((r) => r.value !== 'none').map((r) => `${r.label}: ${SETTINGS_LEVEL_LABEL[r.value]}`);
+    return on.length ? on.join(', ') : 'From the job role only';
+  });
+  private accessChanges(): Array<{ area: SettingsArea; level: SettingsLevel }> {
+    const v = this.access();
+    if (!v) return [];
+    const d = this.accessDraft();
+    return v.areas.filter((a) => d[a.area] && d[a.area] !== a.grant).map((a) => ({ area: a.area, level: d[a.area]! }));
+  }
+  setAccess(area: SettingsArea, level: SettingsLevel): void {
+    this.accessDraft.update((d) => ({ ...d, [area]: level }));
+  }
+  /** One PUT per changed area, in order; the last answer is the new view. A refusal toasts and stops. */
+  private saveAccess(): Promise<boolean> {
+    const changes = this.accessChanges();
+    if (!changes.length) return Promise.resolve(true);
+    return changes.reduce<Promise<boolean>>((prev, c) => prev.then((ok) => !ok ? false : new Promise<boolean>((res) => {
+      this.api.put<SettingsAccessView>(`/api/settings-access/users/${this.id}`, { area: c.area, level: c.level }).subscribe({
+        next: (v) => { this.loadAccess(v); res(true); },
+        error: (e) => { this.toasts.error(ApiError.from(e).message); res(false); },
+      });
+    })), Promise.resolve(true));
+  }
 
   /** Route field-named backend failures to the offending input; toast the rest. */
   private showError(e: unknown) {

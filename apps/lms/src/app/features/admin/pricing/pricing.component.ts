@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, Injector, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { AgGridAngular } from 'ag-grid-angular';
+import { AllCommunityModule, ColDef, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry, RowClassParams } from 'ag-grid-community';
+import { ThemeService } from '../../../core/services/theme.service';
+import { gridThemeDark, gridThemeLight } from '../tests/tests/grid-theme';
+import { TM_NARROW, TM_TWO_PANEL_STYLES, mediaSignal } from '../tests/tests/tm-two-panel';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
@@ -19,6 +26,8 @@ import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { isPackage, shownDepartmentName } from '../../../shared/utils/package-department';
 import { testListUrl } from '../../../shared/utils/test-list-url';
+import { SheetRoundtripService } from '../../files/roundtrip/sheet-roundtrip.service';
+import { PRICES_DATASET_ID } from '../../files/roundtrip/prices-dataset';
 
 /** Department-filter value for the "Packages" option (packages have no department). */
 export const PACKAGES_FILTER = '__packages__';
@@ -47,7 +56,12 @@ export interface PriceRow {
   notPriced: boolean;
   /** Saved "offered here" flag for the viewed scope. */
   offered: boolean;
+  /** Test / Profile / Package (the grid's Type column). */
+  kind?: 'individual' | 'profile' | 'package';
 }
+
+/** One grid row: a test, or one of its specimen price rows. */
+export interface PriceGridRow { key: string; testId: string; spec: string | null; name: string; meta: string; type: string; }
 
 /**
  * Admin test-PRICING screen — the per-tenant pricing table (Test Master
@@ -68,10 +82,87 @@ export interface PriceRow {
 @Component({
   selector: 'pf-pricing',
   standalone: true,
-  imports: [SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
+  imports: [AgGridAngular, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-pricing" [class.pf-pricing--embedded]="embedded()">
+      @if (embedded()) {
+      <!-- Inside Test Master (owner 2026-11-17, "make this a grid view"): Test Master's two-panel — LEFT the
+           Departments side card ("All" first, counts), RIGHT the main card: head (Prices · branch, count, branch
+           pick, bulk change) over a flush grid with inline price / offered editing. Save / Discard stay in the
+           band (bandActions). Narrow: the department pick moves into the head. -->
+      <div class="pf-2p pf-pr" [class.pf-2p--narrow]="narrow()">
+        @if (!narrow()) {
+          <aside class="pf-card pf-2p__side" aria-label="Departments" data-testid="pr-side">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+              <span class="pf-card__label">Departments</span>
+            </header>
+            <ul class="pf-card__body pf-side-list pf-pr__depts">
+              @for (d of deptRail(); track d.value) {
+                <li>
+                  <button type="button" class="pf-side-item pf-pr__dept" [attr.aria-pressed]="selectedDeptId() === d.value" (click)="selectedDeptId.set(d.value)">
+                    <span class="pf-pr__dname">{{ d.label }}</span>
+                    <span class="pf-pr__dcount pf-num">{{ d.count }}</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          </aside>
+        }
+        <section class="pf-card pf-2p__main" aria-label="Prices" data-testid="pr-main">
+          <header class="pf-card__head pf-2p__head">
+            <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z"/><path d="M7.5 7.5h.01"/></svg></span>
+            <span class="pf-card__label">Prices{{ isolationOn() ? ' · ' + scopeName() : '' }}</span>
+            <span class="pf-2p__count"><span class="pf-num">{{ filtered().length }}</span> test{{ filtered().length === 1 ? '' : 's' }}</span>
+            <div class="pf-2p__tools">
+              @if (narrow()) {
+                <pf-select class="pf-pr__deptpick" size="sm" [options]="deptOptions()" [value]="selectedDeptId()" aria-label="Department"
+                           (valueChange)="selectedDeptId.set($event)"></pf-select>
+              }
+              @if (isolationOn()) {
+                <pf-select class="pf-pr__branch" size="sm" [options]="branchOptions()" [value]="scopeValue()" aria-label="Branch"
+                           (valueChange)="setScope($event)"></pf-select>
+              }
+              @if (neuronOn()) {
+                <!-- Edit these prices in a Neuron sheet (all departments; Code / Test / Department / Type locked), then Send to Prefrontal from the sheet. -->
+                <button type="button" class="pf-btn pf-btn--secondary pf-2p__hbtn press" data-testid="pr-open-neuron"
+                        [disabled]="loading() || opening() || dirtyCount() > 0" [pfBusy]="opening()" pfBusyLabel="Making the sheet…"
+                        [title]="dirtyCount() > 0 ? 'Save or discard your changes first' : 'Edit these prices in a Neuron sheet'" (click)="openInNeuron()">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                  {{ opening() ? 'Opening…' : 'Open in Neuron' }}
+                </button>
+              }
+              <span class="pf-pr__bulk" role="group" aria-label="Bulk change">
+                <span class="pf-pr__bulkk">Bulk change</span>
+                <input type="number" class="pf-input pf-num pf-pr__pct" [ngModel]="pct()" (ngModelChange)="pct.set($any($event))"
+                       step="1" inputmode="decimal" aria-label="Percentage" title="Enter a negative % to reduce" />
+                <span class="pf-pricing__unit">%</span>
+                <button type="button" class="pf-btn pf-btn--secondary pf-2p__hbtn press" [disabled]="!filtered().length || !pct()" (click)="applyBulk()">Apply to <span class="pf-num">{{ filtered().length }}</span></button>
+              </span>
+            </div>
+          </header>
+          <div class="pf-2p__body">
+            @if (loading()) {
+              <pf-skeleton-table class="pf-2p__skel" [rows]="12" [cols]="4" label="Loading prices…"></pf-skeleton-table>
+            }
+            <ag-grid-angular
+              class="pf-2p__grid"
+              [theme]="gridTheme()"
+              [rowData]="gridRows()"
+              [columnDefs]="prCols"
+              [defaultColDef]="prDefaultCol"
+              [getRowId]="prRowId"
+              [getRowClass]="prRowClass"
+              [singleClickEdit]="isCoarse"
+              [stopEditingWhenCellsLoseFocus]="true"
+              [overlayNoRowsTemplate]="'No tests match this filter.'"
+              (gridReady)="onPrGridReady($event)">
+            </ag-grid-angular>
+          </div>
+        </section>
+      </div>
+      } @else {
 
       <!-- ── Fixed chrome: header + filters + bulk bar ───────────── -->
       <div class="pf-pricing__chrome px-4 md:px-8 pt-6">
@@ -189,6 +280,7 @@ export interface PriceRow {
           <div class="h-2"></div>
         }
       </div>
+      }
 
       <!-- ── Sticky save bar (only when there are unsaved edits) ──── -->
       <!-- In Test Master's new design the host's BAND carries Save / Discard
@@ -209,8 +301,27 @@ export interface PriceRow {
       }
     </section>
   `,
-  styles: [`
+  styles: [TM_TWO_PANEL_STYLES, `
     :host { display: block; height: 100%; }
+    :host:has(.pf-pricing--embedded) { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: auto; }
+    .pf-pricing--embedded { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: visible; }
+    .pf-pr__dname { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+    .pf-pr__dcount { flex: none; font-size: 11.5px; font-weight: 700; color: var(--text-tertiary); }
+    .pf-pr__branch { width: 190px; }
+    .pf-pr__deptpick { width: 200px; }
+    .pf-pr__bulk { display: inline-flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+    .pf-pr__bulkk { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+    .pf-pr__pct { width: 64px; height: 34px; min-height: 34px; padding: 4px 8px; text-align: right; }
+    .pf-pr ::ng-deep .ag-row.pf-pr__row--off .pf-pr__name { color: var(--text-tertiary); }
+    .pf-pr ::ng-deep .ag-cell.pf-pr__dirty { background: var(--pf-in-tint); box-shadow: inset 2px 0 0 var(--pf-sel-border); }
+    .pf-pr ::ng-deep .pf-pr__cell { display: flex; flex-direction: column; justify-content: center; min-width: 0; line-height: 1.3; padding: 6px 0; }
+    .pf-pr ::ng-deep .pf-pr__name { font-weight: 500; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-pr ::ng-deep .pf-pr__meta { font-size: 12px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pf-pr ::ng-deep .pf-pr__spec { padding-left: 18px; }
+    .pf-pr ::ng-deep .ag-row .ag-cell { display: flex; align-items: center; }
+    .pf-pr ::ng-deep .ag-row .ag-cell.ag-right-aligned-cell { justify-content: flex-end; }
+    .pf-pr ::ng-deep .ag-row .ag-cell > .pf-pr__cell { flex: 1 1 auto; }
+    @media (max-width: 640px) { .pf-pr__bulkk { display: none; } .pf-2p__tools { width: 100%; } .pf-pr__branch, .pf-pr__deptpick { flex: 1 1 140px; width: auto; min-width: 0; } .pf-pr__bulk { flex: 1 1 100%; } .pf-pr__bulk .pf-2p__hbtn { margin-left: auto; } }
     .pf-pricing { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
     .pf-pricing__chrome { flex: 0 0 auto; }
     .pf-pricing__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
@@ -297,6 +408,22 @@ export class PricingComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly pricing = inject(TestPricingService);
+  /** Looked up lazily (Files pulls in the file API): screens and specs without it simply have no "Open in Neuron". */
+  private readonly injector = inject(Injector);
+  private roundtrip(): SheetRoundtripService | null { try { return this.injector.get(SheetRoundtripService); } catch { return null; } }
+
+  /** "Open in Neuron": Files + Neuron storable by this person + the pricing permission (the sheet round-trip's own check). */
+  readonly neuronOn = computed(() => { try { return !!this.roundtrip()?.canOpen(PRICES_DATASET_ID); } catch { return false; } });
+  readonly opening = signal(false);
+  /** The sheet holds the VIEWED scope's prices (all departments): the branch picked here, "All branches", or the lab price (isolation off). */
+  async openInNeuron() {
+    if (this.opening() || this.dirtyCount() > 0) return;
+    const scope = this.isolationOn() ? this.scopeValue() : '';
+    const name = this.isolationOn() ? this.scopeName() : (this.auth.user?.()?.tenantName || 'All branches');
+    this.opening.set(true);
+    try { await this.roundtrip()?.openInNeuron(PRICES_DATASET_ID, scope, name, 'Test Master'); }
+    finally { this.opening.set(false); }
+  }
 
   /** When rendered inside another screen (e.g. the Tests "Pricing" tab) hide the
    *  own header and flow naturally instead of the fixed-page / inner-scroll. */
@@ -308,6 +435,97 @@ export class PricingComponent implements OnInit {
    *  down so this save bar's "Save changes" is the view's ONE primary. */
   readonly editingChange = output<boolean>();
   private readonly _emitEditing = effect(() => this.editingChange.emit(this.dirtyCount() > 0));
+
+  // ── Test Master grid view (embedded) ──
+  private readonly themeSvc = inject(ThemeService);
+  readonly gridTheme = computed(() => (this.themeSvc.isDark() ? gridThemeDark : gridThemeLight));
+  readonly narrow = mediaSignal(TM_NARROW, inject(DestroyRef));
+  readonly isCoarse = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches;
+  private prApi: GridApi<PriceGridRow> | null = null;
+  /** Test rows + their specimen rows, in the filtered order. */
+  readonly gridRows = computed<PriceGridRow[]>(() => {
+    const out: PriceGridRow[] = [];
+    for (const r of this.filtered()) {
+      const type = r.isPackage || r.kind === 'package' ? 'Package' : r.kind === 'profile' ? 'Profile' : 'Test';
+      out.push({ key: r.id, testId: r.id, spec: null, name: r.name, meta: r.isPackage ? 'Package' : (r.deptName || 'No department'), type });
+      for (const sp of this.specimenRowsOf(r.id))
+        out.push({ key: r.id + '|' + sp.code, testId: r.id, spec: sp.code, name: sp.name, meta: 'Specimen of ' + r.name, type: 'Specimen' });
+    }
+    return out;
+  });
+  /** The rail: All, every department (deduped), Packages — with counts. */
+  readonly deptRail = computed(() => {
+    const rows = this._rows();
+    return this.deptOptions().map(o => ({
+      value: o.value, label: o.label,
+      count: !o.value ? rows.length : o.value === PACKAGES_FILTER ? rows.filter(r => r.isPackage).length
+        : rows.filter(r => !r.isPackage && r.deptId === o.value).length,
+    }));
+  });
+  scopeName(): string { return this.branchOptions().find(o => o.value === this.scopeValue())?.label ?? 'All branches'; }
+  readonly prRowId = (p: { data: PriceGridRow }) => p.data.key;
+  readonly prRowClass = (p: RowClassParams<PriceGridRow>) => (p.data && !p.data.spec && !this.offeredNow(p.data.testId) ? 'pf-pr__row--off' : '');
+  readonly prDefaultCol: ColDef<PriceGridRow> = { sortable: true, resizable: true, suppressMovable: true };
+  readonly prCols: ColDef<PriceGridRow>[] = [
+    { headerName: 'Test', field: 'name', flex: 2, minWidth: 150, autoHeight: true,
+      cellRenderer: (p: ICellRendererParams<PriceGridRow>) => {
+        const w = document.createElement('div'); w.className = 'pf-pr__cell' + (p.data?.spec ? ' pf-pr__spec' : '');
+        const n = document.createElement('span'); n.className = 'pf-pr__name'; n.textContent = p.data?.name ?? '';
+        const m = document.createElement('span'); m.className = 'pf-pr__meta';
+        m.textContent = (p.data?.meta ?? '') + (this.phone() && p.data && p.data.type !== 'Test' && p.data.type !== 'Specimen' && p.data.type !== p.data.meta ? ' · ' + p.data.type : '') + (p.data && !p.data.spec && !this.offeredNow(p.data.testId) ? ' · Not offered here' : '');
+        w.append(n, m); return w;
+      } },
+    { headerName: 'Type', field: 'type', colId: 'type', width: 110, minWidth: 96 },
+    { headerName: 'Offered', colId: 'offered', width: 104, minWidth: 72, sortable: false,
+      cellClassRules: { 'pf-pr__dirty': p => !!p.data && !p.data.spec && this.offeredDirty(p.data.testId) },
+      cellRenderer: (p: ICellRendererParams<PriceGridRow>) => {
+        if (!p.data || p.data.spec) return '';
+        const id = p.data.testId; const on = this.offeredNow(id);
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'pf-toggle'; b.setAttribute('role', 'switch');
+        b.setAttribute('aria-checked', String(on)); b.setAttribute('aria-label', 'Offered here: ' + p.data.name);
+        b.innerHTML = '<span class="pf-toggle__track" aria-hidden="true"><span class="pf-toggle__knob"></span></span>';
+        b.addEventListener('click', ev => { ev.stopPropagation(); this.setOffered(id, !this.offeredNow(id)); });
+        return b;
+      } },
+    { headerName: 'Price (₹)', colId: 'price', width: 140, minWidth: 96, editable: true, type: 'rightAligned',
+      cellEditor: 'agNumberCellEditor', cellEditorParams: { min: 0, precision: 2 },
+      cellStyle: { fontVariantNumeric: 'tabular-nums' },
+      valueGetter: p => !p.data ? null : p.data.spec ? this.specimenPriceNow(p.data.testId, p.data.spec) : this.edits()[p.data.testId],
+      valueFormatter: p => (p.value === '' || p.value == null ? (p.data?.spec ? 'base' : '') : '₹' + Number(p.value).toLocaleString('en-IN')),
+      valueSetter: p => {
+        if (!p.data) return false;
+        const v = p.newValue;
+        if (p.data.spec) this.setSpecimenPrice(p.data.testId, p.data.spec, v === null || v === undefined || v === '' ? '' : Number(v));
+        else this.setPrice(p.data.testId, Number(v ?? 0));
+        return true;
+      },
+      cellClassRules: { 'pf-pr__dirty': p => !!p.data && (p.data.spec ? this.isSpecimenDirty(p.data.testId, p.data.spec) : this.priceDirty(p.data.testId)) } },
+  ];
+  onPrGridReady(e: GridReadyEvent<PriceGridRow>) { this.prApi = e.api; this.fitPhone(); }
+  /** Phones: Test · Offered · Price only (the type rides in the Test cell's muted line). */
+  private readonly phone = mediaSignal('(max-width: 640px)', inject(DestroyRef));
+  private readonly _phoneCols = effect(() => { this.phone(); this.fitPhone(); });
+  private fitPhone() {
+    const api = this.prApi;
+    if (!api || api.isDestroyed?.()) return;
+    const ph = this.phone();
+    api.setColumnsVisible(['type'], !ph);
+    api.setColumnWidths([{ key: 'offered', newWidth: ph ? 76 : 104 }, { key: 'price', newWidth: ph ? 104 : 140 }]);
+  }
+  /** Edits live in signals: repaint the cells (dirty marks, switches) when they change. */
+  private readonly _repaint = effect(() => {
+    this.edits(); this.specimenEdits();
+    const api = this.prApi;
+    if (api && !api.isDestroyed?.()) queueMicrotask(() => api.refreshCells({ force: true }));
+  });
+  /** An Offered flip also changes the row's look (muted when not offered). */
+  private readonly _redraw = effect(() => {
+    this.offeredEdits();
+    const api = this.prApi;
+    if (api && !api.isDestroyed?.()) queueMicrotask(() => api.redrawRows());
+  });
+  priceDirty(id: string): boolean { const r = this._rows().find(x => x.id === id); return !!r && this.round2(this.edits()[id]) !== this.round2(r.orig); }
+  offeredDirty(id: string): boolean { const r = this._rows().find(x => x.id === id); const o = this.offeredEdits(); return !!r && id in o && o[id] !== r.offered; }
 
   readonly loading = signal(true);
   readonly saving = signal(false);
@@ -471,6 +689,7 @@ export class PricingComponent implements OnInit {
           orig: effectivePrice(t),
           notPriced: isPriceDefault(t),
           offered: isOffered(t),
+          kind: t.type,
         })).sort((a, b) => (a.deptName || '~').localeCompare(b.deptName || '~') || a.name.localeCompare(b.name));
         this._rows.set(rows);
         this.edits.set(Object.fromEntries(rows.map(r => [r.id, r.orig])));

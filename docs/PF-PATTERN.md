@@ -2089,3 +2089,11 @@ code); the screens are `features/admin/bridges/`. Gate: `manage_bridges`.
 ### Settings: actions live in the pane (owner 2026-11-17)
 
 Settings pages (the Settings frame, the overview's inline pages and the full-screen settings pages; Test Master excepted) put NO button in the band: back chevron + search pill only. Card-level actions go in that card's head (right, after the head tools); a card's Save / Discard go in its sticky footer (`pf-settings-savebar`), shown only while something changed. Buttons: Save and Add = secondary (Add with a + icon), Discard / Cancel / Reset = tertiary. No violet gradient primary in Settings.
+
+## Nothing clickable at the bottom (owner 2026-11-17)
+
+Next to the bottom nav, a button reads as part of the nav. On Settings pages, Test Master views and the panels / sheets they open:
+
+- **Save / Discard** live in the band's **top-right corner** — one Save per page (all tabs / cards at once), always shown, disabled until something changed; Discard (tertiary) and "Unsaved changes" appear beside it while dirty. Pages keep `pf-settings-savebar`; it hands its save to the band (`SettingsSaveService`).
+- **Add / Preview / filters** sit in the card head; a **panel's or sheet's** actions sit in the panel head.
+- No footers with buttons, sticky bottom bars, "load more" or bottom-pinned links. The bottom nav itself is the only thing at the bottom.

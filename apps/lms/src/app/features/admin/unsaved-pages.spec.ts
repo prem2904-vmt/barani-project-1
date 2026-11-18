@@ -21,6 +21,8 @@ describe('Report design asks before it is left', () => {
     const self: any = {
       dirty: signal(true), deptPatientDirty: signal(false), saving: signal(false), _tpl: signal({ labName: 'X' }), savedJson: signal(''),
       api: { post: vi.fn(post) }, toasts: { success: vi.fn(), error: vi.fn() },
+      // The band-corner Save's shared service (other sections' pending saves); clean in these cases.
+      saveSvc: { dirty: signal(false), saving: signal(false), saveAll: vi.fn() },
     };
     self.postTemplate = rt.postTemplate.bind(self);
     self.postDeptPatient = vi.fn(async () => true);

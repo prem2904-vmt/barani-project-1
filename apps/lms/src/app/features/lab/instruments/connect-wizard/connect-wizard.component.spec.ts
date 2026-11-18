@@ -92,7 +92,8 @@ describe('Connect an analyzer — wizard', () => {
     expect(flat).toMatch(/path: 'admin\/instruments\/connect',\s*canActivate: \[\.\.\.routeGuards\('\/admin\/instruments'\)\]/);
     expect(flat.indexOf('admin/instruments/connect')).toBeGreaterThan(-1);
     expect(flat.indexOf('admin/instruments/connect')).toBeLessThan(flat.indexOf('admin/instruments/:id'));
-    expect(ROUTE_ACCESS['/admin/instruments']).toEqual({ perms: ['manage_lab_settings'], module: 'lab' });
+    // + the Lab contributor code (Settings access, owner 2026-11-18: a contributor views it; the server refuses their writes).
+    expect(ROUTE_ACCESS['/admin/instruments']).toEqual({ perms: ['manage_lab_settings', 'contribute_lab_settings'], module: 'lab' });
   });
 
   it('web: explains it runs on the lab PC, offers the manual path, no steps', async () => {

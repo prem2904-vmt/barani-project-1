@@ -1,3 +1,4 @@
+import { SettingsSaveService } from '../../../shared/utils/settings-save';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { MonoTypeOperatorFunction, defer, finalize } from 'rxjs';
 import { NgTemplateOutlet } from '@angular/common';
@@ -73,6 +74,13 @@ interface AutoAssignConfig {
          one hint line left, the control right. Every change autosaves. -->
     <!-- The save state: in the Settings shell it rides the band (small, muted); elsewhere it heads the rows. -->
     <ng-template #statusTpl>
+          @if (viewOnly()) {
+          <!-- Settings access: a contributor reads this page (no approval model here yet), nothing saves. -->
+          <span class="pf-savestate pf-ls__savestate" role="status" data-testid="band-view-only" title="You can see these settings. A Lab admin changes them.">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span class="pf-ls__savestate-t">View only</span>
+          </span>
+          } @else {
           <span class="pf-savestate pf-ls__savestate" role="status" title="Every change saves as you make it"
                 [attr.aria-busy]="savingShown() ? 'true' : null">
             @if (savingShown()) {
@@ -83,6 +91,7 @@ interface AutoAssignConfig {
               <span class="pf-ls__savestate-t">Changes save automatically</span>
             }
           </span>
+          }
     </ng-template>
     <div class="pf-ls__host">
       @if (firstLoad()) {
@@ -325,6 +334,9 @@ export class LabSettingsComponent implements OnInit {
   private readonly tenantState = inject(TenantStateService);
   private readonly labCfg = inject(BranchLabConfigService);
   private readonly auth = inject(AuthService);
+  private readonly saveSvc = inject(SettingsSaveService);
+  /** Settings access: a contributor on this page (no approval model yet) — "View only" instead of the autosave state. */
+  readonly viewOnly = computed(() => this.saveSvc.mode() === 'view');
   private readonly router = inject(Router);
   /** Which cards to show; null = all (the legacy single page). */
   readonly cards = input<readonly LabSettingsCard[] | null>(null);
