@@ -348,9 +348,9 @@
                 @if (linkedProfiles().length > 0) {
                   <ul class="pf-lp-chips pf-profpanel__chips" aria-label="Selected profiles">
                     @for (pr of linkedProfiles(); track pr.id) {
-                      <li class="pf-lp-chip">{{ pr.name }}
+                      <li class="pf-lp-chip"><span class="pf-lp-chip__name">{{ pr.name }}</span>
                         <button type="button" class="pf-lp-chip__x press" (click)="removeFromProfile(pr)"
-                                [attr.aria-label]="'Remove from ' + pr.name" title="Remove from this profile">
+                                [attr.aria-label]="'Remove from ' + pr.name">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                         </button>
                       </li>

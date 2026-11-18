@@ -140,7 +140,7 @@ test.describe('test editor v2', () => {
       els => els.slice(0, 3).every(e => e.classList.contains('pf-row--in')));
     expect(firstThree, 'selected profiles come first').toBe(true);
     const box = await page.locator('.pf-profpanel__grid').evaluate(e => ({ sh: e.scrollHeight, ch: e.clientHeight }));
-    expect(box.ch, 'list box has a sensible max height').toBeLessThanOrEqual(270);
+    expect(box.ch, 'list box has a sensible max height').toBeLessThanOrEqual(280);
     expect(box.sh, 'the 24 profiles scroll inside it').toBeGreaterThan(box.ch);
 
     const sizes = isDesktop() ? [[1440, 900], [1720, 1000]] : formFactor() === 'tablet' ? [[0, 0], [1024, 1366], [1366, 1024]] : [[0, 0]];
@@ -174,6 +174,17 @@ test.describe('test editor v2', () => {
           for (const f of r) expect(Math.abs(f.w - r[0].w)).toBeLessThan(2);
         }
         expect(t['Test code'].y, 'codes row below the type row').toBeGreaterThan(t['Type'].y);
+      }
+      // Chips, then the search row, then the list — never overlapping, single-line pills.
+      const cb = (await page.locator('.pf-profpanel__chips').boundingBox())!;
+      const tb = (await vis(page, '.pf-profpanel__tools').boundingBox())!;
+      const lb = (await vis(page, '.pf-profpanel__grid').boundingBox())!;
+      expect(cb.y + cb.height, 'chips end above the search row').toBeLessThanOrEqual(tb.y);
+      expect(tb.y + tb.height, 'search row ends above the list').toBeLessThanOrEqual(lb.y);
+      for (const c of await page.locator('.pf-profpanel__chips .pf-lp-chip').all()) {
+        const b = (await c.boundingBox())!;
+        expect(b.height, 'chip is a single-line pill').toBeLessThanOrEqual(44);
+        expect(b.height).toBeGreaterThanOrEqual(30);
       }
       await shot(page, `te-basics${w ? '-' + w : ''}`);
     }

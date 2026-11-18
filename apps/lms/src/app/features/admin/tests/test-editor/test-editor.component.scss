@@ -1056,9 +1056,15 @@ select.pf-input--compact {
     border: 1px solid var(--pf-line); border-radius: var(--pf-radius); padding: 2px 12px;
     background: var(--pf-card-bg);
     /* Scrolls INSIDE the box so the card never becomes a long page. */
-    max-height: clamp(180px, 28vh, 300px); overflow-y: auto; align-content: start; scrollbar-width: thin;
+    max-height: clamp(180px, 28vh, 280px); overflow-y: auto; align-content: start; scrollbar-width: thin;
   }
-  .pf-profpanel__chips { list-style: none; padding: 0; margin: 0 0 10px; }
+  .pf-profpanel__chips { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+  .pf-profpanel__chips { flex: none; height: auto; min-height: 0; max-height: none; width: auto; }
+  .pf-profpanel__tools { flex: none; }
+  .pf-profpanel__chips .pf-lp-chip__name { min-width: 0; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pf-profpanel__chips > li { height: auto; min-height: 0; align-self: flex-start; }
+  .pf-profpanel__chips .pf-lp-chip { min-height: 32px; height: 32px; max-width: 100%; flex: none; padding: 4px 6px 4px 10px; }
+  .pf-profpanel__chips .pf-lp-chip__x { width: 28px; height: 28px; min-width: 28px; min-height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; padding: 0; }
   .pf-profpanel__tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
   .pf-profpanel__filter { width: 220px; max-width: 100%; }
   .pf-profpanel__item.pf-row {
