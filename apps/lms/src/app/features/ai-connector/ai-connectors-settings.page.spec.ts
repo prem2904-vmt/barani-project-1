@@ -1,6 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { AuthService } from '../../core/auth/auth.service';
@@ -13,7 +13,7 @@ import { ToastService } from '../../core/services/toast.service';
 import { ApiError } from '../../shared/models/api-response.model';
 import { BetaFeaturesService } from '../../core/services/beta-features.service';
 import { SETTINGS_SECTIONS } from '../admin/settings/settings-map';
-import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_NEVER_ITEMS, AI_CONNECTOR_SUGGEST_OFF_EFFECT, AI_CONNECTOR_SUGGEST_REQUESTED, AI_PRIVACY_LEVELS, AiConnectorApi, AiConnectorGrant, AiConnectorState } from './ai-connector.api';
+import { AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_NEVER_ITEMS, AI_CONNECTOR_SUGGEST_OFF_EFFECT, AI_CONNECTOR_SUGGEST_REQUESTED, AI_PRIVACY_LEVELS, CONNECT_APPS, AiConnectorApi, AiConnectorGrant, AiConnectorState } from './ai-connector.api';
 import { AiConnectorsSettingsPage } from './ai-connectors-settings.page';
 
 /**
@@ -23,7 +23,7 @@ import { AiConnectorsSettingsPage } from './ai-connectors-settings.page';
  */
 const OFF: AiConnectorState = { enabled: false, connectorUrl: 'https://med-fetch-dev.prefrontal.health/mcp', labName: 'Micro World' };
 
-function setup(opts: { grants?: AiConnectorGrant[]; deleteGrant?: () => ReturnType<AiConnectorApi['deleteGrant']>; perms?: string[]; state?: AiConnectorState; confirm?: boolean; putProposals?: () => ReturnType<AiConnectorApi['setProposals']>; put?: () => ReturnType<AiConnectorApi['setEnabled']>; putLevel?: () => ReturnType<AiConnectorApi['setPrivacyLevel']> } = {}) {
+function setup(opts: { tab?: string; grants?: AiConnectorGrant[]; deleteGrant?: () => ReturnType<AiConnectorApi['deleteGrant']>; perms?: string[]; state?: AiConnectorState; confirm?: boolean; putProposals?: () => ReturnType<AiConnectorApi['setProposals']>; put?: () => ReturnType<AiConnectorApi['setEnabled']>; putLevel?: () => ReturnType<AiConnectorApi['setPrivacyLevel']> } = {}) {
   const perms = opts.perms ?? ['manage_lab_settings'];
   const api = {
     get: vi.fn(() => of(opts.state ?? OFF)),
@@ -40,6 +40,7 @@ function setup(opts: { grants?: AiConnectorGrant[]; deleteGrant?: () => ReturnTy
     imports: [AiConnectorsSettingsPage],
     providers: [
       provideRouter([]),
+      ...(opts.tab ? [{ provide: ActivatedRoute, useValue: { queryParamMap: of(convertToParamMap({ tab: opts.tab })) } }] : []),
       { provide: AiConnectorApi, useValue: api },
       { provide: DialogService, useValue: dialog },
       { provide: ToastService, useValue: toasts },
@@ -72,9 +73,9 @@ async function settle(f: { detectChanges(): void; whenStable(): Promise<unknown>
 }
 const sw = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('[role="switch"]') as HTMLButtonElement | null;
 const suggestSw = (f: { nativeElement: HTMLElement }) => f.nativeElement.querySelector('#pf-aic-suggest') as HTMLButtonElement | null;
-const tabBtn = (f: { nativeElement: HTMLElement }, id: 'settings' | 'can' | 'apps' | 'claude') => f.nativeElement.querySelector(`#pf-aic-tab-${id}`) as HTMLButtonElement | null;
+const tabBtn = (f: { nativeElement: HTMLElement }, id: 'settings' | 'can' | 'apps' | 'connect') => f.nativeElement.querySelector(`#pf-aic-tab-${id}`) as HTMLButtonElement | null;
 /** Open one of the main card's tabs (Settings is open by default). */
-async function openTab(f: { nativeElement: HTMLElement; detectChanges(): void; whenStable(): Promise<unknown> }, id: 'settings' | 'can' | 'apps' | 'claude') {
+async function openTab(f: { nativeElement: HTMLElement; detectChanges(): void; whenStable(): Promise<unknown> }, id: 'settings' | 'can' | 'apps' | 'connect') {
   tabBtn(f, id)!.click();
   await settle(f);
 }
@@ -88,9 +89,9 @@ describe('AiConnectorsSettingsPage', () => {
     const s = sw(f)!;
     expect(s).toBeTruthy();
     expect(s.getAttribute('aria-checked')).toBe('false');
-    await openTab(f, 'claude');   // Connect Claude is its own category (owner: no side card)
+    await openTab(f, 'connect');   // Connect an app is its own category (owner: no side card)
     expect(f.nativeElement.querySelector('#pf-aic-url')!.textContent!.trim()).toBe(OFF.connectorUrl);  // whole, never cut
-    expect(f.nativeElement.querySelectorAll('.pf-aic__steps li')).toHaveLength(3);
+    expect(f.nativeElement.querySelectorAll('.pf-aic__steps li')).toHaveLength(4);
     expect(f.nativeElement.textContent).toContain('Add custom connector');
   });
 
@@ -148,7 +149,7 @@ describe('AiConnectorsSettingsPage', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     const { f } = setup();
     await loaded(f);
-    await openTab(f, 'claude');
+    await openTab(f, 'connect');
     (f.nativeElement.querySelector('.pf-aic__copy') as HTMLButtonElement).click();
     await settle(f);
     expect(writeText).toHaveBeenCalledWith(OFF.connectorUrl);
@@ -498,7 +499,7 @@ describe('AiConnectorsSettingsPage: tabs instead of one long page', () => {
     const list = f.nativeElement.querySelector('[role="tablist"]')!;
     expect(list.getAttribute('aria-label')).toBe('AI connector sections');
     const tabs = Array.from(list.querySelectorAll('[role="tab"]')) as HTMLElement[];
-    expect(tabs.map(t => t.textContent!.replace(/\s+/g, ' ').trim())).toEqual(['Settings', 'What apps see', 'Your apps1', 'Connect Claude']);
+    expect(tabs.map(t => t.textContent!.replace(/\s+/g, ' ').trim())).toEqual(['Settings', 'What apps see', 'Your apps1', 'Connect an app']);
     expect(tabs.filter(t => t.getAttribute('aria-selected') === 'true')).toHaveLength(1);
     expect(f.nativeElement.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
     expect(f.nativeElement.querySelector('[role="tabpanel"]')!.getAttribute('aria-labelledby')).toBe('pf-aic-tab-settings');
@@ -517,15 +518,50 @@ describe('AiConnectorsSettingsPage: tabs instead of one long page', () => {
     expect(sw(f)).toBeTruthy();
   });
 
-  it('Connect Claude is a category (admin): the address + Copy and the steps, no side card; the two notes are ONE muted line', async () => {
+  it('Connect an app is a category (admin): the address + Copy and the steps, no side card; the two notes are ONE muted line', async () => {
     const { f } = setup({ state: ON, grants: [G1] });
     await loaded(f);
     expect(f.nativeElement.querySelector('.pf-aic__side, aside.pf-card')).toBeNull();
     expect(f.nativeElement.querySelectorAll('[data-testid="aic-note"]')).toHaveLength(1);
     expect(f.nativeElement.querySelector('.pf-card .pf-card')).toBeNull();   // never card-in-card
-    await openTab(f, 'claude');
+    await openTab(f, 'connect');
     expect(f.nativeElement.querySelector('#pf-aic-url')).toBeTruthy();
-    expect(f.nativeElement.querySelectorAll('.pf-aic__steps li')).toHaveLength(3);
+    expect(f.nativeElement.querySelectorAll('.pf-aic__steps li').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('the App picker switches the steps; every app shows the SAME address; Copy copies it', async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    const { f } = setup({ state: ON, grants: [G1] });
+    await loaded(f);
+    await openTab(f, 'connect');
+    const steps = () => f.nativeElement.querySelector('.pf-aic__steps')!.textContent!;
+    expect(f.nativeElement.querySelectorAll('pf-select.pf-aic__app')).toHaveLength(1);
+    expect(f.nativeElement.querySelector('select, datalist')).toBeNull();
+    expect(steps()).toContain('Add custom connector');
+    expect(CONNECT_APPS.map(a => a.name)).toEqual(['Claude', 'ChatGPT', 'Microsoft Copilot', 'OpenAI Codex', 'Gemini', 'Cursor', 'Other (any app that supports MCP connectors)']);
+    for (const a of CONNECT_APPS) {
+      f.componentInstance.appId.set(a.id);
+      await settle(f);
+      expect(f.nativeElement.querySelector('#pf-aic-url')!.textContent!.trim()).toBe(ON.connectorUrl);
+      expect(f.nativeElement.querySelectorAll('.pf-aic__steps li')).toHaveLength(a.steps.length);
+      expect(steps()).not.toContain('{url}');
+    }
+    f.componentInstance.appId.set('codex');
+    await settle(f);
+    expect(steps()).toContain('codex mcp add prefrontal --url ' + ON.connectorUrl);
+    expect(steps()).not.toContain('Add custom connector');
+    (f.nativeElement.querySelector('.pf-aic__copy') as HTMLButtonElement).click();
+    await settle(f);
+    expect(writeText).toHaveBeenCalledWith(ON.connectorUrl);
+  });
+
+  it('?tab=claude still opens Connect an app (alias), ?tab=connect too', async () => {
+    for (const q of ['claude', 'connect']) {
+      const { f } = setup({ state: ON, grants: [G1], tab: q });
+      await loaded(f);
+      expect(f.componentInstance.tab()).toBe('connect');
+    }
   });
 
   it('the suggest-off helper and confirm share ONE sentence (owner rule)', () => {

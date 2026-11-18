@@ -22,11 +22,11 @@ import { BuilderStatusService, CORTEX_BUILDER_ON } from '../casesheets/studio/bu
 import {
   AI_CONNECTOR_ADMIN_PERMS, AI_CONNECTOR_CAN_SEE, AI_CONNECTOR_CAN_SUGGEST, AI_CONNECTOR_NEVER, AI_CONNECTOR_NEVER_ITEMS,
   AI_CONNECTOR_GRANT_LABEL, AI_CONNECTOR_SUGGEST_OFF, AI_CONNECTOR_SUGGEST_OFF_EFFECT, AI_CONNECTOR_SUGGEST_ON, AI_CONNECTOR_SUGGEST_TITLE, AI_PRIVACY_LEVELS, offersAppGrant,
-  AiConnectorApi, AiConnectorGrant, AiConnectorState, AiPrivacyLevel, CLAUDE_STEPS, rememberedAppName,
+  AiConnectorApi, AiConnectorGrant, AiConnectorState, AiPrivacyLevel, CONNECT_APPS, rememberedAppName,
 } from './ai-connector.api';
 
 /** The main card's sections (segmented tabs in its header). */
-export type AicTab = 'settings' | 'can' | 'apps' | 'claude';
+export type AicTab = 'settings' | 'can' | 'apps' | 'connect';
 
 /**
  * Lab settings → AI connector (MCP Phase 0). One lab-wide switch, DEFAULT
@@ -42,7 +42,7 @@ export type AicTab = 'settings' | 'can' | 'apps' | 'claude';
  *   What apps see — a compact two-column Can / Never list (the full wording
  *                   opens on demand in a DialogService notice);
  *   Your apps     — the person's OWN apps allowed to suggest, with Revoke.
- * + CONNECT CLAUDE side card (admin only): the connector address with Copy
+ * + CONNECT AN APP category (admin only): the connector address with Copy
  * and three short steps. Every switch flip / level change / revoke asks first
  * (DialogService). Anyone else sees the state read-only. The server decides;
  * a refused save says so in words.
@@ -54,7 +54,7 @@ export type AicTab = 'settings' | 'can' | 'apps' | 'claude';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- Test Master's frame (owner 2026-11-17): band = back + search pill; ONE main card whose head carries the categories
-         (Settings | What apps see | Your apps | Connect Claude); flush rows, no nested cards. Inline in the Settings
+         (Settings | What apps see | Your apps | Connect an app); flush rows, no nested cards. Inline in the Settings
          overview the overview's card IS the main card: the categories become its head pill (SETTINGS_HOST). -->
     <section class="pf-band-page pf-aic px-4 md:px-8 lg:px-10 pt-6 pb-10">
       @if (theme.isNewDesign()) {
@@ -181,10 +181,14 @@ export type AicTab = 'settings' | 'can' | 'apps' | 'claude';
                   }
                   <p class="pf-aic__note">Only your own apps are listed. Revoking stops the app suggesting changes straight away; it can still read.</p>
                 }
-                @case ('claude') {
+                @case ('connect') {
                   @if (!s.enabled) {
-                    <p class="pf-aic__note" role="status">Turn on “Allow apps to connect” first — until then Claude can’t connect.</p>
+                    <p class="pf-aic__note" role="status">Turn on “Allow apps to connect” first — until then no app can connect.</p>
                   }
+                  <pf-setting-row label="App" hint="Pick the app you want to connect.">
+                    <pf-select class="pf-aic__app" [options]="appOptions" [value]="appId()" aria-label="App"
+                               (valueChange)="appId.set($event)"></pf-select>
+                  </pf-setting-row>
                   <pf-setting-row label="Connector address" hint="The same address for everyone in your lab.">
                     <!-- Shown whole (wraps, never cut) and selectable in one tap. -->
                     <div id="pf-aic-url" class="pf-aic__urltext" tabindex="0" role="textbox" aria-readonly="true" aria-label="Connector address">{{ s.connectorUrl }}</div>
@@ -193,9 +197,9 @@ export type AicTab = 'settings' | 'can' | 'apps' | 'claude';
                       {{ copied() ? 'Copied' : 'Copy' }}
                     </button>
                   </pf-setting-row>
-                  <pf-setting-row label="Steps" [stack]="true">
+                  <pf-setting-row [label]="'Steps in ' + app().name" [hint]="app().note" [stack]="true">
                     <ol class="pf-aic__steps">
-                      @for (step of steps; track $index) {
+                      @for (step of appSteps(); track $index) {
                         <li><span class="pf-aic__n">{{ $index + 1 }}</span><span>{{ step }}</span></li>
                       }
                     </ol>
@@ -273,7 +277,8 @@ export type AicTab = 'settings' | 'can' | 'apps' | 'claude';
     .pf-aic__grantsub { font-size: 12.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
     .pf-aic__revoke { flex: none; height: 34px; min-height: 34px; }
 
-    /* Connect Claude. */
+    /* Connect an app. */
+    .pf-aic__app { min-width: 240px; max-width: 100%; }
     .pf-aic__urltext { max-width: 420px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--pf-line); background: var(--pf-chip-bg, transparent);
       color: var(--text-primary); font-size: 13px; line-height: 1.4; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; user-select: all; }
     .pf-aic__urltext:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
@@ -309,7 +314,11 @@ export class AiConnectorsSettingsPage {
   readonly suggestOn = AI_CONNECTOR_SUGGEST_ON;
   readonly suggestOff = AI_CONNECTOR_SUGGEST_OFF;
   readonly suggestOffEffect = AI_CONNECTOR_SUGGEST_OFF_EFFECT;
-  readonly steps = CLAUDE_STEPS;
+  readonly appOptions = CONNECT_APPS.map(a => ({ value: a.id, label: a.name }));
+  readonly appId = signal<string>(CONNECT_APPS[0].id);
+  readonly app = computed(() => CONNECT_APPS.find(a => a.id === this.appId()) ?? CONNECT_APPS[0]);
+  /** The picked app's steps with the lab's connector address filled in. */
+  readonly appSteps = computed(() => this.app().steps.map(t => t.split('{url}').join(this.state()?.connectorUrl ?? '')));
   readonly levels = AI_PRIVACY_LEVELS;
   readonly levelOptions = AI_PRIVACY_LEVELS.map(l => ({ value: l.value, label: l.label }));
   readonly level = computed<AiPrivacyLevel>(() => this.state()?.privacyLevel ?? 'counts');
@@ -334,7 +343,7 @@ export class AiConnectorsSettingsPage {
   readonly tab = computed<AicTab>(() => {
     const t = this.picked();
     if (t === 'apps' && !this.showApps()) return 'settings';
-    if (t === 'claude' && !this.isAdmin()) return 'settings';
+    if (t === 'connect' && !this.isAdmin()) return 'settings';
     return t;
   });
 
@@ -385,7 +394,7 @@ export class AiConnectorsSettingsPage {
     { id: 'settings', label: 'Settings' },
     { id: 'can', label: 'What apps see' },
     ...(this.showApps() ? [{ id: 'apps' as AicTab, label: 'Your apps' }] : []),
-    ...(this.isAdmin() && this.state() ? [{ id: 'claude' as AicTab, label: 'Connect Claude' }] : []),
+    ...(this.isAdmin() && this.state() ? [{ id: 'connect' as AicTab, label: 'Connect an app' }] : []),
   ]);
   private readonly settingsHost = inject(SETTINGS_HOST, { optional: true });
   private readonly publishCats = (() => {
@@ -394,7 +403,7 @@ export class AiConnectorsSettingsPage {
     inject(DestroyRef).onDestroy(() => host.categories.set(null));
     return effect(() => host.categories.set(this.state() ? this.cats().map((c) => ({ id: c.id, label: c.label })) : null));
   })();
-  private readonly followTab = bindTabQuery(['settings', 'can', 'apps', 'claude'] as const, (t) => this.picked.set(t));
+  private readonly followTab = bindTabQuery(['settings', 'can', 'apps', 'connect', 'claude'] as const, (t) => this.picked.set(t === 'claude' ? 'connect' : t));
 
   async load(): Promise<void> {
     this.loadError.set(false);
