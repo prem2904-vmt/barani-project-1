@@ -450,14 +450,7 @@ export class RoleEditorComponent implements OnInit, HasUnsavedChanges {
   });
 
   ngOnInit() {
-    const backHandler = () => {
-      this.back();
-      return true;
-    };
-    this.navBack.registerBackInterceptor(backHandler);
-    this.destroyRef.onDestroy(() => {
-      this.navBack.clearBackInterceptor(backHandler);
-    });
+    // Back = navBack.back() (where you came from); no interceptor — it re-entered back() and swallowed the press.
 
     const id = this.route.snapshot.paramMap.get('id');
     // First load: permissions + roles (+ this role's grants) — then the form.

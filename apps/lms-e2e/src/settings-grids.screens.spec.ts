@@ -434,7 +434,7 @@ test.describe('settings list grids', () => {
     await expect.poll(() => rowCount(page, '.pf-br-main')).toBe(3);
     await expectLayout(page, 'branches');
     await shot(page, 'sg-branches');
-    await vis(page, '.pf-br-main .pf-sg-act').dispatchEvent('click');
+    await vis(page, '.pf-sg-act').dispatchEvent('click');   // inline in the overview: the action rides its card head
     await expect(vis(page, '.pf-br-new')).toContainText('New branch');
     await shot(page, 'sg-branches-new');
     expect(ownErrors(errors), 'no uncaught errors').toEqual([]);

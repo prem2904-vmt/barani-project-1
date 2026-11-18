@@ -143,7 +143,10 @@ export function bytesWords(n: number): string {
                   </pf-setting-row>
                 }
               }
-              <pf-settings-savebar saveTestId="files-settings-save" [dirty]="hasUnsavedChanges()" [saving]="saving()" (save)="save()" (discard)="discardDraft()"></pf-settings-savebar>
+              @if (full()) {
+                <!-- View only: nothing to save, so no Save in the band either. -->
+                <pf-settings-savebar saveTestId="files-settings-save" [dirty]="hasUnsavedChanges()" [saving]="saving()" (save)="save()" (discard)="discardDraft()"></pf-settings-savebar>
+              }
             </div>
           </pf-two-panel>
         }

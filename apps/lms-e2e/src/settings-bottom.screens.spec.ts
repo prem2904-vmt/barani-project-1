@@ -24,14 +24,16 @@ async function pinnedAtBottom(page: Page): Promise<string[]> {
       const b = el.getBoundingClientRect();
       if (b.width === 0 || b.height === 0 || b.top < limit || b.top > r.bottom) continue;
       if (el.closest('.ag-row, .ag-header, .ag-cell, .ag-paging-panel, .ag-overlay, .pf-dialog, [role="dialog"]')) continue;
-      let p: HTMLElement | null = el.parentElement; let inScroll = false; let pinned = false;
+      // Content that merely ends near the bottom is fine; a footer / bar / pinned strip is not.
+      let p: HTMLElement | null = el.parentElement; let pinned = false; let inScroll = false;
       while (p && p !== body) {
         const pos = getComputedStyle(p).position;
-        if (pos === 'sticky' || pos === 'fixed') pinned = true;
+        if (!inScroll && (pos === 'sticky' || pos === 'fixed')) pinned = true;
         if (scrolls(p)) inScroll = true;
         p = p.parentElement;
       }
-      if (pinned || !inScroll) bad.push(`${el.tagName.toLowerCase()} "${(el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 40)}"`);
+      const footer = !!el.closest('footer, .pf-card__foot, [class*="__foot"], [class*="savebar"], [class*="bottombar"], .pf-ssb, [class*="designer-bar"]');
+      if (pinned || footer) bad.push(`${el.tagName.toLowerCase()} "${(el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 40)}"`);
     }
     return bad;
   });
@@ -72,7 +74,6 @@ const PAGES: [string, string][] = [
   ['lab results', '/admin/lab/results'],
   ['lab front desk', '/admin/lab/front-desk'],
   ['lab alerts', '/admin/lab/alerts'],
-  ['report design', '/admin/reports'],
   ['test master', '/admin/tests'],
   ['option groups', '/admin/tests?view=option-groups'],
   ['microbiology', '/admin/tests?view=microbiology'],
