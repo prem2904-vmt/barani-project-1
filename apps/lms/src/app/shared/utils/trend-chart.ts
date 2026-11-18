@@ -164,6 +164,9 @@ export async function renderTrendogramPng(args: {
   width?: number; height?: number; pixelRatio?: number;
 }): Promise<string | null> {
   if (args.points.length === 0) return null;
+  // No 2D canvas (tests, locked-down webviews): skip the picture instead of letting the chart library paint into
+  // nothing — its animation frame then throws after the caller has gone (the release gate's uncaught 'clearRect').
+  if (!canvas2dAvailable()) return null;
   const ec = await import('echarts');
   const w = args.width ?? 520, h = args.height ?? 320;
   const el = document.createElement('div');
@@ -174,10 +177,21 @@ export async function renderTrendogramPng(args: {
     chart.setOption(buildTrendOption(ec, {
       param: args.param, points: args.points, chartType: args.chartType, theme: 'light', title: args.title,
     }), true);
-    const url = chart.getDataURL({ type: 'png', pixelRatio: args.pixelRatio ?? 2, backgroundColor: '#fff' });
-    chart.dispose();
-    return url;
+    try {
+      return chart.getDataURL({ type: 'png', pixelRatio: args.pixelRatio ?? 2, backgroundColor: '#fff' });
+    } finally {
+      chart.dispose();
+    }
   } finally {
     el.remove();
+  }
+}
+
+/** True when this environment can draw on a 2D canvas (jsdom and some webviews cannot). */
+function canvas2dAvailable(): boolean {
+  try {
+    return !!document.createElement('canvas').getContext('2d');
+  } catch {
+    return false;
   }
 }
