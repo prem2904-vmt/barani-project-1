@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 import { unsavedChangesGuard } from '../../shared/utils/unsaved-changes';
 import { permissionGuard } from '../../core/auth/permission.guard';
 import { OPD_SETTINGS_OPEN_PERMS } from '../../core/auth/route-access';
+import { routeGuards } from '../../core/auth/route-guards';
 import { opdGuard } from './shared/opd.guard';
 import { PHARMACY_VIEW } from './pharmacy/pharmacy-view';
 
@@ -76,6 +77,10 @@ export const OPD_ADMIN_ROUTES: Routes = [
     loadComponent: () => import('./pharmacy/pharmacy-settings.page').then(m => m.PharmacySettingsPage) },
   { path: 'admin/pharmacy', canActivate: [adminGuard, opdGuard], data: { moduleId: 'pharmacy', [PHARMACY_VIEW]: 'settings' },
     loadComponent: () => import('./pharmacy/pharmacy-settings.page').then(m => m.PharmacySettingsPage) },
+  // Order IDs per module (2026-11-18): OPD's visit number and Pharmacy's dispense number formats.
+  { path: 'admin/opd/numbers', canActivate: [opdGuard, ...routeGuards('/admin/opd/numbers')], canDeactivate: [unsavedChangesGuard], loadComponent: () => import('./admin/opd-numbers.page').then(m => m.OpdNumbersPage) },
+  { path: 'admin/pharmacy/numbers', canActivate: [opdGuard, ...routeGuards('/admin/pharmacy/numbers')], canDeactivate: [unsavedChangesGuard], data: { moduleId: 'pharmacy' },
+    loadComponent: () => import('./pharmacy/pharmacy-numbers.page').then(m => m.PharmacyNumbersPage) },
   // OPD front desk, alerts and numbers (`?tab=` = OPD_FRONT_DESK_SECTIONS): appointments and booking, the shared
   // referring list, OPD alerts. Numbers on OPD screens waits for OPD screens in the KPI-card list.
   { path: 'admin/opd/front-desk', canActivate: [adminGuard, opdGuard], canDeactivate: [unsavedChangesGuard], loadComponent: () => import('./admin/front-desk.page').then(m => m.OpdFrontDeskPage) },

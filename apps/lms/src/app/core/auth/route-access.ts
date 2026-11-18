@@ -226,6 +226,10 @@ export const ROUTE_ACCESS: Record<string, RouteAccess> = {
   '/admin/opd/workflow':          { perms: OPD_SETTINGS_OPEN_PERMS },
   '/admin/opd/settings':          { perms: OPD_SETTINGS_OPEN_PERMS },
   '/admin/opd/front-desk':        { perms: OPD_SETTINGS_OPEN_PERMS },
+  // Order IDs per module: the numbers save on the module's own code, or the codes its settings screen already uses
+  // (ConfigController.GateOrderModuleAsync / OrderModules.WritePermissions — keep in step).
+  '/admin/opd/numbers':           { perms: ['manage_opd', 'manage_users', 'manage_billing_config', C_OPD] },
+  '/admin/pharmacy/numbers':      { perms: ['manage_pharmacy', 'manage_inventory', 'manage_billing_config', C_OPD] },
   '/admin/pharmacy':              { perms: OPD_SETTINGS_OPEN_PERMS },
   '/admin/pharmacy/drugs':        { perms: OPD_SETTINGS_OPEN_PERMS },
   '/admin/ipd/alerts':            { perms: ['manage_tenant', 'manage_notifications', C_IPD] },
