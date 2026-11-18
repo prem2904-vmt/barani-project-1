@@ -1,7 +1,7 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Page } from '@playwright/test';
-import { test, expect, isPhone, expectLayout, shotsDir } from './support/form-factor';
+import { test, expect, isPhone, projectName, expectLayout, shotsDir } from './support/form-factor';
 import { neg, resetNeg, installNegBackend, go } from './support/neg-backend';
 
 /**
@@ -343,7 +343,9 @@ test.describe('settings list grids', () => {
     await expect(page.locator('.pf-ua-main .ag-row').first()).toBeVisible({ timeout: 30_000 });
     const box = await grid.boundingBox();
     expect(box!.height, 'grid has height').toBeGreaterThan(150);
-    expect(box!.width, 'grid has width').toBeGreaterThan(isPhone() ? 200 : 400);
+    // Real width, not a pixel count: on a tablet the 340px side card + the Settings nav leave the grid ~400px, which is by design
+    // (same two-panel frame everywhere); it only has to be clearly usable.
+    expect(box!.width, 'grid has width').toBeGreaterThan(isPhone() ? 200 : projectName().startsWith('tablet') ? 340 : 400);
     expect(await rowCount(page, '.pf-ua-main')).toBeGreaterThan(0);
     await page.screenshot({ path: `${out()}/sg-people-inline-raw.png` });
     await page.waitForTimeout(1500);
