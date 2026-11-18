@@ -246,7 +246,9 @@ interface PickParam { testId: string; testCode: string | null; testName: string;
     .pf-og__count { font-size: 12.5px; }
 
     .pf-og__slabel { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 10px 0 2px; }
-    .pf-og__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    /* Never shrink in the side card's flex column: wrapped chips keep their height (the label slid over a 2nd chip row). */
+    .pf-og__chips { display: flex; flex-wrap: wrap; gap: 6px; flex: none; }
+    .pf-og__slabel, .pf-og__warn, .pf-og__row, .pf-og__addrow { flex-shrink: 0; }
     .pf-og__chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 500; padding: 4px 10px;
       border-radius: var(--pf-radius-chip, 8px); color: var(--text-secondary); background: var(--pf-chip-bg); border: 1px solid var(--pf-line); }
     /* Normal = the neutral selected state + a violet check (never green). */
