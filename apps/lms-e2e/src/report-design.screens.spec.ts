@@ -2,7 +2,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Page } from '@playwright/test';
 import { test, expect, isPhone, shotsDir } from './support/form-factor';
-import { resetNeg, installNegBackend, go } from './support/neg-backend';
+import { resetNeg, installNegBackend, go, neg } from './support/neg-backend';
 
 /**
  * Report design (owner 2026-11-17): sections = LEFT side card, the section's fields fill the RIGHT card; ONE Save in
@@ -25,6 +25,8 @@ async function shot(page: Page, name: string) {
 test.beforeEach(async ({ page, context }) => {
   test.setTimeout(180_000);
   resetNeg();
+  neg.hook = r => (r.method === 'GET' && r.path === '/api/tenants/departments'
+    ? { status: 200, body: { success: true, data: [{ id: 'd1', name: 'Biochemistry', code: 'BIO', isActive: true }] } } : undefined);
   await installNegBackend(page, context);
 });
 
