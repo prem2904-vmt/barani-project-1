@@ -131,7 +131,7 @@ describe('Admin band B2 — Organization & Identity', () => {
     expect(p.band()).not.toBeNull();
     expect(p.bandInput()).toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(pillTabs(p).labels()).toEqual(['Identity', 'Patient ID', 'Order ID']);
+    expect(pillTabs(p).labels()).toEqual(['Identity', 'Patient ID']);
   });
 
   it('pill tabs swap the cards; the open tab Save is the band ONE primary', () => {
@@ -144,22 +144,19 @@ describe('Admin band B2 — Organization & Identity', () => {
     pillTabs(p).click('Patient ID');
     expect(Array.from(p.el.querySelectorAll('.pf-sgroup__label')).map((x) => x.textContent?.trim())).toEqual(['Patient ID']);
     expect(primary()[0].textContent).toContain('Save format');
-    pillTabs(p).click('Order ID');
-    expect(Array.from(p.el.querySelectorAll('.pf-sgroup__label')).map((x) => x.textContent?.trim())).toEqual(['Order ID']);
-    expect(p.actions().length).toBe(1);
+    expect(p.actions().length).toBe(1);   // the Order ID moved to Lab / OPD / Pharmacy: no tab for it here
   });
 
   it('kit controls: pf-card sections, pf-select (no native select), slate switches', () => {
     const p = make();
     expect(p.body()!.querySelectorAll('section.pf-card').length).toBe(2);
-    pillTabs(p).click('Order ID');
+    pillTabs(p).click('Patient ID');
     expect(p.el.querySelector('select')).toBeNull();
-    expect(p.body()!.querySelector('pf-select')).not.toBeNull();
-    const sw = p.body()!.querySelector<HTMLButtonElement>('.pf-toggle[role="switch"]')!;
+    const sw = p.body()!.querySelector<HTMLButtonElement>('.pf-toggle[role="switch"]')!;   // Custom format
     expect(sw.getAttribute('aria-checked')).toBe('false');
     sw.click(); p.f.detectChanges();
     expect(sw.getAttribute('aria-checked')).toBe('true');
-    expect(p.body()!.querySelector('pf-select + *, .pf-ls__letters pf-select')).not.toBeNull();
+    expect(p.body()!.querySelector('pf-select')).not.toBeNull();
     expect(p.el.querySelector('input[type="checkbox"], .font-mono')).toBeNull();
   });
 
