@@ -727,6 +727,11 @@ interface Entry { id: string; label: string; value: string; state: EntryState; i
     :host(.pf-rhe-host--flat) .pf-rhe-main__head > .pf-card__label,
     :host(.pf-rhe-host--flat) .pf-rhe-side > .pf-card__head > .pf-card__icon { display: none; }
     :host(.pf-rhe-host--flat) .pf-rhe-side > .pf-card__head > .pf-card__label { text-transform: none; letter-spacing: 0; font-size: 13.5px; color: var(--text-primary); }
+    /* Flat: elements and setting rows are flush rows (hairline between), never little cards. */
+    :host(.pf-rhe-host--flat) .pf-rhe-list { gap: 0; }
+    :host(.pf-rhe-host--flat) .pf-rhe-li { border: 0; border-bottom: 1px solid var(--pf-line); border-radius: 0; background: transparent; padding-right: 0; }
+    :host(.pf-rhe-host--flat) .pf-rhe-li__main { padding-left: 0; }
+    :host(.pf-rhe-host--flat) .pf-rhe-row:not(.pf-rhe-row--flat) { border: 0; border-bottom: 1px solid var(--pf-line); border-radius: 0; background: transparent; padding-inline: 0; }
     /* Owner rule (2026-11-17): side cards sit on the LEFT, the same height as the main card. */
     .pf-rhe { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; height: 100%; min-height: 0; }
     @media (max-width: 1100px) { .pf-rhe { grid-template-columns: 330px minmax(0, 1fr); } }

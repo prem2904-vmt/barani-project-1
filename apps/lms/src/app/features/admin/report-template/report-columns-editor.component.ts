@@ -224,7 +224,7 @@ export interface ColumnsEditorState {
         <!-- ── SIGNATORIES: who signs this department's report block ──
              Department-scoped — not part of a per-test override. -->
         @if (!hostManaged()) {
-        <div class="pf-ce-inspector" style="margin-top: 16px;">
+        <div class="pf-ce-sigs">
           <div class="flex items-center justify-between flex-wrap gap-2 mb-1">
             <h4 style="margin:0; font-size:13px; font-weight:700; color: var(--text-primary);">Signatories — {{ selectedDeptName() }}</h4>
           </div>
@@ -318,6 +318,8 @@ export interface ColumnsEditorState {
     .pf-ce-total--bad { color: #f87171; }
 
     /* ── Inspector ── */
+    /* Signatories: a flush section under the strip (a hairline above), never a box inside the card. */
+    .pf-ce-sigs { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--pf-line); }
     .pf-ce-inspector { margin-top: 10px; padding: 12px; border: 1px solid var(--glass-border, rgba(148,163,184,0.2));
       border-radius: 14px; background: rgba(255,255,255,0.02); }
     .pf-ce-insp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
