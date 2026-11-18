@@ -38,6 +38,7 @@ import { hasLegacyFields, loadEditorFields, newFieldId, parseParametersBlob, rea
 
 import { SelectComponent, PfSelectOption } from '../../../../shared/primitives/select.component';
 import { methodologyChoices } from '../../../../shared/utils/methodology';
+import { compareTestCodes } from '../../../../shared/utils/test-code';
 import { TUBE_COLORS } from '../../../../shared/utils/tube-colors';
 import {
   SPECIMEN_MODE_OPTIONS, specimenModeOf, withSpecimenMode, type SpecimenMode,
@@ -198,7 +199,7 @@ function makeEmptyDraft(): DraftTest {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './test-editor.component.html',
-  styleUrl: './test-editor.component.scss'
+  styleUrls: ['../../../../shared/settings-grid/settings-grid.scss', './test-editor.component.scss']
 })
 export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, HasUnsavedChanges {
   private readonly api = inject(ApiService);
@@ -234,13 +235,42 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
   /** Where the band's back chevron goes: Test Master on this record's view. */
   readonly backUrl = computed(() =>
     `/admin/tests?type=${this._draft().type || this.route.snapshot.queryParamMap.get('type') || 'individual'}`);
-  /** Below 1024px the live preview is a sheet behind the Preview button. */
+  /** The report preview is a popup (Alt+P / the Preview button) — never a
+   *  permanent panel. It mounts only while open, so it renders fresh each
+   *  time it is opened and never in the background. */
   readonly previewOpen = signal(false);
-  @HostListener('document:keydown.escape', ['$event'])
-  onEscape(ev?: Event): void {
+  private previewReturnTo: HTMLElement | null = null;
+  openPreview(): void {
+    if (this.previewOpen() || this.recordSkeleton()) return;
+    const a = typeof document !== 'undefined' ? document.activeElement : null;
+    this.previewReturnTo = a instanceof HTMLElement && a !== document.body ? a : null;
+    this._previewToken.update(v => v + 1);
+    this.previewOpen.set(true);
+    if (typeof setTimeout !== 'undefined') setTimeout(() => this.previewClose()?.nativeElement.focus());
+  }
+  closePreview(): void {
     if (!this.previewOpen()) return;
-    ev?.preventDefault(); // used → the desktop app stays full screen
     this.previewOpen.set(false);
+    const back = this.previewReturnTo; this.previewReturnTo = null;
+    if (back && typeof document !== 'undefined' && document.contains(back)) back.focus();
+  }
+  private readonly previewClose = viewChild<ElementRef<HTMLButtonElement>>('previewCloseBtn');
+  @HostListener('document:keydown', ['$event'])
+  onPreviewKeys(ev: KeyboardEvent): void {
+    if (this.nd() && ev.altKey && !ev.ctrlKey && !ev.metaKey && (ev.code === 'KeyP' || ev.key.toLowerCase() === 'p')) {
+      ev.preventDefault();
+      if (this.previewOpen()) this.closePreview(); else this.openPreview();
+      return;
+    }
+    if (this.previewOpen() && ev.key === 'Escape') {
+      ev.preventDefault(); // used → the desktop app stays full screen
+      ev.stopPropagation();
+      this.closePreview();
+    } else if (this.previewOpen() && ev.key === 'Tab') {
+      // Keep Tab inside the popup (one focusable: Close).
+      ev.preventDefault();
+      this.previewClose()?.nativeElement.focus();
+    }
   }
   /** Origin as a NEUTRAL context chip (label + glyph + hint). */
   readonly originChip = computed(() => {
@@ -251,29 +281,6 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
     const t = { origin: o, catalogMode: this.catalogMode() };
     return { label: originLabel(t), hint: originHint(t), icon: ORIGIN_ICON_PATHS[k] };
   });
-  /** The section tabs in the pill + their sliding indicator (x / width of
-   *  the selected tab, measured after render; slides on --pf-spring). */
-  private readonly tabsEl = viewChild<ElementRef<HTMLElement>>('tabsEl');
-  readonly tabInd = signal<{ x: number; w: number }>({ x: 0, w: 0 });
-  private readonly _tabIndFx = effect(() => {
-    this.section(); this.sectionNav(); this.tabsEl();
-    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this.measureTab());
-    else this.measureTab();
-  });
-  @HostListener('window:resize')
-  onResizeTabs(): void {
-    if (typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => this.measureTab());
-  }
-  measureTab(): void {
-    const box = this.tabsEl()?.nativeElement;
-    const on = box?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-    if (!box || !on) { this.tabInd.set({ x: 0, w: 0 }); return; }
-    this.tabInd.set({ x: on.offsetLeft, w: on.offsetWidth });
-    // Keep the open tab visible when the strip scrolls (narrow widths).
-    const l = on.offsetLeft, r = l + on.offsetWidth;
-    if (l < box.scrollLeft) box.scrollLeft = Math.max(0, l - 8);
-    else if (r > box.scrollLeft + box.clientWidth) box.scrollLeft = r - box.clientWidth + 8;
-  }
   private readonly nameInput = viewChild<ElementRef<HTMLInputElement>>('nameInput');
   /** The context bar's pencil: open Basics and put the caret in Name. */
   editName(): void {
@@ -1079,6 +1086,8 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
 
   /** Sticky wayfinding for the long form: one link per visible section,
    *  with its completion state folded in from the publish checklist. */
+  readonly sectionPickOptions = computed<PfSelectOption<string>[]>(() =>
+    this.sectionNav().map(n => ({ value: n.id, label: n.label })));
   readonly sectionNav = computed<Array<{ id: TestSection; label: string; ok: boolean }>>(() => {
     const d = this._draft();
     const checks = this.publishChecklist();
@@ -1657,11 +1666,35 @@ export class TestEditorComponent implements OnInit, AfterViewInit, OnDestroy, Ha
   readonly unprintedParamNames = computed<string[]>(() =>
     this._fields().filter(fld => fld.printOnReport === false).map(fld => fld.name));
   readonly profSearch = signal('');
+  /** 'all' | 'selected' | a department id. */
+  readonly profFilter = signal<string>('all');
+  readonly profFilterOptions = computed<PfSelectOption<string>[]>(() => {
+    const depts = new Map<string, string>();
+    for (const p of this._allProfiles()) {
+      const id = p.departmentId ?? '';
+      const name = id ? (this._departments().find(d => d.id === id)?.name ?? '').trim() : '';
+      if (id && name) depts.set(id, name);
+    }
+    return [
+      { value: 'all', label: 'All profiles' },
+      { value: 'selected', label: 'Selected only' },
+      ...[...depts.entries()].sort((a, b) => a[1].localeCompare(b[1])).map(([v, label]) => ({ value: v, label })),
+    ];
+  });
+  /** Filtered by search + filter, the profiles this test belongs to first. */
   readonly visibleProfiles = computed<Test[]>(() => {
     const q = this.profSearch().trim().toLowerCase();
-    const all = this._allProfiles();
-    if (!q) return all;
-    return all.filter(p => `${p.name} ${p.testCode ?? ''}`.toLowerCase().includes(q));
+    const f = this.profFilter();
+    const linked = new Set(this.linkedProfileIds());
+    // Test Master's order: natural code order, then name (tests.component.ts).
+    const out = [...this._allProfiles()].sort((a, b) =>
+      compareTestCodes(a.testCode, b.testCode) || (a.name ?? '').localeCompare(b.name ?? '')).filter(p => {
+      if (f === 'selected' && !linked.has(p.id)) return false;
+      if (f !== 'all' && f !== 'selected' && (p.departmentId ?? '') !== f) return false;
+      return !q || `${p.name} ${p.testCode ?? ''}`.toLowerCase().includes(q);
+    });
+    return out.map((p, i) => ({ p, i, on: linked.has(p.id) }))
+      .sort((a, b) => Number(b.on) - Number(a.on) || a.i - b.i).map(x => x.p);
   });
   isLinkedProfile(id: string): boolean { return this.linkedProfileIds().includes(id); }
   toggleProfileMembership(pr: Test, on: boolean) {

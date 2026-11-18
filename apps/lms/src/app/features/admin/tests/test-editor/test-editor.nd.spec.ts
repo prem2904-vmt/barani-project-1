@@ -16,8 +16,9 @@ import { TenantStateService } from '../../../../core/services/tenant-state.servi
 /**
  * Test editor — NEW DESIGN (PF-PATTERN "Editors"). The band is back · tenant
  * · Save (ONE primary) with a neutral save state; the pill is the CONTEXT
- * BAR (the full test name + neutral chips); the SECTIONS rail is a tabs row;
- * the live preview is the side card, behind "Preview" on small screens.
+ * BAR (the full test name + neutral chips); the SECTIONS are the LEFT side
+ * card (shared pf-sg-side); there is NO permanent live preview — a Preview
+ * button / Alt+P opens an A4 popup that closes with focus returned.
  * Palette + font: no green / amber status classes, no monospace, no native
  * select, no emoji glyphs.
  */
@@ -89,7 +90,7 @@ describe('Test editor — new design: band + context bar', () => {
     expect(el.querySelector('h1')).toBeNull();
   });
 
-  it('pill = ONLY the full test name (+ tiny origin badge, quiet pencil) and the section tabs — no fact chips', () => {
+  it('pill = ONLY the full test name (+ tiny origin badge, quiet pencil) — no tabs, no fact chips', () => {
     const { el, txt } = render();
     const ctx = el.querySelector('pf-hero-band .pf-ctx')!;
     expect(ctx).not.toBeNull();
@@ -99,10 +100,7 @@ describe('Test editor — new design: band + context bar', () => {
     // Code / Dept / Sample / Price / TAT / Fasting live in the sections, not the pill.
     expect(ctx.querySelectorAll('.pf-ctx__chip').length).toBe(0);
     expect(/BIO005|Biochemistry|Fasting|TAT/.test(txt(ctx))).toBe(false);
-    // The tabs ride INSIDE the pill, after the name.
-    const tabs = ctx.querySelector('[role="tablist"].pf-te2-tabs')!;
-    expect(tabs).not.toBeNull();
-    expect(tabs.querySelector('.pf-te2-tabs__ind')).not.toBeNull();
+    expect(ctx.querySelector('[role="tablist"], .pf-te2-tabs')).toBeNull();
   });
 
   it('the pencil opens Basics and focuses the Name field', async () => {
@@ -129,28 +127,37 @@ describe('Test editor — new design: band + context bar', () => {
 });
 
 describe('Test editor — new design: sections as tabs, cards, preview', () => {
-  it('the SECTIONS rail and the separate tabs row are gone; the pill tabs carry small violet dots', () => {
+  it('the sections are the LEFT side card (shared pf-sg-side); no tab strip anywhere', () => {
     const { el } = render();
     expect(el.querySelector('.pf-te2-nav')).toBeNull();
-    expect(el.querySelector('.pf-te2-tabsrow')).toBeNull();
-    expect(el.querySelectorAll('[role="tablist"]').length).toBe(1);
-    const tabs = el.querySelectorAll('pf-hero-band [role="tablist"] [role="tab"]');
-    expect(Array.from(tabs).map(t => t.textContent!.trim())).toEqual(
+    expect(el.querySelector('[role="tablist"], .pf-te2-tabs')).toBeNull();
+    const side = el.querySelector('aside.pf-sg-side')!;
+    expect(side).not.toBeNull();
+    expect(side.classList.contains('pf-card')).toBe(true);
+    expect(side.querySelector('.pf-card__head .pf-card__label')!.textContent).toContain('Sections');
+    const btns = side.querySelectorAll('.pf-te2-sidebtn');
+    expect(Array.from(btns).map(t => t.textContent!.trim())).toEqual(
       ['Basics', 'Price & sample', 'Result entry', 'Printed report', 'Consumables']);
-    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
-    expect(el.querySelectorAll('.pf-te2-tab__dot').length).toBe(5);
-    expect(el.querySelector('.pf-te2-nav__dot--ok')).toBeNull();
+    expect(btns[0].getAttribute('aria-pressed')).toBe('true');
+    expect(side.querySelectorAll('.pf-te2-tab__dot').length).toBe(5);
+    // Side card first in the DOM (left column), then the main card.
+    expect(side.nextElementSibling!.classList.contains('pf-te2-main')).toBe(true);
   });
 
-  it('a tab switches the focused section card (pf-card with the icon-chip header)', () => {
+  it('a side-card item switches the main card (pf-card with the icon-chip header)', () => {
     const { el, f } = render();
-    (el.querySelector('[role="tab"][data-sec="pricing"]') as HTMLButtonElement).click();
+    (el.querySelector('.pf-te2-sidebtn[data-sec="pricing"]') as HTMLButtonElement).click();
     f.detectChanges();
     const card = el.querySelector('#sec-pricing')!;
     expect(card.classList.contains('pf-card')).toBe(true);
     expect(card.querySelector('.pf-card__head .pf-card__icon svg')).not.toBeNull();
     expect(card.querySelector('.pf-card__label')!.textContent).toContain('Price');
-    expect(el.querySelector('[role="tab"][data-sec="pricing"]')!.getAttribute('aria-selected')).toBe('true');
+    expect(el.querySelector('.pf-te2-sidebtn[data-sec="pricing"]')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('phones get a section picker (pf-select) in the main column', () => {
+    const { el } = render();
+    expect(el.querySelector('.pf-te2-pick pf-select')).not.toBeNull();
   });
 
   it('Basics: kit fields, the read-only code in tabular numbers, Profiles as kit rows with a kit search', () => {
@@ -174,19 +181,60 @@ describe('Test editor — new design: sections as tabs, cards, preview', () => {
     expect(el.querySelector('.pf-rep-toggle')).toBeNull();
   });
 
-  it('LIVE PREVIEW is the side card; on small screens it opens behind "Preview" and Esc closes it', () => {
+  it('NO permanent live preview; Preview (button + Alt+P) opens an A4 popup, Esc closes it and returns focus', async () => {
     const { el, f, c } = render();
-    const aside = () => el.querySelector('#pf-te2-preview')!;
-    expect(aside().querySelector('.pf-card .pf-card__label')!.textContent).toContain('Live preview');
-    const btn = el.querySelector<HTMLButtonElement>('.pf-te2-previewbtn')!;
-    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    expect(el.querySelector('#pf-te2-preview, .pf-livewrap, pf-report-pdf-preview')).toBeNull();
+    expect(el.querySelector('pf-hero-band .pf-te2-previewbtn')).toBeNull();
+    const btn = el.querySelector<HTMLButtonElement>('#sec-identity .pf-card__head .pf-te2-previewbtn')!;
+    expect(btn.textContent).toContain('Preview');
+    expect(btn.querySelector('svg')).not.toBeNull();
+    btn.focus();
     btn.click();
     f.detectChanges();
-    expect(aside().classList.contains('pf-te2-aside--open')).toBe(true);
-    expect(el.querySelector('.pf-te2-previewscrim')).not.toBeNull();
+    await new Promise(r => setTimeout(r));
+    expect(c.previewOpen()).toBe(true);
+    const dlg = document.querySelector('[data-testid="preview-dialog"]') ?? el.querySelector('[data-testid="preview-dialog"]');
+    expect(dlg!.getAttribute('role')).toBe('dialog');
+    expect(dlg!.querySelector('pf-report-pdf-preview')).not.toBeNull();
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     f.detectChanges();
     expect(c.previewOpen()).toBe(false);
+    expect(el.querySelector('[data-testid="preview-dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(btn);
+    // Alt+P toggles it too.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP', altKey: true }));
+    f.detectChanges();
+    expect(c.previewOpen()).toBe(true);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP', altKey: true }));
+    f.detectChanges();
+    expect(c.previewOpen()).toBe(false);
+  });
+
+  it('Profiles: selected first, removable chips, search + filter, scroll inside the list', () => {
+    const { el, f, c } = render();
+    const profs = [
+      { id: 'p1', name: 'Diabetes Panel', type: 'profile', testCode: 'PRO012', departmentId: 'd1', parameters: JSON.stringify({ items: [] }) },
+      { id: 'p2', name: 'Lipid Profile', type: 'profile', testCode: 'PRO013', departmentId: 'd1', parameters: JSON.stringify({ items: [{ testId: 't1' }] }) },
+    ];
+    c._allProfiles.set(profs);
+    f.detectChanges();
+    expect(c.visibleProfiles().map((p: any) => p.id)).toEqual(['p2', 'p1']);
+    expect(el.querySelectorAll('.pf-profpanel__chips .pf-lp-chip').length).toBe(1);
+    expect(el.querySelector('.pf-profpanel__count')!.textContent).toContain('1 selected');
+    expect(el.querySelector('.pf-profpanel__tools input[type="search"]')).not.toBeNull();
+    expect(el.querySelector('.pf-profpanel__tools pf-select')).not.toBeNull();
+    expect(el.querySelectorAll('.pf-profpanel__item .pf-profpanel__no')[0].textContent!.trim()).toBe('1');
+    expect(el.querySelectorAll('.pf-profpanel__item .pf-profpanel__no')[1].textContent!.trim()).toBe('2');
+    // Test Master order: natural code order (PRO2 < PRO10), not name.
+    c._allProfiles.set([
+      { id: 'a', name: 'Zed', type: 'profile', testCode: 'PRO010', parameters: '{}' },
+      { id: 'b', name: 'Abe', type: 'profile', testCode: 'PRO002', parameters: '{}' }]);
+    expect(c.visibleProfiles().map((p: any) => p.id)).toEqual(['b', 'a']);
+    c._allProfiles.set(profs);
+    c.profFilter.set('selected');
+    expect(c.visibleProfiles().map((p: any) => p.id)).toEqual(['p2']);
+    c.profFilter.set('all'); c.profSearch.set('diab');
+    expect(c.visibleProfiles().map((p: any) => p.id)).toEqual(['p1']);
   });
 
   it('palette + font hygiene: no monospace / green classes, no <code>, no native select, no emoji glyphs', () => {
@@ -203,11 +251,11 @@ describe('Test editor — new design: sections as tabs, cards, preview', () => {
 describe('Test editor — profile / package variants and classic', () => {
   const PROFILE = OGTT({ name: 'Diabetes Panel', type: 'profile', testCode: 'PRO012', price: 900,
     parameters: JSON.stringify({ items: [] }) });
-  it('profile: the same band + name-and-tabs pill, "Members" tab', () => {
+  it('profile: the same band + name pill, "Members" section', () => {
     const { el, txt } = render({ test: PROFILE, type: 'profile' });
     expect(txt(el.querySelector('.pf-ctx__primary'))).toContain('Diabetes Panel');
     expect(el.querySelectorAll('.pf-ctx__chip').length).toBe(0);
-    const tabs = Array.from(el.querySelectorAll('[role="tab"]')).map(t => t.textContent!.trim());
+    const tabs = Array.from(el.querySelectorAll('.pf-te2-sidebtn')).map(t => t.textContent!.trim());
     expect(tabs).toContain('Members');
     expect(el.querySelectorAll('.pf-hb-btn--primary').length).toBe(1);
   });
@@ -215,7 +263,7 @@ describe('Test editor — profile / package variants and classic', () => {
   it('package: "Package members" tab; the member picker is kit rows with a kit search', () => {
     const PKG = OGTT({ name: 'Wellness Package', type: 'package', testCode: '', parameters: JSON.stringify({ items: [] }) });
     const { el, f, c } = render({ test: PKG, type: 'package' });
-    expect(Array.from(el.querySelectorAll('[role="tab"]')).map(t => t.textContent!.trim())).toContain('Package members');
+    expect(Array.from(el.querySelectorAll('.pf-te2-sidebtn')).map(t => t.textContent!.trim())).toContain('Package members');
     c.jumpToSection('results');
     f.detectChanges();
     expect(el.querySelector('#sec-results input.pf-picker-search.pf-input')).not.toBeNull();

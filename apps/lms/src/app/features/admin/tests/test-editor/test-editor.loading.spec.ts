@@ -82,7 +82,7 @@ describe('Test editor — loading feedback', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('first render of /:id/edit = skeleton (card + form + name + preview), not a blank form', () => {
+  it('first render of /:id/edit = skeleton (card + form + name, side card in place), not a blank form', () => {
     const record$ = new Subject<any>();
     const { el } = render({ record$ });
     const skel = el.querySelector('.pf-te2-loading');
@@ -91,7 +91,8 @@ describe('Test editor — loading feedback', () => {
     expect(el.querySelector('.pf-te2-ctx__nameskel')).not.toBeNull();
     expect(el.querySelector('.pf-te2-ctx__nametext')).toBeNull();          // no "Edit test" placeholder
     expect(el.querySelector('#sec-identity')).toBeNull();                  // no empty form
-    expect(el.querySelector('.pf-livewrap__skel[aria-busy="true"]')).not.toBeNull();
+    expect(el.querySelector('aside.pf-sg-side')).not.toBeNull();            // the sections side card holds its place
+    expect(el.querySelector('.pf-livewrap, pf-report-pdf-preview')).toBeNull(); // no permanent preview
     expect(el.textContent).not.toContain('Save the test to see its live report preview');
   });
 
