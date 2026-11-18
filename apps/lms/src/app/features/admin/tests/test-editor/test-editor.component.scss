@@ -1192,7 +1192,7 @@ select.pf-input--compact {
    Preview / Alt+P, mounted only while open. ── */
 .pf-te2-pvback { position: fixed; inset: 0; z-index: 1100; background: rgba(0, 0, 0, 0.5); animation: pf-fade-scale var(--pf-dur-fast) ease both; }
 .pf-te2-pv {
-  position: fixed; z-index: 1101; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  position: fixed; z-index: 1101; inset: 0; margin: auto; /* no transform: the entry animation owns it */
   width: min(900px, calc(100vw - 24px)); height: min(96dvh, calc(100dvh - 24px));
   display: flex; flex-direction: column; overflow: hidden; gap: 0;
   animation: pf-fade-scale var(--pf-dur) var(--pf-spring) both;
@@ -1204,6 +1204,6 @@ select.pf-input--compact {
 .pf-te2-pv__body ::ng-deep .pf-pdfprev__frame { width: 794px; height: 1123px; aspect-ratio: auto; min-height: 1123px; border-radius: 4px; }
 @media (prefers-reduced-motion: reduce) { .pf-te2-pv, .pf-te2-pvback { animation: none; } }
 @media (max-width: 640px) {
-  .pf-te2-pv { width: 100vw; height: 100dvh; top: 0; left: 0; transform: none; border-radius: 0; }
+  .pf-te2-pv { width: 100vw; height: 100dvh; border-radius: 0; }
   .pf-te2-pv__body { padding: 8px; }
 }
