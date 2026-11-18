@@ -52,15 +52,15 @@ function setup(opts: { perms?: string[]; compact?: boolean; opd?: boolean; pharm
 /* The overview loads the selected section's inline page lazily (dynamic import). Let those loads finish before the
    test environment is torn down, or vitest reports "Cannot load chunk … after the environment was torn down"
    (every test passes, but the run exits 1 — it blocked two dev releases). */
+const opened: AdminOverviewComponent[] = [];
 afterEach(async () => {
-  await vi.dynamicImportSettled();
-  await new Promise((r) => setTimeout(r, 50));
+  while (opened.length) await opened.pop()!.inlineReady.catch(() => undefined);
   await vi.dynamicImportSettled();
 });
 
 async function open(url: string) {
   const h = await RouterTestingHarness.create();
-  await h.navigateByUrl(url, AdminOverviewComponent);
+  opened.push(await h.navigateByUrl(url, AdminOverviewComponent));
   h.detectChanges();
   return h;
 }
