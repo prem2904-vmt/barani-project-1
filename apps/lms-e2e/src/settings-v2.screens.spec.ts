@@ -182,9 +182,21 @@ test.describe('settings v2 (Test Master frame)', () => {
     await expect(vis(page, '[aria-label="Allow apps to connect"]')).toBeVisible({ timeout: 20_000 });
     await page.waitForTimeout(500);
     await shot(page, 'connected-apps');
-    await go(page, '/admin?section=connected&tab=claude');
+    await go(page, '/admin?section=connected&tab=connect');
     if (isPhone()) await vis(page, '[data-testid="tp-item-connected"]').click().catch(() => undefined);
     await expect(vis(page, '#pf-aic-url')).toBeVisible({ timeout: 30_000 });
+    await expect(vis(page, 'pf-select.pf-aic__app')).toBeVisible();
     await shot(page, 'connected-apps-claude');
+    await vis(page, 'pf-select.pf-aic__app').click();
+    await vis(page, '[role="option"]:has-text("OpenAI Codex")').click();
+    await expect(vis(page, '.pf-aic__steps')).toContainText('codex mcp add prefrontal --url https://mcp.prefrontal.health/demo-lab');
+    await shot(page, 'connected-apps-codex');
+    await vis(page, 'pf-select.pf-aic__app').click();
+    await vis(page, '[role="option"]:has-text("Other (any app")').click();
+    await expect(vis(page, '.pf-aic__steps')).toContainText('remote MCP server');
+    await shot(page, 'connected-apps-other');
+    await go(page, '/admin?section=connected&tab=claude');   // the old link still lands here
+    if (isPhone()) await vis(page, '[data-testid="tp-item-connected"]').click().catch(() => undefined);
+    await expect(vis(page, '#pf-aic-url')).toBeVisible({ timeout: 30_000 });
   });
 });
