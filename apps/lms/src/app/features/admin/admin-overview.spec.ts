@@ -40,7 +40,7 @@ function setup(opts: { perms?: string[]; compact?: boolean; opd?: boolean; pharm
           waitForAuth: async () => undefined,
         },
       },
-      { provide: TenantStateService, useValue: { tenant: () => null } },
+      { provide: TenantStateService, useValue: { tenant: () => null, ensureLoaded: async () => null } },
       { provide: OpdGateService, useValue: { visible: () => !!opts.opd } },
       { provide: CasesheetGateService, useValue: { visible: () => !!opts.ipd } },
       ...(opts.pharmacy ? [{ provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true, moduleOn: () => true, ensureLoaded: async () => undefined, loaded: () => true } }] : []),
