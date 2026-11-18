@@ -32,7 +32,7 @@
 
 .pf-sg-panels {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr);
   gap: 16px;
   flex: 1 1 auto;
   min-height: 0;

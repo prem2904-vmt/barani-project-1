@@ -49,7 +49,7 @@
    sheet opened from the band pill. */
 .pf-tm-panels {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
+  grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
   transition: grid-template-columns var(--pf-dur, 320ms) var(--pf-spring, ease);

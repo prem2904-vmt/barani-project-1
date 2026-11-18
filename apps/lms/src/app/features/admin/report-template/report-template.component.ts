@@ -242,9 +242,9 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
               <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span>
               <span class="pf-card__label">Report design</span>
             </header>
-            <ul class="pf-card__body pf-rt-nav__list" role="tablist" aria-orientation="vertical" data-testid="rt-tabs">
+            <ul class="pf-card__body pf-side-list pf-rt-nav__list" role="tablist" aria-orientation="vertical" data-testid="rt-tabs">
               @for (o of sectionOptions(); track o.value) {
-                <li><button type="button" class="pf-rt-nav__item" role="tab" [attr.aria-selected]="tab() === o.value" [attr.data-sec]="o.value"
+                <li><button type="button" class="pf-side-item pf-rt-nav__item" role="tab" [attr.aria-selected]="tab() === o.value" [attr.data-sec]="o.value"
                             [attr.data-testid]="'rt-nav-' + o.value" [title]="o.hint ?? ''" (click)="pickTab(o.value)">{{ o.label }}</button></li>
               }
             </ul>
@@ -1020,18 +1020,14 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
          scroll, at every desktop width. !important beats the old classic rules (designer / norail / ≤1180 one column). */
       :host-context(.design-new) { display: block; height: 100%; overflow: hidden; }
       :host-context(.design-new) .pf-rt-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; padding-bottom: 12px; }
-      :host-context(.design-new) .pf-rt-grid { grid-template-columns: 340px minmax(0, 1fr) !important; grid-template-rows: minmax(0, 1fr);
+      :host-context(.design-new) .pf-rt-grid { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr) !important; grid-template-rows: minmax(0, 1fr);
         gap: 16px; align-items: stretch !important; flex: 1 1 auto; min-height: 0; overflow: hidden !important; }
       :host-context(.design-new) .pf-rt-nav, :host-context(.design-new) .pf-rt-main { min-height: 0; }
     }
     @media (max-width: 900px) { :host-context(.design-new) .pf-rt-grid { grid-template-columns: minmax(0, 1fr) !important; } }
     /* The card itself never scrolls (a scrollIntoView used to push its head out of view): only its body does. */
     .pf-rt-main.pf-card { overflow: clip; }
-    .pf-rt-nav__list { list-style: none; margin: 0; padding: 8px; gap: 2px; }
-    .pf-rt-nav__item { display: flex; align-items: center; width: 100%; min-height: 40px; padding: 8px 12px; border-radius: 10px; cursor: pointer;
-      text-align: left; background: transparent; border: 1px solid transparent; font: inherit; font-size: 13px; font-weight: 500; color: var(--text-primary); }
-    .pf-rt-nav__item:hover { background: var(--pf-chip-bg); }
-    .pf-rt-nav__item[aria-selected='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
+    .pf-rt-nav__item { width: 100%; }
     @media (max-width: 900px) {
       .pf-rt-nav { flex: none; }
       .pf-rt-nav > .pf-card__head { display: none; }

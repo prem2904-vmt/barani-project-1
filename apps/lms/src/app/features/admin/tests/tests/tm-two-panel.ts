@@ -26,7 +26,7 @@ export const TM_NARROW = '(max-width: 900px)';
 /** Component styles for the frame (each panel adds them to its `styles`). */
 export const TM_TWO_PANEL_STYLES = `
   .pf-2p { flex: 1 1 auto; min-height: 0; display: grid; gap: 16px; align-items: stretch;
-    grid-template-columns: 340px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+    grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
   .pf-2p--narrow { grid-template-columns: minmax(0, 1fr); }
   .pf-2p__side, .pf-2p__main { min-width: 0; min-height: 0; }
   .pf-2p__side > .pf-card__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }

@@ -96,10 +96,10 @@ export interface PriceGridRow { key: string; testId: string; spec: string | null
               <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
               <span class="pf-card__label">Departments</span>
             </header>
-            <ul class="pf-card__body pf-pr__depts">
+            <ul class="pf-card__body pf-side-list pf-pr__depts">
               @for (d of deptRail(); track d.value) {
                 <li>
-                  <button type="button" class="pf-pr__dept" [attr.aria-pressed]="selectedDeptId() === d.value" (click)="selectedDeptId.set(d.value)">
+                  <button type="button" class="pf-side-item pf-pr__dept" [attr.aria-pressed]="selectedDeptId() === d.value" (click)="selectedDeptId.set(d.value)">
                     <span class="pf-pr__dname">{{ d.label }}</span>
                     <span class="pf-pr__dcount pf-num">{{ d.count }}</span>
                   </button>
@@ -294,13 +294,7 @@ export interface PriceGridRow { key: string; testId: string; spec: string | null
     :host { display: block; height: 100%; }
     :host:has(.pf-pricing--embedded) { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; height: auto; }
     .pf-pricing--embedded { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: visible; }
-    .pf-pr__depts { list-style: none; margin: 0; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
-    .pf-pr__dept { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 40px;
-      padding: 8px 11px; border-radius: 10px; cursor: pointer; text-align: left; background: transparent; border: 1px solid transparent;
-      font-size: 13px; font-weight: 500; color: var(--text-primary); }
-    .pf-pr__dept:hover { background: var(--pf-chip-bg); }
-    .pf-pr__dept[aria-pressed='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
-    .pf-pr__dname { min-width: 0; overflow-wrap: anywhere; }
+    .pf-pr__dname { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
     .pf-pr__dcount { flex: none; font-size: 11.5px; font-weight: 700; color: var(--text-tertiary); }
     .pf-pr__branch { width: 190px; }
     .pf-pr__deptpick { width: 200px; }

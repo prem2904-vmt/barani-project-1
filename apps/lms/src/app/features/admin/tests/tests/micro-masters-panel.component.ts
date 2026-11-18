@@ -87,12 +87,12 @@ interface EdModel {
               <span class="pf-card__icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
               <span class="pf-card__label">Masters</span>
             </header>
-            <ul class="pf-card__body pf-mm__list">
+            <ul class="pf-card__body pf-side-list pf-mm__list">
               @for (s of sections; track s.key) {
                 <li>
-                  <button type="button" class="pf-mm__item" [attr.aria-pressed]="section() === s.key"
-                          (click)="select(s.key)">
-                    <span class="pf-mm__iname">{{ s.title }}<span class="pf-mm__isub">{{ s.sub }}</span></span>
+                  <button type="button" class="pf-side-item pf-mm__item" [attr.aria-pressed]="section() === s.key"
+                          [title]="s.sub" (click)="select(s.key)">
+                    <span class="pf-mm__iname">{{ s.title }}</span>
                     <span class="pf-mm__icount pf-num">{{ countOf(s.key) }}</span>
                   </button>
                 </li>
@@ -317,14 +317,7 @@ interface EdModel {
     @media (max-width: 640px) { .pf-mm__hint { display: none; } }
     /* Wide screens: a row's detail / editor is a third card beside the grid. */
     .pf-2p.pf-mm__cols--detail { grid-template-columns: 300px minmax(0, 1fr) 380px; }
-    .pf-mm__list { list-style: none; margin: 0; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
-    .pf-mm__item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
-      padding: 9px 11px; border-radius: 10px; cursor: pointer; text-align: left;
-      background: transparent; border: 1px solid transparent; }
-    .pf-mm__item:hover { background: var(--pf-chip-bg); }
-    .pf-mm__item[aria-pressed='true'] { background: var(--pf-sel-bg); border-color: var(--pf-sel-border); }
-    .pf-mm__iname { display: flex; flex-direction: column; gap: 1px; min-width: 0;
-      font-size: 13px; font-weight: 500; color: var(--text-primary); }
+    .pf-mm__iname { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
     .pf-mm__isub { font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
     .pf-mm__icount { flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: var(--text-tertiary);
       font-variant-numeric: tabular-nums; }
