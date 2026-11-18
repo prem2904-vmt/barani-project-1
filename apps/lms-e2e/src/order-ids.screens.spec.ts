@@ -71,6 +71,12 @@ test.beforeEach(async ({ page, context }) => {
   });
 });
 
+/** On touch the bottom bar steps aside while a field has focus (the keyboard is up): let go of it before the layout checks. */
+async function blurField(page: Page) {
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.waitForTimeout(500);
+}
+
 const PAGES: Array<{ name: string; url: string; ready: string; text: string; absent?: string }> = [
   { name: 'lab-order-id', url: '/admin/lab/sample-numbers?tab=order', ready: '[data-testid="order-id-format-lab"]', text: 'Order ID' },
   { name: 'org-patient-numbers', url: '/admin/org/numbers?tab=patient', ready: '[data-testid="fmt-row"]', text: 'Custom format', absent: 'Order ID' },
@@ -106,6 +112,7 @@ test.describe('order IDs per module', () => {
     await vis(page, '[data-testid="order-id-format-lab"] input[aria-label="Prefix"]').fill('ab');
     await expect(vis(page, '[data-testid="order-id-preview"]')).toHaveText(/^AB-\d{4}-000001$/);
     await expect(page.locator('[data-testid="savebar-save"]').locator('visible=true')).toHaveCount(1);
+    await blurField(page);
     await expectLayout(page, 'lab-order-id-dirty');
     await shot(page, 'order-ids-lab-order-id-dirty');
     await vis(page, '[data-testid="savebar-save"]').click();
@@ -119,6 +126,7 @@ test.describe('order IDs per module', () => {
     await expect(vis(page, '[data-testid="order-id-preview"]')).toHaveText(/^PD-\d{4}-000001$/);
     await vis(page, '[data-testid="order-id-format-pharmacy"] button[role="switch"][aria-label="Custom Dispense number format"]').click();
     await vis(page, '[data-testid="order-id-format-pharmacy"] input[aria-label="Prefix"]').fill('dsp');
+    await blurField(page);
     await expectLayout(page, 'pharmacy-dispense-numbers-open');
     await shot(page, 'order-ids-pharmacy-dispense-numbers-open');
     await vis(page, '[data-testid="savebar-save"]').click();
