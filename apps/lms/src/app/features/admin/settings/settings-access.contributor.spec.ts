@@ -27,7 +27,8 @@ function accessFor(perms: string[], opts: { opd?: boolean; ipd?: boolean } = {})
       { provide: AuthService, useValue: { hasAnyPermission: has, settingsLevel: (a: never) => settingsLevel(perms, a) } },
       { provide: ProcessWorkflowService, useValue: { isEnabled: () => true } },
       { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true, moduleOn: () => true } },
-      { provide: BetaFeaturesService, useValue: { enabled: () => false } },
+      // Settings access is dev-only behind its own beta (owner rule): on here, the assistant beta off.
+      { provide: BetaFeaturesService, useValue: { enabled: (k: string) => k === 'settingsaccess' } },
       { provide: LabFeaturesService, useValue: { homeCollectionEnabled: () => true } },
       { provide: OpdGateService, useValue: { visible: () => !!opts.opd } },
       { provide: CasesheetGateService, useValue: { visible: () => !!opts.ipd } },
@@ -49,7 +50,7 @@ describe('Settings access — hidden areas', () => {
     const cats = a.visibleCategories(tm).map((c) => c.id);
     expect(cats).toContain('individual');
     expect(cats).toContain('pricing');    // prices go for approval too
-    expect(cats).toContain('pending');    // their changes wait here (no beta needed)
+    expect(cats).toContain('pending');    // their changes wait here (beta settingsaccess)
     expect(a.saveModeFor('/admin/tests')).toBe('approval');
     expect(a.saveModeFor('/admin/tests/t1/edit')).toBe('approval');
   });
@@ -87,5 +88,24 @@ describe('Settings access — hidden areas', () => {
     const a = accessFor(['*']);
     expect(a.saveModeFor('/admin/tests')).toBe('save');
     expect(a.saveModeFor('/admin/lab/collection')).toBe('save');
+  });
+
+  it('beta settingsaccess off: no Pending changes category for a contributor', () => {
+    TestBed.resetTestingModule();
+    const perms = [...RECEPTIONIST, CONTRIBUTE_CODE.test_master];
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AuthService, useValue: { hasAnyPermission: (c: string[]) => c.some((x) => perms.includes(x)), settingsLevel: (a: never) => settingsLevel(perms, a) } },
+        { provide: ProcessWorkflowService, useValue: { isEnabled: () => true } },
+        { provide: TenantEntitlementsService, useValue: { moduleEnabled: () => true, moduleOn: () => true } },
+        { provide: BetaFeaturesService, useValue: { enabled: () => false } },
+        { provide: LabFeaturesService, useValue: { homeCollectionEnabled: () => true } },
+        { provide: OpdGateService, useValue: { visible: () => false } },
+        { provide: CasesheetGateService, useValue: { visible: () => false } },
+      ],
+    });
+    const a = TestBed.inject(SettingsAccessService);
+    const tm = a.visibleSections()[0].items[0];
+    expect(a.visibleCategories(tm).map((c) => c.id)).not.toContain('pending');
   });
 });

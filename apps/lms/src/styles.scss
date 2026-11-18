@@ -175,6 +175,18 @@
 :root.design-new .pf-ss__main .pf-band-page > .pf-band-body--fill:not(.pf-sgrid) {
   display: flex !important; flex-direction: column; flex: 1 1 auto; min-height: 420px;
 }
+/* People and access inline in the overview (grid + person side panel, owner 2026-11-18): the page FILLS the card body
+   (a definite height down to the panel, while the panel is open), so the panel's own body scrolls and the grid never slides out of view. */
+/* A side panel that becomes a bottom SHEET (phones) is position: fixed — the card body's slide-in animation leaves an
+   identity transform behind (fill: both), which made the card the sheet's containing block (the sheet hid under the
+   card head, its own head off screen). No transform while a sheet is open. */
+.pf-tp__body:has(.pf-sg-side--sheet), .pf-ss__scroll:has(.pf-sg-side--sheet) { animation: none !important; transform: none !important; }
+.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) { display: flex; flex-direction: column; height: 100%; min-height: 0; padding-bottom: 6px; }
+.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) > * { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+:root .pf-ss__main.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) .pf-band-page,
+:root.design-new .pf-ss__main.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) .pf-band-page { display: flex !important; flex-direction: column; flex: 1 1 auto; min-height: 0 !important; }
+:root .pf-ss__main.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) .pf-band-page > .pf-band-body--fill,
+:root.design-new .pf-ss__main.pf-ov__inline--fill:has(.pf-ua-panel:not(.pf-sg-side--sheet)) .pf-band-page > .pf-band-body--fill { min-height: 0 !important; }
 /* A hosted page whose content is a pf-data-grid sits FLUSH in the frame's main card, exactly like Test Master's grid
    (owner 2026-11-17): card head -> divider -> grid header -> rows -> card bottom, no inner padding and no second
    border; the card's radius clips the grid's corners. Shell main card, overview inline page and their wrappers. */

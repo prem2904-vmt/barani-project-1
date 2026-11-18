@@ -20,8 +20,8 @@ export interface SettingsCategory {
   path?: string;
   /** Query that selects the view on that path (`?tab=`, `?type=`, `?view=`). */
   query?: Readonly<Record<string, string>>;
-  /** BETA surface — listed only while that beta is on. */
-  beta?: BetaFeatureKey;
+  /** BETA surface — listed only while that beta (or one of them) is on. */
+  beta?: BetaFeatureKey | readonly BetaFeatureKey[];
   /** Extra permission the category itself needs beyond its page's route. */
   perms?: readonly string[];
   /** Name of the PAGE this category lives on, for the band's page switch (defaults to the label). */
@@ -217,8 +217,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionDef[] = [
           { id: 'option-groups', label: 'Option groups', query: { view: 'option-groups' } },
           { id: 'microbiology', label: 'Microbiology lists', query: { view: 'microbiology' } },
           { id: 'pricing', label: 'Prices', query: { view: 'pricing' }, perms: ['manage_tests', 'manage_test_pricing', 'contribute_test_master'] },
-          // Contributors' changes wait here for a Test Master admin (Settings access, owner 2026-11-18) — no beta needed.
-          { id: 'pending', label: 'Pending changes', query: { view: 'pending' }, perms: ['manage_tests', 'manage_test_master', 'contribute_test_master'] },
+          // Model suggestions (beta assistant) and contributors' changes (beta settingsaccess, owner 2026-11-18) — dev only.
+          { id: 'pending', label: 'Pending changes', query: { view: 'pending' }, beta: ['assistant', 'settingsaccess'], perms: ['manage_tests', 'manage_test_master', 'manage_test_pricing', 'contribute_test_master'] },
         ] },
       { id: 'lab-report', label: 'Report design', path: P.reports, iconPath: ICON.report,
         blurb: 'Letterhead, patient strip, columns, results table and report notes, order, footer and sending.',

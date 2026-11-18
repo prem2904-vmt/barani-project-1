@@ -27,10 +27,12 @@ export class TmProposalsService {
   private readonly beta = inject(BetaFeaturesService, { optional: true });
   static readonly PAGE = 100;
 
-  /** Beta `assistant` on (dev): the full inbox (model + contributor suggestions). Off: contributors' changes only. */
+  /** Beta `assistant` on (dev): the full inbox (model + contributor suggestions). Else, beta `settingsaccess` (dev):
+   *  contributors' changes only. Neither: the assistant inbox (the server answers its empty 404, the view stays hidden). */
   private root(): string {
     const b = this.beta;
-    return b && typeof b.enabled === 'function' && b.enabled('assistant') ? TM_PROPOSALS_URL : TM_CONTRIBUTOR_CHANGES_URL;
+    const on = (k: 'assistant' | 'settingsaccess') => !!b && typeof b.enabled === 'function' && b.enabled(k);
+    return !on('assistant') && on('settingsaccess') ? TM_CONTRIBUTOR_CHANGES_URL : TM_PROPOSALS_URL;
   }
   private path(id: string, action?: 'approve' | 'reject' | 'withdraw' | 're-review'): string { return tmProposalPath(id, action, this.root()); }
 

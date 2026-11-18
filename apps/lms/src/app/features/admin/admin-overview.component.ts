@@ -116,7 +116,7 @@ interface SectionTile {
             </ng-container>
             @if (inlineCmp(); as cmp) {
               <!-- A section with ONE setting shows that setting right here (owner): no tile, no extra click. -->
-              <div class="pf-ss__main pf-ov__inline" [class.pf-ss__main--one]="inlineCats().length > 1" data-testid="ov-inline">
+              <div class="pf-ss__main pf-ov__inline" [class.pf-ss__main--one]="inlineCats().length > 1" [class.pf-ov__inline--fill]="inlineFills()" data-testid="ov-inline">
                 <ng-container *ngComponentOutlet="cmp; injector: inlineInjector()"></ng-container>
               </div>
             } @else {
@@ -296,6 +296,8 @@ export class AdminOverviewComponent implements OnDestroy {
     }) : null;
     return Injector.create({ providers: proxy ? [{ provide: ActivatedRoute, useValue: proxy }] : [], parent: this.injector });
   });
+  /** Inline pages that fill the card body instead of scrolling it (a grid with a side panel). */
+  readonly inlineFills = computed(() => this.inlineItem()?.path === '/admin/users');
   /** Its categories (hosted ones, `?tab=`), as a switch in the main card head. */
   private readonly host = inject(SETTINGS_HOST);
   readonly inlineSearch = computed(() => this.inlineCmp() ? pickHostSearch(this.host.searches(), this.inlineCats().length > 1 ? this.inlineTab() : null) : null);

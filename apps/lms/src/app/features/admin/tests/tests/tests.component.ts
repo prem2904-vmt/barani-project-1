@@ -996,7 +996,9 @@ export class TestsComponent implements OnInit {
   readonly pendingOn = computed(() => {
     const a = this.auth;
     if (!this.beta.enabled('assistant')) {
-      // Settings access (owner 2026-11-18): contributors' changes wait here for a Test Master admin — no beta needed.
+      // Settings access (owner 2026-11-18): contributors' changes wait here for a Test Master admin — dev only behind
+      // beta `settingsaccess` until the owner confirms.
+      if (!this.beta.enabled('settingsaccess')) return false;
       const lvl = a && typeof a.settingsLevel === 'function' ? a.settingsLevel('test_master') : 'none';
       return lvl === 'contributor' || lvl === 'admin';
     }

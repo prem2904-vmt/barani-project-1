@@ -14,10 +14,11 @@
  * confirmation (the server flag), never by default.
  */
 
-export type BetaFeatureKey = 'mcp' | 'passkeys' | 'assistant' | 'support' | 'neuron';
-export const BETA_FEATURE_KEYS: readonly BetaFeatureKey[] = ['mcp', 'passkeys', 'assistant', 'support', 'neuron'];
+/** `settingsaccess` (owner 2026-11-18): the Settings access panel + a contributor's "Send for approval" / Pending changes, dev only. */
+export type BetaFeatureKey = 'mcp' | 'passkeys' | 'assistant' | 'support' | 'neuron' | 'settingsaccess';
+export const BETA_FEATURE_KEYS: readonly BetaFeatureKey[] = ['mcp', 'passkeys', 'assistant', 'support', 'neuron', 'settingsaccess'];
 export type BetaFeatureFlags = Record<BetaFeatureKey, boolean>;
-export const ALL_BETA_OFF: Readonly<BetaFeatureFlags> = Object.freeze({ mcp: false, passkeys: false, assistant: false, support: false, neuron: false });
+export const ALL_BETA_OFF: Readonly<BetaFeatureFlags> = Object.freeze({ mcp: false, passkeys: false, assistant: false, support: false, neuron: false, settingsaccess: false });
 
 /** Request header sent on API calls while any console switch is on. */
 export const BETA_HEADER = 'X-PF-BETA';
@@ -85,6 +86,7 @@ export function parseBetaFlags(body: unknown): BetaFeatureFlags {
   out.assistant = src['assistant'] === true;
   out.support = src['support'] === true;
   out.neuron = src['neuron'] === true;
+  out.settingsaccess = src['settingsaccess'] === true;
   return out;
 }
 

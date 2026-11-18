@@ -309,7 +309,7 @@ interface EditForm {
                       @for (r of roleOptions(); track r.value) {
                         <div class="ue-role" role="listitem" [class.ue-role--on]="hasRole(r.value)">
                           <span class="ue-role__name">{{ r.label }}</span>
-                          <span class="ue-role__what">{{ r.locked ? 'Kept — you can\'t assign or remove this role' : (r.hint || '') }}</span>
+                          <span class="ue-role__what">{{ r.locked ? lockedRoleNote : (r.hint || '') }}</span>
                           <button type="button" class="pf-toggle pf-uf-sw ue-role__sw press" role="switch" [attr.aria-checked]="hasRole(r.value)"
                                   [class.pf-uf-sw--locked]="r.locked" [attr.aria-disabled]="r.locked || null"
                                   [attr.aria-label]="r.label" [title]="r.locked ? lockedHint : ''"
@@ -326,13 +326,18 @@ interface EditForm {
                     <!-- Settings access (owner 2026-11-18): on top of the job role, one pf-select per area. Contributor = view
                          and send changes for approval; Admin = everything in the area and approves. Only an Organization
                          admin changes Admin; an area admin gives Contributor in their own area. -->
-                    <div class="ue-access" data-testid="ue-settings-access">
+                    <!-- Rows: label + hint LEFT, the pf-select RIGHT at one width that fits "Contributor" — never wraps. -->
+                    <div class="ue-access" data-testid="ue-settings-access" role="list">
                       @for (row of accessRows(); track row.area) {
-                        <pf-setting-row [label]="row.label" [hint]="row.hint">
-                          <pf-select class="ue-ctl ue-ctl--m" [attr.data-testid]="'ue-access-' + row.area" [options]="row.options"
-                                     [value]="row.value" [disabled]="!row.canChange || saving()"
+                        <div class="ue-acc-row" role="listitem">
+                          <span class="ue-acc-row__text">
+                            <span class="ue-acc-row__label">{{ row.label }}</span>
+                            <span class="ue-acc-row__hint">{{ row.hint }}</span>
+                          </span>
+                          <pf-select class="ue-acc-row__ctl" [attr.data-testid]="'ue-access-' + row.area" [options]="row.options"
+                                     [value]="row.value" [disabled]="!row.canChange || saving()" [attr.aria-label]="row.label + ' settings access'"
                                      (valueChange)="setAccess(row.area, $any($event))"></pf-select>
-                        </pf-setting-row>
+                        </div>
                       }
                     </div>
     </ng-template>
@@ -443,6 +448,8 @@ export class UserEditComponent implements OnInit, HasUnsavedChanges {
     rolePickerRows(this._roles(), this._heldIds(), this.isSelf())
       .map(r => ({ ...r, hint: ROLE_INFO[r.label] ?? undefined })));
   readonly hasLocked = computed(() => this.roleOptions().some(r => r.locked));
+  /** A role row this caller cannot change (a plain field: an escaped quote inside the template broke the expression). */
+  readonly lockedRoleNote = 'Kept — you can\u2019t assign or remove this role';
   readonly lockedHint = 'Roles you can\'t assign stay as they are. Widening this user\'s branches with them needs someone who can assign them.';
   readonly titleOptions: PfSelectOption<string>[] = TITLE_OPTIONS;
   /** Country codes as pf-select options (code + country; no flag emoji). */

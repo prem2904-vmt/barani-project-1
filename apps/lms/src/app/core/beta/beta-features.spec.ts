@@ -46,7 +46,7 @@ describe('beta gate rules', () => {
     expect(log).toHaveBeenCalledWith('Beta on in this browser: mcp, passkeys');
     (win.pf!['mcp'] as (on: boolean) => void)(false);
     expect(st.data[betaFlagKey('mcp')]).toBeUndefined();
-    expect(readBetaSwitches(st)).toEqual({ mcp: false, passkeys: true, assistant: false, support: false, neuron: false });
+    expect(readBetaSwitches(st)).toEqual({ mcp: false, passkeys: true, assistant: false, support: false, neuron: false, settingsaccess: false });
     expect(reload).toHaveBeenCalledTimes(3);
   });
 
@@ -65,10 +65,10 @@ describe('beta gate rules', () => {
   });
 
   it('server answer: only literal true; envelope or bare; aiConnector aliases mcp; junk ⇒ all off', () => {
-    expect(parseBetaFlags({ success: true, data: { mcp: true, passkeys: 'true' } })).toEqual({ mcp: true, passkeys: false, assistant: false, support: false, neuron: false });
-    expect(parseBetaFlags({ aiConnector: true, assistant: true })).toEqual({ mcp: true, passkeys: false, assistant: true, support: false, neuron: false });
-    expect(parseBetaFlags(null)).toEqual({ mcp: false, passkeys: false, assistant: false, support: false, neuron: false });
-    expect(parseBetaFlags([true])).toEqual({ mcp: false, passkeys: false, assistant: false, support: false, neuron: false });
+    expect(parseBetaFlags({ success: true, data: { mcp: true, passkeys: 'true' } })).toEqual({ mcp: true, passkeys: false, assistant: false, support: false, neuron: false, settingsaccess: false });
+    expect(parseBetaFlags({ aiConnector: true, assistant: true })).toEqual({ mcp: true, passkeys: false, assistant: true, support: false, neuron: false, settingsaccess: false });
+    expect(parseBetaFlags(null)).toEqual({ mcp: false, passkeys: false, assistant: false, support: false, neuron: false, settingsaccess: false });
+    expect(parseBetaFlags([true])).toEqual({ mcp: false, passkeys: false, assistant: false, support: false, neuron: false, settingsaccess: false });
     expect(parseBetaFlags({ data: { support: true } }).support).toBe(true);
     expect(parseBetaFlags({ support: 'true' }).support).toBe(false);
   });
@@ -255,5 +255,12 @@ describe('neuron beta key', () => {
     expect(betaVisible({ switchOn: true, serverAllowed: false, isDev: true })).toBe(false);
     (win.pf!['neuron'] as (on: boolean) => void)(false);
     expect(st.data[betaFlagKey('neuron')]).toBeUndefined();
+  });
+});
+
+describe('beta settingsaccess (owner 2026-11-18: Settings access is dev-only until confirmed)', () => {
+  it('reads only a literal true from the server', () => {
+    expect(parseBetaFlags({ data: { settingsaccess: true } }).settingsaccess).toBe(true);
+    expect(parseBetaFlags({ data: { settingsaccess: 'true' } }).settingsaccess).toBe(false);
   });
 });

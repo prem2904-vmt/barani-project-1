@@ -60,6 +60,8 @@ async function boot(page: Page, context: Parameters<typeof installNegBackend>[1]
   neg.hook = r => {
     const ok = (data: unknown) => ({ status: 200, body: { success: true, data } });
     if (r.path === '/api/auth/me') return ok(me(perms));
+    // Settings access is dev-only behind beta `settingsaccess` (owner rule): the server allows it, this browser ran pf.settingsaccess().
+    if (r.path === '/api/beta-features') return ok({ settingsaccess: true });
     if (r.method === 'POST' && r.path.startsWith('/api/settings-changes/test-master/')) {
       return ok({ created: [{ id: 'pc1', kind: 'test_update', target: 'Glucose fasting', summary: 'Edit: TAT', clinical: false }], skipped: [] });
     }
@@ -76,6 +78,7 @@ async function boot(page: Page, context: Parameters<typeof installNegBackend>[1]
     return undefined;
   };
   await installNegBackend(page, context);
+  await page.addInitScript(() => { try { localStorage.setItem('pf.beta.settingsaccess', '1'); } catch { /* blocked */ } });
 }
 
 test.describe('settings access', () => {
@@ -141,10 +144,33 @@ test.describe('settings access', () => {
     const sec = page.locator('[data-testid="ue-sec-access"]').locator('visible=true');
     const box = page.locator('[data-testid="ue-settings-access"]');
     await expect(page.locator('[data-testid="ue-panel"], [data-testid="ue-sec-access"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
+    // The panel head first: the name keeps whole words (actions wrap below on a narrow panel / phone), role rows read plainly.
+    await page.waitForTimeout(600);
+    await expect(page.getByText('{{', { exact: false }).locator('visible=true')).toHaveCount(0);
+    if (process.env['SA_DEBUG']) console.log('CB', JSON.stringify(await page.evaluate(() => {
+      const out: unknown[] = []; let e: Element | null = document.querySelector('.pf-ua-panel');
+      while (e) { const cs = getComputedStyle(e); if (cs.transform !== 'none' || cs.filter !== 'none' || cs.contain !== 'none' || cs.willChange !== 'auto' || cs.backdropFilter !== 'none' || cs.perspective !== 'none' || cs.containerType !== 'normal') out.push([e.tagName, String(e.className).slice(0, 50), cs.transform, cs.filter, cs.contain, cs.willChange, cs.backdropFilter, cs.containerType]); e = e.parentElement; }
+      const p = document.querySelector('.pf-ua-panel')!; return { out, pos: getComputedStyle(p).position, cls: p.className };
+    })));
+    await shot(page, 'sa-person-panel-head');
     if (await sec.count()) await sec.first().click();
     await box.first().scrollIntoViewIfNeeded();
     await expect(box.locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
-    await expect(box.locator('pf-setting-row')).toHaveCount(5);
+    await expect(box.locator('.ue-acc-row')).toHaveCount(5);
+    // Every row: label left, the select right, on ONE line, the same width (fits "Contributor").
+    const geo = await box.locator('.ue-acc-row').evaluateAll(rows => rows.map(r => {
+      const t = r.querySelector('.ue-acc-row__text')!.getBoundingClientRect(); const c = r.querySelector('pf-select')!.getBoundingClientRect();
+      return { textRight: t.right, ctlLeft: c.left, ctlRight: Math.round(c.right), ctlW: Math.round(c.width), ctlTop: c.top, rowTop: r.getBoundingClientRect().top, rowH: r.getBoundingClientRect().height, text: (r.querySelector('pf-select') as HTMLElement).innerText };
+    }));
+    for (const g of geo) {
+      expect(g.ctlLeft, 'select right of the label').toBeGreaterThanOrEqual(g.textRight);
+      expect(g.ctlTop - g.rowTop, 'select on the label line').toBeLessThan(g.rowH);
+    }
+    expect(new Set(geo.map(g => g.ctlW)).size, 'one select width').toBe(1);
+    expect(new Set(geo.map(g => g.ctlRight)).size, 'selects right-aligned').toBe(1);
+    expect(geo.find(g => g.text.includes('Contributor'))?.text).toContain('Contributor');
+    // The grid beside the panel stays in view (the panel's body scrolls, never the panels box).
+    if (!isPhone()) await expect(page.locator('.pf-ua-panels .ag-header-cell-text', { hasText: 'User' }).first()).toBeInViewport();
     for (const label of ['Organization', 'Lab', 'Test Master', 'OPD', 'IPD']) {
       await expect(box.getByText(label, { exact: true }).first()).toBeAttached();
     }

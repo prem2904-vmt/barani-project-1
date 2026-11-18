@@ -9,12 +9,12 @@ import { BetaFeaturesService } from './beta-features.service';
  * Test Master "Pending changes": the list/badge read the backend's single-request shape
  * (`status=pending,stale,failed`, `counts` settled after the stale flip) - no second read.
  */
-function setup(page: unknown, assistant = true) {
+function setup(page: unknown, assistant = true, settingsaccess = false) {
   const get = vi.fn(() => (page instanceof Error ? throwError(() => page) : of(page)));
   const post = vi.fn(() => of({}));
   TestBed.configureTestingModule({ providers: [
     { provide: ApiService, useValue: { get, post } },
-    { provide: BetaFeaturesService, useValue: { enabled: (k: string) => assistant && k === 'assistant' } },
+    { provide: BetaFeaturesService, useValue: { enabled: (k: string) => (assistant && k === 'assistant') || (settingsaccess && k === 'settingsaccess') } },
   ] });
   return { svc: TestBed.inject(TmProposalsService), get, post };
 }
@@ -50,8 +50,8 @@ describe('TmProposalsService', () => {
     expect(await firstValueFrom(b.svc.openCount())).toBe(0);
   });
 
-  it('beta off (Settings access): the contributor changes route, same calls, never the beta inbox', async () => {
-    const { svc, get, post } = setup({ items: [], total: 0, pendingCount: 0, counts: { pending: 0, stale: 0, failed: 0 } }, false);
+  it('beta settingsaccess on, assistant off: the contributor changes route, same calls, never the assistant inbox', async () => {
+    const { svc, get, post } = setup({ items: [], total: 0, pendingCount: 0, counts: { pending: 0, stale: 0, failed: 0 } }, false, true);
     await firstValueFrom(svc.list('review'));
     expect(get).toHaveBeenCalledWith('/api/settings-changes/test-master?status=pending%2Cstale%2Cfailed&take=100');
     await firstValueFrom(svc.approve('p1', true));

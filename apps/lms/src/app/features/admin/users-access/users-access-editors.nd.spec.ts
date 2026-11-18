@@ -425,7 +425,7 @@ describe('User editor — Settings access (owner 2026-11-18: Job role, then Sett
     const heads = Array.from(el.querySelectorAll('.ue-panel__sec')).map(h => h.textContent!.trim());
     const jr = heads.findIndex(h => h.startsWith('Job role'));
     expect(heads[jr + 1]).toContain('Settings access');
-    const rows = Array.from(el.querySelectorAll('[data-testid="ue-settings-access"] pf-setting-row'));
+    const rows = Array.from(el.querySelectorAll('[data-testid="ue-settings-access"] .ue-acc-row'));
     expect(rows.length).toBe(5);
     const ue = c as unknown as UserEditComponent;
     expect(ue.accessRows().map((r: { area: string; canChange: boolean }) => [r.area, r.canChange])).toEqual([['org', false], ['lab', true], ['test_master', true], ['opd', false], ['ipd', false]]);

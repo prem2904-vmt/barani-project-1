@@ -94,7 +94,10 @@ export class SettingsAccessService {
   }
 
   categoryVisible(item: SettingsItem, cat: SettingsCategory): boolean {
-    if (cat.beta && !this.beta.enabled(cat.beta)) return false;
+    if (cat.beta) {
+      const keys = typeof cat.beta === 'string' ? [cat.beta] : cat.beta;
+      if (!keys.some((k) => this.beta.enabled(k))) return false;
+    }
     if (cat.perms?.length && !this.auth.hasAnyPermission([...cat.perms])) return false;
     return this.canOpenHref(categoryPath(item, cat));
   }
