@@ -141,8 +141,8 @@ describe('Settings re-home routes (hosted by the Settings shell; one route table
       expect(SETTINGS_SHELL_CHILDREN.filter(r => r.path === p).length, p).toBe(1);
       expect(by(p).canActivate!.some(g => (g as any).opdGate), p).toBe(true);
     }
-    expect(ROUTE_ACCESS['/admin/opd/numbers']).toEqual({ perms: ['manage_opd'] });
-    expect(ROUTE_ACCESS['/admin/pharmacy/numbers']).toEqual({ perms: ['manage_pharmacy'] });
+    expect(ROUTE_ACCESS['/admin/opd/numbers']).toEqual({ perms: ['manage_opd', 'manage_users', 'manage_billing_config'] });
+    expect(ROUTE_ACCESS['/admin/pharmacy/numbers']).toEqual({ perms: ['manage_pharmacy', 'manage_inventory', 'manage_billing_config'] });
   });
   it('route data pins what each reused screen shows', () => {
     expect(by('admin/org/numbers').data).toEqual({ orgTabs: ['patient'] });
