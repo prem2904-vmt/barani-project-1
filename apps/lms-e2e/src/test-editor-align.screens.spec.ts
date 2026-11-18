@@ -51,8 +51,24 @@ test.beforeEach(async ({ page, context }) => {
   test.setTimeout(150_000);
   resetNeg();
   neg.hook = r => {
-    if (r.method !== 'GET') return undefined;
     const ok = (data: unknown) => ({ status: 200, body: { success: true, data } });
+    // The engine's sample report for the Preview popup (demo values only).
+    if (r.method === 'POST' && r.path === '/api/report-layout/preview/t1') {
+      return ok({
+        testId: 't1', testName: OGTT.name, departmentName: 'Biochemistry', sampleType: 'Fluoride plasma',
+        columns: [
+          { id: 'c-name', name: 'name', label: 'Investigation', order: 1, width: 34, type: 'name', locked: false },
+          { id: 'c-result', name: 'result', label: 'Result', order: 2, width: 20, type: 'result', locked: false },
+          { id: 'c-unit', name: 'unit', label: 'Unit', order: 3, width: 16, type: 'unit', locked: false },
+          { id: 'c-range', name: 'range', label: 'Reference range', order: 4, width: 30, type: 'range', locked: false },
+        ],
+        sections: [{ id: 's1', type: 'grid', label: null, isVisible: true, rows: [
+          { id: 'r1', parameterName: 'Glucose', title: 'Glucose', unit: 'mg/dL', isMerged: false, isBold: false, color: null,
+            cells: { name: 'Glucose', result: '112', unit: 'mg/dL', range: '70 - 140' } },
+        ] }],
+      });
+    }
+    if (r.method !== 'GET') return undefined;
     if (r.path === '/api/tests/') return ok([OGTT, ...PROFILES]);
     if (r.path === '/api/tests/t1') return ok(OGTT);
     if (r.path === '/api/tenants/departments') return ok(DEPTS);
