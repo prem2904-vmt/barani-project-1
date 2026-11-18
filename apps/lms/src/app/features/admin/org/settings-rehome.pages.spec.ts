@@ -16,6 +16,7 @@ import { SETTINGS_FULL_PAGE_ROUTES, SETTINGS_SHELL_CHILDREN } from '../settings/
 import { OPD_ADMIN_ROUTES } from '../../opd/opd.routes';
 import { PHARMACY_VIEW } from '../../opd/pharmacy/pharmacy-view';
 import { ROUTE_ACCESS } from '../../../core/auth/route-access';
+import { CONTRIBUTE_CODE } from '../../../shared/utils/settings-access';
 
 const route = (data: Record<string, unknown>) => ({ provide: ActivatedRoute, useValue: { snapshot: { data, queryParamMap: new Map() as any, paramMap: new Map() as any }, queryParamMap: of(new Map() as any) } });
 afterEach(() => TestBed.resetTestingModule());
@@ -141,8 +142,9 @@ describe('Settings re-home routes (hosted by the Settings shell; one route table
       expect(SETTINGS_SHELL_CHILDREN.filter(r => r.path === p).length, p).toBe(1);
       expect(by(p).canActivate!.some(g => (g as any).opdGate), p).toBe(true);
     }
-    expect(ROUTE_ACCESS['/admin/opd/numbers']).toEqual({ perms: ['manage_opd', 'manage_users', 'manage_billing_config'] });
-    expect(ROUTE_ACCESS['/admin/pharmacy/numbers']).toEqual({ perms: ['manage_pharmacy', 'manage_inventory', 'manage_billing_config'] });
+    // + the OPD contributor code (Settings access): contributors see the page view-only, the server refuses their saves.
+    expect(ROUTE_ACCESS['/admin/opd/numbers']).toEqual({ perms: ['manage_opd', 'manage_users', 'manage_billing_config', CONTRIBUTE_CODE.opd] });
+    expect(ROUTE_ACCESS['/admin/pharmacy/numbers']).toEqual({ perms: ['manage_pharmacy', 'manage_inventory', 'manage_billing_config', CONTRIBUTE_CODE.opd] });
   });
   it('route data pins what each reused screen shows', () => {
     expect(by('admin/org/numbers').data).toEqual({ orgTabs: ['patient'] });

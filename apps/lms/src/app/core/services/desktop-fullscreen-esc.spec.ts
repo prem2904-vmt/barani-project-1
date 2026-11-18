@@ -204,7 +204,8 @@ describe('Esc actions that are not overlays take the Esc (preventDefault) — so
     ['features/frontdesk/patient-profile/patient-profile.component.ts', /if \(this\.detail\(\)\) \{ used\(\); this\.closeDetail\(\); \}/],
     ['features/frontdesk/patient-profile/patient-profile.component.html', /\(keydown\.escape\)="onEsc\(\$event\)"/],
     ['features/frontdesk/patient-profile/lab-orders.component.ts', /\(keydown\.escape\)="close\(\); \$event\.preventDefault\(\)"/],
-    ['features/admin/tests/test-editor/test-editor.component.ts', /onEscape\(ev\?: Event\)[\s\S]{0,120}ev\?\.preventDefault\(\)/],
+    // v2: Esc closes the Preview popup (no sections overlay any more) and marks the Esc as used.
+    ['features/admin/tests/test-editor/test-editor.component.ts', /this\.previewOpen\(\) && ev\.key === 'Escape'\) \{\s*ev\.preventDefault\(\)/],
   ])('%s', (file, re) => {
     expect(read(file)).toMatch(re);
   });
