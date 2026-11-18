@@ -185,6 +185,8 @@ export interface AssistantPageContext {
   proposals?: Readonly<Record<string, ProposalStatus>>;
   /** Test Master: the composer gets Attach + camera and a rate card can be read (photos / PDF → JPEG pages in the browser). */
   attachments?: 'rate-card';
+  /** The rate-card result's button (default "Review in Pending"): a Neuron price sheet says "Put prices in the sheet". */
+  reviewLabel?: string;
 }
 
 /** Starter prompts per page (plain words). */

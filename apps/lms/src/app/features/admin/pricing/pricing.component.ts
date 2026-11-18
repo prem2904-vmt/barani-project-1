@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, Injector, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ColDef, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry, RowClassParams } from 'ag-grid-community';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -26,6 +26,8 @@ import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { isPackage, shownDepartmentName } from '../../../shared/utils/package-department';
 import { testListUrl } from '../../../shared/utils/test-list-url';
+import { SheetRoundtripService } from '../../files/roundtrip/sheet-roundtrip.service';
+import { PRICES_DATASET_ID } from '../../files/roundtrip/prices-dataset';
 
 /** Department-filter value for the "Packages" option (packages have no department). */
 export const PACKAGES_FILTER = '__packages__';
@@ -121,6 +123,15 @@ export interface PriceGridRow { key: string; testId: string; spec: string | null
               @if (isolationOn()) {
                 <pf-select class="pf-pr__branch" size="sm" [options]="branchOptions()" [value]="scopeValue()" aria-label="Branch"
                            (valueChange)="setScope($event)"></pf-select>
+              }
+              @if (neuronOn()) {
+                <!-- Edit these prices in a Neuron sheet (all departments; Code / Test / Department / Type locked), then Send to Prefrontal from the sheet. -->
+                <button type="button" class="pf-btn pf-btn--secondary pf-2p__hbtn press" data-testid="pr-open-neuron"
+                        [disabled]="loading() || opening() || dirtyCount() > 0" [pfBusy]="opening()" pfBusyLabel="Making the sheet…"
+                        [title]="dirtyCount() > 0 ? 'Save or discard your changes first' : 'Edit these prices in a Neuron sheet'" (click)="openInNeuron()">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+                  {{ opening() ? 'Opening…' : 'Open in Neuron' }}
+                </button>
               }
               <span class="pf-pr__bulk" role="group" aria-label="Bulk change">
                 <span class="pf-pr__bulkk">Bulk change</span>
@@ -397,6 +408,22 @@ export class PricingComponent implements OnInit {
   private readonly toasts = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly pricing = inject(TestPricingService);
+  /** Looked up lazily (Files pulls in the file API): screens and specs without it simply have no "Open in Neuron". */
+  private readonly injector = inject(Injector);
+  private roundtrip(): SheetRoundtripService | null { try { return this.injector.get(SheetRoundtripService); } catch { return null; } }
+
+  /** "Open in Neuron": Files + Neuron storable by this person + the pricing permission (the sheet round-trip's own check). */
+  readonly neuronOn = computed(() => { try { return !!this.roundtrip()?.canOpen(PRICES_DATASET_ID); } catch { return false; } });
+  readonly opening = signal(false);
+  /** The sheet holds the VIEWED scope's prices (all departments): the branch picked here, "All branches", or the lab price (isolation off). */
+  async openInNeuron() {
+    if (this.opening() || this.dirtyCount() > 0) return;
+    const scope = this.isolationOn() ? this.scopeValue() : '';
+    const name = this.isolationOn() ? this.scopeName() : (this.auth.user?.()?.tenantName || 'All branches');
+    this.opening.set(true);
+    try { await this.roundtrip()?.openInNeuron(PRICES_DATASET_ID, scope, name, 'Test Master'); }
+    finally { this.opening.set(false); }
+  }
 
   /** When rendered inside another screen (e.g. the Tests "Pricing" tab) hide the
    *  own header and flow naturally instead of the fixed-page / inner-scroll. */
