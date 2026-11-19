@@ -88,7 +88,7 @@ const shot = (page: Page, name: string) => page.screenshot({ path: `${OUT}/${nam
 const wide = (page: Page) => (page.viewportSize()?.width ?? 0) >= 1024;
 
 test.beforeEach(async ({ page }) => {
-  test.setTimeout(120_000); OUT = shotsDir(OUT_BASE);
+  test.setTimeout(60_000); OUT = shotsDir(OUT_BASE);
   samples = fresh(); requests = [];
   await backend(page);
 });
