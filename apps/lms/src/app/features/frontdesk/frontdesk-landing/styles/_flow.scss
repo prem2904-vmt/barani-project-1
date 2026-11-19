@@ -43,7 +43,13 @@
   }
   .pf-appt-split__pane > .pf-wsec-note { margin: 8px 12px 0; flex-shrink: 0; }
 
-  /* Card head: icon tile + WORK first (visually), the search, the status pill, then "Today" + the filter icon. */
+  /* Card head (owner 2026-11-19): icon tile + WORK, the status pill, then — together at the RIGHT end like every
+     other card head — the search, "Today" and the filter icon. DOM order stays search-first for reading order. */
+  .pf-work-hdr > .pf-work-hdr__filter { order: 1; }
+  .pf-work-hdr > .pf-work-find { order: 2; margin-left: auto; flex: 0 1 240px; }
+  .pf-work-hdr > .pf-work-hdr__date { order: 3; }
+  /* .pf-input's backdrop-filter makes its own stacking layer and painted over the magnifier. */
+  .pf-work-find__icon { z-index: 1; }
   .pf-work-hdr__title {
     order: -1;
     display: inline-flex;
@@ -52,7 +58,7 @@
     flex: none;
   }
   .pf-work-hdr__title .pf-card__label { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
-  .pf-work-hdr__date { margin-left: auto; }
+  .pf-work-hdr__date { margin-left: 0; }
   .pf-work-hdr__range {
     font-size: 12.5px;
     color: var(--text-tertiary);
