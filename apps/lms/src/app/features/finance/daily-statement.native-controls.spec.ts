@@ -12,17 +12,18 @@ describe('Daily statement — business day (no native date input)', () => {
     getFor: (url) => (url.startsWith('/api/finance/daily') ? stmt : []),
   });
 
-  it('band pill: pf-date for the business day, never a visible native date input', () => {
+  it('card head: pf-date for the business day, never a visible native date input, number input or select', () => {
     const p = make();
-    const tools = p.tools()!;
-    expect(tools.querySelectorAll('pf-date').length).toBe(1);
-    expect(tools.querySelector('input[type="date"]:not([aria-hidden="true"])')).toBeNull();
+    expect(p.el.querySelectorAll('.pf-cl__head pf-date').length).toBe(1);
+    expect(p.el.querySelector('input[type="date"]:not([aria-hidden="true"])')).toBeNull();
+    expect(p.el.querySelector('input[type="number"]')).toBeNull();
+    expect(p.el.querySelector('select')).toBeNull();
   });
 
   it('typing a business day in the pill calls setDate and reloads that day', () => {
     const p = make();
     p.api.get.mockClear();
-    const txt = p.tools()!.querySelector<HTMLInputElement>('pf-date input[type="text"]')!;
+    const txt = p.el.querySelector<HTMLInputElement>('.pf-cl__head pf-date input[type="text"]')!;
     txt.value = '20092026';
     txt.dispatchEvent(new Event('input'));
     expect(p.cmp.dateStr()).toBe('2026-09-20');
