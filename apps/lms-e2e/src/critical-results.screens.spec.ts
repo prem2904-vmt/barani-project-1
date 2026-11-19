@@ -125,6 +125,34 @@ for (const dark of [false, true]) {
     expect(g.resizeShown, 'no stray resize divider on the actions header').toBe(false);
     if (isTouch()) for (const b of g.btns) { expect(b.h, 'action button height on touch').toBeGreaterThanOrEqual(44); expect(b.w, 'action button width on touch').toBeGreaterThanOrEqual(44); }
 
+    // 1b — everything fits: no sideways scroll in the grid (All shows every record), no ellipsis in a header,
+    //      the status pill is ONE line, the second step lives in the ⋯ menu
+    const fit = await page.evaluate(() => {
+      const vis = (e: Element) => (e as HTMLElement).getBoundingClientRect().width > 0;
+      const vp = (document.querySelector('.pf-cr__main .ag-body-horizontal-scroll-viewport') ?? document.querySelector('.pf-cr__main .ag-center-cols-viewport') ?? document.querySelector('.pf-cr__main .ag-body-viewport')) as HTMLElement;
+      const heads = [...document.querySelectorAll('.pf-cr__main .ag-header-cell-text')].filter(vis).map(h => ({ t: h.textContent, clipped: (h as HTMLElement).scrollWidth > (h as HTMLElement).clientWidth + 1 }));
+      const pills = [...document.querySelectorAll('.pf-cr__main .pf-cr-status')].filter(vis).map(x => { const r = x.getBoundingClientRect(); const lh = parseFloat(getComputedStyle(x).lineHeight) || 16; return { h: r.height, lh, w: r.width, cellW: (x.closest('.ag-cell') as HTMLElement).clientWidth }; });
+      const clippedCells = [...document.querySelectorAll('.pf-cr__main .ag-cell')].filter(vis).filter(c => (c as HTMLElement).scrollWidth > (c as HTMLElement).clientWidth + 1).length;
+      return { scroll: vp.scrollWidth - vp.clientWidth, heads, pills, clippedCells, text: [...document.querySelectorAll('.pf-cr__main .ag-cell')].map(c => (c as HTMLElement).innerText).join(' | ') };
+    });
+    expect(fit.scroll, 'no horizontal scroll in the register').toBeLessThanOrEqual(1);
+    expect(fit.clippedCells, 'no cell is wider than its column').toBe(0);
+    for (const h of fit.heads) expect(h.clipped, `header "${h.t}" shows no ellipsis`).toBe(false);
+    for (const x of fit.pills) { expect(x.h, 'status pill is a single line').toBeLessThan(x.lh + 10); expect(x.w, 'status pill fits its column').toBeLessThanOrEqual(x.cellW); }
+    if (!isPhone()) {
+      expect(fit.text).toContain('Kavya Desk');
+      expect(fit.text).toContain('Told Dr. Ravi Kumar');
+      const more = page.getByRole('button', { name: /More actions/ }).locator('visible=true').first();
+      await expect(more).toBeVisible();
+      const mb = await more.boundingBox();
+      if (isTouch()) { expect(mb!.height).toBeGreaterThanOrEqual(44); expect(mb!.width).toBeGreaterThanOrEqual(44); }
+      await more.click();
+      await expect(page.getByRole('menuitem', { name: /Communicate|Record communication/ }).locator('visible=true').first()).toBeVisible();
+      await page.keyboard.press('Escape');
+    } else {
+      await expect(page.locator('.pf-cr__main .pf-cr-status').filter({ hasText: "Not ack'd" }).locator('visible=true').first()).toBeVisible();
+    }
+
     // 2 — the status filter: vertical rows, none over the next label
     await openFiltersIfSheet(page);
     await page.waitForTimeout(300);
