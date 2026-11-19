@@ -534,6 +534,12 @@ export const appRoutes: Route[] = withAppModes([
       // "upgrade" screen on direct access rather than silently redirect. The
       // component gates itself (moduleOff) and skips connecting the hubs.
       {
+        // The full notification inbox (bell → "See all notifications"). Every signed-in person has a bell, so no extra
+        // permission: each row's own action is gated by the flow it opens.
+        path: 'notifications',
+        loadComponent: () => import('./features/notifications/notifications.page').then(m => m.NotificationsPage)
+      },
+      {
         path: 'messages',
         canActivate: [...routeGuards('/messages')],
         // New design → the pf-kit screen; classic → the original page.

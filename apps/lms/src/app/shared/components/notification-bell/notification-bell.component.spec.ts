@@ -66,7 +66,8 @@ describe('NotificationBellComponent — type keys', () => {
     const f = render();
     const el = f.nativeElement as HTMLElement;
     const tones = Array.from(el.querySelectorAll('.pf-type-icon')).map((i) => i.getAttribute('data-tone'));
-    expect(tones).toEqual(['amber', 'amber', 'emerald', 'emerald', 'amber', 'rose', 'violet']);
+    // The popover shows the latest POPOVER_ROWS (6); the 7th row lives on the Notifications page.
+    expect(tones).toEqual(['amber', 'amber', 'emerald', 'emerald', 'amber', 'rose']);
     const text = el.textContent ?? '';
     expect(text).toContain('TAT breach');
     expect(text).toContain('report ready');
