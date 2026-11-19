@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import {
   AllCommunityModule, CellClickedEvent, CellValueChangedEvent, ColDef, GetRowIdFunc, GridApi, GridReadyEvent, ModuleRegistry,
-  RowClassParams, RowClickedEvent, RowDragEndEvent,
+  IsFullWidthRowParams, RowClassParams, RowClickedEvent, RowDragEndEvent,
 } from 'ag-grid-community';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -38,6 +38,9 @@ export const DATA_GRID_DEFAULT_COLDEF: ColDef = { sortable: true, resizable: tru
                      [quickFilterText]="quickFilter()" [animateRows]="true" [suppressNoRowsOverlay]="true"
                      [suppressCellFocus]="suppressCellFocus()" [singleClickEdit]="singleClickEdit()"
                      [stopEditingWhenCellsLoseFocus]="true" [rowDragManaged]="rowDragManaged()" (rowDragEnd)="rowDragEnd.emit($event)"
+                     [isFullWidthRow]="isFullWidthRow()" [fullWidthCellRenderer]="fullWidthCellRenderer()"
+                     [fullWidthCellRendererParams]="fullWidthCellRendererParams()"
+                     [suppressColumnVirtualisation]="suppressColumnVirtualisation()"
                      (gridReady)="onReady($event)" (rowClicked)="rowClicked.emit($event)" (cellClicked)="cellClicked.emit($event)"
                      (cellValueChanged)="cellValueChanged.emit($event)"></ag-grid-angular>
     @if (loading()) {
@@ -76,6 +79,13 @@ export class DataGridComponent<T = unknown> implements AfterViewInit {
   readonly singleClickEdit = input(false, { transform: booleanAttribute });
   /** Rows reorder by dragging a column marked `rowDrag: true`; read the new order on rowDragEnd. */
   readonly rowDragManaged = input(false, { transform: booleanAttribute });
+  /** Full-width rows (an inline detail under a row): which rows, their renderer (usually
+   *  DataGridTemplateCellComponent with `{ tpl, measure: true }`) and its params. */
+  readonly isFullWidthRow = input<((p: IsFullWidthRowParams<T>) => boolean) | undefined>(undefined);
+  readonly fullWidthCellRenderer = input<unknown>(undefined);
+  readonly fullWidthCellRendererParams = input<unknown>(undefined);
+  /** Render every column (a short, fixed column list with template cells). */
+  readonly suppressColumnVirtualisation = input(false, { transform: booleanAttribute });
 
   readonly rowClicked = output<RowClickedEvent<T>>();
   readonly cellClicked = output<CellClickedEvent<T>>();

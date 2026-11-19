@@ -9,12 +9,22 @@ import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { DestroyRef,
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   Injector,
   OnInit,
+  TemplateRef,
   computed,
+  effect,
   inject,
   signal,
+  viewChild,
 } from "@angular/core";
+import type { ColDef, GridReadyEvent, IsFullWidthRowParams, RowClassParams, RowClickedEvent } from "ag-grid-community";
+import { DataGridComponent } from "../../../shared/components/data-grid/data-grid.component";
+import { DataGridTemplateCellComponent } from "../../../shared/components/data-grid/template-cell.component";
+import { ModalPortalDirective } from "../../../shared/directives/modal-portal.directive";
+import { mediaSignal, TM_TWO_PANEL_STYLES } from "../../admin/tests/tests/tm-two-panel";
+import { plural } from "../../../shared/utils/plural";
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { environment } from "../../../../environments/environment";
 import { Router } from "@angular/router";
@@ -27,7 +37,7 @@ import { Report } from "../../../shared/models/report.model";
 import { ApiError } from "../../../shared/models/api-response.model";
 import { Order, OrderTest } from "../../../shared/models/order.model";
 import { formatPatientInfo, formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
-import { buildPartialOrders, orderLabel, reportStatus, type PrelimOrder, type PrelimRow, type ReportStatus } from "./report-queue.partial";
+import { buildPartialOrders, orderLabel, queueStatus, QUEUE_DOT, reportStatus, type PrelimOrder, type PrelimRow, type QueueStatus, type QueueStatusKey, type ReportStatus } from "./report-queue.partial";
 import { webPointerSignal } from "../../../shared/utils/pointer-mode";
 import {
   ChipComponent,
@@ -69,6 +79,18 @@ import { matchesDailyNo } from '../../../shared/utils/daily-no';
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
 
+/** One row of the Reports grid (new design): a report, a partly-reported order, or the order's inline detail
+ *  (a full-width row right under it while it is open). */
+export type RqRow =
+  | { id: string; kind: "report"; r: Report }
+  | { id: string; kind: "partial"; po: PrelimOrder; r?: Report }
+  | { id: string; kind: "detail"; po: PrelimOrder; r?: Report };
+
+/** Filter → the status dot it carries (All = an empty ring). */
+const FILTER_DOT: Record<Filter, QueueStatusKey | "ring"> = {
+  all: "ring", pending: "completed", partial: "partial", delivered: "delivered", failed: "failed",
+};
+
 @Component({
   selector: "pf-report-queue",
   standalone: true,
@@ -88,11 +110,14 @@ type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
     HeroBandComponent,
     ActionsMenuComponent,
     ActionsMenuTriggerDirective,
-    BusyDirective
+    BusyDirective,
+    DataGridComponent,
+    ModalPortalDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./report-queue.component.html",
-  styleUrl: "./report-queue.component.scss"
+  styleUrl: "./report-queue.component.scss",
+  styles: [TM_TWO_PANEL_STYLES],
 })
 export class ReportQueueComponent implements OnInit {
   /** "Open in sheet": the sheet editor with Insert results ready for the last 7 days; Back returns to this list. */
@@ -280,7 +305,7 @@ export class ReportQueueComponent implements OnInit {
   private readonly waManual = inject(WhatsAppManualService);
   readonly rowActions = computed<Map<string, PfAction[]>>(() => {
     const m = new Map<string, PfAction[]>();
-    for (const r of this.visible()) m.set(r.id, this.buildRowActions(r));
+    for (const r of this._items()) m.set(r.id, this.buildRowActions(r));
     return m;
   });
 
@@ -745,12 +770,218 @@ export class ReportQueueComponent implements OnInit {
     }));
   }
 
+  // ── New design v2 (owner 2026-11-19): Test Master's frame ─────────────────
+  // Band = lab + search. LEFT side card STATUS (dots + counts), RIGHT main card = the reports grid (pf-data-grid);
+  // a partly-reported order opens an inline detail row. ≤900px: no side card — the status filter is a menu under
+  // the filter button inside the search. ≤640px: the grid folds into two-line rows; a tap opens the actions sheet.
+  /** ≤900px: no side column (the filter moves into the search). */
+  readonly narrow = mediaSignal("(max-width: 900px)", inject(DestroyRef));
+  /** ≤640px: rows instead of the grid, a bottom sheet per row. */
+  readonly phone = mediaSignal("(max-width: 640px)", inject(DestroyRef));
+  /** <1280px: the grid folds Order + Generated into the Patient cell (the actions keep their room). */
+  readonly compact = mediaSignal("(max-width: 1279px)", inject(DestroyRef));
+
+  /** Status dot colour for a side-card row / menu row (null = the empty ring for All). */
+  filterDot(f: Filter): string | null {
+    const k = FILTER_DOT[f];
+    return k === "ring" ? null : QUEUE_DOT[k];
+  }
+
+  /** The filter button's menu (phones / narrow tablets): dot · label · count · tick on the current one. */
+  readonly filterMenu = computed<PfAction[]>(() => this.ndFilters().map((f) => ({
+    id: f.value, label: f.label, count: f.count, current: f.value === this._filter(),
+    dot: this.filterDot(f.value) ?? "ring",
+  })));
+  onFilterMenu(id: string): void { this.setFilter(id as Filter); }
+
+  /** The grid's Status pill + the Unpaid line under it. */
+  rowStatus(r: Report): QueueStatus {
+    return queueStatus(r.deliveryStatus, r.type, this.isUnpaid(r));
+  }
+  statusDot(k: QueueStatusKey): string { return QUEUE_DOT[k]; }
+
+  /** "30/F · AA0010" (the Patient cell's second line). */
+  whoMeta(r: Report): string {
+    const p = r.order?.patient;
+    return p ? formatPatientMeta(p as never) : "";
+  }
+  /** The Order cell: the order number, or the short id of a legacy order. */
+  orderNo(r: Report): string {
+    const o = r.order;
+    return o?.orderNumber || (r.orderId ? `#${r.orderId.slice(0, 8).toUpperCase()}` : "—");
+  }
+  /** The Generated cell ("10:42 AM" today, else "18 Nov, 10:42 AM"). */
+  when(iso: string | undefined): string { return this.shortWhen(iso) || "—"; }
+
+  /** The Sent cell: what happened to the report (WhatsApp status, printed / delivered via …, failed note),
+   *  plus "Preliminary" when the pill (Delivered / Failed) hides it. */
+  sentMeta(r: Report): string {
+    const st = this.rowStatus(r);
+    const parts: string[] = [];
+    const wa = this.waMeta(r);
+    if (wa) parts.push(wa);
+    else if (r.deliveryStatus === "delivered") parts.push(this.viaWords(r.deliveredVia));
+    else if (r.deliveryStatus === "failed") parts.push(r.deliveryNote?.trim() || "Not delivered");
+    if (st.prelim && st.key !== "partial") parts.push("Preliminary");
+    return parts.filter(Boolean).join(" · ");
+  }
+  private viaWords(via: string | undefined): string {
+    const v = (via ?? "").toLowerCase();
+    if (v === "print") return "Printed";
+    if (v === "whatsapp") return "WhatsApp";
+    if (v === "email") return "Email";
+    if (v === "sms") return "SMS";
+    return v ? v.charAt(0).toUpperCase() + v.slice(1) : "Delivered";
+  }
+
+  /** Phone row second line: "30/F · LAB-… · 10:42" (or what was sent). */
+  phoneLine(r: Report): string {
+    const p = r.order?.patient;
+    const age = p ? formatPatientMeta(p as never).split(" · ")[0] : "";
+    return [age, this.orderNo(r), this.sentMeta(r) || this.shortWhen(r.createdAt)].filter(Boolean).join(" · ");
+  }
+  phoneLinePartial(po: PrelimOrder): string {
+    return [po.whoMeta.split(" · ")[0], po.orderNo, po.countLabel].filter(Boolean).join(" · ");
+  }
+
+  /** The report already generated for a partly-reported order (a preliminary), if it is loaded. */
+  partialReport(po: PrelimOrder): Report | undefined {
+    const id = po.id.toLowerCase();
+    return this._items().find((r) => (r.orderId ?? "").toLowerCase() === id);
+  }
+
+  /** Grid rows for the current tab: Partial = the partly-reported orders; All = those without a report row first,
+   *  then every report; the other tabs = their reports. An open order is followed by its detail row. */
+  readonly gridRows = computed<RqRow[]>(() => {
+    const f = this._filter();
+    const open = this._expanded();
+    const out: RqRow[] = [];
+    const addPartial = (po: PrelimOrder) => {
+      const r = this.partialReport(po);
+      out.push({ id: `p:${po.id}`, kind: "partial", po, r });
+      if (open === po.id) out.push({ id: `d:${po.id}`, kind: "detail", po, r });
+    };
+    if (f === "partial") { this.visiblePartials().forEach(addPartial); return out; }
+    if (f === "all") this.allTabPartials().forEach(addPartial);
+    for (const r of this.visible()) out.push({ id: `r:${r.id}`, kind: "report", r });
+    return out;
+  });
+
+  /** How many rows the head counts ("18 reports", "50 of 120 reports"). */
+  readonly headCount = computed(() => {
+    if (this._filter() === "partial") return plural(this.visiblePartials().length, "order");
+    const shown = this.gridRows().filter((x) => x.kind !== "detail").length;
+    const total = this._total();
+    const extra = this._filter() === "all" ? this.allTabPartials().length : 0;
+    if (total != null && this.hasMorePages()) return `${shown} of ${total + extra} reports`;
+    return plural(shown, "report");
+  });
+
+  private readonly noTpl = viewChild<TemplateRef<unknown>>("cNo");
+  private readonly patientTpl = viewChild<TemplateRef<unknown>>("cPatient");
+  private readonly orderTpl = viewChild<TemplateRef<unknown>>("cOrder");
+  private readonly statusTpl = viewChild<TemplateRef<unknown>>("cStatus");
+  private readonly genTpl = viewChild<TemplateRef<unknown>>("cGen");
+  private readonly sentTpl = viewChild<TemplateRef<unknown>>("cSent");
+  private readonly actsTpl = viewChild<TemplateRef<unknown>>("cActs");
+  private readonly detailTpl = viewChild<TemplateRef<unknown>>("cDetail");
+
+  readonly rqDefaultColDef: ColDef<RqRow> = { sortable: false, resizable: false, filter: false, wrapText: true, autoHeight: true, suppressMovable: true };
+  readonly colDefs = computed<ColDef<RqRow>[]>(() => {
+    const cell = (tpl: TemplateRef<unknown> | undefined) => ({ cellRenderer: DataGridTemplateCellComponent, cellRendererParams: { tpl } });
+    const touch = !this.web();
+    const narrow = this.narrow();
+    // Below 1280px (tablet landscape, a narrow window) Order + Generated fold into the Patient cell's meta line.
+    const compact = this.compact();
+    return [
+      { colId: "no", headerName: "#", width: 56, minWidth: 56, ...cell(this.noTpl()) },
+      { colId: "patient", headerName: "Patient", flex: 1.6, minWidth: 160, ...cell(this.patientTpl()) },
+      { colId: "order", headerName: "Order", width: 120, minWidth: 112, hide: compact, ...cell(this.orderTpl()) },
+      { colId: "status", headerName: "Status", width: 128, minWidth: 124, ...cell(this.statusTpl()) },
+      { colId: "generated", headerName: "Generated", width: 100, minWidth: 96, hide: compact, ...cell(this.genTpl()) },
+      { colId: "sent", headerName: "Sent", flex: 1, minWidth: 110, ...cell(this.sentTpl()) },
+      // View · Download · Share ▾ · ⋯ — text on web, 44px icons on touch (+ Details on a partly-reported order).
+      { colId: "actions", headerName: "Actions", width: touch ? 268 : 318, minWidth: touch ? 268 : 318,
+        headerClass: "ag-right-aligned-header", cellClass: "pf-rq2-actcell", ...cell(this.actsTpl()) },
+    ];
+  });
+  readonly rqRowId = (p: { data: RqRow }) => p.data.id;
+  readonly rqFullWidth = (p: IsFullWidthRowParams<RqRow>) => p.rowNode.data?.kind === "detail";
+  readonly rqFullWidthRenderer = DataGridTemplateCellComponent;
+  readonly rqFullWidthParams = computed(() => ({ tpl: this.detailTpl(), measure: true }));
+  readonly rqRowClass = (p: RowClassParams<RqRow>) => {
+    const d = p.data;
+    if (!d) return undefined;
+    if (d.kind === "detail") return "pf-rq2-detailrow";
+    if (d.kind === "partial") return this._expanded() === d.po.id ? "pf-rq2-row pf-rq2-row--partial is-open" : "pf-rq2-row pf-rq2-row--partial";
+    return "pf-rq2-row";
+  };
+  /** A partly-reported order's row opens / closes its detail (a click on a button inside the row does its own thing). */
+  onGridRowClicked(e: RowClickedEvent<RqRow>): void {
+    const t = e.event?.target as HTMLElement | null;
+    if (t?.closest?.("button, a, [role=menu]")) return;
+    const d = e.data;
+    if (d?.kind === "partial") this.toggle(d.po.id);
+  }
+
+  /** Paging without a button at the bottom (owner: nothing clickable at the bottom): the next page loads as the
+   *  grid nears its end. */
+  onGridReady(e: GridReadyEvent<RqRow>): void {
+    const near = () => {
+      const n = e.api.getDisplayedRowCount();
+      if (n && e.api.getLastDisplayedRowIndex() >= n - 6) this.loadMore();
+    };
+    e.api.addEventListener("bodyScroll", near);
+    e.api.addEventListener("viewportChanged", near);
+  }
+
+  // ── Phone: the actions sheet ────────────────────────────────────────────────
+  private readonly _sheet = signal<RqRow | null>(null);
+  readonly sheet = this._sheet.asReadonly();
+  openSheet(row: RqRow): void { this.reportOf(row) && this.onRowMenuOpened(this.reportOf(row)!); this._sheet.set(row); }
+  closeSheet(): void { this._sheet.set(null); }
+  reportOf(row: RqRow | null): Report | undefined { return row ? (row.kind === "report" ? row.r : row.r) : undefined; }
+  /** The sheet's ONE primary: WhatsApp (Auto or Chat — waMode), else Print; none for a view-only desk. */
+  sheetPrimary(r: Report): { label: string; via: "whatsapp" | "print" } | null {
+    if (!this.canDeliver()) return null;
+    return this.waMode(r) ? { label: "Share on WhatsApp", via: "whatsapp" } : { label: "Print", via: "print" };
+  }
+  /** The rest of the ⋯ actions, under the primary and View · Download · Print (no duplicates). */
+  sheetMore(r: Report): PfAction[] {
+    const shown = new Set(["view", "download", "print", "whatsapp", "whatsapp-mine"]);
+    return this.actionsFor(r).filter((a) => !shown.has(a.id));
+  }
+  /** The sheet's Print tile: the view-only print, or the desk's print when WhatsApp is the primary. */
+  sheetShowsPrint(r: Report): boolean {
+    if (!this.canPrint()) return false;
+    const p = this.sheetPrimary(r);
+    return !p || p.via !== "print";
+  }
+  sheetRun(r: Report, id: string): void { this.closeSheet(); this.runRowAction(r, id); }
+  sheetDeliver(r: Report, via: string): void { this.closeSheet(); this.deliver(r, via); }
+
+  /** The ⋯ rows for a report (built for every loaded report). */
+  actionsFor(r: Report): PfAction[] { return this.rowActions().get(r.id) ?? this.buildRowActions(r); }
+
+  /** Phones: the next page loads when the end of the list comes into view. */
+  private readonly listEnd = viewChild<ElementRef<HTMLElement>>("listEnd");
+  private _io: IntersectionObserver | null = null;
+  private readonly _ioWatch = effect(() => {
+    const el = this.listEnd()?.nativeElement;
+    this._io?.disconnect();
+    this._io = null;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    this._io = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) this.loadMore(); });
+    this._io.observe(el);
+  });
+
+
   ngOnInit() {
     this.waSend.ensure();
     this.reportActions.warmChannels();
     // Live: a validation elsewhere can complete an order → its report appears.
     this.liveQ.on('reports', 'validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
-    this.destroyRef.onDestroy(() => clearTimeout(this._searchTimer));
+    this.destroyRef.onDestroy(() => { clearTimeout(this._searchTimer); this._io?.disconnect(); });
     // Self-healing: ask the backend to generate any missing final
     // reports for orders that are already 'validated' but have no
     // report row yet (e.g. validations done before the

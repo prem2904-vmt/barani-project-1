@@ -1605,45 +1605,46 @@ exact PDF on screen. Visual redesign only: every action and API is unchanged.
 
 `/reports` (`features/reports/report-queue/`) — the delivery queue that opens
 the Report view (§19). The New design only; classic is unchanged.
+**Reports v2 (owner 2026-11-19): Test Master's frame.**
 
-- **Band:** search + ONE status filter in the pill: a kit `.pf-seg`
-  radiogroup (All · Completed · Partial · Delivered · Failed), the raised
-  neutral selected tab, counts as plain `.pf-num` text; no colour dots (a
-  non-zero Failed count is the only red). No second stats strip, no stats
-  popover. Band actions **Refresh** and **Generate** are both quiet ghosts:
-  reports generate themselves on validation (+ the page's backfill), so
-  "Generate for an order id" is a fallback, not the page's main action — the
-  list has NO primary. Phones: the filter scrolls in its own row, 44px tabs.
-- **One card anatomy on every tab:** FULL patient name (wraps, never
-  `formatPatientInfo`) + "29/M · MRN · Order LAB-… · time" (Noto, tabular, no
-  "|", no mono) + ONE status + actions. The card is the
-  `[pfZoomSource]="[r.id, r.orderId]"`; report actions are `.pf-rowact`
-  (View · Download · Share ▾ · More — text on web, 44px icons on touch).
-- **ONE status per card, on every tab:** a dot + coloured word, no chip,
-  border or background, in the Frontdesk rows' language and tokens (dot =
-  `--<tone>-text`, word = that token mixed 70% with `--text-primary`, AA in
-  light and dark). It sits in a fixed-width, right-aligned column (min-width
-  fits "Preliminary") so status and actions line up on every row. Words
-  (`reportStatus()`, in priority order): **Failed** (red) › **Unpaid** (red,
-  bill due and not yet delivered) › **Delivered** (green, a check instead of
-  the dot) › **Preliminary** (amber: a partial report isn't final, so it
-  REPLACES "Completed") › **Completed** (green). Never a second chip: a fact
-  the status hides ("Preliminary", "Payment due") is appended to the meta
-  line. Phones: the status sits under the name, left-aligned.
-- **Partial cards** (`report-queue.partial.ts`) are grouped by DEPARTMENT,
-  not tube: a department is ready / partly ready / pending, and a test is
-  "ready" exactly when its tube is fully validated (that is what
-  `generate/partial` prints). Status: "Preliminary" (amber); the count ("1 of
-  3 departments ready", or "partly ready") is a meta line under the name, not
-  a chip. Partly-ready departments mark each test Ready / Pending with where
-  it is ("Sample not received at the lab yet", "Awaiting validation",
-  "Culture in progress · 2 of 4 stages done"). Culture tests show Growth ·
-  Organism · AST (n drugs · r resistant) from the snapshot's stages — never
-  "No parameter values". Pending = a neutral info row with an SVG clock and
-  department NAMES. "Generate partial PDF" is secondary. Expand/collapse =
-  grid-rows on `--pf-spring` (off under reduced motion), `inert` when closed.
-- **Empty:** `.pf-empty`. **Specs:** `report-queue.pf.spec.ts`; real layout
-  `apps/lms-e2e/src/reports-list-layout.rbac.spec.ts` (read only).
+- **Band:** lab + search pill ONLY — no segmented, no band-corner buttons on web.
+  Phones add a Refresh icon in the band.
+- **LEFT side card STATUS** (`data-testid="rq-side"`, `--pf-side-w`, shared
+  `.pf-side-list` / `.pf-side-item` rows): All (empty ring) · Completed (violet
+  dot) · Partial (light-blue) · Delivered (green) · Failed (rose) + plain
+  tabular counts (the old band segmented / stat chips). Dots are theme tokens
+  (`QUEUE_DOT`: `--violet-text`, `--sky-text`, `--green-text`, `--rose-text`).
+  Its foot is a plain note, never a button.
+- **RIGHT main card:** head = icon + REPORTS + the status as scope + count
+  ("50 of 120 reports" while paging) + Open in sheet · Generate (secondary) or
+  the "View only" chip · Refresh (icon). Body = a flush `pf-data-grid`:
+  # (daily no) | Patient (full name + "29/M · MRN") | Order | Status | Generated
+  | Sent (WhatsApp / printed / failed note; "Preliminary" when the pill hides it)
+  | Actions (View · Download · Share ▾ · ⋯, right-aligned; text on web, 44px
+  icons on touch; view-only gets a row Print). Below 1280px Order + Generated
+  fold into the Patient meta.
+- **Status = ONE neutral pill with a small coloured dot** (`queueStatus()`):
+  Completed › Partial (a preliminary report) › Delivered › Failed. "Unpaid" is
+  quiet rose text on its own line UNDER the pill — never a pill, never beside it.
+- **Partly-reported orders** (All: those without a report row, first; Partial:
+  all) open INLINE as a full-width detail row (`DataGridTemplateCellComponent`
+  with `measure: true`): "Generate partial PDF" at the TOP, then the departments
+  side by side, flat (no bordered boxes): Ready / "x of n tests ready", values
+  with flag words + range, culture summary, a "Still pending" column with the
+  SVG clock. Details (chevron, `aria-expanded`) or a row click toggles it.
+- **Paging:** the next page loads as the grid (or the phone list) nears its end
+  — no "Load more" at the bottom.
+- **≤900px:** no side card; a filter button INSIDE the search (`band-inline`,
+  shows the current status) opens `pf-actions-menu [popover]` — a dropdown under
+  the button (dot · label · count · tick), never a bottom sheet.
+- **≤640px:** two-line rows (≥64px): daily no; name + pill; "29/M · order ·
+  time/sent · Unpaid". A tap opens a bottom sheet: patient + pill, the Unpaid
+  note, ONE primary (Share on WhatsApp when `waMode`, else Print; none for
+  view-only), View · Download · Print, then the rest of the ⋯ rows; a partly
+  reported order shows its departments + Generate partial PDF there.
+- **Specs:** `report-queue.nd.spec.ts` (unit, real AG-Grid in jsdom — `settle()`
+  before reading rows), `apps/lms-e2e/src/reports-v2.screens.spec.ts` (every
+  form factor, light + dark), `side-cards.screens.spec.ts` (same side card).
 
 ## 21. Appointments
 
