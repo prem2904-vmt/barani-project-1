@@ -94,9 +94,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('wide: queue = side card, collection = main card, first patient selected, no band Refresh', async ({ page }) => {
+  page.on('console', m => console.log('PAGE>', m.type(), m.text().slice(0, 200)));
+  page.on('pageerror', e => console.log('PAGEERR>', String(e).slice(0, 300)));
   await page.goto('/lab/collect');
+  console.log('DBG goto done');
   await page.waitForLoadState('networkidle').catch(() => {});
+  console.log('DBG idle');
   if (!wide(page)) test.skip(true, 'two-panel is for wide screens');
+  console.log('DBG eval', await Promise.race([page.evaluate(() => 1), new Promise(r => setTimeout(() => r('BLOCKED'), 8000))]));
   await expectLayout(page);
   const two = page.getByTestId('collect-two-panel');
   await expect(two).toBeVisible({ timeout: 20_000 });
