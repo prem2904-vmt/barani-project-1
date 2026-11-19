@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
 import { ProcessWorkflowConfig, ProcessWorkflowRecord, collectsInLab, normalizeWorkflow } from '../../shared/models/process-workflow.model';
 import { workflowActionOn } from '../modules/lab-features';
+import type { WorkflowVersion } from '../../shared/workflow-editor/workflow-backend';
 
 /**
  * Loads the tenant's ACTIVE process workflow (which drives navigation) and
@@ -115,4 +116,6 @@ export class ProcessWorkflowService {
   activate(id: string): Observable<ProcessWorkflowRecord> { return this.api.post<ProcessWorkflowRecord>(`/api/process-workflows/${id}/activate`, {}); }
   duplicate(id: string): Observable<ProcessWorkflowRecord> { return this.api.post<ProcessWorkflowRecord>(`/api/process-workflows/${id}/duplicate`, {}); }
   remove(id: string): Observable<void> { return this.api.delete<void>(`/api/process-workflows/${id}`); }
+  /** History: saved versions, newest first (kept as audit rows — no schema change). */
+  history(id: string): Observable<WorkflowVersion[]> { return this.api.get<WorkflowVersion[]>(`/api/process-workflows/${id}/history`); }
 }
