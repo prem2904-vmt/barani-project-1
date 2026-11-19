@@ -59,7 +59,11 @@ const W = 280;
           <div class="wfm-scroll">
             @for (g of groups(); track $index; let first = $first) {
               @if (!first) { <div class="wfm-sep" role="separator"></div> }
+<<<<<<< HEAD
               @if (g.name) { <p class="wfm-group" aria-hidden="true">{{ g.name }}</p> }
+=======
+              @if (g.name.trim()) { <p class="wfm-group" aria-hidden="true">{{ g.name }}</p> }
+>>>>>>> pc/workflow-v2
               @for (i of g.items; track i.id) {
                 <button type="button" class="wfm-item" role="menuitem" tabindex="-1" [attr.data-id]="i.id"
                         [class.wfm-item--current]="i.current" [attr.aria-current]="i.current ? 'true' : null"

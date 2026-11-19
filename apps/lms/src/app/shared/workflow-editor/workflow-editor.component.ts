@@ -59,7 +59,11 @@ type DragData = { itemId: string; from: 'main' | 'peek' };
     <div class="wf-grid">
       @if (!narrow()) {
         <aside class="wf-card wf-side" aria-label="Work areas" data-testid="wf-side">
+<<<<<<< HEAD
           <header class="wf-head">
+=======
+          <header class="wf-head wf-head--side">
+>>>>>>> pc/workflow-v2
             <span class="wf-head__icon" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>
             <span class="wf-head__txt"><span class="wf-head__label">Work areas</span><span class="wf-head__note">The navigation, in this order</span></span>
             <button type="button" class="wf-btn wf-btn--ghost press" data-testid="wf-history" (click)="page.openHistory()" aria-haspopup="dialog" [attr.aria-expanded]="page.historyOpen()" title="Saved versions">
@@ -88,6 +92,10 @@ type DragData = { itemId: string; from: 'main' | 'peek' };
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">@for (p of areaIcon(l); track $index) { <path [attr.d]="p" /> }</svg>
           </span>
           <span class="wf-head__label wf-main__name" data-testid="wf-area-name">{{ l.cat.name }}</span>
+<<<<<<< HEAD
+=======
+          <span class="wf-head__note wf-main__note">{{ l.items.length }} {{ l.items.length === 1 ? 'action' : 'actions' }} · shown as “{{ l.cat.name }}” in the navigation</span>
+>>>>>>> pc/workflow-v2
           @if (page.isChanged(l.cat.id)) {
             <span class="wf-changed" data-testid="wf-changed">Changed for {{ page.branchName(page.scope()) }}</span>
             <button type="button" class="wf-link press" data-testid="wf-reset" (click)="resetArea(l)">Reset to default</button>
@@ -237,7 +245,11 @@ type DragData = { itemId: string; from: 'main' | 'peek' };
         <div wfPortal class="wf-peek-layer" [class.wf-peek-layer--sheet]="pk.sheet">
           @if (pk.sheet) { <div class="wf-peek-backdrop" aria-hidden="true" (click)="closePeek()"></div> }
           <div class="wf-peek" role="dialog" [attr.aria-label]="pl.cat.name + ' — what is inside'" data-testid="wf-peek"
+<<<<<<< HEAD
                [class.wf-peek--sheet]="pk.sheet" [style.top.px]="pk.sheet ? null : pk.top" [style.left.px]="pk.sheet ? null : pk.left"
+=======
+               [class.wf-peek--sheet]="pk.sheet" [class.wf-peek--dragging]="peekDragging()" [style.top.px]="pk.sheet ? null : pk.top" [style.left.px]="pk.sheet ? null : pk.left"
+>>>>>>> pc/workflow-v2
                (mouseenter)="peekHold()" (mouseleave)="peekLeave()" (keydown.escape)="closePeek()">
             <div class="wf-peek__head">
               <span class="wf-dot" [style.background]="dotOf(pl)" aria-hidden="true"></span>
@@ -361,6 +373,11 @@ export class WorkflowEditorComponent {
   readonly peek = signal<PeekState | null>(null);
   readonly iconFor = signal<string | null>(null);
   readonly dropTarget = signal<string | null>(null);
+<<<<<<< HEAD
+=======
+  /** An action is being carried out of the peek: the peek fades and lets the list under it take the drop. */
+  readonly peekDragging = signal(false);
+>>>>>>> pc/workflow-v2
   private dragging = false;
   private peekPinned = false;
   private altHeld = false;
@@ -566,7 +583,11 @@ export class WorkflowEditorComponent {
 
   dragStart(fromPeek = false): void {
     this.dragging = true;
+<<<<<<< HEAD
     if (fromPeek) this.peekPinned = true;
+=======
+    if (fromPeek) { this.peekPinned = true; this.peekDragging.set(true); }
+>>>>>>> pc/workflow-v2
     this.cancelOpen();
   }
   dragMove(e: CdkDragMove<DragData>): void {
@@ -577,6 +598,10 @@ export class WorkflowEditorComponent {
   dragEnd(): void { setTimeout(() => this.finishDrag(), 0); }
   private finishDrag(): void {
     this.dragging = false;
+<<<<<<< HEAD
+=======
+    this.peekDragging.set(false);
+>>>>>>> pc/workflow-v2
     this.dropTarget.set(null);
     if (this.peekPinned) { this.peekPinned = false; this.closePeek(); }
   }
