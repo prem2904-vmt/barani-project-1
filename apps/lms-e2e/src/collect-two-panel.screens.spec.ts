@@ -69,7 +69,9 @@ async function backend(page: Page) {
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors(origin) });
     return route.fulfill({ status: 200, headers: { ...cors(origin), 'content-type': 'application/json' }, body: JSON.stringify({ access_token: jwt(ME.authId), refresh_token: `rt-${ME.authId}`, token_type: 'bearer', expires_in: 86400, user: { id: ME.authId, aud: 'authenticated', email: 'desk@demo.test' } }) });
   });
-  await page.routeWebSocket(/\/hubs\//, ws => { ws.onMessage(() => ws.send('{}\x1e')); });
+  // Answer ONLY the SignalR handshake: replying `{}` to every frame is an invalid payload -> the hub disconnects and
+  // reconnects in a tight loop (thousands of chat/sync calls) that starves the test runner.
+  await page.routeWebSocket(/\/hubs\//, ws => { let hs = false; ws.onMessage(() => { if (!hs) { hs = true; ws.send('{}\x1e'); } }); });
   await page.addInitScript(([session]) => {
     if (!sessionStorage.getItem('pf.e2e.seeded')) {
       sessionStorage.setItem('pf.e2e.seeded', '1'); localStorage.clear();
@@ -94,15 +96,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('wide: queue = side card, collection = main card, first patient selected, no band Refresh', async ({ page }) => {
-  let nreq = 0; page.on('request', r => { nreq++; if (nreq < 60 || nreq % 200 === 0) console.log('REQ>', nreq, r.method(), r.url().slice(-70)); });
-  page.on('console', m => console.log('PAGE>', m.type(), m.text().slice(0, 200)));
-  page.on('pageerror', e => console.log('PAGEERR>', String(e).slice(0, 300)));
   await page.goto('/lab/collect');
-  console.log('DBG goto done');
-  await page.waitForLoadState('networkidle').catch(() => {});
-  console.log('DBG idle', nreq);
+  await page.locator('pf-hero-band').first().waitFor({ timeout: 20_000 }).catch(() => {});
   if (!wide(page)) test.skip(true, 'two-panel is for wide screens');
-  console.log('DBG eval', await Promise.race([page.evaluate(() => 1), new Promise(r => setTimeout(() => r('BLOCKED'), 8000))]));
   await expectLayout(page);
   const two = page.getByTestId('collect-two-panel');
   await expect(two).toBeVisible({ timeout: 20_000 });
@@ -151,7 +147,7 @@ test('wide: queue = side card, collection = main card, first patient selected, n
 
 test('wide: Done for now moves to the next patient; empty queue shows the empty state', async ({ page }) => {
   await page.goto('/lab/collect');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.locator('pf-hero-band').first().waitFor({ timeout: 20_000 }).catch(() => {});
   if (!wide(page)) test.skip(true, 'two-panel is for wide screens');
   const two = page.getByTestId('collect-two-panel');
   const host = two.locator('.pf-drawer--hosted');
@@ -170,7 +166,7 @@ test('wide: Done for now moves to the next patient; empty queue shows the empty 
 
 test('narrow: list first, tap opens the full-screen collection, back returns (no two panels)', async ({ page }) => {
   await page.goto('/lab/collect');
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.locator('pf-hero-band').first().waitFor({ timeout: 20_000 }).catch(() => {});
   if (wide(page)) test.skip(true, 'phones / tablet portrait only');
   await expectLayout(page);
   await expect(page.getByTestId('collect-two-panel')).toHaveCount(0);
