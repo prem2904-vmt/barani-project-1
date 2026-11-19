@@ -129,7 +129,11 @@ test('wide: queue = side card, collection = main card, first patient selected, n
   await expect(side.locator('.pf-card__head').getByRole('button', { name: 'Refresh' })).toBeVisible();
   // no page scroll; no card-in-card
   expect(await page.evaluate(() => document.documentElement.scrollHeight <= window.innerHeight + 1)).toBe(true);
-  expect(await host.locator('.pf-card').count()).toBe(0);
+  // the inner vials / info panes are flat (no border, no shadow) — never a card inside the card
+  for (const inner of await host.locator('.pf-card').all()) {
+    const st = await inner.evaluate(el => { const c = getComputedStyle(el); return { shadow: c.boxShadow, top: c.borderTopWidth, radius: c.borderTopLeftRadius }; });
+    expect(st.shadow).toBe('none'); expect(st.top).toBe('0px'); expect(st.radius).toBe('0px');
+  }
   await shot(page, 'wide-light'); await theme(page, 'dark'); await shot(page, 'wide-dark'); await theme(page, 'light');
   // select the second patient -> THEIR collection (two tubes) in the main card, no navigation
   await side.locator('.pf-side-item').nth(1).click();
@@ -158,9 +162,16 @@ test('wide: Done for now moves to the next patient; empty queue shows the empty 
   await host.locator('.pf-sc-hhead').getByRole('button', { name: /done/i }).first().click();
   await expect(host.locator('.pf-sc-hhead')).toContainText('Nandini');
   await expect(two.locator('.pf-side-item')).toHaveCount(2);
-  samples.forEach(s => { s.status = 'collected'; });
-  await two.locator('.pf-sc-qside').getByRole('button', { name: 'Refresh' }).click();
+  // draw both of Nandini's tubes, then Done: the queue is now empty -> the main card shows the empty state
+  await host.locator('.pf-sc-tile').nth(0).click();
+  await expect.poll(() => requests.some(r => /PATCH \/api\/samples\/o2a\/collect/.test(r))).toBe(true);
+  await host.locator('.pf-sc-tile').nth(1).click();
+  await expect.poll(() => requests.some(r => /PATCH \/api\/samples\/o2b\/collect/.test(r))).toBe(true);
+  samples.forEach(x => { x.status = 'collected'; });   // the server drops them from the pending list
+  await host.locator('.pf-sc-hhead').getByRole('button', { name: /done/i }).first().click();
+  await expect(two.locator('.pf-sc-main__empty')).toBeVisible();
   await expect(two.locator('.pf-sc__empty').first()).toContainText(/no samples waiting/i);
+  await expect(page.getByTestId('collect-queue-count')).toHaveText('0');
   await shot(page, 'wide-empty-light');
 });
 
