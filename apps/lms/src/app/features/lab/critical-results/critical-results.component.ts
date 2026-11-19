@@ -162,13 +162,18 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
       <div class="pf-card__body pf-cr__filters">
         <div class="pf-field">
           <span class="pf-field__lbl" id="pf-cr-status-lbl">Status</span>
-          <span class="pf-seg pf-cr__seg" role="radiogroup" aria-labelledby="pf-cr-status-lbl">
+          <ul class="pf-side-list pf-cr__statuses" role="radiogroup" aria-labelledby="pf-cr-status-lbl" data-testid="cr-status">
             @for (o of statusOptions(); track o.value) {
-              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="status() === o.value" (click)="setStatus(o.value)">
-                {{ o.label }}@if (o.count != null) { <span class="pf-num pf-cr__segn">{{ o.count }}</span> }
-              </button>
+              <li>
+                <button type="button" class="pf-side-item pf-cr__status" role="radio" [class.is-on]="status() === o.value"
+                        [attr.aria-checked]="status() === o.value" (click)="setStatus(o.value)">
+                  <span class="pf-cr-dot" [attr.data-tone]="o.tone" aria-hidden="true"></span>
+                  <span class="pf-cr__sname">{{ o.label }}</span>
+                  @if (o.count != null) { <span class="pf-num pf-cr__scount">{{ o.count }}</span> }
+                </button>
+              </li>
             }
-          </span>
+          </ul>
         </div>
         <div class="pf-field">
           <span class="pf-field__lbl" id="pf-cr-range-lbl">Detected (IST)</span>
@@ -212,9 +217,17 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     }
     .pf-cr__side--sheet .pf-sheet__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--pf-line); }
     .pf-cr__filters { gap: 16px; }
-    .pf-cr__seg { flex-wrap: wrap; }
-    .pf-cr__segn { margin-left: 5px; color: var(--text-tertiary); }
-    .pf-seg__item[aria-checked='true'] .pf-cr__segn { color: inherit; }
+    /* Four options share one row inside the 300px card: equal cells, tight padding, never wrapping onto the next label. */
+    .pf-cr__seg { flex-wrap: nowrap; width: 100%; }
+    .pf-cr__seg .pf-seg__item { flex: 1 1 0; min-width: 0; padding-inline: 6px; justify-content: center; white-space: nowrap; }
+    .pf-cr__statuses { padding: 0; margin-bottom: 4px; }
+    .pf-cr__sname { flex: 1 1 auto; min-width: 0; }
+    .pf-cr__scount { flex: none; font-size: 12.5px; color: var(--text-tertiary); }
+    .pf-cr-dot { width: 8px; height: 8px; border-radius: 999px; flex: none; background: var(--text-tertiary); --pf-cr-tone: var(--text-tertiary); }
+    .pf-cr-dot[data-tone='red'] { background: var(--red-text, #b91c1c); }
+    .pf-cr-dot[data-tone='amber'] { background: var(--amber-text, #b45309); }
+    .pf-cr-dot[data-tone='green'] { background: var(--green-text, #15803d); }
+    .pf-cr-dot[data-tone='none'] { background: transparent; box-shadow: inset 0 0 0 1.5px var(--text-tertiary); }
     .pf-cr__dates { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; }
     .pf-cr__dates-lbl { font-size: 12px; color: var(--text-tertiary); }
     .pf-cr__main { min-width: 0; min-height: 0; }
@@ -225,22 +238,31 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     .pf-cr__grid { display: block; width: 100%; flex: 1 1 auto; height: calc(100dvh - 300px); min-height: 320px; }
     :host-context(.design-new) .pf-cr__grid { height: auto; min-height: 280px; }
     .pf-cr__main ::ng-deep .ag-root-wrapper { border: 0; border-radius: 0; }
-    .pf-cr__main ::ng-deep .ag-pinned-right-header, .pf-cr__main ::ng-deep .ag-pinned-right-cols-container { border-left: 1px solid var(--pf-line); }
+    /* One thin critical stripe on the row's left edge only: no pinned-column divider, no header resize dividers. */
+    .pf-cr__grid { --ag-pinned-column-border: none; }
+    .pf-cr__main ::ng-deep .ag-cell-first-right-pinned, .pf-cr__main ::ng-deep .ag-header-cell-first-right-pinned { border-left: 0; }
+    .pf-cr__main ::ng-deep .ag-header-cell-resize::after, .pf-cr__main ::ng-deep .ag-header-cell::after { display: none; }
+    .pf-cr__main ::ng-deep .ag-pinned-right-header, .pf-cr__main ::ng-deep .ag-pinned-right-cols-container { border-left: 0; }
     .pf-cr__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--pf-line); }
     /* Row cells: ONE status word (dot + colour), row actions as kit .pf-rowact. */
-    .pf-cr__main ::ng-deep .pf-cr-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; --pf-cr-tone: var(--text-secondary); color: color-mix(in srgb, var(--pf-cr-tone) 70%, var(--text-primary)); }
+    .pf-cr__main ::ng-deep .pf-cr-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.3; white-space: nowrap; --pf-cr-tone: var(--text-secondary); color: var(--text-primary); background: var(--pf-chip-bg); box-shadow: inset 0 0 0 1px var(--pf-line); }
     .pf-cr__main ::ng-deep .pf-cr-status[data-tone='red'] { --pf-cr-tone: var(--red-text, #b91c1c); }
     .pf-cr__main ::ng-deep .pf-cr-status[data-tone='amber'] { --pf-cr-tone: var(--amber-text, #b45309); }
     .pf-cr__main ::ng-deep .pf-cr-status[data-tone='green'] { --pf-cr-tone: var(--green-text, #15803d); }
     .pf-cr__main ::ng-deep .pf-cr-status__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-cr-tone); flex: none; }
-    .pf-cr__main ::ng-deep .pf-cr-acts { display: inline-flex; gap: 6px; align-items: center; height: 100%; }
-    .pf-cr__main ::ng-deep .pf-cr-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; height: 100%; }
+    .pf-cr__main ::ng-deep .pf-cr-acts { display: inline-flex; gap: 6px; align-items: center; justify-content: flex-end; width: 100%; min-height: 44px; }
+    .pf-cr__main ::ng-deep .pf-cr-acts .pf-rowact { min-height: 44px; }
+    .pf-cr__main ::ng-deep .ag-header-cell[col-id='actions'] .ag-header-cell-resize,
+    .pf-cr__main ::ng-deep .ag-header-cell[col-id='actions']::after { display: none; }
+    .pf-cr__main ::ng-deep .ag-header-cell.pf-cr-acthead .ag-header-cell-label { justify-content: flex-end; }
+    .pf-cr__main ::ng-deep .pf-cr-cell { line-height: 1.3; display: flex; flex-direction: column; justify-content: center; min-height: 100%; padding: 8px 0; white-space: normal; overflow-wrap: break-word; }
+    .pf-cr__main ::ng-deep .pf-cr-nb { white-space: nowrap; }
     .pf-cr__main ::ng-deep .pf-cr-cell__sub { font-size: 11.5px; color: var(--text-tertiary); }
-    .pf-cr__main ::ng-deep .pf-cr-cell--stack { gap: 2px; padding: 6px 0; }
+    .pf-cr__main ::ng-deep .pf-cr-cell--stack { gap: 2px; }
     .pf-cr__main ::ng-deep .pf-cr-cell--stack .pf-cr-status { white-space: normal; }
     .pf-cr__main ::ng-deep .ag-cell.pf-cr-actcell { padding-left: 6px; padding-right: 6px; }
     .pf-cr__main ::ng-deep .pf-cr-acts .pf-rowact--icon { width: 44px; height: 44px; }
-    .pf-cr__main ::ng-deep .pf-cr-row--open .ag-cell:first-child { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
+    .pf-cr__main ::ng-deep .pf-cr-row--open .ag-cell[col-id='detectedAt'] { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
     @media (max-width: 900px) {
       .pf-cr__grid { height: calc(100dvh - 260px); }
     }
@@ -294,11 +316,11 @@ export class CriticalResultsComponent {
     const open = this.openCount();
     return `${plural(n, 'record')}${open > 0 ? ` · ${open} not acknowledged` : ''}`;
   });
-  readonly statusOptions = computed<Array<{ value: StatusFilter; label: string; count?: number | null }>>(() => [
-    { value: 'open', label: 'Not acknowledged', count: this.openCount() },
-    { value: 'acknowledged', label: 'Acknowledged' },
-    { value: 'communicated', label: 'Communicated' },
-    { value: 'all', label: 'All' },
+  readonly statusOptions = computed<Array<{ value: StatusFilter; label: string; tone: string; count?: number | null }>>(() => [
+    { value: 'open', label: 'Not acknowledged', tone: 'red', count: this.openCount() },
+    { value: 'acknowledged', label: 'Acknowledged', tone: 'amber' },
+    { value: 'communicated', label: 'Communicated', tone: 'green' },
+    { value: 'all', label: 'All', tone: 'none' },
   ]);
 
   // ── Grid ───────────────────────────────────────────────────────────────
@@ -312,25 +334,26 @@ export class CriticalResultsComponent {
     const web = !this.isCoarse && !this.isPhone;
     const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch] as string));
     const cell = (main: string, sub?: string) =>
-      `<div class="pf-cr-cell"><span>${esc(main)}</span>${sub ? `<span class="pf-cr-cell__sub">${esc(sub)}</span>` : ''}</div>`;
+      `<div class="pf-cr-cell"><span>${esc(main)}</span>${sub ? `<span class="pf-cr-cell__sub">${whole(sub)}</span>` : ''}</div>`;
+    const whole = (sub: string) => sub.split(' · ').map(x => `<span class="pf-cr-nb">${esc(x)}</span>`).join(' · ');
     const multiBranch = this.branchOptions().length > 1;
     // Columns that can only read "—" under the current status filter stay hidden.
     const status = this.status();
     const cols: ColDef<CriticalResultEvent>[] = [
-      { colId: 'detectedAt', headerName: 'Detected', minWidth: 150, width: 160, flex: 0, sort: 'desc',
+      { colId: 'detectedAt', headerName: 'Detected', minWidth: 190, width: 190, flex: 0, sort: 'desc',
         valueGetter: p => p.data?.detectedAt ?? '',
         cellRenderer: (p: { data?: CriticalResultEvent }) => cell(istStamp(p.data?.detectedAt), [
           p.data?.detectedByName ? 'by ' + p.data.detectedByName : '',
-          p.data?.alertedAt ? plural(p.data.alertedCount, 'person', 'people') + ' alerted' : '',
+          p.data?.alertedAt ? p.data.alertedCount + ' alerted' : '',
         ].filter(Boolean).join(' · ')) },
-      { colId: 'patient', headerName: 'Patient', flex: 1.3, minWidth: 170,
+      { colId: 'patient', headerName: 'Patient', flex: 1.3, minWidth: 140,
         valueGetter: p => p.data?.patientName ?? '',
         cellRenderer: (p: { data?: CriticalResultEvent }) => cell(p.data?.patientName ?? '',
           [p.data?.patientMrn, p.data?.orderNumber, multiBranch ? p.data?.branchName : null].filter(Boolean).join(' · ')) },
-      { colId: 'test', headerName: 'Test · critical values', flex: 1.4, minWidth: 170,
+      { colId: 'test', headerName: 'Test · critical values', flex: 1.4, minWidth: 130,
         valueGetter: p => p.data?.testName ?? '',
         cellRenderer: (p: { data?: CriticalResultEvent }) => cell(p.data?.testName ?? '', p.data?.summary) },
-      { colId: 'status', headerName: 'Status', minWidth: 160, width: 165, flex: 0,
+      { colId: 'status', headerName: 'Status', minWidth: 176, width: 176, flex: 0,
         valueGetter: p => p.data?.status ?? '',
         cellRenderer: (p: { data?: CriticalResultEvent }) => {
           const st = criticalStatusWord(p.data?.status ?? 'open');
@@ -349,8 +372,8 @@ export class CriticalResultsComponent {
           : cell('—') },
     ];
     if (canAct) cols.push({
-      colId: 'actions', headerName: '', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
-      minWidth: web ? 292 : 104, width: web ? 292 : 104, flex: 0, cellClass: 'pf-cr-actcell',
+      colId: 'actions', headerName: 'Actions', headerClass: 'pf-cr-acthead', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
+      minWidth: web ? 272 : 104, width: web ? 272 : 104, flex: 0, cellClass: 'pf-cr-actcell',
       cellRenderer: (p: { data?: CriticalResultEvent }) => {
         const e = p.data; if (!e) return '';
         const btn = (act: string, label: string, path: string) =>
