@@ -135,12 +135,13 @@ test('wide: queue = side card, collection = main card, first patient selected, n
     expect(st.shadow).toBe('none'); expect(st.top).toBe('0px'); expect(st.radius).toBe('0px');
   }
   await shot(page, 'wide-light'); await theme(page, 'dark'); await shot(page, 'wide-dark'); await theme(page, 'light');
+  const urlBefore = page.url();
   // select the second patient -> THEIR collection (two tubes) in the main card, no navigation
   await side.locator('.pf-side-item').nth(1).click();
   await expect(host.locator('.pf-sc-hhead')).toContainText('Nandini');
   await expect(side.locator('.pf-side-item.is-on')).toHaveCount(1);
   await expect(host.locator('.pf-sc-tile')).toHaveCount(2);
-  expect(new URL(page.url()).pathname).toBe('/lab/collect');
+  expect(page.url()).toBe(urlBefore);   // no navigation (hash routing in the desktop app, path on the web)
   await shot(page, 'wide-second-light');
   // collect a vial in place
   await host.locator('.pf-sc-tile').first().click();
