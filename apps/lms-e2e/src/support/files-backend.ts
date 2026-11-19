@@ -30,9 +30,11 @@ export const fb = {
   flaggedExportDenied: false,
   hideExtraBeta: false,
   seq: 0,
+  /** The last uploaded file's bytes as the PAGE sent them (a spec's init hook reports them): WebKit's route interception drops Blob parts. */
+  lastUpload: null as Buffer | null,
 };
 export function resetFiles(o: { full?: boolean; empty?: boolean } = {}): void {
-  fb.files.clear(); fb.trash.clear(); fb.shares.clear(); fb.calls = []; fb.seq = 0; fb.full = o.full !== false; fb.editOnPhones = false; fb.trashDays = 30; fb.flaggedExportDenied = false; (fb as unknown as { navDefaults?: unknown }).navDefaults = {};
+  fb.files.clear(); fb.trash.clear(); fb.shares.clear(); fb.calls = []; fb.seq = 0; fb.lastUpload = null; fb.full = o.full !== false; fb.editOnPhones = false; fb.trashDays = 30; fb.flaggedExportDenied = false; (fb as unknown as { navDefaults?: unknown }).navDefaults = {};
   const on = { enabled: true, canRead: true, canWrite: true };
   fb.apps = { sheet: { ...on }, doc: { ...on }, slides: { ...on }, pdf: { ...on }, image: { ...on } };
   neg.modules = { ...(neg.modules as object), files: fb.full } as never;
@@ -101,7 +103,13 @@ export async function installFilesBackend(page: Page, o: { beta?: boolean } = {}
       const d = ro(); if (d) return d;
       const kind = (mp?.fields['kind'] ?? 'sheet');
       if (!fb.apps[kind]?.canWrite) return json(403, { success: false, error: 'forbidden', message: 'x' });
-      const f = add(mp?.fields['name'] || 'Untitled', kind, mp?.file?.length ?? 100, 0, 'Kavya Desk', { bytes: mp?.file ?? undefined });
+      // WebKit hands the route a multipart body whose file part is EMPTY: take the bytes the page reported itself (waits for them).
+      let upBytes: Buffer | undefined = mp?.file ?? undefined;
+      if (mp?.file && mp.file.length === 0) {
+        for (let i = 0; i < 60 && !fb.lastUpload; i++) await new Promise(r => setTimeout(r, 50));
+        upBytes = fb.lastUpload ?? undefined;
+      }
+      const f = add(mp?.fields['name'] || 'Untitled', kind, upBytes?.length ?? mp?.file?.length ?? 100, 0, 'Kavya Desk', { bytes: upBytes });
       if (mp?.fields['phiSource']) { f.containsPhi = true; f.phiSources = [{ source: mp.fields['phiSource'], at: ago(0), byName: 'Kavya Desk' }]; }
       return json(201, { success: true, data: dto(f) });
     }

@@ -170,7 +170,20 @@ test.describe('settings access', () => {
     expect(new Set(geo.map(g => g.ctlRight)).size, 'selects right-aligned').toBe(1);
     expect(geo.find(g => g.text.includes('Contributor'))?.text).toContain('Contributor');
     // The grid beside the panel stays in view (the panel's body scrolls, never the panels box).
-    if (!isPhone()) await expect(page.locator('.pf-ua-panels .ag-header-cell-text', { hasText: 'User' }).first()).toBeInViewport();
+    if (!isPhone()) {
+      const hdr = page.locator('.pf-ua-panels .ag-header-cell-text', { hasText: 'User' }).first();
+      // Side by side: the grid header is plainly in view. On a narrow tablet the person panel is a bottom SHEET laid over the
+      // grid (by design), and WebKit's IntersectionObserver reports a ratio of 0 for content under it - so there the check is the
+      // geometry: the panels box did not scroll away and the header still sits inside the viewport.
+      if (await page.locator('.pf-ua-panel.pf-sg-side--sheet').count()) {
+        const g = await page.evaluate(() => { const p = document.querySelector('.pf-ua-panels') as HTMLElement; return { st: p.scrollTop, sl: p.scrollLeft, w: innerWidth, h: innerHeight }; });
+        expect([g.st, g.sl], 'the panels box did not scroll').toEqual([0, 0]);
+        const b = (await hdr.boundingBox())!;
+        expect(b.x >= 0 && b.y >= 0 && b.x + b.width <= g.w && b.y + b.height <= g.h, 'grid header inside the viewport (behind the sheet)').toBeTruthy();
+      } else {
+        await expect(hdr).toBeInViewport();
+      }
+    }
     for (const label of ['Organization', 'Lab', 'Test Master', 'OPD', 'IPD']) {
       await expect(box.getByText(label, { exact: true }).first()).toBeAttached();
     }

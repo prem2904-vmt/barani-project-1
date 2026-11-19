@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import type { BrowserContext, Page } from '@playwright/test';
 import { test, expect, browser, isPhone, shotsDir } from './support/form-factor';
 import { neg, resetNeg, installNegBackend, go } from './support/neg-backend';
-import { callsOf, installFilesBackend, resetFiles } from './support/files-backend';
+import { callsOf, fb, installFilesBackend, resetFiles } from './support/files-backend';
 
 /**
  * Test Master prices in a Neuron sheet (sheet round-trip, beta `neuron`, dev only). API mocked (fake demo data); the Pricing view,
@@ -100,6 +100,26 @@ test.describe('Test Master prices in Neuron', () => {
     test.skip(isPhone(), 'phones are view-only for Files: no Open in Neuron');
     const withEngine = (await engineIn(page)) && browser() !== 'firefox';
     if (!withEngine) await page.route('**/neuron-engine/**', r => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><html><body><script type="module">/* stub ./neuron-web-stub_bg.wasm */</script></body></html>' }));
+    // WebKit's route interception hands over a multipart body WITHOUT its Blob parts (the file arrives empty), so the bytes are
+    // read where the app sends them: a hook on XHR/fetch reads the FormData's file before it leaves, in every browser.
+    await page.exposeFunction('__pfUpload', (b64: string) => { fb.lastUpload = Buffer.from(b64, 'base64'); });
+    await page.addInitScript(() => {
+      const w = window as unknown as { __up: { name: string; size: number; head: string; len: number }[] };
+      w.__up = [];
+      const grab = async (b: unknown) => {
+        if (!(b instanceof FormData)) return;
+        const f = b.get('file');
+        if (!(f instanceof Blob)) return;
+        const u = new Uint8Array(await f.arrayBuffer());
+        w.__up.push({ name: (f as File).name ?? '', size: f.size, head: String.fromCharCode(u[0], u[1]), len: u.length });
+        let bin = ''; for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode(...u.subarray(i, i + 0x8000));
+        await (window as unknown as { __pfUpload(b64: string): Promise<void> }).__pfUpload(btoa(bin));
+      };
+      const send = XMLHttpRequest.prototype.send;
+      XMLHttpRequest.prototype.send = function (body?: Document | XMLHttpRequestBodyInit | null) { void grab(body); return send.call(this, body); };
+      const f0 = window.fetch;
+      window.fetch = function (i: RequestInfo | URL, init?: RequestInit) { void grab(init?.body); return f0.call(this, i, init); };
+    });
     const errors = await boot(page, context);
     await tid(page, 'pr-open-neuron').click();
     await expect(page).toHaveURL(/\/files\/sheet\/file-\d+/, { timeout: 30_000 });
@@ -109,7 +129,14 @@ test.describe('Test Master prices in Neuron', () => {
     expect(body['name']).toMatch(/^Prices – .+ – \d{4}-\d{2}-\d{2}\.xlsx$/);
     expect(body['kind']).toBe('sheet');
     expect(body['phiSource']).toBeUndefined();
-    expect(posts[0].head).toBe('PK');
+    // The workbook the app builds is a real zip (xlsx) with content, read from the Blob before upload.
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __up: unknown[] }).__up.length)).toBe(1);
+    const up = (await page.evaluate(() => (window as unknown as { __up: { name: string; size: number; head: string; len: number }[] }).__up))[0];
+    expect(up.head).toBe('PK');
+    expect(up.len).toBeGreaterThan(500);
+    expect(up.name).toMatch(/\.xlsx$/);
+    // The route's view of the body: the bytes too where the browser exposes them (WebKit drops the file part).
+    if (browser() !== 'safari') expect(posts[0].head).toBe('PK');
     await expect(tid(page, 'files-send')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('[data-testid="files-phi-chip"]')).toHaveCount(0);
     if (!withEngine) { await shot(page, 'editor-band-no-engine'); expect(errors).toEqual([]); return; }
