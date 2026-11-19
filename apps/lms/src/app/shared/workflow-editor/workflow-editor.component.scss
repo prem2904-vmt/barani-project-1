@@ -88,9 +88,6 @@
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--wf-violet-tint); color: var(--wf-violet-text);
 }
-<<<<<<< HEAD
-.wf-head__txt { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
-=======
 .wf-head__txt { display: flex; flex-direction: column; min-width: 0; flex: 1 1 0; }
 .wf-head--side { flex-wrap: nowrap; gap: 4px; padding-right: 8px;
   .wf-head__icon { margin-right: 4px; }
@@ -99,7 +96,6 @@
   .wf-btn--ghost { padding: 0 6px; }
 }
 @media (pointer: coarse) { .wf-head--side .wf-btn { height: 44px; min-height: 44px; } }
->>>>>>> pc/workflow-v2
 .wf-head__label { font-size: 12.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--wf-text); }
 .wf-head__note { font-size: 12px; color: var(--wf-text-3); }
 
@@ -155,10 +151,7 @@
   background: var(--wf-chip); color: var(--wf-text-2); font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
 }
 .wf-grip {
-<<<<<<< HEAD
-=======
   user-select: none; -webkit-user-select: none;
->>>>>>> pc/workflow-v2
   display: inline-flex; align-items: center; justify-content: center; flex: none; width: 20px; min-height: 28px;
   color: var(--wf-text-3); cursor: grab; touch-action: none;
   &:active { cursor: grabbing; }
@@ -173,10 +166,7 @@
 
 // ── Main card: the selected area ──
 .wf-main__name { font-size: 13px; }
-<<<<<<< HEAD
-=======
 .wf-main__note { flex: 0 1 auto; }
->>>>>>> pc/workflow-v2
 .wf-head__icon--area { background: var(--wf-violet-tint); }
 .wf-main__tools { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .wf-changed {
@@ -319,10 +309,7 @@
   .wf-hist { left: 50%; top: 50%; bottom: auto; right: auto; transform: translate(-50%, -50%); width: min(520px, calc(100vw - 32px)); max-height: min(640px, calc(100dvh - 48px)); border-radius: 16px; }
   .wf-areasheet { left: 50%; top: 50%; bottom: auto; right: auto; transform: translate(-50%, -50%); width: min(520px, calc(100vw - 32px)); max-height: min(680px, calc(100dvh - 48px)); border-radius: 16px; }
 }
-<<<<<<< HEAD
-=======
 .wf-peek--dragging { opacity: .28; pointer-events: none; transition: opacity .15s ease; }
->>>>>>> pc/workflow-v2
 .wf-peek__head { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px 14px; border-bottom: 1px solid var(--wf-line); flex: none; }
 .wf-peek__title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .wf-peek__roles { font-size: 12px; color: var(--wf-text-3); overflow-wrap: anywhere; }
@@ -330,10 +317,7 @@
 .wf-peek__show { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--wf-line-soft); font-size: 13px; flex: none; }
 .wf-peek__list { overflow-y: auto; min-height: 0; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
 .wf-peek__row {
-<<<<<<< HEAD
-=======
   user-select: none; -webkit-user-select: none;
->>>>>>> pc/workflow-v2
   display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 8px 4px 4px; border-radius: 10px;
   background: var(--wf-card); cursor: grab;
   &:hover { background: var(--wf-chip); }

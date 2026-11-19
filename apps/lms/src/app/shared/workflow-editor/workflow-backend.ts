@@ -31,11 +31,8 @@ export interface WorkflowBackend {
   rolePermissions(): Promise<Record<string, string[]> | null>;
   /** The live workflow changed (save of the active one / Set active): refresh what drives the navigation. */
   liveChanged?(): void;
-<<<<<<< HEAD
-=======
   /** Words for the "customise the standard flow" question (the console speaks about "this lab", the LMS "your lab"). */
   forkConfirm?(name: string): { title: string; message: string; confirmLabel: string };
->>>>>>> pc/workflow-v2
 }
 
 export const WORKFLOW_BACKEND = new InjectionToken<WorkflowBackend>('WORKFLOW_BACKEND');

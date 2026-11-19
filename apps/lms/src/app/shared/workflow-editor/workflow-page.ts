@@ -257,23 +257,13 @@ export class WorkflowPage {
     const nm = this.editor.name().trim() || 'Workflow';
     const forking = this.isSystemDefault();
     if (forking) {
-<<<<<<< HEAD
-      const ok = await this.dialog.confirm({
-=======
       const words = this.backend.forkConfirm?.(nm) ?? {
->>>>>>> pc/workflow-v2
         title: 'Create your own version of the standard flow?',
         message: `"${nm}" is the standard flow we ship and keep updated. Your changes are saved as a NEW workflow `
           + 'for your lab and it becomes live. The standard flow stays as shipped, so future improvements still reach you.',
         confirmLabel: 'Create my version',
-<<<<<<< HEAD
-        cancelLabel: 'Cancel',
-        tone: 'primary',
-      });
-=======
       };
       const ok = await this.dialog.confirm({ ...words, cancelLabel: 'Cancel', tone: 'primary' });
->>>>>>> pc/workflow-v2
       if (!ok) return false;
     }
     this.saving.set(true);

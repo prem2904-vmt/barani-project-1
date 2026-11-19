@@ -39,12 +39,8 @@ export class LmsWorkflowBackend implements WorkflowBackend {
         firstValueFrom(this.api.get<{ id: string; code: string }[]>('/api/permissions')),
         firstValueFrom(this.api.get<{ id: string; name: string }[]>('/api/roles')),
       ]);
-<<<<<<< HEAD
-      const code = new Map((perms ?? []).map(p => [p.id, p.code]));
-=======
       if (!perms?.length) return null;   // no catalogue to resolve codes with → the per-area roles
       const code = new Map(perms.map(p => [p.id, p.code]));
->>>>>>> pc/workflow-v2
       const out: Record<string, string[]> = {};
       await Promise.all((roles ?? []).map(async r => {
         const ids = await firstValueFrom(this.api.get<string[]>(`/api/roles/${r.id}/permissions`));
