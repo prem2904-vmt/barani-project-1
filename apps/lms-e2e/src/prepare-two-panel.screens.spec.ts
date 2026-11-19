@@ -81,9 +81,10 @@ test.describe('Prepare two-panel', () => {
     await expect(main(page).locator('.pf-tp__head [data-my-sheets]')).toBeVisible();
     // the count sits on the right of each row; the drafts group is "Continue"
     await expect(page.locator('[data-testid="tp-item-ENT"] .pf-tp__note')).toHaveText('3');
-    await expect(page.locator('[data-testid="tp-group-continue"]')).toHaveText('Continue');
-    await expect(page.locator('[data-testid="tp-item-draft:c1"]')).toContainText('Meenakshi Demo');
-    await expect(page.locator('[data-testid="tp-item-draft:c1"]')).toContainText('Nose history');
+    // owner 2026-11-19: drafts are NOT in the side card; the main card's pill switches Case sheets | Continue
+    await expect(page.locator('[data-testid="tp-group-continue"]')).toHaveCount(0);
+    await expect(side(page).locator('[data-case]')).toHaveCount(0);
+    await expect(main(page).locator('.pf-tp__head pf-segmented')).toBeVisible();
     // main card head: the department + "n case sheets"
     await expect(main(page).locator('.pf-tp__title')).toHaveText('ENT');
     await expect(main(page).locator('.pf-tp__desc')).toContainText('3 case sheets');
@@ -95,6 +96,15 @@ test.describe('Prepare two-panel', () => {
     await expect(main(page).locator('.pf-tp__title')).toHaveText('General Medicine');
     await expect(main(page).locator('.dp__tile')).toHaveCount(2);
     await shot(page, 'prepare-wide');
+    // Continue: the saved drafts as rows, with search + "This department only"
+    await main(page).locator('.pf-tp__head [data-tab="continue"]').click();
+    await expect(main(page).locator('[data-drafts] [data-case="c1"]')).toContainText('Meenakshi Demo');
+    await expect(main(page).locator('[data-drafts] [data-case="c1"]')).toContainText('Nose history');
+    await expect(main(page).locator('[data-draft-search]')).toBeVisible();
+    await expect(main(page).locator('[data-only-dept]')).toBeVisible();
+    await shot(page, 'prepare-continue');
+    await main(page).locator('[data-draft-search]').fill('zzz');
+    await expect(main(page).locator('[data-empty="drafts"]')).toContainText('No drafts to continue');
     expect(errors).toEqual([]);
   });
 
@@ -111,5 +121,8 @@ test.describe('Prepare two-panel', () => {
     await expect(main(page).locator('.dp__tile')).toHaveCount(3);
     await expect(side(page)).toHaveCount(0);
     await shot(page, 'prepare-phone-dept');
+    await main(page).locator('.pf-tp__head [data-tab="continue"]').click();
+    await expect(main(page).locator('[data-drafts] [data-case="c1"]')).toContainText('Meenakshi Demo');
+    await shot(page, 'prepare-phone-continue');
   });
 });

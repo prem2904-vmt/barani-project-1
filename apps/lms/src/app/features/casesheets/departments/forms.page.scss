@@ -217,3 +217,124 @@
     transition: none;
   }
 }
+
+// the main card head's tab pill, draft search and "This department only" switch
+.dp__tabs {
+  flex: none;
+}
+
+.dp__ctl {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+
+@media (max-width: 767px) {
+  .dp__ctl {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .dp__dsearch {
+    max-width: none;
+    flex-basis: 100%;
+  }
+}
+
+.dp__dsearch {
+  flex: 1 1 200px;
+  min-width: 160px;
+  width: 15rem;
+  max-width: 15rem;
+  height: 34px;
+}
+
+.dp__only {
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+// Continue: the saved drafts as one flush list — Patient | Case sheet | Department | Saved, newest first
+.dp__drafts {
+  list-style: none;
+  margin: -14px;
+  padding: 0;
+}
+
+.dp__dh,
+.dp__dr {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) minmax(0, 1fr) 150px;
+  gap: 12px;
+  align-items: center;
+  padding: 0 16px;
+}
+
+.dp__dh {
+  min-height: 36px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--pf-line, var(--border-muted));
+}
+
+.dp__dr {
+  min-height: 48px;
+  padding-block: 8px;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 13.5px;
+  border-bottom: 1px solid var(--pf-line, var(--border-muted));
+  transition: background-color 150ms ease;
+}
+
+.dp__dr:hover {
+  background: var(--pf-chip-bg);
+}
+
+.dp__dr:focus-visible {
+  outline: 2px solid var(--color-violet-600, #7c3aed);
+  outline-offset: -2px;
+}
+
+.dp__dp {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.dp__ds,
+.dp__dd,
+.dp__dw {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.dp__dw {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+// phone: two-line rows (patient + saved, then sheet · department)
+@media (max-width: 767px) {
+  .dp__dh {
+    display: none;
+  }
+  .dp__dr {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'p w' 's s';
+    gap: 2px 12px;
+    min-height: 56px;
+  }
+  .dp__dp { grid-area: p; }
+  .dp__dw { grid-area: w; }
+  .dp__ds { grid-area: s; font-size: 12.5px; }
+  .dp__dd { display: none; }
+}

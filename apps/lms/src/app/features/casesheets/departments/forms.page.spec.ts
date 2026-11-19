@@ -127,11 +127,12 @@ describe('Prepare home', () => {
   let current: MockCasesApi;
   const noop = (): void => undefined;
 
-  async function open(opts: { perms?: string[]; wide?: boolean; dept?: string; seed?: (api: MockCasesApi) => void } = {}) {
+  async function open(opts: { perms?: string[]; wide?: boolean; dept?: string; drafts?: string[]; seed?: (api: MockCasesApi) => void } = {}) {
     (window as unknown as { matchMedia: unknown }).matchMedia = (q: string) => ({ matches: q.includes('max-width') ? !(opts.wide ?? true) : (opts.wide ?? true), addEventListener: noop, removeEventListener: noop });
     const api = (current = new MockCasesApi());
     api.forms.clear(); // the mock starts with one sample ENT form
     opts.seed?.(api);
+    for (const id of opts.drafts ?? []) await api.createCase(id);
     const params = new BehaviorSubject(convertToParamMap(opts.dept ? { dept: opts.dept } : {}));
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
@@ -267,6 +268,32 @@ describe('Prepare home', () => {
     expect(deptRows(el).map((r) => r.querySelector('.pf-tp__label')!.textContent!.trim())).toEqual(['ENT']);
     await set('zzz');
     expect(el.querySelector('[data-empty="search"]')!.textContent).toContain('Nothing matches');
+  });
+
+  it('Continue (owner 2026-11-19): drafts are NOT in the side card; the main card head has a Case sheets | Continue pill; the tab is remembered', async () => {
+    try { localStorage.removeItem('pf.prepare.tab'); } catch { /* blocked */ }
+    const seed = (a: MockCasesApi) => { depts(a); a.addForm('f1', def('Nose history'), 'nose', 'ent'); a.addForm('f2', def('Knee pain'), 'knee', 'ortho'); };
+    const { fx, el, q } = await open({ seed, drafts: ['f1', 'f2'] });
+    expect(el.querySelector('.pf-tp__nav [data-case], .pf-tp__nav .pf-tp__heading')).toBeNull();
+    expect(q('.pf-tp__head pf-segmented')).not.toBeNull();
+    expect(q('[data-drafts]')).toBeNull();
+    expect(el.querySelectorAll('[data-form]').length).toBe(1);
+    const settle = async () => { fx.detectChanges(); await fx.whenStable(); await new Promise((r) => setTimeout(r, 0)); fx.detectChanges(); };
+    (q('.pf-tp__head [data-tab="continue"]') as HTMLElement).click();
+    await settle();
+    expect(el.querySelectorAll('[data-drafts] [data-case]').length).toBe(2);
+    expect(q('[data-drafts]')!.textContent).toContain('Case sheet');
+    expect(q('[data-draft-search]')).not.toBeNull();
+    expect(q('[data-only-dept]')).not.toBeNull();
+    expect(localStorage.getItem('pf.prepare.tab')).toBe('continue');
+    // this department only (ENT is open): only the ENT draft
+    (fx.componentInstance as unknown as { thisDeptOnly: { set(v: boolean): void } }).thisDeptOnly.set(true);
+    await settle();
+    expect(el.querySelectorAll('[data-drafts] [data-case]').length).toBe(1);
+    (fx.componentInstance as unknown as { draftQuery: { set(v: string): void } }).draftQuery.set('zzz');
+    await settle();
+    expect(q('[data-empty="drafts"]')!.textContent).toContain('No drafts to continue');
+    try { localStorage.removeItem('pf.prepare.tab'); } catch { /* blocked */ }
   });
 
   it('copy: no "AI", no emoji', async () => {
