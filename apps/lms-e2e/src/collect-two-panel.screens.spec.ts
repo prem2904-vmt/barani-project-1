@@ -197,3 +197,22 @@ test('narrow: list first, tap opens the full-screen collection, back returns (no
   await expect(page.locator('.pf-drawer')).toHaveCount(0);
   await expect(page.locator('.pf-sc__pcard').first()).toBeVisible();
 });
+
+// Owner 2026-11-19: the Pending collection list can be hidden to a slim rail and brought back (remembered).
+test.describe('collect two-panel — hide / show the queue', () => {
+  test('hide → rail with count, collection widens; show → list back; remembered after reload', async ({ page }) => {
+    await page.goto('/lab/collect');
+    if (!wide(page)) test.skip(true, 'two-panel is for wide screens');
+    const side = page.locator('.pf-sc-qside');
+    await expect(side).toBeVisible({ timeout: 60_000 });
+    const mainBefore = (await page.locator('.pf-sc-main').boundingBox())!.width;
+    await page.getByTestId('collect-queue-hide').click();
+    await expect(side).toHaveCount(0);
+    await expect(page.getByTestId('collect-queue-show')).toBeVisible();
+    expect((await page.locator('.pf-sc-main').boundingBox())!.width).toBeGreaterThan(mainBefore + 200);
+    await page.reload();
+    await expect(page.getByTestId('collect-queue-show')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('collect-queue-show').click();
+    await expect(page.locator('.pf-sc-qside')).toBeVisible();
+  });
+});

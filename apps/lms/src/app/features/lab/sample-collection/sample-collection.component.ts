@@ -768,6 +768,13 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private readonly _wide = signal(false);
   /** New design, not embedded, not a deep link, wide -> the collection is hosted inline (no overlay). */
   readonly hosted = computed(() => this.theme.isNewDesign() && !this.embedded && !this._deepLinkMode() && this._wide());
+  /** Two-panel: the Pending collection list can be hidden to a slim rail (remembered on this device). */
+  private static readonly QUEUE_HIDDEN_KEY = 'pf-lms.collect.queue-hidden';
+  readonly queueHidden = signal<boolean>((() => { try { return localStorage.getItem('pf-lms.collect.queue-hidden') === '1'; } catch { return false; } })());
+  setQueueHidden(hidden: boolean): void {
+    this.queueHidden.set(hidden);
+    try { localStorage.setItem(SampleCollectionComponent.QUEUE_HIDDEN_KEY, hidden ? '1' : '0'); } catch { /* private mode: in-memory only */ }
+  }
 
   readonly groups = computed<OrderGroup[]>(() => {
     const byOrder = new Map<string, OrderGroup>();
