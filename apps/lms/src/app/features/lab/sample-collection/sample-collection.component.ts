@@ -77,7 +77,7 @@ import { SkeletonDetailComponent, SkeletonRowsComponent } from '../../../shared/
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { busyWhile, spinDelay } from '../../../shared/utils/busy';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
-import { matchesDailyNo } from '../../../shared/utils/daily-no';
+import { dailyNoLabel, matchesDailyNo } from '../../../shared/utils/daily-no';
 import { SelectComponent, PfSelectOption } from '../../../shared/primitives/select.component';
 import {
   ManualMergeEntry,
@@ -832,6 +832,31 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const h = Math.floor(m / 60);
     if (h < 24) return `${h} h ${m % 60 > 0 ? (m % 60) + ' m ' : ''}waiting`;
     return `${Math.floor(h / 24)} d waiting`;
+  }
+  /** Whole days since the order was raised (0 when unknown). */
+  protected waitingDays(g: OrderGroup): number {
+    const ms = Date.now() - new Date(g.createdAt).getTime();
+    return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 86400000) : 0;
+  }
+  /** Compact waiting time for the queue rows: "12m", "3h", "52d". */
+  protected waitingShort(g: OrderGroup): string {
+    const ms = Date.now() - new Date(g.createdAt).getTime();
+    if (!Number.isFinite(ms) || ms < 0) return '';
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return 'now';
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
+  }
+  /** Queue row line 2: age/sex · Patient ID · order/sample no (+n) · #serial, day. */
+  protected queueSub(g: OrderGroup): string {
+    const parts: string[] = [];
+    const sub = this.patientSub(g.patientName);
+    if (sub) parts.push(sub);
+    parts.push(g.patientMeta && g.patientMeta !== '—' ? g.patientMeta : g.orderNo);
+    const label = dailyNoLabel(g.dailyNo, g.dailyNoDay);
+    if (label) parts.push('#' + label.replace(' · ', ', '));
+    return parts.join(' · ');
   }
   /** Escalating tone for the waiting badge: >30 min amber, >60 min red. */
   protected waitingTone(g: OrderGroup): 'ok' | 'warn' | 'late' {

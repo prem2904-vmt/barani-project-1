@@ -2590,12 +2590,17 @@
     .pf-sc-spin { animation: pf-sc-spin 0.9s linear infinite; }
     @keyframes pf-sc-spin { to { transform: rotate(360deg); } }
     @media (prefers-reduced-motion: reduce) { .pf-sc-spin { animation: none; } }
-    .pf-sc-qrow { gap: 10px; }
-    .pf-sc-qrow__who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .pf-sc-qrow__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); white-space: normal; overflow-wrap: anywhere; }
-    .pf-sc-qrow__ord { font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
-    .pf-sc-qrow__tail { flex: none; display: inline-flex; align-items: center; gap: 8px; }
-    .pf-sc-qrow__wait { font-size: 12px; font-weight: 400; color: var(--text-tertiary); white-space: nowrap; }
+    .pf-sc-qrow { display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 2px; min-height: 56px; }
+    .pf-sc-qrow:hover:not(.is-on) { background: color-mix(in srgb, var(--pf-chip-bg) 55%, transparent); }
+    .pf-sc-qrow:focus { outline: none; }
+    .pf-sc-qrow:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+    .pf-sc-qrow__l1 { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+    .pf-sc-qrow__name { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-sc-qrow__l2 { font-size: 12px; font-weight: 400; color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-sc-qrow__wait { flex: none; font-size: 12px; font-weight: 400; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+    .pf-sc-qrow__wait--old { color: #be4a5b; }
+    :host-context(.dark) .pf-sc-qrow__wait--old, :host-context([data-theme='dark']) .pf-sc-qrow__wait--old { color: #f0a0ac; }
+    .pf-sc-qside .pf-card__head > .pf-btn--icon { width: 32px; height: 32px; min-height: 32px; padding: 0; }
 
     .pf-sc-main { display: flex; flex-direction: column; }
     .pf-sc-main > * { flex: 1 1 auto; }
