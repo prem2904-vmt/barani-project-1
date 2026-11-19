@@ -2592,14 +2592,10 @@
     @media (prefers-reduced-motion: reduce) { .pf-sc-spin { animation: none; } }
     .pf-sc-qrow { gap: 10px; }
     .pf-sc-qrow__who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-    .pf-sc-qrow__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-sc-qrow__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); white-space: normal; overflow-wrap: anywhere; }
     .pf-sc-qrow__ord { font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
     .pf-sc-qrow__tail { flex: none; display: inline-flex; align-items: center; gap: 8px; }
     .pf-sc-qrow__wait { font-size: 12px; font-weight: 400; color: var(--text-tertiary); white-space: nowrap; }
-    .pf-sc-qrow__wait[data-tone='warn'] { color: #b45309; }
-    .pf-sc-qrow__wait[data-tone='late'] { color: #dc2626; }
-    :host-context(.dark) .pf-sc-qrow__wait[data-tone='warn'], :host-context([data-theme='dark']) .pf-sc-qrow__wait[data-tone='warn'] { color: #fbbf24; }
-    :host-context(.dark) .pf-sc-qrow__wait[data-tone='late'], :host-context([data-theme='dark']) .pf-sc-qrow__wait[data-tone='late'] { color: #f87171; }
 
     .pf-sc-main { display: flex; flex-direction: column; }
     .pf-sc-main > * { flex: 1 1 auto; }
@@ -2618,8 +2614,6 @@
     .pf-sc-hid__name--link:hover { text-decoration: underline; }
     .pf-sc-hid__name--link:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 4px; }
     .pf-sc-hid__sub { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--text-tertiary); }
-    .pf-sc-hid__sub [data-tone='warn'] { color: #b45309; }
-    .pf-sc-hid__sub [data-tone='late'] { color: #dc2626; }
     .pf-sc-hdrawn { flex: none; font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
     .pf-sc-hdrawn strong { font-size: 15px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
     .pf-sc-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; margin-left: auto; }

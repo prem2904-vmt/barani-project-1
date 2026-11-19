@@ -137,15 +137,17 @@
                       <button type="button" class="pf-side-item pf-sc-qrow" [class.is-on]="openOrderId() === g.orderId"
                               [attr.aria-pressed]="openOrderId() === g.orderId" (click)="openOrder(g.orderId)">
                         <span class="pf-sc-qrow__who">
-                          <span class="pf-sc-qrow__name"><pf-daily-no [of]="g" />{{ g.patientName }}</span>
-                          <span class="pf-sc-qrow__ord pf-num">{{ (g.patientMeta && g.patientMeta !== '—') ? g.patientMeta : g.orderNo }}</span>
+                          <span class="pf-sc-qrow__name"><pf-daily-no [of]="g" />{{ patientFullName(g) }}</span>
+                          <span class="pf-sc-qrow__ord pf-num">
+                            @if (patientSub(g.patientName); as sub) { {{ sub }} · }{{ (g.patientMeta && g.patientMeta !== '—') ? g.patientMeta : g.orderNo }}
+                          </span>
                         </span>
                         <span class="pf-sc-qrow__tail">
                           @if (g.paymentHold) {
                             <span class="pf-sc__hold" title="Bill not settled — dispatch is blocked until it's paid">Unpaid</span>
                           }
                           @if (waitingLabel(g)) {
-                            <span class="pf-sc-qrow__wait" [attr.data-tone]="waitingTone(g)">{{ waitingLabel(g) }}</span>
+                            <span class="pf-sc-qrow__wait">{{ waitingLabel(g) }}</span>
                           }
                         </span>
                       </button>
@@ -482,7 +484,7 @@
                 } @else {
                   <span>{{ g.samples.length }} samples</span>
                 }
-                @if (waitingLabel(g)) { <span [attr.data-tone]="waitingTone(g)">{{ waitingLabel(g) }}</span> }
+                @if (waitingLabel(g)) { <span>{{ waitingLabel(g) }}</span> }
               </span>
             </span>
             <span class="pf-sc-hdrawn" aria-live="polite">
