@@ -38,8 +38,8 @@ describe('TAT board — loading feedback', () => {
     await Promise.resolve();
     p.answer(0);
     p.f.detectChanges();
-    expect(p.el.querySelector('pf-skeleton-rows')).toBeNull();          // rows present → content at once
-    expect(p.el.textContent).toContain('Ravi Kumar');
+    expect(p.el.querySelector('pf-skeleton-rows')).toBeNull();          // side list present → content at once
+    expect(p.cmp.gridRows()[0].patient).toBe('Ravi Kumar');          // the board's grid now holds the row
     p.f.destroy();
   });
 
