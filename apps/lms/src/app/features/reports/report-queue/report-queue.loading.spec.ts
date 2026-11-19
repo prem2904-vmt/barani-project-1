@@ -72,24 +72,28 @@ function render(opts: { generate$?: Subject<unknown>; prompt?: string | null; ba
   return { f, el, c: f.componentInstance as any, api, toasts };
 }
 
+/** AG-Grid renders its rows a few ticks later (the grid IS the reports list since Reports v2). */
+const settle = async (f: any) => { for (let i = 0; i < 6; i++) { await new Promise(r => setTimeout(r, 15)); f.detectChanges(); } };
 const downloadBtns = (el: HTMLElement) => Array.from(el.querySelectorAll<HTMLButtonElement>('button[title="Download PDF"]'));
 
 describe('Reports list — loading feedback', () => {
-  it('first open: the list skeleton from the first frame (while the backfill runs), never "No reports here"', () => {
+  it('first open: the grid skeleton from the first frame (while the backfill runs), never "No reports here"', async () => {
     const backfill$ = new Subject<unknown>();
     const { f, el } = render({ backfill$ });
-    expect(el.querySelector('.pf-rq-card--skel')).not.toBeNull();
+    expect(el.querySelector('pf-data-grid pf-skeleton-table')).not.toBeNull();
     expect(el.textContent).not.toContain('No reports here');
     backfill$.next({ generated: 0 });
     backfill$.complete();
     f.detectChanges();
-    expect(el.querySelector('.pf-rq-card--skel')).toBeNull();
+    expect(el.querySelector('pf-data-grid pf-skeleton-table')).toBeNull();
+    await settle(f);
     expect(downloadBtns(el).length).toBe(2);
   });
 
   it('Download: that row\'s button is disabled + aria-busy at once, dots after 150ms, released when the PDF answers', async () => {
-    vi.useFakeTimers();
     const { f, el, c } = render();
+    await settle(f);
+    vi.useFakeTimers();
     let fail!: (e: unknown) => void;
     const spy = vi.spyOn(c, 'storedPdf').mockImplementation(() => new Promise((_, rej) => { fail = rej; }));
     const [first, second] = downloadBtns(el);

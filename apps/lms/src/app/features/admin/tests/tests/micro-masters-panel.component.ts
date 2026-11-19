@@ -437,7 +437,7 @@ export class MicroMastersPanelComponent implements OnInit {
   readonly columnDefs = computed<ColDef[]>(() => {
     switch (this.section()) {
       case 'specimens': return [
-        { headerName: 'Specimen', field: 'name', minWidth: 190, flex: 1.4, sort: 'asc' },
+        { headerName: 'Specimen', field: 'name', minWidth: 190, flex: 1.4, sort: 'asc', wrapText: true, autoHeight: true },
         { headerName: 'Category', field: 'category', minWidth: 130 },
         { headerName: 'Site', field: 'site', minWidth: 140 },
         { headerName: 'Container', field: 'container', minWidth: 160 },
@@ -445,7 +445,7 @@ export class MicroMastersPanelComponent implements OnInit {
         { headerName: 'Suitable for', field: 'suitableFor', minWidth: 220, flex: 1.6 },
       ];
       case 'organisms': return [
-        { headerName: 'Organism', field: 'name', minWidth: 210, flex: 1.4, sort: 'asc' },
+        { headerName: 'Organism', field: 'name', minWidth: 210, flex: 1.4, sort: 'asc', wrapText: true, autoHeight: true },
         { headerName: 'Short', field: 'shortName', minWidth: 90, maxWidth: 120 },
         { headerName: 'Group', field: 'group', minWidth: 160 },
         { headerName: 'Gram', field: 'gram', minWidth: 130 },
@@ -453,7 +453,7 @@ export class MicroMastersPanelComponent implements OnInit {
         { headerName: 'AST', field: 'astApplicable', minWidth: 85, maxWidth: 100, cellRenderer: this.yesNo },
       ];
       case 'antibiotics': return [
-        { headerName: 'Antibiotic', field: 'name', minWidth: 190, flex: 1.4, sort: 'asc' },
+        { headerName: 'Antibiotic', field: 'name', minWidth: 190, flex: 1.4, sort: 'asc', wrapText: true, autoHeight: true },
         { headerName: 'Short', field: 'shortName', minWidth: 90, maxWidth: 110 },
         { headerName: 'Class', field: 'abxClass', minWidth: 160 },
         { headerName: 'Group', field: 'drugGroup', minWidth: 150 },
@@ -464,7 +464,7 @@ export class MicroMastersPanelComponent implements OnInit {
       ];
       default: return [
         { headerName: 'Organism group', field: 'organismGroup', minWidth: 170, flex: 1.1, sort: 'asc' },
-        { headerName: 'Antibiotic', field: 'antibiotic', minWidth: 200, flex: 1.4 },
+        { headerName: 'Antibiotic', field: 'antibiotic', minWidth: 200, flex: 1.4, wrapText: true, autoHeight: true },
         { headerName: 'Short', field: 'shortLabel', minWidth: 90, maxWidth: 110 },
         { headerName: 'Disk', field: 'diskLabel', minWidth: 95, maxWidth: 115 },
         { headerName: 'S ≥ mm', field: 'susceptibleMin', minWidth: 85, maxWidth: 100,

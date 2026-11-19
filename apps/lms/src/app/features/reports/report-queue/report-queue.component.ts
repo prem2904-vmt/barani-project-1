@@ -3,18 +3,29 @@ import { labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { CommonModule, DatePipe } from "@angular/common";
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { firstValueFrom } from "rxjs";
+import { firstValueFrom, forkJoin, of } from "rxjs";
+import { catchError } from "rxjs/operators";
 import { busyWhile } from "../../../shared/utils/busy";
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { DestroyRef,
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
   Injector,
   OnInit,
+  TemplateRef,
   computed,
+  effect,
   inject,
   signal,
+  viewChild,
 } from "@angular/core";
+import type { ColDef, GridReadyEvent, IsFullWidthRowParams, RowClassParams, RowClickedEvent } from "ag-grid-community";
+import { DataGridComponent } from "../../../shared/components/data-grid/data-grid.component";
+import { DataGridTemplateCellComponent } from "../../../shared/components/data-grid/template-cell.component";
+import { ModalPortalDirective } from "../../../shared/directives/modal-portal.directive";
+import { mediaSignal, TM_TWO_PANEL_STYLES } from "../../admin/tests/tests/tm-two-panel";
+import { plural } from "../../../shared/utils/plural";
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { environment } from "../../../../environments/environment";
 import { Router } from "@angular/router";
@@ -27,7 +38,7 @@ import { Report } from "../../../shared/models/report.model";
 import { ApiError } from "../../../shared/models/api-response.model";
 import { Order, OrderTest } from "../../../shared/models/order.model";
 import { formatPatientInfo, formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
-import { buildPartialOrders, orderLabel, reportStatus, type PrelimOrder, type PrelimRow, type ReportStatus } from "./report-queue.partial";
+import { buildPartialOrders, orderLabel, queueStatus, QUEUE_DOT, reportStatus, type PrelimOrder, type PrelimRow, type QueueStatus, type QueueStatusKey, type ReportStatus } from "./report-queue.partial";
 import { webPointerSignal } from "../../../shared/utils/pointer-mode";
 import {
   ChipComponent,
@@ -69,6 +80,21 @@ import { matchesDailyNo } from '../../../shared/utils/daily-no';
 
 type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
 
+/** One row of the Reports grid (new design): a report, a partly-reported order, or the order's inline detail
+ *  (a full-width row right under it while it is open). */
+export type RqRow =
+  | { id: string; kind: "report"; r: Report }
+  | { id: string; kind: "partial"; po: PrelimOrder; r?: Report }
+  | { id: string; kind: "detail"; po: PrelimOrder; r?: Report };
+
+/** The TO SEND queue reads up to this many pending / failed reports (its own page size, never the list's). */
+const TO_SEND_PAGE = 200;
+
+/** Filter → the status dot it carries (All = an empty ring). */
+const FILTER_DOT: Record<Filter, QueueStatusKey | "ring"> = {
+  all: "ring", pending: "completed", partial: "partial", delivered: "delivered", failed: "failed",
+};
+
 @Component({
   selector: "pf-report-queue",
   standalone: true,
@@ -88,11 +114,14 @@ type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
     HeroBandComponent,
     ActionsMenuComponent,
     ActionsMenuTriggerDirective,
-    BusyDirective
+    BusyDirective,
+    DataGridComponent,
+    ModalPortalDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./report-queue.component.html",
-  styleUrl: "./report-queue.component.scss"
+  styleUrl: "./report-queue.component.scss",
+  styles: [TM_TWO_PANEL_STYLES],
 })
 export class ReportQueueComponent implements OnInit {
   /** "Open in sheet": the sheet editor with Insert results ready for the last 7 days; Back returns to this list. */
@@ -175,8 +204,13 @@ export class ReportQueueComponent implements OnInit {
     { value: "pending", label: "Completed", count: this.counts().pending },
     { value: "partial", label: "Partial", count: this.partialOrders().length },
     { value: "delivered", label: "Delivered", count: this.counts().delivered },
-    { value: "failed", label: "Failed", count: this.counts().failed },
   ]);
+
+  /** The main card head's status pill (owner 2026-11-19, "To send" queue): All · Completed · Partial · Delivered,
+   *  dot + count. "Failed" is no report status here — a failed WhatsApp is a TO SEND row. */
+  readonly pillOptions = computed<SegmentedOption<Filter>[]>(() => this.ndFilters().map((f) => ({
+    value: f.value, label: f.label, count: f.count, dot: this.filterDot(f.value) ?? undefined,
+  })));
 
   /** Roving arrow keys across the band filter (radiogroup). */
   onFilterKey(ev: KeyboardEvent) {
@@ -280,7 +314,7 @@ export class ReportQueueComponent implements OnInit {
   private readonly waManual = inject(WhatsAppManualService);
   readonly rowActions = computed<Map<string, PfAction[]>>(() => {
     const m = new Map<string, PfAction[]>();
-    for (const r of this.visible()) m.set(r.id, this.buildRowActions(r));
+    for (const r of this._items()) m.set(r.id, this.buildRowActions(r));
     return m;
   });
 
@@ -745,12 +779,378 @@ export class ReportQueueComponent implements OnInit {
     }));
   }
 
+  // ── New design v2 (owner 2026-11-19): Test Master's frame ─────────────────
+  // Band = lab + search. LEFT side card STATUS (dots + counts), RIGHT main card = the reports grid (pf-data-grid);
+  // a partly-reported order opens an inline detail row. ≤900px: no side card — the status filter is a menu under
+  // the filter button inside the search. ≤640px: the grid folds into two-line rows; a tap opens the actions sheet.
+  /** ≤900px: no side column (the filter moves into the search). */
+  readonly narrow = mediaSignal("(max-width: 900px)", inject(DestroyRef));
+  /** ≤640px: rows instead of the grid, a bottom sheet per row. */
+  readonly phone = mediaSignal("(max-width: 640px)", inject(DestroyRef));
+  /** <1280px: the grid folds Order + Generated into the Patient cell (the actions keep their room). */
+  readonly compact = mediaSignal("(max-width: 1279px)", inject(DestroyRef));
+
+  /** Status dot colour for a side-card row / menu row (null = the empty ring for All). */
+  filterDot(f: Filter): string | null {
+    const k = FILTER_DOT[f];
+    return k === "ring" ? null : QUEUE_DOT[k];
+  }
+
+  /** The filter button's menu (phones / narrow tablets): dot · label · count · tick on the current one. */
+  readonly filterMenu = computed<PfAction[]>(() => this.ndFilters().map((f) => ({
+    id: f.value, label: f.label, count: f.count, current: f.value === this._filter(),
+    dot: this.filterDot(f.value) ?? "ring",
+  })));
+  onFilterMenu(id: string): void { this.setFilter(id as Filter); }
+
+  /** The grid's Status pill + the Unpaid line under it. */
+  rowStatus(r: Report): QueueStatus {
+    return queueStatus(r.deliveryStatus, r.type, this.isUnpaid(r));
+  }
+  statusDot(k: QueueStatusKey): string { return QUEUE_DOT[k]; }
+
+  /** "30/F · AA0010" (the Patient cell's second line). */
+  whoMeta(r: Report): string {
+    const p = r.order?.patient;
+    return p ? formatPatientMeta(p as never) : "";
+  }
+  /** The Order cell: the order number, or the short id of a legacy order. */
+  orderNo(r: Report): string {
+    const o = r.order;
+    return o?.orderNumber || (r.orderId ? `#${r.orderId.slice(0, 8).toUpperCase()}` : "—");
+  }
+  /** The Generated cell ("10:42 AM" today, else "18 Nov, 10:42 AM"). */
+  when(iso: string | undefined): string { return this.shortWhen(iso) || "—"; }
+
+  /** The Sent cell: what happened to the report (WhatsApp status, printed / delivered via …, failed note),
+   *  plus "Preliminary" when the pill (Delivered / Failed) hides it. */
+  sentMeta(r: Report): string {
+    const st = this.rowStatus(r);
+    const parts: string[] = [];
+    const wa = this.waMeta(r);
+    if (wa) parts.push(wa);
+    else if (r.deliveryStatus === "delivered") parts.push(this.viaWords(r.deliveredVia));
+    else if (r.deliveryStatus === "failed") parts.push(r.deliveryNote?.trim() || "Not delivered");
+    if (st.prelim && st.key !== "partial") parts.push("Preliminary");
+    return parts.filter(Boolean).join(" · ");
+  }
+  private viaWords(via: string | undefined): string {
+    const v = (via ?? "").toLowerCase();
+    if (v === "print") return "Printed";
+    if (v === "whatsapp") return "WhatsApp";
+    if (v === "email") return "Email";
+    if (v === "sms") return "SMS";
+    return v ? v.charAt(0).toUpperCase() + v.slice(1) : "Delivered";
+  }
+
+  /** Phone row second line: "30/F · LAB-… · 10:42" (or what was sent). */
+  phoneLine(r: Report): string {
+    const p = r.order?.patient;
+    const age = p ? formatPatientMeta(p as never).split(" · ")[0] : "";
+    return [age, this.orderNo(r), this.sentMeta(r) || this.shortWhen(r.createdAt)].filter(Boolean).join(" · ");
+  }
+  phoneLinePartial(po: PrelimOrder): string {
+    return [po.whoMeta.split(" · ")[0], po.orderNo, po.countLabel].filter(Boolean).join(" · ");
+  }
+
+  /** The report already generated for a partly-reported order (a preliminary), if it is loaded. */
+  partialReport(po: PrelimOrder): Report | undefined {
+    const id = po.id.toLowerCase();
+    return this._items().find((r) => (r.orderId ?? "").toLowerCase() === id);
+  }
+
+  /** Grid rows for the current tab: Partial = the partly-reported orders; All = those without a report row first,
+   *  then every report; the other tabs = their reports. An open order is followed by its detail row. */
+  readonly gridRows = computed<RqRow[]>(() => {
+    const f = this._filter();
+    const open = this._expanded();
+    const out: RqRow[] = [];
+    const addPartial = (po: PrelimOrder) => {
+      const r = this.partialReport(po);
+      out.push({ id: `p:${po.id}`, kind: "partial", po, r });
+      if (open === po.id) out.push({ id: `d:${po.id}`, kind: "detail", po, r });
+    };
+    if (f === "partial") { this.visiblePartials().forEach(addPartial); return out; }
+    if (f === "all") this.allTabPartials().forEach(addPartial);
+    for (const r of this.visible()) out.push({ id: `r:${r.id}`, kind: "report", r });
+    return out;
+  });
+
+  /** How many rows the head counts ("18 reports", "50 of 120 reports"). */
+  readonly headCount = computed(() => {
+    if (this._filter() === "partial") return plural(this.visiblePartials().length, "order");
+    const shown = this.gridRows().filter((x) => x.kind !== "detail").length;
+    const total = this._total();
+    const extra = this._filter() === "all" ? this.allTabPartials().length : 0;
+    if (total != null && this.hasMorePages()) return `${shown} of ${total + extra} reports`;
+    return plural(shown, "report");
+  });
+
+  private readonly noTpl = viewChild<TemplateRef<unknown>>("cNo");
+  private readonly patientTpl = viewChild<TemplateRef<unknown>>("cPatient");
+  private readonly orderTpl = viewChild<TemplateRef<unknown>>("cOrder");
+  private readonly statusTpl = viewChild<TemplateRef<unknown>>("cStatus");
+  private readonly genTpl = viewChild<TemplateRef<unknown>>("cGen");
+  private readonly sentTpl = viewChild<TemplateRef<unknown>>("cSent");
+  private readonly actsTpl = viewChild<TemplateRef<unknown>>("cActs");
+  private readonly detailTpl = viewChild<TemplateRef<unknown>>("cDetail");
+
+  readonly rqDefaultColDef: ColDef<RqRow> = { sortable: false, resizable: false, filter: false, wrapText: true, autoHeight: true, suppressMovable: true };
+  readonly colDefs = computed<ColDef<RqRow>[]>(() => {
+    const cell = (tpl: TemplateRef<unknown> | undefined) => ({ cellRenderer: DataGridTemplateCellComponent, cellRendererParams: { tpl } });
+    const touch = !this.web();
+    const narrow = this.narrow();
+    // Below 1280px (tablet landscape, a narrow window) Order + Generated fold into the Patient cell's meta line.
+    const compact = this.compact();
+    return [
+      // # = the full daily-number chip ("21 · 15 Nov" on an older order) — never clipped.
+      { colId: "no", headerName: "#", width: 94, minWidth: 94, cellClass: "pf-rq2-nowrap", ...cell(this.noTpl()) },
+      { colId: "patient", headerName: "Patient", flex: 1, minWidth: 140, ...cell(this.patientTpl()) },
+      // Order + Generated stay on ONE line; the Patient column takes the slack.
+      { colId: "order", headerName: "Order", width: 130, minWidth: 130, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap", ...cell(this.orderTpl()) },
+      { colId: "status", headerName: "Status", width: 120, minWidth: 116, ...cell(this.statusTpl()) },
+      { colId: "generated", headerName: "Generated", width: 128, minWidth: 128, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap", ...cell(this.genTpl()) },
+      { colId: "sent", headerName: "Sent", flex: 1, minWidth: 96, ...cell(this.sentTpl()) },
+      // View · Download · Share ▾ · ⋯ — text on web, 44px icons on touch (+ Details on a partly-reported order).
+      { colId: "actions", headerName: "Actions", width: touch ? 256 : 290, minWidth: touch ? 256 : 290,
+        headerClass: "ag-right-aligned-header", cellClass: "pf-rq2-actcell", ...cell(this.actsTpl()) },
+    ];
+  });
+  readonly rqRowId = (p: { data: RqRow }) => p.data.id;
+  readonly rqFullWidth = (p: IsFullWidthRowParams<RqRow>) => p.rowNode.data?.kind === "detail";
+  readonly rqFullWidthRenderer = DataGridTemplateCellComponent;
+  readonly rqFullWidthParams = computed(() => ({ tpl: this.detailTpl(), measure: true }));
+  readonly rqRowClass = (p: RowClassParams<RqRow>) => {
+    const d = p.data;
+    if (!d) return undefined;
+    if (d.kind === "detail") return "pf-rq2-detailrow";
+    if (this.picked() === d.id) return d.kind === "partial" ? "pf-rq2-row pf-rq2-row--partial pf-rq2-row--picked" : "pf-rq2-row pf-rq2-row--picked";
+    if (d.kind === "partial") return this._expanded() === d.po.id ? "pf-rq2-row pf-rq2-row--partial is-open" : "pf-rq2-row pf-rq2-row--partial";
+    return "pf-rq2-row";
+  };
+  /** A partly-reported order's row opens / closes its detail (a click on a button inside the row does its own thing). */
+  onGridRowClicked(e: RowClickedEvent<RqRow>): void {
+    const t = e.event?.target as HTMLElement | null;
+    if (t?.closest?.("button, a, [role=menu]")) return;
+    const d = e.data;
+    if (d?.kind === "partial") this.toggle(d.po.id);
+  }
+
+  /** Paging without a button at the bottom (owner: nothing clickable at the bottom): the next page loads as the
+   *  grid nears its end. */
+  onGridReady(e: GridReadyEvent<RqRow>): void {
+    this._gridApi = e.api;
+    const near = () => {
+      const n = e.api.getDisplayedRowCount();
+      if (n && e.api.getLastDisplayedRowIndex() >= n - 6) this.loadMore();
+    };
+    e.api.addEventListener("bodyScroll", near);
+    e.api.addEventListener("viewportChanged", near);
+  }
+
+  // ── Phone: the actions sheet ────────────────────────────────────────────────
+  private readonly _sheet = signal<RqRow | null>(null);
+  readonly sheet = this._sheet.asReadonly();
+  openSheet(row: RqRow): void { this.reportOf(row) && this.onRowMenuOpened(this.reportOf(row)!); this._sheet.set(row); }
+  closeSheet(): void { this._sheet.set(null); }
+  reportOf(row: RqRow | null): Report | undefined { return row ? (row.kind === "report" ? row.r : row.r) : undefined; }
+  /** The sheet's ONE primary: WhatsApp (Auto or Chat — waMode), else Print; none for a view-only desk. */
+  sheetPrimary(r: Report): { label: string; via: "whatsapp" | "print" } | null {
+    if (!this.canDeliver()) return null;
+    return this.waMode(r) ? { label: "Share on WhatsApp", via: "whatsapp" } : { label: "Print", via: "print" };
+  }
+  /** The rest of the ⋯ actions, under the primary and View · Download · Print (no duplicates). */
+  sheetMore(r: Report): PfAction[] {
+    const shown = new Set(["view", "download", "print", "whatsapp", "whatsapp-mine"]);
+    return this.actionsFor(r).filter((a) => !shown.has(a.id));
+  }
+  /** The sheet's Print tile: the view-only print, or the desk's print when WhatsApp is the primary. */
+  sheetShowsPrint(r: Report): boolean {
+    if (!this.canPrint()) return false;
+    const p = this.sheetPrimary(r);
+    return !p || p.via !== "print";
+  }
+  sheetRun(r: Report, id: string): void { this.closeSheet(); this.runRowAction(r, id); }
+  sheetDeliver(r: Report, via: string): void { this.closeSheet(); this.deliver(r, via); }
+
+  /** The ⋯ rows for a report (built for every loaded report). */
+  actionsFor(r: Report): PfAction[] { return this.rowActions().get(r.id) ?? this.buildRowActions(r); }
+
+  /** Phones: the next page loads when the end of the list comes into view. */
+  private readonly listEnd = viewChild<ElementRef<HTMLElement>>("listEnd");
+  private _io: IntersectionObserver | null = null;
+  private readonly _ioWatch = effect(() => {
+    const el = this.listEnd()?.nativeElement;
+    this._io?.disconnect();
+    this._io = null;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    this._io = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) this.loadMore(); });
+    this._io.observe(el);
+  });
+
+
+  // ── TO SEND (owner 2026-11-19, option A): the reports the desk still has to hand over ─────────────────────────────
+  // From EXISTING delivery data only: the pending + failed queue pages, their WhatsApp message status (one batch call)
+  // and each patient's "Don't send WhatsApp" opt-out (the per-report WhatsApp status). Sends go through the SAME flows
+  // as the row's Share: WhatsApp Auto (`WhatsAppSendService.send`) or WhatsApp Chat (`deliver(r, 'whatsapp-mine')`).
+  private readonly _toSendRows = signal<Report[]>([]);
+  private readonly _toSendWa = signal<Record<string, WaMessage>>({});
+  /** reportId → the patient opted out of WhatsApp (absent = not known yet). */
+  private readonly _optOut = signal<Record<string, boolean>>({});
+  /** Rows with a send in flight (this screen's guard; the service also refuses a second send). */
+  private readonly _inFlight = signal<ReadonlySet<string>>(new Set());
+  /** What happened to a row this session ("sent" / "failed"), shown on the row until the queue reloads. */
+  private readonly _sendResult = signal<Record<string, "sent" | "failed">>({});
+  readonly sendingAll = signal(false);
+  /** The report picked from the queue — highlighted in the grid. */
+  readonly picked = signal<string | null>(null);
+  /** Phones / narrow: the queue is a sheet opened from the "To send" chip in the search. */
+  readonly toSendOpen = signal(false);
+
+  private loadToSend(): void {
+    if (!this.canDeliver()) { this._toSendRows.set([]); return; }
+    const page = (status: string) => this.api.get<Report[] | ReportQueuePage<Report> | null>(
+      reportQueuePageUrl({ page: 1, pageSize: TO_SEND_PAGE, status })).pipe(catchError(() => of(null)));
+    forkJoin([page("pending"), page("failed")]).subscribe(([p, f]) => {
+      const rows = (res: Report[] | ReportQueuePage<Report> | null, st: string) =>
+        (!res ? [] : Array.isArray(res) ? res : res.items ?? []).filter((r) => r.deliveryStatus === st);
+      const all = [...rows(p, "pending"), ...rows(f, "failed")];
+      this._toSendRows.set(all);
+      const finals = all.filter((r) => r.type === "final").map((r) => r.id);
+      if (finals.length) {
+        this.wa.statusBatch(finals).subscribe({
+          next: (m) => this._toSendWa.set(m && typeof m === "object" ? m : {}),
+          error: () => { /* no WhatsApp column: the queue still lists the pending reports */ },
+        });
+      }
+      void this.ensureOptOut(all.map((r) => r.id));
+    });
+  }
+
+  /** Read each report's WhatsApp status once for the patient's opt-out (cached per report). */
+  private async ensureOptOut(ids: string[]): Promise<void> {
+    const known = this._optOut();
+    const todo = ids.filter((id) => !(id in known)).slice(0, 100);
+    await Promise.all(todo.map(async (id) => {
+      try {
+        const st = await firstValueFrom(this.wa.reportStatus(id));
+        this._optOut.update((m) => ({ ...m, [id]: st?.patientOptOut === true }));
+      } catch { /* unknown: the send flow itself still checks */ }
+    }));
+  }
+
+  /** One TO SEND row. */
+  private toSendRow(r: Report, reason: string | null) {
+    const live = this.waSend?.state(r.id);
+    const inFlight = this._inFlight().has(r.id) || live?.phase === "sending";
+    const result = this._sendResult()[r.id] ?? (live && live.phase !== "sending" ? (live.phase === "failed" ? "failed" : "sent") : null);
+    return {
+      r, id: r.id, name: this.reportPatientName(r), order: this.orderNo(r), reason,
+      optOut: this._optOut()[r.id] === true, mode: this.waMode(r), auto: this.waAuto(r),
+      sending: inFlight, result,
+    };
+  }
+
+  /** The queue's groups: WhatsApp failed (Retry) · Not sent yet (Send) · Partial, waiting on results (no action). */
+  readonly toSend = computed(() => {
+    const wa = this._toSendWa();
+    const failed: ReturnType<ReportQueueComponent["toSendRow"]>[] = [];
+    const notSent: ReturnType<ReportQueueComponent["toSendRow"]>[] = [];
+    for (const r of this._toSendRows()) {
+      if (r.type !== "final") continue;   // a preliminary is never sent from here (the partial group names it)
+      const m = wa[r.id];
+      if (r.deliveryStatus === "failed" || m?.status === "failed") {
+        failed.push(this.toSendRow(r, m?.errorReason?.trim() || r.deliveryNote?.trim() || "WhatsApp failed"));
+      } else if (r.deliveryStatus === "pending" && !(m && ["sent", "delivered", "read", "queued", "sending"].includes(m.status))) {
+        notSent.push(this.toSendRow(r, m?.status === "held" ? "Sends by itself once the bill is paid" : null));
+      }
+    }
+    const partial = this.partialOrders();
+    return { failed, notSent, partial, total: failed.length + notSent.length + partial.length };
+  });
+
+  /** What "Send all" sends: WhatsApp Auto rows not opted out, not sent this session, not in flight. */
+  readonly sendAllRows = computed(() => [...this.toSend().failed, ...this.toSend().notSent]
+    .filter((x) => x.auto && !x.optOut && !x.sending && x.result !== "sent"));
+
+  /** Retry / Send one report — the row's existing flow, guarded against double sends. */
+  async sendOne(r: Report): Promise<void> {
+    if (!this.canDeliver() || this._inFlight().has(r.id) || this.waSend.busy(r.id) || this._optOut()[r.id] === true) return;
+    if (!this.waSend.canSend(r)) {
+      // WhatsApp Chat on this computer: the person presses Send (opens WhatsApp; its own opt-out question).
+      if (this.waMode(r) === "chat") this.deliver(r, "whatsapp-mine");
+      return;
+    }
+    this.markInFlight(r.id, true);
+    try {
+      if (r.qrToken || r.type === "final") void this.archiveReportPdf(r);
+      const m = await this.waSend.send(r.id);
+      this._sendResult.update((x) => ({ ...x, [r.id]: m && m.status !== "failed" ? "sent" : "failed" }));
+    } finally {
+      this.markInFlight(r.id, false);
+    }
+  }
+
+  private markInFlight(id: string, on: boolean): void {
+    const next = new Set(this._inFlight());
+    if (on) next.add(id); else next.delete(id);
+    this._inFlight.set(next);
+  }
+
+  /** Send every WhatsApp Auto report in the queue — always asks first (count + who is skipped). */
+  async sendAll(): Promise<void> {
+    if (this.sendingAll() || !this.canDeliver()) return;
+    this.sendingAll.set(true);
+    try {
+      const queue = [...this.toSend().failed, ...this.toSend().notSent];
+      await this.ensureOptOut(queue.map((x) => x.id));
+      const fresh = [...this.toSend().failed, ...this.toSend().notSent];
+      const go = fresh.filter((x) => x.auto && !x.optOut && !x.sending && x.result !== "sent");
+      if (!go.length) { this.toasts.info("Nothing to send with WhatsApp Auto."); return; }
+      const optedOut = fresh.filter((x) => x.optOut).length;
+      const chatOnly = fresh.filter((x) => !x.optOut && !x.auto && x.result !== "sent").length;
+      const skipped = [
+        optedOut ? `${plural(optedOut, "patient")} opted out of WhatsApp` : "",
+        chatOnly ? `${plural(chatOnly, "report")} can only go by WhatsApp Chat (send each one)` : "",
+      ].filter(Boolean);
+      const ok = await this.dialog.confirm({
+        title: `Send ${plural(go.length, "report")} on WhatsApp?`,
+        message: skipped.length ? `Skipped: ${skipped.join("; ")}.` : "Each patient gets their report link from the lab's WhatsApp number.",
+        confirmLabel: "Send",
+        tone: "primary",
+      });
+      if (!ok) return;
+      for (const x of go) {
+        // Re-check right before each send: another tab / a live update may have sent it meanwhile.
+        if (this._inFlight().has(x.id) || this.waSend.busy(x.id) || this._sendResult()[x.id] === "sent") continue;
+        await this.sendOne(x.r);
+      }
+      this.refresh();
+    } finally {
+      this.sendingAll.set(false);
+    }
+  }
+
+  /** A queue row picked: show + highlight that report in the grid (All when the tab hides it). */
+  pickFromQueue(id: string, isOrder = false): void {
+    this.toSendOpen.set(false);
+    const rowId = isOrder ? `p:${id}` : `r:${id}`;
+    this.picked.set(rowId);
+    if (!this.gridRows().some((x) => x.id === rowId) && this._filter() !== "all") this.setFilter("all");
+    setTimeout(() => {
+      const api = this._gridApi;
+      const node = api?.getRowNode(rowId);
+      if (api && node) { api.ensureNodeVisible(node, "middle"); api.redrawRows(); }
+    }, 60);
+  }
+  private _gridApi: GridReadyEvent<RqRow>["api"] | null = null;
+
   ngOnInit() {
     this.waSend.ensure();
     this.reportActions.warmChannels();
     // Live: a validation elsewhere can complete an order → its report appears.
     this.liveQ.on('reports', 'validation').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refresh());
-    this.destroyRef.onDestroy(() => clearTimeout(this._searchTimer));
+    this.destroyRef.onDestroy(() => { clearTimeout(this._searchTimer); this._io?.disconnect(); });
     // Self-healing: ask the backend to generate any missing final
     // reports for orders that are already 'validated' but have no
     // report row yet (e.g. validations done before the
@@ -768,6 +1168,7 @@ export class ReportQueueComponent implements OnInit {
     // Summary rows (no rendered snapshot): render paths read the report by id.
     // Paged: the pages already on screen, reloaded in one request.
     this.loadQueue(this._pages > 0 ? "refresh" : "reset");
+    this.loadToSend();
     // Independent fetch — partial reports come from today's orders that carry
     // a validated line, WITH their results (GET /api/orders/partial-ready; the
     // day feed itself no longer carries results). A failure here doesn't

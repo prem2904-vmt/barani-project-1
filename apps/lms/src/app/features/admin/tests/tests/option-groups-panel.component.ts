@@ -337,7 +337,7 @@ export class OptionGroupsPanelComponent implements OnInit {
 
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, suppressMovable: true };
   readonly columnDefs: ColDef<OgGridRow>[] = [
-    { headerName: 'Option group', field: 'name', minWidth: 170, flex: 1,
+    { headerName: 'Option group', field: 'name', minWidth: 170, flex: 1, wrapText: true, autoHeight: true,
       cellStyle: { fontWeight: '600' } },
     { headerName: 'Values', field: 'valuesJoined', minWidth: 200, flex: 1.4 },
     { headerName: 'Normal', field: 'normalsJoined', minWidth: 100, maxWidth: 150 },

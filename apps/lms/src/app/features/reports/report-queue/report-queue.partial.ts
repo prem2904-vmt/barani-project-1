@@ -64,6 +64,12 @@ export interface PrelimOrder {
   patientName: string;
   /** "29/M · AA0012 · Order LAB-2609-000089 · 6:37 PM" (never "|", never cut). */
   patientMeta: string;
+  /** "29/M · AA0012" — the grid's Patient cell second line. */
+  whoMeta: string;
+  /** The order number ("LAB-2609-000089"), or "#7920CD24" for a legacy order — the grid's Order cell. */
+  orderNo: string;
+  /** When the order was made (the grid's Generated cell for an order with no report yet). */
+  createdAt?: string;
   /** For the search box. */
   searchText: string;
   /** The order's daily patient number (on-screen only). */
@@ -252,6 +258,9 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
       id: o.id,
       patientName: name,
       patientMeta: meta,
+      whoMeta: p ? formatPatientMeta(p) : '',
+      orderNo: o.orderNumber || `#${o.id.slice(0, 8).toUpperCase()}`,
+      createdAt: o.createdAt,
       dailyNo: o.dailyNo ?? null,
       dailyNoDay: o.dailyNoDay ?? null,
       searchText: [name, p?.mrn, p?.phone, o.orderNumber, o.id].filter(Boolean).join(' ').toLowerCase(),
@@ -292,3 +301,24 @@ export function reportStatus(deliveryStatus: string, type: string | undefined, u
   if (prelim) return { key: 'preliminary', label: 'Preliminary', tone: 'amber', extra: [] };
   return { key: 'completed', label: 'Completed', tone: 'green', extra: [] };
 }
+
+/** The grid's Status pill (owner 2026-11-19, Reports v2): ONE neutral pill with a small coloured dot —
+ *  Completed (violet) · Partial (light blue, a preliminary report) · Delivered (green) · Failed (rose).
+ *  "Unpaid" is never a status: it is a quiet line UNDER the pill (`unpaid`). */
+export type QueueStatusKey = 'completed' | 'partial' | 'delivered' | 'failed';
+export interface QueueStatus { key: QueueStatusKey; label: string; unpaid: boolean; prelim: boolean }
+export function queueStatus(deliveryStatus: string, type: string | undefined, unpaid: boolean): QueueStatus {
+  const prelim = type === 'partial';
+  if (deliveryStatus === 'failed') return { key: 'failed', label: 'Failed', unpaid, prelim };
+  if (deliveryStatus === 'delivered') return { key: 'delivered', label: 'Delivered', unpaid, prelim };
+  if (prelim) return { key: 'partial', label: 'Partial', unpaid, prelim };
+  return { key: 'completed', label: 'Completed', unpaid, prelim };
+}
+
+/** Status dot colours (theme tokens, AA in light + dark) — the side card, the filter menu and the pills share them. */
+export const QUEUE_DOT: Record<QueueStatusKey, string> = {
+  completed: 'var(--violet-text)',
+  partial: 'var(--sky-text)',
+  delivered: 'var(--green-text)',
+  failed: 'var(--rose-text)',
+};
