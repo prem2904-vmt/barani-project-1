@@ -9,6 +9,13 @@
     [value]="query()"
     (valueChange)="setQuery($event)">
     <ng-container band-inline>
+      @if (narrow() && canDeliver()) {
+      <button type="button" class="pf-rq2-filter__btn pf-rq2-tosendchip press" data-testid="rq-tosend-chip" aria-haspopup="dialog"
+              [attr.aria-expanded]="toSendOpen()" (click)="toSendOpen.set(true)" [attr.aria-label]="'To send, ' + toSend().total">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        <span class="pf-rq2-filter__t pf-rq2-tosendchip__t">To send</span><span class="pf-num pf-rq2-tosendchip__n">{{ toSend().total }}</span>
+      </button>
+      }
       @if (narrow()) {
       <pf-actions-menu class="pf-rq2-filter" [actions]="filterMenu()" label="Filter by status" heading="Status"
                        [popover]="true" [checkCurrent]="true" [width]="232" (action)="onFilterMenu($event)">
@@ -37,29 +44,9 @@
   <div class="pf-band-body pf-band-body--fill pf-rq2__body">
     <div class="pf-2p pf-rq2__cols" [class.pf-2p--narrow]="narrow()">
       @if (!narrow()) {
-      <!-- ── SIDE card (LEFT): STATUS — the filter comes first (shared side-card spec) ── -->
-      <aside class="pf-card pf-2p__side pf-rq2-side" data-testid="rq-side" aria-label="Status">
-        <header class="pf-card__head">
-          <span class="pf-card__icon" aria-hidden="true">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
-          </span>
-          <span class="pf-card__label">Status</span>
-        </header>
-        <ul class="pf-card__body pf-side-list pf-rq2-side__body" role="list">
-            @for (o of ndFilters(); track o.value) {
-            <li>
-              <button type="button" class="pf-side-item pf-rq2-side__item" [attr.data-filter]="o.value"
-                      [attr.aria-pressed]="filter() === o.value" (click)="setFilter(o.value)">
-                <span class="pf-rq2-dot" [class.pf-rq2-dot--ring]="!filterDot(o.value)"
-                      [style.background]="filterDot(o.value)" aria-hidden="true"></span>
-                <span class="pf-rq2-side__label">{{ o.label }}</span>
-                <span class="pf-rq2-side__count pf-num">{{ o.count }}</span>
-              </button>
-            </li>
-            }
-        </ul>
-        <p class="pf-rq2-side__note">Reports build themselves when an order is validated.</p>
+      <!-- ── SIDE card (LEFT): TO SEND — what the desk still has to hand over (owner 2026-11-19, option A) ── -->
+      <aside class="pf-card pf-2p__side pf-rq2-side" data-testid="rq-side" aria-label="To send">
+        <ng-container *ngTemplateOutlet="toSendTpl; context: { sheet: false }"></ng-container>
       </aside>
       }
 
@@ -71,7 +58,13 @@
                  stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
           </span>
           <span class="pf-card__label">Reports</span>
+          @if (!narrow()) {
+          <!-- The status pill (kit segmented): All · Completed · Partial · Delivered, dot + count. -->
+          <pf-segmented class="pf-rq2-pill-seg" data-testid="rq-pill" size="sm" [options]="pillOptions()" [value]="filter()"
+                        aria-label="Filter by status" (valueChange)="setFilter($any($event))"></pf-segmented>
+          } @else {
           <span class="pf-card__note pf-rq2-scope">{{ activeFilterLabel() }}</span>
+          }
           <span class="pf-2p__count pf-rq2-count pf-num" aria-live="polite">{{ headCount() }}</span>
           <span class="pf-2p__tools">
             @if (sheets.available() && !phone()) {
@@ -162,6 +155,97 @@
       </section>
     </div>
   </div>
+
+
+  <!-- ── TO SEND: the side card (wide) or the sheet (phone / narrow) ── -->
+  <ng-template #toSendTpl let-sheet="sheet">
+    <header class="pf-card__head pf-rq2-q__head">
+      <span class="pf-card__icon" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+      </span>
+      <span class="pf-card__label">To send</span>
+      <span class="pf-2p__count pf-num" data-testid="rq-tosend-count">{{ toSend().total }}</span>
+      @if (canDeliver()) {
+      <button type="button" class="pf-btn pf-btn--secondary pf-2p__hbtn pf-rq2-q__all press" data-testid="rq-send-all"
+              [disabled]="sendingAll() || !sendAllRows().length" [pfBusy]="sendingAll()" pfBusyLabel="Sending…"
+              (click)="sendAll()">Send all</button>
+      }
+      @if (sheet) {
+      <button type="button" class="pf-btn pf-btn--icon press" (click)="toSendOpen.set(false)" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      }
+    </header>
+    <div class="pf-card__body pf-rq2-q__body" data-testid="rq-tosend">
+      @if (toSend().total === 0) {
+      <div class="pf-rq2-q__empty" data-testid="rq-tosend-empty">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+        <span>All reports delivered</span>
+      </div>
+      } @else {
+      @if (toSend().failed.length) {
+      <p class="pf-rq2-q__group" data-group="failed">WhatsApp failed <span class="pf-num">{{ toSend().failed.length }}</span></p>
+      <ul class="pf-rq2-q__list" role="list">
+        @for (x of toSend().failed; track x.id) {
+        <ng-container *ngTemplateOutlet="qRow; context: { $implicit: x, verb: 'Retry' }"></ng-container>
+        }
+      </ul>
+      }
+      @if (toSend().notSent.length) {
+      <p class="pf-rq2-q__group" data-group="not-sent">Not sent yet <span class="pf-num">{{ toSend().notSent.length }}</span></p>
+      <ul class="pf-rq2-q__list" role="list">
+        @for (x of toSend().notSent; track x.id) {
+        <ng-container *ngTemplateOutlet="qRow; context: { $implicit: x, verb: 'Send' }"></ng-container>
+        }
+      </ul>
+      }
+      @if (toSend().partial.length) {
+      <p class="pf-rq2-q__group" data-group="partial">Partial, waiting on results <span class="pf-num">{{ toSend().partial.length }}</span></p>
+      <ul class="pf-rq2-q__list" role="list">
+        @for (po of toSend().partial; track po.id) {
+        <li class="pf-rq2-q__row" [class.is-picked]="picked() === 'p:' + po.id">
+          <button type="button" class="pf-rq2-q__pick press" (click)="pickFromQueue(po.id, true)">
+            <span class="pf-rq2-q__name">{{ po.patientName }}</span>
+            <span class="pf-rq2-q__meta pf-num">{{ po.orderNo }} · {{ po.countLabel }}</span>
+          </button>
+        </li>
+        }
+      </ul>
+      }
+      }
+    </div>
+  </ng-template>
+
+  <ng-template #qRow let-x let-verb="verb">
+    <li class="pf-rq2-q__row" [class.is-picked]="picked() === 'r:' + x.id" [attr.data-report]="x.id">
+      <button type="button" class="pf-rq2-q__pick press" (click)="pickFromQueue(x.id)">
+        <span class="pf-rq2-q__name">{{ x.name }}</span>
+        <span class="pf-rq2-q__meta pf-num">{{ x.order }}@if (x.reason) { · {{ x.reason }} }</span>
+      </button>
+      @if (x.optOut) {
+      <span class="pf-rq2-q__note" data-testid="rq-optout">Opted out</span>
+      } @else if (x.result === 'sent') {
+      <span class="pf-rq2-q__ok" data-testid="rq-sent">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Sent
+      </span>
+      } @else if (x.mode && canDeliver()) {
+      <button type="button" class="pf-btn pf-btn--secondary pf-rq2-q__send press" [attr.data-verb]="verb"
+              [disabled]="x.sending || sendingAll()" [pfBusy]="x.sending" pfBusyLabel="Sending…"
+              [title]="x.auto ? 'WhatsApp Auto' : 'WhatsApp Chat'" (click)="sendOne(x.r)">{{ x.result === 'failed' ? 'Retry' : verb }}</button>
+      } @else {
+      <span class="pf-rq2-q__note">No WhatsApp</span>
+      }
+    </li>
+  </ng-template>
+
+  @if (narrow() && toSendOpen()) {
+  <div class="pf-rq2-sheetbd" pfModalPortal aria-hidden="true" (click)="toSendOpen.set(false)"></div>
+  <div class="pf-card pf-rq2-sheet pf-rq2-q__sheet" pfModalPortal role="dialog" aria-modal="true" aria-label="To send"
+       data-testid="rq-tosend-sheet" (keydown.escape)="toSendOpen.set(false)">
+    <span class="pf-rq2-sheet__handle" aria-hidden="true"></span>
+    <ng-container *ngTemplateOutlet="toSendTpl; context: { sheet: true }"></ng-container>
+  </div>
+  }
 
   <!-- ── Cell templates (pf-data-grid template cells) ── -->
   <ng-template #cNo let-row>

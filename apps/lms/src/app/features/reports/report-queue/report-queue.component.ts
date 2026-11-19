@@ -3,7 +3,8 @@ import { labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { CommonModule, DatePipe } from "@angular/common";
 import { ThemeService } from '../../../core/services/theme.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
-import { firstValueFrom } from "rxjs";
+import { firstValueFrom, forkJoin, of } from "rxjs";
+import { catchError } from "rxjs/operators";
 import { busyWhile } from "../../../shared/utils/busy";
 import { printPdfBlobUrl } from '../../../shared/utils/print-pdf';
 import { DestroyRef,
@@ -85,6 +86,9 @@ export type RqRow =
   | { id: string; kind: "report"; r: Report }
   | { id: string; kind: "partial"; po: PrelimOrder; r?: Report }
   | { id: string; kind: "detail"; po: PrelimOrder; r?: Report };
+
+/** The TO SEND queue reads up to this many pending / failed reports (its own page size, never the list's). */
+const TO_SEND_PAGE = 200;
 
 /** Filter → the status dot it carries (All = an empty ring). */
 const FILTER_DOT: Record<Filter, QueueStatusKey | "ring"> = {
@@ -200,8 +204,13 @@ export class ReportQueueComponent implements OnInit {
     { value: "pending", label: "Completed", count: this.counts().pending },
     { value: "partial", label: "Partial", count: this.partialOrders().length },
     { value: "delivered", label: "Delivered", count: this.counts().delivered },
-    { value: "failed", label: "Failed", count: this.counts().failed },
   ]);
+
+  /** The main card head's status pill (owner 2026-11-19, "To send" queue): All · Completed · Partial · Delivered,
+   *  dot + count. "Failed" is no report status here — a failed WhatsApp is a TO SEND row. */
+  readonly pillOptions = computed<SegmentedOption<Filter>[]>(() => this.ndFilters().map((f) => ({
+    value: f.value, label: f.label, count: f.count, dot: this.filterDot(f.value) ?? undefined,
+  })));
 
   /** Roving arrow keys across the band filter (radiogroup). */
   onFilterKey(ev: KeyboardEvent) {
@@ -915,6 +924,7 @@ export class ReportQueueComponent implements OnInit {
     const d = p.data;
     if (!d) return undefined;
     if (d.kind === "detail") return "pf-rq2-detailrow";
+    if (this.picked() === d.id) return d.kind === "partial" ? "pf-rq2-row pf-rq2-row--partial pf-rq2-row--picked" : "pf-rq2-row pf-rq2-row--picked";
     if (d.kind === "partial") return this._expanded() === d.po.id ? "pf-rq2-row pf-rq2-row--partial is-open" : "pf-rq2-row pf-rq2-row--partial";
     return "pf-rq2-row";
   };
@@ -929,6 +939,7 @@ export class ReportQueueComponent implements OnInit {
   /** Paging without a button at the bottom (owner: nothing clickable at the bottom): the next page loads as the
    *  grid nears its end. */
   onGridReady(e: GridReadyEvent<RqRow>): void {
+    this._gridApi = e.api;
     const near = () => {
       const n = e.api.getDisplayedRowCount();
       if (n && e.api.getLastDisplayedRowIndex() >= n - 6) this.loadMore();
@@ -978,6 +989,162 @@ export class ReportQueueComponent implements OnInit {
   });
 
 
+  // ── TO SEND (owner 2026-11-19, option A): the reports the desk still has to hand over ─────────────────────────────
+  // From EXISTING delivery data only: the pending + failed queue pages, their WhatsApp message status (one batch call)
+  // and each patient's "Don't send WhatsApp" opt-out (the per-report WhatsApp status). Sends go through the SAME flows
+  // as the row's Share: WhatsApp Auto (`WhatsAppSendService.send`) or WhatsApp Chat (`deliver(r, 'whatsapp-mine')`).
+  private readonly _toSendRows = signal<Report[]>([]);
+  private readonly _toSendWa = signal<Record<string, WaMessage>>({});
+  /** reportId → the patient opted out of WhatsApp (absent = not known yet). */
+  private readonly _optOut = signal<Record<string, boolean>>({});
+  /** Rows with a send in flight (this screen's guard; the service also refuses a second send). */
+  private readonly _inFlight = signal<ReadonlySet<string>>(new Set());
+  /** What happened to a row this session ("sent" / "failed"), shown on the row until the queue reloads. */
+  private readonly _sendResult = signal<Record<string, "sent" | "failed">>({});
+  readonly sendingAll = signal(false);
+  /** The report picked from the queue — highlighted in the grid. */
+  readonly picked = signal<string | null>(null);
+  /** Phones / narrow: the queue is a sheet opened from the "To send" chip in the search. */
+  readonly toSendOpen = signal(false);
+
+  private loadToSend(): void {
+    if (!this.canDeliver()) { this._toSendRows.set([]); return; }
+    const page = (status: string) => this.api.get<Report[] | ReportQueuePage<Report> | null>(
+      reportQueuePageUrl({ page: 1, pageSize: TO_SEND_PAGE, status })).pipe(catchError(() => of(null)));
+    forkJoin([page("pending"), page("failed")]).subscribe(([p, f]) => {
+      const rows = (res: Report[] | ReportQueuePage<Report> | null, st: string) =>
+        (!res ? [] : Array.isArray(res) ? res : res.items ?? []).filter((r) => r.deliveryStatus === st);
+      const all = [...rows(p, "pending"), ...rows(f, "failed")];
+      this._toSendRows.set(all);
+      const finals = all.filter((r) => r.type === "final").map((r) => r.id);
+      if (finals.length) {
+        this.wa.statusBatch(finals).subscribe({
+          next: (m) => this._toSendWa.set(m && typeof m === "object" ? m : {}),
+          error: () => { /* no WhatsApp column: the queue still lists the pending reports */ },
+        });
+      }
+      void this.ensureOptOut(all.map((r) => r.id));
+    });
+  }
+
+  /** Read each report's WhatsApp status once for the patient's opt-out (cached per report). */
+  private async ensureOptOut(ids: string[]): Promise<void> {
+    const known = this._optOut();
+    const todo = ids.filter((id) => !(id in known)).slice(0, 100);
+    await Promise.all(todo.map(async (id) => {
+      try {
+        const st = await firstValueFrom(this.wa.reportStatus(id));
+        this._optOut.update((m) => ({ ...m, [id]: st?.patientOptOut === true }));
+      } catch { /* unknown: the send flow itself still checks */ }
+    }));
+  }
+
+  /** One TO SEND row. */
+  private toSendRow(r: Report, reason: string | null) {
+    const live = this.waSend?.state(r.id);
+    const inFlight = this._inFlight().has(r.id) || live?.phase === "sending";
+    const result = this._sendResult()[r.id] ?? (live && live.phase !== "sending" ? (live.phase === "failed" ? "failed" : "sent") : null);
+    return {
+      r, id: r.id, name: this.reportPatientName(r), order: this.orderNo(r), reason,
+      optOut: this._optOut()[r.id] === true, mode: this.waMode(r), auto: this.waAuto(r),
+      sending: inFlight, result,
+    };
+  }
+
+  /** The queue's groups: WhatsApp failed (Retry) · Not sent yet (Send) · Partial, waiting on results (no action). */
+  readonly toSend = computed(() => {
+    const wa = this._toSendWa();
+    const failed: ReturnType<ReportQueueComponent["toSendRow"]>[] = [];
+    const notSent: ReturnType<ReportQueueComponent["toSendRow"]>[] = [];
+    for (const r of this._toSendRows()) {
+      if (r.type !== "final") continue;   // a preliminary is never sent from here (the partial group names it)
+      const m = wa[r.id];
+      if (r.deliveryStatus === "failed" || m?.status === "failed") {
+        failed.push(this.toSendRow(r, m?.errorReason?.trim() || r.deliveryNote?.trim() || "WhatsApp failed"));
+      } else if (r.deliveryStatus === "pending" && !(m && ["sent", "delivered", "read", "queued", "sending"].includes(m.status))) {
+        notSent.push(this.toSendRow(r, m?.status === "held" ? "Sends by itself once the bill is paid" : null));
+      }
+    }
+    const partial = this.partialOrders();
+    return { failed, notSent, partial, total: failed.length + notSent.length + partial.length };
+  });
+
+  /** What "Send all" sends: WhatsApp Auto rows not opted out, not sent this session, not in flight. */
+  readonly sendAllRows = computed(() => [...this.toSend().failed, ...this.toSend().notSent]
+    .filter((x) => x.auto && !x.optOut && !x.sending && x.result !== "sent"));
+
+  /** Retry / Send one report — the row's existing flow, guarded against double sends. */
+  async sendOne(r: Report): Promise<void> {
+    if (!this.canDeliver() || this._inFlight().has(r.id) || this.waSend.busy(r.id) || this._optOut()[r.id] === true) return;
+    if (!this.waSend.canSend(r)) {
+      // WhatsApp Chat on this computer: the person presses Send (opens WhatsApp; its own opt-out question).
+      if (this.waMode(r) === "chat") this.deliver(r, "whatsapp-mine");
+      return;
+    }
+    this.markInFlight(r.id, true);
+    try {
+      if (r.qrToken || r.type === "final") void this.archiveReportPdf(r);
+      const m = await this.waSend.send(r.id);
+      this._sendResult.update((x) => ({ ...x, [r.id]: m && m.status !== "failed" ? "sent" : "failed" }));
+    } finally {
+      this.markInFlight(r.id, false);
+    }
+  }
+
+  private markInFlight(id: string, on: boolean): void {
+    const next = new Set(this._inFlight());
+    if (on) next.add(id); else next.delete(id);
+    this._inFlight.set(next);
+  }
+
+  /** Send every WhatsApp Auto report in the queue — always asks first (count + who is skipped). */
+  async sendAll(): Promise<void> {
+    if (this.sendingAll() || !this.canDeliver()) return;
+    this.sendingAll.set(true);
+    try {
+      const queue = [...this.toSend().failed, ...this.toSend().notSent];
+      await this.ensureOptOut(queue.map((x) => x.id));
+      const fresh = [...this.toSend().failed, ...this.toSend().notSent];
+      const go = fresh.filter((x) => x.auto && !x.optOut && !x.sending && x.result !== "sent");
+      if (!go.length) { this.toasts.info("Nothing to send with WhatsApp Auto."); return; }
+      const optedOut = fresh.filter((x) => x.optOut).length;
+      const chatOnly = fresh.filter((x) => !x.optOut && !x.auto && x.result !== "sent").length;
+      const skipped = [
+        optedOut ? `${plural(optedOut, "patient")} opted out of WhatsApp` : "",
+        chatOnly ? `${plural(chatOnly, "report")} can only go by WhatsApp Chat (send each one)` : "",
+      ].filter(Boolean);
+      const ok = await this.dialog.confirm({
+        title: `Send ${plural(go.length, "report")} on WhatsApp?`,
+        message: skipped.length ? `Skipped: ${skipped.join("; ")}.` : "Each patient gets their report link from the lab's WhatsApp number.",
+        confirmLabel: "Send",
+        tone: "primary",
+      });
+      if (!ok) return;
+      for (const x of go) {
+        // Re-check right before each send: another tab / a live update may have sent it meanwhile.
+        if (this._inFlight().has(x.id) || this.waSend.busy(x.id) || this._sendResult()[x.id] === "sent") continue;
+        await this.sendOne(x.r);
+      }
+      this.refresh();
+    } finally {
+      this.sendingAll.set(false);
+    }
+  }
+
+  /** A queue row picked: show + highlight that report in the grid (All when the tab hides it). */
+  pickFromQueue(id: string, isOrder = false): void {
+    this.toSendOpen.set(false);
+    const rowId = isOrder ? `p:${id}` : `r:${id}`;
+    this.picked.set(rowId);
+    if (!this.gridRows().some((x) => x.id === rowId) && this._filter() !== "all") this.setFilter("all");
+    setTimeout(() => {
+      const api = this._gridApi;
+      const node = api?.getRowNode(rowId);
+      if (api && node) { api.ensureNodeVisible(node, "middle"); api.redrawRows(); }
+    }, 60);
+  }
+  private _gridApi: GridReadyEvent<RqRow>["api"] | null = null;
+
   ngOnInit() {
     this.waSend.ensure();
     this.reportActions.warmChannels();
@@ -1001,6 +1168,7 @@ export class ReportQueueComponent implements OnInit {
     // Summary rows (no rendered snapshot): render paths read the report by id.
     // Paged: the pages already on screen, reloaded in one request.
     this.loadQueue(this._pages > 0 ? "refresh" : "reset");
+    this.loadToSend();
     // Independent fetch — partial reports come from today's orders that carry
     // a validated line, WITH their results (GET /api/orders/partial-ready; the
     // day feed itself no longer carries results). A failure here doesn't

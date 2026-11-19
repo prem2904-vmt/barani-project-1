@@ -952,7 +952,8 @@
 :host ::ng-deep .pf-rq2-grid .ag-cell, :host ::ng-deep .pf-rq2-grid .ag-header-cell { padding-left: 10px; padding-right: 10px; }
 :host ::ng-deep .pf-rq2-grid .ag-cell.pf-rq2-nowrap, :host ::ng-deep .pf-rq2-grid .pf-rq2-nowrap .pf-rq2-muted { white-space: nowrap; }
 :host ::ng-deep .pf-rq2-grid .ag-cell.pf-rq2-actcell { justify-content: flex-end; }
-:host ::ng-deep .pf-rq2-grid .ag-full-width-row.pf-rq2-detailrow { background: color-mix(in srgb, var(--pf-chip-bg) 70%, transparent); }
+/* Opaque: the chip tint laid over the card surface (rows scroll under the header). */
+:host ::ng-deep .pf-rq2-grid .ag-full-width-row.pf-rq2-detailrow { background: linear-gradient(color-mix(in srgb, var(--pf-chip-bg) 70%, transparent), color-mix(in srgb, var(--pf-chip-bg) 70%, transparent)), var(--pf-card-bg); }
 :host ::ng-deep .pf-rq2-grid .ag-full-width-row.pf-rq2-detailrow .ag-full-width-container,
 :host ::ng-deep .pf-rq2-grid .pf-rq2-detailrow > * { white-space: normal; }
 
@@ -1049,3 +1050,37 @@
   .pf-rq2-sheet, .pf-rq2-sheetbd { animation: none; }
   .pf-rq2-details__chev { transition: none; }
 }
+
+/* ── TO SEND queue (owner 2026-11-19, option A) ── */
+.pf-rq2-pill-seg { flex: none; }
+.pf-rq2-q__head { flex-wrap: nowrap; }
+.pf-rq2-q__head .pf-2p__count { margin-left: auto; }
+.pf-rq2-q__body { padding: 4px 8px 12px; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+.pf-rq2-q__group {
+  display: flex; align-items: center; gap: 6px; margin: 10px 8px 4px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary);
+}
+.pf-rq2-q__group .pf-num { font-weight: 500; letter-spacing: 0; }
+.pf-rq2-q__group[data-group='failed'] { color: color-mix(in srgb, var(--rose-text) 80%, var(--text-primary)); }
+.pf-rq2-q__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-rq2-q__row { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 4px 6px 4px 0; border-radius: 10px; }
+.pf-rq2-q__row.is-picked { background: var(--pf-sel-bg); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
+.pf-rq2-q__pick {
+  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; min-height: 44px;
+  border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.pf-rq2-q__pick:hover { background: var(--pf-chip-bg); }
+.pf-rq2-q__pick:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+.pf-rq2-q__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.pf-rq2-q__meta { font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+.pf-rq2-q__send { flex: none; height: 34px; min-height: 34px; padding-inline: 12px; }
+.pf-rq2-q__note { flex: none; font-size: 12px; color: var(--text-tertiary); }
+.pf-rq2-q__ok { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 500; color: color-mix(in srgb, var(--green-text) 75%, var(--text-primary)); }
+.pf-rq2-q__empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 16px; font-size: 13px; color: var(--text-tertiary); }
+.pf-rq2-q__empty > svg { color: color-mix(in srgb, var(--green-text) 70%, var(--text-tertiary)); }
+.pf-rq2-tosendchip { gap: 6px; }
+.pf-rq2-tosendchip__n { font-weight: 600; }
+@media (max-width: 640px) { .pf-rq2-tosendchip__t { display: none; } }
+.pf-rq2-q__sheet .pf-rq2-q__body { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+:host ::ng-deep .pf-rq2-grid .ag-row.pf-rq2-row--picked { background: var(--pf-sel-bg); box-shadow: inset 3px 0 0 var(--pf-sel-border); }
+@media (hover: none), (pointer: coarse) { .pf-rq2-q__send { height: 44px; min-height: 44px; } }

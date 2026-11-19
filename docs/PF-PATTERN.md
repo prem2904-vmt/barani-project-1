@@ -1601,6 +1601,10 @@ exact PDF on screen. Visual redesign only: every action and API is unchanged.
   layout: `apps/lms-e2e/src/report-view-layout.rbac.spec.ts` (read only;
   `REPORT_ID=… BASE_URL=… CORS_RELAY=1 SHOTS_DIR=…`).
 
+**Report view panels (owner 2026-11-19):** the REPORT details card is the shared LEFT side card (`--pf-side-w`,
+same height; it collapses ‹ to a strip that expands ›), the PREVIEW is the main card on the right. Phones keep the
+stacking (details as a sheet from the pill).
+
 ## 20. Reports list
 
 `/reports` (`features/reports/report-queue/`) — the delivery queue that opens
@@ -1609,13 +1613,18 @@ the Report view (§19). The New design only; classic is unchanged.
 
 - **Band:** lab + search pill ONLY — no segmented, no band-corner buttons on web.
   Phones add a Refresh icon in the band.
-- **LEFT side card STATUS** (`data-testid="rq-side"`, `--pf-side-w`, shared
-  `.pf-side-list` / `.pf-side-item` rows): All (empty ring) · Completed (violet
-  dot) · Partial (light-blue) · Delivered (green) · Failed (rose) + plain
-  tabular counts (the old band segmented / stat chips). Dots are theme tokens
-  (`QUEUE_DOT`: `--violet-text`, `--sky-text`, `--green-text`, `--rose-text`).
-  Its foot is a plain note, never a button.
-- **RIGHT main card:** head = icon + REPORTS + the status as scope + count
+- **LEFT side card TO SEND** (owner 2026-11-19, option A; `data-testid="rq-side"`, `--pf-side-w`): the reports the
+  desk still has to hand over, from existing delivery data only (the pending + failed queue pages, one WhatsApp
+  status batch, each report's WhatsApp status for the patient's opt-out). Groups: **WhatsApp failed** (patient,
+  order, reason, **Retry**) · **Not sent yet** (**Send**) · **Partial, waiting on results** (no action). "Send all" in
+  the HEAD: WhatsApp Auto reports only, opted-out patients excluded ("Opted out", no button), always asks first
+  (DialogService: "Send n reports on WhatsApp?" + who is skipped); buttons disable while sending; a row in flight is
+  never sent twice. Retry / Send = the row's existing flow (Auto `WhatsAppSendService.send`, Chat
+  `deliver(r, 'whatsapp-mine')`). A queue row picks + highlights its report in the grid. Empty: "All reports
+  delivered" + a quiet tick. Phones / ≤900px: a "To send n" chip in the search opens it as a sheet.
+- **Status pill** in the main card head (kit segmented): All · Completed · Partial · Delivered, dot + count. Failed
+  is no filter — a failed delivery is a TO SEND row (rows keep their Failed pill).
+- **RIGHT main card:** head = icon + REPORTS + the status pill + count
   ("50 of 120 reports" while paging) + Open in sheet · Generate (secondary) or
   the "View only" chip · Refresh (icon). Body = a flush `pf-data-grid`:
   # (daily no) | Patient (full name + "29/M · MRN") | Order | Status | Generated
