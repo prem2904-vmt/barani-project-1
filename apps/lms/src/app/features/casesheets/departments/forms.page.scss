@@ -38,7 +38,9 @@
 }
 
 .dp__mine--icon {
+  flex: none;
   width: 34px;
+  min-width: 34px;
   padding-inline: 0;
   justify-content: center;
 }
