@@ -1,0 +1,92 @@
+/* ══ Frontdesk redesign (owner-approved 2026-11-19) — NEW DESIGN only ══
+   Two-panel frame at ≥1024px: the side card (Appointments | Home collection) takes `--pf-side-w` (the app's one
+   side-card width; the shared pf-pane-splitter writes a per-user override on the row), clamped 300px – 45%;
+   the work card fills the rest. Same height, no page scroll — only the card bodies (and the grid) scroll. */
+:host-context(.design-new) {
+  @media (min-width: 1024px) {
+    .pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work):not(.pf-appt-split__pane--solo) {
+      flex: 0 0 clamp(300px, var(--pf-side-w, 340px), 45%) !important;
+      min-width: 300px;
+    }
+    .pf-appt-split > .pf-appt-split__pane--work:not(.pf-appt-split__pane--solo) {
+      flex: 1 1 0 !important;
+      min-width: 0;
+    }
+    /* The side card is narrower than the old 33% split: its pieces must fit 300px+ without clipping. */
+    .pf-appt-split__pane:not(.pf-appt-split__pane--work) {
+      > .pf-appt-split__hdr { gap: 8px; flex-wrap: nowrap; }
+      > .pf-appt-split__hdr > pf-segmented { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+      > .pf-appt-split__hdr > pf-segmented::-webkit-scrollbar { display: none; }
+      .pf-daystrip { gap: 6px; padding: 10px 12px; }
+      .pf-daystrip__day { flex: 1 1 0 !important; min-width: 0 !important; padding-left: 0; padding-right: 0; }
+      /* Appointment rows: the FULL name wraps (never runs under the row's actions). */
+      .pf-card__name { display: block; white-space: normal; overflow-wrap: anywhere; }
+      .pf-card__body { min-width: 0; }
+      /* ≤420px card: select + slot drop out and the design hides the avatar, so the row is body · actions only —
+         two tracks, or the body lands in an auto track and runs under Check-in. */
+      @container (max-width: 420px) {
+        .pf-card:not(.pf-card--ip):not(.pf-card--token-layout) { grid-template-columns: minmax(0, 1fr) auto; }
+      }
+    }
+  }
+
+  /* The flow grid IS the work card's body: it fills it (its own rows scroll), no wave art over the last rows. */
+  .pf-appt-split__pane--flow::after { display: none !important; }
+  .pf-appt-split__pane > .pf-fd-flow {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
+    overflow: hidden;
+  }
+  .pf-appt-split__pane > .pf-wsec-note { margin: 8px 12px 0; flex-shrink: 0; }
+
+  /* Card head: icon tile + WORK first (visually), the search, the status pill, then "Today" + the filter icon. */
+  .pf-work-hdr__title {
+    order: -1;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+  }
+  .pf-work-hdr__title .pf-card__label { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+  .pf-work-hdr__date { margin-left: auto; }
+  .pf-work-hdr__range {
+    font-size: 12.5px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  /* The filter icon: a 32px quiet square (44px on touch); violet "on" when a filter / another date is in force. */
+  .pf-work-hdr .pf-hdr-filter__btn { width: 32px; height: 32px; border-radius: 9px; }
+  @media (pointer: coarse) {
+    .pf-work-hdr .pf-hdr-filter__btn { width: 44px; height: 44px; }
+  }
+
+  /* Phones / tablet portrait: the More filters icon rides inside the list search (one card). */
+  .pf-work-find-phone { position: relative; }
+  .pf-work-find__filter { display: none; }
+  @media (max-width: 1023px) {
+    .pf-work-find-phone--filters .pf-work-find--phone .pf-work-find__input { padding-right: 50px; }
+    .pf-work-find-phone--filters .pf-work-find__filter {
+      position: absolute;
+      top: 0;
+      right: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .pf-work-find-phone--filters .pf-work-find__filter--on { color: var(--violet-text); }
+    .pf-work-find-phone--filters .pf-work-find__filter:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: -2px; }
+  }
+}

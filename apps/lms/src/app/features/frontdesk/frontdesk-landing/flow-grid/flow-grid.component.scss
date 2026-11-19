@@ -1,0 +1,68 @@
+/* Frontdesk flow grid — the cells' own look. Row height, header, hairlines and touch sizing come from the shared
+   grid theme (pf-data-grid → grid-theme.ts) only; every colour here is a token (light + dark). */
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+.fd-flow { flex: 1 1 auto; min-height: 0; }
+
+:host ::ng-deep {
+  .ag-header-cell.fd-flow__h-right .ag-header-cell-label { justify-content: flex-end; }
+  .ag-cell.fd-flow__c-next { justify-content: flex-end; padding-right: 10px; }
+  .ag-cell.fd-flow__c-sel { padding-left: 8px; padding-right: 0; }
+  .ag-cell.fd-flow__c-wrap { white-space: normal; }
+
+  /* Urgent order: a rose inset rule at the row's leading edge (never a fill). */
+  .ag-row.fd-flow__row--urgent { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
+  /* Selected (In progress multi-select): violet ~7% over the card + a violet hairline — the kit's selected row. */
+  .ag-row.fd-flow__row:has(.fd-cell-sel[aria-checked='true']) {
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 7%, var(--pf-card-bg, transparent));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary, #7c3aed) 45%, transparent);
+  }
+
+  .fd-flow__muted { color: var(--text-tertiary); }
+
+  /* Visit for: quiet service tags. */
+  .fd-flow__tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+  .fd-flow__tag {
+    display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 6px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; line-height: 1;
+    color: var(--text-secondary); background: var(--pf-chip-bg); border: 1px solid var(--pf-line);
+  }
+  .fd-flow__tag[data-tag='ER'] { color: var(--red-text); border-color: color-mix(in srgb, var(--red-text) 30%, var(--pf-line)); }
+
+  /* Where now: a NEUTRAL pill + coloured dot (owner), then the quiet sub-line. */
+  .fd-flow__where { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 8px 0; line-height: 1.3; }
+  .fd-flow__stage {
+    --fd-tone: var(--violet-text);
+    display: inline-flex; align-items: center; gap: 6px; min-height: 22px; padding: 1px 9px 1px 8px; border-radius: 999px;
+    max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; /* never cut by a narrow column */
+    font-size: 12.5px; font-weight: 500; color: var(--text-primary);
+    background: var(--pf-chip-bg); border: 1px solid var(--pf-line);
+  }
+  .fd-flow__stage[data-tone='green'] { --fd-tone: var(--green-text); }
+  .fd-flow__stage[data-tone='rose'] { --fd-tone: var(--red-text); }
+  .fd-flow__stage[data-tone='sky'] { --fd-tone: var(--sky-text, var(--blue-text)); }
+  .fd-flow__stage[data-tone='neutral'] { --fd-tone: var(--text-tertiary); }
+  .fd-flow__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--fd-tone); flex: none; }
+  .fd-flow__sub { font-size: 11.5px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+
+  /* Journey: step dots (done · now · still to come; a stopped step in rose). */
+  .fd-flow__journey { display: inline-flex; align-items: center; gap: 4px; }
+  .fd-flow__step { width: 16px; height: 6px; border-radius: 999px; background: var(--pf-line); }
+  .fd-flow__step[data-state='done'] { background: color-mix(in srgb, var(--violet-text) 55%, var(--pf-line)); }
+  .fd-flow__step[data-state='now'] {
+    background: var(--violet-text);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--violet-text) 22%, transparent);
+  }
+  .fd-flow__step[data-state='stopped'] { background: var(--red-text); }
+
+  /* Waiting / Payment: tabular; rose when late / due (never amber). */
+  .fd-flow__wait, .fd-flow__pay { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  .fd-flow__pay { font-size: 12.5px; }
+  .fd-flow__wait--late, .fd-flow__pay--due { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); font-weight: 600; }
+}
