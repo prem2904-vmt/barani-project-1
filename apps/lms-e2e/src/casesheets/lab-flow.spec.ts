@@ -110,7 +110,7 @@ test('Departments for the patient → ENT → fill across pages (follow-ups, a c
   await shot(page, 'lab-02-departments');
   await expectNoNativeControls(page);
 
-  await page.locator('.dp__row', { hasText: 'ENT' }).first().click();
+  await page.locator('.pf-tp__item', { hasText: 'ENT' }).first().click();
   await settle(page);
   await shot(page, 'lab-03-departments-ent-forms');
   await page.locator('.dp__tile', { hasText: 'Nose History' }).first().click();
@@ -231,7 +231,7 @@ test('the patient profile lists the sheets; the patient sheet list page', async 
 
 test('Wound review: a photo and the body map', async ({ browser }) => {
   const { ctx, page } = await openAs(browser, STACK.doctor, `${LAB_URL}/casesheets/new?patientId=${WOUND_PATIENT.id}`);
-  await page.locator('.dp__row', { hasText: 'General Medicine' }).first().click();
+  await page.locator('.pf-tp__item', { hasText: 'General Medicine' }).first().click();
   await page.locator('.dp__tile', { hasText: 'Wound review' }).first().click();
   await expect(page).toHaveURL(/\/casesheets\/[0-9a-f-]{36}/);
   await (await field(page, 'complaint')).locator('input, textarea').first().fill('Non-healing wound over the left shin for 3 weeks');
@@ -258,7 +258,7 @@ test('a Lab Admin still sees a forked (draft-only) master in Departments', async
   const forms = await api<{ items: { origin: string; title: string; published: unknown }[] }>(STACK.admin, 'GET', '/api/casesheets/forms?pageSize=100');
   test.skip(!forms.items.some(f => f.origin === 'override' && !f.published), 'needs the draft-only fork studio-flow makes');
   const { ctx, page } = await openAs(browser, STACK.admin, `${LAB_URL}/casesheets/new?patientId=${PATIENT.id}`);
-  await expect(page.locator('.dp__row', { hasText: 'ENT' })).toBeVisible({ timeout: 8_000 });
+  await expect(page.locator('.pf-tp__item', { hasText: 'ENT' })).toBeVisible({ timeout: 8_000 });
   await ctx.close();
 });
 

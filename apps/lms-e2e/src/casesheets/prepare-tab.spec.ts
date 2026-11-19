@@ -36,7 +36,7 @@ for (const theme of ['light', 'dark'] as Theme[]) {
     await expect(page.locator('[data-my-sheets]')).toBeVisible();
     await shot(page, 'prepare-02-departments', { theme });
 
-    await page.locator('.dp__row', { hasText: 'General Medicine' }).first().click();
+    await page.locator('.pf-tp__item', { hasText: 'General Medicine' }).first().click();
     await settle(page);
     await page.locator('.dp__tile').first().click();
     const step = page.locator('[data-patient-step]');
@@ -63,7 +63,7 @@ for (const theme of ['light', 'dark'] as Theme[]) {
 test('phone: the Prepare tab and Departments', async ({ browser }) => {
   const { ctx, page } = await openAs(browser, STACK.doctor, '/prepare', { viewport: 'phone' });
   await settle(page, 1200);
-  await expect(page.locator('.dp__row').first()).toBeVisible();
+  await expect(page.locator('.pf-tp__item').first()).toBeVisible();
   await shot(page, 'prepare-06-departments', { viewport: 'phone' });
   await ctx.close();
 });

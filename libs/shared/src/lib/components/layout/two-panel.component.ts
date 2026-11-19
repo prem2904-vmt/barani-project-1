@@ -23,6 +23,8 @@ export interface TwoPanelItem {
   description?: string;
   /** Main-card head icon (stroked path, 24-unit box) for this row; falls back to `panelIcon`. */
   icon?: string;
+  /** A second, muted line under the label (a saved draft's sheet + date). */
+  sub?: string;
   /** The row opens its own full-screen page (an arrow marks it). */
   external?: boolean;
   /** A tree heading (e.g. "Lab spaces"): a chevron toggles the rows naming it as `parent`, shown indented under it. */
@@ -94,6 +96,7 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
           </span>
         }
         <span class="pf-card__label pf-tp__navtitle" data-testid="tp-nav-title">{{ navHead() ?? navTitle() }}</span>
+        <span class="pf-tp__navtools"><ng-content select="[nav-tools]"></ng-content></span>
       </header>
       <div class="pf-card__body pf-tp__scroll" [class.pf-tp__scroll--a]="navPhase() === 0" [class.pf-tp__scroll--b]="navPhase() === 1"
            [class.pf-tp__scroll--back]="navDir() === 'back'">
@@ -116,7 +119,7 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
                     [attr.aria-pressed]="it.id === selected()"
                     [attr.data-testid]="'tp-item-' + it.id"
                     (click)="pick.emit(it.id)">
-              <span class="pf-tp__label">{{ it.label }}</span>
+              <span class="pf-tp__label">{{ it.label }}@if (it.sub) { <span class="pf-tp__sub">{{ it.sub }}</span> }</span>
               @if (it.note) { <span class="pf-tp__note pf-num">{{ it.note }}</span> }
               @if (it.external) {
                 <svg class="pf-tp__ext" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -159,6 +162,9 @@ export function injectTwoPanelCompact(query: string = TWO_PANEL_COMPACT_QUERY): 
     .pf-tp__desc { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .pf-tp__tools { margin-left: auto; display: inline-flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; flex: 0 1 auto; max-width: 100%; }
     .pf-tp__tools:empty { display: none; }
+    .pf-tp__navtools { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; flex: none; }
+    .pf-tp__navtools:empty { display: none; }
+    .pf-tp__sub { display: block; font-size: 12px; font-weight: 400; color: var(--text-tertiary); overflow-wrap: anywhere; }
     .pf-tp__iconbtn {
       width: 32px; height: 32px; display: inline-grid; place-items: center; flex: none; margin: -2px 0 -2px -4px;
       border: 1px solid var(--pf-line, var(--glass-border)); border-radius: 9px; background: var(--pf-card-bg, transparent);
