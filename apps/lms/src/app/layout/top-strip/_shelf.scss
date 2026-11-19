@@ -1,0 +1,150 @@
+/* COPY of the Drafts shelf look in top-strip.component.scss ("Draft tray (bottom bar)" … "Chat entry") for the
+   Frontdesk Services shelf (its own component). services-shelf.component.spec.ts pins the two as byte-identical. */
+/* ── Draft tray (bottom bar): divider · "Drafts N" · resume chips ─────
+   Owner 2026-10-02: the old outlined name pills read as clutter. Now a calm,
+   intentional tray — a quiet label, then compact SOLID chips holding only
+   the sample number (tabular figures), each with a small violet dot = work
+   not yet submitted. Neutral at rest (nd chip surface + hairline), lifts on
+   hover / focus, and the draft on stage takes the app's quiet selected look
+   (violet tint + ink + hairline ring, same as the active work area). */
+.pf-draftshelf {
+  display: none; /* only meaningful when the bar is docked (rule below) */
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+  /* sits right after the nav's own end-of-work-areas hairline */
+  margin-left: 6px;
+}
+/* Chips scroll here when the bar is tight; the +N chip stays outside. */
+.pf-draftshelf__scroll {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* room for the hover lift + focus ring inside the clipper */
+  padding: 4px 2px;
+  margin: -4px -2px;
+}
+.pf-draftshelf__scroll::-webkit-scrollbar { display: none; }
+:host-context(.design-new.nav-bottom) .pf-draftshelf { display: flex; }
+/* Phones: no room — the shelf is a tablet/web affordance (owner: on a
+   phone bar it just gets clumsy). It briefly had a compact phone chip;
+   that was removed at the owner's call. */
+@media (max-width: 767px) {
+  :host-context(.design-new.nav-bottom) .pf-draftshelf { display: none; }
+}
+
+/* "Drafts 5" — a quiet caption, not a control. */
+.pf-draftshelf__head {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  flex-shrink: 0; margin-right: 2px;
+  font-size: 11.5px; font-weight: 500; line-height: 1;
+  color: var(--text-tertiary, var(--text-muted));
+  white-space: nowrap;
+}
+.pf-draftshelf__count {
+  font-variant-numeric: tabular-nums; font-weight: 600;
+  color: var(--text-secondary);
+}
+/* Tablets: the label yields first; the count is in the group's name. */
+@media (max-width: 1023px) {
+  .pf-draftshelf__head { display: none; }
+}
+
+.pf-draftshelf__chip {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 7px;
+  flex-shrink: 0;
+  height: 28px; padding: 0 10px 0 9px;
+  border-radius: var(--pf-radius-chip, 8px);
+  background: var(--pf-card-bg, var(--bg-card-solid, #fff));
+  border: 1px solid var(--pf-line, var(--border-muted, #e5e7eb));
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.04);
+  color: var(--text-primary);
+  font: inherit; font-size: 13px; font-weight: 500; line-height: 1;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.01em;
+  text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition:
+    transform var(--pf-dur-fast, 200ms) var(--pf-spring, ease),
+    box-shadow var(--pf-dur-fast, 200ms) ease,
+    border-color var(--pf-dur-fast, 200ms) ease,
+    background-color var(--pf-dur-fast, 200ms) ease;
+}
+:host-context(.dark) .pf-draftshelf__chip {
+  background: var(--pf-chip-bg, rgba(255, 255, 255, 0.06));
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: none;
+}
+.pf-draftshelf__lbl { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+/* Unsaved work: the one accent at rest. */
+.pf-draftshelf__dot {
+  width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%;
+  background: var(--color-primary, #7c3aed);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent);
+}
+:host-context(.dark) .pf-draftshelf__dot { background: #a78bfa; box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.18); }
+
+@media (hover: hover) {
+  .pf-draftshelf__chip:hover:not([aria-current]) {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 35%, var(--pf-line, #e5e7eb));
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.08);
+  }
+  :host-context(.dark) .pf-draftshelf__chip:hover:not([aria-current]) {
+    background: rgba(255, 255, 255, 0.10);
+    border-color: rgba(167, 139, 250, 0.40);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+}
+.pf-draftshelf__chip:focus-visible {
+  outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px;
+  transform: translateY(-1px);
+}
+
+/* The draft on stage (aria-current) — and the "+N" chip when that draft
+   is one of the hidden ones. Not a link (no pointer). */
+.pf-draftshelf__chip[aria-current],
+.pf-draftshelf__more[data-current] {
+  background: rgba(124, 58, 237, 0.10);
+  border-color: rgba(124, 58, 237, 0.30);
+  color: #6d28d9; font-weight: 600;
+  box-shadow: none;
+}
+.pf-draftshelf__chip[aria-current] { cursor: default; }
+:host-context(.dark) .pf-draftshelf__chip[aria-current],
+:host-context(.dark) .pf-draftshelf__more[data-current] {
+  background: rgba(139, 92, 246, 0.18);
+  border-color: rgba(168, 85, 247, 0.38);
+  color: #ede9fe;
+}
+
+/* "+N" — same chip, neutral ink, an up-chevron (the menu opens upward). */
+.pf-draftshelf__menu { flex-shrink: 0; }
+.pf-draftshelf__more { gap: 4px; padding: 0 8px 0 10px; color: var(--text-secondary); font-weight: 600; }
+.pf-draftshelf__more-t { font-weight: 500; color: var(--text-tertiary, var(--text-muted)); margin-right: 2px; }
+.pf-draftshelf__more svg { flex-shrink: 0; opacity: 0.7; transition: transform var(--pf-dur-fast, 200ms) var(--pf-spring, ease); }
+.pf-draftshelf__more[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 40%, var(--pf-line, #e5e7eb));
+  color: var(--text-primary);
+}
+.pf-draftshelf__more[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-draftshelf__chip, .pf-draftshelf__more-t { font-weight: 500; color: var(--text-tertiary, var(--text-muted)); margin-right: 2px; }
+.pf-draftshelf__more svg { transition: none; }
+  .pf-draftshelf__chip:hover, .pf-draftshelf__chip:focus-visible { transform: none !important; }
+}
+
+/* Touch devices: 44px hit area without growing the 28px chip (the bar's
+   height is fixed) — an invisible, taller hit box around each chip. */
+@media (pointer: coarse) {
+  .pf-draftshelf__chip::after {
+    content: ''; position: absolute; left: 0; right: 0; top: 50%;
+    height: 44px; transform: translateY(-50%);
+  }
+  .pf-draftshelf__more { min-width: 44px; justify-content: center; }
+}
+

@@ -343,6 +343,7 @@
 
           <!-- Phones: the search stacks full width BELOW the list switcher (the filter row). -->
           @if (mobileList() !== 'appt' && mobileList() !== 'home') {
+          <div class="pf-work-find-phone" [class.pf-work-find-phone--filters]="theme.isNewDesign()">
           <label class="pf-work-find pf-work-find--phone">
             <svg class="pf-work-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -353,6 +354,23 @@
               (input)="setWorkQuery($any($event.target).value)" placeholder="Search this list"
               aria-label="Search patient, order, sample or test in this list" />
           </label>
+          <!-- New design, phones / tablet portrait: the More filters icon rides INSIDE the search (one card). -->
+          @if (theme.isNewDesign()) {
+          <button type="button" class="pf-work-find__filter" [class.pf-work-find__filter--on]="workFilterCount() > 0 || workDateRange() !== 'today'"
+            aria-haspopup="dialog" [attr.aria-expanded]="phoneFiltersOpen()" (click)="phoneFiltersOpen.set(!phoneFiltersOpen())"
+            [attr.aria-label]="'More filters' + (workFilterCount() ? ', ' + workFilterCount() + ' on' : '')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+          </button>
+          @if (phoneFiltersOpen()) {
+          <pf-fd-more-filters [filters]="workFilters()" [dateOptions]="workDateSegmentOptions()" [dateValue]="workDateRange()"
+            [dateChanged]="workDateRange() !== 'today'" [doctors]="doctorChoices()" [branches]="branchChoices()"
+            (filtersChange)="setWorkFilters($event)" (dateChange)="setWorkDateRange($any($event))"
+            (dateClick)="onWorkDateOptionClick($any($event))" (dateClear)="clearWorkCustom()"
+            (cleared)="clearMoreFilters()" (closed)="phoneFiltersOpen.set(false)" />
+          }
+          }
+          </div>
           }
 
           <!-- Two-pane layout: Left pane (Appointments & Home collection), Right pane (In progress & Completed).
@@ -363,7 +381,7 @@
             <!-- Left Pane — hidden entirely when BOTH Appointments and Home
                  collection are disabled in /admin/process. -->
             @if (showLeftPane()) {
-            <section class="pf-appt-split__pane" [style.flex-basis.%]="twoPaneSplit()"
+            <section class="pf-appt-split__pane" [style.flex-basis.%]="theme.isNewDesign() ? null : twoPaneSplit()"
               [class.pf-appt-split__pane--filtering]="apptFilterOpen()"
               [class.pf-appt-split__pane--expanded]="expandedPane() === 'appt'"
               [class.pf-appt-split__pane--collapsed]="expandedPane() !== 'appt' && expandedPane() !== 'none'">
@@ -655,6 +673,13 @@
               }
             </section>
 
+            <!-- Splitter: the new design uses the SHARED pf-pane-splitter (drag / ←→ / Home or double-click resets,
+                 width per user, read before first paint); the classic look keeps its own % handle. -->
+            @if (theme.isNewDesign()) {
+            @if (wide()) {
+            <pf-pane-splitter class="pf-fd-splitter" [storageKey]="sideWidthKey()" label="Resize Appointments and Work" />
+            }
+            } @else {
             <!-- Splitter Handle -->
             <div class="pf-appt-split__handle" role="separator" aria-orientation="vertical"
               aria-label="Resize Appointments / Work pane" [attr.aria-valuenow]="twoPaneSplit()" aria-valuemin="15"
@@ -665,10 +690,12 @@
               <span class="pf-appt-split__grip" aria-hidden="true"></span>
             </div>
             }
+            }
 
             <!-- Right Pane -->
             <section class="pf-appt-split__pane pf-appt-split__pane--work"
               [class.pf-appt-split__pane--solo]="!showLeftPane()"
+              [class.pf-appt-split__pane--flow]="flowMode() && rightTab() !== 'out'"
               [class.pf-appt-split__pane--filtering]="workFilterOpen()"
               [class.pf-appt-split__pane--expanded]="expandedPane() === 'work'"
               [class.pf-appt-split__pane--collapsed]="expandedPane() !== 'work' && expandedPane() !== 'none'">
@@ -733,6 +760,22 @@
                   }
                 </div>
 
+                <!-- New design: the card's icon tile + WORK title. Visually FIRST (CSS order), after the search and
+                     status chips in the DOM so the header keeps its search-then-filter reading order. -->
+                @if (theme.isNewDesign()) {
+                <span class="pf-work-hdr__title">
+                  <span class="pf-card__icon" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="8" y="2" width="8" height="4" rx="1" />
+                      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                      <path d="M9 12h6M9 16h4" />
+                    </svg>
+                  </span>
+                  <span class="pf-card__label">Work</span>
+                </span>
+                }
+
                 <!-- Date filter — applies to EVERY status (independent of the chips). -->
                 <div class="pf-work-hdr__date" (click)="$event.stopPropagation()">
                   <!-- Date filters for Right Pane -->
@@ -743,19 +786,29 @@
                                 (optionClick)="onWorkDateOptionClick($event)"
                                 (optionClear)="clearWorkCustom()" />
 
-                  <!-- Dropdown filter for Work (visible on mobile/tablet only < 1024px) -->
+                  @if (theme.isNewDesign()) {
+                  <span class="pf-work-hdr__range" aria-hidden="true">{{ workRangeLabel() === 'Custom' ? workCustomRangeLabel() : workRangeLabel() }}</span>
+                  }
+                  <!-- Dropdown filter for Work. New design: it opens MORE FILTERS (date + doctor / branch / late /
+                       dues / sort — flow-grid/more-filters.component.ts); classic keeps the date-only popover. -->
                   <div class="pf-hdr-filter">
                     <button #workFilterBtn type="button" class="pf-hdr-filter__btn"
-                      [class.pf-hdr-filter__btn--on]="workFilterOpen() || workDateRange() !== 'today'"
+                      [class.pf-hdr-filter__btn--on]="workFilterOpen() || workDateRange() !== 'today' || workFilterCount() > 0"
                       (click)="toggleWorkFilter()" aria-haspopup="true" [attr.aria-expanded]="workFilterOpen()"
-                      [attr.aria-label]="'Filter by date: ' + workRangeLabel()"
-                      [attr.title]="'Filter by date: ' + workRangeLabel()">
+                      [attr.aria-label]="theme.isNewDesign() ? 'More filters: ' + workRangeLabel() + (workFilterCount() ? ', ' + workFilterCount() + ' on' : '') : 'Filter by date: ' + workRangeLabel()"
+                      [attr.title]="theme.isNewDesign() ? 'More filters' : 'Filter by date: ' + workRangeLabel()">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                         stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M4 6h16M7 12h10M10 18h4" />
                       </svg>
                     </button>
-                    @if (workFilterOpen()) {
+                    @if (workFilterOpen() && theme.isNewDesign()) {
+                    <pf-fd-more-filters [filters]="workFilters()" [dateOptions]="workDateSegmentOptions()" [dateValue]="workDateRange()"
+                      [dateChanged]="workDateRange() !== 'today'" [doctors]="doctorChoices()" [branches]="branchChoices()"
+                      (filtersChange)="setWorkFilters($event)" (dateChange)="setWorkDateRange($any($event))"
+                      (dateClick)="onWorkDateOptionClick($any($event))" (dateClear)="clearWorkCustom()"
+                      (cleared)="clearMoreFilters()" (closed)="closeDateFilters()" />
+                    } @else if (workFilterOpen()) {
                     <div class="pf-pop-bd" (click)="closeDateFilters()"></div>
                     <div class="pf-hdr-filter__pop" role="menu" aria-label="Date range">
                       @for (opt of workDateOptions; track opt.id) {
@@ -833,6 +886,23 @@
               </div>
               }
 
+              <!-- NEW DESIGN ≥1024px: the FLOW GRID (owner-approved 2026-11-19) — the same lists as the rows below
+                   (drafts + In progress / Completed / Payments due / the merged list), one row per order:
+                   Token · Patient · Visit for · Where now · Journey · Waiting · Payment · Next (+ ⋯). Outsourced keeps
+                   its own list. Phones / tablet portrait / classic keep the row lists. -->
+              @if (flowMode() && rightTab() !== 'out') {
+              @if (rightTab() === null && outsourcing.truncated()) {
+              <p class="pf-wsec-note" role="status">
+                Showing the first 1000 outsourced rows for this date range — narrow it to see the rest.
+              </p>
+              }
+              <pf-fd-flow-grid class="pf-fd-flow" [rows]="flowRows()" [context]="flowCtx"
+                [loading]="ordersSkel() && flowRows().length === 0 && (rightTab() !== 'billing' || billsSkel())"
+                [selecting]="workSelectable()" [emptyTitle]="flowEmpty().title" [emptyBody]="flowEmpty().body"
+                (opened)="openFlowRow($event)" />
+              }
+
+              @if (!flowMode()) {
               <!-- IN-PROGRESS TAB — saved drafts surface at the top of the same
                    list (parked carts, localStorage), then live in-progress orders. -->
               @if (statusShown('ip')) {
@@ -1263,6 +1333,8 @@
               }
               }
 
+              }
+
               <!-- OUTSOURCED TAB — tests sent to partner labs; the front desk
                    uploads the partner's report to complete them. New design:
                    no filter bar — each row shows its status and the card's
@@ -1271,6 +1343,7 @@
               <pf-outsourced-list [showFilters]="!theme.isNewDesign()"></pf-outsourced-list>
               }
 
+              @if (!flowMode()) {
               <!-- PAYMENTS DUE TAB -->
               @if (statusShown('billing') && showPaymentsDue()) {
               @if (billsSkel() && paymentsDueAll().length === 0) {
@@ -1684,6 +1757,7 @@
                 <p class="pf-empty__body">Pick another day or range above.</p>
               </div>
               }
+              }
             </section>
           </div>
         </div>
@@ -1714,6 +1788,11 @@
          Result entry for a single-person clinic) render here as panels. -->
     <pf-work-area-panels menu="frontdesk" />
   </div>
+
+  <!-- Flow grid: a row's Share (Next or ⋯) — the work list's share rows, floated over the pressed control. -->
+  @if (flowShareOpen(); as fs) {
+  <pf-fd-flow-share-menu [order]="fs.order" [rect]="fs.rect" [api]="flowShareApi" (closed)="closeFlowShare()" />
+  }
 
   <!-- Order drawer (detail view) -->
   @if (selectedOrder(); as so) {
