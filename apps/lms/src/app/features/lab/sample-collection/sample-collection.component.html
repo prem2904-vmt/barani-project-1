@@ -131,7 +131,7 @@
               } @else if (filteredGroups().length === 0) {
                 <div class="pf-empty pf-sc__empty">No samples waiting for collection.</div>
               } @else {
-                <ul class="pf-side-list" role="list">
+                <ul class="pf-side-list pf-side-list--split" role="list">
                   @for (g of filteredGroups(); track g.orderId) {
                     <li>
                       <button type="button" class="pf-side-item pf-sc-qrow" [class.is-on]="openOrderId() === g.orderId"
