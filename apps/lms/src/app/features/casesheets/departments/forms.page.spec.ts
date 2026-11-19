@@ -128,7 +128,7 @@ describe('Prepare home', () => {
   const noop = (): void => undefined;
 
   async function open(opts: { perms?: string[]; wide?: boolean; dept?: string; seed?: (api: MockCasesApi) => void } = {}) {
-    (window as unknown as { matchMedia: unknown }).matchMedia = () => ({ matches: opts.wide ?? true, addEventListener: noop, removeEventListener: noop });
+    (window as unknown as { matchMedia: unknown }).matchMedia = (q: string) => ({ matches: q.includes('max-width') ? !(opts.wide ?? true) : (opts.wide ?? true), addEventListener: noop, removeEventListener: noop });
     const api = (current = new MockCasesApi());
     api.forms.clear(); // the mock starts with one sample ENT form
     opts.seed?.(api);
@@ -158,6 +158,8 @@ describe('Prepare home', () => {
   const depts = (api: MockCasesApi) => api.departments.push({ key: 'ent', name: 'ENT', sortOrder: 1 }, { key: 'ortho', name: 'Orthopaedics', sortOrder: 2 });
 
   afterEach(() => TestBed.resetTestingModule());
+  /** The department rows of the side card (the "Continue" draft rows are `draft:` ids). */
+  const deptRows = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>('.pf-tp__item[data-testid]')].filter((r) => !r.dataset['testid']!.startsWith('tp-item-draft:'));
 
   it('ND header (owner 2026-11-11 "too zoomed"): no big page heading; "My case sheets" is a band action; an sr-only title', async () => {
     const { el, q } = await open({ seed: (a) => { depts(a); a.addForm('f1', def('Nose history'), 'nose', 'ent'); } });
@@ -166,21 +168,25 @@ describe('Prepare home', () => {
     expect(h1.classList.contains('sr-only')).toBe(true);
     expect(q('[data-sub]')!.classList.contains('sr-only')).toBe(true);
     expect(el.querySelector('.dp__top, .dp__title')).toBeNull();
-    const mine = q('pf-hero-band .pf-hb__actions [data-my-sheets]')!;
-    expect(mine.classList.contains('pf-hb-btn--ghost')).toBe(true);
+    // owner 2026-11-19: no button in the band's corner; "My case sheets" sits in the main card's head (compact, secondary)
+    expect(q('pf-hero-band [data-my-sheets]')).toBeNull();
+    const mine = q('.pf-tp__panel .pf-tp__head [data-my-sheets]')!;
+    expect(mine.classList.contains('pf-btn--secondary')).toBe(true);
     expect(mine.textContent).toContain('My case sheets');
     expect(el.querySelector('pf-hero-band')).not.toBeNull();
   });
 
-  it('case-sheet tiles: the whole title, a small icon chip, no hyphenation; headers at the card scale', () => {
+  it('case-sheet tiles: the whole title, a small icon chip, no hyphenation; no hand-rolled two-column card', () => {
     const scss = readFileSync(resolve(process.cwd(), 'apps/lms/src/app/features/casesheets/departments/forms.page.scss'), 'utf8');
     expect(scss).toMatch(/\.dp__tname\s*\{[^}]*word-break:\s*normal[^}]*hyphens:\s*none/);
     expect(scss).not.toMatch(/hyphens:\s*auto/);
     expect(scss).toMatch(/\.dp__grid\s*\{[^}]*minmax\(min\(100%, 260px\), 1fr\)/);
     expect(scss).toMatch(/\.dp__disc\s*\{[^}]*width:\s*32px[^}]*background:\s*var\(--bg-active/);
     expect(scss).not.toMatch(/\.dp__disc\s*\{[^}]*gradient/);
-    expect(scss).toMatch(/\.dp__shtitle\s*\{[^}]*font-size:\s*12px[^}]*text-transform:\s*uppercase/);
     expect(scss).not.toMatch(/scale\(1\.05\)/);
+    // the panels are the shared two-panel's: no own list / row / side width
+    expect(scss).not.toMatch(/\.dp__(list|row|num|shead|back)\b/);
+    expect(scss).not.toMatch(/\b(256|320|370)px/);
   });
 
   it('no departments + builder permission: one empty state with "Add departments" to the new page', async () => {
@@ -209,12 +215,15 @@ describe('Prepare home', () => {
 
   it('wide screen: the departments are listed with their counts and the first one opens by itself', async () => {
     const { el, q } = await open({ seed: (a) => { depts(a); a.addForm('f1', def('Nose history'), 'nose', 'ent'); a.addForm('f2', def('Knee pain'), 'knee', 'ortho'); a.addForm('f3', def('Ear history'), 'ear', 'ent'); } });
-    const rows = [...el.querySelectorAll('[data-dept]')];
-    expect(rows.map((r) => r.getAttribute('data-dept'))).toEqual(['ENT', 'Orthopaedics']);
-    expect(rows[0].textContent).toContain('2 case sheets');
-    expect(rows[1].textContent).toContain('1 case sheet');
+    const rows = deptRows(el);
+    expect(rows.map((r) => r.querySelector('.pf-tp__label')!.textContent!.trim())).toEqual(['ENT', 'Orthopaedics']);
+    expect(rows[0].querySelector('.pf-tp__note')!.textContent!.trim()).toBe('2');
+    expect(rows[1].querySelector('.pf-tp__note')!.textContent!.trim()).toBe('1');
     expect(rows[0].getAttribute('aria-current')).toBe('true');
-    expect(q('#dp-sh')!.textContent).toContain('ENT');
+    expect(q('[data-testid="tp-nav-title"]')!.textContent).toContain('Departments');
+    expect(q('[data-dept-count]')!.textContent!.trim()).toBe('2');
+    expect(q('[data-testid="tp-panel"] .pf-tp__title')!.textContent).toContain('ENT');
+    expect(q('[data-testid="tp-panel"] .pf-tp__desc')!.textContent).toContain('2 case sheets');
     expect([...el.querySelectorAll('[data-form]')].map((t) => t.getAttribute('data-form')).sort()).toEqual(['ear', 'nose']);
     expect(el.textContent).not.toContain('Select a department');
     expect(q('.dp')!.classList.contains('dp--picked')).toBe(false); // phone list stays the first step
@@ -223,17 +232,17 @@ describe('Prepare home', () => {
   it('phone: a two-step list; nothing is opened until one is picked (?dept=)', async () => {
     const seed = (a: MockCasesApi) => { depts(a); a.addForm('f1', def('Nose history'), 'nose', 'ent'); };
     const list = await open({ wide: false, seed });
-    expect(list.q('#dp-sh')).toBeNull();
+    expect(list.q('.pf-tp__title')).toBeNull();
     expect(list.q('.dp')!.classList.contains('dp--picked')).toBe(false);
     const picked = await open({ wide: false, dept: 'ENT', seed });
-    expect(picked.q('#dp-sh')!.textContent).toContain('ENT');
+    expect(picked.q('.pf-tp__title')!.textContent).toContain('ENT');
     expect(picked.q('.dp')!.classList.contains('dp--picked')).toBe(true);
   });
 
   it('a department with no case sheets is still listed, and its pane says so (builders can open Case sheets)', async () => {
     const { q, el } = await open({ perms: ['casesheet_forms_manage'], dept: 'Orthopaedics', seed: (a) => { depts(a); a.addForm('f1', def('Nose history'), 'nose', 'ent'); } });
-    expect([...el.querySelectorAll('[data-dept]')].map((r) => r.getAttribute('data-dept'))).toEqual(['ENT', 'Orthopaedics']);
-    expect(q('[data-dept="Orthopaedics"]')!.textContent).toContain('No case sheets yet');
+    expect(deptRows(el).map((r) => r.querySelector('.pf-tp__label')!.textContent!.trim())).toEqual(['ENT', 'Orthopaedics']);
+    expect(q('[data-testid="tp-item-Orthopaedics"] .pf-tp__note')!.textContent!.trim()).toBe('0');
     expect(q('[data-empty="dept-forms"]')!.textContent).toContain('No case sheets in Orthopaedics yet');
     expect(q('[data-empty="dept-forms"] [data-act="open-myprefrontal"]')).not.toBeNull();
   });
@@ -253,9 +262,9 @@ describe('Prepare home', () => {
       fx.detectChanges();
     };
     await set('knee');
-    expect([...el.querySelectorAll('[data-dept]')].map((r) => r.getAttribute('data-dept'))).toEqual(['Orthopaedics']);
+    expect(deptRows(el).map((r) => r.querySelector('.pf-tp__label')!.textContent!.trim())).toEqual(['Orthopaedics']);
     await set('ENT');
-    expect([...el.querySelectorAll('[data-dept]')].map((r) => r.getAttribute('data-dept'))).toEqual(['ENT']);
+    expect(deptRows(el).map((r) => r.querySelector('.pf-tp__label')!.textContent!.trim())).toEqual(['ENT']);
     await set('zzz');
     expect(el.querySelector('[data-empty="search"]')!.textContent).toContain('Nothing matches');
   });

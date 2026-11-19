@@ -1,9 +1,10 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs';
 import { PfIconComponent } from '@prefrontal/forms-engine';
-import { SkeletonRowsComponent } from '@prefrontal/shared';
+import { SkeletonRowsComponent, TwoPanelComponent, TwoPanelGroup, injectTwoPanelCompact } from '@prefrontal/shared';
+import { NavBackService } from '../../../core/services/nav-back.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { casesheetLinks } from '../casesheets.routes';
@@ -41,6 +42,9 @@ export function orderByDepartments(forms: readonly FormSummary[], departments: r
     .sort((a, b) => a.r - b.r || a.at - b.at)
     .map((x) => x.f);
 }
+
+/** Id prefix of a saved draft row (a department row's id is its name). */
+const DRAFT_PREFIX = 'draft:';
 
 /** Forms with no specialty sit under this department. */
 export const NO_DEPARTMENT = 'General';
@@ -116,7 +120,7 @@ export function deptNavigation(name: string | null, current: string | null): {
 @Component({
   selector: 'app-forms-page',
   standalone: true,
-  imports: [PfIconComponent, SkeletonRowsComponent, RouterLink, CsStylesComponent, CsPatientStepComponent, HeroBandComponent],
+  imports: [PfIconComponent, SkeletonRowsComponent, TwoPanelComponent, RouterLink, CsStylesComponent, CsPatientStepComponent, HeroBandComponent],
   providers: [...CASESHEETS_DATA_PROVIDERS],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './forms.page.html',
@@ -133,6 +137,12 @@ export class FormsPage {
   protected readonly links = casesheetLinks;
   /** Public site vs the lab (Prepare: /cases/:id). */
   protected readonly nav = inject(CasesheetNav);
+  private readonly navBack = inject(NavBackService);
+  /** Phone width: the Departments list first, then the department (the band's back climbs). */
+  protected readonly compact = injectTwoPanelCompact();
+  protected readonly icons = {
+    dept: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
+  };
 
   protected readonly query = signal('');
   protected readonly forms = signal<FormSummary[] | null>(null);
@@ -197,7 +207,45 @@ export class FormsPage {
     () => this.chosenDept() ?? (this.wide() ? (this.departments()[0] ?? null) : null),
   );
 
+  /** The shared two-panel's rows: the departments (count on the right), then "Continue" (saved drafts). */
+  protected readonly groups = computed<TwoPanelGroup[]>(() => {
+    const out: TwoPanelGroup[] = [{ key: 'departments', heading: '', items: this.departments().map((d) => ({ id: d.name, label: d.name, note: String(d.forms.length) })) }];
+    const drafts = this.drafts() ?? [];
+    if (drafts.length) {
+      out.push({
+        key: 'continue',
+        heading: 'Continue',
+        items: drafts.map((d) => ({ id: DRAFT_PREFIX + d.id, label: d.patientName || 'No name yet', sub: `${d.formTitle} · saved ${this.when(d.updatedAt)}` })),
+      });
+    }
+    return out;
+  });
+
+  /** The main card's head note: how many case sheets, then the quiet hint. */
+  protected readonly panelNote = computed(() => {
+    const d = this.pickedDept();
+    if (!d) return null;
+    return d.forms.length ? `${d.forms.length} ${d.forms.length === 1 ? 'case sheet' : 'case sheets'} · Select one to begin` : 'No case sheets in this department yet';
+  });
+
+  protected onPick(id: string): void {
+    if (id.startsWith(DRAFT_PREFIX)) void this.router.navigateByUrl(this.nav.sheet(id.slice(DRAFT_PREFIX.length)));
+    else this.pick(id);
+  }
+
+  /** Phone: the band's back (and the swipe / hardware back) goes from a department to the list. */
+  private readonly backHandler = (): boolean => {
+    if (!this.compact() || !this.chosenDept()) return false;
+    this.pick(null);
+    return true;
+  };
+
   constructor() {
+    effect(() => {
+      if (this.compact() && this.chosenDept()) this.navBack.registerBackInterceptor(this.backHandler);
+      else this.navBack.clearBackInterceptor(this.backHandler);
+    });
+    inject(DestroyRef).onDestroy(() => this.navBack.clearBackInterceptor(this.backHandler));
     const mq = this.wideQuery;
     if (mq && typeof mq.addEventListener === 'function') {
       const on = () => this.wide.set(mq.matches);

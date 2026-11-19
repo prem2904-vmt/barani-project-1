@@ -49,7 +49,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
     .pf-hc-lbl { display: block; margin-bottom: 6px; }
     .pf-hc-hint { margin-top: 6px; }
     .pf-hc-body { gap: 12px; }
-    .pf-hc-panels { grid-template-columns: 380px minmax(0, 1fr); }
+    .pf-hc-panels { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); }
     .pf-hc-panels.pf-sg-panels--single, .pf-hc-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-hc-strip { flex: none; display: block; }
     .pf-hc-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

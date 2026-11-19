@@ -222,7 +222,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     }
     .pf-kpi-bandsel { display: block; min-width: 190px; }
     .pf-kpi-page.pf-band-page { max-width: none; margin: 0; padding: 24px clamp(16px, 3vw, 32px) 40px; gap: 0; }
-    .pf-kpi-panels { grid-template-columns: 300px minmax(0, 1fr); }
+    .pf-kpi-panels { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); }
     .pf-kpi-panels.pf-sg-panels--single, .pf-kpi-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-kpi-scr { list-style: none; margin: 0; padding: 6px; gap: 2px; }
     .pf-kpi-scr__btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 8px 10px;

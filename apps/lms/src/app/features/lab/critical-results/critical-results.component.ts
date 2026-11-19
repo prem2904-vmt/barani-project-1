@@ -203,7 +203,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     .pf-cr__skel { display: block; }
     :host { display: block; min-height: 0; }
     .pf-cr__body { display: flex; flex-direction: column; min-height: 0; }
-    .pf-cr__panels { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+    .pf-cr__panels { display: grid; grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
     .pf-cr__panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-cr__side { min-height: 0; }
     .pf-cr__side--sheet {

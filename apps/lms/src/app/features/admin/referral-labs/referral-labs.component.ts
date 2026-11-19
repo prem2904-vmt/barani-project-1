@@ -183,7 +183,7 @@ const EMPTY: LabDraft = {
     /* Dept chips: kit .pf-chip with the NEUTRAL selected state (aria-pressed). */
     .pf-dept-chip { height: 32px; }
     .pf-rl-form__body { gap: 12px; }
-    .pf-rl-panels { grid-template-columns: 380px minmax(0, 1fr); }
+    .pf-rl-panels { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); }
     .pf-rl-panels.pf-sg-panels--single, .pf-rl-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-rl-lbl { display: block; margin-bottom: 6px; }
     .pf-rl-hint { margin-top: 6px; }

@@ -1,7 +1,13 @@
-// Prepare home. The band page frame is styles/_page.scss; one content card fills the height:
-//  ≥768: departments list (256, lg 320) | case sheets (flex-1). <768: one pane at a time.
+// Prepare home. The band page frame is styles/_page.scss. Below the band: OUR two-panel (pf-two-panel, Test Master's
+// frame — side card LEFT at --pf-side-w, main card RIGHT, same height, only the card bodies scroll). This file styles
+// only what the panels hold: the message cards, the case-sheet tiles and the star.
 .dp__body {
   gap: 16px;
+}
+
+.dp__tp {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 // with a patient: one quiet line above the card (who the new case sheet is for)
@@ -22,47 +28,30 @@
   color: var(--text-primary);
 }
 
+// "My case sheets": a compact secondary button in a card head (never in the band's corner); phone = icon only
 .dp__mine {
   text-decoration: none;
+  height: 34px;
+  min-height: 34px;
+  padding-inline: 10px;
+  white-space: nowrap;
 }
 
-.dp__head {
+.dp__mine--icon {
   flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 52px;
-  padding: 0 16px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border-muted);
-}
-
-.dp__lh {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  width: 34px;
+  min-width: 34px;
+  padding-inline: 0;
+  justify-content: center;
 }
 
 .dp__lc {
-  font-size: 13px;
+  font-size: 12.5px;
+  font-weight: 500;
   color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
 }
 
-.dp__card--msg {
-  align-items: center;
-  justify-content: center;
-  overflow-y: auto;
-}
-
-.dp__card--msg > * {
-  flex: 1 1 auto;
-}
-
+// one-card states (loading, error, empty, no search match)
 .dp__card {
   flex: 1 1 auto;
   min-height: 0;
@@ -74,124 +63,14 @@
   box-shadow: var(--pf-card-shadow, none);
 }
 
-// ───────── left: departments ─────────
-.dp__list {
-  width: 100%;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid var(--border-muted);
-}
-
-
-.dp__scroll,
-.dp__gridscroll {
-  display: block;
-  gap: 0;
-}
-
-.dp__scroll {
-  padding: 0;
-  flex: 1 1 auto;
-  min-height: 0;
-  overscroll-behavior: contain;
-}
-
-.dp__rows {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.dp__rows > li + li {
-  border-top: 1px solid var(--border-muted);
-}
-
-.dp__row {
-  width: 100%;
-  display: flex;
+.dp__card--msg {
   align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  padding: 10px 14px 10px 13px;
-  border: 0;
-  border-left: 3px solid transparent;
-  background: transparent;
-  color: var(--text-muted);
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-  font: inherit;
-  -webkit-tap-highlight-color: transparent;
-  transition: background-color 150ms ease;
+  justify-content: center;
+  overflow-y: auto;
 }
 
-.dp__row:hover {
-  background: var(--bg-hover);
-}
-
-.dp__row:hover .dp__name,
-.dp__row:hover > pf-icon {
-  color: var(--violet-text, var(--color-primary));
-}
-
-.dp__row--on {
-  background: var(--bg-active);
-  border-left-color: var(--color-primary);
-}
-
-.dp__row:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
-}
-
-.dp__num {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  font-size: 13px;
-  border-radius: 999px;
-  display: grid;
-  place-items: center;
-  background: var(--bg-hover);
-  color: var(--violet-text, var(--color-primary));
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.dp__rowtext {
+.dp__card--msg > * {
   flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.dp__name {
-  font-weight: 500;
-  font-size: 14.5px;
-  line-height: 20px;
-  color: var(--text-primary);
-  transition: color 150ms ease;
-}
-
-.dp__count {
-  font-size: 12px;
-  line-height: 16px;
-  color: var(--text-tertiary);
-}
-
-.dp__cont {
-  border-top: 1px solid var(--border-muted);
-}
-
-.dp__conth {
-  margin: 0;
-  padding: 14px 16px 6px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
 }
 
 .dp__msg {
@@ -208,80 +87,14 @@
   font-weight: 600;
 }
 
-// ───────── right: case sheets ─────────
-.dp__sheets {
-  display: none;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  flex-direction: column;
-}
-
-.dp__shead {
-  flex: none;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 2px 12px;
-  min-height: 52px;
-  padding: 14px 16px;
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border-muted);
-}
-
-.dp__back {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: var(--pf-touch, 48px);
-  height: var(--pf-touch, 48px);
-  align-self: center;
-  width: 40px;
-  height: 40px;
-  margin: -10px -4px -10px -8px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.dp__back:hover {
-  background: var(--bg-hover);
-}
-
-// the department's name in the card-header style (uppercase label), the hint quiet beside it
-.dp__shtitle {
-  margin: 0;
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.dp__shsub {
-  font-size: 13px;
-  color: var(--text-tertiary);
-}
-
-.dp__gridscroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overscroll-behavior: contain;
-  padding: 16px;
-}
-
 .dp__err {
   margin: 0 0 16px;
   color: var(--error-text);
   font-size: 14px;
 }
 
-// Case sheets: row tiles wide enough for the whole title (never hyphenated: it wraps between words), the app's tile
-// type scale, a small violet icon chip like every card header (owner 2026-11-11: narrow tiles, huge gradient disc,
-// "CNS case profor-ma").
+// Case sheets: tiles wide enough for the whole title (never hyphenated: it wraps between words), the app's tile look
+// (12px radius, --pf-line border, a small violet icon chip like every card header).
 .dp__grid {
   list-style: none;
   margin: 0;
@@ -318,12 +131,8 @@
 }
 
 .dp__tile:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
-  background: var(--bg-hover);
-}
-
-.dp__tile:hover:not(:disabled) .dp__tname {
-  color: var(--violet-text, var(--color-primary));
+  border-color: var(--pf-sel-border);
+  background: var(--pf-chip-bg);
 }
 
 .dp__tile:active:not(:disabled) {
@@ -331,7 +140,7 @@
 }
 
 .dp__tile:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-violet-600, #7c3aed);
   outline-offset: 2px;
 }
 
@@ -340,8 +149,8 @@
 }
 
 .dp__tile[aria-busy='true'] {
-  border-color: var(--color-primary);
-  background: var(--bg-active);
+  border-color: var(--pf-sel-border);
+  background: var(--pf-sel-bg);
 }
 
 .dp__disc {
@@ -360,13 +169,12 @@
 .dp__tname {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 14.5px;
+  font-size: 13.5px;
   line-height: 20px;
   font-weight: 500;
   overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
-  transition: color 150ms ease;
 }
 
 .dp__tstate {
@@ -374,6 +182,7 @@
   color: var(--violet-text, var(--color-primary));
 }
 
+// the favourite toggle
 .dp__star {
   position: absolute;
   top: 50%;
@@ -392,10 +201,7 @@
   transition: color 200ms ease;
 }
 
-.dp__star:hover {
-  color: var(--violet-text, var(--color-primary));
-}
-
+.dp__star:hover,
 .dp__star--on {
   color: var(--violet-text, var(--color-primary));
 }
@@ -404,67 +210,6 @@
   fill: currentColor;
 }
 
-.dp__none {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  text-align: center;
-  color: var(--text-tertiary);
-}
-
-.dp__noneicon {
-  color: var(--text-muted);
-  margin-bottom: 10px;
-}
-
-.dp__nonetitle {
-  margin: 0 0 4px;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-.dp__none p {
-  margin: 0;
-}
-
-// ───────── phone (<768): one pane at a time ─────────
-@media (max-width: 767px) {
-  .dp--picked .dp__list {
-    display: none;
-  }
-  .dp--picked .dp__sheets {
-    display: flex;
-  }
-  .dp__gridscroll {
-    padding: 12px;
-  }
-}
-
-// ───────── ≥768: list | sheets ─────────
-@media (min-width: 768px) {
-  .dp__list {
-    width: 256px;
-    flex: none;
-  }
-  .dp__sheets {
-    display: flex;
-  }
-  .dp__back {
-    display: none;
-  }
-}
-
-@media (min-width: 1024px) {
-  .dp__list {
-    width: 320px;
-  }
-}
-
-
 @media (prefers-reduced-motion: reduce) {
   .dp__tile,
   .dp__tile:active:not(:disabled) {
@@ -472,4 +217,3 @@
     transition: none;
   }
 }
-
