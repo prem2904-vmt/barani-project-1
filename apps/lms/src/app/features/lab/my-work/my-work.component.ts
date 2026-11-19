@@ -507,6 +507,8 @@ const COUNTERS: CounterSpec[] = [
                 <path d="m14 6-6 6 6 6"/>
               </svg>
             </button>
+            <!-- Sort order sits in the pane head (owner 2026-11-19), not above the first row. -->
+            <pf-lab-sort class="pf-mw-intake-sort" scope="intake" data-testid="lab-sort-intake-head"></pf-lab-sort>
             }
             <div class="pf-mw-scan" [class.pf-intake-open]="intakeSearchOpen()">
               <!-- Phone-only (<=640px) magnifier: collapses the cramped inline
@@ -1298,6 +1300,8 @@ const COUNTERS: CounterSpec[] = [
       padding: 10px 12px;
       flex-wrap: wrap;
     }
+    /* The intake sort rides the head row, at its right end (the scan bar wraps to its own row). */
+    .pf-mw-intake-sort { margin-left: auto; }
     .pf-mw-scan {
       margin-left: auto;
       display: inline-flex;

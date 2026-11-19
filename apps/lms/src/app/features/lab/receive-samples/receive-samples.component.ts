@@ -341,7 +341,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
             </p>
           </div>
         }
-        <div class="flex justify-end mb-2"><pf-lab-sort scope="intake" data-testid="lab-sort-intake"></pf-lab-sort></div>
+        <div class="flex justify-end mb-2 pf-rs-sort" [class.pf-rs-sort--embedded]="embedded && theme.isNewDesign()"><pf-lab-sort scope="intake" data-testid="lab-sort-intake"></pf-lab-sort></div>
         <ul class="pf-rs-list" [class.pf-rs-list--compact]="embedded">
           @for (g of (labCfg.sampleFocused() ? dispatchedTubes() : dispatchedOrders()); track $index) {
             @if (embedded) {
@@ -539,7 +539,7 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
 
       @if (inTransit().length > 0 && !queueSkeleton()) {
         @if (dispatchedOrders().length === 0) {
-          <div class="flex justify-end mb-2"><pf-lab-sort scope="intake" data-testid="lab-sort-intake"></pf-lab-sort></div>
+          <div class="flex justify-end mb-2 pf-rs-sort" [class.pf-rs-sort--embedded]="embedded && theme.isNewDesign()"><pf-lab-sort scope="intake" data-testid="lab-sort-intake"></pf-lab-sort></div>
         }
         <div class="space-y-2.5">
           @for (s of inTransitView(); track s.id) {
@@ -613,6 +613,9 @@ const LAST_DEPT_KEY = 'pf-lms.receive.last-dept-code';
     }
   `,
   styles: [`
+    /* Embedded in My Work (new design): the sort lives in the Lab Intake pane head on tablet/desktop;
+       phones keep it above the list (their head has no room). */
+    @media (min-width: 641px) { .pf-rs-sort--embedded { display: none; } }
     /* ── Embedded compact list (used inside the my-work Lab Intake pane).
      * Each row is a single-line tile with avatar + name + Intake button. */
     .pf-rs-list {
