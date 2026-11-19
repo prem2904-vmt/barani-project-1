@@ -225,3 +225,37 @@ describe('pf-actions-menu — styles', () => {
     expect(css()).toContain('var(--text-primary)');
   });
 });
+
+@Component({
+  standalone: true,
+  imports: [ActionsMenuComponent],
+  template: `<pf-actions-menu [actions]="acts" label="Filter by status" [popover]="true" [checkCurrent]="true" (action)="picked.push($event)" />`,
+})
+class HostFilter {
+  acts: PfAction[] = [
+    { id: 'all', label: 'All', dot: 'ring', count: 18 },
+    { id: 'partial', label: 'Partial', dot: 'var(--sky-text)', count: 4, current: true },
+  ];
+  picked: string[] = [];
+}
+
+describe('pf-actions-menu — popover filter menu (Reports v2)', () => {
+  it('popover stays a dropdown on phones; rows carry a dot, a count and a tick on the current one', async () => {
+    const { f, el, host } = await mount(HostFilter, true);
+    (el.querySelector('button.pf-am-trigger') as HTMLButtonElement).click();
+    f.detectChanges();
+    const panel = document.querySelector('.pf-am-panel') as HTMLElement;
+    expect(panel.classList).not.toContain('pf-am-panel--sheet');
+    expect(document.querySelector('.pf-am-foot')).toBeNull();          // no Cancel bar at the bottom
+    const rows = [...document.querySelectorAll<HTMLElement>('[role=menuitemradio]')];
+    expect(rows.map(r => r.getAttribute('aria-checked'))).toEqual(['false', 'true']);
+    expect(rows[0].querySelector('.pf-am-item__dot--ring')).not.toBeNull();
+    expect((rows[1].querySelector('.pf-am-item__dot') as HTMLElement).style.background).toBe('var(--sky-text)');
+    expect(rows.map(r => r.querySelector('.pf-am-item__count')!.textContent!.trim())).toEqual(['18', '4']);
+    expect(rows[0].querySelector('.pf-am-item__check')!.classList).toContain('pf-am-item__check--off');
+    expect(rows[1].querySelector('.pf-am-item__check')!.classList).not.toContain('pf-am-item__check--off');
+    rows[0].click(); f.detectChanges();
+    expect(host.picked).toEqual(['all']);
+    expect(document.querySelector('.pf-am-panel')).toBeNull();
+  });
+});
