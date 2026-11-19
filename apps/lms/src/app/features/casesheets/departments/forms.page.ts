@@ -243,7 +243,7 @@ export class FormsPage {
   protected readonly panelNote = computed(() => {
     const d = this.pickedDept();
     if (!d) return null;
-    if (this.tab() === 'continue') return `${this.draftRows().length} ${this.draftRows().length === 1 ? 'draft' : 'drafts'} · Select one to continue`;
+    if (this.tab() === 'continue') return null; // the pill carries the draft count; the head keeps room for the search
     return d.forms.length ? `${d.forms.length} ${d.forms.length === 1 ? 'case sheet' : 'case sheets'} · Select one to begin` : 'No case sheets in this department yet';
   });
 

@@ -226,18 +226,31 @@
 .dp__ctl {
   display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 12px;
+}
+
+@media (max-width: 767px) {
+  .dp__ctl {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .dp__dsearch {
+    max-width: none;
+    flex-basis: 100%;
+  }
 }
 
 .dp__dsearch {
   flex: 1 1 200px;
   min-width: 160px;
-  max-width: 22rem;
+  width: 15rem;
+  max-width: 15rem;
   height: 34px;
 }
 
 .dp__only {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   gap: 8px;
