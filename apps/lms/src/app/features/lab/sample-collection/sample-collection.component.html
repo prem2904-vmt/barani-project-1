@@ -136,20 +136,17 @@
                     <li>
                       <button type="button" class="pf-side-item pf-sc-qrow" [class.is-on]="openOrderId() === g.orderId"
                               [attr.aria-pressed]="openOrderId() === g.orderId" (click)="openOrder(g.orderId)">
-                        <span class="pf-sc-qrow__who">
-                          <span class="pf-sc-qrow__name"><pf-daily-no [of]="g" />{{ patientFullName(g) }}</span>
-                          <span class="pf-sc-qrow__ord pf-num">
-                            @if (patientSub(g.patientName); as sub) { {{ sub }} · }{{ (g.patientMeta && g.patientMeta !== '—') ? g.patientMeta : g.orderNo }}
-                          </span>
-                        </span>
-                        <span class="pf-sc-qrow__tail">
+                        <span class="pf-sc-qrow__l1">
+                          <span class="pf-sc-qrow__name">{{ patientFullName(g) }}</span>
                           @if (g.paymentHold) {
                             <span class="pf-sc__hold" title="Bill not settled — dispatch is blocked until it's paid">Unpaid</span>
                           }
                           @if (waitingLabel(g)) {
-                            <span class="pf-sc-qrow__wait">{{ waitingLabel(g) }}</span>
+                            <span class="pf-sc-qrow__wait pf-num" [class.pf-sc-qrow__wait--old]="waitingDays(g) > 2"
+                                  [attr.title]="waitingLabel(g)" [attr.aria-label]="waitingLabel(g)">{{ waitingShort(g) }}</span>
                           }
                         </span>
+                        <span class="pf-sc-qrow__l2 pf-num">{{ queueSub(g) }}</span>
                       </button>
                     </li>
                   }
