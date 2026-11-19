@@ -2954,6 +2954,19 @@ input::-ms-clear {
 .pf-side-item:hover { background: var(--pf-chip-bg); }
 .pf-side-item:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
 .pf-side-item:is([aria-pressed='true'], [aria-selected='true'], .is-on) { background: var(--pf-sel-bg); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
+/* Split list (owner 2026-11-19): two-line rows (queues, drafts) get a thin hairline between rows.
+   The line sits between items, never around the selected one or its neighbour. */
+.pf-side-list--split { gap: 0; }
+.pf-side-list--split > li + li > .pf-side-item,
+.pf-side-list--split > .pf-side-item + .pf-side-item { position: relative; }
+.pf-side-list--split > li + li > .pf-side-item::before,
+.pf-side-list--split > .pf-side-item + .pf-side-item::before {
+  content: ''; position: absolute; left: 12px; right: 12px; top: 0; height: 1px; background: var(--pf-line);
+}
+.pf-side-list--split > li:has(> .pf-side-item.is-on) + li > .pf-side-item::before,
+.pf-side-list--split > li + li > .pf-side-item.is-on::before,
+.pf-side-list--split > .pf-side-item.is-on + .pf-side-item::before,
+.pf-side-list--split > .pf-side-item + .pf-side-item.is-on::before { display: none; }
 
 /* Side cards (owner 2026-11-18): the body is the scroller, so its children never shrink — a wrapped row of chips kept
    collapsing under the label that follows it (Option groups). A child that must flex sets its own flex values. */
