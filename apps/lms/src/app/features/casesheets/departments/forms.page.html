@@ -97,12 +97,44 @@
         </a>
         }
       </ng-container>
+      <pf-segmented panel-tools class="dp__tabs" size="sm" [options]="tabOptions()" [value]="tab()" (valueChange)="setTab($event)" aria-label="Case sheets or drafts" />
+      @if (tab() === 'continue') {
+      <span panel-tools class="dp__ctl">
+        <input type="search" class="pf-input dp__dsearch" data-draft-search aria-label="Search drafts" placeholder="Search drafts — patient or case sheet"
+               [value]="draftQuery()" (input)="draftQuery.set($any($event.target).value)" />
+        <label class="dp__only">
+          <pf-toggle size="sm" [checked]="thisDeptOnly()" (checkedChange)="thisDeptOnly.set($event)" data-only-dept aria-label="This department only" />
+          <span>This department only</span>
+        </label>
+      </span>
+      }
       @if (fromPrepare && !compact()) {
       <a panel-tools class="pf-btn pf-btn--secondary dp__mine" routerLink="/prepare/cases" data-my-sheets>
         <pf-icon name="cases" [size]="16" /> My case sheets
       </a>
       }
-      @if (pickedDept(); as d) {
+      @if (tab() === 'continue') {
+        @if (draftRows().length) {
+        <ul class="dp__drafts" role="list" data-drafts>
+          <li class="dp__dh" aria-hidden="true"><span>Patient</span><span>Case sheet</span><span>Department</span><span>Saved</span></li>
+          @for (r of draftRows(); track r.id) {
+          <li>
+            <a class="dp__dr pf-touch" [routerLink]="nav.sheet(r.id)" [attr.data-case]="r.id">
+              <span class="dp__dp">{{ r.patient }}</span>
+              <span class="dp__ds">{{ r.sheet }}</span>
+              <span class="dp__dd">{{ r.dept }}</span>
+              <span class="dp__dw">{{ when(r.saved) }}</span>
+            </a>
+          </li>
+          }
+        </ul>
+        } @else {
+        <div class="pf-empty" data-empty="drafts">
+          <span class="pf-empty__icon"><pf-icon name="pen" [size]="26" /></span>
+          <h2 class="pf-empty__title">No drafts to continue</h2>
+        </div>
+        }
+      } @else if (pickedDept(); as d) {
         @if (error()) {
         <p class="dp__err" role="alert">{{ error() }}</p>
         }
