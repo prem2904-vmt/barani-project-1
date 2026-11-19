@@ -233,7 +233,9 @@ test.describe('settings list grids', () => {
     await go(page, '/admin?section=people&tab=roles');
     await expect(vis(page, '[data-testid="ov-inline"] .pf-ua-main .ag-row')).toBeVisible({ timeout: 60_000 });
     const before = await page.evaluate(() => history.length);
-    await vis(page, '[data-testid="ov-inline"] .pf-ua-main .ag-row').click();
+    // Click the row's name CELL, as a person does. The row element is wider than the columns while the grid is still sizing them to fit
+    // (Firefox / Safari), and its centre then sits outside the clipped cells container, so a click there hits the grid's body instead.
+    await vis(page, '[data-testid="ov-inline"] .pf-ua-main .ag-row .ag-cell[col-id="name"]').click();
     await expect(page).toHaveURL(/\/admin\/roles\/[^/]+\/edit/, { timeout: 30_000 });
     await expect(vis(page, '.re-main')).toBeVisible({ timeout: 30_000 });
     await vis(page, 'pf-hero-band .pf-hb__back').click();
@@ -396,15 +398,17 @@ test.describe('settings list grids', () => {
         const body = (await page.locator('.pf-band-body').locator('visible=true').first().boundingBox())!;
         expect(g.width, `${url} grid width`).toBeGreaterThan(w * 0.4);
         // Hosted in the shell / overview: the grid is FLUSH in the frame's card (Test Master's fill — no inset box).
-        const flush = await grid.evaluate((el) => {
+        // Polled: the inline page lands with its slide / fade-in (~260 ms) and a lazy load, so one early read can catch it mid-motion
+        // (8.67 px at 3440 on a loaded box). The SETTLED edge must be flush.
+        const flushNow = () => grid.evaluate((el) => {
           const card = el.closest('.pf-tp__panel, .pf-ss__card') as HTMLElement | null;
           if (!card) return null;
           const c = card.getBoundingClientRect(); const r = el.getBoundingClientRect();
           return { left: Math.abs(r.left - c.left), right: Math.abs(r.right - c.right) };
         });
-        if (flush) {
-          expect(flush.left, `${url}: grid flush to the card's left edge`).toBeLessThan(3);
-          expect(flush.right, `${url}: grid flush to the card's right edge`).toBeLessThan(3);
+        if (await flushNow()) {
+          await expect.poll(async () => (await flushNow())?.left ?? 0, { message: `${url}: grid flush to the card's left edge`, timeout: 15_000 }).toBeLessThan(3);
+          await expect.poll(async () => (await flushNow())?.right ?? 0, { message: `${url}: grid flush to the card's right edge`, timeout: 15_000 }).toBeLessThan(3);
         }
         // The inline overview page sizes itself after its lazy load settles (slow on a loaded gate box): poll the gap.
         await expect.poll(async () => {

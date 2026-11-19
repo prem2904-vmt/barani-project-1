@@ -58,8 +58,10 @@ test.describe('settings two-panel', () => {
       await shot(page, 'settings-overview');
       await tid(page, 'tp-item-billing').click();
       await expect(page).toHaveURL(/section=billing/);
-      // The section's tiles render after the section switch settles (slow under a loaded CI box, Edge): give it time.
-      await expect(tid(page, 'ov-tile-admin-billing')).toBeVisible({ timeout: 30_000 });
+      // Billing is a ONE-setting section: the overview shows that setting inline (no tile). The tile is only a placeholder while the
+      // page's lazy chunk loads, so asserting it raced the swap (flaked in Chrome / Edge). Assert the settled state instead.
+      await expect(tid(page, 'ov-inline')).toBeVisible({ timeout: 60_000 });
+      await expect(page.locator('[data-testid="ov-tiles"]')).toHaveCount(0);
       await expectLayout(page, 'settings billing');
       await shot(page, 'settings-billing');
     }
