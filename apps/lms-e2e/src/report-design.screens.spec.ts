@@ -132,7 +132,10 @@ test.describe('Report design', () => {
         expect(Math.abs(g.at - g.bt), `${tab}: top-aligned`).toBeLessThan(3);
         expect(Math.abs(g.ah - g.bh), `${tab}: same height`).toBeLessThan(3);
         expect(g.over, `${tab}: no page scroll`).toBeLessThanOrEqual(2);
-        expect(g.nested, `${tab}: never card-in-card`).toBe(0);
+        // The designer shows a placeholder card while the page renders (slow WebKit tablet): poll the settled state.
+        await expect.poll(() => page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.pf-rt-main .pf-card:not(.pf-rt-pv__panel)')]
+          .filter(c => { const cs = getComputedStyle(c); return c.offsetHeight > 0 && (cs.borderTopWidth !== '0px' || cs.boxShadow !== 'none'); }).length),
+          { message: `${tab}: never card-in-card`, timeout: 15_000 }).toBe(0);
         if (w === 1720 && tab !== 'patient') await shot(page, `rd-${tab}-1720`);
       }
     });
