@@ -894,14 +894,16 @@ export class ReportQueueComponent implements OnInit {
     // Below 1280px (tablet landscape, a narrow window) Order + Generated fold into the Patient cell's meta line.
     const compact = this.compact();
     return [
-      { colId: "no", headerName: "#", width: 56, minWidth: 56, ...cell(this.noTpl()) },
-      { colId: "patient", headerName: "Patient", flex: 1.6, minWidth: 160, ...cell(this.patientTpl()) },
-      { colId: "order", headerName: "Order", width: 120, minWidth: 112, hide: compact, ...cell(this.orderTpl()) },
-      { colId: "status", headerName: "Status", width: 128, minWidth: 124, ...cell(this.statusTpl()) },
-      { colId: "generated", headerName: "Generated", width: 100, minWidth: 96, hide: compact, ...cell(this.genTpl()) },
-      { colId: "sent", headerName: "Sent", flex: 1, minWidth: 110, ...cell(this.sentTpl()) },
+      // # = the full daily-number chip ("21 · 15 Nov" on an older order) — never clipped.
+      { colId: "no", headerName: "#", width: 94, minWidth: 94, cellClass: "pf-rq2-nowrap", ...cell(this.noTpl()) },
+      { colId: "patient", headerName: "Patient", flex: 1, minWidth: 140, ...cell(this.patientTpl()) },
+      // Order + Generated stay on ONE line; the Patient column takes the slack.
+      { colId: "order", headerName: "Order", width: 130, minWidth: 130, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap", ...cell(this.orderTpl()) },
+      { colId: "status", headerName: "Status", width: 120, minWidth: 116, ...cell(this.statusTpl()) },
+      { colId: "generated", headerName: "Generated", width: 128, minWidth: 128, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap", ...cell(this.genTpl()) },
+      { colId: "sent", headerName: "Sent", flex: 1, minWidth: 96, ...cell(this.sentTpl()) },
       // View · Download · Share ▾ · ⋯ — text on web, 44px icons on touch (+ Details on a partly-reported order).
-      { colId: "actions", headerName: "Actions", width: touch ? 268 : 318, minWidth: touch ? 268 : 318,
+      { colId: "actions", headerName: "Actions", width: touch ? 256 : 290, minWidth: touch ? 256 : 290,
         headerClass: "ag-right-aligned-header", cellClass: "pf-rq2-actcell", ...cell(this.actsTpl()) },
     ];
   });

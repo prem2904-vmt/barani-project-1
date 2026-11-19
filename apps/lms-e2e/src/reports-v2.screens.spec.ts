@@ -31,6 +31,8 @@ const QUEUE = [
   rep(6, 'Baby Leo S', 1, 'M', 'failed', { deliveryNote: 'Number not on WhatsApp' }),
   rep(7, 'Ms. Sansa Stark', 28, 'F', 'delivered', { deliveredVia: 'print' }),
   rep(8, 'Master Sasi Kumar', 9, 'M', 'pending'),
+  // An older order: its daily chip carries the day ("21 · 15 Nov") and Generated a date.
+  rep(21, 'Ms. Priya Older', 41, 'F', 'pending', { createdAt: '2026-11-15T09:15:00Z', order: { id: 'ord-21', orderNumber: 'LAB-2611-000016', dailyNo: 21, dailyNoDay: '2026-11-15', patient: pat(21, 'Ms. Priya Older', 41, 'F') } }),
 ];
 const HB = JSON.stringify({ parameters: [{ name: 'hb', title: 'Haemoglobin', unit: 'g/dL' }, { name: 'wbc', title: 'WBC count', unit: '/µL' }] });
 const GLU = JSON.stringify({ parameters: [{ name: 'glu', title: 'Glucose, fasting', unit: 'mg/dL' }] });
@@ -123,7 +125,7 @@ for (const dark of [false, true]) {
       const items = page.locator('[data-testid="rq-side"] .pf-side-item');
       await expect(items).toHaveCount(5);
       expect(await items.locator('.pf-rq2-side__label').allInnerTexts()).toEqual(['All', 'Completed', 'Partial', 'Delivered', 'Failed']);
-      expect(await items.locator('.pf-rq2-side__count').allInnerTexts()).toEqual(['8', '4', '1', '2', '1']);
+      expect(await items.locator('.pf-rq2-side__count').allInnerTexts()).toEqual(['9', '5', '1', '2', '1']);
       await expect(items.nth(0).locator('.pf-rq2-dot--ring')).toHaveCount(1);
       // Head actions (not in the band): Generate (secondary) + Refresh.
       await expect(visible(page, '[data-testid="rq-main"] .pf-rq-generate')).toHaveClass(/pf-btn--secondary/);
@@ -151,6 +153,18 @@ for (const dark of [false, true]) {
     const unpaid = await row.locator('.pf-rq2-unpaid').boundingBox();
     expect(unpaid!.y, 'Unpaid sits under the pill').toBeGreaterThanOrEqual(pill!.y + pill!.height - 1);
     await expect(page.locator('.ag-row .pf-rq2-unpaid').locator('visible=true')).toHaveCount(1);
+    // The # chip is never clipped; Order and Generated stay on ONE line.
+    const old = page.locator('.ag-row').filter({ hasText: 'Ms. Priya Older' }).locator('visible=true').first();
+    await expect(old.locator('.pf-dayno')).toContainText('21 · 15 Nov');
+    const chip = await old.locator('.pf-dayno').boundingBox();
+    const noCell = await old.locator('[col-id="no"]').boundingBox();
+    expect(chip!.x + chip!.width, 'daily chip fits its cell').toBeLessThanOrEqual(noCell!.x + noCell!.width);
+    if (!compact) {
+      for (const col of ['order', 'generated']) {
+        const h = await old.locator(`[col-id="${col}"] .pf-rq2-muted`).evaluate(e => e.getBoundingClientRect().height);
+        expect(h, `${col} is one line`).toBeLessThan(24);
+      }
+    }
     // Actions are right-aligned in the last column: View · Download · Share ▾ · ⋯.
     const actHead = await visible(page, '.ag-header-cell[col-id="actions"]').boundingBox();
     const mainBox = await visible(page, '[data-testid="rq-main"]').boundingBox();
@@ -165,6 +179,11 @@ for (const dark of [false, true]) {
     await expect(acts.locator('.pf-rq-split__face')).toBeVisible();
     await expect(acts.locator('.pf-rq-more')).toBeVisible();
     await expectNoHorizontalScroll(page, `reports ${mode}`);
+    if (dark) {
+      // Dark: the grid takes the card's surface (no stock grey slab): transparent rows + wrapper.
+      const bgs = await page.evaluate(() => ['.ag-root-wrapper', '.ag-row'].map(s => getComputedStyle(document.querySelector(s)!).backgroundColor));
+      expect(bgs, 'grid surfaces are the card').toEqual(['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)']);
+    }
     await shot(page, info.project.name, `all-${mode}`);
   });
 
@@ -260,6 +279,25 @@ for (const dark of [false, true]) {
     await shot(page, info.project.name, `phone-partial-${mode}`);
   });
 }
+
+test('1720px: all seven columns, Order + Generated on one line, the daily chip whole (light + dark)', async ({ page }, info) => {
+  test.skip(!['desktop', 'desktop-app'].includes(info.project.name), 'wide desktop only');
+  await page.setViewportSize({ width: 1720, height: 1000 });
+  await open(page, false);
+  await pick(page, 'All');
+  const old = page.locator('.ag-row').filter({ hasText: 'Ms. Priya Older' }).locator('visible=true').first();
+  await expect(old).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(800);
+  expect(await page.locator('.ag-header-cell-text').locator('visible=true').allInnerTexts()).toEqual(['#', 'Patient', 'Order', 'Status', 'Generated', 'Sent', 'Actions']);
+  for (const col of ['order', 'generated']) {
+    expect(await old.locator(`[col-id="${col}"] .pf-rq2-muted`).evaluate(e => e.getBoundingClientRect().height), col).toBeLessThan(24);
+  }
+  const chip = await old.locator('.pf-dayno').boundingBox(), cell = await old.locator('[col-id="no"]').boundingBox();
+  expect(chip!.x + chip!.width).toBeLessThanOrEqual(cell!.x + cell!.width);
+  await shot(page, info.project.name, 'all-1720-light');
+  await theme(page, true);
+  await shot(page, info.project.name, 'all-1720-dark');
+});
 
 test('actions keep their behaviour: View opens the report, ⋯ lists every action, Share ▾ offers the channels', async ({ page }) => {
   test.skip(isPhone(), 'phones: the sheet');
