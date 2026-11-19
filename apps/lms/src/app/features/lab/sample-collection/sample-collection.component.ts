@@ -1,4 +1,4 @@
-import { DatePipe } from "@angular/common";
+import { DatePipe, NgTemplateOutlet } from "@angular/common";
 import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.directive';
 import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -413,6 +413,7 @@ interface OrderGroup {
     ZoomTargetDirective,
     FormsModule,
     DatePipe,
+    NgTemplateOutlet,
     AvatarComponent,
     HeroBandComponent,
     BarcodeScannerModalComponent,
@@ -623,6 +624,21 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   private teleportedEl: HTMLElement | null = null;
 
   constructor() {
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+      const mq = window.matchMedia('(min-width: 1024px)');
+      this._wide.set(!!mq.matches);
+      const onMq = (e: MediaQueryListEvent) => this._wide.set(e.matches);
+      try {
+        mq.addEventListener?.('change', onMq);
+        this.destroyRef.onDestroy(() => mq.removeEventListener?.('change', onMq));
+      } catch { /* old engines */ }
+    }
+    // Two-panel: the first patient (oldest first) is selected on arrival, and whenever the selection is gone.
+    effect(() => {
+      if (!this.hosted() || !this.queueLoaded() || this._openOrderId()) return;
+      const first = this.filteredGroups()[0] ?? this.groups()[0];
+      if (first) untracked(() => { this.resetSeriesOverrides(); this._openOrderId.set(first.orderId); });
+    });
     // The shell component forms a stacking context (z-index: 1) and the
     // top-strip inside it sits at z-index: 40 — as a sibling of the router
     // outlet, that top-strip paints above anything nested inside the outlet,
@@ -746,6 +762,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
 
   readonly pending = this._pending.asReadonly();
   readonly openOrderId = this._openOrderId.asReadonly();
+
+  /** Wide screens (>= 1024px) run the TWO-PANEL layout: the pending queue is the left side card and the selected
+   *  patient's collection is hosted in the main card. Phones / tablet portrait keep list -> full-screen drawer. */
+  private readonly _wide = signal(false);
+  /** New design, not embedded, not a deep link, wide -> the collection is hosted inline (no overlay). */
+  readonly hosted = computed(() => this.theme.isNewDesign() && !this.embedded && !this._deepLinkMode() && this._wide());
 
   readonly groups = computed<OrderGroup[]>(() => {
     const byOrder = new Map<string, OrderGroup>();
@@ -1211,7 +1233,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     // the page falls into the eternal "Opening collection…" loader). close()
     // already refreshes, so nothing is lost by waiting.
     this.liveQ.on('collection', 'frontdesk').pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
-      if (this._openOrderId()) return;
+      if (this._openOrderId() && !this.hosted()) return;
       this.refresh();
     });
     // Per-branch label config (size + code) for direct-to-printer label print.
@@ -1504,10 +1526,23 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   openOrder(id: string) {
+    if (this.hosted()) { this.selectOrder(id); return; }
     this.zoom.runLocal('in', () => {
       this.resetSeriesOverrides();
       this._openOrderId.set(id);
     });
+  }
+
+  /** Two-panel: select another patient in the queue. The previous one stays out of the way (a refresh drops it if it
+   *  is fully collected); the new one's collection shows in the main card at once. */
+  private selectOrder(id: string) {
+    if (this._openOrderId() === id) return;
+    this.resetSeriesOverrides();
+    this.vialFilter.set('all');
+    this.samplesOpen.set(false);
+    this.actionsOpen.set(false);
+    this._openOrderId.set(id);
+    this.refresh();
   }
 
   /** Open a specific order's collection drawer (e.g. from a scanned order QR).
@@ -1558,6 +1593,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
   close() {
     const open = this._openOrderId();
+    if (this.hosted()) { this.closeHosted(open); return; }
     const shut = () => {
       if (this._openOrderId() !== open) return;   // another order opened meanwhile
       this.resetSeriesOverrides();
@@ -1584,9 +1620,40 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.refresh();
   }
 
+  /** Two-panel "Done for now": re-read the queue, then move to the next patient in line (else the first, else
+   *  the empty state) in one step so the main card never flashes empty. */
+  private closeHosted(open: string | null) {
+    this.resetSeriesOverrides();
+    this.vialFilter.set('all');
+    this.samplesOpen.set(false);
+    this.actionsOpen.set(false);
+    const before = this.filteredGroups().map((g) => g.orderId);
+    const at = open ? before.indexOf(open) : -1;
+    this.api.get<OrderSample[]>("/api/samples/pending-collection").pipe(busyWhile(this.refreshing)).subscribe({
+      next: (l) => {
+        this._pending.set(l ?? []);
+        const ids = this.filteredGroups().map((g) => g.orderId);
+        const wanted = before.slice(at + 1).find((id) => id !== open && ids.includes(id))
+          ?? ids.find((id) => id !== open) ?? ids[0] ?? null;
+        this._openOrderId.set(wanted);
+      },
+      error: () => this._openOrderId.set(null),
+    });
+  }
+
   refresh() {
     this.api.get<OrderSample[]>("/api/samples/pending-collection").pipe(busyWhile(this.refreshing)).subscribe({
-      next: (l) => this._pending.set(l ?? []),
+      next: (l) => {
+        const next = l ?? [];
+        const open = this._openOrderId();
+        if (this.hosted() && open) {
+          // The open order keeps its tubes as the collector sees them (the server list drops drawn vials), the rest
+          // of the queue is replaced — the live queue stays current while a patient is being collected.
+          const mine = this._pending().filter((x) => x.orderId === open);
+          if (mine.length) { this._pending.set([...next.filter((x) => x.orderId !== open), ...mine]); return; }
+        }
+        this._pending.set(next);
+      },
     });
   }
 

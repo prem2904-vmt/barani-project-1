@@ -2571,3 +2571,67 @@
     .pf-sc-share:focus-visible { outline: 2px solid var(--input-border-focus, #8b5cf6); outline-offset: 2px; }
     @media (hover: hover) { .pf-sc-share:hover { color: var(--text-primary); border-color: var(--pf-hover-border, #8b5cf6); } }
     @media (prefers-reduced-motion: reduce) { .pf-sc-share { transition: none; } }
+
+    /* ─── TWO-PANEL (wide, new design; owner 2026-11-19) ─────────────────
+       LEFT: the pending queue as the shared side card (--pf-side-w, .pf-side-list rows). RIGHT: the selected patient's
+       collection — the same drawer, hosted inline as ONE main card (head = patient + actions, body = vials | info).
+       Same height, no page scroll, only the card bodies scroll. Phones / tablet portrait never get this. */
+    :host > section > .pf-sc-2p { flex: 1 1 auto; min-height: 0; }
+    .pf-sc-2p {
+      display: grid; gap: 16px; align-items: stretch;
+      grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
+    }
+    .pf-sc-qside, .pf-sc-main { min-width: 0; min-height: 0; }
+    .pf-sc-qside > .pf-card__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0; }
+    .pf-sc-qside__count { flex: none; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); }
+    .pf-sc-qside .pf-sc__empty { padding: 16px; }
+    .pf-sc-qside .pf-sc__skel { padding: 8px; }
+    .pf-sc-spin { animation: pf-sc-spin 0.9s linear infinite; }
+    @keyframes pf-sc-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .pf-sc-spin { animation: none; } }
+    .pf-sc-qrow { gap: 10px; }
+    .pf-sc-qrow__who { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pf-sc-qrow__name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); white-space: normal; overflow-wrap: anywhere; }
+    .pf-sc-qrow__ord { font-size: 12px; font-weight: 400; color: var(--text-tertiary); }
+    .pf-sc-qrow__tail { flex: none; display: inline-flex; align-items: center; gap: 8px; }
+    .pf-sc-qrow__wait { font-size: 12px; font-weight: 400; color: var(--text-tertiary); white-space: nowrap; }
+
+    .pf-sc-main { display: flex; flex-direction: column; }
+    .pf-sc-main > * { flex: 1 1 auto; }
+    .pf-sc-main__empty .pf-card__body { display: flex; align-items: center; justify-content: center; }
+
+    /* The hosted drawer = the main card. */
+    .pf-drawer.pf-drawer--nd.pf-drawer--hosted {
+      position: relative; inset: auto; z-index: auto; height: 100%; padding: 0; animation: none;
+      background: var(--pf-card-bg); color: var(--text-primary);
+    }
+    .pf-drawer--hosted .pf-drawer__panel { padding: 0; animation: none; background: transparent; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .pf-drawer--hosted .pf-sc-hhead { flex-wrap: wrap; row-gap: 8px; }
+    .pf-sc-hid { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 0 1 auto; }
+    .pf-sc-hid__name { all: unset; font-size: 14.5px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+    .pf-sc-hid__name--link { cursor: pointer; }
+    .pf-sc-hid__name--link:hover { text-decoration: underline; }
+    .pf-sc-hid__name--link:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; border-radius: 4px; }
+    .pf-sc-hid__sub { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12px; color: var(--text-tertiary); }
+    .pf-sc-hdrawn { flex: none; font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
+    .pf-sc-hdrawn strong { font-size: 15px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+    .pf-sc-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; margin-left: auto; }
+    .pf-sc-acts .pf-btn { height: 34px; min-height: 34px; padding-inline: 12px; font-size: 12.5px; flex: none; }
+    .pf-sc-acts .pf-btn__icon { display: none; }
+    .pf-sc-acts .pf-drawer__remaining { font-size: 12px; color: var(--text-tertiary); }
+    .pf-drawer--hosted .pf-body--split.pf-sc-body {
+      display: flex; flex-direction: row; gap: 0; padding: 0; flex: 1 1 auto; min-height: 0; overflow: hidden;
+    }
+    .pf-drawer--hosted .pf-sc-vials {
+      flex: 1 1 auto; min-width: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent;
+    }
+    .pf-drawer--hosted .pf-sc-side {
+      display: flex; flex: 0 0 300px; width: 300px; border: 0; border-left: 1px solid var(--pf-line); border-radius: 0;
+      box-shadow: none; background: transparent;
+    }
+    .pf-drawer--hosted .pf-sc-side > .pf-card__head, .pf-drawer--hosted .pf-sc-side > .pf-sheet__handle { display: none; }
+    .pf-drawer--hosted .pf-sc-side__body { padding-top: 14px; }
+    @media (max-width: 1280px) {
+      .pf-drawer--hosted .pf-sc-side { flex-basis: 240px; width: 240px; }
+    }
