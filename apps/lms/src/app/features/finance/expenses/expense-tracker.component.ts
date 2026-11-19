@@ -404,7 +404,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__tabrow { align-self: flex-start; flex: none; }
     .pf-xt__tabs { flex: none; }
     .pf-xt__tab { height: 26px; padding: 0 14px; font-size: 12.5px; white-space: nowrap; }
-    .pf-xt__panels { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+    .pf-xt__panels { display: grid; grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); gap: 16px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
     .pf-xt__panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-xt__side { min-height: 0; }
     .pf-xt__side--sheet {

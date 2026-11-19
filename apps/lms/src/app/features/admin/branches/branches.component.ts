@@ -131,7 +131,7 @@ interface GstRow { branchId: string; gstin: string; }
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   styles: [`
     .pf-br-new__body { gap: 12px; }
-    .pf-br-panels { grid-template-columns: 360px minmax(0, 1fr); }
+    .pf-br-panels { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); }
     .pf-br-panels.pf-sg-panels--single, .pf-br-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-br-card { overflow: visible; }
     .pf-br-name { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }

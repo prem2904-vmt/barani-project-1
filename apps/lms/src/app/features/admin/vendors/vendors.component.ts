@@ -382,7 +382,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
     /* Palette only (PF-PATTERN §2): over the alert threshold = red, in credit = violet. */
     .pf-vendor__bal-amt--over { color: var(--red-text); }
     .pf-vendor__bal-amt--credit { color: var(--violet-text, #6d28d9); }
-    .pf-vn-panels { grid-template-columns: 380px minmax(0, 1fr); }
+    .pf-vn-panels { grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); }
     .pf-vn-panels.pf-sg-panels--single, .pf-vn-panels.pf-sg-panels--narrow { grid-template-columns: minmax(0, 1fr); }
     .pf-vn-row-end { display: flex; gap: 8px; justify-content: flex-end; }
     /* ── ND audit ── */
