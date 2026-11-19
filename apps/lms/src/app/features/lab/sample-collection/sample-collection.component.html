@@ -105,7 +105,16 @@
       @if (hosted()) {
         <!-- TWO-PANEL (wide, new design): the queue is the LEFT side card, the selected patient's
              collection runs in the main card on the right (the same drawer, hosted inline). -->
-        <div class="pf-sc-2p" data-testid="collect-two-panel">
+        <div class="pf-sc-2p" [class.pf-sc-2p--hidden]="queueHidden()" data-testid="collect-two-panel">
+          @if (queueHidden()) {
+          <!-- Hidden queue = a slim rail; one tap brings the list back (remembered per device). -->
+          <button type="button" class="pf-sc-qrail press" (click)="setQueueHidden(false)"
+                  aria-label="Show pending collection" title="Show pending collection" data-testid="collect-queue-show">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg>
+            <span class="pf-sc-qrail__label">Pending collection</span>
+            <span class="pf-sc-qrail__count pf-num">{{ filteredGroups().length }}</span>
+          </button>
+          } @else {
           <aside class="pf-card pf-sc-qside" aria-label="Pending collection">
             <header class="pf-card__head">
               <span class="pf-card__icon" aria-hidden="true">
@@ -116,6 +125,10 @@
               <span class="pf-card__label">Pending collection</span>
               <span class="pf-sc-qside__count pf-num" data-testid="collect-queue-count">{{ filteredGroups().length }}</span>
               <span class="pf-card__spacer"></span>
+              <button type="button" class="pf-btn pf-btn--icon" (click)="setQueueHidden(true)"
+                      aria-label="Hide pending collection" title="Hide pending collection" data-testid="collect-queue-hide">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
+              </button>
               <button type="button" class="pf-btn pf-btn--icon" (click)="refresh()" [disabled]="refreshing()"
                       aria-label="Refresh" title="Refresh" data-testid="collect-refresh">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" [class.pf-sc-spin]="refreshing()">
@@ -154,6 +167,7 @@
               }
             </div>
           </aside>
+          }
           <div class="pf-sc-main">
             @if (activeGroup()) {
               <ng-container *ngTemplateOutlet="drawerTpl" />
