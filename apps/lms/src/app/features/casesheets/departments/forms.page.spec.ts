@@ -168,9 +168,9 @@ describe('Prepare home', () => {
     expect(h1.classList.contains('sr-only')).toBe(true);
     expect(q('[data-sub]')!.classList.contains('sr-only')).toBe(true);
     expect(el.querySelector('.dp__top, .dp__title')).toBeNull();
-    // owner 2026-11-19: no button in the band's corner; "My case sheets" sits in the side card's head (compact, secondary)
+    // owner 2026-11-19: no button in the band's corner; "My case sheets" sits in the main card's head (compact, secondary)
     expect(q('pf-hero-band [data-my-sheets]')).toBeNull();
-    const mine = q('.pf-tp__nav .pf-tp__navhead [data-my-sheets]')!;
+    const mine = q('.pf-tp__panel .pf-tp__head [data-my-sheets]')!;
     expect(mine.classList.contains('pf-btn--secondary')).toBe(true);
     expect(mine.textContent).toContain('My case sheets');
     expect(el.querySelector('pf-hero-band')).not.toBeNull();

@@ -1,6 +1,6 @@
 <!-- Prepare home (ND, owner 2026-11-19: "a different two-panel than ours"): the band (back + search), then OUR two-panel
      (pf-two-panel = Test Master's frame): LEFT the Departments side card (shared rows, count on the right, "Continue" drafts
-     as a second group, "My case sheets" in its head), RIGHT the department's case sheets as tiles in the main card.
+     as a second group), RIGHT the department's case sheets as tiles in the main card (its head carries "My case sheets").
      Wide screens open the first department by itself; phones show the list, then the department (the band's back climbs). -->
 <cs-styles />
 <div class="pf-page pg dp" [class.dp--picked]="!!chosenDept()">
@@ -87,14 +87,21 @@
       [panelNote]="panelNote()"
       (pick)="onPick($event)"
     >
+      <!-- "My case sheets" never sits in the band's corner: wide = the main card's head; phone (no room beside the
+           count) = an icon button in the side card's head -->
       <ng-container nav-tools>
         <span class="pf-card__note dp__lc pf-num" data-dept-count>{{ departments().length }}</span>
-        @if (fromPrepare) {
-        <a class="pf-btn pf-btn--secondary dp__mine" routerLink="/prepare/cases" data-my-sheets>
-          <pf-icon name="cases" [size]="16" /> My case sheets
+        @if (fromPrepare && compact()) {
+        <a class="pf-btn pf-btn--secondary pf-btn--icon dp__mine dp__mine--icon" routerLink="/prepare/cases" data-my-sheets aria-label="My case sheets" title="My case sheets">
+          <pf-icon name="cases" [size]="18" />
         </a>
         }
       </ng-container>
+      @if (fromPrepare && !compact()) {
+      <a panel-tools class="pf-btn pf-btn--secondary dp__mine" routerLink="/prepare/cases" data-my-sheets>
+        <pf-icon name="cases" [size]="16" /> My case sheets
+      </a>
+      }
       @if (pickedDept(); as d) {
         @if (error()) {
         <p class="dp__err" role="alert">{{ error() }}</p>

@@ -75,10 +75,10 @@ test.describe('Prepare two-panel', () => {
     expect(m.rowH, 'shared 44px row').toBe(44);
     expect(m.pageScroll, 'no page scroll').toBeLessThanOrEqual(1);
     expect(m.bandBtn, 'no button in the band corner').toBe(false);
-    // the side card's head: icon + DEPARTMENTS + count + "My case sheets"
+    // the side card's head: icon + DEPARTMENTS + count; "My case sheets" is in the main card's head
     await expect(side(page).locator('[data-testid="tp-nav-title"]')).toHaveText('Departments');
     await expect(side(page).locator('[data-dept-count]')).toHaveText('5');
-    await expect(side(page).locator('[data-my-sheets]')).toBeVisible();
+    await expect(main(page).locator('.pf-tp__head [data-my-sheets]')).toBeVisible();
     // the count sits on the right of each row; the drafts group is "Continue"
     await expect(page.locator('[data-testid="tp-item-ENT"] .pf-tp__note')).toHaveText('3');
     await expect(page.locator('[data-testid="tp-group-continue"]')).toHaveText('Continue');
@@ -103,7 +103,9 @@ test.describe('Prepare two-panel', () => {
     await go(page, '/prepare');
     await expect(side(page)).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('[data-testid="tp-panel"]').locator('visible=true')).toHaveCount(0);
-    await expect(side(page).locator('[data-my-sheets]')).toBeVisible();
+    await expect(side(page).locator('.pf-tp__navhead [data-my-sheets]')).toBeVisible();
+    const head = await side(page).locator('.pf-tp__navhead').evaluate(h => ({ over: h.scrollWidth - h.clientWidth }));
+    expect(head.over, 'the head fits').toBeLessThanOrEqual(0);
     await shot(page, 'prepare-phone-list');
     await page.locator('[data-testid="tp-item-ENT"]').click();
     await expect(main(page).locator('.dp__tile')).toHaveCount(3);

@@ -28,13 +28,19 @@
   color: var(--text-primary);
 }
 
-// "My case sheets": a compact secondary button in the side card's head (never in the band's corner)
+// "My case sheets": a compact secondary button in a card head (never in the band's corner); phone = icon only
 .dp__mine {
   text-decoration: none;
   height: 34px;
   min-height: 34px;
   padding-inline: 10px;
   white-space: nowrap;
+}
+
+.dp__mine--icon {
+  width: 34px;
+  padding-inline: 0;
+  justify-content: center;
 }
 
 .dp__lc {
