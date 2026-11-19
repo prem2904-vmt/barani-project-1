@@ -190,6 +190,7 @@ test('narrow: list first, tap opens the full-screen collection, back returns (no
   const drawer = page.locator('.pf-drawer[role="dialog"]').first();
   await expect(drawer).toBeVisible();
   await expect(drawer.locator('.pf-sc-tile').first()).toBeVisible();
+  await page.waitForTimeout(900);
   await shot(page, 'narrow-collect-light');
   await theme(page, 'dark'); await shot(page, 'narrow-collect-dark'); await theme(page, 'light');
   await drawer.locator('.pf-hb__back').click();
