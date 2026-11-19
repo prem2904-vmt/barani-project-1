@@ -282,10 +282,23 @@ describe('Admin band B2 — Microbiology / Culture settings', () => {
 
   it('Save lives in the band actions and PUTs the settings', () => {
     const p = make();
-    const save = p.actions().find((b) => b.textContent?.includes('Save'));
+    const save = p.actions().find((b) => b.textContent?.includes('Save')) as HTMLButtonElement;
     expect(save).toBeTruthy();
-    save!.click();
+    // Owner 2026-11-19: Save is DISABLED until something changed ("No changes to save").
+    expect(save.disabled).toBe(true);
+    expect(save.getAttribute('aria-disabled')).toBe('true');
+    expect(save.getAttribute('title')).toBe('No changes to save');
+    save.click();
+    expect(p.api.put).not.toHaveBeenCalled();
+    const sw = p.el.querySelector<HTMLElement>('.pf-cs__check[role="switch"]')!;
+    sw.click(); p.f.detectChanges();
+    expect(save.disabled).toBe(false);
+    expect(save.getAttribute('aria-disabled')).toBeNull();
+    sw.click(); p.f.detectChanges();                       // put back → off again
+    expect(save.disabled).toBe(true);
+    sw.click(); p.f.detectChanges();
+    save.click();
     expect(p.api.put).toHaveBeenCalledWith('/api/microbiology/settings',
-      { lockTimeoutMinutes: 45, allowSupervisorTakeover: false, stageTats: [{ stageKey: 'gram', tatHours: 4 }] });
+      { lockTimeoutMinutes: 45, allowSupervisorTakeover: true, stageTats: [{ stageKey: 'gram', tatHours: 4 }] });
   });
 });

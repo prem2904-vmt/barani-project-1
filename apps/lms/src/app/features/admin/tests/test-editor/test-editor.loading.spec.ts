@@ -116,7 +116,11 @@ describe('Test editor — loading feedback', () => {
     expect(el.querySelector('.pf-te2-loading')).toBeNull();
     expect(el.querySelector('#sec-identity')).not.toBeNull();
     expect(el.querySelector('.pf-te2-ctx__nametext')!.textContent).toContain('Oral Glucose Challenge Test');
-    expect((el.querySelector('.pf-te2-save') as HTMLButtonElement).disabled).toBe(false);
+    // Owner 2026-11-19: on screen but unchanged → Save stays disabled ("No changes to save") until an edit.
+    const save = el.querySelector('.pf-te2-save') as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    expect(save.getAttribute('aria-disabled')).toBe('true');
+    expect(save.getAttribute('title')).toBe('No changes to save');
   });
 
   it('an error releases the skeleton (the form + toast, as before)', async () => {

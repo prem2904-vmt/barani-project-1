@@ -1,3 +1,5 @@
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, input, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { createLoadHold } from '../../../shared/utils/min-duration';
@@ -41,7 +43,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
 @Component({
   selector: 'pf-home-collection-agents',
   standalone: true,
-  imports: [NgTemplateOutlet, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent,
+  imports: [SkelGridComponent, NgTemplateOutlet, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TouchButtonComponent, NumberInputComponent, HeroBandComponent,
     DataGridComponent, HomeCollectionSwitchCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
@@ -94,7 +96,8 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
                 <h3 class="pf-card__label">{{ editing() ? 'Edit area' : 'New agent' }}</h3>
                 <span class="pf-card__spacer"></span>
                 <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
-                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!draft().userId || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!draft().userId || saving() || !draftChanged()" [pfBusyInactive]="!draft().userId || saving() || !draftChanged()"
+                        [attr.title]="draftChanged() || saving() ? null : 'No changes to save'" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
                   {{ saving() ? 'Saving…' : 'Save agent' }}
                 </button>
 <button type="button" class="pf-btn pf-btn--icon" (click)="toggleForm()" aria-label="Close">
@@ -163,7 +166,7 @@ const EMPTY: Draft = { userId: '', areaMode: 'pincode', pincodes: '', centerLat:
             </header>
             <div class="pf-sg-main__body">
               @if (listSkeleton()) {
-                <pf-skeleton-table class="pf-sg-skel" [rows]="5" [cols]="4" label="Loading agents…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="4" label="Loading agents…"></pf-skel-grid>
               }
               <pf-data-grid [rowData]="visibleAgents()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!listSkeleton() && visibleAgents().length === 0) {
@@ -325,9 +328,14 @@ export class HomeCollectionAgentsComponent implements OnInit {
       radiusKm: a.radiusKm ?? 5,
       weightage: a.weightage
     });
+    this._draftBase.set(stableJson(this._draft()));
     this._editing.set(true);
     this._formOpen.set(true);
   }
+  /** Save only when something changed (owner 2026-11-19): an agent being EDITED is compared with how it was opened;
+   *  a new agent has nothing saved yet (Save follows the picked person). */
+  private readonly _draftBase = signal('');
+  readonly draftChanged = computed(() => !this._editing() || stableJson(this._draft()) !== this._draftBase());
 
   save() {
     const d = this._draft();

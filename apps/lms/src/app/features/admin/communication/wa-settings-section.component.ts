@@ -1,3 +1,4 @@
+import { SkelSettingRowsComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, EventEmitter, OnInit, Output, computed, inject, input, signal } from '@angular/core';
 import { finalize } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -20,11 +21,11 @@ export const COMMS_MANAGE_PERMS = COMMS_SETTINGS_PERMS;
 @Component({
   selector: 'pf-wa-settings-section',
   standalone: true,
-  imports: [WaConnectCardComponent, WaBillingCardComponent, SkeletonCardComponent],
+  imports: [SkelSettingRowsComponent, WaConnectCardComponent, WaBillingCardComponent, SkeletonCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading()) {
-      <pf-skeleton-card [lines]="4" label="Loading WhatsApp settings…"></pf-skeleton-card>
+      <pf-skel-setting-rows [rows]="4" label="Loading WhatsApp settings…"></pf-skel-setting-rows>
     } @else if (waSettings(); as wa) {
       <!-- WhatsApp Chat: staff open WhatsApp from a report and press Send (a platform switch, read-only here). -->
       <section class="pf-card pf-ls__card" data-testid="ls-wa-chat">

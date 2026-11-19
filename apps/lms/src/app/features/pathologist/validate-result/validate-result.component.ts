@@ -1,3 +1,4 @@
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
 import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { TrendTest } from '../../../shared/utils/trend-chart';
@@ -410,7 +411,8 @@ interface ValueRow {
               </span>
               <div class="flex-1"></div>
               <button type="button" class="pf-btn pf-btn--ghost press" (click)="cancelEdit()">Cancel</button>
-              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEdits()">
+              <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving() || !editsChanged()" [pfBusyInactive]="saving() || !editsChanged()"
+                      [attr.title]="editsChanged() || saving() ? null : 'No changes to save'" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEdits()">
                 {{ saving() ? 'Saving…' : 'Save changes' }}
               </button>
             } @else {
@@ -1500,9 +1502,15 @@ export class ValidateResultComponent implements OnInit {
       seed[r.name] = v == null ? '' : v;
     }
     this._edits.set(seed);
+    this._editSeed.set(editKey(seed));
     this._editing.set(true);
     this.toasts.success('Edit mode — change values inline, then Save');
   }
+
+  /** Save only when something changed (owner 2026-11-19): the edited values compared with the values edit mode opened
+   *  on (a number typed back as text is the same value). */
+  private readonly _editSeed = signal('');
+  readonly editsChanged = computed(() => editKey(this._edits()) !== this._editSeed());
 
   cancelEdit() {
     this._editing.set(false);
@@ -1599,4 +1607,11 @@ export class ValidateResultComponent implements OnInit {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
+}
+
+/** Compare text of the edit-mode values: plain values as text (5 and "5" are the same entry), structured ones by value. */
+function editKey(v: Record<string, unknown>): string {
+  const o: Record<string, unknown> = {};
+  for (const [k, x] of Object.entries(v)) o[k] = x !== null && typeof x === 'object' ? x : String(x ?? '');
+  return stableJson(o);
 }

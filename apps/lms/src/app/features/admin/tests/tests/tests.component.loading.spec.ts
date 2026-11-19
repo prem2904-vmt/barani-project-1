@@ -88,7 +88,7 @@ describe('Test Master grid — loading feedback', () => {
       expect(skel!.getAttribute('label')).toBe('Loading tests…');
       // The department side card is a skeleton too — never "All · 0" /
       // "No departments yet." before the catalogue has answered.
-      expect(el.querySelector('pf-skeleton-rows[label="Loading departments…"]')).not.toBeNull();
+      expect(el.querySelector('pf-skel-side-list[label="Loading departments…"]')).not.toBeNull();
       expect(el.textContent).not.toContain('No departments yet.');
       await Promise.resolve();
       tests$.next(TESTS); tests$.complete();

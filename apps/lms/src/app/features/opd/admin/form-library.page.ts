@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry, RowClickedEvent } from 'ag-grid-community';
@@ -28,7 +29,7 @@ type Show = 'active' | 'archived';
 @Component({
   selector: 'pf-opd-form-library',
   standalone: true,
-  imports: [SettingsSiblingsComponent, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SkeletonTableComponent],
+  imports: [SkelGridComponent, SettingsSiblingsComponent, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SegmentedComponent, SkeletonTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./opd-admin.shared.scss'],
   template: `
@@ -59,7 +60,7 @@ type Show = 'active' | 'archived';
             <span class="oa-count pf-num">{{ plural(visible().length, 'form') }}</span>
           </header>
           <div class="oa-main__body">
-            @if (skeleton()) { <pf-skeleton-table class="oa-grid-skel" [rows]="8" [cols]="5" label="Loading forms…"></pf-skeleton-table> }
+            @if (skeleton()) { <pf-skel-grid class="oa-grid-skel" [rows]="30" [columns]="5" label="Loading forms…"></pf-skel-grid> }
             <ag-grid-angular class="oa-grid" [theme]="gridTheme()" [rowData]="visible()" [columnDefs]="cols" [defaultColDef]="defaultColDef"
                              [getRowId]="getRowId" [animateRows]="true" (rowClicked)="open($event)"></ag-grid-angular>
             @if (!skeleton() && !visible().length) {

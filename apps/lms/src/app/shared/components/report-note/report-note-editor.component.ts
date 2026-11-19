@@ -72,7 +72,7 @@ import { ReportNoteViewComponent } from './report-note-view.component';
         }
         <button type="button" class="pf-btn pf-btn--secondary pf-rne__btn pf-rne__save"
                 [disabled]="busy() || over() || cleaned() === cleanedInitial()"
-                (click)="save()">{{ busy() ? 'Saving…' : 'Save note' }}</button>
+                (click)="save()" [attr.aria-disabled]="(busy() || over() || cleaned() === cleanedInitial()) ? 'true' : null" [attr.title]="(!busy() && cleaned() === cleanedInitial()) ? 'No changes to save' : 'Save note'">{{ busy() ? 'Saving…' : 'Save note' }}</button>
       </div>
     </div>
   `,

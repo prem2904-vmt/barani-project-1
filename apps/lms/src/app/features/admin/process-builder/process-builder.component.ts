@@ -1,3 +1,6 @@
+import { dirtySnapshot } from '../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../shared/utils/save-state';
+import { bindSaveShortcut } from '../../../shared/utils/save-shortcut';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CdkDragDrop, DragDropModule, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
@@ -64,7 +67,8 @@ const LANE_COLOR = '#7c3aed';
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
               Set active
             </button>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="pb-save" [disabled]="saving() || !changed()" [pfBusyInactive]="saving() || !changed()"
+                    [title]="changed() || saving() ? (isSystemDefault() ? 'Customise' : 'Save') : NO_CHANGES" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
               {{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}
             </button>
@@ -96,7 +100,7 @@ const LANE_COLOR = '#7c3aed';
           <button type="button" class="pb-btn" (click)="newWorkflow()" title="New workflow">+ New</button>
           <button type="button" class="pb-btn" [disabled]="!currentId()" (click)="duplicate()">Duplicate</button>
           <button type="button" class="pb-btn" [disabled]="!currentId() || isActive()" (click)="activate()">Set active</button>
-          <button type="button" class="pb-btn pb-btn--primary" [disabled]="saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">{{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}</button>
+          <button type="button" class="pb-btn pb-btn--primary" [disabled]="saving() || !changed()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" [pfBusyInactive]="saving() || !changed()" [attr.title]="(!changed() && !saving()) ? 'No changes to save' : null">{{ saving() ? 'Saving…' : (isSystemDefault() ? 'Customise' : 'Save') }}</button>
         </div>
       </header>
 
@@ -109,7 +113,7 @@ const LANE_COLOR = '#7c3aed';
             Active — drives the live navigation
           </span>
         }
-        @if (dirty()) { <span class="pf-savestate pb-dirty"><span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes</span> }
+        @if (changed()) { <span class="pf-savestate pb-dirty"><span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved changes</span> }
       </div>
       <p class="pb-hint pf-classic-only">Configuring <strong class="pb-scope-tag">{{ branchName(scope()) }}</strong> · work-area names become the navigation · <svg class="pb-hint-lock" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> actions are locked to their area</p>
 
@@ -503,7 +507,15 @@ export class ProcessBuilderComponent implements OnInit {
   readonly name = signal('');
   readonly lanes = signal<Lane[]>([]);
   readonly palette = signal<ActionCatalogEntry[]>([]);
+  /** An edit happened (cheap gate); `changed` decides whether Save is enabled. */
   readonly dirty = signal(false);
+  /** Owner 2026-11-19: Save only when the workflow differs from the one loaded / last saved. A scope with no workflow
+   *  yet opens as an UNSAVED draft (cloned from the tenant default): that one is a change by itself. */
+  private readonly snap = dirtySnapshot(() => ({ n: this.name(), l: this.lanes().map(ln => ({ c: ln.cat, i: ln.items })) }));
+  private readonly unsavedDraft = signal(false);
+  readonly changed = computed(() => this.unsavedDraft() || (this.dirty() && this.snap.dirty()));
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
+  private readonly _saveKey = bindSaveShortcut({ canSave: () => this.changed() && !this.saving(), save: () => { void this.save(); } });
   readonly saving = signal(false);
 
   /** Workflows in the currently-selected branch scope. */
@@ -603,6 +615,8 @@ export class ProcessBuilderComponent implements OnInit {
     this.palette.set(ACTION_CATALOG.filter(a => !isFixedSlotAction(a.type) && !placed.has(a.type)));
     this.lanes.set(lanes);
     this.dirty.set(dirty);
+    this.unsavedDraft.set(dirty);
+    this.snap.mark();
   }
 
   /** Enforce the lock policy on a loaded config: every locked action sits exactly

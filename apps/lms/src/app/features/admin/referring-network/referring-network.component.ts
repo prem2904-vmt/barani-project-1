@@ -1,3 +1,5 @@
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
@@ -61,7 +63,7 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
 @Component({
   selector: 'pf-referring-network',
   standalone: true,
-  imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent,
+  imports: [SkelGridComponent, BusyDirective, SkeletonRowsComponent, SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent,
     HeroBandComponent, SegmentedComponent, SelectComponent, DataGridComponent, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -115,7 +117,7 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
           </header>
           <div class="pf-sg-main__body">
             @if (view() === 'doctors' ? loadingDoctorsShown() : loadingHospitalsShown()) {
-              <pf-skeleton-table class="pf-sg-skel" [rows]="8" [cols]="6" [label]="view() === 'doctors' ? 'Loading doctors…' : 'Loading hospitals…'"></pf-skeleton-table>
+              <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="6" [label]="view() === 'doctors' ? 'Loading doctors…' : 'Loading hospitals…'"></pf-skel-grid>
             }
             @if (view() === 'doctors') {
               <pf-data-grid [rowData]="gridDoctors()" [columnDefs]="doctorColDefs()" [defaultColDef]="defaultColDef" [getRowId]="rowId" [getRowClass]="doctorRowClass" [suppressCellFocus]="true"></pf-data-grid>
@@ -233,7 +235,8 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
             <span class="flex-1"></span>
             <button type="button" class="pf-btn pf-btn--secondary press" (click)="closeHospitalEditor()">Cancel</button>
             <button type="button" class="pf-btn pf-btn--primary press"
-                    [disabled]="!he.name?.trim() || savingHospital()" [pfBusy]="savingHospital()" pfBusyLabel="Saving…" (click)="saveHospital()">
+                    [disabled]="!he.name?.trim() || savingHospital() || !hospitalChanged()" [pfBusyInactive]="!he.name?.trim() || savingHospital() || !hospitalChanged()"
+                    [attr.title]="hospitalChanged() || savingHospital() ? null : 'No changes to save'" [pfBusy]="savingHospital()" pfBusyLabel="Saving…" (click)="saveHospital()">
               @if (savingHospital()) { Saving… } @else { Save hospital }
             </button>
           </footer>
@@ -341,7 +344,8 @@ type HospitalDraft = Partial<Hospital> & { doctorIds: string[] };
             <span class="flex-1"></span>
             <button type="button" class="pf-btn pf-btn--secondary press" (click)="closeDoctorEditor()">Cancel</button>
             <button type="button" class="pf-btn pf-btn--primary press"
-                    [disabled]="!de.name?.trim() || savingDoctor()" [pfBusy]="savingDoctor()" pfBusyLabel="Saving…" (click)="saveDoctor()">
+                    [disabled]="!de.name?.trim() || savingDoctor() || !doctorChanged()" [pfBusyInactive]="!de.name?.trim() || savingDoctor() || !doctorChanged()"
+                    [attr.title]="doctorChanged() || savingDoctor() ? null : 'No changes to save'" [pfBusy]="savingDoctor()" pfBusyLabel="Saving…" (click)="saveDoctor()">
               @if (savingDoctor()) { Saving… } @else { Save doctor }
             </button>
           </footer>
@@ -864,7 +868,15 @@ export class ReferringNetworkComponent implements OnInit {
     const doctorIds = h ? filterDoctorsByHospital(this.doctorsAll(), h.id).map(d => d.id) : [];
     this.hospitalEditorDoctorsBefore = doctorIds.slice();
     this.hospitalEditor.set(h ? { ...h, doctorIds } : { name: '', isActive: true, doctorIds: [] });
+    this.hospitalBase = stableJson(this.hospitalEditor());
   }
+  /** Save only when something changed (owner 2026-11-19): the open hospital / doctor compared with how it was opened.
+   *  The form edits the draft in place (ngModel), so these are read on every check, not memoised. A NEW record has
+   *  nothing saved to compare with — its Save follows the name only. */
+  private hospitalBase = '';
+  private doctorBase = '';
+  hospitalChanged(): boolean { const e = this.hospitalEditor(); return !!e && (!e.id || stableJson(e) !== this.hospitalBase); }
+  doctorChanged(): boolean { const e = this.doctorEditor(); return !!e && (!e.id || stableJson(e) !== this.doctorBase); }
   closeHospitalEditor(): void { this.hospitalEditor.set(null); }
   setHospitalDoctors(ids: string[]): void {
     this.hospitalEditor.update(e => (e ? { ...e, doctorIds: ids ?? [] } : e));
@@ -997,6 +1009,7 @@ export class ReferringNetworkComponent implements OnInit {
     this.doctorEditor.set(d
       ? { ...d, hospitalIds: doctorHospitalIds(d) }
       : { name: '', isActive: true, hospitalIds: hospitalId ? [hospitalId] : [] });
+    this.doctorBase = stableJson(this.doctorEditor());
   }
   closeDoctorEditor(): void { this.doctorEditor.set(null); }
   setDoctorHospitals(ids: string[]): void {

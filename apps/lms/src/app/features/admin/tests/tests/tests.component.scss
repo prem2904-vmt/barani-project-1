@@ -201,6 +201,9 @@
 }
 
 /* Department rows: the whole row filters; the switch is its own target. */
+.pf-tm-dept-skel { padding: 0; overflow: hidden; }
+.pf-tm-dept-skel .pf-side-list { padding: 8px; }
+
 .pf-tm-dept-list {
   list-style: none;
   margin: 0;

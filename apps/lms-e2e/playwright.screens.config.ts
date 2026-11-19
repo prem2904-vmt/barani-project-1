@@ -15,7 +15,7 @@ import { browsersFromEnv, formFactorProjects } from './src/support/form-factor';
  */
 export default defineConfig({
   testDir: './src',
-  testMatch: /(whatsapp-manual|whatsapp-auto-chat|wizard-port|idcard-size|fx-desk|fx-int|rt-lab|rt-fd|rt-wa|cm-comms|neg-comms|neg-email-share|neg-wa|neg-storage|neg-desk-lab|files|bugs-1116|settings|settings-v2|lab-departments|rehome-lab|rehome-org|settings-grids|test-editor-align|unsaved-dialog|tm-views|settings-bottom|report-design|side-cards|settings-access|prices-neuron|order-ids)\.screens\.spec\.ts/,
+  testMatch: /(whatsapp-manual|whatsapp-auto-chat|wizard-port|idcard-size|fx-desk|fx-int|rt-lab|rt-fd|rt-wa|cm-comms|neg-comms|neg-email-share|neg-wa|neg-storage|neg-desk-lab|files|bugs-1116|settings|settings-v2|lab-departments|rehome-lab|rehome-org|settings-grids|test-editor-align|unsaved-dialog|tm-views|settings-bottom|report-design|side-cards|settings-access|prices-neuron|order-ids|save-dirty|skeleton-layout)\.screens\.spec\.ts/,
   retries: 0,
   workers: Number(process.env['PW_WORKERS'] || 4),
   fullyParallel: false,

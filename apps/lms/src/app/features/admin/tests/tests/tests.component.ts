@@ -41,6 +41,10 @@ import {
   canRevertToMaster, originLabel, restoreDefaultsMessage, restoreDefaultsSummary, revertToMasterPath,
 } from '../../../../shared/utils/test-origin';
 import { compareTestCodes } from '../../../../shared/utils/test-code';
+import { SKELETON_FRAME } from '../../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { EditLedger } from '../../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../../shared/utils/save-state';
+import { bindSaveShortcut } from '../../../../shared/utils/save-shortcut';
 import { departmentKeys, shownDepartmentName } from '../../../../shared/utils/package-department';
 import { pendingProposalIds } from '../../../../shared/utils/catalog-proposals';
 import { CatalogProposal } from '../../../../shared/models/test.model';
@@ -155,6 +159,7 @@ type TmStatus = 'all' | 'active' | 'inactive';
   standalone: true,
   imports: [
     ...SKELETON_KIT,
+    ...SKELETON_FRAME,
     BusyDirective,
     AgGridAngular,
     FormsModule,
@@ -264,7 +269,8 @@ export class TestsComponent implements OnInit {
     this.api.post(revertToMasterPath(row.id), {}).subscribe({
       next: () => {
         this.toasts.success(`${row.name || 'Test'} now follows the Test Master`);
-        this._dirty.update(m => { const n = new Map(m); n.delete(row.id); return n; });
+        this._edits.drop(row.id);
+        this._priceEdits.drop(row.id);
         this.loadTests();
         this.loadProposals();
       },
@@ -291,8 +297,8 @@ export class TestsComponent implements OnInit {
     this.api.post<{ deleted: number; parked: number; cloned: number; mode?: string }>('/api/tests/restore-defaults', {}).subscribe({
       next: r => {
         this.restoring.set(false);
-        this._dirty.set(new Map());
-        this._priceDirty.set(new Map());
+        this._edits.clear();
+        this._priceEdits.clear();
         this.toasts.success(restoreDefaultsSummary(r));
         this.loadTests();
         this.loadDepartments();
@@ -307,12 +313,22 @@ export class TestsComponent implements OnInit {
 
   /** Pending edits keyed by the row's REAL test id (`data.id`), each a map of
    *  `{ field: newValue }` merged across cells. Flushed by `saveAll()`. */
-  private readonly _dirty = signal<Map<string, Record<string, unknown>>>(new Map());
+  private readonly _edits = new EditLedger<unknown>();
   /** Pending PRICE edits (testId → ₹). Prices never ride the test PATCH: they
    *  flush through the pricing table's bulk endpoint (single source). */
-  private readonly _priceDirty = signal<Map<string, number>>(new Map());
+  private readonly _priceEdits = new EditLedger<number>();
+  /** Owner 2026-11-19: Save only when something CHANGED — a cell edited back to the value it had is no longer
+   *  pending (EditLedger compares with the value before the first edit), so Save disables again. */
   readonly dirtyCount = computed(() =>
-    new Set([...this._dirty().keys(), ...this._priceDirty().keys()]).size);
+    new Set([...this._edits.edits().keys(), ...this._priceEdits.edits().keys()]).size);
+  readonly NO_CHANGES = NO_CHANGES_TITLE;
+  /** The grid's batch Save is the band's primary in the Tests / Profiles / Packages view. */
+  readonly gridSaveShown = computed(() => !this.ogView() && !this.microView() && !this.pricingView() && !this.pendingView());
+  private readonly _saveKey = bindSaveShortcut({
+    active: () => this.gridSaveShown() || this.pricingView(),
+    canSave: () => this.pricingView() ? (this.pricingDirty() > 0 && !this.pricingSaving()) : (this.dirtyCount() > 0 && !this.saving()),
+    save: () => { if (this.pricingView()) void this.pricingTable()?.save(); else this.saveAll(); },
+  });
 
   readonly isPhone = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
   /** Row actions: TEXT on web, ICON on touch (PF-PATTERN .pf-rowact). */
@@ -835,7 +851,7 @@ export class TestsComponent implements OnInit {
   };
 
   /** Price cell = the acting branch's EFFECTIVE price from the pricing
-   *  table. Edits are held in `_priceDirty` and flushed through the bulk
+   *  table. Edits are held in `_priceEdits` and flushed through the bulk
    *  price endpoint — never the test row (a price is not a test change).
    *  Shown as just the price ("₹1"): plain text, right-aligned, tabular. */
   private priceColDef(editable: boolean): ColDef<TestRow> {
@@ -1279,24 +1295,21 @@ export class TestsComponent implements OnInit {
     const id = e.data.id;
     if (field === 'price') {
       const n = Number(e.newValue);
-      this._priceDirty.update(prev => new Map(prev).set(id, Number.isFinite(n) ? Math.max(0, n) : 0));
+      const o = Number(e.oldValue);
+      const orig = this._priceEdits.original(id, 'price') ?? (Number.isFinite(o) ? Math.max(0, o) : 0);
+      this._priceEdits.set(id, 'price', orig, Number.isFinite(n) ? Math.max(0, n) : 0);
       this.gridApi?.refreshCells({ columns: ['price'], force: true });
       return;
     }
     const value = field === 'tatHours' ? Number(e.newValue) : e.newValue;
-
-    this._dirty.update(prev => {
-      const next = new Map(prev);
-      next.set(id, { ...(next.get(id) ?? {}), [field]: value });
-      return next;
-    });
-
+    const old = field === 'tatHours' ? Number(e.oldValue) : e.oldValue;
+    this._edits.set(id, field, old, value);
   }
 
   saveAll() {
     if (this.saving()) return;
-    const dirty = this._dirty();
-    const prices = this._priceDirty();
+    const dirty = this._edits.edits();
+    const prices = new Map([...this._priceEdits.edits().entries()].map(([id, f]) => [id, Number(f['price'])] as const));
     if (dirty.size === 0 && prices.size === 0) return;
 
     const entries = [...dirty.entries()];
@@ -1317,8 +1330,8 @@ export class TestsComponent implements OnInit {
         this.toasts.success(this.contributorMode
           ? `Sent ${count} change${count === 1 ? '' : 's'} for approval`
           : `Saved ${count} change${count === 1 ? '' : 's'}`);
-        this._dirty.set(new Map());
-        this._priceDirty.set(new Map());
+        this._edits.clear();
+        this._priceEdits.clear();
         this.loadTests();
       },
       error: e => {
@@ -1330,8 +1343,8 @@ export class TestsComponent implements OnInit {
   }
 
   discardChanges() {
-    this._dirty.set(new Map());
-    this._priceDirty.set(new Map());
+    this._edits.clear();
+    this._priceEdits.clear();
     this.loadTests();
   }
 

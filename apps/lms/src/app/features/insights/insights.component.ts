@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../shared/components/skeleton-frame/skeleton-frame.component';
 import { SheetEditorService } from '../neuron/sheet-editor.service';
 import { ShareService } from '../../core/services/share.service';
 import { NgTemplateOutlet, formatDate } from '@angular/common';
@@ -85,7 +86,7 @@ function writeStore(key: string, value: unknown): void {
 @Component({
   selector: 'pf-insights',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, PfDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, InsightsChartComponent, InsightsDashboardComponent],
+  imports: [SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, PfDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, InsightsChartComponent, InsightsDashboardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './insights.component.html',
   styleUrl: './insights.component.scss',

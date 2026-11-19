@@ -1,3 +1,4 @@
+import { SKELETON_FRAME } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, Injector, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import { AllCommunityModule, ColDef, GridApi, GridReadyEvent, ICellRendererParams, ModuleRegistry, RowClassParams } from 'ag-grid-community';
@@ -82,7 +83,7 @@ export interface PriceGridRow { key: string; testId: string; spec: string | null
 @Component({
   selector: 'pf-pricing',
   standalone: true,
-  imports: [AgGridAngular, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
+  imports: [...SKELETON_FRAME, AgGridAngular, SkeletonTableComponent, BusyDirective, FormsModule, ScreenHeaderComponent, SelectComponent, TileComponent, TouchButtonComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-pricing" [class.pf-pricing--embedded]="embedded()">
@@ -144,7 +145,7 @@ export interface PriceGridRow { key: string; testId: string; spec: string | null
           </header>
           <div class="pf-2p__body">
             @if (loading()) {
-              <pf-skeleton-table class="pf-2p__skel" [rows]="12" [cols]="4" label="Loading prices…"></pf-skeleton-table>
+              <pf-skel-grid class="pf-2p__skel" [rows]="30" [columns]="4" label="Loading prices…"></pf-skel-grid>
             }
             <ag-grid-angular
               class="pf-2p__grid"

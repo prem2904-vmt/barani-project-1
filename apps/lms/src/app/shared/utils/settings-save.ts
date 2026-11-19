@@ -1,4 +1,5 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { SaveShortcutService } from './save-shortcut';
 import type { SettingsSaveMode } from './settings-access';
 
 /** One page's (or one card's) save: what the band-corner Save reads and calls. */
@@ -37,6 +38,15 @@ export class SettingsSaveService {
   readonly canDiscard = computed(() => this.regs().some(r => r.dirty() && r.canDiscard()));
   /** One registration keeps its own test id (e2e); several share `savebar-save`. */
   readonly testId = computed(() => (this.regs().length === 1 ? this.regs()[0].testId() : 'savebar-save'));
+
+  /** Ctrl/Cmd+S = the band's Save: saves when it is enabled, does nothing (and keeps the browser's "Save page" shut)
+   *  while nothing changed. */
+  private readonly _key = inject(SaveShortcutService).register({
+    active: () => this.present() && this.mode() !== 'view',
+    priority: -1,
+    canSave: () => this.canSave() && !this.saving(),
+    save: () => this.saveAll(),
+  });
 
   register(r: SettingsSaveReg): () => void {
     this.regs.update(list => [...list, r]);

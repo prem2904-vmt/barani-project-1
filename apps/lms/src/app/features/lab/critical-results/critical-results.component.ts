@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet, formatDate } from '@angular/common';
 import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, ModuleRegistry, RowClassParams } from 'ag-grid-community';
@@ -55,7 +56,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
 @Component({
   selector: 'pf-critical-results',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent, CriticalCommunicationDialogComponent, BusyDirective, SkeletonTableComponent],
+  imports: [SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent, CriticalCommunicationDialogComponent, BusyDirective, SkeletonTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cr pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -119,7 +120,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
             <div class="pf-cr__grid-wrap">
               @if (listSkeleton()) {
                 <!-- First load / empty refresh: the register's shape, never an empty grid. -->
-                <pf-skeleton-table class="pf-cr__skel" [rows]="8" [cols]="6" label="Loading critical results…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-cr__skel" [rows]="30" [columns]="6" label="Loading critical results…"></pf-skel-grid>
               } @else if (!loading() && visibleRows().length === 0) {
                 <div class="pf-empty pf-empty--compact">
                   <span class="pf-empty__icon" aria-hidden="true">

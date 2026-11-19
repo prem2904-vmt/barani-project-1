@@ -1,3 +1,7 @@
+import { SkelSettingRowsComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { dirtySnapshot } from '../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../shared/utils/save-state';
+import { bindSaveShortcut } from '../../../shared/utils/save-shortcut';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { SkeletonFormComponent } from '../../../shared/primitives/skeleton-kit.component';
@@ -24,7 +28,7 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
 @Component({
   selector: 'pf-opd-settings',
   standalone: true,
-  imports: [FormsModule, ScreenHeaderComponent, TileComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
+  imports: [SkelSettingRowsComponent, FormsModule, ScreenHeaderComponent, TileComponent, HeroBandComponent, SegmentedComponent, BusyDirective, SkeletonFormComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-band-page px-4 md:px-8 lg:px-10 pt-6 pb-10 max-w-3xl mx-auto w-full">
@@ -37,9 +41,9 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
                           (valueChange)="mode.set($event)"></pf-segmented>
           </ng-container>
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || formSkeleton()"
+            <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="saving() || formSkeleton() || !changed()" [pfBusyInactive]="saving() || formSkeleton() || !changed()"
                     [pfBusy]="saving()" pfBusyLabel="Saving…"
-                    (click)="save()" aria-label="Save changes" title="Save changes">
+                    (click)="save()" aria-label="Save changes" [title]="changed() || saving() ? 'Save changes' : NO_CHANGES">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
@@ -54,7 +58,7 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
         eyebrow="OPD" title="OPD Settings" subtitle="Follow-up policy for repeat consultations"
         parentRoute="/admin/opd">
         <div actions>
-          <button type="button" class="pf-os__save press" [disabled]="saving() || formSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+          <button type="button" class="pf-os__save press" [disabled]="saving() || formSkeleton() || !changed()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" [pfBusyInactive]="saving() || formSkeleton() || !changed()" [attr.title]="(!changed() && !saving()) ? 'No changes to save' : null">
             {{ saving() ? 'Saving…' : 'Save changes' }}
           </button>
         </div>
@@ -66,7 +70,7 @@ interface OpdSettings { followUpMode: FollowUpMode; tiers: FollowUpTier[]; }
         <!-- Settings on their way: a skeleton of the card (held 600ms), never
              the "Off" default dressed up as the saved policy. -->
         <section class="pf-card pf-os__card">
-          <pf-skeleton-form [fields]="3" [cols]="1" label="Loading OPD settings…"></pf-skeleton-form>
+          <pf-skel-setting-rows [rows]="3" label="Loading OPD settings…"></pf-skel-setting-rows>
         </section>
       } @else if (theme.isNewDesign()) {
         <!-- The mode is picked in the pill; its meaning stays readable here. -->
@@ -189,10 +193,16 @@ export class OpdSettingsComponent {
   private readonly loadHold = createLoadHold(true);
   readonly formSkeleton = this.loadHold.active;
 
+  /** Owner 2026-11-19: Save only when the rule differs from what was loaded / last saved. */
+  private readonly snap = dirtySnapshot(() => ({ m: this.mode(), t: this.tiers() }));
+  readonly changed = this.snap.dirty;
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
+  private readonly _saveKey = bindSaveShortcut({ canSave: () => this.changed() && !this.saving() && !this.formSkeleton(), save: () => this.save() });
+
   constructor() {
     this.api.get<OpdSettings>('/api/opd/settings').subscribe({
-      next: s => { this.loadHold.done(); if (s) { this.mode.set(s.followUpMode ?? 'off'); this.tiers.set(s.tiers ?? []); } },
-      error: () => { this.loadHold.done(); /* defaults: off */ },
+      next: s => { this.loadHold.done(); if (s) { this.mode.set(s.followUpMode ?? 'off'); this.tiers.set(s.tiers ?? []); } this.snap.mark(); },
+      error: () => { this.loadHold.done(); this.snap.mark(); /* defaults: off */ },
       complete: () => this.loadHold.done(),
     });
   }
@@ -212,7 +222,7 @@ export class OpdSettingsComponent {
       tiers: this.mode() === 'off' ? [] : this.tiers().filter(t => t.withinDays > 0),
     };
     this.api.put('/api/opd/settings', body).subscribe({
-      next: () => { this.saving.set(false); this.toasts.success('OPD settings saved'); },
+      next: () => { this.saving.set(false); this.snap.mark(); this.toasts.success('OPD settings saved'); },
       error: () => { this.saving.set(false); this.toasts.error('Could not save settings'); },
     });
   }

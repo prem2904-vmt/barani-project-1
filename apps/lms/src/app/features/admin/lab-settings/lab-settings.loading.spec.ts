@@ -67,7 +67,7 @@ describe('Lab settings — loading feedback', () => {
   it('first render = skeleton cards (no default switches that flip later), then the real cards', async () => {
     const cfg$ = new Subject<unknown>();
     const { f, el } = render({ cfg$ });
-    expect(el.querySelector('.pf-ls__skel pf-skeleton-card[aria-busy="true"]')).not.toBeNull();
+    expect(el.querySelector('.pf-ls__skel pf-skel-setting-rows[aria-busy="true"]')).not.toBeNull();
     expect(el.querySelector('.pf-ls__card')).toBeNull();
     await Promise.resolve();
     cfg$.next({ labStructure: 'auto', requireValidationForAllResults: true }); cfg$.complete();

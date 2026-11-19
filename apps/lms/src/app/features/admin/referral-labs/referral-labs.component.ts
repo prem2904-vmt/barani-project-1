@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NgTemplateOutlet } from '@angular/common';
@@ -17,6 +18,8 @@ import { SettingsSiblingsComponent } from '../settings/settings-siblings.compone
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import { heldFlag } from '../../../shared/utils/min-duration';
+import { dirtySnapshot } from '../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../shared/utils/save-state';
 import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import {
@@ -48,7 +51,7 @@ const EMPTY: LabDraft = {
 @Component({
   selector: 'pf-referral-labs',
   standalone: true,
-  imports: [SettingsSiblingsComponent, NgTemplateOutlet, BusyDirective, SkeletonTableComponent, SegmentedComponent, DataGridComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
+  imports: [SkelGridComponent, SettingsSiblingsComponent, NgTemplateOutlet, BusyDirective, SkeletonTableComponent, SegmentedComponent, DataGridComponent, FormsModule, ScreenHeaderComponent, TouchButtonComponent, HeroBandComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
@@ -86,7 +89,9 @@ const EMPTY: LabDraft = {
                 <h3 class="pf-card__label">{{ draft().id ? 'Edit referral lab' : 'New referral lab' }}</h3>
                 <span class="pf-card__spacer"></span>
                 <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
-                <button type="button" class="pf-btn pf-btn--primary press" (click)="save()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…">
+                <button type="button" class="pf-btn pf-btn--primary press" (click)="save()" [disabled]="!draft().name.trim() || !draftChanged() || saving()"
+                        [pfBusyInactive]="!draft().name.trim() || !draftChanged() || saving()"
+                        [title]="draftChanged() || saving() ? (draft().id ? 'Save changes' : 'Create referral lab') : NO_CHANGES" [pfBusy]="saving()" pfBusyLabel="Saving…">
                   {{ saving() ? 'Saving…' : (draft().id ? 'Save changes' : 'Create referral lab') }}
                 </button>
 <button type="button" class="pf-btn pf-btn--icon" (click)="toggleForm()" aria-label="Close">
@@ -134,7 +139,7 @@ const EMPTY: LabDraft = {
             </header>
             <div class="pf-sg-main__body">
               @if (loadingShown()) {
-                <pf-skeleton-table class="pf-sg-skel" [rows]="5" [cols]="5" label="Loading referral labs…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="5" label="Loading referral labs…"></pf-skel-grid>
               }
               <pf-data-grid [rowData]="visibleLabs()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!loading() && visibleLabs().length === 0) {
@@ -282,6 +287,10 @@ export class ReferralLabsComponent implements OnInit {
   protected readonly saving = signal<boolean>(false);
   protected readonly formOpen = signal<boolean>(false);
   protected readonly draft = signal<LabDraft>({ ...EMPTY });
+  /** Save only when the form differs from the lab as opened (owner 2026-11-19); a new lab = the empty form. */
+  private readonly draftSnap = (() => { const s = dirtySnapshot(() => this.draft()); s.mark({ ...EMPTY }); return s; })();
+  protected readonly draftChanged = this.draftSnap.dirty;
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
   protected readonly nameError = signal<string | null>(null);
   protected readonly codeError = signal<string | null>(null);
   private readonly _departments = signal<Department[]>([]);
@@ -312,6 +321,7 @@ export class ReferralLabsComponent implements OnInit {
   toggleForm() {
     this.formOpen.update(v => !v);
     if (!this.formOpen()) { this.draft.set({ ...EMPTY }); this.clearFieldErrors(); }
+    this.draftSnap.mark();
   }
   patch(p: Partial<LabDraft>) {
     if ('name' in p) this.nameError.set(null);
@@ -343,6 +353,7 @@ export class ReferralLabsComponent implements OnInit {
       contactEmail: l.contactEmail ?? '', address: l.address ?? '',
       departmentCodes: this.deptCodesOf(l),
     });
+    this.draftSnap.mark();
     this.clearFieldErrors();
     this.formOpen.set(true);
   }
@@ -370,6 +381,7 @@ export class ReferralLabsComponent implements OnInit {
         this.toasts.success(d.id ? 'Referral lab updated' : 'Referral lab created');
         this.formOpen.set(false);
         this.draft.set({ ...EMPTY });
+        this.draftSnap.mark();
         this.refresh();
       },
       error: e => {

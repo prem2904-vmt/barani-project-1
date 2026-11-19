@@ -1,3 +1,4 @@
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
 import { ChangeDetectionStrategy, Component, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { CellValueChangedEvent, ColDef, ICellRendererParams } from 'ag-grid-community';
 import { NgTemplateOutlet } from '@angular/common';
@@ -160,7 +161,7 @@ export class PartnerTestPricesComponent implements HasUnsavedChanges {
     if (!labId) return;
     this.loading.set(true);
     this.api.get<PriceRow[]>(`/api/partner-test-prices?referralLabId=${labId}`).subscribe({
-      next: d => { this.rows.set(d ?? []); this.loading.set(false); },
+      next: d => { this.rows.set(this.remember(d ?? [])); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
   }
@@ -172,9 +173,15 @@ export class PartnerTestPricesComponent implements HasUnsavedChanges {
     }]);
   }
 
+  /** The editable fields of each row as loaded / saved — an edit back to them is no longer a change (owner 2026-11-19). */
+  private readonly loaded = new WeakMap<PriceRow, string>();
+  private snapOf(r: PriceRow): string { return stableJson({ k: r.testCatalogKey, n: r.testName ?? null, c: Number(r.cost) || 0, f: r.effectiveFrom }); }
+  private remember(list: PriceRow[]): PriceRow[] { for (const r of list) if (r.id !== null) { this.loaded.set(r, this.snapOf(r)); r._dirty = false; } return list; }
+
   onCellChanged(ev: CellValueChangedEvent<PriceRow>): void {
     if (!ev.data) return;
-    ev.data._dirty = true;
+    const was = this.loaded.get(ev.data);
+    ev.data._dirty = ev.data.id === null || was === undefined || was !== this.snapOf(ev.data);
     this.rows.set([...this.rows()]); // bump dirty() / template
   }
 

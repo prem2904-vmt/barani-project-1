@@ -1,3 +1,5 @@
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
+import { SKELETON_FRAME } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { NgTemplateOutlet } from '@angular/common';
 import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { AuthService } from '../../../core/auth/auth.service';
@@ -95,7 +97,7 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
 @Component({
   selector: 'pf-report-template',
   standalone: true,
-  imports: [NgTemplateOutlet, SettingsSavebarComponent, SettingRowComponent, ReportSendingCardComponent, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
+  imports: [...SKELETON_FRAME, NgTemplateOutlet, SettingsSavebarComponent, SettingRowComponent, ReportSendingCardComponent, ReportTidyCardComponent, ReportStyleCardsComponent, ReportChartPanelCardComponent, SkeletonCardComponent, SkeletonFormComponent, BusyDirective, 
     FormsModule,
     DragDropModule,
     SegmentedComponent,
@@ -206,10 +208,16 @@ const SELF_SAVING_TABS: ReadonlySet<Tab> = new Set<Tab>(['sending']);
       @if (tplSkeleton()) {
         <!-- First load: the designer's shape until the lab's template lands
              (never the defaults flashing before the saved template). -->
+        @if (theme.isNewDesign()) {
+          <!-- The NEW frame: the section side card (340px) + the main card with the page preview. -->
+          <pf-skel-two-panel class="pf-rt-skel" main="designer" [sideRows]="7" [sideCounts]="false" [note]="true" [pills]="2" narrowAt="(max-width: 900px)" phone="strip"
+                             label="Loading report template…" data-testid="rt-skeleton"></pf-skel-two-panel>
+        } @else {
         <div class="pf-rt-loading">
           <section class="pf-card"><div class="pf-card__body"><pf-skeleton-form [fields]="8" [cols]="2" label="Loading report template…"></pf-skeleton-form></div></section>
           <section class="pf-card"><div class="pf-card__body"><pf-skeleton-card [lines]="8" [boxed]="false" label="Loading preview…"></pf-skeleton-card></div></section>
         </div>
+        }
       } @else {
       <div class="pf-rt-grid" [class.pf-rt-grid--norail]="railHidden() || theme.isNewDesign()"
            [class.pf-rt-grid--designer]="designerTab()" [class.pf-rt-grid--solo]="notesOnly()">
@@ -1694,7 +1702,19 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
   private lastPatch = { at: 0, keys: '' };
   /** JSON of the template as last loaded / saved — "dirty" compares to it. */
   private readonly savedJson = signal<string>(JSON.stringify(this.defaultTemplate()));
-  readonly dirty = computed(() => JSON.stringify(this._tpl()) !== this.savedJson());
+  /** The saved template in key-order-free form (`stableJson`): a key re-added in another place is not a change. */
+  private readonly savedStable = computed(() => { try { return this.tplKey(JSON.parse(this.savedJson())); } catch { return this.savedJson(); } });
+  readonly dirty = computed(() => this.tplKey(this._tpl()) !== this.savedStable());
+  /** The template's compare text: its JSON-in-a-string fields (`metadata`, `…Json`) are compared as VALUES, so the same
+   *  settings written back in another key order (a switch turned off and on again) are not a change. */
+  private tplKey(t: ReportTemplate): string {
+    const o: Record<string, unknown> = { ...(t as unknown as Record<string, unknown>) };
+    for (const k of Object.keys(o)) {
+      const v = o[k];
+      if (typeof v === 'string' && v && (k === 'metadata' || k.endsWith('Json'))) { try { o[k] = JSON.parse(v); } catch { /* plain text */ } }
+    }
+    return stableJson(o);
+  }
 
   // The lab name + logo are set ONCE in Organization profile (Settings re-home): the letterhead shows them read-only,
   // and a save here posts them back unchanged beside the letterhead's own fields (tagline, NABL, colours …).
@@ -2549,7 +2569,12 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
     ...this.departments().map(d => ({ value: d.id, label: d.name })),
   ]);
   readonly deptPatientConfigured = signal(false);
-  readonly deptPatientDirty = signal(false);
+  /** The department strip as loaded / last saved (owner 2026-11-19: a compare, never a "touched" flag — a column moved
+   *  back disables Save again). null = no department draft on screen. */
+  private readonly deptPatientSaved = signal<string | null>(null);
+  private deptPatientSnap(): string { return stableJson({ l: this.deptPatientLayout(), c: this.patientCols() }); }
+  private markDeptPatientSaved(): void { this.deptPatientSaved.set(this.patientScope() === 'default' ? null : this.deptPatientSnap()); }
+  readonly deptPatientDirty = computed(() => this.patientScope() !== 'default' && this.deptPatientSaved() !== null && this.deptPatientSnap() !== this.deptPatientSaved());
   readonly deptPatientSaving = signal(false);
   private readonly deptPatientLayout = signal<string>('three-col');
 
@@ -2561,7 +2586,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
 
   onPatientScopeChange(scope: string) {
     this.patientScope.set(scope);
-    this.deptPatientDirty.set(false);
+    this.deptPatientSaved.set(null);
     if (scope === 'default') { this.deptPatientConfigured.set(false); this.initPatientCols(); return; }
     this.api.get<{ patient?: { layout?: string; columns?: string[][] } | null; configured?: boolean }>(
       `/api/report-layout/department/${scope}/patient`).subscribe({
@@ -2577,6 +2602,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
           this.deptPatientLayout.set(this._tpl().patientLayout ?? 'three-col');
           this.seedPatientColsFromTemplate();
         }
+        this.markDeptPatientSaved();
       },
       error: (e: ApiError) => {
         // Snap back to a safe state, but LOUDLY — a silent revert reads as
@@ -2601,7 +2627,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
       next: () => {
         this.deptPatientSaving.set(false);
         this.deptPatientConfigured.set(true);
-        this.deptPatientDirty.set(false);
+        this.markDeptPatientSaved();
         this.toasts.success('Department patient strip saved');
         resolve(true);
       },
@@ -2615,9 +2641,9 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
     this.api.post(`/api/report-layout/department/${dept}/patient`, { patient: null }).subscribe({
       next: () => {
         this.deptPatientConfigured.set(false);
-        this.deptPatientDirty.set(false);
         this.deptPatientLayout.set(this._tpl().patientLayout ?? 'three-col');
         this.seedPatientColsFromTemplate();
+        this.markDeptPatientSaved();
         this.toasts.success('Back to the default strip');
       },
       error: (e: ApiError) => this.toasts.error(e?.message || 'Reset failed'),
@@ -2698,7 +2724,6 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
     this.patientColsCache.set(n, cols.map(c => [...c]));
     if (this.patientScope() !== 'default') {
       this.deptPatientLayout.set(layout);
-      this.deptPatientDirty.set(true);
       return;
     }
     const placed = new Set(cols.flat());
@@ -2738,7 +2763,7 @@ export class ReportTemplateComponent implements OnInit, OnDestroy, HasUnsavedCha
    *  the default scope patches the template. */
   private commitPatientCols(cols: string[][]) {
     this.patientCols.set(cols);                    // pool is derived → recomputes
-    if (this.patientScope() !== 'default') { this.deptPatientDirty.set(true); return; }
+    if (this.patientScope() !== 'default') return;   // deptPatientDirty is the compare with the loaded / saved strip
     // Persist the arrangement + the titles of any custom fields now placed in a
     // column (so the PDF can label them; placement is the single shown/hidden
     // control — no separate toggle).

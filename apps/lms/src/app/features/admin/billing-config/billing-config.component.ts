@@ -1,3 +1,4 @@
+import { SkelSettingRowsComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import {
@@ -82,7 +83,7 @@ interface GstRow {
 @Component({
   selector: "pf-billing-config",
   standalone: true,
-  imports: [SettingsSavebarComponent, SettingRowComponent, SkeletonFormComponent, BusyDirective, RouterLink,
+  imports: [SkelSettingRowsComponent, SettingsSavebarComponent, SettingRowComponent, SkeletonFormComponent, BusyDirective, RouterLink,
     FormsModule,
     NumberInputComponent,
     ScreenHeaderComponent,
@@ -186,7 +187,7 @@ interface GstRow {
           <!-- First load: the form's shape until the saved config lands
                (never the defaults flashing before the lab's own values). -->
           <section class="pf-card"><div class="pf-card__body">
-            <pf-skeleton-form [fields]="8" [cols]="2" label="Loading billing config…"></pf-skeleton-form>
+            <pf-skel-setting-rows [rows]="8" label="Loading billing config…"></pf-skel-setting-rows>
           </div></section>
         } @else {
         @if (!hosted && !section()) {
