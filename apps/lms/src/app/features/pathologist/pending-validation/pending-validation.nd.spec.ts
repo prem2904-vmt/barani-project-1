@@ -105,11 +105,19 @@ async function render(opts: { queue?: OrderTest[]; scope?: unknown; nd?: boolean
   f.detectChanges();
   await f.whenStable();
   f.detectChanges();
+  await settle(f);
   const el = f.nativeElement as HTMLElement;
   const c = f.componentInstance as any;
   return { f, el, c, api, router };
 }
 
+/** Let the grid (pf-data-grid → AG-Grid) render its rows. */
+const settle = async (f: { detectChanges(): void }) => { for (let i = 0; i < 6; i++) { await new Promise(r => setTimeout(r, 40)); f.detectChanges(); } };
+/** The queue's rows (one per tube) — grid rows since the grid redesign (owner 2026-11-20). */
+const tilesOf = (el: Element) => [...el.querySelectorAll<HTMLElement>('.ag-row.pv-row:not(.ag-opacity-zero)')];
+/** Rows leaving the grid fade out first (animateRows): wait them out. */
+const leave = async (f: { detectChanges(): void }) => { await new Promise(r => setTimeout(r, 600)); await settle(f); };
+const idsOf = (el: Element) => tilesOf(el).map(t => t.querySelector('.pv-tile__id')!.textContent!.trim());
 /** A segment's words: label + count, space-joined. */
 const words = (e: Element) => [...e.children].map(c => c.textContent!.trim()).join(' ');
 /** Component CSS with Angular's scoping attributes stripped. */
@@ -161,17 +169,18 @@ describe('Pathologist queue (nd) — layout', () => {
 });
 
 describe('Pathologist queue (nd) — tiles', () => {
-  it('one tile per tube: sample ID first (tabular), FULL name, meta joined with ·, one status word', async () => {
+  it('one ROW per tube: sample ID first (tabular), FULL name, meta joined with ·, one status word', async () => {
     const { el } = await render();
-    const tiles = [...el.querySelectorAll<HTMLElement>('.pv-tile')];
+    const tiles = tilesOf(el);
     expect(tiles.length).toBe(3);
+    expect(el.querySelector('pf-data-grid[data-testid="pv-grid"]')).not.toBeNull();
     const hae = tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === '0126117')!;
     expect(hae.querySelector('.pv-tile__id')!.classList).toContain('pf-num');
     expect(hae.querySelector('.pv-tile__who')!.textContent!.trim()).toBe(LONG_NAME);   // never cut
     expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('44/F · AA0007 · Haematology');
     expect(hae.querySelector('.pv-tile__meta')!.textContent).not.toContain('|');
     expect(hae.querySelector('.pv-tile__tests')!.textContent).toContain('CBC · ESR');
-    // ONE status each: dot + word, no chip.
+    // ONE status each: a neutral pill + dot, no chip.
     for (const t of tiles) {
       expect(t.querySelectorAll('.pv-status').length).toBe(1);
       expect(t.querySelector('.pv-status .pv-status__dot')).not.toBeNull();
@@ -182,39 +191,47 @@ describe('Pathologist queue (nd) — tiles', () => {
     expect(word('0126117')).toBe('On time');
     expect(word('0126118')).toBe('Overdue');
     expect(word('1126001')).toBe('Critical');
+    // Status tones: rose for critical / overdue, never amber (owner: no yellow).
+    const tone = (id: string) => tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === id)!
+      .querySelector('.pv-status')!.getAttribute('data-tone');
+    expect([tone('0126118'), tone('1126001')]).toEqual(['rose', 'rose']);
   });
 
-  it('groups: Urgent / Normal (order priority) with a neutral dot except Urgent (red)', async () => {
+  it('Urgent (order priority) rows come first with a rose leading rule + "Urgent"; never "High"', async () => {
     const { el } = await render({ queue: [...QUEUE, STAT_LINE] });
-    const groups = [...el.querySelectorAll<HTMLElement>('.pv-group')].map(g => g.getAttribute('data-priority'));
-    expect(groups).toEqual(['urgent', 'normal']);
-    const heads = [...el.querySelectorAll<HTMLElement>('.pv-group__h')].map(h => h.textContent!.replace(/\d+/g, '').trim());
-    expect(heads).toEqual(['Urgent', 'Normal']);
+    const rows = tilesOf(el);
+    const urgent = rows.filter(r => r.classList.contains('wg-row--urgent'));
+    expect(urgent.map(r => r.querySelector('.pv-tile__id')!.textContent!.trim())).toEqual(['0126120']);
+    expect(urgent[0].querySelector('.wg-prio[data-p="urgent"]')!.textContent!.trim()).toBe('Urgent');
+    // The grid keeps the old groups' order: Urgent first, then Normal (mine → priority → least time left).
+    expect(el.querySelector('.ag-row[row-index="0"]')!.classList).toContain('wg-row--urgent');
     expect(el.textContent).not.toMatch(/\bHigh\b/);
-    expect(ndCss()).toMatch(/\.pv-group__dot\s*\{[^}]*var\(--pf-toggle-on\)/);
   });
 
-  it('row action is text on web, a 44px icon on touch; the whole tile opens the review', async () => {
+  it('row action: ONE text "Review" (44px tall on touch, never icon-only); a tap anywhere on the row opens the review', async () => {
     const web = await render();
-    const btn = web.el.querySelector('.pv-review') as HTMLElement;
+    const btn = web.el.querySelector('.ag-row .pv-review') as HTMLElement;
     expect(btn.classList).toContain('pf-rowact');
     expect(btn.classList).not.toContain('pf-rowact--icon');
+    expect(btn.textContent!.trim()).toBe('Review');
     TestBed.resetTestingModule();
     const touch = await render({ touch: true });
-    expect(touch.el.querySelector('.pv-review')!.classList).toContain('pf-rowact--icon');
-    expect(touch.el.querySelector('.pv-review')!.getAttribute('aria-label')).toMatch(/^Review /);
-    // Tap a tube → the same sample screen the tech used, in validate mode.
-    const tile = [...touch.el.querySelectorAll<HTMLElement>('.pv-tile')]
-      .find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === '0126117')!;
-    tile.click();
+    expect(touch.el.querySelector('.ag-row .pv-review')!.classList).not.toContain('pf-rowact--icon');
+    expect(touch.el.querySelector('.ag-row .pv-review')!.getAttribute('aria-label')).toMatch(/^Review /);
+    // Touch sizing comes from the shared work-grid cells: ≥44px controls, 8px apart.
+    expect(css()).toMatch(/not \(\(hover: hover\) and \(pointer: fine\)\)[^{]*\{[^}]*\.wg-act\s*\{[^}]*min-height:\s*44px/);
+    expect(css()).toMatch(/\.wg-acts\s*\{[^}]*gap:\s*8px/);
+    // Tap a tube's row → the same sample screen the tech used, in validate mode.
+    const row = tilesOf(touch.el).find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === '0126117')!;
+    touch.c.onRow({ data: touch.c.gridRows().find((g: any) => g.sampleLabel === '0126117'), event: { target: row.querySelector('.pv-tile__who') } });
     expect(touch.router.navigate).toHaveBeenCalledWith(['/lab/sample', 's1'], { queryParams: { validate: 1 } });
   });
 
   it('Assigned to me filters locally; Review next opens mine first', async () => {
     const { el, c, f, router } = await render();
     (el.querySelector('[data-tab="mine"]') as HTMLElement).click();
-    f.detectChanges();
-    expect([...el.querySelectorAll('.pv-tile__id')].map(x => x.textContent!.trim())).toEqual(['1126001']);
+    f.detectChanges(); await leave(f);
+    expect(idsOf(el)).toEqual(['1126001']);
     c.setTab('all'); f.detectChanges();
     (el.querySelector('.pv-side .pv-next') as HTMLElement).click();
     expect(router.navigate).toHaveBeenCalledWith(['/lab/sample', 's3'], { queryParams: { validate: 1 } });
@@ -226,8 +243,8 @@ describe('Pathologist queue (nd) — tiles', () => {
     expect([...seg.querySelectorAll('[role=radio]')].map(words))
       .toEqual(['All', 'Haematology 2', 'Microbiology 1']);
     ([...seg.querySelectorAll<HTMLElement>('[role=radio]')].find(r => r.textContent!.includes('Microbiology')))!.click();
-    f.detectChanges();
-    expect([...el.querySelectorAll('.pv-tile__id')].map(x => x.textContent!.trim())).toEqual(['1126001']);
+    f.detectChanges(); await leave(f);
+    expect(idsOf(el)).toEqual(['1126001']);
 
     TestBed.resetTestingModule();
     const one = await render({ queue: QUEUE.filter(q => q.subOrder?.departmentId === HAEM.id), scope: SCOPE_HAEM });

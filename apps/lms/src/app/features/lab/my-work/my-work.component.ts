@@ -59,6 +59,8 @@ import { WorkLine, enrichWorkLines, groupByPriority, soonestDue } from './my-wor
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { busyWhile } from '../../../shared/utils/busy';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { MyWorkGridComponent, MwGridContext } from './my-work-grid.component';
+import { MwRow, MwMode, MwTube, MwDoneTube, doneRowsOf, patientRowsOf, sampleRowsOf } from './my-work.grid';
 
 /** The departments of a tube's lines, "Haematology · Biochemistry" — a
  *  shared tube (integrated lab) carries several. */
@@ -108,7 +110,7 @@ const COUNTERS: CounterSpec[] = [
     TileGridDirective, ZoomSourceDirective,
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
     AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, CollectBandButtonComponent, SegmentedComponent,
-    ScanIconComponent],
+    ScanIconComponent, MyWorkGridComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-mw-page px-5 md:px-8 lg:px-10 pt-4 pb-3">
@@ -638,6 +640,10 @@ const COUNTERS: CounterSpec[] = [
               @if (countFor('rejected') > 0) { · {{ countFor('rejected') }} rejected }
               }
             </p>
+            @if (theme.isNewDesign() && tab() === 'completed') {
+              <pf-segmented class="pf-mw-completed-seg pf-mw-headseg" size="sm" [options]="completedWindowOptions"
+                            aria-label="Completed window" [value]="completedWindow()" (valueChange)="setCompletedWindow($any($event))"></pf-segmented>
+            }
           </header>
           <div class="pf-mw-pane__body">
       <!-- Kept mounted (not @if'd) so the bench keeps feeding its count to the
@@ -648,6 +654,21 @@ const COUNTERS: CounterSpec[] = [
         </div>
       }
       @if (tab() !== 'culture') {
+      @if (theme.isNewDesign()) {
+      <!-- New design (owner 2026-11-20): the work list is the Frontdesk / Results GRID — shared pf-data-grid, one
+           primary row action at the row end + ⋯, the row tap = the old tile tap; phones get card rows. -->
+      <pf-mw-grid class="pf-mw-gridhost" [rows]="mwGridRows()" [mode]="mwGridMode()" [ctx]="mwGridCtx"
+                  [loading]="tab() === 'completed' ? completedLoading() : loading()" [emptyTitle]="mwEmptyTitle()" [phone]="isPhone()" />
+      @if (cardPeekId()) {
+        <div class="pf-cardpeek" (click)="$event.stopPropagation()"
+             [style.left.px]="cardPeekPos()?.x" [style.top.px]="cardPeekPos()?.y">
+          <p class="pf-cardpeek__h">Tests ({{ cardPeekTests().length }})</p>
+          <ul>
+            @for (n of cardPeekTests(); track n) { <li>{{ n }}</li> }
+          </ul>
+        </div>
+      }
+      } @else {
       @if (tab() === 'completed') {
       <!-- ── Completed: this tech's finished tubes, newest first ──────
            Read-only history with ONE action: Edit re-opens the whole tube
@@ -1103,6 +1124,7 @@ const COUNTERS: CounterSpec[] = [
         <pf-tile tone="default" padding="xl">
           <p class="text-center text-sm" style="color: var(--text-tertiary);">Nothing in the queue.</p>
         </pf-tile>
+      }
       }
       }
       }
@@ -2766,6 +2788,16 @@ const COUNTERS: CounterSpec[] = [
       :host-context(.design-new) .pf-mw-scan .pf-rowact { height: 40px; min-height: 40px; }
     }
 
+    /* Work list = the grid (owner 2026-11-20): the card body is the grid's frame — flush, no page scroll, the grid
+       scrolls inside it (phones: the card rows scroll in the body). The head stays ONE row; its pill collapses. */
+    .pf-mw-pane__body:has(> .pf-mw-gridhost) { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+    .pf-mw-gridhost { flex: 1 1 auto; min-height: 0; }
+    .pf-mw-pane__hdr--tabs:has(> pf-segmented) { flex-wrap: nowrap; }
+    .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-pane__meta { white-space: nowrap; }
+    .pf-mw-headseg { min-width: 0; }
+    @media (max-width: 640px) {
+      .pf-mw-pane__body:has(> .pf-mw-gridhost) { overflow-y: auto; }
+    }
   `]
 })
 export class MyWorkComponent implements OnInit {
@@ -3452,6 +3484,52 @@ export class MyWorkComponent implements OnInit {
     const filtered = this.filterByCounter(enriched);
     return groupByPriority(filtered);
   });
+
+  // ── New design: the work list as a GRID (owner 2026-11-20) ───────────
+  // The same buckets / tubes / patient groups / completed tubes the tiles drew, as rows for pf-mw-grid. The rules
+  // (status word, journey, TAT, the ONE primary + ⋯) live in my-work.grid.ts; the handlers stay here, unchanged.
+  readonly mwGridMode = computed<MwMode>(() =>
+    this._tab() === 'completed' ? 'done' : this.labCfg.sampleFocused() ? 'sample' : 'patient');
+  readonly mwGridRows = computed<MwRow[]>(() => {
+    if (this._tab() === 'completed') return doneRowsOf(this.completedTubes() as MwDoneTube[]);
+    const buckets = this.buckets().filter(b => b.items.length > 0);
+    if (this.labCfg.sampleFocused()) {
+      return sampleRowsOf(buckets.map(b => ({ priority: b.priority, tubes: this.sampleRows(b.items) })));
+    }
+    const open = this._expanded();
+    return patientRowsOf(buckets.map(b => ({
+      priority: b.priority,
+      groups: this.patientGroups(b.items).map(g => {
+        const patient = g.items[0]?.subOrder?.order?.patient;
+        return {
+          group: { orderId: g.orderId, patientName: g.patientName, patientMeta: patient ? formatPatientMeta(patient) : '',
+                   items: g.items, priority: g.priority, remainingMin: g.remainingMin, dueAt: g.dueAt },
+          tubes: this.tubesIn(g.items),
+        };
+      }),
+    })), id => open.has(id));
+  });
+  /** Empty states keep their copy. */
+  readonly mwEmptyTitle = computed(() => this._tab() === 'completed'
+    ? `Nothing completed ${this.completedWindow() === 'today' ? 'today' : 'in the last 7 days'}.`
+    : 'Nothing in the queue.');
+  /** The grid's handlers = this screen's existing ones (tap, claim, scan gate, delegate, print, edit, view, peek). */
+  readonly mwGridCtx: MwGridContext = {
+    rules: () => ({ tab: this._tab(), myId: this.myUserId(), canReassign: this.canReassign(), canEdit: this.canEditResult() }),
+    ownerName: id => this.assigneeName(id),
+    activate: (tube: MwTube, name: string, ev?: Event) => this.onCardActivate(tube, name, ev),
+    toggle: id => this.toggleExpand(id),
+    delegate: tests => this.openDelegate(tests),
+    print: (d: MwDoneTube) => this.printCompletedTube(d),
+    edit: (d: MwDoneTube) => { void this.editCompletedTube(d); },
+    view: (d: MwDoneTube) => this.viewCompletedTube(d),
+    pending: id => this.pickingTubeId() === id || this.claimingTube(id),
+    printing: id => this.printingTubeId() === id,
+    reopening: id => this.reopeningTubeId() === id,
+    peekDown: (tube: MwTube, ev: PointerEvent) => this.onCardDown(tube, ev),
+    peekMove: ev => this.onCardMove(ev),
+    peekUp: () => this.onCardUp(),
+  };
 
   private enrich(rows: OrderTest[]): Enriched[] {
     return enrichWorkLines(rows);
