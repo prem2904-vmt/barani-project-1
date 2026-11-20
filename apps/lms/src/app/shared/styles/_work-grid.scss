@@ -1,0 +1,107 @@
+// ─────────────────────────────────────────────────────────────────────────
+// WORK GRID cells — the look My Work and the Pathologist queue share (owner 2026-11-20: "the grid format we had
+// against Frontdesk and Results"). Row / header height and the touch hit areas come from the shared grid theme
+// (grid-theme.ts → pf-data-grid) ONLY; nothing here sets a row height. Every colour is a token (light + dark).
+//
+//   @use '<relative>/shared/styles/work-grid' as wg;
+//   @include wg.cells;        // inside the component's styles (the cell templates are the page's own nodes)
+//
+// Touch (no fine pointer + hover — the grid theme's own query): every row control is ≥ 44 × 44 and 8 px from the
+// next one; nothing is revealed on hover only.
+// ─────────────────────────────────────────────────────────────────────────
+
+$web: '(hover: hover) and (pointer: fine)';
+$touch: 'not ((hover: hover) and (pointer: fine))';
+
+@mixin cells {
+  /* AG-Grid's own nodes are not the page's: reach them through ::ng-deep, scoped to the host. */
+  :host ::ng-deep {
+    .ag-cell.wg-c-wrap { white-space: normal; }
+    .ag-cell.wg-c-acts { justify-content: flex-end; padding-right: 10px; }
+    .ag-header-cell.wg-h-right .ag-header-cell-label { justify-content: flex-end; }
+    /* Urgent order: a rose inset rule at the row's leading edge (never a fill). */
+    .ag-row.wg-row--urgent { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
+  }
+
+  .wg-cell { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; align-self: center; gap: 3px; padding: 8px 0; min-width: 0; line-height: 1.3; }
+
+  /* Patient: the FULL name (wraps, never cut) + "30/F · MRN". */
+  .wg-who { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; min-width: 0; line-height: 1.3; }
+  .wg-who__name {
+    font-weight: 600; font-size: 13.5px; color: var(--text-primary);
+    white-space: normal; overflow-wrap: anywhere; text-overflow: clip; border-radius: 4px;
+  }
+  .wg-who__meta { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .wg-who__fold { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 3px; }
+  .wg-link { cursor: pointer; }
+  .wg-link:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px; }
+
+  /* Sample ID: the tube's own number leads (tabular). */
+  .wg-id { font-weight: 600; font-size: 13.5px; color: var(--text-primary); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .wg-tags { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+  .wg-tag {
+    display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 6px;
+    font-size: 11px; font-weight: 600; line-height: 1; white-space: nowrap;
+    color: var(--text-secondary); background: var(--pf-chip-bg); border: 1px solid var(--pf-line);
+  }
+  .wg-tag[data-tone='rose'] { color: var(--red-text); border-color: color-mix(in srgb, var(--red-text) 30%, var(--pf-line)); }
+  .wg-tag[data-tone='violet'] { color: var(--violet-text); border-color: color-mix(in srgb, var(--violet-text) 30%, var(--pf-line)); }
+
+  /* Tests / department: quiet, wraps. */
+  .wg-tests { font-size: 12.5px; color: var(--text-primary); line-height: 1.4; overflow-wrap: anywhere; }
+  .wg-sub { font-size: 11.5px; color: var(--text-tertiary); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .wg-note { font-size: 11.5px; color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); overflow-wrap: anywhere; }
+
+  /* Status: a NEUTRAL pill + a small coloured dot (owner). */
+  .wg-pill {
+    --wg-tone: var(--text-tertiary);
+    display: inline-flex; align-items: center; gap: 6px; min-height: 22px; padding: 1px 9px 1px 8px; border-radius: 999px;
+    max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere;
+    font-size: 12.5px; font-weight: 500; color: var(--text-primary); background: var(--pf-chip-bg); border: 1px solid var(--pf-line);
+  }
+  .wg-pill[data-tone='violet'] { --wg-tone: var(--violet-text); }
+  .wg-pill[data-tone='green'] { --wg-tone: var(--green-text); }
+  .wg-pill[data-tone='rose'] { --wg-tone: var(--red-text); }
+  .wg-pill[data-tone='sky'] { --wg-tone: var(--sky-text, var(--blue-text)); }
+  .wg-dot { width: 7px; height: 7px; border-radius: 999px; background: var(--wg-tone); flex: none; }
+
+  /* Priority: Urgent / Normal only — Urgent in rose words, Normal quiet. */
+  .wg-prio { font-size: 12.5px; color: var(--text-tertiary); white-space: nowrap; }
+  .wg-prio[data-p='urgent'] { color: var(--red-text); font-weight: 600; }
+
+  /* TAT / waiting: tabular; rose when late (never amber). */
+  .wg-tat { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  .wg-tat--late { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); font-weight: 600; }
+
+  /* Row actions: ONE primary at the row end + ⋯. Text on web; ≥ 44 px on touch; always 8 px apart. */
+  .wg-acts { display: inline-flex; align-items: center; justify-content: flex-end; gap: 8px; width: 100%; }
+  .wg-act { min-width: 84px; padding: 0 14px; font-size: 13px; white-space: nowrap; color: var(--violet-text, #6d28d9);
+    border-color: color-mix(in srgb, var(--violet-text, #6d28d9) 35%, var(--pf-line)); }
+  .wg-act--quiet { color: var(--text-secondary); border-color: var(--pf-line); }
+  .wg-acts ::ng-deep .wg-more { width: 36px; min-width: 36px; height: 36px; min-height: 36px; }
+  .wg-chev { transition: transform var(--pf-dur-fast, 150ms) ease; }
+  .wg-chev[data-open='true'] { transform: rotate(90deg); }
+  @media #{$touch} {
+    .wg-act { height: 44px; min-height: 44px; min-width: 88px; }
+    .wg-acts ::ng-deep .wg-more { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+  }
+
+  /* Phones: card rows (Results' phone pattern) — the whole card is the row tap, its actions sit on their own line. */
+  .wg-cards { list-style: none; margin: 0; padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .wg-card {
+    display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--pf-radius, 12px);
+    border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: inherit; text-align: left; cursor: pointer;
+  }
+  .wg-card[data-urgent='true'] { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
+  .wg-card:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px; }
+  .wg-card__l1 { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .wg-card__l1 > :first-child { flex: 1 1 auto; min-width: 0; }
+  .wg-card__l1 > .wg-pill, .wg-card__l1 > .pv-statuscell { flex: none; white-space: nowrap; }
+  .wg-card__foot { display: flex; align-items: center; gap: 8px; }
+  .wg-card__foot .wg-acts { width: auto; margin-left: auto; }
+  .wg-card .wg-act { height: 44px; min-height: 44px; }
+  .wg-card .wg-acts ::ng-deep .wg-more { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+  .wg-card--skel { cursor: default; }
+
+  @media (prefers-reduced-motion: reduce) { .wg-chev { transition: none; } }
+}

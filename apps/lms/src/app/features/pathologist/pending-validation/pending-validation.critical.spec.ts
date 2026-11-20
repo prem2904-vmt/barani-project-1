@@ -89,8 +89,12 @@ async function render(events: CriticalResultEvent[]) {
   f.detectChanges();
   await f.whenStable();
   f.detectChanges();
+  await settle(f);
   return { f, el: f.nativeElement as HTMLElement, api };
 }
+
+/** Let the grid render (the queue is a pf-data-grid since 2026-11-20; rows = .ag-row). */
+const settle = async (f: { detectChanges(): void }) => { for (let i = 0; i < 6; i++) { await new Promise(r => setTimeout(r, 40)); f.detectChanges(); } };
 
 describe('Pathologist queue — critical acknowledgement', () => {
   it('looks up the queued lines\' records with a GET and flags the unacknowledged tile with ONE status word + Acknowledge', async () => {
@@ -99,7 +103,7 @@ describe('Pathologist queue — critical acknowledgement', () => {
     expect(lookups.length).toBe(1);
     expect(lookups[0]).toContain('orderTestIds=l1');
     expect(lookups[0]).toContain('l2');
-    const statuses = [...el.querySelectorAll('.pv-tile .pv-status')].map(s => s.textContent?.trim());
+    const statuses = [...el.querySelectorAll('.ag-row .pv-status')].map(s => s.textContent?.trim());
     expect(statuses).toContain('Critical · not acknowledged');
     expect(el.querySelectorAll('.pv-ack').length).toBe(1);
     expect(el.querySelector('.pv-ack')?.classList.contains('pf-rowact')).toBe(true);
@@ -109,8 +113,9 @@ describe('Pathologist queue — critical acknowledgement', () => {
     const { f, el, api } = await render([EVENT]);
     (el.querySelector('.pv-ack') as HTMLButtonElement).click();
     f.detectChanges();
+    await settle(f);
     expect(api.post).toHaveBeenCalledWith('/api/critical-results/e1/acknowledge', { via: 'pathologist_queue' });
-    const statuses = [...el.querySelectorAll('.pv-tile .pv-status')].map(s => s.textContent?.trim());
+    const statuses = [...el.querySelectorAll('.ag-row .pv-status')].map(s => s.textContent?.trim());
     expect(statuses).toContain('Critical');
     expect(statuses).not.toContain('Critical · not acknowledged');
     expect(el.querySelector('.pv-ack')).toBeNull();
@@ -119,6 +124,6 @@ describe('Pathologist queue — critical acknowledgement', () => {
   it('a record already acknowledged by me needs no button; a communicated one is not even returned', async () => {
     const { el } = await render([{ ...EVENT, status: 'acknowledged', acknowledgements: [{ userId: 'me', name: 'Me', at: '2026-09-27T09:58:00Z', via: 'bell' }] }]);
     expect(el.querySelector('.pv-ack')).toBeNull();
-    expect([...el.querySelectorAll('.pv-tile .pv-status')].map(s => s.textContent?.trim())).toContain('Critical');
+    expect([...el.querySelectorAll('.ag-row .pv-status')].map(s => s.textContent?.trim())).toContain('Critical');
   });
 });

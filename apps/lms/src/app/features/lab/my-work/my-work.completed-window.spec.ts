@@ -27,6 +27,9 @@ import { istDayStart, labDaysAgo } from '../../../shared/utils/lab-clock';
  */
 function harness(getMock: ReturnType<typeof vi.fn>) {
   const loose = () => new Proxy({}, { get: (_t, k) => (k === 'then' ? undefined : () => undefined) });
+  // MyWorkComponent reads window.matchMedia (phone layout) when constructed; the unit-test DOM has none (this spec
+  // used to pass only when an earlier spec in the same run had left its own stub behind).
+  (window as any).matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: { get: getMock, post: vi.fn(() => of({})) } },
