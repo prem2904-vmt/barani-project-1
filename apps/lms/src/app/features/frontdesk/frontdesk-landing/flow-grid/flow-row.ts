@@ -1,5 +1,6 @@
 import type { Order } from '../../../../shared/models/order.model';
 import type { Patient } from '../../../../shared/models/patient.model';
+import type { OpdVisitRow } from '../../../opd/frontdesk/desk.models';
 import type { OutsourcedTube } from '../../outsourced/outsourced-view';
 import { attachState, rowReport } from '../../outsourced/outsourced-view';
 import type { MergedWorkRow } from '../work-merge';
@@ -21,7 +22,8 @@ import { LAB_STEPS_VALIDATED, RingStep, labRingSteps, ringSteps, statusRingSteps
 /** Minutes at the current stage after which a row reads "late" (rose) — the More filters "Only late" rule. */
 export const LATE_AFTER_MIN = 30;
 
-export type FlowKind = 'order' | 'draft' | 'synthetic';
+/** 'visit' = an OPD visit (features/opd), shown in the common Frontdesk while OPD is on (opd-visits.ts). */
+export type FlowKind = 'order' | 'draft' | 'synthetic' | 'visit';
 export type JourneyState = 'done' | 'now' | 'todo' | 'stopped';
 export type FlowTone = 'violet' | 'green' | 'rose' | 'sky' | 'neutral';
 
@@ -30,6 +32,8 @@ export type FlowActionId =
   | 'resume' | 'discard'
   | 'bill' | 'recollect' | 'collect' | 'dispatch' | 'dispatch-drawn' | 'reprint' | 'series' | 'download' | 'pay' | 'share'
   | 'open' | 'profile'
+  /** OPD visit: open the existing visit screen (/opd/visit/:id). */
+  | 'opd-open'
   | `out-upload:${string}` | `out-view:${string}` | `out-attach:${string}` | `out-complete:${string}` | `out-undo:${string}`;
 
 export interface FlowAction {
@@ -56,6 +60,8 @@ export interface FlowRow {
   order: Order | null;
   draft: FlowDraft | null;
   merged: MergedWorkRow<Order> | null;
+  /** The OPD visit behind a 'visit' row. */
+  visit?: OpdVisitRow | null;
   /** The row's leading status (what the head pill would call it). */
   status: WorkStatus;
   service: ServiceId;

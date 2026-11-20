@@ -114,3 +114,17 @@ export function ringSegments(n: number): { d: string; a0: number; a1: number }[]
     return { d: `M${x0} ${y0}A${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1} ${y1}`, a0, a1 };
   });
 }
+
+/** An OPD VISIT (the OPD desk's own record): Check-in → Vitals (when the tenant's workflow takes vitals) → Doctor
+ *  queue → Consult; completed = every step done, cancelled / no-show = nothing started. From the visit's status. */
+export const OPD_VISIT_STEPS = ['Check-in', 'Vitals', 'Doctor queue', 'Consult'] as const;
+
+export function opdVisitRingSteps(status: string, opts: { late?: boolean; vitals?: boolean } = {}): RingStep[] {
+  const labels: string[] = opts.vitals === false ? OPD_VISIT_STEPS.filter(l => l !== 'Vitals') : [...OPD_VISIT_STEPS];
+  if (status === 'cancelled' || status === 'no_show') return labels.map(label => ({ label, state: 'todo' as const }));
+  if (status === 'completed') return ringSteps(labels, -1);
+  const at: Record<string, string> = { booked: 'Check-in', vitals: 'Vitals', waiting: 'Doctor queue', in_consult: 'Consult' };
+  let i = labels.indexOf(at[status] ?? 'Check-in');
+  if (i < 0) i = labels.indexOf('Doctor queue');          // "vitals" status with vitals switched off
+  return ringSteps(labels, i, opts);
+}

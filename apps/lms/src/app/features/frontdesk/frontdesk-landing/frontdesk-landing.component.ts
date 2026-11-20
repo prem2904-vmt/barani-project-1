@@ -155,6 +155,9 @@ import { PaneSplitterComponent } from '../../../shared/components/pane-splitter/
 import { ServiceShelfService } from '../../../core/services/service-shelf.service';
 import { ServiceFilter, ServiceId, inService, serviceOfModule, tallyServices } from '../../../core/services/service-shelf';
 import { WhoIsWhereComponent, WhoPick } from './who-is-where/who-is-where.component';
+import { OpdDeskApi } from '../../opd/frontdesk/desk-api.service';
+import type { OpdVisitRow, PaymentDue } from '../../opd/frontdesk/desk.models';
+import { opdDueByVisit, opdVisitFlowRow, opdVisitMatches, opdVisitOpen } from './opd-visits';
 import { SideTab, WhoItem, apptOverdueMin, effectiveSideTab, fmtMin, sideTabOptions, stepOfRow, whoItemOf } from './who-is-where/who-is-where';
 import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
 
@@ -279,12 +282,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   readonly workStatusSegmentOptions = computed<SegmentedOption<WorkStatus>[]>(() => {
     const opts: SegmentedOption<WorkStatus>[] = [
-      { value: 'ip', label: 'In progress', count: this.visibleOrders().length + this.draftOrders().length, tone: 'active', dot: 'var(--violet-text)' },
-      { value: 'done', label: 'Completed', count: this.completedOrders().length, tone: 'ok', dot: 'var(--green-text)' },
+      { value: 'ip', label: 'In progress', count: this.visibleOrders().length + this.draftOrders().length + this.opdCount().ip, tone: 'active', dot: 'var(--violet-text)' },
+      { value: 'done', label: 'Completed', count: this.completedOrders().length + this.opdCount().done, tone: 'ok', dot: 'var(--green-text)' },
     ];
     // Neutral pill + a coloured dot per status (owner): violet in flight, green done, rose dues, sky partner lab.
     if (this.showPaymentsDue()) {
-      opts.push({ value: 'billing', label: 'Payments due', count: this.paymentsDueAll().length, tone: 'warning', dot: 'var(--red-text)' });
+      opts.push({ value: 'billing', label: 'Payments due', count: this.paymentsDueAll().length + this.opdCount().billing, tone: 'warning', dot: 'var(--red-text)' });
     }
     opts.push({ value: 'out', label: 'Outsourced', count: this.outsourcing.counts().outsourced, dot: 'var(--sky-text, var(--blue-text))' });
     return opts;
@@ -813,7 +816,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly weekDays = computed<Array<{ dow: string; n: number; ms: number; iso: string; isToday: boolean; selected: boolean }>>(() => {
     const base = new Date(); base.setHours(0, 0, 0, 0);
     const mondayOffset = (base.getDay() + 6) % 7;   // 0 = Monday
-    const monday = new Date(base); monday.setDate(base.getDate() - mondayOffset);
+    const monday = new Date(base); monday.setDate(base.getDate() - mondayOffset + 7 * this.apptWeekOffset());
     const b = this.apptBounds();
     const singleDay = (b.end - b.start) === 86_400_000;
     const out: Array<{ dow: string; n: number; ms: number; iso: string; isToday: boolean; selected: boolean }> = [];
@@ -833,6 +836,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   });
 
   /** Scope the Appointments pane to a single day picked from the weekday strip. */
+  /** The week strip's week (0 = this week; ‹ › move it). */
+  readonly apptWeekOffset = signal(0);
+  shiftApptWeek(by: number): void { this.apptWeekOffset.update(w => w + by); }
   selectApptDay(iso: string) {
     this._apptCustomStart.set(iso);
     this._apptCustomEnd.set(iso);
@@ -1038,6 +1044,76 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** An order passes when its owning module (Order.module; lab when unset) is the picked service. */
   private svcPass(o: Order): boolean { return this.svcOn(serviceOfModule(o.module)); }
 
+  // ── OPD visits in the common Frontdesk (owner 2026-11-20): ONLY while the user has OPD (the Services shelf's own
+  //    rule — OPD gate + desk permission). The OPD desk's existing feeds; nothing is fetched otherwise. ──
+  private readonly opdApi = inject(OpdDeskApi);
+  readonly opdOn = computed(() => this.serviceShelf.services().some(s => s.id === 'opd'));
+  private readonly _opdVisits = signal<OpdVisitRow[]>([]);
+  private readonly _opdDues = signal<PaymentDue[]>([]);
+  /** The OPD workflow takes vitals (desk config); unknown = yes. */
+  private readonly _opdVitals = signal(true);
+  private opdCfgLoaded = false;
+  private readonly _opdFirstLoad = effect(() => { if (this.opdOn()) untracked(() => this.loadOpd()); });
+  /** Today's (or the chosen day's) OPD visits + open visit bills. */
+  loadOpd(): void {
+    if (!this.opdOn()) return;
+    const b = this.workBounds();
+    const date = this.toIsoDay(new Date(b.start));
+    this.opdApi.visits({ date }).subscribe({ next: l => this._opdVisits.set(l ?? []), error: () => this._opdVisits.set([]) });
+    this.opdApi.paymentsDue().subscribe({ next: l => this._opdDues.set(l ?? []), error: () => this._opdDues.set([]) });
+    if (!this.opdCfgLoaded) {
+      this.opdCfgLoaded = true;
+      this.opdApi.desk().subscribe({ next: d => this._opdVitals.set(d?.config?.workflow?.vitals !== 'off'), error: () => { /* keep vitals */ } });
+    }
+  }
+  /** Every OPD visit row (every status), before the service filter — the shelf / chart counts read this. */
+  private readonly _opdAll = computed<FlowRow[]>(() => {
+    if (!this.opdOn()) return [];
+    const now = this.nowTick();
+    const due = opdDueByVisit(this._opdDues());
+    const vitals = this._opdVitals();
+    return this._opdVisits().map(v => opdVisitFlowRow(v, now, { due: due.get(v.id) ?? 0, vitals }));
+  });
+  /** The visits the work list shows: OPD picked (or All), the head search and More filters. */
+  private readonly _opdShown = computed<FlowRow[]>(() => {
+    if (!this.svcOn('opd')) return [];
+    const q = this.workQuery();
+    const f = this.workFilters();
+    if (f.branch) return [];                                   // a visit row carries no branch
+    return this._opdAll().filter(r => {
+      const v = r.visit!;
+      if (!opdVisitMatches(v, q)) return false;
+      if (f.doctor && v.doctorName.trim() !== f.doctor) return false;
+      if (f.onlyLate && !r.late) return false;
+      if (f.onlyDues && !(r.due > 0)) return false;
+      return true;
+    });
+  });
+  readonly opdCount = computed(() => {
+    const rows = this._opdShown();
+    return {
+      ip: rows.filter(r => r.status === 'ip').length,
+      done: rows.filter(r => r.status === 'done').length,
+      billing: rows.filter(r => r.status === 'billing').length,
+    };
+  });
+  private opdRowsFor(tab: WorkStatusFilter): FlowRow[] {
+    const rows = this._opdShown();
+    return tab === null ? rows : tab === 'out' ? [] : rows.filter(r => r.status === tab);
+  }
+  /** `/frontdesk?service=opd` (the retired OPD desk's redirect): pre-select that service in the ONE filter once the
+   *  user's services are known (entitlements may still be loading). */
+  private readonly _pendingService = signal<string | null>(this.route.snapshot?.queryParamMap?.get('service') ?? null);
+  /** OPD visits move on the OPD desk's own work event (the one the OPD desk listened to); loadOpd is a no-op with OPD off. */
+  private readonly _opdLive = this.work.on('consults').pipe(takeUntilDestroyed()).subscribe(() => this.loadOpd());
+  private readonly _applyPendingService = effect(() => {
+    const want = this._pendingService();
+    if (!want || !this.serviceShelf.services().some(s => s.id === want)) return;
+    untracked(() => { this.serviceShelf.select(want as ServiceId); this._pendingService.set(null); });
+  });
+  /** Open the existing OPD visit screen (status moves, billing, consult). */
+  openOpdVisit(v: OpdVisitRow): void { void this.router.navigate(['/opd/visit', v.id]); }
+
   // ── Side card "Who is where" (owner-approved 2026-11-20): the chart, its chips and the Services shelf are ONE
   //    filter (ServiceShelfService.selected + step); the appointments / home lists and the work grid all read it. ──
   /** The chart's tab: 2+ services, new design, side-by-side cards (≥1024px). Lab-only users never see it. */
@@ -1061,6 +1137,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     return [
       ...this.draftOrders().map(d => whoItemOf(draftFlowRow(d, now))),
       ...this._ipAll().map(o => whoItemOf(orderFlowRow(o, p, now, { primary: 'ip' }))),
+      ...this._opdAll().filter(r => r.visit && opdVisitOpen(r.visit)).map(whoItemOf),
     ];
   });
   /** A pick from the chart / its chips / the centre. */
@@ -1170,6 +1247,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     } else if (tab === 'billing') {
       rows = this.shownPaymentsDueOnly().map(o => orderFlowRow(o, p, now, { primary: 'billing' }));
     }
+    // Fresh objects each time (AG-Grid refreshes a row's cells — e.g. the ring's service label — only when its data changes).
+    rows = [...rows, ...this.opdRowsFor(tab).map(r => ({ ...r }))];
     // The chart's step (outer ring) narrows the grid inside the picked service — same "Where now" word it counts.
     const step = this.svcStep();
     if (step) rows = rows.filter(r => stepOfRow(r) === step);
@@ -1215,6 +1294,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   /** Tapping a row opens it — exactly what the old row did for that list. */
   openFlowRow(row: FlowRow): void {
+    if (row.kind === 'visit') { if (row.visit) this.openOpdVisit(row.visit); return; }
     if (row.kind === 'draft' && row.draft) { this.resumeDraft(row.draft as DraftOrder); return; }
     if (row.merged) { this.openMergedRow(row.merged); return; }
     if (!row.order) return;
@@ -1224,6 +1304,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
   /** A grid action → the landing's existing handler for it. */
   flowAct(row: FlowRow, id: FlowActionId, anchor: HTMLElement | null): void {
+    if (row.kind === 'visit') { if (row.visit) this.openOpdVisit(row.visit); return; }
     if (row.kind === 'draft' && row.draft) {
       if (id === 'resume') this.resumeDraft(row.draft as DraftOrder);
       else if (id === 'discard') this.discardDraft(row.draft as DraftOrder);
@@ -1294,6 +1375,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
       items.push({ service: serviceOfModule(o.module), late: orderIsLate(o, now) });
     }
     for (const d of this.draftOrders()) items.push({ service: 'lab', late: now - d.savedAt >= 30 * 60000 });
+    for (const r of this._opdAll()) items.push({ service: 'opd', late: r.late });
     const tally = tallyServices(items, i => i.service, i => i.late);
     untracked(() => this.serviceShelf.publish(tally));
   });
@@ -1792,6 +1874,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
 
   refresh() {
+    // OPD visits (only while the user has OPD — loadOpd fetches nothing otherwise).
+    this.loadOpd();
     // Fetch Appointments based on apptBounds
     const apptB = this.apptBounds();
     if (apptB.isToday) {

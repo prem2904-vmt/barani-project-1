@@ -53,7 +53,7 @@ export function flowJourneyDetail(row: FlowRow, now: number, opts: {
 }): JourneyDetail {
   const ring = row.ring ?? [];
   const o = row.order;
-  const created = o ? ms(o.createdAt as unknown as string) : (row.draft?.savedAt ?? null);
+  const created = o ? ms(o.createdAt as unknown as string) : row.visit ? ms(row.visit.checkedInAt ?? row.visit.createdAt) : (row.draft?.savedAt ?? null);
   const times = o && row.service === 'lab' && row.kind === 'order' ? labStepTimes(o) : null;
   let prev = created;
   const steps: JourneyDetailStep[] = ring.map((s, i) => {
@@ -72,14 +72,14 @@ export function flowJourneyDetail(row: FlowRow, now: number, opts: {
     }
     return step;
   });
-  const finished = !!o && DONE.has(o.status);
-  const src = o ? SOURCE[(o.source ?? o.collectionType ?? '').toLowerCase()] : 'Draft';
+  const finished = (!!o && DONE.has(o.status)) || (!!row.visit && !['booked', 'vitals', 'waiting', 'in_consult'].includes(row.visit.status));
+  const src = o ? SOURCE[(o.source ?? o.collectionType ?? '').toLowerCase()] : row.visit ? `OPD visit · ${row.visit.doctorName}` : 'Draft';
   return {
     service: row.service,
     showLabel: opts.showLabel,
     name: row.name,
     meta: row.meta || null,
-    token: o?.dailyNo ? `#${o.dailyNo}` : null,
+    token: row.visit ? row.visit.tokenLabel : o?.dailyNo ? `#${o.dailyNo}` : null,
     visit: [src, created !== null ? clock(created) : null].filter(Boolean).join(' · ') || null,
     lateMin: row.late ? row.waitMin : null,
     inClinicMin: !finished && created !== null ? Math.max(0, Math.round((now - created) / 60000)) : null,
