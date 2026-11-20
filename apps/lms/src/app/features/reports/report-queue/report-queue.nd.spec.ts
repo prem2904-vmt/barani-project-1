@@ -369,7 +369,8 @@ describe('Reports v2 — the grid (Test Master\'s pf-data-grid)', () => {
     expect([...el.querySelectorAll('.ag-header-cell-text')].map(h => h.textContent!.trim())).toEqual(['#', 'Patient', 'Order', 'Status', 'Generated', 'Sent', 'Actions']);
     TestBed.resetTestingModule();
     const narrow = await render({ narrow: true });
-    expect(narrow.c.colDefs().filter((d: any) => d.hide).map((d: any) => d.colId)).toEqual(['order', 'generated']);
+    // Pill fit (2026-11-20): below 1280px Sent folds under the status pill too, so the row actions are never clipped.
+    expect(narrow.c.colDefs().filter((d: any) => d.hide).map((d: any) => d.colId)).toEqual(['order', 'generated', 'sent']);
     expect(narrow.el.querySelector('[data-testid="rq-side"]')).toBeNull();
   });
 

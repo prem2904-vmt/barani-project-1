@@ -58,6 +58,9 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
               <p class="pf-out__who"><pf-daily-no [of]="r" />{{ r.patientName }} · <span class="pf-num">{{ r.orderNumber ?? '' }}</span></p>
               <p class="pf-out__tests">{{ testNames(r) }}</p>
             </div>
+            <!-- Chips + the upload button share ONE line (owner 2026-11-20): the button sits at the
+                 right end of the chip row, never alone on a row of its own. -->
+            <div class="pf-out__line">
             <div class="pf-out__meta">
               <span class="pf-chip pf-chip--static pf-out__partner">{{ r.partnerLabName ?? 'Partner lab' }}</span>
               <span class="pf-out__date">
@@ -87,6 +90,7 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
             <div class="pf-out__acts">
               <pf-outsourced-actions [tube]="r" />
             </div>
+            </div>
           </li>
         }
       </ul>
@@ -115,16 +119,14 @@ import { OutsourcedActionsComponent } from './outsourced-actions.component';
     .pf-out__sample { font-size: 16.5px; font-weight: 600; color: var(--text-primary); }
     .pf-out__who { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
     .pf-out__tests { font-size: 12px; color: var(--text-muted); }
-    .pf-out__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+    .pf-out__line { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px 12px; }
+    .pf-out__meta { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
     .pf-out__partner, .pf-out__status, .pf-out__attach { height: 26px; }
     .pf-out__attach[data-attach='problem'] { color: var(--warning-text, #b45309); }
     .pf-out__date { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
     .pf-out__check { color: var(--violet-text, #6d28d9); }
     .pf-out__row[data-status='completed'] { background: var(--pf-done-tint); border-color: var(--pf-sel-border); }
-    .pf-out__acts { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-    @media (max-width: 640px) {
-      .pf-out__acts { margin-left: 0; width: 100%; justify-content: flex-end; }
-    }
+    .pf-out__acts { flex: none; display: flex; align-items: center; gap: 6px; margin-left: auto; }
     .pf-out__more { display: flex; justify-content: center; padding: 12px 0 2px; }
   `],
 })

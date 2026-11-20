@@ -19,8 +19,19 @@ const isOn = async (page: Page, label: string) => {
   return (await t.getAttribute('aria-selected')) === 'true' || (await t.getAttribute('aria-checked')) === 'true';
 };
 
+/** The work pill collapsed to its selected-pill menu (a tight work card, pf-segmented fit): pick from the menu. */
+const workMenu = (page: Page) => page.locator('.pf-work-hdr pf-segmented [data-seg-compact]').locator('visible=true').first();
+async function pickFromWorkMenu(page: Page, label: string | null): Promise<boolean> {
+  const m = workMenu(page);
+  if (!(await m.count())) return false;
+  await m.click();
+  await page.getByRole('menuitemradio', { name: label ? new RegExp(`^${label}`) : /^All statuses/ }).locator('visible=true').first().click();
+  return true;
+}
+
 /** Make `label` the selected work tab (never toggles an already-selected chip off). */
 export async function deskTab(page: Page, label: string): Promise<void> {
+  if (await pickFromWorkMenu(page, label)) return;
   const t = tabLoc(page, label);
   if (await t.count()) {
     if (!(await isOn(page, label))) await t.click();
@@ -35,6 +46,7 @@ export async function deskTab(page: Page, label: string): Promise<void> {
  *  so it shows In progress (where today's open orders are). */
 export async function deskAllStatuses(page: Page): Promise<void> {
   if (await iconTabs(page)) { await deskTab(page, 'In progress'); return; }
+  if (await pickFromWorkMenu(page, null)) return;
   const t = tabLoc(page, 'In progress');
   if (!(await t.count())) return;
   if (!(await isOn(page, 'In progress'))) await t.click();   // select first…

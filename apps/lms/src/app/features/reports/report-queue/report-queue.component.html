@@ -279,6 +279,7 @@
     <span class="pf-rq2-status">
       <span class="pf-rq2-pill" [attr.data-status]="st.key"><span class="pf-rq2-dot" [style.background]="statusDot(st.key)" aria-hidden="true"></span>{{ st.label }}</span>
       @if (st.unpaid) { <span class="pf-rq2-unpaid">Unpaid</span> }
+      @if (slimActs() && sentMeta(row.r); as sm) { <span class="pf-rq2-sentline">{{ sm }}</span> }
     </span>
     } @else {
     <span class="pf-rq2-status">
@@ -298,7 +299,7 @@
   <ng-template #cActs let-row>
     <span class="pf-rq2-acts">
       @if (row.kind === 'partial') {
-      <button type="button" class="pf-rowact pf-rq2-details" [class.pf-rowact--icon]="!web()" (click)="toggle(row.po.id)"
+      <button type="button" class="pf-rowact pf-rq2-details" [class.pf-rowact--icon]="iconActs()" (click)="toggle(row.po.id)"
               [attr.aria-expanded]="expanded() === row.po.id" [attr.aria-controls]="'pf-rq-po-' + row.po.id"
               [attr.aria-label]="(expanded() === row.po.id ? 'Hide' : 'Show') + ' departments'" title="Departments">
         <svg class="pf-rq2-details__chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
@@ -314,14 +315,17 @@
 
   <!-- View · Download · (view-only Print) · Share ▾ · ⋯ — same permissions, busy states and deliveries as before. -->
   <ng-template #reportActs let-r>
-    <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" aria-label="View" title="View on screen" (click)="view(r)">
+    <button type="button" class="pf-rowact" [class.pf-rowact--icon]="iconActs()" aria-label="View" title="View on screen" (click)="view(r)">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
       </svg>
       <span class="pf-rowact__t">View</span>
     </button>
-    <button type="button" class="pf-rowact" [class.pf-rowact--icon]="!web()" aria-label="Download" title="Download PDF" (click)="downloadPdf(r)"
+    <!-- Tablet widths (901–1279px, slimActs): View · Share · ⋯ only — Download / Print / the share choice live in ⋯
+         (the same rows), so the actions never clip at the card's right edge. -->
+    @if (!slimActs()) {
+    <button type="button" class="pf-rowact" [class.pf-rowact--icon]="iconActs()" aria-label="Download" title="Download PDF" (click)="downloadPdf(r)"
             [disabled]="isRowBusy(r.id, 'download')" [pfBusy]="isRowBusy(r.id, 'download')" pfBusyLabel="Preparing the PDF…">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -329,9 +333,10 @@
       </svg>
       <span class="pf-rowact__t">Download</span>
     </button>
+    }
     <!-- View-only Results can PRINT (not a delivery: nothing recorded); the delivery desk prints from Share ▾. -->
-    @if (!canDeliver() && canPrint()) {
-    <button type="button" class="pf-rowact pf-rq-print" [class.pf-rowact--icon]="!web()" aria-label="Print" title="Print"
+    @if (!slimActs() && !canDeliver() && canPrint()) {
+    <button type="button" class="pf-rowact pf-rq-print" [class.pf-rowact--icon]="iconActs()" aria-label="Print" title="Print"
             [disabled]="isRowBusy(r.id, 'print')" [pfBusy]="isRowBusy(r.id, 'print')" pfBusyLabel="Preparing to print…"
             (click)="printReport(r)">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -343,7 +348,7 @@
     }
     @if (canDeliver()) {
     <span class="pf-rq-split pf-rq-split--nd">
-      <button type="button" class="pf-rowact pf-rq-split__face" [class.pf-rowact--icon]="!web()" aria-label="Share" [title]="waLabel(r) || 'Print'"
+      <button type="button" class="pf-rowact pf-rq-split__face" [class.pf-rowact--icon]="iconActs()" aria-label="Share" [title]="waLabel(r) || 'Print'"
               [pfBusy]="waSending(r.id)" pfBusyLabel="Sending…" (click)="deliver(r, waMode(r) ? 'whatsapp' : 'print')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -351,12 +356,14 @@
         </svg>
         <span class="pf-rowact__t">Share</span>
       </button>
-      <button type="button" class="pf-rowact pf-rq-split__caret" [class.pf-rowact--icon]="!web()" (click)="toggleShare(r.id, $event)"
+      @if (!slimActs()) {
+      <button type="button" class="pf-rowact pf-rq-split__caret" [class.pf-rowact--icon]="iconActs()" (click)="toggleShare(r.id, $event)"
               [pfBusy]="isRowBusy(r.id, 'print')" pfBusyLabel="Preparing to print…"
               [attr.aria-expanded]="shareFor() === r.id" aria-label="Choose how to share">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
              stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
       </button>
+      }
       @if (shareFor() === r.id) {
         <div class="pf-rq-menu__bd" pfModalPortal aria-hidden="true" (click)="toggleShare(r.id)"></div>
         <div class="pf-rq-menu" pfModalPortal role="menu" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left">
@@ -373,7 +380,7 @@
     @if (actionsFor(r).length) {
     <pf-actions-menu class="pf-rq-kebab" [actions]="actionsFor(r)" label="Report actions"
                      [heading]="reportPatientName(r)" (opened)="onRowMenuOpened(r)" (action)="runRowAction(r, $event)">
-      <button pfActionsTrigger type="button" class="pf-rowact pf-rq-more" [class.pf-rowact--icon]="!web()"
+      <button pfActionsTrigger type="button" class="pf-rowact pf-rq-more" [class.pf-rowact--icon]="iconActs()"
               [pfBusy]="isRowBusy(r.id, 'regenerate')" pfBusyLabel="Regenerating…"
               aria-label="Report actions" title="Report actions">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"

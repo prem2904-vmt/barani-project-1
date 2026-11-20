@@ -15,8 +15,8 @@
     /* The side card is narrower than the old 33% split: its pieces must fit 300px+ without clipping. */
     .pf-appt-split__pane:not(.pf-appt-split__pane--work) {
       > .pf-appt-split__hdr { gap: 8px; flex-wrap: nowrap; }
-      > .pf-appt-split__hdr > pf-segmented { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-      > .pf-appt-split__hdr > pf-segmented::-webkit-scrollbar { display: none; }
+      /* The pill never scrolls (owner 2026-11-20): it tightens, then collapses to its selected-pill menu (pf-segmented fit). */
+      > .pf-appt-split__hdr > pf-segmented { flex: 0 1 auto; min-width: 0; overflow: visible; }
       .pf-daystrip { gap: 6px; padding: 10px 12px; }
       .pf-daystrip__day { flex: 1 1 0 !important; min-width: 0 !important; padding-left: 0; padding-right: 0; }
       /* Appointment rows: the FULL name wraps (never runs under the row's actions). */
@@ -45,8 +45,33 @@
 
   /* Card head (owner 2026-11-19): icon tile + WORK on the left; everything else together at the RIGHT end
      like every other card head — the status pill, the search, "Today" and the filter icon. DOM order stays search-first for reading order. */
-  .pf-work-hdr > .pf-work-hdr__filter { order: 1; flex: 0 1 auto; margin-left: auto; }
+  .pf-work-hdr > .pf-work-hdr__filter { order: 1; flex: 0 1 auto; margin-left: auto; overflow: visible; }
   .pf-work-hdr > .pf-work-find { order: 2; flex: 0 1 240px; }
+  /* Tight work card (owner 2026-11-20): the head stays ONE row — the search folds to a 44px magnifier that opens
+     over the head on tap (and folds back on blur); the status pill tightens / collapses to its menu. */
+  @container (max-width: 760px) {
+    .pf-work-hdr { position: relative; gap: 10px; }
+    .pf-work-hdr > .pf-work-find:not(:focus-within) {
+      flex: none; width: 44px; min-width: 44px; max-width: 44px; height: 44px;
+      justify-content: center; border-radius: 10px; cursor: pointer;
+    }
+    .pf-work-hdr > .pf-work-find:not(:focus-within) .pf-work-find__icon { left: 14px; color: var(--text-secondary); }
+    .pf-work-hdr > .pf-work-find:not(:focus-within) .pf-work-find__input {
+      position: absolute; inset: 4px; width: 36px; min-height: 36px; height: 36px; padding: 0;
+      color: transparent; caret-color: transparent; pointer-events: none;
+    }
+    .pf-work-hdr > .pf-work-find:not(:focus-within) .pf-work-find__input::placeholder { color: transparent; }
+    /* A search is in force while folded: a small violet dot on the magnifier. */
+    .pf-work-hdr > .pf-work-find:not(:focus-within):has(.pf-work-find__input:not(:placeholder-shown))::after {
+      content: ''; position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 999px;
+      background: var(--color-violet-600, #7c3aed);
+    }
+    .pf-work-hdr > .pf-work-find:focus-within {
+      position: absolute; z-index: 6; left: 10px; right: 10px; top: 50%; transform: translateY(-50%);
+      max-width: none; min-width: 0; width: auto; border-radius: 10px; background: var(--pf-card-bg);
+    }
+    .pf-work-hdr > .pf-work-find:focus-within .pf-work-find__input { min-height: 40px; height: 40px; }
+  }
   .pf-work-hdr > .pf-work-hdr__date { order: 3; }
   /* .pf-input's backdrop-filter makes its own stacking layer and painted over the magnifier. */
   .pf-work-find__icon { z-index: 1; }

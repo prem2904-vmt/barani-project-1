@@ -159,7 +159,8 @@ for (const dark of [false, true]) {
     }
     const heads = await page.locator('.ag-header-cell-text').locator('visible=true').allInnerTexts();
     const compact = (page.viewportSize()?.width ?? 1440) < 1280;
-    expect(heads).toEqual(compact ? ['#', 'Patient', 'Status', 'Sent', 'Actions'] : ['#', 'Patient', 'Order', 'Status', 'Generated', 'Sent', 'Actions']);
+    // <1280px (pill fit, 2026-11-20): Sent folds under the status pill so the row actions are never clipped.
+    expect(heads).toEqual(compact ? ['#', 'Patient', 'Status', 'Actions'] : ['#', 'Patient', 'Order', 'Status', 'Generated', 'Sent', 'Actions']);
     // The grid fits its card: no sideways scroll, the Actions column fully in view.
     // Pills: neutral background, a small coloured dot per status.
     for (const [key] of Object.entries(DOT)) {
@@ -205,7 +206,9 @@ for (const dark of [false, true]) {
     expect(Math.abs((firstBtn!.y + firstBtn!.height / 2) - (lastBtn!.y + lastBtn!.height / 2)), 'the row actions sit on ONE line').toBeLessThanOrEqual(3);
     const acts = row.locator('.pf-rq2-acts');
     await expect(acts.locator('.pf-rowact[aria-label="View"]')).toBeVisible();
-    await expect(acts.locator('.pf-rowact[aria-label="Download"]')).toBeVisible();
+    // <1280px the row is View · Share · ⋯ (Download lives in ⋯ — pill fit, 2026-11-20).
+    if (compact) await expect(acts.locator('.pf-rowact[aria-label="Download"]')).toHaveCount(0);
+    else await expect(acts.locator('.pf-rowact[aria-label="Download"]')).toBeVisible();
     await expect(acts.locator('.pf-rq-split__face')).toBeVisible();
     await expect(acts.locator('.pf-rq-more')).toBeVisible();
     await expectNoHorizontalScroll(page, `reports ${mode}`);
@@ -402,13 +405,21 @@ test('actions keep their behaviour: View opens the report, ⋯ lists every actio
   await pick(page, 'All');
   const row = page.locator('.ag-row').filter({ hasText: 'Ms. Arya Stark' }).locator('visible=true').first();
   await expect(row).toBeVisible({ timeout: 30_000 });
-  await row.locator('.pf-rq-split__caret').click();
-  const share = visible(page, '.pf-rq-menu[role=menu]');
-  await expect(share).toBeVisible();
-  await expect(share.getByRole('menuitem', { name: 'Print' })).toBeVisible();
-  await visible(page, '.pf-rq-menu__bd').click();
+  // <1280px (pill fit, 2026-11-20) the row is View · Share · ⋯ — the share choice (Print / WhatsApp) and Download live in ⋯.
+  const slim = (page.viewportSize()?.width ?? 1440) < 1280;
+  if (!slim) {
+    await row.locator('.pf-rq-split__caret').click();
+    const share = visible(page, '.pf-rq-menu[role=menu]');
+    await expect(share).toBeVisible();
+    await expect(share.getByRole('menuitem', { name: 'Print' })).toBeVisible();
+    await visible(page, '.pf-rq-menu__bd').click();
+  } else {
+    await expect(row.locator('.pf-rq-split__caret')).toHaveCount(0);
+    await expect(row.locator('.pf-rq-split__face')).toBeVisible();
+  }
   await row.locator('.pf-rq-more').click();
   const menu = visible(page, '.pf-am-panel[role=menu]');
+  if (slim) { await expect(menu).toContainText('Print'); await expect(menu).toContainText('Download PDF'); }
   await expect(menu).toContainText('Copy patient link');
   await expect(menu).toContainText('Regenerate');
   await expect(menu).toContainText('Open patient');

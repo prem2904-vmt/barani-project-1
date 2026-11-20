@@ -395,15 +395,15 @@
 }
 .pf-work-hdr__filter {
   display: flex;
-  /* Own the space between search and date filter; let the tabs scroll here
-     instead of shrinking their intrinsic width into the date button. */
+  /* Own the space between search and date filter. The status pill never scrolls (owner 2026-11-20): it
+     shrinks with this box and tightens / collapses to its selected-pill menu (pf-segmented fit). */
   flex: 1 1 0;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 .pf-work-hdr__filter > pf-segmented {
-  flex: 0 0 max-content;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: visible;
 }
 .pf-work-hdr__filter::-webkit-scrollbar { display: none; }
 .pf-work-hdr__date {

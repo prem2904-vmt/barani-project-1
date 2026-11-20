@@ -908,8 +908,18 @@
 .pf-rq2-dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 999px; }
 .pf-rq2-dot--ring { box-sizing: border-box; border: 1.5px solid var(--text-tertiary); background: transparent; }
 
-.pf-rq2-main__head { flex-wrap: wrap; }
+/* ONE row at every width (owner 2026-11-20): the status pill tightens / collapses to its selected-pill menu
+   (pf-segmented fit), and the "17 reports" count — secondary — gives way first on a narrow head. The head is
+   its own size container (nothing positioned inside it: the pill's menu portals to <body>). */
+.pf-rq2-main__head { flex-wrap: nowrap; container-type: inline-size; }
+.pf-rq2-main__head > .pf-card__label { white-space: nowrap; }
+.pf-rq2-main__head .pf-2p__tools { flex-wrap: nowrap; }
+@container (max-width: 760px) {
+  .pf-rq2-main__head .pf-rq2-count { display: none; }
+  .pf-rq2-main__head .pf-2p__tools { margin-left: auto; }
+}
 .pf-rq2-scope { white-space: nowrap; }
+.pf-rq2-sentline { font-size: 12px; line-height: 1.3; color: var(--text-tertiary); @include pf.no-truncate; }
 .pf-rq2-main__body { min-height: 0; }
 .pf-rq2-grid { flex: 1 1 auto; }
 .pf-rq2-emptywrap { position: absolute; left: 0; right: 0; top: 44px; z-index: 5; pointer-events: none; }
@@ -1052,7 +1062,7 @@
 }
 
 /* ── TO SEND queue (owner 2026-11-19, option A) ── */
-.pf-rq2-pill-seg { flex: none; }
+.pf-rq2-pill-seg { flex: 0 1 auto; min-width: 0; }
 .pf-rq2-q__head { flex-wrap: nowrap; }
 .pf-rq2-q__head .pf-2p__count { margin-left: auto; }
 .pf-rq2-q__body { padding: 4px 8px 12px; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
