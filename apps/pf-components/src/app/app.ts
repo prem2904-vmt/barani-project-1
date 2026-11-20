@@ -52,9 +52,19 @@ import {
   ToggleComponent,
   TileComponent,
   TouchButtonComponent,
+  PasskeyIconComponent,
+  PriceFlagComponent,
   AlphaDirective,
   BusyDirective,
   NumericDirective,
+  PfButtonVariant,
+  TouchBtnVariant,
+  LogoVariant,
+  PfStatusChipTone,
+  ChipTone,
+  ClockVariant,
+  TileTone,
+  SkeletonVariant,
 } from '@prefrontal/shared';
 import {
   CATALOG_COMPONENTS,
@@ -62,6 +72,10 @@ import {
   ComponentDoc,
   CategoryGroup,
 } from './component-catalog.data';
+import {
+  COMPONENT_VARIANTS,
+  ComponentVariantDoc,
+} from './component-variants.data';
 import {
   CLINICAL_COMPOSITIONS,
   CLINICAL_TUBE_CAPS,
@@ -116,6 +130,8 @@ import {
     SkeletonTableComponent,
     ToggleComponent,
     TouchButtonComponent,
+    PasskeyIconComponent,
+    PriceFlagComponent,
     AlphaDirective,
     BusyDirective,
     NumericDirective,
@@ -174,12 +190,23 @@ export class App implements OnInit {
       .filter((cat) => cat.components.length > 0);
   });
 
+  // ── Variants Computed ───────────────────────────────────────────────────
+  protected readonly currentComponentVariants = computed<ComponentVariantDoc[]>(() => {
+    const comp = this.currentComponent();
+    if (!comp) return [];
+    return COMPONENT_VARIANTS[comp.id] || [];
+  });
+
+  // ── Share State ──────────────────────────────────────────────────────────
+  protected readonly shareCopied = signal(false);
+  protected readonly shareToast = signal<{ message: string; url: string } | null>(null);
+
   // ── Interactive Playground Controls State ────────────────────────────────
-  protected readonly btnVariant = signal<'primary' | 'secondary' | 'danger' | 'quiet'>('primary');
+  protected readonly btnVariant = signal<'primary' | 'secondary' | 'tertiary' | 'danger' | 'quiet' | 'icon'>('secondary');
   protected readonly btnFullWidth = signal(false);
   protected readonly btnDisabled = signal(false);
 
-  protected readonly touchVariant = signal<'primary' | 'secondary' | 'accent' | 'danger'>('primary');
+  protected readonly touchVariant = signal<'primary' | 'secondary' | 'ghost' | 'accent' | 'danger' | 'success'>('primary');
   protected readonly touchBusy = signal(false);
   protected readonly touchDisabled = signal(false);
 
@@ -191,6 +218,10 @@ export class App implements OnInit {
 
   protected readonly barcodeMode = signal<'barcode' | 'qr' | 'both'>('both');
   protected readonly barcodeCode = signal('PF-2026-9901');
+  protected readonly passkeySize = signal(24);
+  protected readonly dynamicInputVal = signal('14.2');
+  protected showPinDialog = false;
+  protected showShareSheet = false;
 
 
   // ── New Clinical Components State ───────────────────────────────────────
@@ -250,6 +281,10 @@ export class App implements OnInit {
       document.documentElement.classList.add('dark');
       document.documentElement.setAttribute('data-theme', 'dark');
     }
+    this.restoreStateFromUrl();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('popstate', () => this.restoreStateFromUrl());
+    }
   }
 
   // ── Actions & Methods ────────────────────────────────────────────────────
@@ -266,6 +301,7 @@ export class App implements OnInit {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+    this.updateUrl();
   }
 
   protected selectComponent(id: string): void {
@@ -274,6 +310,7 @@ export class App implements OnInit {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+    this.updateUrl();
   }
 
   protected selectOverview(): void {
@@ -282,6 +319,205 @@ export class App implements OnInit {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+    this.updateUrl();
+  }
+
+  protected selectComposition(id: string): void {
+    this.activeCompositionId.set(id);
+    this.updateUrl();
+  }
+
+  protected onSearchInput(query: string): void {
+    this.searchQuery.set(query);
+    this.updateUrl();
+  }
+
+  // ── Variant & Share State Management ─────────────────────────────────────
+  protected getVariantsForComponent(id: string): ComponentVariantDoc[] {
+    return COMPONENT_VARIANTS[id] || [];
+  }
+
+  // ── Template Variant Casting Helpers ─────────────────────────────────────
+  protected asBtnVariant(v: string): PfButtonVariant {
+    return v as PfButtonVariant;
+  }
+  protected asTouchVariant(v: string): TouchBtnVariant {
+    return v as TouchBtnVariant;
+  }
+  protected asLogoVariant(v: string): LogoVariant {
+    return v as LogoVariant;
+  }
+  protected asStatusChipTone(v: string): PfStatusChipTone {
+    return v as PfStatusChipTone;
+  }
+  protected asChipTone(v: string): ChipTone {
+    return v as ChipTone;
+  }
+  protected asClockVariant(v: string): ClockVariant {
+    return v as ClockVariant;
+  }
+  protected asTileTone(v: string): TileTone {
+    return v as TileTone;
+  }
+  protected asBarcodeMode(v: string): 'both' | 'barcode' | 'qr' | 'datamatrix' {
+    return v as any;
+  }
+  protected asSkeletonVariant(v: string): SkeletonVariant {
+    return v as SkeletonVariant;
+  }
+  protected asPriceFlagKind(v: string): 'not-offered' | 'inactive' {
+    return v as any;
+  }
+
+  protected getActiveVariant(id: string): string {
+    switch (id) {
+      case 'button': return this.btnVariant();
+      case 'touch-button': return this.touchVariant();
+      case 'status-chip': return this.statusChipTone();
+      case 'chip': return this.chipTone();
+      case 'clock': return this.clockVariant();
+      case 'barcode-display': return this.barcodeMode();
+      case 'origin-badge': return this.originKind();
+      default: {
+        const variants = COMPONENT_VARIANTS[id];
+        if (variants && variants.length > 0) {
+          const defaultVar = variants.find(v => v.isDefault);
+          return defaultVar ? defaultVar.name : variants[0].name;
+        }
+        return '';
+      }
+    }
+  }
+
+  protected selectVariant(componentId: string, variantName: string): void {
+    this.applyVariant(componentId, variantName);
+    this.logEvent(`Selected ${componentId} variant: "${variantName}"`);
+    this.updateUrl();
+  }
+
+  protected applyVariant(componentId: string, variantName: string): void {
+    switch (componentId) {
+      case 'button':
+        this.btnVariant.set(variantName as any);
+        break;
+      case 'touch-button':
+        this.touchVariant.set(variantName as any);
+        break;
+      case 'status-chip':
+        this.statusChipTone.set(variantName as any);
+        break;
+      case 'chip':
+        this.chipTone.set(variantName as any);
+        break;
+      case 'clock':
+        this.clockVariant.set(variantName as any);
+        break;
+      case 'barcode-display':
+        this.barcodeMode.set(variantName as any);
+        break;
+      case 'origin-badge':
+        this.originKind.set(variantName);
+        break;
+    }
+  }
+
+  protected updateUrl(): void {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+
+    if (this.activeSection() !== 'cookbook') {
+      url.searchParams.set('section', this.activeSection());
+    } else {
+      url.searchParams.delete('section');
+    }
+
+    if (this.selectedComponentId() !== 'overview') {
+      url.searchParams.set('c', this.selectedComponentId());
+      const variant = this.getActiveVariant(this.selectedComponentId());
+      if (variant) {
+        url.searchParams.set('variant', variant);
+      } else {
+        url.searchParams.delete('variant');
+      }
+    } else {
+      url.searchParams.delete('c');
+      url.searchParams.delete('variant');
+    }
+
+    if (this.activeSection() === 'compositions' && this.activeCompositionId() !== 'order-create') {
+      url.searchParams.set('comp', this.activeCompositionId());
+    } else {
+      url.searchParams.delete('comp');
+    }
+
+    if (this.searchQuery().trim()) {
+      url.searchParams.set('q', this.searchQuery().trim());
+    } else {
+      url.searchParams.delete('q');
+    }
+
+    window.history.replaceState({}, '', url.toString());
+  }
+
+  protected restoreStateFromUrl(): void {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+
+    const section = params.get('section');
+    if (section && ['cookbook', 'compositions', 'tokens', 'principles'].includes(section)) {
+      this.activeSection.set(section as any);
+    }
+
+    const compId = params.get('c') || params.get('component');
+    if (compId && this.allComponents.some((c) => c.id === compId)) {
+      this.selectedComponentId.set(compId);
+      this.activeSection.set('cookbook');
+    }
+
+    const variant = params.get('variant');
+    if (variant && compId) {
+      this.applyVariant(compId, variant);
+    }
+
+    const comp = params.get('comp') || params.get('composition');
+    if (comp && this.clinicalCompositions.some((c) => c.id === comp)) {
+      this.activeCompositionId.set(comp);
+    }
+
+    const q = params.get('q');
+    if (q) {
+      this.searchQuery.set(q);
+    }
+  }
+
+  protected shareCurrentLink(customUrl?: string, customMessage?: string): void {
+    if (typeof window === 'undefined') return;
+    this.updateUrl();
+    const urlToShare = customUrl || window.location.href;
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(urlToShare).then(() => {
+        this.shareCopied.set(true);
+        this.shareToast.set({
+          message: customMessage || 'Shareable link copied to clipboard!',
+          url: urlToShare,
+        });
+        this.logEvent(`Shareable link copied: ${urlToShare}`);
+        setTimeout(() => this.shareCopied.set(false), 2500);
+        setTimeout(() => this.shareToast.set(null), 4000);
+      });
+    } else {
+      this.logEvent('Clipboard unavailable for sharing');
+    }
+  }
+
+  protected shareVariantLink(componentId: string, variantName: string): void {
+    if (typeof window === 'undefined') return;
+    this.selectVariant(componentId, variantName);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('section');
+    url.searchParams.set('c', componentId);
+    url.searchParams.set('variant', variantName);
+    this.shareCurrentLink(url.toString(), `Link for variant "${variantName}" copied!`);
   }
 
   protected toggleTheme(): void {

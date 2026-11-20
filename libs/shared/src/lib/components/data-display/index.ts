@@ -7,6 +7,7 @@ export * from '../../primitives/avatar.component.js';
 export * from '../../primitives/chip.component.js';
 export * from '../../primitives/clock.component.js';
 export * from '../../primitives/tile.component.js';
+export * from '../../primitives/price-flag.component.js';
 export * from './barcode-display.component.js';
 export * from './tat-indicator.component.js';
 export * from './daily-no.component.js';

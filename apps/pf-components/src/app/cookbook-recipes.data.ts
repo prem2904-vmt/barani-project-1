@@ -49,6 +49,34 @@ export const CLINICAL_COMPOSITIONS: ClinicalComposition[] = [
       'No native date/time pickers used (custom accessible Prefrontal controls).',
       'Masked numeric and alphanumeric inputs with pfNumeric and pfAlpha.'
     ]
+  },
+  {
+    id: 'lab-workspace',
+    title: 'Lab Workspace & Result Entry',
+    subtitle: 'Specimen Verification, Sort & Technical Remarks',
+    category: 'Laboratory & Phlebotomy',
+    description: 'Technologist result entry console: Worklist sort picker, TAT tracking, polymorphic dynamic inputs with delta checks, abnormal flags, and technician note cards.',
+    componentsUsed: ['pf-hero-band', 'pf-lab-sort', 'pf-tat-indicator', 'pf-dynamic-input', 'pf-report-notes-card', 'pf-status-chip', 'pf-button'],
+    principlesDemonstrated: [
+      'Persistent worklist sort order remembered per technologist.',
+      'Out-of-range panic values highlighted with urgent red border.',
+      'Pre-analytical quality remarks attached via standardized notes card.',
+      'Single primary CTA (Authorize Results) on side action panel.'
+    ]
+  },
+  {
+    id: 'clinical-sharing',
+    title: 'Multi-Channel Report Delivery & Comms',
+    subtitle: 'Patient Diagnostic Report Dispatch & WhatsApp Dock',
+    category: 'Reports & Dispatch',
+    description: 'Integrated patient communication flow: multi-channel share sheet (WhatsApp, Email, SMS, Print), shared record preview card, and desktop WhatsApp Web dock.',
+    componentsUsed: ['pf-share-sheet', 'pf-share-card', 'pf-wa-dock', 'pf-status-chip', 'pf-button'],
+    principlesDemonstrated: [
+      '92dvh mobile bottom sheet respecting bottom navbar clearance.',
+      'Rich shared-record preview cards with SVG icon, title, and tone chip.',
+      'WhatsApp Terms compliance: zero keystroke automation; drag-and-drop PDF card.',
+      'Plain English error communication on email delivery refusal.'
+    ]
   }
 ];
 
