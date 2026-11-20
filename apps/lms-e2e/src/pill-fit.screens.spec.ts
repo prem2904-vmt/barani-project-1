@@ -250,6 +250,13 @@ test.describe('pill fit', () => {
         await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Ms. Arya Stark")').locator('visible=true')).toHaveCount(0);
         if (state === 'menu') await shot(page, w, 'results-delivered-menu');
         await pickPill(page, '[data-testid="rq-pill"]', 'All');
+      } else if (w > 900) {
+        // Results filters (owner 2026-11-20): the status moved from the head's pill into the FILTERS side card.
+        const row = page.locator('[data-testid="rq-side"] [data-filter="delivered"]').locator('visible=true').first();
+        await row.click();
+        await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Nithin Ragav")').locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
+        await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Ms. Arya Stark")').locator('visible=true')).toHaveCount(0);
+        await row.click();
       }
     }
   });

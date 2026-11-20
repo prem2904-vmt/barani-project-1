@@ -70,6 +70,8 @@ export interface PrelimOrder {
   orderNo: string;
   /** When the order was made (the grid's Generated cell for an order with no report yet). */
   createdAt?: string;
+  /** The order's referring doctor (the Results "Referring doctor" filter). */
+  refDoctorName?: string | null;
   /** For the search box. */
   searchText: string;
   /** The order's daily patient number (on-screen only). */
@@ -261,6 +263,7 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
       whoMeta: p ? formatPatientMeta(p) : '',
       orderNo: o.orderNumber || `#${o.id.slice(0, 8).toUpperCase()}`,
       createdAt: o.createdAt,
+      refDoctorName: o.refDoctorName ?? null,
       dailyNo: o.dailyNo ?? null,
       dailyNoDay: o.dailyNoDay ?? null,
       searchText: [name, p?.mrn, p?.phone, o.orderNumber, o.id].filter(Boolean).join(' ').toLowerCase(),
