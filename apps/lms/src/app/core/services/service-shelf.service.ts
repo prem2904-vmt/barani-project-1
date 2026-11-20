@@ -32,6 +32,8 @@ export class ServiceShelfService {
   private readonly _saved = signal<string | null>(null);
   private readonly _savedFor = signal<string | null>(null);
   private readonly _tally = signal<ServiceTally>(EMPTY_TALLY);
+  /** The step inside the picked service (the Frontdesk "Who is where" chart's outer ring) — never remembered. */
+  private readonly _step = signal<string | null>(null);
 
   /** The services the user has, in shelf order. */
   readonly services = computed<ServiceDef[]>(() => {
@@ -56,6 +58,12 @@ export class ServiceShelfService {
     return effectiveService(this.savedChoice(), this.services());
   });
 
+  /** 2+ services: the shelf, the side card's "Who is where" chart and its chips exist (a lab-only user: none). */
+  readonly multi = computed(() => showServiceShelf(this.services()));
+
+  /** The step filter inside the selected service (null = every step; always null under All). */
+  readonly step = computed<string | null>(() => this.selected() === 'all' ? null : this._step());
+
   readonly chips = computed<ServiceChip[]>(() => serviceChips(this.services(), this._tally(), this.selected()));
 
   constructor() {
@@ -68,11 +76,20 @@ export class ServiceShelfService {
   publish(tally: ServiceTally): void { this._tally.set(tally); }
 
   select(id: ServiceFilter): void {
+    this._step.set(null);
     const key = this.storageKey();
     this._saved.set(id);
     this._savedFor.set(key);
     if (!key) return;
     try { localStorage.setItem(key, id); } catch { /* private mode: not remembered */ }
+  }
+
+  /** The chart / its chips: pick a service (+ a step inside it). Picking exactly the filter in force again clears it
+   *  back to All (the chart's "click again for everyone"); the shelf's own `select` stays a plain radio. */
+  pick(id: ServiceFilter, step: string | null = null): void {
+    if (id === 'all' || (this.selected() === id && this.step() === step)) { this.select('all'); return; }
+    this.select(id);
+    this._step.set(step);
   }
 
   /** Per user: the key carries the signed-in user's id. */

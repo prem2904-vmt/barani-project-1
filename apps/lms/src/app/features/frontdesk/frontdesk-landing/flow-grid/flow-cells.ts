@@ -4,6 +4,9 @@ import type { ICellRendererAngularComp } from 'ag-grid-angular';
 import { DailyNoComponent } from '../../../../shared/components/daily-no/daily-no.component';
 import { ActionsMenuComponent, PfAction } from '../../../../shared/components/actions-menu/actions-menu.component';
 import { OutsourcedActionsComponent } from '../../outsourced/outsourced-actions.component';
+import { JourneyRingComponent } from '../../../../shared/components/journey-ring/journey-ring.component';
+import type { JourneyDetail } from '../../../../shared/components/journey-ring/journey-detail';
+import { flowJourneyDetail } from './flow-journey';
 import type { FlowAction, FlowActionId, FlowRow } from './flow-row';
 
 /** What the landing hands the grid (pf-data-grid `context`): its existing handlers + busy states. */
@@ -17,6 +20,8 @@ export interface FlowGridContext {
   selectable(row: FlowRow): boolean;
   selected(row: FlowRow): boolean;
   toggle(row: FlowRow, ev: MouseEvent | KeyboardEvent): void;
+  /** The ring's inner service label adds information: 2+ services and no single-service filter. */
+  ringLabels?(): boolean;
 }
 
 type P = ICellRendererParams<FlowRow> & { context: FlowGridContext };
@@ -24,6 +29,35 @@ type P = ICellRendererParams<FlowRow> & { context: FlowGridContext };
 const MENU_ICON: Partial<Record<string, PfAction['icon']>> = {
   share: 'share', download: 'download', reprint: 'print', open: 'view', profile: 'patient', pay: 'edit', discard: undefined,
 };
+
+/** Journey: the shared pf-journey-ring — inner disc = the service (label only when it tells something), outer ring =
+ *  the row's own steps. Its own ≥44px button opens the journey view (the row's tap stays the row's). */
+@Component({
+  selector: 'pf-fd-flow-ring',
+  standalone: true,
+  imports: [JourneyRingComponent],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `@if (row) { <pf-journey-ring class="fd-cell-ring" [steps]="row.ring ?? []" [service]="row.service" [showLabel]="label" [detail]="detail" /> }`,
+  styles: [`:host { display: flex; align-items: center; height: 100%; }`],
+})
+export class FlowRingCellComponent implements ICellRendererAngularComp {
+  private readonly cdr = inject(ChangeDetectorRef);
+  private readonly el = inject<ElementRef<HTMLElement>>(ElementRef);
+  row: FlowRow | null = null;
+  label = true;
+  private ctx: FlowGridContext | null = null;
+  /** Read at tap time (fresh clock, the row's own Next action through the landing's existing handler). */
+  readonly detail = (): JourneyDetail => {
+    const row = this.row!;
+    const n = row.next;
+    return flowJourneyDetail(row, Date.now(), {
+      showLabel: this.label,
+      action: n ? { label: n.label, aria: n.aria, run: () => this.ctx?.act(row, n.id, this.el.nativeElement) } : null,
+    });
+  };
+  agInit(p: P): void { this.row = p.data ?? null; this.ctx = p.context; this.label = p.context?.ringLabels?.() ?? true; this.cdr.markForCheck(); }
+  refresh(p: P): boolean { this.agInit(p); return true; }
+}
 
 /** Token: the day's "#N" (pf-daily-no — the same chip the lab screens use). */
 @Component({

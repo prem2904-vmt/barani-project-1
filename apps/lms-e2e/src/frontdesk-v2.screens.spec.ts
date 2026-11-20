@@ -340,7 +340,17 @@ test.describe('frontdesk v2 — Lab + OPD user (Services shelf)', () => {
     await expect(page.getByText(LONG).locator('visible=true').first()).toBeVisible();
     await expect(page.getByText('Ms. Meera Iyer (OPD)').locator('visible=true')).toHaveCount(0);
     // The appointments card sits beside the list at ≥1024px (stacked layouts keep it collapsed behind its header).
-    if (wide()) await expect(page.getByText('Ms. Anjali Raghunathan Subramaniam').locator('visible=true').first()).toBeVisible();
+    // (2+ services: the side card opens on "Who is where" — fd-chart — so switch it to Appointments first.)
+    if (wide()) {
+      const apptTab = page.locator('.pf-appt-split pf-segmented.pf-tabs [role="radio"][data-value="appt"]').locator('visible=true');
+      const folded = page.locator('.pf-appt-split pf-segmented.pf-tabs [data-seg-compact]').locator('visible=true');
+      if (await apptTab.count()) await apptTab.click();
+      else if (await folded.count()) {
+        await folded.click();
+        await page.getByRole('menuitemradio', { name: /^Appointments/ }).locator('visible=true').first().click();
+      }
+      await expect(page.getByText('Ms. Anjali Raghunathan Subramaniam').locator('visible=true').first()).toBeVisible();
+    }
     await pick('all');
     await expect(page.getByText('Ms. Meera Iyer (OPD)').locator('visible=true').first()).toBeVisible();
   });
@@ -355,7 +365,7 @@ test.describe('frontdesk v2 — wide desktop 1720', () => {
     await openDesk(page);
     await expectNoPageScroll(page, '1720');
     const head = (await page.locator('.pf-fd-flow .ag-header-cell-text').allTextContents()).map(t => t.trim()).filter(Boolean);
-    expect(head).toEqual(['Token', 'Patient', 'Visit for', 'Where now', 'Journey', 'Waiting', 'Payment', 'Next']);
+    expect(head).toEqual(['Token', 'Patient', 'Journey', 'Where now', 'Waiting', 'Payment', 'Next']);   // fd-chart: the ring replaced Visit for + the dots
     await shots(page, '07-desktop-1720');
     await deskTab(page, 'In progress');
     await expectNoPageScroll(page, '1720 in progress');

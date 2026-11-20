@@ -1,0 +1,195 @@
+// "Who is where" sunburst — every colour is a theme token (light + dark come from the tokens themselves).
+:host {
+  display: block;
+  min-width: 0;
+  --wiw-lab: var(--sky-text, #0284c7);
+  --wiw-opd: var(--violet-text, #6d28d9);
+  --wiw-ipd: var(--blue-text, #2563eb);
+  --wiw-scan: var(--teal-text, #0d9488);
+  --wiw-er: var(--pink-text, #db2777);
+  --wiw-surface: var(--pf-card-bg, #fff);
+  --wiw-late: color-mix(in srgb, var(--rose-text, #e11d48) 42%, var(--wiw-surface));
+}
+
+[data-svc='lab'] { --svc: var(--wiw-lab); }
+[data-svc='opd'] { --svc: var(--wiw-opd); }
+[data-svc='ipd'] { --svc: var(--wiw-ipd); }
+[data-svc='scan'] { --svc: var(--wiw-scan); }
+[data-svc='er'] { --svc: var(--wiw-er); }
+
+.wiw {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 0 8px;
+}
+
+/* Full size (240px); short screens get 200px. */
+.wiw__sun {
+  position: relative;
+  width: 240px;
+  height: 240px;
+  flex: none;
+}
+@media (max-height: 820px) {
+  .wiw__sun { width: 200px; height: 200px; }
+}
+.wiw__sun svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+.wiw__empty {
+  fill: none;
+  stroke: var(--pf-line, #e5e7eb);
+  stroke-width: 66;
+  opacity: 0.7;
+}
+
+.wiw__slice {
+  fill: var(--svc);
+  stroke: var(--wiw-surface);
+  stroke-width: 1.5;
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+.wiw__slice--step { fill: color-mix(in srgb, var(--svc) 38%, var(--wiw-surface)); }
+.wiw__slice--late { fill: var(--wiw-late); }
+.wiw__slice:focus-visible { stroke: var(--text-primary, #111928); stroke-width: 2.5; }
+
+.wiw__n {
+  font-size: 11.5px;
+  font-weight: 700;
+  fill: var(--wiw-surface);
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+.wiw__n--step { fill: var(--text-primary, #111928); }
+
+/* A filter in force: the rest greys out. */
+.wiw--filtered .wiw__slice:not(.is-on) { opacity: 0.22; }
+.wiw--filtered .wiw__n:not(.is-on) { opacity: 0.35; }
+/* Hover / focus wins over the filter: only the hovered slice (+ its parent / children) keeps its colour. */
+.wiw--hovering .wiw__slice:not(.is-hov) { opacity: 0.14; filter: grayscale(1); }
+.wiw--hovering .wiw__slice.is-hov { opacity: 1; filter: none; }
+.wiw--hovering .wiw__n:not(.is-hov) { opacity: 0.2; }
+.wiw--hovering .wiw__n.is-hov { opacity: 1; }
+
+/* Centre: the count + what it counts; tapping it clears the filter. */
+.wiw__ctr {
+  position: absolute;
+  left: 30%;
+  top: 30%;
+  width: 40%;
+  height: 40%;
+  border-radius: 50%;
+  border: 0;
+  padding: 0 4px;
+  background: transparent;
+  color: var(--text-primary, #111928);
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  text-align: center;
+}
+.wiw__ctr:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 2px; }
+.wiw__ctr b { font-size: 26px; line-height: 1; font-weight: 700; }
+.wiw__ctr span { font-size: 11px; line-height: 1.25; color: var(--text-secondary, #374151); overflow-wrap: anywhere; }
+.wiw__ctr small { font-size: 10.5px; color: var(--text-muted, #9ca3af); }
+
+/* Service chips: dot + name + count + rose "n late". They wrap; names never cut. */
+.wiw__chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+.wiw__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  border: 1px solid var(--pf-line, #e5e7eb);
+  background: transparent;
+  color: var(--text-primary, #111928);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, background-color 0.2s ease, filter 0.2s ease;
+}
+@media (pointer: coarse) {
+  .wiw__chip { min-height: 44px; }
+}
+.wiw__chip:hover { background: var(--pf-chip-bg, #f3f4f6); }
+.wiw__chip:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+.wiw__chip[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent);
+  background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, var(--wiw-surface));
+  color: var(--violet-text, #6d28d9);
+  font-weight: 600;
+}
+.wiw--filtered .wiw__chip:not(.is-on) { opacity: 0.45; }
+.wiw--hovering .wiw__chip:not(.is-hov) { opacity: 0.4; filter: grayscale(1); }
+.wiw__chip-l { font-weight: 600; }
+.wiw__chip-n { color: var(--text-secondary, #374151); }
+.wiw__chip-late { color: var(--rose-text, #e11d48); font-weight: 600; font-size: 11px; }
+.wiw__dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  background: var(--svc);
+  flex: none;
+}
+
+.wiw__hint { margin: 0; font-size: 11.5px; color: var(--text-muted, #9ca3af); text-align: center; }
+
+/* Description card (pointer hover / keyboard focus only). */
+.wiw__tip {
+  position: fixed;
+  z-index: 60;
+  width: 228px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--wiw-surface);
+  border: 1px solid var(--pf-line, #e5e7eb);
+  box-shadow: var(--pf-shadow-sm, 0 4px 14px rgba(15, 23, 42, 0.12));
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-primary, #111928);
+  pointer-events: none;
+  animation: wiw-tip-in 0.15s ease both;
+}
+@keyframes wiw-tip-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.wiw__tip p { margin: 0; }
+.wiw__tip-h { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; margin-bottom: 4px !important; }
+.wiw__tip-h b { margin-left: auto; }
+.wiw__tip-l { color: var(--text-secondary, #374151); overflow-wrap: anywhere; }
+.wiw__tip-l--late { color: var(--rose-text, #e11d48); font-weight: 600; }
+.wiw__tip-go {
+  margin-top: 6px !important;
+  padding-top: 6px;
+  border-top: 1px solid var(--pf-line, #e5e7eb);
+  color: var(--violet-text, #6d28d9);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wiw__slice, .wiw__n, .wiw__chip { transition: none; }
+  .wiw__tip { animation: none; }
+}
+
+/* Dark: the card surface token is translucent there — the floating card needs an opaque one. */
+:host-context(.dark) .wiw__tip,
+:host-context([data-theme='dark']) .wiw__tip { background: var(--pf-dark-surface, var(--wiw-surface)); }

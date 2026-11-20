@@ -537,3 +537,5 @@
 
 /* Frontdesk redesign (new design): two-panel frame, flow grid, card head, phone filter — LAST so it wins. */
 @include meta.load-css('styles/flow');
+/* Side card tabs ("Who is where") + the list row — after the frame. */
+@include meta.load-css('styles/side');
