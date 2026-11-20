@@ -13,21 +13,23 @@ const noLoudColours = (el: HTMLElement) =>
 const noMono = (el: HTMLElement) => expect(el.querySelector('.pf-band-body .font-mono, .pf-band-body code')).toBeNull();
 
 describe('Audit trail — ND audit', () => {
+  // Audit trail v2 (2026-11-19): a timeline of sentences — the area is a neutral chip with a dot, a delete's verb is
+  // rose, and a record id is never on screen (it used to be printed in full).
   const page = { items: [
     { id: 'l1', entityType: 'OrderEntity', entityId: '5f1c2a9e-0000-4444-8888-123456789abc', action: 'create', userName: 'Asha', at: '2026-09-20T10:00:00Z', changes: null },
-    { id: 'l2', entityType: 'OrderEntity', entityId: 'ord-2', action: 'delete', userName: 'Ravi', at: '2026-09-20T11:00:00Z', changes: null },
+    { id: 'l2', entityType: 'OrderEntity', entityId: '6f1c2a9e-0000-4444-8888-123456789abc', action: 'delete', userName: 'Ravi', at: '2026-09-20T11:00:00Z', changes: null },
   ], total: 2 };
   const make = () => renderBandPage(AuditLogComponent, { getFor: (u) => (u.startsWith('/api/audit/logs') ? page : []) });
 
-  it('neutral action chips (violet dot = create, red text = delete); full record id in tabular Noto', () => {
+  it('neutral area chips with a dot; a delete reads in rose; no record id, no mono, no loud colours, no band primary', () => {
     const p = make();
-    const chips = p.el.querySelectorAll('.audit-badge.pf-chip');
+    const chips = p.el.querySelectorAll('[data-testid="audit-area"].pf-chip.pf-chip--static');
     expect(chips.length).toBe(2);
-    expect(chips[0].getAttribute('data-tone')).toBe('add');
-    expect(chips[0].querySelector('.audit-badge__dot')).not.toBeNull();
-    expect(chips[1].getAttribute('data-tone')).toBe('warn');
-    expect(chips[0].getAttribute('style')).toBeNull();
-    expect(p.el.querySelector('.audit-id.pf-num')!.textContent).toContain('5f1c2a9e-0000-4444-8888-123456789abc');
+    expect(chips[0].querySelector('.pf-au__dot')).not.toBeNull();
+    const verbs = p.el.querySelectorAll('.pf-au__verb');
+    expect(verbs[0].classList.contains('is-danger')).toBe(true);    // newest first: Ravi's delete
+    expect(verbs[1].classList.contains('is-danger')).toBe(false);
+    expect(p.el.querySelector('[data-testid="audit-activity"]')!.textContent).not.toContain('123456789abc');
     noMono(p.el);
     noLoudColours(p.el);
     expect(p.el.querySelectorAll('pf-hero-band .pf-hb-btn--primary:not(.pf-ssv__save)').length).toBe(0);

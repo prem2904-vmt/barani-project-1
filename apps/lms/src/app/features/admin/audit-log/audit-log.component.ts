@@ -1,477 +1,558 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import {
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, computed, inject, signal, viewChild,
+} from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { ApiService } from '../../../core/services/api.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { ToastService } from '../../../core/services/toast.service';
+import { ThemeService } from '../../../core/services/theme.service';
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
-import { TileComponent } from '../../../shared/primitives/tile.component';
-import { TouchButtonComponent } from '../../../shared/primitives/touch-button.component';
-import { AUDIT_ENTITY_TYPES, AuditLog, AuditLogPage } from '../../../shared/models/audit.model';
+import { AuditFacets, AuditLog, AuditLogPage, AuditRef } from '../../../shared/models/audit.model';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { ThemeService } from '../../../core/services/theme.service';
-import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
+import { SkeletonRowsComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
+import { BusyDirective } from '../../../shared/directives/busy.directive';
+import { spinDelay } from '../../../shared/utils/busy';
+import { downloadCsv } from '../../../shared/utils/export-csv';
+import { addDays, istDayRange, labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
+import {
+  AUDIT_AREAS, AuditArea, AuditEvent, CSV_HEADER, areaDef, areaOf, csvRow, entityTypesOf, groupByDay, groupEvents,
+} from './audit-text';
 
-/** Quick date windows for the band pill ('' = any time). */
-type RangeKey = '' | 'today' | '7d' | '30d' | 'custom';
+/** The "When" window. */
+export type AuditRange = 'today' | '7d' | '30d' | 'custom';
 
-interface Filters {
-  entityType: string;
-  entityId: string;
-  action: string;
-  from: string;
-  to: string;
+export const AUDIT_PAGE_SIZE = 50;
+/** Export streams the filtered rows in pages of 200, up to this many. */
+export const AUDIT_EXPORT_CAP = 10_000;
+
+/** The side card's filters — pure, so the query a choice sends is unit-tested. */
+export interface AuditFilters {
+  range: AuditRange;
+  from: string;   // IST yyyy-MM-dd (custom)
+  to: string;     // IST yyyy-MM-dd (custom, inclusive)
+  area: AuditArea | '';
+  userId: string;
+  q: string;
 }
 
-interface DiffRow {
-  field: string;
-  kind: 'set' | 'change';
-  value?: string;
-  old?: string;
-  new?: string;
+/** The query string for a filter set (the server's `to` is exclusive, so the last IST day is included). */
+export function auditQuery(f: AuditFilters, page: number, pageSize: number, today = labToday()): URLSearchParams {
+  const p = new URLSearchParams();
+  const from = f.range === 'today' ? today : f.range === '7d' ? addDays(today, -6) : f.range === '30d' ? addDays(today, -29) : f.from;
+  const to = f.range === 'custom' ? (f.to || today) : today;
+  if (from) { const r = istDayRange(from, to < from ? from : to); p.set('from', r.from); p.set('to', r.to); }
+  if (f.area) p.set('entityTypes', entityTypesOf(f.area).join(','));
+  if (f.userId) p.set('userId', f.userId);
+  if (f.q.trim().length >= 2) p.set('q', f.q.trim());
+  p.set('page', String(page));
+  p.set('pageSize', String(pageSize));
+  return p;
 }
 
-const EMPTY_FILTERS: Filters = { entityType: '', entityId: '', action: '', from: '', to: '' };
+/** Facet rows folded into the side card's areas: area → count ('all' = the total). */
+export function areaCounts(f: AuditFacets | null): Record<string, number> {
+  const out: Record<string, number> = { all: f?.total ?? 0 };
+  for (const a of AUDIT_AREAS) out[a.key] = 0;
+  for (const t of f?.types ?? []) {
+    const k = areaOf(t.entityType);
+    out[k] = (out[k] ?? 0) + t.count;
+  }
+  return out;
+}
 
+const RANGE_LABEL: Record<AuditRange, string> = { today: 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days', custom: 'Custom dates' };
+
+/**
+ * Settings → Audit trail (owner-approved redesign, 2026-11-19). The two-panel
+ * frame: the band (back, lab logo + name, the ONE search, Export), a SHOW side
+ * card on the LEFT (When · What changed · Who) and the ACTIVITY card — a
+ * timeline grouped by IST day that scrolls inside its card (no page scroll,
+ * the next page loads as it nears the end). Every line is a human sentence from
+ * the ONE mapping table (`audit-text.ts`); the rows one request wrote collapse
+ * into one event; IDs never show (the server names them: `enrich=true` →
+ * `refs`). Phones / narrow tablets: one card; the filters open as a sheet from
+ * the filter icon inside the search.
+ */
 @Component({
   selector: 'pf-audit-log',
   standalone: true,
-  imports: [SkeletonTableComponent, FormsModule, ScreenHeaderComponent, TileComponent, TouchButtonComponent, HeroBandComponent, SelectComponent, PfDateComponent],
+  imports: [NgTemplateOutlet, RouterLink, ScreenHeaderComponent, HeroBandComponent, SelectComponent, SkeletonRowsComponent, PfDateComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  styles: [`
-    @use '../../../shared/styles/device-tier' as dt;
-    /* Phone (<=640): the log-row header packs 5 children in one non-wrapping
-       flex row; let it wrap and reflow the meta (user/time) so it never forces
-       horizontal overflow. Desktop layout (>=641) is untouched. */
-    @media (max-width: 640px) {
-      :host .audit-row {
-        flex-wrap: wrap;
-        row-gap: 0.25rem;
-        column-gap: 0.5rem;
-        min-height: 44px;          /* comfortable tap target */
-      }
-      /* Drop the ml-auto push so meta wraps onto its own line instead of being
-         squeezed; keep it left-aligned under the badge/type. */
-      :host .audit-row .audit-user {
-        margin-left: 0;
-      }
-      :host .audit-row .audit-when {
-        margin-left: auto;          /* time sits at the end of the wrapped line */
-      }
-      /* Stack the field-diff: a fixed 140px label column is too wide on a
-         ~320px screen — let label + value stack full-width. */
-      :host .audit-diff {
-        grid-template-columns: 1fr;
-        row-gap: 0.125rem;
-      }
-      /* Long diff values (JSON blobs, free text) and the full entity id must
-         break instead of forcing the card/page to scroll sideways on phone. */
-      :host .audit-diff-row { overflow-wrap: anywhere; word-break: break-word; }
-      :host .audit-full-id  { overflow-wrap: anywhere; word-break: break-all; }
-      /* Pagination footer: let the range label + buttons wrap on narrow phones
-         instead of crowding into one line. */
-      :host .audit-pager { flex-wrap: wrap; row-gap: 0.5rem; }
-    }
-    /* Touch devices of any width (iPad/touch laptops): the collapsible log row
-       is the primary control — guarantee a 44px tap target without altering the
-       mouse/desktop layout. */
-    @media (pointer: coarse) {
-      :host .audit-row { min-height: 44px; }
-    }
-    /* ── Log rows: kit card + a NEUTRAL action chip. Deletes / failed
-       sign-ins keep red text (a real warning); creates carry a violet dot. ── */
-    .audit-card { padding: 10px 14px; overflow: visible; }
-    .audit-badge { height: 24px; font-size: 11.5px; font-weight: 600; flex-shrink: 0; }
-    .audit-badge[data-tone='warn'] { color: var(--red-text, #b91c1c); }
-    .audit-badge__dot { width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
-    .audit-id { color: var(--text-tertiary); overflow-wrap: anywhere; }
-    /* ── Band pill filters (new design) ── */
-    .audit-bandsel { display: block; min-width: 150px; }
-    .audit-bandsel--type { min-width: 180px; }
-    .audit-dates { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
-    .audit-date {
-      height: 32px; padding: 0 8px; border-radius: 9px; font-size: 12.5px; font-family: inherit; font-variant-numeric: tabular-nums;
-      background: var(--pf-card-bg); border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent); color: var(--text-primary);
-      color-scheme: light dark;
-    }
-    .audit-date:focus { outline: none; border-color: var(--color-violet-600, #7c3aed); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary, #7c3aed) 16%, transparent); }
-    .audit-dates__sep { font-size: 12px; color: var(--text-tertiary); }
-    @media (max-width: 640px) {
-      .audit-bandsel, .audit-bandsel--type { min-width: 140px; }
-      .audit-date { height: 40px; font-size: 16px; }
-    }
-    /* Web-below-desktop band (641–1279, behind the 64px icon rail): at >=1024
-       Tailwind's lg:grid-cols-5 packs all 5 filters into one row, which leaves
-       the date inputs cramped next to the rail. Cap at 3 columns so the filter
-       fields reflow with comfortable widths; desktop (>=1280) keeps 5-up. */
-    @include dt.tablet-band {
-      :host .audit-filter-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
-    }
-  `],
   template: `
-    <section class="pf-band-page px-4 md:px-8 pt-6 pb-10">
+    <section class="pf-band-page pf-au px-4 md:px-8 pt-6 pb-4">
       @if (theme.isNewDesign()) {
-        <!-- Band pill (owner): the record id is the search; record type,
-             action and the date window ride in the pill and apply at once. -->
-        <pf-hero-band [back]="true" placeholder="Search by record id…"
-                      [value]="filters().entityId" (valueChange)="onIdInput($event)" (submitted)="apply()">
-          <ng-container band-tools>
-            <pf-select class="audit-bandsel audit-bandsel--type" size="sm" [options]="entityTypeOptions"
-                       [value]="filters().entityType" (valueChange)="setFilter({ entityType: $event })"
-                       aria-label="Record type"></pf-select>
-            <pf-select class="audit-bandsel" size="sm" [options]="actionOptions"
-                       [value]="filters().action" (valueChange)="setFilter({ action: $event })"
-                       aria-label="Action"></pf-select>
-            <pf-select class="audit-bandsel" size="sm" [options]="rangeOptions"
-                       [value]="range()" (valueChange)="setRange($event)"
-                       aria-label="When"></pf-select>
-            @if (range() === 'custom') {
-              <span class="audit-dates">
-                <pf-date label="From" [value]="filters().from || null"
-                            (valueChange)="setFilter({ from: $event ?? '' })"></pf-date>
-                <span class="audit-dates__sep">to</span>
-                <pf-date label="To" [value]="filters().to || null"
-                            (valueChange)="setFilter({ to: $event ?? '' })"></pf-date>
-              </span>
-            }
-          </ng-container>
+        <pf-hero-band [back]="true" placeholder="Search a person, patient, order number or test…"
+                      [value]="q()" (valueChange)="onSearch($event)" (submitted)="searchNow()">
+          @if (narrow()) {
+            <ng-container band-inline>
+              <button type="button" class="pf-au__filterbtn press" (click)="sheetOpen.set(true)" aria-haspopup="dialog"
+                      [attr.aria-expanded]="sheetOpen()" aria-label="Filters" data-testid="audit-filters-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+                @if (activeFilterCount() > 0) { <span class="pf-au__filterdot" aria-hidden="true"></span> }
+              </button>
+            </ng-container>
+          }
           <ng-container band-actions>
-            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" [disabled]="!hasFilters()" (click)="clearAll()">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-              Clear
+            <button type="button" class="pf-hb-btn pf-hb-btn--ghost press" data-testid="audit-export" [disabled]="exporting()"
+                    [pfBusy]="exporting()" pfBusyLabel="Preparing the CSV…" (click)="exportCsv()" aria-label="Export" title="Download these changes as CSV">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+              <span class="pf-au__exportlbl">{{ exporting() ? 'Preparing…' : 'Export' }}</span>
             </button>
           </ng-container>
         </pf-hero-band>
       }
-      <pf-screen-header class="pf-classic-only"
-        eyebrow="Admin"
-        title="Audit trail"
-        subtitle="Every change to results, samples, patients, reports, billing and access — who did it, when, and exactly what changed. Append-only.">
+      <pf-screen-header class="pf-classic-only" eyebrow="Admin" title="Audit trail"
+        subtitle="Every change to results, samples, patients, reports, billing and access — who did it and when. Append-only.">
       </pf-screen-header>
 
-      <div class="pf-band-body">
-      <!-- Filters (classic; the new design has them in the band pill) -->
-      <pf-tile tone="default" padding="lg" class="block mb-4 pf-classic-only">
-        <div class="audit-filter-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <div>
-            <label class="pf-label">Record type</label>
-            <pf-select [options]="entityTypeOptions" [value]="filters().entityType"
-                       (valueChange)="patch({ entityType: $event })"
-                       aria-label="Record type"></pf-select>
-          </div>
-          <div>
-            <label class="pf-label">Action</label>
-            <pf-select [options]="actionOptions" [value]="filters().action"
-                       (valueChange)="patch({ action: $event })"
-                       aria-label="Action"></pf-select>
-          </div>
-          <div>
-            <label class="pf-label">Record ID</label>
-            <input type="text" class="pf-input" placeholder="Exact id"
-                   [ngModel]="filters().entityId" (ngModelChange)="patch({ entityId: $event })"/>
-          </div>
-          <div>
-            <label class="pf-label">From</label>
-            <pf-date label="From" [value]="filters().from || null"
-                        (valueChange)="patch({ from: $event ?? '' })"></pf-date>
-          </div>
-          <div>
-            <label class="pf-label">To</label>
-            <pf-date label="To" [value]="filters().to || null"
-                        (valueChange)="patch({ to: $event ?? '' })"></pf-date>
-          </div>
-        </div>
-        <div class="mt-3 flex gap-2 justify-end">
-          <pf-touch-btn size="sm" variant="ghost" (pressed)="reset()">Clear</pf-touch-btn>
-          <pf-touch-btn size="sm" variant="primary" (pressed)="apply()">Apply</pf-touch-btn>
-        </div>
-      </pf-tile>
+      <div class="pf-band-body pf-band-body--fill pf-au__body">
+        <div class="pf-au__panels" [class.pf-au__panels--narrow]="narrow()">
+          @if (narrow()) {
+            @if (sheetOpen()) {
+              <div class="pf-sheet-backdrop" (click)="sheetOpen.set(false)"></div>
+              <aside class="pf-card pf-au__side pf-au__side--sheet" role="dialog" aria-modal="true" aria-label="Show"
+                     (keydown.escape)="sheetOpen.set(false)" data-testid="audit-sheet">
+                <span class="pf-sheet__handle" aria-hidden="true"></span>
+                <ng-container *ngTemplateOutlet="sideHead; context: { sheet: true }"></ng-container>
+                <ng-container *ngTemplateOutlet="sideBody"></ng-container>
+              </aside>
+            }
+          } @else {
+            <aside class="pf-card pf-au__side" aria-label="Show" data-testid="audit-side">
+              <ng-container *ngTemplateOutlet="sideHead; context: { sheet: false }"></ng-container>
+              <ng-container *ngTemplateOutlet="sideBody"></ng-container>
+            </aside>
+          }
 
-      @if (loading()) {
-        <pf-tile tone="default" padding="lg" class="block">
-          <div class="flex justify-center py-6">
-            <pf-skeleton-table [rows]="8" [cols]="5" label="Loading audit trail…"></pf-skeleton-table>
-          </div>
-        </pf-tile>
-      } @else if (logs().length === 0) {
-        <pf-tile tone="default" padding="xl" class="block">
-          <p class="text-center text-[13px]" style="color: var(--text-tertiary);">
-            No audit entries match these filters.
-          </p>
-        </pf-tile>
-      } @else {
-        <div class="space-y-2">
-          @for (log of logs(); track log.id) {
-            <div class="pf-card audit-card">
-              <button type="button" class="audit-row w-full flex items-center gap-3 text-left"
-                      (click)="toggle(log.id)" [attr.aria-expanded]="expanded() === log.id">
-                <span class="pf-chip pf-chip--static audit-badge" [attr.data-tone]="badgeTone(log.action)">
-                  @if (badgeTone(log.action) === 'add') { <span class="audit-badge__dot" aria-hidden="true"></span> }
-                  {{ actionLabel(log.action) }}
-                </span>
-                <span class="text-[13px] font-semibold shrink-0">{{ typeLabel(log.entityType) }}</span>
-                <span class="audit-id pf-num text-[12px] min-w-0">{{ log.entityId }}</span>
-                <span class="audit-user ml-auto text-[12px] shrink-0" style="color: var(--text-secondary);">
-                  {{ log.userName || 'System' }}
-                </span>
-                <span class="audit-when pf-num text-[11.5px] shrink-0" style="color: var(--text-tertiary);">
-                  {{ when(log.at) }}
-                </span>
-              </button>
-
-              @if (expanded() === log.id) {
-                <div class="mt-3 pt-3 border-t" style="border-color: var(--border-subtle);">
-                  @if (diff(log).length === 0) {
-                    <p class="text-[12px]" style="color: var(--text-tertiary);">
-                      @if (log.entityType === 'Auth') {
-                        <!-- Older auth rows predate the event description; a
-                             sign-in has no field diff by nature. -->
-                        Sign-in / security event — there are no record fields to compare.
-                      } @else {
-                        No field-level detail recorded.
-                      }
-                    </p>
-                  } @else {
-                    <div class="space-y-1.5">
-                      @for (d of diff(log); track d.field) {
-                        <div class="audit-diff grid grid-cols-[140px_1fr] gap-2 text-[12px] audit-diff-row">
-                          <span class="pf-num font-semibold" style="color: var(--text-secondary);">{{ d.field }}</span>
-                          @if (d.kind === 'change') {
-                            <span>
-                              <span class="line-through" style="color: var(--text-tertiary);">{{ d.old }}</span>
-                              <span class="mx-1" style="color: var(--text-tertiary);">→</span>
-                              <span class="font-semibold">{{ d.new }}</span>
-                            </span>
-                          } @else {
-                            <span class="font-semibold">{{ d.value }}</span>
-                          }
-                        </div>
-                      }
-                    </div>
-                  }
-                  <p class="audit-full-id mt-2 text-[11.5px] pf-num" style="color: var(--text-tertiary);">id {{ log.entityId }}</p>
+          <section class="pf-card pf-au__main" aria-label="Activity" data-testid="audit-activity">
+            <header class="pf-card__head">
+              <span class="pf-card__icon" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              </span>
+              <h2 class="pf-card__label">Activity</h2>
+              <span class="pf-card__note pf-au__note pf-num" aria-live="polite" data-testid="audit-count">{{ countNote() }}</span>
+            </header>
+            <div class="pf-card__body pf-au__scroll" #scroller (scroll)="onScroll()" data-testid="audit-scroll">
+              @if (listSkeleton()) {
+                <pf-skeleton-rows class="pf-au__skel" [rows]="9" [avatar]="true" [trailing]="true" label="Loading the audit trail…"></pf-skeleton-rows>
+              } @else if (days().length === 0 && !loading()) {
+                <div class="pf-empty pf-empty--compact" data-testid="audit-empty">
+                  <span class="pf-empty__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                  </span>
+                  <p class="pf-empty__title">{{ q().trim() ? 'Nothing matches “' + q().trim() + '”' : 'No changes in this window' }}</p>
+                  <p class="pf-empty__body">{{ q().trim() ? 'Try a name, an order or sample number, or a test.' : 'Pick a longer window or another area.' }}</p>
                 </div>
+              } @else {
+                @for (d of days(); track d.day) {
+                  <h3 class="pf-au__day" data-testid="audit-day">{{ d.label }}</h3>
+                  <ul class="pf-au__list">
+                    @for (e of d.events; track e.id) {
+                      <li class="pf-au__ev" [class.is-open]="isOpen(e.id)" data-testid="audit-event">
+                        <button type="button" class="pf-au__row" (click)="toggle(e.id)" [attr.aria-expanded]="isOpen(e.id)"
+                                [attr.aria-controls]="'au-' + e.id">
+                          <span class="pf-au__time pf-num">{{ e.time }}</span>
+                          <span class="pf-au__avatar" aria-hidden="true">{{ e.initials }}</span>
+                          <span class="pf-au__text">
+                            <!-- Each word's leading space lives INSIDE its text node: Angular drops whitespace-only nodes between elements. -->
+                            <b class="pf-au__who">{{ e.who }}</b>
+                            <span class="pf-au__verb" [class.is-danger]="e.danger">{{ ' ' + e.verb }}</span>
+                            @if (e.what) { <b class="pf-au__what">{{ ' ' + e.what }}</b> }
+                            @if (e.rest) { <span class="pf-au__rest">{{ ' ' + e.rest }}</span> }
+                          </span>
+                          <span class="pf-chip pf-chip--static pf-au__chip" data-testid="audit-area">
+                            <span class="pf-au__dot" [style.background]="dotOf(e.area)" aria-hidden="true"></span>{{ areaLabel(e.area) }}
+                          </span>
+                        </button>
+                        @if (isOpen(e.id)) {
+                          <div class="pf-au__detail" [id]="'au-' + e.id" data-testid="audit-detail">
+                            @if (e.changes.length) {
+                              <dl class="pf-au__changes">
+                                @for (c of e.changes; track c.field) {
+                                  <div class="pf-au__change" data-testid="audit-change">
+                                    <dt>{{ c.label }}</dt>
+                                    <dd>
+                                      @if (c.from !== null) {
+                                        <span class="pf-au__from">{{ c.from }}</span>
+                                        <svg class="pf-au__arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                                        <span class="sr-only">to</span>
+                                      }
+                                      <span class="pf-au__to">{{ c.to }}</span>
+                                    </dd>
+                                  </div>
+                                }
+                              </dl>
+                            } @else {
+                              <p class="pf-au__none">{{ e.rows[0].entityType === 'Auth' ? 'A sign-in or security event — there are no record fields to compare.' : 'Only technical details changed.' }}</p>
+                            }
+                            <div class="pf-au__links">
+                              @if (e.link) { <a class="pf-au__link" [routerLink]="e.link.url" data-testid="audit-open">{{ e.link.label }}</a> }
+                              @if (e.also) { <span class="pf-au__also" data-testid="audit-also">Also updated: {{ e.also }} (same moment)</span> }
+                              <span class="pf-au__spacer"></span>
+                              <button type="button" class="pf-au__tech" (click)="toggleTech(e.id)" [attr.aria-expanded]="techOpen() === e.id"
+                                      data-testid="audit-tech">Technical details</button>
+                            </div>
+                            @if (techOpen() === e.id) {
+                              <pre class="pf-au__raw" data-testid="audit-raw">{{ rawOf(e) }}</pre>
+                            }
+                          </div>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+                <p class="pf-au__more" role="status" data-testid="audit-more">
+                  @if (loadingMore()) { Loading older changes… }
+                  @else if (hasMore()) { Scroll for older changes }
+                  @else { That is everything in this window. }
+                </p>
               }
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <ng-template #sideHead let-sheet="sheet">
+      <header class="pf-card__head">
+        <span class="pf-card__icon" aria-hidden="true">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M6 12h12M10 18h4"/></svg>
+        </span>
+        <h2 class="pf-card__label">Show</h2>
+        <span class="pf-card__spacer"></span>
+        @if (sheet) {
+          <button type="button" class="pf-btn pf-btn--icon" (click)="sheetOpen.set(false)" aria-label="Close filters">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        }
+      </header>
+    </ng-template>
+
+    <ng-template #sideBody>
+      <div class="pf-card__body pf-au__filters">
+        <div class="pf-field">
+          <span class="pf-field__lbl" id="pf-au-when">When</span>
+          <span class="pf-seg pf-au__seg" role="radiogroup" aria-labelledby="pf-au-when" data-testid="audit-when">
+            @for (r of ranges; track r.value) {
+              <button type="button" class="pf-seg__item" role="radio" [attr.aria-checked]="range() === r.value" (click)="setRange(r.value)">{{ r.label }}</button>
+            }
+          </span>
+          @if (range() === 'custom') {
+            <div class="pf-au__dates">
+              <label class="pf-au__dates-lbl" for="pf-au-from">From</label>
+              <pf-date label="From" inputId="pf-au-from" [value]="from() || null" [max]="to() || today" (valueChange)="setFrom($event)"></pf-date>
+              <label class="pf-au__dates-lbl" for="pf-au-to">To</label>
+              <pf-date label="To" inputId="pf-au-to" [value]="to() || null" [min]="from() || null" [max]="today" (valueChange)="setTo($event)"></pf-date>
             </div>
           }
         </div>
-
-        <!-- Pagination -->
-        <div class="audit-pager mt-4 flex items-center justify-between text-[12px]" style="color: var(--text-secondary);">
-          <span>{{ rangeLabel() }} of {{ total() }}</span>
-          <div class="flex gap-2">
-            <pf-touch-btn size="sm" variant="ghost" [disabled]="page() <= 1" (pressed)="prev()">Previous</pf-touch-btn>
-            <pf-touch-btn size="sm" variant="ghost" [disabled]="!hasNext()" (pressed)="next()">Next</pf-touch-btn>
-          </div>
+        <div class="pf-field">
+          <span class="pf-field__lbl" id="pf-au-what">What changed</span>
+          <ul class="pf-side-list pf-au__areas" role="listbox" aria-labelledby="pf-au-what" data-testid="audit-areas">
+            <li><button type="button" class="pf-side-item" role="option" [attr.aria-selected]="area() === ''" (click)="setArea('')" data-area="all">
+              <span class="pf-au__dot" style="background: var(--text-tertiary)" aria-hidden="true"></span>
+              <span class="pf-au__arealbl">Everything</span><span class="pf-au__n pf-num">{{ counts()['all'] }}</span>
+            </button></li>
+            @for (a of areas; track a.key) {
+              <li><button type="button" class="pf-side-item" role="option" [attr.aria-selected]="area() === a.key" (click)="setArea(a.key)"
+                          [attr.data-area]="a.key">
+                <span class="pf-au__dot" [style.background]="a.dot" aria-hidden="true"></span>
+                <span class="pf-au__arealbl">{{ a.label }}</span><span class="pf-au__n pf-num">{{ counts()[a.key] }}</span>
+              </button></li>
+            }
+          </ul>
         </div>
-      }
+        <div class="pf-field">
+          <label class="pf-field__lbl" for="pf-au-who">Who</label>
+          <pf-select id="pf-au-who" [options]="whoOptions()" [value]="userId()" [searchable]="true" placeholder="Everyone"
+                     (valueChange)="setUser($event)" aria-label="Who" data-testid="audit-who"></pf-select>
+        </div>
       </div>
-    </section>
-  `
+    </ng-template>
+  `,
+  styles: [`
+    :host { display: block; min-height: 0; height: 100%; }
+    .pf-au__body { display: flex; flex-direction: column; min-height: 0; }
+    .pf-au__panels { display: grid; grid-template-columns: var(--pf-side-w, 340px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
+      gap: 12px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+    .pf-au__panels--narrow { grid-template-columns: minmax(0, 1fr); }
+    .pf-au__side, .pf-au__main { min-height: 0; min-width: 0; }
+    .pf-au__main { overflow: clip; }
+    .pf-au__side--sheet {
+      position: fixed; left: 0; right: 0; bottom: var(--pf-nav-h, 0px); z-index: 80; max-height: 82dvh;
+      border-radius: 18px 18px 0 0; padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .pf-au__side--sheet .pf-sheet__handle { display: block; width: 40px; height: 4px; margin: 8px auto 0; border-radius: 999px; background: var(--pf-line); }
+    .pf-au__filters { gap: 16px; }
+    .pf-au__seg { display: flex; width: 100%; }
+    .pf-au__seg .pf-seg__item { flex: 1 1 0; min-height: 36px; }
+    .pf-au__dates { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: center; margin-top: 8px; }
+    .pf-au__dates-lbl { font-size: 12px; color: var(--text-tertiary); }
+    .pf-au__areas { padding: 0; }
+    .pf-au__arealbl { flex: 1 1 auto; min-width: 0; }
+    .pf-au__n { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+    .pf-au__dot { width: 7px; height: 7px; border-radius: 999px; flex: none; display: inline-block; }
+    .pf-au__note { color: var(--text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pf-au__scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 0 12px; display: block; }
+    .pf-au__skel { display: block; padding: 12px 16px; }
+    .pf-au__day { margin: 0; padding: 14px 18px 6px; font-size: 11.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text-tertiary); }
+    .pf-au__list { list-style: none; margin: 0; padding: 0; }
+    .pf-au__ev { border-bottom: 1px solid var(--pf-line); }
+    .pf-au__ev.is-open { background: var(--pf-chip-bg); }
+    .pf-au__row {
+      display: flex; align-items: flex-start; gap: 12px; width: 100%; min-height: 56px; padding: 12px 18px; border: 0; background: transparent;
+      color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
+    }
+    .pf-au__row:hover { background: var(--pf-chip-bg); }
+    .pf-au__row:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+    .pf-au__time { width: 64px; flex: none; padding-top: 6px; font-size: 12.5px; color: var(--text-tertiary); }
+    .pf-au__avatar {
+      width: 32px; height: 32px; flex: none; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+      background: var(--pf-sel-bg, var(--pf-chip-bg)); color: var(--violet-text); font-size: 12px; font-weight: 600;
+    }
+    .pf-au__text { flex: 1 1 auto; min-width: 0; font-size: 14px; line-height: 1.45; padding-top: 5px; overflow-wrap: anywhere; }
+    .pf-au__who, .pf-au__what { font-weight: 600; }
+    .pf-au__verb, .pf-au__rest { color: var(--text-secondary); }
+    .pf-au__verb.is-danger { color: var(--rose-text); font-weight: 600; }
+    .pf-au__chip { flex: none; height: 26px; gap: 6px; font-size: 12px; font-weight: 500; margin-top: 3px; white-space: nowrap; }
+    .pf-au__detail { margin: 0 18px 12px 126px; padding: 10px 12px; border-radius: 10px; background: var(--pf-card-bg); border: 1px solid var(--pf-line); font-size: 13px; }
+    .pf-au__changes { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+    .pf-au__change { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+    .pf-au__change dt { color: var(--text-tertiary); }
+    .pf-au__change dd { margin: 0; display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 6px; overflow-wrap: anywhere; }
+    .pf-au__from { color: var(--text-tertiary); text-decoration: line-through; }
+    .pf-au__arrow { color: var(--text-tertiary); align-self: center; }
+    .pf-au__to { font-weight: 600; }
+    .pf-au__none { margin: 0; color: var(--text-tertiary); }
+    .pf-au__links { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; padding-top: 4px; font-size: 12.5px; }
+    .pf-au__link, .pf-au__tech { color: var(--violet-text); font: inherit; font-weight: 500; text-decoration: none; background: none; border: 0; padding: 0; cursor: pointer;
+      min-height: 44px; display: inline-flex; align-items: center; }
+    .pf-au__link:hover, .pf-au__tech:hover { text-decoration: underline; }
+    .pf-au__tech { color: var(--text-tertiary); }
+    .pf-au__also { color: var(--text-tertiary); }
+    .pf-au__spacer { flex: 1 1 auto; }
+    .pf-au__raw { margin: 6px 0 0; padding: 8px 10px; max-height: 260px; overflow: auto; border-radius: 8px; background: var(--pf-chip-bg);
+      font-size: 11.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-secondary); }
+    .pf-au__more { margin: 0; padding: 14px 18px; font-size: 12px; color: var(--text-tertiary); text-align: center; }
+    .pf-au__filterbtn { position: relative; width: 44px; height: 44px; margin-right: -10px; border: 0; background: transparent; color: var(--text-secondary);
+      display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; cursor: pointer; }
+    .pf-au__filterdot { position: absolute; top: 10px; right: 9px; width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+    @media (pointer: coarse) { .pf-au__seg .pf-seg__item { min-height: 44px; } }
+    @media (max-width: 640px) {
+      .pf-au__row { flex-wrap: wrap; gap: 8px 10px; padding: 12px 14px; }
+      .pf-au__time { width: auto; order: 3; padding-top: 0; margin-left: 42px; }
+      .pf-au__text { flex-basis: calc(100% - 42px); padding-top: 4px; }
+      .pf-au__chip { order: 4; margin-top: 0; }
+      .pf-au__detail { margin: 0 14px 12px; }
+      .pf-au__change { grid-template-columns: 1fr; gap: 2px; }
+      .pf-au__exportlbl { display: none; }
+      .pf-au__day { padding: 12px 14px 4px; }
+    }
+  `],
 })
 export class AuditLogComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly toast = inject(ToastService);
-
-  readonly entityTypes = AUDIT_ENTITY_TYPES;
+  private readonly destroyRef = inject(DestroyRef);
   protected readonly theme = inject(ThemeService);
+  private readonly scroller = viewChild<ElementRef<HTMLElement>>('scroller');
 
-  // ── Band pill filters ────────────────────────────────────────────────
-  readonly entityTypeOptions: PfSelectOption<string>[] = AUDIT_ENTITY_TYPES.map(t => ({ value: t.value, label: t.label }));
-  readonly actionOptions: PfSelectOption<string>[] = [
-    { value: '', label: 'Any action' },
-    { value: 'create', label: 'Created' },
-    { value: 'update', label: 'Updated' },
-    { value: 'delete', label: 'Deleted' },
+  readonly today = labToday();
+  readonly areas = AUDIT_AREAS;
+  readonly ranges: { value: AuditRange; label: string }[] = [
+    { value: 'today', label: 'Today' }, { value: '7d', label: '7 days' }, { value: '30d', label: '30 days' }, { value: 'custom', label: 'Custom' },
   ];
-  readonly rangeOptions: PfSelectOption<RangeKey>[] = [
-    { value: '', label: 'Any time' },
-    { value: 'today', label: 'Today' },
-    { value: '7d', label: 'Last 7 days' },
-    { value: '30d', label: 'Last 30 days' },
-    { value: 'custom', label: 'Custom dates…' },
-  ];
-  readonly range = signal<RangeKey>('');
-  private idTimer: ReturnType<typeof setTimeout> | null = null;
+  readonly narrow = signal(this.mq('(max-width: 900px)'));
+  readonly sheetOpen = signal(false);
 
-  /** Pill filter change → apply immediately (no Apply button in the band). */
-  setFilter(p: Partial<Filters>) {
-    this.patch(p);
-    this.apply();
-  }
+  // ── Filters ──
+  readonly range = signal<AuditRange>('7d');
+  readonly from = signal<string>(labDaysAgo(6));
+  readonly to = signal<string>(labToday());
+  readonly area = signal<AuditArea | ''>('');
+  readonly userId = signal<string>('');
+  readonly q = signal<string>('');
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
-  /** Record-id search: debounced while typing; Enter applies at once. */
-  onIdInput(v: string) {
-    this.patch({ entityId: v ?? '' });
-    if (this.idTimer) clearTimeout(this.idTimer);
-    this.idTimer = setTimeout(() => { this.idTimer = null; this.apply(); }, 400);
-  }
+  readonly filters = computed<AuditFilters>(() => ({
+    range: this.range(), from: this.from(), to: this.to(), area: this.area(), userId: this.userId(), q: this.q(),
+  }));
+  readonly activeFilterCount = computed(() => (this.range() !== '7d' ? 1 : 0) + (this.area() ? 1 : 0) + (this.userId() ? 1 : 0));
 
-  setRange(r: RangeKey) {
-    this.range.set(r);
-    if (r === 'custom') return; // the two date inputs appear; they apply on change
-    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const today = new Date();
-    const back = (n: number) => { const d = new Date(today); d.setDate(d.getDate() - n); return iso(d); };
-    const from = r === 'today' ? iso(today) : r === '7d' ? back(6) : r === '30d' ? back(29) : '';
-    this.setFilter({ from, to: r ? iso(today) : '' });
-  }
+  // ── Data ──
+  private readonly logs = signal<AuditLog[]>([]);
+  private readonly refs = signal<Record<string, AuditRef>>({});
+  readonly total = signal(0);
+  readonly facets = signal<AuditFacets | null>(null);
+  private page = 1;
+  private reqSeq = 0;
+  readonly loading = signal(true);
+  readonly loadingMore = signal(false);
+  readonly exporting = signal(false);
+  readonly listSkeleton = spinDelay(computed(() => this.loading() && this.logs().length === 0));
+  readonly hasMore = computed(() => this.logs().length < this.total());
 
-  readonly hasFilters = computed(() => {
-    const f = this._filters();
-    return !!(f.entityType || f.entityId || f.action || f.from || f.to);
+  readonly events = computed(() => groupEvents(this.logs(), this.refs()));
+  readonly days = computed(() => groupByDay(this.events(), this.today));
+  readonly counts = computed(() => areaCounts(this.facets()));
+  readonly whoOptions = computed<PfSelectOption<string>[]>(() => [
+    { value: '', label: 'Everyone' },
+    ...(this.facets()?.users ?? []).map(u => ({ value: u.userId, label: u.name || 'Someone' })),
+  ]);
+  readonly countNote = computed(() => {
+    const n = this.total();
+    const when = this.range() === 'custom' ? 'Custom dates' : RANGE_LABEL[this.range()];
+    return `${when} · ${n === 1 ? '1 change' : `${n.toLocaleString('en-IN')} changes`}`;
   });
 
-  clearAll() {
-    if (this.idTimer) { clearTimeout(this.idTimer); this.idTimer = null; }
-    this.range.set('');
-    this.reset();
+  // ── Expand ──
+  private readonly open = signal<ReadonlySet<string>>(new Set());
+  readonly techOpen = signal<string | null>(null);
+  isOpen(id: string): boolean { return this.open().has(id); }
+  toggle(id: string) {
+    this.open.update(s => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+  toggleTech(id: string) { this.techOpen.update(cur => (cur === id ? null : id)); }
+  /** Support view: the raw rows of the event, as stored. */
+  rawOf(e: AuditEvent): string {
+    return JSON.stringify(e.rows.map(r => {
+      let changes: unknown = r.changes ?? null;
+      try { changes = r.changes ? JSON.parse(r.changes) : null; } catch { /* free text */ }
+      return { at: r.at, entityType: r.entityType, entityId: r.entityId, action: r.action, userId: r.userId ?? null, changes };
+    }), null, 2);
   }
 
-  private readonly _filters = signal<Filters>({ ...EMPTY_FILTERS });
-  readonly filters = this._filters.asReadonly();
-
-  private readonly _logs = signal<AuditLog[]>([]);
-  readonly logs = this._logs.asReadonly();
-  private readonly _total = signal(0);
-  readonly total = this._total.asReadonly();
-  private readonly _page = signal(1);
-  readonly page = this._page.asReadonly();
-  private readonly _loading = signal(false);
-  readonly loading = this._loading.asReadonly();
-  private readonly _expanded = signal<string | null>(null);
-  readonly expanded = this._expanded.asReadonly();
-
-  private readonly pageSize = 50;
-
-  readonly hasNext = computed(() => this._page() * this.pageSize < this._total());
-  readonly rangeLabel = computed(() => {
-    const total = this._total();
-    if (total === 0) return '0';
-    const start = (this._page() - 1) * this.pageSize + 1;
-    const end = Math.min(this._page() * this.pageSize, total);
-    return `${start}–${end}`;
-  });
+  dotOf(a: AuditArea) { return areaDef(a).dot; }
+  areaLabel(a: AuditArea) { return areaDef(a).label; }
 
   ngOnInit(): void {
-    this.load();
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const m = window.matchMedia('(max-width: 900px)');
+      const on = (e: MediaQueryListEvent) => { this.narrow.set(e.matches); if (!e.matches) this.sheetOpen.set(false); };
+      m.addEventListener?.('change', on);
+      this.destroyRef.onDestroy(() => m.removeEventListener?.('change', on));
+    }
+    this.destroyRef.onDestroy(() => { if (this.searchTimer) clearTimeout(this.searchTimer); });
+    this.reload();
   }
 
-  patch(p: Partial<Filters>) {
-    this._filters.update(f => ({ ...f, ...p }));
+  private mq(q: string): boolean {
+    return typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(q).matches;
   }
 
-  apply() {
-    if (this.idTimer) { clearTimeout(this.idTimer); this.idTimer = null; }
-    this._page.set(1);
-    this.load();
+  // ── Filter actions (each reloads at once) ──
+  setRange(r: AuditRange) {
+    this.range.set(r);
+    if (r === 'custom') { if (!this.from()) this.from.set(labDaysAgo(6)); if (!this.to()) this.to.set(this.today); }
+    this.reload();
+  }
+  setFrom(v: string | null) { this.from.set(v ?? ''); this.reload(); }
+  setTo(v: string | null) { this.to.set(v ?? ''); this.reload(); }
+  setArea(a: AuditArea | '') {
+    this.area.set(a);
+    if (this.narrow()) this.sheetOpen.set(false);
+    this.reload(false);
+  }
+  setUser(id: string) { this.userId.set(id ?? ''); this.reload(false); }
+  onSearch(v: string) {
+    this.q.set(v ?? '');
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => { this.searchTimer = null; this.reload(); }, 350);
+  }
+  searchNow() {
+    if (this.searchTimer) { clearTimeout(this.searchTimer); this.searchTimer = null; }
+    this.reload();
   }
 
-  reset() {
-    this._filters.set({ ...EMPTY_FILTERS });
-    this._page.set(1);
-    this.load();
-  }
-
-  prev() {
-    if (this._page() <= 1) return;
-    this._page.update(p => p - 1);
-    this.load();
-  }
-
-  next() {
-    if (!this.hasNext()) return;
-    this._page.update(p => p + 1);
-    this.load();
-  }
-
-  toggle(id: string) {
-    this._expanded.update(cur => (cur === id ? null : id));
-  }
-
-  private load() {
-    const f = this._filters();
-    const params = new URLSearchParams();
-    if (f.entityType) params.set('entityType', f.entityType);
-    if (f.entityId.trim()) params.set('entityId', f.entityId.trim());
-    if (f.action) params.set('action', f.action);
-    if (f.from) params.set('from', new Date(f.from).toISOString());
-    // `to` is exclusive on the backend; push to end-of-day so the picked day is included.
-    if (f.to) { const d = new Date(f.to); d.setDate(d.getDate() + 1); params.set('to', d.toISOString()); }
-    params.set('page', String(this._page()));
-    params.set('pageSize', String(this.pageSize));
-
-    this._loading.set(true);
-    this.api.get<AuditLogPage>(`/api/audit/logs?${params.toString()}`).subscribe({
+  /** Fresh first page (+ the side-card counts when the window / search changed). */
+  reload(withFacets = true) {
+    this.page = 1;
+    this.open.set(new Set());
+    this.techOpen.set(null);
+    const seq = ++this.reqSeq;
+    this.loading.set(true);
+    const p = auditQuery(this.filters(), 1, AUDIT_PAGE_SIZE, this.today);
+    p.set('enrich', 'true');
+    this.api.get<AuditLogPage>(`/api/audit/logs?${p.toString()}`).subscribe({
       next: res => {
-        this._logs.set(res.items ?? []);
-        this._total.set(res.total ?? 0);
-        this._loading.set(false);
+        if (seq !== this.reqSeq) return;
+        this.logs.set(res?.items ?? []);
+        this.refs.set(res?.refs ?? {});
+        this.total.set(res?.total ?? 0);
+        this.loading.set(false);
+        const el = this.scroller()?.nativeElement;
+        if (el) el.scrollTop = 0;
       },
-      error: (e) => {
-        this._loading.set(false);
-        this.toast.error(ApiError.from(e).message);
-      }
+      error: e => { if (seq !== this.reqSeq) return; this.loading.set(false); this.toast.error(ApiError.from(e).message); },
+    });
+    if (withFacets) this.loadFacets();
+  }
+
+  private loadFacets() {
+    const f = auditQuery({ ...this.filters(), area: '', userId: '' }, 1, 1, this.today);
+    const p = new URLSearchParams();
+    for (const k of ['from', 'to', 'q']) { const v = f.get(k); if (v) p.set(k, v); }
+    this.api.get<AuditFacets>(`/api/audit/facets?${p.toString()}`).subscribe({
+      next: res => this.facets.set(res && Array.isArray(res.types) ? res : null),
+      error: () => this.facets.set(null),
     });
   }
 
-  // ── display helpers ─────────────────────────────────────────────────────
+  /** Infinite scroll: the next page when the timeline nears its end. */
+  onScroll() {
+    const el = this.scroller()?.nativeElement;
+    if (!el || this.loading() || this.loadingMore() || !this.hasMore()) return;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 240) this.loadMore();
+  }
 
-  diff(log: AuditLog): DiffRow[] {
-    if (!log.changes) return [];
-    let parsed: Record<string, unknown>;
-    try { parsed = JSON.parse(log.changes); } catch { return []; }
-    const rows: DiffRow[] = [];
-    for (const [field, val] of Object.entries(parsed)) {
-      if (val && typeof val === 'object' && ('old' in val || 'new' in val)) {
-        const o = val as { old?: unknown; new?: unknown };
-        rows.push({ field, kind: 'change', old: this.show(o.old), new: this.show(o.new) });
-      } else {
-        rows.push({ field, kind: 'set', value: this.show(val) });
+  loadMore() {
+    if (this.loadingMore() || !this.hasMore()) return;
+    const seq = this.reqSeq;
+    this.loadingMore.set(true);
+    const p = auditQuery(this.filters(), this.page + 1, AUDIT_PAGE_SIZE, this.today);
+    p.set('enrich', 'true');
+    this.api.get<AuditLogPage>(`/api/audit/logs?${p.toString()}`).subscribe({
+      next: res => {
+        this.loadingMore.set(false);
+        if (seq !== this.reqSeq) return;
+        this.page++;
+        const seen = new Set(this.logs().map(l => l.id));
+        this.logs.update(cur => [...cur, ...(res?.items ?? []).filter(l => !seen.has(l.id))]);
+        this.refs.update(cur => ({ ...cur, ...(res?.refs ?? {}) }));
+        this.total.set(res?.total ?? this.total());
+      },
+      error: e => { this.loadingMore.set(false); this.toast.error(ApiError.from(e).message); },
+    });
+  }
+
+  /** Every filtered row as CSV: the human sentence + friendly changes, then the raw ids. */
+  async exportCsv() {
+    if (this.exporting()) return;
+    this.exporting.set(true);
+    try {
+      const rows: string[][] = [CSV_HEADER];
+      let page = 1, total = Infinity, fetched = 0;
+      while (fetched < total && fetched < AUDIT_EXPORT_CAP) {
+        const p = auditQuery(this.filters(), page, 200, this.today);
+        p.set('enrich', 'true');
+        const res = await firstValueFrom(this.api.get<AuditLogPage>(`/api/audit/logs?${p.toString()}`));
+        const items = res?.items ?? [];
+        total = res?.total ?? 0;
+        for (const log of items) rows.push(csvRow(log, res?.refs ?? {}));
+        fetched += items.length;
+        if (items.length === 0) break;
+        page++;
       }
+      downloadCsv(`audit-trail-${this.today}.csv`, rows);
+      if (total > AUDIT_EXPORT_CAP) this.toast.info(`Exported the latest ${AUDIT_EXPORT_CAP.toLocaleString('en-IN')} changes — narrow the window for the rest.`);
+    } catch (e) {
+      this.toast.error(ApiError.from(e).message);
+    } finally {
+      this.exporting.set(false);
     }
-    return rows;
-  }
-
-  private show(v: unknown): string {
-    if (v === null || v === undefined) return '—';
-    if (typeof v === 'object') return JSON.stringify(v);
-    return String(v);
-  }
-
-  typeLabel(t: string): string {
-    return this.entityTypes.find(e => e.value === t)?.label ?? t.replace(/Entity$/, '');
-  }
-  actionLabel(a: string): string {
-    switch (a) {
-      case 'create': return 'CREATED';
-      case 'update': return 'UPDATED';
-      case 'delete': return 'DELETED';
-      // Auth events written by AuthController — not entity mutations.
-      case 'login': return 'SIGNED IN';
-      case 'login_failed': return 'SIGN-IN FAILED';
-      case 'password_changed': return 'PASSWORD';
-      case 'pin_changed': return 'PIN CHANGED';
-      case 'pin_failed': return 'PIN FAILED';
-      default: return a.toUpperCase();
-    }
-  }
-  /** Palette-only action chip: 'warn' (red text) for deletes / failed
-   *  sign-ins, 'add' (violet dot) for creates / sign-ins, else neutral. */
-  badgeTone(a: string): 'warn' | 'add' | 'neutral' {
-    if (a === 'delete' || a === 'login_failed' || a === 'pin_failed') return 'warn';
-    if (a === 'create' || a === 'login') return 'add';
-    return 'neutral';
-  }
-  shortId(id: string): string {
-    return id.length > 12 ? id.slice(0, 8) + '…' : id;
-  }
-  when(iso: string): string {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   }
 }

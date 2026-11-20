@@ -187,48 +187,30 @@ describe('Admin band — KPI configuration', () => {
 });
 
 describe('Admin band — Audit trail', () => {
+  // Audit trail v2 (2026-11-19): the band holds the ONE search + Export; the filters moved to the SHOW side card
+  // (see audit-log.component.spec.ts for the timeline, the merge and every filter).
   const page = { items: [{ id: 'l1', entityType: 'OrderEntity', entityId: 'ord-1', action: 'update', userName: 'Asha', at: '2026-09-20T10:00:00Z', changes: null }], total: 1 };
   const make = () => renderBandPage(AuditLogComponent, { getFor: (u) => (u.startsWith('/api/audit/logs') ? page : []) });
-  const lastUrl = (p: ReturnType<typeof make>) => String(p.api.get.mock.calls.at(-1)![0]);
+  const lastLogUrl = (p: ReturnType<typeof make>) => p.api.get.mock.calls.map((c) => String(c[0])).filter((u) => u.startsWith('/api/audit/logs')).at(-1)!;
 
-  it('band + body; header and filter card are classic-only; no native select in the pill', () => {
+  it('band + body; header is classic-only; the band has the search and Export only (no filters in the pill)', () => {
     const p = make();
     expect(p.band()).not.toBeNull();
     expect(p.body()).not.toBeNull();
     expect(p.headerIsClassicOnly()).toBe(true);
-    expect(p.el.querySelector('.pf-band-body > pf-tile')?.classList.contains('pf-classic-only')).toBe(true);
-    const tools = p.tools()!;
-    expect(tools.querySelectorAll('pf-select').length).toBe(3);
-    expect(tools.querySelector('select')).toBeNull();
-    expect(p.actions().map((b) => b.textContent?.trim())).toEqual(['Clear']);
+    expect(p.el.querySelector('pf-hero-band pf-select, pf-hero-band select')).toBeNull();
+    expect(p.actions().map((b) => b.textContent?.trim())).toEqual(['Export']);
+    expect(p.el.querySelector('[data-testid="audit-side"] pf-select')).not.toBeNull();
   });
 
-  it('record id is the pill search: Enter reloads with entityId', () => {
+  it('the pill search: Enter reloads the first page with q', () => {
     const p = make();
     const input = p.bandInput()!;
-    input.value = 'ord-1';
+    input.value = 'LAB-2611';
     input.dispatchEvent(new Event('input'));
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-    expect(lastUrl(p)).toContain('entityId=ord-1');
-    expect(lastUrl(p)).toContain('page=1');
-  });
-
-  it('pill filters apply at once: type, action, quick range; Clear resets', () => {
-    const p = make();
-    p.cmp.setFilter({ entityType: 'OrderEntity' });
-    expect(lastUrl(p)).toContain('entityType=OrderEntity');
-    p.cmp.setFilter({ action: 'delete' });
-    expect(lastUrl(p)).toContain('action=delete');
-    p.cmp.setRange('7d');
-    expect(lastUrl(p)).toContain('from=');
-    expect(lastUrl(p)).toContain('to=');
-    expect(p.cmp.hasFilters()).toBe(true);
-    p.cmp.setRange('custom');
-    p.f.detectChanges();
-    expect(p.tools()!.querySelectorAll('input[type=date]').length).toBe(2);
-    p.cmp.clearAll();
-    expect(lastUrl(p)).toBe('/api/audit/logs?page=1&pageSize=50');
-    expect(p.cmp.range()).toBe('');
+    expect(lastLogUrl(p)).toContain('q=LAB-2611');
+    expect(lastLogUrl(p)).toContain('page=1');
   });
 });
 
