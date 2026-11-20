@@ -7,7 +7,7 @@ import type { FlowRow, JourneyState } from './flow-row';
 import { actionCol, numberCol, shapeCol, textCol, valuesCol } from '../../../../shared/utils/work-grid-columns';
 
 /** Token column filter text: "#12". */
-export function flowTokenText(r: FlowRow): string { return r.order?.dailyNo ? `#${r.order.dailyNo}` : ''; }
+export function flowTokenText(r: FlowRow): string { return r.visit ? r.visit.tokenLabel : r.order?.dailyNo ? `#${r.order.dailyNo}` : ''; }
 /** Patient column filter text: name + MRN (meta) + phone. */
 export function flowPatientText(r: FlowRow): string {
   const phone = r.order?.patient?.phone ?? r.draft?.patient?.phone ?? '';

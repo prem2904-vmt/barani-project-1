@@ -26,6 +26,8 @@ const iso = (d: Date) => d.toISOString();
 const minsAgo = (m: number) => new Date(now.getTime() - m * 60000);
 const dayOf = (d: Date) => iso(d).slice(0, 10);
 const LONG = 'Ms. Meenakshi Sundareswaran Ramanathan Iyer';
+/** Later today, never past midnight (fd-chart: the appointments must stay in Today whatever the clock says). */
+const soon = (m: number) => { const eod = new Date(now); eod.setHours(23, 58, 0, 0); return new Date(Math.min(now.getTime() + m * 60000, Math.max(now.getTime() + 60000, eod.getTime()))); };
 
 const pat = (n: number, name: string, sex = 'Female', age = 34) => ({ id: `p${n}`, displayName: name, firstName: name.split(' ')[1] ?? name, sex, gender: sex[0], age, mrn: `AA00${String(n).padStart(2, '0')}`, phone: '+919876543210' });
 const tst = (id: string, status = 'pending') => ({ id, subOrderId: 'x', testId: 'y', name: 'Glucose', status, test: { name: 'Glucose' } });
@@ -64,8 +66,8 @@ function data(withOpd: boolean) {
   ];
   if (withOpd) orders.push(ord(13, 'Ms. Meera Iyer (OPD)', 'billed', ['pending'], { stage: 34, module: 'opd', doctor: 'Dr. Rao' }));
   const appts = [
-    { id: 'a1', tenantId: TENANT.id, patientId: 'p20', branchId: 'b1', type: 'appointment', collectionType: 'walkin', appointmentDate: iso(new Date(now.getTime() + 60 * 60000)), slotTime: '11:00', status: 'booked', consultationFee: 0, createdAt: iso(now), patient: pat(20, 'Ms. Anjali Raghunathan Subramaniam') },
-    { id: 'a2', tenantId: TENANT.id, patientId: 'p21', branchId: 'b1', type: 'appointment', collectionType: 'walkin', appointmentDate: iso(new Date(now.getTime() + 90 * 60000)), slotTime: '11:30', status: 'booked', consultationFee: 0, createdAt: iso(now), patient: pat(21, 'Mr. Gopal Krishnan') },
+    { id: 'a1', tenantId: TENANT.id, patientId: 'p20', branchId: 'b1', type: 'appointment', collectionType: 'walkin', appointmentDate: iso(soon(60)), slotTime: '11:00', status: 'booked', consultationFee: 0, createdAt: iso(now), patient: pat(20, 'Ms. Anjali Raghunathan Subramaniam') },
+    { id: 'a2', tenantId: TENANT.id, patientId: 'p21', branchId: 'b1', type: 'appointment', collectionType: 'walkin', appointmentDate: iso(soon(90)), slotTime: '11:30', status: 'booked', consultationFee: 0, createdAt: iso(now), patient: pat(21, 'Mr. Gopal Krishnan') },
   ];
   return { orders, bills: [bill('o4', 450), bill('o1', 0)], appts };
 }

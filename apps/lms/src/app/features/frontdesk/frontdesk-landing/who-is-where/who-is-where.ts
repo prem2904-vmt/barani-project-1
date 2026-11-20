@@ -38,7 +38,7 @@ export function whoItemOf(r: FlowRow): WhoItem {
   const no = r.order?.dailyNo;
   return {
     service: r.service, step: stepOfRow(r), late: r.late, waitMin: r.waitMin,
-    token: no ? `#${no}` : '', name: r.name,
+    token: r.visit ? r.visit.tokenLabel : no ? `#${no}` : '', name: r.name,
   };
 }
 

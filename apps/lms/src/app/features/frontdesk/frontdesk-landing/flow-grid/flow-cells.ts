@@ -65,9 +65,12 @@ export class FlowRingCellComponent implements ICellRendererAngularComp {
   standalone: true,
   imports: [DailyNoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `@if (row?.order) { <span class="fd-cell-tok" [attr.data-order-id]="row!.id"><pf-daily-no [of]="row!.order" /></span> }`,
+  template: `@if (row?.order) { <span class="fd-cell-tok" [attr.data-order-id]="row!.id"><pf-daily-no [of]="row!.order" /></span> }
+    @else if (row?.visit) { <span class="fd-cell-tok fd-cell-tok--opd" [attr.data-visit-id]="row!.visit!.id">{{ row!.visit!.tokenLabel }}</span> }`,
   styles: [`.fd-cell-tok { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--violet-text, #6d28d9); }
-    .fd-cell-tok ::ng-deep .pf-dayno { font: inherit; color: inherit; }`],
+    .fd-cell-tok ::ng-deep .pf-dayno { font: inherit; color: inherit; }
+    .fd-cell-tok--opd { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 999px; font-size: 12.5px;
+      background: color-mix(in srgb, var(--violet-text, #6d28d9) 10%, var(--pf-card-bg, #fff)); }`],
 })
 export class FlowTokenCellComponent implements ICellRendererAngularComp {
   private readonly cdr = inject(ChangeDetectorRef);

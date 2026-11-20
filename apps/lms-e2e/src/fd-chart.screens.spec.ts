@@ -81,9 +81,20 @@ function data(withOpd: boolean) {
 }
 
 let S = { opd: false, ...data(false) };
+/** Every OPD API path the page asked for (OPD off ⇒ must stay empty). */
+let opdCalls: string[] = [];
+/** The OPD desk returns visits (off for the chart-load tests that count exact rows). */
+let withVisits = true;
+const OPD_VISITS = () => !withVisits ? [] : [
+  { id: 'v1', patientId: 'p31', patientName: 'Ms. Lalitha Ramakrishnan (OPD visit)', patientMeta: '52/F · AA0131', doctorUserId: 'd1', doctorName: 'Dr. Rao', departmentName: 'General', visitNumber: 'OPD-0001', visitDate: dayOf(now), token: 1, tokenLabel: 'R-1', status: 'waiting', isFollowUp: false, charged: 500, billStatus: 'paid', hasLabOrder: false, createdAt: iso(minsAgo(48)), checkedInAt: iso(minsAgo(41)), vitalsFlagged: false },
+  { id: 'v2', patientId: 'p32', patientName: 'Mr. Arun Prakash (OPD visit)', patientMeta: '33/M · AA0132', doctorUserId: 'd2', doctorName: 'Dr. Menon', departmentName: 'General', visitNumber: 'OPD-0002', visitDate: dayOf(now), token: 2, tokenLabel: 'M-2', status: 'in_consult', isFollowUp: false, charged: 500, billStatus: 'paid', hasLabOrder: false, createdAt: iso(minsAgo(20)), checkedInAt: iso(minsAgo(18)), vitalsFlagged: false },
+  { id: 'v3', patientId: 'p33', patientName: 'Mr. Kannan Venkatesan', patientMeta: '60/M · AA0133', doctorUserId: 'd1', doctorName: 'Dr. Rao', departmentName: 'General', visitNumber: 'OPD-0003', visitDate: dayOf(now), token: 3, tokenLabel: 'R-3', status: 'completed', isFollowUp: false, charged: 0, billStatus: 'pending', hasLabOrder: false, createdAt: iso(minsAgo(90)), checkedInAt: iso(minsAgo(88)), vitalsFlagged: false },
+];
 
 async function backend(page: Page, opd: boolean) {
   S = { opd, ...data(opd) };
+  opdCalls = [];
+  withVisits = true;
   const cors = (origin: string) => ({ 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' });
   const ok = (origin: string, d: unknown) => ({ status: 200, headers: { ...cors(origin), 'content-type': 'application/json' }, body: JSON.stringify({ success: true, data: d }) });
   await page.route(/prefrontal\.health\//, async route => {
@@ -106,6 +117,14 @@ async function backend(page: Page, opd: boolean) {
     if (p === '/api/billing/outstanding') return route.fulfill(ok(origin, { due: S.bills.filter(b => b.balance > 0), refundsOwed: [] }));
     const m = /^\/api\/orders\/([^/]+)$/.exec(p);
     if (m) return route.fulfill(ok(origin, S.orders.find(x => x.id === m[1]) ?? {}));
+    // OPD desk feeds (the common Frontdesk reads them only while OPD is on).
+    if (p.startsWith('/api/opd/')) {
+      opdCalls.push(p);
+      if (p === '/api/opd/visits') return route.fulfill(ok(origin, OPD_VISITS()));
+      if (p === '/api/opd/visits/payments-due') return route.fulfill(ok(origin, [{ visitId: 'v3', billId: 'b3', kind: 'consult', patientId: 'p33', patientName: 'Mr. Kannan Venkatesan', doctorUserId: 'd1', doctorName: 'Dr. Rao', tokenLabel: 'R-3', visitDate: dayOf(now), visitStatus: 'completed', lines: [], totalPayable: 500, totalPaid: 0, balance: 500, status: 'pending' }]));
+      if (p === '/api/opd/visits/desk') return route.fulfill(ok(origin, { today: dayOf(now), config: { workflow: { vitals: 'desk', labTestsAtDesk: true, billing: 'before_consult' }, queue: { organise: 'per_doctor', doctorUnavailable: 'manual' } }, doctors: [], departments: [] }));
+      return route.fulfill(ok(origin, []));
+    }
     if (req.method() === 'GET') return route.fulfill(ok(origin, []));
     return route.fulfill(ok(origin, {}));
   });
@@ -211,7 +230,7 @@ test.describe('who is where — Lab + OPD user', () => {
     const n = Number((await chart.locator('.wiw__ctr b').textContent())?.trim());
     expect(n).toBeGreaterThanOrEqual(12);
     await expect(chart.locator('.wiw__chip[data-svc="lab"]')).toContainText('Lab');
-    await expect(chart.locator('.wiw__chip[data-svc="opd"]')).toContainText(/OPD\s*2\s*1 late/);
+    await expect(chart.locator('.wiw__chip[data-svc="opd"]')).toContainText(/OPD\s*4\s*2 late/);   // 2 OPD orders + 2 open OPD visits
     expect(await chart.locator('path.wiw__slice').count()).toBeGreaterThanOrEqual(4);
     // The chart fits the card: 240 (200 on short screens) and centred.
     const sun = (await chart.locator('.wiw__sun').boundingBox())!;
@@ -406,6 +425,7 @@ test.describe('who is where — one patient / busy day', () => {
     test(`${load}: the chart fills and centres in its panel; labels never sit on a seam`, async ({ page }) => {
       await backend(page, true);
       S.orders = load === 'one' ? [S.orders[2]] : busyOrders();
+      withVisits = false;
       await page.goto('/frontdesk');
       await page.getByPlaceholder(/Search patient/).locator('visible=true').first().waitFor({ timeout: 60_000 });
       page_w = page.viewportSize()?.width;
@@ -501,6 +521,55 @@ test.describe('work grid column filters + alignment', () => {
     await find.fill('Nithin');
     await expect(page.getByText('Nithin Ragav Gopalakrishnan').locator('visible=true').first()).toBeVisible();
     await find.fill('');
+  });
+});
+
+test.describe('OPD visits in the common Frontdesk', () => {
+  test.beforeEach(async () => { test.setTimeout(150_000); OUT = shotsDir(OUT_BASE); });
+
+  test('OPD on: visits are OPD rows (counted, filtered, journey ring); /opd/desk lands here with OPD picked', async ({ page }) => {
+    await backend(page, true);
+    await openDesk(page);
+    if (!wide()) { test.info().annotations.push({ type: 'form-factor', description: 'grid ≥1024px only' }); return; }
+    expect(opdCalls).toContain('/api/opd/visits');
+    const grid = vis(page, '.pf-fd-flow').first();
+    await expect(page.getByText('Ms. Lalitha Ramakrishnan (OPD visit)').locator('visible=true').first()).toBeVisible();
+    const row = grid.locator('.ag-row[row-id="opd:v1"]');
+    await expect(row.locator('.fd-cell-tok--opd')).toHaveText('R-1');
+    await expect(row.locator('.pf-jring__btn')).toHaveAttribute('aria-label', /^OPD · step 3 of 4 · Doctor queue · late/);
+    await expect(row.locator('.fd-cell-next__btn')).toHaveText('Open');
+    // The chart and the shelf count them: OPD = 2 orders + 2 open visits.
+    await expect(vis(page, '[data-testid="who-is-where"] .wiw__chip[data-svc="opd"]')).toContainText(/OPD\s*4/);
+    await shots(page, '13-opd-on');
+    // Filter: Lab hides the visits; OPD shows only OPD.
+    await vis(page, '[data-testid="who-is-where"] .wiw__chip[data-svc="lab"]').click();
+    await expect(page.getByText('Ms. Lalitha Ramakrishnan (OPD visit)').locator('visible=true')).toHaveCount(0);
+    await vis(page, '[data-testid="who-is-where"] .wiw__chip[data-svc="opd"]').click();
+    await expect(page.getByText('Ms. Lalitha Ramakrishnan (OPD visit)').locator('visible=true').first()).toBeVisible();
+    await expect(page.getByText(LONG).locator('visible=true')).toHaveCount(0);
+    await shots(page, '14-opd-filtered');
+    // Next opens the existing visit screen.
+    await row.locator('.fd-cell-next__btn').click();
+    await expect(page).toHaveURL(/\/opd\/visit\/v1/);
+    // The retired desk's link lands back here with OPD picked.
+    await page.evaluate(k => localStorage.setItem(k, 'all'), `pf-lms.frontdesk.service.${ME.id}`);
+    await page.goto('/opd/desk');
+    await expect(page).toHaveURL(/\/frontdesk\?service=opd/);
+    await expect.poll(() => page.evaluate(k => localStorage.getItem(k), `pf-lms.frontdesk.service.${ME.id}`)).toBe('opd');
+  });
+
+  test('OPD off: no OPD rows, no OPD in the chart / shelf, not one OPD request; /opd/desk stays gated', async ({ page }) => {
+    await backend(page, false);
+    await openDesk(page);
+    await page.waitForTimeout(800);
+    expect(opdCalls, 'OPD off: no OPD request').toEqual([]);
+    await expect(page.getByText('Ms. Lalitha Ramakrishnan (OPD visit)').locator('visible=true')).toHaveCount(0);
+    await expect(page.locator('[data-testid="who-is-where"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="services-shelf"]')).toHaveCount(0);
+    await shots(page, '15-opd-off');
+    await page.goto('/opd/desk');
+    await expect(page).not.toHaveURL(/service=opd/);
+    expect(opdCalls).toEqual([]);
   });
 });
 
