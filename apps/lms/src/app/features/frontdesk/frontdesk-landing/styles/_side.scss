@@ -1,0 +1,74 @@
+/* ══ Side card: "Who is where" tabs + the list row (owner-approved 2026-11-20) — NEW DESIGN only ══
+   2+ services at ≥1024px: the head is ONE full-width tab row (Who is where | Appointments n | Home n); the lists get
+   their own row ("Booked [Today ▾] [Lab ✕] … [calendar] [+ New]"). Lab-only users keep today's head and get the
+   same row with "Booked today" + "+ New". */
+:host-context(.design-new) {
+  /* The three tabs share the head's width; labels stay whole (pf-segmented tightens / folds when it can't fit). */
+  .pf-appt-split__hdr > pf-segmented.fd-side-tabs { flex: 1 1 auto; }
+  .pf-appt-split__hdr > pf-segmented.fd-side-tabs:not(.is-tight):not(.is-menu) ::ng-deep .bar { width: 100%; }
+  .pf-appt-split__hdr > pf-segmented.fd-side-tabs:not(.is-menu) ::ng-deep .seg-item { flex: 1 1 auto; }
+
+  .fd-side-sub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    flex-shrink: 0;
+    padding: 8px 12px 4px;
+    min-width: 0;
+  }
+  .fd-side-sub__t {
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+  .fd-side-sub__dates { flex: 0 1 auto; min-width: 0; }
+  .fd-side-sub__sp { flex: 1 1 0; min-width: 0; }
+  .fd-side-sub__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 6px 0 10px;
+    border-radius: 9999px;
+    border: 1px solid color-mix(in srgb, var(--color-primary, #7c3aed) 55%, transparent);
+    background: color-mix(in srgb, var(--color-primary, #7c3aed) 9%, var(--pf-card-bg));
+    color: var(--violet-text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .fd-side-sub__chip:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+  .fd-side-sub__cal {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    flex: none;
+    border-radius: var(--pf-radius-sm, 10px);
+    color: var(--text-secondary);
+  }
+  .fd-side-sub__cal:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
+  .fd-side-sub__new { flex: none; padding: 0 12px; }
+
+  /* "Who is where": the chart + chips, centred; the card body scrolls if a short screen needs it. */
+  .fd-who-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 8px 12px 12px;
+  }
+
+  /* Overdue booking: soft-rose status text. */
+  .fd-appt-late { color: var(--rose-text) !important; font-weight: 600; font-family: inherit !important; }
+
+  @media (pointer: coarse) {
+    .fd-side-sub__chip { min-height: 44px; }
+  }
+}

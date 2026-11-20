@@ -79,6 +79,8 @@ import { AdvancedPatientSearchComponent } from '../advanced-patient-search/advan
 import { KpiStripComponent } from '../../../shared/components/kpi-strip/kpi-strip.component';
 
 type DateRange = 'today' | 'yesterday' | 'tomorrow' | '7d' | 'month' | 'custom';
+/** The side card's tabs: "Who is where" (2+ services only), Appointments, Home collection. */
+type LeftTab = SideTab;
 
 /** Mirrors the AdvancedFilters shape inside the modal — kept in this file
  *  so we don't pull a heavy import just for typing. */
@@ -151,7 +153,9 @@ import { FlowActionId, FlowPredicates, FlowRow, draftFlowRow, orderFlowRow, orde
 import { NO_WORK_FILTERS, WorkFilters, activeWorkFilterCount, branchChoices, doctorChoices, sortFlowRows } from './flow-grid/work-filters';
 import { PaneSplitterComponent } from '../../../shared/components/pane-splitter/pane-splitter.component';
 import { ServiceShelfService } from '../../../core/services/service-shelf.service';
-import { ServiceId, inService, serviceOfModule, tallyServices } from '../../../core/services/service-shelf';
+import { ServiceFilter, ServiceId, inService, serviceOfModule, tallyServices } from '../../../core/services/service-shelf';
+import { WhoIsWhereComponent, WhoPick } from './who-is-where/who-is-where.component';
+import { SideTab, WhoItem, apptOverdueMin, effectiveSideTab, fmtMin, sideTabOptions, stepOfRow, whoItemOf } from './who-is-where/who-is-where';
 import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
@@ -191,7 +195,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -260,16 +264,12 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     { value: 'custom', label: this.apptCustomRangeLabel(), clearable: !!this.apptCustomStart() },
   ]);
 
-  readonly leftTabSegmentOptions = computed<SegmentedOption<'appt' | 'home'>[]>(() => {
-    const opts: SegmentedOption<'appt' | 'home'>[] = [];
-    if (this.showAppt()) {
-      opts.push({ value: 'appt', label: 'Appointments', count: this.visibleAppointments().length });
-    }
-    if (this.showHome()) {
-      opts.push({ value: 'home', label: 'Home collection', count: this.homeCollections().length });
-    }
-    return opts;
-  });
+  /** The side card's tabs (who-is-where.ts `sideTabOptions`): 2+ services (new design, ≥1024px) lead with
+   *  "Who is where" and keep short labels so all three fit 340px; Appointments carries a rose dot when overdue. */
+  readonly leftTabSegmentOptions = computed<SegmentedOption<LeftTab>[]>(() => sideTabOptions({
+    who: this.whoTabOn(), appt: this.showAppt(), home: this.showHome(),
+    apptN: this.visibleAppointments().length, overdue: this.overdueAppointments(), homeN: this.homeCollections().length,
+  }));
 
   readonly workDateSegmentOptions = computed<SegmentedOption<DateRange>[]>(() => [
     { value: 'yesterday', label: 'Yesterday' },
@@ -403,8 +403,11 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // Active tabs inside the Left and Right panes — persisted so the user lands
   // on the same tabs next session.
   private static readonly LEFT_TAB_KEY = 'pf.lms.frontdesk.leftTab';
-  private readonly _leftTab = signal<'appt' | 'home'>(this.loadLeftTab());
-  readonly leftTab = this._leftTab.asReadonly();
+  private readonly _leftTab = signal<LeftTab>(this.loadLeftTab());
+  /** The tab on show: "Who is where" only exists for 2+ services in the new design at ≥1024px — otherwise the
+   *  remembered 'who' reads as Appointments (or Home when appointments are off), exactly today's side card. */
+  readonly leftTab = computed<LeftTab>(() =>
+    effectiveSideTab(this._leftTab(), { who: this.whoTabOn(), appt: this.showAppt(), home: this.showHome() }));
   // Workflow-as-source-of-truth: each action is a placeable component. When the
   // admin switches an action OFF in the process workflow, its component vanishes
   // from this screen (no nav/route change — the real Frontdesk stays put).
@@ -425,7 +428,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** The left pane only exists if at least one of its tabs (Appointments /
    *  Home collection) is enabled — otherwise it's hidden and the work pane
    *  fills the row. */
-  readonly showLeftPane = computed(() => this.showAppt() || this.showHome());
+  readonly showLeftPane = computed(() => this.showAppt() || this.showHome() || this.whoTabOn());
   readonly showOrder = computed(() => this.process.isEnabled('walk_in_order'));
   readonly showRegister = computed(() => this.process.isEnabled('patient_registration'));
   // If the currently-selected left tab gets disabled, fall back to the other one.
@@ -436,15 +439,16 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // Neither left tab exists: the phone list must not sit on a hidden pane.
     else if (!appt && !home && untracked(() => this._expandedPane()) === 'appt') this._expandedPane.set('work');
   });
-  setLeftTab(t: 'appt' | 'home') {
+  setLeftTab(t: LeftTab) {
     this._leftTab.set(t);
     try { localStorage.setItem(FrontdeskLandingComponent.LEFT_TAB_KEY, t); } catch { /* ignore */ }
   }
-  private loadLeftTab(): 'appt' | 'home' {
+  /** Nothing remembered: 'who' (it falls back to Appointments wherever the chart doesn't exist). */
+  private loadLeftTab(): LeftTab {
     try {
       const raw = localStorage.getItem(FrontdeskLandingComponent.LEFT_TAB_KEY);
-      return raw === 'home' ? 'home' : 'appt';
-    } catch { return 'appt'; }
+      return raw === 'home' ? 'home' : raw === 'appt' ? 'appt' : 'who';
+    } catch { return 'who'; }
   }
 
   private static readonly RIGHT_TAB_KEY = 'pf.lms.frontdesk.rightTab';
@@ -584,7 +588,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   // is untouched.
   readonly mobileListOpen = signal(false);
   readonly mobileList = computed<'appt' | 'ip' | 'done' | 'home' | 'billing' | 'out' | 'all'>(() =>
-    this.expandedPane() === 'appt' ? this.leftTab() : (this.rightTab() ?? 'all'));
+    // Phones never show "Who is where" (≥1024px only), so the left pane here is Appointments or Home.
+    this.expandedPane() === 'appt' ? (this.leftTab() === 'home' ? 'home' : 'appt') : (this.rightTab() ?? 'all'));
   readonly mobileListLabel = computed(() => {
     switch (this.mobileList()) {
       case 'appt': return 'Appointments';
@@ -1033,6 +1038,57 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** An order passes when its owning module (Order.module; lab when unset) is the picked service. */
   private svcPass(o: Order): boolean { return this.svcOn(serviceOfModule(o.module)); }
 
+  // ── Side card "Who is where" (owner-approved 2026-11-20): the chart, its chips and the Services shelf are ONE
+  //    filter (ServiceShelfService.selected + step); the appointments / home lists and the work grid all read it. ──
+  /** The chart's tab: 2+ services, new design, side-by-side cards (≥1024px). Lab-only users never see it. */
+  readonly whoTabOn = computed(() => this.theme.isNewDesign() && this.wide() && this.serviceShelf.multi());
+  readonly shelfServices = computed(() => this.serviceShelf.services());
+  readonly svcSelected = computed<ServiceFilter>(() => this.serviceShelf.selected());
+  /** The step filter — only where the chart can set it (the flow grid); phones / tablet portrait ignore it. */
+  readonly svcStep = computed<string | null>(() => this.flowMode() ? this.serviceShelf.step() : null);
+  /** "Lab" while a service filter is on (the removable chip in the Appointments / Home header). */
+  readonly svcFilterLabel = computed<string | null>(() => {
+    const id = this.svcSelected();
+    if (id === 'all' || !this.serviceShelf.multi()) return null;
+    return this.shelfServices().find(s => s.id === id)?.label ?? null;
+  });
+  /** What the chart counts: today's ACTIVE work (in progress + parked drafts) for every service, before the
+   *  service filter, the search and More filters — the same rows the flow grid maps (its "Where now" = the step). */
+  readonly whoItems = computed<WhoItem[]>(() => {
+    if (!this.whoTabOn()) return [];
+    const now = this.nowTick();
+    const p = this.flowPredicates;
+    return [
+      ...this.draftOrders().map(d => whoItemOf(draftFlowRow(d, now))),
+      ...this._ipAll().map(o => whoItemOf(orderFlowRow(o, p, now, { primary: 'ip' }))),
+    ];
+  });
+  /** A pick from the chart / its chips / the centre. */
+  pickService(p: WhoPick): void {
+    this.workSel.clear();
+    this.serviceShelf.pick(p.service, p.step);
+  }
+  clearServiceFilter(): void {
+    this.workSel.clear();
+    this.serviceShelf.select('all');
+  }
+  /** Minutes a booked appointment is past its slot (null = not overdue). */
+  apptLateMin(a: Appointment): number | null { return apptOverdueMin(a, this.nowTick()); }
+  /** The overdue appointment's soft-rose status line: "Not arrived · 18m late". */
+  apptLateLabel(a: Appointment): string | null {
+    const m = this.apptLateMin(a);
+    return m === null ? null : `Not arrived · ${fmtMin(m)} late`;
+  }
+  readonly overdueAppointments = computed(() => {
+    const now = this.nowTick();
+    return this.visibleAppointments().filter(a => apptOverdueMin(a, now) !== null).length;
+  });
+  /** "today" / "tomorrow" / "yesterday" / "in range" — the side card's "Booked today" line. */
+  readonly apptRangeWords = computed(() => {
+    const r = this.apptDateRange();
+    return r === 'custom' ? 'in range' : (this.apptDateOptions.find(o => o.id === r)?.label ?? 'Today').toLowerCase();
+  });
+
   /** A one-minute clock for the Waiting column / the late rule. */
   readonly nowTick = signal(Date.now());
 
@@ -1114,6 +1170,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     } else if (tab === 'billing') {
       rows = this.shownPaymentsDueOnly().map(o => orderFlowRow(o, p, now, { primary: 'billing' }));
     }
+    // The chart's step (outer ring) narrows the grid inside the picked service — same "Where now" word it counts.
+    const step = this.svcStep();
+    if (step) rows = rows.filter(r => stepOfRow(r) === step);
     const busy = this.flowBusyId();
     const sel = new Set(this.workSel.ids());
     rows = rows.map(r => {
@@ -1150,6 +1209,8 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     selectable: row => row.kind === 'order' && this.workSelectable() && this.workSel.isSelectable(row.id),
     selected: row => !!row.selected,
     toggle: (row, ev) => this.onWorkCheck(ev as MouseEvent, row.id),
+    // The ring's "LAB / OPD" adds nothing for a single-service tenant or while one service is picked.
+    ringLabels: () => this.serviceShelf.multi() && this.serviceShelf.selected() === 'all',
   };
 
   /** Tapping a row opens it — exactly what the old row did for that list. */

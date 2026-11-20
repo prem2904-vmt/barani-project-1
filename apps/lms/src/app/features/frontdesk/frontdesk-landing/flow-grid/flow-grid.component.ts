@@ -5,7 +5,8 @@ import type { ColDef, GetRowIdParams, RowClassParams, RowClickedEvent, ICellRend
 import { DataGridComponent } from '../../../../shared/components/data-grid/data-grid.component';
 import type { FlowRow, JourneyState } from './flow-row';
 import {
-  FlowGridContext, FlowNextCellComponent, FlowPatientCellComponent, FlowSelectCellComponent, FlowTokenCellComponent,
+  FlowGridContext, FlowNextCellComponent, FlowPatientCellComponent, FlowRingCellComponent, FlowSelectCellComponent,
+  FlowTokenCellComponent,
 } from './flow-cells';
 
 /** Escape for the plain (string) cell renderers. */
@@ -32,7 +33,7 @@ export function flowColumnTier(width: number): -1 | 0 | 1 | 2 {
 /**
  * The Frontdesk FLOW GRID (owner-approved redesign 2026-11-19): the work card's body on the shared pf-data-grid
  * (Test Master's AG-Grid theme — row height, header and touch sizing come from that theme only).
- * Token | Patient | Visit for | Where now | Journey | Waiting | Payment | Next (+ ⋯). Rows come pre-built
+ * Token | Patient | Journey (ring) | Where now | Waiting | Payment | Next (+ ⋯). Rows come pre-built
  * (flow-row.ts); tapping a row opens it exactly as the old rows did.
  */
 @Component({
@@ -84,14 +85,15 @@ export class FlowGridComponent implements AfterViewInit {
       { colId: 'token', headerName: 'Token', width: tight ? 74 : narrow ? 70 : 76, minWidth: 56, cellRenderer: FlowTokenCellComponent },
       { colId: 'patient', headerName: 'Patient', flex: 1.6, minWidth: tight ? 120 : narrow ? 150 : 170, wrapText: true, autoHeight: true,
         cellRenderer: FlowPatientCellComponent, cellClass: 'fd-flow__c-wrap' },
-      { colId: 'visit', headerName: 'Visit for', flex: 0.7, minWidth: 92, hide: t < 1,
-        cellRenderer: (p: ICellRendererParams<FlowRow>) => `<span class="fd-flow__tags">${(p.data?.tags ?? []).map(x => `<span class="fd-flow__tag" data-tag="${esc(x)}">${esc(x)}</span>`).join('')}</span>` },
+      // Journey (owner 2026-11-20): ONE ring per row — inner disc = the service (replaces "Visit for"), outer ring =
+      // the row's own steps (replaces the step dots). 44px; never folds away.
+      // Narrower grids (tier < 2, where the old Journey dots folded away) keep the ring in a 64px headerless column.
+      { colId: 'journey', headerName: t < 2 ? '' : 'Journey', headerTooltip: 'Journey', width: t < 2 ? 64 : 96,
+        minWidth: t < 2 ? 60 : 92, maxWidth: t < 2 ? 68 : 104, cellRenderer: FlowRingCellComponent, cellClass: 'fd-flow__c-ring' },
       { colId: 'where', headerName: 'Where now', flex: 1, minWidth: tight ? 126 : narrow ? 130 : 150, wrapText: true, autoHeight: true, cellClass: 'fd-flow__c-wrap',
         cellRenderer: (p: ICellRendererParams<FlowRow>) => p.data
           ? `<span class="fd-flow__where"><span class="fd-flow__stage" data-tone="${p.data.tone}"><span class="fd-flow__dot" aria-hidden="true"></span>${esc(p.data.where)}</span>${p.data.whereSub ? `<span class="fd-flow__sub">${esc(p.data.whereSub)}</span>` : ''}</span>`
           : '' },
-      { colId: 'journey', headerName: 'Journey', width: 124, minWidth: 116, hide: t < 2,
-        cellRenderer: (p: ICellRendererParams<FlowRow>) => p.data ? journeyHtml(p.data.journey, p.data.journeyLabel) : '' },
       { colId: 'wait', headerName: tight ? 'Wait' : 'Waiting', width: tight ? 66 : narrow ? 80 : 92, minWidth: 62,
         cellRenderer: (p: ICellRendererParams<FlowRow>) => p.data
           ? `<span class="fd-flow__wait${p.data.late ? ' fd-flow__wait--late' : ''}"${p.data.late ? ' title="Waiting over 30 minutes"' : ''}>${esc(p.data.wait)}</span>` : '' },
