@@ -212,7 +212,7 @@
               </div>
             } @else {
               @if (listLoading() && !rows().length) {
-                <pf-skeleton-table class="pf-ins-grid-skel" [rows]="10" [cols]="5" label="Loading the list…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-ins-grid-skel" [rows]="30" [columns]="5" label="Loading the list…"></pf-skel-grid>
               } @else if (!rows().length) {
                 <div class="pf-empty">
                   <span class="pf-empty__icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" [innerHTML]="svg(icons.list)"></svg></span>

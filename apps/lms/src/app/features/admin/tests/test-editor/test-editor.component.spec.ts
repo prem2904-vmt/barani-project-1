@@ -719,3 +719,52 @@ describe('TestEditor — Printed report tab (owner bug 2026-09-27)', () => {
     expect(c.descriptionColumnPrints()).toBe(true);
   });
 });
+
+describe('TestEditor — Save only when something changed (owner 2026-11-19)', () => {
+  it('loaded record: no change → Save disabled; edit → enabled; edit back → disabled again', () => {
+    const { c } = make();
+    expect(c.changed()).toBe(false);
+    expect(c.canSaveNow()).toBe(false);
+    const name = c._draft().name;
+    c.patch({ name: name + ' (edited)' });
+    expect(c.changed()).toBe(true);
+    expect(c.canSaveNow()).toBe(true);
+    c.patch({ name });
+    expect(c.changed()).toBe(false);
+    expect(c.canSaveNow()).toBe(false);
+    expect(c.hasUnsavedChanges()).toBe(false);
+  });
+
+  it('a price edit counts, and putting the price back does not', () => {
+    const { c } = make();
+    const p = c._draft().price;
+    c.patch({ price: Number(p) + 50 });
+    expect(c.changed()).toBe(true);
+    c.patch({ price: p });
+    expect(c.changed()).toBe(false);
+  });
+
+  it('a successful save takes the new snapshot (Save disables); a failed save keeps Save enabled', () => {
+    const ok = make();
+    ok.c.patch({ tatHours: 9 });
+    ok.c.saveTest();
+    expect(ok.c.changed()).toBe(false);
+    expect(ok.c.canSaveNow()).toBe(false);
+    TestBed.resetTestingModule();
+    const bad = make({ patchErr: { error: { message: 'boom' } } });
+    bad.c.patch({ tatHours: 9 });
+    bad.c.saveTest();
+    expect(bad.c.changed()).toBe(true);
+    expect(bad.c.canSaveNow()).toBe(true);
+    expect(bad.c.hasUnsavedChanges()).toBe(true);
+  });
+
+  it('a new test opens clean (Save disabled) until the person types', () => {
+    const { c } = make({ id: null });
+    expect(c.changed()).toBe(false);
+    c.patch({ name: 'Ferritin' });
+    expect(c.changed()).toBe(true);
+    c.patch({ name: '' });
+    expect(c.changed()).toBe(false);
+  });
+});

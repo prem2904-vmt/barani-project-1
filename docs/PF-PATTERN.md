@@ -594,6 +594,12 @@ tech types only the tail number.
   (`pf-skeleton-rows | -table | -card | -detail | -form | -tiles`, inline
   `pf-busy` for buttons): draw the shape of the area that is loading. Each
   preset is the region (role=status, aria-busy, polite label).
+  In the NEW frame use the frame blocks (`shared/components/skeleton-frame`,
+  owner 2026-11-19): `pf-skel-two-panel` (side card left at `--pf-side-w` +
+  main card with its head, same height), `pf-skel-side-list`,
+  `pf-skel-card-head`, `pf-skel-grid` (rows at `--pf-grid-row-h`),
+  `pf-skel-setting-rows`, `pf-skel-tiles`, `pf-skel-doc` — the skeleton takes
+  exactly the boxes the content lands in (no shift).
 - **Load-driven states hold a minimum** (`shared/utils/min-duration.ts`:
   `heldFlag`, `withMinDuration`, 600ms) so a fast load reads as one calm
   motion, never a flash. Taps that load nothing stay instant.
@@ -1098,6 +1104,10 @@ canonical example is the **test editor**
   it turns into a 44px icon on phones). Embedded sub-editors (notes, report
   columns, consumables, advanced layout, formula) never carry a second
   primary: their own saves are secondary.
+- **Save is DISABLED until something changed** (owner 2026-11-19): compared
+  with the last saved snapshot (`dirty-snapshot.ts`), never hidden — the kit's
+  disabled primary, `aria-disabled`, title "No changes to save"; an edit put
+  back disables it again; Ctrl/Cmd+S does nothing while nothing changed.
 - **Save state** (`.pf-savestate`, in the band actions beside Save): muted
   text; a violet check + "All changes saved", or a violet dot + "Unsaved
   changes". Never green / amber. Phones keep only the mark (the words stay

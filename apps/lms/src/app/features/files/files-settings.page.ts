@@ -1,3 +1,4 @@
+import { stableJson } from '../../shared/utils/dirty-snapshot';
 import { SettingsSavebarComponent } from '../../shared/components/setting-row/settings-savebar.component';
 import { HasUnsavedChanges, guardUnsavedOnUnload } from '../../shared/utils/unsaved-changes';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
@@ -138,7 +139,8 @@ export function bytesWords(n: number): string {
                       <pf-select [options]="roleOptions()" [value]="barRole()" [searchable]="true" placeholder="Pick a role" size="sm" aria-label="Role" (valueChange)="barRole.set($event)"></pf-select>
                       <pf-select [options]="appOptions" [multiple]="true" [values]="barApps()" [disabled]="!barRole()" placeholder="No Files apps" size="sm" aria-label="Apps on this role's bar"
                                  (valuesChange)="setBarApps($event)"></pf-select>
-                      <button type="button" class="pf-hb-btn pf-hb-btn--ghost" data-testid="files-bar-save" [disabled]="!barRole() || !barDirty()" (click)="saveBar()">Save bar</button>
+                      <button type="button" class="pf-hb-btn pf-hb-btn--ghost" data-testid="files-bar-save" [disabled]="!barRole() || !barDirty()" [attr.aria-disabled]="!barRole() || !barDirty() ? 'true' : null"
+                              [attr.title]="barDirty() ? null : 'No changes to save'" (click)="saveBar()">Save bar</button>
                     </div>
                   </pf-setting-row>
                 }
@@ -239,7 +241,12 @@ export class FilesSettingsPage implements HasUnsavedChanges {
   protected readonly barRole = signal('');
   private readonly barDraft = signal<Record<string, string[]>>({});
   protected readonly barApps = computed(() => this.barDraft()[this.barRole()] ?? this.currentBar(this.barRole()));
-  protected readonly barDirty = signal(false);
+  /** Save only when something changed (owner 2026-11-19): the picked role's bar compared with its saved default —
+   *  an app ticked and unticked again is no change. */
+  protected readonly barDirty = computed(() => {
+    const role = this.barRole(), draft = this.barDraft()[role];
+    return !!role && !!draft && stableJson(draft) !== stableJson(this.currentBar(role));
+  });
 
   protected readonly storageLine = computed(() => {
     const s = this.storage();
@@ -327,7 +334,6 @@ export class FilesSettingsPage implements HasUnsavedChanges {
   }
   protected setBarApps(ids: string[]): void {
     this.barDraft.update(m => ({ ...m, [this.barRole()]: ids }));
-    this.barDirty.set(true);
   }
   protected saveBar(): void {
     const role = this.barRole();
@@ -338,7 +344,7 @@ export class FilesSettingsPage implements HasUnsavedChanges {
     const n = normalizeRoleNav([...keep, ...(this.barDraft()[role] ?? [])], cur.locked);
     if (n.pinned.length) map[role] = n; else delete map[role];
     this.navPrefs.saveRoleDefaults(map).subscribe({
-      next: () => { this.barDirty.set(false); this.toast.success('Bar defaults saved'); },
+      next: () => { this.toast.success('Bar defaults saved'); },
       error: (e: unknown) => this.toast.error((e as { message?: string })?.message || "Couldn't save the bar defaults."),
     });
   }

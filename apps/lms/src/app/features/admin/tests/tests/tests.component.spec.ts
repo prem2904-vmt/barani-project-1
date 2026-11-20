@@ -525,3 +525,30 @@ describe('Test Master grid — Standard code (LOINC) column', () => {
     expect(api.patch).toHaveBeenCalledWith('/api/tests/t1', { standardCode: '718-7' });
   });
 });
+
+describe('Test Master batch Save — only when something changed (owner 2026-11-19)', () => {
+  it('a cell edited back to its value is no longer pending; Save disables again', () => {
+    const { c } = make([hb()]);
+    expect(c.dirtyCount()).toBe(0);
+    c.onCellValueChanged({ colDef: { field: 'name' }, newValue: 'Hb', oldValue: 'Haemoglobin', data: { id: 't1' } });
+    expect(c.dirtyCount()).toBe(1);
+    c.onCellValueChanged({ colDef: { field: 'name' }, newValue: 'Hb2', oldValue: 'Hb', data: { id: 't1' } });
+    expect(c.dirtyCount()).toBe(1);
+    c.onCellValueChanged({ colDef: { field: 'name' }, newValue: 'Haemoglobin', oldValue: 'Hb2', data: { id: 't1' } });
+    expect(c.dirtyCount()).toBe(0);
+    c.onCellValueChanged({ colDef: { field: 'price' }, newValue: '200', oldValue: 150, data: { id: 't1' } });
+    expect(c.dirtyCount()).toBe(1);
+    c.onCellValueChanged({ colDef: { field: 'price' }, newValue: '150', oldValue: 200, data: { id: 't1' } });
+    expect(c.dirtyCount()).toBe(0);
+  });
+
+  it('a failed save keeps the edits pending (Save stays enabled); a successful one clears them', () => {
+    const { c, api } = make([hb()]);
+    api.patch.mockReturnValueOnce(throwError(() => new ApiError('nope', 'x')));
+    c.onCellValueChanged({ colDef: { field: 'name' }, newValue: 'Hb', oldValue: 'Haemoglobin', data: { id: 't1' } });
+    c.saveAll();
+    expect(c.dirtyCount()).toBe(1);
+    c.saveAll();
+    expect(c.dirtyCount()).toBe(0);
+  });
+});

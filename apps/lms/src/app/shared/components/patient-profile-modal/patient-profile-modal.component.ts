@@ -1,3 +1,4 @@
+import { stableJson } from '../../utils/dirty-snapshot';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import {
@@ -183,7 +184,8 @@ const STATUS_LABELS: Record<string, { label: string; tone: string }> = {
                   <button type="button" class="pf-pp-btn pf-pp-btn--ghost press"
                           [disabled]="saving()" (click)="cancelEdit()">Cancel</button>
                   <button type="button" class="pf-pp-btn pf-pp-btn--primary press"
-                          [disabled]="saving() || !editValid()" [pfBusy]="saving()" pfBusyLabel="Saving…"
+                          [disabled]="saving() || !editValid() || !editChanged()" [pfBusyInactive]="saving() || !editValid() || !editChanged()"
+                          [attr.title]="editChanged() || saving() ? null : 'No changes to save'" [pfBusy]="saving()" pfBusyLabel="Saving…"
                           (click)="saveEdit()">{{ saving() ? 'Saving…' : 'Save changes' }}</button>
                 }
                 <button type="button" class="pf-pp-icon-btn press" aria-label="Close" (click)="close()">
@@ -1147,7 +1149,11 @@ export class PatientProfileModalComponent {
       sex: p.sex ?? '',
       dobTouched: false
     });
+    this._draftBase.set(draftKey(this._draft()));
   }
+  /** Save only when something changed (owner 2026-11-19): the edit draft compared with the patient as loaded. */
+  private readonly _draftBase = signal('');
+  readonly editChanged = computed(() => draftKey(this._draft()) !== this._draftBase());
 
   enterEdit() { this.seedDraftFromPatient(); this._editMode.set(true); }
   cancelEdit() { this._editMode.set(false); this.seedDraftFromPatient(); }
@@ -1381,4 +1387,10 @@ interface DraftPatient {
   /** The DOB box was edited in this session (else only the age is sent). */
   dobTouched?: boolean;
   sex: string;
+}
+
+/** The edit draft's compare text — what the person can change (the `dobTouched` bookkeeping flag is not a change). */
+function draftKey(d: object): string {
+  const { dobTouched: _t, ...rest } = d as { dobTouched?: boolean };
+  return stableJson(rest);
 }

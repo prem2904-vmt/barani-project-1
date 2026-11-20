@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
@@ -41,7 +42,7 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
 @Component({
   selector: 'pf-opd-departments',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SelectComponent, SegmentedComponent,
+  imports: [SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SelectComponent, SegmentedComponent,
     SkeletonRowsComponent, SkeletonTableComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./opd-admin.shared.scss'],
@@ -104,7 +105,7 @@ const COLLAPSE_KEY = 'pf.opd.master.deptCollapsed';
             </header>
             <div class="oa-main__body">
               @if (listSkeleton()) {
-                <pf-skeleton-table class="oa-grid-skel" [rows]="10" [cols]="7" label="Loading services…"></pf-skeleton-table>
+                <pf-skel-grid class="oa-grid-skel" [rows]="30" [columns]="7" label="Loading services…"></pf-skel-grid>
               }
               <ag-grid-angular class="oa-grid" [theme]="gridTheme()" [rowData]="visible()" [columnDefs]="colDefs()"
                                [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass"

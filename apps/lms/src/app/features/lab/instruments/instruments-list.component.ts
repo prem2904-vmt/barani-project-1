@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { NgTemplateOutlet } from '@angular/common';
@@ -43,7 +44,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
 @Component({
   selector: 'pf-instruments-list',
   standalone: true,
-  imports: [SettingsSiblingsComponent, DataGridComponent, RouterLink, NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
+  imports: [SkelGridComponent, SettingsSiblingsComponent, DataGridComponent, RouterLink, NgTemplateOutlet, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, AssistantButtonComponent, AssistantPanelComponent, SupportSessionCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
@@ -103,7 +104,7 @@ export function searchInstruments(rows: readonly InstrumentDto[], q: string): In
             </header>
             <div class="pf-sg-main__body">
               @if (listSkeleton()) {
-                <pf-skeleton-table class="pf-sg-skel" [rows]="6" [cols]="5" label="Loading instruments…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="5" label="Loading instruments…"></pf-skel-grid>
               }
               <pf-data-grid [clickable]="true" [rowData]="visibleRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></pf-data-grid>
               @if (!listSkeleton() && !loading() && visibleRows().length === 0) {

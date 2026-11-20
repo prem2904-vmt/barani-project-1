@@ -999,6 +999,10 @@ button {
   color: #fff;
 }
 .pf-hb-btn--primary:hover { filter: brightness(1.06); transform: translateY(-0.5px); }
+/* Save with nothing to save (owner 2026-11-19): the kit's disabled primary — still the violet family, clearly inactive,
+   never a hover lift. Inside Settings the page primary reads as a secondary; the band Save keeps the violet. */
+.pf-hb-btn--primary:disabled, .pf-hb-btn--primary[aria-disabled='true'] { opacity: 0.45; filter: saturate(0.7); transform: none; box-shadow: none; }
+.pf-hb-btn--primary:disabled:hover, .pf-hb-btn--primary[aria-disabled='true']:hover { filter: saturate(0.7); transform: none; }
 .pf-hb-btn--ghost {
   background: rgba(255, 255, 255, 0.75); color: #1f2937;
   border-color: var(--pf-line, #e2e8f0);
@@ -2945,6 +2949,12 @@ input::-ms-clear {
    and its views. Rows = Test Master's department rows (the pf-two-panel item): 44px, 8px 10px, radius 10, 13.5px/500,
    neutral selected state (tint + inset ring), the count on the right. pf-two-panel's own rows carry the same values. */
 :root { --pf-side-w: 340px; }
+/* Grid row metrics (owner 2026-11-19): 56px rows / 40 header on web (fine pointer + hover), 64 / 48 on touch — the SAME
+   names, numbers and media query the shared grid theme sets on its own element (grid-theme.ts GRID_TOUCH_CSS). Declared
+   on :root too so a SKELETON (shared/components/skeleton-frame), which has no grid around it, reads the same values.
+   Change the two together. */
+:root { --pf-grid-head-h: 40px; --pf-grid-row-h: 56px; }
+@media not ((hover: hover) and (pointer: fine)) { :root { --pf-grid-head-h: 48px; --pf-grid-row-h: 64px; } }
 .pf-side-list { list-style: none; margin: 0; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
 .pf-side-item {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-radius: 10px;

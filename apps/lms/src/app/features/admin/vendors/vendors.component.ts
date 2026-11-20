@@ -1,3 +1,6 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { dirtySnapshot } from '../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../shared/utils/save-state';
 import { HttpClient } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal, TemplateRef, viewChild } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
@@ -87,7 +90,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
 @Component({
   selector: 'pf-vendors',
   standalone: true,
-  imports: [BusyDirective, SkeletonRowsComponent, SkeletonTableComponent,
+  imports: [SkelGridComponent, BusyDirective, SkeletonRowsComponent, SkeletonTableComponent,
     FormsModule, CurrencyInrPipe, WalletOutstandingPipe,
     ScreenHeaderComponent, TouchButtonComponent,
     HeroBandComponent, PfDateComponent, NgTemplateOutlet, DataGridComponent, SegmentedComponent
@@ -143,7 +146,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
             </header>
             <div class="pf-sg-main__body">
               @if (loadingShown()) {
-                <pf-skeleton-table class="pf-sg-skel" [rows]="6" [cols]="6" label="Loading vendors…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="6" label="Loading vendors…"></pf-skel-grid>
               }
               <pf-data-grid [rowData]="visibleVendors()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!loading() && visibleVendors().length === 0) {
@@ -169,7 +172,9 @@ const EMPTY_DRAFT: NewVendorDraft = {
         <h3 class="pf-card__label">{{ draft().id ? 'Edit vendor' : 'New vendor' }}</h3>
         <span class="pf-card__spacer"></span>
         <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
-        <button type="button" class="pf-btn pf-btn--primary press" (click)="draft().id ? saveVendor() : createVendor()" [disabled]="!draft().name.trim() || saving()" [pfBusy]="saving()" [pfBusyLabel]="draft().id ? 'Saving…' : 'Creating…'">
+        <button type="button" class="pf-btn pf-btn--primary press" (click)="draft().id ? saveVendor() : createVendor()" [disabled]="!draft().name.trim() || !draftChanged() || saving()"
+                [pfBusyInactive]="!draft().name.trim() || !draftChanged() || saving()" [title]="draftChanged() || saving() ? (draft().id ? 'Save changes' : 'Create vendor') : NO_CHANGES"
+                [pfBusy]="saving()" [pfBusyLabel]="draft().id ? 'Saving…' : 'Creating…'">
           {{ saving() ? (draft().id ? 'Saving…' : 'Creating…') : (draft().id ? 'Save changes' : 'Create vendor') }}
         </button>
 <button type="button" class="pf-btn pf-btn--icon" (click)="closePanel()" aria-label="Close">
@@ -636,6 +641,7 @@ export class VendorsComponent implements OnInit {
       id: v.id, name: v.name, code: v.code ?? '', contactName: v.contactName ?? '', contactPhone: v.contactPhone ?? '',
       contactEmail: v.contactEmail ?? '', gstin: v.gstin ?? '', address: v.address ?? '', openingCredit: '', notifyThreshold: '',
     });
+    this.draftSnap.mark();
     this.newVendorOpen.set(true);
   }
 
@@ -663,6 +669,7 @@ export class VendorsComponent implements OnInit {
         this.toasts.success('Vendor updated');
         this.newVendorOpen.set(false);
         this.draft.set({ ...EMPTY_DRAFT });
+        this.draftSnap.mark();
         this.refresh();
       },
       error: e => {
@@ -682,6 +689,10 @@ export class VendorsComponent implements OnInit {
   protected readonly saving = signal<boolean>(false);
   protected readonly newVendorOpen = signal<boolean>(false);
   protected readonly draft = signal<NewVendorDraft>({ ...EMPTY_DRAFT });
+  /** Save / Create only when the form differs from the vendor as opened (owner 2026-11-19); new = the empty form. */
+  private readonly draftSnap = (() => { const s = dirtySnapshot(() => this.draft()); s.mark({ ...EMPTY_DRAFT }); return s; })();
+  protected readonly draftChanged = this.draftSnap.dirty;
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
   protected readonly nameError = signal<string | null>(null);
   protected readonly codeError = signal<string | null>(null);
   protected readonly fieldErr = signal<Record<string, string>>({});
@@ -730,6 +741,7 @@ export class VendorsComponent implements OnInit {
     this.closeMoney();
     this.newVendorOpen.update(v => !v);
     if (!this.newVendorOpen()) { this.draft.set({ ...EMPTY_DRAFT }); this.clearFieldErrors(); }
+    this.draftSnap.mark();
   }
   patchDraft(patch: Partial<NewVendorDraft>) {
     if ('name' in patch) this.nameError.set(null);
@@ -769,6 +781,7 @@ export class VendorsComponent implements OnInit {
         this.toasts.success('Vendor created');
         this.newVendorOpen.set(false);
         this.draft.set({ ...EMPTY_DRAFT });
+        this.draftSnap.mark();
         this.refresh();
       },
       error: e => {

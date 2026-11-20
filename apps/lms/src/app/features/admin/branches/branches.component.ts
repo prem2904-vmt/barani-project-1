@@ -73,7 +73,9 @@ interface GstRow { branchId: string; gstin: string; }
                 <h3 class="pf-card__label">New branch</h3>
                 <span class="pf-card__spacer"></span>
                 <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
-                <button type="button" class="pf-btn pf-btn--primary press" [disabled]="creatingBranch()" [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
+                <button type="button" class="pf-btn pf-btn--primary press" data-testid="branch-create" [disabled]="creatingBranch() || !hasUnsavedChanges()"
+                        [pfBusyInactive]="creatingBranch() || !hasUnsavedChanges()" [title]="creatingBranch() || hasUnsavedChanges() ? 'Create branch' : 'Nothing entered yet'"
+                        [pfBusy]="creatingBranch()" pfBusyLabel="Creating…" (click)="createBranch()">Create branch</button>
 <button type="button" class="pf-btn pf-btn--icon" (click)="requestCloseForm()" aria-label="Close">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
                 </button>

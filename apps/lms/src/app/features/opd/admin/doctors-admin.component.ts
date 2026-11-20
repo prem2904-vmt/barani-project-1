@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, computed, inject, signal } from '@angular/core';
 import { forkJoin, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
@@ -62,7 +63,7 @@ export class AssistantCellComponent implements ICellRendererAngularComp {
 @Component({
   selector: 'pf-doctors-admin',
   standalone: true,
-  imports: [AgGridAngular, ScreenHeaderComponent, HeroBandComponent, BusyDirective, SkeletonTableComponent],
+  imports: [AgGridAngular, ScreenHeaderComponent, HeroBandComponent, BusyDirective, SkeletonTableComponent, SkelGridComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./opd-admin.shared.scss'],
   template: `
@@ -72,7 +73,7 @@ export class AssistantCellComponent implements ICellRendererAngularComp {
                       [value]="q()" (valueChange)="q.set($event)">
           <ng-container band-actions>
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
-                    aria-label="Save" title="Save">
+                    aria-label="Save" [pfBusyInactive]="!dirty() || saving()" [attr.title]="(!dirty() && !saving()) ? 'No changes to save' : 'Save'">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/>
@@ -86,7 +87,7 @@ export class AssistantCellComponent implements ICellRendererAngularComp {
         eyebrow="OPD" title="Doctors" subtitle="Fee per service, room, token prefix and availability"
         parentRoute="/admin/opd">
         <div actions>
-          <button type="button" class="pf-da__save press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()">
+          <button type="button" class="pf-da__save press" [disabled]="!dirty() || saving()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()" [pfBusyInactive]="!dirty() || saving()" [attr.title]="(!dirty() && !saving()) ? 'No changes to save' : null">
             {{ saving() ? 'Saving…' : 'Save changes' }}
           </button>
         </div>
@@ -102,7 +103,7 @@ export class AssistantCellComponent implements ICellRendererAngularComp {
           </header>
           <div class="oa-main__body">
             @if (listSkeleton()) {
-              <pf-skeleton-table class="oa-grid-skel" [rows]="8" [cols]="6" label="Loading doctors…"></pf-skeleton-table>
+              <pf-skel-grid class="oa-grid-skel" [rows]="30" [columns]="6" label="Loading doctors…"></pf-skel-grid>
             }
             @if (!loading() && rowData().length === 0) {
               <div class="oa-empty">

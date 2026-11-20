@@ -42,7 +42,7 @@ const SHORT_NAME_MAX = 30;
             @if (hasUnsavedChanges()) { <span class="pf-savestate" role="status" data-testid="unsaved-state"><span class="pf-savestate__dot" aria-hidden="true"></span>Unsaved</span> }
             <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="op-save"
                     [disabled]="saving() || !canSave()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="save()"
-                    aria-label="Save" title="Save">
+                    aria-label="Save" [pfBusyInactive]="saving() || !canSave()" [attr.title]="(!canSave() && !saving()) ? 'No changes to save' : 'Save'">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
               {{ saving() ? 'Saving…' : 'Save' }}
             </button>
@@ -99,7 +99,7 @@ const SHORT_NAME_MAX = 30;
           }
         </div>
         <div class="pf-classic-only pf-op__save">
-          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving() || !canSave()" [pfBusy]="saving()" (click)="save()">{{ saving() ? 'Saving…' : 'Save' }}</button>
+          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="saving() || !canSave()" [pfBusy]="saving()" (click)="save()" [pfBusyInactive]="saving() || !canSave()" [attr.title]="(!canSave() && !saving()) ? 'No changes to save' : null">{{ saving() ? 'Saving…' : 'Save' }}</button>
         </div>
       </div>
     </section>

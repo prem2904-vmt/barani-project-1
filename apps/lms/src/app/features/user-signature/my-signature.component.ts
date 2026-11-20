@@ -55,7 +55,7 @@ type SigTab = 'signature' | 'registration';
             } @else if (tab() === 'registration') {
               <button type="button" class="pf-hb-btn pf-hb-btn--primary press"
                       [disabled]="busy() || regId().trim() === savedRegId()" [pfBusy]="busyKind() === 'reg'" pfBusyLabel="Saving…" (click)="saveRegId()"
-                      aria-label="Save" title="Save registration ID"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Save</button>
+                      aria-label="Save" [pfBusyInactive]="busy() || regId().trim() === savedRegId()" [attr.title]="(!busy() && regId().trim() === savedRegId()) ? 'No changes to save' : 'Save'"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>Save</button>
             }
           </ng-container>
         </pf-hero-band>
@@ -127,7 +127,7 @@ type SigTab = 'signature' | 'registration';
           <input type="text" class="pf-input pf-num pf-sig-input" maxlength="64" aria-label="Registration ID" placeholder="e.g. TN-12345"
                  [value]="regId()" (input)="regId.set($any($event.target).value)" />
           <button type="button" class="pf-sig-cta pf-sig-cta--primary pf-classic-only" style="margin-top: 0;"
-                  [disabled]="busy() || regId().trim() === savedRegId()" [pfBusy]="busyKind() === 'reg'" pfBusyLabel="Saving…" (click)="saveRegId()">Save</button>
+                  [disabled]="busy() || regId().trim() === savedRegId()" [pfBusy]="busyKind() === 'reg'" pfBusyLabel="Saving…" (click)="saveRegId()" [pfBusyInactive]="busy() || regId().trim() === savedRegId()" [attr.title]="(!busy() && regId().trim() === savedRegId()) ? 'No changes to save' : 'Save'">Save</button>
         </div>
       </div>
       }

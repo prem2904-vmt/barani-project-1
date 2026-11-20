@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, HostListener, computed, effect, inject, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet, formatDate } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
@@ -61,7 +62,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
 @Component({
   selector: 'pf-expense-tracker',
   standalone: true,
-  imports: [NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
+  imports: [SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
     ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, DayClosingComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -175,7 +176,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
 
             <div class="pf-xt__grid-wrap">
               @if (listSkeleton()) {
-                <pf-skeleton-table class="pf-xt__skel" [rows]="8" [cols]="5" label="Loading expenses…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-xt__skel" [rows]="30" [columns]="5" label="Loading expenses…"></pf-skel-grid>
               } @else if (view() === 'entries' && !loading() && visibleEntries().length === 0) {
                 <div class="pf-empty pf-empty--compact">
                   <span class="pf-empty__icon" aria-hidden="true">

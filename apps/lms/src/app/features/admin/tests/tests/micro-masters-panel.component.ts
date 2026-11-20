@@ -1,3 +1,6 @@
+import { SKELETON_FRAME } from '../../../../shared/components/skeleton-frame/skeleton-frame.component';
+import { dirtySnapshot } from '../../../../shared/utils/dirty-snapshot';
+import { NO_CHANGES_TITLE } from '../../../../shared/utils/save-state';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -9,7 +12,6 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
 import { gridThemeDark, gridThemeLight } from './grid-theme';
 import { BusyDirective } from '../../../../shared/directives/busy.directive';
-import { SkeletonTableComponent } from '../../../../shared/primitives/skeleton-kit.component';
 import { createLoadHold } from '../../../../shared/utils/min-duration';
 import { TM_NARROW, TM_TWO_PANEL_STYLES, mediaSignal } from './tm-two-panel';
 
@@ -65,7 +67,7 @@ interface EdModel {
 @Component({
   selector: 'pf-micro-masters-panel',
   standalone: true,
-  imports: [AgGridAngular, FormsModule, SelectComponent, BusyDirective, SkeletonTableComponent],
+  imports: [...SKELETON_FRAME, AgGridAngular, FormsModule, SelectComponent, BusyDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-mm">
@@ -116,7 +118,7 @@ interface EdModel {
           <div class="pf-2p__body">
             @if (listSkeleton()) {
               <!-- First load of the masters: the grid's shape (PF-PATTERN "Loading feedback"). -->
-              <pf-skeleton-table class="pf-2p__skel" [rows]="10" [cols]="4" label="Loading microbiology masters…"></pf-skeleton-table>
+              <pf-skel-grid class="pf-2p__skel" [rows]="30" [columns]="4" label="Loading microbiology masters…"></pf-skel-grid>
             }
             <ag-grid-angular
               class="pf-2p__grid"
@@ -148,7 +150,9 @@ interface EdModel {
                   </button>
                 }
                 
-                <button type="button" class="pf-btn pf-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
+                <button type="button" class="pf-btn pf-btn--primary pf-mm__save press" [disabled]="saving() || deleting() || !edValid() || !edChanged()"
+                        [pfBusyInactive]="saving() || deleting() || !edValid() || !edChanged()" [title]="edChanged() || saving() ? 'Save' : NO_CHANGES"
+                        [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveEd()">
                   {{ saving() ? 'Saving…' : 'Save' }}
                 </button>
                 <button type="button" class="pf-btn pf-btn--icon pf-mm__x press" (click)="editor.set(null)" aria-label="Close" title="Close"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
@@ -538,11 +542,17 @@ export class MicroMastersPanelComponent implements OnInit {
       ? { astApplicable: true, diskDiffusion: true, micTesting: false }
       : kind === 'organisms' ? { astApplicable: true } : {};
     this.editor.set({ kind, isNew: true, model });
+    this.edSnap.mark();
   }
   startEdit(kind: MasterKey, row: EdModel) {
     this.selOrg.set(null);
     this.editor.set({ kind, isNew: false, model: { ...row } });
+    this.edSnap.mark();
   }
+  /** Save only when the row differs from how it opened (owner 2026-11-19). */
+  private readonly edSnap = dirtySnapshot(() => this.editor()?.model ?? null);
+  readonly edChanged = this.edSnap.dirty;
+  protected readonly NO_CHANGES = NO_CHANGES_TITLE;
   patchEd(field: string, value: unknown) {
     const ed = this.editor();
     if (ed) this.editor.set({ ...ed, model: { ...ed.model, [field]: value } as EdModel });

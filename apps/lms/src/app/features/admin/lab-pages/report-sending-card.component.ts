@@ -1,3 +1,4 @@
+import { SkelSettingRowsComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { SettingRowComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, output, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -23,11 +24,11 @@ export const MESSAGE_CHANNELS_PATH = '/admin/org/channels';
 @Component({
   selector: 'pf-report-sending-card',
   standalone: true,
-  imports: [SettingRowComponent, RouterLink, SkeletonCardComponent, WaMessagePickerComponent],
+  imports: [SkelSettingRowsComponent, SettingRowComponent, RouterLink, SkeletonCardComponent, WaMessagePickerComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading()) {
-      <pf-skeleton-card [lines]="3" label="Loading WhatsApp settings…"></pf-skeleton-card>
+      <pf-skel-setting-rows [rows]="3" label="Loading WhatsApp settings…"></pf-skel-setting-rows>
     } @else if (wa(); as w) {
       <div class="pf-rs" data-testid="rs-auto">
         @if (autoOff()) {

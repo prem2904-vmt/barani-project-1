@@ -1,3 +1,4 @@
+import { SKELETON_FRAME } from '../../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, Injector, OnInit, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Observable } from 'rxjs';
@@ -53,7 +54,7 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
 @Component({
   selector: 'pf-tm-pending-panel',
   standalone: true,
-  imports: [AgGridAngular, NgTemplateOutlet, SelectComponent, BusyDirective, ...SKELETON_KIT],
+  imports: [...SKELETON_FRAME, AgGridAngular, NgTemplateOutlet, SelectComponent, BusyDirective, ...SKELETON_KIT],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-tmp" [class.pf-tmp--narrow]="narrow()">
@@ -77,7 +78,7 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
         }
         <div class="pf-tmp__body">
           @if (loading() && !loadedOnce()) {
-            <pf-skeleton-table [rows]="6" [cols]="4" label="Loading pending changes…"></pf-skeleton-table>
+            <pf-skel-grid [rows]="12" [columns]="4" label="Loading pending changes…"></pf-skel-grid>
           } @else if (shown().length === 0) {
             <div class="pf-empty pf-empty--compact" data-tmp-empty>
               <span class="pf-empty__icon" aria-hidden="true">

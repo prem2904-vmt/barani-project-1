@@ -25,9 +25,9 @@
     <pf-hero-band class="pf-te2-band" [back]="true" [backTo]="backUrl()" [customSearch]="true" [contextBar]="true">
       <ng-container band-actions>
         <span class="pf-savestate pf-te2-savestate" role="status" aria-live="polite"
-              [attr.aria-label]="dirty() ? 'Unsaved changes' : 'All changes saved'"
-              [title]="dirty() ? 'Unsaved changes — Save to keep them' : 'All changes saved'">
-          @if (dirty()) {
+              [attr.aria-label]="changed() ? 'Unsaved changes' : 'All changes saved'"
+              [title]="changed() ? 'Unsaved changes — Save to keep them' : 'All changes saved'">
+          @if (changed()) {
             <span class="pf-savestate__dot" aria-hidden="true"></span><span class="pf-te2-savestate__t">Unsaved changes</span>
           } @else {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg><span class="pf-te2-savestate__t">All changes saved</span>
@@ -41,9 +41,9 @@
             {{ reverting() ? 'Reverting…' : 'Revert to master' }}
           </button>
         }
-        <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-te2-save press"
-                [disabled]="saving() || recordSkeleton()" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveTest()"
-                [attr.aria-label]="saveWord()" [title]="saveWord()">
+        <button type="button" class="pf-hb-btn pf-hb-btn--primary pf-te2-save press" data-testid="te-save"
+                [disabled]="!canSaveNow()" [pfBusyInactive]="!(canSaveNow() || saving())" [pfBusy]="saving()" pfBusyLabel="Saving…" (click)="saveTest()"
+                [attr.aria-label]="saveWord()" [title]="canSaveNow() || saving() ? saveWord() : NO_CHANGES">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/></svg>
           {{ saveWord() }}
         </button>
@@ -108,7 +108,7 @@
           {{ reverting() ? 'Reverting…' : 'Revert to master' }}
         </pf-touch-btn>
       }
-      <pf-touch-btn size="sm" variant="primary" [disabled]="saving() || recordSkeleton()" [busy]="saving()" (pressed)="saveTest()">
+      <pf-touch-btn size="sm" variant="primary" [disabled]="!canSaveNow()" [attr.title]="canSaveNow() || saving() ? null : NO_CHANGES" [busy]="saving()" (pressed)="saveTest()">
         {{ saveWord() }}
       </pf-touch-btn>
     </div>
@@ -197,9 +197,13 @@
         <!-- Opening an existing record: the section card's shape on the first
              frame (PF-PATTERN "Loading feedback"), never a blank form. -->
         <section class="pf-te2-sec pf-card pf-te2-loading" aria-label="Loading the test">
+          <!-- The section card as it lands: its head (icon · label · note · Preview) over the Basics grid
+               (Name full width, then 3 and 4 fields a row). -->
+          <pf-skel-card-head title="9%" [note]="true" [pills]="1"></pf-skel-card-head>
           <div class="pf-card__body">
-            <pf-skeleton-card [lines]="1" [boxed]="false" label="Loading the test…"></pf-skeleton-card>
-            <pf-skeleton-form [fields]="8" [cols]="2" label="Loading the test…"></pf-skeleton-form>
+            <pf-skeleton-form class="pf-te2-skel-name" [fields]="1" [cols]="1" label="Loading the test…"></pf-skeleton-form>
+            <pf-skeleton-form [fields]="3" [cols]="3" label=""></pf-skeleton-form>
+            <pf-skeleton-form [fields]="4" [cols]="4" label=""></pf-skeleton-form>
           </div>
         </section>
       } @else {
@@ -1444,7 +1448,7 @@
     @if (!nd()) {
     <aside class="pf-te2-aside" id="pf-te2-preview">
       <div class="pf-savestate">
-        @if (dirty()) { <span class="pf-savestate__pending">Unsaved changes</span> }
+        @if (changed()) { <span class="pf-savestate__pending">Unsaved changes</span> }
         @else { <span class="pf-savestate__ok">All changes saved</span> }
       </div>
       <div class="pf-livewrap">

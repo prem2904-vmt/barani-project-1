@@ -1,3 +1,4 @@
+import { stableJson } from '../../../shared/utils/dirty-snapshot';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
@@ -170,7 +171,8 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
           <h3 class="pf-card__label" id="pf-inv-side-t">{{ form().id ? 'Edit item' : 'New item' }}</h3>
           <span class="pf-card__spacer"></span>
           <!-- Actions in the head (owner 2026-11-17: nothing clickable at the bottom). -->
-          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!canSave() || itemSaving()" [pfBusy]="itemSaving()" pfBusyLabel="Saving…" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
+          <button type="button" class="pf-btn pf-btn--primary press" [disabled]="!canSave() || itemSaving() || !itemChanged()" [pfBusyInactive]="!canSave() || itemSaving() || !itemChanged()"
+                  [attr.title]="itemChanged() || itemSaving() ? null : 'No changes to save'" [pfBusy]="itemSaving()" pfBusyLabel="Saving…" (click)="saveItem()">{{ form().id ? 'Save item' : 'Create item' }}</button>
 <button type="button" class="pf-btn pf-btn--icon inv-close" (click)="editing.set(false)" aria-label="Close the item form">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
           </button>
@@ -514,7 +516,10 @@ export class InventoryComponent implements OnInit {
   setR(k: string, v: unknown) { this.rcv.update(r => ({ ...r, [k]: v })); }
 
   startNew() { this.itemError.set(null); this.form.set({ category: 'consumable', uom: 'piece', reorderLevel: 0, nearExpiryDays: 30, isActive: true }); this.editing.set(true); this.attnOpen.set(false); }
-  startEdit(it: InvItem) { this.itemError.set(null); this.form.set({ ...it }); this.editing.set(true); }
+  startEdit(it: InvItem) { this.itemError.set(null); this.form.set({ ...it }); this.formBase.set(stableJson(this.form())); this.editing.set(true); }
+  /** Save only when something changed (owner 2026-11-19): an item being edited compared with how it was opened. */
+  private readonly formBase = signal('');
+  readonly itemChanged = computed(() => !this.form().id || stableJson(this.form()) !== this.formBase());
 
   async saveItem() {
     if (!this.canSave() || this.itemSaving()) return;

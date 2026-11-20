@@ -1,3 +1,4 @@
+import { SkelSettingRowsComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { SettingsSaveService } from '../../../shared/utils/settings-save';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, input, signal, viewChild } from '@angular/core';
 import { MonoTypeOperatorFunction, defer, finalize } from 'rxjs';
@@ -66,7 +67,7 @@ interface AutoAssignConfig {
 @Component({
   selector: 'pf-lab-settings',
   standalone: true,
-  imports: [NgTemplateOutlet, FormsModule, SelectComponent, BusyComponent, SkeletonCardComponent, SegmentedComponent, SettingRowComponent, SettingGroupComponent],
+  imports: [SkelSettingRowsComponent, NgTemplateOutlet, FormsModule, SelectComponent, BusyComponent, SkeletonCardComponent, SegmentedComponent, SettingRowComponent, SettingGroupComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- A card host: the Lab settings pages (Sample numbers, Collection and queues, Results and validation, Report
@@ -96,7 +97,7 @@ interface AutoAssignConfig {
     <div class="pf-ls__host">
       @if (firstLoad()) {
         <div class="pf-ls__skel">
-          <pf-skeleton-card [lines]="3" label="Loading lab settings…"></pf-skeleton-card>
+          <pf-skel-setting-rows [rows]="6" label="Loading lab settings…"></pf-skel-setting-rows>
         </div>
       } @else {
 

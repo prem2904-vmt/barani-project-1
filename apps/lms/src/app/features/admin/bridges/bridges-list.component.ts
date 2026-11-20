@@ -1,3 +1,4 @@
+import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -44,7 +45,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
 @Component({
   selector: 'pf-bridges-list',
   standalone: true,
-  imports: [SettingsSiblingsComponent, DataGridComponent, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, SkeletonRowsComponent, BusyDirective, NgTemplateOutlet],
+  imports: [SkelGridComponent, SettingsSiblingsComponent, DataGridComponent, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, SkeletonRowsComponent, BusyDirective, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../../shared/settings-grid/settings-grid.scss'],
   template: `
@@ -100,7 +101,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
             </header>
             <div class="pf-sg-main__body">
               @if (listSkeleton()) {
-                <pf-skeleton-table class="pf-sg-skel" [rows]="6" [cols]="6" label="Loading Bridges…"></pf-skeleton-table>
+                <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="6" label="Loading Bridges…"></pf-skel-grid>
               }
               <pf-data-grid [clickable]="true" [rowData]="visibleRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></pf-data-grid>
               @if (!listSkeleton() && !loading() && visibleRows().length === 0) {
