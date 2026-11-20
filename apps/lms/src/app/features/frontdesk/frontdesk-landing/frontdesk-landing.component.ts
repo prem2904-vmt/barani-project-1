@@ -813,7 +813,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly weekDays = computed<Array<{ dow: string; n: number; ms: number; iso: string; isToday: boolean; selected: boolean }>>(() => {
     const base = new Date(); base.setHours(0, 0, 0, 0);
     const mondayOffset = (base.getDay() + 6) % 7;   // 0 = Monday
-    const monday = new Date(base); monday.setDate(base.getDate() - mondayOffset);
+    const monday = new Date(base); monday.setDate(base.getDate() - mondayOffset + 7 * this.apptWeekOffset());
     const b = this.apptBounds();
     const singleDay = (b.end - b.start) === 86_400_000;
     const out: Array<{ dow: string; n: number; ms: number; iso: string; isToday: boolean; selected: boolean }> = [];
@@ -833,6 +833,9 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   });
 
   /** Scope the Appointments pane to a single day picked from the weekday strip. */
+  /** The week strip's week (0 = this week; ‹ › move it). */
+  readonly apptWeekOffset = signal(0);
+  shiftApptWeek(by: number): void { this.apptWeekOffset.update(w => w + by); }
   selectApptDay(iso: string) {
     this._apptCustomStart.set(iso);
     this._apptCustomEnd.set(iso);

@@ -1,30 +1,66 @@
-/* ══ Side card: "Who is where" tabs + the list row (owner-approved 2026-11-20) — NEW DESIGN only ══
-   2+ services at ≥1024px: the head is ONE full-width tab row (Who is where | Appointments n | Home n); the lists get
-   their own row ("Booked [Today ▾] [Lab ✕] … [calendar] [+ New]"). Lab-only users keep today's head and get the
-   same row with "Booked today" + "+ New". */
+/* ══ Side card (owner 2026-11-20) — NEW DESIGN only ══
+   A real card head like WORK: icon tile + VISITS (one fixed title), "+ New" at its right end while Appointments shows. Under it, full-width rows: the panel switch (Who is where | Appointments | Home — or Appointments |
+   Home for a lab-only tenant), then for the lists the date pill and one row with the "Lab ✕" chip + the calendar link. */
 :host-context(.design-new) {
-  /* The three tabs share the head's width; labels stay whole (pf-segmented tightens / folds when it can't fit). */
-  .pf-appt-split__hdr > pf-segmented.fd-side-tabs { flex: 1 1 auto; }
-  .pf-appt-split__hdr > pf-segmented.fd-side-tabs:not(.is-tight):not(.is-menu) ::ng-deep .bar { width: 100%; }
-  .pf-appt-split__hdr > pf-segmented.fd-side-tabs:not(.is-menu) ::ng-deep .seg-item { flex: 1 1 auto; }
+  /* Head: icon tile + the panel's name + count (WORK's look), "+ New" at the right end. */
+  .fd-side-title { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 0 1 auto; }
+  /* Both card heads line up: the side head takes WORK's height (its 40px search / 44px touch controls + padding)
+     even on a panel with no head buttons. */
+  @media (min-width: 1024px) {
+    .pf-appt-split > .pf-appt-split__pane > .pf-appt-split__hdr { min-height: 55px; box-sizing: border-box; }
+  }
+  @media (min-width: 1024px) and (pointer: coarse) {
+    .pf-appt-split > .pf-appt-split__pane > .pf-appt-split__hdr { min-height: 61px; }
+  }
+  /* Exactly WORK's title (.pf-work-hdr__title .pf-card__label). */
+  .fd-side-title .pf-card__label { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+  /* Head buttons: WORK's head controls (32px quiet squares; 44px on touch) — the calendar icon and a compact "+ New". */
+  .fd-side-headbtn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: none;
+    height: 32px; min-width: 32px; padding: 0; border-radius: 9px; box-sizing: border-box;
+    border: 1px solid var(--pf-line); background: var(--pf-card-bg); color: var(--text-secondary);
+    font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; text-decoration: none;
+  }
+  .fd-side-headbtn:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
+  .fd-side-headbtn:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
+  .fd-side-headbtn--icon { width: 32px; }
+  .fd-side-new { padding: 0 10px 0 8px; color: var(--violet-text); border-color: color-mix(in srgb, var(--violet-text) 35%, var(--pf-line)); }
+  @media (pointer: coarse) {
+    .fd-side-headbtn { height: 44px; min-width: 44px; }
+    .fd-side-headbtn--icon { width: 44px; }
+  }
+
+  /* The week strip is the ONE date picker: ‹ › move the week (44px targets), days share the rest. */
+  .pf-daystrip.fd-daystrip { align-items: stretch; gap: 4px; container-type: inline-size; }
+  .fd-dow-s { display: none; }
+  /* A narrow side card (splitter at its minimum): one-letter weekdays, never glued together. */
+  @container (max-width: 290px) {
+    .fd-dow-l { display: none; }
+    .fd-dow-s { display: inline; }
+  }
+  .fd-daystrip__nav {
+    flex: 0 0 28px; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0;
+    border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer;
+  }
+  .fd-daystrip__nav:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
+  .fd-daystrip__nav:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
+  @media (pointer: coarse) { .fd-daystrip__nav { flex-basis: 36px; } }
+
+  /* The panel switch: a full-width row under the head (never fights the title); pill-fit folds it when narrow. */
+  .fd-side-switch { flex-shrink: 0; padding: 8px 12px 0; min-width: 0; }
+  .fd-side-switch > pf-segmented { display: flex; width: 100%; }
+  .fd-side-switch > pf-segmented:not(.is-tight):not(.is-menu) ::ng-deep .bar { width: 100%; }
+  .fd-side-switch > pf-segmented:not(.is-menu) ::ng-deep .seg-item { flex: 1 1 auto; }
 
   .fd-side-sub {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 6px 8px;
     flex-shrink: 0;
-    padding: 8px 12px 4px;
+    padding: 8px 12px 0;
     min-width: 0;
   }
-  .fd-side-sub__t {
-    font-size: 12.5px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    color: var(--text-primary);
-    white-space: nowrap;
-  }
-  .fd-side-sub__dates { flex: 0 1 auto; min-width: 0; }
   .fd-side-sub__sp { flex: 1 1 0; min-width: 0; }
   .fd-side-sub__chip {
     display: inline-flex;
@@ -43,18 +79,6 @@
     white-space: nowrap;
   }
   .fd-side-sub__chip:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: 1px; }
-  .fd-side-sub__cal {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    flex: none;
-    border-radius: var(--pf-radius-sm, 10px);
-    color: var(--text-secondary);
-  }
-  .fd-side-sub__cal:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
-  .fd-side-sub__new { flex: none; padding: 0 12px; }
 
   /* "Who is where": the chart + chips, centred; the card body scrolls if a short screen needs it. */
   .fd-who-body {
@@ -63,10 +87,15 @@
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: 8px 12px 12px;
+    display: flex;
+    flex-direction: column;
   }
+  /* The chart sizes itself to this box and centres in it (who-is-where.component). */
+  .fd-who-body > pf-fd-who-is-where { flex: 1 1 auto; min-height: 0; }
 
   /* Overdue booking: soft-rose status text. */
-  .fd-appt-late { color: var(--rose-text) !important; font-weight: 600; font-family: inherit !important; }
+  .fd-appt-late { color: var(--rose-text) !important; font-weight: 600; font-family: inherit !important;
+    white-space: normal !important; overflow: visible !important; text-overflow: clip !important; overflow-wrap: anywhere; }
 
   @media (pointer: coarse) {
     .fd-side-sub__chip { min-height: 44px; }

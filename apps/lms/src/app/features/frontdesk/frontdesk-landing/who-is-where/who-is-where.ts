@@ -145,8 +145,17 @@ function slice(ring: Slice['ring'], s: ServiceNode, step: string | null, n: numb
   const mid = { x: f(mx), y: f(my) };
   return {
     key: step === null ? s.id : `${s.id}:${step}${latePart ? ':late' : ''}`, ring, service: s.id, serviceLabel: s.label, step, n, late, a0, a1,
-    d: arcPath(radii[0], radii[1], a0, a1), label: a1 - a0 >= LABEL_MIN_ANGLE ? mid : null, mid,
+    // A full-turn slice (the only service / its only step) carries no number: the centre already says it, and its
+    // mid-angle would sit on the seam.
+    d: arcPath(radii[0], radii[1], a0, a1), label: a1 - a0 >= LABEL_MIN_ANGLE && a1 - a0 < 2 * Math.PI - 1e-6 ? mid : null, mid,
   };
+}
+
+/** The chart's diameter for its box (owner 2026-11-20): min(width − 32, height − chips − hint − 32, 360), never below
+ *  200; an unmeasured box (0) gets 240. */
+export function sunDiameter(w: number, h: number, below: number): number {
+  if (!w || !h) return 240;
+  return Math.round(Math.max(200, Math.min(w - 32, h - below - 32, 360)));
 }
 
 /* ── Filter + words ───────────────────────────────────────────────────────────────────────────────────────── */

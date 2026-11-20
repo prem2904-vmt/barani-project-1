@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, input, output, signal, viewChild } from '@angular/core';
 import type { ServiceDef, ServiceFilter, ServiceId } from '../../../../core/services/service-shelf';
 import {
-  SUN, ServiceNode, Slice, SliceCard, WhoItem, buildWhoTree, centreOf, describeSlice, layoutSunburst, sliceOn,
+  SUN, ServiceNode, Slice, SliceCard, WhoItem, buildWhoTree, centreOf, describeSlice, layoutSunburst, sliceOn, sunDiameter,
 } from './who-is-where';
 
 /** What a slice / chip / the centre asks for: a service (+ step), or 'all' to clear. */
@@ -21,14 +21,14 @@ export interface WhoPick { service: ServiceFilter; step: string | null }
   template: `
     @let c = centre();
     <div class="wiw" [class.wiw--filtered]="service() !== 'all'" [class.wiw--hovering]="!!hov()" data-testid="who-is-where">
-      <div class="wiw__sun">
+      <div class="wiw__sun" [style.width.px]="diameter()" [style.height.px]="diameter()" [style.--d.px]="diameter()">
         <svg [attr.viewBox]="'0 0 ' + size + ' ' + size" role="group" aria-label="Who is where: services and steps">
           @if (!slices().length) {
             <circle class="wiw__empty" [attr.cx]="size / 2" [attr.cy]="size / 2" r="83" />
           }
           @for (s of slices(); track s.key) {
             <path class="wiw__slice" [attr.d]="s.d" [attr.data-svc]="s.service" [attr.data-step]="s.step"
-              [class.wiw__slice--step]="s.ring === 'step'" [class.wiw__slice--late]="s.ring === 'step' && s.late > 0"
+              [class.wiw__slice--step]="s.ring === 'step'" [class.wiw__slice--full]="s.a1 - s.a0 >= 6.283" [class.wiw__slice--late]="s.ring === 'step' && s.late > 0"
               [class.is-on]="isOn(s)" [class.is-hov]="isLit(s)"
               tabindex="0" role="button" [attr.aria-label]="sliceAria(s)" [attr.aria-pressed]="isPicked(s)"
               (click)="choose(s.service, s.step)"
@@ -54,7 +54,7 @@ export interface WhoPick { service: ServiceFilter; step: string | null }
           }
         </button>
       </div>
-      <div class="wiw__chips" role="group" aria-label="Services">
+      <div class="wiw__chips" role="group" aria-label="Services" #chips>
         @for (s of tree(); track s.id) {
           <button type="button" class="wiw__chip" [attr.data-svc]="s.id" [attr.data-service]="s.id"
             [class.is-on]="service() === 'all' || service() === s.id" [class.is-hov]="hov()?.service === s.id"
@@ -67,7 +67,7 @@ export interface WhoPick { service: ServiceFilter; step: string | null }
           </button>
         }
       </div>
-      <p class="wiw__hint">{{ slices().length ? 'Tap a slice to filter the list' : 'Nobody in the clinic right now' }}</p>
+      <p class="wiw__hint" #hint>{{ slices().length ? 'Tap a slice to filter the list' : 'Nobody in the clinic right now' }}</p>
       @if (card(); as k) {
         <div class="wiw__tip" role="status" aria-live="polite" [style.left.px]="tipAt().x" [style.top.px]="tipAt().y">
           <p class="wiw__tip-h"><i class="wiw__dot" [attr.data-svc]="hov()!.service" aria-hidden="true"></i>{{ k.title }}<b class="pf-num">{{ k.n }}</b></p>
@@ -81,7 +81,29 @@ export interface WhoPick { service: ServiceFilter; step: string | null }
   `,
   styleUrl: './who-is-where.component.scss',
 })
-export class WhoIsWhereComponent {
+export class WhoIsWhereComponent implements AfterViewInit {
+  private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly chipsEl = viewChild<ElementRef<HTMLElement>>('chips');
+  private readonly hintEl = viewChild<ElementRef<HTMLElement>>('hint');
+  /** Sized to the panel (sunDiameter), re-measured on resize; the viewBox keeps every label in proportion. */
+  readonly diameter = signal(240);
+  ngAfterViewInit(): void {
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => this.measure());
+    ro.observe(this.hostEl.nativeElement);
+    const c = this.chipsEl()?.nativeElement;
+    if (c) ro.observe(c);
+    this.destroyRef.onDestroy(() => ro.disconnect());
+    this.measure();
+  }
+  private measure(): void {
+    const host = this.hostEl.nativeElement;
+    const below = (this.chipsEl()?.nativeElement.offsetHeight ?? 0) + (this.hintEl()?.nativeElement.offsetHeight ?? 0) + 20;
+    const d = sunDiameter(host.clientWidth, host.clientHeight, below);
+    if (d !== this.diameter()) this.diameter.set(d);
+  }
+
   /** The active work rows (every service, before the service filter). */
   readonly items = input<readonly WhoItem[]>([]);
   /** The services the user has (shelf order). */

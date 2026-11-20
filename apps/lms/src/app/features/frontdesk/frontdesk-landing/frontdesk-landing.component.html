@@ -388,9 +388,8 @@
               <header class="pf-appt-split__hdr pf-appt-split__hdr--tabs" (click)="togglePane('appt')" role="button"
                 tabindex="0" [attr.aria-expanded]="expandedPane() === 'appt'">
 
-                <!-- Calendar link (placed on the left side). With "Who is where" (2+ services) it moves into the
-                     Appointments row below so the three tabs keep the head to themselves. -->
-                @if (showAppt() && !whoTabOn()) {
+                <!-- Calendar link (classic design; the new design keeps it in the list's own row under the head). -->
+                @if (showAppt() && !theme.isNewDesign()) {
                 <a routerLink="/frontdesk/appointments" class="pf-appt-split__link--left-icon" title="Open calendar"
                   aria-label="Open calendar" (click)="$event.stopPropagation()">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
@@ -403,15 +402,20 @@
                 }
 
                 @if (theme.isNewDesign()) {
-                  @if (showHome() || whoTabOn()) {
-                    <pf-segmented class="pf-tabs" [class.fd-side-tabs]="whoTabOn()" ariaLabel="Side card"
-                                  [options]="leftTabSegmentOptions()"
-                                  [value]="$any(leftTab())"
-                                  (valueChange)="setLeftTab($any($event))" />
-                  } @else if (showAppt()) {
-                    <span class="pf-card__label" style="font-weight: 600; font-size: 13px; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.04em;">Appointments</span>
-                    <span class="pf-num" style="font-size: 12px; font-weight: 600; color: var(--text-muted); margin-left: 2px;">{{ visibleAppointments().length }}</span>
-                  }
+                  <!-- The card head (owner 2026-11-20): ONE fixed title, like WORK — icon tile + VISITS (people here now,
+                       booked appointments and home visits). -->
+                  <span class="fd-side-title" data-testid="fd-side-title">
+                    <span class="pf-card__icon" aria-hidden="true">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                    </span>
+                    <span class="pf-card__label">Visits</span>
+                  </span>
                 } @else {
                   <div class="pf-tabs" role="tablist" aria-label="Left pane tabs" (click)="$event.stopPropagation()">
                     @if (showAppt()) {
@@ -434,8 +438,27 @@
                 }
 
                 <div class="flex items-center gap-1.5 ml-auto" (click)="$event.stopPropagation()">
-                  <!-- Date filters for Left Pane (with "Who is where" they sit in the list's own row below) -->
-                  @if ((leftTab() === 'appt' || leftTab() === 'home') && !whoTabOn()) {
+                  <!-- Pane actions (new design) live in the head: the full calendar (custom dates live there too) and
+                       "+ New" (the EXISTING booking flow), only while the lists show. -->
+                  @if (theme.isNewDesign() && showAppt() && (leftTab() === 'appt' || leftTab() === 'home')) {
+                  <a routerLink="/frontdesk/appointments" class="fd-side-headbtn fd-side-headbtn--icon press" data-testid="fd-side-cal"
+                    title="Open calendar" aria-label="Open calendar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M9 16h6" />
+                    </svg>
+                  </a>
+                  }
+                  @if (theme.isNewDesign() && leftTab() === 'appt' && showAppt()) {
+                  <button type="button" class="fd-side-headbtn fd-side-new press" data-testid="fd-new-appt"
+                    (click)="bookAppointment()" aria-label="New appointment" title="New appointment">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                    New
+                  </button>
+                  }
+                  <!-- Date filters for Left Pane (classic; the new design gives them their own row under the head) -->
+                  @if ((leftTab() === 'appt' || leftTab() === 'home') && !theme.isNewDesign()) {
                   <pf-segmented class="pf-hdr-date-pills"
                                 [options]="apptDateSegmentOptions()"
                                 [value]="apptDateRange()"
@@ -444,9 +467,8 @@
                                 (optionClear)="clearApptCustom()" />
                   }
 
-                  <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px; with "Who is where" the date pill
-                       sits in the list's own row instead) -->
-                  @if ((showAppt() || showHome()) && !whoTabOn()) {
+                  <!-- Dropdown filter for Appt (classic, < 1024px; the new design has the date row under the head) -->
+                  @if ((showAppt() || showHome()) && !theme.isNewDesign()) {
                   <div class="pf-hdr-filter">
                     <button #apptFilterBtn type="button" class="pf-hdr-filter__btn"
                       [class.pf-hdr-filter__btn--on]="apptFilterOpen() || apptDateRange() !== 'today'"
@@ -499,46 +521,22 @@
                 </svg>
               </header>
 
-              <!-- New design: the list's own row — "Booked today" + the service filter chip (the ONE filter, removable)
-                   + "+ New" (the EXISTING book-appointment flow). With "Who is where" the date pill lives here too. -->
-              @if (theme.isNewDesign() && (leftTab() === 'appt' || leftTab() === 'home')) {
+              <!-- New design, under the head: the panel switch (full width, pill-fit). -->
+              @if (theme.isNewDesign() && leftTabSegmentOptions().length > 1) {
+              <div class="fd-side-switch">
+                <pf-segmented class="pf-tabs fd-side-tabs" ariaLabel="Side card" [options]="leftTabSegmentOptions()"
+                              [value]="$any(leftTab())" (valueChange)="setLeftTab($any($event))" />
+              </div>
+              }
+              @if (theme.isNewDesign() && (leftTab() === 'appt' || leftTab() === 'home') && svcFilterLabel(); as l) {
+              <!-- The ONE service filter, removable — its own small row above the list. -->
               <div class="fd-side-sub" data-testid="fd-side-sub">
-                <span class="fd-side-sub__t">{{ leftTab() === 'appt' ? 'Booked' : 'Home visits' }}{{ whoTabOn() ? '' : ' ' + apptRangeWords() }}</span>
-                @if (whoTabOn()) {
-                  <pf-segmented class="fd-side-sub__dates" ariaLabel="Date range"
-                                [options]="apptDateSegmentOptions()"
-                                [value]="apptDateRange()"
-                                (valueChange)="setApptDateRange($any($event))"
-                                (optionClick)="onApptDateOptionClick($event)"
-                                (optionClear)="clearApptCustom()" />
-                }
-                @if (svcFilterLabel(); as l) {
-                  <button type="button" class="fd-side-sub__chip press" data-testid="fd-side-filter-chip"
-                    (click)="clearServiceFilter()" [attr.aria-label]="'Clear ' + l + ' filter'" [title]="'Clear ' + l + ' filter'">
-                    {{ l }}
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                  </button>
-                }
-                <span class="fd-side-sub__sp"></span>
-                @if (leftTab() === 'appt' && showAppt()) {
-                  @if (whoTabOn()) {
-                  <a routerLink="/frontdesk/appointments" class="fd-side-sub__cal press" title="Open calendar" aria-label="Open calendar">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <rect x="3" y="4" width="18" height="18" rx="2" />
-                      <path d="M16 2v4M8 2v4M3 10h18" />
-                      <path d="M9 16h6" />
-                    </svg>
-                  </a>
-                  }
-                  <button type="button" class="pf-btn pf-btn--secondary fd-side-sub__new press" data-testid="fd-new-appt"
-                    (click)="bookAppointment()" aria-label="New appointment" title="New appointment">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-                    New
-                  </button>
-                }
+                <button type="button" class="fd-side-sub__chip press" data-testid="fd-side-filter-chip"
+                  (click)="clearServiceFilter()" [attr.aria-label]="'Clear ' + l + ' filter'" [title]="'Clear ' + l + ' filter'">
+                  {{ l }}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                </button>
               </div>
               }
 
@@ -550,14 +548,25 @@
               </div>
               }
 
-              <!-- Weekday strip — click a day to scope Appointments to it -->
-              @if (leftTab() === 'appt') {
-              <div class="pf-daystrip">
+              <!-- Weekday strip — click a day to scope Appointments to it. New design: the ONE date picker for both lists
+                   (yesterday / tomorrow = tap the day, ‹ › = another week, custom dates = the head's calendar). -->
+              @if (leftTab() === 'appt' || (theme.isNewDesign() && leftTab() === 'home')) {
+              <div class="pf-daystrip" [class.fd-daystrip]="theme.isNewDesign()">
+                @if (theme.isNewDesign()) {
+                <button type="button" class="fd-daystrip__nav press" (click)="shiftApptWeek(-1)" aria-label="Previous week" title="Previous week">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+                </button>
+                }
                 @for (day of weekDays(); track day.iso) {
                 <button type="button" class="pf-daystrip__day" [class.pf-daystrip__day--on]="day.selected"
                   [class.pf-daystrip__day--today]="day.isToday" (click)="selectApptDay(day.iso)">
-                  <span class="pf-daystrip__dow">{{ day.dow }}</span>
+                  <span class="pf-daystrip__dow"><span class="fd-dow-l">{{ day.dow }}</span><span class="fd-dow-s" aria-hidden="true">{{ day.dow.slice(0, 1) }}</span></span>
                   <span class="pf-daystrip__n">{{ day.n }}</span>
+                </button>
+                }
+                @if (theme.isNewDesign()) {
+                <button type="button" class="fd-daystrip__nav press" (click)="shiftApptWeek(1)" aria-label="Next week" title="Next week">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
                 </button>
                 }
               </div>

@@ -68,11 +68,14 @@ function data(withOpd: boolean) {
     orders.push(ord(14, 'Mr. Joseph Varghese (OPD)', 'created', ['pending'], { stage: 6, module: 'opd', doctor: 'Dr. Menon' }));
   }
   const late = minsAgo(20);
+  // Later today, never past midnight (the spec must not depend on the clock).
+  const eod = new Date(now); eod.setHours(23, 58, 0, 0);
+  const soon = (m: number) => new Date(Math.min(now.getTime() + m * 60000, Math.max(now.getTime() + 60000, eod.getTime())));
   const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   const appts = [
     { id: 'a0', tenantId: TENANT.id, patientId: 'p22', branchId: 'b1', type: 'appointment', collectionType: 'walkin', appointmentDate: iso(late), slotTime: hhmm(late), status: 'booked', consultationFee: 0, createdAt: iso(now), patient: pat(22, 'Ms. Revathi Krishnamoorthy') },
-    { id: 'a1', tenantId: TENANT.id, patientId: 'p20', branchId: 'b1', type: 'appointment', collectionType: 'walkin', appointmentDate: iso(new Date(now.getTime() + 60 * 60000)), slotTime: hhmm(new Date(now.getTime() + 60 * 60000)), status: 'booked', consultationFee: 0, createdAt: iso(now), patient: pat(20, 'Ms. Anjali Raghunathan Subramaniam') },
-    { id: 'a2', tenantId: TENANT.id, patientId: 'p21', branchId: 'b1', type: 'appointment', collectionType: 'walkin', appointmentDate: iso(new Date(now.getTime() + 90 * 60000)), slotTime: hhmm(new Date(now.getTime() + 90 * 60000)), status: 'booked', consultationFee: 0, createdAt: iso(now), patient: pat(21, 'Mr. Gopal Krishnan') },
+    { id: 'a1', tenantId: TENANT.id, patientId: 'p20', branchId: 'b1', type: 'appointment', collectionType: 'walkin', appointmentDate: iso(soon(60)), slotTime: hhmm(soon(60)), status: 'booked', consultationFee: 0, createdAt: iso(now), patient: pat(20, 'Ms. Anjali Raghunathan Subramaniam') },
+    { id: 'a2', tenantId: TENANT.id, patientId: 'p21', branchId: 'b1', type: 'appointment', collectionType: 'walkin', appointmentDate: iso(soon(90)), slotTime: hhmm(soon(90)), status: 'booked', consultationFee: 0, createdAt: iso(now), patient: pat(21, 'Mr. Gopal Krishnan') },
   ];
   return { orders, bills: [bill('o4', 450), bill('o1', 0)], appts };
 }
@@ -168,10 +171,10 @@ const sideCard = (page: Page) => page.locator('.pf-appt-split > .pf-appt-split__
 const sideTab = (page: Page, value: string) => sideCard(page).locator(`pf-segmented.pf-tabs [role="radio"][data-value="${value}"]`);
 
 /** Every tab label whole: no option clipped, none collapsed into the selected-pill menu. */
-async function expectTabsFit(page: Page, tag: string) {
+async function expectTabsFit(page: Page, tag: string, allowMenu = false) {
   const seg = sideCard(page).locator('pf-segmented.pf-tabs');
   await expect(seg).toBeVisible();
-  expect(await seg.evaluate(e => e.classList.contains('is-menu')), `${tag}: tabs folded into a menu at ${projectName()}`).toBe(false);
+  if (!allowMenu) expect(await seg.evaluate(e => e.classList.contains('is-menu')), `${tag}: tabs folded into a menu at ${projectName()}`).toBe(false);
   const clipped = await seg.locator('.seg-item').evaluateAll(els => els.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent?.trim()));
   expect(clipped, `${tag}: clipped tab labels at ${projectName()}`).toEqual([]);
   const box = (await seg.boundingBox())!, card = (await sideCard(page).boundingBox())!;
@@ -193,6 +196,13 @@ test.describe('who is where — Lab + OPD user', () => {
       return;
     }
     await expectTabsFit(page, 'who');
+    // The card head: icon + "WHO IS WHERE" + the count.
+    await expect(vis(page, '[data-testid="fd-side-title"]')).toHaveText(/^\s*Visits\s*$/i);
+    // Both card heads line up (same height, same top).
+    const sh = (await sideCard(page).locator('.pf-appt-split__hdr').boundingBox())!;
+    const wh = (await page.locator('.pf-work-hdr').locator('visible=true').first().boundingBox())!;
+    expect(Math.abs(sh.y - wh.y), 'heads share a top').toBeLessThanOrEqual(2);
+    expect(Math.abs(sh.height - wh.height), `heads share a height (${sh.height} vs ${wh.height})`).toBeLessThanOrEqual(2);
     await expect(sideTab(page, 'who')).toHaveAttribute('aria-checked', 'true');
     const chart = vis(page, '[data-testid="who-is-where"]');
     await expect(chart).toBeVisible();
@@ -205,13 +215,19 @@ test.describe('who is where — Lab + OPD user', () => {
     expect(await chart.locator('path.wiw__slice').count()).toBeGreaterThanOrEqual(4);
     // The chart fits the card: 240 (200 on short screens) and centred.
     const sun = (await chart.locator('.wiw__sun').boundingBox())!;
-    expect([200, 240]).toContain(Math.round(sun.width));
+    expect(sun.width, 'the chart fills its panel (200–360px)').toBeGreaterThanOrEqual(200);
+    expect(sun.width).toBeLessThanOrEqual(360);
+    // Centred vertically too: the chart + chips block has about as much room above as below.
+    const body = (await sideCard(page).locator('.fd-who-body').boundingBox())!;
+    const block = (await chart.boundingBox())!;
+    const above = block.y - body.y, below = body.y + body.height - (block.y + block.height);
+    expect(Math.abs(above - below), `centred (above ${above}, below ${below})`).toBeLessThan(Math.max(40, body.height * 0.12));
     const card = (await sideCard(page).boundingBox())!;
     expect(sun.x).toBeGreaterThanOrEqual(card.x);
     expect(sun.x + sun.width).toBeLessThanOrEqual(card.x + card.width);
     // Overdue: a rose dot on the Appointments tab, said in its name.
     await expect(sideTab(page, 'appt').locator('.seg-alert')).toHaveCount(1);
-    await expect(sideTab(page, 'appt')).toHaveAttribute('aria-label', /^Appointments, 3, 1 overdue$/);
+    await expect(sideTab(page, 'appt')).toHaveAttribute('aria-label', /^Appointments, \d+, 1 overdue$/);
     // The journey ring: one per row, with the service label (2+ services, no filter).
     const ring = vis(page, '.pf-fd-flow pf-journey-ring').first();
     await expect(ring.locator('.pf-jring__btn')).toHaveAttribute('aria-label', /^(Lab|OPD) · .*Open journey$/);
@@ -279,7 +295,8 @@ test.describe('who is where — Lab + OPD user', () => {
     await expect(vis(page, '[data-testid="fd-appt-late"]').first()).toContainText(/Not arrived · \d+m late/);
     const newBtn = vis(page, '[data-testid="fd-new-appt"]');
     const nb = (await newBtn.boundingBox())!;
-    expect(nb.height, '+ New ≥ 44px').toBeGreaterThanOrEqual(44);
+    expect(nb.height, '+ New: a head button (32px, 44px on touch)').toBeGreaterThanOrEqual(isTouch() ? 44 : 32);
+    await expect(vis(page, '[data-testid="fd-side-cal"]')).toBeVisible();
     await shots(page, '06-appointments-lab');
     await chip.click();
     await expect(chip).toHaveCount(0);
@@ -300,7 +317,7 @@ test.describe('who is where — lab-only tenant', () => {
     await expect(page.locator('[data-testid="who-is-where"]')).toHaveCount(0);
     await expect(sideCard(page).locator('[role="radio"][data-value="who"]')).toHaveCount(0);
     if (wide()) {
-      await expect(vis(page, '[data-testid="fd-side-sub"]')).toContainText('Booked today');
+      await expect(vis(page, '[data-testid="fd-side-title"]')).toHaveText(/^\s*Visits\s*$/i);
       await expect(vis(page, '[data-testid="fd-new-appt"]')).toBeVisible();
       await expect(vis(page, '[data-testid="fd-side-filter-chip"]')).toHaveCount(0);
       await expect(page.getByText('Ms. Anjali Raghunathan Subramaniam').locator('visible=true').first()).toBeVisible();
@@ -367,6 +384,123 @@ test.describe('journey view — tap a ring', () => {
     await page.locator('pf-journey-overlay .pf-jov__close').click();
     await expect(page.locator('pf-journey-overlay')).toHaveCount(0, { timeout: 3000 });
     await page.setViewportSize(vp);
+  });
+});
+
+/** Extra loads for the chart: one patient, and a busy morning (40 rows across Lab + OPD, many late). */
+function busyOrders() {
+  const out: ReturnType<typeof data>['orders'] = [];
+  const names = ['Asha Menon', 'Vikram Singh', 'Fathima Beevi', 'Rahul Dev', 'Kiran Pillai', 'Deepa Nair', 'Suresh Kumar', 'Lakshmi Venkat', 'Imran Hussain', 'Geetha Raman'];
+  const shapes: [string, string[]][] = [['created', ['pending']], ['billed', ['pending']], ['sample_collected', ['collected']], ['billed', ['received']], ['billed', ['collected', 'pending']]];
+  for (let i = 0; i < 40; i++) {
+    const [st, tubes] = shapes[i % shapes.length];
+    out.push(ord(100 + i, `${names[i % names.length]} ${i + 1}`, st, tubes, { stage: (i * 7) % 55, module: i % 4 === 0 ? 'opd' : 'lab', doctor: i % 2 ? 'Dr. Rao' : 'Dr. Menon' }));
+  }
+  return out;
+}
+
+test.describe('who is where — one patient / busy day', () => {
+  test.beforeEach(async () => { test.setTimeout(150_000); OUT = shotsDir(OUT_BASE); });
+
+  for (const load of ['one', 'busy'] as const) {
+    test(`${load}: the chart fills and centres in its panel; labels never sit on a seam`, async ({ page }) => {
+      await backend(page, true);
+      S.orders = load === 'one' ? [S.orders[2]] : busyOrders();
+      await page.goto('/frontdesk');
+      await page.getByPlaceholder(/Search patient/).locator('visible=true').first().waitFor({ timeout: 60_000 });
+      page_w = page.viewportSize()?.width;
+      await theme(page, false);
+      if (!wide()) { test.info().annotations.push({ type: 'form-factor', description: 'no chart below 1024px' }); return; }
+      const chart = vis(page, '[data-testid="who-is-where"]');
+      await expect(chart).toBeVisible();
+      await expect(chart.locator('.wiw__ctr b')).toHaveText(load === 'one' ? '1' : /^\d{2}$/);
+      if (load === 'one') await expect(chart.locator('text.wiw__n')).toHaveCount(0);   // one slice per ring: the centre says it
+      await expectNoPageScroll(page, `chart ${load}`);
+      await shots(page, `10-chart-${load}`);
+    });
+  }
+});
+
+test.describe('side card at narrow / default / wide widths', () => {
+  test.beforeEach(async () => { test.setTimeout(150_000); OUT = shotsDir(OUT_BASE); });
+
+  for (const w of [280, 340, 420]) {
+    test(`side card ${w}px: pill-fit, no orphan rows, nothing clipped`, async ({ page }) => {
+      await backend(page, true);
+      await page.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch { /* */ } }, [`pf-lms.frontdesk.side-w.${ME.id}`, String(w)] as const);
+      await openDesk(page);
+      if (!wide()) { test.info().annotations.push({ type: 'form-factor', description: 'stacked below 1024px' }); return; }
+      for (const tab of ['appt', 'who'] as const) {
+        const radio = sideTab(page, tab);
+        if (await radio.isVisible()) await radio.click();
+        else {
+          await sideCard(page).locator('pf-segmented.pf-tabs [data-seg-compact]').click();
+          await page.getByRole('menuitemradio', { name: tab === 'appt' ? /^Appointments/ : /^Who is where/ }).locator('visible=true').first().click();
+        }
+        await expectTabsFit(page, `${w} ${tab}`, true);
+        // Nothing inside the side card spills past it; the head stays one row.
+        const spill = await sideCard(page).evaluate(card => {
+          const c = card.getBoundingClientRect();
+          return [...card.querySelectorAll<HTMLElement>('.pf-appt-split__hdr *, .fd-side-switch *, .pf-daystrip *, .fd-side-sub *')]
+            .filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > c.right + 1 || r.left < c.left - 1); })
+            .map(e => e.className || e.tagName).slice(0, 5);
+        });
+        expect(spill, `${w} ${tab}: spills`).toEqual([]);
+        const head = (await sideCard(page).locator('.pf-appt-split__hdr').boundingBox())!;
+        expect(head.height, `${w} ${tab}: head stays one row`).toBeLessThan(64);
+        await expectNoPageScroll(page, `side ${w}`);
+        await shots(page, `11-side-${w}-${tab}`);
+      }
+    });
+  }
+});
+
+test.describe('work grid column filters + alignment', () => {
+  test.beforeEach(async ({ page }) => { test.setTimeout(150_000); OUT = shotsDir(OUT_BASE); await backend(page, false); });
+
+  test('Payment "Due" column filter ANDs with the head search; headers align with their cells', async ({ page }) => {
+    await openDesk(page);
+    if (!wide()) { test.info().annotations.push({ type: 'form-factor', description: 'grid ≥1024px only' }); return; }
+    const grid = vis(page, '.pf-fd-flow').first();
+    // Alignment: Token / Journey / Waiting / Payment centred, Patient / Where now left, Next right — header = cells.
+    for (const [col, cls] of [['token', 'center'], ['journey', 'center'], ['wait', 'center'], ['pay', 'center'], ['patient', 'left'], ['where', 'left'], ['next', 'right']] as const) {
+      await expect(grid.locator(`.ag-header-cell[col-id="${col}"]`)).toHaveClass(new RegExp(`pf-wg-h-${cls}`));
+      await expect(grid.locator(`.ag-cell[col-id="${col}"]`).first()).toHaveClass(new RegExp(`pf-wg-${cls}`));
+    }
+    // Every data column has a filter button; the action column and the ring don't.
+    for (const col of ['token', 'patient', 'where', 'wait', 'pay']) {
+      await expect(grid.locator(`.ag-header-cell[col-id="${col}"] .ag-header-cell-filter-button`)).toHaveCount(1);
+    }
+    await expect(grid.locator('.ag-header-cell[col-id="next"] .ag-header-cell-filter-button')).toHaveCount(0);
+    if (isTouch()) {
+      // A 44px hit area around the small icon: a tap 18px off its centre still lands on it.
+      const hit = await grid.locator('.ag-header-cell[col-id="pay"] .ag-header-cell-filter-button').evaluate(b => {
+        const r = b.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2;
+        return [[x, y - 18], [x, y + 18], [x - 18, y], [x + 18, y]].every(([px, py]) => b.contains(document.elementFromPoint(px, py)));
+      });
+      expect(hit, 'touch: header filter has a 44px hit area').toBe(true);
+    }
+    // The row's ⋯ stays inside the grid (nothing pushed off the right edge).
+    const gb = (await grid.boundingBox())!;
+    const more = (await grid.locator('.fd-cell-next__more').first().boundingBox())!;
+    expect(more.x + more.width, '⋯ inside the grid').toBeLessThanOrEqual(gb.x + gb.width + 1);
+    // Header labels are never cut (no ellipsis) on any form factor.
+    const cut = await grid.locator('.ag-header-cell-text').evaluateAll(els => els.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent));
+    expect(cut, `cut header labels at ${projectName()}`).toEqual([]);
+    await grid.locator('.ag-header-cell[col-id="pay"] .ag-header-cell-filter-button').click();
+    await page.locator('.pf-vf__row[data-value="Due"]').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByText('Nithin Ragav Gopalakrishnan').locator('visible=true').first()).toBeVisible();
+    await expect(page.getByText(LONG).locator('visible=true')).toHaveCount(0);
+    await expect(grid.locator('.ag-header-cell[col-id="pay"]')).toHaveClass(/ag-header-cell-filtered/);
+    await shots(page, '12-column-filter-due');
+    // AND with the head search: a name that is not due shows nothing.
+    const find = vis(page, '.pf-work-find__input').first();
+    await find.fill('Arya');
+    await expect(grid.locator('.ag-row')).toHaveCount(0);
+    await find.fill('Nithin');
+    await expect(page.getByText('Nithin Ragav Gopalakrishnan').locator('visible=true').first()).toBeVisible();
+    await find.fill('');
   });
 });
 

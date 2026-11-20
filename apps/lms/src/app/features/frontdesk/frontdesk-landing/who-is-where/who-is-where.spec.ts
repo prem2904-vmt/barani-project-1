@@ -14,7 +14,7 @@ import { FrontdeskLandingComponent } from '../frontdesk-landing.component';
 import { WhoIsWhereComponent } from './who-is-where.component';
 import {
   OTHER_STEP, SUN, WhoItem, apptOverdueMin, apptStartMs, apptTabAria, arcPath, buildWhoTree, centreOf, describeSlice,
-  effectiveSideTab, layoutSunburst, sideTabOptions, sliceOn, stepOfRow, whoItemOf,
+  effectiveSideTab, layoutSunburst, sideTabOptions, sliceOn, stepOfRow, sunDiameter, whoItemOf,
 } from './who-is-where';
 
 /**
@@ -121,6 +121,22 @@ describe('sunburst geometry', () => {
     expect(r).toBeCloseTo((SUN.inner[0] + SUN.inner[1]) / 2, 0);
   });
 
+  it('a full-turn slice (one service / one step) carries no number — the centre says it', () => {
+    const one = layoutSunburst(buildWhoTree([it_('lab', 'Billed')], LAB_OPD));
+    expect(one.map(s => s.label)).toEqual([null, null]);
+    const two = layoutSunburst(buildWhoTree([it_('lab', 'Billed'), it_('lab', 'In Lab')], LAB_OPD));
+    expect(two.find(s => s.ring === 'service')!.label).toBeNull();          // the service still spans the circle
+    expect(two.filter(s => s.ring === 'step').every(s => s.label !== null)).toBe(true);
+  });
+
+  it('the diameter fits the panel: min(w − 32, h − below − 32, 360), never under 200', () => {
+    expect(sunDiameter(316, 900, 120)).toBe(284);       // width-bound (340px side card)
+    expect(sunDiameter(600, 400, 120)).toBe(248);       // height-bound
+    expect(sunDiameter(900, 900, 100)).toBe(360);       // capped
+    expect(sunDiameter(200, 200, 150)).toBe(200);       // floor
+    expect(sunDiameter(0, 0, 0)).toBe(240);             // not measured yet
+  });
+
   it('a filter lights its service (+ step) and greys the rest', () => {
     const lab = { service: 'lab' as const, step: null }, labBilled = { service: 'lab' as const, step: 'Billed' };
     const opdBilled = { service: 'opd' as const, step: 'Billed' }, labInLab = { service: 'lab' as const, step: 'In Lab' };
@@ -184,6 +200,9 @@ describe('single-service tenants: no chart, no "Who is where" tab', () => {
     expect(html).toMatch(/@if \(leftTab\(\) === 'who'\) \{\s*<div class="fd-who-body">\s*<pf-fd-who-is-where/);
     // "+ New" opens the EXISTING book-appointment flow, for every tenant.
     expect(html).toMatch(/data-testid="fd-new-appt"\s*\(click\)="bookAppointment\(\)"/);
+    // The card head: icon + the panel's name + count; the switch is its own full-width row under it.
+    expect(html).toMatch(/<span class="fd-side-title" data-testid="fd-side-title">\s*<span class="pf-card__icon" aria-hidden="true">[\s\S]{0,700}<span class="pf-card__label">Visits<\/span>/);
+    expect(html).toMatch(/<div class="fd-side-switch">\s*<pf-segmented class="pf-tabs fd-side-tabs"/);
   });
 });
 
@@ -262,7 +281,12 @@ describe('one filter state (ServiceShelfService)', () => {
     expect(ts).toMatch(/readonly whoItems = computed<WhoItem\[\]>\(\(\) => \{[\s\S]{0,300}this\.draftOrders\(\)\.map\(d => whoItemOf\(draftFlowRow\(d, now\)\)\)[\s\S]{0,120}this\._ipAll\(\)\.map\(o => whoItemOf\(orderFlowRow\(o, p, now, \{ primary: 'ip' \}\)\)\)/);
     const html = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/frontdesk-landing.component.html', 'utf8');
     expect(html).toMatch(/\[service\]="svcSelected\(\)"\s*\[step\]="svcStep\(\)" \(pick\)="pickService\(\$event\)"/);
-    expect(html).toMatch(/@if \(svcFilterLabel\(\); as l\) \{\s*<button type="button" class="fd-side-sub__chip press"[\s\S]{0,80}\(click\)="clearServiceFilter\(\)"/);
+    expect(html).toMatch(/svcFilterLabel\(\); as l\) \{[\s\S]{0,300}class="fd-side-sub__chip press"[\s\S]{0,120}\(click\)="clearServiceFilter\(\)"/);
+    // Pane actions in the head (calendar + "+ New"); the week strip is the ONE date picker, with ‹ › weeks.
+    expect(html).toMatch(/data-testid="fd-side-cal"/);
+    expect(html).toMatch(/\(click\)="shiftApptWeek\(-1\)" aria-label="Previous week"/);
+    expect(html).toMatch(/\(click\)="shiftApptWeek\(1\)" aria-label="Next week"/);
+    expect(html).not.toContain('fd-side-dates');
   });
 });
 

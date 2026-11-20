@@ -167,7 +167,10 @@ test.describe('frontdesk v2 — lab-only tenant', () => {
     if (wide()) {
       await expect(vis(page, 'pf-pane-splitter[role="separator"]')).toHaveCount(1);
       const head = await page.locator('.pf-fd-flow .ag-header-cell-text').allTextContents();
-      expect(head.map(t => t.trim()).filter(Boolean)).toEqual(expect.arrayContaining(['Token', 'Patient', 'Where now', 'Waiting', 'Payment', 'Next']));
+      const heads = head.map(t => t.trim()).filter(Boolean);
+      expect(heads).toEqual(expect.arrayContaining(['Token', 'Patient', 'Payment', 'Next']));
+      // fd-chart: narrow grids (iPad) shorten "Where now" / "Waiting" so no header label is ever cut.
+      expect(heads.some(h => /^Where( now)?$/.test(h)) && heads.some(h => /^Wait(ing)?$/.test(h))).toBe(true);
       // Card head: icon tile + WORK, the status pill with its dots, "Today" + the More filters icon.
       await expect(vis(page, '.pf-work-hdr__title .pf-card__label')).toHaveText(/work/i);
       await expect(vis(page, '.pf-work-hdr__range')).toHaveText('Today');

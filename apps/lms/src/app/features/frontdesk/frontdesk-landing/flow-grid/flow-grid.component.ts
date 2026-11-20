@@ -4,6 +4,17 @@ import {
 import type { ColDef, GetRowIdParams, RowClassParams, RowClickedEvent, ICellRendererParams } from 'ag-grid-community';
 import { DataGridComponent } from '../../../../shared/components/data-grid/data-grid.component';
 import type { FlowRow, JourneyState } from './flow-row';
+import { actionCol, numberCol, shapeCol, textCol, valuesCol } from '../../../../shared/utils/work-grid-columns';
+
+/** Token column filter text: "#12". */
+export function flowTokenText(r: FlowRow): string { return r.order?.dailyNo ? `#${r.order.dailyNo}` : ''; }
+/** Patient column filter text: name + MRN (meta) + phone. */
+export function flowPatientText(r: FlowRow): string {
+  const phone = r.order?.patient?.phone ?? r.draft?.patient?.phone ?? '';
+  return [r.name, r.meta, phone].filter(Boolean).join(' ');
+}
+/** Payment column's set values: an amount due reads "Due" (one value, not one per amount). */
+export function flowPayValue(r: FlowRow): string { return r.payDue ? 'Due' : r.pay; }
 import {
   FlowGridContext, FlowNextCellComponent, FlowPatientCellComponent, FlowRingCellComponent, FlowSelectCellComponent,
   FlowTokenCellComponent,
@@ -82,26 +93,31 @@ export class FlowGridComponent implements AfterViewInit {
     return [
       { colId: 'sel', headerName: '', width: 52, minWidth: 52, maxWidth: 52, hide: !this.selecting(), cellRenderer: FlowSelectCellComponent,
         cellClass: 'fd-flow__c-sel' },
-      { colId: 'token', headerName: 'Token', width: tight ? 74 : narrow ? 70 : 76, minWidth: 56, cellRenderer: FlowTokenCellComponent },
-      { colId: 'patient', headerName: 'Patient', flex: 1.6, minWidth: tight ? 120 : narrow ? 150 : 170, wrapText: true, autoHeight: true,
-        cellRenderer: FlowPatientCellComponent, cellClass: 'fd-flow__c-wrap' },
+      // Work-grid column rule (shared/utils/work-grid-columns): filters like Test Master on every data column, text
+      // LEFT, short same-shape values CENTRED, the action column RIGHT. They AND with the head's pill / search / filters.
+      textCol<FlowRow>({ colId: 'token', headerName: 'Token', width: tight ? 86 : narrow ? 88 : 92, minWidth: 84, cellRenderer: FlowTokenCellComponent },
+        r => flowTokenText(r), 'center'),
+      textCol<FlowRow>({ colId: 'patient', headerName: 'Patient', flex: 1.6, minWidth: tight ? 120 : narrow ? 130 : 170, wrapText: true, autoHeight: true,
+        cellRenderer: FlowPatientCellComponent, cellClass: 'fd-flow__c-wrap' }, r => flowPatientText(r)),
       // Journey (owner 2026-11-20): ONE ring per row — inner disc = the service (replaces "Visit for"), outer ring =
       // the row's own steps (replaces the step dots). 44px; never folds away.
       // Narrower grids (tier < 2, where the old Journey dots folded away) keep the ring in a 64px headerless column.
-      { colId: 'journey', headerName: t < 2 ? '' : 'Journey', headerTooltip: 'Journey', width: t < 2 ? 64 : 96,
-        minWidth: t < 2 ? 60 : 92, maxWidth: t < 2 ? 68 : 104, cellRenderer: FlowRingCellComponent, cellClass: 'fd-flow__c-ring' },
-      { colId: 'where', headerName: 'Where now', flex: 1, minWidth: tight ? 126 : narrow ? 130 : 150, wrapText: true, autoHeight: true, cellClass: 'fd-flow__c-wrap',
+      shapeCol<FlowRow>({ colId: 'journey', headerName: t < 2 ? '' : 'Journey', headerTooltip: 'Journey', width: t < 2 ? 64 : 96,
+        minWidth: t < 2 ? 60 : 92, maxWidth: t < 2 ? 68 : 104, cellRenderer: FlowRingCellComponent, cellClass: 'fd-flow__c-ring' }),
+      valuesCol<FlowRow>({ colId: 'where', headerName: narrow ? 'Where' : 'Where now', headerTooltip: 'Where now', flex: 1, minWidth: tight ? 112 : narrow ? 116 : 150, wrapText: true, autoHeight: true, cellClass: 'fd-flow__c-wrap',
         cellRenderer: (p: ICellRendererParams<FlowRow>) => p.data
           ? `<span class="fd-flow__where"><span class="fd-flow__stage" data-tone="${p.data.tone}"><span class="fd-flow__dot" aria-hidden="true"></span>${esc(p.data.where)}</span>${p.data.whereSub ? `<span class="fd-flow__sub">${esc(p.data.whereSub)}</span>` : ''}</span>`
-          : '' },
-      { colId: 'wait', headerName: tight ? 'Wait' : 'Waiting', width: tight ? 66 : narrow ? 80 : 92, minWidth: 62,
+          : '' }, r => r.where),
+      numberCol<FlowRow>({ colId: 'wait', headerName: tight ? 'Wait' : 'Waiting', width: tight ? 76 : narrow ? 100 : 104, minWidth: 74,
         cellRenderer: (p: ICellRendererParams<FlowRow>) => p.data
           ? `<span class="fd-flow__wait${p.data.late ? ' fd-flow__wait--late' : ''}"${p.data.late ? ' title="Waiting over 30 minutes"' : ''}>${esc(p.data.wait)}</span>` : '' },
-      { colId: 'pay', headerName: 'Payment', width: tight ? 90 : narrow ? 100 : 116, minWidth: 86,
+        r => r.waitMin),
+      valuesCol<FlowRow>({ colId: 'pay', headerName: 'Payment', width: tight ? 100 : narrow ? 104 : 124, minWidth: 96,
         cellRenderer: (p: ICellRendererParams<FlowRow>) => p.data
           ? `<span class="fd-flow__pay${p.data.payDue ? ' fd-flow__pay--due' : ''}">${esc(p.data.pay)}</span>` : '' },
-      { colId: 'next', headerName: 'Next', width: narrow ? 164 : 184, minWidth: 156, headerClass: 'fd-flow__h-right', cellClass: 'fd-flow__c-next',
-        cellRenderer: FlowNextCellComponent },
+        r => flowPayValue(r), 'center'),
+      actionCol<FlowRow>({ colId: 'next', headerName: 'Next', width: narrow ? 152 : 184, minWidth: 148, headerClass: 'fd-flow__h-right', cellClass: 'fd-flow__c-next',
+        cellRenderer: FlowNextCellComponent }),
     ];
   });
 
