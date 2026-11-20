@@ -1,5 +1,8 @@
 import { tatStateFor } from '../../../shared/utils/lab-priority';
-import { GridFold, JourneyStep, waitText } from '../../../shared/utils/work-grid';
+import { logicalTestCount } from '../../../shared/models/order.model';
+import { GridFold, waitText } from '../../../shared/utils/work-grid';
+import type { RingStep } from '../../../shared/components/journey-ring/journey-ring';
+import { labLineRing } from '../../../shared/utils/lab-line-journey';
 import type { QueueTile } from './pending-validation.logic';
 
 /**
@@ -21,23 +24,28 @@ export function pvWaiting(t: Pick<QueueTile, 'items' | 'remainingMin'>, now: num
   return { text: at ? waitText(at, now) : '—', sub: time ? `entered ${time}` : '', late: tatStateFor(t.remainingMin) === 'overdue' };
 }
 
-/** Collected → Received → Entered → Validated: everything in this queue is entered; validation is the open step. */
-export function pvJourney(t: Pick<QueueTile, 'remainingMin'>): JourneyStep[] {
-  return [
-    { label: 'Collected', state: 'done' }, { label: 'Received', state: 'done' }, { label: 'Entered', state: 'done' },
-    { label: 'Validated', state: tatStateFor(t.remainingMin) === 'overdue' ? 'late' : 'now' },
-  ];
+/** The shared ring's lab line: everything here is entered, so Validation is the open step — late past the TAT. */
+export function pvRing(t: Pick<QueueTile, 'items' | 'remainingMin'>): RingStep[] {
+  return labLineRing(t.items, tatStateFor(t.remainingMin) === 'overdue');
 }
 
 export interface PvColPlan { colId: string; header: string; hide: boolean }
 /**
- * full  : Sample ID · Patient · Tests · Status · Journey · Waiting · actions.
- * fold  : Journey hides; Status folds under the patient (actions keep their full size).
- * tight : Tests fold under the patient too.
+ * No Tests column (owner 2026-11-20: long test lists made rows 6–8 lines): department + count ride the meta line.
+ * full  : Sample ID · Patient · Status · Journey · Waiting · actions.
+ * fold  : Status folds under the patient (actions keep their full size); the journey ring stays.
+ * tight : the ring folds too.
  */
 export function pvColumns(fold: GridFold): PvColPlan[] {
   const f = fold !== 'full', t = fold === 'tight';
   const c = (colId: string, header: string, hide = false): PvColPlan => ({ colId, header, hide });
-  return [c('sample', 'Sample ID'), c('patient', 'Patient'), c('tests', 'Tests', t), c('status', 'Status', f),
-    c('journey', 'Journey', f), c('wait', 'Waiting'), c('acts', '')];
+  return [c('sample', 'Sample ID'), c('patient', 'Patient'), c('status', 'Status', f), c('journey', 'Journey', t), c('wait', 'Waiting'), c('acts', '')];
+}
+
+/** "44/F · AA0007 · Haematology · 2 tests · entered 9:48 PM". */
+export function pvMeta(t: Pick<QueueTile, 'patientMeta' | 'dept' | 'items'>): string {
+  const n = logicalTestCount(t.items as never);
+  const at = t.items.map(i => i.resultedAt).filter(Boolean).sort().pop();
+  const time = at ? new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+  return [t.patientMeta, t.dept, `${n} test${n === 1 ? '' : 's'}`, time && `entered ${time}`].filter(Boolean).join(' · ');
 }

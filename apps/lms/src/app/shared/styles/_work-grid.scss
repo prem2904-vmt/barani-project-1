@@ -19,6 +19,21 @@ $touch: 'not ((hover: hover) and (pointer: fine))';
     .ag-cell.wg-c-wrap { white-space: normal; }
     .ag-cell.wg-c-acts { justify-content: flex-end; padding-right: 10px; }
     .ag-header-cell.wg-h-right .ag-header-cell-label { justify-content: flex-end; }
+    /* Alignment (shared rule): centred short values; the header matches its cells. */
+    .ag-header-cell.wg-h-center .ag-header-cell-label { justify-content: center; }
+    .ag-cell.wg-c-center { justify-content: center; text-align: center; }
+    .ag-cell.wg-c-center .pf-dg-tpl-cell { display: flex; justify-content: center; }
+    .ag-cell.wg-c-center .wg-cell { align-items: center; }
+    .ag-cell.wg-c-right { justify-content: flex-end; }
+    /* Column filters (Test Master's header filter): the icon always shows, accent when a filter is on, a 44px
+       target on touch. */
+    .ag-header-cell .ag-header-cell-filter-button { opacity: 1; color: var(--text-tertiary); }
+    .ag-header-cell.ag-header-cell-filtered .ag-header-cell-filter-button,
+    .ag-header-cell.ag-header-cell-filtered .ag-icon-filter { color: var(--violet-text, #6d28d9); opacity: 1; }
+    @media #{$touch} {
+      .ag-header-cell .ag-header-cell-filter-button { position: relative; }
+      .ag-header-cell .ag-header-cell-filter-button::after { content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+    }
     /* Urgent order: a rose inset rule at the row's leading edge (never a fill). */
     .ag-row.wg-row--urgent { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
   }
@@ -71,6 +86,8 @@ $touch: 'not ((hover: hover) and (pointer: fine))';
 
   /* TAT / waiting: tabular; rose when late (never amber). */
   .wg-tat { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+  /* Inside a grid cell a long clock word ("Due 21 Nov, 00:08") wraps instead of clipping. */
+  .wg-cell .wg-tat { white-space: normal; overflow-wrap: anywhere; }
   .wg-tat--late { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); font-weight: 600; }
 
   /* Row actions: ONE primary at the row end + ⋯. Text on web; ≥ 44 px on touch; always 8 px apart. */
