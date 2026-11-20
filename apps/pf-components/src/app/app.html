@@ -37,19 +37,34 @@
       </button>
     </nav>
 
-    <!-- Right Controls: Search & Theme Toggle -->
+    <!-- Right Controls: Search, Share & Theme Toggle -->
     <div class="flex items-center gap-3">
       <div class="relative hidden sm:block w-48 md:w-64">
         <input
           type="text"
           [ngModel]="searchQuery()"
-          (ngModelChange)="searchQuery.set($event)"
+          (ngModelChange)="onSearchInput($event)"
           placeholder="Filter components (e.g. pin, btn)..."
           class="w-full text-xs py-1.5 pl-8 pr-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-muted)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-violet-500 transition-colors" />
         <svg class="w-3.5 h-3.5 text-[var(--text-tertiary)] absolute left-2.5 top-2.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
         </svg>
       </div>
+
+      <!-- Share Current Screen / State Button -->
+      <button
+        type="button"
+        (click)="shareCurrentLink()"
+        title="Copy shareable link to current view"
+        class="h-8 px-2.5 rounded-lg border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] text-xs font-medium flex items-center gap-1.5 transition-colors">
+        @if (shareCopied()) {
+          <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="text-emerald-400 font-semibold">Copied!</span>
+        } @else {
+          <svg class="w-3.5 h-3.5 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          <span class="hidden sm:inline">Share</span>
+        }
+      </button>
 
       <!-- Theme Switcher Button -->
       <button
@@ -178,7 +193,14 @@
                       </div>
 
                       <div class="pt-2 border-t border-[var(--border-muted)] flex items-center justify-between text-[11px]">
-                        <span class="text-[var(--text-tertiary)] font-mono">{{ comp.inputs.length }} inputs</span>
+                        <div class="flex items-center gap-2">
+                          <span class="text-[var(--text-tertiary)] font-mono">{{ comp.inputs.length }} inputs</span>
+                          @if (getVariantsForComponent(comp.id).length > 0) {
+                            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                              {{ getVariantsForComponent(comp.id).length }} variants
+                            </span>
+                          }
+                        </div>
                         <span class="font-semibold text-violet-400 group-hover:underline flex items-center gap-1">
                           Cookbook Spec &rarr;
                         </span>
@@ -205,8 +227,20 @@
                   <span class="text-[var(--text-primary)] font-semibold">{{ comp.name }}</span>
                 </div>
 
-                <!-- Action Copy Buttons -->
+                <!-- Action Copy & Share Buttons -->
                 <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    (click)="shareCurrentLink()"
+                    class="px-2.5 py-1 text-xs font-medium rounded-lg border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] flex items-center gap-1.5 transition-colors">
+                    @if (shareCopied()) {
+                      <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span class="text-emerald-400 font-semibold">Link Copied!</span>
+                    } @else {
+                      <svg class="w-3.5 h-3.5 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                      <span>Share Link</span>
+                    }
+                  </button>
                   <button
                     type="button"
                     (click)="copySnippet(comp.importStatement)"
@@ -238,6 +272,171 @@
                 </div>
               }
             </div>
+
+            <!-- ── DESIGN VARIANTS SHOWCASE & COMPARISON ── -->
+            @if (currentComponentVariants().length > 0) {
+              <section class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 class="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                      <span class="size-2 rounded-full bg-violet-400"></span>
+                      <span>Design Variants ({{ currentComponentVariants().length }})</span>
+                    </h2>
+                    <p class="text-xs text-[var(--text-secondary)] mt-0.5">
+                      Compare visual styles side-by-side, check clinical guidelines, and pick whichever variant you need. Click any variant to test it in the stage.
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-mono text-[var(--text-tertiary)] flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      Click card to test · Deep-link shareable
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Variants Grid -->
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  @for (v of currentComponentVariants(); track v.name) {
+                    <div
+                      class="variant-card rounded-xl p-4 flex flex-col justify-between space-y-3 cursor-pointer"
+                      [class.variant-card-active]="getActiveVariant(comp.id) === v.name"
+                      (click)="selectVariant(comp.id, v.name)">
+                      
+                      <div>
+                        <!-- Card Header: Prop badge + Default tag + Share button -->
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                          <div class="flex items-center gap-1.5 flex-wrap">
+                            <code class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                              {{ v.propName || 'variant' }}="{{ v.name }}"
+                            </code>
+                            @if (v.isDefault) {
+                              <span class="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-slate-500/20 text-slate-300 border border-slate-500/30">Default</span>
+                            }
+                          </div>
+
+                          <button
+                            type="button"
+                            title="Copy direct share link to this variant"
+                            (click)="$event.stopPropagation(); shareVariantLink(comp.id, v.name)"
+                            class="p-1.5 rounded-lg border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-violet-400 transition-colors">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                          </button>
+                        </div>
+
+                        <!-- Live Visual Design Preview Canvas -->
+                        <div class="variant-canvas rounded-lg p-4 flex items-center justify-center min-h-[92px] border border-[var(--border-muted)]/70 my-2 overflow-hidden">
+                          @switch (comp.id) {
+                            @case ('button') {
+                              <pf-button [variant]="asBtnVariant(v.name)" (click)="$event.stopPropagation(); logEvent('Clicked button variant: ' + v.name)">
+                                @if (v.name === 'primary') { Confirm Order }
+                                @else if (v.name === 'secondary') { Save Draft }
+                                @else if (v.name === 'tertiary') { View Details }
+                                @else if (v.name === 'danger') { Discard Draft }
+                                @else if (v.name === 'quiet') { Dismiss }
+                                @else if (v.name === 'icon') { <pf-scan-icon [size]="18" /> }
+                                @else { Button }
+                              </pf-button>
+                            }
+                            @case ('touch-button') {
+                              <pf-touch-btn [variant]="asTouchVariant(v.name)" [size]="'sm'" (pressed)="$event.stopPropagation(); logEvent('Tapped touch variant: ' + v.name)">
+                                {{ v.label }}
+                              </pf-touch-btn>
+                            }
+                            @case ('logo-mark') {
+                              <pf-logo-mark [variant]="asLogoVariant(v.name)" [size]="'md'" [pulse]="v.name === 'badge'" />
+                            }
+                            @case ('status-chip') {
+                              <pf-status-chip [tone]="asStatusChipTone(v.name)">{{ v.name | uppercase }}</pf-status-chip>
+                            }
+                            @case ('chip') {
+                              <pf-chip [tone]="asChipTone(v.name)" [selected]="false" (tapped)="$event.stopPropagation(); logEvent('Tapped chip ' + v.name)">
+                                {{ v.label }}
+                              </pf-chip>
+                            }
+                            @case ('clock') {
+                              <pf-clock [variant]="asClockVariant(v.name)" size="sm" />
+                            }
+                            @case ('tile') {
+                              <div class="w-full max-w-[200px]">
+                                <pf-tile [tone]="asTileTone(v.name)" [clickable]="true" (tapped)="$event.stopPropagation()">
+                                  <span class="text-[10px] text-[var(--text-tertiary)] block">Metric</span>
+                                  <strong class="text-sm font-bold pf-num text-[var(--text-primary)]">42 TAT</strong>
+                                </pf-tile>
+                              </div>
+                            }
+                            @case ('barcode-display') {
+                              <div class="p-2 bg-white rounded text-black scale-90 origin-center shadow-sm">
+                                <pf-barcode-display code="PF-2026-9901" [mode]="asBarcodeMode(v.name)" [showValue]="true" />
+                              </div>
+                            }
+                            @case ('skeleton') {
+                              @if (v.name === 'line') {
+                                <pf-skeleton variant="line" [width]="'10rem'" />
+                              } @else if (v.name === 'block') {
+                                <pf-skeleton variant="block" [width]="'8rem'" [height]="'2.75rem'" />
+                              } @else if (v.name === 'circle') {
+                                <pf-skeleton variant="circle" [width]="'36px'" [height]="'36px'" />
+                              } @else if (v.name === 'pill') {
+                                <pf-skeleton variant="pill" [width]="'5.5rem'" [height]="'1.5rem'" />
+                              }
+                            }
+                            @case ('price-flag') {
+                              <pf-price-flag [kind]="asPriceFlagKind(v.name)" />
+                            }
+                            @case ('origin-badge') {
+                              <pf-origin-badge [origin]="v.name" />
+                            }
+                            @case ('confirm-dialog') {
+                              <div class="text-center space-y-1.5">
+                                <span class="text-xs font-semibold block" [class.text-rose-400]="v.name === 'danger'" [class.text-violet-400]="v.name === 'primary'">
+                                  {{ v.name === 'danger' ? 'Destructive Alert Dialog' : 'Standard Confirmation' }}
+                                </span>
+                                <pf-button [variant]="v.name === 'danger' ? 'danger' : 'primary'">Preview {{ v.name }}</pf-button>
+                              </div>
+                            }
+                          }
+                        </div>
+
+                        <!-- Variant Info -->
+                        <div class="mt-2 space-y-1">
+                          <h4 class="text-xs font-bold text-[var(--text-primary)] flex items-center justify-between">
+                            <span>{{ v.label }}</span>
+                          </h4>
+                          <p class="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                            {{ v.description }}
+                          </p>
+                        </div>
+                      </div>
+
+                      <!-- Footer Controls -->
+                      <div class="pt-2.5 border-t border-[var(--border-muted)] flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          (click)="$event.stopPropagation(); copySnippet(v.snippet)"
+                          class="px-2 py-1 text-[11px] font-medium rounded-lg border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] flex items-center gap-1 transition-colors">
+                          @if (copiedSnippet() === v.snippet) {
+                            <svg class="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span class="text-emerald-400 font-semibold">Copied!</span>
+                          } @else {
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                            <span>Copy Code</span>
+                          }
+                        </button>
+
+                        <span
+                          class="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors"
+                          [class.bg-violet-600]="getActiveVariant(comp.id) === v.name"
+                          [class.text-white]="getActiveVariant(comp.id) === v.name"
+                          [class.bg-slate-500-10]="getActiveVariant(comp.id) !== v.name"
+                          [class.text-[var(--text-tertiary)]]="getActiveVariant(comp.id) !== v.name">
+                          {{ getActiveVariant(comp.id) === v.name ? 'Active in Stage' : 'Click to Pick' }}
+                        </span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </section>
+            }
 
             <!-- ── INTERACTIVE PLAYGROUND (STAGE + CONTROLS) ── -->
             <section class="space-y-4">
@@ -376,7 +575,13 @@
                     @case ('button') {
                       <div class="flex flex-wrap items-center justify-center gap-4 w-full">
                         <pf-button [variant]="btnVariant()" [fullWidth]="btnFullWidth()" [disabled]="btnDisabled()" (click)="logEvent('PfButton clicked!')">
-                          {{ btnVariant() === 'primary' ? 'Confirm Diagnosis CTA' : 'Cancel Action' }}
+                          @if (btnVariant() === 'primary') { Confirm Diagnosis CTA }
+                          @else if (btnVariant() === 'secondary') { Save Draft Action }
+                          @else if (btnVariant() === 'tertiary') { View Clinical Details }
+                          @else if (btnVariant() === 'danger') { Discard Draft }
+                          @else if (btnVariant() === 'quiet') { Dismiss Notification }
+                          @else if (btnVariant() === 'icon') { <pf-scan-icon [size]="18" /> }
+                          @else { Button }
                         </pf-button>
                       </div>
                     }
@@ -1004,11 +1209,13 @@
                       @if (comp.id === 'button') {
                         <div>
                           <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Variant</label>
-                          <select [ngModel]="btnVariant()" (ngModelChange)="btnVariant.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                          <select [ngModel]="btnVariant()" (ngModelChange)="selectVariant('button', $event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
                             <option value="primary">primary (Single Main CTA)</option>
-                            <option value="secondary">secondary</option>
-                            <option value="danger">danger</option>
-                            <option value="quiet">quiet</option>
+                            <option value="secondary">secondary (Default Outline)</option>
+                            <option value="tertiary">tertiary (Subtle Bordered)</option>
+                            <option value="danger">danger (Destructive Discard)</option>
+                            <option value="quiet">quiet (Frameless Toolbar)</option>
+                            <option value="icon">icon (Square Tool)</option>
                           </select>
                         </div>
                         <div class="flex items-center gap-2 pt-1">
@@ -1024,11 +1231,13 @@
                       @if (comp.id === 'touch-button') {
                         <div>
                           <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Touch Variant</label>
-                          <select [ngModel]="touchVariant()" (ngModelChange)="touchVariant.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
-                            <option value="primary">primary</option>
-                            <option value="secondary">secondary</option>
-                            <option value="accent">accent</option>
-                            <option value="danger">danger</option>
+                          <select [ngModel]="touchVariant()" (ngModelChange)="selectVariant('touch-button', $event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                            <option value="primary">primary (Touch Main CTA)</option>
+                            <option value="secondary">secondary (Default)</option>
+                            <option value="ghost">ghost (Bordered)</option>
+                            <option value="accent">accent (Highlight)</option>
+                            <option value="danger">danger (Stop/Reject)</option>
+                            <option value="success">success (Verify/Sign)</option>
                           </select>
                         </div>
                         <div class="flex items-center gap-2 pt-1">
@@ -1040,7 +1249,7 @@
                       @if (comp.id === 'barcode-display') {
                         <div>
                           <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Symbology Mode</label>
-                          <select [ngModel]="barcodeMode()" (ngModelChange)="barcodeMode.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                          <select [ngModel]="barcodeMode()" (ngModelChange)="selectVariant('barcode-display', $event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
                             <option value="both">both (1D + QR)</option>
                             <option value="barcode">barcode (1D)</option>
                             <option value="qr">qr (2D matrix)</option>
@@ -1052,8 +1261,8 @@
                         <div>
                           <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Variant</label>
                           <div class="flex gap-2">
-                            <button type="button" class="px-2 py-1 rounded border text-xs" [class.bg-violet-600]="clockVariant() === 'tile'" (click)="clockVariant.set('tile')">Tile Glass</button>
-                            <button type="button" class="px-2 py-1 rounded border text-xs" [class.bg-violet-600]="clockVariant() === 'bare'" (click)="clockVariant.set('bare')">Bare Ambient</button>
+                            <button type="button" class="px-2 py-1 rounded border text-xs" [class.bg-violet-600]="clockVariant() === 'tile'" (click)="selectVariant('clock', 'tile')">Tile Glass</button>
+                            <button type="button" class="px-2 py-1 rounded border text-xs" [class.bg-violet-600]="clockVariant() === 'bare'" (click)="selectVariant('clock', 'bare')">Bare Ambient</button>
                           </div>
                         </div>
                       }
@@ -1061,7 +1270,7 @@
                       @if (comp.id === 'status-chip') {
                         <div>
                           <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Semantic Tone</label>
-                          <select [ngModel]="statusChipTone()" (ngModelChange)="statusChipTone.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                          <select [ngModel]="statusChipTone()" (ngModelChange)="selectVariant('status-chip', $event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
                             <option value="urgent">urgent (STAT Panic)</option>
                             <option value="violet">violet (Active Ready)</option>
                             <option value="neutral">neutral (Draft)</option>
@@ -1562,4 +1771,22 @@
     </div>
     <span>LMS · OPD · IPD · Pharmacy · Frontdesk Shared Primitives</span>
   </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SHAREABLE TOAST NOTIFICATION
+       ═══════════════════════════════════════════════════════════════════════ -->
+  @if (shareToast(); as toast) {
+    <div class="fixed bottom-6 right-6 z-50 max-w-md p-4 rounded-xl border border-violet-500/40 bg-[var(--bg-card)] shadow-2xl backdrop-blur-xl animate-toast flex items-start gap-3">
+      <div class="size-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+          <span>{{ toast.message }}</span>
+        </div>
+        <div class="text-[11px] font-mono text-violet-300 truncate mt-0.5 select-all">{{ toast.url }}</div>
+      </div>
+      <button type="button" class="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] text-sm leading-none p-1" (click)="shareToast.set(null)">✕</button>
+    </div>
+  }
 </div>
