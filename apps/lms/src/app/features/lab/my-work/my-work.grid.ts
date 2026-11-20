@@ -1,7 +1,12 @@
-import type { OrderTest } from '../../../shared/models/order.model';
+import { OrderTest, logicalTestCount } from '../../../shared/models/order.model';
+import { matchesDailyNo } from '../../../shared/utils/daily-no';
+import { lineDepartment } from '../../../shared/utils/shared-tube';
+import type { LabSortKey } from '../../../shared/utils/lab-sort';
 import type { OrderPriority } from '../../../shared/utils/lab-priority';
 import { tatDetail, tatLabel, tatStateFor } from '../../../shared/utils/lab-priority';
-import { GridFold, JourneyStep, WorkStatus, waitText } from '../../../shared/utils/work-grid';
+import { GridFold, WorkStatus, waitText } from '../../../shared/utils/work-grid';
+import type { RingStep } from '../../../shared/components/journey-ring/journey-ring';
+import { labLineRing } from '../../../shared/utils/lab-line-journey';
 import type { WorkLine } from './my-work.priority';
 
 /**
@@ -104,26 +109,21 @@ export function doneStatus(d: Pick<MwDoneTube, 'status' | 'openLines'>): WorkSta
   return { label: 'Submitted', tone: 'violet' };
 }
 
-// ── Journey: the lab's real steps for a tube ───────────────────────────────────
+// ── Journey: the shared ring's lab line (Billing · Sample · Dispatch · Result entry · Validation) ─────────
 
-/** Collected → Received → Entered → Validated; the open step is "now" (rose when past TAT). */
-export function tubeJourney(t: Pick<MwTube, 'tests' | 'allDone' | 'remainingMin'>): JourneyStep[] {
-  const late = !t.allDone && t.remainingMin != null && t.remainingMin <= 0;
-  const received = t.tests.some(x => !!x.subOrder?.receivedAtLab);
-  const validated = t.tests.length > 0 && t.tests.every(x => x.status === 'validated');
-  return [
-    { label: 'Collected', state: 'done' },
-    { label: 'Received', state: received ? 'done' : 'now' },
-    { label: 'Entered', state: t.allDone ? 'done' : !received ? 'todo' : late ? 'late' : 'now' },
-    { label: 'Validated', state: validated ? 'done' : t.allDone ? 'now' : 'todo' },
-  ];
+/** A tube is late when it is past its TAT with something still to enter (the TAT column's rose rule). */
+export function tubeLate(t: Pick<MwTube, 'allDone' | 'remainingMin'>): boolean {
+  return !t.allDone && t.remainingMin != null && t.remainingMin <= 0;
 }
-
-export function doneJourney(d: Pick<MwDoneTube, 'status'>): JourneyStep[] {
-  return [
-    { label: 'Collected', state: 'done' }, { label: 'Received', state: 'done' }, { label: 'Entered', state: 'done' },
-    { label: 'Validated', state: d.status === 'validated' ? 'done' : 'now' },
-  ];
+export function tubeRing(t: Pick<MwTube, 'tests' | 'allDone' | 'remainingMin'>): RingStep[] {
+  return labLineRing(t.tests, tubeLate(t));
+}
+/** A patient row: all their lines; late when any tube is. */
+export function groupRing(tubes: MwTube[], lines: OrderTest[]): RingStep[] {
+  return labLineRing(lines, tubes.some(tubeLate));
+}
+export function doneRing(d: Pick<MwDoneTube, 'tests'>): RingStep[] {
+  return labLineRing(d.tests, false);
 }
 
 // ── TAT: the clock word, rose only when overdue; "in lab 40m" under it ──────────
@@ -202,20 +202,140 @@ export type MwMode = 'sample' | 'patient' | 'done';
 export interface MwColPlan { colId: string; header: string; hide: boolean }
 
 /**
+ * No Tests column (owner 2026-11-20: long test lists blew rows up to 6–8 lines): the department + test count ride the
+ * patient's meta line, the full names stay in the tooltip / press-and-hold peek.
  * full  : every column.
  * fold  : Priority + Status fold under the patient / sample cell; Journey stays; the actions keep full size.
- * tight : Tests and Journey fold too — Sample / Patient · TAT · actions.
+ * tight : Journey folds too — Sample / Patient · TAT · actions.
  */
 export function mwColumns(mode: MwMode, fold: GridFold): MwColPlan[] {
   const f = fold !== 'full', t = fold === 'tight';
   const c = (colId: string, header: string, hide = false): MwColPlan => ({ colId, header, hide });
   if (mode === 'done') return [
-    c('sample', 'Sample ID'), c('patient', 'Patient'), c('tests', 'Tests', t), c('journey', 'Journey', f),
-    c('status', 'Status', f), c('when', 'Completed', t), c('acts', ''),
+    c('sample', 'Sample ID'), c('patient', 'Patient'), c('journey', 'Journey', f), c('status', 'Status', f), c('when', 'Completed', t), c('acts', ''),
   ];
   return [
     ...(mode === 'sample' ? [c('sample', 'Sample ID')] : []),
-    c('patient', 'Patient'), c('tests', 'Tests', t), c('priority', 'Priority', f), c('journey', 'Journey', t),
-    c('tat', 'TAT'), c('status', 'Status', f), c('acts', ''),
+    c('patient', 'Patient'), c('priority', 'Priority', f), c('journey', 'Journey', t), c('tat', 'TAT'), c('status', 'Status', f), c('acts', ''),
   ];
+}
+
+// ── Compact tests: "Biochemistry · 12 tests" / "2 departments · 14 tests" ─────────
+
+export function testsSummary(lines: OrderTest[]): string {
+  const depts = [...new Set(lines.map(l => lineDepartment(l as never).name).filter((n): n is string => !!n))];
+  const n = logicalTestCount(lines as never);
+  const d = depts.length > 1 ? `${depts.length} departments` : depts[0] ?? '';
+  return [d, `${n} test${n === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+}
+/** The full names (tooltip / peek). */
+export function testNames(lines: Array<{ test?: { name?: string } | null }>): string {
+  return lines.map(l => l.test?.name ?? 'Test').join(' · ');
+}
+
+// ── Card-head filters (owner 2026-11-20: "the filter in the grid is missing") ─────
+
+export type MwStatusKey = 'all' | 'to_enter' | 'draft' | 're_entry' | 'entered' | 'in_queue' | 'claimed' | 'validated' | 'partial' | 'submitted';
+export interface MwFilter { q: string; status: MwStatusKey; priority: 'all' | 'urgent' | 'normal'; dept: string | null }
+export const NO_MW_FILTER: MwFilter = { q: '', status: 'all', priority: 'all', dept: null };
+
+const KEY_OF: Record<string, MwStatusKey> = {
+  'To enter': 'to_enter', Draft: 'draft', 'Re-entry': 're_entry', Entered: 'entered', 'In queue': 'in_queue', Validated: 'validated', Submitted: 'submitted',
+};
+export function statusKeyOf(label: string): MwStatusKey {
+  if (label.startsWith('Claimed') || / tubes$/.test(label)) return 'claimed';
+  if (label.startsWith('Partly validated')) return 'partial';
+  return KEY_OF[label] ?? 'all';
+}
+export const MW_STATUS_LABEL: Record<MwStatusKey, string> = {
+  all: 'All', to_enter: 'To enter', draft: 'Draft', re_entry: 'Re-entry', entered: 'Entered', in_queue: 'In queue', claimed: 'Claimed',
+  validated: 'Validated', partial: 'Partly validated', submitted: 'Submitted',
+};
+/** The statuses each view really has, in reading order. */
+export const MW_STATUSES: Record<'queue' | 'work' | 'done', MwStatusKey[]> = {
+  queue: ['in_queue', 'claimed'],
+  work: ['to_enter', 'draft', 're_entry', 'entered'],
+  done: ['validated', 'partial', 'submitted'],
+};
+
+type StatusOf = (row: MwRow) => MwStatusKey;
+const linesOf = (r: MwRow): OrderTest[] => r.kind === 'tube' ? r.tube.tests : r.kind === 'done' ? r.done.tests : r.group.items;
+const deptIdsOf = (r: MwRow): string[] => [...new Set(linesOf(r).map(l => lineDepartment(l as never).id ?? lineDepartment(l as never).name ?? '').filter(Boolean))];
+
+function matchesQ(r: MwRow, q: string): boolean {
+  if (!q) return true;
+  const ln = linesOf(r);
+  const patient = ln[0]?.subOrder?.order?.patient as { displayName?: string; mrn?: string } | undefined;
+  const hay = [
+    r.kind === 'tube' ? r.tube.patientName : r.kind === 'done' ? r.done.patientName : r.group.patientName,
+    patient?.mrn, ...ln.map(l => l.subOrder?.barcode), ...ln.map(l => l.subOrder?.id),
+  ].filter(Boolean).join(' ').toLowerCase();
+  return hay.includes(q) || ln.some(l => matchesDailyNo(q, l.subOrder));
+}
+
+/** Search (sample ID / patient / MRN / daily number) · status · priority · department. A patient's inline tubes row
+ *  follows its patient row. */
+export function filterMwRows(rows: MwRow[], f: MwFilter, statusOf: StatusOf): MwRow[] {
+  const q = f.q.trim().toLowerCase();
+  const keep = (r: MwRow) =>
+    matchesQ(r, q)
+    && (f.status === 'all' || statusOf(r) === f.status)
+    && (f.priority === 'all' || (r.kind !== 'done' && r.priority === f.priority))
+    && (!f.dept || deptIdsOf(r).includes(f.dept));
+  const out: MwRow[] = [];
+  let parentKept = false;
+  for (const r of rows) {
+    if (r.kind === 'detail') { if (parentKept) out.push(r); continue; }
+    parentKept = keep(r);
+    if (parentKept) out.push(r);
+  }
+  return out;
+}
+
+/** Status pill options with counts (on everything else that is filtered — search, priority, department). */
+export function statusOptions(rows: MwRow[], f: MwFilter, view: 'queue' | 'work' | 'done', statusOf: StatusOf):
+  Array<{ value: MwStatusKey; label: string; count: number }> {
+  const base = filterMwRows(rows, { ...f, status: 'all' }, statusOf).filter(r => r.kind !== 'detail');
+  const n = (k: MwStatusKey) => base.filter(r => statusOf(r) === k).length;
+  return [{ value: 'all', label: 'All', count: base.length },
+    ...MW_STATUSES[view].map(k => ({ value: k, label: MW_STATUS_LABEL[k], count: n(k) })).filter(o => o.count > 0 || o.value === f.status)];
+}
+
+/** Departments present (the filter only shows with 2+). */
+export function deptOptions(rows: MwRow[]): Array<{ id: string; name: string }> {
+  const m = new Map<string, string>();
+  for (const r of rows) for (const l of linesOf(r)) {
+    const d = lineDepartment(l as never);
+    const id = d.id ?? d.name;
+    if (id && !m.has(id)) m.set(id, d.name ?? id);
+  }
+  return [...m.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** "4 of 9 samples" while a filter narrows the list, else "9 samples". */
+export function countLabel(shown: number, total: number, unit: string): string {
+  const u = (n: number) => `${unit}${n === 1 ? '' : 's'}`;
+  return shown === total ? `${total} ${u(total)}` : `${shown} of ${total} ${u(total)}`;
+}
+
+// ── Header sort = the lab's persisted sort key (the old band "Priority" picker) ───────
+
+export type MwSortCol = { colId: string; sort: 'asc' | 'desc' } | null;
+/** A column header's sort → LabSortService key. Priority (or no header) = the default order (Urgent first, then TAT). */
+export function sortKeyOf(mode: MwMode, s: MwSortCol): LabSortKey {
+  if (!s) return 'default';
+  if (s.colId === 'sample') return 'sample';
+  if (s.colId === 'patient') return 'patient';
+  if (s.colId === 'tat') return s.sort === 'asc' ? 'oldest' : 'newest';
+  if (s.colId === 'when') return s.sort === 'asc' ? 'oldest' : 'default';
+  return 'default';
+}
+/** …and back: which header shows the arrow for a saved key. */
+export function sortColOf(mode: MwMode, key: LabSortKey): MwSortCol {
+  if (key === 'sample') return mode === 'patient' ? null : { colId: 'sample', sort: 'asc' };
+  if (key === 'patient') return { colId: 'patient', sort: 'asc' };
+  if (mode === 'done') return { colId: 'when', sort: key === 'oldest' ? 'asc' : 'desc' };
+  if (key === 'oldest') return { colId: 'tat', sort: 'asc' };
+  if (key === 'newest') return { colId: 'tat', sort: 'desc' };
+  return { colId: 'priority', sort: 'asc' };   // the default order: Urgent first, then soonest due
 }

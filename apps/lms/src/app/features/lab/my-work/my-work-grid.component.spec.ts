@@ -5,6 +5,9 @@ import { vi } from 'vitest';
 import { ThemeService } from '../../../core/services/theme.service';
 import { ZoomTransitionService } from '../../../core/navigation/zoom-transition';
 import { MyWorkGridComponent, MwGridContext } from './my-work-grid.component';
+import { LabSortService } from '../../../core/services/lab-sort.service';
+import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { MwRow, MwTube, patientRowsOf, sampleRowsOf } from './my-work.grid';
 
 /**
@@ -78,6 +81,35 @@ describe('My Work grid (rendered)', () => {
     expect(rows[0].querySelectorAll('[data-action]').length).toBe(1);
     expect(rows[0].querySelector('[data-action="enter"]')!.textContent!.trim()).toBe('Enter results');
     expect(rows[0].querySelector('.wg-pill')!.textContent!.trim()).toBe('To enter');
+    // No Tests column (owner 2026-11-20): the meta line carries department + count; names in the tooltip.
+    expect(el.querySelector('.ag-header-cell[col-id="tests"]')).toBeNull();
+    const meta = rows[0].querySelector('.wg-who__meta')!;
+    expect(meta.textContent!.trim()).toBe('62/F · AA0007 · 2 tests');
+    expect(meta.getAttribute('title')).toBe('Complete Blood Count · ESR');
+  });
+
+  it('the send-back reason stays visible under the patient (rose, wraps)', async () => {
+    const { el } = await render(sampleRowsOf([{ priority: 'normal', tubes: [tube({ rejections: [{ testName: 'Lipid Profile', reason: 'Sample looks haemolysed' }] })] }]));
+    expect(el.querySelector('.ag-row .wg-who .wg-note')!.textContent!.trim()).toBe('Lipid Profile: Sample looks haemolysed');
+  });
+
+  it('column headers sort with the lab\'s persisted key (the old band picker): a header click saves it', async () => {
+    const { grid } = await render(sampleRowsOf([{ priority: 'normal', tubes: [tube()] }]));
+    const sorts = TestBed.inject(LabSortService);
+    sorts.set('work', 'default');
+    const cols = grid.cols();
+    const sortable = cols.filter(c => c.sortable).map(c => c.colId);
+    expect(sortable).toEqual(['sample', 'patient', 'priority', 'tat']);
+    // The journey cell is the SHARED ring (lab line, blank disc) that opens the journey view.
+    expect(cols.find(c => c.colId === 'journey')).toBeTruthy();
+    expect(cols.find(c => c.colId === 'priority')!.sort).toBe('asc');   // the default order shows on Priority
+    let onSort: () => void = () => undefined;
+    const api = { addEventListener: (_: string, fn: () => void) => { onSort = fn; }, getColumnState: () => [{ colId: 'patient', sort: 'asc' }] };
+    grid.onGridReady({ api } as never);
+    onSort();
+    expect(sorts.keyFor('work')).toBe('patient');
+    expect(grid.cols().find(c => c.colId === 'patient')!.sort).toBe('asc');
+    sorts.set('work', 'default');
   });
 
   it('the primary does the tube tap; ⋯ holds Delegate; a tap on the row = the old tile tap', async () => {
@@ -143,6 +175,38 @@ describe('My Work grid (rendered)', () => {
     (card.querySelector('[data-action="enter"]') as HTMLElement).click();
     expect(ctx.activate).toHaveBeenCalledTimes(1);
     expect(css()).toMatch(/\.wg-card\s+\.wg-act[^{]*\{[^}]*min-height:\s*44px/);
+  });
+
+  it('header filters on every data column (Test Master), never on the actions; alignment shared', async () => {
+    const { grid } = await render(sampleRowsOf([{ priority: 'normal', tubes: [tube()] }]));
+    const by = Object.fromEntries(grid.cols().map(c => [c.colId, c]));
+    expect(by['sample'].filter).toBe('agTextColumnFilter');
+    expect(by['patient'].filter).toBe('agTextColumnFilter');
+    expect(by['priority'].filter).toBe(WorkSetFilterComponent);
+    expect(by['status'].filter).toBe(WorkSetFilterComponent);
+    expect(by['journey'].filter).toBe(WorkSetFilterComponent);
+    expect(by['tat'].filter).toBe('agNumberColumnFilter');
+    expect(by['acts'].filter).toBe(false);
+    // Text stays left; short same-shape values centred; actions right — header matches cells.
+    expect([by['sample'].headerClass, by['patient'].headerClass]).toEqual(['wg-h-left', 'wg-h-left']);
+    for (const k of ['priority', 'journey', 'tat', 'status']) expect(by[k].headerClass).toBe('wg-h-center');
+    expect(by['acts'].headerClass).toBe('wg-h-right');
+    expect(by['patient'].cellClass).toContain('wg-c-left');
+    expect(by['tat'].cellClass).toContain('wg-c-center');
+    // The patient text filter matches name, MRN and phone.
+    const v = (by['patient'].filterValueGetter as (p: unknown) => string)({ data: sampleRowsOf([{ priority: 'normal', tubes: [tube({ tests: [{ id: 'x', status: 'pending', test: { name: 'X' }, subOrder: { order: { patient: { mrn: 'AA0007', phone: '+919876543210' } } } }] as never })] }])[0] });
+    expect(v).toBe(`${LONG} AA0007 +919876543210`);
+  });
+
+  it('a header filter narrows the rows (AND with the card-head filters, which already shaped the rows)', async () => {
+    const rows = sampleRowsOf([{ priority: 'normal', tubes: [tube(), tube({ sampleId: 's2', barcode: '0126102', patientName: 'Mr. Prem Kumar K' })] }]);
+    const { f, el } = await render(rows);
+    const api = f.debugElement.query(By.directive(DataGridComponent)).componentInstance.gridApi();
+    await api.setColumnFilterModel('patient', { filterType: 'text', type: 'contains', filter: 'prem' });
+    api.onFilterChanged();
+    await settle(f);
+    await new Promise(r => setTimeout(r, 500)); f.detectChanges();
+    expect([...el.querySelectorAll('.ag-row.mwg-row:not(.ag-opacity-zero) .wg-who__name')].map(n => n.textContent!.trim())).toEqual(['Mr. Prem Kumar K']);
   });
 
   it('empty keeps its copy', async () => {

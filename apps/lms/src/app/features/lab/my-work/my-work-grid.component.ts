@@ -2,21 +2,27 @@ import {
   AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, NgZone, TemplateRef, computed, inject, input, signal, viewChild,
 } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
-import type { ColDef, GetRowIdParams, IsFullWidthRowParams, RowClassParams, RowClickedEvent } from 'ag-grid-community';
+import type { ColDef, GetRowIdParams, GridReadyEvent, IsFullWidthRowParams, RowClassParams, RowClickedEvent } from 'ag-grid-community';
+import { LabSortService } from '../../../core/services/lab-sort.service';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { DataGridTemplateCellComponent } from '../../../shared/components/data-grid/template-cell.component';
 import { ActionsMenuComponent, PfAction } from '../../../shared/components/actions-menu/actions-menu.component';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
-import { WorkJourneyComponent } from '../../../shared/components/work-journey/work-journey.component';
+import { JourneyRingComponent } from '../../../shared/components/journey-ring/journey-ring.component';
+import type { JourneyDetail } from '../../../shared/components/journey-ring/journey-detail';
+import type { RingStep } from '../../../shared/components/journey-ring/journey-ring';
+import { labLineDetail } from '../../../shared/utils/lab-line-journey';
+import { tatDetail } from '../../../shared/utils/lab-priority';
 import { SkeletonComponent } from '../../../shared/primitives/skeleton.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
-import { GridFold, fitFold, minWidthOf } from '../../../shared/utils/work-grid';
+import { GridFold, alignCol, dateFilterCol, fitFold, minWidthOf, minutesSince, numberFilterCol, setFilterCol, textFilterCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import type { OrderTest } from '../../../shared/models/order.model';
 import {
-  MwAction, MwDoneTube, MwMode, MwRow, MwRules, MwTube, doneJourney, doneMenu, donePrimary, doneStatus, groupPrimary,
-  groupStatus, mwColumns, tatCell, tubeJourney, tubeMenu, tubePrimary, tubeStatus,
+  MwAction, MwDoneTube, MwMode, MwRow, MwRules, MwTube, doneMenu, donePrimary, doneRing, doneStatus, groupPrimary, groupRing,
+  groupStatus, mwColumns, sortColOf, sortKeyOf, tatCell, testNames, testsSummary, tubeLate, tubeMenu, tubePrimary, tubeRing, tubeStatus,
 } from './my-work.grid';
 
 /** What My Work hands its grid: its existing handlers and busy states (nothing new is decided here). */
@@ -52,7 +58,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
 @Component({
   selector: 'pf-mw-grid',
   standalone: true,
-  imports: [DataGridComponent, ActionsMenuComponent, DailyNoComponent, WorkJourneyComponent, SkeletonComponent, BusyDirective, ZoomSourceDirective, DatePipe, NgTemplateOutlet],
+  imports: [DataGridComponent, ActionsMenuComponent, DailyNoComponent, JourneyRingComponent, SkeletonComponent, BusyDirective, ZoomSourceDirective, DatePipe, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (phone()) {
@@ -86,7 +92,8 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
                       @if (row.group.patientMeta) { <span class="wg-who__meta">{{ row.group.patientMeta }}</span> }</span>
                     <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: st }" />
                   </span>
-                  <span class="wg-tests">{{ testsOf(row.group.items) }}</span>
+                  <span class="wg-sub" [attr.title]="testsOf(row.group.items)">{{ summary(row.group.items) }}</span>
+                  @for (t of row.tubes; track t.sampleId) { @for (r of t.rejections; track r.testName) { <span class="wg-note">{{ r.testName }}: {{ r.reason }}</span> } }
                   <span class="wg-card__foot">
                     @let tc = tat(row.group, row.group.items);
                     <span class="wg-tat" [class.wg-tat--late]="tc.late" [attr.title]="tc.detail">{{ tc.text }}</span>
@@ -113,8 +120,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
                     <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: st }" />
                   </span>
                   <span class="wg-who"><span class="wg-who__name"><pf-daily-no [of]="row.done.tests[0]?.subOrder" />{{ row.done.patientName }}</span>
-                    <span class="wg-who__meta">{{ metaJoin(row.done.patientMeta, row.done.deptName) }}</span></span>
-                  <span class="wg-tests">{{ row.done.testNames }}</span>
+                    <span class="wg-who__meta" [attr.title]="row.done.testNames">{{ metaJoin(row.done.patientMeta, summary(row.done.tests)) }}</span></span>
                   <span class="wg-card__foot">
                     <span class="wg-sub">{{ row.done.completedAt | date:'d MMM, h:mm a' }}</span>
                     <span class="wg-acts">
@@ -133,7 +139,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
         [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true"
         [isFullWidthRow]="isDetail" [fullWidthCellRenderer]="detailRenderer" [fullWidthCellRendererParams]="detailParams()"
         [loading]="loading() && !rows().length" loadingLabel="Loading the queue…" [emptyTitle]="emptyTitle()"
-        (rowClicked)="onRow($event)" />
+        (rowClicked)="onRow($event)" (gridReady)="onGridReady($event)" />
     }
 
     <!-- ── Cell templates (pf-data-grid template cells — the page's own nodes) ── -->
@@ -159,8 +165,9 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
         @case ('tube') {
           <span class="wg-who">
             <span class="wg-who__name"><pf-daily-no [of]="row.tube.tests[0]?.subOrder" />{{ row.tube.patientName }}</span>
-            @if (row.tube.patientMeta) { <span class="wg-who__meta">{{ row.tube.patientMeta }}</span> }
-            <ng-container [ngTemplateOutlet]="foldTpl" [ngTemplateOutletContext]="{ st: tStatus(row.tube), urgent: row.priority === 'urgent', tests: fold() === 'tight' ? testsOf(row.tube.tests) : '' }" />
+            <span class="wg-who__meta" [attr.title]="testsOf(row.tube.tests)">{{ metaJoin(row.tube.patientMeta, summary(row.tube.tests)) }}</span>
+            @for (r of row.tube.rejections; track r.testName) { <span class="wg-note">{{ r.testName }}: {{ r.reason }}</span> }
+            <ng-container [ngTemplateOutlet]="foldTpl" [ngTemplateOutletContext]="{ st: tStatus(row.tube), urgent: row.priority === 'urgent' }" />
           </span>
         }
         @case ('patient') {
@@ -168,14 +175,15 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
             <span class="wg-who__name wg-link" role="link" tabindex="0"
                   [attr.aria-label]="(row.open ? 'Hide tubes for ' : 'Show tubes for ') + row.group.patientName"
                   (keydown.enter)="key(row, $event)" (keydown.space)="key(row, $event)"><pf-daily-no [of]="row.group.items[0]?.subOrder" />{{ row.group.patientName }}</span>
-            @if (row.group.patientMeta) { <span class="wg-who__meta">{{ row.group.patientMeta }}</span> }
-            <ng-container [ngTemplateOutlet]="foldTpl" [ngTemplateOutletContext]="{ st: gStatus(row.tubes), urgent: row.priority === 'urgent', tests: fold() === 'tight' ? testsOf(row.group.items) : '' }" />
+            <span class="wg-who__meta" [attr.title]="testsOf(row.group.items)">{{ metaJoin(row.group.patientMeta, summary(row.group.items)) }}</span>
+            @for (t of row.tubes; track t.sampleId) { @for (r of t.rejections; track r.testName) { <span class="wg-note">{{ r.testName }}: {{ r.reason }}</span> } }
+            <ng-container [ngTemplateOutlet]="foldTpl" [ngTemplateOutletContext]="{ st: gStatus(row.tubes), urgent: row.priority === 'urgent' }" />
           </span>
         }
         @case ('done') {
           <span class="wg-who">
             <span class="wg-who__name"><pf-daily-no [of]="row.done.tests[0]?.subOrder" />{{ row.done.patientName }}</span>
-            <span class="wg-who__meta">{{ metaJoin(row.done.patientMeta, row.done.deptName) }}</span>
+            <span class="wg-who__meta" [attr.title]="row.done.testNames">{{ metaJoin(row.done.patientMeta, summary(row.done.tests)) }}</span>
             @if (fold() !== 'full') {
               <span class="wg-who__fold">
                 <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: dStatus(row.done) }" />
@@ -187,34 +195,14 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
       }
     </ng-template>
 
-    <ng-template #cTests let-row>
-      @switch (row.kind) {
-        @case ('tube') {
-          <span class="wg-cell">
-            <span class="wg-tests">{{ testsOf(row.tube.tests) }}</span>
-            <span class="wg-sub">{{ row.tube.deptName || 'Tube' }}</span>
-            @for (r of row.tube.rejections; track r.testName) { <span class="wg-note">{{ r.testName }}: {{ r.reason }}</span> }
-          </span>
-        }
-        @case ('patient') {
-          <span class="wg-cell">
-            <span class="wg-tests">{{ testsOf(row.group.items) }}</span>
-            <span class="wg-sub">{{ deptsOf(row.tubes) }}</span>
-          </span>
-        }
-        @case ('done') {
-          <span class="wg-cell"><span class="wg-tests">{{ row.done.testNames }}</span></span>
-        }
-      }
-    </ng-template>
-
     <ng-template #cPriority let-row>
       <span class="wg-prio" [attr.data-p]="row.priority">{{ row.priority === 'urgent' ? 'Urgent' : 'Normal' }}</span>
     </ng-template>
 
-    <!-- Journey: ONE isolated element (pf-work-journey) — the shared journey ring replaces it here in one line. -->
+    <!-- Journey: the SHARED ring (lab line; blank disc — a single-service screen). Only the ring opens the journey
+         view; the row tap stays the row's. -->
     <ng-template #cJourney let-row>
-      <pf-work-journey [steps]="journeyOf(row)" />
+      <pf-journey-ring class="mwg-ring" [steps]="journeyOf(row)" service="lab" [showLabel]="false" [size]="40" [detail]="detailOf(row)" />
     </ng-template>
 
     <ng-template #cTat let-row>
@@ -272,9 +260,8 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
               <span class="wg-id">{{ t.barcode || 'no label' }}</span>
               <ng-container [ngTemplateOutlet]="tags" [ngTemplateOutletContext]="{ $implicit: t }" />
             </span>
-            <span class="wg-cell mwg-tube__tests">
-              <span class="wg-tests">{{ testsOf(t.tests) }}</span>
-              <span class="wg-sub">{{ t.deptName || 'Tube' }}</span>
+            <span class="wg-cell mwg-tube__tests" [attr.title]="testsOf(t.tests)">
+              <span class="wg-sub">{{ summary(t.tests) }}</span>
               @for (r of t.rejections; track r.testName) { <span class="wg-note">{{ r.testName }}: {{ r.reason }}</span> }
             </span>
             <span class="mwg-tube__st"><ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: st }" /></span>
@@ -302,13 +289,12 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
       }
     </ng-template>
 
-    <ng-template #foldTpl let-st="st" let-urgent="urgent" let-tests="tests">
+    <ng-template #foldTpl let-st="st" let-urgent="urgent">
       @if (fold() !== 'full') {
         <span class="wg-who__fold">
           <span class="wg-pill" [attr.data-tone]="st.tone"><span class="wg-dot" aria-hidden="true"></span>{{ st.label }}</span>
           @if (urgent) { <span class="wg-prio" data-p="urgent">Urgent</span> }
         </span>
-        @if (tests) { <span class="wg-sub">{{ tests }}</span> }
       }
     </ng-template>
 
@@ -360,9 +346,8 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
         </span>
         @if (who) {
           <span class="wg-who"><span class="wg-who__name"><pf-daily-no [of]="t.tests[0]?.subOrder" />{{ t.patientName }}</span>
-            <span class="wg-who__meta">{{ metaJoin(t.patientMeta, t.deptName) }}</span></span>
-        }
-        <span class="wg-tests">{{ testsOf(t.tests) }}</span>
+            <span class="wg-who__meta" [attr.title]="testsOf(t.tests)">{{ metaJoin(t.patientMeta, summary(t.tests)) }}</span></span>
+        } @else { <span class="wg-sub" [attr.title]="testsOf(t.tests)">{{ summary(t.tests) }}</span> }
         @for (r of t.rejections; track r.testName) { <span class="wg-note">{{ r.testName }}: {{ r.reason }}</span> }
         <span class="wg-card__foot">
           <span class="wg-tat" [class.wg-tat--late]="tc.late" [attr.title]="tc.detail">{{ tc.text }}</span>
@@ -408,6 +393,8 @@ export class MyWorkGridComponent implements AfterViewInit {
   readonly phone = input(false);
 
   readonly web = webPointerSignal();
+  private readonly sorts = inject(LabSortService);
+  private readonly scope = computed(() => (this.mode() === 'done' ? 'completed' : 'work') as 'completed' | 'work');
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly zone = inject(NgZone);
   private readonly destroyRef = inject(DestroyRef);
@@ -423,21 +410,60 @@ export class MyWorkGridComponent implements AfterViewInit {
   private sizes(touch: boolean): Record<string, ColDef<MwRow>> {
     return {
       sample: { width: 128, minWidth: 116 },
-      patient: { flex: 1.5, minWidth: 170, cellClass: 'wg-c-wrap' },
-      tests: { flex: 1.3, minWidth: 150, cellClass: 'wg-c-wrap' },
-      priority: { width: 96, minWidth: 90 },
-      journey: { width: 108, minWidth: 100 },
-      tat: { width: 124, minWidth: 112 },
-      status: { width: 150, minWidth: 136, cellClass: 'wg-c-wrap' },
-      when: { width: 132, minWidth: 124 },
+      patient: { flex: 2, minWidth: 220 },
+      // Wide enough for the header words + sort / filter icons (headers never ellipsise).
+      priority: { width: 128, minWidth: 128 },
+      journey: { width: 124, minWidth: 124 },
+      tat: { width: 124, minWidth: 116 },
+      status: { width: 150, minWidth: 136 },
+      when: { width: 160, minWidth: 160 },
       // One primary + ⋯ at their full size (touch: 44 tall, 8 apart) — columns fold before the buttons shrink.
-      acts: { width: touch ? 220 : 196, minWidth: touch ? 220 : 196, headerClass: 'wg-h-right', cellClass: 'wg-c-acts' },
+      acts: { width: touch ? 220 : 196, minWidth: touch ? 220 : 196 },
     };
   }
 
+  /** Column rules shared by every work grid (shared/utils/work-grid.ts): alignment + Test Master's header filters. */
+  private colRules(): Record<string, ColDef<MwRow>> {
+    const set = WorkSetFilterComponent;
+    return {
+      sample: { ...alignCol('left'), ...textFilterCol<MwRow>(r => this.fSample(r)) } as ColDef<MwRow>,
+      patient: { ...alignCol('left', 'wg-c-wrap'), ...textFilterCol<MwRow>(r => this.fPatient(r)) } as ColDef<MwRow>,
+      priority: { ...alignCol('center'), ...setFilterCol<MwRow>(r => (r.kind === 'done' ? '' : r.priority === 'urgent' ? 'Urgent' : 'Normal'), set) } as ColDef<MwRow>,
+      journey: { ...alignCol('center'), ...setFilterCol<MwRow>(r => this.fStep(r), set) } as ColDef<MwRow>,
+      tat: { ...alignCol('center', 'wg-c-wrap'), ...numberFilterCol<MwRow>(r => this.fMinutes(r)) } as ColDef<MwRow>,
+      status: { ...alignCol('center', 'wg-c-wrap'), ...setFilterCol<MwRow>(r => this.fStatus(r), set) } as ColDef<MwRow>,
+      when: { ...alignCol('center'), ...dateFilterCol<MwRow>(r => (r.kind === 'done' ? r.done.completedAt : null)) } as ColDef<MwRow>,
+      acts: { ...alignCol('right', 'wg-c-acts'), filter: false } as ColDef<MwRow>,
+    };
+  }
+  // Filter values per row (a patient's inline tubes row answers like its patient row).
+  private linesOf(r: MwRow): OrderTest[] { return r.kind === 'tube' ? r.tube.tests : r.kind === 'done' ? r.done.tests : r.group.items; }
+  private fSample(r: MwRow): string {
+    return r.kind === 'tube' ? r.tube.barcode || r.tube.sampleId : r.kind === 'done' ? r.done.barcode || r.done.sampleId
+      : r.tubes.map(t => t.barcode || t.sampleId).join(' ');
+  }
+  private fPatient(r: MwRow): string {
+    const p = this.linesOf(r)[0]?.subOrder?.order?.patient as { displayName?: string; mrn?: string; phone?: string } | undefined;
+    const name = r.kind === 'tube' ? r.tube.patientName : r.kind === 'done' ? r.done.patientName : r.group.patientName;
+    return [name, p?.mrn, p?.phone].filter(Boolean).join(' ');
+  }
+  private fStatus(r: MwRow): string {
+    return r.kind === 'tube' ? this.tStatus(r.tube).label : r.kind === 'done' ? this.dStatus(r.done).label : this.gStatus(r.tubes).label;
+  }
+  private fStep(r: MwRow): string {
+    const ring = r.kind === 'detail' ? this.journeyOf({ ...r, kind: 'patient', open: true } as MwRow) : this.journeyOf(r);
+    const cur = ring.find(x => x.state === 'now' || x.state === 'late');
+    return cur ? cur.label + (cur.state === 'late' ? ' (late)' : '') : ring.length ? 'Done' : '';
+  }
+  /** Minutes in the lab (the TAT cell's "in lab 40m"). */
+  private fMinutes(r: MwRow): number | null {
+    const rec = this.linesOf(r).map(l => l.subOrder?.receivedAtLab).filter((v): v is string => !!v).sort()[0];
+    return minutesSince(rec ?? null);
+  }
+
+
   private readonly sampleTpl = viewChild<TemplateRef<unknown>>('cSample');
   private readonly patientTpl = viewChild<TemplateRef<unknown>>('cPatient');
-  private readonly testsTpl = viewChild<TemplateRef<unknown>>('cTests');
   private readonly priorityTpl = viewChild<TemplateRef<unknown>>('cPriority');
   private readonly journeyTpl = viewChild<TemplateRef<unknown>>('cJourney');
   private readonly tatTpl = viewChild<TemplateRef<unknown>>('cTat');
@@ -462,12 +488,22 @@ export class MyWorkGridComponent implements AfterViewInit {
 
   readonly cols = computed<ColDef<MwRow>[]>(() => {
     const tpl: Record<string, TemplateRef<unknown> | undefined> = {
-      sample: this.sampleTpl(), patient: this.patientTpl(), tests: this.testsTpl(), priority: this.priorityTpl(), journey: this.journeyTpl(),
+      sample: this.sampleTpl(), patient: this.patientTpl(), priority: this.priorityTpl(), journey: this.journeyTpl(),
       tat: this.tatTpl(), status: this.statusTpl(), when: this.whenTpl(), acts: this.actsTpl(),
     };
     const size = this.sizes(!this.web());
+    // Header sort = the lab's persisted sort (LabSortService, the old band picker): the server-side order is built
+    // by My Work (applyLabSort); the grid only shows the arrow, its own comparator keeps rows (and inline tubes) in order.
+    const on = sortColOf(this.mode(), this.sorts.keyFor(this.scope()));
+    const order: Record<string, ColDef<MwRow>['sortingOrder']> = {
+      sample: ['asc'], patient: ['asc'], priority: ['asc'], tat: ['asc', 'desc'], when: ['desc', 'asc'],
+    };
+    const rules = this.colRules();
     return mwColumns(this.mode(), this.fold()).map(p => ({
-      colId: p.colId, headerName: p.header, hide: p.hide, ...size[p.colId],
+      colId: p.colId, headerName: p.header, hide: p.hide, ...size[p.colId], ...rules[p.colId],
+      ...(order[p.colId] && !(this.mode() === 'patient' && p.colId === 'sample')
+        ? { sortable: true, sortingOrder: order[p.colId], comparator: () => 0, sort: on?.colId === p.colId ? on.sort : null }
+        : {}),
       cellRenderer: DataGridTemplateCellComponent, cellRendererParams: { tpl: tpl[p.colId] },
     }));
   });
@@ -498,21 +534,61 @@ export class MyWorkGridComponent implements AfterViewInit {
   tMenu(t: MwTube): PfAction[] { return tubeMenu(t, this.rules()).map(a => ({ id: a.id, label: a.label, icon: ICON[a.id] })); }
   dMenu(d: MwDoneTube): PfAction[] { return doneMenu(d, this.rules()).map(a => ({ id: a.id, label: a.label, icon: ICON[a.id] })); }
   tat(x: { remainingMin: number | null; dueAt: number | null }, lines: OrderTest[], done = false) { return tatCell(x, lines, done); }
-  journeyOf(row: MwRow) {
-    if (row.kind === 'tube') return tubeJourney(row.tube);
-    if (row.kind === 'done') return doneJourney(row.done);
-    if (row.kind === 'patient') {
-      // A patient's journey = their least-advanced tube.
-      const j = row.tubes.map(t => tubeJourney(t));
-      return j.sort((a, b) => a.filter(s => s.state === 'done').length - b.filter(s => s.state === 'done').length)[0] ?? [];
+  /** Ring steps per row object (memoised: rows are rebuilt when the data changes, never in between). */
+  private readonly ringCache = new WeakMap<MwRow, RingStep[]>();
+  journeyOf(row: MwRow): RingStep[] {
+    let r = this.ringCache.get(row);
+    if (!r) {
+      r = row.kind === 'tube' ? tubeRing(row.tube) : row.kind === 'done' ? doneRing(row.done)
+        : row.kind === 'patient' ? groupRing(row.tubes, row.group.items) : [];
+      this.ringCache.set(row, r);
     }
-    return [];
+    return r;
   }
-  testsOf(lines: Array<{ test?: { name?: string } | null }>): string { return lines.map(l => l.test?.name ?? 'Test').join(' · '); }
-  deptsOf(tubes: MwTube[]): string {
-    const n = tubes.length;
-    return [...new Set(tubes.map(t => t.deptName).filter(Boolean))].join(' · ') + ` · ${n} tube${n === 1 ? '' : 's'}`;
+  /** The journey view for a row, built at tap time from what the row carries; its action = the row's primary. */
+  private readonly detailCache = new WeakMap<MwRow, () => JourneyDetail>();
+  detailOf(row: MwRow): () => JourneyDetail {
+    let d = this.detailCache.get(row);
+    if (!d) { d = () => this.buildDetail(row); this.detailCache.set(row, d); }
+    return d;
   }
+  private buildDetail(row: MwRow): JourneyDetail {
+    const ring = this.journeyOf(row);
+    if (row.kind === 'done') {
+      const a = this.dPrimary(row.done);
+      return labLineDetail({ lines: row.done.tests, ring, name: row.done.patientName, meta: this.metaJoin(row.done.patientMeta, row.done.barcode),
+        action: a ? { label: a.label, aria: a.aria, run: () => this.pickDone(a.id, row.done) } : { label: 'View results', run: () => this.ctx().view(row.done) } });
+    }
+    const tube = row.kind === 'tube' ? row.tube : null;
+    const tubes = row.kind === 'tube' ? [row.tube] : row.kind === 'patient' ? row.tubes : [];
+    const lines = row.kind === 'tube' ? row.tube.tests : row.kind === 'patient' ? row.group.items : [];
+    const name = row.kind === 'tube' ? row.tube.patientName : row.kind === 'patient' ? row.group.patientName : '';
+    const meta = row.kind === 'tube' ? this.metaJoin(row.tube.patientMeta, row.tube.barcode) : row.kind === 'patient' ? row.group.patientMeta : '';
+    const clockOf = tube ?? (row.kind === 'patient' ? row.group : null);
+    const late = tubes.some(tubeLate);
+    const rem = clockOf?.remainingMin ?? null;
+    const tc = clockOf ? this.tat(clockOf, lines) : null;
+    const a = row.kind === 'tube' ? this.tPrimary(row.tube) : row.kind === 'patient' ? this.gPrimary(row.tubes, row.open) : null;
+    const t0 = tube ?? (row.kind === 'patient' ? row.tubes[0] : undefined);
+    return labLineDetail({
+      lines, ring, name, meta,
+      lateMin: late && rem != null ? Math.round(-rem) : null,
+      note: late ? tatDetail(rem) : tc && tc.text !== '—' ? tc.text : null,
+      action: a && a.id !== 'tubes' && t0 ? { label: a.label, aria: a.aria, run: () => this.ctx().activate(t0, name) } : null,
+    });
+  }
+  testsOf(lines: Array<{ test?: { name?: string } | null }>): string { return testNames(lines); }
+  summary(lines: OrderTest[]): string { return testsSummary(lines); }
+
+  /** A header click saves the lab's sort key (persisted per user, same as the old picker); My Work re-orders. */
+  onGridReady(e: GridReadyEvent<MwRow>): void {
+    e.api.addEventListener('sortChanged', () => {
+      const st = e.api.getColumnState().find(c => c.sort);
+      const key = sortKeyOf(this.mode(), st ? { colId: st.colId, sort: st.sort as 'asc' | 'desc' } : null);
+      if (key !== this.sorts.keyFor(this.scope())) this.sorts.set(this.scope(), key);
+    });
+  }
+
   metaJoin(...parts: Array<string | null | undefined>): string { return parts.filter(Boolean).join(' · '); }
   tubeAria(t: MwTube): string { return (this.rules().tab === 'service_queue' ? 'Pick tube ' : 'Open tube ') + (t.barcode || t.sampleId); }
 

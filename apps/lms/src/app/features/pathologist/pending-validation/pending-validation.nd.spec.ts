@@ -179,7 +179,10 @@ describe('Pathologist queue (nd) — tiles', () => {
     expect(hae.querySelector('.pv-tile__who')!.textContent!.trim()).toBe(LONG_NAME);   // never cut
     expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('44/F · AA0007 · Haematology');
     expect(hae.querySelector('.pv-tile__meta')!.textContent).not.toContain('|');
-    expect(hae.querySelector('.pv-tile__tests')!.textContent).toContain('CBC · ESR');
+    // No Tests column (owner 2026-11-20): department + count in the meta line, the names in its tooltip.
+    expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('Haematology · 2 tests');
+    expect(hae.querySelector('.pv-tile__meta')!.getAttribute('title')).toBe('CBC · ESR');
+    expect(hae.querySelector('.pv-tile__tests')).toBeNull();
     // ONE status each: a neutral pill + dot, no chip.
     for (const t of tiles) {
       expect(t.querySelectorAll('.pv-status').length).toBe(1);
@@ -206,6 +209,20 @@ describe('Pathologist queue (nd) — tiles', () => {
     // The grid keeps the old groups' order: Urgent first, then Normal (mine → priority → least time left).
     expect(el.querySelector('.ag-row[row-index="0"]')!.classList).toContain('wg-row--urgent');
     expect(el.textContent).not.toMatch(/\bHigh\b/);
+  });
+
+  it('header filters on every data column (not the actions) + the shared alignment; the journey cell is the shared ring', async () => {
+    const { c, el } = await render();
+    const by = Object.fromEntries(c.cols().map((d: any) => [d.colId, d]));
+    expect(by['sample'].filter).toBe('agTextColumnFilter');
+    expect(by['patient'].filter).toBe('agTextColumnFilter');
+    expect(by['wait'].filter).toBe('agNumberColumnFilter');
+    expect(typeof by['status'].filter).toBe('function');
+    expect(by['acts'].filter).toBe(false);
+    expect([by['sample'].headerClass, by['patient'].headerClass, by['status'].headerClass, by['wait'].headerClass, by['acts'].headerClass])
+      .toEqual(['wg-h-left', 'wg-h-left', 'wg-h-center', 'wg-h-center', 'wg-h-right']);
+    expect(el.querySelector('.ag-row pf-journey-ring')).not.toBeNull();
+    expect(el.querySelector('pf-work-journey')).toBeNull();
   });
 
   it('row action: ONE text "Review" (44px tall on touch, never icon-only); a tap anywhere on the row opens the review', async () => {

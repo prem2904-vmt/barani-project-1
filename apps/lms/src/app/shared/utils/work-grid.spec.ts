@@ -1,4 +1,4 @@
-import { TOUCH_GAP_PX, TOUCH_TARGET_PX, fitFold, minWidthOf, gridFold, rowActionSizing, touchViolations, waitText } from './work-grid';
+import { alignCol, dateFilterCol, minutesSince, numberFilterCol, setFilterCol, textFilterCol, TOUCH_GAP_PX, TOUCH_TARGET_PX, fitFold, minWidthOf, gridFold, rowActionSizing, touchViolations, waitText } from './work-grid';
 
 const box = (left: number, width: number, height = 44, top = 0, name?: string) => ({ left, right: left + width, top, bottom: top + height, name });
 
@@ -60,5 +60,30 @@ describe('work grids — waiting text', () => {
     expect(waitText('2026-11-20T07:55:00Z', now)).toBe('2h 5m');
     expect(waitText(null, now)).toBe('');
     expect(waitText('not a date', now)).toBe('');
+  });
+});
+
+describe('work grids — shared column rules (alignment + header filters)', () => {
+  it('alignment classes: header always matches its cells', () => {
+    expect(alignCol('left')).toEqual({ headerClass: 'wg-h-left', cellClass: ['wg-c-left'] });
+    expect(alignCol('center', 'wg-c-wrap')).toEqual({ headerClass: 'wg-h-center', cellClass: ['wg-c-center', 'wg-c-wrap'] });
+    expect(alignCol('right', 'wg-c-acts').headerClass).toBe('wg-h-right');
+  });
+  it('filter kinds read the row through filterValueGetter', () => {
+    type R = { name: string; mins: number | null; at: string | null };
+    const r: R = { name: 'Ms. Arya Stark AA0003', mins: 40, at: '2026-11-20T09:00:00Z' };
+    const t = textFilterCol<R>(x => x.name);
+    expect(t.filter).toBe('agTextColumnFilter');
+    expect(t.filterValueGetter({ data: r })).toBe('Ms. Arya Stark AA0003');
+    expect(t.filterValueGetter({})).toBe('');
+    expect(numberFilterCol<R>(x => x.mins).filterValueGetter({ data: r })).toBe(40);
+    expect(numberFilterCol<R>(x => x.mins).filter).toBe('agNumberColumnFilter');
+    expect(dateFilterCol<R>(x => x.at).filterValueGetter({ data: r })).toBeInstanceOf(Date);
+    const C = class {};
+    expect(setFilterCol<R>(x => x.name, C).filter).toBe(C);
+  });
+  it('minutes since a time (the TAT / Waiting number filter)', () => {
+    expect(minutesSince('2026-11-20T09:20:00Z', Date.parse('2026-11-20T10:00:00Z'))).toBe(40);
+    expect(minutesSince(null)).toBeNull();
   });
 });

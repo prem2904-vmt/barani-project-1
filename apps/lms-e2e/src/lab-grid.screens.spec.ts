@@ -166,6 +166,47 @@ for (const dark of [false, true]) {
           expect(h).toBeGreaterThanOrEqual(63.5);
         }
         expect(await touchAudit(page, '.pf-mw-pane', '[data-testid="mw-grid"] .ag-row button')).toEqual([]);
+        // No Tests column; the band's sort picker is gone (headers sort); the head is ONE row with its filters.
+        await expect(page.locator('[data-testid="mw-grid"] .ag-header-cell[col-id="tests"]')).toHaveCount(0);
+        await expect(page.locator('pf-hero-band pf-lab-sort')).toHaveCount(0);
+        const head = await visible(page, '.pf-mw-pane__hdr--tabs').boundingBox();
+        expect(head!.height, 'card head stays one row').toBeLessThan(72);
+        expect(await touchAudit(page, '.pf-mw-pane', '.pf-mw-pane__hdr--tabs > .mw-filterwrap > button, .pf-mw-pane__hdr--tabs > .mw-find')).toEqual([]);
+        // Search narrows the list and the count says so.
+        await visible(page, '[data-testid="mw-find"]').fill('Arya');
+        await expect(page.locator('[data-testid="mw-grid"] .ag-row.mwg-row').locator('visible=true')).toHaveCount(1);
+        await shot(page, `mywork-search-${mode}`);
+        await visible(page, '[data-testid="mw-find"]').fill('');
+        await page.mouse.click(4, 4);
+        // Filters: priority + department (+ window on Completed).
+        await visible(page, '[data-testid="mw-filter-btn"]').click();
+        await expect(visible(page, '[data-testid="mw-filters"]')).toBeVisible();
+        await shot(page, `mywork-filters-${mode}`);
+        await visible(page, '[data-testid="mw-filters"] [data-filter="priority"] [role="radio"]:has-text("Urgent")').click();
+        await expect(page.locator('[data-testid="mw-grid"] .ag-row.mwg-row').locator('visible=true')).toHaveCount(1);
+        await page.keyboard.press('Escape');
+        await expect(visible(page, '[data-testid="mw-filter-btn"]')).toHaveClass(/mw-filterbtn--on/);
+        await visible(page, '[data-testid="mw-filter-btn"]').click();
+        await visible(page, '[data-testid="mw-filters"] .mwf__clear').click();
+        await page.keyboard.press('Escape');
+        // Header (column) filters like Test Master: the Status set filter narrows the rows; the icon is a 44px target on touch.
+        const fbtn = visible(page, '[data-testid="mw-grid"] .ag-header-cell[col-id="status"] .ag-header-cell-filter-button');
+        if (await fbtn.count()) {
+          await fbtn.click();
+          await expect(visible(page, '.ag-filter pf-work-set-filter, .ag-popup pf-work-set-filter')).toBeVisible();
+          await shot(page, `mywork-colfilter-${mode}`);
+          await visible(page, 'pf-work-set-filter [data-value="Draft"]').click();
+          await expect(page.locator('[data-testid="mw-grid"] .ag-row.mwg-row:not(.ag-opacity-zero)').locator('visible=true')).toHaveCount(1);
+          await expect(visible(page, '[data-testid="mw-grid"] .ag-header-cell[col-id="status"]')).toHaveClass(/ag-header-cell-filtered/);
+          await visible(page, 'pf-work-set-filter .wsf__clear').click();
+          await page.keyboard.press('Escape');
+        }
+        // The shared journey ring opens the journey view (the row tap stays the row's).
+        await visible(page, '[data-testid="mw-grid"] .ag-row pf-journey-ring .pf-jring__btn').click();
+        await expect(visible(page, 'pf-journey-overlay [role="dialog"]')).toBeVisible();
+        await shot(page, `mywork-journey-${mode}`);
+        await page.keyboard.press('Escape');
+        await expect(page.locator('pf-journey-overlay [role="dialog"]').locator('visible=true')).toHaveCount(0);
         // Row tap (patient focus) opens the patient's tubes; a tube tap opens result entry (scan gate).
         await visible(page, `[data-testid="mw-grid"] .ag-row .wg-who__name:has-text("${LONG}")`).click();
         await expect(visible(page, '[data-testid="mw-grid"] .mwg-tubes')).toBeVisible();
@@ -174,6 +215,13 @@ for (const dark of [false, true]) {
       } else {
         await expect(visible(page, '[data-testid="mw-cards"]')).toBeVisible({ timeout: 20_000 });
         expect(await touchAudit(page, '.pf-mw-pane', '[data-testid="mw-cards"] button')).toEqual([]);
+        expect(await touchAudit(page, '.pf-mw-pane', '.pf-mw-pane__hdr--tabs > .mw-filterwrap > button, .pf-mw-pane__hdr--tabs > .mw-find')).toEqual([]);
+        // Phones: Filters is a bottom sheet (with Sort — no column headers on a phone).
+        await visible(page, '[data-testid="mw-filter-btn"]').click();
+        await expect(visible(page, '[data-testid="mw-filters"]')).toBeVisible();
+        await expect(visible(page, '[data-testid="mw-filters"] pf-lab-sort')).toBeVisible();
+        await shot(page, `mywork-filters-${mode}`);
+        await page.keyboard.press('Escape');
       }
     }
 
@@ -223,6 +271,10 @@ for (const dark of [false, true]) {
         await expect(visible(page, '[data-testid="pv-grid"] .ag-row')).toBeVisible({ timeout: 20_000 });
         await expect(visible(page, `[data-testid="pv-grid"] .pv-who__name:has-text("${LONG}")`)).toBeVisible();
         await expect(visible(page, '[data-testid="pv-grid"] .pv-ack')).toBeVisible();
+        await visible(page, '[data-testid="pv-grid"] .ag-row pf-journey-ring .pf-jring__btn').click();
+        await expect(visible(page, 'pf-journey-overlay [role="dialog"]')).toBeVisible();
+        await shot(page, `pathologist-journey-${mode}`);
+        await page.keyboard.press('Escape');
         expect(await touchAudit(page, '.pv-queue', '[data-testid="pv-grid"] .ag-row button')).toEqual([]);
         if (isTouch()) {
           const h = await visible(page, '[data-testid="pv-grid"] .ag-row').evaluate(e => e.getBoundingClientRect().height);

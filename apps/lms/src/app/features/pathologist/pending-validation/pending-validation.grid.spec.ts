@@ -1,4 +1,4 @@
-import { pvColumns, pvJourney, pvRows, pvWaiting } from './pending-validation.grid';
+import { pvColumns, pvMeta, pvRing, pvRows, pvWaiting } from './pending-validation.grid';
 import type { QueueTile } from './pending-validation.logic';
 
 const NOW = Date.parse('2026-11-20T10:00:00Z');
@@ -26,21 +26,26 @@ describe('Pathologist grid — waiting since entered (rose when past TAT)', () =
   });
 });
 
-describe('Pathologist grid — journey (the open step is validation)', () => {
-  it('entered tubes wait on validation: now, or late past TAT', () => {
-    expect(pvJourney({ remainingMin: 20 }).map(s => s.state)).toEqual(['done', 'done', 'done', 'now']);
-    expect(pvJourney({ remainingMin: -5 }).map(s => s.state)).toEqual(['done', 'done', 'done', 'late']);
-    expect(pvJourney({ remainingMin: null }).at(-1)!.label).toBe('Validated');
+describe('Pathologist grid — the shared ring (Validation is the open step)', () => {
+  const items = [{ status: 'entered', subOrder: { receivedAtLab: '2026-11-20T09:00:00Z' } }] as never;
+  it('entered tubes wait on validation: now, or late past the TAT', () => {
+    expect(pvRing({ items, remainingMin: 20 }).map(s => s.state)).toEqual(['done', 'done', 'done', 'done', 'now']);
+    expect(pvRing({ items, remainingMin: -5 }).map(s => s.state)).toEqual(['done', 'done', 'done', 'done', 'late']);
+    expect(pvRing({ items, remainingMin: null }).at(-1)!.label).toBe('Validation');
   });
 });
 
-describe('Pathologist grid — columns fold by the main card width', () => {
+describe('Pathologist grid — columns (no Tests column) fold by the main card width', () => {
   const vis = (f: Parameters<typeof pvColumns>[0]) => pvColumns(f).filter(c => !c.hide).map(c => c.colId);
-  it('full: Sample ID · Patient · Tests · Status · Journey · Waiting · actions', () => {
-    expect(vis('full')).toEqual(['sample', 'patient', 'tests', 'status', 'journey', 'wait', 'acts']);
+  it('full: Sample ID · Patient · Status · Journey · Waiting · actions', () => {
+    expect(vis('full')).toEqual(['sample', 'patient', 'status', 'journey', 'wait', 'acts']);
   });
-  it('fold: Status folds under the patient, Journey hides; tight: Tests fold under the patient; actions never hide', () => {
-    expect(vis('fold')).toEqual(['sample', 'patient', 'tests', 'wait', 'acts']);
+  it('fold: Status folds under the patient, the journey ring stays; tight: the ring folds; actions never hide', () => {
+    expect(vis('fold')).toEqual(['sample', 'patient', 'journey', 'wait', 'acts']);
     expect(vis('tight')).toEqual(['sample', 'patient', 'wait', 'acts']);
+  });
+  it('meta line: age/sex · MRN · department · N tests · entered time', () => {
+    const m = pvMeta({ patientMeta: '44/F · AA0007', dept: 'Haematology', items: [{ resultedAt: '2026-11-20T09:48:00Z' }, { resultedAt: '2026-11-20T09:40:00Z' }] as never });
+    expect(m).toMatch(/^44\/F · AA0007 · Haematology · 2 tests · entered /);
   });
 });

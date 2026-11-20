@@ -3,10 +3,15 @@ import { NgTemplateOutlet } from '@angular/common';
 import type { ColDef, GetRowIdParams, RowClassParams, RowClickedEvent } from 'ag-grid-community';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { DataGridTemplateCellComponent } from '../../../shared/components/data-grid/template-cell.component';
-import { WorkJourneyComponent } from '../../../shared/components/work-journey/work-journey.component';
-import { GridFold, fitFold, minWidthOf } from '../../../shared/utils/work-grid';
+import { JourneyRingComponent } from '../../../shared/components/journey-ring/journey-ring.component';
+import type { JourneyDetail } from '../../../shared/components/journey-ring/journey-detail';
+import type { RingStep } from '../../../shared/components/journey-ring/journey-ring';
+import { labLineDetail } from '../../../shared/utils/lab-line-journey';
+import { tatDetail, tatLabel } from '../../../shared/utils/lab-priority';
+import { GridFold, alignCol, fitFold, minWidthOf, minutesSince, numberFilterCol, setFilterCol, textFilterCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
-import { pvColumns, pvJourney, pvRows, pvWaiting } from './pending-validation.grid';
+import { pvColumns, pvMeta, pvRing, pvRows, pvWaiting } from './pending-validation.grid';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { isCultureOrderTest } from '../../../core/navigation/culture-redirect.guard';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -82,7 +87,7 @@ type Tab = 'mine' | 'all';
     TileGridDirective,
     RegnoPromptComponent,
     DataGridComponent,
-    WorkJourneyComponent,
+    JourneyRingComponent,
     NgTemplateOutlet,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -168,7 +173,7 @@ type Tab = 'mine' | 'all';
                         <span class="wg-id pv-tile__id pf-num">{{ g.sampleLabel }}</span>
                         <ng-container [ngTemplateOutlet]="statusTpl" [ngTemplateOutletContext]="{ $implicit: g }" />
                       </span>
-                      <ng-container [ngTemplateOutlet]="whoTpl" [ngTemplateOutletContext]="{ $implicit: g, tests: true }" />
+                      <ng-container [ngTemplateOutlet]="whoTpl" [ngTemplateOutletContext]="{ $implicit: g }" />
                       <span class="wg-card__foot">
                         <span class="wg-tat" [class.wg-tat--late]="w.late">{{ w.text === '—' ? '—' : 'Waiting ' + w.text }}</span>
                         <ng-container [ngTemplateOutlet]="actsTpl" [ngTemplateOutletContext]="{ $implicit: g }" />
@@ -195,16 +200,13 @@ type Tab = 'mine' | 'all';
           </span>
         </ng-template>
         <ng-template #cPatient let-g>
-          <ng-container [ngTemplateOutlet]="whoTpl" [ngTemplateOutletContext]="{ $implicit: g, tests: fold() === 'tight', status: fold() !== 'full' }" />
-        </ng-template>
-        <ng-template #cTests let-g>
-          <span class="wg-cell"><span class="wg-tests pv-tile__tests">{{ g.testNames.join(' · ') }}</span><span class="wg-sub">{{ g.dept }}</span></span>
+          <ng-container [ngTemplateOutlet]="whoTpl" [ngTemplateOutletContext]="{ $implicit: g, status: fold() !== 'full' }" />
         </ng-template>
         <ng-template #cStatus let-g>
           <span class="wg-cell"><ng-container [ngTemplateOutlet]="statusTpl" [ngTemplateOutletContext]="{ $implicit: g }" /></span>
         </ng-template>
-        <!-- Journey: ONE isolated element (pf-work-journey) — the shared journey ring replaces it here in one line. -->
-        <ng-template #cJourney let-g><pf-work-journey [steps]="journey(g)" /></ng-template>
+        <!-- Journey: the SHARED ring (lab line, blank disc); only the ring opens the journey view. -->
+        <ng-template #cJourney let-g><pf-journey-ring [steps]="journey(g)" service="lab" [showLabel]="false" [size]="40" [detail]="detailOf(g)" /></ng-template>
         <ng-template #cWait let-g>
           @let w = waiting(g);
           <span class="wg-cell"><span class="wg-tat" [class.wg-tat--late]="w.late" [attr.title]="w.late ? 'Past its turnaround time' : null">{{ w.text }}</span>
@@ -221,12 +223,11 @@ type Tab = 'mine' | 'all';
             @if (g.priority === 'urgent') { <span class="wg-prio" data-p="urgent">Urgent</span> }
           </span>
         </ng-template>
-        <ng-template #whoTpl let-g let-tests="tests" let-status="status">
+        <ng-template #whoTpl let-g let-status="status">
           <span class="wg-who">
             <span class="wg-who__name pv-who__name pv-tile__who"><pf-daily-no [of]="g.items[0]?.subOrder" />{{ g.patientName }}</span>
-            <span class="wg-who__meta pv-tile__meta pf-num">{{ tileMeta(g) }}</span>
+            <span class="wg-who__meta pv-tile__meta pf-num" [attr.title]="g.testNames.join(' · ')">{{ rowMeta(g) }}</span>
             @if (g.mine) { <span class="pv-mine"><span class="pv-mine__dot" aria-hidden="true"></span>Assigned to you</span> }
-            @if (tests) { <span class="wg-tests pv-tile__tests">{{ g.testNames.join(' · ') }}</span> }
             @if (status) { <span class="wg-who__fold"><ng-container [ngTemplateOutlet]="statusTpl" [ngTemplateOutletContext]="{ $implicit: g }" /></span> }
           </span>
         </ng-template>
@@ -791,18 +792,34 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
     const ack = this.gridRows().some(g => this.unacknowledged(g));
     const acts = ack ? (touch ? 236 : 220) : (touch ? 120 : 112);
     return {
-      sample: { width: 124, minWidth: 112 },
-      patient: { flex: 1.5, minWidth: 170, cellClass: 'wg-c-wrap' },
-      tests: { flex: 1.2, minWidth: 140, cellClass: 'wg-c-wrap' },
-      status: { width: 168, minWidth: 150, cellClass: 'wg-c-wrap' },
-      journey: { width: 104, minWidth: 100 },
-      wait: { width: 116, minWidth: 104 },
-      acts: { width: acts, minWidth: acts, headerClass: 'wg-h-right', cellClass: 'wg-c-acts' },
+      sample: { width: 112, minWidth: 112 },
+      patient: { flex: 1.5, minWidth: 140 },
+      status: { width: 168, minWidth: 150 },
+      journey: { width: 96, minWidth: 96 },
+      wait: { width: 104, minWidth: 104 },
+      acts: { width: acts, minWidth: acts },
+    };
+  }
+  /** Column rules shared by every work grid (shared/utils/work-grid.ts): alignment + Test Master's header filters. */
+  private colRules(): Record<string, ColDef<QueueTile>> {
+    const set = WorkSetFilterComponent;
+    return {
+      sample: { ...alignCol('left'), ...textFilterCol<QueueTile>(g => g.sampleLabel) } as ColDef<QueueTile>,
+      patient: { ...alignCol('left', 'wg-c-wrap'), ...textFilterCol<QueueTile>(g => {
+        const p = g.items[0]?.subOrder?.order?.patient as { mrn?: string; phone?: string } | undefined;
+        return [g.patientName, p?.mrn, p?.phone].filter(Boolean).join(' ');
+      }) } as ColDef<QueueTile>,
+      status: { ...alignCol('center', 'wg-c-wrap'), ...setFilterCol<QueueTile>(g => this.status(g).label, set) } as ColDef<QueueTile>,
+      journey: { ...alignCol('center'), ...setFilterCol<QueueTile>(g => {
+        const cur = this.journey(g).find(x => x.state === 'now' || x.state === 'late');
+        return cur ? cur.label + (cur.state === 'late' ? ' (late)' : '') : 'Done';
+      }, set) } as ColDef<QueueTile>,
+      wait: { ...alignCol('center'), ...numberFilterCol<QueueTile>(g => minutesSince(g.items.map(i => i.resultedAt).filter(Boolean).sort().pop() ?? null)) } as ColDef<QueueTile>,
+      acts: { ...alignCol('right', 'wg-c-acts'), filter: false } as ColDef<QueueTile>,
     };
   }
   private readonly sampleTpl = viewChild<TemplateRef<unknown>>('cSample');
   private readonly patientTpl = viewChild<TemplateRef<unknown>>('cPatient');
-  private readonly testsTpl = viewChild<TemplateRef<unknown>>('cTests');
   private readonly statusColTpl = viewChild<TemplateRef<unknown>>('cStatus');
   private readonly journeyTpl = viewChild<TemplateRef<unknown>>('cJourney');
   private readonly waitTpl = viewChild<TemplateRef<unknown>>('cWait');
@@ -812,17 +829,43 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
   readonly rowClass = (p: RowClassParams<QueueTile>) => (p.data?.priority === 'urgent' ? ['pv-row', 'wg-row--urgent'] : ['pv-row']);
   readonly cols = computed<ColDef<QueueTile>[]>(() => {
     const tpl: Record<string, TemplateRef<unknown> | undefined> = {
-      sample: this.sampleTpl(), patient: this.patientTpl(), tests: this.testsTpl(), status: this.statusColTpl(),
+      sample: this.sampleTpl(), patient: this.patientTpl(), status: this.statusColTpl(),
       journey: this.journeyTpl(), wait: this.waitTpl(), acts: this.actsColTpl(),
     };
     const size = this.sizes();
+    const rules = this.colRules();
     return pvColumns(this.fold()).map(c => ({
-      colId: c.colId, headerName: c.header, hide: c.hide, ...size[c.colId],
+      colId: c.colId, headerName: c.header, hide: c.hide, ...size[c.colId], ...rules[c.colId],
       cellRenderer: DataGridTemplateCellComponent, cellRendererParams: { tpl: tpl[c.colId] },
     }));
   });
   waiting(g: QueueTile) { return pvWaiting(g); }
-  journey(g: QueueTile) { return pvJourney(g); }
+  /** "44/F · AA0007 · Haematology · 2 tests · entered 9:48 PM" — no Tests column (owner 2026-11-20); names in the tooltip. */
+  rowMeta(g: QueueTile): string { return pvMeta(g); }
+  private readonly ringCache = new WeakMap<QueueTile, RingStep[]>();
+  journey(g: QueueTile): RingStep[] {
+    let r = this.ringCache.get(g);
+    if (!r) { r = pvRing(g); this.ringCache.set(g, r); }
+    return r;
+  }
+  /** The journey view (built at tap time); its action = the row's Review. */
+  private readonly detailCache = new WeakMap<QueueTile, () => JourneyDetail>();
+  detailOf(g: QueueTile): () => JourneyDetail {
+    let d = this.detailCache.get(g);
+    if (!d) {
+      d = () => {
+        const late = this.waiting(g).late;
+        return labLineDetail({
+          lines: g.items, ring: this.journey(g), name: g.patientName, meta: [g.patientMeta, g.sampleLabel].filter(Boolean).join(' · '),
+          lateMin: late && g.remainingMin != null ? Math.round(-g.remainingMin) : null,
+          note: late ? tatDetail(g.remainingMin) : tatLabel({ remainingMin: g.remainingMin, dueAt: null }) || null,
+          action: { label: 'Review', aria: 'Review ' + g.sampleLabel, run: () => this.openOrder(g) },
+        });
+      };
+      this.detailCache.set(g, d);
+    }
+    return d;
+  }
   /** A tap on the row = the old tile tap (open the review); a button in the row does its own thing. */
   onRow(e: RowClickedEvent<QueueTile>): void {
     const t = e.event?.target as HTMLElement | null;
