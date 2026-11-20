@@ -59,6 +59,12 @@ import { WorkLine, enrichWorkLines, groupByPriority, soonestDue } from './my-wor
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { busyWhile } from '../../../shared/utils/busy';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { MyWorkGridComponent, MwGridContext } from './my-work-grid.component';
+import { MwFiltersComponent } from './mw-filters.component';
+import {
+  MwRow, MwMode, MwTube, MwDoneTube, MwFilter, MwStatusKey, NO_MW_FILTER, countLabel, deptOptions, doneRowsOf, doneStatus, filterMwRows,
+  groupStatus, patientRowsOf, sampleRowsOf, statusKeyOf, statusOptions, tubeStatus,
+} from './my-work.grid';
 
 /** The departments of a tube's lines, "Haematology · Biochemistry" — a
  *  shared tube (integrated lab) carries several. */
@@ -108,7 +114,7 @@ const COUNTERS: CounterSpec[] = [
     TileGridDirective, ZoomSourceDirective,
     DatePipe, FormsModule, BarcodeScannerModalComponent, DelegateModalComponent, TatIndicatorComponent,
     AvatarComponent, ReceiveSamplesComponent, SampleCollectionComponent, ScreenHeaderComponent, SkeletonComponent, TileComponent, TouchButtonComponent, KpiStripComponent, WorkAreaPanelsComponent, CulturePanelComponent, HeroBandComponent, CollectBandButtonComponent, SegmentedComponent,
-    ScanIconComponent],
+    ScanIconComponent, MyWorkGridComponent, MwFiltersComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-mw-page px-5 md:px-8 lg:px-10 pt-4 pb-3">
@@ -181,9 +187,8 @@ const COUNTERS: CounterSpec[] = [
           <pf-segmented class="pf-mw-seg" [options]="tabOptions()" [value]="tab()" size="sm"
                         (valueChange)="setTab($any($event))"></pf-segmented>
           }
-          @if (tab() !== 'culture') {
-          <pf-lab-sort class="pf-mw-sort" [scope]="tab() === 'completed' ? 'completed' : 'work'" data-testid="lab-sort-band"></pf-lab-sort>
-          }
+          <!-- No sort picker here any more (owner 2026-11-20): the grid's column headers sort (the same per-user
+               LabSortService key); phones, which have no headers, sort from the card head's Filters sheet. -->
         </ng-container>
         <!-- Refresh is a quiet button up on the band, not a bar icon (owner):
              it's the least-used control on the screen. -->
@@ -628,9 +633,11 @@ const COUNTERS: CounterSpec[] = [
                 </button>
               }
             </div>
-            <p class="pf-mw-pane__meta">
+            <p class="pf-mw-pane__meta" aria-live="polite">
               @if (tab() === 'culture') {
                 {{ plural(cultureCount(), 'case') }}
+              } @else if (theme.isNewDesign()) {
+                {{ mwCountLabel() }}
               } @else {
               <!-- Sample-focused branches count TUBES — the unit of work on this
                    screen in that mode — not the tests inside them. -->
@@ -638,6 +645,34 @@ const COUNTERS: CounterSpec[] = [
               @if (countFor('rejected') > 0) { · {{ countFor('rejected') }} rejected }
               }
             </p>
+            @if (theme.isNewDesign() && tab() !== 'culture') {
+              <!-- The list's own filters, at the head's RIGHT end, one row (owner 2026-11-20): search (folds to a 44px
+                   magnifier when tight), the status pill (collapses to its menu), Filters (priority, department, window). -->
+              <label class="mw-find" (click)="$event.stopPropagation()">
+                <svg class="mw-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input class="pf-input mw-find__input" type="search" data-testid="mw-find" [value]="mwFilter().q"
+                       placeholder="Sample ID, patient, MRN" aria-label="Search this list" (input)="setMwQuery(asInput($event))" />
+              </label>
+              <pf-segmented class="mw-headpill" data-testid="mw-pill" size="sm" [options]="mwStatusOptions()" [value]="mwFilter().status"
+                            aria-label="Filter by status" (valueChange)="setMwStatus($any($event))"></pf-segmented>
+              <span class="mw-filterwrap">
+                <button type="button" class="pf-btn pf-btn--secondary mw-filterbtn press" data-testid="mw-filter-btn"
+                        [class.mw-filterbtn--on]="mwFiltersOn()" aria-haspopup="dialog" [attr.aria-expanded]="mwFiltersOpen()"
+                        [attr.aria-label]="'Filters' + (mwFiltersOn() ? ' (on)' : '')" (click)="mwFiltersOpen.set(!mwFiltersOpen())">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+                  <span class="mw-filterbtn__t">Filters</span>
+                </button>
+                @if (mwFiltersOpen()) {
+                  <pf-mw-filters [filter]="mwFilter()" [depts]="mwDepts()" [showPriority]="tab() !== 'completed'"
+                                 [windowValue]="tab() === 'completed' ? completedWindow() : null" [windowOptions]="completedWindowOptions"
+                                 [sortScope]="tab() === 'completed' ? 'completed' : 'work'"
+                                 (filterChange)="mwFilter.set($event)" (windowChange)="setCompletedWindow($any($event))"
+                                 (closed)="mwFiltersOpen.set(false)" />
+                }
+              </span>
+            }
           </header>
           <div class="pf-mw-pane__body">
       <!-- Kept mounted (not @if'd) so the bench keeps feeding its count to the
@@ -648,6 +683,21 @@ const COUNTERS: CounterSpec[] = [
         </div>
       }
       @if (tab() !== 'culture') {
+      @if (theme.isNewDesign()) {
+      <!-- New design (owner 2026-11-20): the work list is the Frontdesk / Results GRID — shared pf-data-grid, one
+           primary row action at the row end + ⋯, the row tap = the old tile tap; phones get card rows. -->
+      <pf-mw-grid class="pf-mw-gridhost" [rows]="mwShownRows()" [mode]="mwGridMode()" [ctx]="mwGridCtx"
+                  [loading]="tab() === 'completed' ? completedLoading() : loading()" [emptyTitle]="mwFiltered() ? 'Nothing matches these filters.' : mwEmptyTitle()" [phone]="isPhone()" />
+      @if (cardPeekId()) {
+        <div class="pf-cardpeek" (click)="$event.stopPropagation()"
+             [style.left.px]="cardPeekPos()?.x" [style.top.px]="cardPeekPos()?.y">
+          <p class="pf-cardpeek__h">Tests ({{ cardPeekTests().length }})</p>
+          <ul>
+            @for (n of cardPeekTests(); track n) { <li>{{ n }}</li> }
+          </ul>
+        </div>
+      }
+      } @else {
       @if (tab() === 'completed') {
       <!-- ── Completed: this tech's finished tubes, newest first ──────
            Read-only history with ONE action: Edit re-opens the whole tube
@@ -1103,6 +1153,7 @@ const COUNTERS: CounterSpec[] = [
         <pf-tile tone="default" padding="xl">
           <p class="text-center text-sm" style="color: var(--text-tertiary);">Nothing in the queue.</p>
         </pf-tile>
+      }
       }
       }
       }
@@ -2766,6 +2817,57 @@ const COUNTERS: CounterSpec[] = [
       :host-context(.design-new) .pf-mw-scan .pf-rowact { height: 40px; min-height: 40px; }
     }
 
+    /* Work list = the grid (owner 2026-11-20): the card body is the grid's frame — flush, no page scroll, the grid
+       scrolls inside it (phones: the card rows scroll in the body). The head stays ONE row; its pill collapses. */
+    .pf-mw-pane__body:has(> .pf-mw-gridhost) { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+    .pf-mw-gridhost { flex: 1 1 auto; min-height: 0; }
+    .pf-mw-pane__hdr--tabs:has(> pf-segmented) { flex-wrap: nowrap; position: relative; container-type: inline-size; container-name: mwhead; }
+    .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-pane__meta { white-space: nowrap; min-width: 0; overflow: hidden; }
+    /* Head tools at the RIGHT end: search · status pill · Filters (owner 2026-11-20 — Frontdesk's work head). */
+    .mw-find { position: relative; display: flex; align-items: center; flex: 0 1 220px; min-width: 120px; }
+    .mw-find__icon { position: absolute; left: 11px; z-index: 1; color: var(--text-tertiary); pointer-events: none; }
+    .mw-find .mw-find__input { width: 100%; min-height: 36px; height: 36px; padding: 0 10px 0 34px; font-size: 13px; }
+    .mw-headpill { min-width: 0; }
+    .mw-filterwrap { position: relative; flex: none; display: inline-flex; }
+    .mw-filterbtn { height: 36px; min-height: 36px; gap: 6px; padding: 0 12px; }
+    .mw-filterbtn--on { color: var(--violet-text); border-color: color-mix(in srgb, var(--violet-text) 45%, var(--pf-line)); }
+    .mw-filterbtn--on::after { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+    @media not ((hover: hover) and (pointer: fine)) {
+      .mw-find .mw-find__input { min-height: 44px; height: 44px; font-size: 16px; }
+      .mw-filterbtn { height: 44px; min-height: 44px; min-width: 44px; }
+    }
+    /* Tight head: the count gives way, then the search folds to a 44px magnifier (opens over the head on tap),
+       then Filters is icon-only. The pill collapses by itself (pill-fit). */
+    @container mwhead (max-width: 820px) { .pf-mw-pane__hdr--tabs .pf-mw-pane__meta { display: none; } }
+    @container mwhead (max-width: 700px) {
+      .mw-find:not(:focus-within) { flex: none; width: 44px; min-width: 44px; height: 44px; justify-content: center; }
+      .mw-find:not(:focus-within) .mw-find__icon { left: 14px; color: var(--text-secondary); }
+      .mw-find:not(:focus-within) .mw-find__input { position: absolute; inset: 0; width: 44px; min-height: 44px; height: 44px; padding: 0;
+        color: transparent; caret-color: transparent; }
+      .mw-find:not(:focus-within) .mw-find__input::placeholder { color: transparent; }
+      .mw-find:not(:focus-within):has(.mw-find__input:not(:placeholder-shown))::after {
+        content: ''; position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
+      .mw-find:focus-within { position: absolute; z-index: 6; left: 10px; right: 10px; top: 50%; transform: translateY(-50%); background: var(--pf-card-bg); }
+    }
+    @container mwhead (max-width: 520px) {
+      .mw-filterbtn { width: 44px; padding: 0; justify-content: center; }
+      .mw-filterbtn__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      .pf-mw-pane__hdr--tabs .pf-mw-pane__title { display: none; }
+    }
+    /* Touch: the shared pill keeps its kit size; its items get a 44px-tall hit area (vertical only — neighbours
+       never overlap). */
+    @media not ((hover: hover) and (pointer: fine)) {
+      .mw-headpill ::ng-deep .seg-item { position: relative; }
+      .mw-headpill ::ng-deep .seg-item::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); }
+    }
+    @media (max-width: 640px) {
+      .pf-mw-pane__body:has(> .pf-mw-gridhost) { overflow-y: auto; }
+      /* Phones hide the in-pane head (the tab strip above names the list) — the new design keeps it for the list's
+         own tools: search · status pill · Filters. */
+      :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) { display: flex !important; padding: 6px 10px; gap: 8px; }
+      :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-tabs { display: none; }
+      :host-context(.design-new) .pf-mw-pane__hdr--tabs:has(> pf-segmented) .mw-headpill { margin-right: auto; }
+    }
   `]
 })
 export class MyWorkComponent implements OnInit {
@@ -3086,7 +3188,7 @@ export class MyWorkComponent implements OnInit {
 
   private readonly _tab = signal<Tab>('my_work');
   readonly tab = this._tab.asReadonly();
-  setTab(t: Tab) { this._tab.set(t); this.refresh(); }
+  setTab(t: Tab) { this._tab.set(t); this.mwFilter.update(f => ({ ...f, status: 'all' })); this.mwFiltersOpen.set(false); this.refresh(); }
 
   // ── Phone-only single-pane presentation state (<=640px) ──────────
   // Purely presentational. `mobileTab` picks which section the phone
@@ -3452,6 +3554,83 @@ export class MyWorkComponent implements OnInit {
     const filtered = this.filterByCounter(enriched);
     return groupByPriority(filtered);
   });
+
+  // ── New design: the work list as a GRID (owner 2026-11-20) ───────────
+  // The same buckets / tubes / patient groups / completed tubes the tiles drew, as rows for pf-mw-grid. The rules
+  // (status word, journey, TAT, the ONE primary + ⋯) live in my-work.grid.ts; the handlers stay here, unchanged.
+  readonly mwGridMode = computed<MwMode>(() =>
+    this._tab() === 'completed' ? 'done' : this.labCfg.sampleFocused() ? 'sample' : 'patient');
+  readonly mwGridRows = computed<MwRow[]>(() => {
+    if (this._tab() === 'completed') return doneRowsOf(this.completedTubes() as MwDoneTube[]);
+    const buckets = this.buckets().filter(b => b.items.length > 0);
+    if (this.labCfg.sampleFocused()) {
+      return sampleRowsOf(buckets.map(b => ({ priority: b.priority, tubes: this.sampleRows(b.items) })));
+    }
+    const open = this._expanded();
+    return patientRowsOf(buckets.map(b => ({
+      priority: b.priority,
+      groups: this.patientGroups(b.items).map(g => {
+        const patient = g.items[0]?.subOrder?.order?.patient;
+        return {
+          group: { orderId: g.orderId, patientName: g.patientName, patientMeta: patient ? formatPatientMeta(patient) : '',
+                   items: g.items, priority: g.priority, remainingMin: g.remainingMin, dueAt: g.dueAt },
+          tubes: this.tubesIn(g.items),
+        };
+      }),
+    })), id => open.has(id));
+  });
+  // ── The card head's filters (owner 2026-11-20) ──
+  readonly mwFilter = signal<MwFilter>({ ...NO_MW_FILTER });
+  readonly mwFiltersOpen = signal(false);
+  private mwStatusOf = (r: MwRow): MwStatusKey => {
+    const rules = this.mwGridCtx.rules();
+    const owner = (id: string) => this.assigneeName(id);
+    if (r.kind === 'tube') return statusKeyOf(tubeStatus(r.tube, rules, owner).label);
+    if (r.kind === 'done') return statusKeyOf(doneStatus(r.done).label);
+    if (r.kind === 'patient') return statusKeyOf(groupStatus(r.tubes, rules, owner).label);
+    return 'all';
+  };
+  private readonly mwView = computed(() => this._tab() === 'completed' ? 'done' as const : this._tab() === 'service_queue' ? 'queue' as const : 'work' as const);
+  readonly mwShownRows = computed(() => filterMwRows(this.mwGridRows(), this.mwFilter(), this.mwStatusOf));
+  readonly mwStatusOptions = computed<SegmentedOption<MwStatusKey>[]>(() =>
+    statusOptions(this.mwGridRows(), this.mwFilter(), this.mwView(), this.mwStatusOf)
+      .map(o => ({ value: o.value, label: o.label, count: o.count })));
+  readonly mwDepts = computed(() => deptOptions(this.mwGridRows()));
+  /** Priority / department narrowed (the Filters button lights up). */
+  readonly mwFiltersOn = computed(() => this.mwFilter().priority !== 'all' || !!this.mwFilter().dept);
+  readonly mwFiltered = computed(() => { const f = this.mwFilter(); return !!f.q.trim() || f.status !== 'all' || this.mwFiltersOn(); });
+  /** "4 of 9 samples" while a filter narrows the list. */
+  readonly mwCountLabel = computed(() => {
+    const all = this.mwGridRows().filter(r => r.kind !== 'detail');
+    const shown = this.mwShownRows().filter(r => r.kind !== 'detail').length;
+    const unit = this.mwGridMode() === 'patient' ? 'patient' : 'sample';
+    const rej = this.countFor('rejected');
+    return countLabel(shown, all.length, unit) + (rej > 0 ? ` · ${rej} rejected` : '');
+  });
+  setMwQuery(q: string) { this.mwFilter.update(f => ({ ...f, q })); }
+  setMwStatus(s: MwStatusKey) { this.mwFilter.update(f => ({ ...f, status: s })); }
+
+  /** Empty states keep their copy. */
+  readonly mwEmptyTitle = computed(() => this._tab() === 'completed'
+    ? `Nothing completed ${this.completedWindow() === 'today' ? 'today' : 'in the last 7 days'}.`
+    : 'Nothing in the queue.');
+  /** The grid's handlers = this screen's existing ones (tap, claim, scan gate, delegate, print, edit, view, peek). */
+  readonly mwGridCtx: MwGridContext = {
+    rules: () => ({ tab: this._tab(), myId: this.myUserId(), canReassign: this.canReassign(), canEdit: this.canEditResult() }),
+    ownerName: id => this.assigneeName(id),
+    activate: (tube: MwTube, name: string, ev?: Event) => this.onCardActivate(tube, name, ev),
+    toggle: id => this.toggleExpand(id),
+    delegate: tests => this.openDelegate(tests),
+    print: (d: MwDoneTube) => this.printCompletedTube(d),
+    edit: (d: MwDoneTube) => { void this.editCompletedTube(d); },
+    view: (d: MwDoneTube) => this.viewCompletedTube(d),
+    pending: id => this.pickingTubeId() === id || this.claimingTube(id),
+    printing: id => this.printingTubeId() === id,
+    reopening: id => this.reopeningTubeId() === id,
+    peekDown: (tube: MwTube, ev: PointerEvent) => this.onCardDown(tube, ev),
+    peekMove: ev => this.onCardMove(ev),
+    peekUp: () => this.onCardUp(),
+  };
 
   private enrich(rows: OrderTest[]): Enriched[] {
     return enrichWorkLines(rows);
