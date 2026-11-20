@@ -41,7 +41,7 @@
   .fd-flow__stage {
     --fd-tone: var(--violet-text);
     display: inline-flex; align-items: center; gap: 6px; min-height: 22px; padding: 1px 9px 1px 8px; border-radius: 999px;
-    max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; /* never cut by a narrow column */
+    box-sizing: border-box; white-space: nowrap; /* one line, whole words (owner: never split a word) — the column fits it */
     font-size: 12.5px; font-weight: 500; color: var(--text-primary);
     background: var(--pf-chip-bg); border: 1px solid var(--pf-line);
   }
@@ -50,7 +50,7 @@
   .fd-flow__stage[data-tone='sky'] { --fd-tone: var(--sky-text, var(--blue-text)); }
   .fd-flow__stage[data-tone='neutral'] { --fd-tone: var(--text-tertiary); }
   .fd-flow__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--fd-tone); flex: none; }
-  .fd-flow__sub { font-size: 11.5px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+  .fd-flow__sub { font-size: 11.5px; color: var(--text-tertiary); overflow-wrap: break-word; word-break: normal; }
 
   /* Journey: step dots (done · now · still to come; a stopped step in rose). */
   .fd-flow__journey { display: inline-flex; align-items: center; gap: 4px; }

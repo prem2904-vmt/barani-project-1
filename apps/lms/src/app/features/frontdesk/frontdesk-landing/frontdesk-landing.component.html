@@ -595,6 +595,45 @@
                 <a routerLink="/frontdesk/appointments" class="pf-btn pf-btn--secondary pf-empty__action press">Open
                   calendar</a>
               </div>
+              } @else if (theme.isNewDesign()) {
+              <!-- New design (owner 2026-11-20): the shared side-list rows — time · name (wraps by word) · "34/F · MRN ·
+                   phone · Dr." + status, the row's action at the right. Same actions as the classic cards. -->
+              <ul class="pf-side-list pf-side-list--split fd-vrows" data-testid="fd-appt-rows">
+                @for (a of visibleAppointments(); track a.id) {
+                @let patient = a.patient;
+                <li>
+                  <div class="pf-side-item fd-vrow" role="button" tabindex="0" [pfZoomSource]="[a.patientId]"
+                    (click)="openAppointment(a)" (keydown.enter)="openAppointment(a)">
+                    <span class="fd-vrow__time">{{ a.slotTime || (a.appointmentDate | date:'shortTime') }}</span>
+                    <span class="fd-vrow__body">
+                      <span class="fd-vrow__name">{{ patient?.displayName ?? 'Patient' }}</span>
+                      <span class="fd-vrow__meta">
+                        {{ visitMeta(patient) }}
+                        @if (patient?.phone; as phone) { · <a class="fd-vrow__tel" [href]="'tel:' + phone" (click)="$event.stopPropagation()" [attr.aria-label]="'Call ' + phone">{{ phone }}</a> }
+                        @if (a.refDoctorName) { · {{ a.refDoctorName }} }
+                      </span>
+                      @if (apptLateLabel(a); as late) {
+                        <span class="fd-vrow__status fd-vrow__status--late fd-appt-late" data-testid="fd-appt-late">{{ late }}</span>
+                      } @else if (a.status === 'checked_in') {
+                        <span class="fd-vrow__status">{{ a.orderId ? 'Checked in · order created' : 'Checked in' }}</span>
+                      }
+                      @if (hasOutstanding(patient?.id)) { <span class="fd-vrow__status fd-vrow__status--late">Outstanding balance</span> }
+                    </span>
+                    <span class="fd-vrow__acts" (click)="$event.stopPropagation()">
+                      @if (patient?.phone; as phone) {
+                        <a [href]="'https://wa.me/' + cleanPhone(phone)" target="_blank" class="fd-vrow__icon press" title="WhatsApp" [attr.aria-label]="'WhatsApp ' + (patient?.displayName ?? 'patient')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-15.3-3.2L3 20l6.2-1.6A8 8 0 0 0 20 12Z" /></svg></a>
+                      }
+                      @if (a.status === 'booked') {
+                        <button type="button" class="pf-btn pf-btn--secondary fd-vrow__btn press" [disabled]="checkingInId() === a.id"
+                          [pfBusy]="checkingInId() === a.id" pfBusyLabel="Checking in…" (click)="checkIn(a)">Check in</button>
+                      } @else if (a.status === 'checked_in') {
+                        <button type="button" class="pf-btn pf-btn--secondary fd-vrow__btn press" (click)="resumeAppointmentOrder(a)">{{ a.orderId ? 'Open order' : 'Resume' }}</button>
+                      }
+                    </span>
+                  </div>
+                </li>
+                }
+              </ul>
               } @else {
               <ul class="pf-cards">
                 @for (a of visibleAppointments(); track a.id) {
@@ -688,6 +727,30 @@
                 <p class="pf-empty__body">Home-collection requests show here with their assigned agent.</p>
                 }
               </div>
+              } @else if (theme.isNewDesign()) {
+              <ul class="pf-side-list pf-side-list--split fd-vrows" data-testid="fd-home-rows">
+                @for (a of homeCollections(); track a.id) {
+                <li>
+                  <div class="pf-side-item fd-vrow" role="button" tabindex="0" (click)="openHomeCollection(a)" (keydown.enter)="openHomeCollection(a)">
+                    <span class="fd-vrow__time">{{ a.slotTime || '—' }}</span>
+                    <span class="fd-vrow__body">
+                      <span class="fd-vrow__name">{{ a.patient?.displayName ?? 'Patient' }}</span>
+                      <span class="fd-vrow__meta">
+                        {{ visitMeta(a.patient) }}
+                        @if (a.patient?.phone; as phone) { · <a class="fd-vrow__tel" [href]="'tel:' + phone" (click)="$event.stopPropagation()" [attr.aria-label]="'Call ' + phone">{{ phone }}</a> }
+                      </span>
+                      <span class="fd-vrow__meta">{{ a.address || 'No address' }}{{ a.pincode ? ' · ' + a.pincode : '' }}</span>
+                      <span class="fd-vrow__status"><span class="fd-vrow__dot" [attr.data-tone]="a.assignedAgentId ? 'green' : 'rose'" aria-hidden="true"></span>{{ a.assignedAgentId ? 'Assigned' : 'Unassigned' }}</span>
+                    </span>
+                    <span class="fd-vrow__acts" (click)="$event.stopPropagation()">
+                      @if (a.patient?.phone; as phone) {
+                        <a [href]="'https://wa.me/' + cleanPhone(phone)" target="_blank" class="fd-vrow__icon press" title="WhatsApp" [attr.aria-label]="'WhatsApp ' + (a.patient?.displayName ?? 'patient')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-15.3-3.2L3 20l6.2-1.6A8 8 0 0 0 20 12Z" /></svg></a>
+                      }
+                    </span>
+                  </div>
+                </li>
+                }
+              </ul>
               } @else {
               <ul class="pf-cards">
                 @for (a of homeCollections(); track a.id) {

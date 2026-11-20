@@ -170,7 +170,7 @@ test.describe('frontdesk v2 — lab-only tenant', () => {
       await expect(vis(page, 'pf-pane-splitter[role="separator"]')).toHaveCount(1);
       const head = await page.locator('.pf-fd-flow .ag-header-cell-text').allTextContents();
       const heads = head.map(t => t.trim()).filter(Boolean);
-      expect(heads).toEqual(expect.arrayContaining(['Token', 'Patient', 'Payment', 'Next']));
+      expect(heads).toEqual(expect.arrayContaining(['Token', 'Patient', 'Next']));   // iPad folds Payment into the Patient line
       // fd-chart: narrow grids (iPad) shorten "Where now" / "Waiting" so no header label is ever cut.
       expect(heads.some(h => /^Where( now)?$/.test(h)) && heads.some(h => /^Wait(ing)?$/.test(h))).toBe(true);
       // Card head: icon tile + WORK, the status pill with its dots, "Today" + the More filters icon.
@@ -206,7 +206,7 @@ test.describe('frontdesk v2 — lab-only tenant', () => {
     if (wide()) {
       expect(cut.nowrap).toBe(false);
       await expect(vis(page, '.fd-flow__wait--late').first()).toBeVisible();
-      await expect(vis(page, '.fd-flow__pay--due').first()).toContainText('due');
+      await expect(vis(page, '.fd-flow__pay--due, .fd-cell-pt__pay--due').first()).toContainText('due');
     }
   });
 

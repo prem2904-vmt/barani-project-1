@@ -340,6 +340,16 @@ test.describe('who is where — lab-only tenant', () => {
       await expect(vis(page, '[data-testid="fd-new-appt"]')).toBeVisible();
       await expect(vis(page, '[data-testid="fd-side-filter-chip"]')).toHaveCount(0);
       await expect(page.getByText('Ms. Anjali Raghunathan Subramaniam').locator('visible=true').first()).toBeVisible();
+      // Appointment rows are the shared side-list rows: no card in the card, name by whole words, phone in the
+      // normal font, a 44px Check in at the right, the overdue status soft rose.
+      const rows = vis(page, '[data-testid="fd-appt-rows"] .fd-vrow');
+      await expect(rows.first()).toBeVisible();
+      await expect(sideCard(page).locator('.pf-cards .pf-card').locator('visible=true')).toHaveCount(0);
+      const btnBox = (await rows.first().locator('.fd-vrow__btn').boundingBox())!;
+      expect(btnBox.height, 'Check in ≥ 44px').toBeGreaterThanOrEqual(44);
+      const font = await rows.first().locator('.fd-vrow__tel').evaluate(e => getComputedStyle(e).fontFamily);
+      expect(font).not.toMatch(/mono/i);
+      await expect(rows.first().locator('.fd-vrow__status--late')).toContainText(/Not arrived/);
       // Standalone lab: the ring keeps its steps but no "LAB" label.
       const ring = vis(page, '.pf-fd-flow pf-journey-ring').first();
       await expect(ring.locator('.pf-jring__btn')).toHaveAttribute('aria-label', /^Lab · /);
@@ -483,18 +493,21 @@ test.describe('work grid column filters + alignment', () => {
     if (!wide()) { test.info().annotations.push({ type: 'form-factor', description: 'grid ≥1024px only' }); return; }
     const grid = vis(page, '.pf-fd-flow').first();
     // Alignment: Token / Journey / Waiting / Payment centred, Patient / Where now left, Next right — header = cells.
+    const payShown = await grid.locator('.ag-header-cell[col-id="pay"]').count() > 0;
     for (const [col, cls] of [['token', 'center'], ['journey', 'center'], ['wait', 'center'], ['pay', 'center'], ['patient', 'left'], ['where', 'left'], ['next', 'right']] as const) {
-      await expect(grid.locator(`.ag-header-cell[col-id="${col}"]`)).toHaveClass(new RegExp(`pf-wg-h-${cls}`));
-      await expect(grid.locator(`.ag-cell[col-id="${col}"]`).first()).toHaveClass(new RegExp(`pf-wg-${cls}`));
+      if (col === 'pay' && !payShown) continue;                        // iPad folds Payment into the Patient line
+      await expect(grid.locator(`.ag-header-cell[col-id="${col}"]`)).toHaveClass(new RegExp(`wg-h-${cls}`));
+      await expect(grid.locator(`.ag-cell[col-id="${col}"]`).first()).toHaveClass(new RegExp(`wg-c-${cls}`));
     }
     // Every data column has a filter button; the action column and the ring don't.
-    for (const col of ['token', 'patient', 'where', 'wait', 'pay']) {
+    for (const col of ['token', 'patient', 'where', 'wait', ...(payShown ? ['pay'] : [])]) {
       await expect(grid.locator(`.ag-header-cell[col-id="${col}"] .ag-header-cell-filter-button`)).toHaveCount(1);
     }
     await expect(grid.locator('.ag-header-cell[col-id="next"] .ag-header-cell-filter-button')).toHaveCount(0);
+    const fcol = payShown ? 'pay' : 'where';
     if (isTouch()) {
       // A 44px hit area around the small icon: a tap 18px off its centre still lands on it.
-      const hit = await grid.locator('.ag-header-cell[col-id="pay"] .ag-header-cell-filter-button').evaluate(b => {
+      const hit = await grid.locator(`.ag-header-cell[col-id="${fcol}"] .ag-header-cell-filter-button`).evaluate(b => {
         const r = b.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2;
         return [[x, y - 18], [x, y + 18], [x - 18, y], [x + 18, y]].every(([px, py]) => b.contains(document.elementFromPoint(px, py)));
       });
@@ -504,15 +517,32 @@ test.describe('work grid column filters + alignment', () => {
     const gb = (await grid.boundingBox())!;
     const more = (await grid.locator('.fd-cell-next__more').first().boundingBox())!;
     expect(more.x + more.width, '⋯ inside the grid').toBeLessThanOrEqual(gb.x + gb.width + 1);
+    // Whole words only: no patient name or status pill splits a word across lines; pills stay on one line.
+    const split = await grid.evaluate(g => {
+      const out: string[] = [];
+      for (const el of g.querySelectorAll<HTMLElement>('.fd-cell-pt__name, .fd-flow__stage')) {
+        const words = (el.textContent ?? '').trim().split(/\s+/);
+        if (el.classList.contains('fd-flow__stage') && el.getBoundingClientRect().height > 30) out.push('pill on 2 lines: ' + el.textContent?.trim());
+        // a word wider than the element = it would have to break mid-word
+        for (const w of words) {
+          const probe = document.createElement('span'); probe.textContent = w; probe.style.whiteSpace = 'nowrap';
+          el.appendChild(probe); const pw = probe.getBoundingClientRect().width; probe.remove();
+          if (pw > el.getBoundingClientRect().width + 1) out.push('word: ' + w);
+        }
+      }
+      return out;
+    });
+    expect(split, `split words at ${projectName()}`).toEqual([]);
     // Header labels are never cut (no ellipsis) on any form factor.
     const cut = await grid.locator('.ag-header-cell-text').evaluateAll(els => els.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent));
     expect(cut, `cut header labels at ${projectName()}`).toEqual([]);
-    await grid.locator('.ag-header-cell[col-id="pay"] .ag-header-cell-filter-button').click();
-    await page.locator('.pf-vf__row[data-value="Due"]').click();
+    // Payment "Due" (or, on iPad where Payment folds away, Where now "Billed" — Nithin's order is Billed and due).
+    await grid.locator(`.ag-header-cell[col-id="${fcol}"] .ag-header-cell-filter-button`).click();
+    await page.locator(`pf-work-set-filter [data-value="${payShown ? 'Due' : 'Billed'}"]`).locator(`visible=true`).first().click();
     await page.keyboard.press('Escape');
     await expect(page.getByText('Nithin Ragav Gopalakrishnan').locator('visible=true').first()).toBeVisible();
-    await expect(page.getByText(LONG).locator('visible=true')).toHaveCount(0);
-    await expect(grid.locator('.ag-header-cell[col-id="pay"]')).toHaveClass(/ag-header-cell-filtered/);
+    if (payShown) await expect(page.getByText(LONG).locator('visible=true')).toHaveCount(0);
+    await expect(grid.locator(`.ag-header-cell[col-id="${fcol}"]`)).toHaveClass(/ag-header-cell-filtered/);
     await shots(page, '12-column-filter-due');
     // AND with the head search: a name that is not due shows nothing.
     const find = vis(page, '.pf-work-find__input').first();

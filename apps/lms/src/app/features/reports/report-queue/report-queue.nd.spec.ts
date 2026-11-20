@@ -6,7 +6,7 @@ import { signal } from '@angular/core';
 import { of, EMPTY } from 'rxjs';
 import { vi } from 'vitest';
 import { ReportQueueComponent } from './report-queue.component';
-import { GridChoiceFilterComponent } from '../../../shared/components/grid-choice-filter/grid-choice-filter.component';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
 import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
 import { cultureStagesDone, cultureSummary, deptCountLabel, pendingStatus, queueStatus, reportStatus } from './report-queue.partial';
@@ -1338,7 +1338,7 @@ describe('Results grid — column filters in the header + alignment (owner 2026-
   it('every data column has a header filter (IDs + Patient = text, Status / Generated / Sent = choices); Actions has none', async () => {
     const { c } = await render({ queue: Q, orders: [] });
     expect(['no', 'patient', 'order'].map(id => col(c, id).filter)).toEqual(['agTextColumnFilter', 'agTextColumnFilter', 'agTextColumnFilter']);
-    expect(['status', 'generated', 'sent'].map(id => col(c, id).filter)).toEqual([GridChoiceFilterComponent, GridChoiceFilterComponent, GridChoiceFilterComponent]);
+    expect(['status', 'generated', 'sent'].map(id => col(c, id).filter)).toEqual([WorkSetFilterComponent, WorkSetFilterComponent, WorkSetFilterComponent]);
     expect(col(c, 'actions').filter).toBeFalsy();
     expect(c.colDefs().filter((d: any) => d.filter).every((d: any) => d.suppressHeaderFilterButton === false)).toBe(true);
     // Patient matches name, MRN and phone; # matches the daily number.
@@ -1364,7 +1364,7 @@ describe('Results grid — column filters in the header + alignment (owner 2026-
   it('the Status / Generated / Sent header filters are BOUND to the Filters side card (one state, both ways)', async () => {
     const { c, f } = await render({ queue: Q, orders: [] });
     const mk = (id: string) => {
-      const comp = new GridChoiceFilterComponent();
+      const comp = new WorkSetFilterComponent();
       const changed = vi.fn();
       comp.agInit({ ...col(c, id).filterParams, filterChangedCallback: changed } as any);
       return { comp, changed };
