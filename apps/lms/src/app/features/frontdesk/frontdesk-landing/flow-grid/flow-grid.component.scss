@@ -15,6 +15,7 @@
   .ag-cell.fd-flow__c-next { justify-content: flex-end; padding-right: 10px; }
   .ag-cell.fd-flow__c-sel { padding-left: 8px; padding-right: 0; }
   .ag-cell.fd-flow__c-wrap { white-space: normal; }
+  .ag-cell.fd-flow__c-ring { display: flex; align-items: center; justify-content: center; padding-left: 4px; padding-right: 4px; }
 
   /* Urgent order: a rose inset rule at the row's leading edge (never a fill). */
   .ag-row.fd-flow__row--urgent { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }

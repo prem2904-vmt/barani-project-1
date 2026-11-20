@@ -27,6 +27,10 @@ export interface SegmentedOption<T = string> {
   iconColor?: string;
   /** Per-item display override: 'both' | 'text' | 'icon' */
   mode?: 'both' | 'text' | 'icon';
+  /** Accessible name override (default: the label) — e.g. "Appointments, 7, 1 overdue". */
+  aria?: string;
+  /** A small rose attention dot at the option's top-right (e.g. overdue appointments). */
+  alert?: boolean;
   /** Whether this option has an inline clear button when active (e.g. custom date range with value). */
   clearable?: boolean;
 }
@@ -56,7 +60,7 @@ export type SegmentedFitMode = 'auto' | 'off';
                 [attr.tabindex]="opt.value === value ? 0 : -1"
                 [disabled]="opt.disabled ?? false"
                 [title]="opt.hint || opt.label"
-                [attr.aria-label]="opt.label"
+                [attr.aria-label]="opt.aria || opt.label"
                 (click)="select(opt.value, $event)">
           @if (hasIcon(opt)) {
             <span class="seg-ico" aria-hidden="true" [style.color]="opt.iconColor || null">
@@ -76,6 +80,7 @@ export type SegmentedFitMode = 'auto' | 'off';
               {{ opt.count }}
             </span>
           }
+          @if (opt.alert) { <span class="seg-alert" aria-hidden="true"></span> }
           @if (opt.clearable && opt.value === value) {
             <span class="seg-clear" role="button" tabindex="0" (click)="$event.stopPropagation(); clearOption(opt, $event)" aria-label="Clear">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -247,6 +252,9 @@ export type SegmentedFitMode = 'auto' | 'off';
     }
 
     .seg-dot { width: 6px; height: 6px; border-radius: 9999px; flex-shrink: 0; }
+    /* Attention dot (option.alert): soft rose, top-right of the option, never moves the label. */
+    .seg-item:has(.seg-alert) { position: relative; }
+    .seg-alert { position: absolute; top: 2px; right: 3px; width: 7px; height: 7px; border-radius: 9999px; background: var(--rose-text, #e11d48); pointer-events: none; }
 
     .seg-clear {
       display: inline-flex;

@@ -388,8 +388,9 @@
               <header class="pf-appt-split__hdr pf-appt-split__hdr--tabs" (click)="togglePane('appt')" role="button"
                 tabindex="0" [attr.aria-expanded]="expandedPane() === 'appt'">
 
-                <!-- Calendar link (placed on the left side) -->
-                @if (showAppt()) {
+                <!-- Calendar link (placed on the left side). With "Who is where" (2+ services) it moves into the
+                     Appointments row below so the three tabs keep the head to themselves. -->
+                @if (showAppt() && !whoTabOn()) {
                 <a routerLink="/frontdesk/appointments" class="pf-appt-split__link--left-icon" title="Open calendar"
                   aria-label="Open calendar" (click)="$event.stopPropagation()">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
@@ -402,8 +403,8 @@
                 }
 
                 @if (theme.isNewDesign()) {
-                  @if (showHome()) {
-                    <pf-segmented class="pf-tabs"
+                  @if (showHome() || whoTabOn()) {
+                    <pf-segmented class="pf-tabs" [class.fd-side-tabs]="whoTabOn()" ariaLabel="Side card"
                                   [options]="leftTabSegmentOptions()"
                                   [value]="$any(leftTab())"
                                   (valueChange)="setLeftTab($any($event))" />
@@ -433,8 +434,8 @@
                 }
 
                 <div class="flex items-center gap-1.5 ml-auto" (click)="$event.stopPropagation()">
-                  <!-- Date filters for Left Pane -->
-                  @if (leftTab() === 'appt' || leftTab() === 'home') {
+                  <!-- Date filters for Left Pane (with "Who is where" they sit in the list's own row below) -->
+                  @if ((leftTab() === 'appt' || leftTab() === 'home') && !whoTabOn()) {
                   <pf-segmented class="pf-hdr-date-pills"
                                 [options]="apptDateSegmentOptions()"
                                 [value]="apptDateRange()"
@@ -443,8 +444,9 @@
                                 (optionClear)="clearApptCustom()" />
                   }
 
-                  <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px) -->
-                  @if (showAppt() || showHome()) {
+                  <!-- Dropdown filter for Appt (visible on mobile/tablet only < 1024px; with "Who is where" the date pill
+                       sits in the list's own row instead) -->
+                  @if ((showAppt() || showHome()) && !whoTabOn()) {
                   <div class="pf-hdr-filter">
                     <button #apptFilterBtn type="button" class="pf-hdr-filter__btn"
                       [class.pf-hdr-filter__btn--on]="apptFilterOpen() || apptDateRange() !== 'today'"
@@ -497,6 +499,57 @@
                 </svg>
               </header>
 
+              <!-- New design: the list's own row — "Booked today" + the service filter chip (the ONE filter, removable)
+                   + "+ New" (the EXISTING book-appointment flow). With "Who is where" the date pill lives here too. -->
+              @if (theme.isNewDesign() && (leftTab() === 'appt' || leftTab() === 'home')) {
+              <div class="fd-side-sub" data-testid="fd-side-sub">
+                <span class="fd-side-sub__t">{{ leftTab() === 'appt' ? 'Booked' : 'Home visits' }}{{ whoTabOn() ? '' : ' ' + apptRangeWords() }}</span>
+                @if (whoTabOn()) {
+                  <pf-segmented class="fd-side-sub__dates" ariaLabel="Date range"
+                                [options]="apptDateSegmentOptions()"
+                                [value]="apptDateRange()"
+                                (valueChange)="setApptDateRange($any($event))"
+                                (optionClick)="onApptDateOptionClick($event)"
+                                (optionClear)="clearApptCustom()" />
+                }
+                @if (svcFilterLabel(); as l) {
+                  <button type="button" class="fd-side-sub__chip press" data-testid="fd-side-filter-chip"
+                    (click)="clearServiceFilter()" [attr.aria-label]="'Clear ' + l + ' filter'" [title]="'Clear ' + l + ' filter'">
+                    {{ l }}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                  </button>
+                }
+                <span class="fd-side-sub__sp"></span>
+                @if (leftTab() === 'appt' && showAppt()) {
+                  @if (whoTabOn()) {
+                  <a routerLink="/frontdesk/appointments" class="fd-side-sub__cal press" title="Open calendar" aria-label="Open calendar">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="3" y="4" width="18" height="18" rx="2" />
+                      <path d="M16 2v4M8 2v4M3 10h18" />
+                      <path d="M9 16h6" />
+                    </svg>
+                  </a>
+                  }
+                  <button type="button" class="pf-btn pf-btn--secondary fd-side-sub__new press" data-testid="fd-new-appt"
+                    (click)="bookAppointment()" aria-label="New appointment" title="New appointment">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                    New
+                  </button>
+                }
+              </div>
+              }
+
+              <!-- WHO IS WHERE (2+ services): the sunburst + chips — the ONE service filter -->
+              @if (leftTab() === 'who') {
+              <div class="fd-who-body">
+                <pf-fd-who-is-where [items]="whoItems()" [services]="shelfServices()" [service]="svcSelected()"
+                  [step]="svcStep()" (pick)="pickService($event)" />
+              </div>
+              }
+
               <!-- Weekday strip — click a day to scope Appointments to it -->
               @if (leftTab() === 'appt') {
               <div class="pf-daystrip">
@@ -523,8 +576,13 @@
                     <rect x="3" y="4" width="18" height="18" rx="2" />
                   </svg>
                 </span>
+                @if (svcFilterLabel() && !svcOn('lab')) {
+                <p class="pf-empty__title">None for {{ svcFilterLabel() }}</p>
+                <p class="pf-empty__body">Appointments here are Lab bookings. Clear the {{ svcFilterLabel() }} filter to see them.</p>
+                } @else {
                 <p class="pf-empty__title">No appointments yet</p>
                 <p class="pf-empty__body">Open the calendar to slot in walk-ins or pre-bookings.</p>
+                }
                 <a routerLink="/frontdesk/appointments" class="pf-btn pf-btn--secondary pf-empty__action press">Open
                   calendar</a>
               </div>
@@ -558,6 +616,9 @@
                       }
                       @if (a.orderId) {
                       <p class="pf-card__meta">Order created</p>
+                      }
+                      @if (theme.isNewDesign() && apptLateLabel(a); as late) {
+                      <p class="pf-card__meta fd-appt-late" data-testid="fd-appt-late">{{ late }}</p>
                       }
                       @if (hasOutstanding(patient?.id)) {
                       <span class="pf-card__flag pf-card__flag--balance" title="Outstanding balance">
@@ -610,8 +671,13 @@
                     <path d="M10 20v-5h4v5" />
                   </svg>
                 </span>
+                @if (svcFilterLabel() && !svcOn('lab')) {
+                <p class="pf-empty__title">None for {{ svcFilterLabel() }}</p>
+                <p class="pf-empty__body">Home collection is Lab work. Clear the {{ svcFilterLabel() }} filter to see it.</p>
+                } @else {
                 <p class="pf-empty__title">No home collections</p>
                 <p class="pf-empty__body">Home-collection requests show here with their assigned agent.</p>
+                }
               </div>
               } @else {
               <ul class="pf-cards">

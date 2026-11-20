@@ -8,6 +8,7 @@ import { drawerAgeSex, drawerName, drawerPipeline, drawerStepCaption } from '../
 import { ServiceId, serviceOfModule } from '../../../../core/services/service-shelf';
 import { formatDuration, normalizePriority } from '../../../../shared/utils/lab-priority';
 import { CurrencyInrPipe } from '../../../../shared/pipes/currency-inr.pipe';
+import { LAB_STEPS_VALIDATED, RingStep, labRingSteps, ringSteps, statusRingSteps, validationApplies } from '../../../../shared/components/journey-ring/journey-ring';
 
 /**
  * Frontdesk FLOW GRID rows (owner-approved redesign 2026-11-19) — the pure mapping from what the work card already
@@ -71,6 +72,8 @@ export interface FlowRow {
   /** Journey dots (Billing → Sample → Dispatch → Result → Report); empty = not tracked for this row. */
   journey: JourneyState[];
   journeyLabel: string;
+  /** The journey RING (shared pf-journey-ring): this row's own steps, done / now / late / todo. */
+  ring?: RingStep[];
   /** Minutes at the current stage (null = finished / unknown). */
   waitMin: number | null;
   wait: string;
@@ -195,6 +198,17 @@ export function journeyDots(o: Pick<Order, 'status' | 'samples'>): { dots: Journ
   return { dots, label };
 }
 
+/** The row's ring steps: a lab order walks its pipeline (4 steps when its results release without validation, 5
+ *  with), other services their status steps, a partner-lab stand-in "At partner lab → Report in". Late = the grid's
+ *  own late rule (the Waiting column); a blocked step (not collected) reads late too. */
+export function orderRing(o: Pick<Order, 'status' | 'samples' | 'module'>, late: boolean, synthetic = false, pending = true): RingStep[] {
+  if (synthetic) return ringSteps(['At partner lab', 'Report in'], pending ? 0 : -1, { late });
+  const service = serviceOfModule(o.module);
+  if (service !== 'lab') return statusRingSteps(service, o.status, { late });
+  const tests = (o.samples ?? []).flatMap(sm => sm.tests ?? []);
+  return labRingSteps(drawerPipeline(o), { late, validation: validationApplies(tests) });
+}
+
 /** Minutes the order has sat at its current stage (since its last status change), null once it is finished. */
 export function orderStageMinutes(o: Pick<Order, 'status' | 'createdAt' | 'updatedAt'>, now: number): number | null {
   if (DONE_STATUSES.has(o.status) || o.status === 'cancelled') return null;
@@ -279,6 +293,8 @@ export function orderFlowRow(o: Order, p: FlowPredicates, now: number, ctx: {
     name: drawerName(o.patient), meta: patientMeta(o.patient), tags: [serviceTag(service)],
     where, whereSub, tone: o.status === 'cancelled' ? 'rose' : toneOf(ctx.primary),
     journey, journeyLabel,
+    ring: o.status === 'cancelled' ? orderRing(o, false).map(x => ({ ...x, state: 'todo' as const }))
+      : orderRing(o, late && !finished, synthetic, !finished),
     waitMin, wait: waitMin === null ? '—' : w.label, late,
     pay, payDue, due,
     createdMs, dailyNo: o.dailyNo ?? null, dailyNoDay: o.dailyNoDay ?? null,
@@ -298,6 +314,7 @@ export function draftFlowRow(d: FlowDraft, now: number): FlowRow {
     name: drawerName(d.patient), meta: patientMeta(d.patient), tags: ['LAB'],
     where: 'Draft', whereSub: `${n} test${n === 1 ? '' : 's'} · not ordered yet`, tone: 'neutral',
     journey: [], journeyLabel: '',
+    ring: ringSteps(LAB_STEPS_VALIDATED, 0, { late: w.min >= LATE_AFTER_MIN }),
     waitMin: w.min, wait: w.label, late: w.min >= LATE_AFTER_MIN,
     pay: 'Not billed', payDue: false, due: 0,
     createdMs: d.savedAt, dailyNo: null, dailyNoDay: null,

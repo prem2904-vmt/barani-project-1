@@ -2981,3 +2981,26 @@ input::-ms-clear {
 /* Side cards (owner 2026-11-18): the body is the scroller, so its children never shrink — a wrapped row of chips kept
    collapsing under the label that follows it (Option groups). A child that must flex sets its own flex values. */
 aside.pf-card > .pf-card__body > * { flex-shrink: 0; }
+
+/* pf-journey-ring hover card (shared/components/journey-ring — appended to <body>, so it lives here). */
+.pf-jring-tip {
+  position: fixed; z-index: 1200; min-width: 160px; max-width: 240px; box-sizing: border-box; padding: 8px 10px;
+  border-radius: 10px; background: var(--pf-card-bg, #fff); border: 1px solid var(--pf-line, #e5e7eb);
+  box-shadow: var(--pf-shadow-sm, 0 4px 14px rgba(15, 23, 42, 0.12)); color: var(--text-primary);
+  font-size: 12px; line-height: 1.4; pointer-events: none;
+}
+.pf-jring-tip p { margin: 0; }
+.pf-jring-tip__h { font-weight: 700; font-size: 12.5px; margin-bottom: 4px !important; }
+.pf-jring-tip__row { display: flex; align-items: center; gap: 7px; min-height: 20px; }
+.pf-jring-tip__w { margin-left: auto; color: var(--text-tertiary, var(--text-muted)); font-size: 11px; }
+.pf-jring-tip__mark { width: 8px; height: 8px; border-radius: 999px; flex: none; box-sizing: border-box; border: 1.5px solid var(--pf-line, #e5e7eb); }
+.pf-jring-tip__row[data-state='done'] .pf-jring-tip__mark {
+  width: 9px; height: 5px; border-radius: 0; border: 0; border-left: 2px solid var(--green-text); border-bottom: 2px solid var(--green-text);
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.pf-jring-tip__row[data-state='now'] .pf-jring-tip__mark { background: var(--text-primary); border-color: var(--text-primary); }
+.pf-jring-tip__row[data-state='late'] .pf-jring-tip__mark { background: var(--rose-text); border-color: var(--rose-text); }
+.pf-jring-tip__row[data-state='now'], .pf-jring-tip__row[data-state='late'] { font-weight: 600; }
+.pf-jring-tip__row[data-state='late'] .pf-jring-tip__w { color: var(--rose-text); }
+.pf-jring-tip__row[data-state='todo'] { color: var(--text-secondary); }
+:root.dark .pf-jring-tip, :root[data-theme='dark'] .pf-jring-tip { background: var(--pf-dark-surface, var(--pf-card-bg)); }
