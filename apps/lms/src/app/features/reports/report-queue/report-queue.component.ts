@@ -789,6 +789,11 @@ export class ReportQueueComponent implements OnInit {
   readonly phone = mediaSignal("(max-width: 640px)", inject(DestroyRef));
   /** <1280px: the grid folds Order + Generated into the Patient cell (the actions keep their room). */
   readonly compact = mediaSignal("(max-width: 1279px)", inject(DestroyRef));
+  /** Tablet widths with the grid (901–1279px): the row actions fold to View · Share · ⋯ icons and the Sent column
+   *  folds under the status pill, so the actions are always whole at the card's right edge (owner 2026-11-20). */
+  readonly slimActs = computed(() => this.compact() && !this.phone());
+  /** 44px icon row actions: touch, or the slim tablet layout. */
+  readonly iconActs = computed(() => !this.web() || this.slimActs());
 
   /** Status dot colour for a side-card row / menu row (null = the empty ring for All). */
   filterDot(f: Filter): string | null {
@@ -902,6 +907,7 @@ export class ReportQueueComponent implements OnInit {
     const narrow = this.narrow();
     // Below 1280px (tablet landscape, a narrow window) Order + Generated fold into the Patient cell's meta line.
     const compact = this.compact();
+    const slim = this.slimActs();
     return [
       // # = the full daily-number chip ("21 · 15 Nov" on an older order) — never clipped.
       { colId: "no", headerName: "#", width: 94, minWidth: 94, cellClass: "pf-rq2-nowrap", ...cell(this.noTpl()) },
@@ -910,9 +916,10 @@ export class ReportQueueComponent implements OnInit {
       { colId: "order", headerName: "Order", width: 130, minWidth: 130, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap", ...cell(this.orderTpl()) },
       { colId: "status", headerName: "Status", width: 120, minWidth: 116, ...cell(this.statusTpl()) },
       { colId: "generated", headerName: "Generated", width: 128, minWidth: 128, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap", ...cell(this.genTpl()) },
-      { colId: "sent", headerName: "Sent", flex: 1, minWidth: 96, ...cell(this.sentTpl()) },
+      { colId: "sent", headerName: "Sent", flex: 1, minWidth: 96, hide: slim, ...cell(this.sentTpl()) },
       // View · Download · Share ▾ · ⋯ — text on web, 44px icons on touch (+ Details on a partly-reported order).
-      { colId: "actions", headerName: "Actions", width: touch ? 256 : 290, minWidth: touch ? 256 : 290,
+      // Slim (901–1279px): View · Share · ⋯ (+ Details on a partly-reported order) as 44px icons.
+      { colId: "actions", headerName: "Actions", width: slim ? 212 : touch ? 256 : 290, minWidth: slim ? 212 : touch ? 256 : 290,
         headerClass: "ag-right-aligned-header", cellClass: "pf-rq2-actcell", ...cell(this.actsTpl()) },
     ];
   });

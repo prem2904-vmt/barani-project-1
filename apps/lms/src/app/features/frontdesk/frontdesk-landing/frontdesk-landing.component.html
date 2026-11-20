@@ -723,6 +723,7 @@
                                 [options]="workStatusSegmentOptions()"
                                 [value]="$any(rightTab())"
                                 [allowDeselect]="true"
+                                fitAlign="end" allLabel="All statuses" ariaLabel="Filter by status"
                                 (valueChange)="setRightTab($any($event))" />
                   } @else {
                   <div class="pf-tabs" role="group" aria-label="Filter by status" (click)="$event.stopPropagation()">

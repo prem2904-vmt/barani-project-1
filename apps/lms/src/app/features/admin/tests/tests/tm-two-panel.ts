@@ -31,6 +31,8 @@ export const TM_TWO_PANEL_STYLES = `
   .pf-2p__side, .pf-2p__main { min-width: 0; min-height: 0; }
   .pf-2p__side > .pf-card__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .pf-2p__head { flex-wrap: wrap; row-gap: 8px; }
+  /* Pill fit (owner 2026-11-20): a head with a status pill is ONE row — the pill collapses, the head never wraps. */
+  .pf-2p__head:has(> pf-segmented) { flex-wrap: nowrap; }
   .pf-2p__head .pf-card__label { white-space: nowrap; }
   .pf-2p__name { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text-primary); white-space: normal; min-width: 0; }
   .pf-2p__count { flex: none; margin-left: auto; font-size: 12.5px; font-weight: 500; color: var(--text-tertiary); white-space: nowrap; }
