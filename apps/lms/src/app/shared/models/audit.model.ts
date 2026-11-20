@@ -11,11 +11,33 @@ export interface AuditLog {
   at: string;
 }
 
+/** One record an audit page references, named by the server
+ *  (`GET /api/audit/logs?enrich=true` → `refs`, keyed by id). Anything the
+ *  caller can't see (another branch of a strict lab, a deleted row) is absent;
+ *  `patient` only comes with view_patient. */
+export interface AuditRef {
+  kind: string;
+  label?: string;
+  orderId?: string;
+  sampleId?: string;
+  patient?: string;
+  sub?: string;
+}
+
 export interface AuditLogPage {
   items: AuditLog[];
   total: number;
   page: number;
   pageSize: number;
+  /** Only with `enrich=true`. */
+  refs?: Record<string, AuditRef>;
+}
+
+/** `GET /api/audit/facets` — side-card counts over the same window / search. */
+export interface AuditFacets {
+  types: { entityType: string; count: number }[];
+  users: { userId: string; name?: string; count: number }[];
+  total: number;
 }
 
 /** Audited entity types (mirrors the backend interceptor allowlist) with
