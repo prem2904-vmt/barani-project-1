@@ -91,13 +91,18 @@ export class FlowTokenCellComponent implements ICellRendererAngularComp {
         <span class="fd-cell-pt__name" tabindex="0" role="link" [attr.aria-label]="'Open ' + row.name"
           (keydown.enter)="open($event)" (keydown.space)="open($event)">{{ row.name }}</span>
         @if (row.meta) { <span class="fd-cell-pt__meta">{{ row.meta }}</span> }
+        <!-- Narrow grids (iPad) fold the Payment column into this line so Patient keeps whole words. -->
+        @if (row.pay && row.pay !== '—') { <span class="fd-cell-pt__pay" [class.fd-cell-pt__pay--due]="row.payDue">{{ row.pay }}</span> }
       </span>
     }`,
   styles: [`
     .fd-cell-pt { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; min-width: 0; line-height: 1.3; }
-    .fd-cell-pt__name { font-weight: 600; font-size: 13.5px; color: var(--text-primary); white-space: normal; overflow-wrap: anywhere; border-radius: 4px; }
+    .fd-cell-pt__name { font-weight: 600; font-size: 13.5px; color: var(--text-primary); white-space: normal; overflow-wrap: break-word; border-radius: 4px; }
     .fd-cell-pt__name:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px; }
     .fd-cell-pt__meta { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+    .fd-cell-pt__pay { display: none; font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .fd-cell-pt__pay--due { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); font-weight: 600; }
+    :host-context(.fd-flow--fold) .fd-cell-pt__pay { display: inline; }
   `],
 })
 export class FlowPatientCellComponent implements ICellRendererAngularComp {

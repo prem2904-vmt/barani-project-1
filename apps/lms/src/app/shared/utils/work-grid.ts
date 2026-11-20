@@ -1,3 +1,4 @@
+import type { ColDef } from 'ag-grid-community';
 import { formatDuration } from './lab-priority';
 
 /**
@@ -128,4 +129,35 @@ export function setFilterCol<T>(get: Getter<T, string>, component: unknown): Fil
 export function minutesSince(iso: string | null | undefined, now: number = Date.now()): number | null {
   const t = iso ? Date.parse(iso) : NaN;
   return Number.isFinite(t) ? Math.max(0, Math.round((now - t) / 60000)) : null;
+}
+
+/** A BOUND set-style filter (Results' Status / Generated / Sent): the header filter IS the screen's own filter state
+ *  (`GridChoiceFilterParams`), one choice, both ways — `filter` = the shared WorkSetFilterComponent. */
+export function choiceFilterCol<P>(params: P, component: unknown): { filter: unknown; filterParams: P; suppressHeaderMenuButton: true; suppressHeaderFilterButton: false } {
+  return { filter: component, filterParams: params, suppressHeaderMenuButton: true, suppressHeaderFilterButton: false };
+}
+
+// ── Whole-column helpers (alignment + filter in one call) — the Frontdesk flow grid builds its columns with these ──
+//  textCol (Token / ID / Patient), valuesCol (Where now / Status / Payment), numberCol (Waiting / TAT), shapeCol
+//  (the ring: centred, no filter), actionCol (right, never filtered). A column's own cellClass / headerClass is kept.
+
+function withAlign<T>(def: ColDef<T>, a: WorkAlign): ColDef<T> {
+  const al = ALIGN_CLASS[a];
+  const list = (x: unknown) => (Array.isArray(x) ? x : x ? [x as string] : []) as string[];
+  return { ...def, cellClass: [al.cellClass, ...list(def.cellClass)], headerClass: [al.headerClass, ...list(def.headerClass)] };
+}
+export function textCol<T>(def: ColDef<T>, get: Getter<T, string>, a: WorkAlign = 'left'): ColDef<T> {
+  return withAlign<T>({ ...def, ...(textFilterCol<T>(get) as ColDef<T>) }, a);
+}
+export function valuesCol<T>(def: ColDef<T>, get: Getter<T, string>, component: unknown, a: WorkAlign = 'left'): ColDef<T> {
+  return withAlign<T>({ ...def, ...(setFilterCol<T>(get, component) as ColDef<T>) }, a);
+}
+export function numberCol<T>(def: ColDef<T>, get: Getter<T, number | null>, a: WorkAlign = 'center'): ColDef<T> {
+  return withAlign<T>({ ...def, ...(numberFilterCol<T>(get) as ColDef<T>) }, a);
+}
+export function shapeCol<T>(def: ColDef<T>, a: WorkAlign = 'center'): ColDef<T> {
+  return withAlign<T>({ ...def, filter: false }, a);
+}
+export function actionCol<T>(def: ColDef<T>): ColDef<T> {
+  return withAlign<T>({ ...def, filter: false, sortable: false }, 'right');
 }

@@ -3005,15 +3005,15 @@ aside.pf-card > .pf-card__body > * { flex-shrink: 0; }
 .pf-jring-tip__row[data-state='todo'] { color: var(--text-secondary); }
 :root.dark .pf-jring-tip, :root[data-theme='dark'] .pf-jring-tip { background: var(--pf-dark-surface, var(--pf-card-bg)); }
 
-/* Work-grid column rule (shared/utils/work-grid-columns.ts — Frontdesk, Lab / Pathologist, Results grids): text LEFT,
+/* Work-grid column rule (shared/utils/work-grid.ts — Frontdesk, Lab / Pathologist, Results grids): text LEFT,
    short same-shape values CENTRED, actions RIGHT; the header always matches its cells. An active column filter shows
    the header's filter icon in the accent; on touch the header's filter / menu button is a 44px target. */
-.ag-cell.pf-wg-left { text-align: left; }
-.ag-cell.pf-wg-center { display: flex; align-items: center; justify-content: center; text-align: center; }
-.ag-cell.pf-wg-right { display: flex; align-items: center; justify-content: flex-end; text-align: right; }
-.ag-header-cell.pf-wg-h-left .ag-header-cell-label { justify-content: flex-start; }
-.ag-header-cell.pf-wg-h-center .ag-header-cell-label { justify-content: center; }
-.ag-header-cell.pf-wg-h-right .ag-header-cell-label { justify-content: flex-end; }
+.ag-cell.wg-c-left { text-align: left; }
+.ag-cell.wg-c-center { display: flex; align-items: center; justify-content: center; text-align: center; }
+.ag-cell.wg-c-right { display: flex; align-items: center; justify-content: flex-end; text-align: right; }
+.ag-header-cell.wg-h-left .ag-header-cell-label { justify-content: flex-start; }
+.ag-header-cell.wg-h-center .ag-header-cell-label { justify-content: center; }
+.ag-header-cell.wg-h-right .ag-header-cell-label { justify-content: flex-end; }
 .ag-header-cell.ag-header-cell-filtered .ag-header-cell-filter-button,
 .ag-header-cell.ag-header-cell-filtered .ag-header-cell-menu-button,
 .ag-header-cell.ag-header-cell-filtered .ag-filter-icon { color: var(--violet-text, #6d28d9); opacity: 1; }

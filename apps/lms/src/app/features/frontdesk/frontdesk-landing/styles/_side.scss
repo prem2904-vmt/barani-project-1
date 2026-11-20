@@ -100,4 +100,34 @@
   @media (pointer: coarse) {
     .fd-side-sub__chip { min-height: 44px; }
   }
+
+  /* Appointment / home rows (owner 2026-11-20): the shared side-list rows — no card in the card. Time (accent,
+     tabular) · name (wraps by WORD) · meta + status · the row's action (44px) at the right. */
+  .fd-vrows { padding: 4px 8px 8px; container-type: inline-size; }
+  .fd-vrow { align-items: flex-start; gap: 10px; padding: 10px 6px; cursor: pointer; }
+  .fd-vrow__time { flex: 0 0 44px; padding-top: 1px; font-size: 12.5px; font-weight: 700; color: var(--violet-text); font-variant-numeric: tabular-nums; }
+  .fd-vrow__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .fd-vrow__name { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: var(--text-primary); white-space: normal; overflow-wrap: break-word; word-break: normal; }
+  .fd-vrow__meta { font-size: 12px; line-height: 1.35; color: var(--text-secondary); font-family: inherit; font-variant-numeric: tabular-nums; overflow-wrap: break-word; }
+  .fd-vrow__tel { color: inherit; text-decoration: none; font-family: inherit; }
+  .fd-vrow__tel:hover { text-decoration: underline; }
+  .fd-vrow__status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+  .fd-vrow__status--late { color: var(--rose-text) !important; }
+  .fd-vrow__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--text-tertiary); flex: none; }
+  .fd-vrow__dot[data-tone='green'] { background: var(--green-text); }
+  .fd-vrow__dot[data-tone='rose'] { background: var(--rose-text); }
+  .fd-vrow__acts { flex: none; display: inline-flex; align-items: center; gap: 4px; align-self: center; }
+  .fd-vrow__icon {
+    display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 10px;
+    color: var(--text-secondary); text-decoration: none;
+  }
+  .fd-vrow__icon:hover { background: var(--pf-chip-bg); color: var(--text-primary); }
+  .fd-vrow__btn { height: 44px; min-height: 44px; padding: 0 12px; }
+  @media (pointer: coarse) { .fd-vrow__icon { width: 44px; height: 44px; } }
+  /* A narrow side card: the row's actions drop under the text (right-aligned) so the name keeps whole words. */
+  @container (max-width: 320px) {
+    .fd-vrow { flex-wrap: wrap; }
+    .fd-vrow__body { flex: 1 1 calc(100% - 54px); }
+    .fd-vrow__acts { flex: 1 0 100%; justify-content: flex-end; }
+  }
 }

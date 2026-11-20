@@ -1151,6 +1151,10 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   }
   /** Minutes a booked appointment is past its slot (null = not overdue). */
   apptLateMin(a: Appointment): number | null { return apptOverdueMin(a, this.nowTick()); }
+  /** The side-list rows' meta: "34/F · AA0022" (age/sex · MRN). */
+  visitMeta(p: Patient | null | undefined): string {
+    return [drawerAgeSex(p ?? null), p?.mrn ?? ''].filter(Boolean).join(' · ');
+  }
   /** The overdue appointment's soft-rose status line: "Not arrived · 18m late". */
   apptLateLabel(a: Appointment): string | null {
     const m = this.apptLateMin(a);

@@ -81,7 +81,8 @@ import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.c
 import { matchesDailyNo } from '../../../shared/utils/daily-no';
 import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { SelectComponent, type PfSelectOption } from '../../../shared/primitives/select.component';
-import { GridChoiceFilterComponent, type GridChoice, type GridChoiceFilterParams } from '../../../shared/components/grid-choice-filter/grid-choice-filter.component';
+import { WorkSetFilterComponent, type GridChoice, type GridChoiceFilterParams } from '../../../shared/components/work-set-filter/work-set-filter.component';
+import { choiceFilterCol } from '../../../shared/utils/work-grid';
 import {
   activeCount, clientActive, doctorNames, partialPasses, presetRange, reportPasses, shouldScan, viaKeys, viaLabel, withShares,
   type BreakdownRow, type DatePreset, type RqClientFilters,
@@ -1091,8 +1092,9 @@ export class ReportQueueComponent implements OnInit {
     };
   }
   private choiceFilter(title: string, options: () => GridChoice[], selected: () => string, select: (v: string) => void): ColDef<RqRow> {
+    // ONE set-style filter for every work grid (shared/components/work-set-filter), here in its BOUND mode.
     const filterParams: GridChoiceFilterParams = { title, options, selected, select };
-    return { filter: GridChoiceFilterComponent, filterParams, suppressHeaderMenuButton: true, suppressHeaderFilterButton: false };
+    return choiceFilterCol(filterParams, WorkSetFilterComponent) as ColDef<RqRow>;
   }
   /** "#12 12 LAB-…" — the daily number (with or without #) of a report or a partly-reported order. */
   private noText(d: RqRow): string {
