@@ -6,6 +6,7 @@ import { signal } from '@angular/core';
 import { of, EMPTY } from 'rxjs';
 import { vi } from 'vitest';
 import { ReportQueueComponent } from './report-queue.component';
+import { GridChoiceFilterComponent } from '../../../shared/components/grid-choice-filter/grid-choice-filter.component';
 import { WhatsAppSendService } from '../../../core/services/whatsapp-send.service';
 import { WhatsAppManualService } from '../../../core/services/whatsapp-manual.service';
 import { cultureStagesDone, cultureSummary, deptCountLabel, pendingStatus, queueStatus, reportStatus } from './report-queue.partial';
@@ -167,10 +168,11 @@ async function render(opts: { touch?: boolean; phone?: boolean; narrow?: boolean
   await settle(f);
   const c = f.componentInstance as any;
   const el = f.nativeElement as HTMLElement;
-  /** Pick a status: the head's status pill (wide), else the component's filter (the menu's handler). */
+  /** Pick a status: its row in the FILTERS side card (wide; a tap on the picked row would clear it), else the
+   *  component's filter (narrow: the same card is a sheet; All = no status row picked). */
   const tab = async (v: string) => {
-    const side = el.querySelector(`[data-testid="rq-pill"] [data-filter="${v}"]`) as HTMLElement | null;
-    if (side) side.click(); else c.onFilterMenu(v);
+    const row = el.querySelector(`[data-testid="rq-side"] [data-filter="${v}"]`) as HTMLElement | null;
+    if (row && row.getAttribute('aria-pressed') !== 'true') row.click(); else c.setFilter(v);
     f.detectChanges();
     await settle(f);
   };
@@ -219,46 +221,53 @@ describe('Reports v2 — frame: band = lab + search, STATUS side card LEFT, repo
     expect(el.querySelector('.pf-rq-stats, .pf-rq-stat, .pf-rq-statbtn, .pf-rq-filter-m, [data-testid="rq-filter"]')).toBeNull();
   });
 
-  it('status pill in the main card head: All · Completed · Partial · Delivered with dots + counts — no Failed', async () => {
-    const { el } = await render();
-    const pill = el.querySelector('[data-testid="rq-main"] .pf-card__head [data-testid="rq-pill"]') as HTMLElement;
-    const items = [...pill.querySelectorAll<HTMLElement>('[role=radio]')];
-    expect(items.map(i => i.querySelector('.seg-lbl')!.textContent!.trim())).toEqual(['All', 'Completed', 'Partial', 'Delivered']);
-    expect(items.map(i => i.querySelector('.seg-count')!.textContent!.trim())).toEqual(['6', '2', '2', '1']);
-    expect(items.slice(1).map(i => (i.querySelector('.seg-dot') as HTMLElement).style.background))
-      .toEqual(['var(--violet-text)', 'var(--sky-text)', 'var(--green-text)']);
-    expect(pill.querySelector('[aria-checked="true"]')?.getAttribute('data-filter')).toBe('pending');
-    expect(el.textContent).not.toMatch(/Failed\s*1\b/);
-  });
-
-  it('TO SEND side card (LEFT): WhatsApp failed (Retry) · Not sent yet (Send) · Partial, waiting on results (no action)', async () => {
+  it('FILTERS side card (LEFT): Dates (IST) · Status (Completed · Partial · Delivered, dot + count + share) · To send', async () => {
     const { el, c } = await render({ wa: { r1: { id: 'm1', reportId: 'r1', trigger: 'auto', kind: 'report_ready', status: 'held', attempts: 0, createdAt: '2026-09-26T13:08:00Z' } } });
     const side = el.querySelector('[data-testid="rq-side"]') as HTMLElement;
     expect(side.tagName).toBe('ASIDE');
     expect(side.parentElement!.firstElementChild).toBe(side);   // choose on the left, see on the right
-    expect(side.querySelector('.pf-card__label')!.textContent!.trim()).toBe('To send');
+    expect(side.querySelector('.pf-card__label')!.textContent!.trim()).toBe('Filters');
+    // Dates: All (the old view, no limit) · Today · 7 days · This month; All picked.
+    const presets = [...side.querySelectorAll<HTMLElement>('[data-testid="rq-dates"] [role=radio]')];
+    expect(presets.map(b => b.textContent!.trim())).toEqual(['All', 'Today', '7 days', 'This month']);
+    expect(presets[0].getAttribute('aria-checked')).toBe('true');
+    expect(side.querySelectorAll('pf-date').length).toBe(2);
+    // Status breakdown: dot · name · count + a share bar; the default (Completed) is pressed.
+    const st = [...side.querySelectorAll<HTMLElement>('[data-testid="rq-statuses"] button')];
+    expect(st.map(b => b.querySelector('.pf-rq2-f__totname')!.textContent!.trim())).toEqual(['Completed', 'Partial', 'Delivered']);
+    expect(st.map(b => b.querySelector('.pf-rq2-f__totn')!.textContent!.trim())).toEqual(['2', '2', '1']);
+    expect(st.map(b => (b.querySelector('.pf-rq2-dot') as HTMLElement).style.background)).toEqual(['var(--violet-text)', 'var(--sky-text)', 'var(--green-text)']);
+    expect(st.map(b => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false']);
+    expect((st[0].querySelector('.pf-rq2-f__totbar > span') as HTMLElement).style.width).toBe('40%');
+    // To send: Not sent yet (r1) · WhatsApp failed (r4); r2 is a preliminary — never sent from here.
     const t = c.toSend();
     expect(t.failed.map((x: any) => x.id)).toEqual(['r4']);
-    expect(t.notSent.map((x: any) => x.id)).toEqual(['r1']);       // r2 is a preliminary: never sent from here
-    expect(t.partial.length).toBe(2);
-    expect(side.querySelector('[data-testid="rq-tosend-count"]')!.textContent!.trim()).toBe('4');
-    const groups = [...side.querySelectorAll('.pf-rq2-q__group')].map(g => g.getAttribute('data-group'));
-    expect(groups).toEqual(['failed', 'not-sent', 'partial']);
-    expect(side.querySelector('[data-report="r4"] .pf-rq2-q__meta')!.textContent).toContain('LAB-2609-000102');
-    expect(side.querySelector('[data-report="r4"] .pf-rq2-q__send')!.textContent!.trim()).toBe('Retry');
-    expect(side.querySelector('[data-report="r1"] .pf-rq2-q__send')!.textContent!.trim()).toBe('Send');
-    expect(side.querySelector('[data-report="r1"] .pf-rq2-q__meta')!.textContent).toContain('Sends by itself once the bill is paid');
-    // Partial rows have no send action. "Send all" is in the HEAD, never at the bottom.
-    const partialRowsInQueue = [...side.querySelectorAll('.pf-rq2-q__row')].filter(r => !r.hasAttribute('data-report'));
-    expect(partialRowsInQueue.length).toBe(2);
-    partialRowsInQueue.forEach(r => expect(r.querySelector('.pf-rq2-q__send')).toBeNull());
-    expect(side.querySelector('.pf-card__head [data-testid="rq-send-all"]')).not.toBeNull();
+    expect(t.notSent.map((x: any) => x.id)).toEqual(['r1']);
+    const ts = [...side.querySelectorAll<HTMLElement>('[data-testid="rq-tosend"] button')];
+    expect(ts.map(b => [b.getAttribute('data-filter'), b.querySelector('.pf-rq2-f__totn')!.textContent!.trim()])).toEqual([['notsent', '1'], ['wafailed', '1']]);
+    expect((ts[1].querySelector('.pf-rq2-dot') as HTMLElement).style.background).toBe('var(--rose-text)');
+    // Nothing clickable at the bottom; Send all is in the MAIN card head.
     expect(side.querySelector('.pf-card__foot')).toBeNull();
+    expect(side.querySelector('[data-testid="rq-send-all"]')).toBeNull();
+    expect(el.querySelector('[data-testid="rq-main"] .pf-card__head [data-testid="rq-send-all"]')).not.toBeNull();
+    // Only pf-select / pf-date — no native select.
+    expect(side.querySelector('select, datalist, input[type=date]:not(.pf-date__native)')).toBeNull();
+  });
+
+  it('Send / Retry live in the grid row (Sent cell): Retry on a failed WhatsApp, Send on one not sent yet', async () => {
+    const { el, tab } = await render();
+    await tab('all');
+    const grid = el.querySelector('[data-testid="rq-grid"]') as HTMLElement;
+    expect(grid.querySelector('[col-id="sent"] [data-report="r4"] .pf-rq2-q__send')!.textContent!.trim()).toBe('Retry');
+    expect(grid.querySelector('[col-id="sent"] [data-report="r1"] .pf-rq2-q__send')!.textContent!.trim()).toBe('Send');
+    // A delivered report and a preliminary carry no send control.
+    expect(grid.querySelector('[data-report="r3"]')).toBeNull();
+    expect(grid.querySelector('[data-report="r2"]')).toBeNull();
   });
 
   it('TO SEND empty: "All reports delivered" with a quiet tick', async () => {
     const { el } = await render({ queue: [rep('d1', 'delivered')], orders: [] });
-    const empty = el.querySelector('[data-testid="rq-tosend-empty"]') as HTMLElement;
+    const empty = el.querySelector('[data-testid="rq-side"] [data-testid="rq-tosend-empty"]') as HTMLElement;
     expect(empty.textContent!.trim()).toBe('All reports delivered');
     expect(empty.querySelector('svg')).not.toBeNull();
   });
@@ -266,7 +275,7 @@ describe('Reports v2 — frame: band = lab + search, STATUS side card LEFT, repo
   it('opt-out: an opted-out patient shows "Opted out", has no Send button and is left out of Send all', async () => {
     const r = await render({ waCloud: true, apiGet: (url: string) => url === '/api/whatsapp/reports/r1' ? { patientOptOut: true } : undefined });
     await settle(r.f);
-    const row = r.el.querySelector('[data-testid="rq-side"] [data-report="r1"]') as HTMLElement;
+    const row = r.el.querySelector('[data-testid="rq-grid"] [data-report="r1"]') as HTMLElement;
     expect(row.querySelector('[data-testid="rq-optout"]')!.textContent!.trim()).toBe('Opted out');
     expect(row.querySelector('.pf-rq2-q__send')).toBeNull();
     expect(r.c.sendAllRows().map((x: any) => x.id)).toEqual(['r4']);
@@ -278,6 +287,7 @@ describe('Reports v2 — frame: band = lab + search, STATUS side card LEFT, repo
   it('Send all asks first (count + who is skipped) through DialogService, then sends each one with the fake sender', async () => {
     const r = await render({ waCloud: true, apiGet: (url: string) => url === '/api/whatsapp/reports/r1' ? { patientOptOut: true } : undefined });
     await settle(r.f);
+    await r.tab('all');   // Send all covers the CURRENT filter; r4 (failed) is not "Completed"
     const dialog = TestBed.inject(DialogService) as any;
     const send = vi.spyOn(r.c.waSend, 'send').mockResolvedValue({ status: 'sent' } as never);
     // Cancel: nothing goes out.
@@ -295,22 +305,23 @@ describe('Reports v2 — frame: band = lab + search, STATUS side card LEFT, repo
 
   it('never double-sends: a second click while a send is in flight does nothing; buttons disable while sending', async () => {
     const r = await render({ waCloud: true });
+    await r.tab('all');
     let resolve!: (m: unknown) => void;
     const send = vi.spyOn(r.c.waSend, 'send').mockImplementation(() => new Promise(res => { resolve = res; }) as never);
     const r4 = r.c.items().find((x: any) => x.id === 'r4') ?? { ...rep('r4', 'failed') };
     const first = r.c.sendOne(r4);
     void r.c.sendOne(r4);
     void r.c.sendOne(r4);
-    r.f.detectChanges();
+    r.f.detectChanges(); await settle(r.f);
     expect(send).toHaveBeenCalledTimes(1);
-    const btn = r.el.querySelector('[data-testid="rq-side"] [data-report="r4"] .pf-rq2-q__send') as HTMLButtonElement;
+    const btn = r.el.querySelector('[data-testid="rq-grid"] [data-report="r4"] .pf-rq2-q__send') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
     // Send all is refused while it runs too.
     (TestBed.inject(DialogService) as any).confirm.mockResolvedValue(true);
     resolve({ status: 'sent' });
     await first;
-    r.f.detectChanges();
-    expect(r.el.querySelector('[data-testid="rq-side"] [data-report="r4"] [data-testid="rq-sent"]')).not.toBeNull();
+    r.f.detectChanges(); await settle(r.f);
+    expect(r.el.querySelector('[data-testid="rq-grid"] [data-report="r4"] [data-testid="rq-sent"]')).not.toBeNull();
   });
 
   it('a queue row picks + highlights its report in the grid', async () => {
@@ -331,8 +342,9 @@ describe('Reports v2 — frame: band = lab + search, STATUS side card LEFT, repo
     const { el, tab, c, f } = await render();
     const head = el.querySelector('[data-testid="rq-main"] .pf-card__head') as HTMLElement;
     expect(head.querySelector('.pf-card__label')!.textContent!.trim()).toBe('Reports');
-    expect(head.querySelector('[data-testid="rq-pill"] [aria-checked="true"]')!.getAttribute('data-filter')).toBe('pending');
-    expect(head.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('2 reports');
+    expect(head.querySelector('[data-testid="rq-scope"]')!.textContent!.trim()).toBe('Completed');
+    // A filter is on (Completed, the default): "2 of 6" = what it matches of everything in the queue.
+    expect(head.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('2 of 6');
     const gen = head.querySelector('.pf-rq-generate') as HTMLElement;
     expect(gen.classList).toContain('pf-btn--secondary');
     expect(head.querySelector('.pf-rq2-refresh')!.getAttribute('aria-label')).toBe('Refresh');
@@ -597,29 +609,38 @@ describe('Reports v2 — Partial: the order opens INLINE (flat departments, Gene
 });
 
 describe('Reports v2 — narrow (≤900px) and phone (≤640px)', () => {
-  it('≤900px: no side card; the filter button inside the search opens a popover menu (dot · label · count · tick)', async () => {
+  it('≤900px: no side card; ONE Filters button inside the search (with the active count) opens the same card as a sheet', async () => {
     const { el, c, f } = await render({ narrow: true });
     expect(el.querySelector('[data-testid="rq-side"]')).toBeNull();
-    const btn = el.querySelector('pf-hero-band [data-testid="rq-filter"]') as HTMLButtonElement;
+    // The old "To send" chip and the status menu are gone: one button.
+    expect(el.querySelector('[data-testid="rq-tosend-chip"], [data-testid="rq-filter"]')).toBeNull();
+    const btn = el.querySelector('pf-hero-band [data-testid="rq-filters-btn"]') as HTMLButtonElement;
     expect(btn.closest('.pf-hb__inline')).not.toBeNull();     // INSIDE the search field
-    expect(btn.textContent!.trim()).toBe('Completed');
-    expect(btn.getAttribute('aria-label')).toBe('Filter by status — Completed');
-    const menu = c.filterMenu();
-    expect(menu.map((a: any) => [a.label, a.count, !!a.current])).toEqual([
-      ['All', 6, false], ['Completed', 2, true], ['Partial', 2, false], ['Delivered', 1, false]]);
-    expect(menu[0].dot).toBe('ring');
+    expect(btn.querySelector('.pf-rq2-filter__t')!.textContent!.trim()).toBe('Filters');
+    expect(btn.querySelector('[data-testid="rq-filters-n"]')!.textContent!.trim()).toBe('1');   // Completed (the default)
+    expect(btn.getAttribute('aria-label')).toBe('Filters, 1 on');
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
     btn.click(); f.detectChanges(); await settle(f);
-    const panel = document.querySelector('.pf-am-panel') as HTMLElement;
-    expect(panel.classList).not.toContain('pf-am-panel--sheet');     // a dropdown, never a bottom sheet
-    const rows = [...document.querySelectorAll<HTMLElement>('.pf-am-panel [role=menuitemradio]')];
-    expect(rows.map(r => r.querySelector('.pf-am-item__t')!.textContent!.trim())).toEqual(['All', 'Completed', 'Partial', 'Delivered']);
-    expect(rows[1].getAttribute('aria-checked')).toBe('true');
-    expect(rows[0].querySelector('.pf-am-item__dot--ring')).not.toBeNull();
-    expect(rows[3].querySelector('.pf-am-item__count')!.textContent!.trim()).toBe('1');
-    rows[3].click(); f.detectChanges(); await settle(f);
+    const sheet = document.querySelector('[data-testid="rq-filters-sheet"]') as HTMLElement;
+    expect(sheet.getAttribute('role')).toBe('dialog');
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+    expect(sheet.querySelector('[data-testid="rq-statuses"]')).not.toBeNull();
+    expect(sheet.querySelector('[data-testid="rq-dates"]')).not.toBeNull();
+    // A status row filters the grid behind the sheet; the badge follows.
+    (sheet.querySelector('[data-filter="delivered"]') as HTMLElement).click(); f.detectChanges(); await settle(f);
     expect(c.filter()).toBe('delivered');
-    expect(btn.textContent!.trim()).toBe('Delivered');
-    closeMenus();
+    expect(btn.querySelector('[data-testid="rq-filters-n"]')!.textContent!.trim()).toBe('1');
+    // Close (the head's ×) and Escape both close it.
+    (sheet.querySelector('[aria-label="Close filters"]') as HTMLElement).click(); f.detectChanges();
+    expect(document.querySelector('[data-testid="rq-filters-sheet"]')).toBeNull();
+    btn.click(); f.detectChanges();
+    (document.querySelector('[data-testid="rq-filters-sheet"]') as HTMLElement).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    f.detectChanges();
+    expect(document.querySelector('[data-testid="rq-filters-sheet"]')).toBeNull();
+    // Clear: no badge.
+    c.clearFilters(); f.detectChanges();
+    expect(btn.querySelector('[data-testid="rq-filters-n"]')).toBeNull();
+    expect(btn.getAttribute('aria-label')).toBe('Filters');
   });
 
   it('phone: band Refresh icon; two-line rows (no grid); name + pill on line 1, meta + "· Unpaid" on line 2', async () => {
@@ -681,7 +702,7 @@ describe('Reports v2 — narrow (≤900px) and phone (≤640px)', () => {
     const { el, f } = await render({ phone: true });
     (el.querySelector('.pf-rq2-prow[data-status="partial"]') as HTMLElement | null);
     const c = f.componentInstance as any;
-    await c.onFilterMenu('partial'); f.detectChanges(); await settle(f);
+    c.setFilter('partial'); f.detectChanges(); await settle(f);
     (el.querySelector('.pf-rq2-prow[data-status="partial"]') as HTMLElement).click(); f.detectChanges();
     const sheet = document.querySelector('[data-testid="rq-sheet"]') as HTMLElement;
     expect(sheet.querySelector('[data-testid="rq-detail"] .pf-rq-dept__name')!.textContent!.trim()).toBe('Microbiology');
@@ -1030,7 +1051,8 @@ describe('Reports list — server paging (DB optimisation phase 3)', () => {
     cur = c;
     expect(cards(el)).toBe(50);
     expect(el.querySelector('.pf-rq-more__btn, .pf-rq-more__count')).toBeNull();   // owner: nothing clickable at the bottom
-    expect(el.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('50 of 120 reports');
+    // Completed (the default) matches the server's 120 of everything (120 reports + 2 partly-reported orders).
+    expect(el.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('120 of 122');
     expect(c.nextPageCount()).toBe(50);
     expect(primaries(el).length).toBe(0);   // still no primary on the page
     // The grid's scroll handler: near the end → the next page.
@@ -1045,7 +1067,7 @@ describe('Reports list — server paging (DB optimisation phase 3)', () => {
     c.loadMore(); await settleP(f);
     expect(cards(el)).toBe(120);
     expect(c.hasMorePages()).toBe(false);
-    expect(el.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('120 reports');
+    expect(el.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('120 of 122');
     // Same rows, same order as the unpaged queue.
     expect(c.items().map((r: any) => r.id)).toEqual(many(120).map(r => r.id));
   });
@@ -1154,5 +1176,236 @@ describe('Reports list — partly reported orders show under All (OPS-136)', () 
     expect(c.allCount()).toBe(4);
     expect(partialRows(el).length).toBe(0);
     expect(reportRows(el).length).toBe(4);
+  });
+});
+
+describe('Results FILTERS (owner 2026-11-20, the Expenses filter card)', () => {
+  // Fake data: today's, yesterday's and an old report; two referring doctors; delivered by WhatsApp and by print.
+  const now = new Date();
+  const ago = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
+  const doc = (id: string, st: string, days: number, refDoctorName: string | null, extra: Record<string, unknown> = {}) =>
+    rep(id, st, 'final', { createdAt: ago(days), order: { id: `o-${id}`, orderNumber: `LAB-${id}`, refDoctorName, patient: { ...PATIENT, displayName: `Patient ${id}` } }, ...extra });
+  const MIXED = [
+    doc('t1', 'pending', 0, 'Dr. Meena R'), doc('t2', 'delivered', 0, 'Dr. Arun K', { deliveredVia: 'whatsapp' }),
+    doc('y1', 'pending', 1, 'Dr. Arun K'), doc('y2', 'delivered', 1, 'Dr. Meena R', { deliveredVia: 'print' }),
+    doc('o1', 'failed', 40, null), doc('o2', 'pending', 40, 'Dr. Meena R'),
+  ];
+  const ids = (c: any) => c.gridRows().filter((x: any) => x.kind === 'report').map((x: any) => x.r.id);
+  const counts = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>('[data-testid="rq-side"] [data-testid="rq-statuses"] .pf-rq2-f__totn')].map(n => n.textContent!.trim());
+  const queueUrls = (api: any) => api.get.mock.calls.map((x: unknown[]) => x[0] as string)
+    .filter((u: string) => u.startsWith('/api/reports/queue') && !u.includes('pageSize=200'));
+
+  it('date presets: Today / 7 days / This month / All, and a custom From / To ("Custom range")', async () => {
+    const { el, c, f, tab } = await render({ queue: MIXED, orders: [] });
+    await tab('all');
+    expect(ids(c)).toEqual(['t1', 't2', 'y1', 'y2', 'o1', 'o2']);
+    (el.querySelector('[data-testid="rq-dates"] [data-preset="today"]') as HTMLElement).click(); f.detectChanges(); await settle(f);
+    expect(c.datePreset()).toBe('today');
+    expect(ids(c)).toEqual(['t1', 't2']);
+    expect(counts(el)).toEqual(['1', '0', '1']);            // the breakdown follows the dates
+    c.setPreset('7d'); f.detectChanges(); await settle(f);
+    expect(ids(c)).toEqual(['t1', 't2', 'y1', 'y2']);
+    c.setPreset('all'); f.detectChanges(); await settle(f);
+    expect(ids(c).length).toBe(6);
+    // Custom: From = 2 days ago, To = yesterday → only yesterday's.
+    const ymd = (days: number) => new Date(Date.now() + 330 * 60_000 - days * 86_400_000).toISOString().slice(0, 10);
+    c.setFrom(ymd(2)); c.setTo(ymd(1)); f.detectChanges(); await settle(f);
+    expect(c.datePreset()).toBe('custom');
+    expect(el.querySelector('.pf-rq2-f__custom')!.textContent!.trim()).toBe('Custom range');
+    expect(ids(c)).toEqual(['y1', 'y2']);
+  });
+
+  it('status: a tap filters the grid, a second tap clears it (aria-pressed); the head says "N of M"', async () => {
+    const { el, c, f } = await render({ queue: MIXED, orders: [] });
+    const row = () => el.querySelector('[data-testid="rq-side"] [data-filter="delivered"]') as HTMLElement;
+    row().click(); f.detectChanges(); await settle(f);
+    expect(c.filter()).toBe('delivered');
+    expect(row().getAttribute('aria-pressed')).toBe('true');
+    expect(ids(c)).toEqual(['t2', 'y2']);
+    expect(el.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('2 of 6');
+    row().click(); f.detectChanges(); await settle(f);
+    expect(c.filter()).toBe('all');
+    expect(row().getAttribute('aria-pressed')).toBe('false');
+    expect(el.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('6 reports');   // nothing on: the plain count
+    expect(el.querySelector('[data-testid="rq-clear"]')).toBeNull();
+  });
+
+  it('the To send groups filter the grid to the desk\'s queue (Not sent yet / WhatsApp failed)', async () => {
+    const { el, c, f } = await render({ queue: MIXED, orders: [] });
+    (el.querySelector('[data-testid="rq-side"] [data-filter="notsent"]') as HTMLElement).click(); f.detectChanges(); await settle(f);
+    expect(ids(c).sort()).toEqual(['o2', 't1', 'y1']);
+    (el.querySelector('[data-testid="rq-side"] [data-filter="wafailed"]') as HTMLElement).click(); f.detectChanges(); await settle(f);
+    expect(ids(c)).toEqual(['o1']);
+    expect(el.querySelector('[data-testid="rq-scope"]')!.textContent!.trim()).toBe('WhatsApp failed');
+  });
+
+  it('combined: dates + referring doctor + delivered via (pf-select, only the values the rows carry)', async () => {
+    const { el, c, f, tab } = await render({ queue: MIXED, orders: [] });
+    await tab('all');
+    expect(c.doctorOptions().map((o: any) => o.label)).toEqual(['All doctors', 'Dr. Arun K', 'Dr. Meena R']);
+    expect(c.viaOptions().map((o: any) => o.label)).toEqual(['Any channel', 'WhatsApp', 'Print']);
+    expect(el.querySelector('[data-testid="rq-side"] pf-select[data-testid="rq-doctor"]')).not.toBeNull();
+    c.setDoctor('Dr. Meena R'); f.detectChanges(); await settle(f);
+    expect(ids(c)).toEqual(['t1', 'y2', 'o2']);
+    c.setPreset('7d'); f.detectChanges(); await settle(f);
+    expect(ids(c)).toEqual(['t1', 'y2']);
+    expect(counts(el)).toEqual(['1', '0', '1']);
+    c.setVia('print'); f.detectChanges(); await settle(f);
+    expect(ids(c)).toEqual(['y2']);
+    expect(c.activeFilters()).toBe(3);
+    expect(el.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('1 of 6');
+    // Clear (in the Filters head) resets everything.
+    (el.querySelector('[data-testid="rq-clear"]') as HTMLElement).click(); f.detectChanges(); await settle(f);
+    expect([c.filter(), c.datePreset(), c.doctor(), c.via()]).toEqual(['all', 'all', '', '']);
+    expect(ids(c).length).toBe(6);
+  });
+
+  it('no referring doctor / channel on the rows → no select for it (never invented)', async () => {
+    const { el, c } = await render({ queue: [rep('x1', 'pending'), rep('x2', 'failed')] });
+    expect(c.doctorOptions()).toEqual([]);
+    expect(el.querySelector('[data-testid="rq-doctor"]')).toBeNull();
+    expect(el.querySelector('[data-testid="rq-via"]')).toBeNull();
+  });
+
+  it('Delivered via while the page holds no delivered row (Completed tab) but the queue has some: the app\'s channels', async () => {
+    const { c } = await render({ paged: true, queue: [rep('p1', 'pending'), rep('d1', 'delivered', 'final', { deliveredVia: 'print' })], orders: [] });
+    expect(c.items().map((r: any) => r.id)).toEqual(['p1']);
+    expect(c.viaOptions().map((o: any) => o.label)).toEqual(['Any channel', 'WhatsApp', 'Print', 'Email', 'SMS']);
+  });
+
+  it('Send all (main card head) is enabled only when the current filter holds a sendable report', async () => {
+    const { el, c, f, tab } = await render({ queue: MIXED, orders: [], waCloud: true });
+    const btn = () => el.querySelector('[data-testid="rq-main"] .pf-card__head [data-testid="rq-send-all"]') as HTMLButtonElement;
+    await tab('all');
+    expect(c.sendAllInView().map((x: any) => x.id).sort()).toEqual(['o1', 'o2', 't1', 'y1']);
+    expect(btn().disabled).toBe(false);
+    await tab('delivered');
+    expect(c.sendAllInView()).toEqual([]);
+    expect(btn().disabled).toBe(true);
+    await tab('wafailed');
+    expect(c.sendAllInView().map((x: any) => x.id)).toEqual(['o1']);
+    expect(btn().disabled).toBe(false);
+    c.setFilter('all'); c.setPreset('today'); f.detectChanges(); await settle(f);
+    expect(c.sendAllInView().map((x: any) => x.id)).toEqual(['t1']);
+    c.setDoctor('Dr. Arun K'); f.detectChanges(); await settle(f);
+    expect(c.sendAllInView()).toEqual([]);
+    expect(btn().disabled).toBe(true);
+    // Send all sends ONLY the filter's reports.
+    c.setDoctor(''); f.detectChanges();
+    (TestBed.inject(DialogService) as any).confirm.mockResolvedValueOnce(true);
+    const send = vi.spyOn(c.waSend, 'send').mockResolvedValue({ status: 'sent' } as never);
+    await c.sendAll();
+    expect(send.mock.calls.map(x => x[0])).toEqual(['t1']);
+  });
+
+  it('view-only: no Send all, no To send group', async () => {
+    const { el } = await render({ perms: ['view_report'] });
+    expect(el.querySelector('[data-testid="rq-send-all"]')).toBeNull();
+    expect(el.querySelector('[data-testid="rq-tosend"], [data-testid="rq-tosend-empty"]')).toBeNull();
+    expect(el.querySelector('[data-testid="rq-statuses"]')).not.toBeNull();
+  });
+
+  it('paged server: a date filter asks for every status and keeps loading pages until the range is complete', async () => {
+    // 60 reports today, then 70 older ones (newest first, like the server).
+    const queue = [
+      ...Array.from({ length: 60 }, (_, i) => doc(`n${String(i).padStart(2, '0')}`, i % 3 ? 'pending' : 'delivered', 0, null)),
+      ...Array.from({ length: 70 }, (_, i) => doc(`x${String(i).padStart(2, '0')}`, 'pending', 10, null)),
+    ];
+    const { c, f, api } = await render({ paged: true, queue, orders: [] });
+    expect(queueUrls(api).at(-1)).toContain('status=pending');
+    c.setPreset('today'); f.detectChanges(); await settle(f);
+    const urls = queueUrls(api);
+    expect(urls).toContain('/api/reports/queue?view=summary&page=1&pageSize=50&status=all');
+    expect(urls).toContain('/api/reports/queue?view=summary&page=2&pageSize=50&status=all');
+    expect(urls.some((u: string) => u.includes('page=3'))).toBe(false);   // page 2 already reached older reports
+    expect(c.filter()).toBe('pending');
+    expect(ids(c).length).toBe(40);                                     // today's Completed (60 − 20 delivered)
+    expect(c.statusRows().map((r: any) => r.count)).toEqual([40, 0, 20]);
+    // Clearing the dates goes back to the tab's own server status.
+    c.setPreset('all'); f.detectChanges(); await settle(f);
+    expect(queueUrls(api).at(-1)).toBe('/api/reports/queue?view=summary&page=1&pageSize=50&status=pending');
+  });
+});
+
+describe('Results grid — column filters in the header + alignment (owner 2026-11-20)', () => {
+  const Q = [
+    rep('a1', 'pending', 'final', { order: { id: 'o-a1', orderNumber: 'LAB-A1', dailyNo: 7, patient: { displayName: 'Anand Krishnan', mrn: 'AA0101', phone: '9000000001' } } }),
+    rep('b1', 'delivered', 'final', { deliveredVia: 'print', order: { id: 'o-b1', orderNumber: 'LAB-B1', dailyNo: 8, patient: { displayName: 'Priya Kumar', mrn: 'AA0102', phone: '9000000002' } } }),
+    rep('c1', 'pending', 'final', { order: { id: 'o-c1', orderNumber: 'LAB-C1', dailyNo: 9, patient: { displayName: 'Ravi Shankar', mrn: 'AA0103', phone: '9000000003' } } }),
+  ];
+  const col = (c: any, id: string) => c.colDefs().find((d: any) => d.colId === id);
+
+  it('every data column has a header filter (IDs + Patient = text, Status / Generated / Sent = choices); Actions has none', async () => {
+    const { c } = await render({ queue: Q, orders: [] });
+    expect(['no', 'patient', 'order'].map(id => col(c, id).filter)).toEqual(['agTextColumnFilter', 'agTextColumnFilter', 'agTextColumnFilter']);
+    expect(['status', 'generated', 'sent'].map(id => col(c, id).filter)).toEqual([GridChoiceFilterComponent, GridChoiceFilterComponent, GridChoiceFilterComponent]);
+    expect(col(c, 'actions').filter).toBeFalsy();
+    expect(c.colDefs().filter((d: any) => d.filter).every((d: any) => d.suppressHeaderFilterButton === false)).toBe(true);
+    // Patient matches name, MRN and phone; # matches the daily number.
+    const row = { id: 'r:a1', kind: 'report', r: Q[0] };
+    const text = col(c, 'patient').filterValueGetter({ data: row });
+    expect(text).toContain('Anand Krishnan'); expect(text).toContain('AA0101'); expect(text).toContain('9000000001');
+    expect(col(c, 'no').filterValueGetter({ data: row })).toContain('#7');
+    expect(col(c, 'order').filterValueGetter({ data: row })).toBe('LAB-A1');
+  });
+
+  it('alignment: #, Patient, Order, Sent LEFT; Status + Generated CENTERED (cells and headers); Actions RIGHT', async () => {
+    const { c } = await render({ queue: Q, orders: [] });
+    for (const id of ['status', 'generated']) {
+      expect(col(c, id).headerClass).toContain('pf-rq2-hcenter');
+      expect(col(c, id).cellClass).toContain('pf-rq2-center');
+    }
+    for (const id of ['no', 'patient', 'order', 'sent']) expect(String(col(c, id).cellClass ?? '')).not.toContain('center');
+    expect(col(c, 'actions').headerClass).toBe('ag-right-aligned-header');
+    expect(css()).toMatch(/\.ag-cell\.pf-rq2-center\s*\{[^}]*justify-content: center/);
+    expect(css()).toMatch(/ag-header-cell-filter-button\s*\{[^}]*min-width:\s*44px;\s*min-height:\s*44px/);
+  });
+
+  it('the Status / Generated / Sent header filters are BOUND to the Filters side card (one state, both ways)', async () => {
+    const { c, f } = await render({ queue: Q, orders: [] });
+    const mk = (id: string) => {
+      const comp = new GridChoiceFilterComponent();
+      const changed = vi.fn();
+      comp.agInit({ ...col(c, id).filterParams, filterChangedCallback: changed } as any);
+      return { comp, changed };
+    };
+    const st = mk('status');
+    expect(st.comp.isFilterActive()).toBe(true);                          // Completed, the default
+    expect(st.comp.current()).toBe('pending');
+    expect(st.comp.options().map(o => o.label)).toEqual(['All', 'Completed', 'Partial', 'Delivered', 'Not sent yet', 'WhatsApp failed']);
+    st.comp.pick('delivered'); f.detectChanges(); await settle(f);
+    expect(st.changed).toHaveBeenCalled();
+    expect(c.filter()).toBe('delivered');                                  // the side card follows
+    c.toggleStatus('delivered'); f.detectChanges();                        // and the header follows the side card
+    expect(st.comp.isFilterActive()).toBe(false);
+    expect(st.comp.getModel()).toBeNull();
+    expect(st.comp.doesFilterPass({ data: {} } as any)).toBe(true);       // the screen already narrowed the rows
+    const gen = mk('generated');
+    gen.comp.pick('today');
+    expect(c.datePreset()).toBe('today');
+    gen.comp.setModel(null);                                               // Clear from the grid → the card clears too
+    expect(c.datePreset()).toBe('all');
+    const via = mk('sent');
+    expect(via.comp.options().map(o => o.label)).toEqual(['Any channel', 'Print']);
+    via.comp.pick('print');
+    expect(c.via()).toBe('print');
+  });
+
+  it('a header TEXT filter combines (AND) with the card: the head count, the badge and Send all follow it; Clear wipes it', async () => {
+    const { c, f, el, tab } = await render({ queue: Q, orders: [], waCloud: true });
+    await tab('all');
+    const api = c._gridApi;
+    await api.setColumnFilterModel('patient', { filterType: 'text', type: 'contains', filter: 'aa0103' });
+    api.onFilterChanged(); f.detectChanges(); await settle(f);
+    expect([...c.colTextIds()]).toEqual(['r:c1']);
+    expect(el.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('1 of 3');
+    expect(c.activeFilters()).toBe(1);
+    expect(c.sendAllInView().map((x: any) => x.id)).toEqual(['c1']);
+    c.setFilter('delivered'); f.detectChanges(); await settle(f);   // AND: Delivered ∩ "aa0103" = nothing
+    expect(el.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('0 of 3');
+    c.clearFilters(); await new Promise(r => setTimeout(r, 30)); f.detectChanges(); await settle(f);
+    expect(api.getColumnFilterModel('patient')).toBeNull();
+    expect(c.colTextIds()).toBeNull();
+    expect(c.activeFilters()).toBe(0);
   });
 });

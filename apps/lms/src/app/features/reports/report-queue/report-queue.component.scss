@@ -1,4 +1,5 @@
 @use '../../../shared/styles/pf-mixins' as pf;
+@use '../../../shared/styles/filter-card' as fc;
 
 /* ───────────────────────────────────────────────────────────────
  NON-SCROLL WORK LAYOUT (all sizes — approved desktop change).
@@ -1061,36 +1062,51 @@
   .pf-rq2-details__chev { transition: none; }
 }
 
-/* ── TO SEND queue (owner 2026-11-19, option A) ── */
-.pf-rq2-pill-seg { flex: 0 1 auto; min-width: 0; }
-.pf-rq2-q__head { flex-wrap: nowrap; }
-.pf-rq2-q__head .pf-2p__count { margin-left: auto; }
-.pf-rq2-q__body { padding: 4px 8px 12px; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
-.pf-rq2-q__group {
-  display: flex; align-items: center; gap: 6px; margin: 10px 8px 4px;
-  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary);
+/* ── FILTERS side card (owner 2026-11-20, the Expenses filter card — shared/styles/_filter-card.scss) ── */
+@include fc.blocks('pf-rq2-f');
+.pf-rq2-f__head { flex-wrap: nowrap; }
+.pf-rq2-f { padding-top: 14px; }
+.pf-rq2-f__totname { display: inline-flex; align-items: baseline; gap: 8px; }
+.pf-rq2-f__totname > .pf-rq2-dot { align-self: center; }
+.pf-rq2-f__done { display: flex; align-items: center; gap: 8px; margin: 0; min-height: 44px; font-size: 13px; color: var(--text-tertiary); }
+.pf-rq2-f__done > svg { flex: none; color: color-mix(in srgb, var(--green-text) 70%, var(--text-tertiary)); }
+.pf-rq2-f__sheet .pf-rq2-f { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+/* The Filters button inside the search (≤900px): label + the active-filter count. */
+.pf-rq2-filter__n {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 999px; background: var(--pf-switch-on); color: #fff; font-size: 11px; font-weight: 600; line-height: 1;
 }
-.pf-rq2-q__group .pf-num { font-weight: 500; letter-spacing: 0; }
-.pf-rq2-q__group[data-group='failed'] { color: color-mix(in srgb, var(--rose-text) 80%, var(--text-primary)); }
-.pf-rq2-q__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.pf-rq2-q__row { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 4px 6px 4px 0; border-radius: 10px; }
-.pf-rq2-q__row.is-picked { background: var(--pf-sel-bg); box-shadow: inset 0 0 0 1px var(--pf-sel-border); }
-.pf-rq2-q__pick {
-  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; min-height: 44px;
-  border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
-}
-.pf-rq2-q__pick:hover { background: var(--pf-chip-bg); }
-.pf-rq2-q__pick:focus-visible { outline: 2px solid var(--color-violet-600, #7c3aed); outline-offset: -2px; }
-.pf-rq2-q__name { font-size: 13.5px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
-.pf-rq2-q__meta { font-size: 12px; color: var(--text-tertiary); overflow-wrap: anywhere; }
+@media (max-width: 640px) { .pf-rq2-filter__t { display: none; } }
+@media (hover: none), (pointer: coarse) { .pf-rq2-filter__btn { height: 44px; } .pf-rq2-f__head .pf-btn.pf-rq2-f__clear { height: 44px; min-height: 44px; } }
+
+/* ── TO SEND in the row: Send / Retry · Opted out · Sent ✓ (Sent cell; under the pill on slim tablets) ── */
+.pf-rq2-sentcell { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; width: 100%; }
+.pf-rq2-sentcell > .pf-rq2-sent { flex: 1 1 96px; min-width: 0; }
+.pf-rq2-q__ctl { display: inline-flex; align-items: center; flex: none; }
+.pf-rq2-status .pf-rq2-q__ctl { margin-top: 2px; }
 .pf-rq2-q__send { flex: none; height: 34px; min-height: 34px; padding-inline: 12px; }
 .pf-rq2-q__note { flex: none; font-size: 12px; color: var(--text-tertiary); }
 .pf-rq2-q__ok { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 500; color: color-mix(in srgb, var(--green-text) 75%, var(--text-primary)); }
-.pf-rq2-q__empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 16px; font-size: 13px; color: var(--text-tertiary); }
-.pf-rq2-q__empty > svg { color: color-mix(in srgb, var(--green-text) 70%, var(--text-tertiary)); }
-.pf-rq2-tosendchip { gap: 6px; }
-.pf-rq2-tosendchip__n { font-weight: 600; }
-@media (max-width: 640px) { .pf-rq2-tosendchip__t { display: none; } }
-.pf-rq2-q__sheet .pf-rq2-q__body { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+.pf-rq2-q__send[data-verb='Retry'] { color: color-mix(in srgb, var(--rose-text) 80%, var(--text-primary)); }
 :host ::ng-deep .pf-rq2-grid .ag-row.pf-rq2-row--picked { background: var(--pf-sel-bg); box-shadow: inset 3px 0 0 var(--pf-sel-border); }
 @media (hover: none), (pointer: coarse) { .pf-rq2-q__send { height: 44px; min-height: 44px; } }
+
+/* ── Column filters + alignment (owner 2026-11-20) ──
+   Reading text LEFT (#, Patient, Order, Sent); short same-shape values CENTERED with their headers (status pill,
+   the Generated time); actions RIGHT. The header funnel is always shown, ≥44px to tap on touch, accent when on. */
+:host ::ng-deep .pf-rq2-grid .ag-cell.pf-rq2-center { justify-content: center; text-align: center; }
+:host ::ng-deep .pf-rq2-grid .ag-cell.pf-rq2-center .pf-rq2-status { align-items: center; }
+:host ::ng-deep .pf-rq2-grid .ag-header-cell.pf-rq2-hcenter .ag-header-cell-label { justify-content: center; }
+:host ::ng-deep .pf-rq2-grid .ag-header-cell-filter-button {
+  display: inline-flex; align-items: center; justify-content: center; flex: none; opacity: 1; color: var(--text-tertiary);
+  min-width: 28px; min-height: 28px; border-radius: 8px;
+}
+:host ::ng-deep .pf-rq2-grid .ag-header-cell-filter-button:hover { background: var(--pf-chip-bg); }
+:host ::ng-deep .pf-rq2-grid .ag-header-cell-filter-button.ag-filter-active,
+:host ::ng-deep .pf-rq2-grid .ag-header-cell-filtered .ag-header-cell-filter-button { color: var(--violet-text); }
+:host ::ng-deep .pf-rq2-grid .ag-header-cell-filter-button.ag-filter-active .ag-icon,
+:host ::ng-deep .pf-rq2-grid .ag-header-cell-filtered .ag-header-cell-filter-button .ag-icon { color: var(--violet-text); }
+/* Touch: a 44 × 44 tap box (negative margins keep the header height). */
+@media (hover: none), (pointer: coarse) {
+  :host ::ng-deep .pf-rq2-grid .ag-header-cell-filter-button { min-width: 44px; min-height: 44px; margin: -8px -10px -8px 0; }
+}

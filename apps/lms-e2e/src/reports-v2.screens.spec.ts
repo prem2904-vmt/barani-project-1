@@ -114,14 +114,24 @@ async function open(page: Page, dark: boolean) {
   await expect(visible(page, '[data-testid="rq-main"]')).toBeVisible({ timeout: 60_000 });
 }
 
-/** Pick a status: the head's status pill (wide) or the filter menu inside the search (≤900px). */
+const STATUS_KEY: Record<string, string> = { Completed: 'pending', Partial: 'partial', Delivered: 'delivered' };
+/** Pick a status in the FILTERS card (owner 2026-11-20): its row in the side card (wide) or in the Filters sheet
+ *  (≤900px). All = clear the picked row. */
 async function pick(page: Page, label: string) {
-  if (isNarrow(page)) {
-    await visible(page, '[data-testid="rq-filter"]').click();
-    await page.getByRole('menuitemradio', { name: new RegExp(`^${label}`) }).locator('visible=true').first().click();
-    await expect(visible(page, '[data-testid="rq-filter"]')).toContainText(label);
+  const sheet = isNarrow(page);
+  if (sheet) await visible(page, '[data-testid="rq-filters-btn"]').click();
+  const scope = sheet ? '[data-testid="rq-filters-sheet"]' : '[data-testid="rq-side"]';
+  await expect(visible(page, `${scope} [data-testid="rq-statuses"] [data-filter="pending"]`)).toBeVisible();
+  const pressed = page.locator(`${scope} [data-testid="rq-statuses"] [aria-pressed="true"]`).locator('visible=true');
+  if (label === 'All') {
+    if (await pressed.count()) await pressed.first().click();
   } else {
-    await visible(page, `[data-testid="rq-pill"] [role="radio"]:has-text("${label}")`).click();
+    const row = visible(page, `${scope} [data-filter="${STATUS_KEY[label]}"]`);
+    if ((await row.getAttribute('aria-pressed')) !== 'true') await row.click();
+  }
+  if (sheet) {
+    await visible(page, `${scope} [aria-label="Close filters"]`).click();
+    await expect(page.locator('[data-testid="rq-filters-sheet"]')).toHaveCount(0);
   }
 }
 
@@ -141,21 +151,20 @@ for (const dark of [false, true]) {
       expect(side!.x + side!.width, 'side card is LEFT of the grid').toBeLessThanOrEqual(main!.x);
       expect(Math.abs(side!.y - main!.y), 'same top').toBeLessThanOrEqual(1);
       expect(Math.abs(side!.height - main!.height), 'same height').toBeLessThanOrEqual(2);
-      // Status pill in the head: All · Completed · Partial · Delivered (no Failed), dot + count.
-      const pillItems = page.locator('[data-testid="rq-pill"] [role="radio"]');
-      expect(await pillItems.locator('.seg-lbl').allInnerTexts()).toEqual(['All', 'Completed', 'Partial', 'Delivered']);
-      expect(await pillItems.locator('.seg-count').allInnerTexts()).toEqual(['9', '5', '1', '2']);
-      // TO SEND (left): WhatsApp failed 1 · Not sent yet 4 · Partial, waiting on results 1.
-      await expect(visible(page, '[data-testid="rq-tosend-count"]')).toHaveText('6');
-      expect(await page.locator('[data-testid="rq-side"] .pf-rq2-q__group').allInnerTexts()).toEqual([
-        expect.stringMatching(/WhatsApp failed\s*1/i), expect.stringMatching(/Not sent yet\s*4/i), expect.stringMatching(/Partial, waiting on results\s*1/i)]);
-      await expect(visible(page, '[data-testid="rq-side"] .pf-card__head [data-testid="rq-send-all"]')).toBeVisible();
+      // FILTERS (left, owner 2026-11-20): Status = Completed · Partial · Delivered (dot + count), To send = Not sent
+      // yet · WhatsApp failed; Send all moved to the main card head.
+      const card = visible(page, '[data-testid="rq-side"]');
+      expect(await card.locator('[data-testid="rq-statuses"] .pf-rq2-f__totname').allInnerTexts()).toEqual(['Completed', 'Partial', 'Delivered']);
+      expect(await card.locator('[data-testid="rq-statuses"] .pf-rq2-f__totn').allInnerTexts()).toEqual(['5', '1', '2']);
+      expect(await card.locator('[data-testid="rq-tosend"] .pf-rq2-f__totname').allInnerTexts()).toEqual(['Not sent yet', 'WhatsApp failed']);
+      expect(await card.locator('[data-testid="rq-tosend"] .pf-rq2-f__totn').allInnerTexts()).toEqual(['4', '1']);
+      await expect(visible(page, '[data-testid="rq-main"] .pf-card__head [data-testid="rq-send-all"]')).toBeVisible();
       // Head actions (not in the band): Generate (secondary) + Refresh.
       await expect(visible(page, '[data-testid="rq-main"] .pf-rq-generate')).toHaveClass(/pf-btn--secondary/);
       await expect(visible(page, '[data-testid="rq-main"] .pf-rq2-refresh')).toBeVisible();
     } else {
       await expect(page.locator('[data-testid="rq-side"]')).toHaveCount(0);
-      await expect(visible(page, '[data-testid="rq-filter"]')).toBeVisible();
+      await expect(visible(page, '[data-testid="rq-filters-btn"]')).toBeVisible();
     }
     const heads = await page.locator('.ag-header-cell-text').locator('visible=true').allInnerTexts();
     const compact = (page.viewportSize()?.width ?? 1440) < 1280;
@@ -247,27 +256,22 @@ for (const dark of [false, true]) {
     await expect(page.locator('[data-testid="rq-detail"]')).toHaveCount(0);
   });
 
-  test(`filter: side card or the filter menu under the search button (${mode})`, async ({ page }, info) => {
+  test(`filter: side card or the Filters sheet from the button inside the search (${mode})`, async ({ page }, info) => {
     await open(page, dark);
     if (isNarrow(page)) {
-      const btn = visible(page, '[data-testid="rq-filter"]');
-      await expect(btn).toContainText('Completed');
+      const btn = visible(page, '[data-testid="rq-filters-btn"]');
+      await expect(btn.locator('[data-testid="rq-filters-n"]')).toHaveText('1');   // Completed (the default)
       await btn.click();
-      const menu = visible(page, '.pf-am-panel[role=menu]');
-      await expect(menu).toBeVisible();
-      await expect(page.locator('.pf-am-panel--sheet')).toHaveCount(0);
-      const b = await btn.boundingBox(), m = await menu.boundingBox();
-      expect(m!.y, 'the menu opens right under the button').toBeGreaterThanOrEqual(b!.y + b!.height - 1);
-      expect(m!.y - (b!.y + b!.height), 'anchored').toBeLessThanOrEqual(16);
-      await page.waitForTimeout(500);   // the menu's open motion (scale) has settled
-      const rows = page.locator('.pf-am-panel [role=menuitemradio]');
-      await expect(rows).toHaveCount(4);
-      for (let i = 0; i < 4; i++) expect((await rows.nth(i).boundingBox())!.height).toBeGreaterThanOrEqual(44);
-      await expect(rows.filter({ hasText: 'Completed' })).toHaveAttribute('aria-checked', 'true');
-      await expect(rows.first().locator('.pf-am-item__dot--ring')).toHaveCount(1);
-      await shot(page, info.project.name, `filter-menu-${mode}`);
+      const sheet = visible(page, '[data-testid="rq-filters-sheet"]');
+      await expect(sheet).toBeVisible();
+      await page.waitForTimeout(600);   // the sheet's rise has settled
+      const rows = sheet.locator('.pf-rq2-f__totrow');
+      const n = await rows.count();
+      for (let i = 0; i < n; i++) expect((await rows.nth(i).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await expect(sheet.locator('[data-filter="pending"]')).toHaveAttribute('aria-pressed', 'true');
+      await shot(page, info.project.name, `filter-sheet-${mode}`);
       await page.keyboard.press('Escape');
-      await expect(page.locator('.pf-am-panel')).toHaveCount(0);
+      await expect(page.locator('[data-testid="rq-filters-sheet"]')).toHaveCount(0);
     }
     await pick(page, 'Delivered');
     const names = isPhone() ? '.pf-rq2-prow__name' : '.ag-row .pf-rq2-who__name';
@@ -353,27 +357,20 @@ for (const dark of [false, true]) {
 }
 
 for (const dark of [false, true]) {
-  test(`TO SEND: the queue of reports to hand over; a row picks its report (${dark ? 'dark' : 'light'})`, async ({ page }, info) => {
+  test(`TO SEND: the To send rows filter the grid; Send / Retry ride in the row (${dark ? 'dark' : 'light'})`, async ({ page }, info) => {
+    test.skip(isPhone(), 'phones: a tap opens the row sheet (Share on WhatsApp)');
     await open(page, dark);
     if (isNarrow(page)) {
-      // Phones / narrow: the queue is a sheet opened from the "To send" chip inside the search.
-      const chip = visible(page, '[data-testid="rq-tosend-chip"]');
-      await expect(chip).toContainText('6');
-      await chip.click();
-      await expect(visible(page, '[data-testid="rq-tosend-sheet"]')).toBeVisible();
-      await page.waitForTimeout(600);
-      await shot(page, info.project.name, `tosend-sheet-${dark ? 'dark' : 'light'}`);
-      await visible(page, '[data-testid="rq-tosend-sheet"] [data-report="rq-6"] .pf-rq2-q__pick').click();
-      await expect(page.locator('[data-testid="rq-tosend-sheet"]')).toHaveCount(0);
-      return;
+      await visible(page, '[data-testid="rq-filters-btn"]').click();
+      await visible(page, '[data-testid="rq-filters-sheet"] [data-filter="wafailed"]').click();
+      await visible(page, '[data-testid="rq-filters-sheet"] [aria-label="Close filters"]').click();
+    } else {
+      await visible(page, '[data-testid="rq-side"] [data-filter="wafailed"]').click();
     }
-    const side = visible(page, '[data-testid="rq-side"]');
-    await expect(side.locator('[data-report="rq-6"] .pf-rq2-q__meta')).toContainText('Number not on WhatsApp');
-    await expect(side.locator('[data-report="rq-6"] .pf-rq2-q__send')).toHaveText('Retry');
-    await expect(side.locator('[data-report="rq-1"] .pf-rq2-q__send')).toHaveText('Send');
-    await side.locator('[data-report="rq-6"] .pf-rq2-q__pick').click();
-    await expect(visible(page, '.ag-row.pf-rq2-row--picked .pf-rq2-who__name')).toHaveText('Baby Leo S', { timeout: 10_000 });
-    await expect(side.locator('[data-report="rq-6"]')).toHaveClass(/is-picked/);
+    await expect(visible(page, '.ag-row .pf-rq2-who__name')).toHaveText('Baby Leo S', { timeout: 10_000 });
+    await expect(page.locator('.ag-row .pf-rq2-who__name').locator('visible=true')).toHaveCount(1);
+    await expect(visible(page, '.ag-row [data-report="rq-6"] .pf-rq2-q__send')).toHaveText('Retry');
+    await expect(visible(page, '[data-testid="rq-main"] [data-testid="rq-scope"]')).toHaveText('WhatsApp failed');
     await page.waitForTimeout(500);
     await shot(page, info.project.name, `tosend-${dark ? 'dark' : 'light'}`);
   });

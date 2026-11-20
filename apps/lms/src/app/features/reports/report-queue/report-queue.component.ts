@@ -11,6 +11,7 @@ import { DestroyRef,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  HostListener,
   Injector,
   OnInit,
   TemplateRef,
@@ -18,6 +19,7 @@ import { DestroyRef,
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from "@angular/core";
 import type { ColDef, GridReadyEvent, IsFullWidthRowParams, RowClassParams, RowClickedEvent } from "ag-grid-community";
@@ -77,8 +79,25 @@ import { formatAge } from "../../../shared/utils/patient-age";
 import { BusyDirective } from "../../../shared/directives/busy.directive";
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 import { matchesDailyNo } from '../../../shared/utils/daily-no';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
+import { SelectComponent, type PfSelectOption } from '../../../shared/primitives/select.component';
+import { GridChoiceFilterComponent, type GridChoice, type GridChoiceFilterParams } from '../../../shared/components/grid-choice-filter/grid-choice-filter.component';
+import {
+  activeCount, clientActive, doctorNames, partialPasses, presetRange, reportPasses, shouldScan, viaKeys, viaLabel, withShares,
+  type BreakdownRow, type DatePreset, type RqClientFilters,
+} from './report-queue.filters';
 
-type Filter = "all" | "partial" | "pending" | "delivered" | "failed";
+/** The status filter: a delivery status, the partly-reported orders, or one of the TO SEND groups (Not sent yet /
+ *  WhatsApp failed — the reports the desk still has to hand over). */
+type Filter = "all" | "partial" | "pending" | "delivered" | "failed" | "notsent" | "wafailed";
+
+/** The delivery channels the app records (`deliveredVia`): WhatsApp, Print, Email, SMS. */
+const VIA_CHANNELS = ["whatsapp", "print", "email", "sms"] as const;
+
+const FILTER_LABEL: Record<Filter, string> = {
+  all: "All", pending: "Completed", partial: "Partial", delivered: "Delivered", failed: "Failed",
+  notsent: "Not sent yet", wafailed: "WhatsApp failed",
+};
 
 /** One row of the Reports grid (new design): a report, a partly-reported order, or the order's inline detail
  *  (a full-width row right under it while it is open). */
@@ -93,6 +112,7 @@ const TO_SEND_PAGE = 200;
 /** Filter → the status dot it carries (All = an empty ring). */
 const FILTER_DOT: Record<Filter, QueueStatusKey | "ring"> = {
   all: "ring", pending: "completed", partial: "partial", delivered: "delivered", failed: "failed",
+  notsent: "completed", wafailed: "failed",
 };
 
 @Component({
@@ -117,6 +137,8 @@ const FILTER_DOT: Record<Filter, QueueStatusKey | "ring"> = {
     BusyDirective,
     DataGridComponent,
     ModalPortalDirective,
+    PfDateComponent,
+    SelectComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./report-queue.component.html",
@@ -205,12 +227,6 @@ export class ReportQueueComponent implements OnInit {
     { value: "partial", label: "Partial", count: this.partialOrders().length },
     { value: "delivered", label: "Delivered", count: this.counts().delivered },
   ]);
-
-  /** The main card head's status pill (owner 2026-11-19, "To send" queue): All · Completed · Partial · Delivered,
-   *  dot + count. "Failed" is no report status here — a failed WhatsApp is a TO SEND row. */
-  readonly pillOptions = computed<SegmentedOption<Filter>[]>(() => this.ndFilters().map((f) => ({
-    value: f.value, label: f.label, count: f.count, dot: this.filterDot(f.value) ?? undefined,
-  })));
 
   /** Roving arrow keys across the band filter (radiogroup). */
   onFilterKey(ev: KeyboardEvent) {
@@ -381,19 +397,134 @@ export class ReportQueueComponent implements OnInit {
     this.refresh();
   }
 
-  readonly activeFilterLabel = computed(
-    () =>
-      this.filterOptions().find((o) => o.value === this._filter())?.label ??
-      "All",
-  );
+  readonly activeFilterLabel = computed(() => FILTER_LABEL[this._filter()] ?? "All");
   setFilter(f: Filter) {
-    const before = reportQueueServerStatus(this._filter());
+    const before = this.serverStatus();
     this._filter.set(f);
     // The report tabs are filtered server-side (paged queue); Partial reads
     // the whole queue for its counts, so switching to / from it only reloads
     // when the server status actually changes.
-    if (reportQueueServerStatus(f) !== before) this.loadQueue("reset");
+    if (this.serverStatus() !== before) this.loadQueue("reset");
   }
+
+  // ── FILTERS side card (owner 2026-11-20, "just like the Expenses filter") ─────────────────────────────────────
+  // Dates (IST) · Status breakdown (+ the TO SEND groups) · Referring doctor · Delivered via. The queue API pages by
+  // status + search only, so dates / doctor / channel filter the LOADED rows (report-queue.filters.ts): while one is on,
+  // the server is asked for every status and pages keep loading until the range is complete (newest first).
+  readonly today = labToday();
+  readonly datePreset = signal<DatePreset>("all");
+  readonly dateFrom = signal<string | null>(null);
+  readonly dateTo = signal<string | null>(null);
+  readonly doctor = signal<string>("");
+  readonly via = signal<string>("");
+  readonly clientFilters = computed<RqClientFilters>(() => ({
+    range: { from: this.dateFrom(), to: this.dateTo() }, doctor: this.doctor(), via: this.via(),
+  }));
+  readonly clientOn = computed(() => clientActive(this.clientFilters()));
+  /** What the server pages by: the status tab, or every status while a client-side filter needs them all. */
+  readonly serverStatus = computed(() => (this.clientOn() ? "all" : reportQueueServerStatus(this._filter())));
+  /** Filters on (status, dates, doctor, channel) — the narrow Filters button's badge. */
+  readonly activeFilters = computed(() => activeCount(this._filter(), this.clientFilters()) + this.colTextCount());
+
+  /** Run a client-filter change, reloading page 1 only when the server status flips (all ↔ the tab's). */
+  private changeClient(fn: () => void): void {
+    const before = this.serverStatus();
+    fn();
+    if (this.serverStatus() !== before) this.loadQueue("reset");
+  }
+  setPreset(p: DatePreset): void {
+    this.changeClient(() => {
+      const r = presetRange(p, labToday());
+      this.datePreset.set(p); this.dateFrom.set(r.from); this.dateTo.set(r.to);
+    });
+  }
+  setFrom(v: string | null): void {
+    if ((v || null) === this.dateFrom()) return;
+    this.changeClient(() => { this.datePreset.set(v || this.dateTo() ? "custom" : "all"); this.dateFrom.set(v || null); });
+  }
+  setTo(v: string | null): void {
+    if ((v || null) === this.dateTo()) return;
+    this.changeClient(() => { this.datePreset.set(v || this.dateFrom() ? "custom" : "all"); this.dateTo.set(v || null); });
+  }
+  setDoctor(v: string | null): void { this.changeClient(() => this.doctor.set(v ?? "")); }
+  setVia(v: string | null): void { this.changeClient(() => this.via.set(v ?? "")); }
+  /** A breakdown row: tap filters by it, tap again clears (back to All). */
+  toggleStatus(k: Filter): void { this.setFilter(this._filter() === k ? "all" : k); }
+  /** Clear every filter: All statuses, every date, any doctor, any channel. */
+  clearFilters(): void {
+    this.changeClient(() => {
+      this.datePreset.set("all"); this.dateFrom.set(null); this.dateTo.set(null); this.doctor.set(""); this.via.set("");
+    });
+    this.setFilter("all");
+    // …and the header text filters (# / Patient / Order).
+    const api = this.liveApi();
+    if (api) for (const id of this.TEXT_COLS) void api.setColumnFilterModel(id, null).then(() => api.onFilterChanged());
+  }
+
+  /** The loaded rows inside the dates / doctor / channel (and the typed search before the server answers). */
+  private readonly scopedItems = computed(() => {
+    const f = this.clientFilters();
+    return this._items().filter((r) => reportPasses(r, f) && this.qPass(r));
+  });
+
+  /** STATUS breakdown: Completed · Partial · Delivered — dot, count, share of the three. Counts are the server's
+   *  (whole queue) until a date / doctor / channel filter is on; then the loaded rows inside it. */
+  readonly statusRows = computed<BreakdownRow<Filter>[]>(() => {
+    const on = this.clientOn();
+    const scoped = on ? this.scopedItems() : [];
+    const n = (st: string) => (on ? scoped.filter((r) => r.deliveryStatus === st).length : (this.counts() as unknown as Record<string, number>)[st] ?? 0);
+    const partial = on ? this.visiblePartials().length : this.partialOrders().length;
+    return withShares<Filter>([
+      { key: "pending", label: "Completed", count: n("pending"), dot: QUEUE_DOT.completed },
+      { key: "partial", label: "Partial", count: partial, dot: QUEUE_DOT.partial },
+      { key: "delivered", label: "Delivered", count: n("delivered"), dot: QUEUE_DOT.delivered },
+    ]);
+  });
+
+  /** TO SEND breakdown (delivery desk only): Not sent yet · WhatsApp failed, inside the other filters. */
+  readonly toSendFiltered = computed(() => {
+    const f = this.clientFilters();
+    const keep = (x: { r: Report }) => reportPasses(x.r, f) && this.qMatches(x.r);
+    return { notSent: this.toSend().notSent.filter(keep), failed: this.toSend().failed.filter(keep) };
+  });
+  readonly toSendRowsBreakdown = computed<BreakdownRow<Filter>[]>(() => withShares<Filter>([
+    { key: "notsent", label: "Not sent yet", count: this.toSendFiltered().notSent.length, dot: QUEUE_DOT.completed },
+    { key: "wafailed", label: "WhatsApp failed", count: this.toSendFiltered().failed.length, dot: QUEUE_DOT.failed },
+  ]));
+
+  /** Referring doctors on the loaded rows (+ the partly-reported orders); the select shows when there is one. */
+  readonly doctorOptions = computed<PfSelectOption<string>[]>(() => {
+    const names = doctorNames([...this._items(), ...this._toSendRows()], this.partialOrders());
+    const cur = this.doctor();
+    if (cur && !names.some((n) => n.toLowerCase() === cur.toLowerCase())) names.unshift(cur);
+    return names.length ? [{ value: "", label: "All doctors" }, ...names.map((n) => ({ value: n, label: n }))] : [];
+  });
+  /** How delivered reports went out (print / WhatsApp / email / SMS) — the select shows when the rows carry one. */
+  readonly viaOptions = computed<PfSelectOption<string>[]>(() => {
+    // The channels the loaded delivered rows carry; while the page holds none (e.g. the Completed tab) but the queue
+    // has delivered reports, the app's own delivery channels (picking one reads every status).
+    let keys = viaKeys(this._items());
+    if (!keys.length && this.counts().delivered > 0) keys = [...VIA_CHANNELS];
+    const cur = this.via();
+    if (cur && !keys.includes(cur)) keys.unshift(cur);
+    return keys.length ? [{ value: "", label: "Any channel" }, ...keys.map((k) => ({ value: k, label: viaLabel(k) }))] : [];
+  });
+
+  /** Narrow screens (≤900px): the same filter card as a sheet, opened from the band's Filters button. */
+  readonly filtersOpen = signal(false);
+  /** Escape closes the Filters sheet wherever focus is. */
+  @HostListener("document:keydown.escape")
+  onEscape(): void { if (this.filtersOpen()) this.filtersOpen.set(false); }
+
+  /** A filter needs rows not loaded yet: keep paging (newest first) until the date range is complete / the cap. */
+  private readonly _scan = effect(() => {
+    const items = this._items();
+    const go = shouldScan({
+      active: this.clientOn(), hasMore: this.hasMorePages(), busy: this._loading() || this._loadingMore(),
+      pages: this._pages, from: this.dateFrom(), oldestIso: items.length ? items[items.length - 1].createdAt : null,
+    });
+    if (go) untracked(() => this.loadMore());
+  });
 
   /** Phone-only presentational state: the compact stat summary's
    *  expanded/collapsed flag. No business logic. */
@@ -541,7 +672,7 @@ export class ReportQueueComponent implements OnInit {
     if (mode === "more") this._loadingMore.set(true); else this._loading.set(true);
     const sentQ = this._query().trim().toLowerCase();
     const url = reportQueuePageUrl({
-      page, pageSize, status: reportQueueServerStatus(this._filter()), q: this._query(),
+      page, pageSize, status: this.serverStatus(), q: this._query(),
     });
     this.api.get<Report[] | ReportQueuePage<Report> | null>(url).subscribe({
       next: (res) => {
@@ -589,33 +720,41 @@ export class ReportQueueComponent implements OnInit {
 
   readonly visible = computed(() => {
     const f = this._filter();
-    const q = this._query().trim().toLowerCase();
+    const cf = this.clientFilters();
     let l = this._items();
-    if (f !== "all") l = l.filter((r) => r.deliveryStatus === f);
-    if (q && q !== this._servedQ()) {
-      l = l.filter((r) => {
-        const name = (r.order?.patient?.displayName ?? "").toLowerCase();
-        const phone = (r.order?.patient?.phone ?? "").toLowerCase();
-        const mrn = (r.order?.patient?.mrn ?? "").toLowerCase();
-        const orderNo = (r.order?.orderNumber ?? "").toLowerCase();
-        const invoiceNo = (r.order?.invoiceNumber ?? "").toLowerCase();
-        // Match against patient name, phone, MRN, short order id, and
-        // short report id — covers every reasonable lookup reception
-        // runs from a paper slip.
-        return (
-          matchesDailyNo(q, r.order) ||
-          name.includes(q) ||
-          phone.includes(q) ||
-          mrn.includes(q) ||
-          orderNo.includes(q) ||
-          invoiceNo.includes(q) ||
-          r.orderId.toLowerCase().includes(q) ||
-          r.id.toLowerCase().includes(q)
-        );
-      });
-    }
-    return l;
+    if (f === "pending" || f === "delivered" || f === "failed") l = l.filter((r) => r.deliveryStatus === f);
+    if (this.clientOn()) l = l.filter((r) => reportPasses(r, cf));
+    return l.filter((r) => this.qPass(r));
   });
+
+  /** The loaded page answers the typed term already (server search), or the row matches it client-side. */
+  private qPass(r: Report): boolean {
+    const q = this._query().trim().toLowerCase();
+    return !q || q === this._servedQ() || this.qMatches(r);
+  }
+  /** Client match on patient name, phone, MRN, order number / id, invoice number, report id, daily number. */
+  private qMatches(r: Report): boolean {
+    const q = this._query().trim().toLowerCase();
+    if (!q) return true;
+    const name = (r.order?.patient?.displayName ?? "").toLowerCase();
+    const phone = (r.order?.patient?.phone ?? "").toLowerCase();
+    const mrn = (r.order?.patient?.mrn ?? "").toLowerCase();
+    const orderNo = (r.order?.orderNumber ?? "").toLowerCase();
+    const invoiceNo = (r.order?.invoiceNumber ?? "").toLowerCase();
+    // Match against patient name, phone, MRN, short order id, and
+    // short report id — covers every reasonable lookup reception
+    // runs from a paper slip.
+    return (
+      matchesDailyNo(q, r.order) ||
+      name.includes(q) ||
+      phone.includes(q) ||
+      mrn.includes(q) ||
+      orderNo.includes(q) ||
+      invoiceNo.includes(q) ||
+      (r.orderId ?? "").toLowerCase().includes(q) ||
+      r.id.toLowerCase().includes(q)
+    );
+  }
 
   /** Every row now uses the neutral 'default' tile tone — the per-status
    *  colour wash made the entire row feel amber-on-amber for the common
@@ -750,7 +889,8 @@ export class ReportQueueComponent implements OnInit {
   /** OPS-136: the All tab shows these Preliminary orders too (search applies). */
   readonly allTabPartials = computed<PrelimOrder[]>(() => {
     const q = this._query().trim().toLowerCase();
-    const l = this.partialsWithoutRow();
+    const cf = this.clientFilters();
+    const l = this.partialsWithoutRow().filter((po) => partialPasses(po, cf));
     return q ? l.filter((po) => matchesDailyNo(q, po) || po.searchText.includes(q)) : l;
   });
 
@@ -760,7 +900,8 @@ export class ReportQueueComponent implements OnInit {
   /** The Partial tab honours the band search too. */
   readonly visiblePartials = computed<PrelimOrder[]>(() => {
     const q = this._query().trim().toLowerCase();
-    const l = this.partialOrders();
+    const cf = this.clientFilters();
+    const l = this.partialOrders().filter((po) => partialPasses(po, cf));
     return q ? l.filter((po) => matchesDailyNo(q, po) || po.searchText.includes(q)) : l;
   });
 
@@ -800,13 +941,6 @@ export class ReportQueueComponent implements OnInit {
     const k = FILTER_DOT[f];
     return k === "ring" ? null : QUEUE_DOT[k];
   }
-
-  /** The filter button's menu (phones / narrow tablets): dot · label · count · tick on the current one. */
-  readonly filterMenu = computed<PfAction[]>(() => this.ndFilters().map((f) => ({
-    id: f.value, label: f.label, count: f.count, current: f.value === this._filter(),
-    dot: this.filterDot(f.value) ?? "ring",
-  })));
-  onFilterMenu(id: string): void { this.setFilter(id as Filter); }
 
   /** The grid's Status pill + the Unpaid line under it. */
   rowStatus(r: Report): QueueStatus {
@@ -876,6 +1010,12 @@ export class ReportQueueComponent implements OnInit {
       if (open === po.id) out.push({ id: `d:${po.id}`, kind: "detail", po, r });
     };
     if (f === "partial") { this.visiblePartials().forEach(addPartial); return out; }
+    // The TO SEND groups list the desk's own queue (its 200-row read), inside the other filters.
+    if (f === "notsent" || f === "wafailed") {
+      const g = this.toSendFiltered();
+      for (const x of f === "notsent" ? g.notSent : g.failed) out.push({ id: `r:${x.id}`, kind: "report", r: x.r });
+      return out;
+    }
     if (f === "all") this.allTabPartials().forEach(addPartial);
     for (const r of this.visible()) out.push({ id: `r:${r.id}`, kind: "report", r });
     return out;
@@ -883,10 +1023,19 @@ export class ReportQueueComponent implements OnInit {
 
   /** How many rows the head counts ("18 reports", "50 of 120 reports"). */
   readonly headCount = computed(() => {
-    if (this._filter() === "partial") return plural(this.visiblePartials().length, "order");
+    const f = this._filter();
     const shown = this.gridRows().filter((x) => x.kind !== "detail").length;
     const total = this._total();
-    const extra = this._filter() === "all" ? this.allTabPartials().length : 0;
+    // Header text filters narrow what the grid shows: count what they let through.
+    const colIds = this.colTextIds();
+    if (colIds) return `${this.gridRows().filter((x) => x.kind !== "detail" && colIds.has(x.id)).length} of ${this.allCount()}`;
+    // A filter on: "12 of 40" = what it matches of everything in the queue.
+    if (f !== "all" || this.clientOn()) {
+      const serverOnly = !this.clientOn() && (f === "pending" || f === "delivered" || f === "failed");
+      const matched = serverOnly && total != null ? total : f === "partial" ? this.visiblePartials().length : shown;
+      return `${matched} of ${this.allCount()}`;
+    }
+    const extra = this.allTabPartials().length;
     if (total != null && this.hasMorePages()) return `${shown} of ${total + extra} reports`;
     return plural(shown, "report");
   });
@@ -910,19 +1059,98 @@ export class ReportQueueComponent implements OnInit {
     const slim = this.slimActs();
     return [
       // # = the full daily-number chip ("21 · 15 Nov" on an older order) — never clipped.
-      { colId: "no", headerName: "#", width: 94, minWidth: 94, cellClass: "pf-rq2-nowrap", ...cell(this.noTpl()) },
-      { colId: "patient", headerName: "Patient", flex: 1, minWidth: 140, ...cell(this.patientTpl()) },
+      // Column filters in the header (owner 2026-11-20, like Test Master): IDs + Patient = text; Status / Generated /
+      // Sent = the choice filter BOUND to the Filters side card (same state, never two answers). Alignment: IDs +
+      // reading text LEFT, short same-shape values (status pill, a time) CENTERED with their headers, actions RIGHT.
+      { colId: "no", headerName: "#", width: 94, minWidth: 94, cellClass: "pf-rq2-nowrap", ...this.textFilter((d) => this.noText(d)), ...cell(this.noTpl()) },
+      { colId: "patient", headerName: "Patient", flex: 1, minWidth: 140, ...this.textFilter((d) => this.patientText(d)), ...cell(this.patientTpl()) },
       // Order + Generated stay on ONE line; the Patient column takes the slack.
-      { colId: "order", headerName: "Order", width: 130, minWidth: 130, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap", ...cell(this.orderTpl()) },
-      { colId: "status", headerName: "Status", width: 120, minWidth: 116, ...cell(this.statusTpl()) },
-      { colId: "generated", headerName: "Generated", width: 128, minWidth: 128, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap", ...cell(this.genTpl()) },
-      { colId: "sent", headerName: "Sent", flex: 1, minWidth: 96, hide: slim, ...cell(this.sentTpl()) },
+      { colId: "order", headerName: "Order", width: 130, minWidth: 130, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap",
+        ...this.textFilter((d) => this.orderText(d)), ...cell(this.orderTpl()) },
+      { colId: "status", headerName: "Status", width: 120, minWidth: 116, headerClass: "pf-rq2-hcenter", cellClass: "pf-rq2-center",
+        ...this.choiceFilter("Status", () => this.statusChoices(), () => (this._filter() === "all" ? "" : this._filter()), (v) => this.setFilter((v || "all") as Filter)),
+        ...cell(this.statusTpl()) },
+      { colId: "generated", headerName: "Generated", width: 128, minWidth: 128, hide: compact, wrapText: false, headerClass: "pf-rq2-hcenter", cellClass: "pf-rq2-nowrap pf-rq2-center",
+        ...this.choiceFilter("Generated (IST)", () => this.dateChoices(), () => (this.datePreset() === "all" ? "" : this.datePreset()), (v) => this.setPreset((v || "all") as DatePreset)),
+        ...cell(this.genTpl()) },
+      { colId: "sent", headerName: "Sent", flex: 1, minWidth: 96, hide: slim,
+        ...this.choiceFilter("Delivered via", () => this.viaChoices(), () => this.via(), (v) => this.setVia(v)),
+        ...cell(this.sentTpl()) },
       // View · Download · Share ▾ · ⋯ — text on web, 44px icons on touch (+ Details on a partly-reported order).
       // Slim (901–1279px): View · Share · ⋯ (+ Details on a partly-reported order) as 44px icons.
       { colId: "actions", headerName: "Actions", width: slim ? 212 : touch ? 256 : 290, minWidth: slim ? 212 : touch ? 256 : 290,
         headerClass: "ag-right-aligned-header", cellClass: "pf-rq2-actcell", ...cell(this.actsTpl()) },
     ];
   });
+  // ── Column filters (header) ──────────────────────────────────────────────────────────────────────────────────
+  private textFilter(get: (d: RqRow) => string): ColDef<RqRow> {
+    return {
+      filter: "agTextColumnFilter", suppressHeaderMenuButton: true, suppressHeaderFilterButton: false,
+      filterValueGetter: (p) => (p.data ? get(p.data) : ""),
+      filterParams: { filterOptions: ["contains"], maxNumConditions: 1, debounceMs: 150, buttons: ["reset"], trimInput: true },
+    };
+  }
+  private choiceFilter(title: string, options: () => GridChoice[], selected: () => string, select: (v: string) => void): ColDef<RqRow> {
+    const filterParams: GridChoiceFilterParams = { title, options, selected, select };
+    return { filter: GridChoiceFilterComponent, filterParams, suppressHeaderMenuButton: true, suppressHeaderFilterButton: false };
+  }
+  /** "#12 12 LAB-…" — the daily number (with or without #) of a report or a partly-reported order. */
+  private noText(d: RqRow): string {
+    const n = d.kind === "report" ? d.r.order?.dailyNo : d.po.dailyNo;
+    return n != null ? `#${n} ${n}` : "";
+  }
+  /** Patient = name + MRN + phone (a detail row rides with its order). */
+  private patientText(d: RqRow): string {
+    if (d.kind !== "report") return d.po.searchText;
+    const p = d.r.order?.patient;
+    return [this.reportPatientName(d.r), p?.mrn, p?.phone, d.r.patient?.phone].filter(Boolean).join(" ");
+  }
+  private orderText(d: RqRow): string { return d.kind === "report" ? this.orderNo(d.r) : d.po.orderNo; }
+  /** The Status column's choices = the side card's Status + To send rows (dot + count). */
+  statusChoices(): GridChoice[] {
+    const rows = [...this.statusRows(), ...(this.canDeliver() ? this.toSendRowsBreakdown() : [])];
+    const out: GridChoice[] = [{ value: "", label: "All" }, ...rows.map((b) => ({ value: b.key, label: b.label, count: b.count, dot: b.dot }))];
+    if (this._filter() === "failed") out.push({ value: "failed", label: "Failed", dot: QUEUE_DOT.failed });
+    return out;
+  }
+  dateChoices(): GridChoice[] {
+    const out: GridChoice[] = [
+      { value: "", label: "All dates" }, { value: "today", label: "Today" }, { value: "7d", label: "7 days" }, { value: "month", label: "This month" },
+    ];
+    if (this.datePreset() === "custom") out.push({ value: "custom", label: "Custom range (Filters card)", disabled: true });
+    return out;
+  }
+  viaChoices(): GridChoice[] {
+    const o = this.viaOptions();
+    return o.length ? o.map((x) => ({ value: x.value, label: x.label })) : [{ value: "", label: "Any channel" }];
+  }
+
+  /** Report row ids the header TEXT filters let through (null = none on) — the head count and Send all follow them. */
+  readonly colTextIds = signal<ReadonlySet<string> | null>(null);
+  private readonly TEXT_COLS = ["no", "patient", "order"];
+  private syncColText(): void {
+    const api = this.liveApi();
+    if (!api) return;
+    const on = this.TEXT_COLS.some((id) => !!api.getColumnFilterModel(id));
+    if (!on) { if (this.colTextIds() !== null) this.colTextIds.set(null); return; }
+    const ids = new Set<string>();
+    api.forEachNodeAfterFilter((n) => { if (n.data && n.data.kind !== "detail") ids.add(n.data.id); });
+    const cur = this.colTextIds();
+    if (!cur || cur.size !== ids.size || [...ids].some((x) => !cur.has(x))) this.colTextIds.set(ids);
+  }
+  /** Header text filters on (they count in the Filters badge and Clear wipes them). */
+  readonly colTextCount = signal(0);
+  /** A side-card change re-reads the bound header filters (their funnel turns accent / plain). */
+  private readonly _headSync = effect(() => {
+    this._filter(); this.datePreset(); this.via();
+    if (untracked(() => this.liveApi())) queueMicrotask(() => this.liveApi()?.onFilterChanged());
+  });
+  /** The grid's API while it is alive (a test stub without the full API counts as none). */
+  private liveApi(): GridReadyEvent<RqRow>["api"] | null {
+    const api = this._gridApi;
+    return api && typeof api.isDestroyed === "function" && !api.isDestroyed() ? api : null;
+  }
+
   readonly rqRowId = (p: { data: RqRow }) => p.data.id;
   readonly rqFullWidth = (p: IsFullWidthRowParams<RqRow>) => p.rowNode.data?.kind === "detail";
   readonly rqFullWidthRenderer = DataGridTemplateCellComponent;
@@ -947,6 +1175,12 @@ export class ReportQueueComponent implements OnInit {
    *  grid nears its end. */
   onGridReady(e: GridReadyEvent<RqRow>): void {
     this._gridApi = e.api;
+    const sync = () => {
+      this.syncColText();
+      this.colTextCount.set(this.TEXT_COLS.filter((id) => !!e.api.getColumnFilterModel(id)).length);
+    };
+    e.api.addEventListener("filterChanged", sync);
+    e.api.addEventListener("modelUpdated", sync);
     const near = () => {
       const n = e.api.getDisplayedRowCount();
       if (n && e.api.getLastDisplayedRowIndex() >= n - 6) this.loadMore();
@@ -1011,8 +1245,6 @@ export class ReportQueueComponent implements OnInit {
   readonly sendingAll = signal(false);
   /** The report picked from the queue — highlighted in the grid. */
   readonly picked = signal<string | null>(null);
-  /** Phones / narrow: the queue is a sheet opened from the "To send" chip in the search. */
-  readonly toSendOpen = signal(false);
 
   private loadToSend(): void {
     if (!this.canDeliver()) { this._toSendRows.set([]); return; }
@@ -1080,6 +1312,33 @@ export class ReportQueueComponent implements OnInit {
   readonly sendAllRows = computed(() => [...this.toSend().failed, ...this.toSend().notSent]
     .filter((x) => x.auto && !x.optOut && !x.sending && x.result !== "sent"));
 
+  /** The TO SEND row (Send / Retry / Opted out / Sent) for a report in the grid, if it is in the desk's queue. */
+  readonly sendCtlById = computed(() => {
+    const m = new Map<string, ReturnType<ReportQueueComponent["toSendRow"]> & { verb: "Send" | "Retry" }>();
+    for (const x of this.toSend().notSent) m.set(x.id, { ...x, verb: "Send" });
+    for (const x of this.toSend().failed) m.set(x.id, { ...x, verb: "Retry" });
+    return m;
+  });
+  sendCtl(r: Report) { return this.canDeliver() ? this.sendCtlById().get(r.id) ?? null : null; }
+
+  /** A TO SEND row belongs to the current filter (status + dates / doctor / channel + search). */
+  private inView(x: { r: Report; id: string }, group: "notSent" | "failed"): boolean {
+    const f = this._filter();
+    const st = x.r.deliveryStatus;
+    const statusOk = f === "all" || (f === "notsent" && group === "notSent") || (f === "wafailed" && group === "failed")
+      || ((f === "pending" || f === "failed") && st === f);
+    const colIds = this.colTextIds();
+    return statusOk && reportPasses(x.r, this.clientFilters()) && this.qMatches(x.r) && (!colIds || colIds.has(`r:${x.id}`));
+  }
+  /** "Send all" in the main card head: the same rule as sendAllRows, inside the current filter. */
+  readonly sendAllInView = computed(() => {
+    const ids = new Set([
+      ...this.toSend().notSent.filter((x) => this.inView(x, "notSent")).map((x) => x.id),
+      ...this.toSend().failed.filter((x) => this.inView(x, "failed")).map((x) => x.id),
+    ]);
+    return this.sendAllRows().filter((x) => ids.has(x.id));
+  });
+
   /** Retry / Send one report — the row's existing flow, guarded against double sends. */
   async sendOne(r: Report): Promise<void> {
     if (!this.canDeliver() || this._inFlight().has(r.id) || this.waSend.busy(r.id) || this._optOut()[r.id] === true) return;
@@ -1109,9 +1368,13 @@ export class ReportQueueComponent implements OnInit {
     if (this.sendingAll() || !this.canDeliver()) return;
     this.sendingAll.set(true);
     try {
-      const queue = [...this.toSend().failed, ...this.toSend().notSent];
-      await this.ensureOptOut(queue.map((x) => x.id));
-      const fresh = [...this.toSend().failed, ...this.toSend().notSent];
+      // Only the reports in the current filter (status, dates, doctor, channel, search).
+      const inFilter = () => [
+        ...this.toSend().failed.filter((x) => this.inView(x, "failed")),
+        ...this.toSend().notSent.filter((x) => this.inView(x, "notSent")),
+      ];
+      await this.ensureOptOut(inFilter().map((x) => x.id));
+      const fresh = inFilter();
       const go = fresh.filter((x) => x.auto && !x.optOut && !x.sending && x.result !== "sent");
       if (!go.length) { this.toasts.info("Nothing to send with WhatsApp Auto."); return; }
       const optedOut = fresh.filter((x) => x.optOut).length;
@@ -1140,7 +1403,7 @@ export class ReportQueueComponent implements OnInit {
 
   /** A queue row picked: show + highlight that report in the grid (All when the tab hides it). */
   pickFromQueue(id: string, isOrder = false): void {
-    this.toSendOpen.set(false);
+    this.filtersOpen.set(false);
     const rowId = isOrder ? `p:${id}` : `r:${id}`;
     this.picked.set(rowId);
     if (!this.gridRows().some((x) => x.id === rowId) && this._filter() !== "all") this.setFilter("all");
