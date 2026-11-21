@@ -1,8 +1,9 @@
-import { isPrefetched, prefetch, prefetchWhenIdle, resetPrefetchForTests } from './prefetch';
+import { isPrefetched, prefetch, prefetchWhenIdle, resetPrefetchForTests, setPrefetchLoadsForTests } from './prefetch';
 
 describe('prefetch (warm a lazy screen before the tap)', () => {
-  beforeEach(() => { resetPrefetchForTests(); vi.useFakeTimers(); });
-  afterEach(() => { vi.useRealTimers(); delete (window as { requestIdleCallback?: unknown }).requestIdleCallback; });
+  // test-setup.ts turns real loads off for every other spec; this one tests the loads themselves (fake loaders only).
+  beforeEach(() => { resetPrefetchForTests(); setPrefetchLoadsForTests(true); vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); setPrefetchLoadsForTests(false); delete (window as { requestIdleCallback?: unknown }).requestIdleCallback; });
 
   it('dedupes by key: one load however often it is asked', async () => {
     const loader = vi.fn(async () => 'mod');

@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { Observable, Subject, of } from 'rxjs';
-import { vi } from 'vitest';
+import { vi, afterEach } from 'vitest';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -11,6 +11,11 @@ import { TenantStateService } from '../../../core/services/tenant-state.service'
 import { BranchLabConfigService } from '../../../core/services/branch-lab-config.service';
 import { TenantEntitlementsService } from '../../../core/services/tenant-entitlements.service';
 import { LabSettingsComponent } from './lab-settings.component';
+
+// This file turns on the NEW design (<html class="design-new">): take it off after every test so the class never
+// leaks into other specs of the combined run (business-chart's classic palette read the leaked class).
+afterEach(() => document.documentElement.classList.remove('design-new'));
+
 
 /**
  * Lab settings — LOADING FEEDBACK (PF-PATTERN "Loading feedback"). The page

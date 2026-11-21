@@ -31,7 +31,8 @@ const SCREENS: Array<[string, string, RegExp]> = [
   ['culture bench', 'features/lab/culture-workbench/culture-workbench.component.ts', /title="Patient"><pf-daily-no/],
   ['pending validation', 'features/pathologist/pending-validation/pending-validation.component.ts', /pv-tile__who"><pf-daily-no/],
   ['validate result', 'features/pathologist/validate-result/validate-result.component.ts', /pf-railpat__name"><pf-daily-no/],
-  ['report queue', 'features/reports/report-queue/report-queue.component.html', /class="pf-rq2-no"><pf-daily-no \[of\]="row\.r\.order" \/>/],
+  // Results grid: the chip owns the "#" column, the cell right before Patient (small-screens reflow, 2026-11-21).
+  ['report queue', 'features/reports/report-queue/report-queue.component.html', /class="pf-rq2-no">\s*@if \(row\.kind === 'report'\) \{ <pf-daily-no \[of\]="row\.r\.order" \/> \}/],
 ];
 
 describe('daily patient number — on every lab screen', () => {

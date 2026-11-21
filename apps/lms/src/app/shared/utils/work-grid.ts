@@ -355,6 +355,11 @@ export function tokenValue(no: number | null | undefined, day?: string | null, t
   const d = Date.parse(`${day || today}T00:00:00Z`);
   return (Number.isFinite(d) ? d / 86_400_000 : 0) * 100_000 + (no as number);
 }
+/** tokenValue of a row that carries its daily chip ({ dailyNo, dailyNoDay }) — on-screen sort only; a screen that
+ *  also prints passes the row, so its own code never reads the number (daily-no.screens.spec). */
+export function tokenValueOf(x: { dailyNo?: number | null; dailyNoDay?: string | null } | null | undefined, today: string = labToday()): number | null {
+  return tokenValue(x?.dailyNo, x?.dailyNoDay, today);
+}
 const MON: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
 /** …from a token's LABEL: "#12", "12", "A-12", "2 · 1 Oct" (an older day; the year is the latest not after today). */
 export function tokenLabelValue(label: string | null | undefined, today: string = labToday()): number | null {

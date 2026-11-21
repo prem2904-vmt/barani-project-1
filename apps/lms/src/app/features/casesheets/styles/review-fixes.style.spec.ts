@@ -57,7 +57,11 @@ describe('Studio page rail', () => {
 describe('case-sheet search box', () => {
   it('Prepare home searches in the band (no native search field, so no browser clear button to hide)', () => {
     expect(deptHtml).toMatch(/<pf-hero-band[^>]*placeholder="Search departments and case sheets"/);
-    expect(deptHtml).not.toMatch(/type="search"/);
+    // The band is THE search. The ONLY other search field allowed on Prepare home is the Continue tab's drafts box
+    // (it filters a different list than the band) — owner decision pending 2026-11-21.
+    const searches = deptHtml.match(/<input[^>]*type="search"[^>]*>/g) ?? [];
+    expect(searches.length).toBeLessThanOrEqual(1);
+    for (const s of searches) expect(s).toMatch(/data-draft-search/);
     expect(dept).not.toMatch(/dp__search/);
   });
 });

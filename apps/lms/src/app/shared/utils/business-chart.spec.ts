@@ -84,6 +84,8 @@ describe('rupeeFormatter', () => {
 });
 
 describe('Insights chart shapes (redesign)', () => {
+  // These assert the CLASSIC light palette: start from it (never from another spec's leftover <html> class).
+  beforeEach(() => document.documentElement.classList.remove('design-new'));
   it('donut folds the tail into a neutral "Other" slice', () => {
     const items = [
       { name: 'A', value: 50 }, { name: 'B', value: 40 }, { name: 'C', value: 30 },
@@ -134,6 +136,7 @@ describe('Insights chart shapes (redesign)', () => {
 });
 
 describe('seriesColor — new design light palette (owner 2026-11-21)', () => {
+  beforeEach(() => document.documentElement.classList.remove('design-new'));
   afterEach(() => document.documentElement.classList.remove('design-new'));
   it('classic light and dark keep their palettes', () => {
     expect(seriesColor(2, 'light')).toBe(CHART_SERIES.light[2]);

@@ -25,6 +25,11 @@ import { BridgeNearbyBannerComponent } from '../../../shared/components/bridge-n
 import { SETTINGS_SECTIONS } from '../settings/settings-map';
 import { BridgeLinkPage, handleBridgeLinkHref } from '../../bridges/bridge-link.page';
 
+// This file turns on the NEW design (<html class="design-new">): take it off after every test so the class never
+// leaks into other specs of the combined run (business-chart's classic palette read the leaked class).
+afterEach(() => document.documentElement.classList.remove('design-new'));
+
+
 const flush = async () => { for (let i = 0; i < 6; i++) await new Promise((r) => setTimeout(r, 0)); };
 /** The detail's first-load skeleton is HELD 600 ms (heldFlag, ND "Loading feedback"). */
 const settle = async () => { await new Promise((r) => setTimeout(r, 650)); await flush(); };
