@@ -250,6 +250,132 @@
    --seg-track: rgba(124, 58, 237, 0.08);
 }
 
+/* =============================================================
+   NEW DESIGN · LIGHT — owner-approved palette (mock light-mode-v6, 2026-11-21)
+   Brand band + soft violet frosted-glass panels on a #f4f0fa ground.
+   Text ramp ≥4.5:1 on the panels; chart / ring / dot colours stay SOFT
+   pastels, only words that mean "late" go deep rose. No yellow at all.
+   Scoped to `.light.design-new` — dark and the classic design never see it.
+   ============================================================= */
+:root.light.design-new {
+   --pf-band-bg: #e9d3f8;
+   --pf-band-sweep: linear-gradient(120deg, #f6cfe9 0%, #e9d3f8 45%, #d9cffb 100%);
+   --pf-band-edge: rgba(124, 58, 237, 0.10);
+   --pf-band-bg-glass: rgba(246, 236, 252, 0.86);
+
+   --bg-primary: #f4f0fa;
+   --bg-secondary: #f6f2fb;
+   --bg-tertiary: #f8f5fc;
+   --bg-card: rgba(255, 255, 255, 0.66);
+   --bg-input: #ffffff;
+   --bg-hover: rgba(124, 58, 237, 0.06);
+   --bg-active: rgba(124, 58, 237, 0.11);
+   --surface-3: #f1ebf8;
+
+   --text-primary: #1c1a27;
+   --text-secondary: #565170;
+   --text-tertiary: #565170;
+   --text-muted: #6e6987;
+
+   --border-primary: rgba(124, 58, 237, 0.18);
+   --border-secondary: rgba(120, 90, 170, 0.12);
+   --border-muted: #e2d7ef;
+   --border-input: #d6cbe8;
+
+   --shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06);
+   --shadow-md: 0 4px 14px rgba(76, 29, 149, 0.07);
+   --shadow-lg: 0 14px 34px rgba(76, 29, 149, 0.10);
+
+   --input-border: #d6cbe8;
+   --input-text: #1c1a27;
+   --input-placeholder: #6e6987;
+
+   --card-bg: rgba(255, 255, 255, 0.66);
+   --card-border: rgba(124, 58, 237, 0.10);
+   --header-bg: rgba(250, 246, 254, 0.9);
+   --header-border: #e2d7ef;
+
+   --scrollbar-track: transparent;
+   --scrollbar-thumb: #d3c7e6;
+   --scrollbar-thumb-hover: #b9a8d6;
+
+   /* Status words: deep enough to read; no amber / yellow (soft rose instead). */
+   --success-text: #0f7a55;
+   --error-text: #c0395e;
+   --error-bg: #fdecf1;
+   --error-border: rgba(192, 57, 94, 0.26);
+   --warning-bg: #fdecf1;
+   --warning-text: #c0395e;
+   --warning-border: rgba(192, 57, 94, 0.26);
+   --color-warning: #efa6b8;
+   --color-high: #efa6b8;
+   --amber-text: #c0395e;
+   --red-text: #c0395e;
+   --rose-text: #c0395e;
+   --violet-text: #6d28d9;
+   --green-text: #0f7a55;
+
+   /* Frosted glass panels. */
+   --glass-bg: rgba(255, 255, 255, 0.66);
+   --glass-bg-hover: rgba(255, 255, 255, 0.78);
+   --glass-border: rgba(124, 58, 237, 0.10);
+   --glass-blur: 18px;
+   --glass-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 8px 28px rgba(76, 29, 149, 0.08), 0 1px 3px rgba(76, 29, 149, 0.06);
+   --glass-highlight: rgba(255, 255, 255, 0.8);
+   --seg-track: rgba(243, 237, 250, 0.75);
+
+   /* pf-kit surfaces. --pf-card-bg stays OPAQUE (sticky headers, popovers, inputs sit on it);
+      the frosted panel is its own token, applied to the outer panels only. */
+   --pf-card-bg: #ffffff;
+   --pf-panel-bg: rgba(255, 255, 255, 0.66);
+   --pf-panel-blur: blur(18px) saturate(140%);
+   --pf-panel-edge: rgba(124, 58, 237, 0.08);
+   --pf-panel-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 8px 28px rgba(76, 29, 149, 0.08), 0 1px 3px rgba(76, 29, 149, 0.06);
+   --pf-line: rgba(120, 90, 170, 0.12);
+   --pf-shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06), 0 4px 14px rgba(76, 29, 149, 0.06);
+   --pf-chip-bg: rgba(243, 237, 250, 0.8);
+   /* Selected row / tile: soft violet, never the grey slate. */
+   --pf-sel-bg: rgba(124, 58, 237, 0.08);
+   --pf-sel-border: #c4b0f7;
+   --pf-head-bg: #f8f4fd;
+   --pf-sec-head-bg: #f3edfa;
+   --pf-head-text: #4a4562;
+   --pf-row-hover: rgba(124, 58, 237, 0.05);
+
+   /* Brand: gradient primary, violet-pink active pill, violet outline buttons. */
+   --gradient-primary: linear-gradient(135deg, #c084fc, #7c3aed);
+   --pf-pill-on-bg: linear-gradient(135deg, #fbe4f3, #ece4fd);
+   --pf-pill-on-text: #6d28d9;
+   --pf-btn-line: #c4b0f7;
+   --pf-nav-bg: linear-gradient(90deg, #fbeaf5, #f1eafd);
+   --pf-navbar-bg: #f6ecfb;
+   --pf-navbar-bg-glass: rgba(250, 240, 252, 0.88);
+   --pf-navbar-wash: linear-gradient(90deg, #fbeaf5, #f1eafd);
+   --pf-navbar-edge: rgba(124, 58, 237, 0.10);
+
+   /* Chart / ring / dot colours — soft pastels (owner rejected vibrant); words that mean late = deep rose. */
+   --pf-svc-lab: #86c8ea;
+   --pf-svc-opd: #bba7f6;
+   --pf-late-fill: #efa6b8;
+   --pf-late-text: #c0395e;
+   --pf-late-bg: #fdecf1;
+   --pf-dot-done: #7fcfa0;
+   --pf-dot-info: #8bbcef;
+   --pf-ring-todo: #ece6f3;
+   --pf-ring-now: #8d86a3;
+   --pf-wiw-step-mix: 100%;
+   --pf-on-soft: #1c1a27;
+}
+/* No backdrop-filter (old WebViews): the panels go near-solid so text never sits on a busy ground. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+   :root.light.design-new {
+      --pf-panel-bg: rgba(255, 255, 255, 0.94);
+      --bg-card: rgba(255, 255, 255, 0.94);
+      --card-bg: rgba(255, 255, 255, 0.94);
+      --glass-bg: rgba(255, 255, 255, 0.94);
+   }
+}
+
 /* NEW design, light: TOGGLES wear the designer's quiet anatomy — the
    primary gradient belongs to the ONE primary button per screen (band).
    Active toggle = white pill + #ecd8ff ring + violet text, exactly like

@@ -5,8 +5,8 @@
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  --cv-lab: var(--sky-text, #0284c7);
-  --cv-opd: var(--violet-text, #6d28d9);
+  --cv-lab: var(--pf-svc-lab, var(--sky-text, #0284c7));
+  --cv-opd: var(--pf-svc-opd, var(--violet-text, #6d28d9));
   --cv-ipd: var(--blue-text, #2563eb);
   --cv-scan: var(--teal-text, #0d9488);
   --cv-er: var(--pink-text, #db2777);
