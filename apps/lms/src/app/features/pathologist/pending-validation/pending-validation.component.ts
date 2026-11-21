@@ -9,6 +9,9 @@ import { WorkSetFilterComponent } from '../../../shared/components/work-set-filt
 import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
 import { pvColumns, pvMeta, pvRows, pvWaiting, pvWords } from './pending-validation.grid';
 import { StatusWordsComponent } from '../../../shared/components/status-words/status-words.component';
+import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
+import { WORK_LIST_MQ, WorkListItem, columnSortOptions, lateWords, sortItems } from '../../../shared/components/work-list/work-list';
+import { SortChipComponent } from '../../../shared/components/work-list/sort-chip.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { isCultureOrderTest } from '../../../core/navigation/culture-redirect.guard';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -68,7 +71,7 @@ type Tab = 'mine' | 'all';
 @Component({
   selector: 'pf-pending-validation',
   standalone: true,
-  imports: [DailyNoComponent, BusyDirective, StatusWordsComponent, 
+  imports: [DailyNoComponent, WorkListComponent, SortChipComponent, BusyDirective, StatusWordsComponent, 
     ZoomSourceDirective,
     FormsModule,
     TatIndicatorComponent,
@@ -155,39 +158,16 @@ type Tab = 'mine' | 'all';
                 <p class="pf-empty__body">{{ emptyBody() }}</p>
               </div>
             } @else if (phone()) {
-              <!-- Phones: card rows (Results' phone pattern); the card is the row tap, its actions sit on their own line. -->
-              @if (loading() && rows().length === 0) {
-                <ul class="wg-cards" aria-hidden="true" data-testid="pv-cards-skel">
-                  @for (i of [0,1,2]; track i) {
-                    <li class="wg-card wg-card--skel">
-                      <span class="wg-card__l1"><pf-skeleton variant="line" width="40%" height="16px"></pf-skeleton><pf-skeleton variant="line" width="72px"></pf-skeleton></span>
-                      <pf-skeleton variant="line" width="70%"></pf-skeleton>
-                      <span class="wg-card__foot"><span class="wg-acts"><pf-skeleton variant="block" width="96px" height="44px"></pf-skeleton></span></span>
-                    </li>
-                  }
-                </ul>
-              } @else {
-                <ul class="wg-cards" data-testid="pv-cards">
-                  @for (g of gridRows(); track g.key) {
-                    @let st = status(g);
-                    @let w = waiting(g);
-                    <li class="wg-card pv-tile" role="button" tabindex="0" [attr.data-urgent]="g.priority === 'urgent'"
-                        [attr.data-priority]="g.priority" [attr.data-status]="st.key" [pfZoomSource]="[g.key, g.sampleId, g.items[0]?.id]"
-                        [attr.aria-label]="'Review sample ' + g.sampleLabel + ', ' + g.patientName + ', ' + g.dept + ', ' + st.label"
-                        (click)="onCard(g, $event)" (keydown.enter)="openOrder(g)" (keydown.space)="$event.preventDefault(); openOrder(g)">
-                      <span class="wg-card__l1">
-                        <span class="wg-id pv-tile__id pf-num">{{ g.sampleLabel }}</span>
-                        <ng-container [ngTemplateOutlet]="statusTpl" [ngTemplateOutletContext]="{ $implicit: g }" />
-                      </span>
-                      <ng-container [ngTemplateOutlet]="whoTpl" [ngTemplateOutletContext]="{ $implicit: g }" />
-                      <span class="wg-card__foot">
-                        <span class="wg-tat" [class.wg-tat--late]="w.late">{{ w.text === '—' ? '—' : 'Waiting ' + w.text }}@if (w.sub) {<span class="wg-sub"> · {{ w.sub }}</span>}</span>
-                        <ng-container [ngTemplateOutlet]="actsTpl" [ngTemplateOutletContext]="{ $implicit: g }" />
-                      </span>
-                    </li>
-                  }
-                </ul>
+              <!-- Below 1024px: the ONE shared work list (owner 2026-11-21); the row's own actions at the right edge. -->
+              @if (rows().length) {
+                <div class="pv-listhead pf-wl-head">
+                  <span class="pv-count pf-num">{{ listItems().length }} {{ listItems().length === 1 ? 'sample' : 'samples' }}</span>
+                  <pf-sort-chip [options]="listSortOptions" [value]="listSort()" (pick)="listSort.set($event)" />
+                </div>
               }
+              <pf-work-list data-testid="pv-list" label="Waiting for validation" [items]="listItems()" [loading]="loading() && rows().length === 0"
+                [actionTpl]="pvListActs" (open)="openItem($event)" />
+              <ng-template #pvListActs let-it><ng-container [ngTemplateOutlet]="actsTpl" [ngTemplateOutletContext]="{ $implicit: it.data }" /></ng-template>
             } @else {
               <pf-data-grid class="pv-gridc" data-testid="pv-grid" [rowData]="gridRows()" [columnDefs]="cols()" [defaultColDef]="defaultCol"
                 [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true" viewStateKey="pathologist.grid"
@@ -449,6 +429,7 @@ type Tab = 'mine' | 'all';
       display: block;
       height: 100%;
     }
+    .pv-listhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 6px 12px; border-bottom: 1px solid var(--pf-line); }
     .pv-page {
       height: 100%;
       display: flex;
@@ -781,7 +762,8 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
   // Same tiles, same order (Urgent first, then mine → priority → least time left), one row each. The rules live in
   // pending-validation.grid.ts; the row tap / Review / Acknowledge are this screen's existing handlers.
   /** Phones (≤640px): card rows. */
-  readonly phone = mediaSignal('(max-width: 640px)', inject(DestroyRef));
+  /** Below 1024px the queue is the shared work list (owner 2026-11-21: a grid on mobile is horrible). */
+  readonly phone = mediaSignal(WORK_LIST_MQ, inject(DestroyRef));
   readonly gridRows = computed(() => pvRows(this.ndGroups()));
   private readonly queueCard = viewChild<ElementRef<HTMLElement>>('queueCard');
   private readonly zone = inject(NgZone);
@@ -893,6 +875,28 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
       : this._tab() === 'mine' && this._rows().length ? 'Switch to All to see the rest of the queue.'
       : this.scope()?.scoped ? 'Results from your departments appear here as soon as the lab submits them.'
       : 'Results appear here as soon as the lab submits them.');
+
+  /** Below 1024px: the queue as shared work-list items (Sample · patient · tests · status words · Due). */
+  /** The list's Sort chip: the grid headers' sorts (Due, Waiting, Patient, Sample), both directions. */
+  readonly listSortOptions = columnSortOptions([{ id: 'due', label: 'Due' }, { id: 'wait', label: 'Waiting', first: 'desc' }, { id: 'patient', label: 'Patient' }, { id: 'sample', label: 'Sample' }]);
+  readonly listSort = signal<string | null>(null);
+  private readonly sortedRows = computed(() => sortItems(this.gridRows(), this.listSort(), {
+    due: g => g.remainingMin, patient: g => g.patientName, sample: g => g.sampleLabel,
+    wait: g => { const at = g.items.map(i => i.resultedAt).filter((v): v is string => !!v).sort()[0]; return at ? Date.now() - Date.parse(at) : null; },
+  }));
+  readonly listItems = computed<WorkListItem<QueueTile>[]>(() => this.sortedRows().map(g => {
+    const st = this.status(g);
+    const d = this.due(g);
+    const w = this.waiting(g);
+    return {
+      id: g.key, name: g.patientName, daily: g.items[0]?.subOrder, lead: g.sampleLabel, urgent: g.priority === 'urgent',
+      facts: [this.rowMeta(g), g.mine ? 'Assigned to you' : null, w.text && w.text !== '—' ? `Waiting ${w.text}` : null],
+      status: lateWords(this.words(g), d.late),
+      time: { text: d.text, late: d.late, title: d.detail },
+      aria: 'Review sample ' + g.sampleLabel + ', ' + g.patientName + ', ' + g.dept + ', ' + st.label, data: g,
+    };
+  }));
+  openItem(it: WorkListItem<QueueTile>): void { if (it.data) this.openOrder(it.data); }
 
   /** ONE status word: an open NABL record turns "Critical" into "Critical · not acknowledged". */
   status(g: QueueTile) {

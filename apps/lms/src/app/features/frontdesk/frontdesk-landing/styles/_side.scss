@@ -40,12 +40,8 @@
 
   /* The week strip is the ONE date picker: ‹ › move the week (44px targets), days share the rest. */
   .pf-daystrip.fd-daystrip { align-items: stretch; gap: 4px; container-type: inline-size; }
+  /* Three-letter day over the date, always (owner 2026-11-21: one-letter / glued days were unreadable). */
   .fd-dow-s { display: none; }
-  /* A narrow side card (splitter at its minimum): one-letter weekdays, never glued together. */
-  @container (max-width: 290px) {
-    .fd-dow-l { display: none; }
-    .fd-dow-s { display: inline; }
-  }
   .fd-daystrip__nav {
     flex: 0 0 28px; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0;
     border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer;
@@ -137,5 +133,32 @@
     .fd-vrow { flex-wrap: wrap; }
     .fd-vrow__body { flex: 1 1 calc(100% - 54px); }
     .fd-vrow__acts { flex: 1 0 100%; justify-content: flex-end; }
+  }
+}
+
+/* ══ Week strip cells (owner 2026-11-21, iPad portrait "MONTUEWEDTHU") ══
+   Equal-width day cells with a clear 6px gap, the 3-letter day over the date, today / selected in the theme's
+   selection tokens (never a one-off violet). Below 340px (each day cell would drop under ~36px) the strip shows the five weekdays (‹ › still move the
+   week; a selected / today weekend day always stays). Doubled class = beats the older per-theme tile rules. */
+:host-context(.design-new) .pf-daystrip.fd-daystrip.fd-daystrip {
+  display: flex; align-items: stretch; gap: 6px;
+  > .pf-daystrip__day {
+    flex: 1 1 0 !important; min-width: 0 !important; height: auto !important; min-height: 48px;
+    padding: 6px 0 !important; gap: 3px; border-radius: 10px;
+    border: 1px solid var(--pf-line, var(--glass-border)) !important;
+    background: transparent !important; box-shadow: none !important;
+  }
+  .pf-daystrip__dow {
+    display: block; font-size: 11px !important; font-weight: 600; letter-spacing: 0 !important; line-height: 1.1;
+    white-space: nowrap; color: var(--text-muted) !important;
+  }
+  .pf-daystrip__n { font-size: 15px !important; font-weight: 600 !important; line-height: 1.1; color: var(--text-primary) !important; }
+  > .pf-daystrip__day--today { border-color: var(--pf-sel-border) !important; }
+  > .pf-daystrip__day--on { background: var(--pf-sel-bg) !important; border-color: var(--pf-sel-border) !important; }
+  > .pf-daystrip__day--on .pf-daystrip__dow { color: var(--text-secondary) !important; }
+  > .pf-daystrip__day--on .pf-daystrip__n, > .pf-daystrip__day--today .pf-daystrip__n { color: var(--text-primary) !important; font-weight: 700 !important; }
+  @container (max-width: 340px) {
+    > .pf-daystrip__day:nth-child(7):not(.pf-daystrip__day--on):not(.pf-daystrip__day--today),
+    > .pf-daystrip__day:nth-child(8):not(.pf-daystrip__day--on):not(.pf-daystrip__day--today) { display: none !important; }
   }
 }

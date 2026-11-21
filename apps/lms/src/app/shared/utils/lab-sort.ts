@@ -23,7 +23,7 @@ export const LAB_SORT_OPTIONS: Record<LabSortScope, LabSortOption[]> = {
     { value: 'sample', label: 'Sample ID' },
   ],
   intake: [
-    { value: 'default', label: 'Default order' },
+    { value: 'default', label: 'Usual order' },
     { value: 'oldest', label: 'Oldest first' },
     { value: 'newest', label: 'Newest first' },
     { value: 'patient', label: 'Patient name' },

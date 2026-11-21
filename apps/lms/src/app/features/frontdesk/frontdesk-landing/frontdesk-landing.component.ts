@@ -154,6 +154,11 @@ import { FlowGridContext } from './flow-grid/flow-cells';
 import { FlowShareApi, FlowShareMenuComponent } from './flow-grid/flow-share-menu.component';
 import { MoreFiltersComponent } from './flow-grid/more-filters.component';
 import { FlowActionId, FlowPredicates, FlowRow, draftFlowRow, orderFlowRow, orderIsLate } from './flow-grid/flow-row';
+import { flowListItems } from './flow-grid/flow-list';
+import { FlowNextCellComponent } from './flow-grid/flow-cells';
+import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
+import { SortChipComponent } from '../../../shared/components/work-list/sort-chip.component';
+import { columnSortOptions, sortItems } from '../../../shared/components/work-list/work-list';
 import { NO_WORK_FILTERS, WorkFilters, activeWorkFilterCount, branchChoices, doctorChoices, sortFlowRows } from './flow-grid/work-filters';
 import { PaneSplitterComponent } from '../../../shared/components/pane-splitter/pane-splitter.component';
 import { ServiceShelfService } from '../../../core/services/service-shelf.service';
@@ -205,7 +210,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [BackToTodayComponent, DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, PfDateComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
+  imports: [BackToTodayComponent, DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, PfDateComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent, WorkListComponent, FlowNextCellComponent, SortChipComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -1302,6 +1307,15 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly wide = mediaSignal('(min-width: 1024px)', inject(DestroyRef));
   /** The new design's work card body is the FLOW GRID at ≥1024px; phones / tablet portrait keep their list. */
   readonly flowMode = computed(() => this.theme.isNewDesign() && this.wide());
+  /** New design below 1024px: the same rows through the shared work list (`pf-work-list`). */
+  readonly listMode = computed(() => this.theme.isNewDesign() && !this.wide());
+  /** The flow rows as work-list items (flow-grid/flow-list.ts). */
+  /** The list's Sort chip: the grid headers' sorts (Token, Patient, Waiting, Payment), both directions. */
+  readonly listSortOptions = columnSortOptions([{ id: 'token', label: 'Token' }, { id: 'patient', label: 'Patient' }, { id: 'wait', label: 'Waiting', first: 'desc' }, { id: 'due', label: 'Payment due', first: 'desc' }]);
+  readonly listSort = signal<string | null>(null);
+  readonly listItems = computed(() => this.listMode() ? flowListItems(sortItems(this.flowRows(), this.listSort(), {
+    token: r => r.dailyNo, patient: r => r.name, wait: r => r.waitMin, due: r => r.due || null,
+  })) : []);
   /** Per-user key for the side card width (shared pf-pane-splitter). */
   readonly sideWidthKey = computed(() => `pf-lms.frontdesk.side-w.${this.auth.user()?.id ?? 'anon'}`);
 
@@ -1323,7 +1337,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** The flow grid's rows: the SAME lists the old rows rendered (drafts + In progress / Completed / Payments due /
    *  the merged no-chip list), mapped to the grid's columns, then sorted by the More filters' Sort. */
   readonly flowRows = computed<FlowRow[]>(() => {
-    if (!this.flowMode()) return [];
+    if (!this.flowMode() && !this.listMode()) return [];
     const now = this.nowTick();
     const p = this.flowPredicates;
     const tab = this._rightTab();

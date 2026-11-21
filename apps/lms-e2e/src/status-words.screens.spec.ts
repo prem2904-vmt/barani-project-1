@@ -197,6 +197,7 @@ test('Frontdesk WORK: Where now = ring + two lines, no Journey column, no pill; 
 });
 
 test('Lab My Work: words, no Draft / Re-entry tags, head = title + count, Department column; band filters + Enter opens', async ({ page }) => {
+  test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
   await go(page, '/lab/my-work');
   await page.getByText('Ms. Arya Stark').locator('visible=true').first().waitFor({ timeout: 60_000 });
   await page.waitForTimeout(800);
@@ -225,6 +226,7 @@ test('Lab My Work: words, no Draft / Re-entry tags, head = title + count, Depart
 });
 
 test('Culture tab: Next step in words (rose when the read is due), no pills, no head search', async ({ page }) => {
+  test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
   await go(page, '/lab/my-work');
   await page.getByText('Ms. Arya Stark').locator('visible=true').first().waitFor({ timeout: 60_000 });
   if (isPhone()) return;
@@ -240,6 +242,7 @@ test('Culture tab: Next step in words (rose when the read is due), no pills, no 
 });
 
 test('Pathologist: Critical / Not acknowledged in words, Department column, no pills', async ({ page }) => {
+  test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
   await go(page, '/pathologist');
   await page.getByText(LONG).locator('visible=true').first().waitFor({ timeout: 60_000 });
   await page.waitForTimeout(800);
@@ -256,6 +259,7 @@ test('Pathologist: Critical / Not acknowledged in words, Department column, no p
 });
 
 test('Results: Ready / Not sent yet · Delivered / how · Failed / reason — words, no pill', async ({ page }) => {
+  test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
   await go(page, '/reports');
   await page.getByText('Ms. Meera Iyer').locator('visible=true').first().waitFor({ timeout: 60_000 });
   await page.waitForTimeout(800);

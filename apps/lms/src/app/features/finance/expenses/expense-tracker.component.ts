@@ -31,6 +31,9 @@ import { LAB_TIME_ZONE, labDaysAgo, labToday } from '../../../shared/utils/lab-c
 import { plural } from '../../../shared/utils/plural';
 import { spinDelay } from '../../../shared/utils/busy';
 import { ExpenseEntryDialogComponent } from './expense-entry-dialog.component';
+import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
+import { WORK_LIST_MQ, WorkListItem } from '../../../shared/components/work-list/work-list';
+import { mediaSignal } from '../../../shared/utils/media-query';
 import { DayClosingComponent } from './day-closing.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { dayLabel, inr, dayStatusWords } from './expense-format';
@@ -66,7 +69,7 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
 @Component({
   selector: 'pf-expense-tracker',
   standalone: true,
-  imports: [BackToTodayComponent, GridViewStateDirective, SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
+  imports: [BackToTodayComponent, WorkListComponent, GridViewStateDirective, SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent,
     ModalPortalDirective, BusyDirective, SkeletonTableComponent, CurrencyInrPipe, ExpenseEntryDialogComponent, DayClosingComponent, SegmentedComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -192,6 +195,12 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
                     <button type="button" class="pf-btn pf-btn--secondary pf-empty__action" (click)="openAdd()">Add expense</button>
                   }
                 </div>
+              } @else if (view() === 'entries' && listMode()) {
+                <!-- Below 1024px: the ONE shared work list (owner 2026-11-21) — the entry, its facts in the grid's
+                     column order, the amount on the right, Edit (or Bills) at the right edge. -->
+                <pf-work-list class="pf-xt__list" data-testid="xt-list" label="Expenses" [items]="entryItems()" [loading]="loading()" emptyTitle="No expenses in this range"
+                  (open)="openEntry($any($event.data), null)" (primary)="openEntry($any($event.data), $event.primary?.id ?? null)"
+                  (action)="openEntry($any($event.item.data), $event.id)" />
               } @else if (view() === 'entries') {
                 <ag-grid-angular class="pf-xt__grid" pfGridViewState="expenses.entries" [theme]="gridTheme()" [rowData]="visibleEntries()" [columnDefs]="entryCols()"
                                  [defaultColDef]="defaultColDef" [getRowId]="entryRowId" [rowClassRules]="entryRowRules" [animateRows]="true" [suppressCellFocus]="true"
@@ -834,6 +843,27 @@ export class ExpenseTrackerComponent {
     if (!files.length) return;
     this.sheetOpen.set(false);
     this.dialog.set({ entry: null, kind: 'expense', date: null, files });
+  }
+
+  /** Below 1024px the entries are the shared work list (owner 2026-11-21). */
+  readonly listMode = mediaSignal(WORK_LIST_MQ);
+  readonly entryItems = computed<WorkListItem<ExpenseEntry>[]>(() => this.visibleEntries().map(e => {
+    const bills = e.attachments.length;
+    return {
+      id: e.id, name: e.description || '—',
+      facts: [dayLabel(e.date), e.categoryName ?? null, e.paymentMode.toUpperCase(), e.paidTo ?? null, e.createdByName],
+      status: { now: e.kind === 'cash_in' ? 'Cash in' : 'Expense', detail: bills ? plural(bills, 'bill') : null, tone: 'normal' },
+      time: { text: (e.kind === 'cash_in' ? '+' : '') + inr(e.amount) },
+      primary: e.canEdit ? { id: 'edit', label: 'Edit', aria: `Edit ${e.description}` } : bills ? { id: 'bills', label: 'Bills', aria: `Bills for ${e.description}` } : null,
+      more: e.canEdit && bills ? [{ id: 'bills', label: 'View bills' }] : [],
+      noAction: !e.canEdit && !bills, data: e,
+    };
+  }));
+  openEntry(e: ExpenseEntry | undefined, act: string | null): void {
+    if (!e) return;
+    if (act === 'bills') this.billsFor.set(e);
+    else if (act === 'edit' || (!act && e.canEdit)) this.dialog.set({ entry: e, kind: e.kind, date: e.date });
+    else if (!act && e.attachments.length) this.billsFor.set(e);
   }
 
   onEntryClicked(ev: CellClickedEvent<ExpenseEntry>) {

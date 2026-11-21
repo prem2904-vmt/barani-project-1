@@ -1,3 +1,5 @@
+import { WorkListComponent } from "../../../shared/components/work-list/work-list.component";
+import { WORK_LIST_MQ, WorkListItem } from "../../../shared/components/work-list/work-list";
 import { ViewStateService } from '../../../shared/services/view-state.service';
 import { BackToTodayComponent } from '../../../shared/components/back-to-today/back-to-today.component';
 import { SheetEditorService } from '../../neuron/sheet-editor.service';
@@ -123,7 +125,7 @@ const FILTER_DOT: Record<Filter, QueueStatusKey | "ring"> = {
 @Component({
   selector: "pf-report-queue",
   standalone: true,
-  imports: [BackToTodayComponent, StatusWordsComponent, 
+  imports: [BackToTodayComponent, WorkListComponent, StatusWordsComponent, 
     DailyNoComponent,
     ZoomSourceDirective,
     CommonModule,
@@ -932,6 +934,23 @@ export class ReportQueueComponent implements OnInit {
   readonly narrow = mediaSignal("(max-width: 900px)", inject(DestroyRef));
   /** ≤640px: rows instead of the grid, a bottom sheet per row. */
   readonly phone = mediaSignal("(max-width: 640px)", inject(DestroyRef));
+  /** Below 1024px the queue is the shared work list (owner 2026-11-21: a grid on mobile is horrible). */
+  readonly listMode = mediaSignal(WORK_LIST_MQ, inject(DestroyRef));
+  readonly listItems = computed<WorkListItem<RqRow>[]>(() => this.gridRows().filter(r => r.kind !== "detail").map(row => {
+    if (row.kind === "report") {
+      const st = this.rowStatus(row.r);
+      return {
+        id: row.id, key: st.key, name: this.reportPatientName(row.r), daily: row.r.order,
+        facts: [this.phoneLine(row.r), st.unpaid ? "Unpaid" : null], status: this.statusWordsOf(row.r),
+        primary: { id: "open", label: "Open", aria: `Open report actions for ${this.reportPatientName(row.r)}` }, data: row,
+      };
+    }
+    const po = (row as { po: PrelimOrder }).po;
+    return {
+      id: row.id, key: "partial", name: po.patientName, daily: po, facts: [this.phoneLinePartial(po)], status: this.partialWords,
+      primary: { id: "open", label: "Open", aria: `Open actions for ${po.patientName}` }, data: row,
+    };
+  }));
   /** <1280px: the grid folds Order + Generated into the Patient cell (the actions keep their room). */
   private readonly compactMq = mediaSignal("(max-width: 1279px)", inject(DestroyRef));
   /** The grid's own width (0 until measured) — the work-grid rule: columns fold by the GRID's width, never scroll

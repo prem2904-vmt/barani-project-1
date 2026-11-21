@@ -23,6 +23,8 @@ import { TileGridDirective } from '../../../shared/directives/tile-grid.directiv
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
+import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
+import { WorkListItem, lateWords } from '../../../shared/components/work-list/work-list';
 
 /** One stage inside a culture case (mirrors the backend CultureStage JSON). */
 export interface CultureStageView {
@@ -94,7 +96,7 @@ export interface CultureCaseView {
 @Component({
   selector: 'pf-culture-panel',
   standalone: true,
-  imports: [DailyNoComponent, TileComponent, SkeletonComponent, TileGridDirective, ZoomSourceDirective, DataGridComponent, StatusWordsComponent],
+  imports: [DailyNoComponent, WorkListComponent, TileComponent, SkeletonComponent, TileGridDirective, ZoomSourceDirective, DataGridComponent, StatusWordsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!theme.isNewDesign()) {
@@ -166,40 +168,10 @@ export interface CultureCaseView {
       </ul>
     }
     } @else if (phone()) {
-      <!-- New design, phones: card rows (Results' phone pattern) — the card opens the bench. -->
-      @if (loading() && cases().length === 0) {
-        <ul class="wg-cards" aria-busy="true">
-          @for (i of [0, 1, 2]; track i) {
-            <li class="wg-card wg-card--skel">
-              <span class="wg-card__l1"><pf-skeleton variant="line" width="45%"></pf-skeleton><pf-skeleton variant="line" width="72px"></pf-skeleton></span>
-              <pf-skeleton variant="line" width="75%" height="10px"></pf-skeleton>
-              <span class="wg-card__foot"><span class="wg-acts"><pf-skeleton variant="block" width="112px" height="44px"></pf-skeleton></span></span>
-            </li>
-          }
-        </ul>
-      } @else if (!shown().length) {
-        <p class="cg-empty">{{ cases().length ? 'Nothing matches these filters.' : 'No culture cases in progress.' }}</p>
-      } @else {
-        <ul class="wg-cards" data-testid="cg-cards">
-          @for (c of shown(); track c.orderTestId) {
-            @let st = words(c);
-            <li class="wg-card" role="button" tabindex="0" [pfZoomSource]="[c.orderTestId, c.sampleId]" [attr.aria-label]="primary(c).aria"
-                (click)="onCard(c, $event)" (keydown.enter)="open(c)" (keydown.space)="$event.preventDefault(); open(c)">
-              <span class="wg-card__l1">
-                <span class="wg-id">{{ c.barcode || c.sampleId || '—' }}</span>
-                <pf-status-words [words]="st" />
-              </span>
-              <span class="wg-who"><span class="wg-who__name"><pf-daily-no [of]="c" />{{ c.patientName || '—' }}</span>
-                @if (pmeta(c); as pm) { <span class="wg-who__meta pf-num">{{ pm }}</span> }
-                <span class="wg-who__meta">{{ meta(c) }}</span></span>
-              <span class="wg-card__foot">
-                <span class="wg-tat" [class.wg-tat--late]="dueOf(c).late">Day {{ day(c) }} · {{ dueOf(c).text }}</span>
-                <span class="wg-acts"><button type="button" class="pf-rowact wg-act" data-action="bench" [attr.aria-label]="primary(c).aria" (click)="$event.stopPropagation(); open(c)">{{ primary(c).label }}</button></span>
-              </span>
-            </li>
-          }
-        </ul>
-      }
+      <!-- New design below 1024px: the ONE shared work list (owner 2026-11-21) — the row opens the bench. -->
+      <pf-work-list data-testid="cg-list" label="Culture cases" [items]="listItems()" [loading]="loading() && cases().length === 0"
+        [emptyTitle]="cases().length ? 'Nothing matches these filters.' : 'No culture cases in progress.'"
+        (open)="openItem($event)" (primary)="openItem($event)" />
     } @else {
       <!-- New design: the work GRID (owner 2026-11-20) — same head, columns, touch sizing as the other My Work lists. -->
       <pf-data-grid class="cg" data-testid="cg-grid" [rowData]="shown()" [columnDefs]="cols()" [defaultColDef]="defaultCol"
@@ -354,6 +326,18 @@ export class CulturePanelComponent implements OnInit, OnDestroy, AfterViewInit {
   words(c: CultureCaseView) { return cultureWords(c, this.now(), this.auth.user()?.id); }
   test(c: CultureCaseView) { return cultureTest(c); }
   pmeta(c: CultureCaseView) { return culturePatientMeta(c); }
+  /** Below 1024px: the cases as shared work-list items (facts in the grid's column order). */
+  readonly listItems = computed<WorkListItem<CultureCaseView>[]>(() => this.shown().map(c => {
+    const d = this.dueOf(c);
+    const p = this.primary(c);
+    return {
+      id: c.orderTestId, name: c.patientName || '—', daily: c, lead: c.barcode || c.sampleId || null,
+      facts: [this.pmeta(c), this.test(c), this.meta(c), `Day ${this.day(c)}`],
+      status: lateWords(this.words(c), d.late),
+      time: { text: d.text, late: d.late }, primary: { id: 'bench', label: p.label, aria: p.aria }, aria: p.aria, data: c,
+    };
+  }));
+  openItem(it: WorkListItem<CultureCaseView>): void { if (it.data) this.open(it.data); }
   onRow(e: RowClickedEvent<CultureCaseView>): void {
     if ((e.event?.target as HTMLElement | null)?.closest?.('button, a, [role="menu"]')) return;
     if (e.data) this.open(e.data);

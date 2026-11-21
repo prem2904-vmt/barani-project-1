@@ -285,6 +285,7 @@
                 <rect x="3" y="4" width="18" height="18" rx="2" />
                 <path d="M16 2v4M8 2v4M3 10h18" />
               </svg>
+              <span class="pf-mtab__label">Bookings</span>
               <span class="pf-mtab__count">{{ visibleAppointments().length }}</span>
             </button>
             }
@@ -296,6 +297,7 @@
                 <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
                 <path d="M9 12h6M9 16h4" />
               </svg>
+              <span class="pf-mtab__label">In progress</span>
               <span class="pf-mtab__count">{{ visibleOrders().length + draftOrders().length }}</span>
             </button>
             <button type="button" role="tab" class="pf-mtab press" [class.pf-mtab--on]="mobileList() === 'done'"
@@ -304,6 +306,7 @@
                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M20 6 9 17l-5-5" />
               </svg>
+              <span class="pf-mtab__label">Done</span>
               <span class="pf-mtab__count">{{ completedOrders().length }}</span>
             </button>
             @if (showHome()) {
@@ -315,6 +318,7 @@
                 <path d="M3 12l9-9 9 9" />
                 <path d="M5 10v10h14V10" />
               </svg>
+              <span class="pf-mtab__label">Home</span>
               <span class="pf-mtab__count">{{ homeCollections().length }}</span>
             </button>
             }
@@ -325,6 +329,7 @@
                 <path d="M7 17 17 7" />
                 <path d="M8 7h9v9" />
               </svg>
+              <span class="pf-mtab__label">Outsourced</span>
               <span class="pf-mtab__count">{{ outsourcing.counts().outsourced }}</span>
             </button>
             @if (showPaymentsDue()) {
@@ -339,6 +344,7 @@
                 <path d="M9 13c6.67 0 6.67-10 0-10" />
                 <path d="M6 13l8.5 8" />
               </svg>
+              <span class="pf-mtab__label">Dues</span>
               <span class="pf-mtab__count" data-tone="warning">{{ paymentsDueAll().length }}</span>
             </button>
             }
@@ -346,7 +352,7 @@
 
           <!-- Phones: the search stacks full width BELOW the list switcher (the filter row). -->
           @if (mobileList() !== 'appt' && mobileList() !== 'home') {
-          <div class="pf-work-find-phone" [class.pf-work-find-phone--filters]="theme.isNewDesign()">
+          <div class="pf-work-find-phone" [class.pf-work-find-phone--filters]="theme.isNewDesign()" [class.pf-wl-head]="theme.isNewDesign()">
           <!-- New design: the band search filters this list (one search per screen, owner 2026-11-21). -->
           @if (!theme.isNewDesign()) {
           <label class="pf-work-find pf-work-find--phone">
@@ -360,8 +366,13 @@
               aria-label="Search patient, order, sample or test in this list" />
           </label>
           }
-          <!-- New design, phones / tablet portrait: the More filters icon rides INSIDE the search (one card). -->
+          <!-- New design, phones / tablet portrait: ONE list head row (owner 2026-11-21) — the count, the Sort chip
+               (the grid headers' sorts) and the More filters button; the band search filters the list. -->
           @if (theme.isNewDesign()) {
+          @if (listMode() && rightTab() !== 'out') {
+          <span class="pf-fd-listhead__n pf-num">{{ listItems().length }} {{ listItems().length === 1 ? 'row' : 'rows' }}</span>
+          <pf-sort-chip [options]="listSortOptions" [value]="listSort()" (pick)="listSort.set($event)" />
+          }
           <button type="button" class="pf-work-find__filter" [class.pf-work-find__filter--on]="workFilterCount() > 0 || workDateRange() !== 'today'"
             aria-haspopup="dialog" [attr.aria-expanded]="phoneFiltersOpen()" (click)="phoneFiltersOpen.set(!phoneFiltersOpen())"
             [attr.aria-label]="'More filters' + (workFilterCount() ? ', ' + workFilterCount() + ' on' : '')">
@@ -1136,7 +1147,22 @@
                 [board]="opdBoard()" (opened)="openFlowRow($event)" (moreFor)="clinicMore($event)" (doctor)="showDoctor($event)" />
               }
 
-              @if (!flowMode()) {
+              <!-- NEW DESIGN <1024px (iPad portrait, phones): the SAME rows as the flow grid, drawn by the ONE shared
+                   work list (owner 2026-11-21: "a grid on mobile is horrible") — name + token, the grid's facts in its
+                   column order, Where now in words with Waiting on the right, the row's Next + ⋯ at the right edge. -->
+              @if (listMode() && rightTab() !== 'out') {
+              @if (rightTab() === null && outsourcing.truncated()) {
+              <p class="pf-wsec-note" role="status">
+                Showing the first 1000 outsourced rows for this date range — narrow it to see the rest.
+              </p>
+              }
+              <pf-work-list class="pf-fd-list" data-testid="fd-list" label="Work" [items]="listItems()" [actionTpl]="fdListActs"
+                [loading]="ordersSkel() && flowRows().length === 0 && (rightTab() !== 'billing' || billsSkel())"
+                [emptyTitle]="flowEmpty().title" [emptyBody]="flowEmpty().body" (open)="openFlowRow($any($event.data))" />
+              <ng-template #fdListActs let-it><pf-fd-flow-next [item]="{ row: it.data, ctx: flowCtx }" /></ng-template>
+              }
+
+              @if (!flowMode() && !listMode()) {
               <!-- IN-PROGRESS TAB — saved drafts surface at the top of the same
                    list (parked carts, localStorage), then live in-progress orders. -->
               @if (statusShown('ip')) {
@@ -1577,7 +1603,7 @@
               <pf-outsourced-list [showFilters]="!theme.isNewDesign()"></pf-outsourced-list>
               }
 
-              @if (!flowMode()) {
+              @if (!flowMode() && !listMode()) {
               <!-- PAYMENTS DUE TAB -->
               @if (statusShown('billing') && showPaymentsDue()) {
               @if (billsSkel() && paymentsDueAll().length === 0) {

@@ -53,6 +53,8 @@ import { plural } from '../../../shared/utils/plural';
 import { lineDepartment } from '../../../shared/utils/shared-tube';
 import { OrderPriority, comparePriorityThenDue } from '../../../shared/utils/lab-priority';
 import { applyLabSort } from '../../../shared/utils/lab-sort';
+import { mediaSignal } from '../../../shared/utils/media-query';
+import { WORK_LIST_MQ } from '../../../shared/components/work-list/work-list';
 import { LabSortService } from '../../../core/services/lab-sort.service';
 import { LabSortComponent } from '../../../shared/components/lab-sort/lab-sort.component';
 import { WorkLine, enrichWorkLines, groupByPriority, soonestDue } from './my-work.priority';
@@ -513,8 +515,7 @@ const COUNTERS: CounterSpec[] = [
                 <path d="m14 6-6 6 6 6"/>
               </svg>
             </button>
-            <!-- Sort order sits in the pane head (owner 2026-11-19), not above the first row. -->
-            <pf-lab-sort class="pf-mw-intake-sort" scope="intake" data-testid="lab-sort-intake-head"></pf-lab-sort>
+            <!-- Sort: the list's own Sort chip (owner 2026-11-21) — no sort dropdown in the pane head. -->
             }
             <div class="pf-mw-scan" [class.pf-intake-open]="intakeSearchOpen()">
               <!-- Phone-only (<=640px) magnifier: collapses the cramped inline
@@ -700,7 +701,7 @@ const COUNTERS: CounterSpec[] = [
            tab pill even while another tab is showing. -->
       @if (cultureAsTab()) {
         <div class="pf-mw-culturetab" [class.pf-mw-culturetab--off]="tab() !== 'culture'">
-          <pf-culture-panel [filter]="cultureFilterEff()" [phone]="isPhone()" (headChange)="cultureHead.set($event)"
+          <pf-culture-panel [filter]="cultureFilterEff()" [phone]="narrow()" (headChange)="cultureHead.set($event)"
                             (countChange)="cultureCount.set($event)"></pf-culture-panel>
         </div>
       }
@@ -709,7 +710,7 @@ const COUNTERS: CounterSpec[] = [
       <!-- New design (owner 2026-11-20): the work list is the Frontdesk / Results GRID — shared pf-data-grid, one
            primary row action at the row end + ⋯, the row tap = the old tile tap; phones get card rows. -->
       <pf-mw-grid class="pf-mw-gridhost" [rows]="mwShownRows()" [mode]="mwGridMode()" [ctx]="mwGridCtx" viewStateKey="lab.my-work.grid"
-                  [loading]="tab() === 'completed' ? completedLoading() : loading()" [emptyTitle]="mwFiltered() ? 'Nothing matches these filters.' : mwEmptyTitle()" [phone]="isPhone()" />
+                  [loading]="tab() === 'completed' ? completedLoading() : loading()" [emptyTitle]="mwFiltered() ? 'Nothing matches these filters.' : mwEmptyTitle()" [phone]="narrow()" />
       @if (cardPeekId()) {
         <div class="pf-cardpeek" (click)="$event.stopPropagation()"
              [style.left.px]="cardPeekPos()?.x" [style.top.px]="cardPeekPos()?.y">
@@ -2496,6 +2497,9 @@ const COUNTERS: CounterSpec[] = [
       :host-context(.design-new) .pf-mtab__ico { display: block; }
       :host-context(.design-new) .pf-mtab__label { display: none; }
       :host-context(.design-new) .pf-mtab { gap: 5px; padding: 8px 4px; }
+      /* The ACTIVE tab keeps its label (owner 2026-11-21: icon-only tabs left people guessing). */
+      :host-context(.design-new) .pf-mtab--on { flex: 2.4 1 0; }
+      :host-context(.design-new) .pf-mtab--on .pf-mtab__label { display: inline; overflow: visible; text-overflow: clip; letter-spacing: 0; text-transform: none; font-size: 12.5px; }
       .pf-mtab__count {
         font-family: 'JetBrains Mono', ui-monospace, monospace;
         font-size: 10.5px;
@@ -3280,6 +3284,8 @@ export class MyWorkComponent implements OnInit {
    *  by the header Stats popover on phone). Kept in sync via matchMedia. */
   private readonly _phoneMq = typeof window !== 'undefined' ? window.matchMedia('(max-width: 640px)') : null;
   protected readonly isPhone = signal<boolean>(this._phoneMq?.matches ?? false);
+  /** Below 1024px the work lists are the shared pf-work-list (owner 2026-11-21); the grid at 1024px and up. */
+  protected readonly narrow = mediaSignal(WORK_LIST_MQ);
   readonly currentYear = new Date().getFullYear();
 
   readonly vendorCode = computed(() => this.tenantState.tenant()?.vendorCode ?? '');
