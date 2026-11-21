@@ -121,6 +121,10 @@ describe('Daily statement — the one day-close', () => {
     const p = make(stmt({ closure: null }, { isClosed: true, canReopen: true, source: 'expense_book', note: 'Old book close', closedByName: 'Admin' }));
     expect(p.cmp.closed()).toBe(true);
     expect(p.cmp.bookClosed()).toBe(true);
+    const chip = p.el.querySelector('[data-testid="closing-state"]')!;
+    expect(chip.textContent!.trim()).toBe('Closed · no cash count');
+    expect(chip.getAttribute('data-state')).toBe('closed');
+    expect(p.el.querySelector('[data-testid="close-day"]'), 'no Close day on a closed day').toBeNull();
     expect(p.input('closing-count').value).toBe('');
     expect(p.el.querySelector('[data-testid="closing-summary"]')!.textContent).toContain('No cash count');
     expect(p.el.querySelector<HTMLTextAreaElement>('[data-testid="closing-note"]')!.value).toBe('Old book close');

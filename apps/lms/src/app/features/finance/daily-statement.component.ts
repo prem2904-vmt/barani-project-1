@@ -88,7 +88,7 @@ interface DailyStatement {
           </ng-container>
           <ng-container band-actions>
             @if (stmt(); as s) {
-              @if (!s.closure) {
+              @if (!closed()) {
                 <button type="button" class="pf-hb-btn pf-hb-btn--primary press" data-testid="close-day"
                         [disabled]="!canClose()" [pfBusy]="saving()" pfBusyLabel="Closing…" (click)="closeDay()"
                         [attr.aria-label]="closeLabel()"
@@ -107,7 +107,7 @@ interface DailyStatement {
         title="Day closing"
         subtitle="Collections by mode, cash count and day closure.">
         @if (stmt(); as s) {
-          @if (!s.closure) {
+          @if (!closed()) {
             <pf-touch-btn actions size="md" variant="primary" [disabled]="!canClose()" [busy]="saving()" busyLabel="Closing…"
                           data-testid="close-day-classic" (pressed)="closeDay()">{{ closeLabel() }}</pf-touch-btn>
           }
@@ -138,8 +138,8 @@ interface DailyStatement {
               </span>
               <span class="pf-card__label" data-testid="closing-title">{{ headLabel() }}</span>
               @if (stmt(); as s) {
-                <span class="pf-cl__state" [attr.data-state]="s.closure ? 'closed' : 'open'" data-testid="closing-state">
-                  <span class="pf-cl__sdot" aria-hidden="true"></span>{{ s.closure ? 'Closed' : 'Open' }}
+                <span class="pf-cl__state" [attr.data-state]="closed() ? 'closed' : 'open'" data-testid="closing-state">
+                  <span class="pf-cl__sdot" aria-hidden="true"></span>{{ stateWord() }}
                 </span>
               }
               <span class="pf-card__spacer"></span>
@@ -447,6 +447,8 @@ export class DailyStatementComponent implements OnInit {
   /** Closed: a closure row (either screen) or a legacy expense-book close (no count). */
   readonly closed = computed(() => !!this._stmt()?.closure || !!this.dayClose()?.isClosed);
   readonly bookClosed = computed(() => !this._stmt()?.closure && this.dayClose()?.source === 'expense_book' && !!this.dayClose()?.isClosed);
+  /** The state chip: a legacy expense-book close is closed too, just never counted. */
+  readonly stateWord = computed(() => (this.bookClosed() ? 'Closed · no cash count' : this.closed() ? 'Closed' : 'Open'));
   readonly canReopen = computed(() => !!this.dayClose()?.canReopen && this.closed());
   readonly isToday = computed(() => this.dateStr() === this.todayStr);
   /** Whole day, open, no earlier closing: ask for the opening float (the server applies it only then). */
