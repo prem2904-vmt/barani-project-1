@@ -346,10 +346,10 @@
    /* Grid glass (owner 2026-11-21, glass across the grid): rows / headers / floating filters are a translucent tint
       over the panel's glass; hover / selected are tints too. Pinned cells are FROSTED (blur + ~.82) so a scrolled
       cell passing under them is blurred, never readable. */
-   --pf-row-glass: rgba(255, 255, 255, 0.42);
-   --pf-row-hover-glass: rgba(250, 246, 255, 0.55);
-   --pf-row-selected-glass: rgba(237, 228, 253, 0.55);
-   --pf-head-glass: rgba(248, 244, 253, 0.5);
+   --pf-row-glass: transparent;
+   --pf-row-hover-glass: rgba(124, 58, 237, 0.06);
+   --pf-row-selected-glass: rgba(124, 58, 237, 0.11);
+   --pf-head-glass: rgba(124, 58, 237, 0.04);
    --pf-pinned-frost: rgba(255, 255, 255, 0.82);
    --pf-pinned-frost-hover: rgba(250, 246, 255, 0.86);
    --pf-pinned-frost-selected: rgba(240, 232, 253, 0.88);
