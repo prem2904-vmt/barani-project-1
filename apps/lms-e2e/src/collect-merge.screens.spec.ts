@@ -227,30 +227,38 @@ test('drawn: Gold pours into Red (stream, wobble), then Separate from the chip',
   expect(pendingGets).toBe(gets);
 });
 
+/** Drag Gold over Grey (fluoride): rose + "Serum into Fluoride · check" while over it; release → the inline question. */
+async function hoverThenAsk(page: Page, mode: 'light' | 'dark') {
+  const ask = tile(page, '26309').getByTestId('inline-ask');
+  const a = await center(page, '26310'), b = await center(page, '26309');
+  if (!isTouch()) {
+    await page.mouse.move(a.x, a.y); await page.mouse.down();
+    for (let i = 1; i <= 12; i++) { await page.mouse.move(a.x + (b.x - a.x) * i / 12, a.y + (b.y - a.y) * i / 12); await page.waitForTimeout(20); }
+    await expect(tile(page, '26309').getByTestId('drop-warn')).toHaveText('Serum into Fluoride · check');
+    await page.screenshot({ path: `${OUT}/warn-hover-${mode}.png` });
+    await page.mouse.up();
+  } else {
+    await drag(page, '26310', '26309');
+  }
+  await expect(ask).toContainText('Serum into Fluoride. Different additive. Pour anyway?');
+  await noDialogs(page);
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/warn-ask-${mode}.png` });
+}
+
+test('dark: the rose drop state and the inline question', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await openBaby(page);
+  await theme(page, 'dark');
+  await page.waitForTimeout(400);
+  await hoverThenAsk(page, 'dark');
+});
+
 test('different additive: target turns rose, asks INLINE — Keep apart changes nothing, Pour merges', async ({ page }) => {
   await openBaby(page);
   const gets = pendingGets;
   const ask = tile(page, '26309').getByTestId('inline-ask');
-  // Hover: the rose state + words while over the Grey (fluoride) tube; release → the inline question. Light, then dark.
-  for (const mode of ['light', 'dark'] as const) {
-    await theme(page, mode);
-    const a = await center(page, '26310'), b = await center(page, '26309');
-    if (!isTouch()) {
-      await page.mouse.move(a.x, a.y); await page.mouse.down();
-      for (let i = 1; i <= 12; i++) { await page.mouse.move(a.x + (b.x - a.x) * i / 12, a.y + (b.y - a.y) * i / 12); await page.waitForTimeout(20); }
-      await expect(tile(page, '26309').getByTestId('drop-warn')).toHaveText('Serum into Fluoride · check');
-      await page.screenshot({ path: `${OUT}/warn-hover-${mode}.png` });
-      await page.mouse.up();
-    } else {
-      await drag(page, '26310', '26309');
-    }
-    await expect(ask).toContainText('Serum into Fluoride. Different additive. Pour anyway?');
-    await noDialogs(page);
-    await page.waitForTimeout(300);
-    await page.screenshot({ path: `${OUT}/warn-ask-${mode}.png` });
-    if (mode === 'light') { await ask.getByTestId('inline-no').click(); await expect(ask).toHaveCount(0); }
-  }
-  await theme(page, 'light');
+  await hoverThenAsk(page, 'light');
   await ask.getByTestId('inline-no').click();
   await expect(ask).toHaveCount(0);
   await expect(tile(page, '26310')).toBeVisible();
