@@ -287,7 +287,10 @@ test('timed series: a +2h draw is not droppable — the reason shows while over 
   const timed = tile(page, '26313');
   await expect(timed).toBeVisible();
   await expect(timed.locator('.pf-tube')).not.toHaveClass(/pf-tube--draggable/);   // nothing to pour it into
-  const a = await center(page, '26310'), b = await center(page, '26313');
+  // Drag its row neighbour sideways (no vertical auto-scroll on short screens).
+  await timed.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  const a = await center(page, '26312'), b = await center(page, '26313');
   if (!isTouch()) {
     await page.mouse.move(a.x, a.y); await page.mouse.down();
     for (let i = 1; i <= 12; i++) { await page.mouse.move(a.x + (b.x - a.x) * i / 12, a.y + (b.y - a.y) * i / 12); await page.waitForTimeout(20); }
@@ -296,10 +299,10 @@ test('timed series: a +2h draw is not droppable — the reason shows while over 
     await page.screenshot({ path: `${OUT}/timed-refused-light.png` });
     await page.mouse.up();
   } else {
-    await drag(page, '26310', '26313');
+    await drag(page, '26312', '26313');
   }
   await expect(page.locator('.toast-item', { hasText: 'Timed draws can’t be poured' })).toBeVisible();
-  await expect(tile(page, '26310')).toBeVisible();
+  await expect(tile(page, '26312')).toBeVisible();
   expect(requests.filter(r => r.endsWith('/merge'))).toEqual([]);
   await noDialogs(page);
 });
