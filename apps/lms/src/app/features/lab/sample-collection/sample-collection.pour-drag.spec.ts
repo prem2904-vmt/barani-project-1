@@ -188,7 +188,7 @@ describe('Sample collection — drag a tube onto another to pour it', () => {
     expect(tubeEl(f, '26105').classList).toContain('pf-tube--pour-ok');
     expect(tubeEl(f, '26105').classList).toContain('pf-tube--pour-over');
     expect(tubeEl(f, '26105').querySelector('[data-testid="pour-drop-ok"]')!.textContent).toContain('Drop to pour in');
-    const ghost = drawerOf(f).querySelector('[data-testid="pour-ghost"]')!;
+    const ghost = document.body.querySelector('[data-testid="pour-ghost"]')!;
     expect(ghost.textContent).toContain('Red · 26104');
     expect(ghost.textContent).toContain('Pour into Grey · 26105');
     c.pourDrag.up(ev(tubeEl(f, '26104'), 80, 20));
@@ -238,13 +238,13 @@ describe('Sample collection — drag a tube onto another to pour it', () => {
     const t = tubeEl(f, '26105');
     expect(t.classList).toContain('pf-tube--pour-no');
     expect(t.querySelector('[data-testid="pour-drop-reason"]')!.textContent).toContain('Already received');
-    expect(drawerOf(f).querySelector('[data-testid="pour-ghost"]')!.textContent).toContain('Can’t pour: Already received');
+    expect(document.body.querySelector('[data-testid="pour-ghost"]')!.textContent).toContain('Can’t pour: Already received');
     c.pourDrag.up(ev(tubeEl(f, '26104'), 80, 20));
     await wait(260);
     await settle(f);
     expect(c.pour()).toBeNull();
     expect(c.dragSrc()).toBeNull();
-    expect(drawerOf(f).querySelector('[data-testid="pour-ghost"]')).toBeNull();
+    expect(document.body.querySelector('[data-testid="pour-ghost"]')).toBeNull();
     expect(api.post).not.toHaveBeenCalled();
     expect(c.activeGroup().samples.map((s: any) => s.id).sort()).toEqual(['grey', 'red']);
   });
@@ -256,7 +256,7 @@ describe('Sample collection — drag a tube onto another to pour it', () => {
     c.onVialDown(sampleOf(c, 'red'), ev(tubeEl(f, '26104'), 10, 10));
     c.pourDrag.move(ev(tubeEl(f, '26104'), 300, 500));
     await settle(f);
-    expect(drawerOf(f).querySelector('[data-testid="pour-ghost"]')!.textContent).toContain('Drop it on another tube');
+    expect(document.body.querySelector('[data-testid="pour-ghost"]')!.textContent).toContain('Drop it on another tube');
     c.pourDrag.up(ev(tubeEl(f, '26104'), 300, 500));
     await wait(260);
     await settle(f);

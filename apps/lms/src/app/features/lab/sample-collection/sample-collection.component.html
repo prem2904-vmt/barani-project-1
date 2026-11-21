@@ -615,7 +615,7 @@
                    [class.pf-tube--pour-no]="ds?.kind === 'no'"
                    [class.pf-tube--pour-over]="!!ds && dragOver() === s.id"
                    (pointerdown)="onVialDown(s, $event)" (pointerup)="onVialUp()"
-                   (pointerleave)="onVialUp()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
+                   (pointerleave)="onVialLeave()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
                    (click)="onVialClick(s, $event)" (keydown.enter)="onVialClick(s, $event)">
                 <!-- Missed-draw badge: red ✕ overlay in the card's top-right
                      (visual only — the tube stays server-pending and can be
@@ -1244,7 +1244,7 @@
              stacking context) so it always paints above the collect content.
              Shown while a vial is held; hidden on release. -->
         @if (peekId()) {
-          <div class="pf-tube__peekpop" (click)="$event.stopPropagation()"
+          <div class="pf-tube__peekpop" wfPortal data-testid="peek-pop" (click)="$event.stopPropagation()"
                [style.left.px]="peekPos()?.x" [style.top.px]="peekPos()?.y">
             <p class="pf-tube__peekpop-h">Tests ({{ peekTests().length }})</p>
             <ul>
@@ -1257,7 +1257,7 @@
              (pointer-events: none, so hit-testing sees the card beneath). -->
         @if (dragMoving() && dragPos(); as pos) {
           @let gsrc = dragSource();
-          <div class="pf-pour-ghost" aria-hidden="true" data-testid="pour-ghost"
+          <div class="pf-pour-ghost" wfPortal aria-hidden="true" data-testid="pour-ghost"
                [class.pf-pour-ghost--back]="dragExit() === 'back'"
                [class.pf-pour-ghost--in]="dragExit() === 'in'"
                [class.pf-pour-ghost--no]="dragCaption().startsWith('Can’t')"

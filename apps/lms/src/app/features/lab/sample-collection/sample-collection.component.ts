@@ -65,6 +65,8 @@ import {
   sortForCollection,
 } from "../../../shared/utils/series-schedule";
 import { countCollected, isOrderDispatched } from "./dispatch-state";
+import { peekPlacement } from "./peek-placement";
+import { WfPortalDirective } from "../../../shared/workflow-editor/wf-menu.component";
 import { fastingGroups, fastingText, infoDocked, infoTier, readInfoOpen, writeInfoOpen, type InfoTier } from "./info-panel";
 import {
   isDrawn,
@@ -426,6 +428,7 @@ interface OrderGroup {
     LabelCardComponent,
     ScanIconComponent,
     SelectComponent,
+    WfPortalDirective,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: "./sample-collection.component.html",
@@ -1488,14 +1491,11 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this._longPressFired = false;
     this._downX = ev.clientX;
     this._downY = ev.clientY;
-    // Float the popover beside the vial (right, or left if no room) so the
-    // holding finger never covers it.
-    const r = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-    const W = 260;
-    let x = r.right + 10;
-    if (x + W > window.innerWidth - 8) x = r.left - W - 10;
-    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
-    const y = Math.max(8, Math.min(r.top, window.innerHeight - 260));
+    // Float the popover beside the POINTER / finger (right of it, or left if
+    // no room; a little above so the finger never covers it), clamped to the
+    // viewport. It renders in <body> (wfPortal), so these viewport
+    // coordinates are never re-anchored by a filtered / transformed ancestor.
+    const { x, y } = peekPlacement(ev.clientX, ev.clientY, window.innerWidth, window.innerHeight);
     const tests = (s.tests ?? [])
       .map((t) => t.test?.name ?? t.name)
       .filter((n): n is string => !!n);
@@ -1513,6 +1513,9 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this.peekPos.set({ x, y });
       this.peekTests.set(tests);
       this.peekId.set(s.id); // popover shows while held
+      const release = () => { window.removeEventListener('pointerup', release, true); window.removeEventListener('pointercancel', release, true); this.clearPress(); };
+      window.addEventListener('pointerup', release, true);
+      window.addEventListener('pointercancel', release, true);
     }, SampleCollectionComponent.HOLD_MS);
   }
   onVialMove(ev: PointerEvent): void {
@@ -1525,6 +1528,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     }
   }
   onVialUp(): void {
+    this.clearPress();
+  }
+  /** Leaving the tile cancels a pending hold, but never closes an OPEN peek: the tile re-lays out as the lift ends
+   *  (pointerleave fires under a still finger on touch) — release (pointerup / cancel, anywhere) closes it. */
+  onVialLeave(): void {
+    if (this.peekId()) return;
     this.clearPress();
   }
   private clearPress(): void {

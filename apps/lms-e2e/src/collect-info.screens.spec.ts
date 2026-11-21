@@ -243,3 +243,66 @@ test('below 1280: hidden by default with chips; drawer opens, Esc / scrim / clos
   await page.keyboard.press('Escape');
   await expect(page.locator('.pf-sc-side--drawer')).toHaveCount(0);
 });
+
+// Owner bug 2026-11-21: press-and-hold on a tube showed the peek popover / pour ghost in the CENTRE of the screen.
+// They must sit next to the finger / pointer (top layer, offset, clamped to the viewport).
+const distTo = (b: { x: number; y: number; width: number; height: number }, x: number, y: number) =>
+  Math.hypot(Math.max(b.x - x, 0, x - (b.x + b.width)), Math.max(b.y - y, 0, y - (b.y + b.height)));
+async function fixedTraps(page: Page, sel: string) {
+  return page.evaluate(s => {
+    const out: string[] = [];
+    let el = document.querySelector(s)?.parentElement ?? null;
+    while (el) {
+      const c = getComputedStyle(el);
+      const trap = (c.transform !== 'none' && c.transform) || (c.filter !== 'none' && c.filter) || ((c as any).backdropFilter && (c as any).backdropFilter !== 'none' && (c as any).backdropFilter)
+        || (c.perspective !== 'none' && c.perspective) || (/(transform|filter|perspective)/.test(c.willChange) && c.willChange) || (/(paint|layout|strict|content)/.test(c.contain) && c.contain) || (c.containerType && c.containerType !== 'normal' && c.containerType);
+      if (trap) out.push(`${el.tagName.toLowerCase()}.${[...el.classList].slice(0, 3).join('.')} → ${trap}`);
+      el = el.parentElement;
+    }
+    return out;
+  }, sel);
+}
+
+test('hold: the peek popover and the pour ghost sit next to the pointer (not the screen centre)', async ({ page }) => {
+  const toggle = await openCollect(page);
+  void toggle;
+  const tile = page.locator('.pf-sc-tile').first();
+  const tb = (await tile.boundingBox())!;
+  // press near the tile's top-left quarter, so the centre of the tile / screen is clearly elsewhere
+  const x = Math.round(tb.x + tb.width * 0.3), y = Math.round(tb.y + tb.height * 0.35);
+  const touch = (page.viewportSize()?.width ?? 0) < 1280 || !!test.info().project.use.hasTouch;
+  const cdp = touch ? await page.context().newCDPSession(page) : null;
+  const tStart = (px: number, py: number) => cdp!.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: px, y: py }] });
+  const tMove = (px: number, py: number) => cdp!.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: px, y: py }] });
+  const tEnd = () => cdp!.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+
+  // 1) still hold ~2s → the tests popover, beside the pointer
+  if (touch) await tStart(x, y); else { await page.mouse.move(x, y); await page.mouse.down(); }
+  const pop = page.getByTestId('peek-pop');
+  await expect(pop).toBeVisible({ timeout: 6000 });
+  console.log('[hold] peek traps', JSON.stringify(await fixedTraps(page, '.pf-tube__peekpop')));
+  const pb = (await pop.boundingBox())!;
+  console.log('[hold] pointer', x, y, 'peek box', JSON.stringify(pb));
+  expect(distTo(pb, x, y)).toBeLessThanOrEqual(80);
+  expect(pb.x).toBeGreaterThanOrEqual(0); expect(pb.y).toBeGreaterThanOrEqual(0);
+  expect(pb.x + pb.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
+  await page.screenshot({ path: `${OUT}/hold-peek-light.png` });
+  await theme(page, 'dark'); await page.screenshot({ path: `${OUT}/hold-peek-dark.png` }); await theme(page, 'light');
+  if (touch) await tEnd(); else await page.mouse.up();
+  await expect(pop).toHaveCount(0);
+  await page.waitForTimeout(400);
+
+  // 2) hold then drag → the pour ghost follows the pointer
+  if (touch) { await tStart(x, y); await page.waitForTimeout(450); } else { await page.mouse.move(x, y); await page.mouse.down(); }
+  let px = x, py = y;
+  for (let i = 1; i <= 10; i++) { px = x + i * 8; py = y + i * 5; if (touch) await tMove(px, py); else await page.mouse.move(px, py); await page.waitForTimeout(40); }
+  const ghost = page.getByTestId('pour-ghost');
+  await expect(ghost).toBeVisible({ timeout: 4000 });
+  console.log('[hold] ghost traps', JSON.stringify(await fixedTraps(page, '[data-testid="pour-ghost"]')));
+  const gb = (await ghost.boundingBox())!;
+  console.log('[hold] pointer', px, py, 'ghost box', JSON.stringify(gb));
+  expect(distTo(gb, px, py)).toBeLessThanOrEqual(80);
+  await page.screenshot({ path: `${OUT}/hold-drag-light.png` });
+  await theme(page, 'dark'); await page.screenshot({ path: `${OUT}/hold-drag-dark.png` }); await theme(page, 'light');
+  if (touch) await tEnd(); else await page.mouse.up();
+});
