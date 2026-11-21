@@ -272,7 +272,8 @@ function expectLightTokens(f: Awaited<ReturnType<typeof lightFacts>>, tag: strin
   expect(f.page, `${tag}: page ground`).toBe('rgb(244, 240, 250)');              // #f4f0fa
   expect(f.panelFound, `${tag}: panel on screen`).toBe(true);
   if (f.glass) {
-    expect(f.panelAlpha, `${tag}: glass panel is translucent`).toBeGreaterThan(0.55);
+    // Owner 2026-11-21 (glass that reads, as mock v6): panels at ~.5 white so the brand pools show through.
+    expect(f.panelAlpha, `${tag}: glass panel is translucent`).toBeGreaterThanOrEqual(0.4);
     expect(f.panelAlpha, `${tag}: glass panel is translucent`).toBeLessThan(0.8);
     expect(f.panelBlur, `${tag}: glass panel blurs`).toContain('blur(18px)');
   } else {
@@ -437,6 +438,40 @@ test.describe('light theme — every screen, light + dark', () => {
       expect(r.blur, `pinned cell surface has a backdrop blur (${(r as { what?: string }).what})`).toMatch(/blur/);
       await expectGridGlass(page, 'Test Master');
     }
+  });
+
+  // Owner 2026-11-21: on Results (light) rows scrolling up showed THROUGH the column header. The header is near-opaque
+  // frost (>= .9) above the rows: the point at a header cell's centre belongs to the header even mid-scroll.
+  test('Results scrolled: rows never show through the grid header (light)', async ({ page }) => {
+    const rep = (n: number) => ({ id: `rq-${n}`, orderId: `ord-r${n}`, patientId: `pr${n}`, type: 'final', status: 'generated', deliveryStatus: n % 3 ? 'pending' : 'delivered',
+      qrToken: `tok-${n}`, createdAt: ago(10 + n * 9),
+      order: { id: `ord-r${n}`, orderNumber: `LAB-2611-0${String(300 + n)}`, dailyNo: 40 + n, dailyNoDay: today, patient: { displayName: `Patient Number ${n + 1}`, age: 30, sex: 'F', mrn: `AA3${n}`, phone: '+919876543210' } } });
+    const items = Array.from({ length: 40 }, (_, i) => rep(i));
+    await page.route(/prefrontal\.health\/api\/reports\/queue/, async route => {
+      const origin = route.request().headers()['origin'] ?? 'http://127.0.0.1';
+      const cors = { 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' };
+      if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+      return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' },
+        body: JSON.stringify({ success: true, data: { items, total: items.length, page: 1, pageSize: 50, hasMore: false, counts: { all: 40, pending: 27, delivered: 13, failed: 0 } } }) });
+    });
+    await go(page, '/reports');
+    if ((page.viewportSize()?.width ?? 0) < 1024) { test.info().annotations.push({ type: 'form-factor', description: 'the grid lives at >= 1024px (phones: the list head is opaque)' }); return; }
+    await expect(page.locator('.ag-row').locator('visible=true').first()).toBeVisible({ timeout: 45_000 });
+    await theme(page, false);
+    await page.evaluate(() => { for (const v of Array.from(document.querySelectorAll<HTMLElement>('.ag-body-viewport, .ag-grid-viewport, .ag-body'))) v.scrollTop = 300; });
+    await page.waitForTimeout(700);
+    await page.screenshot({ path: path.join(OUT_BASE, projectName(), 'lt-results-scrolled--light.png') });
+    const r = await page.evaluate(() => {
+      const alpha = (c: string) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return 1; const p = m[1].split(/[ ,/]+/).filter(Boolean); return p.length > 3 ? Number(p[3]) : 1; };
+      const head = Array.from(document.querySelectorAll<HTMLElement>('.ag-header')).find(e => e.getBoundingClientRect().width > 0)!;
+      const cells = Array.from(head.querySelectorAll<HTMLElement>('.ag-header-cell')).filter(c => c.getBoundingClientRect().width > 20).slice(0, 5);
+      const off = cells.filter(c => { const b = c.getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return !hit || !hit.closest('.ag-header'); })
+        .map(c => (c.textContent ?? '').trim());
+      return { alpha: alpha(getComputedStyle(head).backgroundColor), n: cells.length, off };
+    });
+    expect(r.n, 'header cells on screen').toBeGreaterThan(0);
+    expect(r.off, 'the header owns its cells mid-scroll (no row on top)').toEqual([]);
+    expect(r.alpha, 'grid header is near-opaque in light').toBeGreaterThanOrEqual(0.9);
   });
 
   test('Collect vials: the tile surface follows DARK (page loaded light then switched, and a real dark load)', async ({ page }) => {
