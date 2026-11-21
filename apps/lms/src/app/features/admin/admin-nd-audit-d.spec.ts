@@ -183,7 +183,8 @@ describe('ND audit D — Vendors', () => {
     // Status = words (design D, 2026-11-21): the shared StatusWordsCellComponent, fed by the column's own mapping.
     const st = p.cmp.colDefs().find((c: any) => c.colId === 'status');
     expect(st.cellRendererParams.statusWords(vendors[1])).toEqual({ now: 'Inactive', detail: null, tone: 'normal' });
-    expect(st.valueGetter({ data: vendors[1] })).toBe('Inactive');
+    // valueGetter is the SORT rank (Active first = 0, Inactive = 1); the words are asserted via statusWords above.
+    expect(st.valueGetter({ data: vendors[1] })).toBe(1);
     expect(p.el.querySelector('.pf-sg-main__head pf-segmented')).not.toBeNull();
     expect(p.el.querySelector('pf-chip, pf-tile')).toBeNull();
   });

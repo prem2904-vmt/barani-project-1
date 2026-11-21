@@ -941,7 +941,7 @@ export class ReportQueueComponent implements OnInit {
   readonly listSortOptions = columnSortOptions([{ id: "token", label: "Token" }, { id: "patient", label: "Patient" }, { id: "when", label: "Generated", first: "desc" }]);
   readonly listSort = signal<string | null>(null);
   readonly listItems = computed<WorkListItem<RqRow>[]>(() => sortItems(this.gridRows().filter(r => r.kind !== "detail"), this.listSort(), {
-    token: r => (r.kind === "report" ? r.r.order?.dailyNo : r.po.dailyNo) ?? null,
+    token: r => tokenValueOf(r.kind === "report" ? r.r.order : r.po),
     patient: r => (r.kind === "report" ? this.reportPatientName(r.r) : r.po.patientName),
     when: r => { const at = r.kind === "report" ? r.r.createdAt : r.po.createdAt; return at ? Date.parse(at) : null; },
   }).map(row => {
