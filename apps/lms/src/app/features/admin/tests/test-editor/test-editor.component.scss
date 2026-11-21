@@ -1161,6 +1161,12 @@ select.pf-input--compact {
 /* ── Loading feedback: the editor's own shape while the record loads ── */
 .pf-te2-ctx__nameskel { display: inline-block; vertical-align: middle; }
 .pf-te2-loading .pf-card__body { display: flex; flex-direction: column; gap: 24px; padding: 16px 18px; }
+/* The skeleton head mirrors the loaded section head (house rule: skeletons mirror the final layout): the same
+   .pf-te2-sec__label padding, and its Preview-button shape is the real button's size — 44px tall on touch, an
+   icon-only 44px square on phones (where the shared skeleton would drop it). */
+@media (pointer: coarse) { :host ::ng-deep .pf-te2-skelhead .pf-skf-pill { height: 44px !important; } }
+@media (max-width: 767px) { :host ::ng-deep .pf-te2-skelhead .pf-skf-pill { display: block !important; } }
+@media (max-width: 640px) { :host ::ng-deep .pf-te2-skelhead .pf-skf-pill { width: 44px !important; height: 44px !important; border-radius: 12px; } }
 .pf-livewrap__skel { display: block; }
 
 /* ── Profile FAMILY LINES (owner 2026-10-23) — each line a row of the

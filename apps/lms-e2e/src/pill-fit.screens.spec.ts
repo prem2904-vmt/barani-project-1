@@ -209,14 +209,16 @@ test.describe('pill fit', () => {
     for (const w of widths()) {
       await openAt(page, w, '/reports');
       await expect(page.locator('[data-testid="rq-main"]').locator('visible=true').first()).toBeVisible({ timeout: 60_000 });
-      if (w > 640) await expect(page.locator('.ag-row').locator('visible=true').first()).toBeVisible({ timeout: 30_000 });
+      // ≥1024: the grid; below, the shared <pf-work-list> (owner 2026-11-21, small-screens).
+      if (w >= 1024) await expect(page.locator('.ag-row').locator('visible=true').first()).toBeVisible({ timeout: 30_000 });
+      else await expect(page.locator('[data-testid="rq-main"] pf-work-list .pf-wl__row').locator('visible=true').first()).toBeVisible({ timeout: 30_000 });
       await shot(page, w, 'results');
-      // Grid row actions: every button inside the card, never past its right edge.
-      if (w > 640) {
+      // Row actions (grid buttons, or the list's right-edge control): every button inside the card, never past its right edge.
+      {
         const cut = await page.evaluate(() => {
           const main = document.querySelector('[data-testid="rq-main"]')!.getBoundingClientRect();
           const out: string[] = [];
-          for (const b of Array.from(document.querySelectorAll<HTMLElement>('.pf-rq2-acts button'))) {
+          for (const b of Array.from(document.querySelectorAll<HTMLElement>('[data-testid="rq-main"] .pf-rq2-acts button, [data-testid="rq-main"] .pf-wl__act button'))) {
             const r = b.getBoundingClientRect();
             if (r.width === 0) continue;
             if (r.right > main.right - 1 || r.left < main.left) out.push(`${b.getAttribute('aria-label')} ${Math.round(r.left)}–${Math.round(r.right)} vs card ${Math.round(main.right)}`);
@@ -246,16 +248,16 @@ test.describe('pill fit', () => {
           await theme(page, false);
         }
         await pickPill(page, '[data-testid="rq-pill"]', 'Delivered');
-        await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Nithin Ragav")').locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
-        await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Ms. Arya Stark")').locator('visible=true')).toHaveCount(0);
+        await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Nithin Ragav"), pf-work-list .pf-wl__name:has-text("Nithin Ragav")').locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
+        await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Ms. Arya Stark"), pf-work-list .pf-wl__name:has-text("Ms. Arya Stark")').locator('visible=true')).toHaveCount(0);
         if (state === 'menu') await shot(page, w, 'results-delivered-menu');
         await pickPill(page, '[data-testid="rq-pill"]', 'All');
       } else if (w > 900) {
         // Results filters (owner 2026-11-20): the status moved from the head's pill into the FILTERS side card.
         const row = page.locator('[data-testid="rq-side"] [data-filter="delivered"]').locator('visible=true').first();
         await row.click();
-        await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Nithin Ragav")').locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
-        await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Ms. Arya Stark")').locator('visible=true')).toHaveCount(0);
+        await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Nithin Ragav"), pf-work-list .pf-wl__name:has-text("Nithin Ragav")').locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
+        await expect(page.locator('.ag-row .pf-rq2-who__name:has-text("Ms. Arya Stark"), pf-work-list .pf-wl__name:has-text("Ms. Arya Stark")').locator('visible=true')).toHaveCount(0);
         await row.click();
       }
     }
@@ -295,14 +297,19 @@ test.describe('pill fit', () => {
         await page.locator('.pf-work-hdr pf-segmented [data-seg-compact]').locator('visible=true').first().click();
         await page.getByRole('menuitemradio', { name: /^Outsourced/ }).locator('visible=true').first().click();
       }
-      const row = page.locator('.pf-out__row').locator('visible=true').first();
+      // New design (owner 2026-11-21, small-screens): Outsourced draws through the ONE shared work list — divider rows,
+      // status in words, the upload control at the row's right edge (the classic card rows are `.pf-out__row`).
+      const ROW = '[data-testid="out-list"] .pf-wl__row:not(.pf-wl__row--skel), .pf-out__row';
+      const row = page.locator(ROW).locator('visible=true').first();
       await expect(row).toBeVisible({ timeout: 20_000 });
-      const lay = await page.evaluate(() => Array.from(document.querySelectorAll<HTMLElement>('.pf-out__row')).filter(r => r.getBoundingClientRect().width > 0).map(r => {
-        const meta = r.querySelector('.pf-out__meta')!.getBoundingClientRect();
-        const acts = r.querySelector('.pf-out__acts')!.getBoundingClientRect();
-        return { ok: acts.top < meta.bottom && acts.bottom > meta.top, right: Math.round(r.getBoundingClientRect().right - acts.right) };
-      }));
-      expect(lay.every(l => l.ok), `frontdesk ${w}: upload button on the chip row ${JSON.stringify(lay)}`).toBe(true);
+      const lay = await page.evaluate(sel => Array.from(document.querySelectorAll<HTMLElement>(sel)).filter(r => r.getBoundingClientRect().width > 0).map(r => {
+        const rr = r.getBoundingClientRect();
+        const meta = (r.querySelector('.pf-wl__main, .pf-out__meta') as HTMLElement).getBoundingClientRect();
+        const acts = (r.querySelector('.pf-wl__act, .pf-out__acts') as HTMLElement).getBoundingClientRect();
+        // The upload control shares the row's text block (never alone on a line of its own) and stays inside the row.
+        return { ok: acts.width > 0 && acts.top < meta.bottom && acts.bottom > meta.top && acts.right <= rr.right + 0.5, right: Math.round(rr.right - acts.right) };
+      }), ROW);
+      expect(lay.every(l => l.ok), `frontdesk ${w}: upload button on the row's line, inside the row ${JSON.stringify(lay)}`).toBe(true);
       await shot(page, w, 'frontdesk-outsourced');
     }
   });

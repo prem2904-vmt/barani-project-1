@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { openEditorSection } from './support/test-editor-nav';
 import { test, expect, shotsDir, expectLayout, formFactor } from './support/form-factor';
-import { deskTab } from './support/frontdesk';
+import { deskTab, dispatchDrawnItem } from './support/frontdesk';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -188,14 +188,16 @@ async function openMoreIfFolded(page: Page, label: string) {
       await page.screenshot({ path: `${OUT}/a-collect-drawer-select-tubes.png` });
     });
 
-    test('b. front desk In progress: Collect and Dispatch side by side', async ({ page }) => {
+    test('b. front desk In progress: Collect is the Next step, Dispatch drawn tubes in the row menu', async ({ page }) => {
       await page.goto('/frontdesk');
       await page.getByPlaceholder(/Search patient/).locator('visible=true').first().waitFor({ timeout: 60_000 });
       await deskTab(page, 'In progress');
       await see(page, 'Nandini Rao', `fd-${vp}`);
       await light(page);
       await expectLayout(page, 'front desk');
-      await expect(page.locator('button[aria-label="Dispatch drawn tubes"]').locator('visible=true').first()).toBeVisible();
+      // Flow grid (approved 2026-11-19): ONE Next button per row (Collect) + the ⋯ menu with Dispatch drawn tubes.
+      await expect(page.locator('button[aria-label="Collect"]').locator('visible=true').first()).toBeVisible();
+      await expect(await dispatchDrawnItem(page, 'Nandini Rao')).toBeVisible();
       await page.waitForTimeout(500);
       await page.screenshot({ path: `${OUT}/b-frontdesk-collect-dispatch.png` });
       // The all-outsourced order is NOT listed under In progress.

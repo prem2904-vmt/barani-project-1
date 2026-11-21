@@ -143,9 +143,10 @@ async function openDesk(page: Page) {
   await expect(page.getByText('Priya Nair').locator('visible=true').first()).toBeVisible({ timeout: 20_000 });
 }
 
-/** The row's Share button (one per Completed row). */
+/** The row's Share button (one per Completed row): a grid row (`.pf-wrow`, ≥1024) or the shared work list's row
+ *  (`.pf-wl__row`, below 1024 — owner 2026-11-21, small-screens), which draws the same Next cell. */
 function shareButton(page: Page, name: string) {
-  return page.locator('.pf-wrow').filter({ hasText: name })
+  return page.locator('.pf-wrow, pf-work-list .pf-wl__row').filter({ hasText: name })
     .locator('button[aria-label="Share report"]').locator('visible=true').first();
 }
 

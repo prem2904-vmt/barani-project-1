@@ -1,5 +1,5 @@
 import type { Page, Request } from '@playwright/test';
-import { test, expect, shotsDir } from './support/form-factor';
+import { test, expect, shotsDir, hasCdp } from './support/form-factor';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
@@ -236,7 +236,8 @@ test('below 1280: hidden by default with chips; drawer opens, Esc / scrim / clos
   // open stays open after a reload (remembered for this tier)
   await toggle.click();
   await expect(drawer).toBeVisible();
-  await page.reload();
+  // openCollect's page.goto IS the fresh page load (a reload right before it raced the app's own start-up
+  // navigation on WebKit: "Frame load interrupted").
   const t2 = await openCollect(page);
   await expect(t2).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.pf-sc-side--drawer')).toBeVisible();
@@ -271,6 +272,7 @@ test('hold: the peek popover and the pour ghost sit next to the pointer (not the
   // press near the tile's top-left quarter, so the centre of the tile / screen is clearly elsewhere
   const x = Math.round(tb.x + tb.width * 0.3), y = Math.round(tb.y + tb.height * 0.35);
   const touch = (page.viewportSize()?.width ?? 0) < 1280 || !!test.info().project.use.hasTouch;
+  test.skip(touch && !hasCdp(), 'the touch hold is driven through CDP touch events (Chromium only)');
   const cdp = touch ? await page.context().newCDPSession(page) : null;
   const tStart = (px: number, py: number) => cdp!.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: px, y: py }] });
   const tMove = (px: number, py: number) => cdp!.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: px, y: py }] });

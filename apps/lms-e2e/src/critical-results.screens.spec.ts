@@ -131,7 +131,7 @@ for (const dark of [false, true]) {
       const vis = (e: Element) => (e as HTMLElement).getBoundingClientRect().width > 0;
       const vp = (document.querySelector('.pf-cr__main .ag-body-horizontal-scroll-viewport') ?? document.querySelector('.pf-cr__main .ag-center-cols-viewport') ?? document.querySelector('.pf-cr__main .ag-body-viewport')) as HTMLElement;
       const heads = [...document.querySelectorAll('.pf-cr__main .ag-header-cell-text')].filter(vis).map(h => ({ t: h.textContent, clipped: (h as HTMLElement).scrollWidth > (h as HTMLElement).clientWidth + 1 }));
-      const pills = [...document.querySelectorAll('.pf-cr__main .pf-cr-status')].filter(vis).map(x => { const r = x.getBoundingClientRect(); const lh = parseFloat(getComputedStyle(x).lineHeight) || 16; return { h: r.height, lh, w: r.width, cellW: (x.closest('.ag-cell') as HTMLElement).clientWidth }; });
+      const pills = [...document.querySelectorAll('.pf-cr__main .pf-cr-status, .pf-cr__main .pf-cr-word')].filter(vis).map(x => { const r = x.getBoundingClientRect(); const lh = parseFloat(getComputedStyle(x).lineHeight) || 16; return { h: r.height, lh, w: r.width, cellW: (x.closest('.ag-cell') as HTMLElement).clientWidth }; });
       const clippedCells = [...document.querySelectorAll('.pf-cr__main .ag-cell')].filter(vis).filter(c => (c as HTMLElement).scrollWidth > (c as HTMLElement).clientWidth + 1).length;
       return { scroll: vp.scrollWidth - vp.clientWidth, heads, pills, clippedCells, text: [...document.querySelectorAll('.pf-cr__main .ag-cell')].map(c => (c as HTMLElement).innerText).join(' | ') };
     });
@@ -150,7 +150,8 @@ for (const dark of [false, true]) {
       await expect(page.getByRole('menuitem', { name: /Communicate|Record communication/ }).locator('visible=true').first()).toBeVisible();
       await page.keyboard.press('Escape');
     } else {
-      await expect(page.locator('.pf-cr__main .pf-cr-status').filter({ hasText: "Not ack'd" }).locator('visible=true').first()).toBeVisible();
+      // Status words, not pills (owner design D, 2026-11-21): the phone Record cell's status is a `.pf-cr-word`.
+      await expect(page.locator('.pf-cr__main .pf-cr-word, .pf-cr__main .pf-cr-status').filter({ hasText: "Not ack'd" }).locator('visible=true').first()).toBeVisible();
     }
 
     // 2 — the status filter: vertical rows, none over the next label

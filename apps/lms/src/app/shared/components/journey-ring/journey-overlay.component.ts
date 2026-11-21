@@ -23,7 +23,7 @@ export const JOURNEY_FLIP_MS = 550;
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'pf-jov', '[class.pf-jov--on]': 'shown()', '[class.pf-jov--still]': 'still', '[class.pf-jov--stack]': 'stack()',
-    '(keydown)': 'onKey($event)', '(window:resize)': 'onResize()',
+    '(keydown)': 'onKey($event)', '(document:keydown.escape)': 'onDocEscape($event)', '(window:resize)': 'onResize()',
   },
   template: `
     @let d = detail();
@@ -161,6 +161,14 @@ export class JourneyOverlayComponent implements AfterViewInit, OnDestroy {
   onViewClick(e: MouseEvent): void {
     const t = e.target as HTMLElement;
     if (t === e.currentTarget || t.hasAttribute('data-close-zone')) this.close();
+  }
+
+  /** Esc closes even when focus is not inside the overlay yet (it moves to ✕ a frame after opening; Safari / Firefox
+   *  may leave it on the page) — release gate 2026-11-21. Inside, onKey already handled it. */
+  onDocEscape(e: Event): void {
+    if (e.defaultPrevented || this.closing) return;
+    e.preventDefault();
+    this.close();
   }
 
   onKey(e: KeyboardEvent): void {

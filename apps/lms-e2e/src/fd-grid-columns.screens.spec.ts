@@ -328,7 +328,11 @@ test.describe('Settings › Front desk › Work grid columns', () => {
     const menu = page.locator(`${DESK} [data-fd-menu]`).locator('visible=true').first();
     if (await menu.count()) {
       const hid = (await menu.getAttribute('data-fd-menu'))!;
-      await menu.locator('button').click();
+      // A plain click on the label sorts and never opens the Column menu (its invisible backdrop used to eat the next click).
+      await menu.click();
+      await expect(page.locator('.pf-am-backdrop')).toHaveCount(0);
+      // The Column menu opens on a right-click (press-and-hold on touch, ContextMenu / Shift+F10 on the focused header).
+      await menu.click({ button: 'right' });
       await page.getByRole('menuitem', { name: /Hide column/ }).locator('visible=true').first().click();
       await expect.poll(() => deskColumns(page)).not.toContain(hid);
       await shots(page, '04-frontdesk-staff-hid-column');
@@ -338,7 +342,7 @@ test.describe('Settings › Front desk › Work grid columns', () => {
       // Show it again from another column's menu (when another movable column is on show).
       const other = page.locator(`${DESK} [data-fd-menu]`).locator('visible=true').first();
       if (await other.count()) {
-        await other.locator('button').click();
+        await other.click({ button: 'right' });
         await page.getByRole('menuitem', { name: /Show the hidden column/ }).locator('visible=true').first().click();
         await expect.poll(() => deskColumns(page)).toContain(hid);
       }

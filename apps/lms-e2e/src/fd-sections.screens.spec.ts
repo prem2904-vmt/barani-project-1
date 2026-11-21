@@ -245,7 +245,14 @@ async function expectGridsClean(page: Page, tag: string) {
 
 /** Every section hugs its rows (its last row ends where the section ends) and the next header starts right there. */
 async function expectSectionsHug(page: Page, tag: string) {
-  const r = await page.evaluate(() => {
+  // A width change re-wraps rows and AG-Grid re-measures auto-height rows a few frames later: let the sections settle
+  // (up to ~3 s) before judging, so a 1–2 px mid-reflow reading is not reported (release gate 2026-11-21).
+  let r = await measureHug(page);
+  for (let i = 0; i < 8 && r.out.length; i++) { await page.waitForTimeout(400); r = await measureHug(page); }
+  expect(r.out, `${tag} (${r.n.join(' ')}) at ${projectName()}`).toEqual([]);
+}
+async function measureHug(page: Page) {
+  return page.evaluate(() => {
     const out: string[] = [];
     const secs = Array.from(document.querySelectorAll<HTMLElement>('.fd-sec')).filter(s => s.getBoundingClientRect().height > 0);
     secs.forEach((sec, i) => {
@@ -262,7 +269,6 @@ async function expectSectionsHug(page: Page, tag: string) {
     });
     return { out, n: secs.map(s => `${s.dataset['sec']}:${s.querySelectorAll('.ag-row[row-id]').length}`) };
   });
-  expect(r.out, `${tag} (${r.n.join(' ')}) at ${projectName()}`).toEqual([]);
 }
 
 /** Token · Patient · Waiting · Next start at the same x in every section (shown columns only). */

@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { test, expect, isPhone, expectNoHorizontalScroll, projectName } from './support/form-factor';
+import { test, expect, isPhone, expectNoHorizontalScroll, projectName, belowGrid } from './support/form-factor';
 import { resetNeg, installNegBackend, go, neg, visible } from './support/neg-backend';
 
 /**
@@ -138,7 +138,7 @@ for (const dark of [false, true]) {
   const mode = dark ? 'dark' : 'light';
 
   test(`layout: side card left + same height, grid columns, status dots, Unpaid under the pill (${mode})`, async ({ page }, info) => {
-    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
+    test.skip(belowGrid(), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones get the two-line rows');
     await open(page, dark);
     await pick(page, 'All');
@@ -231,7 +231,7 @@ for (const dark of [false, true]) {
   });
 
   test(`partial order expands inline with Generate partial PDF at the top (${mode})`, async ({ page }, info) => {
-    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
+    test.skip(belowGrid(), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones: the sheet carries the breakdown');
     await open(page, dark);
     await pick(page, 'Partial');
@@ -342,7 +342,7 @@ test('1720px: all seven columns, Order + Generated on one line, the daily chip w
 
 for (const dark of [false, true]) {
   test(`scrolled: rows never show through the header (${dark ? 'dark' : 'light'})`, async ({ page }, info) => {
-    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
+    test.skip(belowGrid(), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones: the list');
     EXTRA = Array.from({ length: 30 }, (_, i) => rep(40 + i, `Ms. Scroll Patient ${i + 1}`, 30 + (i % 40), i % 2 ? 'F' : 'M', 'pending'));
     await open(page, dark);
@@ -364,7 +364,7 @@ for (const dark of [false, true]) {
 
 for (const dark of [false, true]) {
   test(`TO SEND: the To send rows filter the grid; Send / Retry ride in the row (${dark ? 'dark' : 'light'})`, async ({ page }, info) => {
-    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
+    test.skip(belowGrid(), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones: a tap opens the row sheet (Share on WhatsApp)');
     await open(page, dark);
     if (isNarrow(page)) {
@@ -404,7 +404,7 @@ for (const dark of [false, true]) {
 }
 
 test('actions keep their behaviour: View opens the report, ⋯ lists every action, Share ▾ offers the channels', async ({ page }) => {
-  test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
+  test.skip(belowGrid(), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
   test.skip(isPhone(), 'phones: the sheet');
   await open(page, false);
   await pick(page, 'All');

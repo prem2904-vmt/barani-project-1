@@ -139,6 +139,9 @@ async function checkGrid(page: Page, grid: Locator, name: string, cols: ColCheck
     const label = h.locator('.ag-header-cell-text');
     await label.click();
     await expect.poll(() => ariaSort(grid, c.col), { message: `${name}/${c.col} asc` }).toBe('ascending');
+    // A sort click never leaves a menu / backdrop mounted over the header (release gate 2026-11-21: the staff
+    // "Column" menu opened on every label click and its invisible backdrop swallowed the next click).
+    await expect(page.locator('.pf-am-backdrop'), `${name}/${c.col}: no menu backdrop after a sort click`).toHaveCount(0);
     expectOrdered(`${name}/${c.col}`, await columnTexts(grid, c.col, c.sel), c, 'asc');
     // The header words are never cut, even with the arrow showing.
     const cut = await label.evaluate(e => (e.scrollWidth > e.clientWidth + 1 ? `${e.textContent} ${e.scrollWidth}>${e.clientWidth}` : ''));
@@ -280,11 +283,24 @@ async function labTab(page: Page, label: string) {
   if (await compact.count()) { await compact.click(); await page.getByRole('menuitemradio', { name: new RegExp(`^${label}`) }).locator('visible=true').first().click(); }
 }
 
+/** Below 1024px (iPad portrait, phone) the approved design draws work lists through the shared <pf-work-list> (owner
+ *  2026-11-21, small-screens), not a grid: there are no headers to sort. Assert the list is there with rows, then skip
+ *  the grid-only checks. True = handled (skip). */
+async function sharedListBelow1024(page: Page, path: string): Promise<boolean> {
+  if ((page.viewportSize()?.width ?? 0) >= 1024) return false;
+  await go(page, path);
+  await expect(page.locator('pf-work-list .pf-wl__row').locator('visible=true').first(), `${path}: <1024 shows the shared work list`).toBeVisible({ timeout: 60_000 });
+  expect(await page.locator('.ag-root').locator('visible=true').count(), `${path}: <1024 has no AG-Grid`).toBe(0);
+  test.info().annotations.push({ type: 'form-factor', description: 'below 1024px: the shared work list (no grid headers to sort)' });
+  return true;
+}
+
 test.describe('lab work grids', () => {
   test.beforeEach(async ({ page, context }) => { test.setTimeout(420_000); focus = 'sample'; await labBackend(page, context); });
 
   test('My Work · Queue · Completed · Culture — every column sorts on the real value', async ({ page }) => {
     if (isPhone()) { test.info().annotations.push({ type: 'form-factor', description: 'phones have card rows (no headers)' }); return; }
+    if (await sharedListBelow1024(page, '/lab/my-work')) return;
     await go(page, '/lab/my-work');
     const grid = page.locator('[data-testid="mw-grid"]').locator('visible=true').first();
     await expect(grid.locator('.ag-row').first()).toBeVisible({ timeout: 60_000 });
@@ -326,8 +342,9 @@ test.describe('lab work grids', () => {
   });
 
   test('My Work patient focus — every column sorts; inline tubes stay under their patient', async ({ page }) => {
-    if (isPhone()) return;
+    if (isPhone()) return;   // phones: card rows (no headers)
     focus = 'patient';
+    if (await sharedListBelow1024(page, '/lab/my-work')) return;
     await go(page, '/lab/my-work');
     const grid = page.locator('[data-testid="mw-grid"]').locator('visible=true').first();
     await expect(grid.locator('.ag-row').first()).toBeVisible({ timeout: 60_000 });
@@ -351,7 +368,8 @@ test.describe('lab work grids', () => {
   });
 
   test('Pathologist — every column sorts on the real value', async ({ page }) => {
-    if (isPhone()) return;
+    if (isPhone()) return;   // phones: card rows (no headers)
+    if (await sharedListBelow1024(page, '/pathologist')) return;
     await go(page, '/pathologist');
     const grid = page.locator('[data-testid="pv-grid"]').locator('visible=true').first();
     await expect(grid.locator('.ag-row').first()).toBeVisible({ timeout: 60_000 });
@@ -393,6 +411,7 @@ test('Results — every column sorts on the real value', async ({ page, context 
     return route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({ success: true, data: {
       items: REPORTS, total: REPORTS.length, page: 1, pageSize: 50, hasMore: false, counts: { all: REPORTS.length, pending: n('pending'), delivered: n('delivered'), failed: n('failed') } } }) });
   });
+  if (await sharedListBelow1024(page, '/reports')) return;
   await go(page, '/reports');
   const grid = page.locator('[data-testid="rq-main"] pf-data-grid').locator('visible=true').first();
   await expect(grid.locator('.ag-row').first()).toBeVisible({ timeout: 60_000 });

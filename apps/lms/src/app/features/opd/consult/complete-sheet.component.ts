@@ -166,7 +166,10 @@ export function deskDueText(billing: ConsultBilling | null, procTotal: number): 
     </aside>
   `,
   styles: [`
-    :host { position: fixed; inset: 0; z-index: 1100; }
+    /* Ends ABOVE the bottom nav (owner rule: the nav is always visible, layouts fit above it). With inset: 0 the
+       footer (Keep editing / Complete & send) sat under the nav bar — the page's stacking context is below the nav,
+       so no z-index can lift it (release gate 2026-11-21). */
+    :host { position: fixed; inset: 0 0 var(--pf-nav-h, 0px) 0; z-index: 1100; }
     .cs-back { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.32); animation: cs-fade 200ms ease both; }
     .cs { position: absolute; top: 12px; right: 12px; bottom: 12px; width: min(440px, calc(100vw - 24px)); display: flex; flex-direction: column;
       border-radius: 18px; background: var(--pf-card-bg); border: 1px solid var(--pf-line); box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
@@ -202,7 +205,7 @@ export function deskDueText(billing: ConsultBilling | null, procTotal: number): 
     .cs__foot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 16px 16px; border-top: 1px solid var(--pf-line); }
     @media (max-width: 640px) {
       .cs { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 92dvh; border-radius: 20px 20px 0 0;
-        animation-name: cs-up; padding-bottom: env(safe-area-inset-bottom); }
+        animation-name: cs-up; max-height: calc(100% - 8px); padding-bottom: max(0px, calc(env(safe-area-inset-bottom) - var(--pf-nav-h, 0px))); }
       @keyframes cs-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
       .cs__handle { display: block; width: 40px; height: 5px; margin: 8px auto 0; border-radius: 999px; background: var(--pf-line); }
     }

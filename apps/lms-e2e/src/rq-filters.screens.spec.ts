@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { test, expect, isPhone, isTouch, expectNoHorizontalScroll, projectName } from './support/form-factor';
+import { test, expect, isPhone, isTouch, expectNoHorizontalScroll, projectName, belowGrid } from './support/form-factor';
 import { resetNeg, installNegBackend, go, neg, visible } from './support/neg-backend';
 
 /**
@@ -129,7 +129,7 @@ for (const dark of [false, true]) {
   const mode = dark ? 'dark' : 'light';
 
   test(`Filters card: dates, status + To send breakdowns, doctor / channel selects; head "N of M" + Send all (${mode})`, async ({ page }, info) => {
-    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
+    test.skip(belowGrid(), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     await open(page, dark);
     await expect(names(page).first()).toBeVisible({ timeout: 30_000 });
     // The old To send card, chip and status menu are gone.
@@ -206,7 +206,7 @@ for (const dark of [false, true]) {
   });
 
   test(`To send: the group filters the grid; Retry / Send ride in the row; Send all in the head (${mode})`, async ({ page }, info) => {
-    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
+    test.skip(belowGrid(), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones: a row tap opens its sheet (Share on WhatsApp)');
     await open(page, dark);
     const c = await card(page);
@@ -237,7 +237,7 @@ for (const dark of [false, true]) {
 for (const dark of [false, true]) {
   const mode = dark ? 'dark' : 'light';
   test(`column filters in the header: funnels visible, Status bound to the card, Patient text filter, alignment (${mode})`, async ({ page }, info) => {
-    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
+    test.skip(belowGrid(), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones: two-line rows (no grid header)');
     await open(page, dark);
     await expect(names(page).first()).toBeVisible({ timeout: 30_000 });

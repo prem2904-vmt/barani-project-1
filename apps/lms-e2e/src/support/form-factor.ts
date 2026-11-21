@@ -124,6 +124,12 @@ export const isPhone = (): boolean => formFactor() === 'phone';
 export const isTablet = (): boolean => formFactor() === 'tablet';
 /** Phone or tablet: a finger, the touch layout (html.device-touch), the share sheet / wa.me for WhatsApp. */
 export const isTouch = (): boolean => isPhone() || isTablet();
+/** Below 1024px (phone, iPad portrait — on any engine): work lists are the shared <pf-work-list>, not a grid
+ *  (owner 2026-11-21, small-screens). Use this instead of matching project names, which misses phone-webkit /
+ *  tablet-webkit. */
+export const belowGrid = (): boolean => isPhone() || (isTablet() && orientation() === 'portrait');
+/** Chromium-only tooling (CDP touch events): webkit / firefox projects skip those steps. */
+export const hasCdp = (): boolean => engine() === 'chromium';
 export const isDesktopApp = (): boolean => formFactor() === 'desktop-app';
 /** The web app in a desktop browser (not the desktop app). */
 export const isDesktopWeb = (): boolean => formFactor() === 'desktop';

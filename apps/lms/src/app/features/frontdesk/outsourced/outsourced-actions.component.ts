@@ -112,7 +112,7 @@ import {
   styles: [`
     :host { display: contents; }
     .pf-out-acts__file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-    .pf-out-acts { display: flex; align-items: center; gap: 6px; }
+    .pf-out-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
     .pf-out-acts--compact { flex: none; }
     .pf-out-acts__primary { height: 44px; min-height: 44px; padding: 0 14px; font-size: 13px; white-space: nowrap; color: var(--violet-text, var(--text-primary)); }
     :host ::ng-deep .pf-out-acts__more { width: 44px; height: 44px; min-height: 44px; }
