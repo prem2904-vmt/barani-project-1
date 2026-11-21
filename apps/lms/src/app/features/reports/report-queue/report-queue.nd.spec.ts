@@ -221,7 +221,7 @@ describe('Reports v2 — frame: band = lab + search, STATUS side card LEFT, repo
     expect(el.querySelector('.pf-rq-stats, .pf-rq-stat, .pf-rq-statbtn, .pf-rq-filter-m, [data-testid="rq-filter"]')).toBeNull();
   });
 
-  it('FILTERS side card (LEFT): Dates (IST) · Status (Completed · Partial · Delivered, dot + count + share) · To send', async () => {
+  it('FILTERS side card (LEFT): Dates (IST) · Status (Ready · Partial · Delivered, dot + count + share) · To send', async () => {
     const { el, c } = await render({ wa: { r1: { id: 'm1', reportId: 'r1', trigger: 'auto', kind: 'report_ready', status: 'held', attempts: 0, createdAt: '2026-09-26T13:08:00Z' } } });
     const side = el.querySelector('[data-testid="rq-side"]') as HTMLElement;
     expect(side.tagName).toBe('ASIDE');
@@ -232,9 +232,9 @@ describe('Reports v2 — frame: band = lab + search, STATUS side card LEFT, repo
     expect(presets.map(b => b.textContent!.trim())).toEqual(['All', 'Today', '7 days', 'This month']);
     expect(presets[0].getAttribute('aria-checked')).toBe('true');
     expect(side.querySelectorAll('pf-date').length).toBe(2);
-    // Status breakdown: dot · name · count + a share bar; the default (Completed) is pressed.
+    // Status breakdown: dot · name · count + a share bar; the default (Ready) is pressed.
     const st = [...side.querySelectorAll<HTMLElement>('[data-testid="rq-statuses"] button')];
-    expect(st.map(b => b.querySelector('.pf-rq2-f__totname')!.textContent!.trim())).toEqual(['Completed', 'Partial', 'Delivered']);
+    expect(st.map(b => b.querySelector('.pf-rq2-f__totname')!.textContent!.trim())).toEqual(['Ready', 'Partial', 'Delivered']);
     expect(st.map(b => b.querySelector('.pf-rq2-f__totn')!.textContent!.trim())).toEqual(['2', '2', '1']);
     expect(st.map(b => (b.querySelector('.pf-rq2-dot') as HTMLElement).style.background)).toEqual(['var(--violet-text)', 'var(--sky-text)', 'var(--green-text)']);
     expect(st.map(b => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false']);
@@ -287,7 +287,7 @@ describe('Reports v2 — frame: band = lab + search, STATUS side card LEFT, repo
   it('Send all asks first (count + who is skipped) through DialogService, then sends each one with the fake sender', async () => {
     const r = await render({ waCloud: true, apiGet: (url: string) => url === '/api/whatsapp/reports/r1' ? { patientOptOut: true } : undefined });
     await settle(r.f);
-    await r.tab('all');   // Send all covers the CURRENT filter; r4 (failed) is not "Completed"
+    await r.tab('all');   // Send all covers the CURRENT filter; r4 (failed) is not "Ready"
     const dialog = TestBed.inject(DialogService) as any;
     const send = vi.spyOn(r.c.waSend, 'send').mockResolvedValue({ status: 'sent' } as never);
     // Cancel: nothing goes out.
@@ -342,8 +342,8 @@ describe('Reports v2 — frame: band = lab + search, STATUS side card LEFT, repo
     const { el, tab, c, f } = await render();
     const head = el.querySelector('[data-testid="rq-main"] .pf-card__head') as HTMLElement;
     expect(head.querySelector('.pf-card__label')!.textContent!.trim()).toBe('Reports');
-    expect(head.querySelector('[data-testid="rq-scope"]')!.textContent!.trim()).toBe('Completed');
-    // A filter is on (Completed, the default): "2 of 6" = what it matches of everything in the queue.
+    expect(head.querySelector('[data-testid="rq-scope"]')!.textContent!.trim()).toBe('Ready');
+    // A filter is on (Ready, the default): "2 of 6" = what it matches of everything in the queue.
     expect(head.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('2 of 6');
     const gen = head.querySelector('.pf-rq-generate') as HTMLElement;
     expect(gen.classList).toContain('pf-btn--secondary');
@@ -446,7 +446,7 @@ describe('Reports v2 — status: ONE neutral pill with a coloured dot; "Unpaid" 
     }
   });
 
-  it('labels on All: Completed (violet), Partial (sky) for a preliminary, Delivered (green), Failed (rose); Unpaid under r1', async () => {
+  it('labels on All: Ready (violet), Partial (sky) for a preliminary, Delivered (green), Failed (rose); Unpaid under r1', async () => {
     const { el, tab } = await render();
     await tab('all');
     const rows = reportRows(el);
@@ -455,7 +455,7 @@ describe('Reports v2 — status: ONE neutral pill with a coloured dot; "Unpaid" 
       return [p.textContent!.trim(), p.getAttribute('data-status'), (p.querySelector('.pf-rq2-dot') as HTMLElement).style.background];
     });
     expect(got).toEqual([
-      ['Completed', 'completed', 'var(--violet-text)'], ['Partial', 'partial', 'var(--sky-text)'],
+      ['Ready', 'completed', 'var(--violet-text)'], ['Partial', 'partial', 'var(--sky-text)'],
       ['Delivered', 'delivered', 'var(--green-text)'], ['Failed', 'failed', 'var(--rose-text)'],
     ]);
     // r1's bill is due → "Unpaid" is a quiet line inside the status cell, AFTER the pill (a column), never a pill.
@@ -463,7 +463,7 @@ describe('Reports v2 — status: ONE neutral pill with a coloured dot; "Unpaid" 
     expect([...st.children].map(c => c.className)).toEqual(['pf-rq2-pill', 'pf-rq2-unpaid']);
     expect(st.querySelector('.pf-rq2-unpaid')!.textContent!.trim()).toBe('Unpaid');
     expect(rows.slice(1).some(r => r.querySelector('.pf-rq2-unpaid'))).toBe(false);
-    expect(rows[1].textContent).not.toContain('Completed');
+    expect(rows[1].textContent).not.toContain('Ready');
   });
 
   it('a delivered preliminary keeps "Preliminary" in the Sent cell; delivered/failed say what happened', async () => {
@@ -486,11 +486,11 @@ describe('Reports v2 — status: ONE neutral pill with a coloured dot; "Unpaid" 
   });
 
   it('queueStatus + reportStatus', () => {
-    expect(queueStatus('pending', 'final', false)).toEqual({ key: 'completed', label: 'Completed', unpaid: false, prelim: false });
+    expect(queueStatus('pending', 'final', false)).toEqual({ key: 'completed', label: 'Ready', unpaid: false, prelim: false });
     expect(queueStatus('pending', 'partial', true)).toEqual({ key: 'partial', label: 'Partial', unpaid: true, prelim: true });
     expect(queueStatus('delivered', 'partial', true)).toMatchObject({ key: 'delivered', unpaid: true, prelim: true });
     expect(queueStatus('failed', 'final', false)).toMatchObject({ key: 'failed', label: 'Failed' });
-    expect(reportStatus('pending', 'final', false)).toMatchObject({ label: 'Completed', tone: 'green', extra: [] });
+    expect(reportStatus('pending', 'final', false)).toMatchObject({ label: 'Ready', tone: 'green', extra: [] });
     expect(reportStatus('pending', 'partial', true)).toMatchObject({ label: 'Unpaid', tone: 'red', extra: ['Preliminary'] });
     expect(reportStatus('delivered', 'partial', true)).toMatchObject({ label: 'Delivered', extra: ['Preliminary', 'Payment due'] });
   });
@@ -617,7 +617,7 @@ describe('Reports v2 — narrow (≤900px) and phone (≤640px)', () => {
     const btn = el.querySelector('pf-hero-band [data-testid="rq-filters-btn"]') as HTMLButtonElement;
     expect(btn.closest('.pf-hb__inline')).not.toBeNull();     // INSIDE the search field
     expect(btn.querySelector('.pf-rq2-filter__t')!.textContent!.trim()).toBe('Filters');
-    expect(btn.querySelector('[data-testid="rq-filters-n"]')!.textContent!.trim()).toBe('1');   // Completed (the default)
+    expect(btn.querySelector('[data-testid="rq-filters-n"]')!.textContent!.trim()).toBe('1');   // Ready (the default)
     expect(btn.getAttribute('aria-label')).toBe('Filters, 1 on');
     expect(btn.getAttribute('aria-expanded')).toBe('false');
     btn.click(); f.detectChanges(); await settle(f);
@@ -653,7 +653,7 @@ describe('Reports v2 — narrow (≤900px) and phone (≤640px)', () => {
     expect(rows.length).toBe(6);   // 2 partly-reported orders + 4 reports
     const r1 = rows.find(r => r.getAttribute('data-status') === 'completed')!;
     expect(r1.querySelector('.pf-rq2-prow__l1 .pf-rq2-prow__name')!.textContent!.trim()).toBe(FULL_NAME);
-    expect(r1.querySelector('.pf-rq2-prow__l1 .pf-rq2-pill')!.textContent!.trim()).toBe('Completed');
+    expect(r1.querySelector('.pf-rq2-prow__l1 .pf-rq2-pill')!.textContent!.trim()).toBe('Ready');
     expect(r1.querySelector('.pf-rq2-prow__l2')!.textContent!.trim()).toBe('29/M · LAB-2609-000102 · ' + c.when('2026-09-26T13:07:00Z') + ' · Unpaid');
     expect(css()).toMatch(/\.pf-rq2-prow\s*\{[^}]*min-height: 64px/);
   });
@@ -664,7 +664,7 @@ describe('Reports v2 — narrow (≤900px) and phone (≤640px)', () => {
     const sheet = document.querySelector('[data-testid="rq-sheet"]') as HTMLElement;
     expect(sheet.getAttribute('role')).toBe('dialog');
     expect(sheet.querySelector('.pf-rq2-sheet__name')!.textContent!.trim()).toBe(FULL_NAME);
-    expect(sheet.querySelector('.pf-rq2-pill')!.textContent!.trim()).toBe('Completed');
+    expect(sheet.querySelector('.pf-rq2-pill')!.textContent!.trim()).toBe('Ready');
     expect(sheet.querySelector('.pf-rq2-sheet__unpaid')!.textContent).toContain('Unpaid');
     const prim = sheet.querySelectorAll('.pf-btn--primary');
     expect(prim.length).toBe(1);
@@ -1031,7 +1031,7 @@ describe('Reports list — server paging (DB optimisation phase 3)', () => {
   let cur: any;
   const settleP = async (f: any) => { await f.whenStable(); f.detectChanges(); };
 
-  it('asks for page 1 of the default (Completed) tab, 50 rows', async () => {
+  it('asks for page 1 of the default (Ready) tab, 50 rows', async () => {
     const { api } = await render({ paged: true });
     expect(queueUrls(api)[0]).toBe('/api/reports/queue?view=summary&page=1&pageSize=50&status=pending');
   });
@@ -1051,7 +1051,7 @@ describe('Reports list — server paging (DB optimisation phase 3)', () => {
     cur = c;
     expect(cards(el)).toBe(50);
     expect(el.querySelector('.pf-rq-more__btn, .pf-rq-more__count')).toBeNull();   // owner: nothing clickable at the bottom
-    // Completed (the default) matches the server's 120 of everything (120 reports + 2 partly-reported orders).
+    // Ready (the default) matches the server's 120 of everything (120 reports + 2 partly-reported orders).
     expect(el.querySelector('.pf-rq2-count')!.textContent!.trim()).toBe('120 of 122');
     expect(c.nextPageCount()).toBe(50);
     expect(primaries(el).length).toBe(0);   // still no primary on the page
@@ -1267,7 +1267,7 @@ describe('Results FILTERS (owner 2026-11-20, the Expenses filter card)', () => {
     expect(el.querySelector('[data-testid="rq-via"]')).toBeNull();
   });
 
-  it('Delivered via while the page holds no delivered row (Completed tab) but the queue has some: the app\'s channels', async () => {
+  it('Delivered via while the page holds no delivered row (Ready tab) but the queue has some: the app\'s channels', async () => {
     const { c } = await render({ paged: true, queue: [rep('p1', 'pending'), rep('d1', 'delivered', 'final', { deliveredVia: 'print' })], orders: [] });
     expect(c.items().map((r: any) => r.id)).toEqual(['p1']);
     expect(c.viaOptions().map((o: any) => o.label)).toEqual(['Any channel', 'WhatsApp', 'Print', 'Email', 'SMS']);
@@ -1319,7 +1319,7 @@ describe('Results FILTERS (owner 2026-11-20, the Expenses filter card)', () => {
     expect(urls).toContain('/api/reports/queue?view=summary&page=2&pageSize=50&status=all');
     expect(urls.some((u: string) => u.includes('page=3'))).toBe(false);   // page 2 already reached older reports
     expect(c.filter()).toBe('pending');
-    expect(ids(c).length).toBe(40);                                     // today's Completed (60 − 20 delivered)
+    expect(ids(c).length).toBe(40);                                     // today's Ready (60 − 20 delivered)
     expect(c.statusRows().map((r: any) => r.count)).toEqual([40, 0, 20]);
     // Clearing the dates goes back to the tab's own server status.
     c.setPreset('all'); f.detectChanges(); await settle(f);
@@ -1370,9 +1370,9 @@ describe('Results grid — column filters in the header + alignment (owner 2026-
       return { comp, changed };
     };
     const st = mk('status');
-    expect(st.comp.isFilterActive()).toBe(true);                          // Completed, the default
+    expect(st.comp.isFilterActive()).toBe(true);                          // Ready, the default
     expect(st.comp.current()).toBe('pending');
-    expect(st.comp.options().map(o => o.label)).toEqual(['All', 'Completed', 'Partial', 'Delivered', 'Not sent yet', 'WhatsApp failed']);
+    expect(st.comp.options().map(o => o.label)).toEqual(['All', 'Ready', 'Partial', 'Delivered', 'Not sent yet', 'WhatsApp failed']);
     st.comp.pick('delivered'); f.detectChanges(); await settle(f);
     expect(st.changed).toHaveBeenCalled();
     expect(c.filter()).toBe('delivered');                                  // the side card follows

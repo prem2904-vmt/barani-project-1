@@ -256,7 +256,7 @@ export class ReportViewerComponent implements OnInit {
     const st = this._report()?.deliveryStatus;
     if (st === 'delivered') return 'Delivered';
     if (st === 'failed') return 'Delivery failed';
-    return 'Completed';
+    return 'Ready';
   });
   readonly deliveryLine = computed(() => {
     const r = this._report();

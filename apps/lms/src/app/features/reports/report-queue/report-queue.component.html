@@ -111,7 +111,7 @@
                 <span class="pf-rq2-prow__txt">
                   <span class="pf-rq2-prow__l1">
                     <span class="pf-rq2-prow__name">{{ reportPatientName(row.r) }}</span>
-                    <span class="pf-rq2-pill" [attr.data-status]="st.key"><span class="pf-rq2-dot" [style.background]="statusDot(st.key)" aria-hidden="true"></span>{{ st.label }}</span>
+                    <span class="pf-rq2-pill" [attr.data-status]="st.key" [attr.title]="st.key === 'completed' ? 'Ready to send' : null" [attr.aria-label]="st.key === 'completed' ? 'Ready to send' : null"><span class="pf-rq2-dot" [style.background]="statusDot(st.key)" aria-hidden="true"></span>{{ st.label }}</span>
                   </span>
                   <span class="pf-rq2-prow__l2 pf-num">{{ phoneLine(row.r) }}@if (st.unpaid) {<span class="pf-rq2-unpaid"> · Unpaid</span>}</span>
                 </span>
@@ -305,7 +305,7 @@
     @if (row.kind === 'report') {
     @let st = rowStatus(row.r);
     <span class="pf-rq2-status">
-      <span class="pf-rq2-pill" [attr.data-status]="st.key"><span class="pf-rq2-dot" [style.background]="statusDot(st.key)" aria-hidden="true"></span>{{ st.label }}</span>
+      <span class="pf-rq2-pill" [attr.data-status]="st.key" [attr.title]="st.key === 'completed' ? 'Ready to send' : null" [attr.aria-label]="st.key === 'completed' ? 'Ready to send' : null"><span class="pf-rq2-dot" [style.background]="statusDot(st.key)" aria-hidden="true"></span>{{ st.label }}</span>
       @if (st.unpaid) { <span class="pf-rq2-unpaid">Unpaid</span> }
       @if (slimActs() && sentMeta(row.r); as sm) { <span class="pf-rq2-sentline">{{ sm }}</span> }
       @if (slimActs() && sendCtl(row.r); as x) { <ng-container *ngTemplateOutlet="sendCtlTpl; context: { $implicit: x }"></ng-container> }
@@ -551,7 +551,7 @@
       </div>
       @if (row.kind === 'report') {
       @let st = rowStatus(row.r);
-      <span class="pf-rq2-pill" [attr.data-status]="st.key"><span class="pf-rq2-dot" [style.background]="statusDot(st.key)" aria-hidden="true"></span>{{ st.label }}</span>
+      <span class="pf-rq2-pill" [attr.data-status]="st.key" [attr.title]="st.key === 'completed' ? 'Ready to send' : null" [attr.aria-label]="st.key === 'completed' ? 'Ready to send' : null"><span class="pf-rq2-dot" [style.background]="statusDot(st.key)" aria-hidden="true"></span>{{ st.label }}</span>
       } @else {
       <span class="pf-rq2-pill" data-status="partial"><span class="pf-rq2-dot" [style.background]="statusDot('partial')" aria-hidden="true"></span>Partial</span>
       }
@@ -644,9 +644,9 @@
         <span class="pf-rq-stat__label">Total</span>
         <span class="pf-rq-stat__value">{{ allCount() }}</span>
       </span>
-      <span class="pf-rq-stat" data-color="amber">
+      <span class="pf-rq-stat" data-color="violet">
         <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-        <span class="pf-rq-stat__label">Completed</span>
+        <span class="pf-rq-stat__label">Ready</span>
         <span class="pf-rq-stat__value">{{ counts().pending }}</span>
       </span>
       <span class="pf-rq-stat" data-color="sky">
@@ -702,8 +702,8 @@
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
         </button>
-        <button type="button" class="pf-rq-filticon" [class.is-active]="filter() === 'pending'" aria-label="Completed"
-          title="Completed" (click)="setFilter('pending')">
+        <button type="button" class="pf-rq-filticon" [class.is-active]="filter() === 'pending'" aria-label="Ready to send"
+          title="Ready to send" (click)="setFilter('pending')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -760,7 +760,7 @@
             <span class="pf-rq-card__meta pf-num">{{ po.patientMeta }}</span>
             <span class="pf-rq-card__meta pf-rq-card__count pf-num">{{ po.countLabel }}</span>
           </span>
-          <span class="pf-rq-status" data-status="preliminary" data-tone="amber">
+          <span class="pf-rq-status" data-status="preliminary" data-tone="sky">
             <span class="pf-rq-status__dot" aria-hidden="true"></span>
             Preliminary
           </span>
@@ -1097,9 +1097,9 @@
               <span class="pf-rq-stat__label">Total</span>
               <span class="pf-rq-stat__value">{{ counts().all }}</span>
             </span>
-            <span class="pf-rq-stat" data-color="amber">
+            <span class="pf-rq-stat" data-color="violet">
               <span class="pf-rq-stat__dot" aria-hidden="true"></span>
-              <span class="pf-rq-stat__label">Completed</span>
+              <span class="pf-rq-stat__label">Ready</span>
               <span class="pf-rq-stat__value">{{ counts().pending }}</span>
             </span>
             <span class="pf-rq-stat" data-color="sky">
