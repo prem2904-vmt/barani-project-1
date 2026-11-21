@@ -341,6 +341,13 @@
    --pf-sec-head-bg: #f3edfa;
    --pf-head-text: #4a4562;
    --pf-row-hover: rgba(124, 58, 237, 0.05);
+   --pf-row-hover-solid: #faf7fe;
+   --pf-row-selected-solid: #f3ecfd;
+   /* Floating surfaces (menus, dropdowns, popovers, dialogs, sheets, toasts, tooltips): near-opaque, never glass. */
+   --pf-float-bg: rgba(255, 255, 255, 0.97);
+   --pf-float-blur: blur(24px) saturate(140%);
+   --pf-float-edge: rgba(124, 58, 237, 0.12);
+   --pf-float-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset, 0 18px 48px rgba(76, 29, 149, 0.16), 0 2px 6px rgba(76, 29, 149, 0.08);
 
    /* Brand: gradient primary, violet-pink active pill, violet outline buttons. */
    --gradient-primary: linear-gradient(135deg, #c084fc, #7c3aed);

@@ -14,9 +14,11 @@
    which would move them. No `isolation` either (it would trap a card's
    popovers under the next card): the layer sits at z-index -1, under the
    panel's content, over the page's (transparent) ground. */
+// Floating surfaces (see the block below): never glass, even when they reuse .pf-card.
+$pf-floats: '.sm-panel, [data-start-menu], .pf-modal-centered, .pf-dh-card, .pf-dd__panel, [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]:not(pf-select *):not(.pf-dd *), [role="tooltip"], .pf-popover, .pf-pop, [class*="__pop"]:not([class*="__pop-"]), [class$="-pop"], .pf-menu, .pf-sheet, .pf-drawer, .pf-toast, .pf-jov__panel, .pf-bell-pop, .pf-ctx, .sm-ctx, .cdk-overlay-pane > *';
 $pf-light-panels: '.pf-card, .pf-rq-card, .pf-mw-pane, .pf-mw-rail, .pf-appt-split__pane, .pf-side-card, .pf-panel-glass';
 // Outer panels only: a card INSIDE a panel (Frontdesk's row cards, nested kit cards) stays as it is.
-$pf-light-not: ':not(.pf-ai-glow):not(:is(#{$pf-light-panels}) *)';
+$pf-light-not: ':not(.pf-ai-glow):not(:is(#{$pf-light-panels}) *):not(:is(#{$pf-floats})):not(:is(#{$pf-floats}) *)';
 
 /* Zero specificity: a panel that is already absolute / fixed / sticky keeps its own position. */
 :where(:root.light.design-new) :where(#{$pf-light-panels}) { position: relative; }
@@ -39,14 +41,16 @@ $pf-light-not: ':not(.pf-ai-glow):not(:is(#{$pf-light-panels}) *)';
   pointer-events: none;
 }
 
-/* ── AG-Grid on glass ───────────────────────────────────────────────────
-   Rows let the panel show through; the header row is lightly tinted and
-   OPAQUE; row lines visible; violet hover tint. */
+/* ── AG-Grid: OPAQUE inside the glass panel ───────────────────────────
+   Owner 2026-11-21: grids pin columns and scroll sideways, so every row,
+   cell, pinned container, full-width row, header and floating filter is
+   SOLID (scrolled cells must never show through a pinned column). Hover /
+   selection are opaque tints. Glass stays on the docked panel behind. */
 :root.light.design-new .ag-root-wrapper {
-  --ag-background-color: transparent;
-  --ag-odd-row-background-color: transparent;
-  --ag-data-background-color: transparent;
-  --ag-wrapper-background-color: transparent;
+  --ag-background-color: var(--pf-card-bg);
+  --ag-odd-row-background-color: var(--pf-card-bg);
+  --ag-data-background-color: var(--pf-card-bg);
+  --ag-wrapper-background-color: var(--pf-card-bg);
   --ag-chrome-background-color: var(--pf-head-bg);
   --ag-header-background-color: var(--pf-head-bg);
   --ag-header-text-color: var(--pf-head-text);
@@ -55,17 +59,49 @@ $pf-light-not: ':not(.pf-ai-glow):not(:is(#{$pf-light-panels}) *)';
   --ag-subtle-text-color: var(--text-secondary);
   --ag-border-color: var(--pf-line);
   --ag-row-border: 1px solid var(--pf-line);
-  --ag-row-hover-color: var(--pf-row-hover);
-  background: transparent;
+  --ag-row-hover-color: var(--pf-row-hover-solid);
+  --ag-selected-row-background-color: var(--pf-row-selected-solid);
+  --ag-pinned-row-background-color: var(--pf-card-bg);
 }
-:root.light.design-new .ag-header,
-:root.light.design-new .ag-header-viewport,
-:root.light.design-new .ag-header-row {
+/* AG-Grid 36 pins cells INSIDE each row (.ag-grid-pinned-left-cells / -right-cells, sticky); older names kept too. */
+$pf-ag-solid: '.ag-row, .ag-full-width-row, .ag-grid-pinned-left-cells, .ag-grid-pinned-right-cells, .ag-pinned-left-cols-container, .ag-pinned-right-cols-container, .ag-full-width-container, .ag-floating-top, .ag-floating-bottom, .ag-grid-pinned-top-rows, .ag-grid-pinned-bottom-rows, .ag-grid-sticky-top-rows-container, .ag-grid-sticky-bottom-rows-container';
+:root.light.design-new :is(#{$pf-ag-solid}) { background-color: var(--pf-card-bg); }
+:root.light.design-new .ag-row:is(.ag-row-hover, :hover):not(.ag-row-selected),
+:root.light.design-new .ag-row:is(.ag-row-hover, :hover):not(.ag-row-selected) :is(.ag-grid-pinned-left-cells, .ag-grid-pinned-right-cells) { background-color: var(--pf-row-hover-solid); }
+:root.light.design-new .ag-row.ag-row-selected,
+:root.light.design-new .ag-row.ag-row-selected :is(.ag-grid-pinned-left-cells, .ag-grid-pinned-right-cells) { background-color: var(--pf-row-selected-solid); }
+:root.light.design-new :is(.ag-header, .ag-header-viewport, .ag-header-row, .ag-header-container,
+  .ag-pinned-left-header, .ag-pinned-right-header, .ag-floating-filter, .ag-header-row-column-filter) {
   background-color: var(--pf-head-bg);
   color: var(--pf-head-text);
 }
 :root.light.design-new .ag-header-cell-text { color: var(--pf-head-text); font-weight: 600; }
 :root.light.design-new .pf-dg__skel { background: var(--pf-card-bg); }
+
+/* ── Floating surfaces: NEAR-OPAQUE, never glass ────────────────────────
+   Glass is ONLY for docked page panels. Everything that floats over the page
+   (Start / account menus, pf-select panels, popovers, row menus, dialogs,
+   sheets, drawers, toasts, tooltips, the journey card, the notification
+   panel) takes --pf-float-bg (~.97 white) + blur(24px) + the soft violet
+   shadow + a 1px edge, so nothing behind can be read through it. */
+:root.light.design-new :is(.sm-panel, .pf-modal-centered, .pf-dh-card, .pf-dd__panel, .pf-jov__panel, .sm-ctx, [role='menu'], [role='tooltip']) {
+  background-color: var(--pf-float-bg) !important;
+  background-image: none;
+  -webkit-backdrop-filter: var(--pf-float-blur);
+  backdrop-filter: var(--pf-float-blur);
+  border: 1px solid var(--pf-float-edge);
+  box-shadow: var(--pf-float-shadow);
+}
+:root.light.design-new :is(#{$pf-floats}) {
+  --bg-card: var(--pf-float-bg);
+  --card-bg: var(--pf-float-bg);
+  --glass-bg: var(--pf-float-bg);
+  --glass-bg-hover: var(--pf-float-bg);
+  --surface-1: var(--pf-float-bg);
+  --surface-2: var(--pf-float-bg);
+  --header-bg: var(--pf-float-bg);
+  --pf-band-bg-glass: var(--pf-float-bg);
+}
 
 /* ── Brand: active pills, nav, primary ──────────────────────────────── */
 :root.light.design-new .pf-mw-tab--on {
