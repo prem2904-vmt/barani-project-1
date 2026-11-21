@@ -283,7 +283,8 @@ describe('Prepare home', () => {
     await settle();
     expect(el.querySelectorAll('[data-drafts] [data-case]').length).toBe(2);
     expect(q('[data-drafts]')!.textContent).toContain('Case sheet');
-    expect(q('[data-draft-search]')).not.toBeNull();
+    expect(q('[data-draft-search]')).toBeNull();
+    expect(el.querySelector('pf-hero-band')!.innerHTML).toContain('Search drafts');
     expect(q('[data-only-dept]')).not.toBeNull();
     expect(localStorage.getItem('pf.prepare.tab')).toBe('continue');
     // this department only (ENT is open): only the ENT draft

@@ -100,11 +100,22 @@ test.describe('Prepare two-panel', () => {
     await main(page).locator('.pf-tp__head [data-tab="continue"]').click();
     await expect(main(page).locator('[data-drafts] [data-case="c1"]')).toContainText('Meenakshi Demo');
     await expect(main(page).locator('[data-drafts] [data-case="c1"]')).toContainText('Nose history');
-    await expect(main(page).locator('[data-draft-search]')).toBeVisible();
+    await expect(page.locator('[data-draft-search]')).toHaveCount(0);
+    const bandInput = page.locator('pf-hero-band .pf-hb__input');
+    await expect(bandInput).toHaveAttribute('placeholder', /Search drafts/);
     await expect(main(page).locator('[data-only-dept]')).toBeVisible();
     await shot(page, 'prepare-continue');
-    await main(page).locator('[data-draft-search]').fill('zzz');
+    await bandInput.fill('zzz');
     await expect(main(page).locator('[data-empty="drafts"]')).toContainText('No drafts to continue');
+    await bandInput.fill('Nose');
+    await expect(main(page).locator('[data-drafts] [data-case="c1"]')).toBeVisible();
+    // back on Case sheets the band searches departments again (the draft query does not leak)
+    await main(page).locator('.pf-tp__head [data-tab="sheets"]').click();
+    await expect(bandInput).toHaveAttribute('placeholder', /Search departments/);
+    await expect(bandInput).toHaveValue('');
+    await expect(page.locator('[data-testid="tp-item-ENT"]')).toBeVisible();
+    await main(page).locator('.pf-tp__head [data-tab="continue"]').click();
+    await expect(bandInput).toHaveValue('Nose');
     expect(errors).toEqual([]);
   });
 
