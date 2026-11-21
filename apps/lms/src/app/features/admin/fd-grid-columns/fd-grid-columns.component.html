@@ -47,7 +47,7 @@
         <span class="fdgc__pt">PREVIEW · {{ moduleLabel().toUpperCase() }}</span><span class="fdgc__sp"></span>
         @if (!loading()) { <span class="fdgc__cs" data-testid="fdgc-gcount">{{ countLabel() }}</span> }
       </div>
-      <div class="fdgc__gbox" #zone [style.height.px]="fitH()"  [class.fdgc__gbox--hot]="drag()?.on && drag()?.idx !== null" data-testid="fdgc-preview">
+      <div class="fdgc__gbox" #zone [style.height.px]="fitH()" (pointerover)="hover($event)" (pointerleave)="hovered.set(null)"  [class.fdgc__gbox--hot]="drag()?.on && drag()?.idx !== null" data-testid="fdgc-preview">
         <ng-template #skel>
           <div class="fdgc__skelgrid" aria-hidden="true">
             @for (r of [0, 1, 2, 3]; track r) { <div class="fdgc__skelrow" [class.fdgc__skelrow--head]="r === 0"><pf-skeleton variant="line" width="62%" height="11px"></pf-skeleton></div> }
@@ -59,14 +59,28 @@
           <!-- The real Frontdesk grid (its chunk loads once the page is idle; the skeleton holds its place). -->
           @defer (on idle) {
             <!-- Every column on show, scaled to fit the box (never clipped, never a sideways scroll). -->
-            <div class="fdgc__fit" #fit [style.width.px]="fitW()" [style.transform]="fitScale() < 1 ? 'scale(' + fitScale() + ')' : null">
-              <pf-fd-flow-grid class="pf-fd-flow fdgc__grid" [rows]="rows()" [columns]="order()" [module]="module()" [editing]="true" [noFold]="true"
-                [auto]="true" [context]="ctx" />
+            <div class="fdgc__fit" #fit [style.width.px]="fitW()" [attr.data-fd-scale]="fitScale().toFixed(2)"
+              [style.transform]="fitScale() < 1 ? 'scale(' + fitScale() + ')' : null">
+              <pf-fd-flow-grid class="pf-fd-flow fdgc__grid" [rows]="rows()" [columns]="plan().shown" [module]="module()" [editing]="true" [noFold]="true"
+                [tight]="plan().tight" [auto]="true" [context]="ctx" />
             </div>
           } @placeholder { <ng-container [ngTemplateOutlet]="skel" /> }
         }
         @if (drag()?.on && drag()?.idx !== null) { <div class="fdgc__bar" aria-hidden="true" [style.left.px]="drag()!.barLeft"></div> }
       </div>
+      @if (foldedLabels().length) {
+        <!-- Columns that do not fit the preview at a readable size: folded like the real Frontdesk (right-most first). -->
+        <div class="fdgc__folded" data-testid="fdgc-folded">
+          <span class="fdgc__folded-note">Narrow screens fold these into the patient line</span>
+          @for (f of foldedLabels(); track f.id) {
+            <span class="fdgc__fchip" [attr.data-fd-folded]="f.id">{{ f.label }}
+              <button type="button" class="fdgc__fchip-x" [attr.aria-label]="'Remove ' + f.label" title="Remove" (click)="remove(f.id)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+              </button>
+            </span>
+          }
+        </div>
+      }
       <p class="fdgc__fold"><b>Narrow screens:</b> columns on the right fold into the patient line first, so keep what matters most on the left.</p>
     </div>
   </div>

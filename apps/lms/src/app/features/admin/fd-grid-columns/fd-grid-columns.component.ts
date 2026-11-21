@@ -17,7 +17,7 @@ import {
   isDefaultFdColumns, moveFdColumn, readyFdColumns, removeFdColumn,
 } from '../../../shared/utils/fd-grid-columns';
 import { FlowGridComponent } from '../../frontdesk/frontdesk-landing/flow-grid/flow-grid.component';
-import { agColsOf } from '../../frontdesk/frontdesk-landing/flow-grid/flow-columns';
+import { agColsOf, fdIdOfAgCol, fdPreviewPlan } from '../../frontdesk/frontdesk-landing/flow-grid/flow-columns';
 import type { FlowColumnEdit } from '../../frontdesk/frontdesk-landing/flow-grid/flow-cells';
 import { previewContext, previewRows } from './preview-rows';
 
@@ -76,10 +76,24 @@ export class FdGridColumnsComponent implements OnInit {
   /** The preview box's inner width and the grid's laid-out height (both measured). */
   private readonly boxW = signal(0);
   private readonly gridH = signal(0);
-  /** The grid lays out at its natural width (every column at its minimum, more when the box is wider)… */
-  readonly fitW = computed(() => Math.max(this.boxW(), (this.grid()?.minTotal() ?? 0) + 4) || null);
-  /** …and is scaled down to the box when that is wider than the box. */
-  readonly fitScale = computed(() => { const w = this.fitW(), b = this.boxW(); return w && b && w > b ? b / w : 1; });
+  /** The column kept on show while the preview folds (owner 2026-11-21): being dragged, else just added, else hovered. */
+  private readonly lastAdded = signal<string | null>(null);
+  readonly hovered = signal<string | null>(null);
+  readonly pin = computed(() => (this.drag()?.on && this.drag()?.src === 'grid' ? this.drag()!.id : null) ?? this.lastAdded() ?? this.hovered());
+  /** What the preview shows at ≥85% scale; the rest folds into the patient line like the real Frontdesk (right-most first). */
+  readonly plan = computed(() => fdPreviewPlan(this.module(), this.order(), this.boxW(), { pin: this.pin() }));
+  readonly foldedLabels = computed(() => this.plan().folded.map(id => ({ id, label: this.label(id) })));
+  /** Scale: 1 while every shown column fits; else down to the box, never below 85% unless the pinned column forces it
+   *  (the plan folds the rest first). */
+  readonly fitScale = computed(() => {
+    const b = this.boxW(), need = (this.grid()?.minTotal() ?? 0) + 4;
+    if (!b || need <= b) return 1;
+    const fit = b / need;
+    return fit < 0.85 ? fit : 0.85;   // 85% leaves the flexible columns room; below it only when the pinned column forces it
+  });
+  /** The grid lays out at box ÷ scale (≥ its minimums), so its flexible columns share any room left — never at a
+   *  cramped floor. */
+  readonly fitW = computed(() => { const b = this.boxW(); if (!b) return null; const need = (this.grid()?.minTotal() ?? 0) + 4; return Math.max(need, Math.floor(b / this.fitScale())); });
   /** The box takes the scaled height (a transform does not change layout). */
   readonly fitH = computed(() => (this.gridH() && this.fitScale() < 1 ? Math.ceil(this.gridH() * this.fitScale()) + 2 : null));
 
@@ -169,6 +183,7 @@ export class FdGridColumnsComponent implements OnInit {
   add(id: string): void {
     if (!this.palette().ready.some(c => c.id === id)) return;
     this.order.set(addFdColumn(this.module(), this.order(), id));
+    this.lastAdded.set(id);
     this.say(`${this.label(id)} added`);
   }
 
@@ -176,12 +191,14 @@ export class FdGridColumnsComponent implements OnInit {
     const before = this.order();
     const i = before.indexOf(id);
     this.order.set(removeFdColumn(this.module(), before, id));
+    if (this.lastAdded() === id) this.lastAdded.set(null);
     if (this.order().length !== before.length) this.say(`${this.label(id)} removed`);
     if (focusNext) this.focusHead(this.order()[Math.min(i, this.order().length - 2)] ?? null);
   }
 
   /** Reset to default (Save keeps it). */
   reset(): void {
+    this.lastAdded.set(null);
     this.order.set(defaultFdColumns(this.module()));
     this.say('Default columns back. Save to keep.');
   }
@@ -318,6 +335,7 @@ export class FdGridColumnsComponent implements OnInit {
     if (d.idx !== null) {
       const before = this.order();
       this.order.set(insertFdColumn(this.module(), before, d.id, d.idx));
+      this.lastAdded.set(d.id);
       if (d.src === 'pal') this.say(`${this.label(d.id)} added`);
       else if (before.join() !== this.order().join()) this.say(`${this.label(d.id)} moved to position ${this.order().indexOf(d.id) + 1} of ${this.order().length}`);
       return;
@@ -332,6 +350,13 @@ export class FdGridColumnsComponent implements OnInit {
     window.removeEventListener('pointermove', this.onMove);
     window.removeEventListener('pointerup', this.onUp);
     window.removeEventListener('pointercancel', this.onCancel);
+  }
+
+  /** Pointer over a preview header: that column stays on show while it is hovered. */
+  hover(ev: PointerEvent): void {
+    const cell = (ev.target as HTMLElement | null)?.closest?.('.ag-header-cell[col-id]');
+    const id = cell ? fdIdOfAgCol(cell.getAttribute('col-id') ?? '') : null;
+    if (id !== this.hovered()) this.hovered.set(id);
   }
 
   /** The header being dragged reads faded (its AG header cells). */

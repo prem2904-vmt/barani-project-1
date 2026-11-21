@@ -42,7 +42,7 @@ export interface FdFlowLayout {
  * columns take what is left, right-most out first; if even that does not fit, the remaining fixed steps fold too.
  */
 export function fdFlowLayout(width: number, module: FdModule, ids: readonly string[],
-  opts: { selecting?: boolean; tokenW?: number; noFold?: boolean; section?: boolean } = {}): FdFlowLayout {
+  opts: { selecting?: boolean; tokenW?: number; noFold?: boolean; tight?: boolean; section?: boolean } = {}): FdFlowLayout {
   const tw = opts.tokenW ?? FLOW_MIN.token;
   const hasWhere = ids.includes('where');
   const hasWait = ids.includes('waiting');
@@ -53,7 +53,7 @@ export function fdFlowLayout(width: number, module: FdModule, ids: readonly stri
     + (hasWait && !f.has('wait') ? FLOW_MIN.wait : 0)
     + (f.has('tight') ? FLOW_MIN.nextTight : FLOW_MIN.next);
   const midNeed = () => mid.reduce((s, id) => s + (id === 'payment' ? FLOW_MIN.pay : fdColumn(module, id)?.min ?? 100), 0);
-  if (opts.noFold) { const none = new Set<FlowFoldStep>(); return { fold: none, mid, need: fixed(none) + midNeed() }; }
+  if (opts.noFold) { const f = new Set<FlowFoldStep>(opts.tight ? ['tight'] : []); return { fold: f, mid, need: fixed(f) + midNeed() }; }
   const tightSaves = (FLOW_MIN.patient - FLOW_MIN.patientTight) + (FLOW_MIN.next - FLOW_MIN.nextTight) + (hasWhere ? FLOW_MIN.where - FLOW_MIN.whereTight : 0);
   const fold = opts.section ? foldSteps<FlowFoldStep>(width, fixed(new Set()) + OWN_FLOOR, [
     ...(hasWait ? [{ id: 'wait' as const, saves: FLOW_MIN.wait }] : []),
@@ -70,6 +70,51 @@ export function fdFlowLayout(width: number, module: FdModule, ids: readonly stri
     fold.add(st);
   }
   return { fold, mid, need: fixed(fold) + midNeed() };
+}
+
+/** A preview header's room for grip + the whole label + ✕ / lock (edit mode). */
+export function fdHeaderNeed(label: string, locked = false): number {
+  // Locked: label + lock icon. Movable: grip + label + the 22px ✕ (its 44px touch area is an invisible overlay).
+  return Math.ceil(label.length * 7.4 + (locked ? 50 : 86));
+}
+
+/**
+ * A column's laid-out minimum in the settings preview (edit headers; `tight` = the fixed columns at their floors, the
+ * Frontdesk's own tight step for Patient / Next; Where now keeps its full width so its words never clip). The preview sums these to decide how many columns it can show at ≥85% scale.
+ */
+export function fdPreviewMin(module: FdModule, id: string, tight = false, tokenW: number = FLOW_MIN.token): number {
+  const c = fdColumn(module, id);
+  const base = id === 'token' ? tokenW
+    : id === 'patient' ? (tight ? FLOW_MIN.patientTight : FLOW_MIN.patient)
+    : id === 'where' ? FLOW_MIN.where   // the ring + its words never go below their full width in the preview
+    : id === 'waiting' ? FLOW_MIN.wait
+    : id === 'payment' ? FLOW_MIN.pay
+    : id === 'next' ? (tight ? FLOW_MIN.nextTight : FLOW_MIN.next)
+    : c?.min ?? 100;
+  return Math.max(base, fdHeaderNeed(c?.label ?? id, !!c?.locked));
+}
+
+/**
+ * Which columns the settings preview shows in `box` px without going below `minScale` (owner 2026-11-21: never smaller
+ * than 85% — readable). It first tries every column (fixed columns at full width, then at their tight floors); beyond
+ * that the RIGHT-MOST movable columns fold away like the real Frontdesk, except `pin` (the column being dragged, just
+ * added or hovered) — its neighbours fold instead. Returns the shown ids (in order), the folded ones and the tight flag.
+ */
+export function fdPreviewPlan(module: FdModule, order: readonly string[], box: number,
+  opts: { pin?: string | null; minScale?: number; tokenW?: number } = {}): { shown: string[]; folded: string[]; tight: boolean } {
+  const budget = box / (opts.minScale ?? 0.85);
+  const est = (ids: readonly string[], tight: boolean) => ids.reduce((s, id) => s + fdPreviewMin(module, id, tight, opts.tokenW), 4);
+  if (!box || est(order, false) <= budget) return { shown: [...order], folded: [], tight: false };
+  const shown = [...order];
+  const folded: string[] = [];
+  while (est(shown, true) > budget) {
+    let i = shown.length - 1;
+    while (i >= 0 && (fdColumn(module, shown[i])?.locked || shown[i] === opts.pin)) i--;
+    if (i < 0) break;
+    folded.unshift(shown[i]);
+    shown.splice(i, 1);
+  }
+  return { shown, folded, tight: true };
 }
 
 // ── Cells ───────────────────────────────────────────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@ import {
 import type { ColDef, GetRowIdParams, GridReadyEvent, RowClassParams, RowClickedEvent, ICellRendererParams } from 'ag-grid-community';
 import type { ServiceId } from '../../../../core/services/service-shelf';
 import { FLOW_MIN, tokenWidth } from './flow-fold';
-import { fdCell, fdCellCtx, fdFlowLayout } from './flow-columns';
+import { fdCell, fdCellCtx, fdFlowLayout, fdHeaderNeed } from './flow-columns';
 import { FlowHeadComponent, type FlowHeadMode } from './flow-head.component';
 import { FdGridColumnsService } from '../../../../core/services/fd-grid-columns.service';
 import { AuthService } from '../../../../core/auth/auth.service';
@@ -125,6 +125,8 @@ export class FlowGridComponent implements AfterViewInit {
   readonly editing = input(false);
   /** Preview: show every column (the box scrolls) instead of folding them away. */
   readonly noFold = input(false);
+  /** Preview at the Frontdesk's tight floors (Patient / Where now / Next at their minimums). */
+  readonly tight = input(false);
 
   readonly opened = output<FlowRow>();
 
@@ -145,7 +147,7 @@ export class FlowGridComponent implements AfterViewInit {
   readonly ids = computed<readonly string[]>(() => this.columns() ?? this.gridCols.visible(this.mod()));
   readonly layout = computed(() => this.layoutAt(this.width()));
   private layoutAt(w: number) {
-    return fdFlowLayout(w, this.mod(), this.ids(), { selecting: this.selecting(), tokenW: this.tokenW(), noFold: this.noFold(), section: !!this.service() });
+    return fdFlowLayout(w, this.mod(), this.ids(), { selecting: this.selecting(), tokenW: this.tokenW(), noFold: this.noFold(), tight: this.tight(), section: !!this.service() });
   }
   /** The landing's context + this person's "Hide column" (only while the admin lets staff hide columns). */
   private readonly hideApi: FlowColumnHide = {
@@ -191,7 +193,8 @@ export class FlowGridComponent implements AfterViewInit {
     // Where now (owner design D, 2026-11-21): the journey ring + two lines of words in ONE fixed column (it carries the
     // folded Waiting line). Column id "where"; the set filter reads line 1 (the stage word).
     const whereCol = (): ColDef<FlowRow> => valuesCol<FlowRow>({ colId: 'where', headerName: 'Where now', headerTooltip: 'Where now · journey', flex: 1.2,
-      minWidth: tight ? W.whereTight : W.where, wrapText: true, autoHeight: true, cellClass: 'fd-flow__c-wrap',
+      // The settings preview's tight floor keeps Where now whole (ring + words never clip there).
+      minWidth: tight && !this.editing() ? W.whereTight : W.where, wrapText: true, autoHeight: true, cellClass: 'fd-flow__c-wrap',
       cellRenderer: FlowWhereCellComponent, cellRendererParams: { waitIn }, ...hdr('where', 'Where now') }, r => r.where, WorkSetFilterComponent);
     const waitCol = (): ColDef<FlowRow> => durationCol<FlowRow>({ colId: 'wait', headerName: 'Waiting', width: W.wait, minWidth: W.wait, ...hdr('waiting', 'Waiting'),
       cellRenderer: (p: ICellRendererParams<FlowRow>) => p.data
@@ -238,8 +241,8 @@ export class FlowGridComponent implements AfterViewInit {
     // Settings preview: no column filters (nothing to filter), and every header fits grip + whole label + ✕ / lock.
     return all.map(c => {
       if (c.colId === 'sel') return c;
-      const label = String((c.headerComponentParams as { label?: string } | undefined)?.label ?? c.headerName ?? '');
-      const need = Math.ceil(label.length * 7.6 + 78);
+      const hp = c.headerComponentParams as { label?: string; locked?: boolean } | undefined;
+      const need = fdHeaderNeed(String(hp?.label ?? c.headerName ?? ''), !!hp?.locked);
       return {
         ...c, filter: false, sortable: false,
         minWidth: Math.max(c.minWidth ?? 0, need),

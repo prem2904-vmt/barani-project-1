@@ -76,12 +76,12 @@ const GRIP = 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01';
     .fd-hd--lock { cursor: default; }
     .fd-hd__grip { color: var(--text-tertiary); flex: none; }
     .fd-hd__lock { color: var(--text-tertiary); flex: none; }
-    .fd-hd__x { margin-left: auto; flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px;
+    .fd-hd__x { margin-left: auto; flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 7px;
       background: transparent; color: var(--text-tertiary); cursor: pointer; position: relative; }
     .fd-hd__x:hover { color: var(--text-primary); background: var(--pf-chip-bg); }
     .fd-hd__x:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 1px; }
-    /* Touch: a 44px hit area around the 28px ✕ (never 44px of width — labels keep their room). */
-    @media (pointer: coarse) { .fd-hd__x::after { content: ''; position: absolute; inset: -8px; } }
+    /* Touch: a 44px hit area around the 22px ✕ (never 44px of width — labels keep their room). */
+    @media (pointer: coarse) { .fd-hd__x::after { content: ''; position: absolute; inset: -11px; } }
     /* The label as a button: no padding / margin of its own (the header width is exactly the plain label's). */
     :host ::ng-deep .fd-hd__more { display: inline-flex; align-items: center; height: 24px; padding: 0; margin: 0; border: 0; border-radius: 4px;
       background: transparent; color: inherit; font: inherit; cursor: pointer; position: relative; white-space: nowrap; min-width: 0; }
