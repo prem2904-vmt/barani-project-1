@@ -4,11 +4,11 @@ import { DataGridComponent } from '../../../shared/components/data-grid/data-gri
 import { DataGridTemplateCellComponent } from '../../../shared/components/data-grid/template-cell.component';
 import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import {
-  GridFold, alignCol, dueCell, dueComparator, dueValue, fitFold, minWidthOf, numberFilterCol, setFilterCol, textFilterCol,
+  GridFold, actionCol, dueCell, dueValue, durationCol, durationText, fitFold, minWidthOf, numberCol, textCol, valuesCol,
 } from '../../../shared/utils/work-grid';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import {
-  CultureFilter, cultureColumns, cultureDay, cultureDepts, cultureDueMin, cultureMeta, culturePrimary, cultureStatus, cultureTest, nextStep,
+  CultureFilter, cultureColumns, cultureStageRank, cultureDay, cultureDepts, cultureDueMin, cultureMeta, culturePrimary, cultureStatus, cultureTest, nextStep,
   cultureStatusOptions, culturePatientMeta, currentStage, filterCultures, readDue, stageSub,
 } from './culture-grid';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -393,23 +393,23 @@ export class CulturePanelComponent implements OnInit, OnDestroy, AfterViewInit {
     };
     const size = this.sizes(this.fold());
     const set = WorkSetFilterComponent;
-    // Shared column rules: text left (IDs, patient, the stage + its sub-line), short values centred, actions right;
-    // Test Master's header filter on every data column.
-    const rules: Record<string, ColDef<CultureCaseView>> = {
-      sample: { ...alignCol('left'), ...textFilterCol<CultureCaseView>(c => [c.barcode, c.sampleId].filter(Boolean).join(' ')) } as ColDef<CultureCaseView>,
-      patient: { ...alignCol('left', 'wg-c-wrap'), ...textFilterCol<CultureCaseView>(c => [c.patientName, c.patient?.mrn, c.testName, c.specimen].filter(Boolean).join(' ')) } as ColDef<CultureCaseView>,
-      test: { ...alignCol('left', 'wg-c-wrap'), ...setFilterCol<CultureCaseView>(c => this.test(c), set) } as ColDef<CultureCaseView>,
-      day: { ...alignCol('center'), ...numberFilterCol<CultureCaseView>(c => this.day(c)),
-        sortable: true, sortingOrder: ['desc', 'asc', null], comparator: (_a: unknown, _b: unknown, na: { data?: CultureCaseView }, nb: { data?: CultureCaseView }) =>
-          (na.data ? this.day(na.data) : 0) - (nb.data ? this.day(nb.data) : 0) } as ColDef<CultureCaseView>,
-      next: { ...alignCol('center', 'wg-c-wrap'), ...setFilterCol<CultureCaseView>(c => this.next(c).label, set) } as ColDef<CultureCaseView>,
-      due: { ...alignCol('center'), ...numberFilterCol<CultureCaseView>(c => dueValue(cultureDueMin(c, this.now()))),
-        sortable: true, sortingOrder: ['asc', 'desc', null], comparator: (_a: unknown, _b: unknown, na: { data?: CultureCaseView }, nb: { data?: CultureCaseView }) =>
-          dueComparator(na.data ? dueValue(cultureDueMin(na.data, this.now())) : null, nb.data ? dueValue(cultureDueMin(nb.data, this.now())) : null) } as ColDef<CultureCaseView>,
-      acts: { ...alignCol('right', 'wg-c-acts'), filter: false } as ColDef<CultureCaseView>,
+    // Shared column helpers (shared/utils/work-grid.ts): text left (IDs, patient, the stage + its sub-line), short
+    // values centred, actions right; a header filter AND a sort on the real value (day number, stage order, minutes to
+    // the next read) on every data column.
+    const wrap = (d: ColDef<CultureCaseView>) => ({ ...d, cellClass: 'wg-c-wrap' });
+    const rule = (colId: string, def: ColDef<CultureCaseView>): ColDef<CultureCaseView> => {
+      switch (colId) {
+        case 'sample': return textCol<CultureCaseView>(def, c => [c.barcode, c.sampleId].filter(Boolean).join(' '));
+        case 'patient': return textCol<CultureCaseView>(wrap(def), c => [c.patientName, c.patient?.mrn, c.testName, c.specimen].filter(Boolean).join(' '), 'left', c => c.patientName ?? '');
+        case 'test': return valuesCol<CultureCaseView>(wrap(def), c => this.test(c), set);
+        case 'day': return numberCol<CultureCaseView>(def, c => this.day(c));
+        case 'next': return valuesCol<CultureCaseView>(wrap(def), c => this.next(c).label, set, 'center', c => cultureStageRank(c));
+        case 'due': return durationCol<CultureCaseView>(def, c => dueValue(cultureDueMin(c, this.now())), { kind: 'due' });
+        default: return actionCol<CultureCaseView>({ ...def, cellClass: 'wg-c-acts' });
+      }
     };
-    return cultureColumns(this.fold()).map(p => ({
-      colId: p.colId, headerName: p.header, hide: p.hide, ...size[p.colId], ...rules[p.colId],
+    return cultureColumns(this.fold()).map(p => rule(p.colId, {
+      colId: p.colId, headerName: p.header, hide: p.hide, ...size[p.colId],
       cellRenderer: DataGridTemplateCellComponent, cellRendererParams: { tpl: tpl[p.colId] },
     }));
   });
@@ -485,8 +485,7 @@ export class CulturePanelComponent implements OnInit, OnDestroy, AfterViewInit {
     const ms = new Date(s.incubateUntil).getTime() - this.now();
     if (ms <= 0) return 'now';
     const m = Math.floor(ms / 60_000);
-    if (m < 60) return `${m}m`;
-    return `${Math.floor(m / 60)}h ${m % 60}m`;
+    return m < 60 ? `${m}m` : durationText(m);
   }
 
   /** Label of the first not-done stage (shown collapsed as "Next: …"). */

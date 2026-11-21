@@ -15,8 +15,8 @@ import { type SectionColPlan, sectionPlan } from '../work-view/sections';
 export type FlowFoldStep = 'pay' | 'wait' | 'token' | 'ring' | 'tight';
 
 export const FLOW_MIN = {
-  sel: 52, token: 92, patient: 220, patientTight: 132, ring: 80, ringSmall: 56,
-  where: 170, whereTight: 120, wait: 104, pay: 110, next: 156, nextTight: 140,
+  sel: 52, token: 100, patient: 220, patientTight: 132, ring: 80, ringSmall: 56,
+  where: 170, whereTight: 120, wait: 112, pay: 110, next: 156, nextTight: 140,
 };
 /** Room for the grid's own chrome (vertical scrollbar, borders). */
 export const FLOW_SLACK = 16;

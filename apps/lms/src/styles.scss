@@ -3017,4 +3017,21 @@ aside.pf-card > .pf-card__body > * { flex-shrink: 0; }
   .ag-header-cell .ag-header-cell-menu-button::after {
     content: ''; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%);
   }
+  /* …but never OVER the label: the label (text + sort arrow) sits above the hit area, so a tap on the words or the
+     arrow sorts and only the icon (and the room around it that isn't the label) opens the filter (owner 2026-11-21:
+     "clicking Waiting doesn't sort" — the hit area covered the arrow next to the icon). */
+  .ag-header-cell .ag-header-cell-label { position: relative; z-index: 1; }
 }
+/* Header words are never cut ("Wa…"): a header wraps by whole words, and work-grid headers keep a slim inline padding
+   + a tight sort arrow so the label, its arrow and the filter icon fit the column's minimum width (on touch the right
+   padding stays wide enough for the filter's 44px hit area). */
+.ag-header-cell.wg-h-left, .ag-header-cell.wg-h-center, .ag-header-cell.wg-h-right { padding-inline: 8px; }
+.ag-header-cell[class*='wg-h-'] .ag-sort-indicator-container { margin-inline-start: 2px; }
+.ag-header-cell[class*='wg-h-'] .ag-sort-indicator-icon { padding-inline: 0; }
+.ag-header-cell[class*='wg-h-'] .ag-header-cell-filter-button { margin-inline-start: 4px; }
+@media (pointer: coarse) {
+  .ag-header-cell.wg-h-left, .ag-header-cell.wg-h-center, .ag-header-cell.wg-h-right { padding-inline: 8px 14px; }
+}
+.ag-header-cell.wg-h-left .ag-header-cell-text,
+.ag-header-cell.wg-h-center .ag-header-cell-text,
+.ag-header-cell.wg-h-right .ag-header-cell-text { text-overflow: clip; white-space: normal; overflow-wrap: normal; word-break: keep-all; }

@@ -495,7 +495,7 @@ test.describe('side card at narrow / default / wide widths', () => {
 test.describe('work grid column filters + alignment', () => {
   test.beforeEach(async ({ page }) => { test.setTimeout(150_000); OUT = shotsDir(OUT_BASE); await backend(page, false); });
 
-  test('Payment "Due" column filter ANDs with the head search; headers align with their cells', async ({ page }) => {
+  test('Payment "Has dues" column filter ANDs with the head search; headers align with their cells', async ({ page }) => {
     await openDesk(page);
     if (!wide()) { test.info().annotations.push({ type: 'form-factor', description: 'grid ≥1024px only' }); return; }
     const grid = vis(page, '.pf-fd-flow').first();
@@ -516,10 +516,14 @@ test.describe('work grid column filters + alignment', () => {
     await expect(grid.locator('.ag-header-cell[col-id="next"] .ag-header-cell-filter-button')).toHaveCount(0);
     const fcol = payShown ? 'pay' : 'where';
     if (isTouch()) {
-      // A 44px hit area around the small icon: a tap 18px off its centre still lands on it.
+      // A 44px hit area around the small icon: a tap 18px above / below / right of its centre still lands on it —
+      // but never over the label: there the tap SORTS (owner 2026-11-21, grid-sort).
       const hit = await grid.locator(`.ag-header-cell[col-id="${fcol}"] .ag-header-cell-filter-button`).evaluate(b => {
         const r = b.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2;
-        return [[x, y - 18], [x, y + 18], [x - 18, y], [x + 18, y]].every(([px, py]) => b.contains(document.elementFromPoint(px, py)));
+        const label = b.closest('.ag-header-cell')!.querySelector('.ag-header-cell-label')!;
+        const left = document.elementFromPoint(x - 18, y);
+        return [[x, y - 18], [x, y + 18], [x + 18, y]].every(([px, py]) => b.contains(document.elementFromPoint(px, py)))
+          && (b.contains(left) || label.contains(left));
       });
       expect(hit, 'touch: header filter has a 44px hit area').toBe(true);
     }
@@ -548,7 +552,13 @@ test.describe('work grid column filters + alignment', () => {
     expect(cut, `cut header labels at ${projectName()}`).toEqual([]);
     // Payment "Due" (or, on iPad where Payment folds away, Where now "Billed" — Nithin's order is Billed and due).
     await grid.locator(`.ag-header-cell[col-id="${fcol}"] .ag-header-cell-filter-button`).click();
-    await page.locator(`pf-work-set-filter [data-value="${payShown ? 'Due' : 'Billed'}"]`).locator(`visible=true`).first().click();
+    if (payShown) {
+      // Payment is MONEY (owner 2026-11-21): a number filter on the rupees due, with a "Has dues" preset.
+      await page.locator('.ag-popup .ag-filter-select').locator('visible=true').first().click();
+      await page.locator('.ag-list-item, .ag-select-list-item').filter({ hasText: 'Has dues' }).locator('visible=true').first().click();
+    } else {
+      await page.locator('pf-work-set-filter [data-value="Billed"]').locator('visible=true').first().click();
+    }
     await page.keyboard.press('Escape');
     await expect(page.getByText('Nithin Ragav Gopalakrishnan').locator('visible=true').first()).toBeVisible();
     if (payShown) await expect(page.getByText(LONG).locator('visible=true')).toHaveCount(0);

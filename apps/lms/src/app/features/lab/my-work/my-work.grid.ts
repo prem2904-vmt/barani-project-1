@@ -311,8 +311,9 @@ export function countLabel(shown: number, total: number, unit: string): string {
 // ── Header sort = the lab's persisted sort key (the old band "Priority" picker) ───────
 
 export type MwSortCol = { colId: string; sort: 'asc' | 'desc' } | null;
-/** A column header's sort → LabSortService key. Due (or no header) = the default order (Urgent first, then soonest
- *  due); Waiting = longest in the lab first (desc) / newest (asc). */
+/** A column header's sort → LabSortService key (what phones and the next visit start from). The grid itself sorts
+ *  on the real value of ANY column (work-grid helpers); only Sample / Patient / Waiting / Completed have a key —
+ *  any other header (Due, Priority, Status) or none = the default order (Urgent first, then soonest due). */
 export function sortKeyOf(mode: MwMode, s: MwSortCol): LabSortKey {
   if (!s) return 'default';
   if (s.colId === 'sample') return 'sample';
@@ -328,5 +329,5 @@ export function sortColOf(mode: MwMode, key: LabSortKey): MwSortCol {
   if (mode === 'done') return { colId: 'when', sort: key === 'oldest' ? 'asc' : 'desc' };
   if (key === 'oldest') return { colId: 'wait', sort: 'desc' };
   if (key === 'newest') return { colId: 'wait', sort: 'asc' };
-  return { colId: 'due', sort: 'asc' };   // the default order: Urgent first, then soonest due
+  return null;   // the default order (Urgent first, then soonest due) — no header owns it, so no arrow
 }

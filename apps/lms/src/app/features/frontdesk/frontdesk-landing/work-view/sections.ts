@@ -33,15 +33,16 @@ export interface SectionColPlan {
 const C = (id: SectionColId, header: string, min: number, flex: number, align: 'left' | 'center', fold: number): SectionColPlan =>
   ({ id, header, min, flex, align, fold });
 
-const WAIT = C('wait', 'Waiting', 104, 0, 'center', 1);
+const WAIT = C('wait', 'Waiting', 112, 0, 'center', 1);
 const PAY = C('pay', 'Payment', 110, 0, 'center', 4);
 
-/** Each service's own middle columns (owner list; only what we have data for). */
+/** Each service's own middle columns (owner list; only what we have data for). Minimums leave room for the header
+ *  word + its sort arrow + filter icon (never cut, grid-sort 2026-11-21). */
 export const SECTION_COLS: Record<ServiceId, readonly SectionColPlan[]> = {
   opd: [C('doctor', 'Doctor', 130, 0.8, 'left', 2), C('vitals', 'Vitals', 110, 0.6, 'left', 3), C('consult', 'Consult', 130, 0.8, 'left', 0), WAIT, PAY],
   lab: [C('samples', 'Samples', 120, 0.5, 'center', 0), C('where', 'Where now', 160, 1, 'left', 3), WAIT, PAY],
-  ipd: [C('admitted', 'Admitted', 110, 0.4, 'center', 2), C('doctor', 'Doctor', 130, 0.8, 'left', 3), C('where', 'Where now', 160, 1, 'left', 0), PAY],
-  er: [C('triage', 'Triage', 96, 0, 'center', 0), C('arrived', 'Arrived', 96, 0, 'center', 2), C('where', 'Where now', 160, 1, 'left', 3), WAIT, PAY],
+  ipd: [C('admitted', 'Admitted', 120, 0.4, 'center', 2), C('doctor', 'Doctor', 130, 0.8, 'left', 3), C('where', 'Where now', 160, 1, 'left', 0), PAY],
+  er: [C('triage', 'Triage', 104, 0, 'center', 0), C('arrived', 'Arrived', 110, 0, 'center', 2), C('where', 'Where now', 160, 1, 'left', 3), WAIT, PAY],
   scan: [C('where', 'Where now', 160, 1, 'left', 0), WAIT, PAY],
 };
 
