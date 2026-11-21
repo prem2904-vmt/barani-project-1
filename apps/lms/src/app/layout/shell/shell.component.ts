@@ -269,6 +269,9 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
             <div class="ms-3 text-sm font-normal toast-msg">
               {{ t.message }}
             </div>
+            @if (t.action) {
+              <button type="button" class="toast-action ms-2" data-testid="toast-action" (click)="toasts.runAction(t)">{{ t.action.label }}</button>
+            }
 
             <!-- Close -->
             <button
@@ -613,6 +616,11 @@ import { PageOpenService } from "../../core/navigation/page-open.service";
           background 0.15s ease,
           color 0.15s ease;
       }
+      .toast-action {
+        flex: none; min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--pf-btn-line, var(--glass-border));
+        background: transparent; color: var(--pf-pill-on-text, var(--violet-text, #7c3aed)); font-weight: 600; font-size: 13px; cursor: pointer;
+      }
+      .toast-action:hover { background: var(--glass-bg-hover); }
       .toast-close:hover {
         background: var(--glass-bg-hover);
         color: var(--text-primary);

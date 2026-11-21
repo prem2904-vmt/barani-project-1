@@ -614,6 +614,8 @@
                    [class.pf-tube--pour-ok]="ds?.kind === 'ok' || ds?.kind === 'checking'"
                    [class.pf-tube--pour-no]="ds?.kind === 'no'"
                    [class.pf-tube--pour-over]="!!ds && dragOver() === s.id"
+                   [class.pf-tube--pour-warn]="!!ds && dragOver() === s.id && !!dropWarn(s)"
+                   [class.pf-tube--glow]="glowId() === s.id"
                    (pointerdown)="onVialDown(s, $event)" (pointerup)="onVialUp()"
                    (pointerleave)="onVialLeave()" (pointercancel)="onVialUp()" (pointermove)="onVialMove($event)"
                    (click)="onVialClick(s, $event)" (keydown.enter)="onVialClick(s, $event)">
@@ -966,12 +968,32 @@
                   <p class="pf-tube__code">Sample ID&nbsp;<span class="pf-num">{{ s.barcode ?? '—' }}</span></p>
                   <!-- Tubes poured into this one (manual merge): their Sample IDs
                        are retired but still scan. -->
-                  @if (mergeChips(s); as chips) {
+                  @if (chipsOf(s); as chips) {
                     @if (chips.length) {
                       <span class="pf-sc-merges" aria-label="Poured into this tube">
-                        @for (c of chips; track c) { <span class="pf-chip pf-chip--static pf-sc-merge">{{ c }}</span> }
+                        @for (c of chips; track c.m.barcode) {
+                          <!-- Tap = take this tube back out (inline confirm). After dispatch it only says why not. -->
+                          <button type="button" class="pf-chip pf-sc-merge" data-testid="merge-chip"
+                                  [class.pf-sc-merge--pop]="freshChip() === c.m.barcode"
+                                  [class.pf-sc-merge--locked]="!c.ok"
+                                  [attr.aria-disabled]="!c.ok ? 'true' : null"
+                                  [title]="c.ok ? 'Take ' + c.m.barcode + ' back out' : (c.why ?? '')"
+                                  [attr.aria-label]="c.ok ? 'Separate ' + c.text.slice(2) + ' back out' : c.text + '. ' + c.why"
+                                  (pointerdown)="$event.stopPropagation()"
+                                  (click)="askSeparate(s, c, $event)">
+                            <span class="pf-sc-merge__dot" [style.background]="c.m.tubeColor ? tubeColorOf(c.m.tubeColor) : null" aria-hidden="true"></span>
+                            {{ c.text }}
+                            @if (c.ok) {
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                            }
+                          </button>
+                        }
                       </span>
+                      @if (tubesInOneOf(s); as inOne) { <span class="pf-sc-inone" data-testid="tubes-in-one">{{ inOne }}</span> }
                     }
+                  }
+                  @if (dropWarn(s); as w) {
+                    @if (dragOver() === s.id) { <span class="pf-sc-dropwarn" data-testid="drop-warn">{{ w }}</span> }
                   }
 
                   @if (drawn(s)) {
@@ -1053,6 +1075,28 @@
                         [attr.aria-label]="'Ask a colleague about sample ' + s.barcode" title="Ask a colleague about this tube">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 </button>
+              }
+              @if (inlineAsk(); as a) {
+                @if ((a.kind === 'pour' && a.targetId === s.id) || (a.kind === 'separate' && a.keepId === s.id)) {
+                  <!-- Inline confirm on THIS card (never a dialog popup). -->
+                  <div class="pf-sc-ask" [class.pf-sc-ask--warn]="a.kind === 'pour'" role="alertdialog" data-testid="inline-ask"
+                       [attr.aria-label]="a.kind === 'pour' ? 'Different additive' : 'Separate tube'"
+                       (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation()" (keydown.escape)="a.kind === 'pour' ? keepApart() : keepTogether()">
+                    @if (a.kind === 'pour') {
+                      <p><strong>{{ a.words }}.</strong> Different additive. Pour anyway?</p>
+                      <div class="pf-sc-ask__row">
+                        <button type="button" class="pf-btn pf-btn--secondary" data-testid="inline-no" (click)="keepApart()">Keep apart</button>
+                        <button type="button" class="pf-btn pf-btn--secondary pf-sc-ask__go" data-testid="inline-go" (click)="confirmInlinePour()">Pour</button>
+                      </div>
+                    } @else {
+                      <p><strong>Take {{ a.m.tubeColor ? shortName(a.m.tubeColor) : 'tube' }} {{ a.m.barcode }} back out?</strong> It becomes its own tube again with its own label.</p>
+                      <div class="pf-sc-ask__row">
+                        <button type="button" class="pf-btn pf-btn--secondary" data-testid="inline-no" (click)="keepTogether()">Keep together</button>
+                        <button type="button" class="pf-btn pf-btn--secondary pf-sc-ask__go" data-testid="inline-go" (click)="confirmSeparate()">Separate</button>
+                      </div>
+                    }
+                  </div>
+                }
               }
                     </div><!-- /pf-tube-wrap -->
                   }
@@ -1263,13 +1307,17 @@
                [class.pf-pour-ghost--no]="dragCaption().startsWith('Can’t')"
                [style.left.px]="ghostX(pos.x)" [style.top.px]="pos.y">
             <span class="pf-pour-ghost__tube" [style.--tube-color]="gsrc ? container(gsrc).color : null">
-              <svg viewBox="0 0 24 64" width="18" height="48" aria-hidden="true">
-                <rect x="4" y="2" width="16" height="10" rx="2.5" fill="var(--tube-color, #94a3b8)"/>
-                <path d="M6 12h12v40a6 6 0 0 1-12 0Z" fill="none" stroke="currentColor" stroke-width="1.6"/>
-                <path d="M7 34h10v18a5 5 0 0 1-10 0Z" fill="#b91c1c" opacity="0.85"/>
+              <svg viewBox="0 0 46 150" width="46" height="150" aria-hidden="true">
+                <path d="M8 26H38V124a15 15 0 0 1-30 0Z" fill="var(--pf-glass, color-mix(in srgb, var(--text-muted, #94a3b8) 18%, transparent))"/>
+                @if (gsrc && drawn(gsrc)) {
+                  <path d="M8 84H38V124a15 15 0 0 1-30 0Z" [attr.fill]="container(gsrc).fill" opacity="0.9"/>
+                }
+                <path d="M8 26H38V124a15 15 0 0 1-30 0Z" fill="none" stroke="var(--text-muted, #94a3b8)" stroke-width="1.4"/>
+                <rect x="4" y="2" width="38" height="26" rx="6" fill="var(--tube-color, #94a3b8)"/>
+                <rect x="4" y="22" width="38" height="6" fill="#000" opacity="0.12"/>
               </svg>
             </span>
-            <span class="pf-pour-ghost__txt">
+            <span class="pf-pour-ghost__txt pf-sr-only">
               <span class="pf-pour-ghost__name">{{ tubeName(gsrc) }}</span>
               <span class="pf-pour-ghost__to">{{ dragCaption() }}</span>
             </span>

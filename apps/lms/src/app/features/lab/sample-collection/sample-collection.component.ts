@@ -66,6 +66,8 @@ import {
 } from "../../../shared/utils/series-schedule";
 import { countCollected, isOrderDispatched } from "./dispatch-state";
 import { peekPlacement } from "./peek-placement";
+import { additiveWords, chipSeparable, chipText, mergedInto, optimisticMerge, optimisticSeparate, placeholderTube, pourMotion, separateRefusalText, tubesInOne, type MergedIn } from "./merge-flow";
+import { flip, flyBack, foldAway, hoverAbove, popOut, pourIn, rectsOf, slideIn } from "./pour-animation";
 import { WfPortalDirective } from "../../../shared/workflow-editor/wf-menu.component";
 import { fastingGroups, fastingText, infoDocked, infoTier, readInfoOpen, writeInfoOpen, type InfoTier } from "./info-panel";
 import {
@@ -2285,6 +2287,13 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const p = this.pour();
     if (!p || !this.canConfirmPour()) return;
     const sampleIds = [p.sourceId, ...p.alsoIds.filter(id => id !== p.sourceId)];
+    // Keyboard / accessible path for ONE tube = the same inline flow as a drop (no ghost to animate):
+    // the sheet closes and the target card asks inline when the additive differs.
+    if (sampleIds.length === 1) {
+      this.pour.set(null);
+      await this.startInlinePour(p.sourceId, p.targetId);
+      return;
+    }
     this.pourBusy.set(true);
     try {
       // ONE confirmation (OPS-123): the sheet IS the confirm, and any additive
@@ -2426,12 +2435,204 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       return;
     }
     this.haptic(ImpactStyle.Medium);
-    const seed = this._pourCands.get(t.id);
-    this.endPourDrag(false, 'in', t.id);
     this.clearPress();
-    this.pourServerWarn.set([]);
-    this.pour.set({ sourceId: src.id, targetId: '', alsoIds: [], candidates: null, loadError: null });
-    void this.setPourTarget(t.id, seed ?? null);
+    this.stopEdgeScroll();
+    this.setDragCursor(false);
+    // The ghost stays (dragHeld) for the merge motion; the inline flow clears it.
+    this.dragHeld.set(true);
+    void this.startInlinePour(src.id, t.id);
+  }
+
+  // ─── Merge in place (owner-approved design 2026-11-21, mock tube-pour-v1 "Pour") ───
+  // No dialog, no refetch: the drop pours (or asks INLINE on the target card when the additive differs),
+  // the screen updates optimistically and rolls back when the server refuses. Rules: merge-flow.ts;
+  // motion: pour-animation.ts.
+
+  /** The inline question on a card: a different additive, or "Take … back out?". */
+  protected readonly inlineAsk = signal<
+    | { kind: 'pour'; srcId: string; targetId: string; words: string }
+    | { kind: 'separate'; keepId: string; m: MergedIn }
+    | null>(null);
+  /** The ghost outlives the gesture while the merge motion plays. */
+  protected readonly dragHeld = signal(false);
+  protected readonly glowId = signal<string | null>(null);
+  protected readonly freshChip = signal<string | null>(null);
+  protected readonly mergeBusy = signal(false);
+  /** Tubes poured away on this screen, so Undo / Separate can put the real card back. */
+  private readonly _gone = new Map<string, OrderSample>();
+
+  /** Chips on the kept tube: "+ Gold · 26310", whether it can be taken back out and why not. */
+  chipsOf(s: OrderSample): Array<{ m: MergedIn; text: string; ok: boolean; why: string | null }> {
+    return mergedInto(s).map(m => ({ m, text: chipText(m), ...chipSeparable(s as never, m) }));
+  }
+  tubesInOneOf(s: OrderSample): string | null { return tubesInOne(s); }
+  /** Cap colour of a tube type (chip dot). */
+  tubeColorOf(tubeColor: string): string { return this.container({ tubeColor } as OrderSample).color; }
+  shortName(tubeColor: string | null | undefined): string { return shortTubeName(tubeColor); }
+
+  /** Soft-rose words while a tube with another additive is dragged over this one ("Serum into Fluoride · check"). */
+  dropWarn(t: OrderSample): string | null {
+    const src = this.dragSource();
+    if (!src || src.id === t.id) return null;
+    const st = this.dropState(t);
+    if (st?.kind === 'no') return null;
+    const w = additiveWords(src, t) ?? (st?.kind === 'ok' && st.warn ? 'Different additive' : null);
+    return w ? `${w} · check` : null;
+  }
+
+  private ghostEl(): HTMLElement | null {
+    return typeof document === 'undefined' ? null : document.querySelector<HTMLElement>('[data-testid="pour-ghost"]');
+  }
+
+  /** Drop / keyboard path: pour now, or ask inline when the additive differs. */
+  async startInlinePour(srcId: string, targetId: string): Promise<void> {
+    const src = this.sampleById(srcId), t = this.sampleById(targetId);
+    if (!src || !t || this.mergeBusy()) { this.releaseGhost(true); return; }
+    const cand = this._pourCands.get(t.id)?.find(c => c.id === src.id);
+    const words = additiveWords(src, t) ?? ((cand?.warnings ?? []).length ? 'Different additive' : null);
+    if (words) {
+      this.inlineAsk.set({ kind: 'pour', srcId, targetId, words });
+      await hoverAbove(this.ghostEl(), this.tileEl(targetId), this.reducedMotion());
+      setTimeout(() => this.tileEl(targetId)?.parentElement?.querySelector<HTMLElement>('[data-testid="inline-go"]')?.focus(), 0);
+      return;
+    }
+    await this.runPour(srcId, targetId, false);
+  }
+
+  /** Inline "Keep apart": the ghost flies home, nothing changes. */
+  async keepApart(): Promise<void> {
+    const a = this.inlineAsk();
+    this.inlineAsk.set(null);
+    if (a?.kind !== 'pour') return;
+    await flyBack(this.ghostEl(), this.tileEl(a.srcId), this.reducedMotion());
+    this.releaseGhost(false);
+  }
+
+  /** Inline "Pour" (different additive accepted). */
+  async confirmInlinePour(): Promise<void> {
+    const a = this.inlineAsk();
+    if (a?.kind !== 'pour') return;
+    this.inlineAsk.set(null);
+    await this.runPour(a.srcId, a.targetId, true);
+  }
+
+  private releaseGhost(back: boolean): void {
+    this.dragHeld.set(false);
+    if (back) { this.endPourDrag(true); return; }
+    this.dragExit.set(null);
+    this.dragSrc.set(null);
+    this.dragMoving.set(false);
+    this.dragPos.set(null);
+    this.dragOver.set(null);
+  }
+
+  /** The pour: motion + optimistic screen + the API in parallel; roll back if the server refuses. */
+  async runPour(srcId: string, targetId: string, confirm: boolean): Promise<void> {
+    const src = this.sampleById(srcId), t = this.sampleById(targetId);
+    if (!src || !t) { this.releaseGhost(true); return; }
+    this.mergeBusy.set(true);
+    const reduced = this.reducedMotion();
+    const motion = pourMotion(src);
+    const api = this.postMerge(targetId, [srcId], confirm)
+      .then(r => ({ ok: true as const, r }), (e: unknown) => ({ ok: false as const, e: ApiError.from(e) }));
+    const target = this.tileEl(targetId);
+    if (motion === 'slide') await slideIn(this.ghostEl(), target, reduced);
+    else await pourIn(this.ghostEl(), target, this.container(src).fill ?? '#b91c1c', reduced);
+    this.releaseGhost(false);
+    await foldAway(this.tileEl(srcId)?.closest<HTMLElement>('.pf-tube-wrap') ?? null, reduced);
+    const grid = target?.closest('.pf-sc-grid') ?? null;
+    const before = rectsOf(grid);
+    const opt = optimisticMerge(this._pending(), targetId, srcId, new Date().toISOString());
+    if (opt.gone) this._gone.set(opt.gone.id, opt.gone);
+    this._pending.set(opt.list);
+    afterNextRender(() => flip(grid, before, reduced), { injector: this.injector });
+    this.flash(targetId, src.barcode ?? '');
+    const res = await api;
+    this.mergeBusy.set(false);
+    if (!res.ok) {
+      this._pending.set(opt.snapshot);
+      if (res.e.code === 'merge_needs_confirm') {
+        this.inlineAsk.set({ kind: 'pour', srcId, targetId, words: warningLines(this.warningsFrom(res.e.data) ?? [])[0] ?? 'Different additive' });
+        return;
+      }
+      this.toasts.error(mergeRefusalText(res.e.code ?? null, res.e.message));
+      return;
+    }
+    // The kept tube takes the server's state (tests, status, metadata with the restore block).
+    const upd = res.r?.sample;
+    if (upd) this._pending.update(list => list.map(x => x.id === targetId ? { ...x, ...upd, order: x.order ?? upd.order, tests: upd.tests ?? x.tests } : x));
+    const verb = motion === 'pour' ? 'Poured' : 'Merged';
+    const name = (x: OrderSample) => `${shortTubeName(x.tubeColor)} ${x.barcode ?? ''}`.trim();
+    const kept = this.sampleById(targetId) ?? t;
+    this.toasts.withAction(`${verb} ${name(src)} into ${name(kept)}`, { label: 'Undo', run: () => void this.undoPour(targetId, src) });
+    this.sampleCollected.emit();
+  }
+
+  /** Glow the kept tube once and pop its newest chip. */
+  private flash(keepId: string, chipBarcode: string): void {
+    this.glowId.set(keepId);
+    this.freshChip.set(chipBarcode);
+    setTimeout(() => { if (this.glowId() === keepId) this.glowId.set(null); }, 900);
+    setTimeout(() => { if (this.freshChip() === chipBarcode) this.freshChip.set(null); }, 600);
+  }
+
+  /** Undo in the toast = Separate right away. */
+  async undoPour(keepId: string, gone: OrderSample): Promise<void> {
+    await this.runSeparate(keepId, { barcode: gone.barcode ?? '', tubeColor: gone.tubeColor ?? null, sampleId: gone.id, drawn: pourMotion(gone) === 'pour' }, true);
+  }
+
+  /** Tap a chip: ask inline "Take … back out?". */
+  askSeparate(keep: OrderSample, chip: { m: MergedIn; ok: boolean }, ev?: Event): void {
+    ev?.stopPropagation();
+    if (!chip.ok || this.mergeBusy()) return;
+    this.inlineAsk.set({ kind: 'separate', keepId: keep.id, m: chip.m });
+    setTimeout(() => this.tileEl(keep.id)?.parentElement?.querySelector<HTMLElement>('[data-testid="inline-go"]')?.focus(), 0);
+  }
+  keepTogether(): void { this.inlineAsk.set(null); }
+  async confirmSeparate(): Promise<void> {
+    const a = this.inlineAsk();
+    if (a?.kind !== 'separate') return;
+    this.inlineAsk.set(null);
+    await this.runSeparate(a.keepId, a.m, false);
+  }
+
+  /** Separate: the tube pops back out with its own Sample ID (optimistic), the server confirms or we roll back. */
+  async runSeparate(keepId: string, m: MergedIn, viaUndo: boolean): Promise<void> {
+    const keep = this.sampleById(keepId);
+    if (!keep || !m.sampleId) return;
+    this.mergeBusy.set(true);
+    const reduced = this.reducedMotion();
+    const restoredLocal = this._gone.get(m.sampleId) ?? placeholderTube(keep, m);
+    const keepEl = this.tileEl(keepId);
+    keepEl?.classList.add('pf-tube--filling');
+    const grid = keepEl?.closest('.pf-sc-grid') ?? null;
+    const before = rectsOf(grid);
+    const opt = optimisticSeparate(this._pending(), keepId, restoredLocal);
+    this._pending.set(opt.list);
+    afterNextRender(() => {
+      flip(grid, before, reduced);
+      popOut(this.tileEl(m.sampleId!), this.tileEl(keepId), reduced);
+      setTimeout(() => this.tileEl(keepId)?.classList.remove('pf-tube--filling'), 620);
+    }, { injector: this.injector });
+    try {
+      const r = await firstValueFrom(this.api.post<{ sample: OrderSample; restored: OrderSample }>(`/api/samples/${keepId}/separate`, { sampleId: m.sampleId }));
+      this._gone.delete(m.sampleId);
+      this._pending.update(list => list.map(x =>
+        x.id === keepId && r?.sample ? { ...x, ...r.sample, order: x.order ?? r.sample.order, tests: r.sample.tests ?? x.tests }
+        : x.id === m.sampleId && r?.restored ? { ...x, ...r.restored, order: x.order ?? keep.order ?? r.restored.order, tests: r.restored.tests ?? x.tests }
+        : x));
+      const back = this.sampleById(m.sampleId);
+      const label = `${shortTubeName(m.tubeColor)} ${m.barcode}`;
+      if (back && !this.scan.manualEntry()) this.toasts.withAction(`${label} is its own tube again`, { label: 'Print label', run: () => this.reprintLabel(back) }, 'success');
+      else this.toasts.success(`${label} is its own tube again${this.scan.manualEntry() ? ' · write its Sample ID on it' : ''}`, 6000);
+      this.sampleCollected.emit();
+    } catch (e) {
+      this._pending.set(opt.snapshot);
+      const err = ApiError.from(e);
+      this.toasts.error(viaUndo ? `Couldn’t undo: ${separateRefusalText(err.code ?? null, err.message)}` : separateRefusalText(err.code ?? null, err.message));
+    } finally {
+      this.mergeBusy.set(false);
+    }
   }
 
   /** Clear the drag; `snapBack` animates the ghost home first. */
