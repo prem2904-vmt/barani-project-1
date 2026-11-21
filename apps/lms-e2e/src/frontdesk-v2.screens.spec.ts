@@ -349,13 +349,9 @@ test.describe('frontdesk v2 — Lab + OPD user (Services shelf)', () => {
     // The appointments card sits beside the list at ≥1024px (stacked layouts keep it collapsed behind its header).
     // (2+ services: the side card opens on "Who is where" — fd-chart — so switch it to Appointments first.)
     if (wide()) {
-      const apptTab = page.locator('.pf-appt-split pf-segmented.pf-tabs [role="radio"][data-value="appt"]').locator('visible=true');
-      const folded = page.locator('.pf-appt-split pf-segmented.pf-tabs [data-seg-compact]').locator('visible=true');
-      if (await apptTab.count()) await apptTab.click();
-      else if (await folded.count()) {
-        await folded.click();
-        await page.getByRole('menuitemradio', { name: /^Appointments/ }).locator('visible=true').first().click();
-      }
+      // The VISITS head icon cycles the views (owner 2026-11-21): tap until Appointments.
+      const sw = page.locator('.pf-appt-split [data-testid="fd-side-view-btn"]').locator('visible=true');
+      for (let i = 0; i < 3 && (await sw.count()) && (await sw.getAttribute('data-view')) !== 'appt'; i++) await sw.click();
       await expect(page.getByText('Ms. Anjali Raghunathan Subramaniam').locator('visible=true').first()).toBeVisible();
     }
     await pick('all');

@@ -187,17 +187,28 @@ async function shots(page: Page, name: string) {
 
 
 const sideCard = (page: Page) => page.locator('.pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
-const sideTab = (page: Page, value: string) => sideCard(page).locator(`pf-segmented.pf-tabs [role="radio"][data-value="${value}"]`);
+/** The VISITS head's icon switch (owner 2026-11-21: replaces the tab row). */
+const sideBtn = (page: Page) => sideCard(page).locator('[data-testid="fd-side-view-btn"]');
+/** Tap the icon until the side card shows `view` (it cycles Who is where → Appointments → Home). */
+async function goSide(page: Page, view: string) {
+  for (let i = 0; i < 4; i++) {
+    if ((await sideBtn(page).getAttribute('data-view')) === view) return;
+    await sideBtn(page).click();
+    await page.waitForTimeout(120);
+  }
+  await expect(sideBtn(page)).toHaveAttribute('data-view', view);
+}
 
-/** Every tab label whole: no option clipped, none collapsed into the selected-pill menu. */
-async function expectTabsFit(page: Page, tag: string, allowMenu = false) {
-  const seg = sideCard(page).locator('pf-segmented.pf-tabs');
-  await expect(seg).toBeVisible();
-  if (!allowMenu) expect(await seg.evaluate(e => e.classList.contains('is-menu')), `${tag}: tabs folded into a menu at ${projectName()}`).toBe(false);
-  const clipped = await seg.locator('.seg-item').evaluateAll(els => els.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent?.trim()));
-  expect(clipped, `${tag}: clipped tab labels at ${projectName()}`).toEqual([]);
-  const box = (await seg.boundingBox())!, card = (await sideCard(page).boundingBox())!;
-  expect(box.x + box.width, `${tag}: tabs inside the side card`).toBeLessThanOrEqual(card.x + card.width + 1);
+/** The VISITS head: the 44px icon switch + the view's title, whole (never clipped), inside the side card. */
+async function expectTabsFit(page: Page, tag: string, _allowMenu = false) {
+  const btn = sideBtn(page);
+  await expect(btn).toBeVisible();
+  const b = (await btn.boundingBox())!;
+  expect(Math.min(b.width, b.height), `${tag}: the switch is a 44px target`).toBeGreaterThanOrEqual(44);
+  const title = sideCard(page).locator('[data-testid="fd-side-view-title"]');
+  expect(await title.evaluate(e => e.scrollWidth <= e.clientWidth + 1), `${tag}: title clipped at ${projectName()}`).toBe(true);
+  const tb = (await title.boundingBox())!, card = (await sideCard(page).boundingBox())!;
+  expect(tb.x + tb.width, `${tag}: title inside the side card`).toBeLessThanOrEqual(card.x + card.width + 1);
 }
 
 test.describe('who is where — Lab + OPD user', () => {
@@ -210,19 +221,20 @@ test.describe('who is where — Lab + OPD user', () => {
     if (!wide()) {
       // Phones / tablet portrait: no chart — the side card's tabs stay Appointments (| Home).
       await expect(vis(page, '[data-testid="who-is-where"]')).toHaveCount(0);
-      await expect(sideCard(page).locator('[role="radio"][data-value="who"]')).toHaveCount(0);
+      await expect(sideCard(page).locator('[data-testid="fd-side-view-btn"][data-view="who"]')).toHaveCount(0);
       await shots(page, '01-who-is-where');
       return;
     }
     await expectTabsFit(page, 'who');
     // The card head: icon + "WHO IS WHERE" + the count.
-    await expect(vis(page, '[data-testid="fd-side-title"]')).toHaveText(/^\s*Visits\s*$/i);
+    await expect(vis(page, '[data-testid="fd-side-title"]')).toHaveText(/^\s*Who is where\s*$/i);
     // Both card heads line up (same height, same top).
     const sh = (await sideCard(page).locator('.pf-appt-split__hdr').boundingBox())!;
     const wh = (await page.locator('.pf-work-hdr').locator('visible=true').first().boundingBox())!;
     expect(Math.abs(sh.y - wh.y), 'heads share a top').toBeLessThanOrEqual(2);
     expect(Math.abs(sh.height - wh.height), `heads share a height (${sh.height} vs ${wh.height})`).toBeLessThanOrEqual(2);
-    await expect(sideTab(page, 'who')).toHaveAttribute('aria-checked', 'true');
+    await expect(sideBtn(page)).toHaveAttribute('data-view', 'who');
+    await expect(sideCard(page).locator('[data-testid="fd-side-view-title"]')).toHaveText(/who is where/i);
     const chart = vis(page, '[data-testid="who-is-where"]');
     await expect(chart).toBeVisible();
     // 14 active rows: 12 lab orders minus the validated one + 2 OPD.
@@ -245,8 +257,8 @@ test.describe('who is where — Lab + OPD user', () => {
     expect(sun.x).toBeGreaterThanOrEqual(card.x);
     expect(sun.x + sun.width).toBeLessThanOrEqual(card.x + card.width);
     // Overdue: a rose dot on the Appointments tab, said in its name.
-    await expect(sideTab(page, 'appt').locator('.seg-alert')).toHaveCount(1);
-    await expect(sideTab(page, 'appt')).toHaveAttribute('aria-label', /^Appointments, \d+, 1 overdue$/);
+    await expect(sideCard(page).locator('[data-testid="fd-side-overdue-dot"]')).toHaveAttribute('aria-label', '1 appointment overdue');
+    await expect(sideBtn(page)).toHaveAttribute('aria-label', /^Show appointments \(\d+\) · 1 appointment overdue$/);
     // The journey ring: one per row, with the service label (2+ services, no filter).
     const ring = vis(page, '.pf-fd-flow pf-journey-ring').first();
     await expect(ring.locator('.pf-jring__btn')).toHaveAttribute('aria-label', /^(Lab|OPD) · .*Open journey$/);
@@ -297,7 +309,7 @@ test.describe('who is where — Lab + OPD user', () => {
     await shots(page, '04-chart-opd');
 
     // Appointments carry the filter: Lab bookings only, so OPD shows none + the removable chip.
-    await sideTab(page, 'appt').click();
+    await goSide(page, 'appt');
     await expectTabsFit(page, 'appointments');
     const chip = vis(page, '[data-testid="fd-side-filter-chip"]');
     await expect(chip).toHaveText(/OPD/);
@@ -305,10 +317,10 @@ test.describe('who is where — Lab + OPD user', () => {
     await shots(page, '05-appointments-opd');
 
     // Shelf / chart → Lab: the appointments come back, still with the chip; the overdue one reads soft rose.
-    await sideTab(page, 'who').click();
+    await goSide(page, 'who');
     await chart.locator('.wiw__chip[data-svc="lab"]').click();
     await expect(page.getByText('Ms. Meera Iyer (OPD)').locator('visible=true')).toHaveCount(0);
-    await sideTab(page, 'appt').click();
+    await goSide(page, 'appt');
     await expect(chip).toHaveText(/Lab/);
     await expect(page.getByText('Ms. Anjali Raghunathan Subramaniam').locator('visible=true').first()).toBeVisible();
     await expect(vis(page, '[data-testid="fd-appt-late"]').first()).toContainText(/Not arrived · \d+m late/);
@@ -334,9 +346,9 @@ test.describe('who is where — lab-only tenant', () => {
     await openDesk(page);
     await expectNoPageScroll(page, 'lab-only');
     await expect(page.locator('[data-testid="who-is-where"]')).toHaveCount(0);
-    await expect(sideCard(page).locator('[role="radio"][data-value="who"]')).toHaveCount(0);
+    await expect(sideCard(page).locator('[data-testid="fd-side-view-btn"][data-view="who"]')).toHaveCount(0);
     if (wide()) {
-      await expect(vis(page, '[data-testid="fd-side-title"]')).toHaveText(/^\s*Visits\s*$/i);
+      await expect(vis(page, '[data-testid="fd-side-title"]')).toHaveText(/^\s*(Visits|Appointments\s*\d*)\s*$/i);
       await expect(vis(page, '[data-testid="fd-new-appt"]')).toBeVisible();
       await expect(vis(page, '[data-testid="fd-side-filter-chip"]')).toHaveCount(0);
       await expect(page.getByText('Ms. Anjali Raghunathan Subramaniam').locator('visible=true').first()).toBeVisible();
@@ -461,17 +473,12 @@ test.describe('side card at narrow / default / wide widths', () => {
       await openDesk(page);
       if (!wide()) { test.info().annotations.push({ type: 'form-factor', description: 'stacked below 1024px' }); return; }
       for (const tab of ['appt', 'who'] as const) {
-        const radio = sideTab(page, tab);
-        if (await radio.isVisible()) await radio.click();
-        else {
-          await sideCard(page).locator('pf-segmented.pf-tabs [data-seg-compact]').click();
-          await page.getByRole('menuitemradio', { name: tab === 'appt' ? /^Appointments/ : /^Who is where/ }).locator('visible=true').first().click();
-        }
+        await goSide(page, tab);
         await expectTabsFit(page, `${w} ${tab}`, true);
         // Nothing inside the side card spills past it; the head stays one row.
         const spill = await sideCard(page).evaluate(card => {
           const c = card.getBoundingClientRect();
-          return [...card.querySelectorAll<HTMLElement>('.pf-appt-split__hdr *, .fd-side-switch *, .pf-daystrip *, .fd-side-sub *')]
+          return [...card.querySelectorAll<HTMLElement>('.pf-appt-split__hdr *, .pf-daystrip *, .fd-side-sub *')]
             .filter(e => { const r = e.getBoundingClientRect(); return r.width > 0 && (r.right > c.right + 1 || r.left < c.left - 1); })
             .map(e => e.className || e.tagName).slice(0, 5);
         });

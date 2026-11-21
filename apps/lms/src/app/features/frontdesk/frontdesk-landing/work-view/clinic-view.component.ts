@@ -8,8 +8,6 @@ import type { FlowGridContext } from '../flow-grid/flow-cells';
 import { flowJourneyDetail } from '../flow-grid/flow-journey';
 import type { FlowRow } from '../flow-grid/flow-row';
 import { type ClinicChip, type FitResult, blockRowWeights, blockSpans, clinicServices, fitRoom, placeCols } from './clinic';
-import type { RowRects } from './work-view.component';
-import { WV_EASE, WV_MOTION_MS, reducedMotion } from './work-view.component';
 
 /** Chip geometry (CSS below is the same numbers): padding 8 · gap 6 · border 1 · 30px tall (44px on touch). */
 const CHIP = { pad: 8, gap: 6, border: 1, h: 30, hTouch: 44, lineGap: 6 };
@@ -82,10 +80,10 @@ export class ClinicViewComponent implements AfterViewInit {
   /** Filtered to one service: its block takes the whole card. */
   readonly single = input(false);
   readonly context = input.required<FlowGridContext>();
-  /** The list rows' boxes captured before the switch (morph source); null = no morph. */
-  readonly from = input<RowRects | null>(null);
   readonly ringLabels = input(true);
   readonly more = output<ServiceId>();
+  /** Every completed fit (the work view's morph places its tiles on the chips after it, and re-places on later ones). */
+  readonly fitted = output<void>();
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly zone = inject(NgZone);
@@ -116,7 +114,6 @@ export class ClinicViewComponent implements AfterViewInit {
 
   private canvas: CanvasRenderingContext2D | null = null;
   private raf = 0;
-  private morphed = false;
 
   constructor() {
     // Re-fit whenever the rows / layout change.
@@ -187,30 +184,20 @@ export class ClinicViewComponent implements AfterViewInit {
     const cur = this.fits();
     const same = cur.size === next.size && [...next].every(([k, v]) => cur.get(k)?.level === v.level && cur.get(k)?.shown === v.shown);
     if (!same) this.fits.set(next);
-    if (!this.morphed) {
-      this.morphed = true;
-      requestAnimationFrame(() => this.morph());
-    }
+    // The new fit renders on the next change detection; report once it is on screen.
+    requestAnimationFrame(() => this.fitted.emit());
   }
 
-  /** Chips glide in from the list rows they were (~260ms, a light stagger); rooms fade in. */
-  private morph(): void {
-    if (reducedMotion()) return;
-    const from = this.from();
+  /** Where a row sits in this view: its chip, or — when its room overflowed — the room's "+N" (null = not here). */
+  slotOf(rowId: string): { el: HTMLElement; overflow: boolean; dense: boolean } | null {
     const root = this.host.nativeElement;
-    for (const r of Array.from(root.querySelectorAll<HTMLElement>('.cv-svc'))) {
-      r.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: WV_MOTION_MS, easing: WV_EASE });
-    }
-    let i = 0;
-    for (const c of Array.from(root.querySelectorAll<HTMLElement>('.cv-chip[data-row]'))) {
-      const src = from?.get(c.dataset['row'] ?? '');
-      const to = c.getBoundingClientRect();
-      const delay = Math.min(i++ * 12, 180);
-      const kf = src
-        ? [{ transform: `translate(${src.left - to.left}px, ${src.top + src.height / 2 - to.top - to.height / 2}px)`, opacity: 0.35 }, { transform: 'none', opacity: 1 }]
-        : [{ transform: 'translateY(6px)', opacity: 0 }, { transform: 'none', opacity: 1 }];
-      c.animate?.(kf, { duration: WV_MOTION_MS, easing: WV_EASE, delay, fill: 'backwards' });
-    }
+    const chip = root.querySelector<HTMLElement>(`.cv-chip[data-row="${CSS.escape(rowId)}"]`);
+    if (chip) return { el: chip, overflow: false, dense: !!chip.closest('.cv-room--dense') };
+    const place = this.services().flatMap(s => s.places).find(p => p.chips.some(c => c.id === rowId));
+    if (!place) return null;
+    const room = root.querySelector<HTMLElement>(`.cv-room[data-place="${CSS.escape(place.id)}"]`);
+    const more = room?.querySelector<HTMLElement>('.cv-more') ?? room;
+    return more ? { el: more, overflow: true, dense: true } : null;
   }
 
   openChip(c: ClinicChip, ev: MouseEvent): void {

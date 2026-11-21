@@ -73,11 +73,35 @@
     .pf-work-hdr > .pf-work-find:focus-within .pf-work-find__input { min-height: 40px; height: 40px; }
   }
   .pf-work-hdr > .pf-work-hdr__date { order: 3; }
-  /* List | Clinic (owner 2026-11-21): the head's right end, after the date + filter icon. Narrow card: icons only
-     (each still a 44px target on touch); the head never wraps. */
-  .pf-work-hdr > .pf-work-hdr__view { order: 4; flex: none; display: inline-flex; align-items: center; }
-  @container (max-width: 900px) {
-    .pf-work-view-seg ::ng-deep .seg-lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  /* Card-head ICON SWITCH (owner 2026-11-21): the card's icon tile is the view switch — a 44px target (no extra
+     head height), the tile's tint follows the view, the strokes morph (~260ms; instant under reduced motion). */
+  .pf-wvb, .pf-svb {
+    position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 44px; height: 44px; margin: -8px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: inherit; cursor: pointer;
+  }
+  .pf-wvb:focus-visible, .pf-svb:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: -2px; }
+  .pf-wvb .pf-card__icon, .pf-svb .pf-card__icon {
+    width: 30px; height: 30px; transition: background-color 260ms ease, color 260ms ease, box-shadow 260ms ease;
+  }
+  .pf-wvb:hover .pf-card__icon, .pf-svb:hover .pf-card__icon { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent); }
+  [data-tint='teal'] > .pf-card__icon, .pf-wvb.is-clinic .pf-card__icon {
+    background: color-mix(in srgb, var(--teal-text, #0d9488) 16%, transparent); color: var(--teal-text, #0d9488);
+  }
+  [data-tint='sky'] > .pf-card__icon { background: color-mix(in srgb, var(--sky-text, #0284c7) 16%, transparent); color: var(--sky-text, #0284c7); }
+  [data-tint='pink'] > .pf-card__icon { background: color-mix(in srgb, var(--pink-text, #db2777) 14%, transparent); color: var(--pink-text, #db2777); }
+  /* List: the four room rects collapse into three lines (transform only — every engine animates it). */
+  .pf-wvb rect { transform-box: view-box; transform-origin: 0 0; vector-effect: non-scaling-stroke; transition: transform 260ms cubic-bezier(.2, .7, .2, 1), opacity 200ms ease; }
+  .pf-wvb:not(.is-clinic) .pf-wvb__r1 { transform: translate(-3.75px, 5.825px) scale(2.25, .025); }
+  .pf-wvb:not(.is-clinic) .pf-wvb__r2 { transform: translate(-26.25px, 11.78px) scale(2.25, .04); }
+  .pf-wvb:not(.is-clinic) .pf-wvb__r3 { transform: translate(-26.25px, 17.718px) scale(2.25, .01818); }
+  .pf-wvb:not(.is-clinic) .pf-wvb__r4 { transform: translate(-3.75px, 11.575px) scale(2.25, .025); opacity: 0; }
+  /* The VISITS switch: its three icons cross-fade + scale (people → calendar → house). */
+  .pf-svb__ico { transform-origin: 12px 12px; transform-box: view-box; transition: opacity 200ms ease, transform 260ms cubic-bezier(.2, .7, .2, 1); }
+  .pf-svb__ico:not(.on) { opacity: 0; transform: scale(.6) rotate(-20deg); }
+  .pf-svb__dot { position: absolute; top: 6px; right: 6px; width: 9px; height: 9px; border-radius: 999px; background: var(--red-text, #e11d48);
+    box-shadow: 0 0 0 2px var(--pf-card-bg); }
+  @media (prefers-reduced-motion: reduce) {
+    .pf-wvb rect, .pf-svb__ico, .pf-wvb .pf-card__icon, .pf-svb .pf-card__icon { transition: none; }
   }
   /* .pf-input's backdrop-filter makes its own stacking layer and painted over the magnifier. */
   .pf-work-find__icon { z-index: 1; }
