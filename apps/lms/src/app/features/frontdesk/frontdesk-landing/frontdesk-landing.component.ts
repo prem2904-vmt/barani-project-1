@@ -146,6 +146,8 @@ import { testListUrl } from '../../../shared/utils/test-list-url';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 import { isSignedOrSkipped } from '../../../shared/utils/line-status';
 import { FlowGridComponent } from './flow-grid/flow-grid.component';
+import { WorkViewComponent, type WorkViewMode } from './work-view/work-view.component';
+import { sectionOrderKey } from './work-view/sections';
 import { FlowGridContext } from './flow-grid/flow-cells';
 import { FlowShareApi, FlowShareMenuComponent } from './flow-grid/flow-share-menu.component';
 import { MoreFiltersComponent } from './flow-grid/more-filters.component';
@@ -158,7 +160,8 @@ import { WhoIsWhereComponent, WhoPick } from './who-is-where/who-is-where.compon
 import { OpdDeskApi } from '../../opd/frontdesk/desk-api.service';
 import type { OpdVisitRow, PaymentDue } from '../../opd/frontdesk/desk.models';
 import { opdDueByVisit, opdVisitFlowRow, opdVisitMatches, opdVisitOpen } from './opd-visits';
-import { SideTab, WhoItem, apptOverdueMin, effectiveSideTab, fmtMin, sideTabOptions, stepOfRow, whoItemOf } from './who-is-where/who-is-where';
+import { SideTab, WhoItem, apptOverdueMin, effectiveSideTab, fmtMin, nextSideView, overdueDotLabel, sideSwitchLabel, sideTabOptions, sideViewTitle, sideViews, stepOfRow, whoItemOf } from './who-is-where/who-is-where';
+import { ActionsMenuComponent as PfActionsMenuComponent, type PfAction as PfMenuAction } from '../../../shared/components/actions-menu/actions-menu.component';
 import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
 
 // ── Repetitive mode (series) — schedule-sheet view model ──────────
@@ -198,7 +201,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, PfActionsMenuComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -443,8 +446,71 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     else if (!appt && !home && untracked(() => this._expandedPane()) === 'appt') this._expandedPane.set('work');
   });
   setLeftTab(t: LeftTab) {
+    const changed = t !== this.leftTab();
     this._leftTab.set(t);
     try { localStorage.setItem(FrontdeskLandingComponent.LEFT_TAB_KEY, t); } catch { /* ignore */ }
+    if (changed) this.slideSideIn();
+  }
+
+  // ── VISITS card-head icon switch (owner 2026-11-21: replaces "Who is where | Appointments | Home"). The view on show
+  //    stays `leftTab()` / `setLeftTab()` (remembered per browser under LEFT_TAB_KEY) — the names other code binds to. ──
+  /** The views the icon cycles: Who is where → Appointments → Home visits (lab-only: Appointments ↔ Home). */
+  readonly sideViewList = computed<SideTab[]>(() => sideViews({ who: this.whoTabOn(), appt: this.showAppt(), home: this.showHome() }));
+  private readonly sideCounts = computed(() => ({ apptN: this.visibleAppointments().length, homeN: this.homeCollections().length }));
+  readonly sideTitle = computed(() => sideViewTitle(this.leftTab(), this.sideCounts()));
+  readonly sideNextView = computed<SideTab>(() => nextSideView(this.leftTab(), this.sideViewList()));
+  /** "3 appointments overdue" while NOT on Appointments (the rose dot on the icon). */
+  readonly sideOverdueDot = computed(() => overdueDotLabel(this.leftTab(), this.overdueAppointments()));
+  readonly sideSwitchAria = computed(() => {
+    const base = sideSwitchLabel(this.sideNextView(), this.sideCounts());
+    const dot = this.sideOverdueDot();
+    return dot ? `${base} · ${dot}` : base;
+  });
+  readonly sideTint = computed(() => this.leftTab() === 'appt' ? 'sky' : this.leftTab() === 'home' ? 'pink' : null);
+  /** The direct-jump menu (long-press · right-click · Alt+↓): every view with its count. */
+  readonly sideMenuActions = computed<PfMenuAction[]>(() => this.sideViewList().map(t => {
+    const ti = sideViewTitle(t, this.sideCounts());
+    const overdue = t === 'appt' && this.overdueAppointments() > 0;
+    return { id: t, label: ti.label, count: ti.count ?? undefined, current: t === this.leftTab(),
+      hint: overdue ? `${this.overdueAppointments()} overdue` : undefined };
+  }));
+  private readonly sideMenu = viewChild<PfActionsMenuComponent>('sideMenu');
+  private sidePressTimer: ReturnType<typeof setTimeout> | null = null;
+  private sideSuppressClick = false;
+  onSideSwitchClick(ev: MouseEvent): void {
+    ev.stopPropagation();
+    if (this.sideSuppressClick) { this.sideSuppressClick = false; return; }
+    this.setLeftTab(this.sideNextView());
+  }
+  openSideMenu(ev?: Event): void {
+    ev?.preventDefault();
+    ev?.stopPropagation();
+    this.sideMenu()?.show('first');
+  }
+  onSideSwitchKey(ev: KeyboardEvent): void {
+    ev.stopPropagation();
+    if (ev.altKey && ev.key === 'ArrowDown') this.openSideMenu(ev);
+  }
+  sidePressStart(ev: PointerEvent): void {
+    if (ev.button !== 0) return;
+    this.sidePressEnd();
+    this.sidePressTimer = setTimeout(() => { this.sidePressTimer = null; this.sideSuppressClick = true; this.openSideMenu(); }, 500);
+  }
+  sidePressEnd(): void { if (this.sidePressTimer) { clearTimeout(this.sidePressTimer); this.sidePressTimer = null; } }
+  pickSideView(id: string): void {
+    this.setLeftTab(id as LeftTab);
+    requestAnimationFrame(() => (document.querySelector('[data-testid="fd-side-view-btn"]') as HTMLElement | null)?.focus());
+  }
+  /** Owner motion style: the side card's body slides / fades in (260ms; nothing under reduced motion). */
+  private slideSideIn(): void {
+    if (typeof requestAnimationFrame === 'undefined' || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+    requestAnimationFrame(() => {
+      const pane = document.querySelector('.pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
+      for (const el of Array.from(pane?.children ?? []) as HTMLElement[]) {
+        if (el.tagName === 'HEADER' || el.classList.contains('pf-appt-split__hdr')) continue;
+        el.animate?.([{ opacity: 0, transform: 'translateX(12px)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'cubic-bezier(.2,.7,.2,1)' });
+      }
+    });
   }
   /** Nothing remembered: 'who' (it falls back to Appointments wherever the chart doesn't exist). */
   private loadLeftTab(): LeftTab {
@@ -1295,6 +1361,39 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // The ring's "LAB / OPD" adds nothing for a single-service tenant or while one service is picked.
     ringLabels: () => this.serviceShelf.multi() && this.serviceShelf.selected() === 'all',
   };
+
+  // ── WORK body views (owner mocks fd-sections/ColsGrouped + fd-morph-clinic, 2026-11-21) ──
+  /** "All" with 2+ services: one section per service (each with its own columns, in the user's order). */
+  readonly workSplit = computed(() => this.flowMode() && this.serviceShelf.multi() && this.serviceShelf.selected() === 'all');
+  readonly shelfServiceIds = computed<ServiceId[]>(() => this.serviceShelf.services().map(s => s.id));
+  readonly sectionOrderKey = computed(() => { const u = this.auth.user(); return sectionOrderKey(u?.tenantId, u?.id); });
+  /** List | Clinic: 2+ services, the flow grid's lists (Outsourced keeps its own list). */
+  readonly clinicOn = computed(() => this.flowMode() && this.serviceShelf.multi() && this._rightTab() !== 'out');
+  private readonly workViewKey = computed(() => `pf-lms.frontdesk.view.${this.auth.user()?.id ?? 'anon'}`);
+  private readonly _workView = signal<WorkViewMode | null>(null);
+  readonly workView = computed<WorkViewMode>(() => {
+    if (!this.clinicOn()) return 'list';
+    const v = this._workView();
+    if (v) return v;
+    try { return localStorage.getItem(this.workViewKey()) === 'clinic' ? 'clinic' : 'list'; } catch { return 'list'; }
+  });
+  readonly workViewOptions: SegmentedOption<WorkViewMode>[] = [
+    { value: 'list', label: 'List', iconPath: ['M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'] },
+    { value: 'clinic', label: 'Clinic', iconPath: ['M3 3h8v8H3z', 'M13 3h8v5h-8z', 'M13 10h8v11h-8z', 'M3 13h8v8H3z'] },
+  ];
+  private readonly workViewRef = viewChild(WorkViewComponent);
+  setWorkView(v: WorkViewMode): void {
+    if (v === this.workView()) return;
+    this.workViewRef()?.beforeSwitch(v);
+    this._workView.set(v);
+    try { localStorage.setItem(this.workViewKey(), v); } catch { /* private mode: not remembered */ }
+  }
+  /** "+N more" in a clinic room: that service's list. */
+  clinicMore(s: ServiceId): void {
+    this.setWorkView('list');
+    this.workSel.clear();
+    this.serviceShelf.select(s);
+  }
 
   /** Tapping a row opens it — exactly what the old row did for that list. */
   openFlowRow(row: FlowRow): void {

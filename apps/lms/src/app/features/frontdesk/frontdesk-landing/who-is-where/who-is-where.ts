@@ -273,3 +273,36 @@ export function effectiveSideTab(t: SideTab, i: Pick<SideTabInputs, 'who' | 'app
   if (t !== 'who' || i.who) return t;
   return i.appt || !i.home ? 'appt' : 'home';
 }
+
+/* ── The VISITS card-head icon switch (owner 2026-11-21: replaces the tab row) ─────────────────────────────────── */
+
+/** What a side view is called in the card head, with its count inline: "Who is where" · "Appointments 5" · "Home visits 2". */
+export function sideViewTitle(t: SideTab, i: Pick<SideTabInputs, 'apptN' | 'homeN'>): { label: string; count: number | null } {
+  if (t === 'who') return { label: 'Who is where', count: null };
+  if (t === 'appt') return { label: 'Appointments', count: i.apptN };
+  return { label: 'Home visits', count: i.homeN };
+}
+
+/** The views the icon cycles through, in order: Who is where → Appointments → Home visits (lab-only: Appointments ↔ Home). */
+export function sideViews(i: Pick<SideTabInputs, 'who' | 'appt' | 'home'>): SideTab[] {
+  return (['who', 'appt', 'home'] as SideTab[]).filter(t => i[t]);
+}
+
+/** The view one tap brings (wraps around); the current one when it is the only view. */
+export function nextSideView(cur: SideTab, views: readonly SideTab[]): SideTab {
+  if (!views.length) return cur;
+  const i = views.indexOf(cur);
+  return views[(i + 1) % views.length];
+}
+
+/** Tooltip / accessible name of the switch: it names the NEXT view — "Show appointments (5)", "Show who is where". */
+export function sideSwitchLabel(next: SideTab, i: Pick<SideTabInputs, 'apptN' | 'homeN'>): string {
+  const t = sideViewTitle(next, i);
+  return `Show ${t.label.toLowerCase()}${t.count !== null ? ` (${t.count})` : ''}`;
+}
+
+/** The rose dot's words while not on Appointments: "3 appointments overdue" (null = no dot). */
+export function overdueDotLabel(cur: SideTab, overdue: number): string | null {
+  if (cur === 'appt' || overdue <= 0) return null;
+  return `${overdue} appointment${overdue === 1 ? '' : 's'} overdue`;
+}
