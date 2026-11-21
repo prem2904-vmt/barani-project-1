@@ -99,14 +99,15 @@ describe('All = one screen split by service', () => {
     const all = Object.values(SECTION_COLS).flat().map(c => c.header);
     for (const dropped of ['Room', 'Bay', 'Ward · bed', 'Discharge', 'Meds due', 'Diet', 'Tests']) expect(all).not.toContain(dropped);
     expect(SECTION_COLS.opd.map(c => c.id)).toEqual(['doctor', 'vitals', 'consult', 'pay']);
-    expect(SECTION_COLS.lab.map(c => c.id)).toEqual(['samples', 'where', 'pay']);
+    expect(SECTION_COLS.lab.map(c => c.id)).toEqual(['samples', 'pay']);   // Where now (ring + words) + Waiting are every section's fixed columns
   });
-  it('a narrow section folds Payment first, then its low-value columns; never-fold columns stay', () => {
+  it('a narrow section folds Payment first, then its low-value columns; the rank-0 column folds last', () => {
     expect(sectionPlan('opd', 1000).cols.length).toBe(4);
     const p = sectionPlan('opd', 400);
     expect(p.folded).toBe(true);
     expect(p.cols.map(c => c.id)).toContain('consult');
-    expect(sectionPlan('opd', 0).cols.map(c => c.id)).toEqual(['consult']);
+    expect(sectionPlan('opd', 140).cols.map(c => c.id)).toEqual(['consult']);   // rank 0 folds last…
+    expect(sectionPlan('opd', 0).cols.map(c => c.id)).toEqual([]);              // …and only when nothing fits (Where now keeps the visit's words)
   });
 });
 
@@ -117,13 +118,13 @@ describe('never scroll sideways (owner 2026-11-21)', () => {
     expect([...foldSteps(450, 500, steps)]).toEqual(['a']);
     expect([...foldSteps(300, 500, steps)]).toEqual(['a', 'b']);
   });
-  it('fold order: Payment → Waiting → Token → Journey 32px → tight', () => {
+  it('fold order: Payment → Waiting → Token → tight (the ring lives in Where now, always 32px)', () => {
     const at = (w: number) => [...flowLayout(w).fold];
     expect(at(1400)).toEqual([]);
     expect(at(900)).toEqual(['pay']);
     expect(at(750)).toEqual(['pay', 'wait']);
     expect(at(660)).toEqual(['pay', 'wait', 'token']);
-    expect(at(520)).toEqual(['pay', 'wait', 'token', 'ring', 'tight']);
+    expect(at(520)).toEqual(['pay', 'wait', 'token', 'tight']);
   });
   for (const w of [520, 600, 720, 900, 1200]) {
     for (const selecting of [false, true]) {
@@ -186,7 +187,7 @@ describe('Clinic places (only places our data names)', () => {
     const s = clinicServices([row('o1', 'lab'), opd('v1')], ['opd', 'lab']);
     expect(s.map(x => x.id)).toEqual(['opd', 'lab']);
     expect(chipOf(opd('v1'))).toMatchObject({ token: 'R-v1', name: 'Patient v1' });
-    const chips = [{ late: false, waitMin: 50 }, { late: true, waitMin: 31 }, { late: false, waitMin: 70 }].map((c, i) => ({ ...c, id: `${i}`, token: '', name: '', wait: '', now: false }));
+    const chips = [{ late: false, waitMin: 50 }, { late: true, waitMin: 31 }, { late: false, waitMin: 70 }].map((c, i) => ({ ...c, id: `${i}`, token: '', name: '', wait: '', now: false, where: '' }));
     expect(chips.sort(byWait).map(c => c.id)).toEqual(['1', '2', '0']);
   });
   it('block spans fill 12 columns per row; places get as many columns as their width allows', () => {

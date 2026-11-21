@@ -25,6 +25,8 @@ import { MANAGE_BRIDGES } from '../../../shared/bridges/bridge-nearby.service';
 import { clampHotspotMinutes } from '../../../shared/bridges/bridge-commands';
 import { bridgeConnectionText } from '../../../shared/bridges/bridge-assign';
 import type { BridgeCommandType, BridgeDetailDto, DetectedSourceDto } from '../../../shared/bridges/bridge.models';
+import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { linkStateWords } from '../../../shared/bridges/bridge-status-words';
 import {
   BridgeTone, agoText, bridgeErrorText, bridgeStatusWord, commandLine, commandStateWord, detectedSourceHeadline, framingWord,
   linkStateWord, networkModeWord, signalWord, versionText,
@@ -393,11 +395,8 @@ export class BridgeDetailComponent implements OnInit {
             : (p.data?.makeModel && p.data.makeModel !== p.data.name ? p.data.makeModel : ''), 'pf-brd-cell__name') },
       { colId: 'connection', headerName: 'Connection', flex: 1.3, minWidth: 170, valueGetter: (p) => p.data?.connection ?? '',
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => cell(p.data?.connection ?? '', p.data?.framing) },
-      { colId: 'link', headerName: 'Link', flex: 1, minWidth: this.isPhone ? 96 : 120, valueGetter: (p) => p.data?.linkState ?? '',
-        cellRenderer: (p: { data?: BridgeAnalyzerRow }) => {
-          const w = linkStateWord(p.data?.linkState);
-          return `<div class="pf-brd-cell"><span class="pf-sdot" data-tone="${sdotTone(w.tone)}">${esc(w.label)}</span>${p.data?.lastMessageAt ? `<span class="pf-brd-cell__sub">Last result ${esc(agoText(p.data.lastMessageAt).toLowerCase())}</span>` : ''}</div>`;
-        } },
+      statusWordsCol<BridgeAnalyzerRow>({ colId: 'link', headerName: 'Link', flex: 1, minWidth: this.isPhone ? 110 : 150, valueGetter: (p) => p.data?.linkState ?? '' },
+        (r) => linkStateWords(r.linkState, r.lastMessageAt ? `Last result ${agoText(r.lastMessageAt).toLowerCase()}` : '')),
       { colId: 'queue', headerName: 'Queue', width: 96, minWidth: 90, flex: 0, type: 'rightAligned', valueGetter: (p) => p.data?.queueDepth ?? 0,
         cellRenderer: (p: { data?: BridgeAnalyzerRow }) => `<span class="pf-num">${esc(p.data?.queueDepth ?? 0)}</span>` },
     ];

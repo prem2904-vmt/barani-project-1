@@ -181,36 +181,24 @@ for (const dark of [false, true]) {
           expect(h).toBeGreaterThanOrEqual(63.5);
         }
         expect(await touchAudit(page, '.pf-mw-pane', '[data-testid="mw-grid"] .ag-row button')).toEqual([]);
-        // No Tests column; the band's sort picker is gone (headers sort); the head is ONE row with its filters.
+        // No Tests column; the band's sort picker is gone (headers sort); the head is title + count only (owner 2026-11-21).
         await expect(page.locator('[data-testid="mw-grid"] .ag-header-cell[col-id="tests"]')).toHaveCount(0);
         await expect(page.locator('pf-hero-band pf-lab-sort')).toHaveCount(0);
         const head = await visible(page, '.pf-mw-pane__hdr--tabs').boundingBox();
         expect(head!.height, 'card head stays one row').toBeLessThan(72);
-        expect(await touchAudit(page, '.pf-mw-pane', '.pf-mw-pane__hdr--tabs > .mw-filterwrap > button, .pf-mw-pane__hdr--tabs > .mw-find')).toEqual([]);
-        // Search narrows the list and the count says so.
-        await visible(page, '[data-testid="mw-find"]').fill('Arya');
+        await expect(page.locator('[data-testid="mw-find"], [data-testid="mw-pill"], [data-testid="mw-filter-btn"]').locator('visible=true')).toHaveCount(0);
+        // The BAND search narrows the list and the count says so.
+        await visible(page, 'pf-hero-band input').fill('Arya');
         await expect(page.locator('[data-testid="mw-grid"] .ag-row.mwg-row').locator('visible=true')).toHaveCount(1);
         await shot(page, `mywork-search-${mode}`);
-        await visible(page, '[data-testid="mw-find"]').fill('');
-        await page.mouse.click(4, 4);
-        // Filters: priority + department (+ window on Completed).
-        await visible(page, '[data-testid="mw-filter-btn"]').click();
-        await expect(visible(page, '[data-testid="mw-filters"]')).toBeVisible();
-        await shot(page, `mywork-filters-${mode}`);
-        await visible(page, '[data-testid="mw-filters"] [data-filter="priority"] [role="radio"]:has-text("Urgent")').click();
-        await expect(page.locator('[data-testid="mw-grid"] .ag-row.mwg-row').locator('visible=true')).toHaveCount(1);
-        await page.keyboard.press('Escape');
-        await expect(visible(page, '[data-testid="mw-filter-btn"]')).toHaveClass(/mw-filterbtn--on/);
-        await visible(page, '[data-testid="mw-filter-btn"]').click();
-        await visible(page, '[data-testid="mw-filters"] .mwf__clear').click();
-        await page.keyboard.press('Escape');
+        await visible(page, 'pf-hero-band input').fill('');
         // Header (column) filters like Test Master: the Status set filter narrows the rows; the icon is a 44px target on touch.
         const fbtn = visible(page, '[data-testid="mw-grid"] .ag-header-cell[col-id="status"] .ag-header-cell-filter-button');
         if (await fbtn.count()) {
           await fbtn.click();
           await expect(visible(page, '.ag-filter pf-work-set-filter, .ag-popup pf-work-set-filter')).toBeVisible();
           await shot(page, `mywork-colfilter-${mode}`);
-          await visible(page, 'pf-work-set-filter [data-value="Draft"]').click();
+          await visible(page, 'pf-work-set-filter [data-value="Draft"]').click();   // filter value = the status word
           await expect(page.locator('[data-testid="mw-grid"] .ag-row.mwg-row:not(.ag-opacity-zero)').locator('visible=true')).toHaveCount(1);
           await expect(visible(page, '[data-testid="mw-grid"] .ag-header-cell[col-id="status"]')).toHaveClass(/ag-header-cell-filtered/);
           await visible(page, 'pf-work-set-filter .wsf__clear').click();
@@ -290,13 +278,13 @@ for (const dark of [false, true]) {
       await expect(visible(page, '[data-testid="cg-grid"] .ag-row:has-text("Mrs. Shanthi M") .wg-who__meta').first()).toHaveText('34/F · AA0031');
       await expect(visible(page, '[data-testid="cg-grid"] .ag-row:has-text("Baby Leo S") .wg-who__meta').first()).toHaveText('Stool');
       expect(await touchAudit(page, '.pf-mw-pane', '[data-testid="cg-grid"] .ag-row button')).toEqual([]);
-      expect(await touchAudit(page, '.pf-mw-pane', '.pf-mw-pane__hdr--tabs > .mw-filterwrap > button, .pf-mw-pane__hdr--tabs > .mw-find')).toEqual([]);
       if (isTouch()) expect(await visible(page, '[data-testid="cg-grid"] .ag-row').evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(63.5);
-      // The read-due case is rose; the head's search narrows.
+      // The read-due case is rose; the BAND search narrows (no head search any more, owner 2026-11-21).
       await expect(visible(page, '[data-testid="cg-grid"] .ag-row.wg-row--urgent')).toBeVisible();
-      await visible(page, '[data-testid="cg-find"]').fill('Shanthi');
+      await expect(page.locator('[data-testid="cg-find"]').locator('visible=true')).toHaveCount(0);
+      await visible(page, 'pf-hero-band input').fill('Shanthi');
       await expect(page.locator('[data-testid="cg-grid"] .ag-row.cg-row:not(.ag-opacity-zero)').locator('visible=true')).toHaveCount(1);
-      await visible(page, '[data-testid="cg-find"]').fill('');
+      await visible(page, 'pf-hero-band input').fill('');
       await page.mouse.click(4, 4);
       // Due = the next read: "in 1h 30m" while incubating, rose "40m late" once the read is due.
       await expect(page.locator('[data-testid="cg-grid"] pf-journey-ring')).toHaveCount(0);
@@ -320,12 +308,16 @@ for (const dark of [false, true]) {
         await expect(visible(page, '[data-testid="pv-grid"] .ag-row')).toBeVisible({ timeout: 20_000 });
         await expect(visible(page, `[data-testid="pv-grid"] .pv-who__name:has-text("${LONG}")`)).toBeVisible();
         await expect(visible(page, '[data-testid="pv-grid"] .pv-ack')).toBeVisible();
-        // Rebalanced at every width: the status pill and the entered time stay on one line; filter icons are spaced.
+        // Rebalanced at every width: the status word (line 1 of the two lines, design D) stays on one line, the entered
+        // time is never clipped; filter icons are spaced.
         const lay = await page.evaluate(() => {
           const out: string[] = [];
-          for (const p of Array.from(document.querySelectorAll<HTMLElement>('[data-testid="pv-grid"] .ag-row .pv-status, [data-testid="pv-grid"] .pv-wait-sub'))) {
+          for (const p of Array.from(document.querySelectorAll<HTMLElement>('[data-testid="pv-grid"] .ag-row .pv-status .pf-sw__now'))) {
             const lh = parseFloat(getComputedStyle(p).lineHeight) || 20;
             if (p.getBoundingClientRect().height > lh * 1.6 + 6) out.push(`wraps: ${p.textContent?.trim()}`);
+          }
+          for (const p of Array.from(document.querySelectorAll<HTMLElement>('[data-testid="pv-grid"] .pv-wait-sub'))) {
+            if (p.scrollWidth > p.clientWidth + 1) out.push(`clipped: ${p.textContent?.trim()}`);
           }
           return out;
         });

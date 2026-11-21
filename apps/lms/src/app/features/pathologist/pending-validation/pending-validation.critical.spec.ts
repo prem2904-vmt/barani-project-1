@@ -103,10 +103,11 @@ describe('Pathologist queue — critical acknowledgement', () => {
     expect(lookups.length).toBe(1);
     expect(lookups[0]).toContain('orderTestIds=l1');
     expect(lookups[0]).toContain('l2');
-    const statuses = [...el.querySelectorAll('.ag-row .pv-status')].map(s => s.textContent?.trim());
-    // ONE status pill ("Critical", never wraps) + the rose words "Not acknowledged" beside it (owner review 2026-11-20).
+    const statuses = [...el.querySelectorAll('.ag-row .pv-status .pf-sw__now')].map(s => s.textContent?.trim());
+    // Two lines of words (design D): "Critical" / "Not acknowledged", rose; no pill.
     expect(statuses).toContain('Critical');
-    expect([...el.querySelectorAll('.ag-row .pv-unack')].map(s => s.textContent?.trim())).toEqual(['Not acknowledged']);
+    expect([...el.querySelectorAll('.ag-row .pv-status .pf-sw__detail')].map(s => s.textContent?.trim())).toContain('Not acknowledged');
+    expect(el.querySelector('.ag-row .wg-pill')).toBeNull();
     expect(el.querySelectorAll('.pv-ack').length).toBe(1);
     expect(el.querySelector('.pv-ack')?.classList.contains('pf-rowact')).toBe(true);
   });
@@ -117,15 +118,15 @@ describe('Pathologist queue — critical acknowledgement', () => {
     f.detectChanges();
     await settle(f);
     expect(api.post).toHaveBeenCalledWith('/api/critical-results/e1/acknowledge', { via: 'pathologist_queue' });
-    const statuses = [...el.querySelectorAll('.ag-row .pv-status')].map(s => s.textContent?.trim());
+    const statuses = [...el.querySelectorAll('.ag-row .pv-status .pf-sw__now')].map(s => s.textContent?.trim());
     expect(statuses).toContain('Critical');
-    expect(el.querySelector('.ag-row .pv-unack')).toBeNull();
+    expect([...el.querySelectorAll('.ag-row .pv-status .pf-sw__detail')].map(s => s.textContent?.trim())).not.toContain('Not acknowledged');
     expect(el.querySelector('.pv-ack')).toBeNull();
   });
 
   it('a record already acknowledged by me needs no button; a communicated one is not even returned', async () => {
     const { el } = await render([{ ...EVENT, status: 'acknowledged', acknowledgements: [{ userId: 'me', name: 'Me', at: '2026-09-27T09:58:00Z', via: 'bell' }] }]);
     expect(el.querySelector('.pv-ack')).toBeNull();
-    expect([...el.querySelectorAll('.ag-row .pv-status')].map(s => s.textContent?.trim())).toContain('Critical');
+    expect([...el.querySelectorAll('.ag-row .pv-status .pf-sw__now')].map(s => s.textContent?.trim())).toContain('Critical');
   });
 });

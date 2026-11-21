@@ -26,10 +26,6 @@
   .ag-cell.fd-flow__c-next { justify-content: flex-end; padding-right: 10px; }
   .ag-cell.fd-flow__c-sel { padding-left: 8px; padding-right: 0; }
   .ag-cell.fd-flow__c-wrap { white-space: normal; }
-  .ag-header-cell.fd-flow__h-ring { padding-left: 4px; padding-right: 4px; font-size: 11px; }
-  .ag-header-cell.fd-flow__h-ring .ag-header-cell-label { justify-content: center; }
-  .fd-flow__wait-in { font-variant-numeric: tabular-nums; }
-  .ag-cell.fd-flow__c-ring { display: flex; align-items: center; justify-content: center; padding-left: 4px; padding-right: 4px; }
 
   /* Urgent order: a rose inset rule at the row's leading edge (never a fill). */
   .ag-row.fd-flow__row--urgent { box-shadow: inset 3px 0 0 var(--red-text, #dc2626); }
@@ -54,32 +50,7 @@
   }
   .fd-flow__tag[data-tag='ER'] { color: var(--red-text); border-color: color-mix(in srgb, var(--red-text) 30%, var(--pf-line)); }
 
-  /* Where now: a NEUTRAL pill + coloured dot (owner), then the quiet sub-line. */
-  .fd-flow__where { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 8px 0; line-height: 1.3; }
-  .fd-flow__stage {
-    --fd-tone: var(--violet-text);
-    display: inline-flex; align-items: center; gap: 6px; min-height: 22px; padding: 1px 9px 1px 8px; border-radius: 999px;
-    box-sizing: border-box; white-space: normal; overflow-wrap: normal; word-break: normal; /* wraps by WHOLE words, never clipped (owner 2026-11-21) */
-    font-size: 12.5px; font-weight: 500; color: var(--text-primary); max-width: 100%;
-    background: var(--pf-chip-bg); border: 1px solid var(--pf-line);
-  }
-  .fd-flow__stage > span:last-child { min-width: 0; }
-  .fd-flow__stage[data-tone='green'] { --fd-tone: var(--green-text); }
-  .fd-flow__stage[data-tone='rose'] { --fd-tone: var(--red-text); }
-  .fd-flow__stage[data-tone='sky'] { --fd-tone: var(--sky-text, var(--blue-text)); }
-  .fd-flow__stage[data-tone='neutral'] { --fd-tone: var(--text-tertiary); }
-  .fd-flow__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--fd-tone); flex: none; }
-  .fd-flow__sub { font-size: 11.5px; color: var(--text-tertiary); overflow-wrap: break-word; word-break: normal; }
-
-  /* Journey: step dots (done · now · still to come; a stopped step in rose). */
-  .fd-flow__journey { display: inline-flex; align-items: center; gap: 4px; }
-  .fd-flow__step { width: 16px; height: 6px; border-radius: 999px; background: var(--pf-line); }
-  .fd-flow__step[data-state='done'] { background: color-mix(in srgb, var(--violet-text) 55%, var(--pf-line)); }
-  .fd-flow__step[data-state='now'] {
-    background: var(--violet-text);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--violet-text) 22%, transparent);
-  }
-  .fd-flow__step[data-state='stopped'] { background: var(--red-text); }
+  /* Where now: ring + two lines of words (FlowWhereCellComponent + pf-status-words) — no pill, no dot. */
 
   /* Waiting / Payment: tabular; rose when late / due (never amber). */
   .fd-flow__wait, .fd-flow__pay { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--text-secondary); white-space: nowrap; }

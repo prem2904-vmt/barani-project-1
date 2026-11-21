@@ -42,7 +42,7 @@ import { Report } from "../../../shared/models/report.model";
 import { ApiError } from "../../../shared/models/api-response.model";
 import { Order, OrderTest } from "../../../shared/models/order.model";
 import { formatPatientInfo, formatPatientMeta, patientDisplayName } from "../../../shared/models/patient.model";
-import { buildPartialOrders, orderLabel, queueStatus, QUEUE_DOT, reportStatus, type PrelimOrder, type PrelimRow, type QueueStatus, type QueueStatusKey, type ReportStatus } from "./report-queue.partial";
+import { buildPartialOrders, orderLabel, queueStatus, queueWords, QUEUE_DOT, reportStatus, type PrelimOrder, type PrelimRow, type QueueStatus, type QueueStatusKey, type ReportStatus } from "./report-queue.partial";
 import { webPointerSignal } from "../../../shared/utils/pointer-mode";
 import {
   ChipComponent,
@@ -70,6 +70,8 @@ import {
   type ReportQueuePage,
 } from "../../../shared/utils/report-summary";
 import { WhatsAppService, waStatusLabel, type WaMessage } from "../../../core/services/whatsapp.service";
+import { StatusWordsComponent } from "../../../shared/components/status-words/status-words.component";
+import type { StatusWords } from "../../../shared/utils/status-words";
 import { WhatsAppSendService, waSendLabel } from "../../../core/services/whatsapp-send.service";
 import { EditResultDialogComponent } from "../../../shared/components/edit-result-dialog/edit-result-dialog.component";
 import { savedValueRows } from "../../../shared/utils/result-flag";
@@ -121,7 +123,7 @@ const FILTER_DOT: Record<Filter, QueueStatusKey | "ring"> = {
 @Component({
   selector: "pf-report-queue",
   standalone: true,
-  imports: [BackToTodayComponent, 
+  imports: [BackToTodayComponent, StatusWordsComponent, 
     DailyNoComponent,
     ZoomSourceDirective,
     CommonModule,
@@ -939,7 +941,7 @@ export class ReportQueueComponent implements OnInit {
   private readonly rqFold = computed(() => {
     const touch = !this.web();
     const act = touch ? 256 : 290;
-    const base = 94 + 140 + 130 + 116 + 128 + 96 + act;
+    const base = 94 + 140 + 130 + 156 + 128 + 96 + act;   // Status = two lines of words (156)
     return foldSteps<"compact" | "slim">(this.gridW(), base, [{ id: "compact", saves: 130 + 128 }, { id: "slim", saves: 96 + act - 212 }], 0);
   });
   /** Additive: the old <1280px fold stays; a narrower GRID (a split window) folds further so it never scrolls sideways. */
@@ -961,6 +963,9 @@ export class ReportQueueComponent implements OnInit {
     return queueStatus(r.deliveryStatus, r.type, this.isUnpaid(r));
   }
   statusDot(k: QueueStatusKey): string { return QUEUE_DOT[k]; }
+  /** The Status cell's two lines (report-queue.partial.ts `queueWords`): state + what happened / what is next. */
+  statusWordsOf(r: Report): StatusWords { return queueWords(this.rowStatus(r), this.sentMeta(r)); }
+  readonly partialWords: StatusWords = queueWords({ key: 'partial', label: 'Partial' }, '');
 
   /** "30/F · AA0010" (the Patient cell's second line). */
   whoMeta(r: Report): string {
@@ -1086,7 +1091,8 @@ export class ReportQueueComponent implements OnInit {
       // Order + Generated stay on ONE line; the Patient column takes the slack.
       { ...textCol<RqRow>({ colId: "order", headerName: "Order", width: 130, minWidth: 130, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap", ...cell(this.orderTpl()) },
         (d) => this.orderText(d)), ...this.textFilter((d) => this.orderText(d)) },
-      this.choiceFilter({ colId: "status", headerName: "Status", width: 120, minWidth: 116, headerClass: "pf-rq2-hcenter", cellClass: "pf-rq2-center", ...cell(this.statusTpl()) },
+      // Status = two lines of words (owner design D, 2026-11-21) — read LEFT with its header.
+      this.choiceFilter({ colId: "status", headerName: "Status", width: 168, minWidth: 156, ...cell(this.statusTpl()) },
         "Status", () => this.statusChoices(), () => (this._filter() === "all" ? "" : this._filter()), (v) => this.setFilter((v || "all") as Filter),
         { num: (d) => this.statusRank(d) }),
       this.choiceFilter({ colId: "generated", headerName: "Generated", width: 128, minWidth: 128, hide: compact, wrapText: false, headerClass: "pf-rq2-hcenter", cellClass: "pf-rq2-nowrap pf-rq2-center", ...cell(this.genTpl()) },

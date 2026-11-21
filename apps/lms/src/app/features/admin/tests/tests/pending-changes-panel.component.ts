@@ -20,24 +20,14 @@ import { BusyDirective } from '../../../../shared/directives/busy.directive';
 import { agoWords } from '../../../../shared/instruments/instrument-config';
 import {
   TmDiffRow, TmLookups, isOpen, tmCanSeeKind, tmChangeLine, tmClinicalItems, tmConfidenceLine, tmDiffRows, tmExpiresLine,
-  tmFailedWords, tmKindLabel, tmMatches, tmNeedsClinicalConfirm, tmPeopleLine, tmSourceLine, tmSourceShort, tmStatusLabel, tmWhenLine,
+  tmFailedWords, tmKindLabel, tmMatches, tmNeedsClinicalConfirm, tmPeopleLine, tmSourceLine, tmSourceShort, tmStatusLabel, tmStatusWords, tmWhenLine,
 } from '../../../../shared/utils/tm-proposals';
+import { StatusWordsCellComponent } from '../../../../shared/components/status-words/status-words.component';
 
 /** Status → the dot tone of `.pf-sdot` (data, never decoration). */
 function statusTone(s: string): string {
   return s === 'failed' ? 'bad' : s === 'stale' ? 'warn' : s === 'approved' ? 'done' : '';
 }
-
-function svg(paths: string[], size = 14): SVGSVGElement {
-  const ns = 'http://www.w3.org/2000/svg';
-  const el = document.createElementNS(ns, 'svg');
-  for (const [k, v] of Object.entries({ width: String(size), height: String(size), viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor',
-    'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) el.setAttribute(k, v);
-  for (const d of paths) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); el.appendChild(p); }
-  return el;
-}
-const ICON_STALE = ['M21 12a9 9 0 1 1-3-6.7', 'M21 3v6h-6'];
-const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z'];
 
 /**
  * Test Master → "Pending" (beta `assistant`, dev only): the inbox of changes
@@ -263,11 +253,6 @@ const ICON_FAILED = ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h
     :host ::ng-deep .pf-tmp-cell__main { color: var(--text-primary); font-weight: 500; }
     :host ::ng-deep .pf-tmp-cell__text { color: var(--text-primary); }
     :host ::ng-deep .pf-tmp-cell__sub { color: var(--text-secondary); font-size: 12px; }
-    :host ::ng-deep .pf-tmp-status { display: flex; align-items: flex-start; gap: 6px; white-space: normal; }
-    :host ::ng-deep .pf-tmp-status .pf-sdot { white-space: normal; }
-    :host ::ng-deep .pf-tmp-status svg { flex: none; margin-top: 2px; color: var(--text-secondary); }
-    :host ::ng-deep .pf-tmp-status__t { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); }
-    :host ::ng-deep .pf-tmp-flag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
 
     .pf-tmp__detail { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
     .pf-tmp__title { display: flex; flex-direction: column; gap: 8px; }
@@ -439,31 +424,11 @@ export class PendingChangesPanelComponent implements OnInit {
     wrap.append(a);
     return wrap;
   };
-  private readonly statusCell = (p: ICellRendererParams<TmProposal>): HTMLElement => {
-    const d = p.data!;
-    const wrap = document.createElement('div');
-    wrap.className = 'pf-tmp-cell';
-    const line = document.createElement('span'); line.className = 'pf-tmp-status';
-    if (d.status === 'stale') line.appendChild(svg(ICON_STALE));
-    if (d.status === 'failed') line.appendChild(svg(ICON_FAILED));
-    const s = document.createElement('span'); s.className = 'pf-sdot'; s.textContent = tmStatusLabel(d.status);
-    const tone = statusTone(d.status); if (tone) s.setAttribute('data-tone', tone);
-    if (d.status === 'stale' || d.status === 'failed') s.className = 'pf-tmp-status__t';
-    line.appendChild(s);
-    wrap.appendChild(line);
-    if ((d.clinicalFields ?? []).length > 0) {
-      const c = document.createElement('span'); c.className = 'pf-tmp-flag';
-      const dot = document.createElement('span'); dot.className = 'pf-dot-unpriced'; dot.setAttribute('aria-hidden', 'true');
-      c.append(dot, document.createTextNode('Clinical'));
-      wrap.appendChild(c);
-    }
-    return wrap;
-  };
-
   readonly cols = computed<ColDef<TmProposal>[]>(() => {
     const narrow = this.narrow();
     const test: ColDef<TmProposal> = { headerName: 'Test', colId: 'test', flex: narrow ? 1.7 : 1.3, minWidth: narrow ? 120 : 150, cellRenderer: this.testCell };
-    const status: ColDef<TmProposal> = { headerName: 'Status', colId: 'status', flex: 1, minWidth: narrow ? 104 : 130, cellRenderer: this.statusCell };
+    const status: ColDef<TmProposal> = { headerName: 'Status', colId: 'status', flex: 1, minWidth: narrow ? 104 : 130, cellRenderer: StatusWordsCellComponent, cellRendererParams: { statusWords: (d: TmProposal) => tmStatusWords(d.status, (d.clinicalFields ?? []).length > 0) },
+      valueGetter: p => (p.data ? tmStatusLabel(p.data.status) : ''), wrapText: true, autoHeight: true };
     if (narrow) return [test, status];
     return [
       test,

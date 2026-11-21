@@ -1,7 +1,8 @@
 import { tatStateFor } from '../../../shared/utils/lab-priority';
 import { logicalTestCount } from '../../../shared/models/order.model';
 import { GridFold, waitText } from '../../../shared/utils/work-grid';
-import type { QueueTile } from './pending-validation.logic';
+import type { QueueTile, TileStatus } from './pending-validation.logic';
+import { type StatusWords, statusWords } from '../../../shared/utils/status-words';
 
 /**
  * The Pathologist queue as a GRID (owner 2026-11-20): pure row / column rules behind the screen's pf-data-grid.
@@ -26,19 +27,36 @@ export interface PvColPlan { colId: string; header: string; hide: boolean }
 /**
  * No Tests column (owner 2026-11-20: long test lists made rows 6–8 lines): department + count ride the meta line. No
  * journey ring (owner 2026-11-21: every row waits on validation) — Due = time left to TAT.
- * full  : Sample ID · Patient · Status · Due · Waiting · actions.
+ * Department is its own column (owner 2026-11-21: the head's department pills became its header filter; phones keep
+ * the pills — no headers there).
+ * full  : Sample ID · Patient · Department · Status · Due · Waiting · actions.
  * fold  : Status folds under the patient (actions keep their full size).
- * tight : Sample ID and Waiting fold into the patient cell; Due and the actions always stay (no sideways scroll down
+ * tight : Sample ID, Department and Waiting fold into the patient cell; Due and the actions always stay (no sideways scroll down
  *         to a 520px card, owner 2026-11-21).
  */
 export function pvColumns(fold: GridFold): PvColPlan[] {
   const f = fold !== 'full', t = fold === 'tight';
   const c = (colId: string, header: string, hide = false): PvColPlan => ({ colId, header, hide });
-  return [c('sample', 'Sample ID', t), c('patient', 'Patient'), c('status', 'Status', f), c('due', 'Due'), c('wait', 'Waiting', t), c('acts', '')];
+  return [c('sample', 'Sample ID', t), c('patient', 'Patient'), c('dept', 'Department', t), c('status', 'Status', f), c('due', 'Due'), c('wait', 'Waiting', t), c('acts', '')];
+}
+
+/**
+ * The Status cell as WORDS (owner design D, 2026-11-21): line 1 what it is, line 2 what it needs.
+ *   Critical  / Not acknowledged (rose) · Critical / Acknowledged · to validate (rose)
+ *   Overdue   / Past its TAT · to validate (rose) · Due soon / Due in 20m · To validate / On time
+ * Nothing here is "done" (a row leaves the queue once validated).
+ */
+export function pvWords(st: Pick<TileStatus, 'key' | 'label'>, unacknowledged: boolean): StatusWords {
+  switch (st.key) {
+    case 'critical': return statusWords('Critical', unacknowledged ? 'Not acknowledged' : 'Acknowledged · to validate', 'late');
+    case 'overdue': return statusWords('Overdue', 'Past its TAT · to validate', 'late');
+    case 'due': return statusWords('Due soon', st.label, 'normal');
+    default: return statusWords('To validate', 'On time', 'normal');
+  }
 }
 
 /** "44/F · AA0007 · Haematology · 2 tests" — the entered time lives in the Waiting column ("entered 9:48 PM"). */
-export function pvMeta(t: Pick<QueueTile, 'patientMeta' | 'dept' | 'items'>): string {
+export function pvMeta(t: Pick<QueueTile, 'patientMeta' | 'dept' | 'items'>, withDept = true): string {
   const n = logicalTestCount(t.items as never);
-  return [t.patientMeta, t.dept, `${n} test${n === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+  return [t.patientMeta, withDept ? t.dept : '', `${n} test${n === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
 }

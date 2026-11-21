@@ -24,9 +24,10 @@ import { plural } from '../../../shared/utils/plural';
 import { SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { InventoryEnableCardComponent } from './inventory-enable-card.component';
+import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
 import { gridThemeDark, gridThemeLight } from '../tests/tests/grid-theme';
 import {
-  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, ledgerWord, qty, signedQty, stockLevel,
+  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, expiryView, itemCell, ledgerWord, qty, signedQty, stockLevel, stockWords,
 } from '../../stores/inventory-view';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -475,13 +476,11 @@ export class InventoryComponent implements OnInit {
         valueGetter: p => p.data?.onHand ?? 0, valueFormatter: p => `${qty(p.value)} ${p.data?.uom ?? ''}`.trim() },
       { colId: 'reorder', headerName: 'Reorder at', width: 110, type: 'rightAligned', cellClass: 'inv-num', hide: phone,
         valueGetter: p => p.data?.reorderLevel ?? 0, valueFormatter: p => qty(p.value) },
-      { colId: 'status', headerName: 'Status', width: phone ? 96 : 132, sortable: true,
+      statusWordsCol<InvItem>({ colId: 'status', headerName: 'Status', width: phone ? 104 : 140, sortable: true,
         valueGetter: p => (p.data ? stockLevel(p.data) : 'ok'),
-        comparator: (a: string, b: string) => ['out', 'low', 'ok'].indexOf(a) - ['out', 'low', 'ok'].indexOf(b),
-        cellRenderer: (p: { data?: InvItem }) => {
-          const l = p.data ? stockLevel(p.data) : 'ok';
-          return dotCell(phone && l === 'out' ? 'Out' : STOCK_LEVEL_LABEL[l], STOCK_LEVEL_TONE[l]);
-        } },
+        comparator: (a: string, b: string) => ['out', 'low', 'ok'].indexOf(a) - ['out', 'low', 'ok'].indexOf(b) },
+        it => stockWords(it, phone)),
+
     ];
   });
   onGridReady(e: GridReadyEvent<InvItem>) { this.gridApi = e.api; }

@@ -132,7 +132,8 @@ async function bandSearch(page: Page) {
 
 // ─────────────────────────────── Frontdesk ───────────────────────────────
 async function openFrontdesk(page: Page) { await openDesk(page); }
-const fdFind = (page: Page) => vis(page, '.pf-work-find__input').first();
+// ONE search per screen (owner 2026-11-21): the band's patient search also filters the work list (new design).
+const fdFind = (page: Page) => vis(page, 'pf-hero-band pf-patient-search input, .pf-work-find__input').first();
 
 test.describe('Frontdesk', () => {
   test('work search + Yesterday survive navigating away and back; Back to today resets', async ({ page }) => {
@@ -214,15 +215,15 @@ test.describe('Frontdesk', () => {
 
 // ─────────────────────────────── Lab ───────────────────────────────
 test.describe('Lab', () => {
-  test('My Work: the head search survives navigation (list still filtered)', async ({ page }) => {
+  test('My Work: the band search (the list search now) survives navigation (list still filtered)', async ({ page }) => {
     await go(page, '/lab/my-work');
-    const find = vis(page, '[data-testid="mw-find"]').first();
+    const find = vis(page, 'pf-hero-band input').first();
     await expect(find).toBeVisible({ timeout: 60_000 });
     await expect(shown(page, 'Ms. Arya Stark').first()).toBeVisible({ timeout: 30_000 });
     await find.fill('Prem');
     await expect(shown(page, 'Ms. Arya Stark')).toHaveCount(0);
     await awayAndBack(page);
-    await expect(vis(page, '[data-testid="mw-find"]').first()).toHaveValue('Prem');
+    await expect(vis(page, 'pf-hero-band input').first()).toHaveValue('Prem');
     await expect(shown(page, 'Mr. Prem Kumar K').first()).toBeVisible({ timeout: 20_000 });
     await expect(shown(page, 'Ms. Arya Stark')).toHaveCount(0);
   });

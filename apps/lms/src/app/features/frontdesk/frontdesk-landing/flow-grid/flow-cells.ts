@@ -7,8 +7,10 @@ import { OutsourcedActionsComponent } from '../../outsourced/outsourced-actions.
 import { JourneyRingComponent } from '../../../../shared/components/journey-ring/journey-ring.component';
 import type { JourneyDetail } from '../../../../shared/components/journey-ring/journey-detail';
 import { flowJourneyDetail } from './flow-journey';
+import { StatusWordsComponent } from '../../../../shared/components/status-words/status-words.component';
+import type { StatusWords } from '../../../../shared/utils/status-words';
 import { dailyNoLabel } from '../../../../shared/utils/daily-no';
-import type { FlowAction, FlowActionId, FlowRow } from './flow-row';
+import { type FlowAction, type FlowActionId, type FlowRow, whereWords } from './flow-row';
 
 /** What the landing hands the grid (pf-data-grid `context`): its existing handlers + busy states. */
 export interface FlowGridContext {
@@ -31,35 +33,56 @@ const MENU_ICON: Partial<Record<string, PfAction['icon']>> = {
   share: 'share', download: 'download', reprint: 'print', open: 'view', profile: 'patient', pay: 'edit', discard: undefined,
 };
 
-/** Journey: the shared pf-journey-ring — inner disc = the service (label only when it tells something), outer ring =
- *  the row's own steps. Its own ≥44px button opens the journey view (the row's tap stays the row's). */
+/**
+ * Where now (owner design D, 2026-11-21): the journey ring and the words in ONE cell — the shared pf-journey-ring
+ * (32px; its own ≥44px button opens the journey view, the row's tap stays the row's) + `<pf-status-words>`: line 1
+ * what is happening now, line 2 the detail / next (flow-row.ts `whereWords`). A narrow grid folds Waiting in as a
+ * third quiet line (rose when late). No pill, no dot.
+ */
 @Component({
-  selector: 'pf-fd-flow-ring',
+  selector: 'pf-fd-flow-where',
   standalone: true,
-  imports: [JourneyRingComponent],
+  imports: [JourneyRingComponent, StatusWordsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `@if (row) { <pf-journey-ring class="fd-cell-ring" [steps]="row.ring ?? []" [service]="row.service" [showLabel]="label && size >= 44" [size]="size" [detail]="detail" /> }`,
-  styles: [`:host { display: flex; align-items: center; height: 100%; }`],
+  template: `@if (row) {
+    <span class="fd-cell-where">
+      <pf-journey-ring class="fd-cell-ring" [steps]="row.ring ?? []" [service]="row.service" [showLabel]="false" [size]="32" [detail]="detail" />
+      <span class="fd-cell-where__words">
+        <pf-status-words [words]="words" />
+        @if (waitIn && row.waitMin !== null) { <span class="fd-cell-where__wait" [class.fd-cell-where__wait--late]="row.late">Waiting {{ row.wait }}</span> }
+      </span>
+    </span>
+  }`,
+  styles: [`
+    :host { display: flex; align-items: center; min-height: 100%; min-width: 0; }
+    .fd-cell-where { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; column-gap: 8px; padding: 6px 0; min-width: 0; width: 100%; }
+    .fd-cell-where pf-journey-ring { justify-self: center; }
+    .fd-cell-where__words { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .fd-cell-where__wait { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .fd-cell-where__wait--late { color: var(--pf-late-text, color-mix(in srgb, var(--red-text) 85%, var(--text-primary))); font-weight: 600; }
+  `],
 })
-export class FlowRingCellComponent implements ICellRendererAngularComp {
+export class FlowWhereCellComponent implements ICellRendererAngularComp {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly el = inject<ElementRef<HTMLElement>>(ElementRef);
   row: FlowRow | null = null;
-  label = true;
-  /** 44px; 32px when a narrow grid folds the Journey column (flow-fold.ts). */
-  size = 44;
+  words: StatusWords | null = null;
+  /** Waiting folded into this cell (flow-fold.ts 'wait'). */
+  waitIn = false;
   private ctx: FlowGridContext | null = null;
   /** Read at tap time (fresh clock, the row's own Next action through the landing's existing handler). */
   readonly detail = (): JourneyDetail => {
     const row = this.row!;
     const n = row.next;
     return flowJourneyDetail(row, Date.now(), {
-      showLabel: this.label,
+      showLabel: this.ctx?.ringLabels?.() ?? true,
       action: n ? { label: n.label, aria: n.aria, run: () => this.ctx?.act(row, n.id, this.el.nativeElement) } : null,
     });
   };
-  agInit(p: P & { ringSize?: number }): void {
-    this.row = p.data ?? null; this.ctx = p.context; this.label = p.context?.ringLabels?.() ?? true; this.size = p.ringSize ?? 44; this.cdr.markForCheck();
+  agInit(p: P & { waitIn?: boolean }): void {
+    this.row = p.data ?? null; this.ctx = p.context; this.waitIn = !!p.waitIn;
+    this.words = this.row ? whereWords(this.row) : null;
+    this.cdr.markForCheck();
   }
   refresh(p: P): boolean { this.agInit(p); return true; }
 }

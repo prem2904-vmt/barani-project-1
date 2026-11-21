@@ -265,7 +265,8 @@ test.describe('who is where — Lab + OPD user', () => {
     // The journey ring: one per row, with the service label (2+ services, no filter).
     const ring = vis(page, '.pf-fd-flow pf-journey-ring').first();
     await expect(ring.locator('.pf-jring__btn')).toHaveAttribute('aria-label', /^(Lab|OPD) · .*Open journey$/);
-    await expect(ring.locator('text.pf-jring__lbl')).toHaveCount(1);
+    // The ring rides Where now at 32px (design D): no inner label; the service is in its spoken name.
+    await expect(ring.locator('text.pf-jring__lbl')).toHaveCount(0);
     await shots(page, '01-who-is-where');
     if (!isTouch()) {
       await ring.hover();
@@ -506,7 +507,7 @@ test.describe('work grid column filters + alignment', () => {
     const payShown = await grid.locator('.ag-header-cell[col-id="pay"]').count() > 0;
     // A narrow grid folds Waiting into the Where cell (never a sideways scroll, owner 2026-11-21).
     const waitShown = await grid.locator('.ag-header-cell[col-id="wait"]').count() > 0;
-    for (const [col, cls] of [['token', 'center'], ['journey', 'center'], ['wait', 'center'], ['pay', 'center'], ['patient', 'left'], ['where', 'left'], ['next', 'right']] as const) {
+    for (const [col, cls] of [['token', 'center'], ['wait', 'center'], ['pay', 'center'], ['patient', 'left'], ['where', 'left'], ['next', 'right']] as const) {
       if (col === 'pay' && !payShown) continue;                        // iPad folds Payment into the Patient line
       if (col === 'wait' && !waitShown) continue;
       await expect(grid.locator(`.ag-header-cell[col-id="${col}"]`)).toHaveClass(new RegExp(`wg-h-${cls}`));
@@ -568,7 +569,8 @@ test.describe('work grid column filters + alignment', () => {
     await expect(grid.locator(`.ag-header-cell[col-id="${fcol}"]`)).toHaveClass(/ag-header-cell-filtered/);
     await shots(page, '12-column-filter-due');
     // AND with the head search: a name that is not due shows nothing.
-    const find = vis(page, '.pf-work-find__input').first();
+    // ONE search per screen (2026-11-21): the band's patient search filters the work list.
+    const find = vis(page, 'pf-hero-band pf-patient-search input').first();
     await find.fill('Arya');
     await expect(grid.locator('.ag-row')).toHaveCount(0);
     await find.fill('Nithin');
@@ -588,7 +590,8 @@ test.describe('OPD visits in the common Frontdesk', () => {
     const grid = vis(page, '.pf-fd-flow').first();
     await expect(page.getByText('Ms. Lalitha Ramakrishnan (OPD visit)').locator('visible=true').first()).toBeVisible();
     const row = grid.locator('.ag-row[row-id="opd:v1"]');
-    await expect(row.locator('.fd-cell-tok--opd')).toHaveText('R-1');
+    // The token is its own column, or (a narrower grid: Where now's ring + words take the room) the chip before the name.
+    await expect(row.locator('.fd-cell-tok--opd, .fd-cell-pt__tok').locator('visible=true').first()).toHaveText('R-1');
     await expect(row.locator('.pf-jring__btn')).toHaveAttribute('aria-label', /^OPD · step 3 of 4 · Doctor queue · late/);
     await expect(row.locator('.fd-cell-next__btn')).toHaveText('Open');
     // The chart and the shelf count them: OPD = 2 orders + 2 open visits.

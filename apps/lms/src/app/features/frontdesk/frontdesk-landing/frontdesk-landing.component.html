@@ -179,7 +179,10 @@
         <!-- Plain pill like every other band (owner) — the typeahead IS
              the frontdesk search; the special advanced-search trigger is
              gone (⌘K still opens it via the keyboard shortcut). -->
-        <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…"
+        <!-- ONE search per screen (owner 2026-11-21): typing also filters the WORK list live (patient, phone, MRN,
+             order, sample — the old "Search this list" matching); Enter / a pick still opens the patient. -->
+        <pf-patient-search placeholder="Search patient · name, phone, MRN, ABHA…" ariaLabel="Search patients and this list"
+          [value]="workQuery()" (queryChange)="setWorkQuery($event)"
           (picked)="openProfile($event)"></pf-patient-search>
       </div>
 
@@ -344,6 +347,8 @@
           <!-- Phones: the search stacks full width BELOW the list switcher (the filter row). -->
           @if (mobileList() !== 'appt' && mobileList() !== 'home') {
           <div class="pf-work-find-phone" [class.pf-work-find-phone--filters]="theme.isNewDesign()">
+          <!-- New design: the band search filters this list (one search per screen, owner 2026-11-21). -->
+          @if (!theme.isNewDesign()) {
           <label class="pf-work-find pf-work-find--phone">
             <svg class="pf-work-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -354,6 +359,7 @@
               (input)="setWorkQuery($any($event.target).value)" placeholder="Search this list"
               aria-label="Search patient, order, sample or test in this list" />
           </label>
+          }
           <!-- New design, phones / tablet portrait: the More filters icon rides INSIDE the search (one card). -->
           @if (theme.isNewDesign()) {
           <button type="button" class="pf-work-find__filter" [class.pf-work-find__filter--on]="workFilterCount() > 0 || workDateRange() !== 'today'"
@@ -866,6 +872,8 @@
                    search first, then the tab filter in its own scroller. -->
               <header class="pf-appt-split__hdr pf-appt-split__hdr--tabs pf-work-hdr" (click)="togglePane('work')"
                 role="button" tabindex="0" [attr.aria-expanded]="expandedPane() === 'work'">
+                <!-- New design: the band search filters this list (one search per screen, owner 2026-11-21). -->
+                @if (!theme.isNewDesign()) {
                 <label class="pf-work-find" (click)="$event.stopPropagation()">
                   <svg class="pf-work-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -877,6 +885,7 @@
                     (input)="setWorkQuery($any($event.target).value)" (keydown)="$event.stopPropagation()"
                     placeholder="Search this list" aria-label="Search patient, order, sample or test in this list" />
                 </label>
+                }
                 <div class="pf-work-hdr__filter">
                   <!-- STATUS chips: toggle filters. Tap = only that status; tap the
                        same chip again = all statuses. The date range (right) stays

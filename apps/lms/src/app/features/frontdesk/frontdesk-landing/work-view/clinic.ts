@@ -2,6 +2,8 @@ import type { ServiceId } from '../../../../core/services/service-shelf';
 import { durationText } from '../../../../shared/utils/work-grid';
 import type { FlowRow } from '../flow-grid/flow-row';
 import { stepOfRow } from '../who-is-where/who-is-where';
+import { whereWords } from '../flow-grid/flow-row';
+import { statusWordsText } from '../../../../shared/utils/status-words';
 import { sectionLabel } from './sections';
 
 /**
@@ -26,6 +28,8 @@ export interface ClinicChip {
   late: boolean;
   /** Being seen right now (in consult / at vitals). */
   now: boolean;
+  /** Where now in words (the list's line 1 + line 2: flow-row `whereWords`) — the chip's tooltip and spoken text. */
+  where: string;
 }
 
 export interface ClinicPlace {
@@ -55,7 +59,8 @@ export function chipOf(r: FlowRow): ClinicChip {
   const no = r.order?.dailyNo;
   const token = r.visit ? r.visit.tokenLabel : no ? `#${no}` : r.kind === 'draft' ? 'Draft' : '—';
   const now = !!r.visit && (r.visit.status === 'in_consult' || r.visit.status === 'vitals');
-  return { id: r.id, token, name: strip(r.name), wait: r.waitMin === null ? '' : r.wait, waitMin: r.waitMin ?? -1, late: r.late, now };
+  return { id: r.id, token, name: strip(r.name), wait: r.waitMin === null ? '' : r.wait, waitMin: r.waitMin ?? -1, late: r.late, now,
+    where: statusWordsText(whereWords(r)) };
 }
 
 /** Late first, then the longest wait, then the row order. */

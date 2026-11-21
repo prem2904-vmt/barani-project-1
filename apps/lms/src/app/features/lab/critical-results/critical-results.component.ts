@@ -21,6 +21,8 @@ import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.comp
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
 import { CriticalCommunicationDialogComponent } from '../../../shared/components/critical-communication-dialog/critical-communication-dialog.component';
 import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
+import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { criticalStatusWords } from './critical-status-words';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { LAB_TIME_ZONE, labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { plural } from '../../../shared/utils/plural';
@@ -307,12 +309,10 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
     .pf-cr__main ::ng-deep .ag-header-cell-resize::after, .pf-cr__main ::ng-deep .ag-header-cell::after { display: none; }
     .pf-cr__main ::ng-deep .ag-pinned-right-header, .pf-cr__main ::ng-deep .ag-pinned-right-cols-container { border-left: 0; }
     .pf-cr__more { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--pf-line); }
-    /* Row cells: ONE status word (dot + colour), row actions as kit .pf-rowact. */
-    .pf-cr__main ::ng-deep .pf-cr-status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; line-height: 1.3; white-space: nowrap; --pf-cr-tone: var(--text-secondary); color: var(--text-primary); background: var(--pf-chip-bg); box-shadow: inset 0 0 0 1px var(--pf-line); }
-    .pf-cr__main ::ng-deep .pf-cr-status[data-tone='red'] { --pf-cr-tone: var(--red-text, #b91c1c); }
-    .pf-cr__main ::ng-deep .pf-cr-status[data-tone='amber'] { --pf-cr-tone: var(--amber-text, #b45309); }
-    .pf-cr__main ::ng-deep .pf-cr-status[data-tone='green'] { --pf-cr-tone: var(--green-text, #15803d); }
-    .pf-cr__main ::ng-deep .pf-cr-status__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-cr-tone); flex: none; }
+    /* Row cells: status words (shared pf-status-words; the phone card line uses .pf-cr-word), row actions as kit .pf-rowact. */
+    .pf-cr__main ::ng-deep .pf-cr-word { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .pf-cr__main ::ng-deep .pf-cr-word[data-tone='red'] { color: var(--pf-late-text, color-mix(in srgb, var(--red-text) 85%, var(--text-primary))); }
+    .pf-cr__main ::ng-deep .pf-cr-word[data-tone='green'] { color: var(--success-text, var(--green-text)); }
     .pf-cr__main ::ng-deep .pf-cr-acts { display: inline-flex; gap: 6px; align-items: center; justify-content: flex-end; width: 100%; min-height: 44px; }
     .pf-cr__main ::ng-deep .pf-cr-acts .pf-rowact { min-height: 44px; }
     .pf-cr__main ::ng-deep .ag-header-cell[col-id='actions'] .ag-header-cell-resize,
@@ -413,18 +413,14 @@ export class CriticalResultsComponent {
       { colId: 'test', headerName: 'Test', flex: 1.4, minWidth: 110,
         valueGetter: p => p.data?.testName ?? '',
         cellRenderer: (p: { data?: CriticalResultEvent }) => cell(p.data?.testName ?? '', p.data?.summary) },
-      { colId: 'status', headerName: 'Status', flex: 1.5, minWidth: this.isCoarse ? 200 : 230,
-        valueGetter: p => p.data?.status ?? '',
-        cellRenderer: (p: { data?: CriticalResultEvent }) => {
-          const e = p.data; if (!e) return '';
-          const st = criticalStatusWord(e.status);
-          const lines: string[] = [];
-          if (e.acknowledgedAt) lines.push(`${esc(e.acknowledgedByName ?? '')}, ${esc(istStamp(e.acknowledgedAt))}`);
-          if (e.communicatedAt) lines.push(`Told ${esc(e.communicatedToName ?? '')}${e.communicatedToRole ? ' (' + esc(criticalRoleLabel(e.communicatedToRole)) + ')' : ''} by ${esc(criticalMethodLabel(e.communicationMethod).toLowerCase())}, ${esc(istStamp(e.communicatedAt))}`
-            + (e.communicationNotes ? ` · ${esc(e.communicationNotes)}` : ''));
-          return `<div class="pf-cr-cell"><span><span class="pf-cr-status" data-tone="${st.tone}"><span class="pf-cr-status__dot" aria-hidden="true"></span>${st.label}</span></span>`
-            + lines.map(l => `<span class="pf-cr-cell__sub">${l}</span>`).join('') + `</div>`;
-        } },
+      statusWordsCol<CriticalResultEvent>({ colId: 'status', headerName: 'Status', flex: 1.5, minWidth: this.isCoarse ? 200 : 230,
+        valueGetter: p => p.data?.status ?? '' }, e => {
+        const lines: string[] = [];
+        if (e.acknowledgedAt) lines.push(`${e.acknowledgedByName ?? ''}, ${istStamp(e.acknowledgedAt)}`);
+        if (e.communicatedAt) lines.push(`Told ${e.communicatedToName ?? ''}${e.communicatedToRole ? ' (' + criticalRoleLabel(e.communicatedToRole) + ')' : ''} by ${criticalMethodLabel(e.communicationMethod).toLowerCase()}, ${istStamp(e.communicatedAt)}`
+          + (e.communicationNotes ? ` · ${e.communicationNotes}` : ''));
+        return criticalStatusWords(e.status, lines);
+      }),
     ];
     if (canAct) cols.push({
       colId: 'actions', headerName: 'Actions', headerClass: 'pf-cr-acthead', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
@@ -469,7 +465,7 @@ export class CriticalResultsComponent {
         return `<div class="pf-cr-cell pf-cr-cell--stack"><span>${esc(e.patientName)}</span>` +
           `<span class="pf-cr-cell__sub">${esc([e.patientMrn, e.orderNumber].filter(Boolean).join(' · '))}</span>` +
           `<span>${esc(e.testName)} <span class="pf-cr-cell__sub">${esc(e.summary)}</span></span>` +
-          `<span><span class="pf-cr-status" data-tone="${st.tone}" title="${st.label}"><span class="pf-cr-status__dot" aria-hidden="true"></span>${e.status === 'open' ? "Not ack'd" : st.label}</span></span></div>`;
+          `<span class="pf-cr-word" data-tone="${st.tone}" title="${st.label}">${e.status === 'open' ? "Not ack'd" : st.label}</span></div>`;
       },
     };
     const detected = cols.find(c => c.colId === 'detectedAt');

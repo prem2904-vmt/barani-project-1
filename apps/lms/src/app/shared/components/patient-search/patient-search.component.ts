@@ -402,6 +402,14 @@ export class PatientSearchComponent {
    *  to look the patient up and open them directly. */
   @Input() enableScan = false;
   @Output() picked = new EventEmitter<Patient>();
+  /** The typed text, as it changes (typing / Clear / Esc — never a pick). A screen whose band search ALSO filters
+   *  its own list (owner 2026-11-21: one search per screen) binds this, and hands the kept text back via `value`. */
+  @Output() queryChange = new EventEmitter<string>();
+  /** Start the field with this text (view state coming back); ignored while it already shows the same text. */
+  @Input() set value(v: string | null | undefined) {
+    const t = v ?? '';
+    if (t !== this.query()) this.query.set(t);
+  }
   /** Fires once the field has lost focus (after the click-grace delay).
    *  Consumers that reveal the field on demand use it to collapse. */
   @Output() blurred = new EventEmitter<void>();
@@ -481,6 +489,7 @@ export class PatientSearchComponent {
   onInput(ev: Event) {
     const value = (ev.target as HTMLInputElement).value;
     this.query.set(value);
+    this.queryChange.emit(value);
     clearTimeout(this._timer);
     const q = value.trim();
     if (q.length < 2) {
@@ -510,6 +519,7 @@ export class PatientSearchComponent {
 
   clear() {
     this.query.set('');
+    this.queryChange.emit('');
     this._results.set([]);
     this._loading.set(false);
     this._highlight.set(-1);
@@ -517,6 +527,7 @@ export class PatientSearchComponent {
 
   close() {
     this.query.set('');
+    this.queryChange.emit('');
     this._results.set([]);
     this._focused.set(false);
   }

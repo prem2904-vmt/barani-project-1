@@ -1,5 +1,6 @@
 import { TatState, formatDuration } from '../../../shared/utils/lab-priority';
 import { LAB_TIME_ZONE, istDateOf } from '../../../shared/utils/lab-clock';
+import { statusWords, type StatusWords } from '../../../shared/utils/status-words';
 
 /**
  * Turnaround board — the pure logic behind the screen (no Angular): status → plain words, the four buckets and
@@ -211,4 +212,11 @@ export function lateWords(lateMin: number | null): string {
 /** The quiet second line under Due for work not yet late: "in 25m". */
 export function dueInWords(lateMin: number | null): string {
   return lateMin != null && lateMin < 0 ? `in ${formatDuration(lateMin)}` : '';
+}
+
+/** The board's "Now" cell as words (design D): the first step is line 1 (rose only when the sample was rejected), other steps are line 2. */
+export function tatNowWords(now: readonly string[]): StatusWords {
+  const head = now[0] ?? 'In progress';
+  const more = now.length > 1 ? 'Also: ' + now.slice(1).join(', ').toLowerCase() : null;
+  return statusWords(head, more, head === 'Rejected, needs a new sample' ? 'late' : 'normal');
 }

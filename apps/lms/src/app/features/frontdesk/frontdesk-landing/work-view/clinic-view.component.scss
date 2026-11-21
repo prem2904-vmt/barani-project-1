@@ -85,22 +85,17 @@
 /* "tight": the who lines step aside (kept in layout-free form so the fit measures the same box every time). */
 .cv-room--tight:not(.cv-room--wait) .cv-room__who { position: absolute; left: 8px; right: 8px; visibility: hidden; }
 .cv-st {
+  /* The room's state in WORDS (owner design D: no pill, no dot) — "Seeing" in normal text, "Free" quiet. */
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   height: 20px;
-  padding: 0 7px;
-  border-radius: 999px;
-  background: var(--pf-chip-bg);
-  border: 1px solid var(--pf-line);
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-tertiary);
   white-space: nowrap;
 }
-.cv-st i { width: 6px; height: 6px; border-radius: 6px; background: currentColor; }
-.cv-st--run { color: var(--violet-text); }
+.cv-st--run { color: var(--text-primary); }
 
 .cv-chips { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; min-height: 0; overflow: hidden; }
 .cv-chip {

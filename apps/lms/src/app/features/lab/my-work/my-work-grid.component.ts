@@ -14,10 +14,12 @@ import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { GridFold, actionCol, dateCol, dueCell, durationCol, durationText, fitFold, minWidthOf, minutesSince, textCol, valuesCol } from '../../../shared/utils/work-grid';
 import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
+import { StatusWordsComponent } from '../../../shared/components/status-words/status-words.component';
+import type { StatusWords } from '../../../shared/utils/status-words';
 import type { OrderTest } from '../../../shared/models/order.model';
 import {
-  MwAction, MwDoneTube, MwMode, MwRow, MwRules, MwTube, doneMenu, donePrimary, doneStatus, groupPrimary,
-  MwSortCol, groupStatus, mwColumns, sortColOf, sortKeyOf, tatCell, testNames, testsSummary, tubeMenu, tubePrimary, tubeStatus,
+  MwAction, MwDoneTube, MwMode, MwRow, MwRules, MwTube, deptText, doneMenu, donePrimary, doneStatus, doneWords, groupPrimary,
+  MwSortCol, groupStatus, groupWords, mwColumns, sortColOf, sortKeyOf, tatCell, testNames, testsSummary, tubeMenu, tubePrimary, tubeStatus, tubeWords,
 } from './my-work.grid';
 
 /** What My Work hands its grid: its existing handlers and busy states (nothing new is decided here). */
@@ -53,7 +55,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
 @Component({
   selector: 'pf-mw-grid',
   standalone: true,
-  imports: [DataGridComponent, ActionsMenuComponent, DailyNoComponent, SkeletonComponent, BusyDirective, ZoomSourceDirective, DatePipe, NgTemplateOutlet],
+  imports: [DataGridComponent, ActionsMenuComponent, DailyNoComponent, SkeletonComponent, BusyDirective, ZoomSourceDirective, StatusWordsComponent, DatePipe, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (phone()) {
@@ -77,7 +79,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
                 <li><ng-container [ngTemplateOutlet]="tubeCard" [ngTemplateOutletContext]="{ $implicit: row.tube, name: row.tube.patientName, urgent: row.priority === 'urgent', who: true }" /></li>
               }
               @case ('patient') {
-                @let st = gStatus(row.tubes);
+                @let st = gWords(row.tubes);
                 @let p = gPrimary(row.tubes, row.open);
                 <li class="wg-card" role="button" tabindex="0" [attr.data-urgent]="row.priority === 'urgent'" [attr.aria-expanded]="row.open"
                     [attr.aria-label]="(row.open ? 'Hide tubes for ' : 'Show tubes for ') + row.group.patientName"
@@ -105,7 +107,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
                 }
               }
               @case ('done') {
-                @let st = dStatus(row.done);
+                @let st = dWords(row.done);
                 @let p = dPrimary(row.done);
                 <li class="wg-card" role="link" tabindex="0" [pfZoomSource]="row.done.sampleId"
                     [attr.aria-label]="'View results for ' + (row.done.barcode || row.done.sampleId)"
@@ -144,9 +146,9 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
         <span class="wg-cell" [pfZoomSource]="row.tube.sampleId"
               (pointerdown)="ctx().peekDown(row.tube, $event)" (pointerup)="ctx().peekUp()" (pointercancel)="ctx().peekUp()"
               (pointerleave)="ctx().peekUp()" (pointermove)="ctx().peekMove($event)">
+          <!-- No status tags under the ID (owner 2026-11-21): Draft / Re-entry live in the Status words only. -->
           <span class="wg-id wg-link" role="link" tabindex="0" [attr.aria-label]="tubeAria(row.tube)"
                 (keydown.enter)="key(row, $event)" (keydown.space)="key(row, $event)">{{ row.tube.barcode || 'no label' }}</span>
-          <ng-container [ngTemplateOutlet]="tags" [ngTemplateOutletContext]="{ $implicit: row.tube }" />
         </span>
       } @else if (row.kind === 'done') {
         <span class="wg-cell" [pfZoomSource]="row.done.sampleId">
@@ -162,9 +164,9 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
           <span class="wg-who">
             @if (fold() === 'tight') { <span class="wg-id">{{ row.tube.barcode || 'no label' }}</span> }
             <span class="wg-who__name"><pf-daily-no [of]="row.tube.tests[0]?.subOrder" />{{ row.tube.patientName }}</span>
-            <span class="wg-who__meta" [attr.title]="testsOf(row.tube.tests)">{{ metaJoin(row.tube.patientMeta, summary(row.tube.tests)) }}</span>
+            <span class="wg-who__meta" [attr.title]="testsOf(row.tube.tests)">{{ metaJoin(row.tube.patientMeta, rowSummary(row.tube.tests)) }}</span>
             @for (r of row.tube.rejections; track r.testName) { <span class="wg-note">{{ r.testName }}: {{ r.reason }}</span> }
-            <ng-container [ngTemplateOutlet]="foldTpl" [ngTemplateOutletContext]="{ st: tStatus(row.tube), urgent: row.priority === 'urgent' }" />
+            <ng-container [ngTemplateOutlet]="foldTpl" [ngTemplateOutletContext]="{ st: tWords(row.tube), urgent: row.priority === 'urgent' }" />
           </span>
         }
         @case ('patient') {
@@ -172,19 +174,19 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
             <span class="wg-who__name wg-link" role="link" tabindex="0"
                   [attr.aria-label]="(row.open ? 'Hide tubes for ' : 'Show tubes for ') + row.group.patientName"
                   (keydown.enter)="key(row, $event)" (keydown.space)="key(row, $event)"><pf-daily-no [of]="row.group.items[0]?.subOrder" />{{ row.group.patientName }}</span>
-            <span class="wg-who__meta" [attr.title]="testsOf(row.group.items)">{{ metaJoin(row.group.patientMeta, summary(row.group.items)) }}</span>
+            <span class="wg-who__meta" [attr.title]="testsOf(row.group.items)">{{ metaJoin(row.group.patientMeta, rowSummary(row.group.items)) }}</span>
             @for (t of row.tubes; track t.sampleId) { @for (r of t.rejections; track r.testName) { <span class="wg-note">{{ r.testName }}: {{ r.reason }}</span> } }
-            <ng-container [ngTemplateOutlet]="foldTpl" [ngTemplateOutletContext]="{ st: gStatus(row.tubes), urgent: row.priority === 'urgent' }" />
+            <ng-container [ngTemplateOutlet]="foldTpl" [ngTemplateOutletContext]="{ st: gWords(row.tubes), urgent: row.priority === 'urgent' }" />
           </span>
         }
         @case ('done') {
           <span class="wg-who">
             @if (fold() === 'tight') { <span class="wg-id">{{ row.done.barcode || row.done.sampleId }}</span> }
             <span class="wg-who__name"><pf-daily-no [of]="row.done.tests[0]?.subOrder" />{{ row.done.patientName }}</span>
-            <span class="wg-who__meta" [attr.title]="row.done.testNames">{{ metaJoin(row.done.patientMeta, summary(row.done.tests)) }}</span>
+            <span class="wg-who__meta" [attr.title]="row.done.testNames">{{ metaJoin(row.done.patientMeta, rowSummary(row.done.tests)) }}</span>
             @if (fold() !== 'full') {
               <span class="wg-who__fold">
-                <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: dStatus(row.done) }" />
+                <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: dWords(row.done) }" />
                 @if (fold() === 'tight') { <span class="wg-sub">{{ row.done.completedAt | date:'d MMM, h:mm a' }}</span> }
               </span>
             }
@@ -211,11 +213,17 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
     <ng-template #cStatus let-row>
       <span class="wg-cell">
         @switch (row.kind) {
-          @case ('tube') { <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: tStatus(row.tube) }" /> }
-          @case ('patient') { <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: gStatus(row.tubes) }" /> }
-          @case ('done') { <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: dStatus(row.done) }" /> }
+          @case ('tube') { <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: tWords(row.tube) }" /> }
+          @case ('patient') { <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: gWords(row.tubes) }" /> }
+          @case ('done') { <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: dWords(row.done) }" /> }
         }
       </span>
+    </ng-template>
+
+    <!-- Department (owner 2026-11-21): the old head "Filters → Department" is this column's header filter. -->
+    <ng-template #cDept let-row>
+      @let d = dept(row);
+      <span class="wg-cell"><span class="wg-tests" [attr.title]="d.names.length > 1 ? d.names.join(' · ') : null">{{ d.text }}</span></span>
     </ng-template>
 
     <ng-template #cWhen let-row>
@@ -245,7 +253,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
     <ng-template #cDetail let-row>
       <ul class="mwg-tubes" data-testid="mw-tubes">
         @for (t of row.tubes; track t.sampleId) {
-          @let st = tStatus(t);
+          @let st = tWords(t);
           @let tc = tat(t, t.tests, t.allDone);
           <li class="mwg-tube" role="button" tabindex="0" [pfZoomSource]="t.sampleId" [attr.aria-label]="tubeAria(t)"
               [attr.aria-busy]="ctx().pending(t.sampleId) || null" [class.pf-nav-pending]="ctx().pending(t.sampleId)"
@@ -253,7 +261,6 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
               (keydown.enter)="ctx().activate(t, row.group.patientName)" (keydown.space)="$event.preventDefault(); ctx().activate(t, row.group.patientName)">
             <span class="wg-cell mwg-tube__id">
               <span class="wg-id">{{ t.barcode || 'no label' }}</span>
-              <ng-container [ngTemplateOutlet]="tags" [ngTemplateOutletContext]="{ $implicit: t }" />
             </span>
             <span class="wg-cell mwg-tube__tests" [attr.title]="testsOf(t.tests)">
               <span class="wg-sub">{{ summary(t.tests) }}</span>
@@ -271,23 +278,15 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
     </ng-template>
 
     <!-- ── Shared bits ── -->
+    <!-- Status = two lines of words (owner design D, 2026-11-21): no pill, no dot. -->
     <ng-template #pill let-st>
-      <span class="wg-pill" [attr.data-tone]="st.tone"><span class="wg-dot" aria-hidden="true"></span>{{ st.label }}</span>
-    </ng-template>
-
-    <ng-template #tags let-t>
-      @if ((t.hasDraft && !t.allDone) || t.rejections.length) {
-        <span class="wg-tags">
-          @if (t.hasDraft && !t.allDone) { <span class="wg-tag" data-tone="violet">Draft</span> }
-          @if (t.rejections.length) { <span class="wg-tag" data-tone="rose">Re-entry</span> }
-        </span>
-      }
+      <pf-status-words [words]="st" />
     </ng-template>
 
     <ng-template #foldTpl let-st="st" let-urgent="urgent">
       @if (fold() !== 'full') {
         <span class="wg-who__fold">
-          <span class="wg-pill" [attr.data-tone]="st.tone"><span class="wg-dot" aria-hidden="true"></span>{{ st.label }}</span>
+          <pf-status-words [words]="st" />
           @if (urgent) { <span class="wg-prio" data-p="urgent">Urgent</span> }
         </span>
       }
@@ -328,7 +327,7 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
     </ng-template>
 
     <ng-template #tubeCard let-t let-name="name" let-urgent="urgent" let-who="who">
-      @let st = tStatus(t);
+      @let st = tWords(t);
       @let tc = tat(t, t.tests, t.allDone);
       <div class="wg-card" role="button" tabindex="0" [attr.data-urgent]="urgent" [pfZoomSource]="t.sampleId" [attr.aria-label]="tubeAria(t)"
            [attr.aria-busy]="ctx().pending(t.sampleId) || null" [class.pf-nav-pending]="ctx().pending(t.sampleId)"
@@ -377,6 +376,8 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
     .mwg-tube__st, .mwg-tube__tat { flex: none; }
     .mwg-tube__acts { width: auto; flex: none; margin-left: auto; }
     .mwg-subcard { padding-left: 16px; }
+    /* Folded status (fold tier): the two lines of words stack, Urgent under them — never wedged between the lines. */
+    .wg-who__fold:has(pf-status-words) { flex-direction: column; align-items: flex-start; gap: 2px; }
   `],
 })
 export class MyWorkGridComponent implements AfterViewInit {
@@ -408,10 +409,11 @@ export class MyWorkGridComponent implements AfterViewInit {
       sample: { width: 128, minWidth: 116 },
       patient: { flex: 2, minWidth: fold === 'tight' ? 190 : 220 },
       // Wide enough for the header words + sort / filter icons (headers never ellipsise).
+      dept: { flex: 1, minWidth: 150 },
       priority: { width: 128, minWidth: 128 },
       due: { width: 108, minWidth: 104 },
       wait: { width: 118, minWidth: 118 },
-      status: { width: 150, minWidth: 136 },
+      status: { width: 176, minWidth: 160 },
       when: { width: 160, minWidth: 160 },
       // One primary + ⋯ at their full size (touch: 44 tall, 8 apart) — columns fold before the buttons shrink.
       acts: { width: touch ? 200 : 190, minWidth: touch ? 200 : 190 },
@@ -430,7 +432,10 @@ export class MyWorkGridComponent implements AfterViewInit {
         r => (r.kind === 'done' ? null : r.priority === 'urgent' ? 0 : 1));
       case 'due': return durationCol<MwRow>(def, r => this.fDue(r), { kind: 'due' });
       case 'wait': return durationCol<MwRow>(def, r => this.fMinutes(r), { kind: 'wait' });
-      case 'status': return valuesCol<MwRow>(wrap(def), r => this.fStatus(r), set, 'center');
+      // Department (the old head Filters → Department) + Status words read LEFT (two lines, design D); the status
+      // set filter keeps the status label.
+      case 'dept': return valuesCol<MwRow>(wrap(def), r => this.fDept(r), set, 'left');
+      case 'status': return valuesCol<MwRow>(wrap(def), r => this.fStatus(r), set, 'left');
       case 'when': return dateCol<MwRow>(def, r => (r.kind === 'done' ? r.done.completedAt : null));
       default: return actionCol<MwRow>({ ...def, cellClass: 'wg-c-acts' });
     }
@@ -450,6 +455,8 @@ export class MyWorkGridComponent implements AfterViewInit {
   private fStatus(r: MwRow): string {
     return r.kind === 'tube' ? this.tStatus(r.tube).label : r.kind === 'done' ? this.dStatus(r.done).label : this.gStatus(r.tubes).label;
   }
+  /** Department filter value: the line departments' names. */
+  private fDept(r: MwRow): string { return deptText(this.linesOf(r)).names.join(', '); }
   /** Minutes left to TAT (negative = late) — the Due filter's number. */
   private fDue(r: MwRow): number | null {
     const x = r.kind === 'tube' ? r.tube : r.kind === 'done' ? null : r.group;
@@ -469,6 +476,7 @@ export class MyWorkGridComponent implements AfterViewInit {
   private readonly waitTpl = viewChild<TemplateRef<unknown>>('cWait');
   private readonly statusTpl = viewChild<TemplateRef<unknown>>('cStatus');
   private readonly whenTpl = viewChild<TemplateRef<unknown>>('cWhen');
+  private readonly deptTpl = viewChild<TemplateRef<unknown>>('cDept');
   private readonly actsTpl = viewChild<TemplateRef<unknown>>('cActs');
   private readonly detailTpl = viewChild<TemplateRef<unknown>>('cDetail');
 
@@ -489,7 +497,7 @@ export class MyWorkGridComponent implements AfterViewInit {
   readonly cols = computed<ColDef<MwRow>[]>(() => {
     const tpl: Record<string, TemplateRef<unknown> | undefined> = {
       sample: this.sampleTpl(), patient: this.patientTpl(), priority: this.priorityTpl(), due: this.dueTpl(),
-      wait: this.waitTpl(), status: this.statusTpl(), when: this.whenTpl(), acts: this.actsTpl(),
+      wait: this.waitTpl(), status: this.statusTpl(), when: this.whenTpl(), acts: this.actsTpl(), dept: this.deptTpl(),
     };
     const size = this.sizes(!this.web(), this.fold());
     // The GRID sorts, on the real value (minutes / epoch / Urgent first), asc → desc → none; "none" = My Work's own
@@ -523,6 +531,11 @@ export class MyWorkGridComponent implements AfterViewInit {
   tStatus(t: MwTube) { return tubeStatus(t, this.rules(), id => this.ctx().ownerName(id)); }
   gStatus(tubes: MwTube[]) { return groupStatus(tubes, this.rules(), id => this.ctx().ownerName(id)); }
   dStatus(d: MwDoneTube) { return doneStatus(d); }
+  /** The status cell's two lines (my-work.grid.ts words). */
+  tWords(t: MwTube): StatusWords { return tubeWords(t, this.rules(), id => this.ctx().ownerName(id)); }
+  gWords(tubes: MwTube[]): StatusWords { return groupWords(tubes, this.rules(), id => this.ctx().ownerName(id)); }
+  dWords(d: MwDoneTube): StatusWords { return doneWords(d); }
+  dept(r: MwRow) { return deptText(this.linesOf(r)); }
   tPrimary(t: MwTube): MwAction | null { return tubePrimary(t, this.rules()); }
   gPrimary(tubes: MwTube[], open: boolean): MwAction | null { return groupPrimary(tubes, this.rules(), open); }
   dPrimary(d: MwDoneTube): MwAction | null { return donePrimary(d, this.rules()); }
@@ -536,6 +549,11 @@ export class MyWorkGridComponent implements AfterViewInit {
   waitWords(m: number): string { return durationText(m); }
   testsOf(lines: Array<{ test?: { name?: string } | null }>): string { return testNames(lines); }
   summary(lines: OrderTest[]): string { return testsSummary(lines); }
+  /** The grid's patient line: just the test count while the Department column shows (else department · count). */
+  rowSummary(lines: OrderTest[]): string {
+    const s = testsSummary(lines);
+    return this.fold() === 'tight' ? s : s.split(' · ').slice(-1)[0];
+  }
 
   /** The header sort on screen: starts from the saved key; a header click replaces it (the grid sorts itself). */
   private readonly picked = signal<{ mode: MwMode; sort: MwSortCol } | null>(null);

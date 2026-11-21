@@ -7,8 +7,9 @@ import {
   GridFold, actionCol, dueCell, dueValue, durationCol, durationText, fitFold, minWidthOf, numberCol, textCol, valuesCol,
 } from '../../../shared/utils/work-grid';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
+import { StatusWordsComponent } from '../../../shared/components/status-words/status-words.component';
 import {
-  CultureFilter, cultureColumns, cultureStageRank, cultureDay, cultureDepts, cultureDueMin, cultureMeta, culturePrimary, cultureStatus, cultureTest, nextStep,
+  CultureFilter, cultureColumns, cultureStageRank, cultureDay, cultureDepts, cultureDueMin, cultureMeta, culturePrimary, cultureStatus, cultureTest, cultureWords, nextStep,
   cultureStatusOptions, culturePatientMeta, currentStage, filterCultures, readDue, stageSub,
 } from './culture-grid';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -93,7 +94,7 @@ export interface CultureCaseView {
 @Component({
   selector: 'pf-culture-panel',
   standalone: true,
-  imports: [DailyNoComponent, TileComponent, SkeletonComponent, TileGridDirective, ZoomSourceDirective, DataGridComponent],
+  imports: [DailyNoComponent, TileComponent, SkeletonComponent, TileGridDirective, ZoomSourceDirective, DataGridComponent, StatusWordsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (!theme.isNewDesign()) {
@@ -181,12 +182,12 @@ export interface CultureCaseView {
       } @else {
         <ul class="wg-cards" data-testid="cg-cards">
           @for (c of shown(); track c.orderTestId) {
-            @let st = next(c);
+            @let st = words(c);
             <li class="wg-card" role="button" tabindex="0" [pfZoomSource]="[c.orderTestId, c.sampleId]" [attr.aria-label]="primary(c).aria"
                 (click)="onCard(c, $event)" (keydown.enter)="open(c)" (keydown.space)="$event.preventDefault(); open(c)">
               <span class="wg-card__l1">
                 <span class="wg-id">{{ c.barcode || c.sampleId || '—' }}</span>
-                <span class="wg-pill" [attr.data-tone]="st.tone" [attr.title]="st.title"><span class="wg-dot" aria-hidden="true"></span>{{ st.label }}</span>
+                <pf-status-words [words]="st" />
               </span>
               <span class="wg-who"><span class="wg-who__name"><pf-daily-no [of]="c" />{{ c.patientName || '—' }}</span>
                 @if (pmeta(c); as pm) { <span class="wg-who__meta pf-num">{{ pm }}</span> }
@@ -220,9 +221,8 @@ export interface CultureCaseView {
         @if (pmeta(c); as pm) { <span class="wg-who__meta pf-num">{{ pm }}</span> }
         @if (fold() !== 'full') { <span class="wg-who__meta">{{ test(c) }}</span> }
         @if (fold() === 'tight') {
-          @let n = next(c);
           <span class="wg-who__fold">
-            <span class="wg-pill" [attr.data-tone]="n.tone" [attr.title]="n.title"><span class="wg-dot" aria-hidden="true"></span>{{ n.label }}</span>
+            <pf-status-words [words]="words(c)" />
             <span class="wg-sub" [class.wg-note]="due(c)">Day {{ day(c) }}</span>
           </span>
         }
@@ -235,8 +235,7 @@ export interface CultureCaseView {
       <span class="wg-cell"><span class="wg-tat" [class.wg-tat--late]="due(c)" [attr.title]="due(c) ? 'The plate is ready: the read is due' : null">Day {{ day(c) }}</span></span>
     </ng-template>
     <ng-template #cNext let-c>
-      @let n = next(c);
-      <span class="wg-cell"><span class="wg-pill cg-next" [attr.data-tone]="n.tone" [attr.title]="n.title"><span class="wg-dot" aria-hidden="true"></span>{{ n.label }}</span></span>
+      <span class="wg-cell"><pf-status-words class="cg-next" [words]="words(c)" /></span>
     </ng-template>
     <!-- Due: the next read (owner 2026-11-21 — no journey ring on the lab screens). -->
     <ng-template #cDue let-c>
@@ -351,6 +350,8 @@ export class CulturePanelComponent implements OnInit, OnDestroy, AfterViewInit {
   /** "in 1h 30m" until the plate is ready; rose "40m late" once the read is due. */
   dueOf(c: CultureCaseView) { return dueCell(cultureDueMin(c, this.now())); }
   next(c: CultureCaseView) { return nextStep(c, this.now()); }
+  /** The Next-step cell's two lines (culture-grid.ts). */
+  words(c: CultureCaseView) { return cultureWords(c, this.now(), this.auth.user()?.id); }
   test(c: CultureCaseView) { return cultureTest(c); }
   pmeta(c: CultureCaseView) { return culturePatientMeta(c); }
   onRow(e: RowClickedEvent<CultureCaseView>): void {
@@ -372,7 +373,7 @@ export class CulturePanelComponent implements OnInit, OnDestroy, AfterViewInit {
     const touch = !this.web();
     return {
       sample: { width: 124, minWidth: 124 }, patient: { flex: 1.3, minWidth: fold === 'tight' ? 200 : 210 },
-      test: { flex: 1, minWidth: 180 }, day: { width: 100, minWidth: 100 }, next: { width: 176, minWidth: 176 },
+      test: { flex: 1, minWidth: 180 }, day: { width: 100, minWidth: 100 }, next: { width: 196, minWidth: 180 },
       due: { width: 108, minWidth: 108 }, acts: { width: touch ? 112 : 100, minWidth: touch ? 112 : 100 },
     };
   }
@@ -403,7 +404,7 @@ export class CulturePanelComponent implements OnInit, OnDestroy, AfterViewInit {
         case 'patient': return textCol<CultureCaseView>(wrap(def), c => [c.patientName, c.patient?.mrn, c.testName, c.specimen].filter(Boolean).join(' '), 'left', c => c.patientName ?? '');
         case 'test': return valuesCol<CultureCaseView>(wrap(def), c => this.test(c), set);
         case 'day': return numberCol<CultureCaseView>(def, c => this.day(c));
-        case 'next': return valuesCol<CultureCaseView>(wrap(def), c => this.next(c).label, set, 'center', c => cultureStageRank(c));
+        case 'next': return valuesCol<CultureCaseView>(wrap(def), c => this.next(c).label, set, 'left', c => cultureStageRank(c));
         case 'due': return durationCol<CultureCaseView>(def, c => dueValue(cultureDueMin(c, this.now())), { kind: 'due' });
         default: return actionCol<CultureCaseView>({ ...def, cellClass: 'wg-c-acts' });
       }

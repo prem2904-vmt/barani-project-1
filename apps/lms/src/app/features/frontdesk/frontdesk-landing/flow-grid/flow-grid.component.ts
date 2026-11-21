@@ -6,8 +6,8 @@ import type { ServiceId } from '../../../../core/services/service-shelf';
 import { FLOW_MIN, flowLayout, tokenWidth } from './flow-fold';
 import { dailyNoLabel } from '../../../../shared/utils/daily-no';
 import { DataGridComponent } from '../../../../shared/components/data-grid/data-grid.component';
-import type { FlowRow, JourneyState } from './flow-row';
-import { actionCol, dateCol, durationCol, epochOf, moneyCol, ratioCol, shapeCol, textCol, tokenCol, tokenLabelValue, tokenValue, valuesCol } from '../../../../shared/utils/work-grid';
+import type { FlowRow } from './flow-row';
+import { actionCol, dateCol, durationCol, epochOf, moneyCol, ratioCol, textCol, tokenCol, tokenLabelValue, tokenValue, valuesCol } from '../../../../shared/utils/work-grid';
 import { LATE_AFTER_MIN } from './flow-row';
 import type { SectionColId } from '../work-view/sections';
 import { WorkSetFilterComponent } from '../../../../shared/components/work-set-filter/work-set-filter.component';
@@ -40,8 +40,8 @@ export function flowSamples(r: FlowRow): { done: number; total: number } | null 
 /** Triage order: Urgent before Normal. */
 export function flowUrgentRank(r: FlowRow): number { return r.urgent || r.cells?.triage?.text === 'Urgent' ? 0 : 1; }
 import {
-  FlowGridContext, FlowNextCellComponent, FlowPatientCellComponent, FlowRingCellComponent, FlowSelectCellComponent,
-  FlowTokenCellComponent,
+  FlowGridContext, FlowNextCellComponent, FlowPatientCellComponent, FlowSelectCellComponent, FlowTokenCellComponent,
+  FlowWhereCellComponent,
 } from './flow-cells';
 
 /** Escape for the plain (string) cell renderers. */
@@ -59,14 +59,6 @@ function sectionCol(id: SectionColId, def: ColDef<FlowRow>, align: 'left' | 'cen
   return valuesCol<FlowRow>(def, text, WorkSetFilterComponent, align);
 }
 
-const JOURNEY_STEPS = ['Billing', 'Sample', 'Dispatch', 'Result', 'Report'];
-
-export function journeyHtml(dots: readonly JourneyState[], label: string): string {
-  if (!dots.length) return '<span class="fd-flow__muted">—</span>';
-  const items = dots.map((d, i) => `<span class="fd-flow__step" data-state="${d}" title="${esc(JOURNEY_STEPS[i] ?? '')}"></span>`).join('');
-  return `<span class="fd-flow__journey" role="img" aria-label="${esc(label)}">${items}</span>`;
-}
-
 /** Column tiers by the grid's own width (the side card is resizable): narrow grids fold Journey, then Visit for. */
 export function flowColumnTier(width: number): -1 | 0 | 1 | 2 {
   if (width >= 960) return 2;
@@ -78,7 +70,7 @@ export function flowColumnTier(width: number): -1 | 0 | 1 | 2 {
 /**
  * The Frontdesk FLOW GRID (owner-approved redesign 2026-11-19): the work card's body on the shared pf-data-grid
  * (Test Master's AG-Grid theme — row height, header and touch sizing come from that theme only).
- * Token | Patient | Journey (ring) | Where now | Waiting | Payment | Next (+ ⋯). Rows come pre-built
+ * Token | Patient | Where now (journey ring + words) | Waiting | Payment | Next (+ ⋯). Rows come pre-built
  * (flow-row.ts); tapping a row opens it exactly as the old rows did.
  */
 @Component({
@@ -137,17 +129,13 @@ export class FlowGridComponent implements AfterViewInit {
   readonly cols = computed<ColDef<FlowRow>[]>(() => {
     const { fold, own } = this.layout();
     const tight = fold.has('tight');
-    const ringSmall = fold.has('ring');
     const waitIn = fold.has('wait');
     const W = FLOW_MIN;
-    /** Waiting folded into the Where (or first own) cell: a second line, rose when late. */
-    const waitLine = (r: FlowRow) => waitIn && r.waitMin !== null
-      ? `<span class="fd-flow__sub fd-flow__wait-in${r.late ? ' fd-flow__wait--late' : ''}">Waiting ${esc(r.wait)}</span>` : '';
-    const whereCell = (p: ICellRendererParams<FlowRow>) => p.data
-      ? `<span class="fd-flow__where"><span class="fd-flow__stage" data-tone="${p.data.tone}"><span class="fd-flow__dot" aria-hidden="true"></span><span>${esc(p.data.where)}</span></span>${p.data.whereSub ? `<span class="fd-flow__sub">${esc(p.data.whereSub)}</span>` : ''}${waitLine(p.data)}</span>`
-      : '';
-    const whereCol = (minW: number) => valuesCol<FlowRow>({ colId: 'where', headerName: tight ? 'Where' : 'Where now', headerTooltip: 'Where now', flex: 1,
-      minWidth: tight ? W.whereTight : minW, wrapText: true, autoHeight: true, cellClass: 'fd-flow__c-wrap', cellRenderer: whereCell }, r => r.where, WorkSetFilterComponent);
+    // Where now (owner design D, 2026-11-21): the journey ring + two lines of words in ONE column, every layout and
+    // section. Column id stays "where" (settings + view state); the set filter reads line 1 (the stage word).
+    const whereCol = (): ColDef<FlowRow> => valuesCol<FlowRow>({ colId: 'where', headerName: 'Where now', headerTooltip: 'Where now · journey', flex: 1.2,
+      minWidth: tight ? W.whereTight : W.where, wrapText: true, autoHeight: true, cellClass: 'fd-flow__c-wrap',
+      cellRenderer: FlowWhereCellComponent, cellRendererParams: { waitIn } }, r => r.where, WorkSetFilterComponent);
     const waitCol = (): ColDef<FlowRow> => durationCol<FlowRow>({ colId: 'wait', headerName: 'Waiting', width: W.wait, minWidth: W.wait,
       cellRenderer: (p: ICellRendererParams<FlowRow>) => p.data
         ? `<span class="fd-flow__wait${p.data.late ? ' fd-flow__wait--late' : ''}"${p.data.late ? ' title="Waiting over 30 minutes"' : ''}>${esc(p.data.wait)}</span>` : '' },
@@ -159,12 +147,10 @@ export class FlowGridComponent implements AfterViewInit {
 
     let mid: ColDef<FlowRow>[];
     if (!own) {
-      mid = [whereCol(W.where), ...(waitIn ? [] : [waitCol()]), ...(fold.has('pay') ? [] : [payCol()])];
+      mid = [...(waitIn ? [] : [waitCol()]), ...(fold.has('pay') ? [] : [payCol()])];
     } else {
-      // The first never-folding text column carries the folded Waiting line when the section has no Where.
-      const carrier = own.some(c => c.id === 'where') ? 'where' : own.find(c => c.fold === 0 && c.id !== 'wait' && c.id !== 'pay')?.id;
+      // Where now carries the folded Waiting line in every section.
       mid = own.map(c => {
-        if (c.id === 'where') return whereCol(c.min);
         if (c.id === 'wait') return waitCol();
         if (c.id === 'pay') return payCol();
         const def: ColDef<FlowRow> = {
@@ -172,8 +158,7 @@ export class FlowGridComponent implements AfterViewInit {
           wrapText: true, autoHeight: true, cellClass: 'fd-flow__c-wrap',
           cellRenderer: (p: ICellRendererParams<FlowRow>) => {
             const v = p.data?.cells?.[c.id];
-            const txt = v ? `<span class="fd-flow__txt${v.late ? ' fd-flow__txt--late' : ''}">${esc(v.text)}</span>` : '<span class="fd-flow__muted">—</span>';
-            return c.id === carrier && p.data ? `<span class="fd-flow__where">${txt}${waitLine(p.data)}</span>` : txt;
+            return v ? `<span class="fd-flow__txt${v.late ? ' fd-flow__txt--late' : ''}">${esc(v.text)}</span>` : '<span class="fd-flow__muted">—</span>';
           },
         };
         return sectionCol(c.id, def, c.align);
@@ -188,12 +173,8 @@ export class FlowGridComponent implements AfterViewInit {
         r => flowTokenText(r), r => flowTokenValue(r), 'center'),
       textCol<FlowRow>({ colId: 'patient', headerName: 'Patient', flex: 1.6, minWidth: tight ? W.patientTight : W.patient, wrapText: true, autoHeight: true,
         cellRenderer: FlowPatientCellComponent, cellClass: 'fd-flow__c-wrap' }, r => flowPatientText(r), 'left', r => r.name),
-      // Journey (owner 2026-11-20): ONE ring per row — inner disc = the service, outer ring = the row's own steps. A
-      // picture, not a value: no sort / filter (Where now carries the step); its 80px column has no room for both icons.
-      // Always has its header; a narrow grid shrinks the ring to 32px (owner 2026-11-21).
-      shapeCol<FlowRow>({ colId: 'journey', headerName: 'Journey', headerTooltip: 'Journey', headerClass: ringSmall ? 'fd-flow__h-ring' : undefined,
-        width: ringSmall ? W.ringSmall : W.ring, minWidth: ringSmall ? W.ringSmall : W.ring, maxWidth: ringSmall ? W.ringSmall : W.ring + 16,
-        cellRenderer: FlowRingCellComponent, cellRendererParams: { ringSize: ringSmall ? 32 : 44 }, cellClass: 'fd-flow__c-ring' }),
+      // Where now = the row's journey ring + what is happening now (the Journey column merged in, owner 2026-11-21).
+      whereCol(),
       ...mid,
       // Sections: Waiting is a FIXED column right before Next — the same x in every section (owner 2026-11-21).
       ...(own && !waitIn ? [waitCol()] : []),

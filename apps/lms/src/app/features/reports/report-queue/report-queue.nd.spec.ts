@@ -437,36 +437,34 @@ describe('Reports v2 — the grid (Test Master\'s pf-data-grid)', () => {
   });
 });
 
-describe('Reports v2 — status: ONE neutral pill with a coloured dot; "Unpaid" UNDER it', () => {
-  it('every row on every tab has exactly one pill, never a chip; Unpaid is its own line under the pill', async () => {
+describe('Reports v2 — status: two lines of words (design D, 2026-11-21); "Unpaid" UNDER them', () => {
+  it('every row on every tab has exactly one status (words), never a pill or chip; Unpaid is its own line', async () => {
     const { el, tab } = await render();
     for (const v of ['all', 'pending', 'partial', 'delivered']) {
       await tab(v);
       const rows = [...reportRows(el), ...partialRows(el)];
       expect(rows.length).toBeGreaterThan(0);
       for (const row of rows) {
-        expect(row.querySelectorAll('.pf-rq2-pill').length).toBe(1);
-        expect(row.querySelector('.pf-chip, pf-chip')).toBeNull();
-        expect(row.querySelector('.pf-rq2-pill .pf-rq2-dot')).not.toBeNull();
+        expect(row.querySelectorAll('pf-status-words').length).toBe(1);
+        expect(row.querySelector('.pf-chip, pf-chip, .pf-rq2-pill')).toBeNull();
+        expect(row.querySelector('[col-id="status"] .pf-rq2-dot')).toBeNull();
       }
     }
   });
 
-  it('labels on All: Ready (violet), Partial (sky) for a preliminary, Delivered (green), Failed (rose); Unpaid under r1', async () => {
+  it('words on All: Ready / Not sent yet, Partial / Preliminary report, Delivered (green), Failed (rose); Unpaid under r1', async () => {
     const { el, tab } = await render();
     await tab('all');
     const rows = reportRows(el);
     const got = rows.map(r => {
-      const p = r.querySelector('.pf-rq2-pill') as HTMLElement;
-      return [p.textContent!.trim(), p.getAttribute('data-status'), (p.querySelector('.pf-rq2-dot') as HTMLElement).style.background];
+      const w = r.querySelector('pf-status-words') as HTMLElement;
+      return [w.querySelector('.pf-sw__now')!.textContent!.trim(), w.getAttribute('data-tone')];
     });
-    expect(got).toEqual([
-      ['Ready', 'completed', 'var(--violet-text)'], ['Partial', 'partial', 'var(--sky-text)'],
-      ['Delivered', 'delivered', 'var(--green-text)'], ['Failed', 'failed', 'var(--rose-text)'],
-    ]);
-    // r1's bill is due → "Unpaid" is a quiet line inside the status cell, AFTER the pill (a column), never a pill.
+    expect(got).toEqual([['Ready', 'normal'], ['Partial', 'normal'], ['Delivered', 'done'], ['Failed', 'late']]);
+    expect(rows[0].querySelector('.pf-sw__detail')!.textContent!.trim()).toBe('Not sent yet');
+    // r1's bill is due → "Unpaid" is a quiet line inside the status cell, AFTER the words, never a pill.
     const st = rows[0].querySelector('.pf-rq2-status') as HTMLElement;
-    expect([...st.children].map(c => c.className)).toEqual(['pf-rq2-pill', 'pf-rq2-unpaid']);
+    expect([...st.children].map(c => c.tagName.toLowerCase() === 'pf-status-words' ? 'words' : c.className)).toEqual(['words', 'pf-rq2-unpaid']);
     expect(st.querySelector('.pf-rq2-unpaid')!.textContent!.trim()).toBe('Unpaid');
     expect(rows.slice(1).some(r => r.querySelector('.pf-rq2-unpaid'))).toBe(false);
     expect(rows[1].textContent).not.toContain('Ready');
@@ -477,7 +475,8 @@ describe('Reports v2 — status: ONE neutral pill with a coloured dot; "Unpaid" 
     const { el, tab } = await render({ queue: q });
     await tab('all');
     const rows = reportRows(el);
-    expect(rows[0].querySelector('.pf-rq2-pill')!.textContent!.trim()).toBe('Delivered');
+    expect(rows[0].querySelector('pf-status-words .pf-sw__now')!.textContent!.trim()).toBe('Delivered');
+    expect(rows[1].querySelector('pf-status-words .pf-sw__detail')!.textContent!.trim()).toBe('Number not on WhatsApp');
     expect(rows[0].querySelector('.pf-rq2-sent')!.textContent!.trim()).toBe('Printed · Preliminary');
     expect(rows[1].querySelector('.pf-rq2-sent')!.textContent!.trim()).toBe('Number not on WhatsApp');
   });
@@ -513,14 +512,15 @@ describe('Reports v2 — Partial: the order opens INLINE (flat departments, Gene
     return { ...r, row, detail };
   }
 
-  it('row: full name, "29/M · AA0012", the order number, the count line and ONE "Partial" pill', async () => {
+  it('row: full name, "29/M · AA0012", the order number, the count line and ONE "Partial" status (words)', async () => {
     const { row } = await openPartial();
     expect(nameOf(row)).toBe(FULL_NAME);
     const metas = [...row.querySelectorAll('.pf-rq2-who__meta')].map(m => m.textContent!.trim());
     expect(metas).toEqual(['29/M · AA0012', '1 of 2 departments partly ready']);
     expect(row.querySelector('[col-id="order"]')!.textContent!.trim()).toBe('LAB-2609-000089');
-    expect(row.querySelectorAll('.pf-rq2-pill').length).toBe(1);
-    expect(row.querySelector('.pf-rq2-pill')!.textContent!.trim()).toBe('Partial');
+    expect(row.querySelectorAll('pf-status-words').length).toBe(1);
+    expect(row.querySelector('pf-status-words .pf-sw__now')!.textContent!.trim()).toBe('Partial');
+    expect(row.querySelector('.pf-rq2-pill')).toBeNull();
   });
 
   it('the detail is a full-width row right under the order; Generate partial PDF comes FIRST', async () => {
@@ -659,7 +659,7 @@ describe('Reports v2 — narrow (≤900px) and phone (≤640px)', () => {
     expect(rows.length).toBe(6);   // 2 partly-reported orders + 4 reports
     const r1 = rows.find(r => r.getAttribute('data-status') === 'completed')!;
     expect(r1.querySelector('.pf-rq2-prow__l1 .pf-rq2-prow__name')!.textContent!.trim()).toBe(FULL_NAME);
-    expect(r1.querySelector('.pf-rq2-prow__l1 .pf-rq2-pill')!.textContent!.trim()).toBe('Ready');
+    expect(r1.querySelector('.pf-rq2-prow__l1 pf-status-words .pf-sw__now')!.textContent!.trim()).toBe('Ready');
     expect(r1.querySelector('.pf-rq2-prow__l2')!.textContent!.trim()).toBe('29/M · LAB-2609-000102 · ' + c.when('2026-09-26T13:07:00Z') + ' · Unpaid');
     expect(css()).toMatch(/\.pf-rq2-prow\s*\{[^}]*min-height: 64px/);
   });
@@ -670,7 +670,7 @@ describe('Reports v2 — narrow (≤900px) and phone (≤640px)', () => {
     const sheet = document.querySelector('[data-testid="rq-sheet"]') as HTMLElement;
     expect(sheet.getAttribute('role')).toBe('dialog');
     expect(sheet.querySelector('.pf-rq2-sheet__name')!.textContent!.trim()).toBe(FULL_NAME);
-    expect(sheet.querySelector('.pf-rq2-pill')!.textContent!.trim()).toBe('Ready');
+    expect(sheet.querySelector('pf-status-words .pf-sw__now')!.textContent!.trim()).toBe('Ready');
     expect(sheet.querySelector('.pf-rq2-sheet__unpaid')!.textContent).toContain('Unpaid');
     const prim = sheet.querySelectorAll('.pf-btn--primary');
     expect(prim.length).toBe(1);
@@ -1364,9 +1364,10 @@ describe('Results grid — column filters in the header + alignment (owner 2026-
     expect(col(c, 'generated').valueGetter({ data: row })).toBe(Date.parse(Q[0].createdAt));
   });
 
-  it('alignment: #, Patient, Order, Sent LEFT; Status + Generated CENTERED (cells and headers); Actions RIGHT', async () => {
+  it('alignment: #, Patient, Order, Status (words), Sent LEFT; Generated CENTERED (cells and headers); Actions RIGHT', async () => {
     const { c } = await render({ queue: Q, orders: [] });
-    for (const id of ['status', 'generated']) {
+    expect(String(col(c, 'status').cellClass ?? '')).not.toContain('center');
+    for (const id of ['generated']) {
       expect(col(c, id).headerClass).toContain('pf-rq2-hcenter');
       expect(col(c, id).cellClass).toContain('pf-rq2-center');
     }

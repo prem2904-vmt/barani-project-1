@@ -14,7 +14,9 @@ import { HeroBandComponent } from '../../../shared/components/hero-band/hero-ban
 import { ScreenHeaderComponent } from '../../../shared/primitives/screen-header.component';
 import { SkeletonRowsComponent, SkeletonTableComponent } from '../../../shared/primitives/skeleton-kit.component';
 import { SettingsSiblingsComponent } from '../settings/settings-siblings.component';
-import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, sgActions, sgActionsCol, sgCell, sgGridTheme, sgMedia, sgStatusWord, sgBare } from '../../../shared/settings-grid/settings-grid';
+import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { bridgeStatusWords } from '../../../shared/bridges/bridge-status-words';
+import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, sgActions, sgActionsCol, sgCell, sgGridTheme, sgMedia, sgBare } from '../../../shared/settings-grid/settings-grid';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { bandFilter } from '../../../shared/utils/band-search';
 import { plural } from '../../../shared/utils/plural';
@@ -234,12 +236,8 @@ export class BridgesListComponent {
       { colId: 'name', headerName: 'Bridge', flex: 1.4, minWidth: 170, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
         cellRenderer: (p: { data?: BridgeDto }) => sgCell(p.data?.name ?? '', [p.data?.serialShort, plural(p.data?.analyzers?.length ?? 0, 'analyzer')].filter(Boolean).join(' · '), true) },
       { colId: 'branch', headerName: 'Branch', flex: 0.7, minWidth: 90, valueGetter: (p) => p.data?.branchName ?? '' },
-      { colId: 'status', headerName: 'Status', flex: 1, minWidth: 140, valueGetter: (p) => STATUS_ORDER.indexOf((p.data?.status ?? 'never') as typeof STATUS_ORDER[number]),
-        cellRenderer: (p: { data?: BridgeDto }) => {
-          const st = bridgeStatusWord(p.data?.status);
-          const seen = p.data?.status !== 'online' && p.data?.lastSeenAt ? `Last seen ${agoText(p.data.lastSeenAt).toLowerCase()}` : '';
-          return sgStatusWord(st.label, st.tone, seen);
-        } },
+      statusWordsCol<BridgeDto>({ colId: 'status', headerName: 'Status', flex: 1, minWidth: 150, valueGetter: (p) => STATUS_ORDER.indexOf((p.data?.status ?? 'never') as typeof STATUS_ORDER[number]) },
+        (d) => bridgeStatusWords(d.status, d.status !== 'online' && d.lastSeenAt ? `Last seen ${agoText(d.lastSeenAt).toLowerCase()}` : '')),
       { colId: 'lastMessage', headerName: 'Last message', flex: 0.8, minWidth: 110, valueGetter: (p) => p.data?.lastMessageAt ?? '',
         cellRenderer: (p: { data?: BridgeDto }) => sgCell(agoText(p.data?.lastMessageAt) || '—') },
       { colId: 'queue', headerName: 'Queue', width: 90, minWidth: 84, flex: 0, type: 'rightAligned', valueGetter: (p) => p.data?.queueTotal ?? 0,
