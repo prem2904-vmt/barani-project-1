@@ -2,7 +2,7 @@ import type { TmProposal } from '../models/tm-proposal.model';
 import {
   DASH, tmCanSeeKind, tmChangeLine, tmClinicalItems, tmConfidenceLine, tmDiffRows, tmExpiresLine, tmFailedWords, tmFieldLabel,
   tmKindLabel, tmMatches, tmMemberRows, tmNeedsClinicalConfirm, tmIsGuess, tmParameterRows, tmPeopleLine, tmProposalPath, tmSourceLine,
-  tmSourceShort, tmStatusLabel, tmWhenLine,
+  tmSourceShort, tmStatusLabel, tmStatusWords, tmWhenLine,
 } from './tm-proposals';
 
 const base = (over: Partial<TmProposal> = {}): TmProposal => ({
@@ -152,5 +152,25 @@ describe('tm-proposals helpers', () => {
     expect(tmMatches(base(), 'lakshmi')).toBe(true);
     expect(tmMatches(base(), 'cortex')).toBe(true);
     expect(tmMatches(base(), 'ferritin')).toBe(false);
+  });
+});
+
+describe('tmStatusWords', () => {
+  const cases: Array<[string, string, 'normal' | 'late' | 'done']> = [
+    ['pending', 'Waiting for review', 'normal'],
+    ['stale', 'Changed since suggested', 'late'],
+    ['failed', 'Could not apply', 'late'],
+    ['approved', 'Approved', 'done'],
+    ['rejected', 'Rejected', 'normal'],
+    ['withdrawn', 'Withdrawn', 'normal'],
+    ['expired', 'Expired', 'late'],
+  ];
+  for (const [status, now, tone] of cases) {
+    it(`${status} -> ${now} (${tone})`, () => {
+      expect(tmStatusWords(status)).toEqual({ now, detail: null, tone });
+    });
+  }
+  it('a clinical change adds the quiet line', () => {
+    expect(tmStatusWords('pending', true).detail).toBe('Clinical');
   });
 });

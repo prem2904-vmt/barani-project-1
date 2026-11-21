@@ -13,8 +13,8 @@ import type { FlowRow } from '../flow-grid/flow-row';
  *    nothing in the feeds says those), and which ones fold away first when the section's grid is narrow.
  */
 
-/** A section-specific column (Token · Patient · Journey · Next are every section's). */
-export type SectionColId = 'doctor' | 'vitals' | 'consult' | 'samples' | 'where' | 'admitted' | 'triage' | 'arrived' | 'wait' | 'pay';
+/** A section-specific column (Token · Patient · Where now (ring + words) · Next are every section's). */
+export type SectionColId = 'doctor' | 'vitals' | 'consult' | 'samples' | 'admitted' | 'triage' | 'arrived' | 'wait' | 'pay';
 
 export interface SectionCell { text: string; late?: boolean }
 export type SectionCells = Partial<Record<SectionColId, SectionCell>>;
@@ -26,7 +26,8 @@ export interface SectionColPlan {
   min: number;
   flex: number;
   align: 'left' | 'center';
-  /** Fold rank: the highest folds away first on a narrow grid; 0 never folds. */
+  /** Fold rank: the highest folds away first on a narrow grid; 0 folds LAST — only when even the tight fixed columns
+   *  (Where now carries the gist: "0 of 2 tubes collected", the visit's state) leave no room for it. */
   fold: number;
 }
 
@@ -35,24 +36,24 @@ const C = (id: SectionColId, header: string, min: number, flex: number, align: '
 
 const PAY = C('pay', 'Payment', 110, 0, 'center', 4);
 
-/** Each service's own middle columns (owner list; only what we have data for). Waiting is a FIXED section column
- *  (right before Next, the same x in every section — flow-fold.ts), so it is not listed here. Minimums leave room for the header word + sort arrow + filter icon (grid-sort). */
+/** Each service's own middle columns (owner list; only what we have data for). Waiting and Where now (ring + words,
+ *  design D) are FIXED section columns (the same x in every section — flow-fold.ts), so they are not listed here.
+ *  Minimums leave room for the header word + sort arrow + filter icon (grid-sort). */
 export const SECTION_COLS: Record<ServiceId, readonly SectionColPlan[]> = {
   opd: [C('doctor', 'Doctor', 130, 0.8, 'left', 2), C('vitals', 'Vitals', 110, 0.6, 'left', 3), C('consult', 'Consult', 130, 0.8, 'left', 0), PAY],
-  lab: [C('samples', 'Samples', 120, 0.5, 'center', 0), C('where', 'Where now', 160, 1, 'left', 3), PAY],
-  ipd: [C('admitted', 'Admitted', 120, 0.4, 'center', 2), C('doctor', 'Doctor', 130, 0.8, 'left', 3), C('where', 'Where now', 130, 1, 'left', 0), PAY],
-  er: [C('triage', 'Triage', 104, 0, 'center', 0), C('arrived', 'Arrived', 110, 0, 'center', 2), C('where', 'Where now', 160, 1, 'left', 3), PAY],
-  scan: [C('where', 'Where now', 130, 1, 'left', 0), PAY],
+  lab: [C('samples', 'Samples', 120, 0.5, 'center', 0), PAY],
+  ipd: [C('admitted', 'Admitted', 120, 0.4, 'center', 2), C('doctor', 'Doctor', 130, 0.8, 'left', 3), PAY],
+  er: [C('triage', 'Triage', 104, 0, 'center', 0), C('arrived', 'Arrived', 110, 0, 'center', 2), PAY],
+  scan: [PAY],
 };
 
-/** The columns a section shows when `avail` px are left for its OWN columns (after Token · Patient · Journey · Next):
+/** The columns a section shows when `avail` px are left for its OWN columns (after Token · Patient · Where now · Next):
  *  fold the highest rank until their minimums fit. `folded` = Payment rides the patient line. */
 export function sectionPlan(service: ServiceId, avail: number): { cols: SectionColPlan[]; folded: boolean } {
   let cols = [...SECTION_COLS[service]];
   const need = () => cols.reduce((s, c) => s + c.min, 0);
   while (need() > avail) {
     const rank = Math.max(...cols.map(c => c.fold));
-    if (rank <= 0) break;
     const i = cols.map(c => c.fold).lastIndexOf(rank);
     cols = cols.filter((_, k) => k !== i);
   }
@@ -168,7 +169,6 @@ function sectionCells(service: ServiceId, rows: readonly FlowRow[], now: number)
     const c: SectionCells = {
       wait: { text: r.wait, late: r.late },
       pay: { text: r.pay, late: r.payDue },
-      where: { text: r.where },
     };
     const v = r.visit;
     if (v) {

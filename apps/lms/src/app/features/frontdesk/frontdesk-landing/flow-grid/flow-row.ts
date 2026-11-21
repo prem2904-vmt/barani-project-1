@@ -9,6 +9,7 @@ import type { WorkStatus } from '../work-status-filter';
 import { drawerAgeSex, drawerName, drawerPipeline, drawerStepCaption } from '../order-drawer';
 import { ServiceId, serviceOfModule } from '../../../../core/services/service-shelf';
 import { formatDuration, normalizePriority } from '../../../../shared/utils/lab-priority';
+import { type StatusWords, statusWords } from '../../../../shared/utils/status-words';
 import { CurrencyInrPipe } from '../../../../shared/pipes/currency-inr.pipe';
 import { LAB_STEPS_VALIDATED, RingStep, labRingSteps, ringSteps, statusRingSteps, validationApplies } from '../../../../shared/components/journey-ring/journey-ring';
 
@@ -229,6 +230,18 @@ export function orderStageMinutes(o: Pick<Order, 'status' | 'createdAt' | 'updat
 export function orderIsLate(o: Pick<Order, 'status' | 'createdAt' | 'updatedAt'>, now: number): boolean {
   const m = orderStageMinutes(o, now);
   return m !== null && m >= LATE_AFTER_MIN;
+}
+
+/**
+ * Where now as WORDS (owner design D, 2026-11-21) — the ONE mapping the flow grid, every per-service section and the
+ * Clinic chips read: line 1 = the row's stage word (`where`, the same word the chart / filters count), line 2 = its
+ * detail / next (`whereSub`). Soft rose when the row is late or blocked (rose stage: payment due, cancelled, not
+ * collected), soft green when done, otherwise normal text.
+ */
+export function whereWords(r: Pick<FlowRow, 'where' | 'whereSub' | 'tone' | 'late' | 'status'>): StatusWords {
+  const done = r.tone === 'green' || r.status === 'done';
+  const late = !done && (r.late || r.tone === 'rose' || /not collected|can.t collect/i.test(r.where ?? ''));
+  return statusWords(r.where, r.whereSub, done ? 'done' : late ? 'late' : 'normal');
 }
 
 /** "34m" / "2h 5m" — minutes since `fromMs`. */

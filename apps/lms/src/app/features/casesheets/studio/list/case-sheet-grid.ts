@@ -1,5 +1,7 @@
 import { ColDef, ICellRendererParams, RowClassParams } from 'ag-grid-community';
 import { ORIGIN_ICON_PATHS } from '../../../../shared/utils/test-origin';
+import { statusWords, type StatusWords } from '../../../../shared/utils/status-words';
+import { statusWordsCol } from '../../../../shared/components/status-words/status-words.component';
 import { whenText } from '../shared/when';
 import { DepartmentRow, FormRow } from '../data/studio-models';
 
@@ -27,6 +29,12 @@ export function statusOf(f: FormRow): SheetStatus {
 export function statusLabel(f: FormRow): string {
   if (f.published) return f.draft ? 'Published · changes in draft' : 'Published';
   return f.draft?.state === 'in_review' ? 'In review' : 'Draft';
+}
+
+/** The Status cell as words (design D): Published = done (with "Changes in draft" when a newer draft waits), In review / Draft = normal. */
+export function statusWordsOf(f: FormRow): StatusWords {
+  if (f.published) return statusWords('Published', f.draft ? 'Changes in draft' : null, 'done');
+  return statusWords(f.draft?.state === 'in_review' ? 'In review' : 'Draft');
 }
 
 export function originFilterOf(f: FormRow): Exclude<SheetOriginFilter, 'all'> {
@@ -180,7 +188,7 @@ export function sheetColumns(web: boolean, isPhone: boolean): ColDef<FormRow>[] 
       cellRenderer: (p: ICellRendererParams<FormRow>) => (p.data ? originElement(p.data.origin, p.data.newerMaster) : document.createElement('span')),
     },
     { headerName: 'Version', colId: 'version', flex: 0.7, minWidth: 88, maxWidth: 96, valueGetter: (p) => (p.data?.published ? `v${p.data.published.versionNo}` : '—') },
-    { headerName: 'Status', colId: 'status', flex: 1, minWidth: 96, valueGetter: (p) => (p.data ? statusLabel(p.data) : '') },
+    statusWordsCol<FormRow>({ headerName: 'Status', colId: 'status', flex: 1, minWidth: 96, valueGetter: (p) => (p.data ? statusLabel(p.data) : '') }, statusWordsOf),
     {
       headerName: 'Pending', colId: 'pending', flex: 0.8, minWidth: 92, maxWidth: 98, type: 'numericColumn',
       valueGetter: (p) => (p.data ? (p.context as SheetGridContext).pendingOf(p.data) : 0),

@@ -26,11 +26,12 @@ import { ScanIconComponent } from '../../shared/components/icons/scan-icon.compo
 import { webPointerSignal } from '../../shared/utils/pointer-mode';
 import { mediaSignal } from '../../shared/utils/media-query';
 import { plural } from '../../shared/utils/plural';
+import { statusWordsCol } from '../../shared/components/status-words/status-words.component';
 import { gridThemeDark, gridThemeLight } from '../admin/tests/tests/grid-theme';
 import { ViewStateService } from '../../shared/services/view-state.service';
 import { GridViewStateDirective } from '../../shared/services/grid-view-state';
 import {
-  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, dotCell, expiryView, itemCell, linkBarcodeBody, linkableCode, qty, stockLevel,
+  STOCK_LEVEL_LABEL, STOCK_LEVEL_TONE, expiryView, itemCell, linkBarcodeBody, linkableCode, qty, stockLevel, stockWords,
 } from './inventory-view';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -619,13 +620,11 @@ export class StoresComponent implements OnInit, AfterViewInit {
         valueGetter: p => p.data?.onHand ?? 0, valueFormatter: p => `${qty(p.value)} ${p.data?.uom ?? ''}`.trim() },
       { colId: 'reorder', headerName: 'Reorder at', width: 110, type: 'rightAligned', cellClass: 'inv-num', hide: phone,
         valueGetter: p => p.data?.reorderLevel ?? 0, valueFormatter: p => qty(p.value) },
-      { colId: 'status', headerName: 'Status', width: phone ? 96 : 132, sortable: true,
+      statusWordsCol<InvItem>({ colId: 'status', headerName: 'Status', width: phone ? 104 : 140, sortable: true,
         valueGetter: p => (p.data ? stockLevel(p.data) : 'ok'),
-        comparator: (a: string, b: string) => ['out', 'low', 'ok'].indexOf(a) - ['out', 'low', 'ok'].indexOf(b),
-        cellRenderer: (p: { data?: InvItem }) => {
-          const l = p.data ? stockLevel(p.data) : 'ok';
-          return dotCell(phone && l === 'out' ? 'Out' : STOCK_LEVEL_LABEL[l], STOCK_LEVEL_TONE[l]);
-        } },
+        comparator: (a: string, b: string) => ['out', 'low', 'ok'].indexOf(a) - ['out', 'low', 'ok'].indexOf(b) },
+        it => stockWords(it, phone)),
+
     ];
   });
 

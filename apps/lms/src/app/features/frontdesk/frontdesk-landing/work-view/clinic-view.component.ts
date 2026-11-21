@@ -43,7 +43,7 @@ const CHIP = { pad: 8, gap: 6, border: 1, h: 30, hTouch: 44, lineGap: 6 };
                     <button type="button" class="cv-chip cv-more" (click)="more.emit(s.svc.id)"
                       [attr.aria-label]="p.chips.length + ' in ' + p.title + ', show them in the list'">+{{ p.chips.length }}</button>
                   }
-                  @if (p.status) { <span class="cv-st" [class.cv-st--run]="p.status.run"><i aria-hidden="true"></i>{{ p.status.label }}</span> }
+                  @if (p.status) { <span class="cv-st" [class.cv-st--run]="p.status.run">{{ p.status.label }}</span> }
                 </h3>
                 @if (p.wait) { <div class="cv-room__who"><span class="cv-big">{{ p.chips.length }}</span> {{ p.who.replace(p.chips.length + ' ', '') }}</div>
                   @if (p.by) { <div class="cv-room__who cv-room__by">{{ p.by }}</div> } }
@@ -52,7 +52,7 @@ const CHIP = { pad: 8, gap: 6, border: 1, h: 30, hTouch: 44, lineGap: 6 };
                   @for (c of p.chips; track c.id; let i = $index) {
                     @if (i < f.shown) {
                       <button type="button" class="cv-chip" [attr.data-row]="c.id" [class.cv-chip--late]="c.late" [class.cv-chip--now]="c.now"
-                        [attr.aria-label]="c.token + ' ' + c.name + (c.wait ? ', waiting ' + c.wait : '') + (c.late ? ', late' : '') + '. Open journey'"
+                        [attr.title]="c.where" [attr.aria-label]="c.token + ' ' + c.name + (c.where ? ', ' + c.where : '') + (c.wait ? ', waiting ' + c.wait : '') + (c.late ? ', late' : '') + '. Open journey'"
                         (click)="openChip(c, $event)">
                         <b class="cv-chip__tok">{{ c.token }}</b><span class="cv-chip__nm">{{ c.name }}</span>
                         @if (c.wait) { <span class="cv-chip__t">{{ c.wait }}</span> }

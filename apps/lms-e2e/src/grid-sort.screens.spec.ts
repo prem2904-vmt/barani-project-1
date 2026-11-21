@@ -94,7 +94,8 @@ async function columnTexts(grid: Locator, col: string, sel?: string): Promise<st
       if (!cell) continue;
       const el = (sel ? cell.querySelector<HTMLElement>(sel) : null) ?? cell;
       const c = el.cloneNode(true) as HTMLElement;
-      c.querySelectorAll('pf-daily-no, .pf-dayno, .fd-cell-pt__tok, .wg-prio, .wg-note, .fd-flow__sub, .wg-who__meta').forEach(x => x.remove());
+      // Status words (design D): the column sorts on line 1; line 2 / the folded Waiting line are detail.
+      c.querySelectorAll('pf-daily-no, .pf-dayno, .fd-cell-pt__tok, .wg-prio, .wg-note, .fd-flow__sub, .wg-who__meta, .pf-sw__detail, .fd-cell-where__wait').forEach(x => x.remove());
       const t = (c.textContent ?? '').replace(/\s+/g, ' ').trim();
       out.push({ i: Number(r.getAttribute('row-index')), t });
     }

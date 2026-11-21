@@ -9,6 +9,8 @@ import { ToastService } from '../../../core/services/toast.service';
 import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-theme';
 import { PharmacyApi, type SupplierBody, type SupplierRow } from './pharmacy.api';
 import { errText } from './pharmacy-math';
+import { activeWords } from '../../../shared/utils/status-words';
+import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
 import { PharmacySectionsComponent } from './pharmacy-sections.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -112,7 +114,7 @@ export class PharmacySuppliersPage {
     { field: 'gstin', headerName: 'GSTIN', flex: 1, minWidth: 150 },
     { field: 'drugLicenseNo', headerName: 'Drug licence', flex: 1, minWidth: 130 },
     { field: 'phone', headerName: 'Phone', width: 130 },
-    { field: 'isActive', headerName: 'Status', width: 100, valueFormatter: p => (p.value ? 'Active' : 'Off') },
+    statusWordsCol<SupplierRow>({ field: 'isActive', colId: 'isActive', headerName: 'Status', width: 110, valueGetter: p => (p.data?.isActive ? 'Active' : 'Inactive') }, s => activeWords(!!s.isActive)),
   ];
 
   constructor() { this.load(); }

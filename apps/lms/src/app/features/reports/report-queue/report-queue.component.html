@@ -111,7 +111,7 @@
                 <span class="pf-rq2-prow__txt">
                   <span class="pf-rq2-prow__l1">
                     <span class="pf-rq2-prow__name">{{ reportPatientName(row.r) }}</span>
-                    <span class="pf-rq2-pill" [attr.data-status]="st.key" [attr.title]="st.key === 'completed' ? 'Ready to send' : null" [attr.aria-label]="st.key === 'completed' ? 'Ready to send' : null"><span class="pf-rq2-dot" [style.background]="statusDot(st.key)" aria-hidden="true"></span>{{ st.label }}</span>
+                    <pf-status-words [words]="statusWordsOf(row.r)" />
                   </span>
                   <span class="pf-rq2-prow__l2 pf-num">{{ phoneLine(row.r) }}@if (st.unpaid) {<span class="pf-rq2-unpaid"> · Unpaid</span>}</span>
                 </span>
@@ -124,7 +124,7 @@
                 <span class="pf-rq2-prow__txt">
                   <span class="pf-rq2-prow__l1">
                     <span class="pf-rq2-prow__name">{{ row.po.patientName }}</span>
-                    <span class="pf-rq2-pill" data-status="partial"><span class="pf-rq2-dot" [style.background]="statusDot('partial')" aria-hidden="true"></span>Partial</span>
+                    <pf-status-words [words]="partialWords" />
                   </span>
                   <span class="pf-rq2-prow__l2 pf-num">{{ phoneLinePartial(row.po) }}</span>
                 </span>
@@ -306,14 +306,13 @@
     @if (row.kind === 'report') {
     @let st = rowStatus(row.r);
     <span class="pf-rq2-status">
-      <span class="pf-rq2-pill" [attr.data-status]="st.key" [attr.title]="st.key === 'completed' ? 'Ready to send' : null" [attr.aria-label]="st.key === 'completed' ? 'Ready to send' : null"><span class="pf-rq2-dot" [style.background]="statusDot(st.key)" aria-hidden="true"></span>{{ st.label }}</span>
+      <pf-status-words [words]="statusWordsOf(row.r)" />
       @if (st.unpaid) { <span class="pf-rq2-unpaid">Unpaid</span> }
-      @if (slimActs() && sentMeta(row.r); as sm) { <span class="pf-rq2-sentline">{{ sm }}</span> }
       @if (slimActs() && sendCtl(row.r); as x) { <ng-container *ngTemplateOutlet="sendCtlTpl; context: { $implicit: x }"></ng-container> }
     </span>
     } @else {
     <span class="pf-rq2-status">
-      <span class="pf-rq2-pill" data-status="partial"><span class="pf-rq2-dot" [style.background]="statusDot('partial')" aria-hidden="true"></span>Partial</span>
+      <pf-status-words [words]="partialWords" />
     </span>
     }
   </ng-template>
@@ -552,9 +551,9 @@
       </div>
       @if (row.kind === 'report') {
       @let st = rowStatus(row.r);
-      <span class="pf-rq2-pill" [attr.data-status]="st.key" [attr.title]="st.key === 'completed' ? 'Ready to send' : null" [attr.aria-label]="st.key === 'completed' ? 'Ready to send' : null"><span class="pf-rq2-dot" [style.background]="statusDot(st.key)" aria-hidden="true"></span>{{ st.label }}</span>
+      <pf-status-words [words]="statusWordsOf(row.r)" />
       } @else {
-      <span class="pf-rq2-pill" data-status="partial"><span class="pf-rq2-dot" [style.background]="statusDot('partial')" aria-hidden="true"></span>Partial</span>
+      <pf-status-words [words]="partialWords" />
       }
       <button type="button" class="pf-btn pf-btn--icon pf-rq2-sheet__close press" (click)="closeSheet()" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>

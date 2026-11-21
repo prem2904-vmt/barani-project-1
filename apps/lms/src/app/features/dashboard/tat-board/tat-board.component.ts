@@ -19,10 +19,11 @@ import { bandFilter } from '../../../shared/utils/band-search';
 import { busyWhile } from '../../../shared/utils/busy';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { plural } from '../../../shared/utils/plural';
+import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
 import {
   BucketCount, DeptCount, SampleGroup, TatBucket, TatLine, TatMode,
   bucketCounts, clockWords, defaultBucket, deptCounts, dueAtOf, dueInWords, groupBySample, inBucket, lateMinutes, lateWords,
-  lineHaystack, sortLines, sortSamples, statusWord, testsSummary, toLine,
+  lineHaystack, sortLines, sortSamples, statusWord, tatNowWords, testsSummary, toLine,
 } from './tat-board.logic';
 
 interface TatApiRow {
@@ -54,11 +55,6 @@ const BUCKETS: { id: TatBucket; label: string; sub: string; tone: string }[] = [
   { id: 'onTrack', label: 'On track', sub: 'Inside the turnaround', tone: 'green' },
   { id: 'all', label: 'All in progress', sub: 'Everything in the lab now', tone: 'muted' },
 ];
-
-const NOW_TONE: Record<string, string> = {
-  'Waiting for result': 'muted', 'In progress': 'violet', 'Waiting to validate': 'violet', 'Culture incubating': 'muted',
-  'Result being re-entered': 'violet', 'Rejected, needs a new sample': 'rose',
-};
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -254,15 +250,6 @@ export function testRows(lines: readonly TatLine[], now: number): TatGridRow[] {
 
     :host ::ng-deep .pf-tat-late { color: var(--rose-text); font-weight: 600; font-variant-numeric: tabular-nums; }
     :host ::ng-deep .pf-tat-num { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
-    :host ::ng-deep .pf-tat-now { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 6px 0; min-width: 0; }
-    :host ::ng-deep .pf-tat-now__more { white-space: normal; overflow-wrap: anywhere; }
-    :host ::ng-deep .pf-tat-pill {
-      display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 2px 10px; border-radius: 999px;
-      border: 1px solid var(--pf-line); background: var(--pf-chip-bg); color: var(--text-secondary); font-size: 12px; line-height: 1.3; white-space: nowrap;
-    }
-    :host ::ng-deep .pf-tat-pill__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--text-muted); }
-    :host ::ng-deep .pf-tat-pill__dot[data-tone='violet'] { background: var(--violet-text); }
-    :host ::ng-deep .pf-tat-pill__dot[data-tone='rose'] { background: var(--rose-text); }
   `],
 })
 export class TatBoardComponent implements OnInit, OnDestroy {
@@ -341,18 +328,6 @@ export class TatBoardComponent implements OnInit, OnDestroy {
     const web = this.web && !phone;
     const mid = this.mid();
     const blank = () => el('span', '');
-    const nowCell = (r: TatGridRow): HTMLElement => {
-      const wrap = el('div', 'pf-tat-now');
-      const pill = el('span', 'pf-tat-pill');
-      const dot = el('span', 'pf-tat-pill__dot');
-      dot.setAttribute('data-tone', NOW_TONE[r.now[0]] ?? 'muted');
-      dot.setAttribute('aria-hidden', 'true');
-      pill.append(dot, document.createTextNode(r.now[0] ?? 'In progress'));
-      wrap.append(pill);
-      // A sample whose tests sit at different steps: the other steps as a quiet line under the pill.
-      if (r.now.length > 1) wrap.append(el('span', 'pf-sg-cell__sub pf-tat-now__more', 'Also: ' + r.now.slice(1).join(', ').toLowerCase()));
-      return wrap;
-    };
     const actions = sgActionsCol<TatGridRow>(web, ['Open'], 0, (p) => sgActions(web, p.data ? [
       { label: 'Open', aria: `Open ${p.data.patient}`, path: SG_ICON.open, run: () => this.open(p.data!) },
     ] : []));
@@ -386,8 +361,8 @@ export class TatBoardComponent implements OnInit, OnDestroy {
         cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? sgCell(clockWords(p.data.dueAt, now), dueInWords(p.data.lateMin) || null) : blank()) },
       { headerName: 'Late by', colId: 'late', valueGetter: (p) => p.data?.lateMin ?? -Infinity, flex: 0, width: 88,
         cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? el('span', 'pf-tat-late', lateWords(p.data.lateMin)) : blank()) },
-      { headerName: 'Now', colId: 'now', valueGetter: (p) => p.data?.now.join(', ') ?? '', flex: 0, width: 180,
-        cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? nowCell(p.data) : blank()) },
+      statusWordsCol<TatGridRow>({ headerName: 'Now', colId: 'now', valueGetter: (p) => p.data?.now.join(', ') ?? '', flex: 0, width: 200 },
+        (r) => tatNowWords(r.now)),
       actions,
     ];
     return cols;

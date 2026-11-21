@@ -4,7 +4,8 @@ import {
 import type { ServiceId } from '../../../../core/services/service-shelf';
 import { FlowGridComponent } from '../flow-grid/flow-grid.component';
 import type { FlowGridContext } from '../flow-grid/flow-cells';
-import type { FlowRow } from '../flow-grid/flow-row';
+import { type FlowRow, whereWords } from '../flow-grid/flow-row';
+import type { StatusTone } from '../../../../shared/utils/status-words';
 import { ClinicViewComponent } from './clinic-view.component';
 import { chipOf } from './clinic';
 import { tokenWidth } from '../flow-grid/flow-fold';
@@ -24,14 +25,17 @@ export const STAGGER_MS = 22;
 interface Slot { x: number; y: number; w: number; h: number; overflow: boolean; dense: boolean }
 export interface MorphTile {
   id: string; x: number; y: number; w: number; h: number; delay: number; gone: boolean; dense: boolean;
-  token: string; name: string; short: string; meta: string; where: string; wait: string; act: string; late: boolean; now: boolean;
+  token: string; name: string; short: string; meta: string; where: string; whereSub: string; whereTone: StatusTone;
+  wait: string; act: string; late: boolean; now: boolean;
 }
 export interface WorkMorph { face: 'row' | 'chip'; go: boolean; tiles: MorphTile[] }
 
 /** A row's two faces: its list cells and its room chip (same words the real cells / chips show). */
 export function tileFace(r: FlowRow): Omit<MorphTile, 'id' | 'x' | 'y' | 'w' | 'h' | 'delay' | 'gone' | 'dense'> {
   const c = chipOf(r);
-  return { token: c.token, name: r.name, short: c.name, meta: r.meta, where: r.where, wait: r.waitMin === null ? '—' : r.wait,
+  const w = whereWords(r);
+  return { token: c.token, name: r.name, short: c.name, meta: r.meta, where: w.now, whereSub: w.detail ?? '', whereTone: w.tone,
+    wait: r.waitMin === null ? '—' : r.wait,
     act: r.next?.label ?? '', late: r.late, now: c.now };
 }
 
@@ -99,7 +103,7 @@ export function tileFace(r: FlowRow): Omit<MorphTile, 'id' | 'x' | 'y' | 'w' | '
               <div class="fd-tile__cells">
                 <span class="fd-tile__tok">{{ t.token }}</span>
                 <span class="fd-tile__pt"><b>{{ t.name }}</b>@if (t.meta) { <small>{{ t.meta }}</small> }</span>
-                <span class="fd-tile__where"><i aria-hidden="true"></i>{{ t.where }}</span>
+                <span class="fd-tile__where" [attr.data-tone]="t.whereTone"><b>{{ t.where }}</b>@if (t.whereSub) { <small>{{ t.whereSub }}</small> }</span>
                 <span class="fd-tile__wait" [class.late]="t.late">{{ t.wait }}</span>
                 @if (t.act) { <span class="fd-tile__act">{{ t.act }}</span> }
               </div>

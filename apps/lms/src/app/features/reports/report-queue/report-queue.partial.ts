@@ -2,6 +2,7 @@ import type { Order, OrderSample, OrderTest } from '../../../shared/models/order
 import { formatPatientMeta, patientDisplayName } from '../../../shared/models/patient.model';
 import { plural } from '../../../shared/utils/plural';
 import { isSignedOrSkipped, NOT_REPORTED } from '../../../shared/utils/line-status';
+import { type StatusWords, statusWords } from '../../../shared/utils/status-words';
 
 /**
  * Reports list — the PARTIAL tab's model (docs/PF-PATTERN.md → "Reports list").
@@ -316,6 +317,21 @@ export function queueStatus(deliveryStatus: string, type: string | undefined, un
   if (deliveryStatus === 'delivered') return { key: 'delivered', label: 'Delivered', unpaid, prelim };
   if (prelim) return { key: 'partial', label: 'Partial', unpaid, prelim };
   return { key: 'completed', label: 'Ready', unpaid, prelim };
+}
+
+/**
+ * The Status cell as WORDS (owner design D, 2026-11-21): line 1 the state, line 2 what happened / what is next —
+ *   Ready / Not sent yet · Partial / Preliminary report · Delivered / WhatsApp · read 10:12 (green) ·
+ *   Failed / the reason (rose). `sent` = the screen's own sent line (WhatsApp status, printed, failure note).
+ */
+export function queueWords(st: Pick<QueueStatus, 'key' | 'label'>, sent: string): StatusWords {
+  const said = (sent ?? '').trim();
+  switch (st.key) {
+    case 'delivered': return statusWords('Delivered', said || 'Sent', 'done');
+    case 'failed': return statusWords('Failed', said || 'Not delivered', 'late');
+    case 'partial': return statusWords('Partial', said || 'Preliminary report', 'normal');
+    default: return statusWords('Ready', said || 'Not sent yet', 'normal');
+  }
 }
 
 /** Status dot colours (theme tokens, AA in light + dark) — the side card, the filter menu and the pills share them. */

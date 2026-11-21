@@ -1,6 +1,7 @@
 import type { CultureCaseView, CultureStageView } from './culture-panel.component';
 import { durationText, type GridFold, type WorkStatus } from '../../../shared/utils/work-grid';
 import { matchesDailyNo } from '../../../shared/utils/daily-no';
+import { type StatusWords, statusWords } from '../../../shared/utils/status-words';
 import { formatPatientMeta } from '../../../shared/models/patient.model';
 
 /**
@@ -99,6 +100,20 @@ export function nextStep(c: CultureCaseView, now: number): { label: string; tone
   const cur = currentStage(c);
   return { label: cur?.label ?? 'Sign-out', tone: st.tone, title: [st.label, stageSub(c, now, null)].filter(Boolean).join(' · ') };
 }
+/**
+ * The Next-step cell as WORDS (owner design D, 2026-11-21): line 1 = the next stage ("Growth", "Sign-out"), line 2 =
+ * what is happening ("Read due · Day 3", "Incubating · ready in 2h", the holder, "Ready to sign out", "Not started").
+ * Rose when the read is due; otherwise normal text (sign-out still needs a person, so it is not "done").
+ */
+export function cultureWords(c: CultureCaseView, now: number, myId?: string | null): StatusWords {
+  const st = cultureStatus(c, now);
+  const cur = currentStage(c);
+  const sub = stageSub(c, now, myId ?? null);
+  const detail = st.key === 'signout' ? 'Ready to sign out' : st.key === 'read_due' ? `Read due · Day ${cultureDay(c, now)}`
+    : sub || (st.key === 'to_start' ? 'Not started' : st.label);
+  return statusWords(cur?.label ?? 'Sign-out', detail, st.key === 'read_due' ? 'late' : 'normal');
+}
+
 /** The Next-step column's sort: how far the case is (index of the first not-done stage; sign-out = after the last). */
 export function cultureStageRank(c: CultureCaseView): number {
   const st = c.stages ?? [];

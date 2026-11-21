@@ -5,6 +5,8 @@
  * screens read one rule.
  */
 
+import { statusWords, type StatusWords } from '../../shared/utils/status-words';
+
 export type StockLevel = 'ok' | 'low' | 'out';
 /** `.pf-sdot` tones: '' neutral · done violet · warn amber · bad red. */
 export type DotTone = '' | 'done' | 'warn' | 'bad';
@@ -28,6 +30,13 @@ export function stockLevel(it: StockLike): StockLevel {
 }
 
 export const STOCK_LEVEL_LABEL: Record<StockLevel, string> = { ok: 'In stock', low: 'Low', out: 'Out of stock' };
+/** Stock status cell as words (design D): Out / Low = rose, In stock = normal text; the quiet line says what the level is. */
+export function stockWords(it: StockLike & { uom?: string }, phone = false): StatusWords {
+  const l = stockLevel(it);
+  const now = phone && l === 'out' ? 'Out' : STOCK_LEVEL_LABEL[l];
+  return statusWords(now, l === 'ok' ? null : `Reorder at ${it.reorderLevel}`, l === 'ok' ? 'normal' : 'late');
+}
+
 export const STOCK_LEVEL_TONE: Record<StockLevel, DotTone> = { ok: '', low: 'warn', out: 'bad' };
 
 /** Near-expiry alert line: expired lots read red, the rest amber. */

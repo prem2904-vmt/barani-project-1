@@ -80,7 +80,9 @@ describe('My Work grid (rendered)', () => {
     expect(rows[0].querySelector('.wg-who__name')!.textContent!.trim()).toBe(LONG);
     expect(rows[0].querySelectorAll('[data-action]').length).toBe(1);
     expect(rows[0].querySelector('[data-action="enter"]')!.textContent!.trim()).toBe('Enter results');
-    expect(rows[0].querySelector('.wg-pill')!.textContent!.trim()).toBe('To enter');
+    // Status = two lines of words (design D): no pill.
+    expect(rows[0].querySelector('.wg-pill')).toBeNull();
+    expect(rows[0].querySelector('pf-status-words .pf-sw__now')!.textContent!.trim()).toBe('To enter');
     // No Tests column (owner 2026-11-20): the meta line carries department + count; names in the tooltip.
     expect(el.querySelector('.ag-header-cell[col-id="tests"]')).toBeNull();
     const meta = rows[0].querySelector('.wg-who__meta')!;
@@ -100,7 +102,7 @@ describe('My Work grid (rendered)', () => {
     const cols = grid.cols();
     const sortable = cols.filter(c => c.sortable).map(c => c.colId);
     // EVERY data column sorts (owner 2026-11-21) on its real value, asc → desc → none; the actions never.
-    expect(sortable).toEqual(['sample', 'patient', 'priority', 'due', 'wait', 'status']);
+    expect(sortable).toEqual(['sample', 'patient', 'dept', 'priority', 'due', 'wait', 'status']);
     for (const c of cols.filter(x => x.sortable)) {
       expect(c.sortingOrder, c.colId).toEqual(['asc', 'desc', null]);
       expect(typeof c.comparator, c.colId).toBe('function');
@@ -142,7 +144,8 @@ describe('My Work grid (rendered)', () => {
     expect(rows.find(r => r.textContent!.includes('0126101'))!.querySelector('[data-action="pick"]')!.textContent!.trim()).toBe('Pick up');
     const other = rows.find(r => r.textContent!.includes('0126103'))!;
     expect(other.querySelector('[data-action]')).toBeNull();
-    expect(other.querySelector('.wg-pill')!.textContent!.trim()).toBe('Claimed · Ravi T');
+    expect(other.querySelector('pf-status-words .pf-sw__now')!.textContent!.trim()).toBe('Claimed');
+    expect(other.querySelector('pf-status-words .pf-sw__detail')!.textContent!.trim()).toBe('By Ravi T');
   });
 
   it('patient focus: row tap = show the patient\'s tubes; the inline tubes keep the tube tap', async () => {
@@ -200,7 +203,9 @@ describe('My Work grid (rendered)', () => {
     // Text stays left; short same-shape values centred; actions right — header matches cells.
     const hc = (k: string) => [by[k].headerClass].flat().join(' ');
     expect([hc('sample'), hc('patient')]).toEqual(['wg-h-left', 'wg-h-left']);
-    for (const k of ['priority', 'due', 'wait', 'status']) expect(hc(k)).toBe('wg-h-center');
+    for (const k of ['priority', 'due', 'wait']) expect(hc(k)).toBe('wg-h-center');
+    // Status words + Department read LEFT (two lines of words, design D).
+    for (const k of ['status', 'dept']) expect(hc(k)).toBe('wg-h-left');
     expect(hc('acts')).toBe('wg-h-right');
     expect(by['patient'].cellClass).toContain('wg-c-left');
     expect(by['due'].cellClass).toContain('wg-c-center');

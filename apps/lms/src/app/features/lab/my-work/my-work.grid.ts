@@ -6,6 +6,7 @@ import type { OrderPriority } from '../../../shared/utils/lab-priority';
 import { tatDetail, tatLabel, tatStateFor } from '../../../shared/utils/lab-priority';
 import { GridFold, WorkStatus, waitText } from '../../../shared/utils/work-grid';
 import type { WorkLine } from './my-work.priority';
+import { type StatusWords, statusWords } from '../../../shared/utils/status-words';
 
 /**
  * My Work as a GRID (owner 2026-11-20): the pure row model + column plan behind `my-work-grid.component.ts`. Every
@@ -107,6 +108,57 @@ export function doneStatus(d: Pick<MwDoneTube, 'status' | 'openLines'>): WorkSta
   return { label: 'Submitted', tone: 'violet' };
 }
 
+// ── Status as WORDS (owner design D, 2026-11-21): two lines, no pill, no dot ───────────────────────────────
+// Line 1 = the status word above (the Status column's filter value stays the WorkStatus label); line 2 = the detail.
+// Rose = sent back or past its TAT with something left to enter; green = entered / validated.
+
+const nTests = (n: number) => `${n} test${n === 1 ? '' : 's'}`;
+
+export function tubeWords(t: MwTube, r: Pick<MwRules, 'tab' | 'myId'>, ownerName?: (id: string) => string): StatusWords {
+  const st = tubeStatus(t, r, ownerName);
+  const late = tubeLate(t);
+  if (r.tab === 'service_queue') {
+    if (st.label.startsWith('Claimed')) {
+      const who = st.label.split(' · ')[1];
+      return statusWords('Claimed', who === 'You' ? 'By you' : who ? `By ${who}` : 'By another technician', late ? 'late' : 'normal');
+    }
+    return statusWords('In queue', `Not picked up · ${nTests(logicalTestCount(t.tests as never))}`, late ? 'late' : 'normal');
+  }
+  if (st.label === 'Re-entry') {
+    const r0 = t.rejections[0];
+    // The reason itself already reads under the patient (rose note) — line 2 says what to do, never repeats it.
+    return statusWords('Re-entry', r0 ? 'Sent back · fix and resubmit' : 'Sent back for correction', 'late');
+  }
+  if (st.label === 'Entered') return statusWords('Entered', `All ${nTests(logicalTestCount(t.tests as never))} in`, 'done');
+  if (st.label === 'Draft') return statusWords('Draft', 'Saved, not submitted', late ? 'late' : 'normal');
+  // The test count already rides the patient line; line 2 says where the entry stands.
+  return statusWords('To enter', late ? 'Past TAT · nothing entered' : 'Nothing entered yet', late ? 'late' : 'normal');
+}
+
+export function groupWords(tubes: MwTube[], r: Pick<MwRules, 'tab' | 'myId'>, ownerName?: (id: string) => string): StatusWords {
+  if (tubes.length === 1) return tubeWords(tubes[0], r, ownerName);
+  const st = groupStatus(tubes, r, ownerName);
+  const late = tubes.some(tubeLate);
+  if (r.tab === 'service_queue') return statusWords(st.label.endsWith(' tubes') ? 'In queue' : st.label.split(' · ')[0], `${tubes.length} tubes`, late ? 'late' : 'normal');
+  const entered = tubes.filter(t => t.allDone).length;
+  const detail = `${entered} of ${tubes.length} tubes entered`;
+  if (st.tone === 'green') return statusWords('Entered', `All ${tubes.length} tubes in`, 'done');
+  if (st.label === 'Re-entry') return statusWords('Re-entry', detail, 'late');
+  return statusWords(st.label.split(' · ')[0], detail, late ? 'late' : 'normal');
+}
+
+export function doneWords(d: Pick<MwDoneTube, 'status' | 'openLines'>): StatusWords {
+  if (d.status === 'validated') return statusWords('Validated', 'Report ready', 'done');
+  if (d.status === 'partial') return statusWords('Partly validated', `${nTests(d.openLines)} still open`, 'normal');
+  return statusWords('Submitted', 'Waiting for validation', 'normal');
+}
+
+/** Department column (the old Filters → Department): the line departments' names ("Biochemistry", or "2 departments"). */
+export function deptText(lines: OrderTest[]): { text: string; names: string[] } {
+  const names = [...new Set(lines.map(l => lineDepartment(l as never).name).filter((n): n is string => !!n))];
+  return { text: names.length > 1 ? `${names.length} departments` : names[0] ?? '—', names };
+}
+
 // ── Due: time left to TAT (owner 2026-11-21 — no journey ring on the lab screens) ─────────────────────────
 
 /** A tube is late when it is past its TAT with something still to enter (the Due column's rose rule). */
@@ -193,20 +245,22 @@ export interface MwColPlan { colId: string; header: string; hide: boolean }
  * No Tests column (owner 2026-11-20: long test lists blew rows up to 6–8 lines): the department + test count ride the
  * patient's meta line, the full names stay in the tooltip / press-and-hold peek. No Journey ring (owner 2026-11-21:
  * every row here is at the same step) — DUE (time left to TAT) instead; Waiting = time in the lab.
+ * Department is its own column (owner 2026-11-21: the head's "Filters → Department" became its header filter); the
+ * patient line then carries just the test count.
  * full  : every column.
  * fold  : Priority + Status fold under the patient / sample cell; the actions keep full size.
- * tight : Sample ID and Waiting fold into the patient cell — Patient · Due · actions: the grid never scrolls
+ * tight : Sample ID, Department and Waiting fold into the patient cell — Patient · Due · actions: the grid never scrolls
  *         sideways down to a 520px card (owner 2026-11-21).
  */
 export function mwColumns(mode: MwMode, fold: GridFold): MwColPlan[] {
   const f = fold !== 'full', t = fold === 'tight';
   const c = (colId: string, header: string, hide = false): MwColPlan => ({ colId, header, hide });
   if (mode === 'done') return [
-    c('sample', 'Sample ID', t), c('patient', 'Patient'), c('status', 'Status', f), c('when', 'Completed', t), c('acts', ''),
+    c('sample', 'Sample ID', t), c('patient', 'Patient'), c('dept', 'Department', t), c('status', 'Status', f), c('when', 'Completed', t), c('acts', ''),
   ];
   return [
     ...(mode === 'sample' ? [c('sample', 'Sample ID', t)] : []),
-    c('patient', 'Patient'), c('priority', 'Priority', f), c('due', 'Due'), c('wait', 'Waiting', t), c('status', 'Status', f), c('acts', ''),
+    c('patient', 'Patient'), c('dept', 'Department', t), c('priority', 'Priority', f), c('due', 'Due'), c('wait', 'Waiting', t), c('status', 'Status', f), c('acts', ''),
   ];
 }
 

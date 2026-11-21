@@ -113,7 +113,7 @@ describe('the shared set filter — both modes', () => {
 describe('the Frontdesk flow grid follows the rule', () => {
   const src = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/flow-grid/flow-grid.component.ts', 'utf8');
   it.each([
-    "tokenCol<FlowRow>({ colId: 'token'", "textCol<FlowRow>({ colId: 'patient'", "shapeCol<FlowRow>({ colId: 'journey'",
+    "tokenCol<FlowRow>({ colId: 'token'", "textCol<FlowRow>({ colId: 'patient'",
     "valuesCol<FlowRow>({ colId: 'where'", "durationCol<FlowRow>({ colId: 'wait'", "moneyCol<FlowRow>({ colId: 'pay'", "actionCol<FlowRow>({ colId: 'next'",
   ])('%s', head => expect(src).toContain(head));
 

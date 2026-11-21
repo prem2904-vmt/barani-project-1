@@ -94,13 +94,14 @@ describe('Instruments list', () => {
     expect(p.cmp.statusCounts().map((s: { label: string; n: number; tone: string }) => [s.label, s.n, s.tone])).toEqual([
       ['Online', 1, 'green'], ['Waiting for analyzer', 1, 'amber'], ['Error', 1, 'red'], ['Connector running', 1, 'neutral'],
     ]);
-    const cells = Array.from(p.el.querySelectorAll('.pf-inl__main .pf-inl-status'))
-      .map((c) => Array.from(c.closest('.pf-inl-cell')!.children).map((x) => x.textContent!.trim()).join(' '));
+    // Status = two lines of words (design D): "Online" / "connected from …".
+    const cells = Array.from(p.el.querySelectorAll('.pf-inl__main pf-status-words'))
+      .map((c) => Array.from(c.children).map((x) => x.textContent!.trim()).join(' '));
     expect(cells).toContain('Online connected from 192.168.1.21 · last data 2 min ago');
     expect(cells).toContain('Waiting for analyzer listening on port 5604');
     expect(cells.find((c) => c.startsWith('Error'))).toContain('Port 5600 is used by CBCLisM51 (PID 7412)');
     // No green dot for anything that isn't really connected.
-    expect(p.el.querySelectorAll('.pf-inl__main .pf-inl-status[data-tone="green"]').length).toBe(1);
+    expect(p.el.querySelectorAll('.pf-inl__main pf-status-words[data-tone="done"]').length).toBe(1);
   });
 
   it('"Connect an analyzer" shows on the desktop app with the setup helper (a secondary — no violet primary in Settings)', async () => {

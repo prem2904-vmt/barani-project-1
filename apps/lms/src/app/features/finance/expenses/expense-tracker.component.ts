@@ -33,7 +33,8 @@ import { spinDelay } from '../../../shared/utils/busy';
 import { ExpenseEntryDialogComponent } from './expense-entry-dialog.component';
 import { DayClosingComponent } from './day-closing.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
-import { dayLabel, inr } from './expense-format';
+import { dayLabel, inr, dayStatusWords } from './expense-format';
+import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -491,9 +492,6 @@ function monthStart(ymd: string): string { return ymd.slice(0, 8) + '01'; }
     .pf-xt__main ::ng-deep .pf-xt-amt--in { color: var(--text-secondary); }
     .pf-xt__main ::ng-deep .pf-xt-amt--neg { color: var(--red-text, #dc2626); }
     .pf-xt__main ::ng-deep .pf-xt-num { font-variant-numeric: tabular-nums; text-align: right; display: block; }
-    .pf-xt__main ::ng-deep .pf-xt-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; white-space: nowrap; color: var(--text-secondary); }
-    .pf-xt__main ::ng-deep .pf-xt-status__dot { width: 7px; height: 7px; border-radius: 999px; background: var(--pf-toggle-off, #cbd5e1); flex: none; }
-    .pf-xt__main ::ng-deep .pf-xt-status[data-closed='true'] .pf-xt-status__dot { background: var(--violet-text, #7c3aed); }
     .pf-xt__main ::ng-deep .pf-xt-acts { display: inline-flex; gap: 6px; align-items: center; height: 100%; }
     .pf-xt__main ::ng-deep .ag-cell.pf-xt-actcell { padding-left: 6px; padding-right: 6px; }
     .pf-xt__main ::ng-deep .pf-xt-acts .pf-rowact--icon { width: 44px; height: 44px; }
@@ -696,8 +694,8 @@ export class ExpenseTrackerComponent {
     const web = !this.isCoarse && !this.isPhone;
     const b = this.book();
     const admin = this.can().isAdmin;
-    const status = (d?: ExpenseDay) => d ? `<span class="pf-xt-status" data-closed="${d.isClosed}"><span class="pf-xt-status__dot" aria-hidden="true"></span>${d.isClosed ? 'Closed' : 'Open'}</span>` +
-      (d.isClosed && d.closedByName ? `<span class="pf-xt-cell__sub">by ${this.esc(d.closedByName)}</span>` : '') : '';
+    // Phone card line: plain words (no pill / dot); the desktop Status column uses dayStatusWords.
+    const status = (d?: ExpenseDay) => d ? `<span class="pf-xt-cell__sub">${d.isClosed ? 'Closed' : 'Open'}${d.isClosed && d.closedByName ? ` · by ${this.esc(d.closedByName)}` : ''}</span>` : '';
     const num = (v: number | null | undefined, neg = false) => `<span class="pf-xt-num${neg && (v ?? 0) < 0 ? ' pf-xt-amt--neg' : ''}">${this.esc(inr(v ?? 0))}</span>`;
     const actions: ColDef<ExpenseDay> = {
       colId: 'actions', headerName: '', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
@@ -737,8 +735,8 @@ export class ExpenseTrackerComponent {
         cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.expenses) },
       { colId: 'closing', headerName: 'Closing', flex: 1, minWidth: 120, type: 'rightAligned', valueGetter: p => p.data?.closing ?? 0,
         cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.closing, true) },
-      { colId: 'status', headerName: 'Status', width: 130, minWidth: 110, flex: 0, valueGetter: p => (p.data?.isClosed ? 'closed' : 'open'),
-        cellRenderer: (p: { data?: ExpenseDay }) => `<div class="pf-xt-cell">${status(p.data)}</div>` },
+      statusWordsCol<ExpenseDay>({ colId: 'status', headerName: 'Status', width: 140, minWidth: 120, flex: 0, valueGetter: p => (p.data?.isClosed ? 'closed' : 'open') },
+        dayStatusWords),
       actions,
     ];
   });

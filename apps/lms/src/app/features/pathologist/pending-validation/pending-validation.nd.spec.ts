@@ -177,27 +177,28 @@ describe('Pathologist queue (nd) — tiles', () => {
     const hae = tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === '0126117')!;
     expect(hae.querySelector('.pv-tile__id')!.classList).toContain('pf-num');
     expect(hae.querySelector('.pv-tile__who')!.textContent!.trim()).toBe(LONG_NAME);   // never cut
-    expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('44/F · AA0007 · Haematology');
+    expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('44/F · AA0007');
+    expect(hae.textContent).toContain('Haematology');   // its own Department column (or the meta line when folded)
     expect(hae.querySelector('.pv-tile__meta')!.textContent).not.toContain('|');
     // No Tests column (owner 2026-11-20): department + count in the meta line, the names in its tooltip.
-    expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('Haematology · 2 tests');
+    expect(hae.querySelector('.pv-tile__meta')!.textContent).toContain('2 tests');
     expect(hae.querySelector('.pv-tile__meta')!.getAttribute('title')).toBe('CBC · ESR');
     expect(hae.querySelector('.pv-tile__tests')).toBeNull();
-    // ONE status each: a neutral pill + dot, no chip.
+    // ONE status each, in two lines of words (design D): no pill, no dot, no chip.
     for (const t of tiles) {
       expect(t.querySelectorAll('.pv-status').length).toBe(1);
-      expect(t.querySelector('.pv-status .pv-status__dot')).not.toBeNull();
+      expect(t.querySelector('.pv-status__dot, .wg-pill, .wg-dot')).toBeNull();
       expect(t.querySelector('.pf-chip, pf-chip')).toBeNull();
     }
-    const word = (id: string) => tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === id)!
-      .querySelector('.pv-status')!.textContent!.trim();
-    expect(word('0126117')).toBe('On time');
+    const st = (id: string) => tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === id)!.querySelector('.pv-status')!;
+    const word = (id: string) => st(id).querySelector('.pf-sw__now')!.textContent!.trim();
+    expect(word('0126117')).toBe('To validate');
+    expect(st('0126117').querySelector('.pf-sw__detail')!.textContent!.trim()).toBe('On time');
     expect(word('0126118')).toBe('Overdue');
     expect(word('1126001')).toBe('Critical');
-    // Status tones: rose for critical / overdue, never amber (owner: no yellow).
-    const tone = (id: string) => tiles.find(t => t.querySelector('.pv-tile__id')!.textContent!.trim() === id)!
-      .querySelector('.pv-status')!.getAttribute('data-tone');
-    expect([tone('0126118'), tone('1126001')]).toEqual(['rose', 'rose']);
+    // Rose words for critical / overdue, never amber (owner: no yellow).
+    const tone = (id: string) => st(id).getAttribute('data-tone');
+    expect([tone('0126118'), tone('1126001')]).toEqual(['late', 'late']);
   });
 
   it('Urgent (order priority) rows come first with a rose leading rule + "Urgent"; never "High"', async () => {
@@ -220,9 +221,9 @@ describe('Pathologist queue (nd) — tiles', () => {
     expect(typeof by['status'].filter).toBe('function');
     expect(by['acts'].filter).toBe(false);
     expect([by['sample'].headerClass, by['patient'].headerClass, by['status'].headerClass, by['wait'].headerClass, by['acts'].headerClass].map(h => [h].flat().join(' ')))
-      .toEqual(['wg-h-left', 'wg-h-left', 'wg-h-center', 'wg-h-center', 'wg-h-right']);
+      .toEqual(['wg-h-left', 'wg-h-left', 'wg-h-left', 'wg-h-center', 'wg-h-right']);   // status words read left
     // Every data column SORTS on its real value (owner 2026-11-21), asc → desc → none; the actions never.
-    for (const k of ['sample', 'patient', 'status', 'due', 'wait']) {
+    for (const k of ['sample', 'patient', 'dept', 'status', 'due', 'wait']) {
       expect(by[k].sortable, k).toBe(true);
       expect(by[k].sortingOrder, k).toEqual(['asc', 'desc', null]);
       expect(typeof by[k].comparator, k).toBe('function');
@@ -269,18 +270,17 @@ describe('Pathologist queue (nd) — tiles', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/lab/sample', 's3'], { queryParams: { validate: 1 } });
   });
 
-  it('department filter appears only with more than one department and narrows the tiles', async () => {
-    const { el, f } = await render();
-    const seg = el.querySelector('.pv-depts') as HTMLElement;
-    expect([...seg.querySelectorAll('[role=radio]')].map(words))
-      .toEqual(['All', 'Haematology 2', 'Microbiology 1']);
-    ([...seg.querySelectorAll<HTMLElement>('[role=radio]')].find(r => r.textContent!.includes('Microbiology')))!.click();
-    f.detectChanges(); await leave(f);
-    expect(idsOf(el)).toEqual(['1126001']);
-
-    TestBed.resetTestingModule();
-    const one = await render({ queue: QUEUE.filter(q => q.subOrder?.departmentId === HAEM.id), scope: SCOPE_HAEM });
-    expect(one.el.querySelector('.pv-depts')).toBeNull();
+  it('department: a Department COLUMN filter on the grid (the head pills are phones-only now, owner 2026-11-21)', async () => {
+    const { el, c } = await render();
+    expect(el.querySelector('.pv-depts')).toBeNull();
+    const dept = c.cols().find((x: { colId?: string }) => x.colId === 'dept')!;
+    expect(dept.headerName).toBe('Department');
+    expect(dept.filter).toBeTruthy();
+    // A department picked earlier on a phone never narrows the grid invisibly.
+    const before = c.visibleTiles().length;
+    c.dept.set(HAEM.id);
+    expect(c.visibleTiles().length).toBe(before);
+    expect(idsOf(el)).toContain('1126001');
   });
 
   it('first load: the side card numbers are placeholders and Review next says it is loading', async () => {

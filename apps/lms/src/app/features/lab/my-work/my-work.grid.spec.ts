@@ -113,11 +113,12 @@ describe('My Work grid — rows + columns', () => {
   });
   it('NO Tests column (owner 2026-11-20); the actions column never hides; low-value columns fold first', () => {
     const vis = (m: Parameters<typeof mwColumns>[0], f: Parameters<typeof mwColumns>[1]) => mwColumns(m, f).filter(c => !c.hide).map(c => c.colId);
-    expect(vis('sample', 'full')).toEqual(['sample', 'patient', 'priority', 'due', 'wait', 'status', 'acts']);
-    expect(vis('patient', 'full')).toEqual(['patient', 'priority', 'due', 'wait', 'status', 'acts']);
-    expect(vis('sample', 'fold')).toEqual(['sample', 'patient', 'due', 'wait', 'acts']);
+    // Department = its own column (the old head Filters → Department), folds with the tight tier.
+    expect(vis('sample', 'full')).toEqual(['sample', 'patient', 'dept', 'priority', 'due', 'wait', 'status', 'acts']);
+    expect(vis('patient', 'full')).toEqual(['patient', 'dept', 'priority', 'due', 'wait', 'status', 'acts']);
+    expect(vis('sample', 'fold')).toEqual(['sample', 'patient', 'dept', 'due', 'wait', 'acts']);
     expect(vis('sample', 'tight')).toEqual(['patient', 'due', 'acts']);   // fits a 520px card
-    expect(vis('done', 'full')).toEqual(['sample', 'patient', 'status', 'when', 'acts']);
+    expect(vis('done', 'full')).toEqual(['sample', 'patient', 'dept', 'status', 'when', 'acts']);
     for (const m of ['sample', 'patient', 'done'] as const) expect(mwColumns(m, 'full').map(c => c.colId)).not.toContain('journey');
     expect(vis('done', 'tight')).toEqual(['patient', 'acts']);
     for (const m of ['sample', 'patient', 'done'] as const) expect(mwColumns(m, 'full').map(c => c.colId)).not.toContain('tests');

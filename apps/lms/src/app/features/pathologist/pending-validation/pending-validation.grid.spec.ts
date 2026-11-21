@@ -28,16 +28,18 @@ describe('Pathologist grid — waiting since entered (rose when past TAT)', () =
 
 describe('Pathologist grid — columns (no Tests column) fold by the main card width', () => {
   const vis = (f: Parameters<typeof pvColumns>[0]) => pvColumns(f).filter(c => !c.hide).map(c => c.colId);
-  it('full: Sample ID · Patient · Status · Due · Waiting · actions — no journey ring (owner 2026-11-21)', () => {
-    expect(vis('full')).toEqual(['sample', 'patient', 'status', 'due', 'wait', 'acts']);
+  it('full: Sample ID · Patient · Department · Status · Due · Waiting · actions — no journey ring (owner 2026-11-21)', () => {
+    expect(vis('full')).toEqual(['sample', 'patient', 'dept', 'status', 'due', 'wait', 'acts']);
     expect(pvColumns('full').map(c => c.colId)).not.toContain('journey');
   });
   it('fold: Status folds under the patient; tight: Sample ID + Waiting fold; Due and the actions never hide', () => {
-    expect(vis('fold')).toEqual(['sample', 'patient', 'due', 'wait', 'acts']);
+    expect(vis('fold')).toEqual(['sample', 'patient', 'dept', 'due', 'wait', 'acts']);
     expect(vis('tight')).toEqual(['patient', 'due', 'acts']);   // fits a 520px card
   });
   it('meta line: age/sex · MRN · department · N tests (the entered time is in the Waiting column)', () => {
     const m = pvMeta({ patientMeta: '44/F · AA0007', dept: 'Haematology', items: [{ resultedAt: '2026-11-20T09:48:00Z' }, { resultedAt: '2026-11-20T09:40:00Z' }] as never });
     expect(m).toBe('44/F · AA0007 · Haematology · 2 tests');
+    // With the Department column on screen the line drops the department (never said twice).
+    expect(pvMeta({ patientMeta: '44/F · AA0007', dept: 'Haematology', items: [{}, {}] as never }, false)).toBe('44/F · AA0007 · 2 tests');
   });
 });

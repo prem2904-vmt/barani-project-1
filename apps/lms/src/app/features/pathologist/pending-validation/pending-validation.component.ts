@@ -7,7 +7,8 @@ import { DataGridTemplateCellComponent } from '../../../shared/components/data-g
 import { GridFold, actionCol, dueCell, dueValue, durationCol, fitFold, minWidthOf, minutesSince, textCol, valuesCol } from '../../../shared/utils/work-grid';
 import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
-import { pvColumns, pvMeta, pvRows, pvWaiting } from './pending-validation.grid';
+import { pvColumns, pvMeta, pvRows, pvWaiting, pvWords } from './pending-validation.grid';
+import { StatusWordsComponent } from '../../../shared/components/status-words/status-words.component';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { isCultureOrderTest } from '../../../core/navigation/culture-redirect.guard';
 import { ThemeService } from '../../../core/services/theme.service';
@@ -67,7 +68,7 @@ type Tab = 'mine' | 'all';
 @Component({
   selector: 'pf-pending-validation',
   standalone: true,
-  imports: [DailyNoComponent, BusyDirective, 
+  imports: [DailyNoComponent, BusyDirective, StatusWordsComponent, 
     ZoomSourceDirective,
     FormsModule,
     TatIndicatorComponent,
@@ -129,7 +130,8 @@ type Tab = 'mine' | 'all';
             <h2 class="pf-card__label">Pending validation</h2>
             <span class="pv-count pf-num">{{ countLabel() }}</span>
             <span class="pf-card__spacer"></span>
-            @if (deptFilters().length > 1) {
+            <!-- Phones only (no column headers there); the grid's Department column filters the same thing. -->
+            @if (phone() && deptFilters().length > 1) {
               <pf-segmented class="pv-depts" [options]="deptSegmentOptions()" [value]="dept()" (valueChange)="dept.set($any($event))" />
             }
           </header>
@@ -197,6 +199,9 @@ type Tab = 'mine' | 'all';
         <ng-template #cPatient let-g>
           <ng-container [ngTemplateOutlet]="whoTpl" [ngTemplateOutletContext]="{ $implicit: g, status: fold() !== 'full' }" />
         </ng-template>
+        <ng-template #cDept let-g>
+          <span class="wg-cell"><span class="wg-tests">{{ g.dept || '—' }}</span></span>
+        </ng-template>
         <ng-template #cStatus let-g>
           <span class="wg-cell"><ng-container [ngTemplateOutlet]="statusTpl" [ngTemplateOutletContext]="{ $implicit: g }" /></span>
         </ng-template>
@@ -212,13 +217,10 @@ type Tab = 'mine' | 'all';
         </ng-template>
         <ng-template #cActs let-g><ng-container [ngTemplateOutlet]="actsTpl" [ngTemplateOutletContext]="{ $implicit: g }" /></ng-template>
 
+        <!-- Status = two lines of words (owner design D, 2026-11-21): no pill, no dot. -->
         <ng-template #statusTpl let-g>
-          @let st = status(g);
           <span class="pv-statuscell">
-            <span class="wg-pill pv-status" [attr.data-tone]="st.tone === 'red' ? 'rose' : st.tone === 'green' ? 'green' : 'neutral'">
-              <span class="wg-dot pv-status__dot" aria-hidden="true"></span>{{ st.key === 'critical' ? 'Critical' : st.label }}
-            </span>
-            @if (st.key === 'critical' && unacknowledged(g)) { <span class="pv-unack">Not acknowledged</span> }
+            <pf-status-words class="pv-status" [words]="words(g)" />
             @if (g.priority === 'urgent') { <span class="wg-prio" data-p="urgent">Urgent</span> }
           </span>
         </ng-template>
@@ -602,10 +604,8 @@ type Tab = 'mine' | 'all';
     /* Grid body: flush — the grid scrolls inside the card (no page scroll). */
     .pv-scroll--grid { padding: 0; gap: 0; overflow: hidden; display: flex; flex-direction: column; }
     .pv-gridc { flex: 1 1 auto; min-height: 0; }
-    .pv-statuscell { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 8px; }
-    .pv-statuscell .pv-status { white-space: nowrap; }
-    .pv-unack { font-size: 12px; font-weight: 600; color: var(--red-text, #b91c1c); white-space: nowrap; }
-    .pv-wait-sub { white-space: nowrap; }
+    .pv-statuscell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .pv-wait-sub { white-space: normal; overflow-wrap: normal; }   /* "entered 10:50 AM" wraps by words, never clipped */
     .pv-acts--stack { flex-direction: column; align-items: flex-end; gap: 8px; padding: 6px 0; }
     .wg-who__fold .pv-statuscell { justify-content: flex-start; }
     .pv-tile__id { font-size: 14.5px; }
@@ -748,7 +748,8 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
     ...this.deptFilters().map(d => ({ value: d.id, label: d.name, count: d.count })),
   ]);
   readonly visibleTiles = computed(() => {
-    const d = this.dept();
+    // The department pills are phones-only now: elsewhere the grid's Department column filters (never a hidden filter).
+    const d = this.phone() ? this.dept() : null;
     const tiles = this.tabTiles();
     // A department that left the queue drops the filter instead of hiding everything.
     if (!d || !tiles.some(t => (t.deptId ?? t.dept) === d)) return tiles;
@@ -802,9 +803,11 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
     const stacked = fold !== 'full';
     const acts = !ack ? (touch ? 120 : 112) : stacked ? 140 : (touch ? 236 : 220);
     return {
-      sample: { width: 110, minWidth: 110 },
+      // Wide enough for "Sample ID" + its sort arrow + filter icon (headers never truncate).
+      sample: { width: 128, minWidth: 128 },
       patient: { flex: 1, minWidth: fold === 'tight' ? 190 : 250 },
-      status: { width: 168, minWidth: 168 },
+      dept: { width: 150, minWidth: 140 },
+      status: { width: 184, minWidth: 176 },
       due: { width: 100, minWidth: 100 },
       wait: { width: 118, minWidth: 118 },
       acts: { width: acts, minWidth: acts },
@@ -821,7 +824,9 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
         const p = g.items[0]?.subOrder?.order?.patient as { mrn?: string; phone?: string } | undefined;
         return [g.patientName, p?.mrn, p?.phone].filter(Boolean).join(' ');
       }, 'left', g => g.patientName);
-      case 'status': return valuesCol<QueueTile>(wrap(def), g => this.status(g).label, set, 'center');
+      // Department (the old head pills) + Status words read LEFT (two lines, design D).
+      case 'dept': return valuesCol<QueueTile>(wrap(def), g => g.dept ?? '', set, 'left');
+      case 'status': return valuesCol<QueueTile>(wrap(def), g => this.status(g).label, set, 'left');
       case 'due': return durationCol<QueueTile>(def, g => dueValue(g.remainingMin), { kind: 'due' });
       case 'wait': return durationCol<QueueTile>(def, g => minutesSince(g.items.map(i => i.resultedAt).filter(Boolean).sort().pop() ?? null), { kind: 'wait' });
       default: return actionCol<QueueTile>({ ...def, cellClass: 'wg-c-acts' });
@@ -830,6 +835,7 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
   private readonly sampleTpl = viewChild<TemplateRef<unknown>>('cSample');
   private readonly patientTpl = viewChild<TemplateRef<unknown>>('cPatient');
   private readonly statusColTpl = viewChild<TemplateRef<unknown>>('cStatus');
+  private readonly deptColTpl = viewChild<TemplateRef<unknown>>('cDept');
   private readonly dueTpl = viewChild<TemplateRef<unknown>>('cDue');
   private readonly waitTpl = viewChild<TemplateRef<unknown>>('cWait');
   private readonly actsColTpl = viewChild<TemplateRef<unknown>>('cActs');
@@ -839,7 +845,7 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
   readonly cols = computed<ColDef<QueueTile>[]>(() => {
     const tpl: Record<string, TemplateRef<unknown> | undefined> = {
       sample: this.sampleTpl(), patient: this.patientTpl(), status: this.statusColTpl(),
-      due: this.dueTpl(), wait: this.waitTpl(), acts: this.actsColTpl(),
+      due: this.dueTpl(), wait: this.waitTpl(), acts: this.actsColTpl(), dept: this.deptColTpl(),
     };
     const size = this.sizes(this.fold());
     return pvColumns(this.fold()).map(c => this.colRule(c.colId, {
@@ -849,7 +855,9 @@ export class PendingValidationComponent implements OnInit, AfterViewInit {
   });
   waiting(g: QueueTile) { return pvWaiting(g); }
   /** "44/F · AA0007 · Haematology · 2 tests" — no Tests column (owner 2026-11-20); names in the tooltip. */
-  rowMeta(g: QueueTile): string { return pvMeta(g); }
+  rowMeta(g: QueueTile): string { return pvMeta(g, this.phone() || this.fold() === 'tight'); }
+  /** The Status cell's two lines (pending-validation.grid.ts). */
+  words(g: QueueTile) { return pvWords(tileStatus(g), this.unacknowledged(g)); }
   /** "in 25m" / rose "12m late" — the tube's time left to TAT. */
   due(g: QueueTile) { return dueCell(g.remainingMin); }
   /** A tap on the row = the old tile tap (open the review); a button in the row does its own thing. */

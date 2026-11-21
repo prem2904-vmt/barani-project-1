@@ -287,7 +287,8 @@ test.describe('All = one screen split by service', () => {
     await expect(opdHead.locator('.fd-sec__late')).toHaveText(/\d+ late/);
     const headers = (s: string) => page.locator(`.fd-sec[data-sec="${s}"] .ag-header-cell`).evaluateAll(els => els.map(e => (e.textContent ?? '').trim()).filter(Boolean));
     const opdCols = await headers('opd');
-    expect(opdCols).toEqual(expect.arrayContaining(['Patient', 'Consult', 'Next', 'Journey']));
+    expect(opdCols).toEqual(expect.arrayContaining(['Patient', 'Consult', 'Next', 'Where now']));
+    expect(opdCols).not.toContain('Journey');   // the ring rides Where now (design D)
     expect(opdCols).not.toContain('Room');
     expect(await headers('lab')).toEqual(expect.arrayContaining(['Samples']));
     // OPD cells read the visit's own data: the doctor's queue position.
@@ -351,7 +352,8 @@ test.describe('All = one screen split by service', () => {
   test('sections hug their rows with 1 row and with 5 rows (no blank row, no scrollbar strip)', async ({ page }) => {
     await openDesk(page);
     if (!wide(page)) return;
-    const find = vis(page, '.pf-work-find__input').first();
+    // ONE search per screen (2026-11-21): the band's patient search filters the work list.
+    const find = vis(page, 'pf-hero-band pf-patient-search input').first();
     for (const [q, n] of [['Arya', 1], ['Ms.', 5]] as const) {
       await find.fill(q);
       await page.waitForTimeout(700);

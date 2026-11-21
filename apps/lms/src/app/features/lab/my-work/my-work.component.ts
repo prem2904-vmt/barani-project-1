@@ -129,7 +129,7 @@ const COUNTERS: CounterSpec[] = [
            its own box inside the Lab Intake pane. Refresh rides the band
            as the screen's primary action. -->
       <pf-hero-band
-        [placeholder]="(scanSvc.manualEntry() ? 'Enter a sample ID (e.g. ' : 'Scan a barcode or type a sample ID (e.g. ') + sampleIdExample() + ')…'"
+        [placeholder]="(scanSvc.manualEntry() ? 'Type a sample ID (e.g. ' : 'Scan, or type a sample ID (e.g. ') + sampleIdExample() + '), patient or MRN…'"
         [value]="scan()"
         keys="sample" keysEnter="Open" keysEnterAria="Open this sample"
         (valueChange)="setScan($event)"
@@ -646,14 +646,9 @@ const COUNTERS: CounterSpec[] = [
               @if (countFor('rejected') > 0) { · {{ countFor('rejected') }} rejected }
               }
             </p>
-            @if (theme.isNewDesign() && tab() === 'culture') {
-              <!-- Culture: the same head tools over the culture cases (search · status · Filters → department). -->
-              <label class="mw-find" (click)="$event.stopPropagation()">
-                <svg class="mw-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                <input class="pf-input mw-find__input" type="search" data-testid="cg-find" [value]="cultureFilter().q"
-                       placeholder="Sample ID, patient, test" aria-label="Search culture cases" (input)="setCultureQuery(asInput($event))" />
-              </label>
+            @if (theme.isNewDesign() && tab() === 'culture' && isPhone()) {
+              <!-- Phones only (no column headers there): the culture status pill + Filters → department. Wider screens
+                   filter from the grid's column headers; the band search filters the list (owner 2026-11-21). -->
               <pf-segmented class="mw-headpill" data-testid="cg-pill" size="sm" [options]="cultureHead().options" [value]="cultureFilter().status"
                             aria-label="Filter by culture status" (valueChange)="setCultureStatus($any($event))"></pf-segmented>
               <span class="mw-filterwrap">
@@ -672,15 +667,14 @@ const COUNTERS: CounterSpec[] = [
                 }
               </span>
             }
-            @if (theme.isNewDesign() && tab() !== 'culture') {
-              <!-- The list's own filters, at the head's RIGHT end, one row (owner 2026-11-20): search (folds to a 44px
-                   magnifier when tight), the status pill (collapses to its menu), Filters (priority, department, window). -->
-              <label class="mw-find" (click)="$event.stopPropagation()">
-                <svg class="mw-find__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                <input class="pf-input mw-find__input" type="search" data-testid="mw-find" [value]="mwFilter().q"
-                       placeholder="Sample ID, patient, MRN" aria-label="Search this list" (input)="setMwQuery(asInput($event))" />
-              </label>
+            @if (theme.isNewDesign() && tab() === 'completed' && !isPhone()) {
+              <!-- Completed's fetch window (Today · 7 days) is a date control, not a column duplicate: it stays. -->
+              <pf-segmented class="mw-headpill" data-testid="mw-window" size="sm" [options]="completedWindowOptions" [value]="completedWindow()"
+                            aria-label="Completed window" (valueChange)="setCompletedWindow($any($event))"></pf-segmented>
+            }
+            @if (theme.isNewDesign() && tab() !== 'culture' && isPhone()) {
+              <!-- Head = title + count (owner 2026-11-21): the band search filters this list, the grid's column headers
+                   filter Status / Department / Priority. Phones have no headers, so they keep the status pill + Filters. -->
               <pf-segmented class="mw-headpill" data-testid="mw-pill" size="sm" [options]="mwStatusOptions()" [value]="mwFilter().status"
                             aria-label="Filter by status" (valueChange)="setMwStatus($any($event))"></pf-segmented>
               <span class="mw-filterwrap">
@@ -706,7 +700,7 @@ const COUNTERS: CounterSpec[] = [
            tab pill even while another tab is showing. -->
       @if (cultureAsTab()) {
         <div class="pf-mw-culturetab" [class.pf-mw-culturetab--off]="tab() !== 'culture'">
-          <pf-culture-panel [filter]="cultureFilter()" [phone]="isPhone()" (headChange)="cultureHead.set($event)"
+          <pf-culture-panel [filter]="cultureFilterEff()" [phone]="isPhone()" (headChange)="cultureHead.set($event)"
                             (countChange)="cultureCount.set($event)"></pf-culture-panel>
         </div>
       }
@@ -2852,32 +2846,17 @@ const COUNTERS: CounterSpec[] = [
     :host-context(.design-new) .pf-mw-pane__body:has(> .pf-mw-culturetab:not(.pf-mw-culturetab--off)) { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
     .pf-mw-pane__hdr--tabs:has(> pf-segmented) { flex-wrap: nowrap; position: relative; container-type: inline-size; container-name: mwhead; }
     .pf-mw-pane__hdr--tabs:has(> pf-segmented) .pf-mw-pane__meta { white-space: nowrap; min-width: 0; overflow: hidden; }
-    /* Head tools at the RIGHT end: search · status pill · Filters (owner 2026-11-20 — Frontdesk's work head). */
-    .mw-find { position: relative; display: flex; align-items: center; flex: 0 1 220px; min-width: 120px; }
-    .mw-find__icon { position: absolute; left: 11px; z-index: 1; color: var(--text-tertiary); pointer-events: none; }
-    .mw-find .mw-find__input { width: 100%; min-height: 36px; height: 36px; padding: 0 10px 0 34px; font-size: 13px; }
+    /* Head = title + count (owner 2026-11-21); phones keep status pill · Filters at the RIGHT end (no headers there). */
     .mw-headpill { min-width: 0; }
     .mw-filterwrap { position: relative; flex: none; display: inline-flex; }
     .mw-filterbtn { height: 36px; min-height: 36px; gap: 6px; padding: 0 12px; }
     .mw-filterbtn--on { color: var(--violet-text); border-color: color-mix(in srgb, var(--violet-text) 45%, var(--pf-line)); }
     .mw-filterbtn--on::after { content: ''; width: 6px; height: 6px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
     @media not ((hover: hover) and (pointer: fine)) {
-      .mw-find .mw-find__input { min-height: 44px; height: 44px; font-size: 16px; }
       .mw-filterbtn { height: 44px; min-height: 44px; min-width: 44px; }
     }
-    /* Tight head: the count gives way, then the search folds to a 44px magnifier (opens over the head on tap),
-       then Filters is icon-only. The pill collapses by itself (pill-fit). */
+    /* Tight head: the count gives way, then Filters is icon-only. The pill collapses by itself (pill-fit). */
     @container mwhead (max-width: 820px) { .pf-mw-pane__hdr--tabs .pf-mw-pane__meta { display: none; } }
-    @container mwhead (max-width: 700px) {
-      .mw-find:not(:focus-within) { flex: none; width: 44px; min-width: 44px; height: 44px; justify-content: center; }
-      .mw-find:not(:focus-within) .mw-find__icon { left: 14px; color: var(--text-secondary); }
-      .mw-find:not(:focus-within) .mw-find__input { position: absolute; inset: 0; width: 44px; min-height: 44px; height: 44px; padding: 0;
-        color: transparent; caret-color: transparent; }
-      .mw-find:not(:focus-within) .mw-find__input::placeholder { color: transparent; }
-      .mw-find:not(:focus-within):has(.mw-find__input:not(:placeholder-shown))::after {
-        content: ''; position: absolute; top: 9px; right: 9px; width: 7px; height: 7px; border-radius: 999px; background: var(--color-violet-600, #7c3aed); }
-      .mw-find:focus-within { position: absolute; z-index: 6; left: 10px; right: 10px; top: 50%; transform: translateY(-50%); background: var(--pf-card-bg); }
-    }
     @container mwhead (max-width: 520px) {
       .mw-filterbtn { width: 44px; padding: 0; justify-content: center; }
       .mw-filterbtn__t { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -3623,14 +3602,26 @@ export class MyWorkComponent implements OnInit {
     return 'all';
   };
   private readonly mwView = computed(() => this._tab() === 'completed' ? 'done' as const : this._tab() === 'service_queue' ? 'queue' as const : 'work' as const);
-  readonly mwShownRows = computed(() => filterMwRows(this.mwGridRows(), this.mwFilter(), this.mwStatusOf));
+  /** The list's filter as applied: the BAND search text is the list search (one search per screen, owner 2026-11-21);
+   *  the status / priority / department head filters are phones-only (wider screens filter from the column headers),
+   *  so they never narrow the grid invisibly. */
+  readonly mwFilterEff = computed<MwFilter>(() => {
+    const f = this.mwFilter();
+    return this.isPhone() ? { ...f, q: this._scan() } : { ...NO_MW_FILTER, q: this._scan() };
+  });
+  /** The culture panel's filter, the same way. */
+  readonly cultureFilterEff = computed(() => {
+    const f = this.cultureFilter();
+    return this.isPhone() ? { ...f, q: this._scan() } : { q: this._scan(), status: 'all', dept: null };
+  });
+  readonly mwShownRows = computed(() => filterMwRows(this.mwGridRows(), this.mwFilterEff(), this.mwStatusOf));
   readonly mwStatusOptions = computed<SegmentedOption<MwStatusKey>[]>(() =>
-    statusOptions(this.mwGridRows(), this.mwFilter(), this.mwView(), this.mwStatusOf)
+    statusOptions(this.mwGridRows(), this.mwFilterEff(), this.mwView(), this.mwStatusOf)
       .map(o => ({ value: o.value, label: o.label, count: o.count })));
   readonly mwDepts = computed(() => deptOptions(this.mwGridRows()));
   /** Priority / department narrowed (the Filters button lights up). */
-  readonly mwFiltersOn = computed(() => this.mwFilter().priority !== 'all' || !!this.mwFilter().dept);
-  readonly mwFiltered = computed(() => { const f = this.mwFilter(); return !!f.q.trim() || f.status !== 'all' || this.mwFiltersOn(); });
+  readonly mwFiltersOn = computed(() => this.mwFilterEff().priority !== 'all' || !!this.mwFilterEff().dept);
+  readonly mwFiltered = computed(() => { const f = this.mwFilterEff(); return !!f.q.trim() || f.status !== 'all' || this.mwFiltersOn(); });
   /** "4 of 9 samples" while a filter narrows the list. */
   readonly mwCountLabel = computed(() => {
     const all = this.mwGridRows().filter(r => r.kind !== 'detail');
@@ -4352,5 +4343,7 @@ export class MyWorkComponent implements OnInit {
   private readonly _viewState = inject(ViewStateService).bind('lab.my-work', {
     tab: this._tab, mobileTab: this.mobileTab, counter: this._counter, completedWindow: this._completedWindow,
     mwFilter: this.mwFilter, cultureFilter: this.cultureFilter, showClaimed: this.showClaimed,
+    // The band search IS the list search now (owner 2026-11-21): its text comes back with the screen.
+    scan: this._scan,
   });
 }

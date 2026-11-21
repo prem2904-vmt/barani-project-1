@@ -46,7 +46,9 @@ describe('Culture tiles — new design', () => {
     expect(row.querySelector('.wg-id')?.textContent?.trim()).toBe('MICRO26001');
     expect(row.querySelector('.wg-who__name')?.textContent?.trim()).toBe('Mrs. Shanthi M');
     expect(row.textContent).toContain('Bacterial Culture & Sensitivity · Microbiology');
-    expect(row.querySelector('.cg-next')?.textContent?.trim()).toBe('Gram / Direct smear');
+    expect(row.querySelector('.cg-next .pf-sw__now')?.textContent?.trim()).toBe('Gram / Direct smear');
+    expect(row.querySelector('.cg-next .pf-sw__detail')?.textContent?.trim()).toBe('Not started');
+    expect(row.querySelector('.wg-pill')).toBeNull();
     expect(row.querySelector('[data-action="bench"]')?.textContent?.trim()).toBe('Open');
     expect(row.querySelector('pf-journey-ring')).toBeNull();   // Due instead of a journey ring (owner 2026-11-21)
     expect(row.querySelector('.cg-due')?.textContent?.trim()).toBe('—');
