@@ -5,6 +5,7 @@ import { PfSelectOption, SelectComponent } from '../../../shared/primitives/sele
 import { RouterLink } from '@angular/router';
 import { ReportLayoutService } from '../../../core/services/report-layout.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import {
   ColumnLock,
@@ -1659,6 +1660,7 @@ const OPERATORS = [
 export class TestLayoutEditorComponent {
   private readonly layout = inject(ReportLayoutService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
   /** Test id (after the parent's saveTest creates the row). When empty, the
    *  component shows the "save the test first" prompt. */
@@ -2476,7 +2478,7 @@ export class TestLayoutEditorComponent {
     });
   }
   async clearLocks(p: string) {
-    if (!confirm(`Remove all column locks for "${p}"?`)) return;
+    if (!(await this.dialog.confirm({ title: 'Remove all column locks?', message: p, confirmLabel: 'Remove', tone: 'danger' }))) return;
     const id = this.testId();
     if (!id) return;
     this._locks.update(all => {
@@ -2560,8 +2562,8 @@ export class TestLayoutEditorComponent {
     });
   }
 
-  removeSection(i: number) {
-    if (!confirm('Delete this section?')) return;
+  async removeSection(i: number) {
+    if (!(await this.dialog.confirm({ title: 'Delete this section?', confirmLabel: 'Delete', tone: 'danger' }))) return;
     this.mutateSections(arr => this.reindex(arr.filter((_, idx) => idx !== i)));
   }
 

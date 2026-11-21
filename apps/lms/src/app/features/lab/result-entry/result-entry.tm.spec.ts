@@ -16,8 +16,6 @@ function ctx(values: Record<string, unknown> = {}, patient: any = { sex: 'F', ag
     _fieldByName: () => new Map(),
   };
   c.inputKindFor = P.inputKindFor.bind(c);
-  c.rangeFor = P.rangeFor.bind(c);
-  c.prettySegment = P.prettySegment.bind(c);
   return c;
 }
 
@@ -80,6 +78,11 @@ describe('ResultEntry.refLabel — printed-style range on the bench (CURRENT)', 
     const c = ctx();
     expect(P.refLabel.call(c, { name: 'a', normalValue: 'Negative', referenceRanges: [{ min: 1, max: 2 }] })).toBe('Negative');
     expect(P.refLabel.call(c, { name: 'a', unit: 'g/dL', referenceRanges: [{ min: 12, max: 15, sex: 'F' }] })).toBe('12–15 g/dL');
+    // Only the patient's own band (a woman) — never the male one beside it.
+    const hb = { name: 'hb', unit: 'g/dL', referenceRanges: [{ min: 13, max: 17, sex: 'M' }, { min: 12, max: 15, sex: 'F' }] };
+    expect(P.refLabel.call(c, hb)).toBe('12–15 g/dL');
+    // No sex known -> no band matches on merit -> every band, as the report does.
+    expect(P.refLabel.call(ctx({}, {}), hb)).toContain('13–17');
     expect(P.refLabel.call(c, { name: 'a', criticalLow: 1, criticalHigh: 9 })).toBe('1–9');
     expect(P.refLabel.call(c, { name: 'a' })).toBe('');
   });

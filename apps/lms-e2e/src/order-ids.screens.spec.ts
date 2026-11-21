@@ -7,7 +7,7 @@ import { neg, resetNeg, installNegBackend, go } from './support/neg-backend';
 /**
  * Order IDs per module (2026-11-18) on EVERY form factor, light + dark. API mocked, demo data only; the pages, bands and
  * cards are the real app. Lab › Sample numbers (Order ID), Organization › Patient numbers, OPD › Visit numbers and
- * Pharmacy › Dispense numbers (the last two are OPD-gated: the console flag `pf.opd` opens the gate, as `pf.opd()` does).
+ * Pharmacy › Dispense numbers (the last two are OPD-gated: the mocked /me carries opdEntitled; the pf.opd console flag is dev-only now, so the spec no longer relies on it).
  * Screenshots: SHOTS_DIR/<form factor>/order-ids-*.png
  */
 const OUT_BASE = process.env['SHOTS_DIR'] || path.join(os.homedir(), 'Developer/pf-work/screens/order-ids');
@@ -39,7 +39,6 @@ const ROWS: Record<string, unknown> = {
 test.beforeEach(async ({ page, context }) => {
   test.setTimeout(150_000);
   resetNeg();
-  await page.addInitScript(() => { try { localStorage.setItem('pf.opd', '1'); } catch { /* storage blocked */ } });
   neg.hook = r => {
     const ok = (data: unknown) => ({ status: 200, body: { success: true, data } });
     if (r.method !== 'GET') return undefined;

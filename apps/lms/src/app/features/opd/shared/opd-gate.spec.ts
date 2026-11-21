@@ -1,4 +1,4 @@
-import { FlagStorage, OPD_FLAG_KEY, OPD_PREVIEW_HEADER, installPfOpd, isApiRequest, opdConsolePreview, opdPreviewHeaders, opdVisible, readOpdFlag } from './opd-gate';
+import { OPD_DEV_ONLY_NOTE, FlagStorage, OPD_FLAG_KEY, OPD_PREVIEW_HEADER, installPfOpd, isApiRequest, opdConsolePreview, opdPreviewHeaders, opdVisible, readOpdFlag } from './opd-gate';
 
 /** OPD dark build — the pure visibility rule and the silent `pf.opd()` hook. */
 describe('opdVisible — the gate matrix (console flag × tenant entitlement)', () => {
@@ -86,5 +86,39 @@ describe('installPfOpd — window.pf.opd()', () => {
     installPfOpd(win, fakeStorage(), () => undefined);
     (win.pf!['opd'] as () => void)();
     for (const s of spies) { expect(s).not.toHaveBeenCalled(); s.mockRestore(); }
+  });
+});
+
+describe('OPD preview is dev-only (owner 2026-11-21)', () => {
+  it('readOpdFlag: a stored 1 counts on dev, is ignored off dev', () => {
+    const st = fakeStorage({ [OPD_FLAG_KEY]: '1' });
+    expect(readOpdFlag(st, true)).toBe(true);
+    expect(readOpdFlag(st, false)).toBe(false);
+  });
+
+  it('opdPreviewHeaders: no X-PF-OPD off dev even with the flag set', () => {
+    const st = fakeStorage({ [OPD_FLAG_KEY]: '1' });
+    expect(opdPreviewHeaders(st, true)).toEqual({ [OPD_PREVIEW_HEADER]: '1' });
+    expect(opdPreviewHeaders(st, false)).toEqual({});
+  });
+
+  it('off dev, pf.opd() only prints the note: nothing stored, no reload', () => {
+    const win: { pf?: Record<string, unknown> } & Record<string, unknown> = {};
+    const st = fakeStorage();
+    let reloads = 0;
+    const notes: string[] = [];
+    installPfOpd(win, st, () => { reloads++; }, false, m => notes.push(m));
+    const opd = win.pf!['opd'] as (on?: unknown) => void;
+    opd(); opd(false);
+    expect(notes).toEqual([OPD_DEV_ONLY_NOTE, OPD_DEV_ONLY_NOTE]);
+    expect(OPD_DEV_ONLY_NOTE).toBe('OPD preview is available on dev only');
+    expect(st.data).toEqual({});
+    expect(reloads).toBe(0);
+  });
+
+  it('off dev, entitlement still opens OPD while a leftover flag does nothing', () => {
+    const flag = readOpdFlag(fakeStorage({ [OPD_FLAG_KEY]: '1' }), false);
+    expect(opdVisible({ consoleFlag: flag, tenantEntitled: false })).toBe(false);
+    expect(opdVisible({ consoleFlag: flag, tenantEntitled: true })).toBe(true);
   });
 });

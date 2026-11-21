@@ -10,6 +10,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { PatientProfileService } from '../../../core/services/patient-profile.service';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { PATIENT_TITLES, Patient, isBabyOfTitle, patientDisplayName, patientMrnLabel, formatPatientInfo } from '../../models/patient.model';
 import { AvatarComponent } from '../../primitives/avatar.component';
 import { PfSelectOption, SelectComponent } from '../../primitives/select.component';
@@ -967,6 +968,7 @@ export class PatientProfileModalComponent {
   private readonly auth = inject(AuthService);
   private readonly profile = inject(PatientProfileService);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
 
   protected readonly sexOptions = SEX_OPTIONS;
   /** Honorifics — matches the registration form + server normalizer.
@@ -1268,10 +1270,10 @@ export class PatientProfileModalComponent {
       }
     });
   }
-  unlinkAbha() {
+  async unlinkAbha() {
     const p = this._patient();
     if (!p) return;
-    if (!confirm('Unlink this ABHA from the patient?')) return;
+    if (!(await this.dialog.confirm({ title: 'Unlink this ABHA?', message: 'It will be removed from the patient.', confirmLabel: 'Unlink', tone: 'danger' }))) return;
     this._abhaBusy.set(true);
     this.api.delete<Patient>(`/api/patients/${p.id}/abha`).subscribe({
       next: updated => {
