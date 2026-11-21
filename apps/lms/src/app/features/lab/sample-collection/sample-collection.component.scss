@@ -2471,11 +2471,15 @@
     /* The dragged tube's own card = its placeholder. */
     .pf-drawer--nd .pf-sc-grid .pf-tube-wrap:has(> .pf-tube--pour-src),
     .pf-drawer:not(.pf-drawer--nd) .pf-tube-wrap .pf-tube.pf-sc-tile.pf-tube--pour-src {
-      opacity: 0.45;
-      border-style: dashed;
-      border-color: var(--text-tertiary);
+      /* A quiet placeholder in both themes (owner 2026-11-21): the card keeps an opaque surface, its outline is a
+         soft dashed line from the theme's line colour, and only the CONTENT fades — never the whole card (in dark
+         the faded card showed the glass layer and a harsh outline through it). */
+      border: 1.5px dashed color-mix(in srgb, var(--text-tertiary) 45%, transparent);
+      background: var(--pf-chip-bg, var(--pf-card-bg));
       box-shadow: none;
     }
+    .pf-drawer--nd .pf-sc-grid .pf-tube-wrap:has(> .pf-tube--pour-src) > *,
+    .pf-drawer:not(.pf-drawer--nd) .pf-tube-wrap .pf-tube.pf-sc-tile.pf-tube--pour-src > * { opacity: 0.38; }
     /* Eligible drop targets: a calm dashed accent ring; the one under the
        pointer turns solid with a soft tint. */
     .pf-drawer--nd .pf-sc-grid .pf-tube-wrap:has(> .pf-tube--pour-ok),
@@ -2499,7 +2503,7 @@
     .pf-drawer:not(.pf-drawer--nd) .pf-tube-wrap .pf-tube.pf-sc-tile.pf-tube--pour-no.pf-tube--pour-over,
     .pf-drawer:not(.pf-drawer--nd) .pf-tube-wrap .pf-tube.pf-sc-tile.pf-tube--pour-no:hover {
       opacity: 0.9;
-      border-color: color-mix(in srgb, var(--red-text, #dc2626) 55%, transparent);
+      border-color: color-mix(in srgb, var(--pf-late-text, var(--rose-text, #c0395e)) 55%, transparent);
     }
     .pf-tube__drop {
       position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 2;
@@ -2511,10 +2515,10 @@
     }
     .pf-tube__drop--ok { background: var(--color-violet-500, #8b5cf6); color: #fff; white-space: nowrap; }
     .pf-tube__drop--no {
-      background: color-mix(in srgb, var(--red-text, #dc2626) 16%, var(--pf-card-bg, var(--pf-card, #fff)));
+      background: var(--pf-late-bg, color-mix(in srgb, var(--rose-text, #c0395e) 14%, var(--pf-card-bg, #fff)));
       font-weight: 700;
-      color: var(--red-text, #dc2626);
-      border: 1px solid color-mix(in srgb, var(--red-text, #dc2626) 30%, transparent);
+      color: var(--pf-late-text, var(--rose-text, #c0395e));
+      border: 1px solid var(--error-border, color-mix(in srgb, var(--rose-text, #c0395e) 30%, transparent));
       opacity: 0; transition: opacity 0.12s ease;
     }
     .pf-tube--pour-over .pf-tube__drop--no,

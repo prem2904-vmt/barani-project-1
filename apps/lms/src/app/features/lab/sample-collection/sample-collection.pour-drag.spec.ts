@@ -90,7 +90,7 @@ function render(opts: Opts = {}) {
     printLabelData: vi.fn(async (_d?: any) => ({ ok: true, direct: true })),
   };
   const dialog = { confirm: vi.fn(async (_req?: any) => confirms.shift() ?? false) };
-  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() };
+  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn(), withAction: vi.fn(() => 1), dismiss: vi.fn() };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },

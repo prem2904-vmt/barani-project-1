@@ -66,7 +66,8 @@ import {
 } from "../../../shared/utils/series-schedule";
 import { countCollected, isOrderDispatched } from "./dispatch-state";
 import { peekPlacement } from "./peek-placement";
-import { additiveWords, chipSeparable, chipText, mergedInto, optimisticMerge, optimisticSeparate, placeholderTube, pourMotion, separateRefusalText, tubesInOne, type MergedIn } from "./merge-flow";
+import { additiveWords, chipSeparable, chipText, localPourBlock, mergedInto, optimisticMerge, optimisticSeparate, placeholderTube, pourMotion, separateRefusalText, tubesInOne, undoFailureText, type MergedIn } from "./merge-flow";
+import { cloneTubeVisual } from "./tube-clone";
 import { flip, flyBack, foldAway, hoverAbove, popOut, pourIn, rectsOf, slideIn } from "./pour-animation";
 import { WfPortalDirective } from "../../../shared/workflow-editor/wf-menu.component";
 import { fastingGroups, fastingText, infoDocked, infoTier, readInfoOpen, writeInfoOpen, type InfoTier } from "./info-panel";
@@ -96,6 +97,7 @@ import {
   manualMergesOf,
   mergeChipLabel,
   mergeRefusalText,
+  mergeShortReason,
   pourTargets,
   shortTubeName,
   warningLines,
@@ -2373,9 +2375,12 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const src = this.dragSrc();
     if (!src || t.id === src) return null;
     this._pourCandsVer();
+    const s0 = this.sampleById(src);
     const local = this.notCollected(t)
       ? 'Not collected'
-      : isMergedTube(t) ? 'Already poured' : null;
+      : isMergedTube(t) ? 'Already poured'
+      // Same rules as the server BEFORE the drop (timed draws, left the counter, other order…).
+      : s0 ? localPourBlock(s0, t) : null;
     if (local) return pourDropState(src, [], local);
     if (!this._pourCands.has(t.id)) return { kind: 'checking' };
     return pourDropState(src, this._pourCands.get(t.id));
@@ -2421,6 +2426,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     if (this._pressTimer || this.holdingId()) this.clearPress();
     if (!this.dragMoving()) {
       this.dragMoving.set(true);
+      afterNextRender(() => this.mountGhostTube(), { injector: this.injector });
       if (!this.pourHintSeen()) this.markPourHintSeen();
       this.setDragCursor(true);
     }
@@ -2435,6 +2441,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     const st = t ? this.dropState(t) : null;
     if (!src || !t || !pourDropOpensSheet(st)) {
       this.endPourDrag(true); // snap back — nothing changed
+      if (st?.kind === 'no') this.toasts.info(`Can’t pour into ${this.tubeName(t)}: ${st.reason}`);
       return;
     }
     this.haptic(ImpactStyle.Medium);
@@ -2483,6 +2490,14 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     return w ? `${w} · check` : null;
   }
 
+  /** The ghost shows the picked-up card's OWN tube (cloned with its computed colours / fill / theme). */
+  private mountGhostTube(): void {
+    const host = this.ghostEl()?.querySelector<HTMLElement>('.pf-pour-ghost__tube');
+    const tile = this.tileEl(this.dragSrc());
+    const clone = cloneTubeVisual(tile?.querySelector('svg.pf-vial') ?? tile?.querySelector('svg') ?? null);
+    if (host && clone) host.replaceChildren(clone);
+  }
+
   private ghostEl(): HTMLElement | null {
     return typeof document === 'undefined' ? null : document.querySelector<HTMLElement>('[data-testid="pour-ghost"]');
   }
@@ -2491,7 +2506,22 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   async startInlinePour(srcId: string, targetId: string): Promise<void> {
     const src = this.sampleById(srcId), t = this.sampleById(targetId);
     if (!src || !t || this.mergeBusy()) { this.releaseGhost(true); return; }
-    const cand = this._pourCands.get(t.id)?.find(c => c.id === src.id);
+    const block = localPourBlock(src, t);
+    let list = this._pourCands.get(t.id);
+    if (!block && list === undefined) {
+      // Dropped before the server's verdict arrived: ask now, never pour on a guess.
+      list = await firstValueFrom(this.api.get<MergeCandidate[]>(`/api/samples/${t.id}/merge-candidates`)).catch(() => null);
+      this._pourCands.set(t.id, list ?? null);
+    }
+    const row = list?.find(c => c.id === src.id);
+    const refusal = block ?? (list && (!row || !row.eligible) ? mergeShortReason(row?.reason ?? null) : null);
+    if (refusal) {
+      await flyBack(this.ghostEl(), this.tileEl(srcId), this.reducedMotion());
+      this.releaseGhost(false);
+      this.toasts.info(`Can’t pour into ${this.tubeName(t)}: ${refusal}`);
+      return;
+    }
+    const cand = row;
     const words = additiveWords(src, t) ?? ((cand?.warnings ?? []).length ? 'Different additive' : null);
     if (words) {
       this.inlineAsk.set({ kind: 'pour', srcId, targetId, words });
@@ -2552,9 +2582,21 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this._pending.set(opt.list);
     afterNextRender(() => flip(grid, before, reduced), { injector: this.injector });
     this.flash(targetId, src.barcode ?? '');
+    // Undo is offered at once. While the merge call is still running (or failed) it is undone HERE, never by
+    // calling another endpoint; only a merge the server confirmed is undone through Separate.
+    const flow = { done: false, ok: false, undone: false };
+    const verb = motion === 'pour' ? 'Poured' : 'Merged';
+    const name = (x: OrderSample) => `${shortTubeName(x.tubeColor)} ${x.barcode ?? ''}`.trim();
+    const toastId = this.toasts.withAction(`${verb} ${name(src)} into ${name(t)}`, { label: 'Undo', run: () => {
+      if (!flow.done) { flow.undone = true; this._pending.set(this.withoutMerge(opt.snapshot, targetId, srcId)); return; }
+      if (flow.ok) void this.undoPour(targetId, src);
+    } });
     const res = await api;
+    flow.done = true;
     this.mergeBusy.set(false);
     if (!res.ok) {
+      this.toasts.dismiss(toastId);
+      if (flow.undone) return;                 // already back as it was
       this._pending.set(opt.snapshot);
       if (res.e.code === 'merge_needs_confirm') {
         this.inlineAsk.set({ kind: 'pour', srcId, targetId, words: warningLines(this.warningsFrom(res.e.data) ?? [])[0] ?? 'Different additive' });
@@ -2563,14 +2605,37 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
       this.toasts.error(mergeRefusalText(res.e.code ?? null, res.e.message));
       return;
     }
-    // The kept tube takes the server's state (tests, status, metadata with the restore block).
+    flow.ok = true;
     const upd = res.r?.sample;
+    if (flow.undone) {
+      // Undone while the server was still merging: the server DID merge, so take it back out now.
+      this.toasts.dismiss(toastId);
+      try {
+        await firstValueFrom(this.api.post(`/api/samples/${targetId}/separate`, { sampleId: srcId }));
+      } catch (e) {
+        const err = ApiError.from(e);
+        // Couldn't take it back out: show the truth (merged), in plain words.
+        this._pending.set(opt.list.map(x => x.id === targetId && upd ? { ...x, ...upd, order: x.order ?? upd.order, tests: upd.tests ?? x.tests } : x));
+        this.toasts.error(undoFailureText(err.code ?? null, err.message, err.status));
+      }
+      return;
+    }
+    // The kept tube takes the server's state (tests, status, metadata with the restore block).
     if (upd) this._pending.update(list => list.map(x => x.id === targetId ? { ...x, ...upd, order: x.order ?? upd.order, tests: upd.tests ?? x.tests } : x));
-    const verb = motion === 'pour' ? 'Poured' : 'Merged';
-    const name = (x: OrderSample) => `${shortTubeName(x.tubeColor)} ${x.barcode ?? ''}`.trim();
-    const kept = this.sampleById(targetId) ?? t;
-    this.toasts.withAction(`${verb} ${name(src)} into ${name(kept)}`, { label: 'Undo', run: () => void this.undoPour(targetId, src) });
     this.sampleCollected.emit();
+  }
+
+  /** The snapshot, but keeping any OTHER change made meanwhile (only the two tubes go back). */
+  private withoutMerge(snapshot: OrderSample[], keepId: string, goneId: string): OrderSample[] {
+    const cur = this._pending();
+    const back = new Map(snapshot.filter(x => x.id === keepId || x.id === goneId).map(x => [x.id, x]));
+    const out: OrderSample[] = [];
+    for (const x of snapshot) {
+      if (back.has(x.id)) out.push(back.get(x.id)!);
+      else { const c = cur.find(y => y.id === x.id); if (c) out.push(c); }
+    }
+    for (const c of cur) if (!out.some(y => y.id === c.id)) out.push(c);
+    return out;
   }
 
   /** Glow the kept tube once and pop its newest chip. */
@@ -2634,7 +2699,8 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     } catch (e) {
       this._pending.set(opt.snapshot);
       const err = ApiError.from(e);
-      this.toasts.error(viaUndo ? `Couldn’t undo: ${separateRefusalText(err.code ?? null, err.message)}` : separateRefusalText(err.code ?? null, err.message));
+      this.toasts.error(viaUndo ? undoFailureText(err.code ?? null, err.message, err.status)
+        : (err.status === 404 || err.status === 405) ? 'This server can’t take tubes back out yet.' : separateRefusalText(err.code ?? null, err.message));
     } finally {
       this.mergeBusy.set(false);
     }
