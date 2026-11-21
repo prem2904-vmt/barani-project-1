@@ -287,13 +287,15 @@ test.describe('All = one screen split by service', () => {
     await expect(opdHead.locator('.fd-sec__late')).toHaveText(/\d+ late/);
     const headers = (s: string) => page.locator(`.fd-sec[data-sec="${s}"] .ag-header-cell`).evaluateAll(els => els.map(e => (e.textContent ?? '').trim()).filter(Boolean));
     const opdCols = await headers('opd');
-    expect(opdCols).toEqual(expect.arrayContaining(['Patient', 'Consult', 'Next', 'Where now']));
+    // Each section draws its module's Work grid columns (Settings › Front desk; defaults = the owner's catalogue).
+    expect(opdCols).toEqual(expect.arrayContaining(['Patient', 'Next', 'Where now']));
     expect(opdCols).not.toContain('Journey');   // the ring rides Where now (design D)
     expect(opdCols).not.toContain('Room');
-    expect(await headers('lab')).toEqual(expect.arrayContaining(['Samples']));
-    // OPD cells read the visit's own data: the doctor's queue position.
     await expect(page.locator('.fd-sec[data-sec="opd"] .ag-row').first()).toBeVisible();
-    await expect(page.locator('.fd-sec[data-sec="opd"]').getByText(/Waiting · (next|\d+ ahead)/).first()).toBeVisible();
+    if (opdCols.includes('Doctor')) {
+      // OPD cells read the visit's own data: the consulting doctor.
+      await expect(page.locator('.fd-sec[data-sec="opd"] .ag-cell[col-id="doctor"]').getByText(/Dr\. (Rao|Menon)/).first()).toBeVisible();
+    }
     await expectGridsClean(page, 'sections');
     await expectSectionsHug(page, 'sections');
     await expectSectionsAligned(page, 'sections');

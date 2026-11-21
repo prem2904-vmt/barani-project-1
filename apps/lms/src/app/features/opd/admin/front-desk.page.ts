@@ -8,6 +8,8 @@ import { map } from 'rxjs';
 import { AppointmentsConfigComponent } from '../../admin/appointments-config/appointments-config.component';
 import { NotificationsConfigComponent } from '../../admin/notifications-config/notifications-config.component';
 import { ReferringNetworkComponent } from '../../admin/referring-network/referring-network.component';
+import { FdGridColumnsComponent } from '../../admin/fd-grid-columns/fd-grid-columns.component';
+import { OpdGateService } from '../shared/opd-gate.service';
 
 /** The categories the Settings left panel lists for OPD › Front desk (`?tab=`). */
 import { OPD_FRONT_DESK_SECTIONS } from '../../admin/settings/settings-map';
@@ -25,7 +27,7 @@ export type OpdFrontDeskSection = typeof OPD_FRONT_DESK_SECTIONS[number]['id'];
 @Component({
   selector: 'pf-opd-front-desk',
   standalone: true,
-  imports: [SettingGroupComponent, SegmentedComponent, RouterLink, AppointmentsConfigComponent, ReferringNetworkComponent, NotificationsConfigComponent],
+  imports: [SettingGroupComponent, SegmentedComponent, RouterLink, AppointmentsConfigComponent, ReferringNetworkComponent, NotificationsConfigComponent, FdGridColumnsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- ONE page (owner 2026-11-17): booking slots and OPD alerts as group cards, the shared referring list full width. -->
@@ -37,6 +39,15 @@ export type OpdFrontDeskSection = typeof OPD_FRONT_DESK_SECTIONS[number]['id'];
         <pf-segmented group-tools size="sm" ariaLabel="Hospitals or doctors" [options]="rn.viewOptions()" [value]="rn.view()" (valueChange)="rn.setView($any($event))"></pf-segmented>
         <pf-referring-network #rn></pf-referring-network>
       </pf-setting-group>
+      @if (opdGate.visible()) {
+        <!-- Work grid columns: the OPD rows of the common Frontdesk, this branch (only while OPD is on). -->
+        <pf-setting-group label="Work grid columns" scope="this branch" id="columns" [wide]="true" hint="What the Frontdesk list shows for OPD."
+                          icon="M3 4h18v16H3zM3 10h18M9 10v10M15 10v10">
+          <button group-tools type="button" class="pf-btn pf-btn--secondary pf-ofd__reset" data-testid="fdgc-reset"
+                  [disabled]="!gc.canReset()" (click)="gc.reset()">Reset to default</button>
+          <pf-fd-grid-columns #gc module="opd"></pf-fd-grid-columns>
+        </pf-setting-group>
+      }
       <p class="pf-ofd__note">OPD tokens and queue order are set in <a routerLink="/admin/opd/workflow">OPD workflow</a>.</p>
     </div>
   `,
@@ -49,9 +60,19 @@ export type OpdFrontDeskSection = typeof OPD_FRONT_DESK_SECTIONS[number]['id'];
 export class OpdFrontDeskPage implements HasUnsavedChanges {
   /** Booking slots / queue mode / priority have an explicit Save: leaving with edits asks first. */
   private readonly appointments = viewChild(AppointmentsConfigComponent);
+  private readonly columns = viewChild(FdGridColumnsComponent);
+  protected readonly opdGate = inject(OpdGateService);
   readonly unsavedLabel = 'the OPD front desk settings';
-  hasUnsavedChanges(): boolean { return this.appointments()?.hasUnsavedChanges() ?? false; }
-  saveChanges(): Promise<boolean> { return this.appointments()?.saveChanges() ?? Promise.resolve(true); }
+  hasUnsavedChanges(): boolean {
+    return (this.appointments()?.hasUnsavedChanges() ?? false) || (this.columns()?.hasUnsavedChanges() ?? false);
+  }
+  async saveChanges(): Promise<boolean> {
+    const colsDirty = this.columns()?.hasUnsavedChanges() ?? false;
+    // Only the columns changed: leave the booking settings alone (they save on their own when they change).
+    const a = !colsDirty || this.appointments()?.hasUnsavedChanges() ? await (this.appointments()?.saveChanges() ?? Promise.resolve(true)) : true;
+    const c = this.columns()?.hasUnsavedChanges() ? await this.columns()!.saveChanges() : true;
+    return a && c;
+  }
   private readonly _unloadGuard = guardUnsavedOnUnload(this);
   private readonly route = inject(ActivatedRoute);
   private readonly tab = toSignal(this.route.queryParamMap.pipe(map(q => q.get('tab'))), { initialValue: this.route.snapshot.queryParamMap.get('tab') });

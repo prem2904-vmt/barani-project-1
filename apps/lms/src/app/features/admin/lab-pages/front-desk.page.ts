@@ -6,6 +6,7 @@ import { ReferringNetworkComponent } from '../referring-network/referring-networ
 import { labPageTab } from './lab-page.component';
 import { SettingGroupComponent } from '../../../shared/components/setting-row/setting-row.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
+import { FdGridColumnsComponent } from '../fd-grid-columns/fd-grid-columns.component';
 
 /**
  * Lab › Front desk: lab appointments and queue (token or walk-up, booking
@@ -17,7 +18,7 @@ import { SegmentedComponent } from '../../../shared/primitives/segmented.compone
 @Component({
   selector: 'pf-lab-front-desk-page',
   standalone: true,
-  imports: [AppointmentsConfigComponent, ReferringNetworkComponent, SettingGroupComponent, SegmentedComponent],
+  imports: [AppointmentsConfigComponent, ReferringNetworkComponent, SettingGroupComponent, SegmentedComponent, FdGridColumnsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <!-- ONE page (owner 2026-11-17): Queue mode · Booking slots · Priority engine as group cards in the grid, then the
@@ -29,15 +30,31 @@ import { SegmentedComponent } from '../../../shared/primitives/segmented.compone
         <pf-segmented group-tools size="sm" ariaLabel="Hospitals or doctors" [options]="rn.viewOptions()" [value]="rn.view()" (valueChange)="rn.setView($any($event))"></pf-segmented>
         <pf-referring-network #rn></pf-referring-network>
       </pf-setting-group>
+      <!-- Work grid columns (owner mock grid-settings-v3, 2026-11-21): the Lab Frontdesk grid's columns for this branch. -->
+      <pf-setting-group label="Work grid columns" scope="this branch" id="columns" [wide]="true" hint="What the Frontdesk list shows for Lab."
+                        icon="M3 4h18v16H3zM3 10h18M9 10v10M15 10v10">
+        <button group-tools type="button" class="pf-btn pf-btn--secondary pf-fd__reset" data-testid="fdgc-reset"
+                [disabled]="!gc.canReset()" (click)="gc.reset()">Reset to default</button>
+        <pf-fd-grid-columns #gc module="lab"></pf-fd-grid-columns>
+      </pf-setting-group>
     </div>
   `,
 })
 export class LabFrontDeskPage implements HasUnsavedChanges {
   /** Booking slots / queue mode / priority have an explicit Save: leaving with edits asks first. */
   private readonly appointments = viewChild(AppointmentsConfigComponent);
+  private readonly columns = viewChild(FdGridColumnsComponent);
   readonly unsavedLabel = 'the front desk settings';
-  hasUnsavedChanges(): boolean { return this.appointments()?.hasUnsavedChanges() ?? false; }
-  saveChanges(): Promise<boolean> { return this.appointments()?.saveChanges() ?? Promise.resolve(true); }
+  hasUnsavedChanges(): boolean {
+    return (this.appointments()?.hasUnsavedChanges() ?? false) || (this.columns()?.hasUnsavedChanges() ?? false);
+  }
+  async saveChanges(): Promise<boolean> {
+    const colsDirty = this.columns()?.hasUnsavedChanges() ?? false;
+    // Only the columns changed: leave the booking settings alone (they save on their own when they change).
+    const a = !colsDirty || this.appointments()?.hasUnsavedChanges() ? await (this.appointments()?.saveChanges() ?? Promise.resolve(true)) : true;
+    const c = this.columns()?.hasUnsavedChanges() ? await this.columns()!.saveChanges() : true;
+    return a && c;
+  }
   private readonly _unloadGuard = guardUnsavedOnUnload(this);
   protected readonly tab = labPageTab(LAB_PAGES.frontDesk).tab;
 }

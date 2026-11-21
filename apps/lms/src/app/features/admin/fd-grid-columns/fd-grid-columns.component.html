@@ -1,0 +1,80 @@
+<div class="fdgc" [class.fdgc--dragging]="drag()?.on" [attr.data-fd-module]="module()" [attr.data-fd-order]="order().join(',')">
+  <div class="fdgc__hint">
+    <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>Drag a column into the grid header</span>
+    <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8l-4 4 4 4M17 8l4 4-4 4M3 12h18" /></svg>Drag a header to move it</span>
+    <span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>Drag it back, or ✕, to remove</span>
+  </div>
+
+  <div class="fdgc__split">
+    <aside class="fdgc__palw" aria-labelledby="fdgc-pt">
+      <div class="fdgc__ph">
+        <span class="fdgc__pt" id="fdgc-pt">AVAILABLE</span><span class="fdgc__sp"></span>
+        @if (!loading()) { <span class="fdgc__cs" data-testid="fdgc-pcount">{{ palette().ready.length }} to add</span> }
+      </div>
+      <div class="fdgc__pal" #pal [class.fdgc__pal--hot]="drag()?.on && drag()?.toPal" data-testid="fdgc-palette">
+        @if (loading()) {
+          @for (i of [0, 1, 2, 3]; track i) { <div class="fdgc__item fdgc__item--skel" aria-hidden="true"><pf-skeleton variant="line" width="62%" height="11px"></pf-skeleton></div> }
+        } @else {
+          @for (c of palette().ready; track c.id) {
+            <div class="fdgc__item" [attr.data-fd-item]="c.id" tabindex="0" role="button" [attr.aria-label]="'Add ' + c.label + '. ' + c.description"
+              (pointerdown)="startPal($event, c.id)" (keydown)="itemKey($event, c.id)">
+              <svg class="fdgc__gr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path [attr.d]="grip" /></svg>
+              <span class="fdgc__txt"><span class="fdgc__n">{{ c.label }}</span><span class="fdgc__d">{{ c.description }}</span></span>
+              <button type="button" class="fdgc__add" tabindex="-1" [attr.data-fd-add]="c.id" [attr.aria-label]="'Add ' + c.label" title="Add before Next" (click)="add(c.id)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+            </div>
+          } @empty {
+            <p class="fdgc__empty">Every column is in the grid. Drag one back here to remove it.</p>
+          }
+          @if (palette().soon.length) {
+            <p class="fdgc__grp">NEEDS DATA</p>
+            @for (c of palette().soon; track c.id) {
+              <div class="fdgc__item fdgc__item--soon" [attr.data-fd-soon]="c.id" aria-disabled="true">
+                <svg class="fdgc__gr" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path [attr.d]="grip" /></svg>
+                <span class="fdgc__txt"><span class="fdgc__n">{{ c.label }} <span class="fdgc__tag">needs data</span></span><span class="fdgc__d">{{ c.description }}. Turns on once this is recorded.</span></span>
+              </div>
+            }
+          }
+        }
+      </div>
+    </aside>
+
+    <div class="fdgc__gw">
+      <div class="fdgc__ph">
+        <span class="fdgc__pt">PREVIEW · {{ moduleLabel().toUpperCase() }}</span><span class="fdgc__sp"></span>
+        @if (!loading()) { <span class="fdgc__cs" data-testid="fdgc-gcount">{{ countLabel() }}</span> }
+      </div>
+      <div class="fdgc__gbox" #zone [class.fdgc__gbox--hot]="drag()?.on && drag()?.idx !== null" data-testid="fdgc-preview">
+        <ng-template #skel>
+          <div class="fdgc__skelgrid" aria-hidden="true">
+            @for (r of [0, 1, 2, 3]; track r) { <div class="fdgc__skelrow" [class.fdgc__skelrow--head]="r === 0"><pf-skeleton variant="line" width="62%" height="11px"></pf-skeleton></div> }
+          </div>
+        </ng-template>
+        @if (loading()) {
+          <ng-container [ngTemplateOutlet]="skel" />
+        } @else {
+          <!-- The real Frontdesk grid (its chunk loads once the page is idle; the skeleton holds its place). -->
+          @defer (on idle) {
+            <pf-fd-flow-grid class="pf-fd-flow fdgc__grid" [rows]="rows()" [columns]="order()" [module]="module()" [editing]="true" [noFold]="true"
+              [auto]="true" [context]="ctx" />
+          } @placeholder { <ng-container [ngTemplateOutlet]="skel" /> }
+        }
+        @if (drag()?.on && drag()?.idx !== null) { <div class="fdgc__bar" aria-hidden="true" [style.left.px]="drag()!.barLeft"></div> }
+      </div>
+      <p class="fdgc__fold"><b>Narrow screens:</b> columns on the right fold into the patient line first, so keep what matters most on the left.</p>
+    </div>
+  </div>
+
+  <div class="fdgc__foot">
+    <span class="fdgc__foot-label" id="fdgc-perm">Staff may hide columns for themselves</span>
+    <pf-setting-toggle [value]="staffMayHide()" (valueChange)="staffMayHide.set($event)" label="Staff may hide columns for themselves" [disabled]="loading()" data-testid="fdgc-staff-hide" />
+    <span class="fdgc__foot-note">Their choice stays on their browser. This page sets the default for everyone.</span>
+  </div>
+
+  <pf-settings-savebar [dirty]="dirty()" [saving]="saving()" [canSave]="!loading()" saveTestId="fdgc-save" (save)="save()" (discard)="discard()" />
+  <span class="fdgc__sr" aria-live="polite" role="status">{{ announce() }}</span>
+</div>
+
+<!-- The drag ghost lives in the TOP LAYER (popover): the dark theme's <body> re-anchors fixed boxes. -->
+<div #ghost class="fdgc__ghost" popover="manual" aria-hidden="true" [style.left.px]="drag()?.x ?? 0" [style.top.px]="drag()?.y ?? 0">{{ drag() ? label(drag()!.id) : '' }}</div>
