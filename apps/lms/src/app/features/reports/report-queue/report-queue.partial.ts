@@ -284,7 +284,7 @@ export function buildPartialOrders(orders: Order[], extractValues: (t: OrderTest
  *  Tones are the Frontdesk rows' (`--<tone>-text` tokens). Priority:
  *    Failed (red) › Unpaid (red, only while not yet delivered) ›
  *    Delivered (green + check) › Preliminary (amber, a partial report is not
- *    final, so it REPLACES "Completed") › Completed (green).
+ *    final, so it REPLACES "Ready") › Ready (green).
  *  Whatever the status hides is returned as `extra` for the meta line. */
 export type ReportTone = 'green' | 'amber' | 'red';
 export interface ReportStatus {
@@ -302,11 +302,11 @@ export function reportStatus(deliveryStatus: string, type: string | undefined, u
   if (deliveryStatus === 'delivered') return { key: 'delivered', label: 'Delivered', tone: 'green', extra: extra({}) };
   if (unpaid) return { key: 'unpaid', label: 'Unpaid', tone: 'red', extra: extra({ unpaid: true }) };
   if (prelim) return { key: 'preliminary', label: 'Preliminary', tone: 'amber', extra: [] };
-  return { key: 'completed', label: 'Completed', tone: 'green', extra: [] };
+  return { key: 'completed', label: 'Ready', tone: 'green', extra: [] };
 }
 
 /** The grid's Status pill (owner 2026-11-19, Reports v2): ONE neutral pill with a small coloured dot —
- *  Completed (violet) · Partial (light blue, a preliminary report) · Delivered (green) · Failed (rose).
+ *  Ready (violet) · Partial (light blue, a preliminary report) · Delivered (green) · Failed (rose).
  *  "Unpaid" is never a status: it is a quiet line UNDER the pill (`unpaid`). */
 export type QueueStatusKey = 'completed' | 'partial' | 'delivered' | 'failed';
 export interface QueueStatus { key: QueueStatusKey; label: string; unpaid: boolean; prelim: boolean }
@@ -315,7 +315,7 @@ export function queueStatus(deliveryStatus: string, type: string | undefined, un
   if (deliveryStatus === 'failed') return { key: 'failed', label: 'Failed', unpaid, prelim };
   if (deliveryStatus === 'delivered') return { key: 'delivered', label: 'Delivered', unpaid, prelim };
   if (prelim) return { key: 'partial', label: 'Partial', unpaid, prelim };
-  return { key: 'completed', label: 'Completed', unpaid, prelim };
+  return { key: 'completed', label: 'Ready', unpaid, prelim };
 }
 
 /** Status dot colours (theme tokens, AA in light + dark) — the side card, the filter menu and the pills share them. */

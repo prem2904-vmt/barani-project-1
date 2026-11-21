@@ -96,7 +96,7 @@ type Filter = "all" | "partial" | "pending" | "delivered" | "failed" | "notsent"
 const VIA_CHANNELS = ["whatsapp", "print", "email", "sms"] as const;
 
 const FILTER_LABEL: Record<Filter, string> = {
-  all: "All", pending: "Completed", partial: "Partial", delivered: "Delivered", failed: "Failed",
+  all: "All", pending: "Ready", partial: "Partial", delivered: "Delivered", failed: "Failed",
   notsent: "Not sent yet", wafailed: "WhatsApp failed",
 };
 
@@ -224,7 +224,7 @@ export class ReportQueueComponent implements OnInit {
    *  (raised neutral selected tab), plain tabular counts, no colour dots. */
   readonly ndFilters = computed<{ value: Filter; label: string; count: number }[]>(() => [
     { value: "all", label: "All", count: this.allCount() },
-    { value: "pending", label: "Completed", count: this.counts().pending },
+    { value: "pending", label: "Ready", count: this.counts().pending },
     { value: "partial", label: "Partial", count: this.partialOrders().length },
     { value: "delivered", label: "Delivered", count: this.counts().delivered },
   ]);
@@ -256,10 +256,10 @@ export class ReportQueueComponent implements OnInit {
   private readonly injector = inject(Injector);
   private readonly auth = inject(AuthService);
 
-  // "Completed" = lab work signed off, report generated, awaiting
+  // "Ready" (ready to send) = lab work signed off, report generated, awaiting
   // delivery. Backed by deliveryStatus === 'pending' on the report row
   // (the technical name stays 'pending' for backwards compatibility;
-  // the user-facing label reflects the semantic — these are completed
+  // the user-facing label reflects the semantic — these are ready-to-send
   // work products, not unfinished work).
   /**
    * The filter toggle IS the status legend (owner): each state carries
@@ -272,7 +272,7 @@ export class ReportQueueComponent implements OnInit {
     // only replace the words on phones.
     { value: "all", label: "All", dot: "#a78bfa", count: this.allCount(),
       iconPath: ["M4 6h16", "M4 12h16", "M4 18h16"] },
-    { value: "pending", label: "Completed", dot: "#f59e0b", count: this.counts().pending,
+    { value: "pending", label: "Ready", dot: "#a78bfa", count: this.counts().pending,
       iconPath: ["M22 11.08V12a10 10 0 1 1-5.93-9.14", "M22 4 12 14.01l-3-3"] },
     { value: "partial", label: "Partial", dot: "#38bdf8", count: this.partialOrders().length,
       // Two arcs + Z so the circle actually CLOSES (a single 10-radius arc
@@ -285,7 +285,7 @@ export class ReportQueueComponent implements OnInit {
       iconPath: ["M10 10l4 4m0-4l-4 4", "M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Z"] },
   ]);
 
-  // Default to 'pending' (Completed) — the queue's primary purpose is
+  // Default to 'pending' (Ready) — the queue's primary purpose is
   // showing what's done and waiting for handover.
   private readonly _filter = signal<Filter>("pending");
   readonly filter = this._filter.asReadonly();
@@ -468,7 +468,7 @@ export class ReportQueueComponent implements OnInit {
     return this._items().filter((r) => reportPasses(r, f) && this.qPass(r));
   });
 
-  /** STATUS breakdown: Completed · Partial · Delivered — dot, count, share of the three. Counts are the server's
+  /** STATUS breakdown: Ready · Partial · Delivered — dot, count, share of the three. Counts are the server's
    *  (whole queue) until a date / doctor / channel filter is on; then the loaded rows inside it. */
   readonly statusRows = computed<BreakdownRow<Filter>[]>(() => {
     const on = this.clientOn();
@@ -476,7 +476,7 @@ export class ReportQueueComponent implements OnInit {
     const n = (st: string) => (on ? scoped.filter((r) => r.deliveryStatus === st).length : (this.counts() as unknown as Record<string, number>)[st] ?? 0);
     const partial = on ? this.visiblePartials().length : this.partialOrders().length;
     return withShares<Filter>([
-      { key: "pending", label: "Completed", count: n("pending"), dot: QUEUE_DOT.completed },
+      { key: "pending", label: "Ready", count: n("pending"), dot: QUEUE_DOT.completed },
       { key: "partial", label: "Partial", count: partial, dot: QUEUE_DOT.partial },
       { key: "delivered", label: "Delivered", count: n("delivered"), dot: QUEUE_DOT.delivered },
     ]);
@@ -502,7 +502,7 @@ export class ReportQueueComponent implements OnInit {
   });
   /** How delivered reports went out (print / WhatsApp / email / SMS) — the select shows when the rows carry one. */
   readonly viaOptions = computed<PfSelectOption<string>[]>(() => {
-    // The channels the loaded delivered rows carry; while the page holds none (e.g. the Completed tab) but the queue
+    // The channels the loaded delivered rows carry; while the page holds none (e.g. the Ready tab) but the queue
     // has delivered reports, the app's own delivery channels (picking one reads every status).
     let keys = viaKeys(this._items());
     if (!keys.length && this.counts().delivered > 0) keys = [...VIA_CHANNELS];
@@ -759,7 +759,7 @@ export class ReportQueueComponent implements OnInit {
 
   /** Every row now uses the neutral 'default' tile tone — the per-status
    *  colour wash made the entire row feel amber-on-amber for the common
-   *  "Completed" case. Status is communicated by the small icon badge
+   *  "Ready" case. Status is communicated by the small icon badge
    *  + chip + the left-edge accent strip instead. */
   rowTone(_status: string): TileTone {
     return "default";
@@ -801,9 +801,9 @@ export class ReportQueueComponent implements OnInit {
 
   /** Map raw deliveryStatus → user-facing label. The DB still stores
    *  'pending' for "report generated, awaiting handover" but the user
-   *  thinks of these as Completed work, so we relabel at the edge. */
+   *  thinks of these as Ready (to send), so we relabel at the edge. */
   statusLabel(status: string): string {
-    if (status === "pending") return "Completed";
+    if (status === "pending") return "Ready";
     if (status === "delivered") return "Delivered";
     if (status === "failed") return "Failed";
     return status;

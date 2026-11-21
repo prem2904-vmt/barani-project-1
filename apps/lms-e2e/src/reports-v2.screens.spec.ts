@@ -114,7 +114,7 @@ async function open(page: Page, dark: boolean) {
   await expect(visible(page, '[data-testid="rq-main"]')).toBeVisible({ timeout: 60_000 });
 }
 
-const STATUS_KEY: Record<string, string> = { Completed: 'pending', Partial: 'partial', Delivered: 'delivered' };
+const STATUS_KEY: Record<string, string> = { Ready: 'pending', Partial: 'partial', Delivered: 'delivered' };
 /** Pick a status in the FILTERS card (owner 2026-11-20): its row in the side card (wide) or in the Filters sheet
  *  (≤900px). All = clear the picked row. */
 async function pick(page: Page, label: string) {
@@ -151,10 +151,10 @@ for (const dark of [false, true]) {
       expect(side!.x + side!.width, 'side card is LEFT of the grid').toBeLessThanOrEqual(main!.x);
       expect(Math.abs(side!.y - main!.y), 'same top').toBeLessThanOrEqual(1);
       expect(Math.abs(side!.height - main!.height), 'same height').toBeLessThanOrEqual(2);
-      // FILTERS (left, owner 2026-11-20): Status = Completed · Partial · Delivered (dot + count), To send = Not sent
+      // FILTERS (left, owner 2026-11-20): Status = Ready · Partial · Delivered (dot + count), To send = Not sent
       // yet · WhatsApp failed; Send all moved to the main card head.
       const card = visible(page, '[data-testid="rq-side"]');
-      expect(await card.locator('[data-testid="rq-statuses"] .pf-rq2-f__totname').allInnerTexts()).toEqual(['Completed', 'Partial', 'Delivered']);
+      expect(await card.locator('[data-testid="rq-statuses"] .pf-rq2-f__totname').allInnerTexts()).toEqual(['Ready', 'Partial', 'Delivered']);
       expect(await card.locator('[data-testid="rq-statuses"] .pf-rq2-f__totn').allInnerTexts()).toEqual(['5', '1', '2']);
       expect(await card.locator('[data-testid="rq-tosend"] .pf-rq2-f__totname').allInnerTexts()).toEqual(['Not sent yet', 'WhatsApp failed']);
       expect(await card.locator('[data-testid="rq-tosend"] .pf-rq2-f__totn').allInnerTexts()).toEqual(['4', '1']);
@@ -260,7 +260,7 @@ for (const dark of [false, true]) {
     await open(page, dark);
     if (isNarrow(page)) {
       const btn = visible(page, '[data-testid="rq-filters-btn"]');
-      await expect(btn.locator('[data-testid="rq-filters-n"]')).toHaveText('1');   // Completed (the default)
+      await expect(btn.locator('[data-testid="rq-filters-n"]')).toHaveText('1');   // Ready (the default)
       await btn.click();
       const sheet = visible(page, '[data-testid="rq-filters-sheet"]');
       await expect(sheet).toBeVisible();
@@ -287,7 +287,7 @@ for (const dark of [false, true]) {
     await expect(row).toBeVisible({ timeout: 30_000 });
     expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(64);
     await expect(row.locator('.pf-rq2-prow__l2')).toContainText('Unpaid');
-    await expect(row.locator('.pf-rq2-pill')).toContainText('Completed');
+    await expect(row.locator('.pf-rq2-pill')).toContainText('Ready');
     // Band: Refresh icon; search with the filter button inside.
     await expect(visible(page, 'pf-hero-band .pf-rq2-bandrefresh')).toBeVisible();
     await expectNoHorizontalScroll(page, `reports phone ${mode}`);

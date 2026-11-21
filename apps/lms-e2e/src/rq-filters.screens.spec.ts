@@ -141,7 +141,7 @@ for (const dark of [false, true]) {
       const main = await visible(page, '[data-testid="rq-main"]').boundingBox();
       expect(side!.x + side!.width, 'filters LEFT of the grid').toBeLessThanOrEqual(main!.x);
       expect(Math.abs(side!.height - main!.height), 'same height').toBeLessThanOrEqual(2);
-      await expect(head.locator('.pf-rq2-count')).toHaveText('6 of 11');   // Completed (default) of 10 reports + 1 order
+      await expect(head.locator('.pf-rq2-count')).toHaveText('6 of 11');   // Ready (default) of 10 reports + 1 order
     } else {
       await expect(visible(page, '[data-testid="rq-filters-n"]')).toHaveText('1');
     }
@@ -151,7 +151,7 @@ for (const dark of [false, true]) {
     const c = await card(page);
     await expect(c.locator('.pf-card__label')).toHaveText('Filters');
     expect(await c.locator('[data-testid="rq-dates"] [role=radio]').allInnerTexts()).toEqual(['All', 'Today', '7 days', 'This month']);
-    expect(await c.locator('[data-testid="rq-statuses"] .pf-rq2-f__totname').allInnerTexts()).toEqual(['Completed', 'Partial', 'Delivered']);
+    expect(await c.locator('[data-testid="rq-statuses"] .pf-rq2-f__totname').allInnerTexts()).toEqual(['Ready', 'Partial', 'Delivered']);
     expect(await c.locator('[data-testid="rq-statuses"] .pf-rq2-f__totn').allInnerTexts()).toEqual(['6', '1', '3']);
     expect(await c.locator('[data-testid="rq-tosend"] .pf-rq2-f__totname').allInnerTexts()).toEqual(['Not sent yet', 'WhatsApp failed']);
     await expect(c.locator('pf-select[data-testid="rq-doctor"]')).toHaveCount(1);

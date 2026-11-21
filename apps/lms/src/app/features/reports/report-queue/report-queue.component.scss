@@ -218,7 +218,7 @@
   background: var(--text-muted);
 }
 .pf-rq-row--pending .pf-rq-row__accent {
-  background: #f59e0b;
+  background: var(--violet-text);
 }
 .pf-rq-row--delivered .pf-rq-row__accent {
   background: #10b981;
@@ -743,7 +743,7 @@
   font-size: 13.5px; font-weight: 500; line-height: 18px; white-space: nowrap;
   color: color-mix(in srgb, var(--pf-tone) 70%, var(--text-primary));
 }
-.pf-rq-status[data-tone='amber'] { --pf-tone: var(--amber-text); }
+.pf-rq-status[data-tone='sky'] { --pf-tone: var(--sky-text); }
 .pf-rq-status[data-tone='red'] { --pf-tone: var(--red-text); }
 .pf-rq-status__dot { flex: none; width: 7px; height: 7px; border-radius: 999px; background: var(--pf-tone); }
 .pf-rq-status__mark { flex: none; display: block; color: var(--pf-tone); }
@@ -887,7 +887,7 @@
    REPORTS v2 (owner 2026-11-19) — Test Master's frame.
    Band = lab + search. LEFT side card STATUS (shared .pf-side-list rows,
    --pf-side-w), RIGHT main card = a flush pf-data-grid. Status = ONE
-   neutral pill with a small coloured dot (violet Completed, light-blue
+   neutral pill with a small coloured dot (violet Ready, light-blue
    Partial, green Delivered, rose Failed); "Unpaid" is quiet rose text on
    its own line UNDER the pill. Partial orders open an inline, flat detail
    row ("Generate partial PDF" at its top). ≤900px: no side card — the

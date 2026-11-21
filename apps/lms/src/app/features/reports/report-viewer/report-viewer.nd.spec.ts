@@ -148,7 +148,7 @@ describe('Report view (nd) — band + CONTEXT BAR', () => {
     expect(ctx.querySelector('.pf-rv-chip--patient .pf-rv-chip__meta')?.textContent).toContain('29/M');
     expect(ctx.querySelector('.pf-rv-chip--order')?.textContent).toContain('LAB-2609-000123');
     expect(ctx.querySelector('.pf-rv-chip--status')?.textContent).toContain('Final');
-    expect(ctx.querySelector('.pf-rv-chip--status')?.textContent).toContain('Completed');
+    expect(ctx.querySelector('.pf-rv-chip--status')?.textContent).toContain('Ready');
     expect(ctx.querySelector('.pf-rv-ctx__date')?.textContent?.trim()).toContain('2026');
   });
 
