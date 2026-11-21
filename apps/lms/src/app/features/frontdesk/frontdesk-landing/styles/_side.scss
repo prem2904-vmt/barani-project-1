@@ -15,10 +15,7 @@
   /* Exactly WORK's title (.pf-work-hdr__title .pf-card__label). */
   .fd-side-title .pf-card__label { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
   .fd-side-title--switch { position: relative; }
-  .fd-side-title__n { margin-left: 6px; font-weight: 600; letter-spacing: 0; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-  /* The jump menu measures from an invisible trigger laid over the icon (the icon's tap cycles; it never opens the menu). */
-  .fd-svb-menu { position: absolute; left: -8px; top: 50%; width: 44px; height: 44px; margin-top: -22px; pointer-events: none; }
-  .fd-svb-menu ::ng-deep .fd-svb-menu__trigger { position: absolute; inset: 0; width: 44px; height: 44px; visibility: hidden; }
+
   /* Head buttons: WORK's head controls (32px quiet squares; 44px on touch) — the calendar icon and a compact "+ New". */
   .fd-side-headbtn {
     display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: none;

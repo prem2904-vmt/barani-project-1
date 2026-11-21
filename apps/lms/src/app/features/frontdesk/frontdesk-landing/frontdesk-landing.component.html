@@ -404,48 +404,42 @@
                 @if (theme.isNewDesign()) {
                   <!-- The card head (owner 2026-11-20): ONE fixed title, like WORK — icon tile + VISITS (people here now,
                        booked appointments and home visits). -->
-                  @if (sideViewList().length > 1) {
-                  <!-- The card icon IS the view switch (owner 2026-11-21): tap = the next view (Who is where → Appointments →
-                       Home visits), long-press / right-click / Alt+↓ = every view with its count. The title names the view. -->
-                  <span class="fd-side-title fd-side-title--switch" data-testid="fd-side-title">
-                    <button type="button" class="pf-svb" data-testid="fd-side-view-btn" [attr.data-tint]="sideTint()" [attr.data-view]="leftTab()"
-                      [attr.aria-label]="sideSwitchAria()" [attr.title]="sideSwitchAria()"
-                      (click)="onSideSwitchClick($event)" (contextmenu)="openSideMenu($event)" (keydown)="onSideSwitchKey($event)"
-                      (pointerdown)="sidePressStart($event)" (pointerup)="sidePressEnd()" (pointerleave)="sidePressEnd()" (pointercancel)="sidePressEnd()">
+                  <!-- The card icon (owner 2026-11-21): where the chart AND bookings exist it is a TWO-state switch —
+                       Who is where ↔ Bookings (people ⇄ calendar); inside Bookings the pills pick Appointments | Home. -->
+                  <span class="fd-side-title" [class.fd-side-title--switch]="sideSwitchOn()" data-testid="fd-side-title">
+                    @if (sideSwitchOn()) {
+                    <button type="button" class="pf-svb" data-testid="fd-side-view-btn" [attr.data-tint]="sideTint()" [attr.data-view]="leftTab() === 'who' ? 'who' : 'bookings'"
+                      [attr.aria-pressed]="leftTab() !== 'who'" [attr.aria-label]="sideSwitchAria()" [attr.title]="sideSwitchAria()"
+                      (click)="toggleSideView($event)" (keydown)="$event.stopPropagation()">
                       <span class="pf-card__icon" aria-hidden="true">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
                           <g class="pf-svb__ico" [class.on]="leftTab() === 'who'">
                             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
                             <path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
                           </g>
-                          <g class="pf-svb__ico" [class.on]="leftTab() === 'appt'">
+                          <g class="pf-svb__ico" [class.on]="leftTab() !== 'who'">
                             <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M8 15h3" />
-                          </g>
-                          <g class="pf-svb__ico" [class.on]="leftTab() === 'home'">
-                            <path d="m3 10 9-7 9 7" /><path d="M5 9v12h14V9" /><path d="M10 21v-6h4v6" />
                           </g>
                         </svg>
                       </span>
                       @if (sideOverdueDot(); as d) { <span class="pf-svb__dot" role="img" data-testid="fd-side-overdue-dot" [attr.aria-label]="d"></span> }
                     </button>
-                    <span class="pf-card__label" data-testid="fd-side-view-title">{{ sideTitle().label }}@if (sideTitle().count !== null) { <span class="fd-side-title__n">{{ sideTitle().count }}</span> }</span>
-                    <pf-actions-menu #sideMenu class="fd-svb-menu" [actions]="sideMenuActions()" heading="Show" label="All views" [checkCurrent]="true"
-                      [popover]="true" align="start" triggerClass="fd-svb-menu__trigger" (action)="pickSideView($event)" />
-                  </span>
-                  } @else {
-                  <span class="fd-side-title" data-testid="fd-side-title">
+                    } @else {
                     <span class="pf-card__icon" aria-hidden="true">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                        <circle cx="9" cy="7" r="4" />
-                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      @if (leftTab() === 'who') {
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
                       </svg>
+                      } @else {
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M8 15h3" />
+                      </svg>
+                      }
                     </span>
-                    <span class="pf-card__label">Visits</span>
+                    }
+                    <span class="pf-card__label" data-testid="fd-side-view-title">{{ sideTitle() }}</span>
                   </span>
-                  }
                 } @else {
                   <div class="pf-tabs" role="tablist" aria-label="Left pane tabs" (click)="$event.stopPropagation()">
                     @if (showAppt()) {
@@ -551,6 +545,13 @@
                 </svg>
               </header>
 
+              <!-- Bookings (new design): the pill toggle "Appointments n | Home collection n" (rose dot when overdue). -->
+              @if (theme.isNewDesign() && leftTab() !== 'who' && bookingPillOptions().length > 1) {
+              <div class="fd-side-switch" data-testid="fd-bookings-pills">
+                <pf-segmented class="pf-tabs fd-side-tabs" ariaLabel="Bookings" [options]="bookingPillOptions()"
+                              [value]="$any(leftTab())" (valueChange)="setLeftTab($any($event))" />
+              </div>
+              }
               @if (theme.isNewDesign() && (leftTab() === 'appt' || leftTab() === 'home') && svcFilterLabel(); as l) {
               <!-- The ONE service filter, removable — its own small row above the list. -->
               <div class="fd-side-sub" data-testid="fd-side-sub">

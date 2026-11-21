@@ -134,7 +134,7 @@ describe('<pf-journey-ring>', () => {
 describe('frontdesk flow grid uses the ring', () => {
   it('one "Journey" ring column replaces Visit for + the dots; the label hides for one service / a service filter', () => {
     const grid = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/flow-grid/flow-grid.component.ts', 'utf8');
-    expect(grid).toContain("colId: 'journey', headerName: t < 2 ? '' : 'Journey'");
+    expect(grid).toContain("colId: 'journey', headerName: 'Journey', headerTooltip: 'Journey'");   // always headed (owner 2026-11-21)
     expect(grid).not.toContain("colId: 'visit'");
     const ts = readFileSync('apps/lms/src/app/features/frontdesk/frontdesk-landing/frontdesk-landing.component.ts', 'utf8');
     expect(ts).toContain("ringLabels: () => this.serviceShelf.multi() && this.serviceShelf.selected() === 'all',");

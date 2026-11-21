@@ -189,14 +189,17 @@ async function shots(page: Page, name: string) {
 const sideCard = (page: Page) => page.locator('.pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
 /** The VISITS head's icon switch (owner 2026-11-21: replaces the tab row). */
 const sideBtn = (page: Page) => sideCard(page).locator('[data-testid="fd-side-view-btn"]');
-/** Tap the icon until the side card shows `view` (it cycles Who is where → Appointments → Home). */
+/** Show `view` in the side card: the icon toggles Who is where ↔ Bookings; the pills pick Appointments | Home. */
 async function goSide(page: Page, view: string) {
-  for (let i = 0; i < 4; i++) {
-    if ((await sideBtn(page).getAttribute('data-view')) === view) return;
-    await sideBtn(page).click();
-    await page.waitForTimeout(120);
+  const btn = sideBtn(page);
+  const onWho = (await btn.getAttribute('data-view')) === 'who';
+  if ((view === 'who') !== onWho) await btn.click();
+  await expect(btn).toHaveAttribute('data-view', view === 'who' ? 'who' : 'bookings');
+  if (view !== 'who') {
+    const pill = sideCard(page).locator(`[data-testid="fd-bookings-pills"] [role="radio"][data-value="${view}"]`);
+    if (await pill.count() && (await pill.getAttribute('aria-checked')) !== 'true') await pill.click();
   }
-  await expect(sideBtn(page)).toHaveAttribute('data-view', view);
+  await page.waitForTimeout(300);
 }
 
 /** The VISITS head: the 44px icon switch + the view's title, whole (never clipped), inside the side card. */
@@ -226,15 +229,15 @@ test.describe('who is where — Lab + OPD user', () => {
       return;
     }
     await expectTabsFit(page, 'who');
-    // The card head: icon + "WHO IS WHERE" + the count.
-    await expect(vis(page, '[data-testid="fd-side-title"]')).toHaveText(/^\s*Who is where\s*$/i);
+    // The card head: icon + "PATIENT FLOW" (was "Who is where").
+    await expect(vis(page, '[data-testid="fd-side-title"]')).toHaveText(/^\s*Patient flow\s*$/i);
     // Both card heads line up (same height, same top).
     const sh = (await sideCard(page).locator('.pf-appt-split__hdr').boundingBox())!;
     const wh = (await page.locator('.pf-work-hdr').locator('visible=true').first().boundingBox())!;
     expect(Math.abs(sh.y - wh.y), 'heads share a top').toBeLessThanOrEqual(2);
     expect(Math.abs(sh.height - wh.height), `heads share a height (${sh.height} vs ${wh.height})`).toBeLessThanOrEqual(2);
     await expect(sideBtn(page)).toHaveAttribute('data-view', 'who');
-    await expect(sideCard(page).locator('[data-testid="fd-side-view-title"]')).toHaveText(/who is where/i);
+    await expect(sideCard(page).locator('[data-testid="fd-side-view-title"]')).toHaveText(/patient flow/i);
     const chart = vis(page, '[data-testid="who-is-where"]');
     await expect(chart).toBeVisible();
     // 14 active rows: 12 lab orders minus the validated one + 2 OPD.
@@ -257,8 +260,8 @@ test.describe('who is where — Lab + OPD user', () => {
     expect(sun.x).toBeGreaterThanOrEqual(card.x);
     expect(sun.x + sun.width).toBeLessThanOrEqual(card.x + card.width);
     // Overdue: a rose dot on the Appointments tab, said in its name.
-    await expect(sideCard(page).locator('[data-testid="fd-side-overdue-dot"]')).toHaveAttribute('aria-label', '1 appointment overdue');
-    await expect(sideBtn(page)).toHaveAttribute('aria-label', /^Show appointments \(\d+\) · 1 appointment overdue$/);
+    await expect(sideCard(page).locator('[data-testid="fd-side-overdue-dot"]')).toHaveAttribute('aria-label', '1 appointment overdue · show bookings');
+    await expect(sideBtn(page)).toHaveAttribute('aria-label', '1 appointment overdue · show bookings');
     // The journey ring: one per row, with the service label (2+ services, no filter).
     const ring = vis(page, '.pf-fd-flow pf-journey-ring').first();
     await expect(ring.locator('.pf-jring__btn')).toHaveAttribute('aria-label', /^(Lab|OPD) · .*Open journey$/);
@@ -348,7 +351,7 @@ test.describe('who is where — lab-only tenant', () => {
     await expect(page.locator('[data-testid="who-is-where"]')).toHaveCount(0);
     await expect(sideCard(page).locator('[data-testid="fd-side-view-btn"][data-view="who"]')).toHaveCount(0);
     if (wide()) {
-      await expect(vis(page, '[data-testid="fd-side-title"]')).toHaveText(/^\s*(Visits|Appointments\s*\d*)\s*$/i);
+      await expect(vis(page, '[data-testid="fd-side-title"]')).toHaveText(/^\s*Bookings\s*$/i);
       await expect(vis(page, '[data-testid="fd-new-appt"]')).toBeVisible();
       await expect(vis(page, '[data-testid="fd-side-filter-chip"]')).toHaveCount(0);
       await expect(page.getByText('Ms. Anjali Raghunathan Subramaniam').locator('visible=true').first()).toBeVisible();

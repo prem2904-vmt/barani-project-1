@@ -33,16 +33,16 @@ export interface SectionColPlan {
 const C = (id: SectionColId, header: string, min: number, flex: number, align: 'left' | 'center', fold: number): SectionColPlan =>
   ({ id, header, min, flex, align, fold });
 
-const WAIT = C('wait', 'Waiting', 104, 0, 'center', 1);
 const PAY = C('pay', 'Payment', 110, 0, 'center', 4);
 
-/** Each service's own middle columns (owner list; only what we have data for). */
+/** Each service's own middle columns (owner list; only what we have data for). Waiting is a FIXED section column
+ *  (right before Next, the same x in every section — flow-fold.ts), so it is not listed here. */
 export const SECTION_COLS: Record<ServiceId, readonly SectionColPlan[]> = {
-  opd: [C('doctor', 'Doctor', 130, 0.8, 'left', 2), C('vitals', 'Vitals', 110, 0.6, 'left', 3), C('consult', 'Consult', 130, 0.8, 'left', 0), WAIT, PAY],
-  lab: [C('samples', 'Samples', 120, 0.5, 'center', 0), C('where', 'Where now', 160, 1, 'left', 3), WAIT, PAY],
-  ipd: [C('admitted', 'Admitted', 110, 0.4, 'center', 2), C('doctor', 'Doctor', 130, 0.8, 'left', 3), C('where', 'Where now', 160, 1, 'left', 0), PAY],
-  er: [C('triage', 'Triage', 96, 0, 'center', 0), C('arrived', 'Arrived', 96, 0, 'center', 2), C('where', 'Where now', 160, 1, 'left', 3), WAIT, PAY],
-  scan: [C('where', 'Where now', 160, 1, 'left', 0), WAIT, PAY],
+  opd: [C('doctor', 'Doctor', 130, 0.8, 'left', 2), C('vitals', 'Vitals', 110, 0.6, 'left', 3), C('consult', 'Consult', 130, 0.8, 'left', 0), PAY],
+  lab: [C('samples', 'Samples', 120, 0.5, 'center', 0), C('where', 'Where now', 160, 1, 'left', 3), PAY],
+  ipd: [C('admitted', 'Admitted', 110, 0.4, 'center', 2), C('doctor', 'Doctor', 130, 0.8, 'left', 3), C('where', 'Where now', 130, 1, 'left', 0), PAY],
+  er: [C('triage', 'Triage', 96, 0, 'center', 0), C('arrived', 'Arrived', 96, 0, 'center', 2), C('where', 'Where now', 160, 1, 'left', 3), PAY],
+  scan: [C('where', 'Where now', 130, 1, 'left', 0), PAY],
 };
 
 /** The columns a section shows when `avail` px are left for its OWN columns (after Token · Patient · Journey · Next):

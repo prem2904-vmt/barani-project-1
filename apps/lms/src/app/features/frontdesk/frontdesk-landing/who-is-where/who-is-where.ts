@@ -261,7 +261,7 @@ export interface SideTabOption { value: SideTab; label: string; count?: number; 
  *  (no chart) keeps exactly today's "Appointments | Home collection". */
 export function sideTabOptions(i: SideTabInputs): SideTabOption[] {
   const out: SideTabOption[] = [];
-  if (i.who) out.push({ value: 'who', label: 'Who is where' });
+  if (i.who) out.push({ value: 'who', label: 'Patient flow' });
   if (i.appt) out.push({ value: 'appt', label: 'Appointments', count: i.apptN, alert: i.overdue > 0, aria: apptTabAria(i.apptN, i.overdue) });
   if (i.home) out.push({ value: 'home', label: i.who ? 'Home' : 'Home collection', count: i.homeN });
   return out;
@@ -274,35 +274,33 @@ export function effectiveSideTab(t: SideTab, i: Pick<SideTabInputs, 'who' | 'app
   return i.appt || !i.home ? 'appt' : 'home';
 }
 
-/* ── The VISITS card-head icon switch (owner 2026-11-21: replaces the tab row) ─────────────────────────────────── */
+/* ── The VISITS card-head icon switch (owner 2026-11-21, refined): TWO states — Who is where (the chart) ↔ Bookings.
+ *    Inside Bookings a pill toggle picks Appointments | Home collection. `leftTab` keeps 'who' | 'appt' | 'home'. ── */
 
-/** What a side view is called in the card head, with its count inline: "Who is where" · "Appointments 5" · "Home visits 2". */
-export function sideViewTitle(t: SideTab, i: Pick<SideTabInputs, 'apptN' | 'homeN'>): { label: string; count: number | null } {
-  if (t === 'who') return { label: 'Who is where', count: null };
-  if (t === 'appt') return { label: 'Appointments', count: i.apptN };
-  return { label: 'Home visits', count: i.homeN };
+/** The head title: "Patient flow" (the chart; was "Who is where", owner 2026-11-21) or "Bookings". */
+export function sideTitleOf(t: SideTab): string {
+  return t === 'who' ? 'Patient flow' : 'Bookings';
 }
 
-/** The views the icon cycles through, in order: Who is where → Appointments → Home visits (lab-only: Appointments ↔ Home). */
-export function sideViews(i: Pick<SideTabInputs, 'who' | 'appt' | 'home'>): SideTab[] {
-  return (['who', 'appt', 'home'] as SideTab[]).filter(t => i[t]);
+/** The icon is a switch only where both sides exist: the chart (2+ services, ≥1024px) AND a bookings list. */
+export function sideSwitchOn(i: Pick<SideTabInputs, 'who' | 'appt' | 'home'>): boolean {
+  return i.who && (i.appt || i.home);
 }
 
-/** The view one tap brings (wraps around); the current one when it is the only view. */
-export function nextSideView(cur: SideTab, views: readonly SideTab[]): SideTab {
-  if (!views.length) return cur;
-  const i = views.indexOf(cur);
-  return views[(i + 1) % views.length];
+/** One tap: Who is where → the last bookings pill (Appointments when none, or when that list is off); Bookings → Who is where. */
+export function toggleSideView(cur: SideTab, lastBookings: SideTab | null, i: Pick<SideTabInputs, 'appt' | 'home'>): SideTab {
+  if (cur !== 'who') return 'who';
+  if (lastBookings === 'home' && i.home) return 'home';
+  return i.appt ? 'appt' : 'home';
 }
 
-/** Tooltip / accessible name of the switch: it names the NEXT view — "Show appointments (5)", "Show who is where". */
-export function sideSwitchLabel(next: SideTab, i: Pick<SideTabInputs, 'apptN' | 'homeN'>): string {
-  const t = sideViewTitle(next, i);
-  return `Show ${t.label.toLowerCase()}${t.count !== null ? ` (${t.count})` : ''}`;
+/** The switch's tooltip / accessible name names what a tap shows. */
+export function sideSwitchLabel(cur: SideTab): string {
+  return cur === 'who' ? 'Show bookings' : 'Show patient flow';
 }
 
-/** The rose dot's words while not on Appointments: "3 appointments overdue" (null = no dot). */
+/** The rose dot on the icon while on Who is where: "3 appointments overdue · show bookings" (null = no dot). */
 export function overdueDotLabel(cur: SideTab, overdue: number): string | null {
-  if (cur === 'appt' || overdue <= 0) return null;
-  return `${overdue} appointment${overdue === 1 ? '' : 's'} overdue`;
+  if (cur !== 'who' || overdue <= 0) return null;
+  return `${overdue} appointment${overdue === 1 ? '' : 's'} overdue · show bookings`;
 }

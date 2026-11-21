@@ -190,6 +190,9 @@ async function expectGridsClean(page: Page, tag: string) {
         const r = el.getBoundingClientRect();
         if (r.width > 0 && r.right > gr.right + 1) out.scroll.push(`${el.getAttribute('col-id')} ends at ${Math.round(r.right)} > ${Math.round(gr.right)}`);
       }
+      for (const t of Array.from(g.querySelectorAll<HTMLElement>('.ag-header-cell-text'))) {
+        if (t.clientWidth > 0 && t.scrollWidth > t.clientWidth + 1) out.clipped.push(`header "${t.textContent?.trim()}" cut`);
+      }
       for (const cell of Array.from(g.querySelectorAll<HTMLElement>('.ag-cell'))) {
         const c = cell.getBoundingClientRect();
         if (c.width === 0) continue;
@@ -220,6 +223,49 @@ async function expectGridsClean(page: Page, tag: string) {
   expect(r.broken, `${tag}: words broken mid-word at ${projectName()}`).toEqual([]);
 }
 
+
+/** Every section hugs its rows (its last row ends where the section ends) and the next header starts right there. */
+async function expectSectionsHug(page: Page, tag: string) {
+  const r = await page.evaluate(() => {
+    const out: string[] = [];
+    const secs = Array.from(document.querySelectorAll<HTMLElement>('.fd-sec')).filter(s => s.getBoundingClientRect().height > 0);
+    secs.forEach((sec, i) => {
+      const rows = Array.from(sec.querySelectorAll<HTMLElement>('.ag-row[row-id]')).map(x => x.getBoundingClientRect()).filter(x => x.height > 0);
+      if (!rows.length) { out.push(`${sec.dataset['sec']}: no rows`); return; }
+      const last = Math.max(...rows.map(x => x.bottom));
+      const end = sec.getBoundingClientRect().bottom;
+      if (end - last > 1) out.push(`${sec.dataset['sec']}: ${Math.round(end - last)}px blank under its last row`);
+      const next = secs[i + 1]?.querySelector<HTMLElement>('.fd-sec__h');
+      if (next) {
+        const gap = next.getBoundingClientRect().top - last;
+        if (Math.abs(gap) > 1) out.push(`${sec.dataset['sec']} → ${secs[i + 1].dataset['sec']}: ${Math.round(gap)}px gap`);
+      }
+    });
+    return { out, n: secs.map(s => `${s.dataset['sec']}:${s.querySelectorAll('.ag-row[row-id]').length}`) };
+  });
+  expect(r.out, `${tag} (${r.n.join(' ')}) at ${projectName()}`).toEqual([]);
+}
+
+/** Token · Patient · Waiting · Next start at the same x in every section (shown columns only). */
+async function expectSectionsAligned(page: Page, tag: string) {
+  const bad = await page.evaluate(() => {
+    const out: string[] = [];
+    const secs = Array.from(document.querySelectorAll<HTMLElement>('.fd-sec')).filter(s => s.getBoundingClientRect().height > 0);
+    for (const col of ['sel', 'token', 'patient', 'wait', 'next']) {
+      const xs = secs.map(sec => {
+        const h = sec.querySelector<HTMLElement>(`.ag-header-cell[col-id="${col}"]`);
+        const r = h?.getBoundingClientRect();
+        return r && r.width > 0 ? Math.round(r.left) : null;
+      });
+      const shown = xs.filter((x): x is number => x !== null);
+      if (shown.length !== xs.length && shown.length) out.push(`${col}: shown in some sections only (${xs.join(', ')})`);
+      else if (shown.length && Math.max(...shown) - Math.min(...shown) > 1) out.push(`${col}: x ${shown.join(' / ')}`);
+    }
+    return out;
+  });
+  expect(bad, `${tag}: columns line up across sections at ${projectName()}`).toEqual([]);
+}
+
 const sectionIds = (page: Page) => page.locator('.fd-sec').evaluateAll(els => els.map(e => (e as HTMLElement).dataset['sec']));
 
 test.describe('All = one screen split by service', () => {
@@ -248,6 +294,8 @@ test.describe('All = one screen split by service', () => {
     await expect(page.locator('.fd-sec[data-sec="opd"] .ag-row').first()).toBeVisible();
     await expect(page.locator('.fd-sec[data-sec="opd"]').getByText(/Waiting · (next|\d+ ahead)/).first()).toBeVisible();
     await expectGridsClean(page, 'sections');
+    await expectSectionsHug(page, 'sections');
+    await expectSectionsAligned(page, 'sections');
     await shots(page, '01-sections');
     // Sticky: scroll the body — the OPD header stays at the body's top while its rows pass.
     const body = page.locator('.fd-secs');
@@ -300,6 +348,20 @@ test.describe('All = one screen split by service', () => {
     await shots(page, '03-sections-reordered');
   });
 
+  test('sections hug their rows with 1 row and with 5 rows (no blank row, no scrollbar strip)', async ({ page }) => {
+    await openDesk(page);
+    if (!wide(page)) return;
+    const find = vis(page, '.pf-work-find__input').first();
+    for (const [q, n] of [['Arya', 1], ['Ms.', 5]] as const) {
+      await find.fill(q);
+      await page.waitForTimeout(700);
+      await expect(page.locator('.fd-sec[data-sec="lab"] .ag-row[row-id]')).toHaveCount(n);
+      await expectSectionsHug(page, `search "${q}"`);
+      await shots(page, `02b-hug-${n}-row${n === 1 ? '' : 's'}`);
+    }
+    await find.fill('');
+  });
+
   test('one service picked = just that service\'s table (no section headers)', async ({ page }) => {
     await openDesk(page);
     if (!wide(page)) return;
@@ -323,6 +385,8 @@ test.describe('All = one screen split by service', () => {
       await page.addStyleTag({ content: `.pf-appt-split > .pf-appt-split__pane--work { flex: 0 0 ${w}px !important; width: ${w}px !important; max-width: ${w}px !important; }` });
       await page.waitForTimeout(700);
       await expectGridsClean(page, `sections @${w}`);
+      await expectSectionsHug(page, `sections @${w}`);
+      await expectSectionsAligned(page, `sections @${w}`);
       await expectNoPageScroll(page, `@${w}`);
       await theme(page, true);
       await page.waitForTimeout(1100);
@@ -454,71 +518,70 @@ test.describe('lab-only tenant: unchanged', () => {
   });
 });
 
-test.describe('VISITS head: the icon cycles the views', () => {
+test.describe('VISITS head: Patient flow ↔ Bookings (icon) · Appointments | Home collection (pills)', () => {
   test.beforeEach(async ({ page }) => { test.setTimeout(180_000); OUT = shotsDir(OUT_BASE); });
   const side = (page: Page) => page.locator('.pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
   const btn = (page: Page) => side(page).locator('[data-testid="fd-side-view-btn"]');
   const title = (page: Page) => side(page).locator('[data-testid="fd-side-view-title"]');
+  const pill = (page: Page, v: string) => side(page).locator(`[data-testid="fd-bookings-pills"] [role="radio"][data-value="${v}"]`);
 
-  test('Who is where → Appointments → Home visits → back; overdue dot; menu jump; no tab row', async ({ page }) => {
+  test('two-state icon, the dot on the icon and on the pill, pills switch, remembered', async ({ page }) => {
     await backend(page, true);
     await openDesk(page);
     if (!wide(page)) { test.info().annotations.push({ type: 'form-factor', description: 'the chart is ≥1024px only' }); return; }
-    await expect(side(page).locator('.fd-side-switch, pf-segmented.fd-side-tabs')).toHaveCount(0);
     await expect(btn(page)).toHaveAttribute('data-view', 'who');
-    await expect(title(page)).toHaveText(/^\s*who is where\s*$/i);
-    // Overdue appointments while elsewhere: the rose dot, and the switch names the next view with its count.
-    await expect(side(page).locator('[data-testid="fd-side-overdue-dot"]')).toHaveAttribute('aria-label', '3 appointments overdue');
-    await expect(btn(page)).toHaveAttribute('aria-label', /^Show appointments \(5\) · 3 appointments overdue$/);
+    await expect(title(page)).toHaveText(/^\s*patient flow\s*$/i);
+    await expect(side(page).locator('[data-testid="fd-bookings-pills"]')).toHaveCount(0);
+    // Overdue while on the chart: the rose dot on the icon, and the icon says what a tap shows.
+    await expect(side(page).locator('[data-testid="fd-side-overdue-dot"]')).toHaveAttribute('aria-label', '3 appointments overdue · show bookings');
+    await expect(btn(page)).toHaveAttribute('aria-label', '3 appointments overdue · show bookings');
     const b = (await btn(page).boundingBox())!;
     expect(Math.min(b.width, b.height)).toBeGreaterThanOrEqual(44);
     await shots(page, '10-visits-who');
     await btn(page).click();
-    await expect(btn(page)).toHaveAttribute('data-view', 'appt');
-    await expect(title(page)).toHaveText(/^\s*appointments\s*5\s*$/i);
+    await expect(btn(page)).toHaveAttribute('data-view', 'bookings');
+    await expect(btn(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(btn(page)).toHaveAttribute('aria-label', 'Show patient flow');
+    await expect(title(page)).toHaveText(/^\s*bookings\s*$/i);
     await expect(side(page).locator('[data-testid="fd-side-overdue-dot"]')).toHaveCount(0);
+    // The pills: Appointments 5 (rose dot: 3 overdue) | Home collection n; "+ New" on Appointments.
+    await expect(pill(page, 'appt')).toHaveAttribute('aria-checked', 'true');
+    await expect(pill(page, 'appt')).toContainText('5');
+    await expect(pill(page, 'appt').locator('.seg-alert')).toHaveCount(1);
+    await expect(pill(page, 'appt')).toHaveAttribute('aria-label', /^Appointments, 5, 3 overdue$/);
     await expect(side(page).locator('[data-testid="fd-new-appt"]')).toBeVisible();
     await page.waitForTimeout(400);
     await shots(page, '11-visits-appointments');
-    await btn(page).click();
-    await expect(btn(page)).toHaveAttribute('data-view', 'home');
-    await expect(title(page)).toHaveText(/^\s*home visits\s*\d+\s*$/i);
+    await pill(page, 'home').click();
+    await expect(pill(page, 'home')).toHaveAttribute('aria-checked', 'true');
     await expect(side(page).locator('[data-testid="fd-new-appt"]')).toHaveCount(0);
     await page.waitForTimeout(400);
     await shots(page, '12-visits-home');
+    // Back to the chart and again to Bookings: the last pill (Home collection) comes back.
     await btn(page).click();
     await expect(btn(page)).toHaveAttribute('data-view', 'who');
-    // Direct jump: Alt+↓ (and right-click) open the menu of every view with its count.
-    await btn(page).focus();
-    await page.keyboard.press('Alt+ArrowDown');
-    const menu = page.locator('.pf-am-panel[role="menu"]').locator('visible=true');
-    await expect(menu).toBeVisible();
-    await expect(menu).toContainText('Who is where');
-    await expect(menu).toContainText('Appointments');
-    await expect(menu).toContainText('Home visits');
-    await shots(page, '13-visits-menu');
-    await menu.getByText('Home visits').click();
-    await expect(btn(page)).toHaveAttribute('data-view', 'home');
-    await btn(page).click({ button: 'right' });
-    await expect(menu).toBeVisible();
-    await menu.getByText('Appointments').click();
-    await expect(btn(page)).toHaveAttribute('data-view', 'appt');
-    // Remembered.
+    await btn(page).click();
+    await expect(pill(page, 'home')).toHaveAttribute('aria-checked', 'true');
+    // Remembered (leftTab = 'home').
     await page.reload();
     await page.getByPlaceholder(/Search patient/).locator('visible=true').first().waitFor({ timeout: 60_000 });
-    await expect(btn(page)).toHaveAttribute('data-view', 'appt');
+    await expect(btn(page)).toHaveAttribute('data-view', 'bookings');
+    await expect(pill(page, 'home')).toHaveAttribute('aria-checked', 'true');
+    expect(await page.evaluate(() => localStorage.getItem('pf.lms.frontdesk.leftTab'))).toBe('home');
   });
 
-  test('lab-only: Appointments ↔ Home visits, no Who is where', async ({ page }) => {
+  test('lab-only: no icon switch, title BOOKINGS, the pills only', async ({ page }) => {
     await backend(page, false);
     await openDesk(page);
-    if (!(await btn(page).isVisible())) { test.info().annotations.push({ type: 'data', description: 'one side view (or a stacked side card): the static VISITS head' }); return; }
-    await expect(btn(page)).toHaveAttribute('data-view', 'appt');
-    await btn(page).click();
-    await expect(btn(page)).toHaveAttribute('data-view', 'home');
-    await btn(page).click();
-    await expect(btn(page)).toHaveAttribute('data-view', 'appt');
-    await expect(side(page).locator('[data-view="who"]')).toHaveCount(0);
+    if (!(await title(page).isVisible())) { test.info().annotations.push({ type: 'form-factor', description: 'stacked side card' }); return; }
+    await expect(btn(page)).toHaveCount(0);
+    await expect(title(page)).toHaveText(/^\s*bookings\s*$/i);
+    if (await pill(page, 'home').count()) {
+      await pill(page, 'home').click();
+      await expect(pill(page, 'home')).toHaveAttribute('aria-checked', 'true');
+      await pill(page, 'appt').click();
+      await expect(pill(page, 'appt')).toHaveAttribute('aria-checked', 'true');
+    }
     await shots(page, '14-visits-lab-only');
   });
 });

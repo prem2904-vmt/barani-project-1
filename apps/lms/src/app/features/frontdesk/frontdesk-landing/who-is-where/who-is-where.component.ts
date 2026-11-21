@@ -22,7 +22,7 @@ export interface WhoPick { service: ServiceFilter; step: string | null }
     @let c = centre();
     <div class="wiw" [class.wiw--filtered]="service() !== 'all'" [class.wiw--hovering]="!!hov()" data-testid="who-is-where">
       <div class="wiw__sun" [style.width.px]="diameter()" [style.height.px]="diameter()" [style.--d.px]="diameter()">
-        <svg [attr.viewBox]="'0 0 ' + size + ' ' + size" role="group" aria-label="Who is where: services and steps">
+        <svg [attr.viewBox]="'0 0 ' + size + ' ' + size" role="group" aria-label="Patient flow: services and steps">
           @if (!slices().length) {
             <circle class="wiw__empty" [attr.cx]="size / 2" [attr.cy]="size / 2" r="83" />
           }

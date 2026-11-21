@@ -98,11 +98,11 @@ describe('All = one screen split by service', () => {
   it('each service has its own columns — only ones we have data for (no Room, Bay, Ward · bed, Discharge, Meds, Diet)', () => {
     const all = Object.values(SECTION_COLS).flat().map(c => c.header);
     for (const dropped of ['Room', 'Bay', 'Ward · bed', 'Discharge', 'Meds due', 'Diet', 'Tests']) expect(all).not.toContain(dropped);
-    expect(SECTION_COLS.opd.map(c => c.id)).toEqual(['doctor', 'vitals', 'consult', 'wait', 'pay']);
-    expect(SECTION_COLS.lab.map(c => c.id)).toEqual(['samples', 'where', 'wait', 'pay']);
+    expect(SECTION_COLS.opd.map(c => c.id)).toEqual(['doctor', 'vitals', 'consult', 'pay']);
+    expect(SECTION_COLS.lab.map(c => c.id)).toEqual(['samples', 'where', 'pay']);
   });
   it('a narrow section folds Payment first, then its low-value columns; never-fold columns stay', () => {
-    expect(sectionPlan('opd', 1000).cols.length).toBe(5);
+    expect(sectionPlan('opd', 1000).cols.length).toBe(4);
     const p = sectionPlan('opd', 400);
     expect(p.folded).toBe(true);
     expect(p.cols.map(c => c.id)).toContain('consult');
@@ -122,7 +122,7 @@ describe('never scroll sideways (owner 2026-11-21)', () => {
     expect(at(1400)).toEqual([]);
     expect(at(900)).toEqual(['pay']);
     expect(at(750)).toEqual(['pay', 'wait']);
-    expect(at(650)).toEqual(['pay', 'wait', 'token']);
+    expect(at(660)).toEqual(['pay', 'wait', 'token']);
     expect(at(520)).toEqual(['pay', 'wait', 'token', 'ring', 'tight']);
   });
   for (const w of [520, 600, 720, 900, 1200]) {
@@ -139,6 +139,15 @@ describe('never scroll sideways (owner 2026-11-21)', () => {
       }
     }
   }
+  it('sections fold their FIXED columns alike (Token · Patient · Waiting · Next at the same x in every section)', () => {
+    for (const w of [520, 600, 720, 900, 1200]) {
+      for (const selecting of [false, true]) {
+        const fixed = (['lab', 'opd', 'ipd', 'er', 'scan'] as const).map(service =>
+          [...flowLayout(w, { selecting, service, tokenW: 104 }).fold].filter(f => f !== 'pay').sort().join());
+        expect(new Set(fixed).size, `${w}${selecting ? ' selecting' : ''}: ${fixed.join(' | ')}`).toBe(1);
+      }
+    }
+  });
   it('the action column keeps room for its button + ⋯ at the floor', () => {
     expect(FLOW_MIN.nextTight).toBeGreaterThanOrEqual(140);
   });

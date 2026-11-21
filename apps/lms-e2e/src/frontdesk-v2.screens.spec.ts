@@ -351,7 +351,9 @@ test.describe('frontdesk v2 — Lab + OPD user (Services shelf)', () => {
     if (wide()) {
       // The VISITS head icon cycles the views (owner 2026-11-21): tap until Appointments.
       const sw = page.locator('.pf-appt-split [data-testid="fd-side-view-btn"]').locator('visible=true');
-      for (let i = 0; i < 3 && (await sw.count()) && (await sw.getAttribute('data-view')) !== 'appt'; i++) await sw.click();
+      if ((await sw.count()) && (await sw.getAttribute('data-view')) === 'who') await sw.click();
+      const apptPill = page.locator('.pf-appt-split [data-testid="fd-bookings-pills"] [role="radio"][data-value="appt"]').locator('visible=true');
+      if (await apptPill.count()) await apptPill.click();
       await expect(page.getByText('Ms. Anjali Raghunathan Subramaniam').locator('visible=true').first()).toBeVisible();
     }
     await pick('all');
