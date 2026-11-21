@@ -85,7 +85,7 @@ export function bytesWords(n: number): string {
                           <span class="fs-app__blurb">{{ a.blurb }}</span>
                         </div>
                         <div class="fs-app__who">
-                          <pf-select [options]="roleOptions()" [multiple]="true" [searchable]="true" [values]="d.apps[a.kind].editRoles" [disabled]="!full()"
+                          <pf-select [options]="roleOptions()" [multiple]="true" [maxChips]="2" [searchable]="true" [values]="d.apps[a.kind].editRoles" [disabled]="!full()"
                                      placeholder="Everyone with a login can edit" [attr.aria-label]="'Who can edit ' + a.name" (valuesChange)="setRoles(a, $event)"></pf-select>
                         </div>
                         <pf-toggle [checked]="d.apps[a.kind].enabled" [disabled]="!full()" [attr.data-testid]="'files-toggle-' + a.id"
@@ -137,7 +137,7 @@ export function bytesWords(n: number): string {
                   <pf-setting-row data-testid="files-bar-defaults" label="On the bottom bar by default" hint="Per role; people can still pin or unpin their own">
                     <div class="fs-bar">
                       <pf-select [options]="roleOptions()" [value]="barRole()" [searchable]="true" placeholder="Pick a role" size="sm" aria-label="Role" (valueChange)="barRole.set($event)"></pf-select>
-                      <pf-select [options]="appOptions" [multiple]="true" [values]="barApps()" [disabled]="!barRole()" placeholder="No Files apps" size="sm" aria-label="Apps on this role's bar"
+                      <pf-select [options]="appOptions" [multiple]="true" [maxChips]="2" [values]="barApps()" [disabled]="!barRole()" placeholder="No Files apps" size="sm" aria-label="Apps on this role's bar"
                                  (valuesChange)="setBarApps($event)"></pf-select>
                       <button type="button" class="pf-hb-btn pf-hb-btn--ghost" data-testid="files-bar-save" [disabled]="!barRole() || !barDirty()" [attr.aria-disabled]="!barRole() || !barDirty() ? 'true' : null"
                               [attr.title]="barDirty() ? null : 'No changes to save'" (click)="saveBar()">Save bar</button>

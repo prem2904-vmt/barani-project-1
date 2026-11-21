@@ -2,6 +2,8 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
+  afterEveryRender,
   PLATFORM_ID,
   Signal,
   computed,
@@ -12,6 +14,7 @@ import {
   signal,
 } from '@angular/core';
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
+import { fillHeadTitles } from '../../utils/head-titles.js';
 
 /** One row in the left list. */
 export interface TwoPanelItem {
@@ -304,7 +307,10 @@ export class TwoPanelComponent {
   private lastNav: string | null | undefined = undefined;
   private last: string | null = null;
   private readonly browser = isPlatformBrowser(inject(PLATFORM_ID));
+  private readonly el = inject(ElementRef<HTMLElement>);
   constructor() {
+    // Narrow heads turn text actions into icons (styles.scss `@container pf-head`): each keeps a tooltip.
+    afterEveryRender(() => { fillHeadTitles((this.el.nativeElement as HTMLElement).querySelector('.pf-tp__tools')); });
     effect(() => {
       const key = this.navKey();
       if (key === this.lastNav) return;

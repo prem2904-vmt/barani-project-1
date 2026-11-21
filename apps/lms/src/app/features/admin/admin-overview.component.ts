@@ -304,6 +304,8 @@ export class AdminOverviewComponent implements OnDestroy {
   private readonly host = inject(SETTINGS_HOST);
   readonly inlineSearch = computed(() => this.inlineCmp() ? pickHostSearch(this.host.searches(), this.inlineCats().length > 1 ? this.inlineTab() : null) : null);
   /** The inline page's actions, in its card head (never the band's corner); per picked category when they belong to one. */
+  /** The picked category's group hands its tools to the card head (pf-setting-group reads headGroup). */
+  private readonly syncHeadGroup = effect(() => { this.host.headGroup?.set(this.inlineCmp() && this.inlineCats().length > 1 ? this.inlineTab() : null); });
   readonly inlineActions = computed(() => {
     const sel = this.inlineCats().length > 1 ? this.inlineTab() : null;
     return this.host.actions().filter((a) => !a.group || !sel || a.group === sel);

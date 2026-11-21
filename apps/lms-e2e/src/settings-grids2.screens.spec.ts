@@ -201,7 +201,13 @@ test.describe('Settings › Front desk', () => {
   test('B: paste hospitals (Hospitals view) flags an existing name / code', async ({ page }) => {
     await go(page, FD);
     await category(page, 'Referring doctors');
-    await vis(page, 'pf-setting-group[data-group="referring"] [role="radio"]:has-text("Hospitals")').click();
+    // The group's Hospitals | Doctors pill rides the card head now (owner 2026-11-21); it may be collapsed to its menu.
+    const pill = page.locator('.pf-tp__head [role="radio"]:has-text("Hospitals")').locator('visible=true').first();
+    if (await pill.count()) await pill.click();
+    else {
+      await vis(page, '.pf-tp__head pf-segmented [data-seg-compact]').click();
+      await page.getByRole('menuitemradio', { name: /^Hospitals/ }).locator('visible=true').first().click();
+    }
     await expect(vis(page, '[data-testid="rn-add"]')).toHaveText(/Add hospital/);
     await vis(page, '[data-testid="rn-paste-open"]').click();
     const panel = vis(page, '[data-testid="rn-paste"]');

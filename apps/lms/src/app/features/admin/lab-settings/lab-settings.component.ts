@@ -254,18 +254,18 @@ interface AutoAssignConfig {
               <div class="pf-ls__drow pf-ls__dept" role="row">
                 <span class="pf-ls__dname" role="cell">{{ d.name }} <span class="pf-ls__dept-code">{{ d.code }}</span></span>
                 <span class="pf-ls__dcell" role="cell" [class.pf-ls__pool--off]="!autoAssignEnabled()">
-                  <pf-select size="sm" [multiple]="true" [options]="allUserOptions()" [values]="assigneesFor(d.id)" placeholder="People…"
+                  <pf-select size="sm" [multiple]="true" [maxChips]="2" [options]="allUserOptions()" [values]="assigneesFor(d.id)" placeholder="People…"
                              [disabled]="!autoAssignEnabled()" (valuesChange)="setAssignees(d.id, $any($event))"></pf-select>
-                  <pf-select size="sm" [multiple]="true" [options]="allRoleOptions()" [values]="rolesFor(d.id)" placeholder="Roles…"
+                  <pf-select size="sm" [multiple]="true" [maxChips]="2" [options]="allRoleOptions()" [values]="rolesFor(d.id)" placeholder="Roles…"
                              [disabled]="!autoAssignEnabled()" (valuesChange)="setRoles(d.id, $any($event))"></pf-select>
                   @if (autoAssignEnabled() && !assigneesFor(d.id).length && !rolesFor(d.id).length) {
                     <span class="pf-ls__warn">No one set — shared queue.</span>
                   }
                 </span>
                 <span class="pf-ls__dcell" role="cell">
-                  <pf-select size="sm" [multiple]="true" [options]="allUserOptions()" [values]="validatorsFor(d.id)" placeholder="People…"
+                  <pf-select size="sm" [multiple]="true" [maxChips]="2" [options]="allUserOptions()" [values]="validatorsFor(d.id)" placeholder="People…"
                              (valuesChange)="setValidators(d.id, $any($event))"></pf-select>
-                  <pf-select size="sm" [multiple]="true" [options]="allRoleOptions()" [values]="validatorRolesFor(d.id)" placeholder="Roles…"
+                  <pf-select size="sm" [multiple]="true" [maxChips]="2" [options]="allRoleOptions()" [values]="validatorRolesFor(d.id)" placeholder="Roles…"
                              (valuesChange)="setValidatorRoles(d.id, $any($event))"></pf-select>
                   @if (autoAssignValidatorsEnabled() && !validatorsFor(d.id).length && !validatorRolesFor(d.id).length) {
                     <span class="pf-ls__warn">No one set — shared validation queue.</span>
@@ -315,7 +315,9 @@ interface AutoAssignConfig {
     .pf-ls__drow--head { min-height: 40px; border-top: 0; background: color-mix(in srgb, var(--color-primary, #7c3aed) 3%, var(--pf-card-bg)); font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
     .pf-ls__dname { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
     .pf-ls__dept-code { margin-left: 4px; font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-    .pf-ls__dcell { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; min-width: 0; }
+    .pf-ls__dcell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; min-width: 0; align-items: start; }
+    /* A multi-select holds its chips (max 2 + "+N", pf-select maxChips): it never spills over the next row. */
+    .pf-ls__dcell > pf-select { min-width: 0; }
     .pf-ls__dcell .pf-ls__warn { grid-column: 1 / -1; }
     @media (pointer: coarse) { :host .pf-ls__switch { min-width: 44px; min-height: 44px; justify-content: flex-end; } }
     @media (max-width: 900px) {

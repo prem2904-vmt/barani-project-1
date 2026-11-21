@@ -73,6 +73,14 @@ $pf-light-not: ':not(.pf-ai-glow):not(:is(#{$pf-light-panels}) *):not(:is(#{$pf-
   --ag-selected-row-background-color: var(--pf-row-selected-glass);
   --ag-pinned-row-background-color: var(--pf-row-glass);
 }
+/* Nothing solid between the panel glass and the rows (owner 2026-11-21: "rows look solid white"): every wrapper inside a
+   docked glass panel that HOLDS a grid (a Frontdesk service section, a card body, a grid host) and every container
+   inside the grid that holds rows is clear — the tint lives on the rows only. Floats keep their own surface. */
+:root.light.design-new :is(#{$pf-light-panels}) :has(.ag-root-wrapper):not(:is(#{$pf-floats})):not(:is(#{$pf-floats}) *),
+:root.light.design-new .ag-root-wrapper :has(.ag-row):not(.ag-row):not(.ag-row *) {
+  background-color: transparent !important;
+  background-image: none !important;
+}
 /* AG-Grid 36 pins cells INSIDE each row (.ag-grid-pinned-left-cells / -right-cells, sticky); older names kept too. */
 // Only the ROWS carry the tint — their containers stay transparent (a tinted container under a tinted row doubled it).
 $pf-ag-rows: '.ag-row, .ag-full-width-row';

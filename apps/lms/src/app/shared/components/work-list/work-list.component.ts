@@ -112,7 +112,9 @@ import { WorkListItem, WorkListStatus, factsLine, statusLine } from './work-list
     .pf-wl__l3 .pf-sw__detail::before { content: '· '; }
     .pf-wl__time { flex: none; font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
     .pf-wl__time--late { color: var(--pf-late-text, var(--red-text)); font-weight: 600; }
-    .pf-wl__act { flex: none; display: flex; align-items: center; gap: 6px; }
+    /* The right edge never takes more than half the row (owner 2026-11-21: the name was squeezed to one letter wide by
+       a row of actions) — a screen with several actions hands in ONE primary + ⋯; anything wider wraps inside its half. */
+    .pf-wl__act { flex: 0 1 auto; max-width: 50%; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
     .pf-wl .pf-wl__primary { height: 44px; min-height: 44px; padding: 0 14px; font-size: 13px; }
     .pf-wl .pf-wl__more { width: 44px; height: 44px; min-height: 44px; }
     /* The row's primary is a TEXT button on touch too (never icon-only): an icon-mode action handed in through

@@ -3086,3 +3086,67 @@ aside.pf-card > .pf-card__body > * { flex-shrink: 0; }
 /* No browser number spinners anywhere (the app's stepper is pf-number-input; a plain number field is just a field). */
 input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 input[type='number']::-webkit-outer-spin-button, input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ── Card heads are ONE row at every size (owner 2026-11-21, house rule) ──────────────────────────────────────────
+   Title (+ count) on the left; on the right the pills — which collapse into the pf-segmented selected-pill menu when
+   they don't fit (pill-fit) — and the actions. The head is its own size container (`pf-head`): when it is narrow the
+   count, the note and the text of each action give way (actions become 44px icon buttons; their accessible name and
+   tooltip stay — TwoPanelComponent fills a missing `title` from the aria-label / words). Never wrap a head. */
+html body :is(.pf-tp__head, .pf-sg-main__head, .pf-sgroup__head) { flex-wrap: nowrap !important; container: pf-head / inline-size; }
+/* The title may wrap onto two lines (whole words) before anything is cut; the tools take their content's width and
+   shrink with it (pills → selected-pill menu); `safe` keeps an overflow on the right, never over the title. */
+html body .pf-tp__head > .pf-tp__title { flex: 0 1 auto !important; max-width: none !important; white-space: normal; overflow-wrap: normal; }
+html body :is(.pf-tp__tools, .pf-sgroup__tools) {
+  flex: 1 1 auto !important; min-width: 0 !important; flex-wrap: nowrap !important;
+  justify-content: flex-end; justify-content: safe flex-end;
+}
+html body :is(.pf-tp__tools, .pf-sgroup__tools) :is(.pf-ss__acts, .pf-ov__acts) { flex: 0 1 auto; min-width: 0; }
+/* Head text actions: the kit's compact size (34px; the touch rule lifts them to 44px). */
+@media (hover: hover) and (pointer: fine) {
+  html body :is(.pf-tp__tools, .pf-sgroup__tools) .pf-btn:not(.pf-btn--icon) { height: 34px; min-height: 34px; padding-inline: 12px; font-size: 13px; }
+}
+html body :is(.pf-ss__acts, .pf-ov__acts):empty { display: none; }
+html body :is(.pf-tp__head, .pf-sg-main__head, .pf-sgroup__head) pf-segmented { flex: 0 1 auto !important; min-width: 0 !important; }
+/* Collapsed (menu) pill: its flex basis is its menu button (not the pinned natural width, which squeezed the title
+   onto three lines), it is never narrower than that button (it can't slide under the next action), and it takes the
+   head's spare room — so the room it measures still grows with the head and it opens back up when there is space. */
+html body :is(.pf-tp__head, .pf-sg-main__head, .pf-sgroup__head) pf-segmented.is-menu {
+  flex: 1 1 max-content !important; min-width: max-content !important; justify-content: flex-end;
+}
+html body :is(.pf-tp__head, .pf-sg-main__head, .pf-sgroup__head) :is(.pf-btn, .pf-sg-act, .pf-sg-count) { flex: none; }
+@container pf-head (max-width: 420px) {
+  /* A phone head keeps its words: the decorative icon tile gives way first. */
+  :is(.pf-tp__head, .pf-sg-main__head) > .pf-card__icon { display: none; }
+  :is(.pf-tp__head, .pf-sg-main__head) > :is(.pf-tp__title, .pf-card__label) { font-size: 12px !important; letter-spacing: 0.04em !important; }
+  /* …then a collapsed pill drops its leading icon (its words + count stay), and the tools sit a little closer. */
+  pf-segmented [data-seg-compact] .seg-ico { display: none !important; }
+  pf-segmented [data-seg-compact] { padding-inline: 10px 8px !important; }
+  :is(.pf-tp__tools, .pf-sgroup__tools, .pf-ss__acts, .pf-ov__acts) { gap: 6px !important; }
+}
+@container pf-head (max-width: 640px) {
+  .pf-sg-count, .pf-tp__desc, .pf-card__note, .pf-sgroup__scope { display: none !important; }
+  /* A text action with an icon → the icon alone, a 44px target (its words stay its accessible name). */
+  :is(.pf-tp__tools, .pf-sgroup__tools, .pf-sg-main__head) .pf-btn:not(.pf-btn--icon):has(> svg) {
+    font-size: 0 !important; gap: 0 !important; padding: 0 !important; width: 44px; min-width: 44px !important; height: 44px !important; min-height: 44px !important;
+    justify-content: center;
+  }
+  :is(.pf-tp__tools, .pf-sgroup__tools, .pf-sg-main__head) .pf-btn:not(.pf-btn--icon):has(> svg) > svg { width: 18px; height: 18px; flex: none; }
+}
+
+/* ── Positioned tooltips (owner 2026-11-21): a tooltip never covers the controls around it ─────────────────────────
+   `data-tip="…"` + `data-tip-pos="right" | "above"` (default above) instead of a native `title` where the browser's
+   tooltip (always BELOW the pointer) would sit over the next row of controls. Hover (fine pointers) or keyboard focus. */
+[data-tip] { position: relative; }
+[data-tip]::after {
+  content: attr(data-tip); position: absolute; z-index: 40; pointer-events: none; opacity: 0; white-space: nowrap;
+  font-size: 12px; font-weight: 500; line-height: 1.3; letter-spacing: 0; text-transform: none;
+  padding: 6px 9px; border-radius: 8px; color: var(--text-primary);
+  background: var(--pf-float-bg, var(--bg-card-solid)); border: 1px solid var(--pf-line, var(--glass-border));
+  box-shadow: var(--pf-float-shadow, 0 6px 20px rgba(0, 0, 0, 0.18));
+  transition: opacity 120ms ease;
+}
+[data-tip]:not([data-tip-pos='right'])::after { bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); }
+[data-tip][data-tip-pos='right']::after { left: calc(100% + 8px); top: 50%; transform: translateY(-50%); }
+@media (hover: hover) and (pointer: fine) { [data-tip]:hover::after { opacity: 1; transition-delay: 350ms; } }
+[data-tip]:focus-visible::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { [data-tip]::after { transition: none; } }

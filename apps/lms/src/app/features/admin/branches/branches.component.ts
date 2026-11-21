@@ -197,8 +197,16 @@ export class BranchesComponent implements OnInit, HasUnsavedChanges {
         b => this.gstinOf(b.id) ?? ''),
       sgPillCol<Branch>(b => b.isActive !== false),
     ];
-    if (this.canRetireBranch()) cols.push(sgActionsCol<Branch>(web, [], 1, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), false));
-    if (this.phone()) return cols.filter(c => ['name', 'status', 'actions'].includes(c.colId ?? ''));
+    // Phone (owner 2026-11-21: the power button was cut off at the right edge): Branch + the action only — the status
+    // rides the name's second line. The action column is pinned at every size so it always shows in full.
+    if (this.canRetireBranch()) cols.push(sgActionsCol<Branch>(web, [], 1, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span')), true));
+    if (this.phone()) {
+      return cols.filter(c => ['name', 'actions'].includes(c.colId ?? '')).map(c => c.colId !== 'name' ? c : {
+        ...c, minWidth: 120,
+        cellRenderer: (p: ICellRendererParams<Branch>) => sgCell(p.data?.name,
+          [p.data?.isActive === false ? 'Inactive' : 'Active', p.data?.code, p.data?.hasPfBox ? 'PF Box' : null].filter(Boolean).join(' · '), true),
+      });
+    }
     return cols;
   });
 

@@ -426,7 +426,7 @@
                   <span class="fd-side-title" [class.fd-side-title--switch]="sideSwitchOn()" data-testid="fd-side-title">
                     @if (sideSwitchOn()) {
                     <button type="button" class="pf-svb" data-testid="fd-side-view-btn" [attr.data-tint]="sideTint()" [attr.data-view]="leftTab() === 'who' ? 'who' : 'bookings'"
-                      [attr.aria-pressed]="leftTab() !== 'who'" [attr.aria-label]="sideSwitchAria()" [attr.title]="sideSwitchAria()"
+                      [attr.aria-pressed]="leftTab() !== 'who'" [attr.aria-label]="sideSwitchAria()" [attr.data-tip]="sideSwitchAria()" data-tip-pos="right"
                       (click)="toggleSideView($event)" (keydown)="$event.stopPropagation()">
                       <span class="pf-card__icon" aria-hidden="true">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -569,17 +569,7 @@
                               [value]="$any(leftTab())" (valueChange)="setLeftTab($any($event))" />
               </div>
               }
-              @if (theme.isNewDesign() && (leftTab() === 'appt' || leftTab() === 'home') && svcFilterLabel(); as l) {
-              <!-- The ONE service filter, removable — its own small row above the list. -->
-              <div class="fd-side-sub" data-testid="fd-side-sub">
-                <button type="button" class="fd-side-sub__chip press" data-testid="fd-side-filter-chip"
-                  (click)="clearServiceFilter()" [attr.aria-label]="'Clear ' + l + ' filter'" [title]="'Clear ' + l + ' filter'">
-                  {{ l }}
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                </button>
-              </div>
-              }
+              <!-- No service-filter chip here (owner 2026-11-21): the Services filter lives in the bottom bar. -->
 
               <!-- WHO IS WHERE (2+ services): the sunburst + chips — the ONE service filter -->
               @if (leftTab() === 'who') {
@@ -629,7 +619,7 @@
                 </span>
                 @if (svcFilterLabel() && !svcOn('lab')) {
                 <p class="pf-empty__title">None for {{ svcFilterLabel() }}</p>
-                <p class="pf-empty__body">Appointments here are Lab bookings. Clear the {{ svcFilterLabel() }} filter to see them.</p>
+                <p class="pf-empty__body">Appointments here are Lab bookings. Pick All under Services in the bottom bar to see them.</p>
                 } @else {
                 <p class="pf-empty__title">No appointments yet</p>
                 <p class="pf-empty__body">Open the calendar to slot in walk-ins or pre-bookings.</p>
@@ -763,7 +753,7 @@
                 </span>
                 @if (svcFilterLabel() && !svcOn('lab')) {
                 <p class="pf-empty__title">None for {{ svcFilterLabel() }}</p>
-                <p class="pf-empty__body">Home collection is Lab work. Clear the {{ svcFilterLabel() }} filter to see it.</p>
+                <p class="pf-empty__body">Home collection is Lab work. Pick All under Services in the bottom bar to see it.</p>
                 } @else {
                 <p class="pf-empty__title">No home collections</p>
                 <p class="pf-empty__body">Home-collection requests show here with their assigned agent.</p>
@@ -993,7 +983,7 @@
                        the title follow. 44px target; only a switch where Clinic exists (2+ services, ≥1024px). -->
                   <button type="button" class="pf-wvb" [class.is-clinic]="workView() === 'clinic'" data-testid="fd-work-view-btn"
                     [attr.aria-pressed]="workView() === 'clinic'" [attr.aria-label]="workView() === 'clinic' ? 'Show list' : 'Show clinic view'"
-                    [attr.title]="workView() === 'clinic' ? 'Show list' : 'Show clinic view'"
+                    [attr.data-tip]="workView() === 'clinic' ? 'Show list' : 'Show clinic view'" data-tip-pos="right"
                     (click)="$event.stopPropagation(); setWorkView(workView() === 'clinic' ? 'list' : 'clinic')" (keydown)="$event.stopPropagation()">
                     <span class="pf-card__icon pf-wvb__tile" aria-hidden="true">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
