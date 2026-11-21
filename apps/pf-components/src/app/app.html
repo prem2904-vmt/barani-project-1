@@ -37,19 +37,34 @@
       </button>
     </nav>
 
-    <!-- Right Controls: Search & Theme Toggle -->
+    <!-- Right Controls: Search, Share & Theme Toggle -->
     <div class="flex items-center gap-3">
       <div class="relative hidden sm:block w-48 md:w-64">
         <input
           type="text"
           [ngModel]="searchQuery()"
-          (ngModelChange)="searchQuery.set($event)"
+          (ngModelChange)="onSearchInput($event)"
           placeholder="Filter components (e.g. pin, btn)..."
           class="w-full text-xs py-1.5 pl-8 pr-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-muted)] text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:outline-none focus:border-violet-500 transition-colors" />
         <svg class="w-3.5 h-3.5 text-[var(--text-tertiary)] absolute left-2.5 top-2.5 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
         </svg>
       </div>
+
+      <!-- Share Current Screen / State Button -->
+      <button
+        type="button"
+        (click)="shareCurrentLink()"
+        title="Copy shareable link to current view"
+        class="h-8 px-2.5 rounded-lg border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] text-xs font-medium flex items-center gap-1.5 transition-colors">
+        @if (shareCopied()) {
+          <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span class="text-emerald-400 font-semibold">Copied!</span>
+        } @else {
+          <svg class="w-3.5 h-3.5 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          <span class="hidden sm:inline">Share</span>
+        }
+      </button>
 
       <!-- Theme Switcher Button -->
       <button
@@ -178,7 +193,14 @@
                       </div>
 
                       <div class="pt-2 border-t border-[var(--border-muted)] flex items-center justify-between text-[11px]">
-                        <span class="text-[var(--text-tertiary)] font-mono">{{ comp.inputs.length }} inputs</span>
+                        <div class="flex items-center gap-2">
+                          <span class="text-[var(--text-tertiary)] font-mono">{{ comp.inputs.length }} inputs</span>
+                          @if (getVariantsForComponent(comp.id).length > 0) {
+                            <span class="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                              {{ getVariantsForComponent(comp.id).length }} variants
+                            </span>
+                          }
+                        </div>
                         <span class="font-semibold text-violet-400 group-hover:underline flex items-center gap-1">
                           Cookbook Spec &rarr;
                         </span>
@@ -205,8 +227,20 @@
                   <span class="text-[var(--text-primary)] font-semibold">{{ comp.name }}</span>
                 </div>
 
-                <!-- Action Copy Buttons -->
+                <!-- Action Copy & Share Buttons -->
                 <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    (click)="shareCurrentLink()"
+                    class="px-2.5 py-1 text-xs font-medium rounded-lg border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] flex items-center gap-1.5 transition-colors">
+                    @if (shareCopied()) {
+                      <svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span class="text-emerald-400 font-semibold">Link Copied!</span>
+                    } @else {
+                      <svg class="w-3.5 h-3.5 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                      <span>Share Link</span>
+                    }
+                  </button>
                   <button
                     type="button"
                     (click)="copySnippet(comp.importStatement)"
@@ -238,6 +272,171 @@
                 </div>
               }
             </div>
+
+            <!-- ── DESIGN VARIANTS SHOWCASE & COMPARISON ── -->
+            @if (currentComponentVariants().length > 0) {
+              <section class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 class="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
+                      <span class="size-2 rounded-full bg-violet-400"></span>
+                      <span>Design Variants ({{ currentComponentVariants().length }})</span>
+                    </h2>
+                    <p class="text-xs text-[var(--text-secondary)] mt-0.5">
+                      Compare visual styles side-by-side, check clinical guidelines, and pick whichever variant you need. Click any variant to test it in the stage.
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-mono text-[var(--text-tertiary)] flex items-center gap-1.5">
+                      <svg class="w-3.5 h-3.5 text-violet-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      Click card to test · Deep-link shareable
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Variants Grid -->
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  @for (v of currentComponentVariants(); track v.name) {
+                    <div
+                      class="variant-card rounded-xl p-4 flex flex-col justify-between space-y-3 cursor-pointer"
+                      [class.variant-card-active]="getActiveVariant(comp.id) === v.name"
+                      (click)="selectVariant(comp.id, v.name)">
+                      
+                      <div>
+                        <!-- Card Header: Prop badge + Default tag + Share button -->
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                          <div class="flex items-center gap-1.5 flex-wrap">
+                            <code class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-violet-500/15 text-violet-300 border border-violet-500/30">
+                              {{ v.propName || 'variant' }}="{{ v.name }}"
+                            </code>
+                            @if (v.isDefault) {
+                              <span class="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-slate-500/20 text-slate-300 border border-slate-500/30">Default</span>
+                            }
+                          </div>
+
+                          <button
+                            type="button"
+                            title="Copy direct share link to this variant"
+                            (click)="$event.stopPropagation(); shareVariantLink(comp.id, v.name)"
+                            class="p-1.5 rounded-lg border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-tertiary)] hover:text-violet-400 transition-colors">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                          </button>
+                        </div>
+
+                        <!-- Live Visual Design Preview Canvas -->
+                        <div class="variant-canvas rounded-lg p-4 flex items-center justify-center min-h-[92px] border border-[var(--border-muted)]/70 my-2 overflow-hidden">
+                          @switch (comp.id) {
+                            @case ('button') {
+                              <pf-button [variant]="asBtnVariant(v.name)" (click)="$event.stopPropagation(); logEvent('Clicked button variant: ' + v.name)">
+                                @if (v.name === 'primary') { Confirm Order }
+                                @else if (v.name === 'secondary') { Save Draft }
+                                @else if (v.name === 'tertiary') { View Details }
+                                @else if (v.name === 'danger') { Discard Draft }
+                                @else if (v.name === 'quiet') { Dismiss }
+                                @else if (v.name === 'icon') { <pf-scan-icon [size]="18" /> }
+                                @else { Button }
+                              </pf-button>
+                            }
+                            @case ('touch-button') {
+                              <pf-touch-btn [variant]="asTouchVariant(v.name)" [size]="'sm'" (pressed)="$event.stopPropagation(); logEvent('Tapped touch variant: ' + v.name)">
+                                {{ v.label }}
+                              </pf-touch-btn>
+                            }
+                            @case ('logo-mark') {
+                              <pf-logo-mark [variant]="asLogoVariant(v.name)" [size]="'md'" [pulse]="v.name === 'badge'" />
+                            }
+                            @case ('status-chip') {
+                              <pf-status-chip [tone]="asStatusChipTone(v.name)">{{ v.name | uppercase }}</pf-status-chip>
+                            }
+                            @case ('chip') {
+                              <pf-chip [tone]="asChipTone(v.name)" [selected]="false" (tapped)="$event.stopPropagation(); logEvent('Tapped chip ' + v.name)">
+                                {{ v.label }}
+                              </pf-chip>
+                            }
+                            @case ('clock') {
+                              <pf-clock [variant]="asClockVariant(v.name)" size="sm" />
+                            }
+                            @case ('tile') {
+                              <div class="w-full max-w-[200px]">
+                                <pf-tile [tone]="asTileTone(v.name)" [clickable]="true" (tapped)="$event.stopPropagation()">
+                                  <span class="text-[10px] text-[var(--text-tertiary)] block">Metric</span>
+                                  <strong class="text-sm font-bold pf-num text-[var(--text-primary)]">42 TAT</strong>
+                                </pf-tile>
+                              </div>
+                            }
+                            @case ('barcode-display') {
+                              <div class="p-2 bg-white rounded text-black scale-90 origin-center shadow-sm">
+                                <pf-barcode-display code="PF-2026-9901" [mode]="asBarcodeMode(v.name)" [showValue]="true" />
+                              </div>
+                            }
+                            @case ('skeleton') {
+                              @if (v.name === 'line') {
+                                <pf-skeleton variant="line" [width]="'10rem'" />
+                              } @else if (v.name === 'block') {
+                                <pf-skeleton variant="block" [width]="'8rem'" [height]="'2.75rem'" />
+                              } @else if (v.name === 'circle') {
+                                <pf-skeleton variant="circle" [width]="'36px'" [height]="'36px'" />
+                              } @else if (v.name === 'pill') {
+                                <pf-skeleton variant="pill" [width]="'5.5rem'" [height]="'1.5rem'" />
+                              }
+                            }
+                            @case ('price-flag') {
+                              <pf-price-flag [kind]="asPriceFlagKind(v.name)" />
+                            }
+                            @case ('origin-badge') {
+                              <pf-origin-badge [origin]="v.name" />
+                            }
+                            @case ('confirm-dialog') {
+                              <div class="text-center space-y-1.5">
+                                <span class="text-xs font-semibold block" [class.text-rose-400]="v.name === 'danger'" [class.text-violet-400]="v.name === 'primary'">
+                                  {{ v.name === 'danger' ? 'Destructive Alert Dialog' : 'Standard Confirmation' }}
+                                </span>
+                                <pf-button [variant]="v.name === 'danger' ? 'danger' : 'primary'">Preview {{ v.name }}</pf-button>
+                              </div>
+                            }
+                          }
+                        </div>
+
+                        <!-- Variant Info -->
+                        <div class="mt-2 space-y-1">
+                          <h4 class="text-xs font-bold text-[var(--text-primary)] flex items-center justify-between">
+                            <span>{{ v.label }}</span>
+                          </h4>
+                          <p class="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                            {{ v.description }}
+                          </p>
+                        </div>
+                      </div>
+
+                      <!-- Footer Controls -->
+                      <div class="pt-2.5 border-t border-[var(--border-muted)] flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          (click)="$event.stopPropagation(); copySnippet(v.snippet)"
+                          class="px-2 py-1 text-[11px] font-medium rounded-lg border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] flex items-center gap-1 transition-colors">
+                          @if (copiedSnippet() === v.snippet) {
+                            <svg class="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                            <span class="text-emerald-400 font-semibold">Copied!</span>
+                          } @else {
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                            <span>Copy Code</span>
+                          }
+                        </button>
+
+                        <span
+                          class="text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors"
+                          [class.bg-violet-600]="getActiveVariant(comp.id) === v.name"
+                          [class.text-white]="getActiveVariant(comp.id) === v.name"
+                          [class.bg-slate-500-10]="getActiveVariant(comp.id) !== v.name"
+                          [class.text-[var(--text-tertiary)]]="getActiveVariant(comp.id) !== v.name">
+                          {{ getActiveVariant(comp.id) === v.name ? 'Active in Stage' : 'Click to Pick' }}
+                        </span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </section>
+            }
 
             <!-- ── INTERACTIVE PLAYGROUND (STAGE + CONTROLS) ── -->
             <section class="space-y-4">
@@ -376,7 +575,13 @@
                     @case ('button') {
                       <div class="flex flex-wrap items-center justify-center gap-4 w-full">
                         <pf-button [variant]="btnVariant()" [fullWidth]="btnFullWidth()" [disabled]="btnDisabled()" (click)="logEvent('PfButton clicked!')">
-                          {{ btnVariant() === 'primary' ? 'Confirm Diagnosis CTA' : 'Cancel Action' }}
+                          @if (btnVariant() === 'primary') { Confirm Diagnosis CTA }
+                          @else if (btnVariant() === 'secondary') { Save Draft Action }
+                          @else if (btnVariant() === 'tertiary') { View Clinical Details }
+                          @else if (btnVariant() === 'danger') { Discard Draft }
+                          @else if (btnVariant() === 'quiet') { Dismiss Notification }
+                          @else if (btnVariant() === 'icon') { <pf-scan-icon [size]="18" /> }
+                          @else { Button }
                         </pf-button>
                       </div>
                     }
@@ -601,7 +806,379 @@
                         <input pfInput pfNumeric [allowDecimal]="false" placeholder="12345" class="w-full" (input)="logEvent('Numeric input event')" />
                       </div>
                     }
-                    @default {
+                                        @case ('passkey-icon') {
+                      <div class="flex flex-col items-center gap-4">
+                        <div class="flex items-center justify-center p-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-muted)] text-violet-400">
+                          <pf-passkey-icon [size]="passkeySize()" />
+                        </div>
+                        <span class="text-xs text-[var(--text-tertiary)]">Stroked SVG Fingerprint ({{ passkeySize() }}px)</span>
+                      </div>
+                    }
+
+                    @case ('files-logo') {
+                      <div class="flex flex-col items-center gap-4">
+                        <div class="flex flex-wrap items-center justify-center gap-4">
+                          <div class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)]">
+                            <span class="inline-flex items-center justify-center size-10 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-sm">
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+                            </span>
+                            <span class="text-[11px] font-semibold text-[var(--text-primary)]">Neuron</span>
+                            <span class="text-[9px] text-[var(--text-tertiary)]">Sheet</span>
+                          </div>
+                          <div class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)]">
+                            <span class="inline-flex items-center justify-center size-10 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-sm">
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            </span>
+                            <span class="text-[11px] font-semibold text-[var(--text-primary)]">Synapse</span>
+                            <span class="text-[9px] text-[var(--text-tertiary)]">Document</span>
+                          </div>
+                          <div class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)]">
+                            <span class="inline-flex items-center justify-center size-10 rounded-xl bg-amber-600 text-white font-bold text-xs shadow-sm">
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                            </span>
+                            <span class="text-[11px] font-semibold text-[var(--text-primary)]">Axon</span>
+                            <span class="text-[9px] text-[var(--text-tertiary)]">Slides</span>
+                          </div>
+                          <div class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)]">
+                            <span class="inline-flex items-center justify-center size-10 rounded-xl bg-rose-600 text-white font-bold text-xs shadow-sm">
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/></svg>
+                            </span>
+                            <span class="text-[11px] font-semibold text-[var(--text-primary)]">Myelin</span>
+                            <span class="text-[9px] text-[var(--text-tertiary)]">Annotate</span>
+                          </div>
+                          <div class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)]">
+                            <span class="inline-flex items-center justify-center size-10 rounded-xl bg-violet-600 text-white font-bold text-xs shadow-sm">
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/></svg>
+                            </span>
+                            <span class="text-[11px] font-semibold text-[var(--text-primary)]">Retina</span>
+                            <span class="text-[9px] text-[var(--text-tertiary)]">Diagrams</span>
+                          </div>
+                        </div>
+                      </div>
+                    }
+
+                    @case ('price-flag') {
+                      <div class="flex flex-wrap items-center justify-center gap-6">
+                        <div class="text-center space-y-2">
+                          <span class="text-[10px] text-[var(--text-tertiary)] block">Not Offered by Branch</span>
+                          <pf-price-flag kind="not-offered" />
+                        </div>
+                        <div class="text-center space-y-2">
+                          <span class="text-[10px] text-[var(--text-tertiary)] block">Inactive Test Switch</span>
+                          <pf-price-flag kind="inactive" />
+                        </div>
+                      </div>
+                    }
+
+                    @case ('page-frame') {
+                      <div class="w-full max-w-lg p-4 rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-[var(--border-muted)]">
+                          <span class="text-xs font-bold text-[var(--text-primary)]">.pf-page responsive viewport</span>
+                          <span class="text-[10px] font-mono text-emerald-400">92dvh phone · auto desktop</span>
+                        </div>
+                        <div class="h-24 rounded-xl border border-dashed border-[var(--border-muted)] bg-[var(--bg-secondary)] flex items-center justify-center text-xs text-[var(--text-tertiary)]">
+                          Card bodies own internal scroll — No window body overflow
+                        </div>
+                      </div>
+                    }
+
+                    @case ('whatsapp-dock') {
+                      <div class="w-full max-w-md rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] overflow-hidden">
+                        <div class="p-3 bg-[var(--bg-secondary)] border-b border-[var(--border-muted)] flex items-center justify-between">
+                          <div class="flex items-center gap-2">
+                            <svg class="text-emerald-500" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.4 8.4 0 0 1-12.3 7.4L3 21l2.1-5.5A8.4 8.4 0 1 1 21 11.5Z"/></svg>
+                            <span class="text-xs font-bold text-[var(--text-primary)]">WhatsApp Desktop Dock</span>
+                          </div>
+                          <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Docked</span>
+                        </div>
+                        <div class="p-4 space-y-2 text-xs">
+                          <div class="flex items-center justify-between p-2.5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-primary)]">
+                            <span class="text-[var(--text-secondary)]">Report PDF on Clipboard</span>
+                            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-violet-600/20 text-violet-400">Ctrl+V ready</span>
+                          </div>
+                          <p class="text-[11px] text-[var(--text-tertiary)]">Zero automated browser manipulation — terms compliant drag & drop.</p>
+                        </div>
+                      </div>
+                    }
+
+                    @case ('collect-band-button') {
+                      <div class="flex items-center justify-center gap-4">
+                        <button type="button" class="pf-btn pf-btn--secondary flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--border-muted)] bg-[var(--bg-card)] text-xs text-[var(--text-primary)] hover:bg-[var(--bg-hover)]" (click)="logEvent('Collect band button tapped')">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+                          <span>Collect</span>
+                          <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-violet-600/20 text-violet-400">4 due</span>
+                        </button>
+                      </div>
+                    }
+
+                    @case ('lab-sort') {
+                      <div class="flex items-center justify-center gap-4">
+                        <div class="w-48">
+                          <pf-select label="Queue Order (OPS-52)" [options]="[
+                            { value: 'tat', label: 'TAT Urgency First' },
+                            { value: 'accession', label: 'Accession Time (FIFO)' },
+                            { value: 'patient', label: 'Patient Name' }
+                          ]" [value]="'tat'" (valueChange)="logEvent('Lab sort picked: ' + $event)" />
+                        </div>
+                      </div>
+                    }
+
+                    @case ('share-sheet') {
+                      <div class="flex flex-col items-center gap-3">
+                        <pf-button variant="secondary" (click)="showShareSheet = !showShareSheet; logEvent('Toggled Share Sheet')">
+                          {{ showShareSheet ? 'Hide Share Sheet' : 'Launch Share Sheet' }}
+                        </pf-button>
+                        @if (showShareSheet) {
+                          <div class="w-full max-w-sm rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] p-4 shadow-xl space-y-3">
+                            <div class="flex items-center justify-between pb-2 border-b border-[var(--border-muted)]">
+                              <span class="text-xs font-bold text-[var(--text-primary)]">Dispatch Diagnostic Report</span>
+                              <button type="button" class="text-xs text-[var(--text-tertiary)] hover:text-white" (click)="showShareSheet = false">✕</button>
+                            </div>
+                            <div class="grid grid-cols-4 gap-2 text-center text-[11px]">
+                              <button type="button" class="p-2.5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:border-emerald-500 flex flex-col items-center gap-1" (click)="logEvent('Share: WhatsApp')">
+                                <span class="text-emerald-400 font-bold">WA</span>
+                                <span>WhatsApp</span>
+                              </button>
+                              <button type="button" class="p-2.5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:border-violet-500 flex flex-col items-center gap-1" (click)="logEvent('Share: Email')">
+                                <span class="text-violet-400 font-bold">@</span>
+                                <span>Email</span>
+                              </button>
+                              <button type="button" class="p-2.5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:border-sky-500 flex flex-col items-center gap-1" (click)="logEvent('Share: SMS')">
+                                <span class="text-sky-400 font-bold">SMS</span>
+                                <span>Messages</span>
+                              </button>
+                              <button type="button" class="p-2.5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-secondary)] hover:border-amber-500 flex flex-col items-center gap-1" (click)="logEvent('Share: Print')">
+                                <span class="text-amber-400 font-bold">PDF</span>
+                                <span>Print</span>
+                              </button>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
+
+                    @case ('report-notes-card') {
+                      <div class="w-full max-w-md rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-[var(--border-muted)]">
+                          <span class="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)]">Technical &amp; Clinical Notes</span>
+                          <span class="text-[10px] text-[var(--text-tertiary)]">Audit Trail Preserved</span>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5">
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--bg-secondary)] border border-[var(--border-muted)] cursor-pointer hover:border-violet-500" (click)="logEvent('Preset note: Hemolysed sample')">+ Hemolysed</span>
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--bg-secondary)] border border-[var(--border-muted)] cursor-pointer hover:border-violet-500" (click)="logEvent('Preset note: Fasting specimen')">+ Fasting Sample</span>
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--bg-secondary)] border border-[var(--border-muted)] cursor-pointer hover:border-violet-500" (click)="logEvent('Preset note: Repeat advised')">+ Repeat Advised</span>
+                        </div>
+                        <textarea placeholder="Enter pathologist remark or clinical impression…" class="w-full h-16 bg-[var(--bg-secondary)] border border-[var(--border-muted)] rounded-xl p-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-violet-500"></textarea>
+                      </div>
+                    }
+
+                    @case ('order-partner-picks') {
+                      <div class="w-full max-w-md rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-[var(--border-muted)]">
+                          <span class="text-xs font-bold text-[var(--text-primary)]">Outsourced Line Item (OPS-106)</span>
+                          <span class="text-[10px] text-amber-400 font-mono">Reference Lab</span>
+                        </div>
+                        <div class="space-y-2">
+                          <label class="p-2.5 rounded-xl border border-violet-500/40 bg-violet-500/10 flex items-center justify-between text-xs cursor-pointer">
+                            <div class="flex items-center gap-2">
+                              <input type="radio" name="partner" checked />
+                              <span class="font-semibold text-white">Metropolis Reference Lab</span>
+                            </div>
+                            <span class="text-[11px] font-mono text-violet-300">TAT 24h · ₹850</span>
+                          </label>
+                          <label class="p-2.5 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-secondary)] flex items-center justify-between text-xs cursor-pointer opacity-75">
+                            <div class="flex items-center gap-2">
+                              <input type="radio" name="partner" />
+                              <span>Thyrocare Central</span>
+                            </div>
+                            <span class="text-[11px] font-mono text-[var(--text-tertiary)]">TAT 48h · ₹650</span>
+                          </label>
+                        </div>
+                      </div>
+                    }
+
+                    @case ('dynamic-input') {
+                      <div class="w-full max-w-sm rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] p-4 space-y-3">
+                        <div class="flex items-center justify-between">
+                          <span class="text-xs font-bold text-[var(--text-primary)]">Serum Creatinine (mg/dL)</span>
+                          <span class="text-[10px] font-mono text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">Critical High (CH)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <input type="text" [value]="dynamicInputVal()" (input)="dynamicInputVal.set($any($event.target).value); logEvent('Dynamic input: ' + dynamicInputVal())" class="w-full bg-[var(--bg-secondary)] border border-rose-500/50 rounded-xl px-3 py-2 text-sm font-mono text-rose-300 focus:outline-none" />
+                          <span class="text-xs text-[var(--text-tertiary)]">mg/dL</span>
+                        </div>
+                        <span class="text-[11px] text-[var(--text-tertiary)] block">Normal: 0.70 – 1.30 · Delta Check: +0.45 from yesterday</span>
+                      </div>
+                    }
+
+                    @case ('family-input') {
+                      <div class="w-full max-w-md rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-[var(--border-muted)]">
+                          <span class="text-xs font-bold text-[var(--text-primary)]">Family Health Package Members</span>
+                          <span class="text-[10px] text-violet-400">3 dependents</span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                          <span class="px-2.5 py-1 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-muted)] text-xs flex items-center gap-1.5">
+                            <span class="font-semibold text-white">Prem Kumar</span>
+                            <span class="text-[10px] text-violet-400 font-mono">(Self)</span>
+                          </span>
+                          <span class="px-2.5 py-1 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-muted)] text-xs flex items-center gap-1.5">
+                            <span class="font-semibold text-white">Ananya</span>
+                            <span class="text-[10px] text-violet-400 font-mono">(Spouse)</span>
+                          </span>
+                          <span class="px-2.5 py-1 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-muted)] text-xs flex items-center gap-1.5">
+                            <span class="font-semibold text-white">Aarav (4y)</span>
+                            <span class="text-[10px] text-violet-400 font-mono">(Child)</span>
+                          </span>
+                        </div>
+                      </div>
+                    }
+
+                    @case ('share-card') {
+                      <div class="w-full max-w-sm p-3 rounded-xl border border-[var(--border-muted)] bg-[var(--bg-card)] flex items-center gap-3">
+                        <span class="size-9 rounded-lg bg-violet-600/20 text-violet-400 flex items-center justify-center font-bold text-xs">
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        </span>
+                        <div class="flex-1 min-w-0">
+                          <span class="text-[9px] uppercase tracking-wider text-[var(--text-tertiary)] block font-mono">DIAGNOSTIC REPORT</span>
+                          <span class="text-xs font-bold text-[var(--text-primary)] truncate block">Complete Blood Count (CBC)</span>
+                          <span class="text-[11px] text-[var(--text-tertiary)]">Prem Kumar K · Verified</span>
+                        </div>
+                        <pf-status-chip tone="neutral">READY</pf-status-chip>
+                      </div>
+                    }
+
+                    @case ('design-mode-badge') {
+                      <div class="flex items-center justify-center">
+                        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 text-xs text-violet-300">
+                          <span class="size-2 rounded-full bg-violet-400 animate-pulse"></span>
+                          <span class="font-semibold">lab/my-work</span>
+                          <span class="text-[10px] text-[var(--text-tertiary)]">· Laptop 1280 · 1280px</span>
+                          <button type="button" class="text-[10px] font-bold text-violet-400 hover:text-white ml-1" (click)="logEvent('Copied Figma frame name')">Copy</button>
+                        </div>
+                      </div>
+                    }
+
+                    @case ('report-chart') {
+                      <div class="w-full max-w-md p-4 rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-[var(--border-muted)]">
+                          <span class="text-xs font-bold text-[var(--text-primary)]">HbA1c Glycated Hemoglobin Trend</span>
+                          <span class="text-xs font-mono text-emerald-400">Current: 5.8%</span>
+                        </div>
+                        <svg class="w-full h-24" viewBox="0 0 300 80">
+                          <line x1="20" y1="20" x2="280" y2="20" stroke="rgba(255,255,255,0.1)" stroke-dasharray="3,3" />
+                          <line x1="20" y1="60" x2="280" y2="60" stroke="rgba(255,255,255,0.1)" stroke-dasharray="3,3" />
+                          <polyline fill="none" stroke="#7c3aed" stroke-width="2.5" points="30,65 90,52 150,58 210,40 270,30" />
+                          <circle cx="30" cy="65" r="4" fill="#7c3aed" />
+                          <circle cx="90" cy="52" r="4" fill="#7c3aed" />
+                          <circle cx="150" cy="58" r="4" fill="#7c3aed" />
+                          <circle cx="210" cy="40" r="4" fill="#7c3aed" />
+                          <circle cx="270" cy="30" r="5" fill="#a855f7" stroke="#ffffff" stroke-width="2" />
+                        </svg>
+                        <div class="flex justify-between text-[10px] text-[var(--text-tertiary)] font-mono">
+                          <span>Jan 26</span>
+                          <span>Apr 26</span>
+                          <span>Jul 26</span>
+                          <span>Oct 26</span>
+                          <span>Nov 26</span>
+                        </div>
+                      </div>
+                    }
+
+                    @case ('comment-thread') {
+                      <div class="w-full max-w-md rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] p-4 space-y-3">
+                        <div class="flex items-center justify-between pb-2 border-b border-[var(--border-muted)]">
+                          <span class="text-xs font-bold text-[var(--text-primary)]">Clinical Consultation Remarks</span>
+                          <span class="text-[10px] text-[var(--text-tertiary)]">Order #AK-8801</span>
+                        </div>
+                        <div class="space-y-2 text-xs">
+                          <div class="p-2.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-muted)] space-y-1">
+                            <div class="flex items-center justify-between">
+                              <span class="font-semibold text-violet-400">Dr. Priya Nair (Pathologist)</span>
+                              <span class="text-[10px] text-[var(--text-tertiary)] font-mono">10:45 AM</span>
+                            </div>
+                            <p class="text-[var(--text-secondary)]">Platelets flagged at 45,000. Verified manually on peripheral smear. Confirmed severe thrombocytopenia.</p>
+                          </div>
+                        </div>
+                      </div>
+                    }
+
+                    @case ('set-pin-dialog') {
+                      <div class="flex flex-col items-center gap-3">
+                        <pf-button variant="secondary" (click)="showPinDialog = !showPinDialog; logEvent('Toggled PIN Dialog')">
+                          {{ showPinDialog ? 'Close Dialog' : 'Launch Set PIN Modal (OPS-107)' }}
+                        </pf-button>
+                        @if (showPinDialog) {
+                          <div class="w-full max-w-xs p-4 rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] shadow-xl space-y-3">
+                            <h3 class="text-xs font-bold text-[var(--text-primary)]">Set 4-Digit Unlock PIN</h3>
+                            <pf-pin-dots (completed)="logEvent('PIN entered: ' + $event); showPinDialog = false" />
+                          </div>
+                        }
+                      </div>
+                    }
+
+                    @case ('update-banner') {
+                      <div class="w-full max-w-md p-3.5 rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] shadow-lg flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5">
+                          <div class="size-8 rounded-lg bg-violet-600/20 text-violet-400 flex items-center justify-center">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+                          </div>
+                          <div>
+                            <span class="text-xs font-bold text-[var(--text-primary)] block">Prefrontal v1.2.0 ready</span>
+                            <span class="text-[10px] text-[var(--text-tertiary)]">Installs in background on restart</span>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <button type="button" class="pf-btn pf-btn--secondary text-xs" (click)="logEvent('Update postponed')">Later</button>
+                          <pf-button variant="primary" (click)="logEvent('Restart app now triggered')">Restart now</pf-button>
+                        </div>
+                      </div>
+                    }
+
+                    @case ('bridge-nearby-banner') {
+                      <div class="w-full max-w-md p-3 rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] shadow-lg flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5">
+                          <div class="size-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 17h.01M8 9a6 6 0 0 1 8 0M5.5 6.5a10 10 0 0 1 13 0"/></svg>
+                          </div>
+                          <div>
+                            <span class="text-xs font-bold text-[var(--text-primary)] block">New Bridge found nearby</span>
+                            <span class="text-[10px] text-[var(--text-tertiary)]">Bridge <span class="pf-num font-bold">#PF-902</span> on clinic WiFi</span>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <button type="button" class="pf-btn pf-btn--secondary text-xs" (click)="logEvent('Dismiss bridge')">Not now</button>
+                          <pf-button variant="primary" (click)="logEvent('Bridge added')">Add</pf-button>
+                        </div>
+                      </div>
+                    }
+
+                    @case ('passkey-offer') {
+                      <div class="w-full max-w-md p-4 rounded-2xl border border-violet-500/30 bg-violet-500/10 flex items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                          <pf-passkey-icon [size]="28" class="text-violet-400" />
+                          <div>
+                            <span class="text-xs font-bold text-white block">Sign in faster with Passkey</span>
+                            <span class="text-[11px] text-violet-300">Touch ID, Face ID or Windows Hello</span>
+                          </div>
+                        </div>
+                        <pf-button variant="primary" (click)="logEvent('Passkey setup enabled')">Enable</pf-button>
+                      </div>
+                    }
+
+                    @case ('lock-screen') {
+                      <div class="w-full max-w-sm p-6 rounded-2xl border border-[var(--border-muted)] bg-[var(--bg-card)] flex flex-col items-center gap-4 text-center">
+                        <pf-avatar name="Dr. Ananya Rao" [size]="52" />
+                        <div>
+                          <span class="text-sm font-bold text-[var(--text-primary)] block">Dr. Ananya Rao</span>
+                          <span class="text-xs text-[var(--text-tertiary)]">Senior Consultant Pathologist</span>
+                        </div>
+                        <pf-pin-dots (completed)="logEvent('Station unlocked: ' + $event)" />
+                        <span class="text-[11px] text-[var(--text-tertiary)]">Enter 4-digit PIN to resume workstation</span>
+                      </div>
+                    }
+
+@default {
                       <div class="text-xs text-[var(--text-tertiary)] font-mono">Component live preview loaded</div>
                     }
                   }
@@ -617,14 +1194,28 @@
 
                     <!-- Props Form depending on component -->
                     <div class="space-y-3 text-xs">
+                      @if (comp.id === 'passkey-icon') {
+                        <div>
+                          <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Passkey Size (px)</label>
+                          <select [ngModel]="passkeySize()" (ngModelChange)="passkeySize.set(+$event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                            <option [value]="16">16px (Dense)</option>
+                            <option [value]="18">18px (Standard)</option>
+                            <option [value]="24">24px (Large)</option>
+                            <option [value]="32">32px (Hero)</option>
+                          </select>
+                        </div>
+                      }
+
                       @if (comp.id === 'button') {
                         <div>
                           <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Variant</label>
-                          <select [ngModel]="btnVariant()" (ngModelChange)="btnVariant.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                          <select [ngModel]="btnVariant()" (ngModelChange)="selectVariant('button', $event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
                             <option value="primary">primary (Single Main CTA)</option>
-                            <option value="secondary">secondary</option>
-                            <option value="danger">danger</option>
-                            <option value="quiet">quiet</option>
+                            <option value="secondary">secondary (Default Outline)</option>
+                            <option value="tertiary">tertiary (Subtle Bordered)</option>
+                            <option value="danger">danger (Destructive Discard)</option>
+                            <option value="quiet">quiet (Frameless Toolbar)</option>
+                            <option value="icon">icon (Square Tool)</option>
                           </select>
                         </div>
                         <div class="flex items-center gap-2 pt-1">
@@ -640,11 +1231,13 @@
                       @if (comp.id === 'touch-button') {
                         <div>
                           <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Touch Variant</label>
-                          <select [ngModel]="touchVariant()" (ngModelChange)="touchVariant.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
-                            <option value="primary">primary</option>
-                            <option value="secondary">secondary</option>
-                            <option value="accent">accent</option>
-                            <option value="danger">danger</option>
+                          <select [ngModel]="touchVariant()" (ngModelChange)="selectVariant('touch-button', $event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                            <option value="primary">primary (Touch Main CTA)</option>
+                            <option value="secondary">secondary (Default)</option>
+                            <option value="ghost">ghost (Bordered)</option>
+                            <option value="accent">accent (Highlight)</option>
+                            <option value="danger">danger (Stop/Reject)</option>
+                            <option value="success">success (Verify/Sign)</option>
                           </select>
                         </div>
                         <div class="flex items-center gap-2 pt-1">
@@ -656,7 +1249,7 @@
                       @if (comp.id === 'barcode-display') {
                         <div>
                           <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Symbology Mode</label>
-                          <select [ngModel]="barcodeMode()" (ngModelChange)="barcodeMode.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                          <select [ngModel]="barcodeMode()" (ngModelChange)="selectVariant('barcode-display', $event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
                             <option value="both">both (1D + QR)</option>
                             <option value="barcode">barcode (1D)</option>
                             <option value="qr">qr (2D matrix)</option>
@@ -668,8 +1261,8 @@
                         <div>
                           <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Variant</label>
                           <div class="flex gap-2">
-                            <button type="button" class="px-2 py-1 rounded border text-xs" [class.bg-violet-600]="clockVariant() === 'tile'" (click)="clockVariant.set('tile')">Tile Glass</button>
-                            <button type="button" class="px-2 py-1 rounded border text-xs" [class.bg-violet-600]="clockVariant() === 'bare'" (click)="clockVariant.set('bare')">Bare Ambient</button>
+                            <button type="button" class="px-2 py-1 rounded border text-xs" [class.bg-violet-600]="clockVariant() === 'tile'" (click)="selectVariant('clock', 'tile')">Tile Glass</button>
+                            <button type="button" class="px-2 py-1 rounded border text-xs" [class.bg-violet-600]="clockVariant() === 'bare'" (click)="selectVariant('clock', 'bare')">Bare Ambient</button>
                           </div>
                         </div>
                       }
@@ -677,7 +1270,7 @@
                       @if (comp.id === 'status-chip') {
                         <div>
                           <label class="text-[11px] text-[var(--text-tertiary)] block mb-1">Semantic Tone</label>
-                          <select [ngModel]="statusChipTone()" (ngModelChange)="statusChipTone.set($event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
+                          <select [ngModel]="statusChipTone()" (ngModelChange)="selectVariant('status-chip', $event)" class="w-full bg-[var(--bg-primary)] border border-[var(--border-muted)] rounded p-1 text-xs">
                             <option value="urgent">urgent (STAT Panic)</option>
                             <option value="violet">violet (Active Ready)</option>
                             <option value="neutral">neutral (Draft)</option>
@@ -1178,4 +1771,22 @@
     </div>
     <span>LMS · OPD · IPD · Pharmacy · Frontdesk Shared Primitives</span>
   </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       SHAREABLE TOAST NOTIFICATION
+       ═══════════════════════════════════════════════════════════════════════ -->
+  @if (shareToast(); as toast) {
+    <div class="fixed bottom-6 right-6 z-50 max-w-md p-4 rounded-xl border border-violet-500/40 bg-[var(--bg-card)] shadow-2xl backdrop-blur-xl animate-toast flex items-start gap-3">
+      <div class="size-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0 border border-emerald-500/30">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-xs font-bold text-[var(--text-primary)] flex items-center gap-1.5">
+          <span>{{ toast.message }}</span>
+        </div>
+        <div class="text-[11px] font-mono text-violet-300 truncate mt-0.5 select-all">{{ toast.url }}</div>
+      </div>
+      <button type="button" class="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] text-sm leading-none p-1" (click)="shareToast.set(null)">✕</button>
+    </div>
+  }
 </div>

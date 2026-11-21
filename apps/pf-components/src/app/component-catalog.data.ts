@@ -936,6 +936,422 @@ export const CATALOG_COMPONENTS: ComponentDoc[] = [
     outputs: [],
   },
 
+  
+  // ── General (Passkey & Files Brand) ─────────────────────────────────────────
+  {
+    id: 'passkey-icon',
+    name: 'Passkey Icon',
+    selector: 'pf-passkey-icon',
+    category: 'General',
+    summary: 'The ONE passkey glyph across Prefrontal. A stroked SVG fingerprint icon (never an emoji) used for WebAuthn authentication, security settings, and biometric sign-in.',
+    clinicalScenario: 'Displayed in Account Security, profile switchers, and passkey registration dialogs for biometric clinician authentication.',
+    importStatement: "import { PasskeyIconComponent } from '@prefrontal/shared';",
+    templateSnippet: `<pf-passkey-icon [size]="20" />`,
+    inputs: [
+      { name: 'size', type: 'number', required: false, default: '18', description: 'Dimension of the icon square in pixels.' }
+    ],
+    guidance: [
+      'Single passkey glyph rule: always use stroked SVG fingerprint, never emojis or generic lock symbols.',
+      'Renders with stroke-width 1.8 and currentColor fill, adapting automatically to light and dark theme context.'
+    ],
+    recipes: [
+      {
+        title: 'Biometric Login Prompt',
+        scenario: 'Passkey sign-in option on login and lock screen.',
+        templateSnippet: `<button type="button" class="pf-btn pf-btn--secondary flex items-center gap-2">
+  <pf-passkey-icon [size]="18" />
+  <span>Sign in with Passkey</span>
+</button>`
+      }
+    ]
+  },
+  {
+    id: 'files-logo',
+    name: 'Files App Logo',
+    selector: 'pf-files-logo',
+    category: 'General',
+    summary: 'Brand logo tile for Prefrontal Files suite applications: Neuron (Spreadsheet), Synapse (Document), Axon (Presentations), Myelin (PDF Annotation), and Retina (Diagrams/Craft).',
+    clinicalScenario: 'Displayed in the global Start menu, files explorer, recent files strip, and clinical office suite launchers.',
+    importStatement: "import { FilesLogoComponent } from './shared/components/files-logo/files-logo.component';",
+    templateSnippet: `<pf-files-logo [app]="'neuron'" [size]="32" [label]="'Neuron Sheets'" />`,
+    inputs: [
+      { name: 'app', type: 'string', required: true, description: 'Identifier of the suite app (neuron, synapse, axon, myelin, retina).' },
+      { name: 'size', type: 'number', required: false, default: '24', description: 'Size in pixels. Below 24px, the outline is dropped and strokes thicken for navbar readability.' },
+      { name: 'label', type: 'string', required: false, default: "''", description: 'Accessible aria-label when the logo stands alone without adjacent text.' }
+    ],
+    guidance: [
+      'Tile colors adapt between bright branding on light theme and deep saturated tones in dark theme.',
+      'At <=24px on the top navigation bar, logoSmall geometry is rendered with thicker strokes.'
+    ],
+    recipes: [
+      {
+        title: 'Files App Switcher Strip',
+        scenario: 'Horizontal row of apps in the Start menu or editor header.',
+        templateSnippet: `<div class="flex items-center gap-3">
+  <pf-files-logo app="neuron" [size]="28" />
+  <pf-files-logo app="synapse" [size]="28" />
+  <pf-files-logo app="axon" [size]="28" />
+  <pf-files-logo app="myelin" [size]="28" />
+  <pf-files-logo app="retina" [size]="28" />
+</div>`
+      }
+    ]
+  },
+
+  // ── Layout (Page Frame & Docks) ───────────────────────────────────────────
+  {
+    id: 'page-frame',
+    name: 'Page Frame Layout',
+    selector: 'pf-page-frame',
+    category: 'Layout',
+    summary: 'Standard clinical page wrapper ensuring proper margin containment, fixed header clearance, and 92dvh mobile viewport behavior.',
+    clinicalScenario: 'Base frame wrapping standard feature pages across Frontdesk, Lab, Reports, and Admin.',
+    importStatement: "import { PageFrameComponent } from './shared/components/page-frame/page-frame.component';",
+    templateSnippet: `<pf-page-frame [padded]="true">
+  <div class="pf-body pf-body--split">...</div>
+</pf-page-frame>`,
+    inputs: [
+      { name: 'padded', type: 'boolean', required: false, default: 'true', description: 'Applies standard content padding around page perimeter.' }
+    ],
+    guidance: [
+      'Never allows page-level window scrolling; cards within the page own their scroll.',
+      'Fits strictly above the bottom navigation bar, leaving clearance for docked items.'
+    ]
+  },
+  {
+    id: 'whatsapp-dock',
+    name: 'WhatsApp Dock',
+    selector: 'pf-wa-dock',
+    category: 'Layout',
+    summary: 'Desktop application docking strip mounted above the WhatsApp Web side panel. Provides sign out, close, browser fallback, and draggable PDF notice.',
+    clinicalScenario: 'Enables desktop lab operators to preview WhatsApp messages side-by-side with lab workflows without leaving the Prefrontal app.',
+    importStatement: "import { WhatsappDockComponent } from './shared/components/whatsapp-dock/whatsapp-dock.component';",
+    templateSnippet: `<pf-wa-dock />`,
+    inputs: [],
+    guidance: [
+      'Desktop Electron app only. App content reflows smoothly to the left when docked.',
+      'Strictly complies with WhatsApp Web Terms of Service — no automated keystrokes injected.'
+    ]
+  },
+
+  // ── Navigation (Band Buttons, Sorters & Share) ─────────────────────────────
+  {
+    id: 'collect-band-button',
+    name: 'Collect Band Button',
+    selector: 'pf-collect-band-button',
+    category: 'Navigation',
+    summary: 'Hero band entry point for Sample Collection (PF-PATTERN §1). Appears at the right edge of band actions when collection workflow is active.',
+    clinicalScenario: 'Enables phlebotomists and receptionists to jump directly from Frontdesk order creation or Lab desk into the phlebotomy collection queue.',
+    importStatement: "import { CollectBandButtonComponent } from './shared/components/collect-band-button/collect-band-button.component';",
+    templateSnippet: `<pf-collect-band-button [area]="'frontdesk'" [orderId]="currentOrderId()" />`,
+    inputs: [
+      { name: 'area', type: 'string', required: false, description: "The screen work area ('frontdesk', 'billing-counter', 'lab')." },
+      { name: 'orderId', type: 'string', required: false, description: 'Selected order ID to deep link directly into that patient collection.' },
+      { name: 'from', type: 'string', required: false, description: 'Return URL for the back chevron affordance.' }
+    ],
+    guidance: [
+      'Quiet secondary button (never violet gradient); the band single primary CTA is reserved for the screen main action.',
+      'On mobile phones, condenses to a 44px tap target with tube SVG icon.'
+    ]
+  },
+  {
+    id: 'lab-sort',
+    name: 'Lab Sort Picker',
+    selector: 'pf-lab-sort',
+    category: 'Navigation',
+    summary: 'Compact sorting dropdown shared across laboratory work queues (OPS-52). Remembers user preference across Intake, My Work, Queue, and Completed lists.',
+    clinicalScenario: 'Used in laboratory queue tables to order test batches by TAT urgency, accession time, or department grouping.',
+    importStatement: "import { LabSortComponent } from './shared/components/lab-sort/lab-sort.component';",
+    templateSnippet: `<pf-lab-sort [scope]="'my-work'" />`,
+    inputs: [
+      { name: 'scope', type: "'intake' | 'my-work' | 'queue' | 'completed'", required: true, description: 'Queue context that determines available sort criteria.' }
+    ],
+    guidance: [
+      'Uses quiet small pf-select primitive with min-width: 150px.',
+      'Sort choices are persisted per-user in local settings for consistency across sessions.'
+    ]
+  },
+  {
+    id: 'share-sheet',
+    name: 'Share Sheet',
+    selector: 'pf-share-sheet',
+    category: 'Navigation',
+    summary: 'Multi-channel sharing bottom sheet & dialog. Orchestrates instant WhatsApp dispatch, email report delivery, SMS messaging, print preview, and link copy.',
+    clinicalScenario: 'Launched when clinician taps Share on a verified diagnostic report or billing invoice.',
+    importStatement: "import { ShareSheetComponent } from './shared/components/share-sheet/share-sheet.component';",
+    templateSnippet: `<pf-share-sheet [request]="activeShareRequest()" (dismiss)="closeShare()" />`,
+    inputs: [
+      { name: 'request', type: 'ShareSheetRequest', required: true, description: 'Target report ID, patient contact, PDF URL, and allowable channels.' }
+    ],
+    outputs: [
+      { name: 'dismiss', type: 'EventEmitter<void>', description: 'Fired when bottom sheet or modal is closed.' }
+    ],
+    guidance: [
+      'Adheres to the 92dvh mobile bottom sheet rule, floating above the bottom navbar.',
+      'Email and SMS share options respect clinic module settings.'
+    ]
+  },
+
+  // ── Data Entry (Notes, Outsourced Partners & Polymorphic Inputs) ────────────
+  {
+    id: 'report-notes-card',
+    name: 'Report Notes Card',
+    selector: 'pf-report-notes-card',
+    category: 'Data Entry',
+    summary: 'Standardized card and inline editor for technical lab notes and pathologist clinical impressions with quick-insert clinical presets.',
+    clinicalScenario: 'Used in result entry and pathologist review screens to attach notes like "Specimen slightly hemolysed" or "Advised repeat test".',
+    importStatement: "import { ReportNotesCardComponent } from './shared/components/report-note/report-notes-card.component';",
+    templateSnippet: `<pf-report-notes-card [orderId]="orderId" [readOnly]="false" (saved)="onNotesSaved($event)" />`,
+    inputs: [
+      { name: 'orderId', type: 'string', required: true, description: 'Diagnostic order ID to bind clinical notes.' },
+      { name: 'readOnly', type: 'boolean', required: false, default: 'false', description: 'Prevents note modifications when in validation mode.' }
+    ],
+    outputs: [
+      { name: 'saved', type: 'EventEmitter<ReportNote[]>', description: 'Emitted when notes are committed.' }
+    ],
+    guidance: [
+      'Provides one-click pills for frequent pre-analytical remarks (Lipemic, Icteric, Hemolysed, Diluted 1:10).',
+      'Preserves audit trail of which pathologist or technologist entered each note.'
+    ]
+  },
+  {
+    id: 'order-partner-picks',
+    name: 'Order Partner Picks',
+    selector: 'pf-order-partner-picks',
+    category: 'Data Entry',
+    summary: 'Outsourced partner laboratory picker per line item (OPS-106). Allows routing specific specialized investigations to reference labs.',
+    clinicalScenario: 'Used in frontdesk diagnostic billing when an outsourced investigation (e.g. Histopathology or Genetic Sequencing) requires a chosen partner lab.',
+    importStatement: "import { OrderPartnerPicksComponent } from './shared/components/order-partner-picks/order-partner-picks.component';",
+    templateSnippet: `<pf-order-partner-picks [items]="orderLines" (partnerChange)="onPartnerSelected($event)" />`,
+    inputs: [
+      { name: 'items', type: 'OrderItem[]', required: true, description: 'List of order items requiring reference partner assignment.' }
+    ],
+    outputs: [
+      { name: 'partnerChange', type: 'EventEmitter<{ lineId: string; partnerId: string }>', description: 'Emitted when a partner lab is picked for an order line.' }
+    ],
+    guidance: [
+      'Displays partner turnaround time and tariff difference beside partner options.',
+      'Neutral highlight states for selected partner.'
+    ]
+  },
+  {
+    id: 'dynamic-input',
+    name: 'Dynamic Input',
+    selector: 'pf-dynamic-input',
+    category: 'Data Entry',
+    summary: 'Polymorphic input control adapting to numerical values, reference ranges, clinical formulas, discrete option lists, and multi-line notes.',
+    clinicalScenario: 'Primary workhorse of laboratory result entry, handling automated instrument readings, delta checks, and panic highlights.',
+    importStatement: "import { DynamicInputComponent } from './shared/components/dynamic-input/dynamic-input.component';",
+    templateSnippet: `<pf-dynamic-input [field]="testParameter" [(value)]="readingVal" (valueChange)="onResultChanged($event)" />`,
+    inputs: [
+      { name: 'field', type: 'ClinicalParameterDef', required: true, description: 'Field definition with datatype, normal range, units, and validation rules.' },
+      { name: 'value', type: 'any', required: true, description: 'Current parameter value.' }
+    ],
+    outputs: [
+      { name: 'valueChange', type: 'EventEmitter<any>', description: 'Fires when input changes or calculation runs.' }
+    ],
+    guidance: [
+      'Immediately flags out-of-range High (H) / Low (L) and Panic (CH/CL) values in red/amber.',
+      'Supports auto-advancing to next parameter on Enter keypress.'
+    ]
+  },
+  {
+    id: 'family-input',
+    name: 'Family Group Input',
+    selector: 'pf-family-input',
+    category: 'Data Entry',
+    summary: 'Family and multi-patient booking tag input. Connects group diagnostic packages under a single primary bill payer with relationship tags.',
+    clinicalScenario: 'Outpatient billing for family health checkup packages and corporate employee dependents.',
+    importStatement: "import { FamilyInputComponent } from './shared/components/family-input/family-input.component';",
+    templateSnippet: `<pf-family-input [(members)]="familyMembers" (memberAdded)="addPatient($event)" />`,
+    inputs: [
+      { name: 'members', type: 'FamilyMember[]', required: true, description: 'List of family dependents with relationship badges.' }
+    ],
+    outputs: [
+      { name: 'memberAdded', type: 'EventEmitter<FamilyMember>', description: 'Fired when new dependent is registered.' }
+    ],
+    guidance: [
+      'Displays neutral relationship chips (Self, Spouse, Child, Parent).',
+      'Calculates consolidated invoice totals across all family members.'
+    ]
+  },
+
+  // ── Data Display (Flags, Share Cards & Clinical Visualizations) ─────────────
+  {
+    id: 'price-flag',
+    name: 'Price Flag',
+    selector: 'pf-price-flag',
+    category: 'Data Display',
+    summary: 'Standardized quiet neutral tag with an SVG glyph indicating "Not offered here" or "Inactive" tests in the Test Master catalogue.',
+    clinicalScenario: 'Rendered in diagnostic test pricing grids and branch tariff catalogs to mark tests not offered by a specific satellite branch.',
+    importStatement: "import { PriceFlagComponent, notOfferedElement, inactiveElement } from '@prefrontal/shared';",
+    templateSnippet: `<pf-price-flag kind="not-offered" />
+<pf-price-flag kind="inactive" />`,
+    inputs: [
+      { name: 'kind', type: "'not-offered' | 'inactive'", required: false, default: "'not-offered'", description: 'Selects between Not offered here and Inactive wording and styling.' }
+    ],
+    guidance: [
+      'Never use a "not priced yet" tag; tests at standard rates show their nominal price.',
+      'Exported both as an Angular component and as pure DOM element helper functions (notOfferedElement, inactiveElement) for AG Grid renderers.'
+    ]
+  },
+  {
+    id: 'share-card',
+    name: 'Share Card',
+    selector: 'pf-share-card',
+    category: 'Data Display',
+    summary: 'Standard shared-record card (PF-PATTERN §18). Renders a rich preview tile for patients, test orders, diagnostic reports, and invoices.',
+    clinicalScenario: 'Rendered in clinical messaging, internal doctor chat threads, and colleague share sheets with one-tap deep link resolution.',
+    importStatement: "import { ShareCardComponent } from './shared/components/share-card/share-card.component';",
+    templateSnippet: `<pf-share-card [card]="sharedReportCard" [preview]="false" (opened)="onOpenRecord($event)" />`,
+    inputs: [
+      { name: 'card', type: 'ShareCard', required: true, description: 'Payload containing record type, title, subtitle, icon, and status chip.' },
+      { name: 'preview', type: 'boolean', required: false, default: 'false', description: 'When true, renders a static non-clickable card preview.' }
+    ],
+    outputs: [
+      { name: 'opened', type: 'EventEmitter<ShareCard>', description: 'Emitted when user taps card to navigate.' }
+    ],
+    guidance: [
+      'Eyebrow indicates record type (e.g. REPORT, ORDER, INVOICE, PATIENT).',
+      'Tapping resolves permissions server-side: opens record directly or prompts branch switch if record belongs to another center.'
+    ]
+  },
+  {
+    id: 'design-mode-badge',
+    name: 'Design Mode Badge',
+    selector: 'pf-design-mode-badge',
+    category: 'Data Display',
+    summary: 'Floating designer frame pill showing current screen slug, live viewport breakpoint (e.g. Laptop 1280), and one-tap frame naming copy.',
+    clinicalScenario: 'Used by UI/UX designers and QA teams during design audits and Figma frame captures.',
+    importStatement: "import { DesignModeBadgeComponent } from './shared/components/design-mode-badge/design-mode-badge.component';",
+    templateSnippet: `<pf-design-mode-badge />`,
+    inputs: [],
+    guidance: [
+      'Automatically excludes itself from DOM captures (data-pf-capture-ignore).',
+      'Can be minimized to a small pulse dot to prevent obscuring screen content.'
+    ]
+  },
+  {
+    id: 'report-chart',
+    name: 'Report Chart',
+    selector: 'pf-report-chart',
+    category: 'Data Display',
+    summary: 'Clinical SVG visualization chart rendering patient test trends, historical comparison graphs, and reference range bar visualizers.',
+    clinicalScenario: 'Rendered in patient PDF reports and web reports for HbA1c, Lipid Profiles, and Thyroid function trends.',
+    importStatement: "import { ReportChartComponent } from './shared/components/report-chart/report-chart.component';",
+    templateSnippet: `<pf-report-chart [type]="'trend'" [data]="historicalResults" [range]="referenceRange" />`,
+    inputs: [
+      { name: 'type', type: "'trend' | 'gauge' | 'range-bar'", required: false, default: "'trend'", description: 'Visualization chart style.' },
+      { name: 'data', type: 'ChartDataPoint[]', required: true, description: 'Historical patient timestamps and parameter values.' },
+      { name: 'range', type: 'RefRange', required: false, description: 'Normal range bounds.' }
+    ],
+    guidance: [
+      'Follows Prefrontal monochrome / violet styling; never uses rainbow charts.',
+      'SVGs use vector-effect="non-scaling-stroke" for razor-sharp rendering on high-DPI displays.'
+    ]
+  },
+  {
+    id: 'comment-thread',
+    name: 'Comment Thread',
+    selector: 'pf-comment-thread',
+    category: 'Data Display',
+    summary: 'Internal clinical communication and audit discussion thread for diagnostic orders and reports. Displays clinician avatars, timestamps, and replies.',
+    clinicalScenario: 'Consultation between pathologist, lab tech, and phlebotomist regarding sample recollection or clinical correlation.',
+    importStatement: "import { CommentThreadComponent } from './shared/components/comment-thread/comment-thread.component';",
+    templateSnippet: `<pf-comment-thread [orderId]="orderId" (commentAdded)="onPostComment($event)" />`,
+    inputs: [
+      { name: 'orderId', type: 'string', required: true, description: 'Target order identifier.' }
+    ],
+    outputs: [
+      { name: 'commentAdded', type: 'EventEmitter<string>', description: 'Fired when a new clinical remark is submitted.' }
+    ],
+    guidance: [
+      'Maintains immutable timestamped logs for quality management and clinical compliance.'
+    ]
+  },
+
+  // ── Feedback (Modals, Banners & Workstation Security) ───────────────────────
+  {
+    id: 'set-pin-dialog',
+    name: 'Set PIN Dialog',
+    selector: 'pf-set-pin-dialog',
+    category: 'Feedback',
+    summary: 'Modal dialog for setting or changing clinician 4-digit unlock PINs (OPS-107). Built with pf-pin-dots and numeric touch input without iOS zoom.',
+    clinicalScenario: 'Raised from clinician avatar menu to configure switch-unlock PIN for fast station locking.',
+    importStatement: "import { SetPinDialogComponent } from './shared/components/set-pin-dialog/set-pin-dialog.component';",
+    templateSnippet: `<pf-set-pin-dialog />`,
+    inputs: [],
+    guidance: [
+      'Real dialog modal replaces legacy popover forms so mobile and tablet keyboards reliably raise without shifting viewport.',
+      'Submits automatically once the 4th digit is keyed.'
+    ]
+  },
+  {
+    id: 'update-banner',
+    name: 'Update Banner',
+    selector: 'pf-update-banner',
+    category: 'Feedback',
+    summary: 'Bottom-anchored notification banner alerting user that an application update is downloaded, verified, and ready for restart.',
+    clinicalScenario: 'Appears in Electron desktop apps when a background update completes sha512 verification.',
+    importStatement: "import { UpdateBannerComponent } from './shared/components/update-banner/update-banner.component';",
+    templateSnippet: `<pf-update-banner />`,
+    inputs: [],
+    guidance: [
+      'Primary gradient ONLY on the single CTA ("Restart now"); "Later" is a calm secondary button.',
+      'Floats above the bottom navigation bar without overlapping docked status items.'
+    ]
+  },
+  {
+    id: 'bridge-nearby-banner',
+    name: 'Bridge Nearby Banner',
+    selector: 'pf-bridge-nearby-banner',
+    category: 'Feedback',
+    summary: 'Local network analyzer bridge discovery banner. Notifies lab supervisor when a new hardware analyzer bridge is detected on the LAN.',
+    clinicalScenario: 'Appears on the lab dashboard when a prefrontal bridge IoT box is connected to the same clinic WiFi/Ethernet.',
+    importStatement: "import { BridgeNearbyBannerComponent } from './shared/components/bridge-nearby-banner/bridge-nearby-banner.component';",
+    templateSnippet: `<pf-bridge-nearby-banner />`,
+    inputs: [],
+    guidance: [
+      'One offer at a time, strictly shown to authorized supervisor roles.',
+      'One-tap "Add" CTA routes to analyzer mapping wizard.'
+    ]
+  },
+  {
+    id: 'passkey-offer',
+    name: 'Passkey Offer Card',
+    selector: 'pf-passkey-offer',
+    category: 'Feedback',
+    summary: 'Non-intrusive promotional banner/card prompting users to configure Touch ID, Face ID, or Windows Hello for frictionless sign-in.',
+    clinicalScenario: 'Shown after successful password login on WebAuthn-capable devices.',
+    importStatement: "import { PasskeyOfferComponent } from './shared/components/passkey-offer/passkey-offer.component';",
+    templateSnippet: `<pf-passkey-offer (accepted)="setupPasskey()" (dismissed)="dismissOffer()" />`,
+    inputs: [],
+    outputs: [
+      { name: 'accepted', type: 'EventEmitter<void>', description: 'Fired when user clicks Enable Passkey.' },
+      { name: 'dismissed', type: 'EventEmitter<void>', description: 'Fired when user dismisses offer.' }
+    ],
+    guidance: [
+      'Features pf-passkey-icon with primary setup button and dismiss action.'
+    ]
+  },
+  {
+    id: 'lock-screen',
+    name: 'Lock & Switch Screen',
+    selector: 'pf-lock-screen',
+    category: 'Feedback',
+    summary: 'Fullscreen clinician lock screen and multi-user profile switcher with PIN authentication and avatar tiles.',
+    clinicalScenario: 'Shared terminal workstation protection in busy lab phlebotomy kiosks and billing desks.',
+    importStatement: "import { LockScreenComponent } from './shared/components/lock-screen.component';",
+    templateSnippet: `<pf-lock-screen (unlocked)="onTerminalUnlocked()" />`,
+    inputs: [],
+    outputs: [
+      { name: 'unlocked', type: 'EventEmitter<void>', description: 'Emitted when valid PIN is keyed.' }
+    ],
+    guidance: [
+      'Fast PIN pad unlock without requiring password re-entry.'
+    ]
+  },
+
   // ── Theme & Tokens ───────────────────────────────────────────────────────
   {
     id: 'theme-tokens',
