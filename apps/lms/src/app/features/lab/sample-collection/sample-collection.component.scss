@@ -2741,6 +2741,8 @@
     }
     .pf-tube.pf-tube--filling .pf-vial { animation: pf-sc-wobble 0.62s ease-out; transform-origin: 50% 90%; }
     @keyframes pf-sc-wobble { 0% { transform: rotate(0); } 25% { transform: rotate(2.5deg); } 50% { transform: rotate(-2deg); } 75% { transform: rotate(1deg); } 100% { transform: rotate(0); } }
+    /* The tile sends every tap to itself (.pf-tube > * has no pointer events); the chips are their own buttons. */
+    .pf-tube .pf-sc-merges, .pf-tube button.pf-sc-merge { pointer-events: auto; }
     button.pf-sc-merge {
       display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 10px; border: 0; cursor: pointer;
       border-radius: 999px; background: var(--pf-sel-bg, color-mix(in srgb, var(--color-violet-600, #7c3aed) 10%, transparent));
