@@ -15,7 +15,66 @@
 
 .fd-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.fd-wv__clinic { flex: 1 1 auto; min-height: 0; }
+/* Both views share ONE box (the list and the clinic stack while the morph runs). */
+.fd-wv__stack {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+}
+.fd-wv__view { grid-area: 1 / 1; min-width: 0; min-height: 0; transition: opacity 260ms cubic-bezier(.2, .7, .2, 1); }
+.fd-wv__list { display: flex; flex-direction: column; overflow: hidden; }
+.fd-wv__list > .pf-fd-flow { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.fd-wv__view.off { opacity: 0; pointer-events: none; }
+.fd-wv__clinic { height: 100%; }
+/* While the tiles fly, the patients in BOTH views step aside (their boxes stay: they are the tiles' slots). */
+.fd-wv--morph ::ng-deep .ag-row,
+.fd-wv--morph ::ng-deep .cv-chip[data-row] { visibility: hidden; }
+
+/* ── The morph tiles (owner mock fd-morph-clinic): one per patient, both faces, cross-fading. ── */
+.fd-tiles { position: absolute; inset: 0; z-index: 6; pointer-events: none; overflow: hidden; }
+.fd-tile {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: var(--pf-card-bg);
+  transition: transform 260ms cubic-bezier(.2, .7, .2, 1), width 260ms cubic-bezier(.2, .7, .2, 1), height 260ms cubic-bezier(.2, .7, .2, 1),
+    border-radius 260ms ease, background-color 260ms ease, border-color 260ms ease, opacity 200ms ease;
+}
+.fd-tiles--still .fd-tile, .fd-tiles--still .fd-tile * { transition: none !important; }
+.fd-tile.gone { opacity: 0; }
+.fd-tile__cells, .fd-tile__chip { position: absolute; inset: 0; display: flex; align-items: center; transition: opacity 200ms ease; transition-delay: inherit; }
+.fd-tile__cells { gap: 14px; padding: 0 12px 0 16px; font-size: 13px; color: var(--text-secondary); border-bottom: 1px solid var(--pf-line); }
+.fd-tile__tok { flex: none; min-width: 48px; font-weight: 700; color: var(--violet-text); font-variant-numeric: tabular-nums; }
+.fd-tile__pt { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.fd-tile__pt b { font-weight: 600; font-size: 13.5px; color: var(--text-primary); }
+.fd-tile__pt small { font-size: 12px; color: var(--text-tertiary); }
+.fd-tile__where { flex: 0 1 180px; min-width: 0; display: inline-flex; align-items: center; gap: 6px; }
+.fd-tile__where i { width: 7px; height: 7px; border-radius: 999px; background: var(--violet-text); flex: none; }
+.fd-tile__wait { flex: none; width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+.fd-tile__wait.late, .fd-tile.lt .fd-tile__t { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); font-weight: 600; }
+.fd-tile__act { flex: none; height: 36px; padding: 0 14px; display: inline-flex; align-items: center; border-radius: 10px; font-weight: 600;
+  color: var(--violet-text); border: 1px solid color-mix(in srgb, var(--violet-text) 35%, var(--pf-line)); }
+.fd-tile__chip { gap: 6px; padding: 0 8px; font-size: 12px; white-space: nowrap; opacity: 0; }
+.fd-tile__chip b { font-weight: 700; color: var(--violet-text); font-variant-numeric: tabular-nums; }
+.fd-tile__t { font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.fd-tile.dense .fd-tile__nm { display: none; }
+/* Chip face: the room chip's look; the row face fades out, the chip face in. */
+.fd-tiles--chip .fd-tile { border-radius: 8px; border-color: var(--pf-line); background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg)); }
+.fd-tiles--chip .fd-tile.now { background: color-mix(in srgb, var(--violet-text) 10%, var(--pf-card-bg)); border-color: color-mix(in srgb, var(--violet-text) 45%, var(--pf-line)); }
+.fd-tiles--chip .fd-tile.lt { background: color-mix(in srgb, var(--red-text) 9%, var(--pf-card-bg)); border-color: color-mix(in srgb, var(--red-text) 40%, var(--pf-line)); }
+.fd-tiles--chip .fd-tile__cells { opacity: 0; }
+.fd-tiles--chip .fd-tile__chip { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .fd-tile, .fd-tile *, .fd-wv__view { transition: none !important; }
+}
 
 /* Stacked sections: ONE scroll body; each section's header sticks while its rows pass under it. */
 .fd-secs {
@@ -93,9 +152,3 @@
   pointer-events: none;
 }
 
-/* Back from Clinic: the list slides / fades in (~260ms; none under reduced motion). */
-.fd-secs--in, .fd-wv--in { animation: fd-wv-in 260ms cubic-bezier(.2, .7, .2, 1) both; }
-@keyframes fd-wv-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@media (prefers-reduced-motion: reduce) {
-  .fd-secs--in, .fd-wv--in { animation: none; }
-}
