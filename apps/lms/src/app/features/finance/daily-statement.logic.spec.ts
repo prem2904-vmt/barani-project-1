@@ -1,5 +1,5 @@
 import {
-  Closure, canCloseDay, closedWords, closureTotals, closureWord, dayRows, modeRows, money, money2, noteRequired, shiftsOf,
+  Closure, canCloseDay, closedWords, closureTotals, closureWord, dayHaystack, dayRows, modeRows, money, money2, noteRequired, parseRupees, shiftsOf,
   varianceKind, varianceOf, varianceRow,
 } from './daily-statement.logic';
 
@@ -92,5 +92,32 @@ describe('Day closing — Days list, modes, snapshot', () => {
     const c = closure({ closedBy: 'u1', closedAt: '2026-11-18T15:42:00Z' });
     expect(closedWords(c, { id: 'u1', name: 'Kavya' })).toBe('Closed by Kavya, 9:12 PM');
     expect(closedWords(c, { id: 'u2', name: 'Ravi' })).toBe('Closed 9:12 PM');
+  });
+});
+
+describe('Day closing — the one day-close (history from both sources)', () => {
+  it('parses rupees to the paisa (moved from the retired Expenses Day-closing component)', () => {
+    expect(parseRupees('1,510.50')).toBe(1510.5);
+    expect(parseRupees('₹ 20')).toBe(20);
+    expect(parseRupees('')).toBeNull();
+    expect(parseRupees('-5')).toBeNull();
+    expect(parseRupees('1.005')).toBeNull();
+    expect(parseRupees('abc')).toBeNull();
+  });
+  it('a legacy expense-book close has no count: "No count", never NaN', () => {
+    expect(closureWord(null)).toBe('No count');
+    expect(closureWord(undefined)).toBe('No count');
+    expect(closureTotals({ totalsJson: null })).toBeNull();
+  });
+  it('who closed it: the server\'s name first, else the signed-in person only', () => {
+    const c = closure({ closedBy: 'u2', closedByName: 'Kavya' });
+    expect(closedWords(c, { id: 'me', name: 'Me' })).toMatch(/^Closed by Kavya, /);
+    expect(closedWords(closure({ closedBy: 'me' }), { id: 'me', name: 'Me' })).toMatch(/^Closed by Me, /);
+    expect(closedWords(closure({ closedBy: 'u2' }), { id: 'me', name: 'Me' })).toMatch(/^Closed /);
+    expect(closedWords(closure({ closedBy: 'u2' }), { id: 'me', name: 'Me' })).not.toContain('by');
+  });
+  it('the band search finds a closure by the person who closed it', () => {
+    const rows = dayRows([closure({ id: 'k', closedByName: 'Kavya' })], '2026-11-19', '');
+    expect(dayHaystack(rows[1], '')).toContain('Kavya');
   });
 });
