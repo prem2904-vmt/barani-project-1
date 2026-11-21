@@ -44,6 +44,9 @@ const FIG = {
 
 /** The ONE day-close of the branch for today, whichever screen wrote it. */
 let store: null | { counted: number; note: string | null; closedAt: string; by: string } = null;
+/** A legacy close made in the expense book alone (before the one day-close): closed, no count, no closure row. */
+let legacy = false;
+const LEGACY_AT = new Date(NOW - 3600_000).toISOString();
 const closureOf = () => store && ({
   id: 'dc-today', date: TODAY, shift: null, openingBalance: 1000, expectedCash: 2250, countedCash: store.counted,
   variance: Math.round((store.counted - 2250) * 100) / 100, note: store.note, closedBy: 'app-1', closedAt: store.closedAt,
@@ -56,9 +59,11 @@ const statement = () => {
     payments: PAY, refunds: REF, totalCollected: 3300, totalRefunded: 100, net: 3200, cashCollected: 1500, cashRefunded: 100,
     cashExpenses: 350, cashTopUps: 200, expectedCash: 2250, closure: c,
     dayClose: {
-      date: TODAY, today: TODAY, isClosed: !!c, canClose: !c, canReopen: !!c, fromSnapshot: !!c, figures: FIG,
-      countedCash: c?.countedCash ?? null, variance: c?.variance ?? null, note: c?.note ?? null, closedAt: c?.closedAt ?? null,
-      closedByName: c ? store!.by : null, lastClosed: c ? TODAY : null, source: c ? 'day_close' : null,
+      date: TODAY, today: TODAY, isClosed: !!c || legacy, canClose: !c && !legacy, canReopen: !!c || legacy, fromSnapshot: !!c, figures: FIG,
+      countedCash: c?.countedCash ?? null, variance: c?.variance ?? null, note: c?.note ?? (legacy ? 'Old book close' : null),
+      closedAt: c?.closedAt ?? (legacy ? LEGACY_AT : null),
+      closedByName: c ? store!.by : legacy ? 'Admin User' : null, lastClosed: c ? TODAY : null,
+      source: c ? 'day_close' : legacy ? 'expense_book' : null,
     },
   };
 };
@@ -72,6 +77,7 @@ test.beforeEach(async ({ page, context }) => {
   test.setTimeout(180_000);
   resetNeg();
   store = null;
+  legacy = false;
   neg.hook = r => {
     const ok = (data: unknown) => ({ status: 200, body: { success: true, data } });
     if (r.method === 'POST' && r.path === '/api/finance/close') {
@@ -82,7 +88,9 @@ test.beforeEach(async ({ page, context }) => {
     if (r.method === 'POST' && r.path === `/api/finance/closures/${TODAY}/reopen`) { store = null; return ok(statement()); }
     if (r.method !== 'GET') return undefined;
     switch (r.path) {
-      case '/api/finance/closures': return ok(store ? [closureOf()] : []);
+      case '/api/finance/closures': return ok(store ? [closureOf()] : legacy
+        ? [{ id: 'xd-today', date: TODAY, shift: null, openingBalance: 1000, note: 'Old book close', closedBy: 'u0', closedAt: LEGACY_AT, closedByName: 'Admin User', source: 'expense_book' }]
+        : []);
       case '/api/expenses': return ok(book());
       case '/api/expenses/categories': return ok([]);
       default: return undefined;
@@ -180,5 +188,20 @@ test.describe('One day-close', () => {
     await openFinance(page);
     await expect(vis(page, '[data-testid="closing-state"]')).toHaveText(/Open/);
     await expect(vis(page, '[data-testid="closing-count"]')).toBeEnabled();
+  });
+
+  test('a legacy expense-book close reads closed, no cash count, in the chip and the Days list', async ({ page }) => {
+    legacy = true;
+    await openFinance(page);
+    const chip = vis(page, '[data-testid="closing-state"]');
+    await expect(chip).toHaveText(/Closed · no cash count/);
+    await expect(chip).toHaveAttribute('data-state', 'closed');
+    await expect(vis(page, '[data-testid="closing-summary"]')).toContainText('No cash count');
+    await expect(vis(page, '[data-testid="closing-count"]')).toBeDisabled();
+    await expect(page.locator('[data-testid="close-day"]').locator('visible=true')).toHaveCount(0);
+    if (narrow(page)) await vis(page, '[data-testid="closing-sheet-chip"]').click();
+    await expect(vis(page, '[data-testid="closing-side"]').locator('.pf-cl__day').first()).toContainText('No count');
+    if (narrow(page)) await vis(page, '[data-testid="closing-side"] button[aria-label="Close"]').click();
+    if (!isPhone()) await shot(page, 'day-close-legacy');
   });
 });
