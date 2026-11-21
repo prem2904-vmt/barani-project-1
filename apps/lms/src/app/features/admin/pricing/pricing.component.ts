@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { SKELETON_FRAME } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, Injector, OnInit, computed, effect, inject, input, output, signal } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -812,4 +813,8 @@ export class PricingComponent implements OnInit {
     }
     return [...byKey.values()];
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.pricing', { search: this.search, dept: this.selectedDeptId, scope: this.scope });
 }

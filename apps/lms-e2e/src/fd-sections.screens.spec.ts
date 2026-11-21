@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { test, expect, shotsDir, isPhone, isTouch, projectName } from './support/form-factor';
 import { deskAllStatuses } from './support/frontdesk';
 
@@ -81,6 +82,16 @@ const VISITS = [
   v(16, 'Baby Ira Raghavan', 'booked', 2, 0),
 ];
 
+/** Five bookings today: three overdue (slot passed, not arrived), two later. */
+const APPTS = () => {
+  const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const eod = new Date(now); eod.setHours(23, 58, 0, 0);
+  const at = (m: number) => m < 0 ? minsAgo(-m) : new Date(Math.min(now.getTime() + m * 60000, eod.getTime()));
+  return [[-50, 'Ms. Revathi Krishnamoorthy'], [-35, 'Mr. Dinesh Prabhu'], [-20, 'Ms. Farah Naaz'], [60, 'Mr. Kannan Velu'], [120, 'Baby Ira Menon']]
+    .map(([m, name], i) => ({ id: `a${i}`, tenantId: TENANT.id, patientId: `pa${i}`, branchId: 'b1', type: 'appointment', collectionType: 'walkin',
+      appointmentDate: iso(at(m as number)), slotTime: hhmm(at(m as number)), status: 'booked', consultationFee: 0, createdAt: iso(now), patient: pat(40 + i, name as string) }));
+};
+
 async function backend(page: Page, opd = true) {
   const cors = (origin: string) => ({ 'access-control-allow-origin': origin, 'access-control-allow-credentials': 'true', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' });
   const ok = (origin: string, d: unknown) => ({ status: 200, headers: { ...cors(origin), 'content-type': 'application/json' }, body: JSON.stringify({ success: true, data: d }) });
@@ -100,7 +111,7 @@ async function backend(page: Page, opd = true) {
     if (p === '/api/process-workflows/active') return route.fulfill(ok(origin, null));
     if (p === '/api/whatsapp/settings') return route.fulfill(ok(origin, { canSend: false }));
     if (p === '/api/orders/today' || p === '/api/orders/range') return route.fulfill(ok(origin, orders));
-    if (p === '/api/appointments/today') return route.fulfill(ok(origin, []));
+    if (p === '/api/appointments/today') return route.fulfill(ok(origin, APPTS()));
     if (p === '/api/billing/outstanding') return route.fulfill(ok(origin, { due: [bill('o4', 450)], refundsOwed: [] }));
     const m = /^\/api\/orders\/([^/]+)$/.exec(p);
     if (m) return route.fulfill(ok(origin, orders.find(x => x.id === m[1]) ?? {}));
@@ -170,13 +181,14 @@ async function expectGridsClean(page: Page, tag: string) {
     const grids = Array.from(document.querySelectorAll<HTMLElement>('.pf-fd-flow .ag-root-wrapper')).filter(g => g.getBoundingClientRect().width > 0);
     out.grids = grids.length;
     for (const g of grids) {
-      for (const vp of Array.from(g.querySelectorAll<HTMLElement>('.ag-center-cols-viewport, .ag-body-horizontal-scroll-viewport, .ag-header-viewport'))) {
-        if (vp.scrollWidth > vp.clientWidth + 1 && vp.clientWidth > 0) out.scroll.push(`${vp.className.split(' ')[0]} ${vp.scrollWidth}>${vp.clientWidth}`);
+      // Columns fit the grid: the horizontal scroller has nothing to scroll and no cell / header ends past the grid.
+      const gr = g.getBoundingClientRect();
+      for (const vp of Array.from(g.querySelectorAll<HTMLElement>('.ag-body-horizontal-scroll-viewport'))) {
+        if (vp.clientWidth > 0 && vp.scrollWidth > vp.clientWidth + 1) out.scroll.push(`h-scroll ${vp.scrollWidth}>${vp.clientWidth}`);
       }
-      const hs = g.querySelector<HTMLElement>('.ag-body-horizontal-scroll');
-      if (hs && hs.getBoundingClientRect().height > 1 && !hs.classList.contains('ag-scrollbar-invisible') && !hs.classList.contains('ag-hidden')) {
-        const sp = hs.querySelector<HTMLElement>('.ag-horizontal-left-spacer, .ag-body-horizontal-scroll-container');
-        if (sp && sp.scrollWidth > hs.clientWidth + 1) out.scroll.push('horizontal scrollbar');
+      for (const el of Array.from(g.querySelectorAll<HTMLElement>('.ag-cell, .ag-header-cell'))) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.right > gr.right + 1) out.scroll.push(`${el.getAttribute('col-id')} ends at ${Math.round(r.right)} > ${Math.round(gr.right)}`);
       }
       for (const cell of Array.from(g.querySelectorAll<HTMLElement>('.ag-cell'))) {
         const c = cell.getBoundingClientRect();
@@ -218,7 +230,7 @@ test.describe('All = one screen split by service', () => {
     await expectNoPageScroll(page, 'sections');
     if (!wide(page)) {
       await expect(vis(page, '.fd-sec')).toHaveCount(0);
-      await expect(vis(page, '.pf-work-hdr__view')).toHaveCount(0);
+      await expect(vis(page, '[data-testid="fd-work-view-btn"]')).toHaveCount(0);
       await shots(page, '01-sections');
       return;
     }
@@ -325,14 +337,41 @@ test.describe('Clinic view', () => {
 
   test('List | Clinic: rooms from real data, 10+ waiting with no overlap, chip → journey, remembered', async ({ page }) => {
     await openDesk(page);
-    if (!wide(page)) { await expect(vis(page, '.pf-work-hdr__view')).toHaveCount(0); return; }
-    // The head stays ONE row with the switch at its right end.
+    if (!wide(page)) { await expect(vis(page, '[data-testid="fd-work-view-btn"]')).toHaveCount(0); return; }
+    // The card icon IS the switch: 44px, in the head (one row), "Show clinic view", aria-pressed false; title WORK.
     const head = (await vis(page, '.pf-work-hdr').first().boundingBox())!;
-    const sw = vis(page, '.pf-work-hdr__view');
+    const sw = vis(page, '[data-testid="fd-work-view-btn"]');
     const sb = (await sw.boundingBox())!;
-    expect(sb.y + sb.height, 'switch inside the head').toBeLessThanOrEqual(head.y + head.height + 1);
+    expect(Math.min(sb.width, sb.height), 'icon switch is a 44px target').toBeGreaterThanOrEqual(44);
     expect(head.height, 'head stays one row').toBeLessThanOrEqual(isTouch() ? 72 : 64);
-    await sw.locator('[role="radio"][data-value="clinic"]').click();
+    await expect(sw).toHaveAttribute('aria-pressed', 'false');
+    await expect(sw).toHaveAttribute('aria-label', 'Show clinic view');
+    await expect(vis(page, '[data-testid="fd-work-title"]')).toHaveText(/^\s*work\s*$/i);
+    await expect(page.locator('.pf-work-hdr__view')).toHaveCount(0);
+    // The morph: one tile per patient flies from its list row into its room — capture a tile's box mid-flight.
+    const frames = path.join(OUT, 'morph');
+    fs.mkdirSync(frames, { recursive: true });
+    await sw.click();
+    const tile = page.locator('.fd-tile[data-tile="o1"]');
+    await tile.waitFor({ state: 'attached', timeout: 5000 });
+    // In-page: sample the tile's box every frame while it flies (screenshots are too slow to time this on iPad).
+    const moved = await tile.evaluate(el => new Promise<number>(res => {
+      const r0 = el.getBoundingClientRect();
+      let max = 0;
+      const t = performance.now();
+      const step = () => {
+        const r = el.isConnected ? el.getBoundingClientRect() : null;
+        if (r) max = Math.max(max, Math.hypot(r.left - r0.left, r.top - r0.top) + Math.abs(r.width - r0.width));
+        if (performance.now() - t < 500 && el.isConnected) requestAnimationFrame(step); else res(max);
+      };
+      requestAnimationFrame(step);
+    }));
+    expect(moved, 'the tile flew from its row toward its room').toBeGreaterThan(20);
+    // A frame sequence for the owner (the move is replayed: back to the list, then into the clinic again).
+    await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 4000 });       // landed: the real clinic takes over
+    await expect(sw).toHaveAttribute('aria-pressed', 'true');
+    await expect(sw).toHaveAttribute('aria-label', 'Show list');
+    await expect(vis(page, '[data-testid="fd-work-title"]')).toHaveText(/^\s*clinic\s*$/i);
     const clinic = vis(page, 'pf-fd-clinic');
     await expect(clinic).toBeVisible();
     await page.waitForTimeout(600);
@@ -378,8 +417,28 @@ test.describe('Clinic view', () => {
     await page.waitForTimeout(700);
     await shots(page, '08-clinic-journey');
     await page.keyboard.press('Escape');
-    await vis(page, '.pf-work-hdr__view [role="radio"][data-value="list"]').click();
+    // Back to the list: the tiles fly out of the rooms into the rows.
+    await vis(page, '[data-testid="fd-work-view-btn"]').click();
+    await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 5000 });
+    for (const k of [1, 2, 3, 4]) { await page.screenshot({ path: `${frames}/to-list-${k}.png` }); await page.waitForTimeout(110); }
+    await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 4000 });
     await expect(vis(page, '.fd-sec').first()).toBeVisible();
+    await expect(vis(page, '[data-testid="fd-work-title"]')).toHaveText(/^\s*work\s*$/i);
+    // Frames for the owner: list → clinic at real speed, then once more in 4× slow motion (labelled "slowmo").
+    if (!isTouch()) {
+      await page.waitForTimeout(400);
+      await vis(page, '[data-testid="fd-work-view-btn"]').click();
+      await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 5000 });
+      for (const k of [1, 2, 3, 4]) { await page.screenshot({ path: `${frames}/to-clinic-${k}.png` }); await page.waitForTimeout(90); }
+      await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 4000 });
+      await vis(page, '[data-testid="fd-work-view-btn"]').click();
+      await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 4000 });
+      await page.waitForTimeout(400);
+      await page.addStyleTag({ content: '.fd-tile, .fd-tile * { transition-duration: 1040ms !important; } .fd-tile { transition-delay: 0ms !important; }' });
+      await vis(page, '[data-testid="fd-work-view-btn"]').click();
+      await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 5000 });
+      for (const k of [1, 2, 3, 4, 5]) { await page.screenshot({ path: `${frames}/slowmo-to-clinic-${k}.png` }); await page.waitForTimeout(220); }
+    }
   });
 });
 
@@ -388,9 +447,78 @@ test.describe('lab-only tenant: unchanged', () => {
   test('no sections, no Clinic switch, the one table', async ({ page }) => {
     await openDesk(page);
     await expect(vis(page, '.fd-sec')).toHaveCount(0);
-    await expect(vis(page, '.pf-work-hdr__view')).toHaveCount(0);
+    await expect(vis(page, '[data-testid="fd-work-view-btn"]')).toHaveCount(0);
     if (wide(page)) await expectGridsClean(page, 'lab only');
     await expectNoPageScroll(page, 'lab only');
     await shots(page, '09-lab-only');
+  });
+});
+
+test.describe('VISITS head: the icon cycles the views', () => {
+  test.beforeEach(async ({ page }) => { test.setTimeout(180_000); OUT = shotsDir(OUT_BASE); });
+  const side = (page: Page) => page.locator('.pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
+  const btn = (page: Page) => side(page).locator('[data-testid="fd-side-view-btn"]');
+  const title = (page: Page) => side(page).locator('[data-testid="fd-side-view-title"]');
+
+  test('Who is where → Appointments → Home visits → back; overdue dot; menu jump; no tab row', async ({ page }) => {
+    await backend(page, true);
+    await openDesk(page);
+    if (!wide(page)) { test.info().annotations.push({ type: 'form-factor', description: 'the chart is ≥1024px only' }); return; }
+    await expect(side(page).locator('.fd-side-switch, pf-segmented.fd-side-tabs')).toHaveCount(0);
+    await expect(btn(page)).toHaveAttribute('data-view', 'who');
+    await expect(title(page)).toHaveText(/^\s*who is where\s*$/i);
+    // Overdue appointments while elsewhere: the rose dot, and the switch names the next view with its count.
+    await expect(side(page).locator('[data-testid="fd-side-overdue-dot"]')).toHaveAttribute('aria-label', '3 appointments overdue');
+    await expect(btn(page)).toHaveAttribute('aria-label', /^Show appointments \(5\) · 3 appointments overdue$/);
+    const b = (await btn(page).boundingBox())!;
+    expect(Math.min(b.width, b.height)).toBeGreaterThanOrEqual(44);
+    await shots(page, '10-visits-who');
+    await btn(page).click();
+    await expect(btn(page)).toHaveAttribute('data-view', 'appt');
+    await expect(title(page)).toHaveText(/^\s*appointments\s*5\s*$/i);
+    await expect(side(page).locator('[data-testid="fd-side-overdue-dot"]')).toHaveCount(0);
+    await expect(side(page).locator('[data-testid="fd-new-appt"]')).toBeVisible();
+    await page.waitForTimeout(400);
+    await shots(page, '11-visits-appointments');
+    await btn(page).click();
+    await expect(btn(page)).toHaveAttribute('data-view', 'home');
+    await expect(title(page)).toHaveText(/^\s*home visits\s*\d+\s*$/i);
+    await expect(side(page).locator('[data-testid="fd-new-appt"]')).toHaveCount(0);
+    await page.waitForTimeout(400);
+    await shots(page, '12-visits-home');
+    await btn(page).click();
+    await expect(btn(page)).toHaveAttribute('data-view', 'who');
+    // Direct jump: Alt+↓ (and right-click) open the menu of every view with its count.
+    await btn(page).focus();
+    await page.keyboard.press('Alt+ArrowDown');
+    const menu = page.locator('.pf-am-panel[role="menu"]').locator('visible=true');
+    await expect(menu).toBeVisible();
+    await expect(menu).toContainText('Who is where');
+    await expect(menu).toContainText('Appointments');
+    await expect(menu).toContainText('Home visits');
+    await shots(page, '13-visits-menu');
+    await menu.getByText('Home visits').click();
+    await expect(btn(page)).toHaveAttribute('data-view', 'home');
+    await btn(page).click({ button: 'right' });
+    await expect(menu).toBeVisible();
+    await menu.getByText('Appointments').click();
+    await expect(btn(page)).toHaveAttribute('data-view', 'appt');
+    // Remembered.
+    await page.reload();
+    await page.getByPlaceholder(/Search patient/).locator('visible=true').first().waitFor({ timeout: 60_000 });
+    await expect(btn(page)).toHaveAttribute('data-view', 'appt');
+  });
+
+  test('lab-only: Appointments ↔ Home visits, no Who is where', async ({ page }) => {
+    await backend(page, false);
+    await openDesk(page);
+    if (!(await btn(page).isVisible())) { test.info().annotations.push({ type: 'data', description: 'one side view (or a stacked side card): the static VISITS head' }); return; }
+    await expect(btn(page)).toHaveAttribute('data-view', 'appt');
+    await btn(page).click();
+    await expect(btn(page)).toHaveAttribute('data-view', 'home');
+    await btn(page).click();
+    await expect(btn(page)).toHaveAttribute('data-view', 'appt');
+    await expect(side(page).locator('[data-view="who"]')).toHaveCount(0);
+    await shots(page, '14-visits-lab-only');
   });
 });

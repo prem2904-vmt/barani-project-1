@@ -60,6 +60,7 @@ export function flowColumnTier(width: number): -1 | 0 | 1 | 2 {
     <pf-data-grid class="fd-flow" [class.fd-flow--fold]="folded()" [class.fd-flow--fold-token]="foldToken()" [class.fd-flow--tight]="foldTight()" [class.fd-flow--auto]="auto()" [rowData]="rows()" [columnDefs]="cols()" [defaultColDef]="defaultCol"
       [getRowId]="rowId" [getRowClass]="rowClass" [context]="context()" [clickable]="true"
       [loading]="loading()" loadingLabel="Loading orders…" [emptyTitle]="emptyTitle()" [emptyBody]="emptyBody()"
+      [viewStateKey]="'frontdesk.flow.' + (service() ?? 'all')"
       (rowClicked)="onRow($event)" (gridReady)="onReady($event)" />
   `,
   styleUrl: './flow-grid.component.scss',

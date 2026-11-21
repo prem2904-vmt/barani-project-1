@@ -1,4 +1,4 @@
-import { CHART_OTHER, CHART_SERIES, buildBusinessLineOption, buildDonutOption, buildGroupedHBarOption, buildHorizontalBarOption, buildSparklineOption, buildStackedBarOption, foldOther, restoreSeriesColours, rupeeAxisFormatter, rupeeFormatter } from './business-chart';
+import { CHART_OTHER, CHART_SERIES, buildBusinessLineOption, buildDonutOption, buildGroupedHBarOption, buildHorizontalBarOption, buildSparklineOption, buildStackedBarOption, foldOther, restoreSeriesColours, rupeeAxisFormatter, rupeeFormatter, seriesColor, CHART_SERIES_LIGHT_NEW } from './business-chart';
 
 const mockEc = {
   graphic: {
@@ -130,5 +130,20 @@ describe('Insights chart shapes (redesign)', () => {
   it('compact rupee axis ticks', () => {
     expect(rupeeAxisFormatter(150000)).toBe('₹1.5L');
     expect(rupeeAxisFormatter(4500)).toBe('₹4.5k');
+  });
+});
+
+describe('seriesColor — new design light palette (owner 2026-11-21)', () => {
+  afterEach(() => document.documentElement.classList.remove('design-new'));
+  it('classic light and dark keep their palettes', () => {
+    expect(seriesColor(2, 'light')).toBe(CHART_SERIES.light[2]);
+    document.documentElement.classList.add('design-new');
+    expect(seriesColor(0, 'dark')).toBe(CHART_SERIES.dark[0]);
+  });
+  it('new design light = soft pastels, never amber', () => {
+    document.documentElement.classList.add('design-new');
+    expect(seriesColor(1, 'light')).toBe('#86c8ea');
+    expect(CHART_SERIES_LIGHT_NEW).not.toContain('#d97706');
+    expect(seriesColor(9, 'light')).toBe(CHART_OTHER.light);
   });
 });

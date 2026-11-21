@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, input, signal, untracked, viewChild } from '@angular/core';
 import { ApiService } from '../../../core/services/api.service';
@@ -165,7 +166,7 @@ const CATEGORY_LABELS: Record<string, string> = {
               <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
             </header>
             <div class="pf-sg-main__body">
-              <pf-data-grid [rowData]="gridRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
+              <pf-data-grid viewStateKey="admin.kpis.g1" [rowData]="gridRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
                             [getRowClass]="rowClass" [rowDragManaged]="true" (rowDragEnd)="onRowDragEnd($event)"
                             [loading]="loading()" loadingLabel="Loading number cards…"
                             emptyTitle="No cards on this screen yet" emptyBody="Add KPI picks one from the catalogue; drag rows to reorder."></pf-data-grid>
@@ -1147,4 +1148,8 @@ export class KpiConfigComponent implements OnInit, HasUnsavedChanges {
       });
     }
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.kpis', { q: this.filterQuery, scope: this.selectedScope });
 }

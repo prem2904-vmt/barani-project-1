@@ -1,3 +1,5 @@
+import { GridViewStateDirective } from '../../../shared/services/grid-view-state';
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { NgTemplateOutlet, formatDate } from '@angular/common';
@@ -116,7 +118,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
 @Component({
   selector: 'pf-critical-results',
   standalone: true,
-  imports: [SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent, CriticalCommunicationDialogComponent, BusyDirective, SkeletonTableComponent],
+  imports: [GridViewStateDirective, SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, PfDateComponent, SelectComponent, CriticalCommunicationDialogComponent, BusyDirective, SkeletonTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-cr pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -190,7 +192,7 @@ export function searchEvents(rows: readonly CriticalResultEvent[], q: string): C
                   <p class="pf-empty__body">{{ q().trim() ? 'Try another name, order or test.' : 'Widen the date range or switch the status filter to All.' }}</p>
                 </div>
               } @else {
-                <ag-grid-angular class="pf-cr__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
+                <ag-grid-angular pfGridViewState="lab.critical" class="pf-cr__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
                                  [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="getRowClass"
                                  [animateRows]="true" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)">
                 </ag-grid-angular>
@@ -560,4 +562,8 @@ export class CriticalResultsComponent {
       error: err => { this.exporting.set(false); this.toasts.error(ApiError.from(err).message); },
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('lab.critical', { q: this.q, status: this.status, quick: this.quick, from: this.from, to: this.to, branchId: this.branchId });
 }

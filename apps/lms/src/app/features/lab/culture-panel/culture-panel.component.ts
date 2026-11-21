@@ -202,7 +202,7 @@ export interface CultureCaseView {
     } @else {
       <!-- New design: the work GRID (owner 2026-11-20) — same head, columns, touch sizing as the other My Work lists. -->
       <pf-data-grid class="cg" data-testid="cg-grid" [rowData]="shown()" [columnDefs]="cols()" [defaultColDef]="defaultCol"
-        [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true"
+        [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true" viewStateKey="lab.culture.grid"
         [loading]="loading() && cases().length === 0" loadingLabel="Loading culture cases…"
         [emptyTitle]="cases().length ? 'Nothing matches these filters.' : 'No culture cases in progress.'" (rowClicked)="onRow($event)" />
     }

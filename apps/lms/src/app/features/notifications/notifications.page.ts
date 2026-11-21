@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../shared/services/view-state.service';
 import { AfterViewInit, ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnInit, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -500,4 +501,8 @@ export class NotificationsPage implements OnInit, AfterViewInit {
     this.store.markRowRead(r);
     if (a.route) this.router.navigate(a.route.commands, a.route.queryParams ? { queryParams: a.route.queryParams } : {});
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('notifications', { kind: this.kind, view: this.view, q: this.q });
 }

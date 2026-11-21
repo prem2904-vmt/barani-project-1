@@ -1,4 +1,6 @@
+import { ViewStateService } from '../../shared/services/view-state.service';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
+import { BackToTodayComponent } from '../../shared/components/back-to-today/back-to-today.component';
 import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnDestroy, OnInit,
   computed, inject, signal, viewChild,
@@ -197,6 +199,7 @@ export function waitingLabel(iso: string | null | undefined, now: number): strin
   selector: 'pf-billing-counter',
   standalone: true,
   imports: [
+    BackToTodayComponent,
     DailyNoComponent,
     DatePipe, NgTemplateOutlet, CurrencyInrPipe,
     HeroBandComponent, CollectBandButtonComponent, ScanIconComponent, BarcodeScannerModalComponent, PfDateComponent,
@@ -1177,4 +1180,8 @@ export class BillingCounterComponent implements OnInit, OnDestroy {
       error: e => { this.refunding.set(false); this.toasts.error(ApiError.from(e).message); },
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('billing-counter', { pane: this.pane, reconcileDate: this.reconcileDate });
 }

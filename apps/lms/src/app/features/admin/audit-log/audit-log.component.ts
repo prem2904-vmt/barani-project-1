@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, OnInit, computed, inject, signal, viewChild,
 } from '@angular/core';
@@ -555,4 +556,8 @@ export class AuditLogComponent implements OnInit {
       this.exporting.set(false);
     }
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.audit', { range: this.range, from: this.from, to: this.to, area: this.area, userId: this.userId, q: this.q });
 }

@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
@@ -170,7 +171,7 @@ export function testRows(lines: readonly TatLine[], now: number): TatGridRow[] {
                             ariaLabel="Group by" (valueChange)="mode.set($event)"></pf-segmented>
             </header>
             <div class="pf-sg-main__body">
-              <pf-data-grid [rowData]="gridRows()" [columnDefs]="colDefs()" [getRowId]="rowId" [clickable]="true"
+              <pf-data-grid viewStateKey="tat-board" [rowData]="gridRows()" [columnDefs]="colDefs()" [getRowId]="rowId" [clickable]="true"
                             [loading]="firstLoad() && lines().length === 0" loadingLabel="Loading the board…"
                             [emptyTitle]="emptyTitle()" [emptyBody]="emptyBody()"
                             (cellClicked)="onCell($event)"></pf-data-grid>
@@ -445,4 +446,8 @@ export class TatBoardComponent implements OnInit, OnDestroy {
       error: () => undefined,
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('tat-board', { q: this.q, mode: this.mode, dept: this.dept });
 }

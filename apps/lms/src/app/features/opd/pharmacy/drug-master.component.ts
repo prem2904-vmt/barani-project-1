@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { AgGridAngular } from 'ag-grid-angular';
 import {
@@ -216,4 +217,8 @@ export class PharmacyDrugMasterComponent {
   }
 
   discard(): void { this.dirty.set(new Map()); this.load(); }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('opd.drugs', { q: this.q, showInactive: this.showInactive });
 }

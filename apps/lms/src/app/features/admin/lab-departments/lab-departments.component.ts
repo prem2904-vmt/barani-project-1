@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, effect, inject, signal, untracked, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NgTemplateOutlet } from '@angular/common';
@@ -129,7 +130,7 @@ export const LAB_DEPARTMENTS_TABS: readonly LabDepartmentsTab[] = ['departments'
                 </div>
               }
               <div class="pf-sg-main__body">
-                <pf-data-grid [rowData]="visibleDepartments()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
+                <pf-data-grid viewStateKey="admin.lab-departments.g1" [rowData]="visibleDepartments()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId"
                               [getRowClass]="rowClass" [singleClickEdit]="isCoarse" [suppressCellFocus]="false"
                               [loading]="listSkeleton()" loadingLabel="Loading departments…"
                               [emptyTitle]="departments().length === 0 ? 'No departments yet.' : 'No departments match your search.'"
@@ -757,4 +758,8 @@ export class LabDepartmentsComponent implements OnInit {
     const v = b.labStructure;
     return v === 'standalone' || v === 'individual' ? 'standalone' : v === 'integrated' ? 'integrated' : 'auto';
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.lab-departments', { q: this.q, status: this.status });
 }

@@ -98,6 +98,8 @@ interface DeptRecord {
 export { gridThemeDark, gridThemeLight } from './grid-theme';
 import { gridThemeDark, gridThemeLight } from './grid-theme';
 import { testListUrl } from '../../../../shared/utils/test-list-url';
+import { ViewStateService } from '../../../../shared/services/view-state.service';
+import { GridViewStateDirective } from '../../../../shared/services/grid-view-state';
 
 /** Extended row model supporting manual tree hierarchy for profiles/packages. */
 export type TestRow = Test & {
@@ -158,6 +160,7 @@ type TmStatus = 'all' | 'active' | 'inactive';
   selector: 'pf-tests',
   standalone: true,
   imports: [
+    GridViewStateDirective,
     ...SKELETON_KIT,
     ...SKELETON_FRAME,
     BusyDirective,
@@ -1361,4 +1364,10 @@ export class TestsComponent implements OnInit {
     this.router.navigate(['/admin/tests/new'], { queryParams: { type: this._type() } });
   }
 
+  // Screen view state (owner 2026-11-21): catalogue type, side view, department, status / source segments and the
+  // searches come back as left after in-app navigation (a ?type= / ?view= deep link still wins in ngOnInit).
+  private readonly _viewState = inject(ViewStateService).bind('test-master', {
+    type: this._type, dept: this._selectedDept, status: this.statusFilter, outsourcedOnly: this.outsourcedOnly,
+    search: this.search, panelQuery: this.panelQuery, og: this.ogView, micro: this.microView, pricing: this.pricingView,
+  });
 }

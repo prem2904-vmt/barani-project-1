@@ -284,6 +284,20 @@ import { DOCUMENT } from '@angular/common';
     :root.light .float-glyph.float-6 { color: rgba(124, 58, 237, 0.20); }
     :root.light .float-heart         { color: rgba(219, 39, 119, 0.18); }
 
+    /* NEW design, light (owner mock light-mode-v6): a calm, STILL ground — #f4f0fa with four soft
+       brand-tinted pools for the frosted panels to pick up. No moving flow or glyphs, so text never
+       sits on a busy area. Dark and the classic design keep the flow above. */
+    :host-context(.light.design-new) .wash {
+      background:
+        radial-gradient(38% 46% at 12% 18%, rgba(246, 207, 233, 0.55), transparent 70%),
+        radial-gradient(34% 40% at 88% 12%, rgba(205, 193, 250, 0.5), transparent 70%),
+        radial-gradient(40% 50% at 70% 92%, rgba(186, 220, 246, 0.4), transparent 70%),
+        radial-gradient(30% 36% at 30% 85%, rgba(233, 213, 252, 0.45), transparent 70%),
+        #f4f0fa;
+    }
+    :host-context(.light.design-new) .dna-flow,
+    :host-context(.light.design-new) .float-layer { display: none; }
+
     @media (prefers-reduced-motion: reduce) {
       .dna-flow,
       .float { animation: none; }

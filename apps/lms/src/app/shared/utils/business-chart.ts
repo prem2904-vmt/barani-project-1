@@ -25,8 +25,14 @@ export const CHART_SERIES = {
 } as const;
 export const CHART_OTHER = { light: '#94a3b8', dark: '#64748b' } as const;
 
+/** New design, light (owner palette 2026-11-21): SOFT pastels — violet, Lab sky, late rose, done mint, OPD lilac. No amber. */
+export const CHART_SERIES_LIGHT_NEW = ['#a78bfa', '#86c8ea', '#efa6b8', '#7fcfa0', '#bba7f6'] as const;
+function isNewDesign(): boolean {
+  try { return typeof document !== 'undefined' && document.documentElement.classList.contains('design-new'); } catch { return false; }
+}
+
 export function seriesColor(i: number, theme: 'dark' | 'light'): string {
-  const p = CHART_SERIES[theme];
+  const p = theme === 'light' && isNewDesign() ? CHART_SERIES_LIGHT_NEW : CHART_SERIES[theme];
   return i < p.length ? p[i] : CHART_OTHER[theme];
 }
 

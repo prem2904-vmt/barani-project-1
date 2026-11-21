@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { HeroBandComponent } from '../../../shared/components/hero-band/hero-band.component';
@@ -199,4 +200,8 @@ export class PharmacyRxQueuePage {
       error: e => { this.collecting.set(null); this.toast.error(errText(e)); },
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('opd.rx-queue', { q: this.q });
 }

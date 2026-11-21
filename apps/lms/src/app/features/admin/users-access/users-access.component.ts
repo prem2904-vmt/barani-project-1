@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { firstValueFrom } from 'rxjs';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -182,11 +183,11 @@ function rowAction(web: boolean, label: string, icon: string, title: string): HT
           </header>
           <div class="pf-sg-main__body pf-ua-grid">
             @if (tab() === 'users') {
-              <pf-data-grid [rowData]="gridUsers()" [columnDefs]="userColDefs()" [context]="gridContext" [getRowClass]="userRowClass"
+              <pf-data-grid viewStateKey="admin.users.g1" [rowData]="gridUsers()" [columnDefs]="userColDefs()" [context]="gridContext" [getRowClass]="userRowClass"
                             [loading]="listSkeleton()" loadingLabel="Loading users…" [clickable]="true"
                             [emptyTitle]="search() ? 'No users match.' : 'No users yet.'" (rowClicked)="onUserRow($event)"></pf-data-grid>
             } @else {
-              <pf-data-grid [rowData]="filteredRoles()" [columnDefs]="roleColDefs()" [context]="gridContext"
+              <pf-data-grid viewStateKey="admin.users.g2" [rowData]="filteredRoles()" [columnDefs]="roleColDefs()" [context]="gridContext"
                             [loading]="listSkeleton()" loadingLabel="Loading roles…" [clickable]="true"
                             [emptyTitle]="search() ? 'No roles match.' : 'No roles yet.'" (rowClicked)="onRoleRow($event)"></pf-data-grid>
             }
@@ -860,4 +861,8 @@ export class UsersAccessComponent implements OnInit {
     if (await this.accountActions.deactivate(u))
       this._users.update(list => list.map(x => x.id === u.id ? { ...x, isActive: false } : x));
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.users', { tab: this._tab, search: this._search, status: this.status });
 }

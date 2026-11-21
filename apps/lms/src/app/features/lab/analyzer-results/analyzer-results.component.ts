@@ -1,3 +1,5 @@
+import { GridViewStateDirective } from '../../../shared/services/grid-view-state';
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, GridApi, GridReadyEvent, ModuleRegistry, RowClassRules } from 'ag-grid-community';
 import { ActivatedRoute } from '@angular/router';
@@ -53,7 +55,7 @@ export function searchMessages(rows: readonly MessageSummaryDto[], q: string): M
 @Component({
   selector: 'pf-analyzer-results',
   standalone: true,
-  imports: [AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, BarcodeScannerModalComponent],
+  imports: [GridViewStateDirective, AgGridAngular, HeroBandComponent, ScreenHeaderComponent, SkeletonTableComponent, BusyDirective, BarcodeScannerModalComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="pf-ar pf-band-page px-4 md:px-8 pt-6 pb-10">
@@ -97,7 +99,7 @@ export function searchMessages(rows: readonly MessageSummaryDto[], q: string): M
                 <p class="pf-empty__body">{{ q().trim() ? 'Try another sample ID or code.' : 'New runs appear here as they arrive.' }}</p>
               </div>
             } @else {
-              <ag-grid-angular class="pf-ar__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
+              <ag-grid-angular pfGridViewState="lab.analyzer" class="pf-ar__grid" [theme]="gridTheme()" [rowData]="visibleRows()" [columnDefs]="colDefs()"
                                [defaultColDef]="defaultColDef" [getRowId]="getRowId" [animateRows]="true" [rowClassRules]="rowClassRules"
                                [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)" (gridReady)="onGridReady($event)"></ag-grid-angular>
             }
@@ -299,4 +301,8 @@ export class AnalyzerResultsComponent {
       error: (err) => { this.attaching.delete(m.id); this.toasts.error(ApiError.from(err).message); },
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('lab.analyzer', { q: this.q, tab: this.tab });
 }

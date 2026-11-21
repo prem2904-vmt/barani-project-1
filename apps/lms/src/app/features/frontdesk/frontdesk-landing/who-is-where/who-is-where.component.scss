@@ -4,15 +4,16 @@
   min-width: 0;
   height: 100%;
   min-height: 0;
-  --wiw-lab: var(--sky-text, #0284c7);
-  --wiw-opd: var(--violet-text, #6d28d9);
+  /* --pf-svc-* / --pf-late-fill: the soft light-palette chart colours (new design, light only); else the old tokens. */
+  --wiw-lab: var(--pf-svc-lab, var(--sky-text, #0284c7));
+  --wiw-opd: var(--pf-svc-opd, var(--violet-text, #6d28d9));
   --wiw-ipd: var(--blue-text, #2563eb);
   --wiw-scan: var(--teal-text, #0d9488);
   --wiw-er: var(--pink-text, #db2777);
   --wiw-surface: var(--pf-card-bg, #fff);
   /* Steps: a lighter tint of the service (clearly its own ring), late = soft rose; numbers dark on them. */
-  --wiw-step-mix: 40%;
-  --wiw-late: color-mix(in srgb, var(--rose-text, #e11d48) 40%, var(--wiw-surface));
+  --wiw-step-mix: var(--pf-wiw-step-mix, 40%);
+  --wiw-late: var(--pf-late-fill, color-mix(in srgb, var(--rose-text, #e11d48) 40%, var(--wiw-surface)));
   --wiw-step-ink: var(--text-primary, #111928);
 }
 :host-context(.dark), :host-context([data-theme='dark']) {

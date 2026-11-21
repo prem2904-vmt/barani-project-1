@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, TemplateRef, computed, inject, signal, viewChild } from '@angular/core';
@@ -103,7 +104,7 @@ interface GstRow { branchId: string; gstin: string; }
               <ng-container *ngTemplateOutlet="headToolsTpl"></ng-container>
             </header>
             <div class="pf-sg-main__body">
-              <pf-data-grid [rowData]="gridBranches()" [columnDefs]="colDefs()" [getRowId]="getRowId" [getRowClass]="rowClass"
+              <pf-data-grid viewStateKey="admin.branches.g1" [rowData]="gridBranches()" [columnDefs]="colDefs()" [getRowId]="getRowId" [getRowClass]="rowClass"
                             [loading]="listSkeleton()" loadingLabel="Loading branches…"
                             [emptyTitle]="branches().length === 0 ? 'No branches yet.' : 'No branches match your search.'"></pf-data-grid>
             </div>
@@ -302,4 +303,8 @@ export class BranchesComponent implements OnInit, HasUnsavedChanges {
       error: e => this.toasts.error(ApiError.from(e).message)
     });
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.branches', { q: this.q, status: this.status });
 }

@@ -6,6 +6,7 @@ import { FlowGridComponent } from '../flow-grid/flow-grid.component';
 import type { FlowGridContext } from '../flow-grid/flow-cells';
 import type { FlowRow } from '../flow-grid/flow-row';
 import { ClinicViewComponent } from './clinic-view.component';
+import { chipOf } from './clinic';
 import { buildSections, loadSectionOrder, mergeSectionOrder, moveSection, saveSectionOrder } from './sections';
 
 export type WorkViewMode = 'list' | 'clinic';
@@ -15,8 +16,22 @@ export const WV_MOTION_MS = 260;
 export const WV_EASE = 'cubic-bezier(.2,.7,.2,1)';
 export const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** The List view's row boxes by row id (for the Clinic morph). */
-export type RowRects = Map<string, DOMRect>;
+/** Morph stagger per tile (owner mock: i·22ms). */
+export const STAGGER_MS = 22;
+
+interface Slot { x: number; y: number; w: number; h: number; overflow: boolean; dense: boolean }
+export interface MorphTile {
+  id: string; x: number; y: number; w: number; h: number; delay: number; gone: boolean; dense: boolean;
+  token: string; name: string; short: string; meta: string; where: string; wait: string; act: string; late: boolean; now: boolean;
+}
+export interface WorkMorph { face: 'row' | 'chip'; go: boolean; tiles: MorphTile[] }
+
+/** A row's two faces: its list cells and its room chip (same words the real cells / chips show). */
+export function tileFace(r: FlowRow): Omit<MorphTile, 'id' | 'x' | 'y' | 'w' | 'h' | 'delay' | 'gone' | 'dense'> {
+  const c = chipOf(r);
+  return { token: c.token, name: r.name, short: c.name, meta: r.meta, where: r.where, wait: r.waitMin === null ? '—' : r.wait,
+    act: r.next?.label ?? '', late: r.late, now: c.now };
+}
 
 /**
  * The Frontdesk WORK card body (new design, ≥1024px):
@@ -33,37 +48,65 @@ export type RowRects = Map<string, DOMRect>;
   imports: [FlowGridComponent, ClinicViewComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (view() === 'clinic') {
-      <pf-fd-clinic class="fd-wv__clinic" [rows]="rows()" [order]="order()" [single]="!split()" [context]="context()"
-        [from]="morphFrom()" [ringLabels]="split()" (more)="moreFor.emit($event)" />
-    } @else if (split() && sections().length) {
-      <div class="fd-secs" #secs [class.fd-secs--in]="listIn()" [class.fd-secs--dragging]="!!drag()">
-        @for (s of sections(); track s.id) {
-          <section class="fd-sec" [attr.data-sec]="s.id" [class.fd-sec--lifted]="drag()?.id === s.id"
-            [style.transform]="drag()?.id === s.id ? 'translateY(' + drag()!.dy + 'px)' : null">
-            <header class="fd-sec__h" tabindex="0" [attr.data-sec-head]="s.id"
-              [attr.aria-label]="s.label + ', ' + s.rows.length + (s.rows.length === 1 ? ' patient' : ' patients') + (s.late ? ', ' + s.late + ' late' : '') + '. Alt plus arrow up or down moves this section.'"
-              (keydown)="onKey($event, s.id)">
-              <span class="fd-sec__grip" aria-hidden="true" title="Drag to reorder" (pointerdown)="dragStart($event, s.id)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                  <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
-                </svg>
-              </span>
-              <i class="fd-sec__dot" [attr.data-svc]="s.id" aria-hidden="true"></i>
-              <span class="fd-sec__name">{{ s.label }}</span>
-              <span class="fd-sec__n">{{ s.rows.length }}</span>
-              @if (s.late) { <span class="fd-sec__late">{{ s.late }} late</span> }
-            </header>
-            <pf-fd-flow-grid class="pf-fd-flow fd-sec__grid" [rows]="s.rows" [service]="s.id" [auto]="true" [context]="context()"
-              [selecting]="selecting()" (opened)="opened.emit($event)" />
-          </section>
-        }
-        @if (drag(); as d) { <div class="fd-secs__drop" aria-hidden="true" [style.top.px]="d.lineY"></div> }
-      </div>
-    } @else {
-      <pf-fd-flow-grid class="pf-fd-flow" [class.fd-wv--in]="listIn()" [rows]="rows()" [context]="context()" [loading]="loading()"
-        [selecting]="selecting()" [emptyTitle]="emptyTitle()" [emptyBody]="emptyBody()" (opened)="opened.emit($event)" />
-    }
+    <div class="fd-wv__stack" #stack [class.fd-wv--morph]="!!morph()" [class.fd-wv--clinic]="view() === 'clinic'">
+      @if (showList()) {
+        <div class="fd-wv__view fd-wv__list" [class.off]="view() === 'clinic'">
+          @if (split() && sections().length) {
+            <div class="fd-secs" #secs [class.fd-secs--dragging]="!!drag()">
+              @for (s of sections(); track s.id) {
+                <section class="fd-sec" [attr.data-sec]="s.id" [class.fd-sec--lifted]="drag()?.id === s.id"
+                  [style.transform]="drag()?.id === s.id ? 'translateY(' + drag()!.dy + 'px)' : null">
+                  <header class="fd-sec__h" tabindex="0" [attr.data-sec-head]="s.id"
+                    [attr.aria-label]="s.label + ', ' + s.rows.length + (s.rows.length === 1 ? ' patient' : ' patients') + (s.late ? ', ' + s.late + ' late' : '') + '. Alt plus arrow up or down moves this section.'"
+                    (keydown)="onKey($event, s.id)">
+                    <span class="fd-sec__grip" aria-hidden="true" title="Drag to reorder" (pointerdown)="dragStart($event, s.id)">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                        <path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01" />
+                      </svg>
+                    </span>
+                    <i class="fd-sec__dot" [attr.data-svc]="s.id" aria-hidden="true"></i>
+                    <span class="fd-sec__name">{{ s.label }}</span>
+                    <span class="fd-sec__n">{{ s.rows.length }}</span>
+                    @if (s.late) { <span class="fd-sec__late">{{ s.late }} late</span> }
+                  </header>
+                  <pf-fd-flow-grid class="pf-fd-flow fd-sec__grid" [rows]="s.rows" [service]="s.id" [auto]="true" [context]="context()"
+                    [selecting]="selecting()" (opened)="opened.emit($event)" />
+                </section>
+              }
+              @if (drag(); as d) { <div class="fd-secs__drop" aria-hidden="true" [style.top.px]="d.lineY"></div> }
+            </div>
+          } @else {
+            <pf-fd-flow-grid class="pf-fd-flow" [rows]="rows()" [context]="context()" [loading]="loading()"
+              [selecting]="selecting()" [emptyTitle]="emptyTitle()" [emptyBody]="emptyBody()" (opened)="opened.emit($event)" />
+          }
+        </div>
+      }
+      @if (showClinic()) {
+        <pf-fd-clinic class="fd-wv__view fd-wv__clinic" [class.off]="view() === 'list'" [rows]="rows()" [order]="order()" [single]="!split()"
+          [context]="context()" [ringLabels]="split()" (more)="moreFor.emit($event)" (fitted)="onClinicFitted()" />
+      }
+      <!-- The morph (owner mock fd-morph-clinic): ONE moving tile per patient above both views, holding both faces
+           (the row's cells and the room chip); each flies from its slot in the outgoing view to its slot in the
+           incoming one (stagger i·22ms, 260ms). -->
+      @if (morph(); as m) {
+        <div class="fd-tiles" [class.fd-tiles--chip]="m.face === 'chip'" [class.fd-tiles--still]="!m.go" aria-hidden="true">
+          @for (t of m.tiles; track t.id) {
+            <div class="fd-tile" [attr.data-tile]="t.id" [class.lt]="t.late" [class.now]="t.now" [class.gone]="t.gone" [class.dense]="t.dense"
+              [style.transform]="'translate(' + t.x + 'px,' + t.y + 'px)'" [style.width.px]="t.w" [style.height.px]="t.h"
+              [style.transition-delay]="t.delay + 'ms'">
+              <div class="fd-tile__cells">
+                <span class="fd-tile__tok">{{ t.token }}</span>
+                <span class="fd-tile__pt"><b>{{ t.name }}</b>@if (t.meta) { <small>{{ t.meta }}</small> }</span>
+                <span class="fd-tile__where"><i aria-hidden="true"></i>{{ t.where }}</span>
+                <span class="fd-tile__wait" [class.late]="t.late">{{ t.wait }}</span>
+                @if (t.act) { <span class="fd-tile__act">{{ t.act }}</span> }
+              </div>
+              <div class="fd-tile__chip"><b>{{ t.token }}</b><span class="fd-tile__nm">{{ t.short }}</span>@if (t.wait !== '—') { <span class="fd-tile__t">{{ t.wait }}</span> }</div>
+            </div>
+          }
+        </div>
+      }
+    </div>
     <span class="fd-sr" aria-live="polite">{{ announce() }}</span>
   `,
   styleUrl: './work-view.component.scss',
@@ -104,33 +147,131 @@ export class WorkViewComponent {
 
   readonly drag = signal<{ id: ServiceId; dy: number; lineY: number; to: number } | null>(null);
   readonly announce = signal('');
-  /** The list just came back from Clinic: slide / fade it in. */
-  readonly listIn = signal(false);
-  /** Row boxes captured just before List → Clinic (the clinic morphs its chips from them). */
-  readonly morphFrom = signal<RowRects | null>(null);
+  private readonly stackEl = viewChild<ElementRef<HTMLElement>>('stack');
+  private readonly clinicView = viewChild(ClinicViewComponent);
+
+  /** The morph in flight (null = none). */
+  readonly morph = signal<WorkMorph | null>(null);
+  readonly showList = computed(() => this.view() === 'list' || !!this.morph());
+  readonly showClinic = computed(() => this.view() === 'clinic' || !!this.morph());
+  private sources = new Map<string, Slot>();
+  private morphTo: WorkViewMode | null = null;
+  private morphStarted = false;
+  private morphTimer: ReturnType<typeof setTimeout> | null = null;
+  private waitFrames = 0;
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.endDrag());
+    inject(DestroyRef).onDestroy(() => { this.endDrag(); if (this.morphTimer) clearTimeout(this.morphTimer); });
   }
 
-  /** The landing calls this right before it flips the view (the DOM still shows the old one). */
+  /** The landing calls this right before it flips the view (the DOM still shows the outgoing one). */
   beforeSwitch(to: WorkViewMode): void {
-    if (to === 'clinic') {
-      const m: RowRects = new Map();
-      if (!reducedMotion()) {
-        for (const el of Array.from(this.host.nativeElement.querySelectorAll<HTMLElement>('.ag-center-cols-container .ag-row[row-id]'))) {
-          const id = el.getAttribute('row-id');
-          const r = el.getBoundingClientRect();
-          if (id && r.height > 0) m.set(id, r);
-        }
-      }
-      this.morphFrom.set(m);
-      this.listIn.set(false);
-    } else {
-      this.morphFrom.set(null);
-      this.listIn.set(!reducedMotion());
-      setTimeout(() => this.listIn.set(false), WV_MOTION_MS + 80);
+    this.finishMorph();
+    if (reducedMotion()) return;                                   // reduced motion: the switch is instant
+    this.sources = to === 'clinic' ? this.listSlots() : this.clinicSlots();
+    if (!this.sources.size) return;
+    this.morphTo = to;
+    this.morphStarted = false;
+    this.waitFrames = 0;
+    this.morph.set({ face: to === 'clinic' ? 'row' : 'chip', go: false, tiles: [] });
+    if (to === 'list') requestAnimationFrame(() => this.whenListReady());
+  }
+
+  /** The clinic fitted its rooms: start the morph into it, or re-place the tiles after a late layout shift. */
+  onClinicFitted(): void {
+    if (this.morphTo !== 'clinic' || !this.morph()) return;
+    if (!this.morphStarted) this.startMorph();
+    else this.place(this.clinicSlots(), false);
+  }
+
+  private whenListReady(): void {
+    if (this.morphTo !== 'list' || this.morphStarted) return;
+    const ready = this.host.nativeElement.querySelector('.fd-wv__list .ag-row[row-id]');
+    if (ready || ++this.waitFrames > 30) { requestAnimationFrame(() => this.startMorph()); return; }
+    requestAnimationFrame(() => this.whenListReady());
+  }
+
+  /** Box of every row in the list (its grid row), relative to the stack. */
+  private listSlots(): Map<string, Slot> {
+    const out = new Map<string, Slot>();
+    const o = this.stackEl()?.nativeElement.getBoundingClientRect();
+    if (!o) return out;
+    // A grid row may be split over containers (pinned / centre): its widest part is the row.
+    for (const el of Array.from(this.host.nativeElement.querySelectorAll<HTMLElement>('.fd-wv__list .ag-row[row-id]'))) {
+      const id = el.getAttribute('row-id');
+      const r = el.getBoundingClientRect();
+      if (!id || r.height <= 0 || (out.get(id)?.w ?? 0) >= r.width) continue;
+      out.set(id, { x: r.left - o.left, y: r.top - o.top, w: r.width, h: r.height, overflow: false, dense: false });
     }
+    return out;
+  }
+
+  /** Box of every row's chip in the clinic (or its room's "+N" when the room overflowed). */
+  private clinicSlots(): Map<string, Slot> {
+    const out = new Map<string, Slot>();
+    const cv = this.clinicView();
+    const o = this.stackEl()?.nativeElement.getBoundingClientRect();
+    if (!cv || !o) return out;
+    for (const r of this.rows()) {
+      const s = cv.slotOf(r.id);
+      if (!s) continue;
+      const b = s.el.getBoundingClientRect();
+      if (b.width > 0) out.set(r.id, { x: b.left - o.left, y: b.top - o.top, w: b.width, h: b.height, overflow: s.overflow, dense: s.dense });
+    }
+    return out;
+  }
+
+  /** Tiles at their OUTGOING slots (no transition), then — two frames later — at the incoming ones (staggered). */
+  private startMorph(): void {
+    const to = this.morphTo;
+    if (!to || this.morphStarted) return;
+    this.morphStarted = true;
+    const targets = to === 'clinic' ? this.clinicSlots() : this.listSlots();
+    const tiles: MorphTile[] = [];
+    let i = 0;
+    for (const r of this.rows()) {
+      const from = this.sources.get(r.id);
+      const dest = targets.get(r.id);
+      if (!from && !dest) continue;
+      const start = from ?? dest!;
+      tiles.push({
+        ...tileFace(r), id: r.id, x: start.x, y: start.y, w: start.w, h: start.h,
+        gone: !from || !!from.overflow, dense: !!(from ?? dest)?.dense, delay: Math.min(i++ * STAGGER_MS, 900),
+      });
+    }
+    this.morph.set({ face: to === 'clinic' ? 'row' : 'chip', go: false, tiles });
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const m = this.morph();
+      if (!m) return;
+      this.morph.set({ ...m, go: true, face: to === 'clinic' ? 'chip' : 'row' });
+      this.place(targets, true);
+      // Late layout shifts (grid rows measuring their height): re-place once they have settled.
+      if (to === 'list') setTimeout(() => { if (this.morphTo === 'list') this.place(this.listSlots(), false); }, 140);
+    }));
+  }
+
+  /** Move every tile to its slot in the incoming view; a tile with no slot (or a room's overflow) fades away. */
+  private place(targets: Map<string, Slot>, schedule: boolean): void {
+    const m = this.morph();
+    if (!m) return;
+    const tiles = m.tiles.map(t => {
+      const d = targets.get(t.id);
+      if (!d) return { ...t, gone: true };
+      return { ...t, x: d.x, y: d.y, w: d.w, h: d.h, gone: d.overflow, dense: d.dense };
+    });
+    this.morph.set({ ...m, tiles });
+    if (schedule) {
+      const last = Math.max(0, ...tiles.map(t => t.delay));
+      if (this.morphTimer) clearTimeout(this.morphTimer);
+      this.morphTimer = setTimeout(() => this.finishMorph(), last + WV_MOTION_MS + 140);
+    }
+  }
+
+  private finishMorph(): void {
+    if (this.morphTimer) { clearTimeout(this.morphTimer); this.morphTimer = null; }
+    this.morphTo = null;
+    this.morphStarted = false;
+    if (this.morph()) this.morph.set(null);
   }
 
   // ── Reordering ──────────────────────────────────────────────────────────────────────────────────────────

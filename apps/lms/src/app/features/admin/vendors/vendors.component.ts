@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { dirtySnapshot } from '../../../shared/utils/dirty-snapshot';
 import { NO_CHANGES_TITLE } from '../../../shared/utils/save-state';
@@ -148,7 +149,7 @@ const EMPTY_DRAFT: NewVendorDraft = {
               @if (loadingShown()) {
                 <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="6" label="Loading vendors…"></pf-skel-grid>
               }
-              <pf-data-grid [rowData]="visibleVendors()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
+              <pf-data-grid viewStateKey="admin.vendors.g1" [rowData]="visibleVendors()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [getRowClass]="rowClass" [suppressCellFocus]="true"></pf-data-grid>
               @if (!loading() && visibleVendors().length === 0) {
                 <div class="pf-sg-empty pf-band-empty">
                   @if (vendors().length === 0) {
@@ -941,4 +942,8 @@ export class VendorsComponent implements OnInit {
     const min = String(d.getMinutes()).padStart(2, '0');
     return `${dd}/${mm} ${hh}:${min}`;
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.vendors', { q: this.q, status: this.status });
 }

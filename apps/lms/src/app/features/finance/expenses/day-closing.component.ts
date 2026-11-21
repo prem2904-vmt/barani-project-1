@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal, untracked } from '@angular/core';
+import { BackToTodayComponent } from '../../../shared/components/back-to-today/back-to-today.component';
 import { formatDate } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
 import { ExpenseService } from '../../../core/services/expense.service';
@@ -39,7 +40,7 @@ export function parseRupees(text: string): number | null {
 @Component({
   selector: 'pf-day-closing',
   standalone: true,
-  imports: [PfDateComponent, BusyDirective, SkeletonTableComponent],
+  imports: [PfDateComponent, BusyDirective, SkeletonTableComponent, BackToTodayComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="pf-dc" [class.pf-dc--narrow]="narrow()">
@@ -54,6 +55,7 @@ export function parseRupees(text: string): number | null {
           }
           <span class="pf-card__spacer"></span>
           <div class="pf-dc__date">
+            <pf-back-to-today [show]="date() !== today()" (reset)="pick(today())" />
             <label class="pf-dc__datelbl" for="pf-dc-date">Day (IST)</label>
             <pf-date label="Day" inputId="pf-dc-date" [value]="date()" [max]="today()" (valueChange)="pick($event)"></pf-date>
           </div>
