@@ -17,10 +17,11 @@ describe('info panel — tier by width', () => {
     expect(infoTier(640)).toBe('phone');
     expect(infoTier(390)).toBe('phone');
   });
-  it('docked + open by default only on desktop', () => {
+  it('docked only on desktop; closed by default on every tier', () => {
     expect(infoDocked('desktop')).toBe(true);
     expect(infoDocked('tablet')).toBe(false);
-    expect(infoDefaultOpen('desktop')).toBe(true);
+    expect(infoDocked('phone')).toBe(false);
+    expect(infoDefaultOpen('desktop')).toBe(false);
     expect(infoDefaultOpen('tablet')).toBe(false);
     expect(infoDefaultOpen('phone')).toBe(false);
   });
@@ -29,26 +30,35 @@ describe('info panel — tier by width', () => {
 describe('info panel — remembered choice', () => {
   it('falls back to the tier default when nothing is stored', () => {
     const s = memStore();
-    expect(readInfoOpen(s, 'u1', 'desktop')).toBe(true);
+    expect(readInfoOpen(s, 'u1', 'desktop')).toBe(false);
+    expect(readInfoOpen(s, 'u1', 'tablet')).toBe(false);
+    expect(readInfoOpen(s, 'u1', 'phone')).toBe(false);
+  });
+  it('ignores choices saved under the old (v1) key — the default changed', () => {
+    const s = memStore();
+    s.setItem('pf-lms.collect.info.u1.desktop', '1');
+    s.setItem('pf-lms.collect.info.u1.tablet', '1');
+    expect(readInfoOpen(s, 'u1', 'desktop')).toBe(false);
     expect(readInfoOpen(s, 'u1', 'tablet')).toBe(false);
   });
   it('remembers per user and per tier', () => {
     const s = memStore();
-    writeInfoOpen(s, 'u1', 'desktop', false);
+    writeInfoOpen(s, 'u1', 'desktop', true);
     writeInfoOpen(s, 'u1', 'tablet', true);
-    expect(readInfoOpen(s, 'u1', 'desktop')).toBe(false);
-    expect(readInfoOpen(s, 'u1', 'tablet')).toBe(true);
+    writeInfoOpen(s, 'u1', 'tablet', false);
+    expect(readInfoOpen(s, 'u1', 'desktop')).toBe(true);     // the user's own choice wins
+    expect(readInfoOpen(s, 'u1', 'tablet')).toBe(false);
     expect(readInfoOpen(s, 'u1', 'phone')).toBe(false);      // untouched tier keeps its default
-    expect(readInfoOpen(s, 'u2', 'desktop')).toBe(true);     // another user keeps the default
-    expect(s.m.get(infoKey('u1', 'desktop'))).toBe('0');
-    expect(infoKey('u1', 'tablet')).toBe('pf-lms.collect.info.u1.tablet');
-    expect(infoKey(null, 'phone')).toBe('pf-lms.collect.info.anon.phone');
+    expect(readInfoOpen(s, 'u2', 'desktop')).toBe(false);    // another user keeps the default
+    expect(s.m.get(infoKey('u1', 'desktop'))).toBe('1');
+    expect(infoKey('u1', 'tablet')).toBe('pf-lms.collect.info.v2.u1.tablet');
+    expect(infoKey(null, 'phone')).toBe('pf-lms.collect.info.v2.anon.phone');
   });
   it('ignores junk values and survives storage that throws or is missing', () => {
     const s = memStore();
     s.setItem(infoKey('u1', 'desktop'), 'yes');
-    expect(readInfoOpen(s, 'u1', 'desktop')).toBe(true);
-    expect(readInfoOpen(throwing, 'u1', 'desktop')).toBe(true);
+    expect(readInfoOpen(s, 'u1', 'desktop')).toBe(false);
+    expect(readInfoOpen(throwing, 'u1', 'desktop')).toBe(false);
     expect(readInfoOpen(throwing, 'u1', 'tablet')).toBe(false);
     expect(() => writeInfoOpen(throwing, 'u1', 'tablet', true)).not.toThrow();
     expect(readInfoOpen(null, 'u1', 'tablet')).toBe(false);

@@ -5,8 +5,8 @@ import * as path from 'node:path';
 
 /**
  * Collect — the right-side info panel can be shown / hidden (owner 2026-11-21).
- * >= 1280px: docked, shown by default, the VIALS-head toggle collapses it (the grid takes the width).
- * < 1280px: hidden by default; the toggle opens a right drawer over the vials (scrim, ✕, Esc; focus trapped and returned).
+ * Closed by default on every size (owner revision 2026-11-21); the chips show instead.
+ * >= 1280px: the VIALS-head toggle opens it docked (the grid gives up the width). < 1280px: the toggle opens a right drawer over the vials (scrim, ✕, Esc; focus trapped and returned).
  * While hidden: Urgent / Fasting / "N of M left" chips in the patient head. The choice survives a reload.
  * API mocked, demo data only. Screenshots under SHOTS_DIR/<project>/ (light + dark).
  */
@@ -115,49 +115,65 @@ test.beforeEach(async ({ page }) => {
   await backend(page);
 });
 
-test('desktop: panel docked by default; toggle collapses it (grid widens, chips show) and expands it; remembered', async ({ page }) => {
+test('desktop: closed by default with chips; toggle opens it DOCKED (grid narrows) and closes it; remembered', async ({ page }) => {
   await page.goto('/lab/collect');
   await page.locator('pf-hero-band').first().waitFor({ timeout: 20_000 }).catch(() => {});
   if (!docked(page)) test.skip(true, 'docked panel is for >= 1280px');
   const toggle = await openCollect(page);
   const panel = page.getByTestId('collect-info-panel');
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  await expect(toggle).toHaveAttribute('aria-controls', 'pf-sc-info-panel');
-  await expect(toggle).toHaveAttribute('title', 'Hide details');
-  await expect(panel).toBeVisible();
-  // fasting reads "Required" + the series as a sorted short list
-  await expect(panel.locator('.pf-sc-fast')).toContainText('30 min · 60 min · 120 min · 180 min');
-  await expect(panel).toContainText('4 of 4');
-  await expect(page.getByTestId('collect-info-chips')).toHaveCount(0);
-  const box = (await toggle.boundingBox())!;
-  expect(Math.round(box.width)).toBeGreaterThanOrEqual(44); expect(Math.round(box.height)).toBeGreaterThanOrEqual(44);
   const grid = page.locator('.pf-sc-vials');
-  const before = (await grid.boundingBox())!.width;
-  await shots(page, 'desktop-open');
-
-  await toggle.click();
+  // default = closed on desktop too: chips carry Urgent / Fasting / left
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(toggle).toHaveAttribute('aria-controls', 'pf-sc-info-panel');
   await expect(toggle).toHaveAttribute('title', 'Show details');
   await expect(panel).toBeHidden();
-  await expect.poll(async () => (await grid.boundingBox())!.width).toBeGreaterThan(before + 200);
+  const box = (await toggle.boundingBox())!;
+  expect(Math.round(box.width)).toBeGreaterThanOrEqual(44); expect(Math.round(box.height)).toBeGreaterThanOrEqual(44);
   const chips = page.getByTestId('collect-info-chips').filter({ visible: true });
   await expect(chips.getByTestId('chip-urgent')).toHaveText('Urgent');
   await expect(chips.getByTestId('chip-fasting')).toBeVisible();
   await expect(chips.getByTestId('chip-fasting')).toHaveAttribute('title', /OGTT 30 min · 60 min · 120 min · 180 min/);
   await expect(chips.getByTestId('chip-left')).toContainText('4 of 4 left');
+  const closedW = (await grid.boundingBox())!.width;
   await shots(page, 'desktop-collapsed');
   await chips.getByTestId('chip-fasting').click();
   await expect(chips.locator('.pf-sc-ichip__pop')).toBeVisible();
   await page.waitForTimeout(200);
   await page.screenshot({ path: `${OUT}/desktop-fasting-pop-light.png` });
+  await chips.getByTestId('chip-fasting').click();
 
-  // remembered after reload
+  // open → docked beside the vials (never a drawer / scrim), grid gives up the width
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(toggle).toHaveAttribute('title', 'Hide details');
+  await expect(panel).toBeVisible();
+  await expect(page.locator('.pf-sc-side--drawer')).toHaveCount(0);
+  await expect(page.getByTestId('collect-info-scrim')).toHaveCount(0);
+  await expect(panel.locator('.pf-sc-fast')).toContainText('30 min · 60 min · 120 min · 180 min');
+  await expect(panel).toContainText('4 of 4');
+  await expect(page.getByTestId('collect-info-chips')).toHaveCount(0);
+  await expect.poll(async () => (await grid.boundingBox())!.width).toBeLessThan(closedW - 200);
+  await shots(page, 'desktop-open');
+
+  // remembered after reload (the user's choice wins over the closed default)
+  await page.reload();
+  await expect(page.getByTestId('collect-info-toggle')).toHaveAttribute('aria-expanded', 'true', { timeout: 30_000 });
+  await expect(page.getByTestId('collect-info-panel')).toBeVisible();
+  await page.getByTestId('collect-info-toggle').click();
+  await expect(page.getByTestId('collect-info-panel')).toBeHidden();
+  await expect(page.getByTestId('collect-info-chips').filter({ visible: true })).toBeVisible();
   await page.reload();
   await expect(page.getByTestId('collect-info-toggle')).toHaveAttribute('aria-expanded', 'false', { timeout: 30_000 });
-  await expect(page.getByTestId('collect-info-chips').filter({ visible: true })).toBeVisible();
-  await page.getByTestId('collect-info-toggle').click();
-  await expect(page.getByTestId('collect-info-panel')).toBeVisible();
-  await expect(page.getByTestId('collect-info-chips')).toHaveCount(0);
+});
+
+test('desktop: a choice saved under the old key is ignored (default changed to closed)', async ({ page }) => {
+  await page.addInitScript(() => { try { localStorage.setItem('pf-lms.collect.info.app-1.desktop', '1'); } catch { /* */ } });
+  await page.goto('/lab/collect');
+  await page.locator('pf-hero-band').first().waitFor({ timeout: 20_000 }).catch(() => {});
+  if (!docked(page)) test.skip(true, 'desktop only');
+  const toggle = await openCollect(page);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByTestId('collect-info-panel')).toBeHidden();
 });
 
 test('below 1280: hidden by default with chips; drawer opens, Esc / scrim / close shut it, focus returns; remembered', async ({ page }) => {

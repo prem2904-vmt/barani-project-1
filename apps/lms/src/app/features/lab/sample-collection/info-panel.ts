@@ -2,24 +2,27 @@
  * Collect screen — the right-side info panel (remaining, priority, fasting, timeline, tests) can be shown / hidden
  * (owner 2026-11-21: on tablets and small screens it crowds the vials). Pure rules only; the component wires signals.
  *
- *  - desktop (>= 1280px): the panel is DOCKED beside the vials, shown by default; the toggle collapses it.
- *  - tablet (641–1279px) / phone (<= 640px): hidden by default; the toggle opens it as a right-side DRAWER.
+ *  - CLOSED by default on every tier (owner 2026-11-21, revision 2): the head chips carry the critical info.
+ *  - desktop (>= 1280px): the toggle opens it DOCKED beside the vials (never a drawer).
+ *  - tablet (641–1279px) / phone (<= 640px): the toggle opens it as a right-side DRAWER.
  *  - the choice is remembered per user AND per tier in localStorage (every access in try/catch).
  */
 export type InfoTier = 'desktop' | 'tablet' | 'phone';
 
 export const INFO_DOCK_MIN = 1280;
 export const INFO_PHONE_MAX = 640;
-const KEY_PREFIX = 'pf-lms.collect.info';
+/** v2: the default changed to closed everywhere, so choices saved under v1 (desktop open by default) are ignored. */
+const KEY_PREFIX = 'pf-lms.collect.info.v2';
 
 export function infoTier(width: number): InfoTier {
   if (width >= INFO_DOCK_MIN) return 'desktop';
   return width <= INFO_PHONE_MAX ? 'phone' : 'tablet';
 }
 
-/** Desktop docks the panel (open by default); smaller tiers overlay it as a drawer (closed by default). */
+/** Desktop docks the panel; smaller tiers overlay it as a drawer. */
 export function infoDocked(tier: InfoTier): boolean { return tier === 'desktop'; }
-export function infoDefaultOpen(tier: InfoTier): boolean { return infoDocked(tier); }
+/** Closed by default on every tier (owner 2026-11-21, revision 2). */
+export function infoDefaultOpen(_tier: InfoTier): boolean { return false; }
 
 export function infoKey(userId: string | null | undefined, tier: InfoTier): string {
   return `${KEY_PREFIX}.${userId || 'anon'}.${tier}`;

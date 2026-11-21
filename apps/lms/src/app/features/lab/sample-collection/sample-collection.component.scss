@@ -2652,8 +2652,8 @@
     }
 
     /* ─── Info panel show / hide (owner 2026-11-21) ─────────────────────
-       >= 1280px: docked beside the vials, the VIALS-head toggle collapses it (260ms slide/fade, the grid takes the
-       width). Below: hidden by default, the toggle opens it as a right drawer over the vials with a soft scrim.
+       Closed by default everywhere. >= 1280px: the VIALS-head toggle opens it docked beside the vials (260ms
+       slide/fade, the grid gives / takes the width). Below: the toggle opens it as a right drawer over the vials with a soft scrim.
        While hidden, compact chips (Urgent · Fasting · N of M left) ride the patient head. Tokens only. */
     .pf-sc-infotoggle { flex: none; width: 44px; height: 44px; min-height: 44px; padding: 0; color: var(--text-secondary); }
     .pf-sc-infotoggle.is-on { color: var(--pf-pill-on-text, var(--violet-text, #7c3aed)); background: var(--pf-sel-bg, transparent); }

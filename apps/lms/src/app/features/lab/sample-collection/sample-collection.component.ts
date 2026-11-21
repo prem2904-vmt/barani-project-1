@@ -791,10 +791,10 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   }
 
   // ─── Info panel show / hide (owner 2026-11-21; rules in info-panel.ts) ───
-  /** Form-factor tier from the viewport width (desktop >= 1280 docks the panel; smaller tiers use a drawer). */
+  /** Form-factor tier from the viewport width (desktop >= 1280 docks the panel when opened; smaller tiers use a drawer). Closed by default. */
   readonly infoTier = signal<InfoTier>(typeof window !== 'undefined' ? infoTier(window.innerWidth) : 'desktop');
   readonly infoDocked = computed(() => infoDocked(this.infoTier()));
-  private readonly _infoOpen = signal<boolean>(typeof window !== 'undefined' && window.innerWidth >= 1280);
+  private readonly _infoOpen = signal<boolean>(false);   // closed by default everywhere; loadInfoOpen() applies a saved choice
   /** Panel visible: docked beside the vials (desktop) or the drawer is open (tablet / phone). */
   readonly infoOpen = this._infoOpen.asReadonly();
   /** The drawer (below 1280px) is open. */
