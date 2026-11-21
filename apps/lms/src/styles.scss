@@ -3061,7 +3061,6 @@ aside.pf-card > .pf-card__body > * { flex-shrink: 0; }
 .ag-header-cell.wg-h-center .ag-header-cell-text,
 .ag-header-cell.wg-h-right .ag-header-cell-text { text-overflow: clip; white-space: normal; overflow-wrap: normal; word-break: keep-all; }
 
-<<<<<<< HEAD
 /* ── Touch: every card-head control is a ≥44px target (owner 2026-11-21, small screens) ──
    Buttons / inputs / compact pill triggers in a card head grow to 44px; a pill's segments keep their slim look and
    get a 44px HIT AREA (::after), the same trick as the grid header's filter icon. */
@@ -3083,8 +3082,7 @@ aside.pf-card > .pf-card__body > * { flex-shrink: 0; }
    `.pf-wl-head--sticky` = a list head (count · Sort · Filters) that sits at the top of a scroller it lives in. */
 .pf-wl-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .pf-wl-head--sticky { position: sticky; top: 0; z-index: 3; background: var(--pf-card-bg, var(--bg-card-solid, #fff)); }
-=======
+
 /* No browser number spinners anywhere (the app's stepper is pf-number-input; a plain number field is just a field). */
 input[type='number'] { -moz-appearance: textfield; appearance: textfield; }
 input[type='number']::-webkit-outer-spin-button, input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
->>>>>>> 66d42b447f8a09bfbf82e56ba725ecd153cf798f
