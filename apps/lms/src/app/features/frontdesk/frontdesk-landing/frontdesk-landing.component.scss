@@ -45,7 +45,8 @@
 :host-context(.light.design-new) {
   /* Page: the frame's white → blush vertical gradient. */
   .pf-page {
-    background: linear-gradient(to top, #fcf8fe 0%, #fff8ff 55%, #ffffff 100%);
+    /* Owner light palette (2026-11-21): the shell's soft ground shows through (the glass panels pick it up). */
+    background: transparent;
     min-height: calc(100dvh - var(--pf-botbar-h, 0px));
   }
 
@@ -72,8 +73,8 @@
 
   /* Header strip: #f8f8f8, 49px, hairline. */
   .pf-appt-split__hdr {
-    background: #f8f8f8;
-    border-bottom: 1px solid #fbf9fe;
+    background: transparent;
+    border-bottom: 1px solid var(--pf-line);
     min-height: 49px;
     border-radius: 20px 20px 0 0;
   }
@@ -100,8 +101,8 @@
     background: color-mix(in srgb, var(--color-primary, #7c3aed) 4%, #ffffff);
     color: var(--text-primary);
   }
-  .pf-daystrip__dow { font-size: 12px; letter-spacing: 0.76px; text-transform: uppercase; color: #9ca3af; }
-  .pf-daystrip__n { font-size: 14px; font-weight: 500; color: #6b7280; }
+  .pf-daystrip__dow { font-size: 12px; letter-spacing: 0.76px; text-transform: uppercase; color: var(--text-muted); }
+  .pf-daystrip__n { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
   .pf-daystrip__day--on { border-color: #eee1fd; }
   .pf-daystrip__day--on .pf-daystrip__dow,
   .pf-daystrip__day--on .pf-daystrip__n { color: #7c3aed; }
@@ -118,8 +119,8 @@
     border-color: var(--glass-border-hover, rgba(124, 58, 237, 0.3));
     box-shadow: 0 4px 12px rgba(124, 58, 237, 0.08);
   }
-  .pf-card__name { font-size: 12px; font-weight: 500; color: #4b5563; }
-  .pf-card__meta { font-size: 12px; color: #6b7280; }
+  .pf-card__name { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+  .pf-card__meta { font-size: 12px; color: var(--text-secondary); }
   /* Design carries no avatar — remove it AND its grid track, or every
      child shifts into the empty 40px column (the collapsed-row bug). */
   .pf-card pf-avatar { display: none; }
@@ -131,7 +132,7 @@
   }
   .pf-card__sel {
     width: 20px; height: 20px;
-    border: 1px solid #9ca3af;
+    border: 1px solid var(--text-muted);
     background: rgba(246, 244, 252, 0.55);
   }
   /* Draft cards have no select circle — [text][actions] only. Without
@@ -141,9 +142,9 @@
   /* Row action buttons → the frame's violet-outline "Collect →" anatomy. */
   .pf-ghostbtn {
     background: #ffffff;
-    border: 1px solid #7c3aed;
+    border: 1px solid var(--pf-btn-line, #7c3aed);
     border-radius: 8px;
-    color: #7c3aed;
+    color: var(--violet-text, #7c3aed);
     height: 24px; padding: 0 12px;
     font-size: 12px; font-weight: 600;
   }
