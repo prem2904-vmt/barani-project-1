@@ -160,7 +160,10 @@ import { ServiceShelfService } from '../../../core/services/service-shelf.servic
 import { ServiceFilter, ServiceId, inService, serviceOfModule, tallyServices } from '../../../core/services/service-shelf';
 import { WhoIsWhereComponent, WhoPick } from './who-is-where/who-is-where.component';
 import { OpdDeskApi } from '../../opd/frontdesk/desk-api.service';
-import type { OpdVisitRow, PaymentDue } from '../../opd/frontdesk/desk.models';
+import type { OpdVisitRow, PaymentDue, ProcedureToBook, QueueDoctor } from '../../opd/frontdesk/desk.models';
+import { toBookPriceText } from '../../opd/frontdesk/desk-rules';
+import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
+import { addDays, labToday } from '../../../shared/utils/lab-clock';
 import { opdDueByVisit, opdVisitFlowRow, opdVisitMatches, opdVisitOpen } from './opd-visits';
 import { SideTab, WhoItem, apptOverdueMin, effectiveSideTab, fmtMin, overdueDotLabel, sideSwitchLabel, sideSwitchOn, sideTabOptions, sideTitleOf, stepOfRow, toggleSideView, whoItemOf } from './who-is-where/who-is-where';
 import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
@@ -202,7 +205,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [BackToTodayComponent, DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
+  imports: [BackToTodayComponent, DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, PfDateComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -414,7 +417,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   /** The tab on show: "Who is where" only exists for 2+ services in the new design at ≥1024px — otherwise the
    *  remembered 'who' reads as Appointments (or Home when appointments are off), exactly today's side card. */
   readonly leftTab = computed<LeftTab>(() =>
-    effectiveSideTab(this._leftTab(), { who: this.whoTabOn(), appt: this.showAppt(), home: this.showHome() }));
+    effectiveSideTab(this._leftTab(), { who: this.whoTabOn(), appt: this.showAppt(), home: this.showHome(), proc: this.procOn() }));
   // Workflow-as-source-of-truth: each action is a placeable component. When the
   // admin switches an action OFF in the process workflow, its component vanishes
   // from this screen (no nav/route change — the real Frontdesk stays put).
@@ -461,7 +464,7 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   //    'home', remembered under LEFT_TAB_KEY) — the names other code binds to; the icon = 'who' vs the last bookings pill. ──
   private static readonly BOOKINGS_TAB_KEY = 'pf.lms.frontdesk.bookingsTab';
   /** The icon is a switch only where the chart AND a bookings list both exist (lab-only: a static icon). */
-  readonly sideSwitchOn = computed(() => sideSwitchOn({ who: this.whoTabOn(), appt: this.showAppt(), home: this.showHome() }));
+  readonly sideSwitchOn = computed(() => sideSwitchOn({ who: this.whoTabOn(), appt: this.showAppt() || this.procOn(), home: this.showHome() }));
   readonly sideTitle = computed(() => sideTitleOf(this.leftTab()));
   /** "3 appointments overdue · show bookings" — the rose dot on the icon while on Who is where. */
   readonly sideOverdueDot = computed(() => this.sideSwitchOn() ? overdueDotLabel(this.leftTab(), this.overdueAppointments()) : null);
@@ -471,12 +474,13 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
   readonly bookingPillOptions = computed<SegmentedOption<LeftTab>[]>(() => sideTabOptions({
     who: false, appt: this.showAppt(), home: this.showHome(),
     apptN: this.visibleAppointments().length, overdue: this.overdueAppointments(), homeN: this.homeCollections().length,
+    procN: this.procOn() ? this.procsToBook().length : null,
   }));
   toggleSideView(ev?: Event): void {
     ev?.stopPropagation();
     let last: SideTab | null = null;
     try { last = localStorage.getItem(FrontdeskLandingComponent.BOOKINGS_TAB_KEY) as SideTab | null; } catch { /* not remembered */ }
-    this.setLeftTab(toggleSideView(this.leftTab(), last, { appt: this.showAppt(), home: this.showHome() }));
+    this.setLeftTab(toggleSideView(this.leftTab(), last, { appt: this.showAppt(), home: this.showHome(), proc: this.procOn() }));
   }
   /** Owner motion style: the side card's body slides / fades in (260ms; nothing under reduced motion). */
   private slideSideIn(): void {
@@ -1104,11 +1108,56 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     const date = this.toIsoDay(new Date(b.start));
     this.opdApi.visits({ date }).subscribe({ next: l => this._opdVisits.set(l ?? []), error: () => this._opdVisits.set([]) });
     this.opdApi.paymentsDue().subscribe({ next: l => this._opdDues.set(l ?? []), error: () => this._opdDues.set([]) });
+    // The OPD desk's doctors board (Clinic view's OPD block) and "Procedures to book" (the Bookings pill) — the two
+    // things the Frontdesk had left on /opd/desk/classic (owner 2026-11-21).
+    this.opdApi.board().subscribe({ next: l => this._opdBoard.set(l ?? []), error: () => this._opdBoard.set([]) });
+    this.opdApi.proceduresToBook().subscribe({ next: l => this._toBook.set(l), error: () => { /* keep the last list */ } });
     if (!this.opdCfgLoaded) {
       this.opdCfgLoaded = true;
       this.opdApi.desk().subscribe({ next: d => this._opdVitals.set(d?.config?.workflow?.vitals !== 'off'), error: () => { /* keep vitals */ } });
     }
   }
+  /** The OPD doctors board (GET /api/opd/queue/board): every OPD doctor with waiting / at vitals / now serving. */
+  readonly _opdBoard = signal<QueueDoctor[]>([]);
+  readonly opdBoard = computed<QueueDoctor[]>(() => this.opdOn() ? this._opdBoard() : []);
+  /** Procedures the doctor ordered for later; null = OPD off or the server has no such list (no pill). */
+  private readonly _toBook = signal<ProcedureToBook[] | null>(null);
+  readonly procOn = computed(() => this.opdOn() && this._toBook() !== null);
+  readonly procsToBook = computed<ProcedureToBook[]>(() => this.procOn() ? this._toBook() ?? [] : []);
+  readonly toBookPriceText = toBookPriceText;
+  readonly procToday = labToday();
+  readonly procMaxDate = addDays(labToday(), 90);
+  readonly procBookDate = signal<Record<string, string | null>>({});
+  readonly procBooking = signal<string | null>(null);
+  setProcDate(id: string, v: string | null): void { this.procBookDate.update(m => ({ ...m, [id]: v })); }
+  procDay(iso: string): string { return new Date(iso.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); }
+  /** Book a later procedure on the picked date (today … 90 days) — the classic desk's own call, toasts and errors. */
+  bookProcedure(r: ProcedureToBook): void {
+    const date = this.procBookDate()[r.id];
+    if (!date || this.procBooking()) return;
+    this.procBooking.set(r.id);
+    this.opdApi.bookProcedure(r.id, date, r.doctorId).subscribe({
+      next: res => {
+        this.procBooking.set(null);
+        this._toBook.update(l => (l ?? []).filter(x => x.id !== r.id));
+        this.toasts.success(`${r.procedureName} booked for ${r.patientName} on ${this.procDay(res?.date || date)}`);
+        this.loadOpd();
+      },
+      error: e => {
+        this.procBooking.set(null);
+        const err = ApiError.from(e);
+        this.toasts.error(err.code === 'already_booked' ? 'This procedure is already booked.'
+          : err.code === 'date_out_of_range' ? 'Pick a date from today up to 90 days ahead.' : err.message);
+        if (err.code === 'already_booked') this.loadOpd();
+      },
+    });
+  }
+  /** A doctor in the Clinic view's OPD block: show that doctor's patients in the list (the board's "tap a doctor"). */
+  showDoctor(name: string): void {
+    this.setWorkFilters({ ...this.workFilters(), doctor: name });
+    this.setWorkView('list');
+  }
+
   /** Every OPD visit row (every status), before the service filter — the shelf / chart counts read this. */
   private readonly _opdAll = computed<FlowRow[]>(() => {
     if (!this.opdOn()) return [];

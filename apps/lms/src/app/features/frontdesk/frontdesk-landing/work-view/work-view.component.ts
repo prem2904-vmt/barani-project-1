@@ -7,7 +7,7 @@ import type { FlowGridContext } from '../flow-grid/flow-cells';
 import { type FlowRow, whereWords } from '../flow-grid/flow-row';
 import type { StatusTone } from '../../../../shared/utils/status-words';
 import { ClinicViewComponent } from './clinic-view.component';
-import { chipOf } from './clinic';
+import { type BoardDoctor, chipOf } from './clinic';
 import { tokenWidth } from '../flow-grid/flow-fold';
 import { dailyNoLabel } from '../../../../shared/utils/daily-no';
 import { buildSections, loadSectionOrder, mergeSectionOrder, moveSection, saveSectionOrder } from './sections';
@@ -89,7 +89,7 @@ export function tileFace(r: FlowRow): Omit<MorphTile, 'id' | 'x' | 'y' | 'w' | '
       }
       @if (showClinic()) {
         <pf-fd-clinic class="fd-wv__view fd-wv__clinic" [class.off]="view() === 'list'" [rows]="rows()" [order]="order()" [single]="!split()"
-          [context]="context()" [ringLabels]="split()" (more)="moreFor.emit($event)" (fitted)="onClinicFitted()" />
+          [context]="context()" [ringLabels]="split()" [board]="board()" (more)="moreFor.emit($event)" (doctor)="doctor.emit($event)" (fitted)="onClinicFitted()" />
       }
       <!-- The morph (owner mock fd-morph-clinic): ONE moving tile per patient above both views, holding both faces
            (the row's cells and the room chip); each flies from its slot in the outgoing view to its slot in the
@@ -131,10 +131,14 @@ export class WorkViewComponent {
   /** localStorage key for the user's section order (`pf.fd.sectionOrder.<tenant>.<user>`). */
   readonly orderKey = input('');
   readonly view = input<WorkViewMode>('list');
+  /** The OPD doctors board for the Clinic view (empty while OPD is off). */
+  readonly board = input<BoardDoctor[]>([]);
 
   readonly opened = output<FlowRow>();
   /** "+N more" in a clinic room: show that service's list. */
   readonly moreFor = output<ServiceId>();
+  /** A doctor's room in the Clinic view: show that doctor's patients. */
+  readonly doctor = output<string>();
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly secsEl = viewChild<ElementRef<HTMLElement>>('secs');

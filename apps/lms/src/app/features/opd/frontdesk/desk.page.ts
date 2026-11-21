@@ -17,6 +17,7 @@ import { SegmentedComponent, type SegmentedOption } from '../../../shared/primit
 import { ToastService } from '../../../core/services/toast.service';
 import { addDays, labToday } from '../../../shared/utils/lab-clock';
 import { statusWord } from './visit-status';
+import { toBookPriceText } from './desk-rules';
 
 export type DeskFilter = 'all' | 'waiting' | 'in_consult' | 'done' | 'due' | 'tobook';
 
@@ -35,12 +36,7 @@ export function toBookFilter(rows: ProcedureToBook[], doctorId: string | null, q
     (!s || r.patientName.toLowerCase().includes(s) || (r.mrn ?? '').toLowerCase().includes(s) || r.procedureName.toLowerCase().includes(s)));
 }
 
-/** The price line the desk reads: "Set by Dr X (preset ₹Y) · reason" or "Preset price". Pure. */
-export function toBookPriceText(r: Pick<ProcedureToBook, 'price' | 'rulePrice' | 'doctorName' | 'priceReason'>): string {
-  if (r.price === r.rulePrice) return 'Preset price';
-  const inr = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
-  return `Set by ${r.doctorName || 'the doctor'} (preset ${inr(r.rulePrice)})${r.priceReason?.trim() ? ' · ' + r.priceReason.trim() : ''}`;
-}
+export { toBookPriceText } from './desk-rules';
 
 /** "Consultation + 2 procedures" — what a due bill is for. */
 export function dueWhat(r: Pick<PaymentDue, 'lines'>): string {

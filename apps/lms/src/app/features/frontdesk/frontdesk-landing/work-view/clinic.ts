@@ -43,7 +43,12 @@ export interface ClinicPlace {
   chips: ClinicChip[];
   /** The waiting area: big count, spans two rows of its block when there is room. */
   wait?: boolean;
+  /** An OPD doctor's room: the doctor's name (its title shows that doctor's patients in the list). */
+  doctor?: string;
 }
+
+/** The OPD desk's doctors board row (GET /api/opd/queue/board) — what the Clinic's doctor rooms add. */
+export interface BoardDoctor { id: string; name: string; department?: string | null; waiting: number; vitals: number; nowServing?: string | null }
 
 export interface ClinicService {
   id: ServiceId;
@@ -98,7 +103,7 @@ export function placeOf(r: FlowRow): Slot {
 const fmt = (m: number) => durationText(m);
 
 /** The clinic: one block per service in `order` (then any other service that has rows), each with its places. */
-export function clinicServices(rows: readonly FlowRow[], order: readonly ServiceId[]): ClinicService[] {
+export function clinicServices(rows: readonly FlowRow[], order: readonly ServiceId[], board: readonly BoardDoctor[] = []): ClinicService[] {
   const by = new Map<ServiceId, FlowRow[]>();
   for (const r of rows) by.set(r.service, [...(by.get(r.service) ?? []), r]);
   const all: ServiceId[] = ['lab', 'opd', 'ipd', 'scan', 'er'];
@@ -117,11 +122,17 @@ export function clinicServices(rows: readonly FlowRow[], order: readonly Service
       const open = list.filter(r => r.visit && ['booked', 'vitals', 'waiting', 'in_consult'].includes(r.visit.status));
       const docs = new Map<string, { name: string; dept: string }>();
       for (const r of open) docs.set(r.visit!.doctorUserId, { name: r.visit!.doctorName || 'Doctor', dept: r.visit!.departmentName ?? '' });
+      // The doctors board (owner 2026-11-21: moved in from /opd/desk/classic): every OPD doctor gets a room, with the
+      // board's own waiting count (waiting + at vitals) and who is being seen now.
+      const byId = new Map(board.map(b => [b.id, b] as const));
+      for (const b of board) if (!docs.has(b.id)) docs.set(b.id, { name: b.name, dept: b.department ?? '' });
       for (const [docId, d] of docs) {
         const p = get({ key: `opd:doc:${docId}`, title: d.name, rank: 2 });
-        const waiting = open.filter(r => r.visit!.doctorUserId === docId && r.visit!.status === 'waiting').length;
-        p.who = [d.dept, waiting ? `${waiting} waiting` : ''].filter(Boolean).join(' · ');
-        p.status = p.chips.length ? { label: 'Seeing', run: true } : { label: 'Free', run: false };
+        const b = byId.get(docId);
+        const waiting = b ? b.waiting + b.vitals : open.filter(r => r.visit!.doctorUserId === docId && r.visit!.status === 'waiting').length;
+        p.who = [d.dept, waiting ? `${waiting} waiting` : '', b?.nowServing ? `Now ${b.nowServing}` : ''].filter(Boolean).join(' · ');
+        p.status = p.chips.length || b?.nowServing ? { label: 'Seeing', run: true } : { label: 'Free', run: false };
+        p.doctor = d.name;
       }
       const w = places.get('opd:wait');
       if (w) {
@@ -236,7 +247,8 @@ const heightOf = (lines: number, chipH: number, gap: number) => (lines <= 0 ? 0 
 export function fitRoom(f: FitInput): FitResult {
   const n = f.full.length;
   if (!n) return { level: 'full', shown: 0 };
-  const withWho = f.h - f.head - f.who - f.gap;
+  // The room's column gap sits between the title, each who line and the chips.
+  const withWho = f.h - f.head - f.who - f.gap * (f.who > 0 ? 2 : 1);
   const noWho = f.keepWho ? withWho : f.h - f.head - f.gap;
   // A chip wider than the room would be cut: that level does not fit.
   const fits = (widths: readonly number[], room: number) =>

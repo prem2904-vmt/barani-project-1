@@ -122,7 +122,7 @@ describe('never scroll sideways (owner 2026-11-21)', () => {
     const at = (w: number) => [...flowLayout(w).fold];
     expect(at(1400)).toEqual([]);
     expect(at(900)).toEqual(['pay']);
-    expect(at(750)).toEqual(['pay', 'wait']);
+    expect(at(770)).toEqual(['pay', 'wait']);
     expect(at(660)).toEqual(['pay', 'wait', 'token']);
     expect(at(520)).toEqual(['pay', 'wait', 'token', 'tight']);
   });
@@ -168,6 +168,20 @@ describe('Clinic places (only places our data names)', () => {
     expect(wait.chips[0].late).toBe(true);
     expect(s.places.find(p => p.title === 'Dr. Rao')!.status).toEqual({ label: 'Seeing', run: true });
     expect(s.places.find(p => p.title === 'Dr. Menon')!.status).toEqual({ label: 'Free', run: false });
+  });
+  it('the OPD doctors board: every doctor gets a room — waiting count, who is being seen, Free / Seeing, and a name to filter by', () => {
+    const rows = [opd('w1', { checkedInAt: ago(10) }), opd('c', { status: 'in_consult' })];
+    const board = [
+      { id: 'd1', name: 'Dr. Rao', department: 'General', waiting: 4, vitals: 1, nowServing: 'R-c' },
+      { id: 'd9', name: 'Dr. Shah', department: 'Ortho', waiting: 0, vitals: 0, nowServing: null },
+    ];
+    const [s] = clinicServices(rows, ['opd'], board);
+    const rao = s.places.find(p => p.title === 'Dr. Rao')!;
+    expect(rao).toMatchObject({ who: 'General · 5 waiting · Now R-c', status: { label: 'Seeing', run: true }, doctor: 'Dr. Rao' });
+    const shah = s.places.find(p => p.title === 'Dr. Shah')!;
+    expect(shah).toMatchObject({ who: 'Ortho', status: { label: 'Free', run: false }, doctor: 'Dr. Shah', chips: [] });
+    // OPD off = no board: only the doctors of today's visits.
+    expect(clinicServices(rows, ['opd'])[0].places.some(p => p.title === 'Dr. Shah')).toBe(false);
   });
   it('Lab: billing counter (drafts, Bill / Pay), collection, the rows\' own steps, partner lab, reports ready', () => {
     const rows = [
@@ -216,7 +230,7 @@ describe('room fitting (full → dense → hide who → +N more → count in tit
   });
   it('steps down one level at a time as the room fills', () => {
     expect(fitRoom({ ...base, h: 200, ...chips(4) })).toEqual({ level: 'full', shown: 4 });
-    expect(fitRoom({ ...base, h: 110, ...chips(8) })).toEqual({ level: 'dense', shown: 8 });
+    expect(fitRoom({ ...base, h: 116, ...chips(8) })).toEqual({ level: 'dense', shown: 8 });
     expect(fitRoom({ ...base, h: 100, ...chips(8) })).toEqual({ level: 'tight', shown: 8 });
     const more = fitRoom({ ...base, h: 100, ...chips(30) });
     expect(more.level).toBe('more');
@@ -237,7 +251,7 @@ describe('room fitting (full → dense → hide who → +N more → count in tit
         if (r.level === 'counted') continue;
         const widths = r.level === 'full' ? f.full.slice(0, r.shown) : [...f.dense.slice(0, r.shown), ...(r.level === 'more' ? [f.moreW(n - r.shown)] : [])];
         const lines = wrapLines(widths, f.w, f.gap);
-        const room = h - f.head - f.gap - (r.level === 'full' || r.level === 'dense' ? f.who : 0);
+        const room = h - f.head - (r.level === 'full' || r.level === 'dense' ? f.who + 2 * f.gap : f.gap);
         expect(lines * f.chipH + (lines - 1) * f.gap).toBeLessThanOrEqual(room);
         expect(n - r.shown).not.toBe(1);                          // never "+1 more"
       }

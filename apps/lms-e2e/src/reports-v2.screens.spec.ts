@@ -260,7 +260,7 @@ for (const dark of [false, true]) {
     await open(page, dark);
     if (isNarrow(page)) {
       const btn = visible(page, '[data-testid="rq-filters-btn"]');
-      await expect(btn.locator('[data-testid="rq-filters-n"]')).toHaveText('1');   // Ready (the default)
+      await expect(btn.locator('[data-testid="rq-filters-n"]')).toHaveCount(0);   // opens on All: no filter on (owner 2026-11-21)
       await btn.click();
       const sheet = visible(page, '[data-testid="rq-filters-sheet"]');
       await expect(sheet).toBeVisible();
@@ -268,7 +268,7 @@ for (const dark of [false, true]) {
       const rows = sheet.locator('.pf-rq2-f__totrow');
       const n = await rows.count();
       for (let i = 0; i < n; i++) expect((await rows.nth(i).boundingBox())!.height).toBeGreaterThanOrEqual(44);
-      await expect(sheet.locator('[data-filter="pending"]')).toHaveAttribute('aria-pressed', 'true');
+      await expect(sheet.locator('[data-filter="pending"]')).toHaveAttribute('aria-pressed', 'false');
       await shot(page, info.project.name, `filter-sheet-${mode}`);
       await page.keyboard.press('Escape');
       await expect(page.locator('[data-testid="rq-filters-sheet"]')).toHaveCount(0);

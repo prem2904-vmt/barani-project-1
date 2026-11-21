@@ -289,9 +289,8 @@ export class ReportQueueComponent implements OnInit {
       iconPath: ["M10 10l4 4m0-4l-4 4", "M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Z"] },
   ]);
 
-  // Default to 'pending' (Ready) — the queue's primary purpose is
-  // showing what's done and waiting for handover.
-  private readonly _filter = signal<Filter>("pending");
+  // Opens on All (owner 2026-11-21: was Ready). A scope restored by view state or picked by the user still wins.
+  private readonly _filter = signal<Filter>("all");
   readonly filter = this._filter.asReadonly();
   /** Human label for the active filter — shown on phone above the list so the
    *  icon-only filter row reads clearly ("which category am I looking at?"). */

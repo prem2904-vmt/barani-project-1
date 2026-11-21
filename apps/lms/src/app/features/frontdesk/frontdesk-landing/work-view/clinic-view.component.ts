@@ -7,7 +7,7 @@ import { JourneyOverlayService } from '../../../../shared/components/journey-rin
 import type { FlowGridContext } from '../flow-grid/flow-cells';
 import { flowJourneyDetail } from '../flow-grid/flow-journey';
 import type { FlowRow } from '../flow-grid/flow-row';
-import { type ClinicChip, type FitResult, blockRowWeights, blockSpans, clinicServices, fitRoom, placeCols } from './clinic';
+import { type BoardDoctor, type ClinicChip, type FitResult, blockRowWeights, blockSpans, clinicServices, fitRoom, placeCols } from './clinic';
 
 /** Chip geometry (CSS below is the same numbers): padding 8 · gap 6 · border 1 · 30px tall (44px on touch). */
 const CHIP = { pad: 8, gap: 6, border: 1, h: 30, hTouch: 44, lineGap: 6 };
@@ -38,7 +38,12 @@ const CHIP = { pad: 8, gap: 6, border: 1, h: 30, hTouch: 44, lineGap: 6 };
                 [class.cv-room--dense]="f.level !== 'full'" [class.cv-room--tight]="f.level === 'tight' || f.level === 'more' || f.level === 'counted'"
                 [attr.data-fit]="f.level">
                 <h3 class="cv-room__t">
-                  <span class="cv-room__title">{{ p.title }}</span>
+                  @if (p.doctor) {
+                    <button type="button" class="cv-room__title cv-room__doc" [attr.aria-label]="'Show the patients of ' + p.title + ' in the list'"
+                      [attr.title]="'Show the patients of ' + p.title" (click)="doctor.emit(p.doctor!)">{{ p.title }}</button>
+                  } @else {
+                    <span class="cv-room__title">{{ p.title }}</span>
+                  }
                   @if (f.level === 'counted') {
                     <button type="button" class="cv-chip cv-more" (click)="more.emit(s.svc.id)"
                       [attr.aria-label]="p.chips.length + ' in ' + p.title + ', show them in the list'">+{{ p.chips.length }}</button>
@@ -81,7 +86,11 @@ export class ClinicViewComponent implements AfterViewInit {
   readonly single = input(false);
   readonly context = input.required<FlowGridContext>();
   readonly ringLabels = input(true);
+  /** The OPD doctors board (OPD on only): every doctor gets a room with the board's counts. */
+  readonly board = input<BoardDoctor[]>([]);
   readonly more = output<ServiceId>();
+  /** A doctor's room title: show that doctor's patients in the list (the board's "tap a doctor"). */
+  readonly doctor = output<string>();
   /** Every completed fit (the work view's morph places its tiles on the chips after it, and re-places on later ones). */
   readonly fitted = output<void>();
 
@@ -92,7 +101,7 @@ export class ClinicViewComponent implements AfterViewInit {
 
   readonly width = signal(1000);
   readonly compact = computed(() => this.width() < 900);
-  readonly services = computed(() => clinicServices(this.rows(), this.order()));
+  readonly services = computed(() => clinicServices(this.rows(), this.order(), this.board()));
   readonly blocks = computed(() => {
     const svcs = this.services();
     const w = this.width();
@@ -105,7 +114,8 @@ export class ClinicViewComponent implements AfterViewInit {
   readonly rowsTpl = computed(() => {
     const b = this.blocks();
     const weights = blockRowWeights(b.map(x => x.svc.places.length), b);
-    return (weights.length ? weights : [1]).map(n => `minmax(0, ${n}fr)`).join(' ');
+    // A block row never shrinks below one room (title + a chip); a crowded card scrolls rather than cutting rooms.
+    return (weights.length ? weights : [1]).map(n => `minmax(${weights.length > 1 ? 150 : 0}px, ${n}fr)`).join(' ');
   });
 
   /** placeId → fit (measured after render). Before a measure, everything shows (then fits within a frame). */

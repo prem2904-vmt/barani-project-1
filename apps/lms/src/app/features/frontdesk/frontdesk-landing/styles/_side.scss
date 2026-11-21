@@ -10,11 +10,17 @@
     .pf-appt-split > .pf-appt-split__pane > .pf-appt-split__hdr { min-height: 55px; box-sizing: border-box; }
   }
   @media (min-width: 1024px) and (pointer: coarse) {
-    .pf-appt-split > .pf-appt-split__pane > .pf-appt-split__hdr { min-height: 61px; }
+    .pf-appt-split > .pf-appt-split__pane > .pf-appt-split__hdr { min-height: 70px;   /* touch: 44px head controls + the 46px pill (owner 2026-11-21) */ }
   }
   /* Exactly WORK's title (.pf-work-hdr__title .pf-card__label). */
   .fd-side-title .pf-card__label { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
   .fd-side-title--switch { position: relative; }
+  /* Procedures to book (OPD): the procedure's name, then the date + Book on one row (they wrap under on a narrow card). */
+  .fd-proc { cursor: default; }
+  .fd-proc__what { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-top: 4px; }
+  .fd-proc__act { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+  .fd-proc__act pf-date { flex: 1 1 150px; min-width: 0; }
+  .fd-proc__book { flex: none; }
 
   /* Head buttons: WORK's head controls (32px quiet squares; 44px on touch) — the calendar icon and a compact "+ New". */
   .fd-side-headbtn {

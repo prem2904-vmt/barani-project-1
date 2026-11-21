@@ -660,6 +660,17 @@ button {
   }
 }
 
+/* Touch (owner 2026-11-21): EVERY control in a card head or the band is a 44×44 target — icon buttons too (the rule
+   above only sets the height). One place for all screens (Frontdesk VISITS / WORK heads, Results, Lab / Pathologist,
+   Settings); desktop sizes are untouched. `html body` lifts it over a screen's scoped head-button sizes. */
+@media (pointer: coarse) {
+  html body :is(.pf-card__head, .pf-2p__head, .pf-appt-split__hdr, .pf-work-hdr, pf-hero-band, .pf-hb)
+    :is(button, a[href], [role='button'], .pf-btn, .pf-hb-btn):not([hidden]) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 /* Prevent iOS focus zoom */
 @media screen and (max-width: 768px) {
 

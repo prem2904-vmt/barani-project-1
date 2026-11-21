@@ -245,7 +245,8 @@ export function apptTabAria(n: number, overdue: number): string {
 
 /* ── Side card tabs ───────────────────────────────────────────────────────────────────────────────────────── */
 
-export type SideTab = 'who' | 'appt' | 'home';
+/** 'proc' = OPD "Procedures to book" (a Bookings pill, OPD on only — owner 2026-11-21). */
+export type SideTab = 'who' | 'appt' | 'home' | 'proc';
 export interface SideTabInputs {
   /** "Who is where" exists: 2+ services, new design, side-by-side cards. */
   who: boolean;
@@ -254,6 +255,8 @@ export interface SideTabInputs {
   apptN: number;
   overdue: number;
   homeN: number;
+  /** OPD procedures to book: null = no pill (OPD off, or the server has no such list). */
+  procN?: number | null;
 }
 export interface SideTabOption { value: SideTab; label: string; count?: number; alert?: boolean; aria?: string }
 
@@ -263,13 +266,17 @@ export function sideTabOptions(i: SideTabInputs): SideTabOption[] {
   const out: SideTabOption[] = [];
   if (i.who) out.push({ value: 'who', label: 'Patient flow' });
   if (i.appt) out.push({ value: 'appt', label: 'Appointments', count: i.apptN, alert: i.overdue > 0, aria: apptTabAria(i.apptN, i.overdue) });
-  if (i.home) out.push({ value: 'home', label: i.who ? 'Home' : 'Home collection', count: i.homeN });
+  const three = i.procN !== null && i.procN !== undefined;          // three pills: short words so they fit 340px
+  if (i.home) out.push({ value: 'home', label: i.who || three ? 'Home' : 'Home collection', count: i.homeN, aria: `Home collection, ${i.homeN}` });
+  if (i.procN !== null && i.procN !== undefined) out.push({ value: 'proc', label: 'Procedures', count: i.procN, aria: `Procedures to book, ${i.procN}` });
   return out;
 }
 
 /** The tab on show: a remembered "Who is where" reads as Appointments (or Home when appointments are off) wherever
  *  the chart doesn't exist. */
-export function effectiveSideTab(t: SideTab, i: Pick<SideTabInputs, 'who' | 'appt' | 'home'>): SideTab {
+export function effectiveSideTab(t: SideTab, i: Pick<SideTabInputs, 'who' | 'appt' | 'home'> & { proc?: boolean }): SideTab {
+  if (t === 'proc' && !i.proc) t = 'appt';                     // OPD off: the Procedures pill is gone
+  if (t === 'appt' && !i.appt && i.home) return 'home';
   if (t !== 'who' || i.who) return t;
   return i.appt || !i.home ? 'appt' : 'home';
 }
@@ -288,10 +295,11 @@ export function sideSwitchOn(i: Pick<SideTabInputs, 'who' | 'appt' | 'home'>): b
 }
 
 /** One tap: Who is where → the last bookings pill (Appointments when none, or when that list is off); Bookings → Who is where. */
-export function toggleSideView(cur: SideTab, lastBookings: SideTab | null, i: Pick<SideTabInputs, 'appt' | 'home'>): SideTab {
+export function toggleSideView(cur: SideTab, lastBookings: SideTab | null, i: Pick<SideTabInputs, 'appt' | 'home'> & { proc?: boolean }): SideTab {
   if (cur !== 'who') return 'who';
   if (lastBookings === 'home' && i.home) return 'home';
-  return i.appt ? 'appt' : 'home';
+  if (lastBookings === 'proc' && i.proc) return 'proc';
+  return i.appt ? 'appt' : i.home ? 'home' : 'proc';
 }
 
 /** The switch's tooltip / accessible name names what a tap shows. */

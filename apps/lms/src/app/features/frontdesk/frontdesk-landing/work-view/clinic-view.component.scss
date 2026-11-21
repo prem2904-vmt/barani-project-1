@@ -4,7 +4,7 @@
   display: block;
   min-height: 0;
   height: 100%;
-  overflow: hidden;
+  overflow: auto;
   --cv-lab: var(--pf-svc-lab, var(--sky-text, #0284c7));
   --cv-opd: var(--pf-svc-opd, var(--violet-text, #6d28d9));
   --cv-ipd: var(--blue-text, #2563eb);
@@ -80,6 +80,11 @@
   flex: none;
 }
 .cv-room__title { overflow-wrap: normal; word-break: normal; }
+/* A doctor's room title is a link-like button: it shows that doctor's patients in the list. */
+.cv-room__doc { min-height: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer;
+  text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 30%, transparent); text-underline-offset: 3px; }
+.cv-room__doc:hover { color: var(--violet-text); }
+.cv-room__doc:focus-visible { outline: 2px solid var(--color-primary, #7c3aed); outline-offset: 2px; border-radius: 4px; }
 .cv-room__who { font-size: 11.5px; line-height: 1.35; color: var(--text-tertiary); flex: none; }
 .cv-big { font-size: 20px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 /* "tight": the who lines step aside (kept in layout-free form so the fit measures the same box every time). */
@@ -133,5 +138,8 @@
 
 @media (pointer: coarse) {
   .cv-chip { height: 44px; min-height: 44px; }
-  .cv-room__t .cv-more { height: 44px; min-height: 44px; }
+  /* Title-line controls keep the line's height (a 44px HIT AREA, never 44px of room): the "+N" count and a doctor's name. */
+  .cv-room__t .cv-more, .cv-room__doc { position: relative; min-height: 0; }
+  .cv-room__t .cv-more { height: 26px; }
+  .cv-room__t .cv-more::after, .cv-room__doc::after { content: ''; position: absolute; left: 50%; top: 50%; min-width: 44px; width: 100%; height: 44px; transform: translate(-50%, -50%); }
 }

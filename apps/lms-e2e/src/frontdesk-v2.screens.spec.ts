@@ -170,7 +170,9 @@ test.describe('frontdesk v2 — lab-only tenant', () => {
       await expect(vis(page, 'pf-pane-splitter[role="separator"]')).toHaveCount(1);
       const head = await page.locator('.pf-fd-flow .ag-header-cell-text').allTextContents();
       const heads = head.map(t => t.trim()).filter(Boolean);
-      expect(heads).toEqual(expect.arrayContaining(['Token', 'Patient', 'Next']));   // iPad folds Payment into the Patient line
+      expect(heads).toEqual(expect.arrayContaining(['Patient', 'Next']));   // iPad folds Payment into the Patient line
+      // A narrow grid folds Token into a chip before the name (never a sideways scroll, owner 2026-11-21).
+      if (!heads.includes('Token')) await expect(vis(page, '.pf-fd-flow .fd-cell-pt__tok').first()).toBeVisible();
       // fd-chart: narrow grids (iPad) shorten "Where now" / "Waiting" so no header label is ever cut.
       // Never scroll sideways (owner 2026-11-21): a narrow grid folds Waiting into the Where cell (second line).
       expect(heads.some(h => /^Where( now)?$/.test(h))).toBe(true);

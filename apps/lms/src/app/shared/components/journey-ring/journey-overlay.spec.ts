@@ -83,7 +83,11 @@ describe('journey view — open / close / focus', () => {
     const { btn } = openRing(detail({ action: { label: 'Pay now', run } }));
     btn.click();
     vi.advanceTimersByTime(20);
-    overlay()!.querySelector<HTMLButtonElement>('.pf-jov__act')!.click();
+    const act = overlay()!.querySelector<HTMLButtonElement>('.pf-jov__act')!;
+    // Outlined, never a second violet primary (owner 2026-11-21).
+    expect(act.classList).toContain('pf-btn--secondary');
+    expect(act.classList).not.toContain('pf-btn--primary');
+    act.click();
     expect(overlay()).toBeNull();
     expect(run).toHaveBeenCalledTimes(1);
   });

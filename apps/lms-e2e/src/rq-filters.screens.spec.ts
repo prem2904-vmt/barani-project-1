@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { test, expect, isPhone, expectNoHorizontalScroll } from './support/form-factor';
+import { test, expect, isPhone, isTouch, expectNoHorizontalScroll } from './support/form-factor';
 import { resetNeg, installNegBackend, go, neg, visible } from './support/neg-backend';
 
 /**
@@ -135,15 +135,16 @@ for (const dark of [false, true]) {
     await expect(page.locator('[data-testid="rq-tosend-chip"], [data-testid="rq-filter"], [data-testid="rq-pill"]')).toHaveCount(0);
     const head = visible(page, '[data-testid="rq-main"] .pf-card__head');
     await expect(head.locator('[data-testid="rq-send-all"]')).toBeVisible();
-    expect((await head.boundingBox())!.height, 'main head is one row').toBeLessThanOrEqual(64);
+    // One row; on touch its pill and buttons are 44px targets (owner 2026-11-21), so the row is a little taller.
+    expect((await head.boundingBox())!.height, 'main head is one row').toBeLessThanOrEqual(isTouch() ? 72 : 64);
     if (!isNarrow(page)) {
       const side = await visible(page, '[data-testid="rq-side"]').boundingBox();
       const main = await visible(page, '[data-testid="rq-main"]').boundingBox();
       expect(side!.x + side!.width, 'filters LEFT of the grid').toBeLessThanOrEqual(main!.x);
       expect(Math.abs(side!.height - main!.height), 'same height').toBeLessThanOrEqual(2);
-      await expect(head.locator('.pf-rq2-count')).toHaveText('6 of 11');   // Ready (default) of 10 reports + 1 order
+      await expect(head.locator('.pf-rq2-count')).toHaveText('11 reports');   // opens on All (owner 2026-11-21): 10 reports + 1 order
     } else {
-      await expect(visible(page, '[data-testid="rq-filters-n"]')).toHaveText('1');
+      await expect(visible(page, '[data-testid="rq-filters-n"]')).toHaveCount(0);
     }
     await expectNoHorizontalScroll(page, `results ${mode}`);
     await shot(page, info.project.name, `default-${mode}`);
@@ -256,7 +257,7 @@ for (const dark of [false, true]) {
     await btn('status').click();
     const pop = visible(page, '.pf-gcf');
     await expect(pop).toBeVisible();
-    await expect(pop.locator('[role=radio][aria-checked="true"]')).toHaveAttribute('data-value', 'pending');
+    await expect(pop.locator('[role=radio][aria-checked="true"]')).toHaveAttribute('data-value', '');   // All (the default)
     for (const b of await pop.locator('[role=radio]').all()) expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await page.waitForTimeout(300);
     await shot(page, info.project.name, `col-status-${mode}`);

@@ -82,6 +82,22 @@ const VISITS = [
   v(16, 'Baby Ira Raghavan', 'booked', 2, 0),
 ];
 
+/** The OPD doctors board (classic desk) — Dr. Shah sits today with nobody booked yet. */
+const BOARD = [
+  { id: 'd1', name: 'Dr. Rao', department: 'General medicine', waiting: 8, vitals: 0, inConsult: 1, done: 1, nowServing: 'R-13' },
+  { id: 'd2', name: 'Dr. Menon', department: 'Diabetology', waiting: 4, vitals: 1, inConsult: 0, done: 0, nowServing: null },
+  { id: 'd9', name: 'Dr. Shah', department: 'Orthopaedics', waiting: 0, vitals: 0, inConsult: 0, done: 0, nowServing: null },
+];
+/** Procedures ordered "for later" (classic desk's "Procedures to book"). */
+const PROCS = [
+  { id: 'pb1', visitId: 'v13', patientId: 'pv13', patientName: 'Mr. Gopal Thiruvengadam', mrn: 'AA0113', procedureName: 'Knee joint injection',
+    serviceId: 's1', doctorId: 'd1', doctorName: 'Dr. Rao', price: 1500, rulePrice: 1200, priceReason: 'Bilateral', preferredWithin: 'Within 2 weeks',
+    prepNote: 'Fasting not needed', orderedAt: iso(minsAgo(30)) },
+  { id: 'pb2', visitId: 'v14', patientId: 'pv14', patientName: 'Anu Krishnamurthy', mrn: 'AA0114', procedureName: 'Nerve conduction study',
+    serviceId: 's2', doctorId: 'd2', doctorName: 'Dr. Menon', price: 2400, rulePrice: 2400, priceReason: null, preferredWithin: null,
+    prepNote: null, orderedAt: iso(minsAgo(90)) },
+];
+
 /** Five bookings today: three overdue (slot passed, not arrived), two later. */
 const APPTS = () => {
   const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -118,6 +134,9 @@ async function backend(page: Page, opd = true) {
     if (p.startsWith('/api/opd/')) {
       if (p === '/api/opd/visits') return route.fulfill(ok(origin, opd ? VISITS : []));
       if (p === '/api/opd/visits/payments-due') return route.fulfill(ok(origin, [{ visitId: 'v15', billId: 'b15', kind: 'consult', patientId: 'pv15', patientName: 'Mr. Kannan Venkatesan', doctorUserId: 'd1', doctorName: 'Dr. Rao', tokenLabel: 'R-15', visitDate: dayOf(now), visitStatus: 'completed', lines: [], totalPayable: 500, totalPaid: 0, balance: 500, status: 'pending' }]));
+      if (p === '/api/opd/queue/board') return route.fulfill(ok(origin, opd ? BOARD : []));
+      if (p === '/api/opd/procedures/to-book') return route.fulfill(ok(origin, opd ? PROCS : []));
+      if (/^\/api\/opd\/procedures\/[^/]+\/book$/.test(p)) return route.fulfill(ok(origin, { visitId: 'v99', date: dayOf(now) }));
       if (p === '/api/opd/visits/desk') return route.fulfill(ok(origin, { today: dayOf(now), config: { workflow: { vitals: 'desk', labTestsAtDesk: true, billing: 'before_consult' }, queue: { organise: 'per_doctor', doctorUnavailable: 'manual' } }, doctors: [], departments: [] }));
       return route.fulfill(ok(origin, []));
     }
@@ -264,6 +283,16 @@ async function expectSectionsAligned(page: Page, tag: string) {
     return out;
   });
   expect(bad, `${tag}: columns line up across sections at ${projectName()}`).toEqual([]);
+}
+
+/** Pick a Bookings pill — through the collapsed pill's menu when the pills don't fit (pf-segmented pill-fit). */
+async function pickPill(page: Page, v: 'appt' | 'home' | 'proc') {
+  const sideCard = page.locator('.pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
+  const p = sideCard.locator(`[data-testid="fd-bookings-pills"] [role="radio"][data-value="${v}"]`);
+  if (await p.isVisible()) { await p.click(); return; }
+  await sideCard.locator('[data-testid="fd-bookings-pills"] [data-seg-compact]').click();
+  const name = { appt: /^Appointments/, home: /^Home/, proc: /^Procedures/ }[v];
+  await page.getByRole('menuitemradio', { name }).locator('visible=true').first().click();
 }
 
 const sectionIds = (page: Page) => page.locator('.fd-sec').evaluateAll(els => els.map(e => (e as HTMLElement).dataset['sec']));
@@ -482,6 +511,9 @@ test.describe('Clinic view', () => {
     const chip = vis(page, 'pf-fd-clinic .cv-chip[data-row]').first();
     await chip.click();
     await expect(page.locator('pf-journey-overlay [role="dialog"][aria-modal="true"]')).toBeVisible();
+    // The journey view's action is OUTLINED (never a second violet primary).
+    const act = page.locator('pf-journey-overlay .pf-jov__act');
+    if (await act.count()) { await expect(act).toHaveClass(/pf-btn--secondary/); await expect(act).not.toHaveClass(/pf-btn--primary/); }
     await page.waitForTimeout(700);
     await shots(page, '08-clinic-journey');
     await page.keyboard.press('Escape');
@@ -551,12 +583,12 @@ test.describe('VISITS head: Patient flow ↔ Bookings (icon) · Appointments | H
     // The pills: Appointments 5 (rose dot: 3 overdue) | Home collection n; "+ New" on Appointments.
     await expect(pill(page, 'appt')).toHaveAttribute('aria-checked', 'true');
     await expect(pill(page, 'appt')).toContainText('5');
-    await expect(pill(page, 'appt').locator('.seg-alert')).toHaveCount(1);
+    if (await pill(page, 'appt').isVisible()) await expect(pill(page, 'appt').locator('.seg-alert')).toHaveCount(1);
     await expect(pill(page, 'appt')).toHaveAttribute('aria-label', /^Appointments, 5, 3 overdue$/);
     await expect(side(page).locator('[data-testid="fd-new-appt"]')).toBeVisible();
     await page.waitForTimeout(400);
     await shots(page, '11-visits-appointments');
-    await pill(page, 'home').click();
+    await pickPill(page, 'home');
     await expect(pill(page, 'home')).toHaveAttribute('aria-checked', 'true');
     await expect(side(page).locator('[data-testid="fd-new-appt"]')).toHaveCount(0);
     await page.waitForTimeout(400);
@@ -581,11 +613,96 @@ test.describe('VISITS head: Patient flow ↔ Bookings (icon) · Appointments | H
     await expect(btn(page)).toHaveCount(0);
     await expect(title(page)).toHaveText(/^\s*bookings\s*$/i);
     if (await pill(page, 'home').count()) {
-      await pill(page, 'home').click();
+      await pickPill(page, 'home');
       await expect(pill(page, 'home')).toHaveAttribute('aria-checked', 'true');
-      await pill(page, 'appt').click();
+      await pickPill(page, 'appt');
       await expect(pill(page, 'appt')).toHaveAttribute('aria-checked', 'true');
     }
     await shots(page, '14-visits-lab-only');
+  });
+});
+
+test.describe('OPD board + Procedures to book, moved in from /opd/desk/classic', () => {
+  test.beforeEach(async () => { test.setTimeout(180_000); OUT = shotsDir(OUT_BASE); });
+  const side = (page: Page) => page.locator('.pf-appt-split > .pf-appt-split__pane:not(.pf-appt-split__pane--work)');
+  const pill = (page: Page, v: string) => side(page).locator(`[data-testid="fd-bookings-pills"] [role="radio"][data-value="${v}"]`);
+
+  test('OPD on: every board doctor has a Clinic room; a doctor\'s name shows their patients; Procedures pill lists and books', async ({ page }) => {
+    await backend(page, true);
+    await openDesk(page);
+    if (!wide(page)) { test.info().annotations.push({ type: 'form-factor', description: 'Clinic + chart ≥1024px' }); return; }
+    await vis(page, '[data-testid="fd-work-view-btn"]').click();
+    const clinic = vis(page, 'pf-fd-clinic');
+    // Let the morph start and land (the tiles exist only while they fly).
+    await page.locator('.fd-tiles').waitFor({ state: 'attached', timeout: 5000 }).catch(() => { /* reduced motion: no morph */ });
+    await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 8000 });
+    await page.waitForTimeout(300);
+    const shah = clinic.locator('.cv-room[data-place="opd:doc:d9"]');
+    await expect(shah).toContainText('Dr. Shah');
+    await expect(shah.locator('.cv-st')).toHaveText(/Free/);
+    await expect(clinic.locator('.cv-room[data-place="opd:doc:d1"]')).toContainText(/Now R-13/);
+    await shots(page, '15-clinic-doctors-board');
+    await clinic.locator('.cv-room[data-place="opd:doc:d2"] .cv-room__doc').click();
+    await expect(vis(page, '[data-testid="fd-work-title"]')).toHaveText(/^\s*work\s*$/i);
+    await expect(page.locator('.fd-tiles')).toHaveCount(0, { timeout: 5000 });
+    const opdRows = page.locator('.fd-sec[data-sec="opd"] .ag-row[row-id]');
+    await expect(opdRows.first()).toBeVisible();
+    expect(await page.locator('.fd-sec[data-sec="opd"]').innerText()).not.toContain('Dr. Rao');
+    // Bookings → Procedures (2), with the classic desk's details and a Book that waits for a date.
+    await side(page).locator('[data-testid="fd-side-view-btn"]').click();
+    await expect(pill(page, 'proc')).toHaveAttribute('aria-label', 'Procedures to book, 2');
+    await pickPill(page, 'proc');
+    const rows = side(page).locator('[data-testid="fd-proc-rows"] [data-tobook]');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toContainText('Knee joint injection');
+    await expect(rows.first()).toContainText('Set by Dr. Rao');
+    await expect(rows.first().locator('.fd-proc__book')).toBeDisabled();
+    await expect(side(page).locator('[data-testid="fd-new-appt"]')).toHaveCount(0);
+    await page.waitForTimeout(400);
+    await shots(page, '16-bookings-procedures');
+  });
+
+  test('OPD off: no Procedures pill, no board rooms', async ({ page }) => {
+    await backend(page, false);
+    await openDesk(page);
+    await expect(page.locator('[data-testid="fd-bookings-pills"] [data-value="proc"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="fd-proc-rows"]')).toHaveCount(0);
+  });
+});
+
+test.describe('touch: every head / band control is 44×44', () => {
+  test.beforeEach(async () => { test.setTimeout(180_000); OUT = shotsDir(OUT_BASE); });
+  const audit = (page: Page) => page.evaluate(() => {
+    const out: string[] = [];
+    const heads = document.querySelectorAll<HTMLElement>('.pf-card__head, .pf-2p__head, .pf-appt-split__hdr, .pf-work-hdr, pf-hero-band');
+    for (const h of Array.from(heads)) {
+      for (const el of Array.from(h.querySelectorAll<HTMLElement>('button, a[href], [role="button"], [role="radio"]'))) {
+        const r = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        if (r.width === 0 || r.height === 0 || cs.visibility === 'hidden' || cs.display === 'none') continue;
+        if (r.width < 43.5 || r.height < 43.5) out.push(`${(el.getAttribute('aria-label') || el.textContent || el.className).trim().slice(0, 30)} ${Math.round(r.width)}×${Math.round(r.height)}`);
+      }
+    }
+    return out;
+  });
+
+  test('Frontdesk, Results and Pathologist heads on a tablet', async ({ page }) => {
+    if (!isTouch()) { test.info().annotations.push({ type: 'form-factor', description: 'touch only' }); return; }
+    await backend(page, true);
+    await openDesk(page);
+    expect(await audit(page), `Frontdesk at ${projectName()}`).toEqual([]);
+    await shots(page, '17-touch-frontdesk');
+    for (const route of ['/reports', '/pathologist']) {
+      await page.goto(route);
+      await page.locator('pf-hero-band').first().waitFor({ timeout: 60_000 });
+      await page.waitForTimeout(1200);
+      expect(await audit(page), `${route} at ${projectName()}`).toEqual([]);
+      if (route === '/pathologist') {
+        // Review next is the band's one violet primary; nothing at the bottom of the side card.
+        await expect(page.locator('pf-hero-band [data-testid="pv-review-next"]')).toHaveCount(1);
+        await expect(page.locator('.pv-side .pv-next, .pf-bottombar .pv-next')).toHaveCount(0);
+      }
+      await shots(page, `17-touch${route.replace('/', '-')}`);
+    }
   });
 });

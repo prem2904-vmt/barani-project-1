@@ -122,7 +122,7 @@ function pagedQueue(all: any[], url: string) {
 /** AG-Grid renders its rows a few ticks after a change (the grid IS the reports list since Reports v2). */
 const settle = async (f: any) => { for (let i = 0; i < 8; i++) { await new Promise(r => setTimeout(r, 60)); f.detectChanges(); } };
 
-async function render(opts: { touch?: boolean; phone?: boolean; narrow?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[]; wa?: Record<string, unknown>; waCloud?: boolean; paged?: boolean; apiGet?: (url: string) => unknown } = {}) {
+async function render(opts: { touch?: boolean; phone?: boolean; narrow?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[]; wa?: Record<string, unknown>; waCloud?: boolean; paged?: boolean; apiGet?: (url: string) => unknown; scope?: string | null } = {}) {
   (window as any).matchMedia = (q: string) => ({
     matches: q.includes('hover') ? !opts.touch : q.includes('640px') ? !!opts.phone : q.includes('900px') ? !!(opts.phone || opts.narrow) : q.includes('1279px') ? !!(opts.phone || opts.narrow) : false,
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
@@ -162,6 +162,9 @@ async function render(opts: { touch?: boolean; phone?: boolean; narrow?: boolean
     ],
   });
   const f = TestBed.createComponent(ReportQueueComponent);
+  // The page opens on All (owner 2026-11-21). These specs were written on the Ready tab: they start there as if the
+  // user had picked it (a picked / restored scope wins). `scope: null` keeps the page's own default.
+  if (opts.scope !== null) (f.componentInstance as any)._filter.set(opts.scope ?? 'pending');
   f.detectChanges();
   await f.whenStable();
   f.detectChanges();
@@ -1024,6 +1027,16 @@ describe('Reports list — ONE WhatsApp action: Auto, else Chat', () => {
     expect(TestBed.inject(DialogService).confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'This patient opted out of WhatsApp' }));
     expect(open).not.toHaveBeenCalled();
     expect(api.post).not.toHaveBeenCalledWith(`/api/reports/${r.id}/deliver`, expect.anything());
+  });
+});
+
+describe('Results opens on All (owner 2026-11-21)', () => {
+  it('the default scope is All: first page asks for every status; no status row pressed', async () => {
+    const { api, el } = await render({ paged: true, scope: null });
+    const queueUrls = (a: any) => a.get.mock.calls.map((c: unknown[]) => c[0] as string).filter((u: string) => u.startsWith('/api/reports/queue'));
+    expect(queueUrls(api)[0]).toBe('/api/reports/queue?view=summary&page=1&pageSize=50&status=all');
+    const pressed = [...el.querySelectorAll('[data-testid="rq-side"] [data-filter]')].filter(b => b.getAttribute('aria-pressed') === 'true');
+    expect(pressed.map(b => b.getAttribute('data-filter'))).toEqual([]);
   });
 });
 

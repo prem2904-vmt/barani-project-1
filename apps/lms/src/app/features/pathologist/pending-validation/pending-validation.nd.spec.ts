@@ -133,7 +133,7 @@ const primaries = (root: Element) =>
     .filter(b => !b.closest('.pf-bottombar'));
 
 describe('Pathologist queue (nd) — layout', () => {
-  it('band + QUEUE card + SCOPE side card; ONE primary (Review next), in the side card', async () => {
+  it('band + QUEUE card + SCOPE side card; ONE primary (Review next), in the band (owner 2026-11-21)', async () => {
     const { el } = await render();
     expect(el.querySelector('pf-hero-band')).not.toBeNull();
     expect(el.querySelector('.pf-body.pf-body--split')).not.toBeNull();
@@ -141,10 +141,10 @@ describe('Pathologist queue (nd) — layout', () => {
     expect(cards.map(c => c.querySelector('.pf-card__label')?.textContent?.trim())).toEqual(['Pending validation', 'Your scope']);
     const p = primaries(el);
     expect(p.length).toBe(1);
-    expect(p[0].closest('.pv-side')).not.toBeNull();
+    expect(p[0].closest('pf-hero-band')).not.toBeNull();
     expect(p[0].textContent).toContain('Review next');
-    // The bottom bar carries at most the same one action.
-    expect(el.querySelectorAll('.pf-bottombar .pf-btn--primary').length).toBeLessThanOrEqual(1);
+    // Nothing clickable at the bottom of the side card or the phone bar for it any more.
+    expect(el.querySelector('.pv-side .pv-next, .pf-bottombar .pv-next')).toBeNull();
     // Refresh is a quiet ghost on the band.
     expect(el.querySelector('.pv-refresh')!.classList).toContain('pf-hb-btn--ghost');
   });
@@ -266,7 +266,7 @@ describe('Pathologist queue (nd) — tiles', () => {
     f.detectChanges(); await leave(f);
     expect(idsOf(el)).toEqual(['1126001']);
     c.setTab('all'); f.detectChanges();
-    (el.querySelector('.pv-side .pv-next') as HTMLElement).click();
+    (el.querySelector('[data-testid="pv-review-next"]') as HTMLElement).click();
     expect(router.navigate).toHaveBeenCalledWith(['/lab/sample', 's3'], { queryParams: { validate: 1 } });
   });
 
@@ -288,22 +288,22 @@ describe('Pathologist queue (nd) — tiles', () => {
     const { f, el } = await render({ queue$ });
     const stats = el.querySelector('.pv-stats')!;
     expect(stats.querySelectorAll('pf-skeleton').length).toBe(4);
-    expect(el.querySelector('.pv-next')!.textContent).toContain('Loading the queue');
+    expect(el.querySelector('.pv-next')!.getAttribute('aria-label')).toContain('Loading the queue');
     expect(el.textContent).not.toContain('Nothing to review');
     queue$.next(QUEUE); queue$.complete();
     f.detectChanges();
     expect(stats.querySelectorAll('pf-skeleton').length).toBe(0);
     expect(el.querySelector('.pv-next')!.textContent).toContain('Review next');
+    expect(el.querySelector('.pv-next')!.getAttribute('aria-label')).toMatch(/^Review next: /);
   });
 
-  it('empty queue: the kit empty state and a disabled, non-primary Review next', async () => {
+  it('empty queue: the kit empty state and a disabled Review next in the band', async () => {
     const { el } = await render({ queue: [] });
     expect(el.querySelector('.pf-empty')).not.toBeNull();
     expect(el.querySelector('.pf-empty__title')!.textContent).toContain('Nothing to validate');
-    const next = el.querySelector('.pv-side .pv-next') as HTMLButtonElement;
+    const next = el.querySelector('[data-testid="pv-review-next"]') as HTMLButtonElement;
     expect(next.disabled).toBe(true);
-    expect(next.classList).not.toContain('pf-btn--primary');
-    expect(primaries(el).length).toBe(0);
+    expect(next.getAttribute('aria-label')).toBe('Nothing to review');
   });
 });
 

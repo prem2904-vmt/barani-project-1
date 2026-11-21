@@ -47,7 +47,15 @@ describe('More filters — rules', () => {
 });
 
 describe('pf-fd-more-filters', () => {
-  beforeEach(() => TestBed.configureTestingModule({ imports: [MoreFiltersComponent] }));
+  // A wide screen (the popover, not the phone sheet): other specs in the same worker stub window.matchMedia and never
+  // put it back, so pin it here instead of inheriting a "phone" answer.
+  let realMm: typeof window.matchMedia;
+  beforeEach(() => {
+    realMm = window.matchMedia;
+    (window as any).matchMedia = (q: string) => ({ matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+    TestBed.configureTestingModule({ imports: [MoreFiltersComponent] });
+  });
+  afterEach(() => { (window as any).matchMedia = realMm; });
 
   const mount = (inputs: Record<string, unknown> = {}) => {
     const f = TestBed.createComponent(MoreFiltersComponent);

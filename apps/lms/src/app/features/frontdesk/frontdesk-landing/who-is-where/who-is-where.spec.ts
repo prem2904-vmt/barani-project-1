@@ -422,3 +422,20 @@ describe('VISITS card-head icon switch (owner 2026-11-21, refined: two states)',
     expect(t.map(o => [o.value, o.label, o.count, !!o.alert])).toEqual([['appt', 'Appointments', 5, true], ['home', 'Home collection', 2, false]]);
   });
 });
+
+describe('Bookings "Procedures" pill (OPD on only, owner 2026-11-21)', () => {
+  it('a third pill with its count only while OPD gives a list; none when OPD is off', () => {
+    const on = sideTabOptions({ who: false, appt: true, home: true, apptN: 5, overdue: 0, homeN: 2, procN: 3 });
+    expect(on.map(o => [o.value, o.label, o.count])).toEqual([['appt', 'Appointments', 5], ['home', 'Home', 2], ['proc', 'Procedures', 3]]);
+    expect(on[2].aria).toBe('Procedures to book, 3');
+    const off = sideTabOptions({ who: false, appt: true, home: true, apptN: 5, overdue: 0, homeN: 2, procN: null });
+    expect(off.map(o => o.value)).toEqual(['appt', 'home']);
+  });
+  it('a remembered Procedures view falls back to Appointments when OPD is off; the icon returns to it when on', () => {
+    expect(effectiveSideTab('proc', { who: true, appt: true, home: true, proc: false })).toBe('appt');
+    expect(effectiveSideTab('proc', { who: true, appt: true, home: true, proc: true })).toBe('proc');
+    expect(toggleSideView('who', 'proc', { appt: true, home: true, proc: true })).toBe('proc');
+    expect(toggleSideView('who', 'proc', { appt: true, home: true, proc: false })).toBe('appt');
+    expect(sideTitleOf('proc')).toBe('Bookings');
+  });
+});
