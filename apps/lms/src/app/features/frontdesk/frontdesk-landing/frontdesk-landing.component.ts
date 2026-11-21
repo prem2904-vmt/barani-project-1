@@ -1,4 +1,6 @@
 import { DatePipe } from '@angular/common';
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { BackToTodayComponent } from '../../../shared/components/back-to-today/back-to-today.component';
 import { EditReferralDialogComponent } from '../../../shared/components/edit-referral-dialog/edit-referral-dialog.component';
 import { EDIT_REFERRAL_PERM, ReferralSaveResult } from '../../../shared/components/edit-referral-dialog/referral-edit';
 import { ReportActionsService } from '../../../core/services/report-actions.service';
@@ -201,7 +203,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, PfActionsMenuComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
+  imports: [BackToTodayComponent, DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, PfActionsMenuComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -1859,6 +1861,14 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
 
 
   constructor() {
+    // Screen view state (owner 2026-11-21): dates, custom ranges, week strip, search and More filters come back exactly
+    // as left after in-app navigation; fresh on reload / sign-out / branch switch. (Side / status tabs and List | Clinic
+    // already persist in localStorage — they stay there.)
+    inject(ViewStateService).bind('frontdesk', {
+      apptRange: this._apptDateRange, apptStart: this._apptCustomStart, apptEnd: this._apptCustomEnd,
+      workRange: this._workDateRange, workStart: this._workCustomStart, workEnd: this._workCustomEnd,
+      workQuery: this.workQuery, apptWeek: this.apptWeekOffset, workFilters: this.workFilters,
+    });
     // Restore saved 3-pane split positions (Appointments | In Progress | Completed).
     // Done in the constructor so the first render uses the persisted ratio
     // and we don't flicker from defaults to user values.

@@ -1,4 +1,6 @@
 import { stableJson } from '../../../shared/utils/dirty-snapshot';
+import { ViewStateService } from '../../../shared/services/view-state.service';
+import { GridViewStateDirective } from '../../../shared/services/grid-view-state';
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { firstValueFrom } from 'rxjs';
@@ -65,7 +67,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
 @Component({
   selector: 'pf-inventory',
   standalone: true,
-  imports: [BusyDirective, SkeletonTableComponent, DecimalPipe, DatePipe, NgTemplateOutlet, AgGridAngular, BarcodeDisplayComponent,
+  imports: [GridViewStateDirective, BusyDirective, SkeletonTableComponent, DecimalPipe, DatePipe, NgTemplateOutlet, AgGridAngular, BarcodeDisplayComponent,
     HeroBandComponent, PfDateComponent, SelectComponent, InventoryEnableCardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['../../stores/inv-layout.scss'],
@@ -139,7 +141,7 @@ const CATEGORIES = ['consumable', 'reagent', 'kit', 'disposable'];
                 @if (!visibleItems().length) {
                   <p class="pf-band-empty">No items match{{ q() ? ' "' + q() + '"' : ' this category' }}.</p>
                 }
-                <ag-grid-angular class="inv-grid pf-inv-grid" [class.pf-inv-grid--hidden]="!visibleItems().length"
+                <ag-grid-angular class="inv-grid pf-inv-grid" pfGridViewState="admin.inventory" [class.pf-inv-grid--hidden]="!visibleItems().length"
                                  [theme]="gridTheme()" [rowData]="visibleItems()" [columnDefs]="itemCols()"
                                  [getRowId]="rowId" [rowClassRules]="rowClassRules" [animateRows]="true" [suppressCellFocus]="true"
                                  (gridReady)="onGridReady($event)" (rowClicked)="onRowClicked($event)"></ag-grid-angular>
@@ -490,6 +492,9 @@ export class InventoryComponent implements OnInit {
   tone(it: InvItem) { return STOCK_LEVEL_TONE[stockLevel(it)]; }
   levelLabel(it: InvItem) { return STOCK_LEVEL_LABEL[stockLevel(it)]; }
   expiry(daysLeft: number) { return expiryView(daysLeft); }
+
+  // Screen view state (owner 2026-11-21): search + category come back as left after in-app navigation.
+  private readonly _viewState = inject(ViewStateService).bind('admin.inventory', { q: this.q, category: this.category });
 
   async ngOnInit() { await Promise.all([this.load(), this.loadAlerts()]); }
 

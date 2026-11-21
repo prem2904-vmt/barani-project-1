@@ -1,4 +1,7 @@
 import { SkelGridComponent } from '../../shared/components/skeleton-frame/skeleton-frame.component';
+import { ViewStateService } from '../../shared/services/view-state.service';
+import { GridViewStateDirective } from '../../shared/services/grid-view-state';
+import { BackToTodayComponent } from '../../shared/components/back-to-today/back-to-today.component';
 import { SheetEditorService } from '../neuron/sheet-editor.service';
 import { ShareService } from '../../core/services/share.service';
 import { NgTemplateOutlet, formatDate } from '@angular/common';
@@ -86,7 +89,7 @@ function writeStore(key: string, value: unknown): void {
 @Component({
   selector: 'pf-insights',
   standalone: true,
-  imports: [SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, PfDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, InsightsChartComponent, InsightsDashboardComponent],
+  imports: [BackToTodayComponent, GridViewStateDirective, SkelGridComponent, NgTemplateOutlet, AgGridAngular, HeroBandComponent, PfDateComponent, SelectComponent, SkeletonTableComponent, BusyDirective, InsightsChartComponent, InsightsDashboardComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './insights.component.html',
   styleUrl: './insights.component.scss',
@@ -312,6 +315,12 @@ export class InsightsComponent {
   readonly selectedKpi = signal<string>('patients');
 
   constructor() {
+    // Screen view state (owner 2026-11-21): section, period, custom dates, filters and search come back as left after
+    // in-app navigation; a deep link's query params (restoreFromUrl) still win.
+    inject(ViewStateService).bind('insights', {
+      nav: this.nav, period: this.period, customFrom: this.customFrom, customTo: this.customTo, branchId: this.branchId,
+      departmentId: this.departmentId, testId: this.testId, refDoctorId: this.refDoctorId, q: this.q, dashPeriod: this.dashPeriod,
+    });
     this.restoreFromUrl();
     void this.beta.ensureLoaded();
     // My dashboards: listed only with the beta on; a dashboard URL without it falls back to Overview.

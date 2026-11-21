@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, HostListener, OnDestroy, OnInit, type WritableSignal, computed, inject, signal, viewChild,
 } from '@angular/core';
@@ -423,4 +424,8 @@ export class OpdMyPatientsPage implements OnInit, OnDestroy {
   /** A date tapped on the dock: that visit in the patient's history. */
   historyAt(day: string) { const r = this.selected(); if (r) this.router.navigate(['/opd/patient', r.patientId], { queryParams: { date: day } }); }
   dxText(dx: { label: string }[]): string { return dx.map(d => d.label).join(', '); }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('opd.my-patients', { tab: this.tab, chips: this.chips, query: this.query, doctor: this.selectedDoctorId });
 }

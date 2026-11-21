@@ -1,3 +1,4 @@
+import { ViewStateService } from '../../../shared/services/view-state.service';
 import { SkelGridComponent } from '../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, signal, TemplateRef, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
@@ -103,7 +104,7 @@ const STATUS_ORDER = ['online', 'offline', 'error', 'pending', 'never'] as const
               @if (listSkeleton()) {
                 <pf-skel-grid class="pf-sg-skel" [rows]="30" [columns]="6" label="Loading Bridges…"></pf-skel-grid>
               }
-              <pf-data-grid [clickable]="true" [rowData]="visibleRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></pf-data-grid>
+              <pf-data-grid viewStateKey="admin.bridges.g1" [clickable]="true" [rowData]="visibleRows()" [columnDefs]="colDefs()" [defaultColDef]="defaultColDef" [getRowId]="getRowId" [suppressCellFocus]="true" (cellClicked)="onCellClicked($event)"></pf-data-grid>
               @if (!listSkeleton() && !loading() && visibleRows().length === 0) {
                 <div class="pf-sg-empty">
                   <p class="pf-sg-empty__title">{{ q().trim() ? 'No Bridges match "' + q().trim() + '"' : 'No Bridges yet' }}</p>
@@ -284,4 +285,8 @@ export class BridgesListComponent {
     if (ev.colDef.colId === 'actions') return;
     this.open(ev.data);
   }
+
+  // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
+  // fresh on reload, sign-out and branch switch.
+  private readonly _viewState = inject(ViewStateService).bind('admin.bridges', { q: this.q });
 }

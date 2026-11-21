@@ -35,6 +35,7 @@
             <pf-date label="To" inputId="pf-ins-to" [value]="customTo()" [min]="customFrom()" [max]="today" (valueChange)="$event && customTo.set($event)"></pf-date>
           </span>
         }
+        <pf-back-to-today [show]="customOn() && customTo() < today" (reset)="setPeriod('today')" />
         @if (branchOptions().length > 2) {
           <pf-select class="pf-ins-bandsel" size="sm" [options]="branchOptions()" [value]="branchId()"
                      (valueChange)="setFilter('branch', $event)" aria-label="Branch"></pf-select>
@@ -225,7 +226,7 @@
                   }
                 </div>
               } @else {
-                <ag-grid-angular class="pf-ins-grid" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="colDefs()"
+                <ag-grid-angular class="pf-ins-grid" [pfGridViewState]="'insights.list.' + (listKey() ?? '')" [theme]="gridTheme()" [rowData]="rows()" [columnDefs]="colDefs()"
                                  [defaultColDef]="defaultColDef" [quickFilterText]="q()" [animateRows]="true" [autoSizeStrategy]="phone() ? undefined : autoSize()"
                                  [suppressCellFocus]="true" [enableCellTextSelection]="true" [tooltipShowDelay]="300"></ag-grid-angular>
               }

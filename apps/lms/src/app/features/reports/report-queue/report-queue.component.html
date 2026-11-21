@@ -136,7 +136,7 @@
           <div #listEnd class="pf-rq2-listend" aria-hidden="true"></div>
           }
           } @else {
-          <pf-data-grid #rqGrid class="pf-rq2-grid" data-testid="rq-grid"
+          <pf-data-grid #rqGrid class="pf-rq2-grid" data-testid="rq-grid" viewStateKey="reports.grid"
                         [rowData]="gridRows()" [columnDefs]="colDefs()" [defaultColDef]="rqDefaultColDef"
                         [getRowId]="$any(rqRowId)" [getRowClass]="rqRowClass" [suppressColumnVirtualisation]="true"
                         [isFullWidthRow]="rqFullWidth" [fullWidthCellRenderer]="rqFullWidthRenderer"
@@ -181,6 +181,7 @@
         </span>
         <div class="pf-rq2-f__dates" [attr.data-custom]="datePreset() === 'custom'">
           @if (datePreset() === 'custom') { <span class="pf-rq2-f__custom">Custom range</span> }
+          <pf-back-to-today [show]="datePreset() === 'custom' && !!dateTo() && dateTo()! < today" (reset)="setPreset('today')" />
           <label class="pf-rq2-f__dates-lbl" [for]="'pf-rq-from' + (sheet ? '-s' : '')">From</label>
           <pf-date label="From" [inputId]="'pf-rq-from' + (sheet ? '-s' : '')" [value]="dateFrom()" [max]="dateTo() || today" (valueChange)="setFrom($event)"></pf-date>
           <label class="pf-rq2-f__dates-lbl" [for]="'pf-rq-to' + (sheet ? '-s' : '')">To</label>
