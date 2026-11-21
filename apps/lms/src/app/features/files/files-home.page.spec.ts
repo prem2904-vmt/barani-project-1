@@ -13,6 +13,7 @@ import { FilesAccessService } from './files-access.service';
 import { FilesDeviceService } from './files-device.service';
 import { FILES_APPS } from './files-registry';
 import { OfficeService } from './office.service';
+import { sortsAndFilters } from '../../shared/utils/work-grid';
 import { FilesHomePage } from './files-home.page';
 
 @Component({ selector: 'pf-hero-band', standalone: true, template: '<ng-content></ng-content><ng-content select="[band-center]"></ng-content><ng-content select="[band-search]"></ng-content><ng-content select="[band-actions]"></ng-content>' })
@@ -265,5 +266,14 @@ describe('Files home', () => {
     const names = page.templates().map((x: { name: string }) => x.name);
     expect(names.filter((n: string) => n === "Letter on the lab's letterhead")).toHaveLength(1);
     expect(page.templates().find((x: { name: string }) => x.name === "Letter on the lab's letterhead").own).toBeTruthy();
+  });
+
+  it('every data column sorts and filters; the actions column is exempt', async () => {
+    const { page, settle } = make();
+    await settle();
+    for (const c of page.colDefs() as Array<{ colId?: string; field?: string; sortable?: boolean; filter?: unknown }>) {
+      if (c.colId === 'actions') expect([c.sortable, c.filter]).toEqual([false, false]);
+      else expect(sortsAndFilters(c as never), String(c.field)).toBe(true);
+    }
   });
 });

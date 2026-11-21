@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { AgGridAngular } from 'ag-grid-angular';
 import { ColDef, RowClickedEvent } from 'ag-grid-community';
+import { numberCol, textCol } from '../../../../shared/utils/work-grid';
 import { ApiService } from '../../../../core/services/api.service';
 import { ToastService } from '../../../../core/services/toast.service';
 import { ThemeService } from '../../../../core/services/theme.service';
@@ -26,13 +27,26 @@ interface OgGroup { code: string; name: string; values: OgRow[]; links: OgLink[]
 /** One distinct test a group is linked into. */
 interface OgTestRef { testId: string; testCode: string | null; testName: string; params: string[]; }
 
-interface OgGridRow {
+export interface OgGridRow {
   group: OgGroup;
   name: string;
   valuesJoined: string;
   normalsJoined: string;
   testCount: number;
   testCodesJoined: string;
+}
+
+/** The option-groups grid's columns: every data column sorts and filters on its real value (work-grid helpers). */
+export function ogColumns(): ColDef<OgGridRow>[] {
+  return [
+    textCol<OgGridRow>({ headerName: 'Option group', field: 'name', minWidth: 170, flex: 1, wrapText: true, autoHeight: true,
+      cellStyle: { fontWeight: '600' } }, r => r.name),
+    textCol<OgGridRow>({ headerName: 'Values', field: 'valuesJoined', minWidth: 200, flex: 1.4 }, r => r.valuesJoined),
+    textCol<OgGridRow>({ headerName: 'Normal', field: 'normalsJoined', minWidth: 100, maxWidth: 150 }, r => r.normalsJoined),
+    numberCol<OgGridRow>({ headerName: 'Tests', field: 'testCount', minWidth: 84, maxWidth: 95, sort: 'desc' }, r => r.testCount, 'left'),
+    textCol<OgGridRow>({ headerName: 'Linked tests', field: 'testCodesJoined', minWidth: 180, flex: 1.3,
+      tooltipField: 'testCodesJoined' }, r => r.testCodesJoined),
+  ];
 }
 
 /** A pickable parameter of a test in the create-mapping flow. */
@@ -341,15 +355,7 @@ export class OptionGroupsPanelComponent implements OnInit {
   readonly rowClass = (p: { data?: OgGridRow }) => (p.data && p.data.group.code === this.selected()?.code ? 'pf-og__row--sel' : '');
 
   readonly defaultColDef: ColDef = { sortable: true, resizable: true, filter: false, suppressMovable: true };
-  readonly columnDefs: ColDef<OgGridRow>[] = [
-    { headerName: 'Option group', field: 'name', minWidth: 170, flex: 1, wrapText: true, autoHeight: true,
-      cellStyle: { fontWeight: '600' } },
-    { headerName: 'Values', field: 'valuesJoined', minWidth: 200, flex: 1.4 },
-    { headerName: 'Normal', field: 'normalsJoined', minWidth: 100, maxWidth: 150 },
-    { headerName: 'Tests', field: 'testCount', minWidth: 84, maxWidth: 95, sort: 'desc' },
-    { headerName: 'Linked tests', field: 'testCodesJoined', minWidth: 180, flex: 1.3,
-      tooltipField: 'testCodesJoined' },
-  ];
+  readonly columnDefs: ColDef<OgGridRow>[] = ogColumns();
 
   readonly rows = computed<OgGridRow[]>(() => {
     const q = this.effectiveQuery().trim().toLowerCase();

@@ -15,7 +15,11 @@ import { browsersFromEnv, formFactorProjects } from './src/support/form-factor';
  */
 export default defineConfig({
   testDir: './src',
+<<<<<<< HEAD
   testMatch: /(whatsapp-manual|whatsapp-auto-chat|wizard-port|idcard-size|fx-desk|fx-int|rt-lab|rt-fd|rt-wa|cm-comms|neg-comms|neg-email-share|neg-wa|neg-storage|neg-desk-lab|files|bugs-1116|settings|settings-v2|lab-departments|rehome-lab|rehome-org|settings-grids|test-editor-align|unsaved-dialog|tm-views|settings-bottom|report-design|side-cards|prepare-two-panel|settings-access|prices-neuron|order-ids|collect-two-panel|workflow-v2|reports-v2|critical-results|frontdesk-v2|notifications-v2|tat-closing|save-dirty|skeleton-layout|audit-v2|pill-fit|lab-grid|fd-chart|rq-filters|fd-sections|view-state|light-theme|grid-sort|collect-info|collect-merge|status-words|fd-grid-columns|small-screens)\.screens\.spec\.ts/,
+=======
+  testMatch: /(whatsapp-manual|whatsapp-auto-chat|wizard-port|idcard-size|fx-desk|fx-int|rt-lab|rt-fd|rt-wa|cm-comms|neg-comms|neg-email-share|neg-wa|neg-storage|neg-desk-lab|files|bugs-1116|settings|settings-v2|lab-departments|rehome-lab|rehome-org|settings-grids|test-editor-align|unsaved-dialog|tm-views|settings-bottom|report-design|side-cards|prepare-two-panel|settings-access|prices-neuron|order-ids|collect-two-panel|workflow-v2|reports-v2|critical-results|frontdesk-v2|notifications-v2|tat-closing|save-dirty|skeleton-layout|audit-v2|pill-fit|lab-grid|fd-chart|rq-filters|fd-sections|view-state|light-theme|grid-sort|collect-info|collect-merge|status-words|fd-grid-columns|all-grids-sort-filter|settings-grids2)\.screens\.spec\.ts/,
+>>>>>>> 66d42b447f8a09bfbf82e56ba725ecd153cf798f
   retries: 0,
   workers: Number(process.env['PW_WORKERS'] || 4),
   fullyParallel: false,

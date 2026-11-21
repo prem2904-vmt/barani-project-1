@@ -10,7 +10,8 @@ import { gridThemeDark, gridThemeLight } from '../../admin/tests/tests/grid-them
 import { PharmacyApi, type SupplierBody, type SupplierRow } from './pharmacy.api';
 import { errText } from './pharmacy-math';
 import { activeWords } from '../../../shared/utils/status-words';
-import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { textCol } from '../../../shared/utils/work-grid';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
 import { PharmacySectionsComponent } from './pharmacy-sections.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -109,13 +110,7 @@ export class PharmacySuppliersPage {
   protected readonly gstOk = computed(() => gstinOk(this.form().gstin));
   protected readonly valid = computed(() => !!this.form().name.trim() && this.gstOk());
   protected readonly rowId = (p: { data: SupplierRow }) => p.data.id;
-  protected readonly cols: ColDef<SupplierRow>[] = [
-    { field: 'name', headerName: 'Supplier', flex: 2, minWidth: 180, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' },
-    { field: 'gstin', headerName: 'GSTIN', flex: 1, minWidth: 150 },
-    { field: 'drugLicenseNo', headerName: 'Drug licence', flex: 1, minWidth: 130 },
-    { field: 'phone', headerName: 'Phone', width: 130 },
-    statusWordsCol<SupplierRow>({ field: 'isActive', colId: 'isActive', headerName: 'Status', width: 110, valueGetter: p => (p.data?.isActive ? 'Active' : 'Inactive') }, s => activeWords(!!s.isActive)),
-  ];
+  protected readonly cols: ColDef<SupplierRow>[] = supplierColumns();
 
   constructor() { this.load(); }
   private load() { this.api.suppliers(true).subscribe({ next: s => this.all.set(s), error: e => this.toast.error(errText(e)) }); }
@@ -139,4 +134,15 @@ export class PharmacySuppliersPage {
   // Screen view state (owner 2026-11-21): filters / tab / search come back as left after in-app navigation;
   // fresh on reload, sign-out and branch switch.
   private readonly _viewState = inject(ViewStateService).bind('opd.suppliers', { q: this.q });
+}
+
+/** The suppliers grid's columns; Status is words (Active before Inactive), never a pill. */
+export function supplierColumns(): ColDef<SupplierRow>[] {
+  return [
+    textCol<SupplierRow>({ field: 'name', headerName: 'Supplier', flex: 2, minWidth: 180, wrapText: true, autoHeight: true, cellClass: 'ph-wrap' }, r => r.name ?? ''),
+    textCol<SupplierRow>({ field: 'gstin', headerName: 'GSTIN', flex: 1, minWidth: 150 }, r => r.gstin ?? ''),
+    textCol<SupplierRow>({ field: 'drugLicenseNo', headerName: 'Drug licence', flex: 1, minWidth: 130 }, r => r.drugLicenseNo ?? ''),
+    textCol<SupplierRow>({ field: 'phone', headerName: 'Phone', width: 130 }, r => r.phone ?? ''),
+    statusValuesCol<SupplierRow>({ field: 'isActive', colId: 'isActive', headerName: 'Status', width: 110 }, s => activeWords(!!s.isActive), s => (s.isActive ? 0 : 1)),
+  ];
 }

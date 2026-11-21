@@ -38,7 +38,9 @@ import { mediaSignal } from '../../../shared/utils/media-query';
 import { DayClosingComponent } from './day-closing.component';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { dayLabel, inr, dayStatusWords } from './expense-format';
-import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
+import { dateCol, moneyCol, numberCol, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -676,37 +678,39 @@ export class ExpenseTrackerComponent {
     };
     if (this.isPhone) {
       return [
-        { colId: 'date', headerName: 'Day', width: 92, minWidth: 92, flex: 0, sort: 'desc',
-          valueGetter: p => p.data?.date ?? '', cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(dayLabel(p.data?.date ?? '', false)) },
-        { colId: 'record', headerName: 'Entry', flex: 1, minWidth: 150, valueGetter: p => p.data?.description ?? '',
+        dateCol<ExpenseEntry>({ colId: 'date', headerName: 'Day', width: 92, minWidth: 92, flex: 0, sort: 'desc',
+          cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(dayLabel(p.data?.date ?? '', false)) }, r => r.date, 'left'),
+        textCol<ExpenseEntry>({ colId: 'record', headerName: 'Entry', flex: 1, minWidth: 150,
           cellRenderer: (p: { data?: ExpenseEntry }) => {
             const e = p.data; if (!e) return '';
             return `<div class="pf-xt-cell"><span>${this.esc(e.description)}</span>` +
               `<span class="pf-xt-cell__sub">${this.esc([e.kind === 'cash_in' ? 'Cash in' : e.categoryName, expenseModeLabel(e.paymentMode), e.paidTo].filter(Boolean).join(' · '))}</span>` +
               `${this.amountHtml(e)}${this.billsHtml(e)}</div>`;
-          } },
+          } }, r => [r.description, r.kind === 'cash_in' ? 'Cash in' : r.categoryName, expenseModeLabel(r.paymentMode), r.paidTo].filter(Boolean).join(' '), 'left', r => r.description),
         ...(canAdd ? [actions] : []),
       ];
     }
     const cols: ColDef<ExpenseEntry>[] = [
-      { colId: 'date', headerName: 'Date', width: 120, minWidth: 110, flex: 0, sort: 'desc',
-        valueGetter: p => p.data?.date ?? '', cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(dayLabel(p.data?.date ?? '')) },
-      { colId: 'item', headerName: 'Item', flex: 1.6, minWidth: 180, valueGetter: p => p.data?.description ?? '',
+      dateCol<ExpenseEntry>({ colId: 'date', headerName: 'Date', width: 120, minWidth: 110, flex: 0, sort: 'desc',
+        cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(dayLabel(p.data?.date ?? '')) }, r => r.date, 'left'),
+      textCol<ExpenseEntry>({ colId: 'item', headerName: 'Item', flex: 1.6, minWidth: 180,
         cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(p.data?.description ?? '', [p.data?.paidTo, p.data?.notes].filter(Boolean).join(' · ')) },
-      { colId: 'category', headerName: 'Category', flex: 1, minWidth: 140,
-        valueGetter: p => (p.data?.kind === 'cash_in' ? expenseKindLabel('cash_in') : p.data?.categoryName) ?? '',
+        r => [r.description, r.paidTo, r.notes].filter(Boolean).join(' '), 'left', r => r.description),
+      valuesCol<ExpenseEntry>({ colId: 'category', headerName: 'Category', flex: 1, minWidth: 140,
         cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(p.data?.kind === 'cash_in' ? 'Cash in' : p.data?.categoryName ?? '') },
-      { colId: 'mode', headerName: 'Mode', width: 120, minWidth: 100, flex: 0, valueGetter: p => expenseModeLabel(p.data?.paymentMode) },
+        r => (r.kind === 'cash_in' ? expenseKindLabel('cash_in') : r.categoryName) ?? '', WorkSetFilterComponent),
+      valuesCol<ExpenseEntry>({ colId: 'mode', headerName: 'Mode', width: 120, minWidth: 100, flex: 0 },
+        r => expenseModeLabel(r.paymentMode) ?? '', WorkSetFilterComponent),
       // Pinned right (beside the row action): the money never scrolls out of
       // view when the grid is narrower than its columns (iPad + side card).
-      { colId: 'amount', headerName: 'Amount', width: 130, minWidth: 120, flex: 0, type: 'rightAligned', pinned: 'right', lockPinned: true,
-        valueGetter: p => (p.data ? (p.data.kind === 'cash_in' ? p.data.amount : -p.data.amount) : 0),
+      moneyCol<ExpenseEntry>({ colId: 'amount', headerName: 'Amount', width: 130, minWidth: 120, flex: 0, type: 'rightAligned', pinned: 'right', lockPinned: true,
         cellRenderer: (p: { data?: ExpenseEntry }) => (p.data ? this.amountHtml(p.data) : '') },
-      { colId: 'bills', headerName: 'Bills', width: 84, minWidth: 80, flex: 0, sortable: false,
-        cellRenderer: (p: { data?: ExpenseEntry }) => (p.data ? this.billsHtml(p.data) : '') },
-      { colId: 'by', headerName: 'Entered by', flex: 1, minWidth: 140, valueGetter: p => p.data?.createdByName ?? '',
+        r => (r.kind === 'cash_in' ? r.amount : -r.amount), 'right'),
+      numberCol<ExpenseEntry>({ colId: 'bills', headerName: 'Bills', width: 84, minWidth: 80, flex: 0,
+        cellRenderer: (p: { data?: ExpenseEntry }) => (p.data ? this.billsHtml(p.data) : '') }, r => r.attachments?.length ?? 0, 'left'),
+      textCol<ExpenseEntry>({ colId: 'by', headerName: 'Entered by', flex: 1, minWidth: 140,
         cellRenderer: (p: { data?: ExpenseEntry }) => this.cell(p.data?.createdByName ?? '',
-          p.data ? formatDate(p.data.createdAt, 'd MMM, h:mm a', 'en-US', LAB_TIME_ZONE) : '') },
+          p.data ? formatDate(p.data.createdAt, 'd MMM, h:mm a', 'en-US', LAB_TIME_ZONE) : '') }, r => r.createdByName ?? ''),
     ];
     return canAdd ? [...cols, actions] : cols;
   });
@@ -735,29 +739,30 @@ export class ExpenseTrackerComponent {
     };
     if (this.isPhone) {
       return [
-        { colId: 'date', headerName: 'Day', flex: 1, minWidth: 140, valueGetter: p => p.data?.date ?? '',
+        dateCol<ExpenseDay>({ colId: 'date', headerName: 'Day', flex: 1, minWidth: 140,
           cellRenderer: (p: { data?: ExpenseDay }) => {
             const d = p.data; if (!d) return '';
             return `<div class="pf-xt-cell"><span>${this.esc(dayLabel(d.date))}</span>` +
               `<span class="pf-xt-cell__sub">Open ${this.esc(inr(d.opening))} · In ${this.esc(inr(d.cashIn))} · Out ${this.esc(inr(d.expenses))}</span>` +
               `<span>Close ${this.esc(inr(d.closing))}</span>${status(d)}</div>`;
-          } },
+          } }, r => r.date, 'left'),
         actions,
       ];
     }
     return [
-      { colId: 'date', headerName: 'Day', width: 140, minWidth: 130, flex: 0, valueGetter: p => p.data?.date ?? '',
-        cellRenderer: (p: { data?: ExpenseDay }) => this.cell(dayLabel(p.data?.date ?? ''), p.data ? plural(p.data.entryCount, 'entry', 'entries') : '') },
-      { colId: 'opening', headerName: 'Opening', flex: 1, minWidth: 120, type: 'rightAligned', valueGetter: p => p.data?.opening ?? 0,
+      dateCol<ExpenseDay>({ colId: 'date', headerName: 'Day', width: 140, minWidth: 130, flex: 0,
+        cellRenderer: (p: { data?: ExpenseDay }) => this.cell(dayLabel(p.data?.date ?? ''), p.data ? plural(p.data.entryCount, 'entry', 'entries') : '') }, r => r.date, 'left'),
+      moneyCol<ExpenseDay>({ colId: 'opening', headerName: 'Opening', flex: 1, minWidth: 120, type: 'rightAligned',
         cellRenderer: (p: { data?: ExpenseDay }) => `<div class="pf-xt-cell pf-xt-cell--end">${num(p.data?.opening)}${p.data?.openingSet ? '<span class="pf-xt-cell__sub">set by admin</span>' : ''}</div>` },
-      { colId: 'cashIn', headerName: 'Cash in', flex: 1, minWidth: 110, type: 'rightAligned', valueGetter: p => p.data?.cashIn ?? 0,
-        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.cashIn) },
-      { colId: 'expenses', headerName: 'Expenses', flex: 1, minWidth: 110, type: 'rightAligned', valueGetter: p => p.data?.expenses ?? 0,
-        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.expenses) },
-      { colId: 'closing', headerName: 'Closing', flex: 1, minWidth: 120, type: 'rightAligned', valueGetter: p => p.data?.closing ?? 0,
-        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.closing, true) },
-      statusWordsCol<ExpenseDay>({ colId: 'status', headerName: 'Status', width: 140, minWidth: 120, flex: 0, valueGetter: p => (p.data?.isClosed ? 'closed' : 'open') },
-        dayStatusWords),
+        r => r.opening ?? 0, 'right'),
+      moneyCol<ExpenseDay>({ colId: 'cashIn', headerName: 'Cash in', flex: 1, minWidth: 110, type: 'rightAligned',
+        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.cashIn) }, r => r.cashIn ?? 0, 'right'),
+      moneyCol<ExpenseDay>({ colId: 'expenses', headerName: 'Expenses', flex: 1, minWidth: 110, type: 'rightAligned',
+        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.expenses) }, r => r.expenses ?? 0, 'right'),
+      moneyCol<ExpenseDay>({ colId: 'closing', headerName: 'Closing', flex: 1, minWidth: 120, type: 'rightAligned',
+        cellRenderer: (p: { data?: ExpenseDay }) => num(p.data?.closing, true) }, r => r.closing ?? 0, 'right'),
+      statusValuesCol<ExpenseDay>({ colId: 'status', headerName: 'Status', width: 140, minWidth: 120, flex: 0 },
+        dayStatusWords, r => (r.isClosed ? 1 : 0)),
       actions,
     ];
   });

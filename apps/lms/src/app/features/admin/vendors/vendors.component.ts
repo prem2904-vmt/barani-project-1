@@ -26,6 +26,7 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { NgTemplateOutlet } from '@angular/common';
 import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, ModuleRegistry } from 'ag-grid-community';
+import { moneyCol, textCol } from '../../../shared/utils/work-grid';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { SegmentedComponent } from '../../../shared/primitives/segmented.component';
 import {
@@ -589,21 +590,21 @@ export class VendorsComponent implements OnInit {
     const money = (n: number) => { const el = sgCell(sgInr(n)); el.classList.add('pf-sg-money'); return el; };
     const sample = this.actionsFor({ id: '', name: '', isActive: true } as VendorRow, web);
     const cols: ColDef<VendorRow>[] = [
-      { colId: 'name', headerName: 'Account', flex: 1.5, minWidth: 190, sort: 'asc', valueGetter: p => p.data?.name ?? '',
+      textCol<VendorRow>({ colId: 'name', headerName: 'Account', flex: 1.5, minWidth: 190, sort: 'asc',
         cellRenderer: (p: ICellRendererParams<VendorRow>) => {
           const v = p.data;
           // Two "Apollo D"s stay distinguishable: contact (+ code on phone) under the name.
           const sub = [phone ? v?.code : null, v?.contactName, v?.contactPhone].filter(this.isText).join(' · ') || (v?.gstin ? `GSTIN ${v.gstin}` : '');
           return sgCell(v?.name, sub || 'No contact', true);
-        } },
-      { colId: 'code', headerName: 'Code', field: 'code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num',
-        valueFormatter: p => p.value || '—' },
+        } }, v => [v.name, v.contactName, v.contactPhone, v.gstin].filter(this.isText).join(' '), 'left', v => v.name ?? ''),
+      textCol<VendorRow>({ colId: 'code', headerName: 'Code', field: 'code', width: 110, minWidth: 90, flex: 0, cellClass: 'pf-num',
+        valueFormatter: p => p.value || '—' }, v => v.code ?? ''),
       sgPillCol<VendorRow>(v => v.isActive),
-      { colId: 'charged', headerName: 'Charged', width: 130, minWidth: 110, flex: 0, type: 'rightAligned', valueGetter: p => p.data?.usedCredit ?? 0,
-        cellRenderer: (p: ICellRendererParams<VendorRow>) => money(p.data?.usedCredit ?? 0) },
-      { colId: 'settled', headerName: 'Settled', width: 130, minWidth: 110, flex: 0, type: 'rightAligned', valueGetter: p => p.data?.totalCredit ?? 0,
-        cellRenderer: (p: ICellRendererParams<VendorRow>) => money(p.data?.totalCredit ?? 0) },
-      { colId: 'outstanding', headerName: 'Outstanding', flex: 1, minWidth: 210, type: 'rightAligned', valueGetter: p => p.data?.outstanding ?? 0,
+      moneyCol<VendorRow>({ colId: 'charged', headerName: 'Charged', width: 130, minWidth: 110, flex: 0, type: 'rightAligned',
+        cellRenderer: (p: ICellRendererParams<VendorRow>) => money(p.data?.usedCredit ?? 0) }, v => v.usedCredit ?? 0, 'right'),
+      moneyCol<VendorRow>({ colId: 'settled', headerName: 'Settled', width: 130, minWidth: 110, flex: 0, type: 'rightAligned',
+        cellRenderer: (p: ICellRendererParams<VendorRow>) => money(p.data?.totalCredit ?? 0) }, v => v.totalCredit ?? 0, 'right'),
+      moneyCol<VendorRow>({ colId: 'outstanding', headerName: 'Outstanding', flex: 1, minWidth: 210, type: 'rightAligned',
         cellRenderer: (p: ICellRendererParams<VendorRow>) => {
           const v = p.data!;
           const over = this.overThreshold(v);
@@ -614,7 +615,7 @@ export class VendorsComponent implements OnInit {
           el.classList.add('pf-sg-money');
           el.firstElementChild?.classList.add('pf-sg-tone--' + tone, 'pf-vn-out');
           return el;
-        } },
+        } }, v => v.outstanding ?? 0, 'right'),
       sgActionsCol<VendorRow>(web, sample.filter(a => !a.icon).map(a => a.label), sample.filter(a => a.icon).length,
         (p) => (p.data ? sgActions(web, this.actionsFor(p.data, web)) : document.createElement('span'))),
     ];

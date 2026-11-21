@@ -9,6 +9,7 @@ import { ThemeService } from '../../../core/services/theme.service';
 import { ToastService } from '../../../core/services/toast.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { CriticalRegisterFilter, CriticalResultEvent } from '../../../shared/models/critical-result.model';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { labDaysAgo, labToday } from '../../../shared/utils/lab-clock';
 import { BusyDirective } from '../../../shared/directives/busy.directive';
 
@@ -134,6 +135,14 @@ describe('CriticalResultsComponent (register)', () => {
     btn.dataset['act'] = 'comm';
     c.onCellClicked({ event: { target: btn }, data: c.rows()[0] });
     expect(c.dialogFor()?.id).toBe('e1');
+  });
+
+  it('every data column sorts and filters; the actions column is exempt', () => {
+    const { c } = render();
+    for (const col of c.colDefs() as Array<{ colId?: string; sortable?: boolean; filter?: unknown }>) {
+      if (col.colId === 'actions') expect([col.sortable, col.filter]).toEqual([false, false]);
+      else expect(sortsAndFilters(col as never), String(col.colId)).toBe(true);
+    }
   });
 
   it('row actions need the result permissions; the register itself still reads', () => {

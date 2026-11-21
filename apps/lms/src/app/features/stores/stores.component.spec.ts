@@ -5,7 +5,8 @@ import { TestBed } from '@angular/core/testing';
 import { AuthService } from '../../core/auth/auth.service';
 import { ScanService } from '../../core/services/scan.service';
 import { DialogService } from '../../core/services/dialog.service';
-import { StoresComponent } from './stores.component';
+import { StoresComponent, stockColumns, type InvItem } from './stores.component';
+import { sortsAndFilters } from '../../shared/utils/work-grid';
 import { timedKeyboard } from '../../shared/scan/hardware-scan.spec-helpers';
 
 const items = [
@@ -208,5 +209,21 @@ describe('Stores desk — ND band + cards', () => {
     p.cmp.setCount('b1', 290);
     await p.cmp.doCount({ id: 'b1', qtyOnHand: 300, expired: false });
     expect(p.api.post).toHaveBeenCalledWith('/api/inventory/batches/b1/count', { countedQty: 290 });
+  });
+});
+
+describe('Stores stock grid columns', () => {
+  const item = (o: Partial<InvItem>): InvItem => ({ id: 'i', sku: 'S', name: 'Gloves', uom: 'box', onHand: 5, lowStock: false, reorderLevel: 2, ...o });
+  it('every data column sorts and filters on its real value', () => {
+    const cols = stockColumns(false);
+    expect(cols.map(c => c.colId)).toEqual(['item', 'onHand', 'reorder', 'status']);
+    for (const c of cols) expect(sortsAndFilters(c as never), String(c.colId)).toBe(true);
+  });
+  it('quantities sort as numbers; Out sorts before Low before OK', () => {
+    const cols = stockColumns(false);
+    const vg = (id: string, r: InvItem) => (cols.find(c => c.colId === id)!.valueGetter as (p: { data: InvItem }) => unknown)({ data: r });
+    expect(vg('onHand', item({ onHand: 12 }))).toBe(12);
+    expect(vg('reorder', item({ reorderLevel: 7 }))).toBe(7);
+    expect(vg('item', item({ name: 'Gloves', sku: 'G1' }))).toContain('Gloves');
   });
 });

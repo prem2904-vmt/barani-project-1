@@ -18,6 +18,7 @@ import { PageOpenService } from '../../../core/navigation/page-open.service';
 import { UserEditComponent } from './user-edit.component';
 import { RoleEditorComponent } from './role-editor.component';
 import { UsersAccessComponent } from './users-access.component';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 
 /**
  * Users & access — LOADING FEEDBACK (PF-PATTERN "Loading feedback"). Opening
@@ -156,5 +157,25 @@ describe('Users & access — loading feedback', () => {
     expect(navigate).toHaveBeenCalledWith([], expect.objectContaining({ queryParams: { edit: 'u1' } }));
     c.closePanel();
     expect(c.panelUserId()).toBeNull();
+  });
+});
+
+describe('Users & access grids — every data column sorts and filters on its real value', () => {
+  afterEach(() => TestBed.resetTestingModule());
+  const check = (cols: any[], ids: string[]) => {
+    const data = cols.filter(c => c.colId !== 'actions');
+    expect(data.map(c => c.colId)).toEqual(ids);
+    for (const c of data) expect(sortsAndFilters(c), c.colId).toBe(true);
+    const act = cols.find(c => c.colId === 'actions');
+    if (act) { expect(act.sortable).toBe(false); expect(act.filter).toBe(false); }
+  };
+  it('users + roles grids', () => {
+    const { c } = render(UsersAccessComponent);
+    check(c.userColDefs(), ['displayName', 'branches', 'departments', 'phone', 'status']);
+    check(c.roleColDefs(), ['name', 'who', 'isPreSeeded', 'scope']);
+  });
+  it('role editor permission grid', () => {
+    const { c } = render(RoleEditorComponent, { id: 'r2' });
+    check(c.colDefs(), ['allowed', 'title', 'what', 'impact', 'code']);
   });
 });

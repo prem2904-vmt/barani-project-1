@@ -5,6 +5,7 @@ import { AllCommunityModule, CellClickedEvent, ColDef, GetRowIdParams, GridApi, 
 import { ActivatedRoute } from '@angular/router';
 import { ShareService } from '../../../core/services/share.service';
 import { AgGridAngular } from 'ag-grid-angular';
+import { dateCol, numberCol, textCol } from '../../../shared/utils/work-grid';
 import { AuthService } from '../../../core/auth/auth.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ScanService } from '../../../core/services/scan.service';
@@ -174,24 +175,24 @@ export class AnalyzerResultsComponent {
     const cell = (main: string, sub?: string, cls = '') =>
       `<div class="pf-ar-cell"><span class="${cls}">${esc(main)}</span>${sub ? `<span class="pf-ar-cell__sub">${esc(sub)}</span>` : ''}</div>`;
     const cols: ColDef<MessageSummaryDto>[] = [
-      { colId: 'sampleId', headerName: qc ? 'Run' : 'Sample ID as sent', flex: 1, minWidth: 150,
-        valueGetter: (p) => p.data?.sampleId ?? '',
+      textCol<MessageSummaryDto>({ colId: 'sampleId', headerName: qc ? 'Run' : 'Sample ID as sent', flex: 1, minWidth: 150,
         cellRenderer: (p: { data?: MessageSummaryDto }) => cell(p.data?.sampleId || (qc ? 'QC' : '(no ID)'), p.data?.instrumentName, 'pf-ar-cell__id') },
-      { colId: 'receivedAt', headerName: 'Received', width: 160, minWidth: 140, flex: 0, sort: 'desc',
-        valueGetter: (p) => p.data?.receivedAt ?? '',
+        (m) => [m.sampleId ?? '', m.instrumentName ?? ''].filter(Boolean).join(' · '), 'left', (m) => m.sampleId ?? ''),
+      dateCol<MessageSummaryDto>({ colId: 'receivedAt', headerName: 'Received', width: 160, minWidth: 140, flex: 0, sort: 'desc',
         cellRenderer: (p: { data?: MessageSummaryDto }) => cell(fmtIst(p.data?.receivedAt), p.data?.runAt ? `Run ${fmtIst(p.data.runAt, 'h:mm a')}` : '') },
-      { colId: 'results', headerName: 'Results', width: 120, minWidth: 110, flex: 0,
-        valueGetter: (p) => p.data?.resultCount ?? 0,
+        (m) => m.receivedAt ?? null, 'left'),
+      numberCol<MessageSummaryDto>({ colId: 'results', headerName: 'Results', width: 120, minWidth: 110, flex: 0,
         cellRenderer: (p: { data?: MessageSummaryDto }) => cell(plural(p.data?.resultCount ?? 0, 'result'),
           (p.data?.unmappedCodes?.length ?? 0) > 0 ? `${p.data!.unmappedCodes!.length} unmapped` : '') },
-      { colId: 'preview', headerName: 'Preview', flex: 2, minWidth: 220,
-        valueGetter: (p) => (p.data ? previewSummary(p.data) : ''),
+        (m) => m.resultCount ?? 0, 'left'),
+      textCol<MessageSummaryDto>({ colId: 'preview', headerName: 'Preview', flex: 2, minWidth: 220,
         cellRenderer: (p: { data?: MessageSummaryDto }) => `<div class="pf-ar-cell"><span class="pf-num">${esc(p.data ? previewSummary(p.data) : '')}</span></div>` },
+        (m) => previewSummary(m)),
     ];
     const attachW = canAttach ? (web ? 150 : 52) : 0;
     const shareW = canShare ? 52 : 0;
     if (canAttach || canShare) cols.push({
-      colId: 'actions', headerName: '', sortable: false, resizable: false, pinned: 'right', lockPinned: true,
+      colId: 'actions', headerName: '', sortable: false, filter: false, resizable: false, pinned: 'right', lockPinned: true,
       width: attachW + shareW + 12, minWidth: attachW + shareW + 12, flex: 0, cellClass: 'pf-ar-actcell',
       cellRenderer: (p: { data?: MessageSummaryDto }) => '<div class="pf-ar-acts">' +
         (canAttach

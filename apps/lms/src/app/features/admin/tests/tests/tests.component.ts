@@ -12,6 +12,7 @@ import {
   GridReadyEvent,
   GetRowIdParams,
   ICellRendererParams,
+  IRowNode,
   ModuleRegistry,
   CellValueChangedEvent,
   RowClassParams,
@@ -41,6 +42,8 @@ import {
   canRevertToMaster, originLabel, restoreDefaultsMessage, restoreDefaultsSummary, revertToMasterPath,
 } from '../../../../shared/utils/test-origin';
 import { compareTestCodes } from '../../../../shared/utils/test-code';
+import { compareText, numberCol, textCol, valuesCol } from '../../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../../shared/components/work-set-filter/work-set-filter.component';
 import { SKELETON_FRAME } from '../../../../shared/components/skeleton-frame/skeleton-frame.component';
 import { EditLedger } from '../../../../shared/utils/dirty-snapshot';
 import { NO_CHANGES_TITLE } from '../../../../shared/utils/save-state';
@@ -655,86 +658,124 @@ export class TestsComponent implements OnInit {
    *  search never re-lays the columns out). */
   readonly anyRevert = computed(() => this._tests().some(t => t.type === this._type() && canRevertToMaster(t as TestRow)));
 
+  /** Text column over a plain field: sorts + filters on the field's text (blank when unset). */
+  private txt(def: ColDef<TestRow>, get: (r: TestRow) => string | null | undefined): ColDef<TestRow> {
+    return textCol<TestRow>(def, r => get(r) ?? '');
+  }
+
+  /** Code: natural code order (BIO002 < BIO010 < BIO1000), text filter on the code. */
+  private codeCol(def: ColDef<TestRow>): ColDef<TestRow> {
+    return { ...textCol<TestRow>(def, r => r.testCode ?? ''),
+      comparator: (a: string | null, b: string | null) => compareTestCodes(a, b) };
+  }
+
+  /** Container: the cell VALUE stays the tube key (the editor needs it); sort + filter read the colour's label. */
+  private containerCol(): ColDef<TestRow> {
+    const label = (k: string | null | undefined) => tubeColor(k)?.label ?? '—';
+    const base = valuesCol<TestRow>({
+      headerName: 'Container', field: 'tubeColor', editable: true, flex: 1.3, minWidth: 150,
+      ...WRAP2, tooltipValueGetter: p => tubeColor(p.data?.tubeColor)?.label,
+      cellRenderer: this.containerRenderer,
+      cellEditor: TubeColorEditorComponent,
+      cellEditorParams: {
+        choices: TUBE_COLORS.map(c => ({ key: c.key, label: c.label, hex: c.hex })),
+      },
+    }, r => label(r.tubeColor), WorkSetFilterComponent);
+    return {
+      ...base,
+      valueGetter: p => p.data?.tubeColor ?? null,
+      filterValueGetter: p => (p.data ? label(p.data.tubeColor) : ''),
+      comparator: (a: unknown, b: unknown, _na: unknown, _nb: unknown, desc?: boolean) =>
+        compareText(a == null ? null : label(String(a)), b == null ? null : label(String(b)), !!desc),
+    };
+  }
+
   readonly colDefs = computed<ColDef<TestRow>[]>(() => {
     const view = this._type();
     this.partners();   // names resolve once the referral labs have loaded
 
     if (view === 'individual') {
       return [
-        {
-          // Codes are server-assigned and never change — not editable here.
+        // Codes are server-assigned and never change — not editable here.
+        this.codeCol({
           headerName: 'Code', field: 'testCode', editable: false, width: 116, minWidth: 100, maxWidth: 130, sort: 'asc', pinned: 'left',
-          comparator: (a: string | null, b: string | null) => compareTestCodes(a, b),
           cellRenderer: this.codeCellRenderer,
           tooltipValueGetter: p => {
             const tColor = tubeColor(p.data?.tubeColor);
             return tColor ? `Container: ${tColor.label}` : undefined;
           },
-        },
+        }),
         // Names WRAP (up to 2 lines, auto row height) instead of an ellipsis
         // (ND §5); the full name stays in the tooltip.
-        { headerName: 'Name', field: 'name', editable: true, width: 250, minWidth: 200, pinned: 'left',
-          ...WRAP2, cellRenderer: this.plainNameRenderer, tooltipField: 'name' },
+        this.txt({ headerName: 'Name', field: 'name', editable: true, width: 250, minWidth: 200, pinned: 'left',
+          ...WRAP2, cellRenderer: this.plainNameRenderer, tooltipField: 'name' }, r => r.name),
         this.outsourcedColDef(),
         this.originColDef(),
-        { headerName: 'Short', field: 'shortName', editable: true, flex: 1, minWidth: 110 },
-        { headerName: 'Section', field: 'section', editable: true, flex: 1, minWidth: 120 },
-        {
-          headerName: 'Container', field: 'tubeColor', editable: true, flex: 1.3, minWidth: 150,
-          ...WRAP2, tooltipValueGetter: p => tubeColor(p.data?.tubeColor)?.label,
-          cellRenderer: this.containerRenderer,
-          cellEditor: TubeColorEditorComponent,
-          cellEditorParams: {
-            choices: TUBE_COLORS.map(c => ({ key: c.key, label: c.label, hex: c.hex })),
-          },
-        },
+        this.txt({ headerName: 'Short', field: 'shortName', editable: true, flex: 1, minWidth: 110 }, r => r.shortName),
+        this.txt({ headerName: 'Section', field: 'section', editable: true, flex: 1, minWidth: 120 }, r => r.section),
+        this.containerCol(),
         this.derivedRangeColDef(),
         this.derivedUnitColDef(),
-        {
+        numberCol<TestRow>({
           headerName: 'TAT (h)', field: 'tatHours', editable: true, minWidth: 100, maxWidth: 120,
           cellEditor: 'agNumberCellEditor',
-        },
+        }, r => (typeof r.tatHours === 'number' ? r.tatHours : null), 'left'),
         this.priceColDef(this.canEditPrices()),
         // Standard code (LOINC) — plain free text like Short / Section, set on the master catalogue.
-        { headerName: 'Standard code (LOINC)', field: 'standardCode', editable: true, minWidth: 140, maxWidth: 180 },
+        this.txt({ headerName: 'Standard code (LOINC)', field: 'standardCode', editable: true, minWidth: 140, maxWidth: 180 }, r => r.standardCode),
         this.statusColDef(),
         this.actionsColDef(),
       ];
     }
 
+    // Profiles / packages: the grid is a tree (members under their bundle). Sort + filter work on the values; the
+    // grid keeps every member under its own bundle (see postSortRows).
     return [
-      {
+      this.txt({
         headerName: 'Name', colId: 'treeName', flex: 3, minWidth: 260, pinned: 'left',
-        sortable: false, filter: false, editable: false, sort: null,
+        editable: false,
         tooltipValueGetter: p => p.data?.name,
         cellRenderer: this.nameCellRenderer,
-        valueGetter: p => p.data?.name,
-      },
-      { headerName: 'Code', field: 'testCode', minWidth: 120, maxWidth: 160, sortable: false, filter: false, sort: null, pinned: 'left', cellRenderer: this.codeCellRenderer },
-      { ...this.outsourcedColDef(), sortable: false, filter: false },
-      { ...this.originColDef(), sortable: false, filter: false },
-      {
-        headerName: 'Kind', colId: 'kind', minWidth: 110, maxWidth: 140, sortable: false, filter: false,
-        valueGetter: p => this.kindLabel(p.data),
-      },
-      { headerName: 'Short', field: 'shortName', editable: true, minWidth: 110, sortable: false, filter: false },
-      {
-        headerName: 'Container', field: 'tubeColor', editable: true, flex: 1.3, minWidth: 150, sortable: false, filter: false,
-        ...WRAP2, tooltipValueGetter: p => tubeColor(p.data?.tubeColor)?.label,
-        cellRenderer: this.containerRenderer,
-        cellEditor: TubeColorEditorComponent,
-        cellEditorParams: {
-          choices: TUBE_COLORS.map(c => ({ key: c.key, label: c.label, hex: c.hex })),
-        },
-      },
-      { ...this.derivedRangeColDef(), minWidth: 180, sortable: false, filter: false },
-      { ...this.derivedUnitColDef(), sortable: false, filter: false },
-      { ...this.priceColDef(this.canEditPrices()), sortable: false, filter: false },
-      { headerName: 'Standard code (LOINC)', field: 'standardCode', editable: true, minWidth: 140, maxWidth: 180, sortable: false, filter: false },
+      }, r => r.name),
+      this.codeCol({ headerName: 'Code', field: 'testCode', minWidth: 120, maxWidth: 160, pinned: 'left', cellRenderer: this.codeCellRenderer }),
+      this.outsourcedColDef(),
+      this.originColDef(),
+      valuesCol<TestRow>({
+        headerName: 'Kind', colId: 'kind', minWidth: 110, maxWidth: 140,
+      }, r => this.kindLabel(r), WorkSetFilterComponent),
+      this.txt({ headerName: 'Short', field: 'shortName', editable: true, minWidth: 110 }, r => r.shortName),
+      this.containerCol(),
+      { ...this.derivedRangeColDef(), minWidth: 180 },
+      this.derivedUnitColDef(),
+      this.priceColDef(this.canEditPrices()),
+      this.txt({ headerName: 'Standard code (LOINC)', field: 'standardCode', editable: true, minWidth: 140, maxWidth: 180 }, r => r.standardCode),
       this.statusColDef(),
       this.actionsColDef(),
     ];
   });
+
+  /** A bundle's members stay under it when the grid sorts / filters (the tree is flattened, so a plain sort would
+   *  scatter them). Roots take the sorted order; each root's children follow it, sorted among themselves. */
+  readonly postSortRows = (p: { nodes: IRowNode<TestRow>[] }): void => {
+    if (this._type() === 'individual') return;
+    const nodes = p.nodes;
+    if (!nodes.some(n => (n.data?._level ?? 0) > 0)) return;
+    const out: IRowNode<TestRow>[] = [];
+    const used = new Set<IRowNode<TestRow>>();
+    const emit = (n: IRowNode<TestRow>) => {
+      out.push(n); used.add(n);
+      const key = n.data?._key;
+      if (!key) return;
+      const lvl = (n.data?._level ?? 0) + 1;
+      for (const c of nodes) {
+        if (!used.has(c) && (c.data?._level ?? 0) === lvl && (c.data?._key ?? '').startsWith(key + '>')
+          && !(c.data?._key ?? '').slice(key.length + 1).includes('>')) emit(c);
+      }
+    };
+    for (const n of nodes) if ((n.data?._level ?? 0) === 0) emit(n);
+    for (const n of nodes) if (!used.has(n)) out.push(n);   // a member whose bundle is filtered out stays visible
+    nodes.splice(0, nodes.length, ...out);
+  };
 
   private codeCellRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
     const wrap = document.createElement('div');
@@ -754,40 +795,36 @@ export class TestsComponent implements OnInit {
    *  server's `derivedReferenceRange` wins; older payloads derive client-side
    *  from the first value's bands. The flat column is never shown. */
   private derivedRangeColDef(): ColDef<TestRow> {
-    return {
+    return this.txt({
       headerName: 'Reference range', colId: 'referenceRange', minWidth: 220, flex: 3,
       editable: false, ...WRAP2, cellRenderer: clampRenderer,
-      valueGetter: p => this.derivedRange(p.data),
       tooltipValueGetter: p => this.derivedRange(p.data) || 'Comes from the test\'s values — edit ranges in the test editor',
-    };
+    }, r => this.derivedRange(r));
   }
 
   /** Unit = DERIVED from the values (the printed unit), read-only. */
   private derivedUnitColDef(): ColDef<TestRow> {
-    return {
+    return this.txt({
       headerName: 'Unit', colId: 'unit', flex: 0.8, minWidth: 100, editable: false,
-      valueGetter: p => this.derivedUnit(p.data),
       tooltipValueGetter: () => 'Comes from the test\'s values — edit it in the test editor',
-    };
+    }, r => this.derivedUnit(r));
   }
 
   /** Master / Customised / Branch / Own test chip (+ a dot when a Test
    *  Master update is waiting for this row). */
   /** Partner lab the test is sent to (Test Master default) — read-only; set in the test editor. */
   private outsourcedColDef(): ColDef<TestRow> {
-    return {
+    return this.txt({
       headerName: 'Outsourced to', colId: 'outsourced', minWidth: 160, flex: 1.2, editable: false, ...WRAP2,
-      valueGetter: p => this.partnerLabel(p.data) || '',
       tooltipValueGetter: p => this.partnerLabel(p.data) || undefined,
-    };
+    }, r => this.partnerLabel(r) || '');
   }
 
   private originColDef(): ColDef<TestRow> {
-    return {
+    return valuesCol<TestRow>({
       headerName: 'Origin', colId: 'origin', minWidth: 120, maxWidth: 150, editable: false,
-      valueGetter: p => originLabel(p.data),
       cellRenderer: this.originRenderer,
-    };
+    }, r => originLabel(r) ?? '', WorkSetFilterComponent);
   }
 
   private originRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
@@ -806,12 +843,11 @@ export class TestsComponent implements OnInit {
   };
 
   private statusColDef(): ColDef<TestRow> {
-    return {
+    return valuesCol<TestRow>({
       headerName: 'Status', colId: 'status', field: 'isActive',
-      minWidth: 95, maxWidth: 110, editable: false, sortable: true, filter: false,
+      minWidth: 95, maxWidth: 110, editable: false,
       cellRenderer: this.statusSwitchRenderer,
-      valueGetter: p => (p.data && isTestEnabled(p.data) ? 'Active' : 'Inactive'),
-    };
+    }, r => (isTestEnabled(r) ? 'Active' : 'Inactive'), WorkSetFilterComponent, 'left', r => (isTestEnabled(r) ? 0 : 1));
   }
 
   private statusSwitchRenderer = (params: ICellRendererParams<TestRow>): HTMLElement => {
@@ -858,14 +894,15 @@ export class TestsComponent implements OnInit {
    *  price endpoint — never the test row (a price is not a test change).
    *  Shown as just the price ("₹1"): plain text, right-aligned, tabular. */
   private priceColDef(editable: boolean): ColDef<TestRow> {
-    return {
+    // numberCol on RUPEES (not moneyCol, whose cell value is paise): the editor and the "₹" formatter read the value.
+    return numberCol<TestRow>({
       headerName: 'Price (₹)', field: 'price', editable, minWidth: 110, maxWidth: 140,
       cellEditor: 'agNumberCellEditor',
       valueParser: p => { const n = Number(p.newValue); return Number.isFinite(n) ? Math.max(0, n) : p.oldValue; },
       valueFormatter: p => (p.value == null ? '' : '₹' + Number(p.value).toLocaleString('en-IN')),
       type: 'rightAligned',
       cellStyle: { fontVariantNumeric: 'tabular-nums' },
-    };
+    }, r => (typeof r.price === 'number' ? r.price : null), 'right');
   }
 
   /** Individual-view name cell: the name plus a quiet "Not offered here" tag. */

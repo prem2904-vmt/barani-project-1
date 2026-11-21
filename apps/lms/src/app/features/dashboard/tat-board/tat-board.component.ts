@@ -19,7 +19,9 @@ import { bandFilter } from '../../../shared/utils/band-search';
 import { busyWhile } from '../../../shared/utils/busy';
 import { createLoadHold } from '../../../shared/utils/min-duration';
 import { plural } from '../../../shared/utils/plural';
-import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
+import { dateCol, numberCol, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import {
   BucketCount, DeptCount, SampleGroup, TatBucket, TatLine, TatMode,
   bucketCounts, clockWords, defaultBucket, deptCounts, dueAtOf, dueInWords, groupBySample, inBucket, lateMinutes, lateWords,
@@ -62,6 +64,52 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   if (text !== undefined) e.textContent = text;
   return e;
 }
+
+/** The board's columns. Every data column sorts and filters on its real value (minutes late, the epoch of a time,
+ *  the words of a status); Open is the only action-only column. */
+export function tatColumns(o: { phone: boolean; mid: boolean; web: boolean; now: number; open: (r: TatGridRow) => void }): ColDef<TatGridRow>[] {
+  const { phone, mid, web, now } = o;
+  const blank = () => el('span', '');
+  const actions = sgActionsCol<TatGridRow>(web, ['Open'], 0, (p) => sgActions(web, p.data ? [
+    { label: 'Open', aria: `Open ${p.data.patient}`, path: SG_ICON.open, run: () => o.open(p.data!) },
+  ] : []));
+  // Phones: two columns. The patient with the tests under it, then how late it is with the plain-words step under it.
+  if (phone) {
+    return [
+      textCol<TatGridRow>({ headerName: 'Sample · patient', colId: 'patient', field: 'patient', flex: 1, minWidth: 130,
+        cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? sgCell(p.data.patient, [p.data.head, p.data.names].filter(Boolean).join(': '), true) : blank()) },
+        r => [r.patient, r.head, r.names].filter(Boolean).join(' '), 'left', r => r.patient),
+      numberCol<TatGridRow>({ headerName: 'Late by · now', colId: 'late', flex: 0, width: 132,
+        cellRenderer: (p: ICellRendererParams<TatGridRow>) => {
+          if (!p.data) return blank();
+          const wrap = el('div', 'pf-sg-cell');
+          const late = p.data.lateMin != null && p.data.lateMin >= 0;
+          wrap.append(el('span', late ? 'pf-tat-late' : 'pf-tat-num', late ? `Late ${lateWords(p.data.lateMin)}` : dueInWords(p.data.lateMin) ? `Due ${dueInWords(p.data.lateMin)}` : '—'),
+            el('span', 'pf-sg-cell__sub', p.data.now.join(', ')));
+          return wrap;
+        } }, r => r.lateMin, 'left'),
+      actions,
+    ];
+  }
+  return [
+    textCol<TatGridRow>({ headerName: 'Sample · patient', colId: 'patient', field: 'patient', flex: 1, minWidth: 152,
+      cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? sgCell(p.data.patient, null, true) : blank()) }, r => r.patient),
+    textCol<TatGridRow>({ headerName: 'Tests', colId: 'tests', field: 'head', flex: 1.6, minWidth: 160,
+      cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? sgCell(p.data.head, p.data.names || null, true) : blank()) },
+      r => [r.head, r.names].filter(Boolean).join(' '), 'left', r => r.head),
+    valuesCol<TatGridRow>({ headerName: 'Department', colId: 'dept', field: 'dept', flex: 0, width: 125, hide: mid,
+      cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? el('span', 'pf-tat-num', p.data.dept) : blank()) }, r => r.dept ?? '', WorkSetFilterComponent),
+    dateCol<TatGridRow>({ headerName: 'Received', colId: 'received', flex: 0, width: 105, hide: mid,
+      cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? el('span', 'pf-tat-num', clockWords(p.data.receivedAt, now)) : blank()) }, r => r.receivedAt, 'left'),
+    dateCol<TatGridRow>({ headerName: 'Due', colId: 'due', flex: 0, width: 110,
+      cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? sgCell(clockWords(p.data.dueAt, now), dueInWords(p.data.lateMin) || null) : blank()) }, r => r.dueAt, 'left'),
+    numberCol<TatGridRow>({ headerName: 'Late by', colId: 'late', flex: 0, width: 88,
+      cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? el('span', 'pf-tat-late', lateWords(p.data.lateMin)) : blank()) }, r => r.lateMin, 'left'),
+    statusValuesCol<TatGridRow>({ headerName: 'Now', colId: 'now', flex: 0, width: 200 }, (r) => tatNowWords(r.now)),
+    actions,
+  ];
+}
+
 
 /** Samples as grid rows. */
 export function sampleRows(groups: readonly SampleGroup[]): TatGridRow[] {
@@ -322,51 +370,9 @@ export class TatBoardComponent implements OnInit, OnDestroy {
 
   readonly rowId = (p: GetRowIdParams<TatGridRow>) => `${this.mode()}:${p.data.id}`;
 
-  readonly colDefs = computed<ColDef<TatGridRow>[]>(() => {
-    const phone = this.phone();
-    const now = this.now();
-    const web = this.web && !phone;
-    const mid = this.mid();
-    const blank = () => el('span', '');
-    const actions = sgActionsCol<TatGridRow>(web, ['Open'], 0, (p) => sgActions(web, p.data ? [
-      { label: 'Open', aria: `Open ${p.data.patient}`, path: SG_ICON.open, run: () => this.open(p.data!) },
-    ] : []));
-    // Phones: two columns. The patient with the tests under it, then how late it is with the plain-words step under it.
-    if (phone) {
-      return [
-        { headerName: 'Sample · patient', colId: 'patient', field: 'patient', flex: 1, minWidth: 130,
-          cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? sgCell(p.data.patient, [p.data.head, p.data.names].filter(Boolean).join(': '), true) : blank()) },
-        { headerName: 'Late by · now', colId: 'late', valueGetter: (p) => p.data?.lateMin ?? -Infinity, flex: 0, width: 132,
-          cellRenderer: (p: ICellRendererParams<TatGridRow>) => {
-            if (!p.data) return blank();
-            const wrap = el('div', 'pf-sg-cell');
-            const late = p.data.lateMin != null && p.data.lateMin >= 0;
-            wrap.append(el('span', late ? 'pf-tat-late' : 'pf-tat-num', late ? `Late ${lateWords(p.data.lateMin)}` : dueInWords(p.data.lateMin) ? `Due ${dueInWords(p.data.lateMin)}` : '—'),
-              el('span', 'pf-sg-cell__sub', p.data.now.join(', ')));
-            return wrap;
-          } },
-        actions,
-      ];
-    }
-    const cols: ColDef<TatGridRow>[] = [
-      { headerName: 'Sample · patient', colId: 'patient', field: 'patient', flex: 1, minWidth: 152,
-        cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? sgCell(p.data.patient, null, true) : blank()) },
-      { headerName: 'Tests', colId: 'tests', field: 'head', flex: 1.6, minWidth: 160,
-        cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? sgCell(p.data.head, p.data.names || null, true) : blank()) },
-      { headerName: 'Department', colId: 'dept', field: 'dept', flex: 0, width: 125, hide: mid,
-        cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? el('span', 'pf-tat-num', p.data.dept) : blank()) },
-      { headerName: 'Received', colId: 'received', valueGetter: (p) => p.data?.receivedAt ?? 0, flex: 0, width: 105, hide: mid,
-        cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? el('span', 'pf-tat-num', clockWords(p.data.receivedAt, now)) : blank()) },
-      { headerName: 'Due', colId: 'due', valueGetter: (p) => p.data?.dueAt ?? 0, flex: 0, width: 110,
-        cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? sgCell(clockWords(p.data.dueAt, now), dueInWords(p.data.lateMin) || null) : blank()) },
-      { headerName: 'Late by', colId: 'late', valueGetter: (p) => p.data?.lateMin ?? -Infinity, flex: 0, width: 88,
-        cellRenderer: (p: ICellRendererParams<TatGridRow>) => (p.data ? el('span', 'pf-tat-late', lateWords(p.data.lateMin)) : blank()) },
-      statusWordsCol<TatGridRow>({ headerName: 'Now', colId: 'now', valueGetter: (p) => p.data?.now.join(', ') ?? '', flex: 0, width: 200 },
-        (r) => tatNowWords(r.now)),
-      actions,
-    ];
-    return cols;
-  });
+  readonly colDefs = computed<ColDef<TatGridRow>[]>(() => tatColumns({
+    phone: this.phone(), mid: this.mid(), web: this.web && !this.phone(), now: this.now(), open: (r) => this.open(r),
+  }));
 
   private _interval?: ReturnType<typeof setInterval>;
 

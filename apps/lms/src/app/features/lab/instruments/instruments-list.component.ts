@@ -22,7 +22,8 @@ import { InstrumentsApiService } from '../../../shared/instruments/instruments-a
 import { InstrumentDto } from '../../../shared/instruments/instrument.models';
 import { InstrumentBridgeService } from '../../../shared/instruments/instrument-bridge.service';
 import { instrumentStatusWords } from '../../../shared/instruments/instrument-status-words';
-import { statusWordsCol } from '../../../shared/components/status-words/status-words.component';
+import { statusValuesCol } from '../../../shared/components/status-words/status-words.component';
+import { numberCol, textCol } from '../../../shared/utils/work-grid';
 import { STATUS_ORDER, connectionSummary, protocolLabel, statusWord } from '../../../shared/instruments/instrument-config';
 import { AssistantButtonComponent } from '../../../shared/assistant/assistant-button.component';
 import { AssistantPanelComponent } from '../../../shared/assistant/assistant-panel.component';
@@ -241,16 +242,18 @@ export class InstrumentsListComponent {
     const cell = (main: string, sub?: string, cls = '') =>
       `<div class="pf-inl-cell"><span class="${cls}">${esc(main)}</span>${sub ? `<span class="pf-inl-cell__sub">${esc(sub)}</span>` : ''}</div>`;
     const cols: ColDef<InstrumentDto>[] = [
-      { colId: 'name', headerName: 'Instrument', flex: 1.3, minWidth: 180, sort: 'asc', valueGetter: (p) => p.data?.name ?? '',
+      textCol<InstrumentDto>({ colId: 'name', headerName: 'Instrument', flex: 1.3, minWidth: 180, sort: 'asc',
         cellRenderer: (p: { data?: InstrumentDto }) => cell(p.data?.name ?? '', [p.data?.make, p.data?.model].filter(Boolean).join(' · '), 'pf-inl-cell__name') },
-      { colId: 'connection', headerName: 'Connection', flex: 1.4, minWidth: 190, valueGetter: (p) => connectionSummary(p.data?.config, p.data?.transport),
+        (d) => d.name ?? ''),
+      textCol<InstrumentDto>({ colId: 'connection', headerName: 'Connection', flex: 1.4, minWidth: 190,
         cellRenderer: (p: { data?: InstrumentDto }) => cell(connectionSummary(p.data?.config, p.data?.transport),
           [p.data?.bridgeId ? `via ${p.data.bridgeName || 'Prefrontal Bridge'}` : '', protocolLabel(p.data?.config)].filter(Boolean).join(' · ')) },
-      statusWordsCol<InstrumentDto>({ colId: 'status', headerName: 'Status', flex: 1.3, minWidth: 200, valueGetter: (p) => p.data?.status ?? 'never' },
+        (d) => connectionSummary(d.config, d.transport)),
+      statusValuesCol<InstrumentDto>({ colId: 'status', headerName: 'Status', flex: 1.3, minWidth: 200 },
         (d) => instrumentStatusWords(d)),
-      { colId: 'unmatched', headerName: 'Unmatched', width: 120, minWidth: 110, flex: 0, type: 'rightAligned',
-        valueGetter: (p) => p.data?.unmatchedCount ?? 0,
+      numberCol<InstrumentDto>({ colId: 'unmatched', headerName: 'Unmatched', width: 120, minWidth: 110, flex: 0, type: 'rightAligned',
         cellRenderer: (p: { data?: InstrumentDto }) => `<span class="pf-num">${esc(p.data?.unmatchedCount ?? 0)}</span>` },
+        (d) => d.unmatchedCount ?? 0, 'right'),
       sgActionsCol<InstrumentDto>(web, [], 1, (p) => sgActions(web, [
         { label: 'Open', aria: `Open ${p.data?.name ?? 'instrument'}`, path: SG_ICON.open, icon: true, run: () => this.open(p.data) },
       ])),

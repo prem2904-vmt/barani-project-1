@@ -159,7 +159,7 @@ export class StudioPage {
   /** The rail counts what the other filters leave, so All = the sum. */
   protected readonly rail = computed<DeptRailRow[]>(() => railRows(filterSheets(this.inView(), this.departments(), this.filters({ dept: null })), this.departments()));
   protected readonly railTotal = computed(() => filterSheets(this.inView(), this.departments(), this.filters({ dept: null })).length);
-  protected readonly colDefs = computed(() => sheetColumns(this.web(), this.isPhone));
+  protected readonly colDefs = computed(() => sheetColumns(this.web(), this.isPhone, (f) => this.pending.byForm().get(f.id) ?? 0));
   protected readonly archivedCount = computed(() => (this.forms() ?? []).filter((f) => f.status === 'archived').length);
   protected readonly fromPrefrontalCount = computed(() => this.pending.offerForms().size);
 

@@ -6,6 +6,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { SettingsSavebarComponent } from '../../../shared/components/setting-row/settings-savebar.component';
 import { SG_ICON, sgActions, sgActionsCol, sgBare } from '../../../shared/settings-grid/settings-grid';
+import { dateCol, moneyCol, numComparator, textCol, textComparator } from '../../../shared/utils/work-grid';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { HasUnsavedChanges, confirmLeaveUnsaved, guardUnsavedOnUnload } from '../../../shared/utils/unsaved-changes';
 import { bandFilter } from '../../../shared/utils/band-search';
@@ -130,17 +131,25 @@ export class PartnerTestPricesComponent implements HasUnsavedChanges {
         path: SG_ICON.trash, run: () => { void this.deleteRow(params.data!); } }])
     : document.createElement('span'));
 
+  // Editable columns keep `field` (AG-Grid writes edits through it); the helpers' value getters return the SAME
+  // value the editor shows (rupees / the yyyy-mm-dd text), so sort + filter use the real value and editing is unchanged.
   readonly colDefs: ColDef<PriceRow>[] = [
-    { field: 'testCatalogKey', headerName: 'Test catalogue key', editable: true, minWidth: 180 },
-    { field: 'testName', headerName: 'Test name (label)', editable: true, minWidth: 180 },
+    textCol<PriceRow>({ field: 'testCatalogKey', colId: 'testCatalogKey', headerName: 'Test catalogue key', editable: true, minWidth: 180 }, r => r.testCatalogKey ?? ''),
+    textCol<PriceRow>({ field: 'testName', colId: 'testName', headerName: 'Test name (label)', editable: true, minWidth: 180 }, r => r.testName ?? ''),
     {
-      field: 'cost', headerName: 'Partner cost (₹)', editable: true, minWidth: 140, type: 'numericColumn',
-      valueParser: p => Number(p.newValue) || 0,
-      valueFormatter: p => p.value != null ? '₹' + Number(p.value).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '',
+      ...moneyCol<PriceRow>({
+        field: 'cost', colId: 'cost', headerName: 'Partner cost (₹)', editable: true, minWidth: 140, type: 'numericColumn',
+        valueParser: p => Number(p.newValue) || 0,
+        valueFormatter: p => p.value != null ? '₹' + Number(p.value).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '',
+      }, r => r.cost ?? null, 'right'),
+      valueGetter: p => p.data?.cost ?? null, comparator: numComparator,
     },
     {
-      field: 'effectiveFrom', headerName: 'Effective from', editable: true, minWidth: 140,
-      valueParser: p => /^\d{4}-\d{2}-\d{2}$/.test(p.newValue) ? p.newValue : p.oldValue,
+      ...dateCol<PriceRow>({
+        field: 'effectiveFrom', colId: 'effectiveFrom', headerName: 'Effective from', editable: true, minWidth: 140,
+        valueParser: p => /^\d{4}-\d{2}-\d{2}$/.test(p.newValue) ? p.newValue : p.oldValue,
+      }, r => r.effectiveFrom ?? null, 'left'),
+      valueGetter: p => p.data?.effectiveFrom ?? null, comparator: textComparator,
     },
     sgActionsCol<PriceRow>(true, [], 1, p => this.deleteRenderer(p), false),
   ];

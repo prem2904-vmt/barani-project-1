@@ -156,3 +156,27 @@ describe('TAT — departments, tests cell, words', () => {
     expect(dueAtOf(row('2', { remainingMinutes: null }), NOW)).toBeNull();
   });
 });
+
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
+import { tatColumns, type TatGridRow } from './tat-board.component';
+
+describe('TAT board grid columns', () => {
+  const row = (o: Partial<TatGridRow> = {}): TatGridRow => ({ id: 'r', patient: 'Asha', head: 'CBC', names: '', dept: 'Haematology',
+    receivedAt: 1_700_000_000_000, dueAt: 1_700_003_600_000, lateMin: 12, now: ['Waiting'], openId: 'x', ...o });
+  for (const phone of [false, true]) {
+    it(`${phone ? 'phone' : 'desktop'}: every data column sorts and filters; Open is action-only`, () => {
+      const cols = tatColumns({ phone, mid: false, web: !phone, now: Date.now(), open: () => undefined });
+      for (const c of cols) {
+        if (c.colId === 'actions') { expect(c.sortable).toBe(false); expect(c.filter).toBe(false); continue; }
+        expect(sortsAndFilters(c as never), String(c.colId)).toBe(true);
+      }
+    });
+  }
+  it('Late by sorts on minutes, Received / Due on the epoch', () => {
+    const cols = tatColumns({ phone: false, mid: false, web: true, now: 0, open: () => undefined });
+    const vg = (id: string) => (cols.find(c => c.colId === id)!.valueGetter as (p: { data: TatGridRow }) => unknown)({ data: row() });
+    expect(vg('late')).toBe(12);
+    expect(vg('received')).toBe(1_700_000_000_000);
+    expect(vg('due')).toBe(1_700_003_600_000);
+  });
+});

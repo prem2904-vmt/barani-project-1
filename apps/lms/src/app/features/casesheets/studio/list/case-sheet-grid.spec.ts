@@ -1,4 +1,5 @@
 import { FormRow } from '../data/studio-models';
+import { sortsAndFilters } from '../../../../shared/utils/work-grid';
 import { deptCode, filterSheets, railRows, sheetColumns, statusLabel, statusOf, statusWordsOf } from './case-sheet-grid';
 
 const row = (o: Partial<FormRow>): FormRow => ({
@@ -52,6 +53,20 @@ describe('case-sheet list (Test Master pattern)', () => {
     expect(phone[0].pinned).toBeNull();
     const fixed = phone.reduce((n, c) => n + (c.flex ? 0 : (c.width ?? 0)), 0);
     expect(fixed + (phone[0].minWidth ?? 0)).toBeLessThanOrEqual(390 - 32 - 2);
+  });
+
+  it('columns: every data column sorts and filters; only the actions column is exempt', () => {
+    for (const c of sheetColumns(true, false)) {
+      if (c.colId === 'actions') expect([c.sortable, c.filter]).toEqual([false, false]);
+      else expect(sortsAndFilters(c as never), String(c.colId)).toBe(true);
+    }
+  });
+
+  it('columns: Pending sorts on the injected count, Updated on the epoch', () => {
+    const cols = sheetColumns(true, false, () => 3);
+    const get = (id: string, r: FormRow) => (cols.find((c) => c.colId === id)!.valueGetter as (p: { data: FormRow }) => unknown)({ data: r });
+    expect(get('pending', row({}))).toBe(3);
+    expect(get('updated', row({ published: pub }))).toBe(Date.parse('2026-11-01T00:00:00Z'));
   });
 
   it('columns: every desktop column fits the card at 1440 with the department rail open (about 1000px)', () => {

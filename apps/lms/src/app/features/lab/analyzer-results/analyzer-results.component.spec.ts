@@ -6,6 +6,7 @@ import { renderBandPage } from '../../admin/admin-band.spec-helpers';
 import { DialogService } from '../../../core/services/dialog.service';
 import { ScanService } from '../../../core/services/scan.service';
 import type { MessageSummaryDto } from '../../../shared/instruments/instrument.models';
+import { sortsAndFilters } from '../../../shared/utils/work-grid';
 import { AnalyzerResultsComponent, previewSummary, searchMessages } from './analyzer-results.component';
 
 const flush = async () => { for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0)); };
@@ -47,6 +48,15 @@ describe('Analyzer results (unmatched + QC)', () => {
     const html = act ? act.cellRenderer({ data: msg({ id: 'q1', isQc: true }) }) : '';
     expect(html).not.toContain('data-act="attach"');
     if (p.cmp.share.available()) expect(html).toContain('data-act="share"'); else expect(act).toBeUndefined();
+  });
+
+  it('every data column sorts and filters; the actions column is exempt', async () => {
+    const p = render();
+    await flush(); p.f.detectChanges();
+    for (const c of p.cmp.colDefs() as Array<{ colId?: string; sortable?: boolean; filter?: unknown }>) {
+      if (c.colId === 'actions') expect([c.sortable, c.filter]).toEqual([false, false]);
+      else expect(sortsAndFilters(c as never), String(c.colId)).toBe(true);
+    }
   });
 
   it('deep link ?message=<id>&tab=qc (a shared analyzer card): opens that tab and marks + reveals the run', async () => {

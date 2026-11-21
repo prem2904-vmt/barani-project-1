@@ -26,6 +26,7 @@ import { AllCommunityModule, ColDef, GetRowIdParams, ICellRendererParams, Module
 import { DataGridComponent } from '../../../shared/components/data-grid/data-grid.component';
 import { HomeCollectionSwitchCardComponent } from '../lab-pages/home-collection-switch-card.component';
 import { SG_ICON, SG_NARROW_MQ, SG_PHONE_MQ, SgAction, sgActions, sgActionsCol, sgCell, sgGridTheme, sgMedia, sgPillCol, sgRowOff, sgBare } from '../../../shared/settings-grid/settings-grid';
+import { numberCol, textCol } from '../../../shared/utils/work-grid';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -266,18 +267,19 @@ export class HomeCollectionAgentsComponent implements OnInit {
     const web = this.web() && !this.phone();
     this.removingId(); this._users();
     const cols: ColDef<HomeCollectionAgent>[] = [
-      { colId: 'agent', headerName: 'Agent', flex: 1.1, minWidth: 180, sort: 'asc', valueGetter: p => (p.data ? this.agentName(p.data) : ''),
+      textCol<HomeCollectionAgent>({ colId: 'agent', headerName: 'Agent', flex: 1.1, minWidth: 180, sort: 'asc',
         cellRenderer: (p: ICellRendererParams<HomeCollectionAgent>) => sgCell(p.data ? this.agentName(p.data) : '', p.data?.user?.email ?? null, true) },
-      { colId: 'coverage', headerName: 'Coverage', flex: 2, minWidth: 220, valueGetter: p => (p.data ? this.coverageText(p.data) : ''),
+        a => `${this.agentName(a)} ${a.user?.email ?? ''}`.trim(), 'left', a => this.agentName(a)),
+      textCol<HomeCollectionAgent>({ colId: 'coverage', headerName: 'Coverage', flex: 2, minWidth: 220,
         cellRenderer: (p: ICellRendererParams<HomeCollectionAgent>) => {
           const t = p.data ? this.coverageText(p.data) : '';
           const unset = !!p.data && this.coverageUnset(p.data);
           const el = sgCell(unset ? null : t, unset ? t : null);
           if (unset) el.firstElementChild?.remove();
           return el;
-        } },
-      { colId: 'weight', headerName: 'Share of work', width: 140, minWidth: 120, flex: 0, type: 'rightAligned', cellClass: 'pf-num',
-        valueGetter: p => p.data?.weightage ?? 1 },
+        } }, a => this.coverageText(a)),
+      numberCol<HomeCollectionAgent>({ colId: 'weight', headerName: 'Share of work', width: 140, minWidth: 120, flex: 0, type: 'rightAligned', cellClass: 'pf-num' },
+        a => a.weightage ?? 1, 'right'),
       sgPillCol<HomeCollectionAgent>(a => a.isActive !== false),
       sgActionsCol<HomeCollectionAgent>(web, [], 2, p => (p.data ? sgActions(web, this.actionsFor(p.data)) : document.createElement('span'))),
     ];
