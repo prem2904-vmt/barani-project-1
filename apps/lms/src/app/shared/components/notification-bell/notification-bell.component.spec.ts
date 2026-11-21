@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 import { NotificationBellComponent } from './notification-bell.component';
+import { NotificationIconComponent } from './notification-icon.component';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { CriticalResultsService } from '../../../core/services/critical-results.service';
@@ -14,8 +15,11 @@ import { ToastService } from '../../../core/services/toast.service';
  * violet bell. Both spellings must render the same icon, tone and label.
  */
 describe('NotificationBellComponent — type keys', () => {
+  // ONE timestamp for every row: the list sorts newest first, and per-row `new Date()` calls could straddle a
+  // millisecond and reorder the rows (the tone order then flipped under full-suite load).
+  const AT = new Date().toISOString();
   const row = (id: string, type: string) => ({
-    id, type, title: 't ' + id, body: 'b', isRead: false, createdAt: new Date().toISOString(),
+    id, type, title: 't ' + id, body: 'b', isRead: false, createdAt: AT,
     referenceId: null, referenceType: null,
   });
   const list = [
@@ -68,6 +72,10 @@ describe('NotificationBellComponent — type keys', () => {
     const tones = Array.from(el.querySelectorAll('.pf-type-icon')).map((i) => i.getAttribute('data-tone'));
     // The popover shows the latest POPOVER_ROWS (6); the 7th row lives on the Notifications page.
     expect(tones).toEqual(['amber', 'amber', 'emerald', 'emerald', 'amber', 'rose']);
+    // "amber" is only the late tone's NAME: the tile paints it as a dusty rose from --red-text, never yellow (no-yellow rule).
+    const css = ((NotificationIconComponent as any).ɵcmp.styles as string[]).join('\n');
+    expect(css).toMatch(/\[data-tone=['"]?amber['"]?\][^{]*\{\s*--pf-nt-tone:\s*color-mix\(in srgb, var\(--red-text\)/);
+    expect(css).not.toMatch(/amber-text|yellow|#f59e0b|#fbbf24|#d97706|#eab308/i);
     const text = el.textContent ?? '';
     expect(text).toContain('TAT breach');
     expect(text).toContain('report ready');

@@ -61,6 +61,13 @@ export function matchesDailyNo(q: string | null | undefined, x: unknown, today: 
   return dailyNo === n && (!dailyNoDay || dailyNoDay === today);
 }
 
+/** On-screen grid filter text for a row's daily number ("#12 12": finds "#12" and "12"); '' when there is none.
+ *  Screens that also print / share call this so their own code never reads the number (daily-no.screens.spec). */
+export function dailyNoFilterText(x: unknown): string {
+  const { dailyNo } = dailyNoOf(x);
+  return dailyNo != null ? `#${dailyNo} ${dailyNo}` : '';
+}
+
 const esc = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
 /** The chip as HTML (AG-Grid cell renderers). '' when there is none. */

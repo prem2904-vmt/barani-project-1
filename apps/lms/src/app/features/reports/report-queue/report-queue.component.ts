@@ -84,11 +84,11 @@ import { PATIENT_PROFILE_PERMS, ReportActionsService, WA_MANUAL_NOTE, type Chann
 import { formatAge } from "../../../shared/utils/patient-age";
 import { BusyDirective } from "../../../shared/directives/busy.directive";
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
-import { matchesDailyNo } from '../../../shared/utils/daily-no';
+import { dailyNoFilterText, matchesDailyNo } from '../../../shared/utils/daily-no';
 import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { SelectComponent, type PfSelectOption } from '../../../shared/primitives/select.component';
 import { WorkSetFilterComponent, type GridChoice, type GridChoiceFilterParams } from '../../../shared/components/work-set-filter/work-set-filter.component';
-import { choiceCol, epochOf, foldSteps, textCol, tokenCol, tokenValue } from '../../../shared/utils/work-grid';
+import { choiceCol, epochOf, foldSteps, textCol, tokenCol, tokenValueOf } from '../../../shared/utils/work-grid';
 import {
   activeCount, clientActive, doctorNames, partialPasses, presetRange, reportPasses, shouldScan, viaKeys, viaLabel, withShares,
   type BreakdownRow, type DatePreset, type RqClientFilters,
@@ -1143,8 +1143,7 @@ export class ReportQueueComponent implements OnInit {
   }
   /** # sort: the order's IST day, then its daily number (a detail row rides with its order). */
   private noValue(d: RqRow): number | null {
-    const o = d.kind === "report" ? d.r.order : d.po;
-    return tokenValue(o?.dailyNo, o?.dailyNoDay);
+    return tokenValueOf(d.kind === "report" ? d.r.order : d.po);
   }
   /** Patient sort: the whole name. */
   private nameOf(d: RqRow): string { return d.kind === "report" ? this.reportPatientName(d.r) : d.po.patientName; }
@@ -1165,8 +1164,7 @@ export class ReportQueueComponent implements OnInit {
   }
   /** "#12 12 LAB-…" — the daily number (with or without #) of a report or a partly-reported order. */
   private noText(d: RqRow): string {
-    const n = d.kind === "report" ? d.r.order?.dailyNo : d.po.dailyNo;
-    return n != null ? `#${n} ${n}` : "";
+    return dailyNoFilterText(d.kind === "report" ? d.r.order : d.po);
   }
   /** Patient = name + MRN + phone (a detail row rides with its order). */
   private patientText(d: RqRow): string {

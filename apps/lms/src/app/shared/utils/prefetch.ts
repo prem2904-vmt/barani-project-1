@@ -15,10 +15,15 @@
  */
 
 const inflight = new Map<string, Promise<unknown>>();
+/** Test seam: unit tests never start a real background import (apps/lms/src/test-setup.ts turns loads off) — a chunk
+ *  still loading when a spec file's environment is torn down fails the run ("EnvironmentTeardownError"). */
+let loadsOn = true;
+export function setPrefetchLoadsForTests(on: boolean): void { loadsOn = on; }
 
 /** Start loading now; repeated calls with the same key share one load. */
 export function prefetch(key: string, loader: () => Promise<unknown>): Promise<unknown> {
   let p = inflight.get(key);
+  if (!p && !loadsOn) { p = Promise.resolve(); inflight.set(key, p); return p; }   // tests: remembered, never loaded
   if (!p) {
     p = loader().catch(err => {
       inflight.delete(key);            // a network blip may retry on the next hover
@@ -58,7 +63,7 @@ type IdleWindow = Window & {
  * Returns a cancel function for the caller's DestroyRef.
  */
 export function prefetchWhenIdle(key: string, loader: () => Promise<unknown>, fallbackMs = 600): () => void {
-  if (inflight.has(key) || typeof window === 'undefined' || saveData()) return () => { /* nothing scheduled */ };
+  if (!loadsOn || inflight.has(key) || typeof window === 'undefined' || saveData()) return () => { /* nothing scheduled */ };
   const w = window as IdleWindow;
   if (typeof w.requestIdleCallback === 'function') {
     const id = w.requestIdleCallback(() => { void prefetch(key, loader); }, { timeout: 4000 });
