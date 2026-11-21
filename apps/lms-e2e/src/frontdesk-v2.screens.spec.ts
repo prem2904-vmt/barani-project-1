@@ -370,7 +370,9 @@ test.describe('frontdesk v2 — wide desktop 1720', () => {
     await openDesk(page);
     await expectNoPageScroll(page, '1720');
     const head = (await page.locator('.pf-fd-flow .ag-header-cell-text').allTextContents()).map(t => t.trim()).filter(Boolean);
-    expect(head).toEqual(['Token', 'Patient', 'Journey', 'Where now', 'Waiting', 'Payment', 'Next']);   // fd-chart: the ring replaced Visit for + the dots
+    // Lab's Work grid columns, defaults (Settings › Lab › Front desk): the owner's catalogue adds Samples after Where now;
+    // Waiting is fixed right before Next.
+    expect(head).toEqual(['Token', 'Patient', 'Where now', 'Samples', 'Payment', 'Waiting', 'Next']);
     await shots(page, '07-desktop-1720');
     await deskTab(page, 'In progress');
     await expectNoPageScroll(page, '1720 in progress');

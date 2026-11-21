@@ -87,6 +87,7 @@ export const OPD_FRONT_DESK_SECTIONS = [
   { id: 'appointments', label: 'Appointments and booking' },
   { id: 'referring', label: 'Referring doctors and hospitals' },
   { id: 'alerts', label: 'OPD alerts' },
+  { id: 'columns', label: 'Work grid columns' },
 ] as const;
 
 export const SETTINGS_GROUPS = [

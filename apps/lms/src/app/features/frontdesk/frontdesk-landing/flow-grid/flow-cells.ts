@@ -25,6 +25,21 @@ export interface FlowGridContext {
   toggle(row: FlowRow, ev: MouseEvent | KeyboardEvent): void;
   /** The ring's inner service label adds information: 2+ services and no single-service filter. */
   ringLabels?(): boolean;
+  /** Settings › Work grid columns preview: the header drag / ✕ / Alt+arrows (flow-head.component.ts). */
+  columnEdit?: FlowColumnEdit;
+  /** Frontdesk: this person may hide a column for themselves (only while the admin allows it). */
+  columnHide?: FlowColumnHide;
+}
+
+export interface FlowColumnEdit {
+  start(ev: PointerEvent, fdId: string, headerCell: HTMLElement): void;
+  key(ev: KeyboardEvent, fdId: string): void;
+  remove(fdId: string): void;
+}
+export interface FlowColumnHide {
+  hide(fdId: string): void;
+  showAll(): void;
+  hiddenCount(): number;
 }
 
 type P = ICellRendererParams<FlowRow> & { context: FlowGridContext };

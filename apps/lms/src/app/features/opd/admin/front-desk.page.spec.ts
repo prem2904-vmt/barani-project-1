@@ -15,8 +15,8 @@ describe('OPD front desk (Settings → OPD → Front desk, alerts and numbers)',
   };
   afterEach(() => TestBed.resetTestingModule());
 
-  it('lists the three categories the left panel anchors', () => {
-    expect(OPD_FRONT_DESK_SECTIONS.map(s => s.label)).toEqual(['Appointments and booking', 'Referring doctors and hospitals', 'OPD alerts']);
+  it('lists the categories the left panel anchors (Work grid columns last)', () => {
+    expect(OPD_FRONT_DESK_SECTIONS.map(s => s.label)).toEqual(['Appointments and booking', 'Referring doctors and hospitals', 'OPD alerts', 'Work grid columns']);
   });
 
   it('opens on Appointments and booking: only the Booking slots card, plus a link to the OPD workflow', () => {
