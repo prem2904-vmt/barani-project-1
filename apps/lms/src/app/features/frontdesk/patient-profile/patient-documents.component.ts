@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { ToastService } from '../../../core/services/toast.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { ApiError } from '../../../shared/models/api-response.model';
 import { SelectComponent } from '../../../shared/primitives/select.component';
@@ -109,6 +110,7 @@ const DOC_TYPES = [
 export class PatientDocumentsComponent {
   private readonly http = inject(HttpClient);
   private readonly toasts = inject(ToastService);
+  private readonly dialog = inject(DialogService);
   /** Patient files only through the authenticated endpoint (logic audit). */
   protected readonly uploads = inject(UploadsService);
 
@@ -163,7 +165,7 @@ export class PatientDocumentsComponent {
   }
 
   async remove(d: PatientDocument) {
-    if (!confirm(`Delete "${d.fileName}"?`)) return;
+    if (!(await this.dialog.confirm({ title: 'Delete this document?', message: d.fileName, confirmLabel: 'Delete', tone: 'danger' }))) return;
     try {
       await firstValueFrom(this.http.delete(`${this.base()}/${d.id}`));
       this.docs.update(list => list.filter(x => x.id !== d.id));

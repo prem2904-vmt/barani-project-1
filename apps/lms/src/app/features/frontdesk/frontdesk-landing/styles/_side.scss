@@ -40,6 +40,8 @@
 
   /* The week strip is the ONE date picker: ‹ › move the week (44px targets), days share the rest. */
   .pf-daystrip.fd-daystrip { align-items: stretch; gap: 4px; container-type: inline-size; }
+  /* "Back to today" sits on its own row under the strip so the seven day cells keep equal widths. */
+  .fd-btt-row { display: flex; justify-content: flex-end; padding: 4px 0 2px; }
   /* Three-letter day over the date, always (owner 2026-11-21: one-letter / glued days were unreadable). */
   .fd-dow-s { display: none; }
   .fd-daystrip__nav {
