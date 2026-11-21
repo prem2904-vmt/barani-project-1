@@ -176,7 +176,7 @@ test.describe('frontdesk v2 — lab-only tenant', () => {
       // fd-chart: narrow grids (iPad) shorten "Where now" / "Waiting" so no header label is ever cut.
       // Never scroll sideways (owner 2026-11-21): a narrow grid folds Waiting into the Where cell (second line).
       expect(heads.some(h => /^Where( now)?$/.test(h))).toBe(true);
-      if (!heads.some(h => /^Wait(ing)?$/.test(h))) await expect(vis(page, '.pf-fd-flow .fd-flow__wait-in').first()).toBeVisible();
+      if (!heads.some(h => /^Wait(ing)?$/.test(h))) await expect(vis(page, '.pf-fd-flow .fd-cell-where__wait').first()).toBeVisible();   // Where now's third line (design D)
       // Card head: icon tile + WORK, the status pill with its dots, "Today" + the More filters icon.
       await expect(vis(page, '.pf-work-hdr__title .pf-card__label')).toHaveText(/work/i);
       await expect(vis(page, '.pf-work-hdr__range')).toHaveText('Today');
@@ -209,7 +209,7 @@ test.describe('frontdesk v2 — lab-only tenant', () => {
     expect(cut.ellipsis, 'no ellipsis').toBe(false);
     if (wide()) {
       expect(cut.nowrap).toBe(false);
-      await expect(vis(page, '.fd-flow__wait--late').first()).toBeVisible();
+      await expect(vis(page, '.fd-flow__wait--late, .fd-cell-where__wait--late').first()).toBeVisible();
       await expect(vis(page, '.fd-flow__pay--due, .fd-cell-pt__pay--due').first()).toContainText('due');
     }
   });

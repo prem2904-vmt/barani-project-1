@@ -959,7 +959,7 @@ export class ReportQueueComponent implements OnInit {
   private readonly rqFold = computed(() => {
     const touch = !this.web();
     const act = touch ? 256 : 290;
-    const base = 94 + 140 + 130 + 156 + 128 + 96 + act;   // Status = two lines of words (156)
+    const base = 94 + 140 + 130 + 116 + 128 + 96 + act;   // Status words wrap by whole words inside their minimum
     return foldSteps<"compact" | "slim">(this.gridW(), base, [{ id: "compact", saves: 130 + 128 }, { id: "slim", saves: 96 + act - 212 }], 0);
   });
   /** Additive: the old <1280px fold stays; a narrower GRID (a split window) folds further so it never scrolls sideways. */
@@ -1110,7 +1110,7 @@ export class ReportQueueComponent implements OnInit {
       { ...textCol<RqRow>({ colId: "order", headerName: "Order", width: 130, minWidth: 130, hide: compact, wrapText: false, cellClass: "pf-rq2-nowrap", ...cell(this.orderTpl()) },
         (d) => this.orderText(d)), ...this.textFilter((d) => this.orderText(d)) },
       // Status = two lines of words (owner design D, 2026-11-21) — read LEFT with its header.
-      this.choiceFilter({ colId: "status", headerName: "Status", width: 168, minWidth: 156, ...cell(this.statusTpl()) },
+      this.choiceFilter({ colId: "status", headerName: "Status", width: 120, minWidth: 116, ...cell(this.statusTpl()) },
         "Status", () => this.statusChoices(), () => (this._filter() === "all" ? "" : this._filter()), (v) => this.setFilter((v || "all") as Filter),
         { num: (d) => this.statusRank(d) }),
       this.choiceFilter({ colId: "generated", headerName: "Generated", width: 128, minWidth: 128, hide: compact, wrapText: false, headerClass: "pf-rq2-hcenter", cellClass: "pf-rq2-nowrap pf-rq2-center", ...cell(this.genTpl()) },

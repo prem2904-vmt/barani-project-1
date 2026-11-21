@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 import { JourneyOverlayService } from './journey-overlay.service';
 import { JourneyRingComponent } from './journey-ring.component';
 import { JOURNEY_FLIP_MS } from './journey-overlay.component';
@@ -7,6 +7,12 @@ import { JourneyDetail, detailLine, detailStepOf, detailTat } from './journey-de
 import { labRingSteps, PipelineLike } from './journey-ring';
 import { flowJourneyDetail } from '../../../features/frontdesk/frontdesk-landing/flow-grid/flow-journey';
 import type { FlowRow } from '../../../features/frontdesk/frontdesk-landing/flow-grid/flow-row';
+
+// This file stubs window.matchMedia: put the REAL one back after every test so the stub never leaks into other specs
+// of the combined run (a leaked "reduce" / "pointer: coarse" answer flipped motion and touch rules elsewhere).
+const realMatchMedia = window.matchMedia;
+afterEach(() => { Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: realMatchMedia }); });
+
 
 /** Tap-to-expand journey view (owner-approved 2026-11-20): open / close (✕ · Esc · backdrop), focus return, the
  *  timeline from the step model, the reduced-motion path, and the Frontdesk row → detail mapping. */

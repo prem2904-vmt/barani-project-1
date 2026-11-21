@@ -12,6 +12,12 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { reportedAstRows } from '../../../shared/utils/report-pdf';
 import { PlateReading } from './plate-reading';
 
+// This file stubs window.matchMedia: put the REAL one back after every test so the stub never leaks into other specs
+// of the combined run (a leaked "reduce" / "pointer: coarse" answer flipped motion and touch rules elsewhere).
+const realMatchMedia = window.matchMedia;
+afterEach(() => { Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: realMatchMedia }); });
+
+
 /**
  * SME flow: the plate is measured BEFORE the organism (PF Sense reads the
  * codes against the whole antibiotic master), held on the case, and the AST
