@@ -10,6 +10,8 @@
  */
 export const EASE = 'cubic-bezier(.2,.8,.2,1)';
 
+/** Web Animations available (not in jsdom / very old engines)? Without it every motion is skipped. */
+const can = (el: Element | null | undefined): el is HTMLElement => !!el && typeof (el as HTMLElement).animate === 'function';
 const done = (a: Animation | null | undefined) => (a ? a.finished.then(() => undefined, () => undefined) : Promise.resolve());
 
 function baseTransform(el: HTMLElement): string {
@@ -26,7 +28,7 @@ function aboveTarget(ghost: HTMLElement, target: HTMLElement): { dx: number; dy:
 
 /** The ghost glides back to its own card. */
 export async function flyBack(ghost: HTMLElement | null, home: HTMLElement | null, reduced: boolean): Promise<void> {
-  if (!ghost || !home || reduced) return;
+  if (!can(ghost) || !home || reduced) return;
   const base = baseTransform(ghost);
   const g = ghost.getBoundingClientRect(), h = home.getBoundingClientRect();
   const dx = h.left + h.width / 2 - (g.left + g.width / 2), dy = h.top + h.height * 0.35 - (g.top + g.height / 2);
@@ -36,7 +38,7 @@ export async function flyBack(ghost: HTMLElement | null, home: HTMLElement | nul
 
 /** While the inline "Different additive" question is open the ghost waits above the target. */
 export async function hoverAbove(ghost: HTMLElement | null, target: HTMLElement | null, reduced: boolean): Promise<void> {
-  if (!ghost || !target) return;
+  if (!can(ghost) || !target) return;
   const base = baseTransform(ghost);
   const { dx, dy } = aboveTarget(ghost, target);
   await done(ghost.animate([{ transform: base }, { transform: `translate(${dx}px, ${dy}px) ${base} rotate(6deg)` }],
@@ -45,7 +47,7 @@ export async function hoverAbove(ghost: HTMLElement | null, target: HTMLElement 
 
 /** Not drawn yet: the tube slides down into the target and is gone (~680 ms). */
 export async function slideIn(ghost: HTMLElement | null, target: HTMLElement | null, reduced: boolean): Promise<void> {
-  if (!ghost || !target || reduced) return;
+  if (!can(ghost) || !target || reduced) return;
   const base = baseTransform(ghost);
   const { dx, dy, g } = aboveTarget(ghost, target);
   const above = `translate(${dx}px, ${dy}px) ${base} rotate(6deg)`;
@@ -56,7 +58,7 @@ export async function slideIn(ghost: HTMLElement | null, target: HTMLElement | n
 
 /** Drawn: fly above, tip over, a stream pours in, the target's liquid wobbles up, the empty tube spins away (~1.4 s). */
 export async function pourIn(ghost: HTMLElement | null, target: HTMLElement | null, liquid: string, reduced: boolean): Promise<void> {
-  if (!ghost || !target || reduced) return;
+  if (!can(ghost) || !target || reduced) return;
   const base = baseTransform(ghost);
   const { dx, dy, t } = aboveTarget(ghost, target);
   const tipped = `translate(${dx + 22}px, ${dy + 18}px) ${base} rotate(-112deg)`;
@@ -98,7 +100,7 @@ export async function pourIn(ghost: HTMLElement | null, target: HTMLElement | nu
 
 /** The poured card folds away (before the list drops it). */
 export async function foldAway(card: HTMLElement | null, reduced: boolean): Promise<void> {
-  if (!card || reduced) return;
+  if (!can(card) || reduced) return;
   await done(card.animate([{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(.86)' }], { duration: 180, easing: 'ease-in', fill: 'forwards' }));
 }
 
@@ -123,14 +125,14 @@ export function flip(root: ParentNode | null | undefined, before: Map<string, DO
     const dx = b.left - a.left, dy = b.top - a.top;
     if (!dx && !dy) return;
     moved.push(id);
-    if (!reduced) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 320, easing: EASE });
+    if (!reduced && can(el)) el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 320, easing: EASE });
   });
   return moved;
 }
 
 /** A tube taken back out pops out of the kept one (460 ms). */
 export function popOut(card: HTMLElement | null, from: HTMLElement | null, reduced: boolean): void {
-  if (!card || reduced) return;
+  if (!can(card) || reduced) return;
   const c = card.getBoundingClientRect(), f = from?.getBoundingClientRect() ?? c;
   card.animate([{ transform: `translate(${f.left - c.left}px, ${f.top - c.top}px) scale(.3)`, opacity: 0 }, { transform: 'none', opacity: 1 }],
     { duration: 460, easing: 'cubic-bezier(.2,1.2,.4,1)' });
