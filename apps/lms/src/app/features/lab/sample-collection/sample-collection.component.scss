@@ -2650,3 +2650,85 @@
     @media (max-width: 1280px) {
       .pf-drawer--hosted .pf-sc-side { flex-basis: 240px; width: 240px; }
     }
+
+    /* ─── Info panel show / hide (owner 2026-11-21) ─────────────────────
+       >= 1280px: docked beside the vials, the VIALS-head toggle collapses it (260ms slide/fade, the grid takes the
+       width). Below: hidden by default, the toggle opens it as a right drawer over the vials with a soft scrim.
+       While hidden, compact chips (Urgent · Fasting · N of M left) ride the patient head. Tokens only. */
+    .pf-sc-infotoggle { flex: none; width: 44px; height: 44px; min-height: 44px; padding: 0; color: var(--text-secondary); }
+    .pf-sc-infotoggle.is-on { color: var(--pf-pill-on-text, var(--violet-text, #7c3aed)); background: var(--pf-sel-bg, transparent); }
+    .pf-sc-fast { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; color: var(--text-secondary); }
+    .pf-sc-fast__base { color: var(--text-tertiary); margin-right: 4px; }
+    .pf-sc-ichips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: none; }
+    .pf-sc-ichip { height: 28px; min-height: 28px; padding: 0 9px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+    button.pf-sc-ichip { cursor: pointer; }
+    .pf-sc-ichip--urgent {
+      color: var(--pf-late-text, var(--rose-text)); background: var(--pf-late-bg, color-mix(in srgb, var(--rose-text) 10%, transparent));
+      border-color: var(--error-border, color-mix(in srgb, var(--rose-text) 28%, transparent));
+    }
+    .pf-sc-ichip-wrap { position: relative; display: inline-flex; }
+    .pf-sc-ichip__pop {
+      display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 6; width: max-content; max-width: min(320px, 80vw);
+      padding: 8px 10px; font-size: 12px; line-height: 1.4; color: var(--text-primary); white-space: normal;
+      background: var(--pf-card-bg); border: 1px solid var(--pf-line); border-radius: var(--pf-radius-sm, 8px); box-shadow: var(--shadow-md, 0 8px 24px rgb(0 0 0 / .12));
+    }
+    .pf-sc-ichip__pop--open, .pf-sc-ichip-wrap:hover .pf-sc-ichip__pop, .pf-sc-ichip-wrap:focus-within .pf-sc-ichip__pop { display: block; }
+    .pf-sc-scrim { display: none; }
+    .pf-drawer .pf-sc-side > .pf-card__head > .pf-sc-side__close { width: 44px; height: 44px; min-height: 44px; }
+
+    /* Docked (desktop): collapse = slide/fade to zero width. */
+    .pf-drawer--hosted .pf-sc-side.pf-sc-side--docked {
+      overflow: hidden;
+      transition: flex-basis 260ms var(--pf-ease-out, ease), width 260ms var(--pf-ease-out, ease), opacity 260ms ease, visibility 0s linear 0s;
+    }
+    .pf-drawer--hosted .pf-sc-side.pf-sc-side--docked > .pf-sc-side__body { min-width: 240px; }
+    .pf-drawer--hosted .pf-sc-side.pf-sc-side--docked.pf-sc-side--collapsed {
+      flex-basis: 0; width: 0; opacity: 0; visibility: hidden; border-left-color: transparent;
+      transition: flex-basis 260ms var(--pf-ease-out, ease), width 260ms var(--pf-ease-out, ease), opacity 200ms ease, visibility 0s linear 260ms;
+    }
+    /* Not hosted (full-screen collection, tablet portrait / classic desktop): hidden = only the action footer stays. */
+    .pf-drawer:not(.pf-drawer--hosted) .pf-sc-side.pf-sc-side--collapsed:not(.pf-sc-side--drawer) > :not(.pf-sc-foot) { display: none; }
+    .pf-drawer:not(.pf-drawer--hosted) .pf-sc-side.pf-sc-side--collapsed:not(.pf-sc-side--drawer) { flex: none; }
+
+    /* Drawer (below 1280px): over the vials, from the right. */
+    .pf-drawer--hosted .pf-body--split.pf-sc-body { position: relative; }
+    .pf-drawer--hosted .pf-sc-side:not(.pf-sc-side--docked):not(.pf-sc-side--drawer) { display: none; }
+    .pf-sc-scrim {
+      .pf-drawer--hosted & { display: block; position: absolute; inset: 0; z-index: 4; }
+      .pf-drawer:not(.pf-drawer--hosted) & { display: block; position: fixed; inset: 0 0 var(--pf-nav-h, 0px) 0; z-index: 1003; }
+      background: color-mix(in srgb, var(--text-primary) 22%, transparent);
+      animation: pf-sc-fade 260ms ease both;
+    }
+    .pf-drawer .pf-sc-side.pf-sc-side--drawer {
+      display: flex; flex-direction: column; width: min(360px, 88vw); max-width: 88vw; touch-action: pan-y;
+      background: var(--pf-card-bg); border: 0; border-left: 1px solid var(--pf-line); border-radius: 0;
+      box-shadow: var(--shadow-lg, -12px 0 32px color-mix(in srgb, var(--text-primary) 16%, transparent));
+      animation: pf-sc-drawer-in 260ms var(--pf-ease-out, ease) both;
+      --pf-panel-bg: var(--pf-card-bg);   /* the light theme's glass layer: opaque over the vials */
+    }
+    .pf-drawer--hosted .pf-sc-side.pf-sc-side--drawer { position: absolute; top: 0; right: 0; bottom: 0; z-index: 5; flex: none; }
+    .pf-drawer:not(.pf-drawer--hosted) .pf-sc-side.pf-sc-side--drawer {
+      position: fixed; top: 0; right: 0; bottom: var(--pf-nav-h, 0px); left: auto; height: auto; z-index: 1004; border-radius: 16px 0 0 16px;
+    }
+    .pf-drawer .pf-sc-side.pf-sc-side--drawer > .pf-card__head { display: flex; }
+    .pf-drawer .pf-sc-side.pf-sc-side--drawer > .pf-sheet__handle { display: none; }
+    .pf-drawer .pf-sc-side.pf-sc-side--drawer .pf-sc-side__close { display: inline-flex; }
+    .pf-drawer .pf-sc-side.pf-sc-side--drawer > .pf-sc-side__body { flex: 1 1 auto; min-height: 0; }
+    @keyframes pf-sc-drawer-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes pf-sc-fade { from { opacity: 0; } to { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) {
+      .pf-drawer--hosted .pf-sc-side.pf-sc-side--docked, .pf-drawer--hosted .pf-sc-side.pf-sc-side--docked.pf-sc-side--collapsed { transition: none; }
+      .pf-drawer .pf-sc-side.pf-sc-side--drawer, .pf-sc-scrim { animation: none; }
+    }
+    /* Full-screen collection (tablet portrait): the chips share the band pill, so the "Order" word gives way to the name. */
+    @media (max-width: 1100px) {
+      .pf-sc-ctx:has(.pf-sc-ichips) .pf-sc-chip--order .pf-sc-chip__meta { display: none; }
+    }
+    /* Phones: the band pill only fits patient + order, so the chips move to their own line in the VIALS head. */
+    .pf-sc-ichips-band { display: contents; }
+    .pf-sc-ichips-phone { display: none; }
+    @media (max-width: 640px) {
+      .pf-sc-ichips-band { display: none; }
+      .pf-sc-vials > .pf-card__head:has(.pf-sc-ichips-phone) { flex-wrap: wrap; row-gap: 8px; }
+      .pf-sc-ichips-phone { display: flex; order: 10; flex: 1 0 100%; }
+    }

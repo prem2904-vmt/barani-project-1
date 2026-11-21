@@ -3,6 +3,8 @@ import { PfKeysDirective } from '../../../shared/components/numpad/pf-keys.direc
 import { SamplePresetDirective } from '../../../shared/directives/sample-preset.directive';
 import { ThemeService } from '../../../core/services/theme.service';
 import { DestroyRef,
+  Injector,
+  afterNextRender,
   ChangeDetectionStrategy,
   Component,
   ElementRef,
@@ -63,6 +65,7 @@ import {
   sortForCollection,
 } from "../../../shared/utils/series-schedule";
 import { countCollected, isOrderDispatched } from "./dispatch-state";
+import { fastingGroups, fastingText, infoDocked, infoTier, readInfoOpen, writeInfoOpen, type InfoTier } from "./info-panel";
 import {
   isDrawn,
   isNotCollected,
@@ -434,6 +437,7 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
   readonly theme = inject(ThemeService);
   private readonly liveQ = inject(LiveQueueService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly injector = inject(Injector);
   private readonly auth = inject(AuthService);
   private readonly toasts = inject(ToastService);
   private readonly labelPrint = inject(LabelPrintService);
@@ -633,6 +637,16 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
         this.destroyRef.onDestroy(() => mq.removeEventListener?.('change', onMq));
       } catch { /* old engines */ }
     }
+    // Info panel: tier follows the width; the remembered choice is re-read per tier (and once the user is known).
+    if (typeof window !== 'undefined') {
+      const onResize = () => { const t = infoTier(window.innerWidth); if (t !== this.infoTier()) this.infoTier.set(t); };
+      window.addEventListener('resize', onResize, { passive: true });
+      // Esc closes the info drawer wherever focus is (the drawer's own keydown also traps Tab).
+      const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape' && this.infoDrawerOpen()) { e.preventDefault(); this.setInfoOpen(false); } };
+      window.addEventListener('keydown', onEsc);
+      this.destroyRef.onDestroy(() => { window.removeEventListener('resize', onResize); window.removeEventListener('keydown', onEsc); });
+    }
+    effect(() => { this.infoTier(); this.auth.user()?.id; untracked(() => this.loadInfoOpen()); });
     // Two-panel: the first patient (oldest first) is selected on arrival, and whenever the selection is gone.
     effect(() => {
       if (!this.hosted() || !this.queueLoaded() || this._openOrderId()) return;
@@ -775,6 +789,84 @@ export class SampleCollectionComponent implements OnInit, OnDestroy {
     this.queueHidden.set(hidden);
     try { localStorage.setItem(SampleCollectionComponent.QUEUE_HIDDEN_KEY, hidden ? '1' : '0'); } catch { /* private mode: in-memory only */ }
   }
+
+  // ─── Info panel show / hide (owner 2026-11-21; rules in info-panel.ts) ───
+  /** Form-factor tier from the viewport width (desktop >= 1280 docks the panel; smaller tiers use a drawer). */
+  readonly infoTier = signal<InfoTier>(typeof window !== 'undefined' ? infoTier(window.innerWidth) : 'desktop');
+  readonly infoDocked = computed(() => infoDocked(this.infoTier()));
+  private readonly _infoOpen = signal<boolean>(typeof window !== 'undefined' && window.innerWidth >= 1280);
+  /** Panel visible: docked beside the vials (desktop) or the drawer is open (tablet / phone). */
+  readonly infoOpen = this._infoOpen.asReadonly();
+  /** The drawer (below 1280px) is open. */
+  readonly infoDrawerOpen = computed(() => !this.infoDocked() && this._infoOpen());
+  @ViewChild('infoToggle') private infoToggleRef?: ElementRef<HTMLButtonElement>;
+  @ViewChild('infoPanel') private infoPanelRef?: ElementRef<HTMLElement>;
+  private infoSwipe: { x: number; y: number } | null = null;
+
+  private loadInfoOpen(): void {
+    const store = typeof localStorage !== 'undefined' ? localStorage : null;
+    this._infoOpen.set(readInfoOpen(store, this.auth.user()?.id, this.infoTier()));
+  }
+  setInfoOpen(open: boolean, opts: { focus?: boolean } = {}): void {
+    if (this._infoOpen() === open) return;
+    this._infoOpen.set(open);
+    const store = typeof localStorage !== 'undefined' ? localStorage : null;
+    writeInfoOpen(store, this.auth.user()?.id, this.infoTier(), open);
+    if (opts.focus === false) return;
+    if (open && !this.infoDocked()) {
+      // Drawer: focus moves into it (its close button) once it renders.
+      afterNextRender(() => this.infoPanel()?.querySelector<HTMLElement>('.pf-sc-side__close')?.focus(), { injector: this.injector });
+    } else if (!open && !this.infoDocked()) {
+      // Drawer closed: focus returns to the toggle.
+      afterNextRender(() => (this.infoToggleEl?.isConnected ? this.infoToggleEl : this.infoToggleRef?.nativeElement)?.focus(), { injector: this.injector });
+    }
+  }
+  /** The toggle that was pressed (the collection template can render more than once — e.g. hosted + a closing copy —
+   *  so the drawer is found next to THIS toggle, never by the first @ViewChild match). */
+  private infoToggleEl: HTMLElement | null = null;
+  private infoPanel(): HTMLElement | null {
+    const scoped = this.infoToggleEl?.isConnected ? this.infoToggleEl.closest('.pf-sc-body')?.querySelector<HTMLElement>('.pf-sc-side') : null;
+    return scoped ?? this.infoPanelRef?.nativeElement ?? null;
+  }
+  toggleInfo(el?: EventTarget | null): void {
+    if (el instanceof HTMLElement) this.infoToggleEl = el;
+    this.setInfoOpen(!this._infoOpen());
+  }
+  /** ✕ in the side card: closes the phone actions sheet and the info drawer. */
+  closeSide(): void {
+    this.actionsOpen.set(false);
+    if (this.infoDrawerOpen()) this.setInfoOpen(false);
+  }
+  /** Drawer keyboard: Esc closes, Tab stays inside (focus trap). */
+  onInfoKeydown(e: KeyboardEvent): void {
+    if (!this.infoDrawerOpen()) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.setInfoOpen(false); return; }
+    if (e.key !== 'Tab') return;
+    const root = e.currentTarget instanceof HTMLElement ? e.currentTarget : this.infoPanel();
+    if (!root) return;
+    const items = [...root.querySelectorAll<HTMLElement>('button:not([disabled]), [href], summary, input:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter(el => el.getClientRects().length > 0);
+    if (!items.length) { e.preventDefault(); return; }
+    const first = items[0], last = items[items.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (e.shiftKey && (active === first || !root.contains(active))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (active === last || !root.contains(active))) { e.preventDefault(); first.focus(); }
+  }
+  /** Touch: a swipe to the right on the drawer closes it. */
+  onInfoPointerDown(e: PointerEvent): void {
+    this.infoSwipe = this.infoDrawerOpen() && e.pointerType !== 'mouse' ? { x: e.clientX, y: e.clientY } : null;
+  }
+  onInfoPointerUp(e: PointerEvent): void {
+    const s = this.infoSwipe; this.infoSwipe = null;
+    if (!s || !this.infoDrawerOpen()) return;
+    const dx = e.clientX - s.x, dy = Math.abs(e.clientY - s.y);
+    if (dx > 60 && dx > dy * 1.5) this.setInfoOpen(false);
+  }
+  /** Compact head chips while the panel is hidden. */
+  remainingLeft(g: OrderGroup): number { return Math.max(0, g.totalVials - g.collected - g.notCollected); }
+  readonly fastingOpen = signal(false);
+  fastingGroupsOf(g: OrderGroup) { return fastingGroups(this.collectInfo(g).fasting); }
+  fastingTextOf(g: OrderGroup): string { return fastingText(this.collectInfo(g).fasting); }
 
   readonly groups = computed<OrderGroup[]>(() => {
     const byOrder = new Map<string, OrderGroup>();
