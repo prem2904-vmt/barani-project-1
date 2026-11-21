@@ -146,6 +146,8 @@ import { testListUrl } from '../../../shared/utils/test-list-url';
 import { DailyNoComponent } from '../../../shared/components/daily-no/daily-no.component';
 import { isSignedOrSkipped } from '../../../shared/utils/line-status';
 import { FlowGridComponent } from './flow-grid/flow-grid.component';
+import { WorkViewComponent, type WorkViewMode } from './work-view/work-view.component';
+import { sectionOrderKey } from './work-view/sections';
 import { FlowGridContext } from './flow-grid/flow-cells';
 import { FlowShareApi, FlowShareMenuComponent } from './flow-grid/flow-share-menu.component';
 import { MoreFiltersComponent } from './flow-grid/more-filters.component';
@@ -198,7 +200,7 @@ interface SeriesSheetGroup {
 @Component({
   selector: 'pf-frontdesk-landing',
   standalone: true,
-  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
+  imports: [DatePipe, RouterLink, PatientSearchComponent, AvatarComponent, ChipComponent, SegmentedComponent, CurrencyInrPipe, AdvancedPatientSearchComponent, KpiStripComponent, WorkAreaPanelsComponent, BarcodeScannerModalComponent, LabelCardComponent, InlinePaymentPanelComponent, HeroBandComponent, ScanIconComponent, OutsourcedListComponent, OutsourcedActionsComponent, ZoomSourceDirective, BusyDirective, SkeletonRowsComponent, SkeletonCardComponent, DailyNoComponent, PfCalendarComponent, EditReferralDialogComponent, FlowGridComponent, WorkViewComponent, FlowShareMenuComponent, MoreFiltersComponent, PaneSplitterComponent, WhoIsWhereComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './frontdesk-landing.component.html',
   styleUrl: './frontdesk-landing.component.scss',
@@ -1295,6 +1297,39 @@ export class FrontdeskLandingComponent implements OnInit, OnDestroy {
     // The ring's "LAB / OPD" adds nothing for a single-service tenant or while one service is picked.
     ringLabels: () => this.serviceShelf.multi() && this.serviceShelf.selected() === 'all',
   };
+
+  // ── WORK body views (owner mocks fd-sections/ColsGrouped + fd-morph-clinic, 2026-11-21) ──
+  /** "All" with 2+ services: one section per service (each with its own columns, in the user's order). */
+  readonly workSplit = computed(() => this.flowMode() && this.serviceShelf.multi() && this.serviceShelf.selected() === 'all');
+  readonly shelfServiceIds = computed<ServiceId[]>(() => this.serviceShelf.services().map(s => s.id));
+  readonly sectionOrderKey = computed(() => { const u = this.auth.user(); return sectionOrderKey(u?.tenantId, u?.id); });
+  /** List | Clinic: 2+ services, the flow grid's lists (Outsourced keeps its own list). */
+  readonly clinicOn = computed(() => this.flowMode() && this.serviceShelf.multi() && this._rightTab() !== 'out');
+  private readonly workViewKey = computed(() => `pf-lms.frontdesk.view.${this.auth.user()?.id ?? 'anon'}`);
+  private readonly _workView = signal<WorkViewMode | null>(null);
+  readonly workView = computed<WorkViewMode>(() => {
+    if (!this.clinicOn()) return 'list';
+    const v = this._workView();
+    if (v) return v;
+    try { return localStorage.getItem(this.workViewKey()) === 'clinic' ? 'clinic' : 'list'; } catch { return 'list'; }
+  });
+  readonly workViewOptions: SegmentedOption<WorkViewMode>[] = [
+    { value: 'list', label: 'List', iconPath: ['M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'] },
+    { value: 'clinic', label: 'Clinic', iconPath: ['M3 3h8v8H3z', 'M13 3h8v5h-8z', 'M13 10h8v11h-8z', 'M3 13h8v8H3z'] },
+  ];
+  private readonly workViewRef = viewChild(WorkViewComponent);
+  setWorkView(v: WorkViewMode): void {
+    if (v === this.workView()) return;
+    this.workViewRef()?.beforeSwitch(v);
+    this._workView.set(v);
+    try { localStorage.setItem(this.workViewKey(), v); } catch { /* private mode: not remembered */ }
+  }
+  /** "+N more" in a clinic room: that service's list. */
+  clinicMore(s: ServiceId): void {
+    this.setWorkView('list');
+    this.workSel.clear();
+    this.serviceShelf.select(s);
+  }
 
   /** Tapping a row opens it — exactly what the old row did for that list. */
   openFlowRow(row: FlowRow): void {

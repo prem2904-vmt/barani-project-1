@@ -975,6 +975,14 @@
                   </div>
                 </div>
 
+                <!-- List | Clinic (owner mock fd-morph-clinic): 2+ services, the flow grid's lists only. -->
+                @if (clinicOn()) {
+                <div class="pf-work-hdr__view" (click)="$event.stopPropagation()">
+                  <pf-segmented class="pf-work-view-seg" [options]="workViewOptions" [value]="workView()" ariaLabel="View"
+                    (valueChange)="setWorkView($any($event))" />
+                </div>
+                }
+
                 <svg class="pf-appt-split__chev" width="14" height="14" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"
                   aria-hidden="true">
@@ -1035,10 +1043,11 @@
                 Showing the first 1000 outsourced rows for this date range — narrow it to see the rest.
               </p>
               }
-              <pf-fd-flow-grid class="pf-fd-flow" [rows]="flowRows()" [context]="flowCtx"
+              <pf-fd-work-view class="pf-fd-flow" [rows]="flowRows()" [context]="flowCtx"
                 [loading]="ordersSkel() && flowRows().length === 0 && (rightTab() !== 'billing' || billsSkel())"
                 [selecting]="workSelectable()" [emptyTitle]="flowEmpty().title" [emptyBody]="flowEmpty().body"
-                (opened)="openFlowRow($event)" />
+                [split]="workSplit()" [services]="shelfServiceIds()" [orderKey]="sectionOrderKey()" [view]="workView()"
+                (opened)="openFlowRow($event)" (moreFor)="clinicMore($event)" />
               }
 
               @if (!flowMode()) {

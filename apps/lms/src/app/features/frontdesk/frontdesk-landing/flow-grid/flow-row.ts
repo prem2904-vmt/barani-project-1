@@ -4,6 +4,7 @@ import type { OpdVisitRow } from '../../../opd/frontdesk/desk.models';
 import type { OutsourcedTube } from '../../outsourced/outsourced-view';
 import { attachState, rowReport } from '../../outsourced/outsourced-view';
 import type { MergedWorkRow } from '../work-merge';
+import type { SectionCells } from '../work-view/sections';
 import type { WorkStatus } from '../work-status-filter';
 import { drawerAgeSex, drawerName, drawerPipeline, drawerStepCaption } from '../order-drawer';
 import { ServiceId, serviceOfModule } from '../../../../core/services/service-shelf';
@@ -101,6 +102,8 @@ export interface FlowRow {
   selected?: boolean;
   /** The action in flight on this row (its Next shows the busy label), set by the landing. */
   busy?: FlowActionId | null;
+  /** Per-service section cells (All split by service — work-view/sections.ts `buildSections`). */
+  cells?: SectionCells;
 }
 
 /** The landing's existing row predicates — passed in, never re-implemented here. */

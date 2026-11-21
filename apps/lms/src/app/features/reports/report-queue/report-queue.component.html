@@ -136,7 +136,7 @@
           <div #listEnd class="pf-rq2-listend" aria-hidden="true"></div>
           }
           } @else {
-          <pf-data-grid class="pf-rq2-grid" data-testid="rq-grid"
+          <pf-data-grid #rqGrid class="pf-rq2-grid" data-testid="rq-grid"
                         [rowData]="gridRows()" [columnDefs]="colDefs()" [defaultColDef]="rqDefaultColDef"
                         [getRowId]="$any(rqRowId)" [getRowClass]="rqRowClass" [suppressColumnVirtualisation]="true"
                         [isFullWidthRow]="rqFullWidth" [fullWidthCellRenderer]="rqFullWidthRenderer"

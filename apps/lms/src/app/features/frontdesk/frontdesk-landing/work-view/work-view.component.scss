@@ -1,0 +1,101 @@
+/* Frontdesk WORK body: the one grid, the per-service sections, or the clinic. Tokens only (light + dark). */
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  position: relative;
+  --wv-lab: var(--sky-text, #0284c7);
+  --wv-opd: var(--violet-text, #6d28d9);
+  --wv-ipd: var(--blue-text, #2563eb);
+  --wv-scan: var(--teal-text, #0d9488);
+  --wv-er: var(--pink-text, #db2777);
+}
+
+.fd-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.fd-wv__clinic { flex: 1 1 auto; min-height: 0; }
+
+/* Stacked sections: ONE scroll body; each section's header sticks while its rows pass under it. */
+.fd-secs {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-bottom: 12px;
+}
+.fd-sec { position: relative; display: flex; flex-direction: column; background: var(--pf-card-bg); }
+.fd-sec__h {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px 0 4px;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--pf-card-bg));
+  border-top: 1px solid var(--pf-line);
+  border-bottom: 1px solid var(--pf-line);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  outline: none;
+}
+.fd-sec:first-child .fd-sec__h { border-top: 0; }
+.fd-sec__h:focus-visible { box-shadow: inset 0 0 0 2px var(--color-primary, #7c3aed); }
+.fd-sec__grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  color: var(--text-tertiary);
+  cursor: grab;
+  touch-action: none;
+  border-radius: 10px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.fd-sec__grip:hover { color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary) 5%, transparent); }
+.fd-secs--dragging, .fd-secs--dragging * { cursor: grabbing !important; user-select: none; }
+.fd-sec__dot { width: 8px; height: 8px; border-radius: 999px; flex: none; background: var(--wv-lab); }
+.fd-sec__dot[data-svc='opd'] { background: var(--wv-opd); }
+.fd-sec__dot[data-svc='ipd'] { background: var(--wv-ipd); }
+.fd-sec__dot[data-svc='scan'] { background: var(--wv-scan); }
+.fd-sec__dot[data-svc='er'] { background: var(--wv-er); }
+.fd-sec__name { text-transform: uppercase; }
+.fd-sec__n { font-weight: 500; letter-spacing: 0; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.fd-sec__late { font-size: 12px; font-weight: 600; letter-spacing: 0; color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); }
+
+/* The lifted section follows the finger / pointer; the violet line marks where it lands. */
+.fd-sec--lifted {
+  z-index: 8;
+  box-shadow: 0 14px 34px color-mix(in srgb, #000 22%, transparent);
+  border-radius: 12px;
+  overflow: hidden;
+  opacity: 0.96;
+}
+.fd-secs__drop {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--color-primary, #7c3aed);
+  z-index: 9;
+  pointer-events: none;
+}
+
+/* Back from Clinic: the list slides / fades in (~260ms; none under reduced motion). */
+.fd-secs--in, .fd-wv--in { animation: fd-wv-in 260ms cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes fd-wv-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .fd-secs--in, .fd-wv--in { animation: none; }
+}
