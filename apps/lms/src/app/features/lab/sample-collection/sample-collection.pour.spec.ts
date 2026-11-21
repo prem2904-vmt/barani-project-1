@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { signal } from '@angular/core';
-import { of, throwError } from 'rxjs';
+import { of, throwError, Subject } from 'rxjs';
 import { vi } from 'vitest';
 import { SampleCollectionComponent } from './sample-collection.component';
 import { ApiService } from '../../../core/services/api.service';
@@ -52,8 +52,9 @@ const keptAfter = {
 
 interface Opts {
   candidates?: unknown[];
-  mergeFirst?: 'ok' | 'confirm' | 'refuse';
-  separate?: 'ok' | 'refuse';
+  mergeFirst?: 'ok' | 'confirm' | 'refuse' | 'slow';
+  slow?: Subject<unknown>;
+  separate?: 'ok' | 'refuse' | '404';
   confirm?: boolean[];
   samples?: unknown[];
   manual?: boolean;
@@ -74,6 +75,7 @@ function render(opts: Opts = {}) {
     post: vi.fn((url: string, body?: any) => {
       if (url.endsWith('/merge')) {
         mergeCalls++;
+        if (opts.mergeFirst === 'slow') return opts.slow!;
         if (opts.mergeFirst === 'refuse')
           return throwError(() => new ApiError('', 'merge_already_received'));
         if (opts.mergeFirst === 'confirm' && mergeCalls === 1 && !body.confirmWarnings)
@@ -83,6 +85,7 @@ function render(opts: Opts = {}) {
       }
       if (url.endsWith('/separate')) {
         if (opts.separate === 'refuse') return throwError(() => new ApiError('', 'separate_dispatched'));
+        if ((opts.separate as string) === '404') return throwError(() => new ApiError('That could not be found.', undefined, undefined, undefined, 404));
         return of({ sample: { ...grey }, restored: { ...red } });
       }
       return of({});
@@ -94,7 +97,7 @@ function render(opts: Opts = {}) {
     printLabelData: vi.fn(async (_d?: any) => ({ ok: true, direct: true })),
   };
   const dialog = { confirm: vi.fn(async (_req?: any) => confirms.shift() ?? false) };
-  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn(), withAction: vi.fn() };
+  const toasts = { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn(), withAction: vi.fn((_m?: any, _a?: any, ..._r: any[]) => 1), dismiss: vi.fn() };
   TestBed.configureTestingModule({
     providers: [
       { provide: ApiService, useValue: api },
@@ -307,6 +310,40 @@ describe('Sample collection — pour one tube into another', () => {
     expect(api.post).toHaveBeenCalledWith('/api/samples/grey/separate', { sampleId: 'red' });
     expect(c.activeGroup().samples.map((s: any) => s.id)).toEqual(['grey', 'red']);
     expect(toasts.withAction).toHaveBeenLastCalledWith('Red 26104 is its own tube again', expect.objectContaining({ label: 'Print label' }), 'success');
+  });
+
+  it('Undo while the merge call is still running: rolled back locally, no separate call until the merge lands', async () => {
+    const slow = new Subject<unknown>();
+    const { f, c, toasts, api } = render({ mergeFirst: 'slow', slow });
+    await open(f, c);
+    c.openPour(red);
+    await settle(f);
+    await c.confirmPour();
+    const done = c.confirmInlinePour();
+    await settle(f);
+    expect(c.activeGroup().samples.map((s: any) => s.id)).toEqual(['grey']);       // optimistic
+    toasts.withAction.mock.calls[0][1].run();                                       // Undo before the server answered
+    await settle(f);
+    expect(c.activeGroup().samples.map((s: any) => s.id)).toEqual(['red', 'grey']); // back at once
+    expect(api.post.mock.calls.some(([u]: any[]) => String(u).endsWith('/separate'))).toBe(false);
+    slow.next({ sample: keptAfter, warnings: [], retired: ['26104'] }); slow.complete();
+    await done; await settle(f);
+    expect(api.post).toHaveBeenCalledWith('/api/samples/grey/separate', { sampleId: 'red' });
+    expect(toasts.error).not.toHaveBeenCalled();
+  });
+
+  it('Undo after the merge, Separate missing on the server (404): plain words, never a raw error', async () => {
+    const { f, c, toasts } = render({ separate: '404' });
+    await open(f, c);
+    c.openPour(red);
+    await settle(f);
+    await c.confirmPour();
+    await c.confirmInlinePour();
+    await settle(f);
+    toasts.withAction.mock.calls[0][1].run();
+    await settle(f); await settle(f);
+    expect(toasts.error).toHaveBeenCalledWith('Couldn’t undo: this server can’t take tubes back out yet.');
+    expect(c.activeGroup().samples.map((s: any) => s.id)).toEqual(['grey']);       // still merged — the truth
   });
 
   it('a refused Separate rolls back with a plain error', async () => {

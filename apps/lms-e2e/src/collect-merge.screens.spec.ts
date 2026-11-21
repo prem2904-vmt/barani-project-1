@@ -36,7 +36,12 @@ let requests: string[] = [];
 
 const TUBES: Array<[string, string, string, string]> = [['g', '26309', 'fluoride', 'Glucose'], ['s', '26310', 'sst', 'Cholesterol'], ['r', '26311', 'plain', 'Bilirubin'], ['l', '26312', 'edta', 'CBC']];
 const ADD: Record<string, string> = { fluoride: 'fluoride', sst: 'serum', plain: 'serum', edta: 'edta' };
+let withTimed = false;
+let separateMode: 'ok' | '404' = 'ok';
+let mergeDelay = 250;
 const fresh = () => [
+  ...(withTimed ? [mkSample('o1t', 'o1', 'pending', { barcode: '26313', tubeColor: 'sst', repeatOffsetMin: 120, repeatProfileTestId: 'ser-1', createdAt: iso(minsAgo(89)),
+    tests: [{ id: 'o1t-t', status: 'pending', test: { name: 'Glucose +2h', parameters: PARAMS, sampleType: 'Serum' } }] })] : []),
   ...TUBES.map(([k, code, color, test]) => mkSample(`o1${k}`, 'o1', 'pending', { barcode: code, tubeColor: color, createdAt: iso(minsAgo(89)),
     tests: [{ id: `o1${k}-t`, status: 'pending', test: { name: test, parameters: PARAMS, sampleType: 'Plasma' } }] })),
   mkSample('o2a', 'o2', 'pending', { createdAt: iso(minsAgo(80)) }),
@@ -73,7 +78,7 @@ async function backend(page: Page) {
     }
     m = /^\/api\/samples\/([^/]+)\/merge$/.exec(p);
     if (m && req.method() === 'POST') {
-      await new Promise(r => setTimeout(r, 250));   // a real round trip
+      await new Promise(r => setTimeout(r, mergeDelay));   // a real round trip
       const body = req.postDataJSON(); const keep = samples.find(x => x.id === m![1]);
       const g = samples.find(x => x.id === body.sampleIds[0]);
       if (ADD[g.tubeColor] !== ADD[keep.tubeColor] && !body.confirmWarnings)
@@ -88,6 +93,8 @@ async function backend(page: Page) {
     }
     m = /^\/api\/samples\/([^/]+)\/separate$/.exec(p);
     if (m && req.method() === 'POST') {
+      // dev before the Separate backend ships: no such route (empty 404).
+      if (separateMode === '404') return route.fulfill({ status: 404, headers: cors(origin), body: '' });
       const body = req.postDataJSON(); const keep = samples.find(x => x.id === m![1]); const g = gone[body.sampleId];
       const mm = meta(keep);
       mm.manualMerge = (mm.manualMerge ?? []).filter((e: any) => e.barcode !== g.barcode);
@@ -172,6 +179,8 @@ test.beforeEach(async ({ page }) => {
   // Owner scope: desktop + tablet (touch). Phones auto-scroll the vial list under a long drag; covered by unit specs.
   test.skip(test.info().project.name.startsWith('phone'), 'desktop + tablet');
   test.setTimeout(120_000); OUT = shotsDir(OUT_BASE);
+  withTimed = /timed/i.test(test.info().title); separateMode = /404/.test(test.info().title) ? '404' : 'ok';
+  mergeDelay = /still running/.test(test.info().title) ? 2500 : 250;
   samples = fresh(); requests = []; pendingGets = 0; gone = {};
   await backend(page);
 });
@@ -271,4 +280,60 @@ test('different additive: target turns rose, asks INLINE — Keep apart changes 
   expect(requests.filter(r => r.endsWith('/merge'))).toEqual(['POST /api/samples/o1g/merge']);
   await noDialogs(page);
   expect(pendingGets).toBe(gets);
+});
+
+test('timed series: a +2h draw is not droppable — the reason shows while over it, a drop pours nothing', async ({ page }) => {
+  await openBaby(page);
+  const timed = tile(page, '26313');
+  await expect(timed).toBeVisible();
+  await expect(timed.locator('.pf-tube')).not.toHaveClass(/pf-tube--draggable/);   // nothing to pour it into
+  // Drag its row neighbour sideways (no vertical auto-scroll on short screens).
+  await timed.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  const a = await center(page, '26312'), b = await center(page, '26313');
+  if (!isTouch()) {
+    await page.mouse.move(a.x, a.y); await page.mouse.down();
+    for (let i = 1; i <= 12; i++) { await page.mouse.move(a.x + (b.x - a.x) * i / 12, a.y + (b.y - a.y) * i / 12); await page.waitForTimeout(20); }
+    await expect(timed.locator('.pf-tube')).toHaveClass(/pf-tube--pour-no/);
+    await expect(timed).toContainText('Timed draws can’t be poured');
+    await page.screenshot({ path: `${OUT}/timed-refused-light.png` });
+    await page.mouse.up();
+  } else {
+    await drag(page, '26312', '26313');
+  }
+  await expect(page.locator('.toast-item', { hasText: 'Timed draws can’t be poured' })).toBeVisible();
+  await expect(tile(page, '26312')).toBeVisible();
+  expect(requests.filter(r => r.endsWith('/merge'))).toEqual([]);
+  await noDialogs(page);
+});
+
+test('Undo after the merge completed, separate missing on the server (404): plain words, the merge stays', async ({ page }) => {
+  await openBaby(page);
+  await drag(page, '26310', '26311');
+  await expect(tile(page, '26310')).toHaveCount(0, { timeout: 5000 });
+  await expect.poll(() => requests.includes('POST /api/samples/o1r/merge')).toBe(true);
+  await page.waitForTimeout(600);   // the merge answered
+  await page.locator('.toast-item', { hasText: 'Merged Gold 26310 into Red 26311' }).getByTestId('toast-action').click();
+  const err = page.locator('.toast-item', { hasText: 'Couldn’t undo: this server can’t take tubes back out yet.' });
+  await expect(err).toBeVisible();
+  await expect(page.locator('.toast-item', { hasText: /Http failure|404/ })).toHaveCount(0);
+  await expect(tile(page, '26311').getByTestId('merge-chip')).toHaveText(/\+ Gold · 26310/);   // the truth: still merged
+  expect(requests).toContain('POST /api/samples/o1r/separate');
+  await page.screenshot({ path: `${OUT}/undo-404-light.png` });
+  await noDialogs(page);
+});
+
+test('Undo while the merge call is still running: undone on the screen at once, then taken back out on the server', async ({ page }) => {
+  await openBaby(page);
+  await drag(page, '26310', '26311');
+  await expect(tile(page, '26310')).toHaveCount(0, { timeout: 5000 });
+  expect(requests.includes('POST /api/samples/o1r/separate')).toBe(false);
+  await page.locator('.toast-item', { hasText: 'Merged Gold 26310 into Red 26311' }).getByTestId('toast-action').click();
+  await expect(tile(page, '26310')).toBeVisible();                      // back immediately, no request needed
+  await expect(tile(page, '26311').getByTestId('merge-chip')).toHaveCount(0);
+  expect(requests.includes('POST /api/samples/o1r/separate')).toBe(false);
+  // the merge then lands → the screen asks the server to take it back out
+  await expect.poll(() => requests.includes('POST /api/samples/o1r/separate'), { timeout: 8000 }).toBe(true);
+  await expect(tile(page, '26310')).toBeVisible();
+  await expect(page.locator('.toast-item', { hasText: 'Couldn’t undo' })).toHaveCount(0);
 });

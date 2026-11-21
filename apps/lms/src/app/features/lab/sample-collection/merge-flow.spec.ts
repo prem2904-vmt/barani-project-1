@@ -1,4 +1,4 @@
-import { additiveWords, chipSeparable, chipText, mergedInto, optimisticMerge, optimisticSeparate, placeholderTube, pourMotion, separateRefusalText, tubesInOne } from './merge-flow';
+import { localPourBlock, undoFailureText, additiveWords, chipSeparable, chipText, mergedInto, optimisticMerge, optimisticSeparate, placeholderTube, pourMotion, separateRefusalText, tubesInOne } from './merge-flow';
 
 const t = (id: string, extra: Record<string, unknown> = {}) => ({ id, barcode: `B-${id}`, tubeColor: 'fluoride', status: 'pending', metadata: null as unknown, collectedAt: null as string | null, ...extra });
 
@@ -76,5 +76,32 @@ describe('merge-flow — separate', () => {
     expect(separateRefusalText('separate_dispatched')).toMatch(/left the counter/);
     expect(separateRefusalText('x', 'Server says no')).toBe('Server says no');
     expect(separateRefusalText(null)).toMatch(/can’t be taken back out/);
+  });
+});
+
+
+describe('merge-flow — what the screen refuses before the drop', () => {
+  const base = { orderId: 'o1', status: 'pending', repeatOffsetMin: null as number | null, repeatProfileTestId: null as string | null };
+  it('two ordinary tubes: no objection', () => expect(localPourBlock(base, { ...base })).toBeNull());
+  it('a +2h timed draw never takes a first draw (and vice versa)', () => {
+    const later = { ...base, repeatOffsetMin: 120, repeatProfileTestId: 's1' };
+    expect(localPourBlock(base, later)).toBe('Timed draws can’t be poured');
+    expect(localPourBlock(later, base)).toBe('Timed draws can’t be poured');
+  });
+  it('the same series at the same time is refused; another series at the same time is fine', () => {
+    const a = { ...base, repeatOffsetMin: 60, repeatProfileTestId: 's1' };
+    expect(localPourBlock(a, { ...a })).toBe('Timed draws can’t be poured');
+    expect(localPourBlock(a, { ...a, repeatProfileTestId: 's2' })).toBeNull();
+  });
+  it('a tube that left the counter, another order or an outsourced tube is refused', () => {
+    expect(localPourBlock(base, { ...base, status: 'dispatched' })).toBe('Already left the counter');
+    expect(localPourBlock(base, { ...base, status: 'collected', receivedAtLab: 'x' })).toBe('Already left the counter');
+    expect(localPourBlock(base, { ...base, orderId: 'o2' })).toBe('Different order');
+    expect(localPourBlock(base, { ...base, outsourcedVendorId: 'v' })).toBe('Outsourced tube');
+  });
+  it('Undo failures read in plain words', () => {
+    expect(undoFailureText(null, 'That could not be found.', 404)).toBe('Couldn’t undo: this server can’t take tubes back out yet.');
+    expect(undoFailureText('separate_dispatched', null, 400)).toMatch(/^Couldn’t undo: This tube has left the counter/);
+    expect(undoFailureText(null, null, 0)).toMatch(/can’t reach the server/);
   });
 });

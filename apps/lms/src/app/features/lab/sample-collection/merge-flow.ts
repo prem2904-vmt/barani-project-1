@@ -8,7 +8,7 @@
  *  - the kept tube shows "+ Gold · 26310" chips; a chip takes that tube back out (Separate) until the
  *    kept tube has left the counter.
  */
-import { manualMergesOf, sampleMeta, shortTubeName } from '../../../shared/utils/tube-merge';
+import { manualMergesOf, sampleMeta, shortTubeName, timedPourOk, type TimedTube } from '../../../shared/utils/tube-merge';
 
 /** What a tube holds, for the "Serum into Fluoride" words (mirror of SharedTubeRules.Subject). */
 const ADDITIVE: Record<string, string> = {
@@ -152,4 +152,31 @@ export function optimisticSeparate<T extends Tube>(list: readonly T[], keepId: s
 export function placeholderTube<T extends Tube>(keep: T, m: MergedIn): T {
   return { ...keep, id: m.sampleId ?? `restored-${m.barcode}`, barcode: m.barcode, tubeColor: m.tubeColor,
     status: m.drawn ? 'collected' : 'pending', metadata: null, tests: [] } as unknown as T;
+}
+
+/**
+ * Why a tube can't take the dragged one, decided on the screen BEFORE the drop (mirror of the server's
+ * SharedTubeRules.CanManualMerge for what the screen knows), so nothing the server would refuse looks
+ * droppable. null = no local objection (the server's merge-candidates still have the last word).
+ */
+export function localPourBlock(src: TimedTube & { status?: string | null; outsourcedVendorId?: string | null; orderId?: string | null; dispatchedAt?: string | null; receivedAtLab?: string | null },
+  t: TimedTube & { status?: string | null; outsourcedVendorId?: string | null; orderId?: string | null; dispatchedAt?: string | null; receivedAtLab?: string | null }): string | null {
+  if (src.orderId && t.orderId && src.orderId !== t.orderId) return 'Different order';
+  const atCounter = (x: { status?: string | null; dispatchedAt?: string | null; receivedAtLab?: string | null }) =>
+    (x.status === 'pending' || x.status === 'collected') && !x.dispatchedAt && !x.receivedAtLab;
+  if (!atCounter(t)) return 'Already left the counter';
+  if (!atCounter(src)) return 'This tube left the counter';
+  if (src.outsourcedVendorId || t.outsourcedVendorId) return 'Outsourced tube';
+  if (!timedPourOk(src, t)) {
+    const timed = (src.repeatOffsetMin ?? 0) > 0 || (t.repeatOffsetMin ?? 0) > 0;
+    return timed ? 'Timed draws can’t be poured' : 'Different time point';
+  }
+  return null;
+}
+
+/** Plain words for a failed Undo / Separate, never a raw error (404 / 405 = this server can't separate yet). */
+export function undoFailureText(code: string | null | undefined, message: string | null | undefined, status?: number): string {
+  if (status === 404 || status === 405) return 'Couldn’t undo: this server can’t take tubes back out yet.';
+  if (status === 0) return 'Couldn’t undo: can’t reach the server. Check the connection and try again.';
+  return `Couldn’t undo: ${separateRefusalText(code, message)}`;
 }
