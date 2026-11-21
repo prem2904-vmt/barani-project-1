@@ -2,6 +2,12 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { WEB_POINTER_MQ, webPointerSignal } from './pointer-mode';
 
+// This file stubs window.matchMedia: put the REAL one back after every test so the stub never leaks into other specs
+// of the combined run (a leaked "reduce" / "pointer: coarse" answer flipped motion and touch rules elsewhere).
+const realMatchMedia = window.matchMedia;
+afterEach(() => { Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: realMatchMedia }); });
+
+
 function stub(matches: boolean) {
   let listener: ((e: MediaQueryListEvent) => void) | null = null;
   const seen: string[] = [];

@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { test, expect, isPhone, isTouch, expectNoHorizontalScroll } from './support/form-factor';
+import { test, expect, isPhone, isTouch, expectNoHorizontalScroll, projectName } from './support/form-factor';
 import { resetNeg, installNegBackend, go, neg, visible } from './support/neg-backend';
 
 /**
@@ -129,6 +129,7 @@ for (const dark of [false, true]) {
   const mode = dark ? 'dark' : 'light';
 
   test(`Filters card: dates, status + To send breakdowns, doctor / channel selects; head "N of M" + Send all (${mode})`, async ({ page }, info) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     await open(page, dark);
     await expect(names(page).first()).toBeVisible({ timeout: 30_000 });
     // The old To send card, chip and status menu are gone.
@@ -205,6 +206,7 @@ for (const dark of [false, true]) {
   });
 
   test(`To send: the group filters the grid; Retry / Send ride in the row; Send all in the head (${mode})`, async ({ page }, info) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones: a row tap opens its sheet (Share on WhatsApp)');
     await open(page, dark);
     const c = await card(page);
@@ -235,6 +237,7 @@ for (const dark of [false, true]) {
 for (const dark of [false, true]) {
   const mode = dark ? 'dark' : 'light';
   test(`column filters in the header: funnels visible, Status bound to the card, Patient text filter, alignment (${mode})`, async ({ page }, info) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones: two-line rows (no grid header)');
     await open(page, dark);
     await expect(names(page).first()).toBeVisible({ timeout: 30_000 });
@@ -243,15 +246,16 @@ for (const dark of [false, true]) {
       if (id === 'actions') await expect(page.locator('.ag-header-cell[col-id="actions"] .ag-header-cell-filter-button')).toHaveCount(0);
       else await expect(btn(id), `${id} funnel`).toBeVisible();
     }
-    // Alignment: the status pill centred in its cell, the header label centred; the name left.
+    // Alignment: the status words read LEFT in their cell (two lines, design D), like the name.
     const al = await page.evaluate(() => {
       const cell = [...document.querySelectorAll<HTMLElement>('.ag-row .ag-cell[col-id="status"]')].find(e => e.getBoundingClientRect().width > 0)!;
-      const pill = cell.querySelector<HTMLElement>('.pf-rq2-pill')!.getBoundingClientRect(), c = cell.getBoundingClientRect();
+      const words = cell.querySelector<HTMLElement>('pf-status-words')!.getBoundingClientRect(), c = cell.getBoundingClientRect();
       const name = document.querySelector<HTMLElement>('.ag-row .ag-cell[col-id="patient"] .pf-rq2-who__name')!.getBoundingClientRect();
       const pc = document.querySelector<HTMLElement>('.ag-row .ag-cell[col-id="patient"]')!.getBoundingClientRect();
-      return { pillOff: Math.abs((pill.left + pill.width / 2) - (c.left + c.width / 2)), nameLeft: name.left - pc.left };
+      return { wordsLeft: words.left - c.left, nameLeft: name.left - pc.left, pill: !!cell.querySelector('.pf-rq2-pill') };
     });
-    expect(al.pillOff, 'status pill centred').toBeLessThanOrEqual(3);
+    expect(al.pill, 'no status pill').toBe(false);
+    expect(al.wordsLeft, 'status words left').toBeLessThanOrEqual(24);
     expect(al.nameLeft, 'patient name left').toBeLessThanOrEqual(14);
     // Status header filter: the side card's choices; picking one presses the side-card row (one state).
     await btn('status').click();

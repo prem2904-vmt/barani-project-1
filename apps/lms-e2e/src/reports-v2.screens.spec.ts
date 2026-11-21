@@ -48,7 +48,6 @@ const PARTIAL = {
       { id: 't5c', status: 'in_progress', test: { name: 'Thyroid profile', parameters: JSON.stringify({ parameters: [] }) }, currentResult: null }] },
   ],
 };
-const DOT = { completed: 'violet', partial: 'sky', delivered: 'green', failed: 'rose' };
 
 /** Extra rows for a test that needs the grid to scroll. */
 let EXTRA: typeof QUEUE = [];
@@ -169,15 +168,17 @@ for (const dark of [false, true]) {
     }
     const heads = await page.locator('.ag-header-cell-text').locator('visible=true').allInnerTexts();
     const compact = (page.viewportSize()?.width ?? 1440) < 1280;
-    // <1280px (pill fit, 2026-11-20): Sent folds under the status pill so the row actions are never clipped.
+    // <1280px (pill fit, 2026-11-20): Sent folds under the status words so the row actions are never clipped.
     expect(heads).toEqual(compact ? ['#', 'Patient', 'Status', 'Actions'] : ['#', 'Patient', 'Order', 'Status', 'Generated', 'Sent', 'Actions']);
     // The grid fits its card: no sideways scroll, the Actions column fully in view.
-    // Pills: neutral background, a small coloured dot per status.
-    for (const [key] of Object.entries(DOT)) {
-      const pill = visible(page, `.ag-row .pf-rq2-pill[data-status="${key}"]`);
-      await expect(pill, key).toBeVisible();
-      const dot = await pill.locator('.pf-rq2-dot').evaluate(e => getComputedStyle(e).backgroundColor);
-      expect(dot, `${key} dot has a colour`).not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+    // Status = two lines of words (design D, 2026-11-21): no pill, no dot; one colour rule (late rose, done green).
+    await expect(page.locator('.ag-row .pf-rq2-pill, .ag-row [col-id="status"] .pf-rq2-dot').locator('visible=true')).toHaveCount(0);
+    const TONE: Record<string, string> = { Ready: 'normal', Partial: 'normal', Delivered: 'done', Failed: 'late' };
+    for (const [now, tone] of Object.entries(TONE)) {
+      const w = page.locator('.ag-row pf-status-words').filter({ has: page.locator('.pf-sw__now', { hasText: new RegExp(`^${now}$`) }) }).locator('visible=true').first();
+      if (now === 'Failed' && !(await w.count())) continue;   // the failed report may sit on another tab
+      await expect(w, now).toBeVisible();
+      await expect(w, now).toHaveAttribute('data-tone', tone);
     }
     // Rows auto-size their height and animate into place: measure once they have settled.
     await page.waitForTimeout(800);
@@ -188,11 +189,11 @@ for (const dark of [false, true]) {
     const web = await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches);
     expect(rowH, 'row height').toBeGreaterThanOrEqual(web ? 56 : 64);
     expect(Math.round(headH), 'header height').toBe(web ? 40 : 48);
-    // Unpaid is quiet text on its own line UNDER the pill (never side by side).
+    // Unpaid is quiet text on its own line UNDER the status words (never side by side).
     const row = page.locator('.ag-row').filter({ hasText: 'Mr. Sathish Kumar' }).locator('visible=true').first();
-    const pill = await row.locator('.pf-rq2-pill').boundingBox();
+    const pill = await row.locator('[col-id="status"] pf-status-words').boundingBox();
     const unpaid = await row.locator('.pf-rq2-unpaid').boundingBox();
-    expect(unpaid!.y, 'Unpaid sits under the pill').toBeGreaterThanOrEqual(pill!.y + pill!.height - 1);
+    expect(unpaid!.y, 'Unpaid sits under the words').toBeGreaterThanOrEqual(pill!.y + pill!.height - 1);
     await expect(page.locator('.ag-row .pf-rq2-unpaid').locator('visible=true')).toHaveCount(1);
     // The # chip is never clipped; Order and Generated stay on ONE line.
     const old = page.locator('.ag-row').filter({ hasText: 'Ms. Priya Older' }).locator('visible=true').first();

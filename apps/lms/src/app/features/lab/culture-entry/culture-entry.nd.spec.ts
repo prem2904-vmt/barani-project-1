@@ -4,6 +4,12 @@ import { CultureEntryComponent } from './culture-entry.component';
 import { ApiService } from '../../../core/services/api.service';
 import { PlatformService } from '../../../core/services/platform.service';
 
+// This file stubs window.matchMedia: put the REAL one back after every test so the stub never leaks into other specs
+// of the combined run (a leaked "reduce" / "pointer: coarse" answer flipped motion and touch rules elsewhere).
+const realMatchMedia = window.matchMedia;
+afterEach(() => { Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: realMatchMedia }); });
+
+
 /** AST table (owner): light mode drops the traffic lights (eye strain) —
  *  neutral headers / breakpoint chips / muted MIC line / neutral S·I·R
  *  selection, a small red dot on a selected R the only colour. Dark keeps
