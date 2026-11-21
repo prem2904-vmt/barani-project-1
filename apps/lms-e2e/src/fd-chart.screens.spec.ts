@@ -340,6 +340,21 @@ test.describe('who is where — Lab + OPD user', () => {
     await newBtn.click();
     await expect(page).toHaveURL(/\/frontdesk\/appointments\/new/);
   });
+
+  // Owner 2026-11-21 (light-float): floating surfaces are near-opaque in light — the chart never reads through the Start menu.
+  test('the Start menu over the chart is near-opaque in light', async ({ page }) => {
+    await openDesk(page);
+    if (!wide()) { test.info().annotations.push({ type: 'form-factor', description: 'the chart lives at >= 1024px' }); return; }
+    const trig = vis(page, '[data-start-trigger]').first();
+    await expect(trig).toBeVisible({ timeout: 30_000 });
+    await trig.click();
+    await expect(vis(page, '.sm-panel').first()).toBeVisible();
+    await page.waitForTimeout(900);
+    await shots(page, '16-start-menu-over-chart');
+    const bg = await vis(page, '.sm-panel').first().evaluate(e => getComputedStyle(e).backgroundColor);
+    const m = /rgba?\(([^)]+)\)/.exec(bg); const p = m ? m[1].split(/[ ,/]+/).filter(Boolean) : [];
+    expect(p.length > 3 ? Number(p[3]) : 1, `Start menu background ${bg}`).toBeGreaterThanOrEqual(0.95);
+  });
 });
 
 test.describe('who is where — lab-only tenant', () => {

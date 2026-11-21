@@ -59,6 +59,28 @@ const EXPENSES = [
   { id: 'e2', date: today, category: 'Utilities', description: 'Electricity — November', amount: 6200, paidBy: 'UPI', createdByName: 'Kavya Desk' },
 ];
 
+const DEPTS = [
+  { id: 'd1', name: 'Biochemistry', code: 'BIO', isActive: true },
+  { id: 'd2', name: 'Haematology', code: 'HAE', isActive: true },
+];
+const TM_NAMES = ['Transferrin', 'Iron Studies', 'Serum Ferritin', 'Total Iron Binding Capacity', 'Vitamin B12', 'Folic Acid', 'Haemoglobin A1c', 'Liver Function Test'];
+const TESTS = Array.from({ length: 24 }, (_, i) => {
+  const d = DEPTS[i % 2];
+  return {
+    id: `t${i + 1}`, testCode: `${d.code}${100 + i}`, name: TM_NAMES[i % TM_NAMES.length], shortName: `S${i}`, section: 'Routine',
+    type: 'individual', isActive: true, price: 120 + i * 30, priceIsDefault: false, isOffered: true,
+    tatHours: 4, department: { id: d.id, name: d.name, code: d.code }, departmentId: d.id, tubeColor: 'Red', parameters: '[]',
+  };
+});
+
+const CPAT = { id: 'pc1', displayName: 'Sathish Kumar', firstName: 'Sathish', gender: 'M', sex: 'Male', age: 34, mrn: '260001', phone: '+919876543210' };
+const CPARAMS = JSON.stringify({ parameters: [{ name: 'glu', title: 'Glucose', unit: 'mg/dL' }] });
+const CSAMPLES = ['a', 'b', 'c'].map((k, i) => ({
+  id: `cs${k}`, orderId: 'oc1', status: 'pending', barcode: `B-c${k}`, tubeColor: ['grey', 'red', 'lavender'][i], rejectionCount: 0, collectedAt: null, createdAt: ago(90),
+  department: { id: 'bio', name: 'Biochemistry', code: 'BIO' }, tests: [{ id: `cs${k}-t`, status: 'pending', test: { name: ['Glucose', 'Lipid Profile', 'CBC'][i], parameters: CPARAMS, sampleType: 'Plasma' } }],
+}));
+const CORDER = { id: 'oc1', orderNumber: 'LAB-2611-00001', dailyNo: 1, dailyNoDay: today, patientId: 'pc1', branchId: 'b1', patient: CPAT, priority: 'Normal', source: 'walkin', collectionType: 'walkin', status: 'created', createdAt: ago(90), updatedAt: ago(5), samples: CSAMPLES };
+
 let holdLab = false;
 test.beforeEach(async ({ page, context }) => {
   test.setTimeout(240_000);
@@ -75,6 +97,10 @@ test.beforeEach(async ({ page, context }) => {
       case '/api/tenants/branch-lab-config': return ok({ effectiveQueueFocus: 'patient', queueFocus: 'patient' });
       case '/api/microbiology/culture-queue': return ok(CULTURES);
       case '/api/expenses': return ok(EXPENSES);
+      case '/api/tests': case '/api/tests/': return ok(TESTS);
+      case '/api/samples/pending-collection': return ok(CSAMPLES.map(x => ({ ...x, order: CORDER })));
+      case '/api/orders/oc1': return ok(CORDER);
+      case '/api/tenants/departments': return ok(DEPTS);
       case '/api/config/billing': return ok({ gstEnabled: false, gstScope: 'intra', allowDiscounts: true, maxDiscountPct: 10, invoicePrefix: 'INV', invoiceStartNumber: 1001 });
       default: return undefined;
     }
@@ -82,8 +108,9 @@ test.beforeEach(async ({ page, context }) => {
   await page.clock.setFixedTime(FIXED);
   await installNegBackend(page, context);
   // Freeze motion (the ambient flow, shimmers, carets) so the before/after dark sets compare pixel for pixel.
-  await page.addInitScript(() => {
-    const css = '*,*::before,*::after{animation-play-state:paused!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important}';
+  if (process.env['LT_NOFREEZE'] !== '1') await page.addInitScript(() => {
+    // Every animation jumps to its END state (entrances finish, loops stand still): menus and dialogs show, nothing moves.
+    const css = '*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;animation-iteration-count:1!important;transition:none!important;caret-color:transparent!important}';
     const add = () => { const s = document.createElement('style'); s.setAttribute('data-lt-freeze', ''); s.textContent = css; document.head.appendChild(s); };
     if (document.head) add(); else document.addEventListener('DOMContentLoaded', add);
   });
@@ -150,6 +177,29 @@ async function lightFacts(page: Page, panelSel: string) {
     };
   }, panelSel);
 }
+/** Background alpha of a floating surface: the element itself, else its biggest painted child (a host wrapper). */
+async function surfaceAlpha(page: Page, sel: string): Promise<{ found: boolean; alpha: number; what: string }> {
+  return page.evaluate(sel => {
+    const alpha = (c: string) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return 1; const p = m[1].split(/[ ,/]+/).filter(Boolean); return p.length > 3 ? Number(p[3]) : 1; };
+    const el = Array.from(document.querySelectorAll<HTMLElement>(sel)).find(e => e.getBoundingClientRect().width > 0);
+    if (!el) return { found: false, alpha: -1, what: '' };
+    if (getComputedStyle(el).backgroundColor !== 'rgba(0, 0, 0, 0)') return { found: true, alpha: alpha(getComputedStyle(el).backgroundColor), what: `${el.tagName}.${String(el.className).slice(0, 60)}` };
+    const cands = [...Array.from(el.querySelectorAll<HTMLElement>(':scope > *, :scope > * > *'))]
+      .filter(e => getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)')
+      .sort((a, b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height - a.getBoundingClientRect().width * a.getBoundingClientRect().height);
+    const s = cands[0];
+    return s ? { found: true, alpha: alpha(getComputedStyle(s).backgroundColor), what: `${s.tagName}.${String(s.className).slice(0, 60)}` } : { found: true, alpha: 0, what: 'no background' };
+  }, sel);
+}
+async function expectOpaqueFloat(page: Page, sel: string, tag: string) {
+  if (SHOTS_ONLY) return;
+  await theme(page, false);
+  await page.waitForTimeout(300);
+  const a = await surfaceAlpha(page, sel);
+  expect(a.found, `${tag}: on screen`).toBe(true);
+  expect(a.alpha, `${tag}: near-opaque in light (${a.what})`).toBeGreaterThanOrEqual(0.95);
+}
+
 function expectLightTokens(f: Awaited<ReturnType<typeof lightFacts>>, tag: string) {
   expect(f.designNew, `${tag}: new design`).toBe(true);
   expect(f.secondary, `${tag}: secondary text`).toBe('rgb(86, 81, 112)');       // #565170
@@ -242,6 +292,7 @@ test.describe('light theme — every screen, light + dark', () => {
       await page.locator('[role="dialog"], [role="alertdialog"]').locator('visible=true').first().waitFor({ timeout: 10_000 }).catch(() => undefined);
       await page.waitForTimeout(600);
       await shots(page, 'dialog');
+      await expectOpaqueFloat(page, '.pf-dh-card', 'dialog');
     }
   });
 
@@ -257,7 +308,100 @@ test.describe('light theme — every screen, light + dark', () => {
       await trig.click({ timeout: 8000 }).catch(() => trig.dispatchEvent('click'));
       await page.waitForTimeout(500);
       await shots(page, 'select-open');
+      await expectOpaqueFloat(page, '.pf-dd__panel', 'pf-select panel');
       await page.keyboard.press('Escape');
+    }
+  });
+
+  test('Start menu is near-opaque over the page (light)', async ({ page }) => {
+    await go(page, '/frontdesk');
+    await settle(page, 'Priya Nair');
+    const trig = page.locator('[data-start-trigger]').locator('visible=true').first();
+    await expect(trig).toBeVisible({ timeout: 60_000 });
+    await trig.click();
+    await expect(page.locator('[data-start-menu]').locator('visible=true').first()).toBeVisible();
+    await page.waitForTimeout(800);
+    await shots(page, 'start-menu');
+    if (process.env['LT_DEBUG'] === '1') console.log('SMDBG', await page.evaluate(() => {
+      const out: string[] = []; let e = document.querySelector<HTMLElement>('[data-start-menu]');
+      while (e && out.length < 12) { const c = getComputedStyle(e); out.push(`${e.tagName}.${String(e.className).slice(0, 50)} bg=${c.backgroundColor} img=${c.backgroundImage.slice(0, 40)} op=${c.opacity} filt=${c.filter} bf=${c.backdropFilter} mix=${c.mixBlendMode}`); e = e.parentElement; }
+      return out.join('\n');
+    }));
+    await expectOpaqueFloat(page, '.sm-panel', 'Start menu');
+  });
+
+  test('Test Master scrolled right: pinned columns stay opaque (light)', async ({ page }) => {
+    await go(page, '/admin/tests');
+    await settle(page, 'Transferrin');
+    await page.evaluate(() => {
+      for (const v of Array.from(document.querySelectorAll<HTMLElement>('.ag-body-horizontal-scroll-viewport, .ag-center-cols-viewport'))) v.scrollLeft = 600;
+    });
+    await page.waitForTimeout(800);
+    await shots(page, 'tm-scrolled');
+    if (process.env['LT_DEBUG'] === '1') console.log('TMDBG', await page.evaluate(() => {
+      const set = new Set<string>(); document.querySelectorAll('[class*="pinned"], [class*="ag-"]').forEach(e => String(e.className).split(/\s+/).filter(c => /pinned|left|right|cols|row|cell|viewport|container/.test(c)).forEach(c => set.add(c)));
+      const cell = document.querySelector('.ag-cell'); const chain: string[] = []; let e = cell as HTMLElement | null;
+      while (e && chain.length < 8) { chain.push(`${String(e.className).slice(0, 80)} bg=${getComputedStyle(e).backgroundColor}`); e = e.parentElement; }
+      return [...set].join(' ') + '\n' + chain.join('\n');
+    }));
+    if (!SHOTS_ONLY && !isPhone()) {
+      await theme(page, false);
+      await page.waitForTimeout(300);
+      // The painted surface behind a pinned cell (the cell, else its row) is fully opaque.
+      const r = await page.evaluate(() => {
+        const alpha = (c: string) => { const m = /rgba?\(([^)]+)\)/.exec(c); if (!m) return 1; const p = m[1].split(/[ ,/]+/).filter(Boolean); return p.length > 3 ? Number(p[3]) : 1; };
+        const cell = Array.from(document.querySelectorAll<HTMLElement>('.ag-grid-pinned-left-cells .ag-cell, .ag-pinned-left-cols-container .ag-cell')).find(e => e.getBoundingClientRect().width > 0);
+        if (!cell) return { found: false, alpha: -1 };
+        let e: HTMLElement | null = cell;
+        while (e && getComputedStyle(e).backgroundColor === 'rgba(0, 0, 0, 0)' && !e.classList.contains('ag-root-wrapper')) e = e.parentElement;
+        return { found: true, alpha: e ? alpha(getComputedStyle(e).backgroundColor) : 0, what: e?.className };
+      });
+      expect(r.found, 'a pinned cell on screen').toBe(true);
+      expect(r.alpha, `pinned cell surface is opaque (${(r as { what?: string }).what})`).toBe(1);
+    }
+  });
+
+  test('Collect vials: the tile surface follows DARK (page loaded light then switched, and a real dark load)', async ({ page }) => {
+    // The surface under the middle of a vial tile (the tile, else the first painted ancestor).
+    const tileBg = () => page.evaluate(() => {
+      const t = Array.from(document.querySelectorAll<HTMLElement>('.pf-sc-tile')).find(e => e.getBoundingClientRect().width > 0);
+      if (!t) return null;
+      let e: HTMLElement | null = t; let bg = 'rgba(0, 0, 0, 0)';
+      while (e && (bg = getComputedStyle(e).backgroundColor) === 'rgba(0, 0, 0, 0)') e = e.parentElement;
+      const m = /rgba?\(([^)]+)\)/.exec(bg);
+      const [r, g, b] = m ? m[1].split(/[ ,/]+/).filter(Boolean).map(Number) : [0, 0, 0];
+      return { bg, what: e ? String(e.className).slice(0, 80) : '', lum: (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 };
+    });
+    const openFirst = async () => {
+      const card = page.locator('.pf-sc__pcard').locator('visible=true').first();
+      await card.waitFor({ timeout: 45_000 }).catch(() => undefined);
+      if (!(await page.locator('.pf-sc-tile').locator('visible=true').count()) && (await card.count())) await card.click();
+      await page.locator('.pf-sc-tile').locator('visible=true').first().waitFor({ timeout: 20_000 }).catch(() => undefined);
+      await page.waitForTimeout(1200);
+    };
+    const out = path.join(OUT_BASE, projectName()); fs.mkdirSync(out, { recursive: true });
+    // A: loaded in light, then switched to dark at runtime (how the owner and the screen specs see it).
+    await go(page, '/lab/collect');
+    await openFirst();
+    await theme(page, false); await page.waitForTimeout(600);
+    await page.screenshot({ path: `${out}/lt-collect--light.png` });
+    // Real motion for this check (the spec's freeze would hide a delayed transition): 400 ms after the switch.
+    await page.evaluate(() => document.querySelectorAll('style[data-lt-freeze]').forEach(x => x.remove()));
+    await theme(page, true); await page.waitForTimeout(400);
+    const sw = await tileBg();
+    await page.screenshot({ path: `${out}/lt-collect--dark.png` });
+    // B: a real dark page load (OS + saved theme say dark before the app boots).
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.addInitScript(() => { try { localStorage.setItem('pf-theme', 'dark'); } catch { /* ignore */ } });
+    await page.reload();
+    await openFirst();
+    await page.screenshot({ path: `${out}/lt-collect-darkload--dark.png` });
+    const load = await tileBg();
+    if (process.env['LT_DEBUG'] === '1') console.log('CLDBG', JSON.stringify({ sw, load }));
+    if (!SHOTS_ONLY) {
+      expect(sw, 'a vial tile on screen').not.toBeNull();
+      expect(sw!.lum, `runtime switch to dark: vial tile is not white (${sw!.bg} on ${sw!.what})`).toBeLessThan(0.4);
+      expect(load!.lum, `dark page load: vial tile is not white (${load!.bg} on ${load!.what})`).toBeLessThan(0.4);
     }
   });
 });
