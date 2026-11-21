@@ -82,7 +82,7 @@ import { matchesDailyNo } from '../../../shared/utils/daily-no';
 import { PfDateComponent } from '../../../shared/components/pf-date/pf-date.component';
 import { SelectComponent, type PfSelectOption } from '../../../shared/primitives/select.component';
 import { WorkSetFilterComponent, type GridChoice, type GridChoiceFilterParams } from '../../../shared/components/work-set-filter/work-set-filter.component';
-import { choiceFilterCol } from '../../../shared/utils/work-grid';
+import { choiceFilterCol, foldSteps } from '../../../shared/utils/work-grid';
 import {
   activeCount, clientActive, doctorNames, partialPasses, presetRange, reportPasses, shouldScan, viaKeys, viaLabel, withShares,
   type BreakdownRow, type DatePreset, type RqClientFilters,
@@ -930,10 +930,21 @@ export class ReportQueueComponent implements OnInit {
   /** ≤640px: rows instead of the grid, a bottom sheet per row. */
   readonly phone = mediaSignal("(max-width: 640px)", inject(DestroyRef));
   /** <1280px: the grid folds Order + Generated into the Patient cell (the actions keep their room). */
-  readonly compact = mediaSignal("(max-width: 1279px)", inject(DestroyRef));
+  private readonly compactMq = mediaSignal("(max-width: 1279px)", inject(DestroyRef));
+  /** The grid's own width (0 until measured) — the work-grid rule: columns fold by the GRID's width, never scroll
+   *  sideways (owner 2026-11-21; shared/utils/work-grid.ts foldSteps). */
+  readonly gridW = signal(0);
+  private readonly rqFold = computed(() => {
+    const touch = !this.web();
+    const act = touch ? 256 : 290;
+    const base = 94 + 140 + 130 + 116 + 128 + 96 + act;
+    return foldSteps<"compact" | "slim">(this.gridW(), base, [{ id: "compact", saves: 130 + 128 }, { id: "slim", saves: 96 + act - 212 }], 0);
+  });
+  /** Additive: the old <1280px fold stays; a narrower GRID (a split window) folds further so it never scrolls sideways. */
+  readonly compact = computed(() => this.compactMq() || (!!this.gridW() && this.rqFold().has("compact")));
   /** Tablet widths with the grid (901–1279px): the row actions fold to View · Share · ⋯ icons and the Sent column
    *  folds under the status pill, so the actions are always whole at the card's right edge (owner 2026-11-20). */
-  readonly slimActs = computed(() => this.compact() && !this.phone());
+  readonly slimActs = computed(() => !this.phone() && (this.compactMq() || (!!this.gridW() && this.rqFold().has("slim"))));
   /** 44px icon row actions: touch, or the slim tablet layout. */
   readonly iconActs = computed(() => !this.web() || this.slimActs());
 
@@ -1416,6 +1427,15 @@ export class ReportQueueComponent implements OnInit {
     }, 60);
   }
   private _gridApi: GridReadyEvent<RqRow>["api"] | null = null;
+  /** Measures the grid's own width (the fold above) — re-measured as the card resizes. */
+  private readonly rqGridEl = viewChild("rqGrid", { read: ElementRef });
+  private readonly _measureGrid = effect((onCleanup) => {
+    const el = this.rqGridEl()?.nativeElement as HTMLElement | undefined;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => { const w = Math.round(el.clientWidth); if (w > 0 && w !== this.gridW()) this.gridW.set(w); });
+    ro.observe(el);
+    onCleanup(() => ro.disconnect());
+  });
 
   ngOnInit() {
     this.waSend.ensure();

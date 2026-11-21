@@ -494,13 +494,16 @@ test.describe('work grid column filters + alignment', () => {
     const grid = vis(page, '.pf-fd-flow').first();
     // Alignment: Token / Journey / Waiting / Payment centred, Patient / Where now left, Next right — header = cells.
     const payShown = await grid.locator('.ag-header-cell[col-id="pay"]').count() > 0;
+    // A narrow grid folds Waiting into the Where cell (never a sideways scroll, owner 2026-11-21).
+    const waitShown = await grid.locator('.ag-header-cell[col-id="wait"]').count() > 0;
     for (const [col, cls] of [['token', 'center'], ['journey', 'center'], ['wait', 'center'], ['pay', 'center'], ['patient', 'left'], ['where', 'left'], ['next', 'right']] as const) {
       if (col === 'pay' && !payShown) continue;                        // iPad folds Payment into the Patient line
+      if (col === 'wait' && !waitShown) continue;
       await expect(grid.locator(`.ag-header-cell[col-id="${col}"]`)).toHaveClass(new RegExp(`wg-h-${cls}`));
       await expect(grid.locator(`.ag-cell[col-id="${col}"]`).first()).toHaveClass(new RegExp(`wg-c-${cls}`));
     }
     // Every data column has a filter button; the action column and the ring don't.
-    for (const col of ['token', 'patient', 'where', 'wait', ...(payShown ? ['pay'] : [])]) {
+    for (const col of ['token', 'patient', 'where', ...(waitShown ? ['wait'] : []), ...(payShown ? ['pay'] : [])]) {
       await expect(grid.locator(`.ag-header-cell[col-id="${col}"] .ag-header-cell-filter-button`)).toHaveCount(1);
     }
     await expect(grid.locator('.ag-header-cell[col-id="next"] .ag-header-cell-filter-button')).toHaveCount(0);

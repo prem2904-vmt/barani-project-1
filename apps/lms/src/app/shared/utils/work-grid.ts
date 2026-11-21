@@ -59,6 +59,23 @@ export function fitFold(width: number, need: (f: GridFold) => number, slack = 20
   return 'tight';
 }
 
+/**
+ * Step folding (owner 2026-11-21: "work grids NEVER scroll sideways"): fold one step at a time, in the given order,
+ * until the visible columns' minimum widths (+ `slack` for the grid's own chrome / scrollbar) fit `width`. Each step
+ * says how many px it frees. Returns the folded step ids (a prefix of `steps`). The last steps may still not fit a
+ * very narrow grid — the caller's tightest minimums must then be the floor.
+ */
+export function foldSteps<K extends string>(width: number, base: number, steps: ReadonlyArray<{ id: K; saves: number }>, slack = 20): Set<K> {
+  const out = new Set<K>();
+  let need = base;
+  for (const st of steps) {
+    if (width >= need + slack) break;
+    out.add(st.id);
+    need -= st.saves;
+  }
+  return out;
+}
+
 /** Sum of the minimum widths of the columns a plan shows. */
 export function minWidthOf(plan: ReadonlyArray<{ colId: string; hide: boolean }>, mins: Record<string, number>): number {
   return plan.filter(c => !c.hide).reduce((n, c) => n + (mins[c.colId] ?? 0), 0);

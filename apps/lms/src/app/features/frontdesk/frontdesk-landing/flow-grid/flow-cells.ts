@@ -7,6 +7,7 @@ import { OutsourcedActionsComponent } from '../../outsourced/outsourced-actions.
 import { JourneyRingComponent } from '../../../../shared/components/journey-ring/journey-ring.component';
 import type { JourneyDetail } from '../../../../shared/components/journey-ring/journey-detail';
 import { flowJourneyDetail } from './flow-journey';
+import { dailyNoLabel } from '../../../../shared/utils/daily-no';
 import type { FlowAction, FlowActionId, FlowRow } from './flow-row';
 
 /** What the landing hands the grid (pf-data-grid `context`): its existing handlers + busy states. */
@@ -37,7 +38,7 @@ const MENU_ICON: Partial<Record<string, PfAction['icon']>> = {
   standalone: true,
   imports: [JourneyRingComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `@if (row) { <pf-journey-ring class="fd-cell-ring" [steps]="row.ring ?? []" [service]="row.service" [showLabel]="label" [detail]="detail" /> }`,
+  template: `@if (row) { <pf-journey-ring class="fd-cell-ring" [steps]="row.ring ?? []" [service]="row.service" [showLabel]="label && size >= 44" [size]="size" [detail]="detail" /> }`,
   styles: [`:host { display: flex; align-items: center; height: 100%; }`],
 })
 export class FlowRingCellComponent implements ICellRendererAngularComp {
@@ -45,6 +46,8 @@ export class FlowRingCellComponent implements ICellRendererAngularComp {
   private readonly el = inject<ElementRef<HTMLElement>>(ElementRef);
   row: FlowRow | null = null;
   label = true;
+  /** 44px; 32px when a narrow grid folds the Journey column (flow-fold.ts). */
+  size = 44;
   private ctx: FlowGridContext | null = null;
   /** Read at tap time (fresh clock, the row's own Next action through the landing's existing handler). */
   readonly detail = (): JourneyDetail => {
@@ -55,7 +58,9 @@ export class FlowRingCellComponent implements ICellRendererAngularComp {
       action: n ? { label: n.label, aria: n.aria, run: () => this.ctx?.act(row, n.id, this.el.nativeElement) } : null,
     });
   };
-  agInit(p: P): void { this.row = p.data ?? null; this.ctx = p.context; this.label = p.context?.ringLabels?.() ?? true; this.cdr.markForCheck(); }
+  agInit(p: P & { ringSize?: number }): void {
+    this.row = p.data ?? null; this.ctx = p.context; this.label = p.context?.ringLabels?.() ?? true; this.size = p.ringSize ?? 44; this.cdr.markForCheck();
+  }
   refresh(p: P): boolean { this.agInit(p); return true; }
 }
 
@@ -88,6 +93,7 @@ export class FlowTokenCellComponent implements ICellRendererAngularComp {
   template: `
     @if (row) {
       <span class="fd-cell-pt">
+        @if (token) { <span class="fd-cell-pt__tok">{{ token }}</span> }
         <span class="fd-cell-pt__name" tabindex="0" role="link" [attr.aria-label]="'Open ' + row.name"
           (keydown.enter)="open($event)" (keydown.space)="open($event)">{{ row.name }}</span>
         @if (row.meta) { <span class="fd-cell-pt__meta">{{ row.meta }}</span> }
@@ -103,13 +109,24 @@ export class FlowTokenCellComponent implements ICellRendererAngularComp {
     .fd-cell-pt__pay { display: none; font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
     .fd-cell-pt__pay--due { color: color-mix(in srgb, var(--red-text) 80%, var(--text-primary)); font-weight: 600; }
     :host-context(.fd-flow--fold) .fd-cell-pt__pay { display: inline; }
+    /* A narrow grid folds the Token column into a small chip before the name (flow-fold.ts). */
+    .fd-cell-pt__tok { display: none; align-self: flex-start; min-height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+      line-height: 20px; font-variant-numeric: tabular-nums; color: var(--violet-text, #6d28d9);
+      background: color-mix(in srgb, var(--violet-text, #6d28d9) 10%, var(--pf-card-bg, #fff)); }
+    :host-context(.fd-flow--fold-token) .fd-cell-pt__tok { display: inline-block; }
   `],
 })
 export class FlowPatientCellComponent implements ICellRendererAngularComp {
   private readonly cdr = inject(ChangeDetectorRef);
   row: FlowRow | null = null;
+  token = '';
   private ctx: FlowGridContext | null = null;
-  agInit(p: P): void { this.row = p.data ?? null; this.ctx = p.context; this.cdr.markForCheck(); }
+  agInit(p: P): void {
+    this.row = p.data ?? null; this.ctx = p.context;
+    const r = this.row;
+    this.token = r?.visit ? r.visit.tokenLabel : dailyNoLabel(r?.order?.dailyNo, r?.order?.dailyNoDay);
+    this.cdr.markForCheck();
+  }
   refresh(p: P): boolean { this.agInit(p); return true; }
   open(ev: Event): void { ev.preventDefault(); ev.stopPropagation(); if (this.row) this.ctx?.open(this.row); }
 }
@@ -180,6 +197,9 @@ export class FlowSelectCellComponent implements ICellRendererAngularComp {
       .fd-cell-next__btn { height: 44px; min-height: 44px; min-width: 88px; }
       :host ::ng-deep .fd-cell-next__more { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
     }
+    /* Narrowest grid: the button keeps its whole label at its natural width (never clipped). */
+    :host-context(.fd-flow--tight) .fd-cell-next__btn { min-width: 0; padding: 0 10px; }
+    .fd-cell-next__btn { white-space: nowrap; flex: none; }
     .fd-cell-next__oa { position: absolute; width: 0; height: 0; overflow: hidden; visibility: hidden; }
   `],
 })
