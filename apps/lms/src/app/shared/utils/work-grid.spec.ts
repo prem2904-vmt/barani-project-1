@@ -1,4 +1,4 @@
-import { alignCol, dateFilterCol, minutesSince, numberFilterCol, setFilterCol, textFilterCol, TOUCH_GAP_PX, TOUCH_TARGET_PX, fitFold, minWidthOf, gridFold, rowActionSizing, touchViolations, waitText } from './work-grid';
+import { dueCell, dueComparator, dueValue, alignCol, dateFilterCol, minutesSince, numberFilterCol, setFilterCol, textFilterCol, TOUCH_GAP_PX, TOUCH_TARGET_PX, fitFold, minWidthOf, gridFold, rowActionSizing, touchViolations, waitText } from './work-grid';
 
 const box = (left: number, width: number, height = 44, top = 0, name?: string) => ({ left, right: left + width, top, bottom: top + height, name });
 
@@ -85,5 +85,20 @@ describe('work grids — shared column rules (alignment + header filters)', () =
   it('minutes since a time (the TAT / Waiting number filter)', () => {
     expect(minutesSince('2026-11-20T09:20:00Z', Date.parse('2026-11-20T10:00:00Z'))).toBe(40);
     expect(minutesSince(null)).toBeNull();
+  });
+});
+
+describe('work grids — the Due column (time left to TAT)', () => {
+  it('"in 25m" while there is time, rose "12m late" once past, "—" without a clock, "Done" when finished', () => {
+    expect(dueCell(25)).toEqual({ text: 'in 25m', late: false, detail: 'Due in 25m' });
+    expect(dueCell(-12)).toEqual({ text: '12m late', late: true, detail: 'Overdue by 12m' });
+    expect(dueCell(-125).text).toBe('2h 5m late');
+    expect(dueCell(null).text).toBe('—');
+    expect(dueCell(30, { done: true }).text).toBe('Done');
+  });
+  it('sorts soonest / most late first, no clock last', () => {
+    expect([30, null, -12, 5].sort(dueComparator)).toEqual([-12, 5, 30, null]);
+    expect(dueValue(12.6)).toBe(13);
+    expect(dueValue(null)).toBeNull();
   });
 });

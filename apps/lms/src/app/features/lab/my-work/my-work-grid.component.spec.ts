@@ -99,10 +99,10 @@ describe('My Work grid (rendered)', () => {
     sorts.set('work', 'default');
     const cols = grid.cols();
     const sortable = cols.filter(c => c.sortable).map(c => c.colId);
-    expect(sortable).toEqual(['sample', 'patient', 'priority', 'tat']);
-    // The journey cell is the SHARED ring (lab line, blank disc) that opens the journey view.
-    expect(cols.find(c => c.colId === 'journey')).toBeTruthy();
-    expect(cols.find(c => c.colId === 'priority')!.sort).toBe('asc');   // the default order shows on Priority
+    expect(sortable).toEqual(['sample', 'patient', 'due', 'wait']);
+    // No journey ring on the lab screens (owner 2026-11-21): Due = time left to TAT.
+    expect(cols.find(c => c.colId === 'journey')).toBeUndefined();
+    expect(cols.find(c => c.colId === 'due')!.sort).toBe('asc');   // the default order (Urgent first, then soonest due)
     let onSort: () => void = () => undefined;
     const api = { addEventListener: (_: string, fn: () => void) => { onSort = fn; }, getColumnState: () => [{ colId: 'patient', sort: 'asc' }] };
     grid.onGridReady({ api } as never);
@@ -184,15 +184,15 @@ describe('My Work grid (rendered)', () => {
     expect(by['patient'].filter).toBe('agTextColumnFilter');
     expect(by['priority'].filter).toBe(WorkSetFilterComponent);
     expect(by['status'].filter).toBe(WorkSetFilterComponent);
-    expect(by['journey'].filter).toBe(WorkSetFilterComponent);
-    expect(by['tat'].filter).toBe('agNumberColumnFilter');
+    expect(by['due'].filter).toBe('agNumberColumnFilter');
+    expect(by['wait'].filter).toBe('agNumberColumnFilter');
     expect(by['acts'].filter).toBe(false);
     // Text stays left; short same-shape values centred; actions right — header matches cells.
     expect([by['sample'].headerClass, by['patient'].headerClass]).toEqual(['wg-h-left', 'wg-h-left']);
-    for (const k of ['priority', 'journey', 'tat', 'status']) expect(by[k].headerClass).toBe('wg-h-center');
+    for (const k of ['priority', 'due', 'wait', 'status']) expect(by[k].headerClass).toBe('wg-h-center');
     expect(by['acts'].headerClass).toBe('wg-h-right');
     expect(by['patient'].cellClass).toContain('wg-c-left');
-    expect(by['tat'].cellClass).toContain('wg-c-center');
+    expect(by['due'].cellClass).toContain('wg-c-center');
     // The patient text filter matches name, MRN and phone.
     const v = (by['patient'].filterValueGetter as (p: unknown) => string)({ data: sampleRowsOf([{ priority: 'normal', tubes: [tube({ tests: [{ id: 'x', status: 'pending', test: { name: 'X' }, subOrder: { order: { patient: { mrn: 'AA0007', phone: '+919876543210' } } } }] as never })] }])[0] });
     expect(v).toBe(`${LONG} AA0007 +919876543210`);
@@ -207,6 +207,13 @@ describe('My Work grid (rendered)', () => {
     await settle(f);
     await new Promise(r => setTimeout(r, 500)); f.detectChanges();
     expect([...el.querySelectorAll('.ag-row.mwg-row:not(.ag-opacity-zero) .wg-who__name')].map(n => n.textContent!.trim())).toEqual(['Mr. Prem Kumar K']);
+  });
+
+  it('Due: "in Nm" while there is time, rose "Nm late" once past (no journey ring)', async () => {
+    const { el } = await render(sampleRowsOf([{ priority: 'normal', tubes: [tube({ remainingMin: 25 }), tube({ sampleId: 's2', barcode: '0126102', remainingMin: -12 })] }]));
+    const due = [...el.querySelectorAll<HTMLElement>('.ag-row .mwg-due')].map(d => [d.textContent!.trim(), d.classList.contains('wg-tat--late')]);
+    expect(due).toEqual([['in 25m', false], ['12m late', true]]);
+    expect(el.querySelector('pf-journey-ring')).toBeNull();
   });
 
   it('empty keeps its copy', async () => {

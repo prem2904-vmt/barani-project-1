@@ -1,7 +1,7 @@
 import {
   MwDoneTube, MwGroup, MwRow, MwTube, NO_MW_FILTER, countLabel, deptOptions, filterMwRows, sortColOf, sortKeyOf, statusKeyOf, statusOptions, testsSummary,
-  doneRing, doneMenu, donePrimary, doneRowsOf, doneStatus, groupPrimary, groupStatus, mwColumns,
-  patientRowsOf, sampleRowsOf, tatCell, tubeRing, tubeLate, tubeMenu, tubePrimary, tubeStatus,
+  doneMenu, donePrimary, doneRowsOf, doneStatus, groupPrimary, groupStatus, mwColumns,
+  patientRowsOf, sampleRowsOf, tatCell, tubeLate, tubeMenu, tubePrimary, tubeStatus,
 } from './my-work.grid';
 
 const NOW = Date.parse('2026-11-20T10:00:00Z');
@@ -79,19 +79,11 @@ describe('My Work grid — ONE primary at the row end = the old tile tap; the re
   });
 });
 
-describe('My Work grid — journey + TAT', () => {
-  it('the shared ring\'s lab line (Billing · Sample · Dispatch · Result entry · Validation); late = the TAT rule', () => {
-    const st = (r: { state: string }[]) => r.map(x => x.state);
-    expect(tubeRing(tube()).map(x => x.label)).toEqual(['Billing', 'Sample', 'Dispatch', 'Result entry', 'Validation']);
-    expect(st(tubeRing(tube()))).toEqual(['done', 'done', 'done', 'now', 'todo']);
+describe('My Work grid — Due + TAT', () => {
+  it('no journey ring on the lab screens (owner 2026-11-21): a tube is late only past TAT with something left to enter', () => {
     expect(tubeLate(tube({ remainingMin: -5 }))).toBe(true);
-    expect(st(tubeRing(tube({ remainingMin: -5 })))).toEqual(['done', 'done', 'done', 'late', 'todo']);
-    expect(st(tubeRing(tube({ allDone: true, tests: [line('entered')] })))).toEqual(['done', 'done', 'done', 'done', 'now']);
+    expect(tubeLate(tube({ remainingMin: 5 }))).toBe(false);
     expect(tubeLate(tube({ allDone: true, remainingMin: -5 }))).toBe(false);   // nothing left to enter is never late
-    expect(st(tubeRing(tube({ allDone: true, tests: [line('validated', { validatedAt: '2026-11-20T09:50:00Z', resultedAt: '2026-11-20T09:40:00Z' })] }))).every(x => x === 'done')).toBe(true);
-    // Released at result entry (no validation step): 4 steps.
-    expect(tubeRing(tube({ allDone: true, tests: [line('validated', { validatedAt: '2026-11-20T09:40:00Z', resultedAt: '2026-11-20T09:40:00Z' })] })).length).toBe(4);
-    expect(st(doneRing({ tests: [line('entered')] }))).toEqual(['done', 'done', 'done', 'done', 'now']);
   });
   it('TAT word is rose only when overdue; "in lab 40m" under it', () => {
     const ok = tatCell({ remainingMin: 30, dueAt: NOW + 30 * 60000 }, [line('pending')], false, NOW);
@@ -121,12 +113,13 @@ describe('My Work grid — rows + columns', () => {
   });
   it('NO Tests column (owner 2026-11-20); the actions column never hides; low-value columns fold first', () => {
     const vis = (m: Parameters<typeof mwColumns>[0], f: Parameters<typeof mwColumns>[1]) => mwColumns(m, f).filter(c => !c.hide).map(c => c.colId);
-    expect(vis('sample', 'full')).toEqual(['sample', 'patient', 'priority', 'journey', 'tat', 'status', 'acts']);
-    expect(vis('patient', 'full')).toEqual(['patient', 'priority', 'journey', 'tat', 'status', 'acts']);
-    expect(vis('sample', 'fold')).toEqual(['sample', 'patient', 'journey', 'tat', 'acts']);
-    expect(vis('sample', 'tight')).toEqual(['sample', 'patient', 'tat', 'acts']);
-    expect(vis('done', 'full')).toEqual(['sample', 'patient', 'journey', 'status', 'when', 'acts']);
-    expect(vis('done', 'tight')).toEqual(['sample', 'patient', 'acts']);
+    expect(vis('sample', 'full')).toEqual(['sample', 'patient', 'priority', 'due', 'wait', 'status', 'acts']);
+    expect(vis('patient', 'full')).toEqual(['patient', 'priority', 'due', 'wait', 'status', 'acts']);
+    expect(vis('sample', 'fold')).toEqual(['sample', 'patient', 'due', 'wait', 'acts']);
+    expect(vis('sample', 'tight')).toEqual(['patient', 'due', 'acts']);   // fits a 520px card
+    expect(vis('done', 'full')).toEqual(['sample', 'patient', 'status', 'when', 'acts']);
+    for (const m of ['sample', 'patient', 'done'] as const) expect(mwColumns(m, 'full').map(c => c.colId)).not.toContain('journey');
+    expect(vis('done', 'tight')).toEqual(['patient', 'acts']);
     for (const m of ['sample', 'patient', 'done'] as const) expect(mwColumns(m, 'full').map(c => c.colId)).not.toContain('tests');
     expect(mwColumns('sample', 'full').map(c => c.header).join(' ')).not.toMatch(/High/);
   });
@@ -181,12 +174,12 @@ describe('My Work grid — card-head filters', () => {
 });
 
 describe('My Work grid — header sort = the old band sort picker (persisted LabSortService key)', () => {
-  it('headers map to the same keys; no header / Priority = the default order (Urgent first, then TAT)', () => {
+  it('headers map to the same keys; no header / Due = the default order (Urgent first, then soonest due)', () => {
     expect(sortKeyOf('sample', { colId: 'sample', sort: 'asc' })).toBe('sample');
     expect(sortKeyOf('sample', { colId: 'patient', sort: 'asc' })).toBe('patient');
-    expect(sortKeyOf('sample', { colId: 'tat', sort: 'asc' })).toBe('oldest');
-    expect(sortKeyOf('sample', { colId: 'tat', sort: 'desc' })).toBe('newest');
-    expect(sortKeyOf('sample', { colId: 'priority', sort: 'asc' })).toBe('default');
+    expect(sortKeyOf('sample', { colId: 'wait', sort: 'desc' })).toBe('oldest');
+    expect(sortKeyOf('sample', { colId: 'wait', sort: 'asc' })).toBe('newest');
+    expect(sortKeyOf('sample', { colId: 'due', sort: 'asc' })).toBe('default');
     expect(sortKeyOf('sample', null)).toBe('default');
     expect(sortKeyOf('done', { colId: 'when', sort: 'desc' })).toBe('default');
     expect(sortKeyOf('done', { colId: 'when', sort: 'asc' })).toBe('oldest');

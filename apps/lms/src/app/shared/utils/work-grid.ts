@@ -161,3 +161,23 @@ export function shapeCol<T>(def: ColDef<T>, a: WorkAlign = 'center'): ColDef<T> 
 export function actionCol<T>(def: ColDef<T>): ColDef<T> {
   return withAlign<T>({ ...def, filter: false, sortable: false }, 'right');
 }
+
+// ── Due (owner 2026-11-21: the lab / validation / culture grids show TIME LEFT, not a journey ring — every row there
+//    is by definition at that one step) ──────────────────────────────────────────────────────────────────────────
+export interface DueCell { text: string; late: boolean; detail: string }
+/** "in 25m" while there is time; rose "12m late" once past; "—" with no clock; "Done" when nothing is left to do. */
+export function dueCell(remainingMin: number | null | undefined, opts: { done?: boolean } = {}): DueCell {
+  if (opts.done) return { text: 'Done', late: false, detail: 'Nothing left to do' };
+  if (remainingMin == null || !Number.isFinite(remainingMin)) return { text: '—', late: false, detail: 'No turnaround time set' };
+  if (remainingMin > 0) return { text: `in ${formatDuration(remainingMin)}`, late: false, detail: `Due in ${formatDuration(remainingMin)}` };
+  return { text: `${formatDuration(-remainingMin)} late`, late: true, detail: `Overdue by ${formatDuration(-remainingMin)}` };
+}
+/** The number the Due column sorts / filters on (minutes left; no clock sorts last). */
+export function dueValue(remainingMin: number | null | undefined): number | null {
+  return remainingMin == null || !Number.isFinite(remainingMin) ? null : Math.round(remainingMin);
+}
+/** AG-Grid comparator for a Due column: soonest (most late) first, no clock last. */
+export function dueComparator(a: number | null | undefined, b: number | null | undefined): number {
+  const x = a ?? Number.POSITIVE_INFINITY, y = b ?? Number.POSITIVE_INFINITY;
+  return x === y ? 0 : x < y ? -1 : 1;
+}

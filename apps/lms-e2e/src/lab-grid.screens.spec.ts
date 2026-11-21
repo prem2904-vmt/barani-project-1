@@ -65,6 +65,20 @@ const PV: Line[] = [
 ];
 const CRIT = [{ id: 'cr1', status: 'open', source: 'live', orderTestId: 'v1', orderId: 'ord-21', resultVersion: 1, patientId: 'p21', patientName: LONG, testId: 't-v1', testName: 'Complete Blood Count', summary: 'Hb 5.1 g/dL CL', values: [], detectedAt: ago(10), alertedCount: 1, acknowledgements: [] }];
 
+const cstage = (label: string, state: string, extra: Record<string, unknown> = {}) => ({ key: label.toLowerCase(), label, state, ...extra });
+const CULTURES = [
+  { orderTestId: 'cu1', caseState: 'in_progress', createdAt: ago(26 * 60), barcode: 'MICRO26001', sampleId: 'sc1', patientName: 'Mrs. Shanthi M', dailyNo: 31, dailyNoDay: today,
+    testName: 'Bacterial Culture & Sensitivity', departmentName: 'Microbiology', specimen: 'Urine',
+    stages: [cstage('Gram / Direct smear', 'done', { doneAt: ago(25 * 60), doneByName: 'Ravi T' }), cstage('Growth', 'open', { incubateUntil: ago(-90) }), cstage('ID', 'open'), cstage('AST', 'open')] },
+  { orderTestId: 'cu2', caseState: 'in_progress', createdAt: ago(50 * 60), barcode: 'MICRO26002', sampleId: 'sc2', patientName: LONG, dailyNo: 32, dailyNoDay: today,
+    testName: 'Blood Culture', departmentName: 'Microbiology', specimen: 'Blood',
+    stages: [cstage('Gram / Direct smear', 'done', { doneAt: ago(49 * 60) }), cstage('Growth', 'open', { incubateUntil: ago(40) }), cstage('AST', 'open')] },
+  { orderTestId: 'cu3', caseState: 'in_progress', createdAt: ago(3 * 60), barcode: 'MICRO26003', sampleId: 'sc3', patientName: 'Mr. Prem Kumar K', dailyNo: 33, dailyNoDay: today,
+    testName: 'Pus Culture', departmentName: 'Microbiology', specimen: 'Pus', stages: [cstage('Gram / Direct smear', 'picked', { holderName: 'Ravi T', pickedAt: ago(20) }), cstage('Growth', 'open')] },
+  { orderTestId: 'cu4', caseState: 'awaiting_signout', createdAt: ago(72 * 60), barcode: 'MICRO26004', sampleId: 'sc4', patientName: 'Baby Leo S', dailyNo: 34, dailyNoDay: today,
+    testName: 'Stool Culture', departmentName: 'Microbiology', specimen: 'Stool', stages: [cstage('Gram / Direct smear', 'done'), cstage('Growth', 'done')] },
+];
+
 let focus: 'patient' | 'sample' = 'patient';
 
 test.beforeEach(async ({ page, context }) => {
@@ -83,6 +97,7 @@ test.beforeEach(async ({ page, context }) => {
       case '/api/critical-results/lookup': return ok(CRIT);
       case '/api/tenants/branch-lab-config': return ok({ effectiveQueueFocus: focus, queueFocus: focus });
       case '/api/users/': return ok([{ id: 'other-tech', displayName: 'Ravi T' }]);
+      case '/api/microbiology/culture-queue': return ok(CULTURES);
       default: return undefined;
     }
   };
@@ -201,12 +216,10 @@ for (const dark of [false, true]) {
           await visible(page, 'pf-work-set-filter .wsf__clear').click();
           await page.keyboard.press('Escape');
         }
-        // The shared journey ring opens the journey view (the row tap stays the row's).
-        await visible(page, '[data-testid="mw-grid"] .ag-row pf-journey-ring .pf-jring__btn').click();
-        await expect(visible(page, 'pf-journey-overlay [role="dialog"]')).toBeVisible();
-        await shot(page, `mywork-journey-${mode}`);
-        await page.keyboard.press('Escape');
-        await expect(page.locator('pf-journey-overlay [role="dialog"]').locator('visible=true')).toHaveCount(0);
+        // Due (time left to TAT) instead of a journey ring (owner 2026-11-21): rose once late, never folded away.
+        await expect(page.locator('[data-testid="mw-grid"] pf-journey-ring')).toHaveCount(0);
+        await expect(visible(page, '[data-testid="mw-grid"] .ag-header-cell[col-id="due"]')).toBeVisible();
+        await expect(visible(page, '[data-testid="mw-grid"] .mwg-due.wg-tat--late')).toHaveText(/late$/);
         // Row tap (patient focus) opens the patient's tubes; a tube tap opens result entry (scan gate).
         await visible(page, `[data-testid="mw-grid"] .ag-row .wg-who__name:has-text("${LONG}")`).click();
         await expect(visible(page, '[data-testid="mw-grid"] .mwg-tubes')).toBeVisible();
@@ -259,6 +272,39 @@ for (const dark of [false, true]) {
     }
   });
 
+  test(`My Work — Culture tab on the same grid (${mode})`, async ({ page }) => {
+    await go(page, '/lab/my-work');
+    await theme(page, dark);
+    await page.getByText('Ms. Arya Stark').locator('visible=true').first().waitFor({ timeout: 60_000 }).catch(() => undefined);
+    if (isPhone()) await labTab(page, 'Culture bench');
+    else await visible(page, '.pf-mw-seg [data-tab="culture"], .pf-mw-seg [role="radio"]:has-text("Culture")').click();
+    await page.getByText('MICRO26001').locator('visible=true').first().waitFor({ timeout: 60_000 }).catch(() => undefined);
+    await settle(page);
+    await shot(page, `mywork-culture-${mode}`);
+    if (SHOTS_ONLY) return;
+    await expectNoHorizontalScroll(page);
+    if (!isPhone()) {
+      await expect(visible(page, '[data-testid="cg-grid"] .ag-row')).toBeVisible({ timeout: 20_000 });
+      await expect(page.locator('[data-testid="cg-grid"] .ag-row.cg-row').locator('visible=true')).toHaveCount(4);
+      expect(await touchAudit(page, '.pf-mw-pane', '[data-testid="cg-grid"] .ag-row button')).toEqual([]);
+      expect(await touchAudit(page, '.pf-mw-pane', '.pf-mw-pane__hdr--tabs > .mw-filterwrap > button, .pf-mw-pane__hdr--tabs > .mw-find')).toEqual([]);
+      if (isTouch()) expect(await visible(page, '[data-testid="cg-grid"] .ag-row').evaluate(e => e.getBoundingClientRect().height)).toBeGreaterThanOrEqual(63.5);
+      // The read-due case is rose; the head's search narrows.
+      await expect(visible(page, '[data-testid="cg-grid"] .ag-row.wg-row--urgent')).toBeVisible();
+      await visible(page, '[data-testid="cg-find"]').fill('Shanthi');
+      await expect(page.locator('[data-testid="cg-grid"] .ag-row.cg-row:not(.ag-opacity-zero)').locator('visible=true')).toHaveCount(1);
+      await visible(page, '[data-testid="cg-find"]').fill('');
+      await page.mouse.click(4, 4);
+      // Due = the next read: "in 1h 30m" while incubating, rose "40m late" once the read is due.
+      await expect(page.locator('[data-testid="cg-grid"] pf-journey-ring')).toHaveCount(0);
+      await expect(visible(page, '[data-testid="cg-grid"] .cg-due.wg-tat--late')).toHaveText(/late$/);
+      await expect(visible(page, '[data-testid="cg-grid"] .cg-due:not(.wg-tat--late)')).toHaveText(/^in /);
+    } else {
+      await expect(visible(page, '[data-testid="cg-cards"]')).toBeVisible({ timeout: 20_000 });
+      expect(await touchAudit(page, '.pf-mw-pane', '[data-testid="cg-cards"] button')).toEqual([]);
+    }
+  });
+
   test(`Pathologist queue (${mode})`, async ({ page }) => {
     await go(page, '/pathologist');
     await theme(page, dark);
@@ -271,10 +317,21 @@ for (const dark of [false, true]) {
         await expect(visible(page, '[data-testid="pv-grid"] .ag-row')).toBeVisible({ timeout: 20_000 });
         await expect(visible(page, `[data-testid="pv-grid"] .pv-who__name:has-text("${LONG}")`)).toBeVisible();
         await expect(visible(page, '[data-testid="pv-grid"] .pv-ack')).toBeVisible();
-        await visible(page, '[data-testid="pv-grid"] .ag-row pf-journey-ring .pf-jring__btn').click();
-        await expect(visible(page, 'pf-journey-overlay [role="dialog"]')).toBeVisible();
-        await shot(page, `pathologist-journey-${mode}`);
-        await page.keyboard.press('Escape');
+        // Rebalanced at every width: the status pill and the entered time stay on one line; filter icons are spaced.
+        const lay = await page.evaluate(() => {
+          const out: string[] = [];
+          for (const p of Array.from(document.querySelectorAll<HTMLElement>('[data-testid="pv-grid"] .ag-row .pv-status, [data-testid="pv-grid"] .pv-wait-sub'))) {
+            const lh = parseFloat(getComputedStyle(p).lineHeight) || 20;
+            if (p.getBoundingClientRect().height > lh * 1.6 + 6) out.push(`wraps: ${p.textContent?.trim()}`);
+          }
+          return out;
+        });
+        expect(lay).toEqual([]);
+        // Due instead of a journey ring — shown at EVERY width (tablet portrait included): rose "Nm late" when past TAT.
+        await expect(page.locator('[data-testid="pv-grid"] pf-journey-ring')).toHaveCount(0);
+        await expect(visible(page, '[data-testid="pv-grid"] .ag-header-cell[col-id="due"]')).toBeVisible();
+        await expect(visible(page, '[data-testid="pv-grid"] .pv-due.wg-tat--late')).toHaveText(/late$/);
+        await expect(visible(page, '[data-testid="pv-grid"] .pv-due:not(.wg-tat--late)')).toHaveText(/^in /);
         expect(await touchAudit(page, '.pv-queue', '[data-testid="pv-grid"] .ag-row button')).toEqual([]);
         if (isTouch()) {
           const h = await visible(page, '[data-testid="pv-grid"] .ag-row').evaluate(e => e.getBoundingClientRect().height);
@@ -291,6 +348,59 @@ for (const dark of [false, true]) {
         await expect(visible(page, '[data-testid="pv-cards"]')).toBeVisible({ timeout: 20_000 });
         expect(await touchAudit(page, '.pv-queue', '[data-testid="pv-cards"] button')).toEqual([]);
       }
+    }
+  });
+
+  test(`no work grid scrolls sideways — card widths 520 · 600 · 720 · 900 · 1200 (${mode})`, async ({ page }) => {
+    test.skip(isPhone() || isTouch(), 'card widths are set on the desktop layout');
+    /** Pin a card to a width, let the grid re-tier, then measure: no horizontal overflow, nothing outside the card. */
+    const measure = async (cardSel: string, gridSel: string, w: number) => {
+      await page.evaluate(([sel, w]) => {
+        const el = document.querySelector<HTMLElement>(sel as string)!;
+        // The work pane's own rules use !important (pf-mw-pane--solo), so the pin must too.
+        for (const [k, v] of [['flex', `0 0 ${w}px`], ['width', `${w}px`], ['max-width', `${w}px`], ['min-width', `${w}px`], ['justify-self', 'start']])
+          el.style.setProperty(k, v, 'important');
+      }, [cardSel, w] as const);
+      await page.waitForTimeout(700);
+      return page.evaluate(([cardSel, gridSel, w]) => {
+        const out: string[] = [];
+        const card = document.querySelector<HTMLElement>(cardSel as string)!.getBoundingClientRect();
+        if (Math.abs(card.width - (w as number)) > 2) out.push(`card is ${Math.round(card.width)}px, not ${w}px`);
+        for (const vp of Array.from(document.querySelectorAll<HTMLElement>(`${gridSel} .ag-center-cols-viewport, ${gridSel} .ag-body-viewport`))) {
+          if (vp.getBoundingClientRect().width === 0) continue;
+          if (vp.scrollWidth > vp.clientWidth + 1) out.push(`grid scrolls sideways by ${vp.scrollWidth - vp.clientWidth}px`);
+        }
+        for (const b of Array.from(document.querySelectorAll<HTMLElement>(`${gridSel} .ag-row button, ${gridSel} .ag-row .wg-pill`))) {
+          const r = b.getBoundingClientRect();
+          if (r.width && (r.right > card.right + 0.5 || r.left < card.left - 0.5)) out.push(`${b.getAttribute('aria-label') || b.textContent?.trim()} clipped`);
+        }
+        return out;
+      }, [cardSel, gridSel, w] as const);
+    };
+    const widths = [520, 600, 720, 900, 1200];
+    // My Work (sample focus is the widest plan).
+    focus = 'sample';
+    await go(page, '/lab/my-work');
+    await theme(page, dark);
+    await expect(visible(page, '[data-testid="mw-grid"] .ag-row')).toBeVisible({ timeout: 60_000 });
+    for (const w of widths) {
+      expect(await measure('.pf-mw-pane:has(> .pf-mw-pane__hdr--tabs)', '[data-testid="mw-grid"]', w), `My Work at ${w}px`).toEqual([]);
+      if (w === 520) await shot(page, `nosideways-mywork-520-${mode}`);
+    }
+    // Culture (same pane).
+    await visible(page, '.pf-mw-seg [data-tab="culture"], .pf-mw-seg [role="radio"]:has-text("Culture")').click();
+    await expect(visible(page, '[data-testid="cg-grid"] .ag-row')).toBeVisible({ timeout: 30_000 });
+    for (const w of widths) {
+      expect(await measure('.pf-mw-pane:has(> .pf-mw-pane__hdr--tabs)', '[data-testid="cg-grid"]', w), `Culture at ${w}px`).toEqual([]);
+      if (w === 520) await shot(page, `nosideways-culture-520-${mode}`);
+    }
+    // Pathologist.
+    await go(page, '/pathologist');
+    await theme(page, dark);
+    await expect(visible(page, '[data-testid="pv-grid"] .ag-row')).toBeVisible({ timeout: 60_000 });
+    for (const w of widths) {
+      expect(await measure('.pv-queue', '[data-testid="pv-grid"]', w), `Pathologist at ${w}px`).toEqual([]);
+      if (w === 520) await shot(page, `nosideways-pathologist-520-${mode}`);
     }
   });
 }
