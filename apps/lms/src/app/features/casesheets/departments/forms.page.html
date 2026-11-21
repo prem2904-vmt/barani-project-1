@@ -7,8 +7,8 @@
   <pf-hero-band
     [back]="nav.isLab"
     [standardPill]="true"
-    placeholder="Search departments and case sheets"
-    [value]="query()"
+    [placeholder]="searchPlaceholder()"
+    [value]="bandValue()"
     (valueChange)="onSearch($event)"
   >
   </pf-hero-band>
@@ -100,8 +100,6 @@
       <pf-segmented panel-tools class="dp__tabs" size="sm" [options]="tabOptions()" [value]="tab()" (valueChange)="setTab($event)" aria-label="Case sheets or drafts" />
       @if (tab() === 'continue') {
       <span panel-tools class="dp__ctl">
-        <input type="search" class="pf-input dp__dsearch" data-draft-search aria-label="Search drafts" placeholder="Search drafts — patient or case sheet"
-               [value]="draftQuery()" (input)="draftQuery.set($any($event.target).value)" />
         <label class="dp__only">
           <pf-toggle size="sm" [checked]="thisDeptOnly()" (checkedChange)="thisDeptOnly.set($event)" data-only-dept aria-label="This department only" />
           <span>This department only</span>

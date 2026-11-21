@@ -317,8 +317,11 @@ export class FormsPage {
     void this.router.navigate([], { relativeTo: this.route, ...deptNavigation(name, this.deptParam()) });
   }
 
+  /** ONE search (owner 2026-11-21): the band's. It filters what the tab shows — drafts on Continue, else departments / case sheets. */
+  protected readonly bandValue = computed(() => (this.tab() === 'continue' ? this.draftQuery() : this.query()));
+  protected readonly searchPlaceholder = computed(() => (this.tab() === 'continue' ? 'Search drafts — patient, form…' : 'Search departments and case sheets'));
   protected onSearch(v: string): void {
-    this.query.set(v);
+    (this.tab() === 'continue' ? this.draftQuery : this.query).set(v);
   }
 
   /** Pin / unpin (legacy favourite star): pinned case sheets come first. Optimistic; put back if the API says no. */
