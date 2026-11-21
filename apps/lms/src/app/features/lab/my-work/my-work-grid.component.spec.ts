@@ -179,15 +179,18 @@ describe('My Work grid (rendered)', () => {
     expect(css()).toMatch(/\.wg-who__name\s*\{[^}]*white-space:\s*normal/);
   });
 
-  it('phones: card rows with the same actions, ≥44px', async () => {
+  it('below 1024px: the shared work list — urgent words, full name, status words, the same primary (≥44px), Sort chip', async () => {
     const { el, ctx } = await render(sampleRowsOf([{ priority: 'urgent', tubes: [tube()] }]), { phone: true, touch: true });
     expect(el.querySelector('pf-data-grid')).toBeNull();
-    const card = el.querySelector('[data-testid="mw-cards"] .wg-card') as HTMLElement;
-    expect(card.getAttribute('data-urgent')).toBe('true');
-    expect(card.querySelector('.wg-who__name')!.textContent!.trim()).toBe(LONG);
-    (card.querySelector('[data-action="enter"]') as HTMLElement).click();
+    expect(el.querySelector('.wg-card')).toBeNull();
+    const row = el.querySelector('[data-testid="mw-list"] .pf-wl__row') as HTMLElement;
+    expect(row.querySelector('.pf-wl__urgent')).not.toBeNull();
+    expect(row.querySelector('.pf-wl__name')!.textContent!.trim()).toContain(LONG);
+    expect(row.querySelector('pf-status-words')).not.toBeNull();
+    expect(row.querySelector('.wg-pill')).toBeNull();
+    (row.querySelector('.pf-wl__act [data-action="enter"]') as HTMLElement).click();
     expect(ctx.activate).toHaveBeenCalledTimes(1);
-    expect(css()).toMatch(/\.wg-card\s+\.wg-act[^{]*\{[^}]*min-height:\s*44px/);
+    expect(el.querySelector('[data-testid="sort-chip"]')).not.toBeNull();
   });
 
   it('header filters on every data column (Test Master), never on the actions; alignment shared', async () => {

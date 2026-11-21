@@ -161,6 +161,7 @@ for (const dark of [false, true]) {
   const mode = dark ? 'dark' : 'light';
 
   test(`My Work — patient focus, sample focus, queue, completed (${mode})`, async ({ page }) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     await go(page, '/lab/my-work');
     await theme(page, dark);
     if (isPhone()) await labTab(page, 'My Work');
@@ -245,6 +246,7 @@ for (const dark of [false, true]) {
   });
 
   test(`My Work — sample focus (${mode})`, async ({ page }) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     focus = 'sample';
     await go(page, '/lab/my-work');
     await theme(page, dark);
@@ -261,6 +263,7 @@ for (const dark of [false, true]) {
   });
 
   test(`My Work — Culture tab on the same grid (${mode})`, async ({ page }) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     await go(page, '/lab/my-work');
     await theme(page, dark);
     await page.getByText('Ms. Arya Stark').locator('visible=true').first().waitFor({ timeout: 60_000 }).catch(() => undefined);
@@ -297,6 +300,7 @@ for (const dark of [false, true]) {
   });
 
   test(`Pathologist queue (${mode})`, async ({ page }) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     await go(page, '/pathologist');
     await theme(page, dark);
     await page.getByText('0126117').locator('visible=true').first().waitFor({ timeout: 60_000 }).catch(() => undefined);

@@ -86,53 +86,14 @@
         </header>
 
         <div class="pf-2p__body pf-rq2-main__body">
-          @if (phone()) {
-          <!-- Phones: the grid's columns fold into two lines; a tap opens the actions sheet. -->
-          @if (loading() && items().length === 0 && filter() !== 'partial') {
-          <ul class="pf-rq2-list" role="list" aria-busy="true">
-            @for (i of [0, 1, 2, 3, 4]; track i) {
-            <li class="pf-rq2-prow pf-rq2-prow--skel">
-              <pf-skeleton variant="block" width="28px" height="28px"></pf-skeleton>
-              <span class="pf-rq2-prow__txt"><pf-skeleton variant="line" width="55%"></pf-skeleton><pf-skeleton variant="line" width="75%" height="10px"></pf-skeleton></span>
-            </li>
-            }
-          </ul>
-          } @else if (gridRows().length === 0) {
+          @if (listMode()) {
+          <!-- Below 1024px: the ONE shared work list (owner 2026-11-21) — patient + token, the grid's facts in its
+               column order, the status in words; Open (the actions sheet) at the right edge. -->
+          @if (gridRows().length === 0 && !(loading() && items().length === 0 && filter() !== 'partial')) {
           <ng-container *ngTemplateOutlet="emptyTpl"></ng-container>
           } @else {
-          <ul class="pf-rq2-list" role="list" data-testid="rq-list">
-            @for (row of gridRows(); track row.id) {
-            @if (row.kind === 'report') {
-            @let st = rowStatus(row.r);
-            <li>
-              <button type="button" class="pf-rq2-prow press" [attr.data-status]="st.key" [pfZoomSource]="[row.r.id, row.r.orderId]"
-                      aria-haspopup="dialog" (click)="openSheet(row)">
-                <span class="pf-rq2-no"><pf-daily-no [of]="row.r.order" /></span>
-                <span class="pf-rq2-prow__txt">
-                  <span class="pf-rq2-prow__l1">
-                    <span class="pf-rq2-prow__name">{{ reportPatientName(row.r) }}</span>
-                    <pf-status-words [words]="statusWordsOf(row.r)" />
-                  </span>
-                  <span class="pf-rq2-prow__l2 pf-num">{{ phoneLine(row.r) }}@if (st.unpaid) {<span class="pf-rq2-unpaid"> · Unpaid</span>}</span>
-                </span>
-              </button>
-            </li>
-            } @else if (row.kind === 'partial') {
-            <li>
-              <button type="button" class="pf-rq2-prow press" data-status="partial" aria-haspopup="dialog" (click)="openSheet(row)">
-                <span class="pf-rq2-no"><pf-daily-no [of]="row.po" /></span>
-                <span class="pf-rq2-prow__txt">
-                  <span class="pf-rq2-prow__l1">
-                    <span class="pf-rq2-prow__name">{{ row.po.patientName }}</span>
-                    <pf-status-words [words]="partialWords" />
-                  </span>
-                  <span class="pf-rq2-prow__l2 pf-num">{{ phoneLinePartial(row.po) }}</span>
-                </span>
-              </button>
-            </li>
-            }
-            }
-          </ul>
+          <pf-work-list data-testid="rq-list" label="Reports" [items]="listItems()" [loading]="loading() && items().length === 0 && filter() !== 'partial'"
+            (open)="openSheet($any($event.data))" (primary)="openSheet($any($event.data))" />
           <div #listEnd class="pf-rq2-listend" aria-hidden="true"></div>
           }
           } @else {

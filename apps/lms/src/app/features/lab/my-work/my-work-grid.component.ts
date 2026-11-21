@@ -13,6 +13,10 @@ import { BusyDirective } from '../../../shared/directives/busy.directive';
 import { ZoomSourceDirective } from '../../../core/navigation/zoom.directive';
 import { webPointerSignal } from '../../../shared/utils/pointer-mode';
 import { GridFold, actionCol, dateCol, dueCell, durationCol, durationText, fitFold, minWidthOf, minutesSince, textCol, valuesCol } from '../../../shared/utils/work-grid';
+import { WorkListComponent } from '../../../shared/components/work-list/work-list.component';
+import { SortChipComponent } from '../../../shared/components/work-list/sort-chip.component';
+import { LAB_SORT_OPTIONS, LabSortKey } from '../../../shared/utils/lab-sort';
+import { SortChipOption, WorkListItem, lateWords } from '../../../shared/components/work-list/work-list';
 import { WorkSetFilterComponent } from '../../../shared/components/work-set-filter/work-set-filter.component';
 import { StatusWordsComponent } from '../../../shared/components/status-words/status-words.component';
 import type { StatusWords } from '../../../shared/utils/status-words';
@@ -55,82 +59,21 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
 @Component({
   selector: 'pf-mw-grid',
   standalone: true,
-  imports: [DataGridComponent, ActionsMenuComponent, DailyNoComponent, SkeletonComponent, BusyDirective, ZoomSourceDirective, StatusWordsComponent, DatePipe, NgTemplateOutlet],
+  imports: [DataGridComponent, WorkListComponent, SortChipComponent, ActionsMenuComponent, DailyNoComponent, SkeletonComponent, BusyDirective, ZoomSourceDirective, StatusWordsComponent, DatePipe, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (phone()) {
-      @if (loading() && !rows().length) {
-        <ul class="wg-cards" aria-busy="true" data-testid="mw-cards-skel">
-          @for (i of [0, 1, 2, 3]; track i) {
-            <li class="wg-card wg-card--skel">
-              <span class="wg-card__l1"><pf-skeleton variant="line" width="55%"></pf-skeleton><pf-skeleton variant="line" width="64px"></pf-skeleton></span>
-              <pf-skeleton variant="line" width="80%" height="10px"></pf-skeleton>
-              <span class="wg-card__foot"><span class="wg-acts"><pf-skeleton variant="block" width="112px" height="44px"></pf-skeleton><pf-skeleton variant="block" width="44px" height="44px"></pf-skeleton></span></span>
-            </li>
-          }
-        </ul>
-      } @else if (!rows().length) {
-        <p class="mwg-empty">{{ emptyTitle() }}</p>
-      } @else {
-        <ul class="wg-cards" data-testid="mw-cards">
-          @for (row of rows(); track row.id) {
-            @switch (row.kind) {
-              @case ('tube') {
-                <li><ng-container [ngTemplateOutlet]="tubeCard" [ngTemplateOutletContext]="{ $implicit: row.tube, name: row.tube.patientName, urgent: row.priority === 'urgent', who: true }" /></li>
-              }
-              @case ('patient') {
-                @let st = gWords(row.tubes);
-                @let p = gPrimary(row.tubes, row.open);
-                <li class="wg-card" role="button" tabindex="0" [attr.data-urgent]="row.priority === 'urgent'" [attr.aria-expanded]="row.open"
-                    [attr.aria-label]="(row.open ? 'Hide tubes for ' : 'Show tubes for ') + row.group.patientName"
-                    (click)="onCard(row, $event)" (keydown.enter)="onCard(row, $event)" (keydown.space)="$event.preventDefault(); onCard(row, $event)">
-                  <span class="wg-card__l1">
-                    <span class="wg-who"><span class="wg-who__name"><pf-daily-no [of]="row.group.items[0]?.subOrder" />{{ row.group.patientName }}</span>
-                      @if (row.group.patientMeta) { <span class="wg-who__meta">{{ row.group.patientMeta }}</span> }</span>
-                    <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: st }" />
-                  </span>
-                  <span class="wg-sub" [attr.title]="testsOf(row.group.items)">{{ summary(row.group.items) }}</span>
-                  @for (t of row.tubes; track t.sampleId) { @for (r of t.rejections; track r.testName) { <span class="wg-note">{{ r.testName }}: {{ r.reason }}</span> } }
-                  <span class="wg-card__foot">
-                    @let tc = tat(row.group, row.group.items);
-                    <span class="wg-tat" [class.wg-tat--late]="tc.late" [attr.title]="tc.detail">{{ tc.text }}</span>
-                    @if (row.priority === 'urgent') { <span class="wg-prio" data-p="urgent">Urgent</span> }
-                    <span class="wg-acts">
-                      @if (p) { <ng-container [ngTemplateOutlet]="primaryBtn" [ngTemplateOutletContext]="{ a: p, tube: row.tubes[0], row: row, name: row.group.patientName }" /> }
-                    </span>
-                  </span>
-                </li>
-                @if (row.open) {
-                  @for (t of row.tubes; track t.sampleId) {
-                    <li class="mwg-subcard"><ng-container [ngTemplateOutlet]="tubeCard" [ngTemplateOutletContext]="{ $implicit: t, name: row.group.patientName, urgent: false, who: false }" /></li>
-                  }
-                }
-              }
-              @case ('done') {
-                @let st = dWords(row.done);
-                @let p = dPrimary(row.done);
-                <li class="wg-card" role="link" tabindex="0" [pfZoomSource]="row.done.sampleId"
-                    [attr.aria-label]="'View results for ' + (row.done.barcode || row.done.sampleId)"
-                    (click)="onCard(row, $event)" (keydown.enter)="onCard(row, $event)">
-                  <span class="wg-card__l1">
-                    <span class="wg-id">{{ row.done.barcode || row.done.sampleId }}</span>
-                    <ng-container [ngTemplateOutlet]="pill" [ngTemplateOutletContext]="{ $implicit: st }" />
-                  </span>
-                  <span class="wg-who"><span class="wg-who__name"><pf-daily-no [of]="row.done.tests[0]?.subOrder" />{{ row.done.patientName }}</span>
-                    <span class="wg-who__meta" [attr.title]="row.done.testNames">{{ metaJoin(row.done.patientMeta, summary(row.done.tests)) }}</span></span>
-                  <span class="wg-card__foot">
-                    <span class="wg-sub">{{ row.done.completedAt | date:'d MMM, h:mm a' }}</span>
-                    <span class="wg-acts">
-                      @if (p) { <ng-container [ngTemplateOutlet]="doneBtn" [ngTemplateOutletContext]="{ a: p, d: row.done }" /> }
-                      <ng-container [ngTemplateOutlet]="doneMore" [ngTemplateOutletContext]="{ d: row.done }" />
-                    </span>
-                  </span>
-                </li>
-              }
-            }
-          }
-        </ul>
+      <!-- Below 1024px: the ONE shared work list (owner 2026-11-21) — the same rows, facts in the grid's column
+           order, status in words, the row's own primary + ⋯ (the grid's action cell) at the right edge. -->
+      @if (rows().length) {
+        <div class="mwg-listhead pf-wl-head">
+          <span class="mwg-listhead__n">{{ listItems().length }} {{ listItems().length === 1 ? 'row' : 'rows' }}</span>
+          <pf-sort-chip [options]="sortOptions()" [value]="sortValue()" (pick)="pickSort($event)" />
+        </div>
       }
+      <pf-work-list class="mwg-list" data-testid="mw-list" label="Work list" [items]="listItems()" [loading]="loading()"
+        [emptyTitle]="emptyTitle()" [actionTpl]="listActs" (open)="onItem($event)" />
+      <ng-template #listActs let-it><ng-container [ngTemplateOutlet]="cActs" [ngTemplateOutletContext]="{ $implicit: it.data }" /></ng-template>
     } @else {
       <pf-data-grid class="mwg" data-testid="mw-grid" [rowData]="rows()" [columnDefs]="cols()" [defaultColDef]="defaultCol"
         [getRowId]="rowId" [getRowClass]="rowClass" [clickable]="true" [suppressColumnVirtualisation]="true"
@@ -359,6 +302,8 @@ const ICON: Partial<Record<string, PfAction['icon']>> = { delegate: 'reassign', 
     @include wg.cells;
     :host { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
     .mwg { flex: 1 1 auto; min-height: 0; }
+    .mwg-listhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 6px 12px; border-bottom: 1px solid var(--pf-line); }
+    .mwg-listhead__n { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
     .mwg-empty { margin: 0; padding: 32px 16px; text-align: center; font-size: 13.5px; color: var(--text-tertiary); }
 
     /* Patient focus: the tubes under a patient row — each a full tap target (≥ the touch row height). */
@@ -581,6 +526,54 @@ export class MyWorkGridComponent implements AfterViewInit {
 
   metaJoin(...parts: Array<string | null | undefined>): string { return parts.filter(Boolean).join(' · '); }
   tubeAria(t: MwTube): string { return (this.rules().tab === 'service_queue' ? 'Pick tube ' : 'Open tube ') + (t.barcode || t.sampleId); }
+
+  // ── The small-screen list (<1024px): the same rows as items for pf-work-list ──
+  readonly listItems = computed<WorkListItem<MwRow>[]>(() => {
+    const out: WorkListItem<MwRow>[] = [];
+    const tubeItem = (t: MwTube, row: MwRow, who: boolean, urgent: boolean, sub: boolean): WorkListItem<MwRow> => {
+      const st = this.tWords(t);
+      const tc = this.tat(t, t.tests, t.allDone);
+      const pt = t as MwTube & { patientName?: string; patientMeta?: string };
+      return {
+        id: (sub ? 'sub:' : '') + t.sampleId, name: who ? pt.patientName ?? '' : (t.barcode || 'no label'), daily: who ? t.tests[0]?.subOrder : null,
+        lead: who ? (t.barcode || 'no label') : null, urgent, sub,
+        facts: [who ? pt.patientMeta : null, this.summary(t.tests), t.hasDraft && !t.allDone ? 'Draft' : null],
+        notes: t.rejections.map(r => `${r.testName}: ${r.reason}`),
+        status: lateWords(st, tc.late), time: { text: tc.text, late: tc.late, title: tc.detail },
+        aria: this.tubeAria(t), data: row,
+      };
+    };
+    for (const row of this.rows()) {
+      if (row.kind === 'tube') out.push(tubeItem(row.tube, row, true, row.priority === 'urgent', false));
+      else if (row.kind === 'patient') {
+        const st = this.gWords(row.tubes);
+        const tc = this.tat(row.group, row.group.items);
+        out.push({
+          id: row.id, name: row.group.patientName, daily: row.group.items[0]?.subOrder, urgent: row.priority === 'urgent',
+          facts: [row.group.patientMeta, this.summary(row.group.items), row.tubes.length > 1 ? `${row.tubes.length} tubes` : null],
+          notes: row.tubes.flatMap(t => t.rejections.map(r => `${r.testName}: ${r.reason}`)),
+          status: lateWords(st, tc.late), time: { text: tc.text, late: tc.late, title: tc.detail },
+          selected: row.open, aria: (row.open ? 'Hide tubes for ' : 'Show tubes for ') + row.group.patientName, data: row,
+        });
+        if (row.open) for (const t of row.tubes) out.push(tubeItem(t, { kind: 'tube', id: `sub:${t.sampleId}`, tube: t, priority: row.priority } as MwRow, false, false, true));
+      } else if (row.kind === 'done') {
+        const st = this.dWords(row.done);
+        out.push({
+          id: row.id, name: row.done.patientName, daily: row.done.tests[0]?.subOrder, lead: row.done.barcode || row.done.sampleId,
+          facts: [row.done.patientMeta, this.summary(row.done.tests)],
+          status: st,
+          time: row.done.completedAt ? { text: new Date(row.done.completedAt).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) } : null,
+          aria: 'View results for ' + (row.done.barcode || row.done.sampleId), data: row,
+        });
+      }
+    }
+    return out;
+  });
+  /** The list's Sort chip: the lab's saved sort key (the same choices the old picker had, the same key the headers write). */
+  readonly sortOptions = computed<SortChipOption[]>(() => LAB_SORT_OPTIONS[this.scope()].map(o => ({ id: o.value, label: o.label })));
+  readonly sortValue = computed(() => this.sorts.keyFor(this.scope()));
+  pickSort(id: string): void { this.picked.set(null); this.sorts.set(this.scope(), id as LabSortKey); }
+  onItem(it: WorkListItem<MwRow>): void { if (it.data) this.tap(it.data); }
 
   // ── Taps ──
   /** A tap on the row = the old tile tap; a control inside the row does its own thing. */

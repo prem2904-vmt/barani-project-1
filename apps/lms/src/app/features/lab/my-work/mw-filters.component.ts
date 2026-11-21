@@ -4,7 +4,6 @@ import { ModalPortalDirective } from '../../../shared/directives/modal-portal.di
 import { mediaSignal } from '../../admin/tests/tests/tm-two-panel';
 import { SegmentedComponent, SegmentedOption } from '../../../shared/primitives/segmented.component';
 import { PfSelectOption, SelectComponent } from '../../../shared/primitives/select.component';
-import { LabSortComponent } from '../../../shared/components/lab-sort/lab-sort.component';
 import { MwFilter, NO_MW_FILTER } from './my-work.grid';
 
 /**
@@ -16,7 +15,7 @@ import { MwFilter, NO_MW_FILTER } from './my-work.grid';
 @Component({
   selector: 'pf-mw-filters',
   standalone: true,
-  imports: [SegmentedComponent, SelectComponent, LabSortComponent, NgTemplateOutlet, ModalPortalDirective],
+  imports: [SegmentedComponent, SelectComponent, NgTemplateOutlet, ModalPortalDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (sheet()) {
@@ -55,12 +54,7 @@ import { MwFilter, NO_MW_FILTER } from './my-work.grid';
               (valueChange)="windowChange.emit($any($event))" />
           </div>
         }
-        @if (sheet() && showSort()) {
-          <div class="mwf__field">
-            <span class="mwf__label">Sort</span>
-            <pf-lab-sort class="mwf__sort" [scope]="sortScope()" />
-          </div>
-        }
+        <!-- Sort lives on the list itself (the Sort chip, owner 2026-11-21) — never a dropdown in this sheet. -->
       </div>
     </ng-template>
   `,

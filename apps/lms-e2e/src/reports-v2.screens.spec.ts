@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { test, expect, isPhone, expectNoHorizontalScroll } from './support/form-factor';
+import { test, expect, isPhone, expectNoHorizontalScroll, projectName } from './support/form-factor';
 import { resetNeg, installNegBackend, go, neg, visible } from './support/neg-backend';
 
 /**
@@ -139,6 +139,7 @@ for (const dark of [false, true]) {
   const mode = dark ? 'dark' : 'light';
 
   test(`layout: side card left + same height, grid columns, status dots, Unpaid under the pill (${mode})`, async ({ page }, info) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones get the two-line rows');
     await open(page, dark);
     await pick(page, 'All');
@@ -229,6 +230,7 @@ for (const dark of [false, true]) {
   });
 
   test(`partial order expands inline with Generate partial PDF at the top (${mode})`, async ({ page }, info) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones: the sheet carries the breakdown');
     await open(page, dark);
     await pick(page, 'Partial');
@@ -274,7 +276,7 @@ for (const dark of [false, true]) {
       await expect(page.locator('[data-testid="rq-filters-sheet"]')).toHaveCount(0);
     }
     await pick(page, 'Delivered');
-    const names = isPhone() ? '.pf-rq2-prow__name' : '.ag-row .pf-rq2-who__name';
+    const names = (page.viewportSize()?.width ?? 0) < 1024 ? '.pf-wl__name' : '.ag-row .pf-rq2-who__name';
     await expect(visible(page, `${names}:has-text("Nithin Ragav G")`)).toBeVisible({ timeout: 30_000 });
     await expect(page.locator(names).locator('visible=true')).toHaveCount(2);
   });
@@ -283,16 +285,18 @@ for (const dark of [false, true]) {
     test.skip(!isPhone(), 'phones only');
     await open(page, dark);
     await pick(page, 'All');
-    const row = visible(page, '.pf-rq2-prow:has-text("Mr. Sathish Kumar")');
+    // The shared small-screen list (pf-work-list): name + token, facts, status in words, Open at the right edge.
+    const row = visible(page, '.pf-wl__row:has-text("Mr. Sathish Kumar")');
     await expect(row).toBeVisible({ timeout: 30_000 });
     expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(64);
-    await expect(row.locator('.pf-rq2-prow__l2')).toContainText('Unpaid');
-    await expect(row.locator('.pf-rq2-pill')).toContainText('Ready');
+    await expect(row.locator('.pf-wl__l2')).toContainText('Unpaid');
+    await expect(row.locator('.pf-sw__now')).toContainText('Ready');
+    await expect(row.locator('.pf-wl__primary')).toHaveText('Open');
     // Band: Refresh icon; search with the filter button inside.
     await expect(visible(page, 'pf-hero-band .pf-rq2-bandrefresh')).toBeVisible();
     await expectNoHorizontalScroll(page, `reports phone ${mode}`);
     await shot(page, info.project.name, `phone-list-${mode}`);
-    await row.click();
+    await row.locator('.pf-wl__main').click();
     const sheet = visible(page, '[data-testid="rq-sheet"]');
     await expect(sheet).toBeVisible();
     await expect(sheet).toContainText('Unpaid — collect the balance before handing over');
@@ -309,7 +313,7 @@ for (const dark of [false, true]) {
     await sheet.getByRole('button', { name: 'Close' }).click();
     await expect(page.locator('[data-testid="rq-sheet"]')).toHaveCount(0);
     // A partly-reported order: its departments + Generate partial PDF in the sheet.
-    await visible(page, '.pf-rq2-prow:has-text("Mr. Sam Altman")').click();
+    await visible(page, '.pf-wl__row:has-text("Mr. Sam Altman") .pf-wl__main').click();
     await expect(visible(page, '[data-testid="rq-sheet"] [data-testid="rq-detail"]')).toContainText('Haematology');
     await expect(visible(page, '[data-testid="rq-sheet"] .pf-rq-genpartial')).toBeVisible();
     await shot(page, info.project.name, `phone-partial-${mode}`);
@@ -337,6 +341,7 @@ test('1720px: all seven columns, Order + Generated on one line, the daily chip w
 
 for (const dark of [false, true]) {
   test(`scrolled: rows never show through the header (${dark ? 'dark' : 'light'})`, async ({ page }, info) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones: the list');
     EXTRA = Array.from({ length: 30 }, (_, i) => rep(40 + i, `Ms. Scroll Patient ${i + 1}`, 30 + (i % 40), i % 2 ? 'F' : 'M', 'pending'));
     await open(page, dark);
@@ -358,6 +363,7 @@ for (const dark of [false, true]) {
 
 for (const dark of [false, true]) {
   test(`TO SEND: the To send rows filter the grid; Send / Retry ride in the row (${dark ? 'dark' : 'light'})`, async ({ page }, info) => {
+    test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
     test.skip(isPhone(), 'phones: a tap opens the row sheet (Share on WhatsApp)');
     await open(page, dark);
     if (isNarrow(page)) {
@@ -397,6 +403,7 @@ for (const dark of [false, true]) {
 }
 
 test('actions keep their behaviour: View opens the report, ⋯ lists every action, Share ▾ offers the channels', async ({ page }) => {
+  test.skip(['phone', 'tablet'].includes(projectName()), 'below 1024px this list is the shared pf-work-list — covered by small-screens.screens.spec.ts');
   test.skip(isPhone(), 'phones: the sheet');
   await open(page, false);
   await pick(page, 'All');

@@ -119,10 +119,12 @@ describe('flow grid actions → the landing\'s existing handlers', () => {
 });
 
 describe('template wiring', () => {
-  it('flow grid only in the new design at ≥1024px; Outsourced keeps its list; the old rows stay for phones / classic', () => {
+  it('flow grid only in the new design at ≥1024px; below it the SAME rows in the shared work list; Outsourced keeps its list; the old rows stay for classic', () => {
     expect(ts).toContain("readonly flowMode = computed(() => this.theme.isNewDesign() && this.wide());");
+    expect(ts).toContain("readonly listMode = computed(() => this.theme.isNewDesign() && !this.wide());");
     expect(html).toMatch(/@if \(flowMode\(\) && rightTab\(\) !== 'out'\) \{[\s\S]{0,600}<pf-fd-work-view/);
-    expect((html.match(/@if \(!flowMode\(\)\) \{/g) ?? []).length).toBe(2);
+    expect(html).toMatch(/@if \(listMode\(\) && rightTab\(\) !== 'out'\) \{[\s\S]{0,600}<pf-work-list[^>]*\[items\]="listItems\(\)"/);
+    expect((html.match(/@if \(!flowMode\(\) && !listMode\(\)\) \{/g) ?? []).length).toBe(2);
     expect(html).toMatch(/@if \(rightTab\(\) === 'out'\) \{\s*<pf-outsourced-list/);
   });
 

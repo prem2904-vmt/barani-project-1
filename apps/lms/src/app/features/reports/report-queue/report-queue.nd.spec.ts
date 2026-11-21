@@ -124,7 +124,7 @@ const settle = async (f: any) => { for (let i = 0; i < 8; i++) { await new Promi
 
 async function render(opts: { touch?: boolean; phone?: boolean; narrow?: boolean; orders?: unknown[]; queue?: unknown[]; nd?: boolean; perms?: string[]; wa?: Record<string, unknown>; waCloud?: boolean; paged?: boolean; apiGet?: (url: string) => unknown } = {}) {
   (window as any).matchMedia = (q: string) => ({
-    matches: q.includes('hover') ? !opts.touch : q.includes('640px') ? !!opts.phone : q.includes('900px') ? !!(opts.phone || opts.narrow) : q.includes('1279px') ? !!(opts.phone || opts.narrow) : false,
+    matches: q.includes('hover') ? !opts.touch : q.includes('640px') ? !!opts.phone : q.includes('1023') ? !!(opts.phone || opts.narrow) : q.includes('900px') ? !!(opts.phone || opts.narrow) : q.includes('1279px') ? !!(opts.phone || opts.narrow) : false,
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
   });
   const api = {
@@ -655,18 +655,18 @@ describe('Reports v2 — narrow (≤900px) and phone (≤640px)', () => {
     expect(el.querySelector('pf-hero-band .pf-rq2-bandrefresh')).not.toBeNull();
     expect(el.querySelector('[data-testid="rq-main"] .pf-rq2-refresh')).toBeNull();
     await tab('all');
-    const rows = [...el.querySelectorAll<HTMLElement>('[data-testid="rq-list"] .pf-rq2-prow')];
+    const rows = [...el.querySelectorAll<HTMLElement>('[data-testid="rq-list"] .pf-wl__row')];
     expect(rows.length).toBe(6);   // 2 partly-reported orders + 4 reports
-    const r1 = rows.find(r => r.getAttribute('data-status') === 'completed')!;
-    expect(r1.querySelector('.pf-rq2-prow__l1 .pf-rq2-prow__name')!.textContent!.trim()).toBe(FULL_NAME);
-    expect(r1.querySelector('.pf-rq2-prow__l1 pf-status-words .pf-sw__now')!.textContent!.trim()).toBe('Ready');
-    expect(r1.querySelector('.pf-rq2-prow__l2')!.textContent!.trim()).toBe('29/M · LAB-2609-000102 · ' + c.when('2026-09-26T13:07:00Z') + ' · Unpaid');
-    expect(css()).toMatch(/\.pf-rq2-prow\s*\{[^}]*min-height: 64px/);
+    const r1 = rows.find(r => r.querySelector('.pf-sw__now')?.textContent?.trim() === 'Ready')!;
+    expect(r1.querySelector('.pf-wl__name')!.textContent!.trim()).toContain(FULL_NAME);
+    expect(r1.querySelector('.pf-wl__l2')!.textContent!.trim()).toBe('29/M · LAB-2609-000102 · ' + c.when('2026-09-26T13:07:00Z') + ' · Unpaid');
+    expect(r1.querySelector('.pf-wl__primary')!.textContent!.trim()).toBe('Open');
   });
 
   it('phone: a tap opens the sheet — patient + status, Unpaid note, ONE primary (WhatsApp per waMode), View · Download · Print, the rest as a list', async () => {
     const { el, f, c } = await render({ phone: true, perms: ['deliver_report', 'view_report', 'view_order', 'edit_result', 'view_patient', 'view_bill'] });
-    (el.querySelector('.pf-rq2-prow[data-status="completed"]') as HTMLElement).click(); f.detectChanges();
+    const ready = [...el.querySelectorAll<HTMLElement>('.pf-wl__row')].find(r => r.querySelector('.pf-sw__now')?.textContent?.trim() === 'Ready')!;
+    (ready.querySelector('.pf-wl__main') as HTMLElement).click(); f.detectChanges();
     const sheet = document.querySelector('[data-testid="rq-sheet"]') as HTMLElement;
     expect(sheet.getAttribute('role')).toBe('dialog');
     expect(sheet.querySelector('.pf-rq2-sheet__name')!.textContent!.trim()).toBe(FULL_NAME);
@@ -690,14 +690,14 @@ describe('Reports v2 — narrow (≤900px) and phone (≤640px)', () => {
   it('phone sheet: Print is the primary when WhatsApp is not available; view-only gets no primary', async () => {
     const r = await render({ phone: true, perms: ['deliver_report', 'view_report'] });
     vi.spyOn(r.c, 'waMode').mockReturnValue(null);
-    (r.el.querySelector('.pf-rq2-prow[data-status="completed"]') as HTMLElement).click(); r.f.detectChanges();
+    (r.el.querySelector('.pf-wl__row[data-key="completed"] .pf-wl__main') as HTMLElement).click(); r.f.detectChanges();
     let sheet = document.querySelector('[data-testid="rq-sheet"]') as HTMLElement;
     expect(sheet.querySelector('.pf-btn--primary')!.textContent!.trim()).toBe('Print');
     expect([...sheet.querySelectorAll('.pf-rq2-sheet__trio .pf-btn')].map(b => b.textContent!.trim())).toEqual(['View', 'Download']);
     r.c.closeSheet(); r.f.detectChanges();
     TestBed.resetTestingModule();
     const v = await render({ phone: true, perms: ['view_report'] });
-    (v.el.querySelector('.pf-rq2-prow[data-status="completed"]') as HTMLElement).click(); v.f.detectChanges();
+    (v.el.querySelector('.pf-wl__row[data-key="completed"] .pf-wl__main') as HTMLElement).click(); v.f.detectChanges();
     sheet = document.querySelector('[data-testid="rq-sheet"]') as HTMLElement;
     expect(sheet.querySelector('.pf-btn--primary')).toBeNull();
     expect([...sheet.querySelectorAll('.pf-rq2-sheet__trio .pf-btn')].map(b => b.textContent!.trim())).toEqual(['View', 'Download', 'Print']);
@@ -706,10 +706,10 @@ describe('Reports v2 — narrow (≤900px) and phone (≤640px)', () => {
 
   it('phone sheet for a partly-reported order: its departments + Generate partial PDF', async () => {
     const { el, f } = await render({ phone: true });
-    (el.querySelector('.pf-rq2-prow[data-status="partial"]') as HTMLElement | null);
+    (el.querySelector('.pf-wl__row[data-key="partial"] .pf-wl__main') as HTMLElement | null);
     const c = f.componentInstance as any;
     c.setFilter('partial'); f.detectChanges(); await settle(f);
-    (el.querySelector('.pf-rq2-prow[data-status="partial"]') as HTMLElement).click(); f.detectChanges();
+    (el.querySelector('.pf-wl__row[data-key="partial"] .pf-wl__main') as HTMLElement).click(); f.detectChanges();
     const sheet = document.querySelector('[data-testid="rq-sheet"]') as HTMLElement;
     expect(sheet.querySelector('[data-testid="rq-detail"] .pf-rq-dept__name')!.textContent!.trim()).toBe('Microbiology');
     expect(sheet.querySelector('.pf-rq-genpartial')).not.toBeNull();

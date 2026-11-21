@@ -3035,3 +3035,18 @@ aside.pf-card > .pf-card__body > * { flex-shrink: 0; }
 .ag-header-cell.wg-h-left .ag-header-cell-text,
 .ag-header-cell.wg-h-center .ag-header-cell-text,
 .ag-header-cell.wg-h-right .ag-header-cell-text { text-overflow: clip; white-space: normal; overflow-wrap: normal; word-break: keep-all; }
+
+/* ── Touch: every card-head control is a ≥44px target (owner 2026-11-21, small screens) ──
+   Buttons / inputs / compact pill triggers in a card head grow to 44px; a pill's segments keep their slim look and
+   get a 44px HIT AREA (::after), the same trick as the grid header's filter icon. */
+@media (pointer: coarse) {
+  :is(.pf-card__head, .pf-mw-pane__hdr, .pf-work-hdr, .pf-2p__head, .pf-wl-head) :is(.pf-btn, .pf-rowact, input.pf-input, .seg-compact, .press:not(.pf-seg__item)) {
+    min-height: 44px !important;
+  }
+  :is(.pf-card__head, .pf-mw-pane__hdr, .pf-work-hdr, .pf-2p__head) :is(.pf-btn--icon, .pf-rowact--icon) { min-width: 44px !important; }
+  .pf-ins-main__switch, .seg-compact { min-height: 44px !important; }
+  /* A field inside a head's pill (Lab Intake's scan box): the input itself is the 44px tap target. */
+  :is(.pf-card__head, .pf-mw-pane__hdr) input { min-height: 44px !important; }
+  .pf-seg__item { position: relative; }
+  .pf-seg__item::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); min-width: 44px; }
+}

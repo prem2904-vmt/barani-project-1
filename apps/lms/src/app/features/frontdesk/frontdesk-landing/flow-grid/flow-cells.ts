@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, inject, viewChildren } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, Input, inject, viewChildren } from '@angular/core';
 import type { ICellRendererParams } from 'ag-grid-community';
 import type { ICellRendererAngularComp } from 'ag-grid-angular';
 import { DailyNoComponent } from '../../../../shared/components/daily-no/daily-no.component';
@@ -233,6 +233,8 @@ export class FlowNextCellComponent implements ICellRendererAngularComp {
   row: FlowRow | null = null;
   menu: PfAction[] = [];
   private ctx: FlowGridContext | null = null;
+  /** Outside the grid (the shared work list below 1024px): the same cell, fed the row + context directly. */
+  @Input() set item(v: { row: FlowRow; ctx: FlowGridContext } | null) { if (v) this.agInit({ data: v.row, context: v.ctx } as P); }
 
   agInit(p: P): void {
     this.row = p.data ?? null;
